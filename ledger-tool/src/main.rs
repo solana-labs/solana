@@ -60,8 +60,8 @@ use {
         snapshot_hash::StartingSnapshotHashes,
         snapshot_minimizer::SnapshotMinimizer,
         snapshot_utils::{
-            self, ArchiveFormat, SnapshotVersion, DEFAULT_ARCHIVE_COMPRESSION,
-            SUPPORTED_ARCHIVE_COMPRESSION,
+            self, move_and_async_delete_path, ArchiveFormat, SnapshotVersion,
+            DEFAULT_ARCHIVE_COMPRESSION, SUPPORTED_ARCHIVE_COMPRESSION,
         },
     },
     solana_sdk::{
@@ -1091,10 +1091,11 @@ fn load_bank_forks(
         );
 
         if non_primary_accounts_path.exists() {
-            info!(
-                "Skip clearing {}, to save the snapshot unpacking work.",
-                non_primary_accounts_path.display()
-            );
+            info!("Clearing {:?}", non_primary_accounts_path);
+            let mut measure_time = Measure::start("clean_non_primary_accounts_paths");
+            move_and_async_delete_path(&non_primary_accounts_path);
+            measure_time.stop();
+            info!("done. {}", measure_time);
         }
 
         vec![non_primary_accounts_path]

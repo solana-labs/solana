@@ -33,6 +33,14 @@ use {
         time::Instant,
     },
 };
+
+lazy_static! {
+    static ref VERSION_FILE_REGEX: Regex = Regex::new(r"^version$").unwrap();
+    static ref BANK_FIELDS_FILE_REGEX: Regex = Regex::new(r"^[0-9]+(\.pre)?$").unwrap();
+    static ref STORAGE_FILE_REGEX: Regex =
+        Regex::new(r"^(?P<slot>[0-9]+)\.(?P<id>[0-9]+)$").unwrap();
+}
+
 /// Convenient wrapper for snapshot version and rebuilt storages
 pub(crate) struct RebuiltSnapshotStorage {
     /// Snapshot version
@@ -60,7 +68,7 @@ pub(crate) struct SnapshotStorageRebuilder {
     /// Tracks the number of collisions in AppendVecId
     num_collisions: AtomicUsize,
     /// Rebuild from the snapshot files or archives
-    snapshot_from: Option<SnapshotFrom>,
+    snapshot_from: SnapshotFrom,
 }
 
 impl SnapshotStorageRebuilder {
@@ -69,7 +77,7 @@ impl SnapshotStorageRebuilder {
         file_receiver: Receiver<PathBuf>,
         num_threads: usize,
         next_append_vec_id: Arc<AtomicAppendVecId>,
-        snapshot_from: Option<SnapshotFrom>,
+        snapshot_from: SnapshotFrom,
     ) -> Result<RebuiltSnapshotStorage, SnapshotError> {
         let (snapshot_version_path, snapshot_file_path, append_vec_files) =
             Self::get_version_and_snapshot_files(&file_receiver);
@@ -105,7 +113,7 @@ impl SnapshotStorageRebuilder {
         num_threads: usize,
         next_append_vec_id: Arc<AtomicAppendVecId>,
         snapshot_storage_lengths: HashMap<Slot, HashMap<usize, usize>>,
-        snapshot_from: Option<SnapshotFrom>,
+        snapshot_from: SnapshotFrom,
     ) -> Self {
         let storage = DashMap::with_capacity(snapshot_storage_lengths.len());
         let storage_paths: DashMap<_, _> = snapshot_storage_lengths
@@ -196,7 +204,7 @@ impl SnapshotStorageRebuilder {
         next_append_vec_id: Arc<AtomicAppendVecId>,
         snapshot_storage_lengths: HashMap<Slot, HashMap<usize, usize>>,
         append_vec_files: Vec<PathBuf>,
-        snapshot_from: Option<SnapshotFrom>,
+        snapshot_from: SnapshotFrom,
     ) -> Result<AccountStorageMap, std::io::Error> {
         let rebuilder = Arc::new(SnapshotStorageRebuilder::new(
             file_receiver,
@@ -208,7 +216,7 @@ impl SnapshotStorageRebuilder {
 
         let thread_pool = rebuilder.build_thread_pool();
 
-        if snapshot_from == Some(SnapshotFrom::Archive) {
+        if snapshot_from == SnapshotFrom::Archive {
             // Synchronously process buffered append_vec_files
             thread_pool.install(|| rebuilder.process_buffered_files(append_vec_files))?;
         }
@@ -262,7 +270,7 @@ impl SnapshotStorageRebuilder {
     fn process_append_vec_file(&self, path: PathBuf) -> Result<(), std::io::Error> {
         let filename = path.file_name().unwrap().to_str().unwrap().to_owned();
         if let Some(SnapshotFileKind::Storage) = get_snapshot_file_kind(&filename) {
-            if self.snapshot_from == Some(SnapshotFrom::File) {
+            if self.snapshot_from == SnapshotFrom::File {
                 let (_slot, appendvec_id) = get_slot_and_append_vec_id(&filename);
                 let next_appendvec_id = appendvec_id + 1;
                 // Always set to the maximum to avoid id conflict.
@@ -317,7 +325,7 @@ impl SnapshotStorageRebuilder {
                     .unwrap();
 
                 let storage_entry = match &self.snapshot_from {
-                    Some(SnapshotFrom::Archive) => remap_and_reconstruct_single_storage(
+                    SnapshotFrom::Archive => remap_and_reconstruct_single_storage(
                         slot,
                         old_append_vec_id,
                         current_len,
@@ -325,16 +333,12 @@ impl SnapshotStorageRebuilder {
                         &self.next_append_vec_id,
                         &self.num_collisions,
                     )?,
-                    Some(SnapshotFrom::File) => reconstruct_single_storage(
+                    SnapshotFrom::File => reconstruct_single_storage(
                         &slot,
                         path.as_path(),
                         current_len,
                         old_append_vec_id as u32,
                     )?,
-                    None => {return Err(std::io::Error::new(
-                        std::io::ErrorKind::Other,
-                            "Error does not support none type in this function.  should not be here".to_string(),
-                    ));}
                 };
 
                 Ok((storage_entry.append_vec_id(), storage_entry))
@@ -399,12 +403,6 @@ pub enum SnapshotFileKind {
 
 /// Determines `SnapshotFileKind` for `filename` if any
 pub fn get_snapshot_file_kind(filename: &str) -> Option<SnapshotFileKind> {
-    lazy_static! {
-        static ref VERSION_FILE_REGEX: Regex = Regex::new(r"^version$").unwrap();
-        static ref BANK_FIELDS_FILE_REGEX: Regex = Regex::new(r"^[0-9]+(\.pre)?$").unwrap();
-        static ref STORAGE_FILE_REGEX: Regex = Regex::new(r"^[0-9]+\.[0-9]+$").unwrap();
-    };
-
     if VERSION_FILE_REGEX.is_match(filename) {
         Some(SnapshotFileKind::Version)
     } else if BANK_FIELDS_FILE_REGEX.is_match(filename) {
@@ -418,11 +416,6 @@ pub fn get_snapshot_file_kind(filename: &str) -> Option<SnapshotFileKind> {
 
 /// Get the slot and append vec id from the filename
 pub(crate) fn get_slot_and_append_vec_id(filename: &str) -> (Slot, usize) {
-    lazy_static! {
-        static ref STORAGE_FILE_REGEX: Regex =
-            Regex::new(r"^(?P<slot>[0-9]+)\.(?P<id>[0-9]+)$").unwrap();
-    };
-
     STORAGE_FILE_REGEX
         .captures(filename)
         .map(|cap| {

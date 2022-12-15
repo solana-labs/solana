@@ -7,6 +7,7 @@ use {
         },
         accounts_index::AccountSecondaryIndexes,
         accounts_update_notifier_interface::AccountsUpdateNotifier,
+        append_vec::AppendVec,
         bank::{Bank, BankFieldsToDeserialize, BankSlotDelta},
         builtins::{self, Builtins},
         hardened_unpack::{
@@ -881,9 +882,10 @@ fn hard_link_appendvec_files_to_snapshot(
         for storage in slot_storages {
             storage.flush()?;
             let path = storage.accounts.get_path();
-            let hard_link_path = dir_accounts_hard_links
-                .clone()
-                .join(format!("{:?}.{:?}", storage.slot, storage.id));
+            let hard_link_path = dir_accounts_hard_links.clone().join(AppendVec::file_name(
+                storage.slot(),
+                storage.append_vec_id(),
+            ));
             fs::hard_link(&path, &hard_link_path).map_err(|e| {
                 let err_str = format!(
                     "hard-link appendvec file {} to {}",
@@ -1670,7 +1672,7 @@ where
             file_receiver,
             num_rebuilder_threads,
             next_append_vec_id,
-            Some(SnapshotFrom::Archive),
+            SnapshotFrom::Archive,
         )?,
         measure_name
     );
@@ -1779,7 +1781,7 @@ where
             file_receiver,
             num_rebuilder_threads,
             next_append_vec_id,
-            Some(SnapshotFrom::File),
+            SnapshotFrom::File,
         )?,
         measure_name
     );

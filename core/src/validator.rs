@@ -2005,8 +2005,12 @@ fn get_stake_percent_in_gossip(bank: &Bank, cluster_info: &ClusterInfo, log: boo
 fn cleanup_accounts_paths(config: &ValidatorConfig) {
     for accounts_path in &config.account_paths {
         move_and_async_delete_path(accounts_path);
-        // Let the empty top dir exist.
-        std::fs::create_dir_all(accounts_path).unwrap();
+        // Let the empty top accounts/ dir exist.  It was created at very early
+        // stage.  It should not disappear after clearing its content.
+        if std::fs::metadata(accounts_path).is_err() {
+            // not the /mnt/account case
+            std::fs::create_dir_all(accounts_path).unwrap();
+        }
     }
     if let Some(ref shrink_paths) = config.account_shrink_paths {
         for accounts_path in shrink_paths {
