@@ -669,6 +669,7 @@ impl BankingSimulator {
 
     pub fn simulate(
         &self,
+        genesis_config: &solana_sdk::genesis_config::GenesisConfig,
         bank_forks: Arc<std::sync::RwLock<solana_runtime::bank_forks::BankForks>>,
         blockstore: Arc<solana_ledger::blockstore::Blockstore>,
     ) {
@@ -694,8 +695,40 @@ impl BankingSimulator {
 
         let collector = solana_sdk::pubkey::new_rand();
         let leader_schedule_cache = Arc::new(LeaderScheduleCache::new_from_bank(&bank));
-        let (exit, poh_recorder, poh_service, _signal_receiver) =
-            create_test_recorder(&bank, &blockstore, None, Some(leader_schedule_cache));
+        let (exit, poh_recorder, poh_service, _signal_receiver) = {
+            use std::sync::RwLock;
+            use solana_poh::poh_service::PohService;
+            use solana_poh::poh_recorder::PohRecorder;
+
+
+            let exit = Arc::new(AtomicBool::default());
+            //create_test_recorder(&bank, &blockstore, None, Some(leader_schedule_cache));
+            let (r, entry_receiver, record_receiver) = PohRecorder::new_with_clear_signal(
+                bank.tick_height(),
+                bank.last_blockhash(),
+                bank.clone(),
+                None,
+                bank.ticks_per_slot(),
+                &collector,
+                &blockstore,
+                blockstore.get_new_shred_signal(0),
+                &leader_schedule_cache,
+                &genesis_config.poh_config,
+                None,
+                exit.clone(),
+            );
+            let r = Arc::new(RwLock::new(r));
+            let s = PohService::new(
+                r.clone(),
+                &genesis_config.poh_config,
+                &exit,
+                bank_forks.read().unwrap().root_bank().ticks_per_slot(),
+                solana_poh::poh_service::DEFAULT_PINNED_CPU_CORE,
+                solana_poh::poh_service::DEFAULT_HASHES_PER_BATCH,
+                record_receiver,
+            );
+            (exit, r, s, 0)
+        };
 
         let banking_tracer = BankingTracer::new(Some((
             blockstore.banking_retracer_path(),

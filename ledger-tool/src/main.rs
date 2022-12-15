@@ -3645,9 +3645,10 @@ fn main() {
                     &shred_storage_type,
                     force_update_to_open,
                 );
+                let genesis_config = open_genesis_config_by(&ledger_path, arg_matches);
                 let (bank_forks, ..) = load_bank_forks(
                     arg_matches,
-                    &open_genesis_config_by(&ledger_path, arg_matches),
+                    &genesis_config,
                     &blockstore,
                     process_options,
                     snapshot_archive_path,
@@ -3659,7 +3660,7 @@ fn main() {
                 });
 
                 //simulator.seek(bank); => Ok or Err("no BankStart")
-                simulator.simulate(bank_forks, Arc::new(blockstore));
+                simulator.simulate(&genesis_config, bank_forks, Arc::new(blockstore));
 
                 println!("Ok");
             }
