@@ -1,6 +1,6 @@
 #![allow(clippy::integer_arithmetic)]
 use {
-    crate::{bigtable::*, bounds::*, ledger_path::*},
+    crate::{bigtable::*, ledger_path::*, output::*},
     chrono::{DateTime, Utc},
     clap::{
         crate_description, crate_name, value_t, value_t_or_exit, values_t_or_exit, App,
@@ -105,8 +105,8 @@ use {
 };
 
 mod bigtable;
-mod bounds;
 mod ledger_path;
+mod output;
 
 #[derive(PartialEq, Eq)]
 enum LedgerOutputMethod {
@@ -1267,6 +1267,7 @@ fn assert_capitalization(bank: &Bank) {
 }
 #[cfg(not(target_env = "msvc"))]
 use jemallocator::Jemalloc;
+use solana_cli_output::OutputFormat;
 
 #[cfg(not(target_env = "msvc"))]
 #[global_allocator]
@@ -1737,7 +1738,20 @@ fn main() {
             .about("Prints the hash of the working bank after reading the ledger")
             .arg(&max_genesis_archive_unpacked_size_arg)
         )
-        .bounds_subcommand()
+        .subcommand(
+            SubCommand::with_name("bounds")
+            .about(
+                "Print lowest and highest non-empty slots. \
+                Note that there may be empty slots within the bounds",
+            )
+            .arg(
+                Arg::with_name("all")
+                    .long("all")
+                    .takes_value(false)
+                    .required(false)
+                    .help("Additionally print all the non-empty slots within the bounds"),
+            )
+        )
         .subcommand(
             SubCommand::with_name("json")
             .about("Print the ledger in JSON format")
@@ -4154,16 +4168,118 @@ fn main() {
                 }
             }
             ("bounds", Some(arg_matches)) => {
-                bounds_process_command(
-                    open_blockstore(
-                        &ledger_path,
-                        AccessType::Secondary,
-                        wal_recovery_mode,
-                        &shred_storage_type,
-                        force_update_to_open,
-                    ),
-                    arg_matches,
+                let blockstore = open_blockstore(
+                    &ledger_path,
+                    AccessType::Secondary,
+                    wal_recovery_mode,
+                    &shred_storage_type,
+                    force_update_to_open,
                 );
+
+                match blockstore.slot_meta_iterator(0) {
+                    Ok(metas) => {
+                        let output_format =
+                            OutputFormat::from_matches(arg_matches, "output_format", false);
+                        let all = matches.is_present("all");
+
+                        let slots: Vec<_> = metas.map(|(slot, _)| slot).collect();
+                        let mut slot_bounds = SlotBounds::default();
+
+                        if slots.is_empty() {
+                            match output_format {
+                                OutputFormat::Json | OutputFormat::JsonCompact => {
+                                    println!("{}", output_format.formatted_string(&slot_bounds))
+                                }
+                                _ => println!("Ledger is empty"),
+                            }
+                        } else {
+                            let first = slots.first().unwrap();
+                            let last = slots.last().unwrap_or(first);
+
+                            slot_bounds.total_slots = Some(SlotInfo {
+                                start: *first,
+                                end: *last,
+                                total: slots.len(),
+                                ..Default::default()
+                            });
+
+                            // Rooted Slots
+                            if let Ok(rooted) = blockstore.rooted_slot_iterator(0) {
+                                let mut first_rooted = 0;
+                                let mut last_rooted = 0;
+                                let mut total_rooted = 0;
+                                for (i, slot) in rooted.into_iter().enumerate() {
+                                    if i == 0 {
+                                        first_rooted = slot;
+                                    }
+                                    last_rooted = slot;
+                                    total_rooted += 1;
+                                }
+                                let mut count_past_root = 0;
+                                for slot in slots.iter().rev() {
+                                    if *slot > last_rooted {
+                                        count_past_root += 1;
+                                    } else {
+                                        break;
+                                    }
+                                }
+
+                                slot_bounds.rooted_slots = Some(SlotInfo {
+                                    start: first_rooted,
+                                    end: last_rooted,
+                                    total: total_rooted,
+                                    from_last: Some(count_past_root),
+                                });
+                            }
+                        }
+
+                        // Print collected data
+                        match output_format {
+                            OutputFormat::Json | OutputFormat::JsonCompact => {
+                                println!("{}", output_format.formatted_string(&slot_bounds))
+                            }
+                            _ => {
+                                // Simple text print in other cases.
+
+                                if let Some(total_slots) = slot_bounds.total_slots {
+                                    if total_slots.start != total_slots.end {
+                                        println!(
+                                            "Ledger has data for {:?} slots {:?} to {:?}",
+                                            total_slots.total, total_slots.start, total_slots.end
+                                        );
+                                        if all {
+                                            println!("Non-empty slots: {:?}", slots);
+                                        }
+                                    } else {
+                                        println!(
+                                            "Ledger has data for slot {:?}",
+                                            total_slots.start
+                                        );
+                                    }
+
+                                    if let Some(rooted_slots) = slot_bounds.rooted_slots {
+                                        println!(
+                                            "  with {:?} rooted slots from {:?} to {:?}",
+                                            rooted_slots.total,
+                                            rooted_slots.start,
+                                            rooted_slots.end
+                                        );
+                                        println!(
+                                            "  and {:?} slots past the last root",
+                                            rooted_slots.from_last
+                                        )
+                                    } else {
+                                        println!("  with no rooted slots")
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    Err(err) => {
+                        eprintln!("Unable to read the Ledger: {:?}", err);
+                        exit(1);
+                    }
+                };
             }
             ("analyze-storage", _) => {
                 analyze_storage(
