@@ -7284,7 +7284,11 @@ impl Bank {
 
     /// Hash the `accounts` HashMap. This represents a validator's interpretation
     ///  of the delta of the ledger since the last vote and up to now
-    fn hash_internal_state(&self, bank_hash_override: Option<Hash>) -> Hash {
+    fn hash_internal_state(&self) -> Hash {
+        self._hash_internal_state(None);
+    }
+
+    fn _hash_internal_state(&self, bank_hash_override: Option<Hash>) -> Hash {
         // If there are no accounts, return the hash of the previous state and the latest blockhash
         let bank_hash_info = self.rc.accounts.bank_hash_info_at(self.slot());
         let mut signature_count_buf = [0u8; 8];
@@ -7329,7 +7333,7 @@ impl Bank {
             self.signature_count(),
             self.transaction_count(),
             self.last_blockhash(),
-            self.blockhash_override.map(|bo| format!(" (overrode)")).unwrap_or_else(|| format!("")),
+            self.blockhash_override.map(|_| format!(" (overrode)")).unwrap_or_else(|| format!("")),
             self.capitalization(),
             if let Some(epoch_accounts_hash) = epoch_accounts_hash {
                 format!(", epoch_accounts_hash: {:?}", epoch_accounts_hash.as_ref())
