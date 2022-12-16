@@ -1769,6 +1769,9 @@ impl ReplayStage {
                 rpc_subscriptions,
                 NewBankOptions { vote_only_bank },
             );
+            // make sure parent is frozen for finalized hashes via the above
+            // new()-ing of its child bank
+            banking_tracer.hash_event(parent.slot(), parent.last_blockhash(), parent.hash());
 
             let tpu_bank = bank_forks.write().unwrap().insert(tpu_bank);
             poh_recorder
