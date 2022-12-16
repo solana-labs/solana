@@ -7513,7 +7513,7 @@ impl Bank {
     #[must_use]
     fn verify_hash(&self) -> bool {
         assert!(self.is_frozen());
-        let calculated_hash = self.hash_internal_state(None);
+        let calculated_hash = self.hash_internal_state();
         let expected_hash = self.hash();
 
         if calculated_hash == expected_hash {
