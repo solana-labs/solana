@@ -8,7 +8,7 @@ use {
 pub struct Poh {
     pub hash: Hash,
     num_hashes: u64,
-    hashes_per_tick: u64,
+    pub hashes_per_tick: u64,
     remaining_hashes: u64,
     tick_number: u64,
     slot_start_time: Instant,

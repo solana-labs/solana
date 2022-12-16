@@ -554,6 +554,10 @@ pub mod enable_program_redeployment_cooldown {
     solana_sdk::declare_id!("J4HFT8usBxpcF63y46t1upYobJgChmKyZPm5uTBRg25Z");
 }
 
+pub mod configurable_hashes_per_tick {
+    solana_sdk::declare_id!("3uFHb9oKdGfgZGJK9EHaAXN4USvnQtAFC13Fh5gGFS5B");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -687,6 +691,7 @@ lazy_static! {
         (cap_transaction_accounts_data_size::id(), "cap transaction accounts data size up to its compute unit limits #27839"),
         (enable_alt_bn128_syscall::id(), "add alt_bn128 syscalls #27961"),
         (enable_program_redeployment_cooldown::id(), "enable program redeployment cooldown #29135"),
+        (configurable_hashes_per_tick::id(), "Configure desired hashes per tick to update on epoch boundary"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()

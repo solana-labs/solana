@@ -108,9 +108,10 @@ use {
         account_utils::StateMut,
         bpf_loader_upgradeable::{self, UpgradeableLoaderState},
         clock::{
-            BankId, Epoch, Slot, SlotCount, SlotIndex, UnixTimestamp, DEFAULT_TICKS_PER_SECOND,
-            INITIAL_RENT_EPOCH, MAX_PROCESSING_AGE, MAX_TRANSACTION_FORWARDING_DELAY,
-            MAX_TRANSACTION_FORWARDING_DELAY_GPU, SECONDS_PER_DAY,
+            BankId, Epoch, Slot, SlotCount, SlotIndex, UnixTimestamp, DEFAULT_HASHES_PER_TICK,
+            DEFAULT_TICKS_PER_SECOND, INITIAL_RENT_EPOCH, MAX_PROCESSING_AGE,
+            MAX_TRANSACTION_FORWARDING_DELAY, MAX_TRANSACTION_FORWARDING_DELAY_GPU,
+            SECONDS_PER_DAY,
         },
         ed25519_program,
         epoch_info::EpochInfo,
@@ -1661,7 +1662,8 @@ impl Bank {
                     let (_, apply_feature_activations_time) = measure!(
                         new.apply_feature_activations(
                             ApplyFeatureActivationsCaller::NewFromParent,
-                            false
+                            false,
+                            vec![false; FeatureActivation::NumVariants as usize],
                         ),
                         "apply_feature_activation",
                     );
@@ -1888,7 +1890,11 @@ impl Bank {
 
         let parent_timestamp = parent.clock().unix_timestamp;
         let mut new = Bank::new_from_parent(parent, collector_id, slot);
-        new.apply_feature_activations(ApplyFeatureActivationsCaller::WarpFromParent, false);
+        new.apply_feature_activations(
+            ApplyFeatureActivationsCaller::WarpFromParent,
+            false,
+            vec![false; FeatureActivation::NumVariants as usize],
+        );
         new.update_epoch_stakes(new.epoch_schedule().get_epoch(slot));
         new.tick_height.store(new.max_tick_height(), Relaxed);
 
@@ -2014,10 +2020,6 @@ impl Bank {
             bank.genesis_creation_time, genesis_config.creation_time,
             "Bank snapshot genesis creation time does not match genesis.bin creation time.\
              The snapshot and genesis.bin might pertain to different clusters"
-        );
-        assert_eq!(
-            bank.hashes_per_tick,
-            genesis_config.poh_config.hashes_per_tick
         );
         assert_eq!(bank.ticks_per_slot, genesis_config.ticks_per_slot);
         assert_eq!(
@@ -6426,6 +6428,7 @@ impl Bank {
         self.apply_feature_activations(
             ApplyFeatureActivationsCaller::FinishInit,
             debug_do_not_add_builtins,
+            vec![false; FeatureActivation::NumVariants as usize],
         );
 
         if self
@@ -7452,10 +7455,12 @@ impl Bank {
 
     // This is called from snapshot restore AND for each epoch boundary
     // The entire code path herein must be idempotent
-    fn apply_feature_activations(
+    pub fn apply_feature_activations(
         &mut self,
         caller: ApplyFeatureActivationsCaller,
         debug_do_not_add_builtins: bool,
+        // This vector is for forcing a feature to get activated for testing purposes
+        features_activated_test: Vec<bool>,
     ) {
         use ApplyFeatureActivationsCaller::*;
         let allow_new_activations = match caller {
@@ -7507,6 +7512,21 @@ impl Bank {
             const ACCOUNTS_DATA_LEN: u64 = 50_000_000_000;
             self.accounts_data_size_initial = ACCOUNTS_DATA_LEN;
         }
+
+        if new_feature_activations.contains(&feature_set::configurable_hashes_per_tick::id())
+            || features_activated_test[FeatureActivation::ConfigurablePohTicksPerSecond as usize]
+        {
+            self.apply_updated_hashes_per_tick(DEFAULT_HASHES_PER_TICK);
+        }
+    }
+
+    fn apply_updated_hashes_per_tick(&mut self, hashes_per_tick: u64) {
+        info!(
+            "Activating configurable_hashes_per_tick {} at slot {}",
+            hashes_per_tick,
+            self.slot(),
+        );
+        self.hashes_per_tick = Some(hashes_per_tick);
     }
 
     fn adjust_sysvar_balance_for_rent(&self, account: &mut AccountSharedData) {
@@ -7797,10 +7817,17 @@ fn calculate_data_size_delta(old_data_size: usize, new_data_size: usize) -> i64 
 /// Since `apply_feature_activations()` has different behavior depending on its caller, enumerate
 /// those callers explicitly.
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
-enum ApplyFeatureActivationsCaller {
+pub enum ApplyFeatureActivationsCaller {
     FinishInit,
     NewFromParent,
     WarpFromParent,
+}
+
+/// Allows for force enabling feature activations for testing.
+pub enum FeatureActivation {
+    ConfigurablePohTicksPerSecond,
+    // Add new feature activation enums here
+    NumVariants,
 }
 
 /// Return the computed values from `collect_rent_from_accounts()`
@@ -20156,5 +20183,48 @@ pub(crate) mod tests {
                 solana_sdk::instruction::InstructionError::MaxAccountsDataAllocationsExceeded,
             )),
         );
+    }
+
+    #[test]
+    fn test_feature_activation_idempotent() {
+        let GenesisConfigInfo {
+            mut genesis_config, ..
+        } = genesis_utils::create_genesis_config_with_leader(
+            1_000_000 * LAMPORTS_PER_SOL,
+            &Pubkey::new_unique(),
+            100 * LAMPORTS_PER_SOL,
+        );
+        genesis_config.rent = Rent::default();
+        const HASHES_PER_TICK_START: u64 = 3;
+        genesis_config.poh_config.hashes_per_tick = Some(HASHES_PER_TICK_START);
+
+        let mut bank = Bank::new_for_tests(&genesis_config);
+        assert_eq!(bank.hashes_per_tick, Some(HASHES_PER_TICK_START));
+
+        // Don't activate feature
+        let mut test_activation = vec![false; FeatureActivation::NumVariants as usize];
+        bank.apply_feature_activations(
+            ApplyFeatureActivationsCaller::NewFromParent,
+            false,
+            test_activation.clone(),
+        );
+        assert_eq!(bank.hashes_per_tick, Some(HASHES_PER_TICK_START));
+
+        // Activate feature
+        test_activation[FeatureActivation::ConfigurablePohTicksPerSecond as usize] = true;
+        bank.apply_feature_activations(
+            ApplyFeatureActivationsCaller::NewFromParent,
+            false,
+            test_activation.clone(),
+        );
+        assert_eq!(bank.hashes_per_tick, Some(DEFAULT_HASHES_PER_TICK));
+
+        // Activate feature "again"
+        bank.apply_feature_activations(
+            ApplyFeatureActivationsCaller::NewFromParent,
+            false,
+            test_activation,
+        );
+        assert_eq!(bank.hashes_per_tick, Some(DEFAULT_HASHES_PER_TICK));
     }
 }
