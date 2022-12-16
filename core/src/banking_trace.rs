@@ -69,8 +69,9 @@ pub struct TimedTracedEvent(std::time::SystemTime, TracedEvent);
 
 #[derive(Serialize, Deserialize, Debug)]
 enum TracedEvent {
-    Bank(Slot, u32, BankStatus, usize),
     PacketBatch(ChannelLabel, BankingPacketBatch),
+    Bank(Slot, u32, BankStatus, usize),
+    BlockAndBankHash(Slot, Hash, Hash),
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -238,13 +239,24 @@ impl BankingTracer {
         status: BankStatus,
         unprocessed_transaction_count: usize,
     ) {
+        self.trace_event(TimedTracedEvent(
+            SystemTime::now(),
+            TracedEvent::Bank(slot, id, status, unprocessed_transaction_count),
+        ))
+    }
+
+    pub fn hash_event(&self, slot: Slot, blockhash: Hash, bank_hash: Hash) {
+        self.trace_event(TimedTracedEvent(
+            SystemTime::now(),
+            TracedEvent::BlockAndBankHash(slot, blockhash, bank_hash),
+        ))
+    }
+
+    fn trace_event(&self, event: TimedTracedEvent) {
         if let Some((sender, _, exit)) = &self.enabled_tracer {
             if !exit.load(Ordering::Relaxed) {
                 sender
-                    .send(TimedTracedEvent(
-                        SystemTime::now(),
-                        TracedEvent::Bank(slot, id, status, unprocessed_transaction_count),
-                    ))
+                    .send(event)
                     .expect("active tracer thread unless exited");
             }
         }
@@ -399,7 +411,12 @@ pub mod for_test {
 mod tests {
     use {
         super::*,
-        std::{fs::File, io::BufReader},
+        bincode::ErrorKind::Io as BincodeIoError,
+        std::{
+            fs::File,
+            io::{BufReader, ErrorKind::UnexpectedEof},
+            str::FromStr,
+        },
     };
 
     #[test]
@@ -482,31 +499,48 @@ mod tests {
             .send(for_test::sample_packet_batch())
             .unwrap();
         tracer.bank_start(1, 2, 3);
+        let blockhash = Hash::from_str("B1ockhash1111111111111111111111111111111111").unwrap();
+        let bank_hash = Hash::from_str("BankHash11111111111111111111111111111111111").unwrap();
+        tracer.hash_event(4, blockhash, bank_hash);
 
         for_test::terminate_tracer(tracer, dummy_main_thread, non_vote_sender, None);
 
         let mut stream = BufReader::new(File::open(path.join(BASENAME)).unwrap());
-        let results = (0..3)
+        let results = (0..=3)
             .map(|_| bincode::deserialize_from::<_, TimedTracedEvent>(&mut stream))
             .collect::<Vec<_>>();
 
+        let mut i = 0;
         assert_matches!(
-            results[0],
+            results[i],
             Ok(TimedTracedEvent(
                 _,
                 TracedEvent::PacketBatch(ChannelLabel::NonVote, _)
             ))
         );
+        i += 1;
         assert_matches!(
-            results[1],
+            results[i],
             Ok(TimedTracedEvent(
                 _,
                 TracedEvent::Bank(1, 2, BankStatus::Started, 3)
             ))
         );
+        i += 1;
         assert_matches!(
-            results[2],
-            Err(_) // in this way, rustfmt formats this line like the above
+            results[i],
+            Ok(TimedTracedEvent(
+                _,
+                TracedEvent::BlockAndBankHash(4, actual_blockhash, actual_bank_hash)
+            )) if actual_blockhash == blockhash && actual_bank_hash == bank_hash
+        );
+        i += 1;
+        assert_matches!(
+            results[i],
+            Err(ref err) if matches!(
+                **err,
+                BincodeIoError(ref error) if error.kind() == UnexpectedEof
+            )
         );
 
         for_test::drop_and_clean_temp_dir_unless_suppressed(temp_dir);
