@@ -4,6 +4,8 @@ import { ClusterStatsStatus } from "./solanaClusterStats";
 export type PerformanceInfo = {
   status: ClusterStatsStatus;
   avgTps: number;
+  nonVoteTps: number;
+  recordedNonVoteCount: number;
   historyMaxTps: number;
   perfHistory: {
     short: (number | null)[];
@@ -13,8 +15,14 @@ export type PerformanceInfo = {
   transactionCount: number;
 };
 
+export type TransactionCount = {
+  transactionCount: number;
+  nonVoteTps: number;
+};
+
 export enum PerformanceInfoActionType {
   SetTransactionCount,
+  SetTransactionNonVoteTps,
   SetPerfSamples,
   SetError,
   Reset,
@@ -22,6 +30,11 @@ export enum PerformanceInfoActionType {
 
 export type PerformanceInfoActionSetTransactionCount = {
   type: PerformanceInfoActionType.SetTransactionCount;
+  data: number;
+};
+
+export type PerformanceInfoActionSetNonVoteTps = {
+  type: PerformanceInfoActionType.SetTransactionNonVoteTps;
   data: number;
 };
 
@@ -42,6 +55,7 @@ export type PerformanceInfoActionReset = {
 
 export type PerformanceInfoAction =
   | PerformanceInfoActionSetTransactionCount
+  | PerformanceInfoActionSetNonVoteTps
   | PerformanceInfoActionSetPerfSamples
   | PerformanceInfoActionSetError
   | PerformanceInfoActionReset;
@@ -100,9 +114,30 @@ export function performanceInfoReducer(
           ? ClusterStatsStatus.Ready
           : ClusterStatsStatus.Loading;
 
+      // calculate running average
       return {
         ...state,
         transactionCount: action.data,
+        status,
+      };
+    }
+
+    case PerformanceInfoActionType.SetTransactionNonVoteTps: {
+      const status =
+        state.nonVoteTps !== 0
+          ? ClusterStatsStatus.Ready
+          : ClusterStatsStatus.Loading;
+
+      // calculate running average to smooth the
+      // non tps output
+      const updatedNonVoteTps =
+        state.nonVoteTps +
+        (action.data - state.nonVoteTps) / (state.recordedNonVoteCount + 1);
+
+      return {
+        ...state,
+        nonVoteTps: updatedNonVoteTps,
+        recordedNonVoteCount: state.recordedNonVoteCount + 1,
         status,
       };
     }

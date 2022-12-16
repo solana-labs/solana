@@ -170,8 +170,9 @@ type TpsBarChartProps = {
   setSeries: SetSeries;
 };
 function TpsBarChart({ performanceInfo, series, setSeries }: TpsBarChartProps) {
-  const { perfHistory, avgTps, historyMaxTps } = performanceInfo;
+  const { perfHistory, avgTps, historyMaxTps, nonVoteTps } = performanceInfo;
   const averageTps = Math.round(avgTps).toLocaleString("en-US");
+  const nonVoteTpsLive = Math.round(nonVoteTps).toLocaleString("en-US");
   const transactionCount = <AnimatedTransactionCount info={performanceInfo} />;
   const seriesData = perfHistory[series];
   const chartOptions = React.useMemo(
@@ -203,7 +204,13 @@ function TpsBarChart({ performanceInfo, series, setSeries }: TpsBarChartProps) {
         </tr>
         <tr>
           <td className="w-100">Transactions per second (TPS)</td>
-          <td className="text-lg-end font-monospace">{averageTps} </td>
+          <td className="text-lg-end font-monospace">
+            {avgTps > 0 ? averageTps : "Loading..."}{" "}
+          </td>
+        </tr>
+        <tr>
+          <td className="w-100">Non vote (TPS)</td>
+          <td className="text-lg-end font-monospace">{nonVoteTpsLive} </td>
         </tr>
       </TableCardBody>
 

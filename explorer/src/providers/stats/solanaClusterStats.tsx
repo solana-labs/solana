@@ -17,6 +17,7 @@ export const PERF_UPDATE_SEC = 5;
 export const SAMPLE_HISTORY_HOURS = 6;
 export const PERFORMANCE_SAMPLE_INTERVAL = 60000;
 export const TRANSACTION_COUNT_INTERVAL = 5000;
+export const NON_VOTE_COUNT_INTERVAL = 10000;
 export const EPOCH_INFO_INTERVAL = 2000;
 export const BLOCK_TIME_INTERVAL = 5000;
 export const LOADING_TIMEOUT = 10000;
@@ -30,6 +31,8 @@ export enum ClusterStatsStatus {
 const initialPerformanceInfo: PerformanceInfo = {
   status: ClusterStatsStatus.Loading,
   avgTps: 0,
+  nonVoteTps: 0,
+  recordedNonVoteCount: 0,
   historyMaxTps: 0,
   perfHistory: {
     short: [],
@@ -161,6 +164,102 @@ export function SolanaClusterStatsProvider({ children }: Props) {
       }
     };
 
+    type BlockNonVoteTxs = {
+      txs: number;
+      blockTime: number;
+      slot: number;
+    };
+
+    /**
+     * getNonVoteTpsCount gets the 10 last slots and counts the number of
+     * transactions with a compute budget larger than 0.
+     *
+     * Then the blocks and number of transactons is grouped by the block time.
+     * We then remove the first and last blockTime as it's not guaranteed that we recorded
+     * all txs inside the second.
+     *
+     * Finally the number of txs over the blocktimes are counted and divided by the number of
+     * blocktimes. This in turn is one calculation of tps
+     */
+    const getNonVoteTpsCount = async () => {
+      try {
+        const lastBlocks = 10;
+        const slot = await connection.getSlot("finalized");
+        // get last 10 slots
+        const slots = Array.from(
+          { length: lastBlocks },
+          (v, k) => ((slot - lastBlocks) as number) + k
+        );
+
+        // get the number of txs per slot
+        const blockNonVoteTxs = (
+          await Promise.all(
+            slots.map(async (slot) => {
+              // get block
+              try {
+                const block = await connection.getBlock(slot, {
+                  maxSupportedTransactionVersion: 0,
+                });
+                // count non-vote transactions
+                const nonVoteTx = block?.transactions.reduce(
+                  (prev, next) =>
+                    next.meta?.computeUnitsConsumed !== 0 ? prev + 1 : prev,
+                  0
+                );
+                return {
+                  txs: nonVoteTx,
+                  blockTime: block?.blockTime,
+                  slot: slot,
+                };
+              } catch {
+                return undefined;
+              }
+            })
+          )
+        ).filter((i) => i !== undefined) as BlockNonVoteTxs[];
+
+        // group by blocktime
+        const groupedByBlockTime = blockNonVoteTxs.reduce((prev, next) => {
+          const { blockTime } = next;
+          (prev as any)[blockTime] = (prev as any)[blockTime] ?? [];
+          (prev as any)[blockTime].push(next);
+          return prev;
+        }, {}) as Record<number, BlockNonVoteTxs[]>;
+
+        // sum the number of txs over each blocktime, this is an approx tps
+        const slicedGrouped = Object.keys(groupedByBlockTime)
+          .map((time) =>
+            groupedByBlockTime[parseInt(time)].reduce((p, n) => p + n.txs, 0)
+          )
+          .slice(1, -1);
+        // only consider slicedGroup of length >= 3
+        if (slicedGrouped.length > 0) {
+          const numSeconds = slicedGrouped.length;
+          const totalTxs = slicedGrouped.reduce((p, n) => p + n);
+
+          // final calculation
+          const tps = totalTxs / numSeconds;
+          if (tps) {
+            dispatchPerformanceInfo({
+              type: PerformanceInfoActionType.SetTransactionNonVoteTps,
+              data: tps,
+            });
+          }
+        }
+      } catch (error) {
+        if (cluster !== Cluster.Custom) {
+          reportError(error, { url });
+        }
+        if (error instanceof Error) {
+          dispatchPerformanceInfo({
+            type: PerformanceInfoActionType.SetError,
+            data: error.toString(),
+          });
+        }
+        setActive(false);
+      }
+    };
+
     const getEpochInfo = async () => {
       try {
         const epochInfo = await connection.getEpochInfo();
@@ -210,11 +309,17 @@ export function SolanaClusterStatsProvider({ children }: Props) {
       getTransactionCount,
       TRANSACTION_COUNT_INTERVAL
     );
+
+    const nonVoteCountInterval = setInterval(
+      getNonVoteTpsCount,
+      NON_VOTE_COUNT_INTERVAL
+    );
     const epochInfoInterval = setInterval(getEpochInfo, EPOCH_INFO_INTERVAL);
     const blockTimeInterval = setInterval(getBlockTime, BLOCK_TIME_INTERVAL);
 
     getPerformanceSamples();
     getTransactionCount();
+    getNonVoteTpsCount();
     (async () => {
       await getEpochInfo();
       await getBlockTime();
@@ -223,6 +328,7 @@ export function SolanaClusterStatsProvider({ children }: Props) {
     return () => {
       clearInterval(performanceInterval);
       clearInterval(transactionCountInterval);
+      clearInterval(nonVoteCountInterval);
       clearInterval(epochInfoInterval);
       clearInterval(blockTimeInterval);
     };
