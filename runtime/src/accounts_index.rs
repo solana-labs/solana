@@ -1694,8 +1694,8 @@ impl<T: IndexValue> AccountsIndex<T> {
         })
     }
 
-    fn purge_secondary_indexes_by_inner_key<'a>(
-        &'a self,
+    fn purge_secondary_indexes_by_inner_key(
+        &self,
         inner_key: &Pubkey,
         account_indexes: &AccountSecondaryIndexes,
     ) {

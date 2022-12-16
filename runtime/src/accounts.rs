@@ -1409,12 +1409,12 @@ impl Accounts {
     }
 }
 
-fn prepare_if_nonce_account<'a>(
+fn prepare_if_nonce_account(
     address: &Pubkey,
     account: &mut AccountSharedData,
     execution_result: &Result<()>,
     is_fee_payer: bool,
-    maybe_nonce: Option<(&'a NonceFull, bool)>,
+    maybe_nonce: Option<(&NonceFull, bool)>,
     &durable_nonce: &DurableNonce,
     lamports_per_signature: u64,
 ) -> bool {

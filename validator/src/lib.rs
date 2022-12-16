@@ -153,8 +153,8 @@ pub fn ledger_lockfile(ledger_path: &Path) -> RwLock<File> {
     )
 }
 
-pub fn lock_ledger<'path, 'lock>(
-    ledger_path: &'path Path,
+pub fn lock_ledger<'lock>(
+    ledger_path: &Path,
     ledger_lockfile: &'lock mut RwLock<File>,
 ) -> RwLockWriteGuard<'lock, File> {
     ledger_lockfile.try_write().unwrap_or_else(|_| {
