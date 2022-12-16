@@ -593,12 +593,13 @@ impl BankingSimulator {
         }
     }
 
-    pub fn dump(&self, bank: Option<Arc<solana_runtime::bank::Bank>>) -> (std::collections::BTreeMap<Slot, std::collections::HashMap<u32, (std::time::SystemTime, usize)>>, std::collections::BTreeMap<std::time::SystemTime, (ChannelLabel, BankingPacketBatch)>, (usize, usize, usize)) {
+    pub fn dump(&self, bank: Option<Arc<solana_runtime::bank::Bank>>) -> (std::collections::BTreeMap<Slot, std::collections::HashMap<u32, (std::time::SystemTime, usize)>>, std::collections::BTreeMap<std::time::SystemTime, (ChannelLabel, BankingPacketBatch)>, std::collections::HashMap<u64, (solana_sdk::hash::Hash, solana_sdk::hash::Hash)>, (usize, usize, usize)) {
         use std::io::BufReader;
         use std::fs::File;
         let mut stream = BufReader::new(File::open(&self.path).unwrap());
         let mut bank_starts_by_slot = std::collections::BTreeMap::new();
         let mut packet_batches_by_time = std::collections::BTreeMap::new();
+        let mut hashes_by_slot = std::collections::HashMap::new();
 
         let mut packet_count = 0;
         let mut events = vec![];
@@ -625,7 +626,10 @@ impl BankingSimulator {
                 TracedEvent::PacketBatch(label, batch) => {
                     packet_batches_by_time.insert(event_time, (label.clone(), batch.clone()));
                 }
-                _ => {}
+                TracedEvent::BlockAndBankHash(slot, blockhash, bank_hash) => {
+                    hashes_by_slot.insert(*slot, (*blockhash, *bank_hash));
+                },
+                _ => {},
             }
         }
 
@@ -675,7 +679,7 @@ impl BankingSimulator {
             }
         }
 
-        (bank_starts_by_slot, packet_batches_by_time, unprocessed_counts)
+        (bank_starts_by_slot, packet_batches_by_time, hashes_by_slot, unprocessed_counts)
     }
 
     pub fn simulate(
@@ -695,7 +699,7 @@ impl BankingSimulator {
 
         let mut bank = bank_forks.read().unwrap().working_bank();
 
-        let (bank_starts_by_slot, packet_batches_by_time, unprocessed_counts) = self.dump(Some(bank.clone()));
+        let (bank_starts_by_slot, packet_batches_by_time, hashes_by_slot, unprocessed_counts) = self.dump(Some(bank.clone()));
         if std::env::var("DUMP_WITH_BANK").is_ok() {
             return
         }
@@ -747,6 +751,7 @@ impl BankingSimulator {
             exit.clone(),
             DEFAULT_BANKING_TRACE_SIZE
         ))).unwrap();
+        let banking_tracer = Arc::new(banking_tracer);
         let (non_vote_sender, non_vote_receiver) = banking_tracer.create_channel_non_vote();
         let (tpu_vote_sender, tpu_vote_receiver) = banking_tracer.create_channel_tpu_vote();
         let (gossip_vote_sender, gossip_vote_receiver) =
@@ -924,10 +929,10 @@ impl BankingSimulator {
                 use solana_runtime::bank::NewBankOptions;
 
                 let old_slot = bank.slot();
-                bank.freeze_with_bank_hash_override(bank_hash_overrides.get(&old_slot).copied());
+                bank.freeze_with_bank_hash_override(hashes_by_slot.get(&old_slot).map(|hh| hh.1));
                 let new_slot = bank.slot() + 1;
                 let options = NewBankOptions {
-                    blockhash_override: blockhash_overrides.get(&new_slot).copied(),
+                    blockhash_override: hashes_by_slot.get(&new_slot).map(|hh| hh.0),
                     ..Default::default()
                 };
                 let new_bank = Bank::new_from_parent_with_options(&bank, &collector, new_slot, options);
