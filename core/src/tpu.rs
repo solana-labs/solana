@@ -99,8 +99,8 @@ impl Tpu {
         log_messages_bytes_limit: Option<usize>,
         staked_nodes: &Arc<RwLock<StakedNodes>>,
         shared_staked_nodes_overrides: Arc<RwLock<HashMap<Pubkey, u64>>>,
+        banking_tracer: Arc<BankingTracer>,
         tpu_enable_udp: bool,
-        banking_tracer: BankingTracer,
     ) -> Self {
         let TpuSockets {
             transactions: transactions_sockets,
