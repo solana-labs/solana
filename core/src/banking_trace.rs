@@ -901,11 +901,17 @@ impl BankingSimulator {
         poh_recorder.write().unwrap().set_bank(&bank, false);
 
         use solana_sdk::hash::Hash;
-        let hash_overrides =std::collections::HashMap::from([
+        let blockhash_overrides =std::collections::HashMap::from([
             (167249284, Hash::from_str("84HMxHV6W4o6BvJh455Zk6Yg2aU1K2TDBFpTvxuEuYG4").unwrap()),
             (167249285, Hash::from_str("5BxWarhTStdTBrPAdYRpBsrCgZoB7QSYsLbzd4Shz8uJ").unwrap()),
             (167249286, Hash::from_str("FEmFN2zPnuaR6tYn2uxTF7Rq1hDnYbtKejbUW8KDJwVv").unwrap()),
             (167249287, Hash::from_str("9iZHWHaMBemZPrtRfcw5LmVTxEhq8biAxsp9UupVuu2V").unwrap()),
+        ]);
+        let bank_hash_overrides =std::collections::HashMap::from([
+            (167249284, Hash::from_str("HmeLnLAeaF5zjLcLr5xBqxCLZbf11Gi2kcG1phVhJW22").unwrap()),
+            (167249285, Hash::from_str("BxueduRmDa12A1soB9obebgx34pmicFFab37cXzGfP8r").unwrap()),
+            (167249286, Hash::from_str("9kFZNx49fQ5ugE3i3dzfAFvPPpw4EWVQYqnkxGH8GFWp").unwrap()),
+            (167249287, Hash::from_str("7Lc3dTaGrSouBPVAUjKWxqGJJEY13fhsT3u3vMMmJNwN").unwrap()),
         ]);
 
         for _ in 0..500 {
@@ -917,9 +923,11 @@ impl BankingSimulator {
                 info!("Bank::new_from_parent()!");
                 use solana_runtime::bank::NewBankOptions;
 
+                let old_slot = bank.slot();
+                bank.freeze_with_bank_hash_override(bank_hash_overrides.get(&old_slot).copied());
                 let new_slot = bank.slot() + 1;
                 let options = NewBankOptions {
-                    blockhash_override: hash_overrides.get(&new_slot).copied(),
+                    blockhash_override: blockhash_overrides.get(&new_slot).copied(),
                     ..Default::default()
                 };
                 let new_bank = Bank::new_from_parent_with_options(&bank, &collector, new_slot, options);

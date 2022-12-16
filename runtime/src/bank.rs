@@ -3648,7 +3648,7 @@ impl Bank {
         }
     }
 
-    pub fn _freeze(&self, hash_override: Option<Hash>) {
+    pub fn _freeze(&self, bank_hash_override: Option<Hash>) {
         // This lock prevents any new commits from BankingStage
         // `process_and_record_transactions_locked()` from coming
         // in after the last tick is observed. This is because in
@@ -3672,16 +3672,17 @@ impl Bank {
 
             // freeze is a one-way trip, idempotent
             self.freeze_started.store(true, Relaxed);
-            *hash = self.hash_internal_state(hash_override);
+            *hash = self.hash_internal_state(bank_hash_override);
             self.rc.accounts.accounts_db.mark_slot_frozen(self.slot());
         }
     }
+
     pub fn freeze(&self) {
         self._freeze(None);
     }
 
-    pub fn freeze_with_hash_override(&self, hash: Hash) {
-        self._freeze(Some(hash));
+    pub fn freeze_with_bank_hash_override(&self, bank_hash_override: option<hash>) {
+        self._freeze(bank_hash_override);
     }
 
     // dangerous; don't use this; this is only needed for ledger-tool's special command
@@ -7283,7 +7284,7 @@ impl Bank {
 
     /// Hash the `accounts` HashMap. This represents a validator's interpretation
     ///  of the delta of the ledger since the last vote and up to now
-    fn hash_internal_state(&self, hash_override: Option<Hash>) -> Hash {
+    fn hash_internal_state(&self, bank_hash_override: Option<Hash>) -> Hash {
         // If there are no accounts, return the hash of the previous state and the latest blockhash
         let bank_hash_info = self.rc.accounts.bank_hash_info_at(self.slot());
         let mut signature_count_buf = [0u8; 8];
@@ -7323,7 +7324,7 @@ impl Bank {
             "bank frozen: {} (parent: {}) hash: {} accounts_delta: {} sigs: {} txs: {}, last_blockhash: {}{} capitalization: {}{}",
             self.slot(),
             self.parent_slot(),
-            hash_override.map(|ho| format!("{ho} (overrode: {hash})")).unwrap_or_else(|| format!("{hash}")),
+            bank_hash_override.map(|ho| format!("{ho} (overrode: {hash})")).unwrap_or_else(|| format!("{hash}")),
             bank_hash_info.accounts_delta_hash,
             self.signature_count(),
             self.transaction_count(),
