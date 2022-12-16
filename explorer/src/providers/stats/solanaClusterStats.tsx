@@ -31,7 +31,7 @@ export enum ClusterStatsStatus {
 const initialPerformanceInfo: PerformanceInfo = {
   status: ClusterStatsStatus.Loading,
   avgTps: 0,
-  nonVoteTps: 0,
+  nonVoteTps: -1,
   recordedNonVoteCount: 0,
   historyMaxTps: 0,
   perfHistory: {
