@@ -4076,25 +4076,7 @@ fn main() {
                     .rooted_slot_iterator(start_root)
                     .expect("Failed to get rooted slot");
 
-                let mut slot_hash = Vec::new();
-                for (i, slot) in iter.into_iter().enumerate() {
-                    if i > num_roots {
-                        break;
-                    }
-                    if slot <= max_height as u64 {
-                        let blockhash = blockstore
-                            .get_slot_entries(slot, 0)
-                            .unwrap()
-                            .last()
-                            .unwrap()
-                            .hash;
-                        slot_hash.push((slot, blockhash));
-                    } else {
-                        break;
-                    }
-                }
-
-                let mut output_file: Box<dyn Write> =
+                let mut output: Box<dyn Write> =
                     if let Some(path) = arg_matches.value_of("slot_list") {
                         match File::create(path) {
                             Ok(file) => Box::new(file),
@@ -4104,16 +4086,20 @@ fn main() {
                         Box::new(stdout())
                     };
 
-                slot_hash
+                iter.take(num_roots)
+                    .take_while(|slot| *slot <= max_height as u64)
+                    .collect::<Vec<_>>()
                     .into_iter()
                     .rev()
-                    .enumerate()
-                    .for_each(|(i, (slot, hash))| {
-                        if i < num_roots {
-                            output_file
-                                .write_all(format!("{slot:?}: {hash:?}\n").as_bytes())
-                                .expect("failed to write");
-                        }
+                    .for_each(|slot| {
+                        let blockhash = blockstore
+                            .get_slot_entries(slot, 0)
+                            .unwrap()
+                            .last()
+                            .unwrap()
+                            .hash;
+
+                        writeln!(output, "{}: {:?}", slot, blockhash).expect("failed to write");
                     });
             }
             ("latest-optimistic-slots", Some(arg_matches)) => {
