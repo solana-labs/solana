@@ -4037,23 +4037,17 @@ impl AccountsDb {
         slot: Slot,
         aligned_total: u64,
     ) -> Arc<AccountStorageEntry> {
-        let shrunken_store = if let Some(new_store) =
-            self.try_recycle_and_insert_store(slot, aligned_total, aligned_total + 1024)
-        {
-            new_store
-        } else {
-            let maybe_shrink_paths = self.shrink_paths.read().unwrap();
-            if let Some(ref shrink_paths) = *maybe_shrink_paths {
-                self.create_and_insert_store_with_paths(
-                    slot,
-                    aligned_total,
-                    "shrink-w-path",
-                    shrink_paths,
-                )
-            } else {
-                self.create_and_insert_store(slot, aligned_total, "shrink")
-            }
-        };
+        let shrunken_store = self
+            .try_recycle_store(slot, aligned_total, aligned_total + 1024)
+            .unwrap_or_else(|| {
+                let maybe_shrink_paths = self.shrink_paths.read().unwrap();
+                let (shrink_paths, from) = maybe_shrink_paths
+                    .as_ref()
+                    .map(|paths| (paths, "shrink-w-path"))
+                    .unwrap_or_else(|| (&self.paths, "shrink"));
+                self.create_store(slot, aligned_total, from, shrink_paths)
+            });
+        self.insert_store(slot, Arc::clone(&shrunken_store));
         shrunken_store
     }
 
