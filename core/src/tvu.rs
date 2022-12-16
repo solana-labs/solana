@@ -82,13 +82,10 @@ pub struct TvuConfig {
     pub shred_version: u16,
     // Validators from which repairs are requested
     pub repair_validators: Option<HashSet<Pubkey>>,
-<<<<<<< HEAD
     pub rocksdb_compaction_interval: Option<u64>,
     pub rocksdb_max_compaction_jitter: Option<u64>,
-=======
     // Validators which should be given priority when serving repairs
     pub repair_whitelist: Arc<RwLock<HashSet<Pubkey>>>,
->>>>>>> a44ea779b (add support for a repair protocol whitelist (#29161))
     pub wait_for_vote_to_start_leader: bool,
 }
 

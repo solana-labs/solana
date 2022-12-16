@@ -383,12 +383,12 @@ fn wait_for_restart_window(
     Ok(())
 }
 
-<<<<<<< HEAD
 fn hash_validator(hash: String) -> Result<(), String> {
     Hash::from_str(&hash)
         .map(|_| ())
         .map_err(|e| format!("{:?}", e))
-=======
+}
+
 fn set_repair_whitelist(
     ledger_path: &Path,
     whitelist: Vec<Pubkey>,
@@ -403,21 +403,6 @@ fn set_repair_whitelist(
             )
         })?;
     Ok(())
-}
-
-/// Returns the default fifo shred storage size (include both data and coding
-/// shreds) based on the validator config.
-fn default_fifo_shred_storage_size(vc: &ValidatorConfig) -> Option<u64> {
-    // The max shred size is around 1228 bytes.
-    // Here we reserve a little bit more than that to give extra storage for FIFO
-    // to prevent it from purging data that have not yet being marked as obsoleted
-    // by LedgerCleanupService.
-    const RESERVED_BYTES_PER_SHRED: u64 = 1500;
-    vc.max_ledger_shreds.map(|max_ledger_shreds| {
-        // x2 as we have data shred and coding shred.
-        max_ledger_shreds * RESERVED_BYTES_PER_SHRED * 2
-    })
->>>>>>> a44ea779b (add support for a repair protocol whitelist (#29161))
 }
 
 // This function is duplicated in ledger-tool/src/main.rs...
@@ -1229,6 +1214,18 @@ pub fn main() {
                        request from validators outside this set [default: all validators]")
         )
         .arg(
+            Arg::with_name("repair_whitelist")
+                .hidden(true)
+                .long("repair-whitelist")
+                .validator(is_pubkey)
+                .value_name("VALIDATOR IDENTITY")
+                .multiple(true)
+                .takes_value(true)
+                .help("A list of validators to prioritize repairs from. If specified, repair requests \
+                       from validators in the list will be prioritized over requests from other validators. \
+                       [default: all validators]")
+        )
+        .arg(
             Arg::with_name("gossip_validators")
                 .long("gossip-validator")
                 .validator(is_pubkey)
@@ -1933,6 +1930,46 @@ pub fn main() {
                     .possible_values(&["json", "json-compact"])
                     .help("Output display mode")
             )
+        )
+        .subcommand(
+            SubCommand::with_name("repair-whitelist")
+                .about("Manage the validator's repair protocol whitelist")
+                .setting(AppSettings::SubcommandRequiredElseHelp)
+                .setting(AppSettings::InferSubcommands)
+                .subcommand(
+                    SubCommand::with_name("get")
+                        .about("Display the validator's repair protocol whitelist")
+                        .arg(
+                            Arg::with_name("output")
+                                .long("output")
+                                .takes_value(true)
+                                .value_name("MODE")
+                                .possible_values(&["json", "json-compact"])
+                                .help("Output display mode")
+                        )
+                )
+                .subcommand(
+                    SubCommand::with_name("set")
+                        .about("Set the validator's repair protocol whitelist")
+                        .setting(AppSettings::ArgRequiredElseHelp)
+                        .arg(
+                            Arg::with_name("whitelist")
+                            .long("whitelist")
+                            .validator(is_pubkey)
+                            .value_name("VALIDATOR IDENTITY")
+                            .multiple(true)
+                            .takes_value(true)
+                            .help("Set the validator's repair protocol whitelist")
+                        )
+                        .after_help("Note: repair protocol whitelist changes only apply to the currently \
+                                    running validator instance")
+                )
+                .subcommand(
+                    SubCommand::with_name("remove-all")
+                        .about("Clear the validator's repair protocol whitelist")
+                        .after_help("Note: repair protocol whitelist changes only apply to the currently \
+                                    running validator instance")
+                )
         )
         .subcommand(
             SubCommand::with_name("init")

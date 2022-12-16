@@ -17,11 +17,7 @@ use {
         signature::{read_keypair_file, Keypair, Signer},
     },
     std::{
-<<<<<<< HEAD
-=======
-        collections::{HashMap, HashSet},
-        error,
->>>>>>> a44ea779b (add support for a repair protocol whitelist (#29161))
+        collections::HashSet,
         fmt::{self, Display},
         net::SocketAddr,
         path::{Path, PathBuf},

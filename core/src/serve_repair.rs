@@ -503,26 +503,18 @@ impl ServeRepair {
                     }
                 };
 
-                let from_addr = packet.meta().socket_addr();
+                let from_addr = packet.meta.socket_addr();
                 if !ContactInfo::is_valid_address(&from_addr, &socket_addr_space) {
                     stats.err_malformed += 1;
                     continue;
                 }
 
-<<<<<<< HEAD
-            let from_addr = packet.meta.socket_addr();
-            if !ContactInfo::is_valid_address(&from_addr, &socket_addr_space) {
-                stats.err_malformed += 1;
-                continue;
-            }
-=======
                 if request.supports_signature() {
                     // collect stats for signature verification
                     Self::verify_signed_packet(&my_id, packet, &request, stats);
                 } else {
                     stats.unsigned_requests += 1;
                 }
->>>>>>> a44ea779b (add support for a repair protocol whitelist (#29161))
 
                 if request.sender() == &my_id {
                     stats.self_repair += 1;

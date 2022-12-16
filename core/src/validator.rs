@@ -1010,12 +1010,9 @@ impl Validator {
                 max_ledger_shreds: config.max_ledger_shreds,
                 shred_version: node.info.shred_version,
                 repair_validators: config.repair_validators.clone(),
-<<<<<<< HEAD
                 rocksdb_compaction_interval: config.rocksdb_compaction_interval,
                 rocksdb_max_compaction_jitter: config.rocksdb_compaction_interval,
-=======
                 repair_whitelist: config.repair_whitelist.clone(),
->>>>>>> a44ea779b (add support for a repair protocol whitelist (#29161))
                 wait_for_vote_to_start_leader,
             },
             &max_slots,
