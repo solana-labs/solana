@@ -7285,7 +7285,7 @@ impl Bank {
     /// Hash the `accounts` HashMap. This represents a validator's interpretation
     ///  of the delta of the ledger since the last vote and up to now
     fn hash_internal_state(&self) -> Hash {
-        self._hash_internal_state(None);
+        self._hash_internal_state(None)
     }
 
     fn _hash_internal_state(&self, bank_hash_override: Option<Hash>) -> Hash {
