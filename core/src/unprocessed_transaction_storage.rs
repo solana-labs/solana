@@ -542,27 +542,14 @@ impl ThreadLocalUnprocessedPackets {
         )
     }
 
-    fn filter_forwardable_packets_and_add_batches(
-        &mut self,
-        bank: Arc<Bank>,
-        forward_packet_batches_by_accounts: &mut ForwardPacketBatchesByAccounts,
-    ) -> FilterForwardingResults {
-        self.filter_and_forward_with_account_limits(
-            bank,
-            forward_packet_batches_by_accounts,
-            UNPROCESSED_BUFFER_STEP_SIZE,
-        )
-    }
-
     /// Filter out packets that fail to sanitize, or are no longer valid (could be
     /// too old, a duplicate of something already processed). Doing this in batches to avoid
     /// checking bank's blockhash and status cache per transaction which could be bad for performance.
     /// Added valid and sanitized packets to forwarding queue.
-    fn filter_and_forward_with_account_limits(
+    fn filter_forwardable_packets_and_add_batches(
         &mut self,
         bank: Arc<Bank>,
         forward_buffer: &mut ForwardPacketBatchesByAccounts,
-        batch_size: usize,
     ) -> FilterForwardingResults {
         let mut total_forwardable_tracer_packets: usize = 0;
         let mut total_tracer_packets_in_buffer: usize = 0;
@@ -582,7 +569,7 @@ impl ThreadLocalUnprocessedPackets {
         new_priority_queue.extend(
             original_priority_queue
                 .drain_desc()
-                .chunks(batch_size)
+                .chunks(UNPROCESSED_BUFFER_STEP_SIZE)
                 .into_iter()
                 .flat_map(|packets_to_process| {
                     // Only process packets not yet forwarded
