@@ -291,7 +291,10 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
             Arg::with_name("snapshot_from_file")
             .long("snapshot-from-file")
             .takes_value(false)
-            .help("Construct initial bank state from files instead of archives"),
+            // Hide it because it is for internal usage only at this point.  Once this path has been verified via
+            // internal usage, this argument will be removed, and this path will be set as the default.
+            .hidden(true)
+            .help("Construct initial bank state from files instead of archives for much faster boot"),
         )
         .arg(
             Arg::with_name("tower")

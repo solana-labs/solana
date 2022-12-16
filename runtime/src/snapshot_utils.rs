@@ -211,7 +211,7 @@ struct UnarchivedSnapshot {
 struct UnpackedSnapshotsDirAndVersion {
     unpacked_snapshots_dir: PathBuf,
     snapshot_version: SnapshotVersion,
-    snapshot_from: Option<SnapshotFrom>,
+    snapshot_from: SnapshotFrom,
     snapshot_file_path: PathBuf,
     status_cache_file_path: PathBuf,
 }
@@ -902,6 +902,10 @@ fn hard_link_appendvec_files_to_snapshot(
 
 /// Serialize a bank to a snapshot
 ///
+/// Build the bank snapshot directory to contain the full state for rebuilding the bank.
+/// It contains the bank snapshot file, accounts/, status_cache, snapshot version and a
+/// state_complete file flag.
+///
 /// **DEVELOPER NOTE** Any error that is returned from this function may bring down the node!  This
 /// function is called from AccountsBackgroundService to handle snapshot requests.  Since taking a
 /// snapshot is not permitted to fail, any errors returned here will trigger the node to shutdown.
@@ -953,6 +957,9 @@ pub fn add_bank_snapshot(
 
     let status_cache_path = bank_snapshot_dir.join(SNAPSHOT_STATUS_CACHE_FILENAME);
     serialize_status_cache(slot, &slot_deltas, &status_cache_path)?;
+
+    let version_path = bank_snapshot_dir.join("version");
+    snapshot_write_version_file(version_path, SnapshotVersion::default()).unwrap();
 
     // Mark this directory complete so it can be used.  Check this flag first before selecting for deserialization.
     let state_complete_path = bank_snapshot_dir.join("state_complete");
@@ -1088,7 +1095,11 @@ fn build_storage_from_full_and_incremental_snapshot_files(
 ) -> Result<(UnarchivedSnapshot, Option<UnarchivedSnapshot>, AtomicU32)> {
     check_are_snapshots_compatible(full_snapshot_file_info, incremental_snapshot_file_info)?;
 
-    let version_path = bank_snapshots_dir.as_ref().join("version");
+    let slot = full_snapshot_file_info.slot();
+    let version_path = bank_snapshots_dir
+        .as_ref()
+        .join(slot.to_string())
+        .join("version");
 
     let next_append_vec_id = Arc::new(AtomicU32::new(0));
     let deserialized_full_snapshot = build_storage_from_snapshot_file(
@@ -1689,7 +1700,7 @@ where
         unpacked_snapshots_dir_and_version: UnpackedSnapshotsDirAndVersion {
             unpacked_snapshots_dir,
             snapshot_version,
-            snapshot_from: Some(SnapshotFrom::Archive),
+            snapshot_from: SnapshotFrom::Archive,
             snapshot_file_path: PathBuf::new(), // unused in archive mode
             status_cache_file_path,
         },
@@ -1792,12 +1803,12 @@ where
         storage,
     } = version_and_storages;
     Ok(UnarchivedSnapshot {
-        unpack_dir: TempDir::new().unwrap(), // Not used, just to fit into UnarchivedSnapshot.
+        unpack_dir: TempDir::new().unwrap(), // Not used, just to fill into UnarchivedSnapshot.
         storage,
         unpacked_snapshots_dir_and_version: UnpackedSnapshotsDirAndVersion {
             unpacked_snapshots_dir: bank_snapshots_dir.as_ref().to_path_buf(),
             snapshot_version,
-            snapshot_from: Some(SnapshotFrom::File),
+            snapshot_from: SnapshotFrom::File,
             snapshot_file_path: snapshot_file_path.as_ref().to_path_buf(),
             status_cache_file_path: snapshot_file_path
                 .as_ref()
@@ -2068,6 +2079,15 @@ pub fn snapshot_slot_dir_check_complete(path: &Path) -> bool {
     fs::metadata(completion_flag_file).is_ok()
 }
 
+pub fn snapshot_slot_dir_check_version(path: &Path) -> bool {
+    let version_path = path.to_path_buf().join("version");
+    if let Ok(content) = fs::read_to_string(version_path) {
+        content.eq(SnapshotVersion::default().as_str())
+    } else {
+        false
+    }
+}
+
 /// Get the path (and metadata) for the full snapshot archive with the highest slot in a directory
 pub fn get_highest_full_snapshot_slot_and_path(
     snapshot_dir: impl AsRef<Path>,
@@ -2084,6 +2104,7 @@ pub fn get_highest_full_snapshot_slot_and_path(
             r.is_dir()
                 && RE_SLOT_DIR.is_match(r.file_name().unwrap().to_str().unwrap())
                 && snapshot_slot_dir_check_complete(r)
+                && snapshot_slot_dir_check_version(r)
         })
         .map(|r| r.file_name().unwrap().to_os_string())
         .collect();
@@ -2351,7 +2372,7 @@ fn verify_unpacked_snapshots_dir_and_version(
 
     let snapshot_version = unpacked_snapshots_dir_and_version.snapshot_version;
     let root_paths = match unpacked_snapshots_dir_and_version.snapshot_from {
-        Some(SnapshotFrom::Archive) => {
+        SnapshotFrom::Archive => {
             let mut bank_snapshots =
                 get_bank_snapshots_post(&unpacked_snapshots_dir_and_version.unpacked_snapshots_dir);
             if bank_snapshots.len() > 1 {
@@ -2361,7 +2382,7 @@ fn verify_unpacked_snapshots_dir_and_version(
                 .pop()
                 .ok_or_else(|| get_io_error("No snapshots found in snapshots directory"))?
         }
-        Some(SnapshotFrom::File) => {
+        SnapshotFrom::File => {
             let snapshot_file_path = &unpacked_snapshots_dir_and_version.snapshot_file_path;
             let (slot, _) =
                 parse_snapshot_filename(snapshot_file_path.file_name().unwrap().to_str().unwrap())
@@ -2381,10 +2402,6 @@ fn verify_unpacked_snapshots_dir_and_version(
                     .unwrap()
                     .join(SNAPSHOT_STATUS_CACHE_FILENAME),
             }
-        }
-        None => {
-            error!("Should never reach here.");
-            return Err(SnapshotError::InvalidOperation);
         }
     };
 
@@ -2717,7 +2734,7 @@ pub fn verify_snapshot_archive<P, Q, R>(
         )
         .unwrap();
 
-        // Remove the new accounts/ and state_complete file to be consistent with the
+        // Remove the new accounts/, version, and state_complete file to be consistent with the
         // old archive structure.
         let accounts_path = snapshot_slot_dir.join("accounts");
         if accounts_path.is_dir() {
@@ -2725,6 +2742,10 @@ pub fn verify_snapshot_archive<P, Q, R>(
             // requires the job to be done.
             // This is for test only, so the performance is not an issue.
             std::fs::remove_dir_all(accounts_path).unwrap();
+        }
+        let version_path = snapshot_slot_dir.join("version");
+        if version_path.is_file() {
+            std::fs::remove_file(version_path).unwrap();
         }
         let state_complete_path = snapshot_slot_dir.join("state_complete");
         if state_complete_path.is_file() {
@@ -2906,7 +2927,6 @@ pub fn package_and_archive_full_snapshot(
         bank,
         bank_snapshot_info,
         bank_snapshots_dir,
-        None, // status_cache is in the file
         &full_snapshot_archives_dir,
         &incremental_snapshot_archives_dir,
         snapshot_storages,
@@ -2959,7 +2979,6 @@ pub fn package_and_archive_incremental_snapshot(
         bank,
         bank_snapshot_info,
         bank_snapshots_dir,
-        None, // status_cache is in the file
         &full_snapshot_archives_dir,
         &incremental_snapshot_archives_dir,
         snapshot_storages,

@@ -1180,7 +1180,7 @@ pub fn main() {
         .map(|account_path| {
             match fs::create_dir_all(&account_path).and_then(|_| fs::canonicalize(&account_path)) {
                 Ok(account_path) => {
-                    info!("Created account_path {}", account_path.display());
+                    debug!("Created account_path {}", account_path.display());
                     account_path
                 }
                 Err(err) => {

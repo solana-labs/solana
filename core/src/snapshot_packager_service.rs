@@ -326,7 +326,6 @@ mod tests {
                 archive_format,
             },
             block_height: slot,
-            slot_deltas: None,
             snapshot_links: link_snapshots_dir,
             snapshot_storages: vec![storage_entries],
             snapshot_version: SnapshotVersion::default(),
