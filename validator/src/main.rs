@@ -344,6 +344,22 @@ fn wait_for_restart_window(
     Ok(())
 }
 
+fn set_repair_whitelist(
+    ledger_path: &Path,
+    whitelist: Vec<Pubkey>,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let admin_client = admin_rpc_service::connect(ledger_path);
+    admin_rpc_service::runtime()
+        .block_on(async move { admin_client.await?.set_repair_whitelist(whitelist).await })
+        .map_err(|err| {
+            std::io::Error::new(
+                std::io::ErrorKind::Other,
+                format!("setRepairWhitelist request failed: {}", err),
+            )
+        })?;
+    Ok(())
+}
+
 /// Returns the default fifo shred storage size (include both data and coding
 /// shreds) based on the validator config.
 fn default_fifo_shred_storage_size(vc: &ValidatorConfig) -> Option<u64> {
@@ -667,6 +683,59 @@ pub fn main() {
             });
             return;
         }
+        ("repair-whitelist", Some(repair_whitelist_subcommand_matches)) => {
+            match repair_whitelist_subcommand_matches.subcommand() {
+                ("get", Some(subcommand_matches)) => {
+                    let output_mode = subcommand_matches.value_of("output");
+                    let admin_client = admin_rpc_service::connect(&ledger_path);
+                    let repair_whitelist = admin_rpc_service::runtime()
+                        .block_on(async move { admin_client.await?.repair_whitelist().await })
+                        .unwrap_or_else(|err| {
+                            eprintln!("Repair whitelist query failed: {}", err);
+                            exit(1);
+                        });
+                    if let Some(mode) = output_mode {
+                        match mode {
+                            "json" => println!(
+                                "{}",
+                                serde_json::to_string_pretty(&repair_whitelist).unwrap()
+                            ),
+                            "json-compact" => {
+                                print!("{}", serde_json::to_string(&repair_whitelist).unwrap())
+                            }
+                            _ => unreachable!(),
+                        }
+                    } else {
+                        print!("{}", repair_whitelist);
+                    }
+                    return;
+                }
+                ("set", Some(subcommand_matches)) => {
+                    let whitelist = if subcommand_matches.is_present("whitelist") {
+                        let validators_set: HashSet<_> =
+                            values_t_or_exit!(subcommand_matches, "whitelist", Pubkey)
+                                .into_iter()
+                                .collect();
+                        validators_set.into_iter().collect::<Vec<_>>()
+                    } else {
+                        return;
+                    };
+                    set_repair_whitelist(&ledger_path, whitelist).unwrap_or_else(|err| {
+                        eprintln!("{err}");
+                        exit(1);
+                    });
+                    return;
+                }
+                ("remove-all", _) => {
+                    set_repair_whitelist(&ledger_path, Vec::default()).unwrap_or_else(|err| {
+                        eprintln!("{err}");
+                        exit(1);
+                    });
+                    return;
+                }
+                _ => unreachable!(),
+            }
+        }
         _ => unreachable!(),
     };
 
@@ -786,6 +855,13 @@ pub fn main() {
         "repair_validators",
         "--repair-validator",
     );
+    let repair_whitelist = validators_set(
+        &identity_keypair.pubkey(),
+        &matches,
+        "repair_whitelist",
+        "--repair-whitelist",
+    );
+    let repair_whitelist = Arc::new(RwLock::new(repair_whitelist.unwrap_or_default()));
     let gossip_validators = validators_set(
         &identity_keypair.pubkey(),
         &matches,
@@ -1094,6 +1170,7 @@ pub fn main() {
         wait_for_supermajority: value_t!(matches, "wait_for_supermajority", Slot).ok(),
         known_validators,
         repair_validators,
+        repair_whitelist: repair_whitelist.clone(),
         gossip_validators,
         wal_recovery_mode,
         poh_verify: !matches.is_present("skip_poh_verify"),
@@ -1572,6 +1649,7 @@ pub fn main() {
             bank_forks: validator.bank_forks.clone(),
             cluster_info: validator.cluster_info.clone(),
             vote_account,
+            repair_whitelist,
         });
 
     if let Some(filename) = init_complete_file {
