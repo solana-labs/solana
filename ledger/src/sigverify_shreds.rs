@@ -295,7 +295,7 @@ pub fn sign_shreds_cpu(keypair: &Keypair, batches: &mut [PacketBatch]) {
                 .for_each(|p| sign_shred_cpu(keypair, p));
         });
     });
-    inc_new_counter_debug!("ed25519_shred_verify_cpu", packet_count);
+    inc_new_counter_debug!("ed25519_shred_sign_cpu", packet_count);
 }
 
 pub fn sign_shreds_gpu_pinned_keypair(keypair: &Keypair, cache: &RecyclerCache) -> PinnedVec<u8> {
