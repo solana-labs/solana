@@ -3681,7 +3681,7 @@ impl Bank {
         self._freeze(None);
     }
 
-    pub fn freeze_with_bank_hash_override(&self, bank_hash_override: option<hash>) {
+    pub fn freeze_with_bank_hash_override(&self, bank_hash_override: Option<Hash>) {
         self._freeze(bank_hash_override);
     }
 
