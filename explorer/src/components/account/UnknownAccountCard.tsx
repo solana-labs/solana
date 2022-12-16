@@ -34,7 +34,11 @@ export function UnknownAccountCard({ account }: { account: Account }) {
         <tr>
           <td>Balance (SOL)</td>
           <td className="text-lg-end">
-            <SolBalance lamports={account.lamports} />
+            {account.lamports === 0 ? (
+              "No longer exists on chain"
+            ) : (
+              <SolBalance lamports={account.lamports} />
+            )}
           </td>
         </tr>
 
