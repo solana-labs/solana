@@ -613,7 +613,7 @@ fn check_server_is_ready_or_panic(socket_addr: &SocketAddr, retry: u8, sleep_dur
             retry.checked_sub(1).unwrap();
         }
 
-        if connect(format!("ws://{}", socket_addr)).is_ok() {
+        if connect(format!("ws://{socket_addr}")).is_ok() {
             return;
         }
         sleep(sleep_duration);
