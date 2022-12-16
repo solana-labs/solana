@@ -157,6 +157,14 @@ before execting it in the virtual machine.",
                 .takes_value(true)
                 .possible_values(["json", "json-compact"]),
         )
+        .arg(
+            Arg::new("trace")
+                .help("Output instruction trace")
+                .short('t')
+                .long("trace")
+                .takes_value(true)
+                .value_name("FILE"),
+        )
         .get_matches();
 
     let loader_id = bpf_loader::id();
@@ -257,11 +265,13 @@ before execting it in the virtual machine.",
     }
     .unwrap();
 
+    #[allow(unused_mut)]
     let mut verified_executable =
         VerifiedExecutable::<RequisiteVerifier, InvokeContext>::from_executable(executable)
             .map_err(|err| format!("Executable verifier failed: {err:?}"))
             .unwrap();
 
+    #[cfg(all(not(target_os = "windows"), target_arch = "x86_64"))]
     verified_executable.jit_compile().unwrap();
     let mut analysis = LazyAnalysis::new(verified_executable.get_executable());
 
@@ -295,6 +305,23 @@ before execting it in the virtual machine.",
     }
     let (instruction_count, result) = vm.execute_program(matches.value_of("use").unwrap() != "jit");
     let duration = Instant::now() - start_time;
+    if matches.occurrences_of("trace") > 0 {
+        let trace_log = vm.env.context_object_pointer.trace_log.as_slice();
+        if matches.value_of("trace").unwrap() == "stdout" {
+            analysis
+                .analyze()
+                .disassemble_trace_log(&mut std::io::stdout(), trace_log)
+                .unwrap();
+        } else {
+            analysis
+                .analyze()
+                .disassemble_trace_log(
+                    &mut File::create(matches.value_of("trace").unwrap()).unwrap(),
+                    trace_log,
+                )
+                .unwrap();
+        }
+    }
     drop(vm);
 
     let output = Output {

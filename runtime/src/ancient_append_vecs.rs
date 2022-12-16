@@ -135,7 +135,7 @@ pub mod tests {
         let hash = Hash::new(&[2; 32]);
         let stored_meta = StoredMeta {
             /// global write version
-            write_version: 0,
+            write_version_obsolete: 0,
             /// key for the account
             pubkey,
             data_len: 43,

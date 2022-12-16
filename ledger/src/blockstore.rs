@@ -3353,11 +3353,11 @@ fn update_slot_meta(
     reference_tick: u8,
     received_data_shreds: &ShredIndex,
 ) -> Vec<(u32, u32)> {
-    let maybe_first_insert = slot_meta.received == 0;
+    let first_insert = slot_meta.received == 0;
     // Index is zero-indexed, while the "received" height starts from 1,
     // so received = index + 1 for the same shred.
     slot_meta.received = cmp::max(u64::from(index) + 1, slot_meta.received);
-    if maybe_first_insert && slot_meta.received > 0 {
+    if first_insert {
         // predict the timestamp of what would have been the first shred in this slot
         let slot_time_elapsed = u64::from(reference_tick) * 1000 / DEFAULT_TICKS_PER_SECOND;
         slot_meta.first_shred_timestamp = timestamp() - slot_time_elapsed;

@@ -6,6 +6,7 @@ import { useAnchorProgram } from "providers/anchor";
 import { getProgramName } from "utils/tx";
 import { snakeToTitleCase, camelToTitleCase, numberWithSeparator } from "utils";
 import {
+  IdlField,
   IdlInstruction,
   IdlType,
   IdlTypeDef,
@@ -279,8 +280,43 @@ function mapField(
         </ExpandableRow>
       );
     } else {
-      const enumValue = Object.keys(value)[0];
-      return (
+      const enumVariantName = Object.keys(value)[0];
+      const variant = fieldType.type.variants.find(
+        (val) =>
+          val.name.toLocaleLowerCase() === enumVariantName.toLocaleLowerCase()
+      );
+
+      return variant && variant.fields ? (
+        <ExpandableRow
+          fieldName={itemKey}
+          fieldType={typeDisplayName({ enum: enumVariantName })}
+          nestingLevel={nestingLevel}
+          key={keySuffix ? `${key}-${keySuffix}` : key}
+        >
+          <Fragment key={keySuffix ? `${key}-${keySuffix}` : key}>
+            {Object.entries(value[enumVariantName]).map(
+              ([innerKey, innerValue]: [string, any], index) => {
+                const innerFieldType = variant.fields![index];
+                if (!innerFieldType) {
+                  throw Error(
+                    `Could not type definition for ${innerKey} field in user-defined struct ${fieldType.name}`
+                  );
+                }
+                return mapField(
+                  innerKey,
+                  innerValue,
+                  (innerFieldType as any).name
+                    ? (innerFieldType as IdlField).type
+                    : (innerFieldType as IdlType),
+                  idl,
+                  key,
+                  nestingLevel + 1
+                );
+              }
+            )}
+          </Fragment>
+        </ExpandableRow>
+      ) : (
         <SimpleRow
           key={keySuffix ? `${key}-${keySuffix}` : key}
           rawKey={key}
@@ -288,7 +324,7 @@ function mapField(
           keySuffix={keySuffix}
           nestingLevel={nestingLevel}
         >
-          {camelToTitleCase(enumValue)}
+          {camelToTitleCase(enumVariantName)}
         </SimpleRow>
       );
     }

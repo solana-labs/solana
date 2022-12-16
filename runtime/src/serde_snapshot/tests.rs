@@ -3,8 +3,9 @@
 use {
     super::*,
     crate::{
+        account_storage::AccountStorageMap,
         accounts::{test_utils::create_test_accounts, Accounts},
-        accounts_db::{get_temp_accounts_paths, AccountShrinkThreshold, AccountStorageMap},
+        accounts_db::{get_temp_accounts_paths, AccountShrinkThreshold},
         accounts_hash::AccountsHash,
         append_vec::AppendVec,
         bank::{Bank, BankTestConfig},
@@ -111,7 +112,6 @@ where
             ..GenesisConfig::default()
         },
         AccountSecondaryIndexes::default(),
-        false,
         None,
         AccountShrinkThreshold::default(),
         false,
@@ -392,7 +392,6 @@ fn test_bank_serialize_style(
         None,
         None,
         AccountSecondaryIndexes::default(),
-        false,
         None,
         AccountShrinkThreshold::default(),
         false,
@@ -544,7 +543,6 @@ fn test_extra_fields_eof() {
         None,
         None,
         AccountSecondaryIndexes::default(),
-        false,
         None,
         AccountShrinkThreshold::default(),
         false,
@@ -672,7 +670,6 @@ fn test_blank_extra_fields() {
         None,
         None,
         AccountSecondaryIndexes::default(),
-        false,
         None,
         AccountShrinkThreshold::default(),
         false,

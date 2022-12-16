@@ -120,7 +120,6 @@ pub struct TestValidatorGenesis {
     pub max_ledger_shreds: Option<u64>,
     pub max_genesis_archive_unpacked_size: Option<u64>,
     pub geyser_plugin_config_files: Option<Vec<PathBuf>>,
-    pub accounts_db_caching_enabled: bool,
     deactivate_feature_set: HashSet<Pubkey>,
     compute_unit_limit: Option<u64>,
     pub log_messages_bytes_limit: Option<usize>,
@@ -152,7 +151,6 @@ impl Default for TestValidatorGenesis {
             max_ledger_shreds: Option::<u64>::default(),
             max_genesis_archive_unpacked_size: Option::<u64>::default(),
             geyser_plugin_config_files: Option::<Vec<PathBuf>>::default(),
-            accounts_db_caching_enabled: true,
             deactivate_feature_set: HashSet::<Pubkey>::default(),
             compute_unit_limit: Option::<u64>::default(),
             log_messages_bytes_limit: Option::<usize>::default(),
@@ -975,6 +973,10 @@ impl TestValidator {
 
     pub fn bank_forks(&self) -> Arc<RwLock<BankForks>> {
         self.validator.as_ref().unwrap().bank_forks.clone()
+    }
+
+    pub fn repair_whitelist(&self) -> Arc<RwLock<HashSet<Pubkey>>> {
+        Arc::new(RwLock::new(HashSet::default()))
     }
 }
 

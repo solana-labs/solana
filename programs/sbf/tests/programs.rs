@@ -163,6 +163,10 @@ fn load_upgradeable_sbf_program(
         authority_keypair,
         elf,
     );
+    bank_client.set_sysvar_for_tests(&clock::Clock {
+        slot: 1,
+        ..clock::Clock::default()
+    });
 }
 
 #[cfg(feature = "sbf_rust")]
@@ -2002,6 +2006,10 @@ fn test_program_sbf_upgrade() {
         &authority_keypair,
         "solana_sbf_rust_upgraded",
     );
+    bank_client.set_sysvar_for_tests(&clock::Clock {
+        slot: 2,
+        ..clock::Clock::default()
+    });
 
     // Call upgraded program
     instruction.data[0] += 1;
@@ -2179,6 +2187,10 @@ fn test_program_sbf_invoke_upgradeable_via_cpi() {
         &authority_keypair,
         "solana_sbf_rust_upgraded",
     );
+    bank_client.set_sysvar_for_tests(&clock::Clock {
+        slot: 2,
+        ..clock::Clock::default()
+    });
 
     // Call the upgraded program
     instruction.data[0] += 1;

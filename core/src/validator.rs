@@ -140,6 +140,7 @@ pub struct ValidatorConfig {
     pub new_hard_forks: Option<Vec<Slot>>,
     pub known_validators: Option<HashSet<Pubkey>>, // None = trust all
     pub repair_validators: Option<HashSet<Pubkey>>, // None = repair from all
+    pub repair_whitelist: Arc<RwLock<HashSet<Pubkey>>>, // Empty = repair with all
     pub gossip_validators: Option<HashSet<Pubkey>>, // None = gossip with all
     pub halt_on_known_validators_accounts_hash_mismatch: bool,
     pub accounts_hash_fault_injection_slots: u64, // 0 = no fault injection
@@ -201,6 +202,7 @@ impl Default for ValidatorConfig {
             new_hard_forks: None,
             known_validators: None,
             repair_validators: None,
+            repair_whitelist: Arc::new(RwLock::new(HashSet::default())),
             gossip_validators: None,
             halt_on_known_validators_accounts_hash_mismatch: false,
             accounts_hash_fault_injection_slots: 0,
@@ -635,7 +637,6 @@ impl Validator {
                 snapshot_request_handler,
                 pruned_banks_request_handler,
             },
-            true, // caching_enabled
             config.accounts_db_test_hash_calculation,
             last_full_snapshot_slot,
         );
@@ -871,7 +872,11 @@ impl Validator {
             Some(stats_reporter_sender.clone()),
             &exit,
         );
-        let serve_repair = ServeRepair::new(cluster_info.clone(), bank_forks.clone());
+        let serve_repair = ServeRepair::new(
+            cluster_info.clone(),
+            bank_forks.clone(),
+            config.repair_whitelist.clone(),
+        );
         let serve_repair_service = ServeRepairService::new(
             serve_repair,
             blockstore.clone(),
@@ -965,6 +970,7 @@ impl Validator {
                 max_ledger_shreds: config.max_ledger_shreds,
                 shred_version: node.info.shred_version,
                 repair_validators: config.repair_validators.clone(),
+                repair_whitelist: config.repair_whitelist.clone(),
                 wait_for_vote_to_start_leader,
                 replay_slots_concurrently: config.replay_slots_concurrently,
             },
@@ -1404,7 +1410,6 @@ fn load_blockstore(
         new_hard_forks: config.new_hard_forks.clone(),
         debug_keys: config.debug_keys.clone(),
         account_indexes: config.account_indexes.clone(),
-        accounts_db_caching_enabled: true,
         accounts_db_config: config.accounts_db_config.clone(),
         shrink_ratio: config.accounts_shrink_ratio,
         accounts_db_test_hash_calculation: config.accounts_db_test_hash_calculation,

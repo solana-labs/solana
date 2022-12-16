@@ -1,7 +1,8 @@
 use {
     crate::{
+        account_storage::AccountStorageMap,
         accounts_db::{
-            AccountShrinkThreshold, AccountStorageMap, AccountsDbConfig, AtomicAppendVecId,
+            AccountShrinkThreshold, AccountsDbConfig, AtomicAppendVecId,
             CalcAccountsHashDataSource, SnapshotStorage, SnapshotStorages,
         },
         accounts_index::AccountSecondaryIndexes,
@@ -1003,7 +1004,6 @@ pub fn bank_from_snapshot_archives(
         debug_keys,
         additional_builtins,
         account_secondary_indexes,
-        true, // caching_enabled
         limit_load_slot_count_from_snapshot,
         shrink_ratio,
         verify_index,
@@ -1062,7 +1062,6 @@ pub fn bank_from_latest_snapshot_archives(
     debug_keys: Option<Arc<HashSet<Pubkey>>>,
     additional_builtins: Option<&Builtins>,
     account_secondary_indexes: AccountSecondaryIndexes,
-    _accounts_db_caching_enabled: bool,
     limit_load_slot_count_from_snapshot: Option<usize>,
     shrink_ratio: AccountShrinkThreshold,
     test_hash_calculation: bool,
@@ -1789,8 +1788,6 @@ fn rebuild_bank_from_snapshots(
     debug_keys: Option<Arc<HashSet<Pubkey>>>,
     additional_builtins: Option<&Builtins>,
     account_secondary_indexes: AccountSecondaryIndexes,
-    // this parameter will be removed when all plumbing for disabling write cache is removed
-    _accounts_db_caching_enabled: bool,
     limit_load_slot_count_from_snapshot: Option<usize>,
     shrink_ratio: AccountShrinkThreshold,
     verify_index: bool,
@@ -1798,7 +1795,6 @@ fn rebuild_bank_from_snapshots(
     accounts_update_notifier: Option<AccountsUpdateNotifier>,
     exit: &Arc<AtomicBool>,
 ) -> Result<Bank> {
-    let accounts_db_caching_enabled = true;
     let (full_snapshot_version, full_snapshot_root_paths) =
         verify_unpacked_snapshots_dir_and_version(
             full_snapshot_unpacked_snapshots_dir_and_version,
@@ -1841,7 +1837,6 @@ fn rebuild_bank_from_snapshots(
                     debug_keys,
                     additional_builtins,
                     account_secondary_indexes,
-                    accounts_db_caching_enabled,
                     limit_load_slot_count_from_snapshot,
                     shrink_ratio,
                     verify_index,
@@ -3623,7 +3618,6 @@ mod tests {
             None,
             None,
             AccountSecondaryIndexes::default(),
-            false,
             None,
             AccountShrinkThreshold::default(),
             false,
