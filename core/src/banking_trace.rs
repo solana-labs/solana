@@ -8,14 +8,14 @@ use {
         packet::{to_packet_batches, PacketBatch},
         test_tx::test_tx,
     },
-    solana_sdk::slot_history::Slot,
+    solana_sdk::{hash::Hash, slot_history::Slot},
     std::{
         fs::{create_dir_all, remove_dir_all},
         io::{self, Write},
         path::PathBuf,
         sync::{
             atomic::{AtomicBool, Ordering},
-            Arc,
+            Arc, Mutex,
         },
         thread::{self, sleep, JoinHandle},
         time::{Duration, SystemTime},
@@ -28,6 +28,7 @@ pub type BankingPacketBatch = Arc<(Vec<PacketBatch>, Option<SigverifyTracerPacke
 pub type BankingPacketSender = TracedSender;
 pub type BankingPacketReceiver = Receiver<BankingPacketBatch>;
 pub type TracerThreadResult = Result<(), TraceError>;
+pub type TracerThread = Option<JoinHandle<TracerThreadResult>>;
 
 #[derive(Error, Debug)]
 pub enum TraceError {
@@ -58,7 +59,7 @@ pub const DEFAULT_BANKING_TRACE_SIZE: u64 =
 pub struct BankingTracer {
     enabled_tracer: Option<(
         Sender<TimedTracedEvent>,
-        Option<JoinHandle<TracerThreadResult>>,
+        Mutex<Option<JoinHandle<TracerThreadResult>>>,
         Arc<AtomicBool>,
     )>,
 }
@@ -165,7 +166,9 @@ pub fn sender_overhead_minimized_receiver_loop<T, E, const SLEEP_MS: u64>(
 }
 
 impl BankingTracer {
-    pub fn new(maybe_config: Option<(PathBuf, Arc<AtomicBool>, u64)>) -> Result<Self, TraceError> {
+    pub fn new(
+        maybe_config: Option<(PathBuf, Arc<AtomicBool>, u64)>,
+    ) -> Result<Arc<Self>, TraceError> {
         let enabled_tracer = maybe_config
             .map(|(path, exit, total_size)| -> Result<_, TraceError> {
                 let rotate_threshold_size = total_size / TRACE_FILE_ROTATE_COUNT;
@@ -184,17 +187,17 @@ impl BankingTracer {
                 let tracing_thread =
                     Self::spawn_background_thread(trace_receiver, file_appender, exit.clone())?;
 
-                Ok((trace_sender, Some(tracing_thread), exit))
+                Ok((trace_sender, Mutex::new(Some(tracing_thread)), exit))
             })
             .transpose()?;
 
-        Ok(Self { enabled_tracer })
+        Ok(Arc::new(Self { enabled_tracer }))
     }
 
-    pub fn new_disabled() -> Self {
-        Self {
+    pub fn new_disabled() -> Arc<Self> {
+        Arc::new(Self {
             enabled_tracer: None,
-        }
+        })
     }
 
     fn create_channel(&self, label: ChannelLabel) -> (BankingPacketSender, BankingPacketReceiver) {
@@ -218,13 +221,14 @@ impl BankingTracer {
         self.create_channel(ChannelLabel::GossipVote)
     }
 
-    pub fn finalize_under_arc(mut self) -> (Option<JoinHandle<TracerThreadResult>>, Arc<Self>) {
-        (
-            self.enabled_tracer
-                .as_mut()
-                .and_then(|(_, tracer_thread, _)| tracer_thread.take()),
-            Arc::new(self),
-        )
+    pub fn take_tracer_thread_join_handle(&self) -> TracerThread {
+        self.enabled_tracer.as_ref().map(|(_, tracer_thread, _)| {
+            tracer_thread
+                .lock()
+                .unwrap()
+                .take()
+                .expect("no double take; BankingStage should only do once!")
+        })
     }
 
     fn bank_event(
@@ -374,7 +378,7 @@ pub mod for_test {
     }
 
     pub fn terminate_tracer(
-        tracer: BankingTracer,
+        tracer: Arc<BankingTracer>,
         main_thread: JoinHandle<TracerThreadResult>,
         sender: TracedSender,
         exit: Option<Arc<AtomicBool>>,
@@ -382,7 +386,7 @@ pub mod for_test {
         if let Some(exit) = exit {
             exit.store(true, Ordering::Relaxed);
         }
-        let (tracer_thread, tracer) = tracer.finalize_under_arc();
+        let tracer_thread = tracer.take_tracer_thread_join_handle();
         drop((sender, tracer));
         main_thread.join().unwrap().unwrap();
         if let Some(tracer_thread) = tracer_thread {
@@ -425,7 +429,7 @@ mod tests {
         let path = temp_dir.path().join("banking-trace");
         let exit = Arc::<AtomicBool>::default();
         let tracer = BankingTracer::new(Some((path, exit.clone(), u64::max_value()))).unwrap();
-        let (tracer_thread, tracer) = tracer.finalize_under_arc();
+        let tracer_thread = tracer.take_tracer_thread_join_handle();
         let (non_vote_sender, non_vote_receiver) = tracer.create_channel_non_vote();
 
         let exit_for_dummy_thread = Arc::<AtomicBool>::default();

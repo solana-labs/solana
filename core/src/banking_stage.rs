@@ -4,7 +4,7 @@
 
 use {
     crate::{
-        banking_trace::{BankingPacketReceiver, BankingTracer, TracerThreadResult},
+        banking_trace::{BankingPacketReceiver, BankingTracer, TracerThread},
         forward_packet_batches_by_accounts::ForwardPacketBatchesByAccounts,
         immutable_deserialized_packet::ImmutableDeserializedPacket,
         latest_unprocessed_votes::{LatestUnprocessedVotes, VoteSource},
@@ -346,7 +346,7 @@ pub struct BatchedTransactionErrorDetails {
 /// Stores the stage's thread handle and output receiver.
 pub struct BankingStage {
     bank_thread_hdls: Vec<JoinHandle<()>>,
-    tracer_thread_hdl: Option<JoinHandle<TracerThreadResult>>,
+    tracer_thread_hdl: TracerThread,
 }
 
 #[derive(Debug, Clone)]
@@ -387,7 +387,7 @@ impl BankingStage {
         log_messages_bytes_limit: Option<usize>,
         connection_cache: Arc<ConnectionCache>,
         bank_forks: Arc<RwLock<BankForks>>,
-        banking_tracer: BankingTracer,
+        banking_tracer: Arc<BankingTracer>,
     ) -> Self {
         Self::new_num_threads(
             cluster_info,
@@ -418,7 +418,7 @@ impl BankingStage {
         log_messages_bytes_limit: Option<usize>,
         connection_cache: Arc<ConnectionCache>,
         bank_forks: Arc<RwLock<BankForks>>,
-        banking_tracer: BankingTracer,
+        banking_tracer: Arc<BankingTracer>,
     ) -> Self {
         assert!(num_threads >= MIN_TOTAL_THREADS);
         // Single thread to generate entries from many banks.
@@ -437,7 +437,6 @@ impl BankingStage {
                     .is_active(&allow_votes_to_directly_update_vote_state::id())
             })
             .unwrap_or(false);
-        let (tracer_thread_hdl, banking_tracer) = banking_tracer.finalize_under_arc();
         // Many banks that process transactions in parallel.
         let bank_thread_hdls: Vec<JoinHandle<()>> = (0..num_threads)
             .map(|i| {
@@ -512,9 +511,10 @@ impl BankingStage {
                     .unwrap()
             })
             .collect();
+
         Self {
             bank_thread_hdls,
-            tracer_thread_hdl,
+            tracer_thread_hdl: banking_tracer.take_tracer_thread_join_handle(),
         }
     }
 
