@@ -23,6 +23,8 @@ example_helloworld() {
     set -x
     rm -rf example-helloworld
     git clone https://github.com/solana-labs/example-helloworld.git
+    # copy toolchain file to use solana's rust version
+    cp "$solana_dir"/rust-toolchain.toml example-helloworld/
     cd example-helloworld
 
     update_solana_dependencies src/program-rust "$solana_ver"
@@ -56,6 +58,8 @@ spl() {
     set -x
     rm -rf spl
     git clone https://github.com/solana-labs/solana-program-library.git spl
+    # copy toolchain file to use solana's rust version
+    cp "$solana_dir"/rust-toolchain.toml spl/
     cd spl
 
     project_used_solana_version=$(sed -nE 's/solana-sdk = \"[>=<~]*(.*)\"/\1/p' <"token/program/Cargo.toml")
@@ -84,6 +88,8 @@ openbook_dex() {
     set -x
     rm -rf openbook-dex
     git clone https://github.com/openbook-dex/program.git openbook-dex
+    # copy toolchain file to use solana's rust version
+    cp "$solana_dir"/rust-toolchain.toml openbook-dex/
     cd openbook-dex
 
     update_solana_dependencies . "$solana_ver"

@@ -43,6 +43,8 @@ anchor() {
   set -x
   rm -rf anchor
   git clone https://github.com/coral-xyz/anchor.git
+  # copy toolchain file to use solana's rust version
+  cp "$solana_dir"/rust-toolchain.toml anchor/
   cd anchor
 
   update_solana_dependencies . "$solana_ver"
@@ -62,6 +64,8 @@ mango() {
     set -x
     rm -rf mango-v3
     git clone https://github.com/blockworks-foundation/mango-v3
+    # copy toolchain file to use solana's rust version
+    cp "$solana_dir"/rust-toolchain.toml mango-v3/
     cd mango-v3
 
     update_solana_dependencies . "$solana_ver"
@@ -81,6 +85,8 @@ metaplex() {
     set -x
     rm -rf metaplex-program-library
     git clone https://github.com/metaplex-foundation/metaplex-program-library
+    # copy toolchain file to use solana's rust version
+    cp "$solana_dir"/rust-toolchain.toml metaplex-program-library/
     cd metaplex-program-library
 
     update_solana_dependencies . "$solana_ver"
