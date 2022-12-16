@@ -159,6 +159,7 @@ struct ServeRepairStats {
     dropped_requests_outbound_bandwidth: usize,
     dropped_requests_load_shed: usize,
     dropped_requests_low_stake: usize,
+    whitelisted_requests: usize,
     total_dropped_response_packets: usize,
     total_response_packets: usize,
     total_response_bytes_staked: usize,
@@ -281,6 +282,7 @@ impl RepairProtocol {
 pub struct ServeRepair {
     cluster_info: Arc<ClusterInfo>,
     bank_forks: Arc<RwLock<BankForks>>,
+    repair_whitelist: Arc<RwLock<HashSet<Pubkey>>>,
 }
 
 // Cache entry for repair peers for a slot.
@@ -316,11 +318,23 @@ impl RepairPeers {
     }
 }
 
+struct RepairRequestWithMeta {
+    request: RepairProtocol,
+    from_addr: SocketAddr,
+    stake: u64,
+    whitelisted: bool,
+}
+
 impl ServeRepair {
-    pub fn new(cluster_info: Arc<ClusterInfo>, bank_forks: Arc<RwLock<BankForks>>) -> Self {
+    pub fn new(
+        cluster_info: Arc<ClusterInfo>,
+        bank_forks: Arc<RwLock<BankForks>>,
+        repair_whitelist: Arc<RwLock<HashSet<Pubkey>>>,
+    ) -> Self {
         Self {
             cluster_info,
             bank_forks,
+            repair_whitelist,
         }
     }
 
@@ -456,7 +470,11 @@ impl ServeRepair {
         let my_id = identity_keypair.pubkey();
 
         let max_buffered_packets = if root_bank.cluster_type() != ClusterType::MainnetBeta {
-            2 * MAX_REQUESTS_PER_ITERATION
+            if self.repair_whitelist.read().unwrap().len() > 0 {
+                4 * MAX_REQUESTS_PER_ITERATION
+            } else {
+                2 * MAX_REQUESTS_PER_ITERATION
+            }
         } else {
             MAX_REQUESTS_PER_ITERATION
         };
@@ -475,58 +493,74 @@ impl ServeRepair {
         stats.total_requests += total_requests;
 
         let decode_start = Instant::now();
-        let mut decoded_reqs = Vec::default();
-        for packet in reqs_v.iter().flatten() {
-            let request: RepairProtocol = match packet.deserialize_slice(..) {
-                Ok(request) => request,
-                Err(_) => {
+        let mut decoded_requests = Vec::default();
+        let mut whitelisted_request_count: usize = 0;
+        {
+            let whitelist = self.repair_whitelist.read().unwrap();
+            for packet in reqs_v.iter().flatten() {
+                let request: RepairProtocol = match packet.deserialize_slice(..) {
+                    Ok(request) => request,
+                    Err(_) => {
+                        stats.err_malformed += 1;
+                        continue;
+                    }
+                };
+
+                let from_addr = packet.meta().socket_addr();
+                if !ContactInfo::is_valid_address(&from_addr, &socket_addr_space) {
                     stats.err_malformed += 1;
                     continue;
                 }
-            };
 
-            let from_addr = packet.meta().socket_addr();
-            if !ContactInfo::is_valid_address(&from_addr, &socket_addr_space) {
-                stats.err_malformed += 1;
-                continue;
-            }
+                if request.supports_signature() {
+                    // collect stats for signature verification
+                    Self::verify_signed_packet(&my_id, packet, &request, stats);
+                } else {
+                    stats.unsigned_requests += 1;
+                }
 
-            if request.supports_signature() {
-                // collect stats for signature verification
-                Self::verify_signed_packet(&my_id, packet, &request, stats);
-            } else {
-                stats.unsigned_requests += 1;
-            }
+                if request.sender() == &my_id {
+                    stats.self_repair += 1;
+                    continue;
+                }
 
-            if request.sender() == &my_id {
-                stats.self_repair += 1;
-                continue;
-            }
+                let stake = epoch_staked_nodes
+                    .as_ref()
+                    .and_then(|stakes| stakes.get(request.sender()))
+                    .unwrap_or(&0);
+                if *stake == 0 {
+                    stats.handle_requests_unstaked += 1;
+                } else {
+                    stats.handle_requests_staked += 1;
+                }
 
-            let stake = epoch_staked_nodes
-                .as_ref()
-                .and_then(|stakes| stakes.get(request.sender()))
-                .unwrap_or(&0);
-            if *stake == 0 {
-                stats.handle_requests_unstaked += 1;
-            } else {
-                stats.handle_requests_staked += 1;
+                let whitelisted = whitelist.contains(request.sender());
+                if whitelisted {
+                    whitelisted_request_count += 1;
+                }
+
+                decoded_requests.push(RepairRequestWithMeta {
+                    request,
+                    from_addr,
+                    stake: *stake,
+                    whitelisted,
+                });
             }
-            decoded_reqs.push((request, from_addr, *stake));
         }
         stats.decode_time_us += decode_start.elapsed().as_micros() as u64;
+        stats.whitelisted_requests += whitelisted_request_count.min(MAX_REQUESTS_PER_ITERATION);
 
-        if decoded_reqs.len() > MAX_REQUESTS_PER_ITERATION {
-            stats.dropped_requests_low_stake += decoded_reqs.len() - MAX_REQUESTS_PER_ITERATION;
-            decoded_reqs.sort_unstable_by_key(|(_, _, stake)| Reverse(*stake));
-            decoded_reqs.truncate(MAX_REQUESTS_PER_ITERATION);
+        if decoded_requests.len() > MAX_REQUESTS_PER_ITERATION {
+            stats.dropped_requests_low_stake += decoded_requests.len() - MAX_REQUESTS_PER_ITERATION;
+            decoded_requests.sort_unstable_by_key(|r| Reverse((r.whitelisted, r.stake)));
+            decoded_requests.truncate(MAX_REQUESTS_PER_ITERATION);
         }
 
         self.handle_packets(
             ping_cache,
             recycler,
             blockstore,
-            decoded_reqs,
+            decoded_requests,
             response_sender,
             stats,
             data_budget,
@@ -564,6 +598,7 @@ impl ServeRepair {
                 stats.dropped_requests_low_stake,
                 i64
             ),
+            ("whitelisted_requests", stats.whitelisted_requests, i64),
             (
                 "total_dropped_response_packets",
                 stats.total_dropped_response_packets,
@@ -778,7 +813,7 @@ impl ServeRepair {
         ping_cache: &mut PingCache,
         recycler: &PacketBatchRecycler,
         blockstore: &Blockstore,
-        requests: Vec<(RepairProtocol, SocketAddr, /*stake*/ u64)>,
+        requests: Vec<RepairRequestWithMeta>,
         response_sender: &PacketBatchSender,
         stats: &mut ServeRepairStats,
         data_budget: &DataBudget,
@@ -787,7 +822,16 @@ impl ServeRepair {
         let mut pending_pings = Vec::default();
 
         let requests_len = requests.len();
-        for (i, (request, from_addr, stake)) in requests.into_iter().enumerate() {
+        for (
+            i,
+            RepairRequestWithMeta {
+                request,
+                from_addr,
+                stake,
+                ..
+            },
+        ) in requests.into_iter().enumerate()
+        {
             if !matches!(&request, RepairProtocol::Pong(_)) {
                 let (check, ping_pkt) =
                     Self::check_ping_cache(ping_cache, &request, &from_addr, &identity_keypair);
@@ -1246,7 +1290,11 @@ mod tests {
         let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
         let me = ContactInfo::new_localhost(&solana_sdk::pubkey::new_rand(), timestamp());
         let cluster_info = Arc::new(new_test_cluster_info(me));
-        let serve_repair = ServeRepair::new(cluster_info.clone(), bank_forks);
+        let serve_repair = ServeRepair::new(
+            cluster_info.clone(),
+            bank_forks,
+            Arc::new(RwLock::new(HashSet::default())),
+        );
         let keypair = cluster_info.keypair().clone();
         let repair_peer_id = solana_sdk::pubkey::new_rand();
         let repair_request = ShredRepairType::Orphan(123);
@@ -1292,7 +1340,11 @@ mod tests {
         let mut bank = Bank::new_for_tests(&genesis_config);
         bank.feature_set = Arc::new(FeatureSet::all_enabled());
         let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
-        let serve_repair = ServeRepair::new(cluster_info, bank_forks);
+        let serve_repair = ServeRepair::new(
+            cluster_info,
+            bank_forks,
+            Arc::new(RwLock::new(HashSet::default())),
+        );
 
         let request_bytes = serve_repair
             .ancestor_repair_request_bytes(&keypair, &repair_peer_id, slot, nonce)
@@ -1326,7 +1378,11 @@ mod tests {
         let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
         let me = ContactInfo::new_localhost(&solana_sdk::pubkey::new_rand(), timestamp());
         let cluster_info = Arc::new(new_test_cluster_info(me));
-        let serve_repair = ServeRepair::new(cluster_info.clone(), bank_forks);
+        let serve_repair = ServeRepair::new(
+            cluster_info.clone(),
+            bank_forks,
+            Arc::new(RwLock::new(HashSet::default())),
+        );
         let keypair = cluster_info.keypair().clone();
         let repair_peer_id = solana_sdk::pubkey::new_rand();
 
@@ -1653,7 +1709,11 @@ mod tests {
         let cluster_slots = ClusterSlots::default();
         let me = ContactInfo::new_localhost(&solana_sdk::pubkey::new_rand(), timestamp());
         let cluster_info = Arc::new(new_test_cluster_info(me));
-        let serve_repair = ServeRepair::new(cluster_info.clone(), bank_forks);
+        let serve_repair = ServeRepair::new(
+            cluster_info.clone(),
+            bank_forks,
+            Arc::new(RwLock::new(HashSet::default())),
+        );
         let identity_keypair = cluster_info.keypair().clone();
         let mut outstanding_requests = OutstandingShredRepairs::default();
         let rv = serve_repair.repair_request(
@@ -1984,7 +2044,11 @@ mod tests {
         cluster_info.insert_info(contact_info2.clone());
         cluster_info.insert_info(contact_info3.clone());
         let identity_keypair = cluster_info.keypair().clone();
-        let serve_repair = ServeRepair::new(cluster_info, bank_forks);
+        let serve_repair = ServeRepair::new(
+            cluster_info,
+            bank_forks,
+            Arc::new(RwLock::new(HashSet::default())),
+        );
 
         // If:
         // 1) repair validator set doesn't exist in gossip

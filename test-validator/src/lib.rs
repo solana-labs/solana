@@ -974,6 +974,10 @@ impl TestValidator {
     pub fn bank_forks(&self) -> Arc<RwLock<BankForks>> {
         self.validator.as_ref().unwrap().bank_forks.clone()
     }
+
+    pub fn repair_whitelist(&self) -> Arc<RwLock<HashSet<Pubkey>>> {
+        Arc::new(RwLock::new(HashSet::default()))
+    }
 }
 
 impl Drop for TestValidator {
