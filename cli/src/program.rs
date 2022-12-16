@@ -95,6 +95,11 @@ pub enum ProgramCliCommand {
         upgrade_authority_index: Option<SignerIndex>,
         new_upgrade_authority: Option<Pubkey>,
     },
+    SetUpgradeAuthorityChecked {
+        program_pubkey: Pubkey,
+        upgrade_authority_index: SignerIndex,
+        new_upgrade_authority_index: SignerIndex,
+    },
     Show {
         account_pubkey: Option<Pubkey>,
         authority_pubkey: Pubkey,
@@ -272,11 +277,13 @@ impl ProgramSubCommands for App<'_, '_> {
                                 .help("Upgrade authority [default: the default configured keypair]")
                         )
                         .arg(
-                            pubkey!(Arg::with_name("new_upgrade_authority")
+                            Arg::with_name("new_upgrade_authority")
                                 .long("new-upgrade-authority")
+                                .value_name("NEW_UPGRADE_AUTHORITY")
                                 .required_unless("final")
-                                .value_name("NEW_UPGRADE_AUTHORITY"),
-                                "Address of the new upgrade authority"),
+                                .takes_value(true)
+                                .help("New upgrade authority (keypair or pubkey). It is strongly recommended to pass in a keypair to prevent mistakes in setting the upgrade authority. You can opt out of this behavior by passing --skip-new-upgrade-authority-signer-check if you are really confident that you are setting the correct authority. Alternatively, If you wish to make the program immutable, you should ignore this arg and pass the --final flag."
+                        )
                         )
                         .arg(
                             Arg::with_name("final")
@@ -284,6 +291,13 @@ impl ProgramSubCommands for App<'_, '_> {
                                 .conflicts_with("new_upgrade_authority")
                                 .help("The program will not be upgradeable")
                         )
+                        .arg(
+                            Arg::with_name("skip_new_upgrade_authority_signer_check")
+                                .long("skip-new-upgrade-authority-signer-check")
+                                .requires("new_upgrade_authority")
+                                .takes_value(false)
+                                .help("Set this flag if you don't want the new authority to sign the set-upgrade-authority transaction."),
+                        ),
                 )
                 .subcommand(
                     SubCommand::with_name("show")
@@ -560,28 +574,49 @@ pub fn parse_program_subcommand(
             let (upgrade_authority_signer, upgrade_authority_pubkey) =
                 signer_of(matches, "upgrade_authority", wallet_manager)?;
             let program_pubkey = pubkey_of(matches, "program_id").unwrap();
-            let new_upgrade_authority = if matches.is_present("final") {
+            let is_final = matches.is_present("final");
+            let new_upgrade_authority = if is_final {
                 None
             } else {
                 pubkey_of_signer(matches, "new_upgrade_authority", wallet_manager)?
             };
 
-            let signer_info = default_signer.generate_unique_signers(
-                vec![
-                    Some(default_signer.signer_from_path(matches, wallet_manager)?),
-                    upgrade_authority_signer,
-                ],
-                matches,
-                wallet_manager,
-            )?;
+            let mut signers = vec![
+                Some(default_signer.signer_from_path(matches, wallet_manager)?),
+                upgrade_authority_signer,
+            ];
 
-            CliCommandInfo {
-                command: CliCommand::Program(ProgramCliCommand::SetUpgradeAuthority {
-                    program_pubkey,
-                    upgrade_authority_index: signer_info.index_of(upgrade_authority_pubkey),
-                    new_upgrade_authority,
-                }),
-                signers: signer_info.signers,
+            if !is_final && !matches.is_present("skip_new_upgrade_authority_signer_check") {
+                let (new_upgrade_authority_signer, _) =
+                    signer_of(matches, "new_upgrade_authority", wallet_manager)?;
+                signers.push(new_upgrade_authority_signer);
+            }
+
+            let signer_info =
+                default_signer.generate_unique_signers(signers, matches, wallet_manager)?;
+
+            if matches.is_present("skip_new_upgrade_authority_signer_check") || is_final {
+                CliCommandInfo {
+                    command: CliCommand::Program(ProgramCliCommand::SetUpgradeAuthority {
+                        program_pubkey,
+                        upgrade_authority_index: signer_info.index_of(upgrade_authority_pubkey),
+                        new_upgrade_authority,
+                    }),
+                    signers: signer_info.signers,
+                }
+            } else {
+                CliCommandInfo {
+                    command: CliCommand::Program(ProgramCliCommand::SetUpgradeAuthorityChecked {
+                        program_pubkey,
+                        upgrade_authority_index: signer_info
+                            .index_of(upgrade_authority_pubkey)
+                            .expect("upgrade authority is missing from signers"),
+                        new_upgrade_authority_index: signer_info
+                            .index_of(new_upgrade_authority)
+                            .expect("new upgrade authority is missing from signers"),
+                    }),
+                    signers: signer_info.signers,
+                }
             }
         }
         ("show", Some(matches)) => {
@@ -730,6 +765,17 @@ pub fn process_program_subcommand(
             None,
             *upgrade_authority_index,
             *new_upgrade_authority,
+        ),
+        ProgramCliCommand::SetUpgradeAuthorityChecked {
+            program_pubkey,
+            upgrade_authority_index,
+            new_upgrade_authority_index,
+        } => process_set_authority_checked(
+            &rpc_client,
+            config,
+            *program_pubkey,
+            *upgrade_authority_index,
+            *new_upgrade_authority_index,
         ),
         ProgramCliCommand::Show {
             account_pubkey,
@@ -1163,6 +1209,51 @@ fn process_set_authority(
         } else {
             CliProgramAccountType::Buffer
         },
+    };
+    Ok(config.output_format.formatted_string(&authority))
+}
+
+fn process_set_authority_checked(
+    rpc_client: &RpcClient,
+    config: &CliConfig,
+    program_pubkey: Pubkey,
+    authority_index: SignerIndex,
+    new_authority_index: SignerIndex,
+) -> ProcessResult {
+    let authority_signer = config.signers[authority_index];
+    let new_authority_signer = config.signers[new_authority_index];
+
+    trace!("Set a new (checked) authority");
+    let blockhash = rpc_client.get_latest_blockhash()?;
+
+    let mut tx = Transaction::new_unsigned(Message::new(
+        &[bpf_loader_upgradeable::set_upgrade_authority_checked(
+            &program_pubkey,
+            &authority_signer.pubkey(),
+            &new_authority_signer.pubkey(),
+        )],
+        Some(&config.signers[0].pubkey()),
+    ));
+
+    tx.try_sign(
+        &[config.signers[0], authority_signer, new_authority_signer],
+        blockhash,
+    )?;
+    rpc_client
+        .send_and_confirm_transaction_with_spinner_and_config(
+            &tx,
+            config.commitment,
+            RpcSendTransactionConfig {
+                skip_preflight: false,
+                preflight_commitment: Some(config.commitment.commitment),
+                ..RpcSendTransactionConfig::default()
+            },
+        )
+        .map_err(|e| format!("Setting authority failed: {e}"))?;
+
+    let authority = CliProgramAuthority {
+        authority: new_authority_signer.pubkey().to_string(),
+        account_type: CliProgramAccountType::Program,
     };
     Ok(config.output_format.formatted_string(&authority))
 }
@@ -2622,6 +2713,7 @@ mod tests {
             &program_pubkey.to_string(),
             "--new-upgrade-authority",
             &new_authority_pubkey.to_string(),
+            "--skip-new-upgrade-authority-signer-check",
         ]);
         assert_eq!(
             parse_command(&test_command, &default_signer, &mut None).unwrap(),
@@ -2646,6 +2738,7 @@ mod tests {
             &program_pubkey.to_string(),
             "--new-upgrade-authority",
             &new_authority_pubkey_file,
+            "--skip-new-upgrade-authority-signer-check",
         ]);
         assert_eq!(
             parse_command(&test_command, &default_signer, &mut None).unwrap(),
@@ -2656,6 +2749,35 @@ mod tests {
                     new_upgrade_authority: Some(new_authority_pubkey.pubkey()),
                 }),
                 signers: vec![read_keypair_file(&keypair_file).unwrap().into()],
+            }
+        );
+
+        let program_pubkey = Pubkey::new_unique();
+        let new_authority_pubkey = Keypair::new();
+        let new_authority_pubkey_file = make_tmp_path("authority_keypair_file");
+        write_keypair_file(&new_authority_pubkey, &new_authority_pubkey_file).unwrap();
+        let test_command = test_commands.clone().get_matches_from(vec![
+            "test",
+            "program",
+            "set-upgrade-authority",
+            &program_pubkey.to_string(),
+            "--new-upgrade-authority",
+            &new_authority_pubkey_file,
+        ]);
+        assert_eq!(
+            parse_command(&test_command, &default_signer, &mut None).unwrap(),
+            CliCommandInfo {
+                command: CliCommand::Program(ProgramCliCommand::SetUpgradeAuthorityChecked {
+                    program_pubkey,
+                    upgrade_authority_index: 0,
+                    new_upgrade_authority_index: 1,
+                }),
+                signers: vec![
+                    read_keypair_file(&keypair_file).unwrap().into(),
+                    read_keypair_file(&new_authority_pubkey_file)
+                        .unwrap()
+                        .into(),
+                ],
             }
         );
 
