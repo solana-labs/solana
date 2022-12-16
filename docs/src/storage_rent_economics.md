@@ -29,3 +29,11 @@ deducted at a rate specified in genesis, in lamports per kilobyte-year.
 
 For information on the technical implementation details of this design, see the
 [Rent](implemented-proposals/rent.md) section.
+
+**Note:** New accounts now **are required** to be initialized with enough
+lamports to be rent exempt. Additionally, transactions that leave an account's
+balance below the rent exempt minimum (and non-zero) will **fail**. This
+essentially renders all accounts rent exempt. Rent-paying accounts that were
+created before this requirement will continue paying rent until either (1)
+their balance falls to zero, or (2) a transaction increases the account's
+balance to be rent exempt.
