@@ -751,7 +751,6 @@ impl BankingSimulator {
             exit.clone(),
             DEFAULT_BANKING_TRACE_SIZE
         ))).unwrap();
-        let banking_tracer = Arc::new(banking_tracer);
         let (non_vote_sender, non_vote_receiver) = banking_tracer.create_channel_non_vote();
         let (tpu_vote_sender, tpu_vote_receiver) = banking_tracer.create_channel_tpu_vote();
         let (gossip_vote_sender, gossip_vote_receiver) =
