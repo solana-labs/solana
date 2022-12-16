@@ -22,7 +22,7 @@ use {
     },
     solana_runtime::bank::Bank,
     solana_sdk::{
-        clock::{Slot, SLOT_MS},
+        clock::{Slot, DEFAULT_MS_PER_SLOT},
         pubkey::Pubkey,
         signature::Signable,
         signer::keypair::Keypair,
@@ -554,7 +554,7 @@ impl AncestorHashesService {
                     &mut request_throttle,
                 );
 
-                sleep(Duration::from_millis(SLOT_MS));
+                sleep(Duration::from_millis(DEFAULT_MS_PER_SLOT));
             })
             .unwrap()
     }
