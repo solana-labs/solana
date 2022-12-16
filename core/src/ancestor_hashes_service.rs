@@ -523,6 +523,7 @@ impl AncestorHashesService {
         let serve_repair = ServeRepair::new(
             repair_info.cluster_info.clone(),
             repair_info.bank_forks.clone(),
+            repair_info.repair_whitelist.clone(),
         );
         let mut repair_stats = AncestorRepairRequestsStats::default();
 
@@ -969,8 +970,11 @@ mod test {
                 Arc::new(keypair),
                 SocketAddrSpace::Unspecified,
             );
-            let responder_serve_repair =
-                ServeRepair::new(Arc::new(cluster_info), vote_simulator.bank_forks);
+            let responder_serve_repair = ServeRepair::new(
+                Arc::new(cluster_info),
+                vote_simulator.bank_forks,
+                Arc::<RwLock<HashSet<_>>>::default(), // repair whitelist
+            );
 
             // Set up thread to give us responses
             let ledger_path = get_tmp_ledger_path!();
@@ -1054,8 +1058,12 @@ mod test {
                 Arc::new(keypair),
                 SocketAddrSpace::Unspecified,
             ));
-            let requester_serve_repair =
-                ServeRepair::new(requester_cluster_info.clone(), bank_forks.clone());
+            let repair_whitelist = Arc::new(RwLock::new(HashSet::default()));
+            let requester_serve_repair = ServeRepair::new(
+                requester_cluster_info.clone(),
+                bank_forks.clone(),
+                repair_whitelist.clone(),
+            );
             let (duplicate_slots_reset_sender, _duplicate_slots_reset_receiver) = unbounded();
             let repair_info = RepairInfo {
                 bank_forks,
@@ -1064,6 +1072,7 @@ mod test {
                 epoch_schedule,
                 duplicate_slots_reset_sender,
                 repair_validators: None,
+                repair_whitelist,
             };
 
             let (ancestor_hashes_replay_update_sender, ancestor_hashes_replay_update_receiver) =

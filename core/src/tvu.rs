@@ -80,9 +80,15 @@ pub struct TvuSockets {
 pub struct TvuConfig {
     pub max_ledger_shreds: Option<u64>,
     pub shred_version: u16,
+    // Validators from which repairs are requested
     pub repair_validators: Option<HashSet<Pubkey>>,
+<<<<<<< HEAD
     pub rocksdb_compaction_interval: Option<u64>,
     pub rocksdb_max_compaction_jitter: Option<u64>,
+=======
+    // Validators which should be given priority when serving repairs
+    pub repair_whitelist: Arc<RwLock<HashSet<Pubkey>>>,
+>>>>>>> a44ea779b (add support for a repair protocol whitelist (#29161))
     pub wait_for_vote_to_start_leader: bool,
 }
 
@@ -190,6 +196,7 @@ impl Tvu {
                 epoch_schedule,
                 duplicate_slots_reset_sender,
                 repair_validators: tvu_config.repair_validators,
+                repair_whitelist: tvu_config.repair_whitelist,
                 cluster_info: cluster_info.clone(),
                 cluster_slots: cluster_slots.clone(),
             };
