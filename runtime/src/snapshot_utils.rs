@@ -277,6 +277,91 @@ pub enum VerifySlotDeltasError {
     BadSlotHistory,
 }
 
+/// Delete the files and subdirectories in a directory.
+/// This is useful if the process does not have permission
+/// to delete the top level directory it might be able to
+/// delete the contents of that directory.
+fn delete_contents_of_path(path: impl AsRef<Path> + Copy) {
+    if let Ok(dir_entries) = std::fs::read_dir(path) {
+        for entry in dir_entries.flatten() {
+            let sub_path = entry.path();
+            let metadata = match entry.metadata() {
+                Ok(metadata) => metadata,
+                Err(err) => {
+                    warn!(
+                        "Failed to get metadata for {}. Error: {}",
+                        sub_path.display(),
+                        err.to_string()
+                    );
+                    break;
+                }
+            };
+            if metadata.is_dir() {
+                if let Err(err) = std::fs::remove_dir_all(&sub_path) {
+                    warn!(
+                        "Failed to remove sub directory {}.  Error: {}",
+                        sub_path.display(),
+                        err.to_string()
+                    );
+                }
+            } else if metadata.is_file() {
+                if let Err(err) = std::fs::remove_file(&sub_path) {
+                    warn!(
+                        "Failed to remove file {}.  Error: {}",
+                        sub_path.display(),
+                        err.to_string()
+                    );
+                }
+            }
+        }
+    } else {
+        warn!(
+            "Failed to read the sub paths of {}",
+            path.as_ref().display()
+        );
+    }
+}
+
+/// Delete directories/files asynchronously to avoid blocking on it.
+/// Fist, in sync context, rename the original path to *_deleted,
+/// then spawn a thread to delete the renamed path.
+/// If the process is killed and the deleting process is not done,
+/// the leftover path will be deleted in the next process life, so
+/// there is no file space leaking.
+pub fn move_and_async_delete_path(path: impl AsRef<Path> + Copy) {
+    let mut path_delete = PathBuf::new();
+    path_delete.push(path);
+    path_delete.set_file_name(format!(
+        "{}{}",
+        path_delete.file_name().unwrap().to_str().unwrap(),
+        "_to_be_deleted"
+    ));
+
+    if path_delete.exists() {
+        std::fs::remove_dir_all(&path_delete).unwrap();
+    }
+
+    if !path.as_ref().exists() {
+        return;
+    }
+
+    if let Err(err) = std::fs::rename(path, &path_delete) {
+        warn!(
+            "Path renaming failed: {}.  Falling back to rm_dir in sync mode",
+            err.to_string()
+        );
+        delete_contents_of_path(path);
+        return;
+    }
+
+    Builder::new()
+        .name("solDeletePath".to_string())
+        .spawn(move || {
+            std::fs::remove_dir_all(path_delete).unwrap();
+        })
+        .unwrap();
+}
+
 /// If the validator halts in the middle of `archive_snapshot_package()`, the temporary staging
 /// directory won't be cleaned up.  Call this function to clean them up.
 pub fn remove_tmp_snapshot_archives(snapshot_archives_dir: impl AsRef<Path>) {
@@ -298,6 +383,14 @@ pub fn remove_tmp_snapshot_archives(snapshot_archives_dir: impl AsRef<Path>) {
             }
         }
     }
+}
+
+pub fn snapshot_write_version_file(version_file: PathBuf, version: SnapshotVersion) -> Result<()> {
+    let mut f = fs::File::create(version_file)
+        .map_err(|e| SnapshotError::IoWithSource(e, "create version file"))?;
+    f.write_all(version.as_str().as_bytes())
+        .map_err(|e| SnapshotError::IoWithSource(e, "write version file"))?;
+    Ok(())
 }
 
 /// Make a snapshot archive out of the snapshot package
@@ -376,12 +469,7 @@ pub fn archive_snapshot_package(
     }
 
     // Write version file
-    {
-        let mut f = fs::File::create(staging_version_file)
-            .map_err(|e| SnapshotError::IoWithSource(e, "create version file"))?;
-        f.write_all(snapshot_package.snapshot_version.as_str().as_bytes())
-            .map_err(|e| SnapshotError::IoWithSource(e, "write version file"))?;
-    }
+    snapshot_write_version_file(staging_version_file, snapshot_package.snapshot_version)?;
 
     // Tar the staging directory into the archive at `archive_path`
     let archive_path = tar_dir.join(format!(
@@ -1455,6 +1543,25 @@ pub(crate) fn parse_incremental_snapshot_archive_filename(
     })
 }
 
+pub(crate) fn parse_snapshot_filename(filename: &str) -> Option<(Slot, BankSnapshotType)> {
+    lazy_static! {
+        static ref SNAPSHOT_FILE_REGEX: Regex =
+            Regex::new(r"^(?P<slot>[0-9]+)\.(?P<type>(pre|post))$").unwrap();
+    };
+
+    SNAPSHOT_FILE_REGEX.captures(filename).map(|cap| {
+        let slot_str = cap.name("slot").map(|m| m.as_str());
+        let type_str = cap.name("type").map(|m| m.as_str());
+        let slot: Slot = slot_str.unwrap().parse::<u64>().unwrap();
+        let snapshot_type = if type_str.unwrap() == "pre" {
+            BankSnapshotType::Pre
+        } else {
+            BankSnapshotType::Post
+        };
+        (slot, snapshot_type)
+    })
+}
+
 /// Walk down the snapshot archive to collect snapshot archive file info
 fn get_snapshot_archives<T, F>(snapshot_archives_dir: &Path, cb: F) -> Vec<T>
 where
@@ -1752,7 +1859,7 @@ fn bank_fields_from_snapshots(
             (None, None)
         };
     info!(
-        "Loading bank from full snapshot {} and incremental snapshot {:?}",
+        "Loading bank fields from full snapshot {} and incremental snapshot {:?}",
         full_snapshot_root_paths.snapshot_path.display(),
         incremental_snapshot_root_paths
             .as_ref()
@@ -1811,7 +1918,7 @@ fn rebuild_bank_from_snapshots(
             (None, None)
         };
     info!(
-        "Loading bank from full snapshot {} and incremental snapshot {:?}",
+        "Rebuild bank from full snapshot {} and incremental snapshot {:?}",
         full_snapshot_root_paths.snapshot_path.display(),
         incremental_snapshot_root_paths
             .as_ref()

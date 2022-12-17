@@ -5410,7 +5410,9 @@ impl AccountsDb {
                     let old_id = ret.append_vec_id();
                     ret.recycle(slot, self.next_id());
                     debug!(
-                        "recycling store: {} {:?} old_id: {}",
+                        "recycling store: slot param {},  slot {}, id{}, path {:?} old_id: {}",
+                        slot,
+                        ret.slot(),
                         ret.append_vec_id(),
                         ret.get_path(),
                         old_id

@@ -41,7 +41,7 @@ pub struct SnapshotConfig {
     /// This is the `debug_verify` parameter to use when calling `update_accounts_hash()`
     pub accounts_hash_debug_verify: bool,
 
-    // Thread niceness adjustment for snapshot packager service
+    /// Thread niceness adjustment for snapshot packager service
     pub packager_thread_niceness_adj: i8,
 }
 
