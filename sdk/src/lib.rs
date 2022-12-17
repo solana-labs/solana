@@ -3,7 +3,7 @@
 //! This is the base library for all off-chain programs that interact with
 //! Solana or otherwise operate on Solana data structures. On-chain programs
 //! instead use the [`solana-program`] crate, the modules of which are
-//! re-exported by this crate, similarly to the relationship between the Rust
+//! re-exported by this crate, like the relationship between the Rust
 //! `core` and `std` crates. As much of the functionality of this crate is
 //! provided by `solana-program`, see that crate's documentation for an
 //! overview.
