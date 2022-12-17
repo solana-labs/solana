@@ -26,14 +26,29 @@ struct DuplicateSlotProofKey {
     wallclock: u64,
 }
 
-// Group received chunks by peer pubkey, when we receive an invalid proof,
-// set the value to None so we don't accept future proofs with the same key.
-type SlotChunkMap = HashMap<DuplicateSlotProofKey, Option<ProofChunkMap>>;
+enum ProofStatus {
+    Frozen,
+    UnfinishedProof(ProofChunkMap)
+}
 
+// Group received chunks by peer pubkey, when we receive an invalid proof,
+// set the value to Frozen so we don't accept future proofs with the same key.
+type SlotChunkMap = HashMap<DuplicateSlotProofKey, ProofStatus>;
+
+enum SlotStatus {
+    Frozen,
+    UnfinishedProof(SlotChunkMap)
+}
 pub struct DuplicateShredHandler {
-    // When a valid proof has been inserted, we change the entry for that slot to None
+    // Because we use UDP for packet transfer, we can normally only send ~1500 bytes
+    // in each packet. We send both shreds and meta data in duplicate shred proof, and
+    // each shred is normally 1 packet(1500 bytes), so the whole proof is larger than
+    // 1 packet and it needs to be cut down as chunks for transfer. So we need to piece
+    // together the chunks into the original proof before anything useful is done.
+    //
+    // When a valid proof has been inserted, we change the entry for that slot to Frozen
     // to indicate we no longer accept proofs for this slot.
-    chunk_map: HashMap<Slot, Option<SlotChunkMap>>,
+    chunk_map: HashMap<Slot, SlotStatus>,
     // remember the last root slot handled, clear anything older than last_root.
     last_root: Slot,
     blockstore: Arc<Blockstore>,
@@ -73,7 +88,7 @@ impl DuplicateShredHandler {
                 Ok(Some((slot, proof))) => {
                     self.verify_and_apply_proof(slot, proof)?;
                     // We stored the duplicate proof in this slot, no need to accept any future proof.
-                    self.clear_slot(slot);
+                    self.mark_slot_proof_received(slot);
                 }
                 _ => (),
             }
@@ -87,7 +102,7 @@ impl DuplicateShredHandler {
         {
             return false;
         }
-        !matches!(self.chunk_map.get(&slot), Some(None))
+        !matches!(self.chunk_map.get(&slot), Some(SlotStatus::Frozen))
     }
 
     fn new_proof_chunk_map(num_chunks: u8) -> ProofChunkMap {
@@ -98,26 +113,26 @@ impl DuplicateShredHandler {
         }
     }
 
-    fn clear_slot(&mut self, slot: u64) {
-        self.chunk_map.insert(slot, None);
+    fn mark_slot_proof_received(&mut self, slot: u64) {
+        self.chunk_map.insert(slot, SlotStatus::Frozen);
     }
 
     fn insert_chunk(
         &mut self,
         data: DuplicateShred,
     ) -> Result<Option<(Slot, DuplicateSlotProof)>, Error> {
-        if let Some(slot_chunk_map) = self
+        if let SlotStatus::UnfinishedProof(slot_chunk_map) = self
             .chunk_map
             .entry(data.slot)
-            .or_insert_with(|| Some(HashMap::new()))
+            .or_insert_with(|| SlotStatus::UnfinishedProof(HashMap::new()))
         {
             let proof_key = DuplicateSlotProofKey {
                 from: data.from,
                 wallclock: data.wallclock,
             };
-            if let Some(proof_chunk_map) = slot_chunk_map
+            if let ProofStatus::UnfinishedProof(proof_chunk_map) = slot_chunk_map
                 .entry(proof_key)
-                .or_insert_with(|| Some(Self::new_proof_chunk_map(data.num_chunks)))
+                .or_insert_with(|| ProofStatus::UnfinishedProof(Self::new_proof_chunk_map(data.num_chunks)))
             {
                 let num_chunks = data.num_chunks;
                 let chunk_index = data.chunk_index;

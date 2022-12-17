@@ -23,19 +23,19 @@ pub struct ClusterInfoEntryListener {
     thread_hdls: Vec<JoinHandle<()>>,
 }
 
-// right now we only need to process duplicate proof, in the future the receiver
+// Right now we only need to process duplicate proof, in the future the receiver
 // should be a map from enum value to handlers.
 impl ClusterInfoEntryListener {
     pub fn new(
         exit: Arc<AtomicBool>,
         cluster_info: Arc<ClusterInfo>,
-        duplicate_proof_handler: impl ClusterInfoEntryHandler + 'static,
+        handler: impl ClusterInfoEntryHandler + 'static,
     ) -> Self {
         let listen_thread = {
             Builder::new()
                 .name("solCiEntryLstnr".to_string())
                 .spawn(move || {
-                    Self::recv_loop(exit, &cluster_info, duplicate_proof_handler);
+                    Self::recv_loop(exit, &cluster_info, handler);
                 })
                 .unwrap()
         };
@@ -54,14 +54,14 @@ impl ClusterInfoEntryListener {
     fn recv_loop(
         exit: Arc<AtomicBool>,
         cluster_info: &ClusterInfo,
-        mut duplicate_proof_handler: impl ClusterInfoEntryHandler + 'static,
+        mut handler: impl ClusterInfoEntryHandler + 'static,
     ) {
         let mut cursor = Cursor::default();
         while !exit.load(Ordering::Relaxed) {
             let entries: Vec<CrdsData> = cluster_info.get_duplicate_shred_entries(&mut cursor);
             inc_new_counter_debug!("cluster_info_entry_listener-recv_count", entries.len());
             for x in entries {
-                duplicate_proof_handler.handle(x);
+                handler.handle(x);
             }
             sleep(Duration::from_millis(GOSSIP_SLEEP_MILLIS));
         }
