@@ -26,14 +26,9 @@ struct DuplicateSlotProofKey {
     wallclock: u64,
 }
 
-enum ProofStatus {
-    Frozen,
-    UnfinishedProof(ProofChunkMap)
-}
-
 // Group received chunks by peer pubkey, when we receive an invalid proof,
 // set the value to Frozen so we don't accept future proofs with the same key.
-type SlotChunkMap = HashMap<DuplicateSlotProofKey, ProofStatus>;
+type SlotChunkMap = HashMap<DuplicateSlotProofKey, ProofChunkMap>;
 
 enum SlotStatus {
     Frozen,
@@ -130,26 +125,24 @@ impl DuplicateShredHandler {
                 from: data.from,
                 wallclock: data.wallclock,
             };
-            if let ProofStatus::UnfinishedProof(proof_chunk_map) = slot_chunk_map
+            let proof_chunk_map = slot_chunk_map
                 .entry(proof_key)
-                .or_insert_with(|| ProofStatus::UnfinishedProof(Self::new_proof_chunk_map(data.num_chunks)))
+                .or_insert_with(|| Self::new_proof_chunk_map(data.num_chunks));
+            let num_chunks = data.num_chunks;
+            let chunk_index = data.chunk_index;
+            if num_chunks == proof_chunk_map.num_chunks
+                && chunk_index < num_chunks
+                && !proof_chunk_map.chunks.contains_key(&chunk_index)
             {
-                let num_chunks = data.num_chunks;
-                let chunk_index = data.chunk_index;
-                if num_chunks == proof_chunk_map.num_chunks
-                    && chunk_index < num_chunks
-                    && !proof_chunk_map.chunks.contains_key(&chunk_index)
-                {
-                    proof_chunk_map.missing_chunks =
-                        proof_chunk_map.missing_chunks.saturating_sub(1);
-                    proof_chunk_map.chunks.insert(chunk_index, data.chunk);
-                    if proof_chunk_map.missing_chunks == 0 {
-                        let proof_data = (0..num_chunks)
-                            .map(|k| proof_chunk_map.chunks.remove(&k).unwrap())
-                            .concat();
-                        let proof: DuplicateSlotProof = bincode::deserialize(&proof_data)?;
-                        return Ok(Some((data.slot, proof)));
-                    }
+                proof_chunk_map.missing_chunks =
+                    proof_chunk_map.missing_chunks.saturating_sub(1);
+                proof_chunk_map.chunks.insert(chunk_index, data.chunk);
+                if proof_chunk_map.missing_chunks == 0 {
+                    let proof_data = (0..num_chunks)
+                        .map(|k| proof_chunk_map.chunks.remove(&k).unwrap())
+                        .concat();
+                    let proof: DuplicateSlotProof = bincode::deserialize(&proof_data)?;
+                    return Ok(Some((data.slot, proof)));
                 }
             }
         }
