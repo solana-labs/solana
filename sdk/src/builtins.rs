@@ -1,4 +1,4 @@
-//! Solana helper macros for declaring builtin programs.
+//! Solana helper macros for declaring built-in programs.
 
 #[rustversion::since(1.46.0)]
 #[macro_export]
