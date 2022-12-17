@@ -1543,25 +1543,6 @@ pub(crate) fn parse_incremental_snapshot_archive_filename(
     })
 }
 
-pub(crate) fn parse_snapshot_filename(filename: &str) -> Option<(Slot, BankSnapshotType)> {
-    lazy_static! {
-        static ref SNAPSHOT_FILE_REGEX: Regex =
-            Regex::new(r"^(?P<slot>[0-9]+)\.(?P<type>(pre|post))$").unwrap();
-    };
-
-    SNAPSHOT_FILE_REGEX.captures(filename).map(|cap| {
-        let slot_str = cap.name("slot").map(|m| m.as_str());
-        let type_str = cap.name("type").map(|m| m.as_str());
-        let slot: Slot = slot_str.unwrap().parse::<u64>().unwrap();
-        let snapshot_type = if type_str.unwrap() == "pre" {
-            BankSnapshotType::Pre
-        } else {
-            BankSnapshotType::Post
-        };
-        (slot, snapshot_type)
-    })
-}
-
 /// Walk down the snapshot archive to collect snapshot archive file info
 fn get_snapshot_archives<T, F>(snapshot_archives_dir: &Path, cb: F) -> Vec<T>
 where
