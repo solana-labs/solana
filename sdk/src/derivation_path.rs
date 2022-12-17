@@ -1,7 +1,8 @@
-//! Definitions of standard Solana [BIP-44] key derivation paths.
+//! [BIP-44] derivation paths.
 //!
 //! [BIP-44]: https://github.com/bitcoin/bips/blob/master/bip-0044.mediawiki
 //!
+//! Includes definitions and helpers for Solana derivation paths.
 //! The standard Solana BIP-44 derivation path prefix is
 //!
 //! > `m/44'/501'`
