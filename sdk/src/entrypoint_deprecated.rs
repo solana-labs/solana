@@ -1,4 +1,4 @@
-//! The Rust-based BPF program entry point supported by the original BPF loader.
+//! The Rust-based BPF program entrypoint supported by the original BPF loader.
 //!
 //! The original BPF loader is deprecated and exists for backwards-compatibility
 //! reasons. This module should not be used by new programs.

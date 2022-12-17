@@ -1,4 +1,4 @@
-//! The Rust-based BPF program entry point supported by the latest BPF loader.
+//! The Rust-based BPF program entrypoint supported by the latest BPF loader.
 //!
 //! For more information see the [`bpf_loader`] module.
 //!
