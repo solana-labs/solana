@@ -204,88 +204,93 @@ impl EpochRewardCalcRequestHandler {
         Self { receiver, results }
     }
 
-    /// Handle incoming calculation request
+    /// Process one reward calculation request
+    pub fn process(&self, request: EpochRewardCalcRequest) {
+        let EpochRewardCalcRequest { epoch, bank } = request;
+        let parent_slot = bank.parent_slot();
+        info!(
+            "handle reward calculation request: epoch {} parent_slot {}",
+            epoch, parent_slot
+        );
+
+        let mut calc_metrics = RewardsCalcMetrics {
+            epoch,
+            slot: bank.slot(),
+            parent_slot,
+            ..RewardsCalcMetrics::default()
+        };
+
+        self.results.write().unwrap().relinquish(epoch);
+
+        if !self
+            .results
+            .read()
+            .unwrap()
+            .signatures
+            .contains_key(&parent_slot)
+        {
+            let mut total_time = Measure::start("total");
+            // hasn't seen the epoch boundary slot yet, load the stake_vote_delegation map and
+            // compute the signature and add (boundary_slot, signature) to map.
+            let thread_pool = ThreadPoolBuilder::new().build().unwrap();
+            let mut metrics = RewardsMetrics::default();
+            let (vote_with_stake_delegations_map, load_calc_info_time) =
+                measure!(bank.load_reward_calc_info(&thread_pool, &mut metrics));
+            calc_metrics.load_calc_info_time_us = load_calc_info_time.as_us();
+
+            let (signature, calc_signature_time) =
+                measure!(bank.compute_rewards_calc_signature(&vote_with_stake_delegations_map));
+            calc_metrics.calc_signature_time_us = calc_signature_time.as_us();
+
+            self.results
+                .write()
+                .unwrap()
+                .signatures
+                .insert(parent_slot, signature);
+
+            if !self
+                .results
+                .read()
+                .unwrap()
+                .rewards
+                .contains_key(&signature)
+            {
+                // hasn't seen the signature in the rewards yet, compute the rewards and save
+                // (signature, rewards) to the map.
+                let parent_epoch = epoch.saturating_sub(1); // TODO
+
+                let (result, reward_calc_time) = measure!(
+                    bank.do_stake_reward_calc(
+                        vote_with_stake_delegations_map,
+                        parent_epoch,
+                        &thread_pool,
+                        &mut metrics,
+                    ),
+                    "stake_reward_calc",
+                );
+                self.results
+                    .write()
+                    .unwrap()
+                    .rewards
+                    .insert(signature, Arc::new(result));
+                calc_metrics.reward_calc_time_us = reward_calc_time.as_us();
+            }
+
+            total_time.stop();
+
+            calc_metrics.total_time_us = total_time.as_us();
+            calc_metrics.report();
+        }
+    }
+
+    /// Handle incoming calculation requests loop
     pub fn handle_request(&self) {
         const MAX_REQUEST_RECV_TIME_MS: u64 = 500;
         if let Ok(request) = self
             .receiver
             .recv_timeout(Duration::from_millis(MAX_REQUEST_RECV_TIME_MS))
         {
-            let EpochRewardCalcRequest { epoch, bank } = request;
-            let parent_slot = bank.parent_slot();
-            info!(
-                "handle reward calculation request: epoch {} parent_slot {}",
-                epoch, parent_slot
-            );
-
-            let mut calc_metrics = RewardsCalcMetrics {
-                epoch,
-                slot: bank.slot(),
-                parent_slot,
-                ..RewardsCalcMetrics::default()
-            };
-
-            self.results.write().unwrap().relinquish(epoch);
-
-            if !self
-                .results
-                .read()
-                .unwrap()
-                .signatures
-                .contains_key(&parent_slot)
-            {
-                let mut total_time = Measure::start("total");
-                // hasn't seen the epoch boundary slot yet, load the stake_vote_delegation map and
-                // compute the signature and add (boundary_slot, signature) to map.
-                let thread_pool = ThreadPoolBuilder::new().build().unwrap();
-                let mut metrics = RewardsMetrics::default();
-                let (vote_with_stake_delegations_map, load_calc_info_time) =
-                    measure!(bank.load_reward_calc_info(&thread_pool, &mut metrics));
-                calc_metrics.load_calc_info_time_us = load_calc_info_time.as_us();
-
-                let (signature, calc_signature_time) =
-                    measure!(bank.compute_rewards_calc_signature(&vote_with_stake_delegations_map));
-                calc_metrics.calc_signature_time_us = calc_signature_time.as_us();
-
-                self.results
-                    .write()
-                    .unwrap()
-                    .signatures
-                    .insert(parent_slot, signature);
-
-                if !self
-                    .results
-                    .read()
-                    .unwrap()
-                    .rewards
-                    .contains_key(&signature)
-                {
-                    // hasn't seen the signature in the rewards yet, compute the rewards and save
-                    // (signature, rewards) to the map.
-                    let parent_epoch = epoch.saturating_sub(1); // TODO
-
-                    let (result, reward_calc_time) = measure!(
-                        bank.do_stake_reward_calc(
-                            vote_with_stake_delegations_map,
-                            parent_epoch,
-                            &thread_pool,
-                            &mut metrics,
-                        ),
-                        "stake_reward_calc",
-                    );
-                    self.results
-                        .write()
-                        .unwrap()
-                        .rewards
-                        .insert(signature, Arc::new(result));
-                    calc_metrics.reward_calc_time_us = reward_calc_time.as_us();
-                }
-
-                total_time.stop();
-
-                calc_metrics.total_time_us = total_time.as_us();
-                calc_metrics.report();
-            }
+            self.process(request);
         }
     }
 }
