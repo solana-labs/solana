@@ -1154,6 +1154,26 @@ impl ProgramTestContext {
                     )
             });
 
+        // Simulate reward calculation
+        let (epoch_reward_calc_sender, epoch_reward_calc_receiver) = crossbeam_channel::unbounded();
+        let results = Arc::new(RwLock::new(EpochRewardResult::new()));
+
+        {
+            let root_bank = bank_forks.root_bank();
+            root_bank.set_epoch_reward_calculator(EpochRewardCalculator::<
+                StakeVoteAccountRewardResult,
+            >::new(
+                epoch_reward_calc_sender, results.clone()
+            ));
+        }
+
+        let epoch_reward_calc_request_handler =
+            EpochRewardCalcRequestHandler::new(epoch_reward_calc_receiver, epoch_rewards_results);
+
+        epoch_reward_calc_receiver.try_iter().for_each(|request| {
+            epoch_reward_calc_request_handler.process(request);
+        });
+
         // warp_bank is frozen so go forward to get unfrozen bank at warp_slot
         bank_forks.insert(Bank::new_from_parent(
             &warp_bank,
