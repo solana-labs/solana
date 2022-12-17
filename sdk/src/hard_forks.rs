@@ -1,4 +1,4 @@
-//! Used to maintain the list of slot boundaries for when a hard fork should
+//! The list of slot boundaries at which a hard fork should
 //! occur.
 
 #![cfg(feature = "full")]
