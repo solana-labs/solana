@@ -130,7 +130,7 @@ async fn process_connection(
             .await??;
 
             debug!("Connection established to tcp/{}", *tcp_port);
-            let _ = tcp_stream.shutdown();
+            tcp_stream.shutdown().await?;
         }
     }
     let response = IpEchoServerResponse {
