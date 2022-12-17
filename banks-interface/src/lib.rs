@@ -100,6 +100,7 @@ pub trait Banks {
         commitment: CommitmentLevel,
         message: Message,
     ) -> Option<u64>;
+    async fn get_reward_interval_with_commitment_and_context(commitment: CommitmentLevel) -> u64;
 }
 
 #[cfg(test)]

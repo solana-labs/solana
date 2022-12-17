@@ -252,6 +252,15 @@ async fn stake_rewards_from_warp() {
     // TODO: check lamport reward after reward interval.
     assert!(account.lamports == stake_lamports);
 
+    let reward_interval = context
+        .banks_client
+        .get_reward_interval()
+        .await
+        .expect("reward_interval exists")
+        .unwrap();
+
+    assert!(reward_interval > 0);
+
     // check that stake is fully active
     let stake_history_account = context
         .banks_client
@@ -362,7 +371,7 @@ async fn stake_merge_immediately_after_activation() {
     // calculation service.
     // So the lamports and credits_observed won't change at the start of the new epoch
     //
-    // TODO: check lamport reward after reward interval and simulate epoch reward calcuation
+    // TODO: check lamport reward after reward interval and simulate epoch reward calculation
     // service...
     assert_eq!(stake_state.stake().unwrap().credits_observed, 200);
     assert_eq!(stake_account.lamports, stake_lamports);
