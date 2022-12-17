@@ -222,6 +222,14 @@ async fn stake_rewards_from_warp() {
         .unwrap();
     assert_eq!(account.lamports, stake_lamports);
 
+    // before normal epoch, reward interval should be 2
+    let reward_interval = context
+        .banks_client
+        .get_reward_interval()
+        .await
+        .expect("reward_interval exists");
+    assert_eq!(reward_interval, 2);
+
     // warp one epoch forward for normal inflation, no rewards collected
     let first_normal_slot = context.genesis_config().epoch_schedule.first_normal_slot;
     context.warp_to_slot(first_normal_slot).unwrap();
@@ -252,14 +260,13 @@ async fn stake_rewards_from_warp() {
     // TODO: check lamport reward after reward interval.
     assert!(account.lamports == stake_lamports);
 
+    // for normal epoch, reward interval should be 100+50
     let reward_interval = context
         .banks_client
         .get_reward_interval()
         .await
-        .expect("reward_interval exists")
-        .unwrap();
-
-    assert!(reward_interval > 0);
+        .expect("reward_interval exists");
+    assert_eq!(reward_interval, 150);
 
     // check that stake is fully active
     let stake_history_account = context
