@@ -264,6 +264,7 @@ impl RepairService {
         let duplicate_slot_repair_statuses: HashMap<Slot, DuplicateSlotRepairStatus> =
             HashMap::new();
         let mut peers_cache = LruCache::new(REPAIR_PEERS_CACHE_CAPACITY);
+        let mut repairs_cache = LruCache::new(1_000); // TODO choose const
 
         loop {
             if exit.load(Ordering::Relaxed) {
@@ -322,6 +323,15 @@ impl RepairService {
 
                 repairs
             };
+
+            for r in &repairs {
+                if let Some(x) = repairs_cache.get_mut(r) {
+                    *x += 1;
+                    error!(">>> {:04} -- {:?}", x, r);
+                } else {
+                    repairs_cache.put(*r, 0);
+                }
+            }
 
             let identity_keypair: &Keypair = &repair_info.cluster_info.keypair().clone();
 
