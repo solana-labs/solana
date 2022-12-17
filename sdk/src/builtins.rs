@@ -58,7 +58,7 @@ macro_rules! declare_builtin_name {
     };
 }
 
-/// Convenience macro to declare a builtin.
+/// Convenience macro to declare a built-in program.
 ///
 /// bs58_string: bs58 string representation the program's id
 /// name: Name of the program
