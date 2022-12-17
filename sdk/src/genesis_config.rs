@@ -1,4 +1,4 @@
-//! Generating the chain's genesis config.
+//! The chain's genesis config.
 
 #![cfg(feature = "full")]
 
