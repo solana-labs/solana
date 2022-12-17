@@ -416,8 +416,7 @@ impl Banks for BanksServer {
         commitment: CommitmentLevel,
     ) -> u64 {
         let bank = self.bank(commitment);
-        let reward_interval = bank.get_reward_interval();
-        reward_interval
+        bank.get_reward_interval()
     }
 }
 
