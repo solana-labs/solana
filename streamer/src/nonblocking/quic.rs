@@ -1,3 +1,4 @@
+use quinn::{IncomingBiStreams, SendStream};
 use {
     crate::{
         quic::{configure_server, QuicServerError, StreamStats},
@@ -208,6 +209,7 @@ async fn setup_connection(
             let NewConnection {
                 connection,
                 uni_streams,
+                bi_streams,
                 ..
             } = new_connection;
 
@@ -306,6 +308,7 @@ async fn setup_connection(
                         };
                         tokio::spawn(handle_connection(
                             uni_streams,
+                            bi_streams,
                             packet_sender,
                             remote_addr,
                             remote_pubkey,
@@ -339,8 +342,16 @@ async fn setup_connection(
     }
 }
 
+async fn reply_on_send_channel(send_channel: &mut SendStream, data: &[u8]) {
+    let send_res = send_channel.write(data).await;
+    if let Err(e) = send_res {
+        debug!("error sending timeout results {}", e.to_string());
+    }
+}
+
 async fn handle_connection(
     mut uni_streams: IncomingUniStreams,
+    mut bi_streams: IncomingBiStreams,
     packet_sender: Sender<PacketBatch>,
     remote_addr: SocketAddr,
     remote_pubkey: Option<Pubkey>,
@@ -357,60 +368,112 @@ async fn handle_connection(
         stats.total_connections.load(Ordering::Relaxed),
     );
     while !stream_exit.load(Ordering::Relaxed) {
-        if let Ok(stream) = tokio::time::timeout(
-            Duration::from_millis(WAIT_FOR_STREAM_TIMEOUT_MS),
-            uni_streams.next(),
-        )
-        .await
-        {
-            match stream {
-                Some(stream_result) => match stream_result {
-                    Ok(mut stream) => {
-                        stats.total_streams.fetch_add(1, Ordering::Relaxed);
-                        stats.total_new_streams.fetch_add(1, Ordering::Relaxed);
-                        let stream_exit = stream_exit.clone();
-                        let stats = stats.clone();
-                        let packet_sender = packet_sender.clone();
-                        let last_update = last_update.clone();
-                        tokio::spawn(async move {
-                            let mut maybe_batch = None;
-                            while !stream_exit.load(Ordering::Relaxed) {
-                                if let Ok(chunk) = tokio::time::timeout(
-                                    Duration::from_millis(WAIT_FOR_STREAM_TIMEOUT_MS),
-                                    stream.read_chunk(PACKET_DATA_SIZE, false),
-                                )
-                                .await
-                                {
-                                    if handle_chunk(
-                                        &chunk,
-                                        &mut maybe_batch,
-                                        &remote_addr,
-                                        &packet_sender,
-                                        stats.clone(),
-                                        stake,
-                                    ) {
-                                        last_update.store(timing::timestamp(), Ordering::Relaxed);
-                                        break;
-                                    }
-                                } else {
-                                    debug!("Timeout in receiving on stream");
-                                    stats
-                                        .total_stream_read_timeouts
-                                        .fetch_add(1, Ordering::Relaxed);
+        let selected_stream = tokio::select! {
+            v = bi_streams.next() => match v {
+                Some(s) => {
+                    match s {
+                        Ok(x) => {
+                            Some((x.1, Some(x.0)))
+                        },
+                        Err(_) =>
+                        {
+                            None
+                        }
+                    }
+                }
+                None=> None,
+            },
+            v = tokio::time::timeout(
+                Duration::from_millis(WAIT_FOR_STREAM_TIMEOUT_MS),
+                uni_streams.next(),
+            ) => match v {
+                Ok(v) => match v {
+                    Some(x) => {
+                        match x {
+                            Ok(x) => {
+                                Some((x, None))
+                            },
+                            Err(_) =>
+                            {
+                                None
+                            }
+                        }
+                    }
+                    None=> None,
+                },
+                Err(_) => None,
+            }
+        };
+
+        if let Some((mut stream, mut replier)) = selected_stream {
+            stats.total_streams.fetch_add(1, Ordering::Relaxed);
+            stats.total_new_streams.fetch_add(1, Ordering::Relaxed);
+            let stream_exit = stream_exit.clone();
+            let stats = stats.clone();
+            let packet_sender = packet_sender.clone();
+            let last_update = last_update.clone();
+            tokio::spawn(async move {
+                let mut maybe_batch = None;
+                while !stream_exit.load(Ordering::Relaxed) {
+                    if let Ok(chunk) = tokio::time::timeout(
+                        Duration::from_millis(WAIT_FOR_STREAM_TIMEOUT_MS),
+                        stream.read_chunk(PACKET_DATA_SIZE, false),
+                    )
+                    .await
+                    {
+                        match chunk {
+                            Ok(chunk) => {
+                                if handle_chunk(
+                                    &chunk,
+                                    &mut maybe_batch,
+                                    &remote_addr,
+                                    &packet_sender,
+                                    stats.clone(),
+                                    stake,
+                                ) {
+                                    last_update.store(timing::timestamp(), Ordering::Relaxed);
+                                    break;
+                                }
+                                if let Some(replier) = &mut replier {
+                                    reply_on_send_channel(replier, b"ok").await;
                                 }
                             }
-                            stats.total_streams.fetch_sub(1, Ordering::Relaxed);
-                        });
+                            Err(e) => {
+                                if let Some(replier) = &mut replier {
+                                    let e = e.clone();
+                                    let data: &[u8] = match e {
+                                        quinn::ReadError::Reset(_) => b"reset_error",
+                                        quinn::ReadError::ConnectionLost(_) => {
+                                            b"connection_lost_error"
+                                        }
+                                        quinn::ReadError::IllegalOrderedRead => {
+                                            b"illegal_ordered_read_error"
+                                        }
+                                        quinn::ReadError::UnknownStream => b"unknown_stream_error",
+                                        quinn::ReadError::ZeroRttRejected => b"zero_rtt_rejected",
+                                    };
+                                    reply_on_send_channel(replier, data).await;
+                                }
+                                debug!("Received stream error: {:?}", e);
+                                stats
+                                    .total_stream_read_errors
+                                    .fetch_add(1, Ordering::Relaxed);
+
+                                last_update.store(timing::timestamp(), Ordering::Relaxed);
+                            }
+                        }
+                    } else {
+                        if let Some(ref mut s) = replier {
+                            reply_on_send_channel(s, b"timeout").await;
+                        }
+                        debug!("Timeout in receiving on stream");
+                        stats
+                            .total_stream_read_timeouts
+                            .fetch_add(1, Ordering::Relaxed);
                     }
-                    Err(e) => {
-                        debug!("stream error: {:?}", e);
-                        break;
-                    }
-                },
-                None => {
-                    break;
                 }
-            }
+                stats.total_streams.fetch_sub(1, Ordering::Relaxed);
+            });
         }
     }
 
@@ -429,90 +492,78 @@ async fn handle_connection(
 
 // Return true if the server should drop the stream
 fn handle_chunk(
-    chunk: &Result<Option<quinn::Chunk>, quinn::ReadError>,
+    chunk: &Option<quinn::Chunk>,
     maybe_batch: &mut Option<PacketBatch>,
     remote_addr: &SocketAddr,
     packet_sender: &Sender<PacketBatch>,
     stats: Arc<StreamStats>,
     stake: u64,
 ) -> bool {
-    match chunk {
-        Ok(maybe_chunk) => {
-            if let Some(chunk) = maybe_chunk {
-                trace!("got chunk: {:?}", chunk);
-                let chunk_len = chunk.bytes.len() as u64;
+    if let Some(chunk) = chunk {
+        trace!("got chunk: {:?}", chunk);
+        let chunk_len = chunk.bytes.len() as u64;
 
-                // shouldn't happen, but sanity check the size and offsets
-                if chunk.offset > PACKET_DATA_SIZE as u64 || chunk_len > PACKET_DATA_SIZE as u64 {
-                    stats.total_invalid_chunks.fetch_add(1, Ordering::Relaxed);
-                    return true;
-                }
-                let end_of_chunk = match chunk.offset.checked_add(chunk_len) {
-                    Some(end) => end,
-                    None => return true,
-                };
-                if end_of_chunk > PACKET_DATA_SIZE as u64 {
-                    stats
-                        .total_invalid_chunk_size
-                        .fetch_add(1, Ordering::Relaxed);
-                    return true;
-                }
-
-                // chunk looks valid
-                if maybe_batch.is_none() {
-                    let mut batch = PacketBatch::with_capacity(1);
-                    let mut packet = Packet::default();
-                    packet.meta.set_socket_addr(remote_addr);
-                    packet.meta.sender_stake = stake;
-                    batch.push(packet);
-                    *maybe_batch = Some(batch);
-                    stats
-                        .total_packets_allocated
-                        .fetch_add(1, Ordering::Relaxed);
-                }
-
-                if let Some(batch) = maybe_batch.as_mut() {
-                    let end_of_chunk = match (chunk.offset as usize).checked_add(chunk.bytes.len())
-                    {
-                        Some(end) => end,
-                        None => return true,
-                    };
-                    batch[0].buffer_mut()[chunk.offset as usize..end_of_chunk]
-                        .copy_from_slice(&chunk.bytes);
-                    batch[0].meta.size = std::cmp::max(batch[0].meta.size, end_of_chunk);
-                    stats.total_chunks_received.fetch_add(1, Ordering::Relaxed);
-                }
-            } else {
-                trace!("chunk is none");
-                // done receiving chunks
-                if let Some(batch) = maybe_batch.take() {
-                    let len = batch[0].meta.size;
-                    if let Err(e) = packet_sender.send(batch) {
-                        stats
-                            .total_packet_batch_send_err
-                            .fetch_add(1, Ordering::Relaxed);
-                        info!("send error: {}", e);
-                    } else {
-                        stats
-                            .total_packet_batches_sent
-                            .fetch_add(1, Ordering::Relaxed);
-                        trace!("sent {} byte packet", len);
-                    }
-                } else {
-                    stats
-                        .total_packet_batches_none
-                        .fetch_add(1, Ordering::Relaxed);
-                }
-                return true;
-            }
+        // shouldn't happen, but sanity check the size and offsets
+        if chunk.offset > PACKET_DATA_SIZE as u64 || chunk_len > PACKET_DATA_SIZE as u64 {
+            stats.total_invalid_chunks.fetch_add(1, Ordering::Relaxed);
+            return true;
         }
-        Err(e) => {
-            debug!("Received stream error: {:?}", e);
+        let end_of_chunk = match chunk.offset.checked_add(chunk_len) {
+            Some(end) => end,
+            None => return true,
+        };
+        if end_of_chunk > PACKET_DATA_SIZE as u64 {
             stats
-                .total_stream_read_errors
+                .total_invalid_chunk_size
                 .fetch_add(1, Ordering::Relaxed);
             return true;
         }
+
+        // chunk looks valid
+        if maybe_batch.is_none() {
+            let mut batch = PacketBatch::with_capacity(1);
+            let mut packet = Packet::default();
+            packet.meta.set_socket_addr(remote_addr);
+            packet.meta.sender_stake = stake;
+            batch.push(packet);
+            *maybe_batch = Some(batch);
+            stats
+                .total_packets_allocated
+                .fetch_add(1, Ordering::Relaxed);
+        }
+
+        if let Some(batch) = maybe_batch.as_mut() {
+            let end_of_chunk = match (chunk.offset as usize).checked_add(chunk.bytes.len()) {
+                Some(end) => end,
+                None => return true,
+            };
+            batch[0].buffer_mut()[chunk.offset as usize..end_of_chunk]
+                .copy_from_slice(&chunk.bytes);
+            batch[0].meta.size = std::cmp::max(batch[0].meta.size, end_of_chunk);
+            stats.total_chunks_received.fetch_add(1, Ordering::Relaxed);
+        }
+    } else {
+        trace!("chunk is none");
+        // done receiving chunks
+        if let Some(batch) = maybe_batch.take() {
+            let len = batch[0].meta.size;
+            if let Err(e) = packet_sender.send(batch) {
+                stats
+                    .total_packet_batch_send_err
+                    .fetch_add(1, Ordering::Relaxed);
+                info!("send error: {}", e);
+            } else {
+                stats
+                    .total_packet_batches_sent
+                    .fetch_add(1, Ordering::Relaxed);
+                trace!("sent {} byte packet", len);
+            }
+        } else {
+            stats
+                .total_packet_batches_none
+                .fetch_add(1, Ordering::Relaxed);
+        }
+        return true;
     }
     false
 }
