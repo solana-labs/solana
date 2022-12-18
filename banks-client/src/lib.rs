@@ -536,6 +536,32 @@ impl BanksClient {
             .get_reward_interval_with_commitment_and_context(ctx, commitment)
             .map_err(Into::into)
     }
+
+    /// Return the total calculated reward (not yet fully credit) from the most recently rooted bank
+    pub fn get_calculated_rewards(
+        &mut self,
+    ) -> impl Future<Output = Result<Option<(u128, u128)>, BanksClientError>> + '_ {
+        self.get_calculated_rewards_with_commitment(CommitmentLevel::default())
+    }
+
+    /// Return the total calculated reward (not yet fully credit) from the most recently bank given the commit level
+    pub fn get_calculated_rewards_with_commitment(
+        &mut self,
+        commitment: CommitmentLevel,
+    ) -> impl Future<Output = Result<Option<(u128, u128)>, BanksClientError>> + '_ {
+        self.get_calculated_rewards_with_commitment_and_context(context::current(), commitment)
+    }
+
+    /// Return the total calculated reward (not yet fully credit) from the most recently bank given the commit level and context
+    pub fn get_calculated_rewards_with_commitment_and_context(
+        &mut self,
+        ctx: Context,
+        commitment: CommitmentLevel,
+    ) -> impl Future<Output = Result<Option<(u128, u128)>, BanksClientError>> + '_ {
+        self.inner
+            .get_calculated_rewards_with_commitment_and_context(ctx, commitment)
+            .map_err(Into::into)
+    }
 }
 
 pub async fn start_client<C>(transport: C) -> Result<BanksClient, BanksClientError>

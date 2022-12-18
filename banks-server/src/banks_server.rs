@@ -418,6 +418,15 @@ impl Banks for BanksServer {
         let bank = self.bank(commitment);
         bank.get_reward_interval()
     }
+
+    async fn get_calculated_rewards_with_commitment_and_context(
+        self,
+        _: Context,
+        commitment: CommitmentLevel,
+    ) -> Option<(u128, u128)> {
+        let bank = self.bank(commitment);
+        bank.get_calculated_rewards()
+    }
 }
 
 pub async fn start_local_server(
