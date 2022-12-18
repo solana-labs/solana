@@ -2077,7 +2077,13 @@ fn read_and_verify_elf(program_location: &str) -> Result<Vec<u8>, Box<dyn std::e
     let mut program_data = Vec::new();
     file.read_to_end(&mut program_data)
         .map_err(|err| format!("Unable to read program file: {err}"))?;
-    let mut transaction_context = TransactionContext::new(Signature::default(), Vec::new(), Some(Rent::default()), 1, 1);
+    let mut transaction_context = TransactionContext::new(
+        Signature::default(),
+        Vec::new(),
+        Some(Rent::default()),
+        1,
+        1,
+    );
     let invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
 
     // Verify the program
@@ -2092,8 +2098,10 @@ fn read_and_verify_elf(program_location: &str) -> Result<Vec<u8>, Box<dyn std::e
     let executable = Executable::<InvokeContext>::from_elf(&program_data, loader)
         .map_err(|err| format!("ELF error: {err}"))?;
 
-    let _ = VerifiedExecutable::<RequisiteVerifier, InvokeContext>::from_executable(Arc::new(executable))
-        .map_err(|err| format!("ELF error: {err}"))?;
+    let _ = VerifiedExecutable::<RequisiteVerifier, InvokeContext>::from_executable(Arc::new(
+        executable,
+    ))
+    .map_err(|err| format!("ELF error: {err}"))?;
 
     Ok(program_data)
 }

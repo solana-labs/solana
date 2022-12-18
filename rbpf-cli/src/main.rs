@@ -22,6 +22,7 @@ use {
         fs::File,
         io::{Read, Seek},
         path::Path,
+        sync::Arc,
         time::{Duration, Instant},
     },
 };
@@ -268,9 +269,11 @@ before execting it in the virtual machine.",
 
     #[allow(unused_mut)]
     let mut verified_executable =
-        VerifiedExecutable::<RequisiteVerifier, InvokeContext>::from_executable(Arc::new(executable))
-            .map_err(|err| format!("Executable verifier failed: {err:?}"))
-            .unwrap();
+        VerifiedExecutable::<RequisiteVerifier, InvokeContext>::from_executable(Arc::new(
+            executable,
+        ))
+        .map_err(|err| format!("Executable verifier failed: {err:?}"))
+        .unwrap();
 
     #[cfg(all(not(target_os = "windows"), target_arch = "x86_64"))]
     verified_executable.jit_compile().unwrap();

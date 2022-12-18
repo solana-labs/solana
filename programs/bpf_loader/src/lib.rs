@@ -131,7 +131,7 @@ fn create_executor_from_bytes(
     programdata: &[u8],
     use_jit: bool,
     reject_deployment_of_broken_elfs: bool,
-    enable_instruction_tracing: bool,
+    debugging_features: bool,
 ) -> Result<Arc<BpfExecutor>, InstructionError> {
     let mut register_syscalls_time = Measure::start("register_syscalls_time");
     let disable_deploy_of_alloc_free_syscall = reject_deployment_of_broken_elfs
@@ -141,7 +141,7 @@ fn create_executor_from_bytes(
         compute_budget,
         reject_deployment_of_broken_elfs,
         disable_deploy_of_alloc_free_syscall,
-        false,
+        debugging_features,
     )
     .map_err(|e| {
         ic_logger_msg!(log_collector, "Failed to register syscalls: {}", e);
@@ -149,31 +149,6 @@ fn create_executor_from_bytes(
     })?;
     register_syscalls_time.stop();
     create_executor_metrics.register_syscalls_us = register_syscalls_time.as_us();
-    let config = Config {
-        max_call_depth: compute_budget.max_call_depth,
-        stack_frame_size: compute_budget.stack_frame_size,
-        enable_stack_frame_gaps: true,
-        instruction_meter_checkpoint_distance: 10000,
-        enable_instruction_meter: true,
-        enable_instruction_tracing,
-        enable_symbol_and_section_labels: false,
-        reject_broken_elfs: reject_deployment_of_broken_elfs,
-        noop_instruction_rate: 256,
-        sanitize_user_provided_values: true,
-        encrypt_environment_registers: true,
-        syscall_bpf_function_hash_collision: feature_set
-            .is_active(&error_on_syscall_bpf_function_hash_collisions::id()),
-        reject_callx_r10: feature_set.is_active(&reject_callx_r10::id()),
-        dynamic_stack_frames: false,
-        enable_sdiv: false,
-        optimize_rodata: false,
-        static_syscalls: false,
-        enable_elf_vaddr: false,
-        reject_rodata_stack_overlap: false,
-        new_elf_parser: false,
-        aligned_memory_mapping: true,
-        // Warning, do not use `Config::default()` so that configuration here is explicit.
-    };
     let mut load_elf_time = Measure::start("load_elf_time");
     let executable = Executable::<InvokeContext>::from_elf(programdata, loader).map_err(|err| {
         ic_logger_msg!(log_collector, "{}", err);
