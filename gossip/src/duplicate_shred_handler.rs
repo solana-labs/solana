@@ -14,6 +14,8 @@ use {
     std::{collections::HashMap, sync::Arc},
 };
 
+const CLEANUP_EVERY_N_LOOPS: usize = 10;
+
 struct ProofChunkMap {
     num_chunks: u8,
     missing_chunks: u8,
@@ -48,6 +50,9 @@ pub struct DuplicateShredHandler {
     last_root: Slot,
     blockstore: Arc<Blockstore>,
     leader_schedule_cache: Arc<LeaderScheduleCache>,
+    // Because cleanup could potentially be very expensive, only clean up when clean up
+    // count is 0
+    cleanup_count: usize,
 }
 
 impl ClusterInfoEntryHandler for DuplicateShredHandler {
@@ -58,7 +63,9 @@ impl ClusterInfoEntryHandler for DuplicateShredHandler {
             if let Err(error) = self.handle_shred_data(shred_data) {
                 error!("handle packet: {:?}", error)
             }
-            self.cleanup_old_slots();
+            if self.cleanup_count.saturating_sub(1) == 0 {
+                self.cleanup_old_slots();
+            }
         }
     }
 }
@@ -73,6 +80,7 @@ impl DuplicateShredHandler {
             last_root: 0,
             blockstore,
             leader_schedule_cache,
+            cleanup_count: CLEANUP_EVERY_N_LOOPS,
         }
     }
 
