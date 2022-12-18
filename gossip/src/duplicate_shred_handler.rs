@@ -32,7 +32,7 @@ type SlotChunkMap = HashMap<DuplicateSlotProofKey, ProofChunkMap>;
 
 enum SlotStatus {
     Frozen,
-    UnfinishedProof(SlotChunkMap)
+    UnfinishedProof(SlotChunkMap),
 }
 pub struct DuplicateShredHandler {
     // Because we use UDP for packet transfer, we can normally only send ~1500 bytes
@@ -134,8 +134,7 @@ impl DuplicateShredHandler {
                 && chunk_index < num_chunks
                 && !proof_chunk_map.chunks.contains_key(&chunk_index)
             {
-                proof_chunk_map.missing_chunks =
-                    proof_chunk_map.missing_chunks.saturating_sub(1);
+                proof_chunk_map.missing_chunks = proof_chunk_map.missing_chunks.saturating_sub(1);
                 proof_chunk_map.chunks.insert(chunk_index, data.chunk);
                 if proof_chunk_map.missing_chunks == 0 {
                     let proof_data = (0..num_chunks)
