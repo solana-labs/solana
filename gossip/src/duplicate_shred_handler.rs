@@ -65,6 +65,7 @@ impl ClusterInfoEntryHandler for DuplicateShredHandler {
             }
             if self.cleanup_count.saturating_sub(1) == 0 {
                 self.cleanup_old_slots();
+                self.cleanup_count = CLEANUP_EVERY_N_LOOPS;
             }
         }
     }
