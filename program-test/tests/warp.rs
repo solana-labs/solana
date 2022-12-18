@@ -257,8 +257,19 @@ async fn stake_rewards_from_warp() {
         .unwrap();
     // With partition rewards, the reward is paid after reward interval
     // So the lamports won't change at the start of the new epoch
-    // TODO: check lamport reward after reward interval.
     assert!(account.lamports == stake_lamports);
+
+    // assert calculated stake rewards
+    let rewards = context
+        .banks_client
+        .get_calculated_rewards()
+        .await
+        .expect("reward_interval exists")
+        .unwrap();
+    // stake rewards should be greater than 0
+    assert!(rewards.0 > 0);
+    // vote rewards is zero because vote comission is 0
+    assert!(rewards.1 == 0);
 
     // for normal epoch, reward interval should be 100+50
     let reward_interval = context
@@ -267,6 +278,7 @@ async fn stake_rewards_from_warp() {
         .await
         .expect("reward_interval exists");
     assert_eq!(reward_interval, 150);
+
 
     // check that stake is fully active
     let stake_history_account = context
