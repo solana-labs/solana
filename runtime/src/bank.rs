@@ -1333,6 +1333,13 @@ impl VoteReward {
             x.checked_add_lamports(amount).unwrap();
         }
     }
+
+    pub fn reward(&self) -> i64 {
+        if let Some(info) = &self.vote_reward_info {
+            info.lamports;
+        }
+        0
+    }
 }
 
 /// allow [StakeReward] to be passed to `StoreAccounts` directly without copies or vec construction
