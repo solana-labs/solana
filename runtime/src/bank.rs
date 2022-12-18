@@ -3603,6 +3603,31 @@ impl Bank {
         (num_stake_rewards, num_vote_rewards)
     }
 
+    /// Return the total calculated reward (not yet fully credit) from the most recently rooted bank
+    pub fn get_calculated_rewards(&self) -> Option<(u128, u128)> {
+        let calc = self.epoch_reward_calculator.read();
+        let inner = calc.unwrap();
+        if let Some(calc) = &*inner {
+            if let Some((start_slot, _)) = self.epoch_reward_calc_start {
+                let result = calc.get(start_slot);
+                if let Some(calc_result) = result {
+                    let stake_rewards = &calc_result.0;
+                    let vote_rewards = &calc_result.1;
+                    let total_stake_rewards = stake_rewards
+                        .par_iter()
+                        .map(|r| r.get_stake_reward() as u128)
+                        .sum::<u128>();
+                    let total_vote_rewards = vote_rewards
+                        .par_iter()
+                        .map(|r| r.reward() as u128)
+                        .sum::<u128>();
+                    return Some((total_stake_rewards, total_vote_rewards));
+                }
+            }
+        }
+        None
+    }
+
     fn credit_epoch_rewards_in_partition(&mut self, start_slot: Slot, partition_index: u64) {
         const SLEEP_MS: u64 = 10;
         const MAX_WAIT_MIN: u64 = 10;
