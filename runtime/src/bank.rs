@@ -2196,7 +2196,7 @@ impl Bank {
     /// Initialize epoch_reward_calculator. This method should not be used directly.
     /// EpochRewardCalcService will set it up on the root bank.
     /// All banks in the bank fork share the same epoch_reward_calculator instance.
-    pub(crate) fn set_epoch_reward_calculator(
+    pub fn set_epoch_reward_calculator(
         &self,
         calculator: EpochRewardCalculator<StakeVoteAccountRewardResult>,
     ) {
