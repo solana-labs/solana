@@ -844,15 +844,12 @@ impl ClusterInfo {
             nodes.join(""),
             nodes.len().saturating_sub(shred_spy_nodes),
             if total_spy_nodes > 0 {
-                format!("\nSpies: {}", total_spy_nodes)
+                format!("\nSpies: {total_spy_nodes}")
             } else {
                 "".to_string()
             },
             if different_shred_nodes > 0 {
-                format!(
-                    "\nNodes with different shred version: {}",
-                    different_shred_nodes
-                )
+                format!("\nNodes with different shred version: {different_shred_nodes}")
             } else {
                 "".to_string()
             }
@@ -1714,7 +1711,7 @@ impl ClusterInfo {
     ) -> JoinHandle<()> {
         let thread_pool = ThreadPoolBuilder::new()
             .num_threads(std::cmp::min(get_thread_count(), 8))
-            .thread_name(|i| format!("solRunGossip{:02}", i))
+            .thread_name(|i| format!("solRunGossip{i:02}"))
             .build()
             .unwrap();
         Builder::new()
@@ -1803,7 +1800,7 @@ impl ClusterInfo {
             .unwrap()
     }
 
-    fn handle_batch_prune_messages(&self, messages: Vec<(Pubkey, PruneData)>) {
+    fn handle_batch_prune_messages(&self, messages: Vec<PruneData>) {
         let _st = ScopedTimer::from(&self.stats.handle_batch_prune_messages_time);
         if messages.is_empty() {
             return;
@@ -1811,22 +1808,19 @@ impl ClusterInfo {
         self.stats
             .prune_message_count
             .add_relaxed(messages.len() as u64);
-        self.stats.prune_message_len.add_relaxed(
-            messages
-                .iter()
-                .map(|(_, data)| data.prunes.len() as u64)
-                .sum(),
-        );
+        self.stats
+            .prune_message_len
+            .add_relaxed(messages.iter().map(|data| data.prunes.len() as u64).sum());
         let mut prune_message_timeout = 0;
         let mut bad_prune_destination = 0;
         let self_pubkey = self.id();
         {
             let _st = ScopedTimer::from(&self.stats.process_prune);
             let now = timestamp();
-            for (from, data) in messages {
+            for data in messages {
                 match self.gossip.process_prune_msg(
                     &self_pubkey,
-                    &from,
+                    &data.pubkey,
                     &data.destination,
                     &data.prunes,
                     data.wallclock,
@@ -1947,7 +1941,7 @@ impl ClusterInfo {
             }
             check
         };
-        // Because pull-responses are sent back to packet.meta.socket_addr() of
+        // Because pull-responses are sent back to packet.meta().socket_addr() of
         // incoming pull-requests, pings are also sent to request.from_addr (as
         // opposed to caller.gossip address).
         move |request| {
@@ -2041,8 +2035,8 @@ impl ClusterInfo {
             match Packet::from_data(Some(addr), response) {
                 Err(err) => error!("failed to write pull-response packet: {:?}", err),
                 Ok(packet) => {
-                    if self.outbound_budget.take(packet.meta.size) {
-                        total_bytes += packet.meta.size;
+                    if self.outbound_budget.take(packet.meta().size) {
+                        total_bytes += packet.meta().size;
                         packet_batch.push(packet);
                         sent += 1;
                     } else {
@@ -2266,17 +2260,7 @@ impl ClusterInfo {
         let origins: HashSet<_> = {
             let _st = ScopedTimer::from(&self.stats.process_push_message);
             let now = timestamp();
-            messages
-                .into_iter()
-                .flat_map(|(from, crds_values)| {
-                    let (num_success, origins) =
-                        self.gossip.process_push_message(&from, crds_values, now);
-                    self.stats
-                        .process_push_success
-                        .add_relaxed(num_success as u64);
-                    origins
-                })
-                .collect()
+            self.gossip.process_push_message(messages, now)
         };
         // Generate prune messages.
         let self_pubkey = self.id();
@@ -2302,7 +2286,6 @@ impl ClusterInfo {
         let prune_messages: Vec<_> = {
             let gossip_crds = self.gossip.crds.read().unwrap();
             let wallclock = timestamp();
-            let self_pubkey = self.id();
             thread_pool.install(|| {
                 prunes
                     .into_par_iter()
@@ -2437,7 +2420,7 @@ impl ClusterInfo {
                     check_duplicate_instance(&data)?;
                     push_messages.push((from, data));
                 }
-                Protocol::PruneMessage(from, data) => prune_messages.push((from, data)),
+                Protocol::PruneMessage(_from, data) => prune_messages.push(data),
                 Protocol::PingMessage(ping) => ping_messages.push((from_addr, ping)),
                 Protocol::PongMessage(pong) => pong_messages.push((from_addr, pong)),
             }
@@ -2520,7 +2503,7 @@ impl ClusterInfo {
             let protocol: Protocol = packet.deserialize_slice(..).ok()?;
             protocol.sanitize().ok()?;
             let protocol = protocol.par_verify(&self.stats)?;
-            Some((packet.meta.socket_addr(), protocol))
+            Some((packet.meta().socket_addr(), protocol))
         };
         let packets: Vec<_> = {
             let _st = ScopedTimer::from(&self.stats.verify_gossip_packets_time);
@@ -2620,7 +2603,7 @@ impl ClusterInfo {
     ) -> JoinHandle<()> {
         let thread_pool = ThreadPoolBuilder::new()
             .num_threads(get_thread_count().min(8))
-            .thread_name(|i| format!("solGossipCons{:02}", i))
+            .thread_name(|i| format!("solGossipCons{i:02}"))
             .build()
             .unwrap();
         let run_consume = move || {
@@ -2652,7 +2635,7 @@ impl ClusterInfo {
         let recycler = PacketBatchRecycler::default();
         let thread_pool = ThreadPoolBuilder::new()
             .num_threads(get_thread_count().min(8))
-            .thread_name(|i| format!("solGossipWork{:02}", i))
+            .thread_name(|i| format!("solGossipWork{i:02}"))
             .build()
             .unwrap();
         Builder::new()
@@ -3412,7 +3395,7 @@ RPC Enabled Nodes: 1"#;
             remote_nodes.into_iter(),
             pongs.into_iter()
         ) {
-            assert_eq!(packet.meta.socket_addr(), socket);
+            assert_eq!(packet.meta().socket_addr(), socket);
             let bytes = serialize(&pong).unwrap();
             match packet.deserialize_slice(..).unwrap() {
                 Protocol::PongMessage(pong) => assert_eq!(serialize(&pong).unwrap(), bytes),
@@ -3568,8 +3551,7 @@ RPC Enabled Nodes: 1"#;
             let size = serialized_size(&pull_response).unwrap();
             assert!(
                 PULL_RESPONSE_MIN_SERIALIZED_SIZE as u64 <= size,
-                "pull-response serialized size: {}",
-                size
+                "pull-response serialized size: {size}"
             );
         }
     }

@@ -56,14 +56,10 @@ use {
     solana_bpf_loader_program::{
         create_vm,
         serialization::{deserialize_parameters, serialize_parameters},
-        syscalls::register_syscalls,
+        syscalls::create_loader,
     },
     solana_program_runtime::invoke_context::with_mock_invoke_context,
-    solana_rbpf::{
-        elf::Executable,
-        verifier::RequisiteVerifier,
-        vm::{Config, VerifiedExecutable},
-    },
+    solana_rbpf::{elf::Executable, verifier::RequisiteVerifier, vm::VerifiedExecutable},
     solana_runtime::{
         bank::Bank,
         bank_client::BankClient,
@@ -167,6 +163,10 @@ fn load_upgradeable_sbf_program(
         authority_keypair,
         elf,
     );
+    bank_client.set_sysvar_for_tests(&clock::Clock {
+        slot: 1,
+        ..clock::Clock::default()
+    });
 }
 
 #[cfg(feature = "sbf_rust")]
@@ -224,21 +224,15 @@ fn run_program(name: &str) -> u64 {
     file.read_to_end(&mut data).unwrap();
     let loader_id = bpf_loader::id();
     with_mock_invoke_context(loader_id, 0, false, |invoke_context| {
-        let config = Config {
-            enable_instruction_tracing: true,
-            reject_broken_elfs: true,
-            ..Config::default()
-        };
-        let executable = Executable::<InvokeContext>::from_elf(
-            &data,
-            config,
-            register_syscalls(
-                &invoke_context.feature_set,
-                true, /* no sol_alloc_free */
-            )
-            .unwrap(),
+        let loader = create_loader(
+            &invoke_context.feature_set,
+            &ComputeBudget::default(),
+            true,
+            true,
+            true,
         )
         .unwrap();
+        let executable = Executable::<InvokeContext>::from_elf(&data, loader).unwrap();
 
         #[allow(unused_mut)]
         let mut verified_executable =
@@ -293,18 +287,16 @@ fn run_program(name: &str) -> u64 {
                     assert_eq!(instruction_count, compute_units_consumed);
                 }
                 instruction_count = compute_units_consumed;
-                if config.enable_instruction_tracing {
-                    if i == 0 {
-                        trace_log = Some(vm.context_object.trace_log.clone());
-                    } else {
-                        let interpreter = trace_log.as_ref().unwrap().as_slice();
-                        let mut jit = vm.context_object.trace_log.as_slice();
-                        if jit.len() > interpreter.len() {
-                            jit = &jit[0..interpreter.len()];
-                        }
-                        assert_eq!(interpreter, jit);
-                        trace_log = None;
+                if i == 0 {
+                    trace_log = Some(vm.env.context_object_pointer.trace_log.clone());
+                } else {
+                    let interpreter = trace_log.as_ref().unwrap().as_slice();
+                    let mut jit = vm.env.context_object_pointer.trace_log.as_slice();
+                    if jit.len() > interpreter.len() {
+                        jit = &jit[0..interpreter.len()];
                     }
+                    assert_eq!(interpreter, jit);
+                    trace_log = None;
                 }
             }
             assert!(match deserialize_parameters(
@@ -2014,6 +2006,10 @@ fn test_program_sbf_upgrade() {
         &authority_keypair,
         "solana_sbf_rust_upgraded",
     );
+    bank_client.set_sysvar_for_tests(&clock::Clock {
+        slot: 2,
+        ..clock::Clock::default()
+    });
 
     // Call upgraded program
     instruction.data[0] += 1;
@@ -2191,6 +2187,10 @@ fn test_program_sbf_invoke_upgradeable_via_cpi() {
         &authority_keypair,
         "solana_sbf_rust_upgraded",
     );
+    bank_client.set_sysvar_for_tests(&clock::Clock {
+        slot: 2,
+        ..clock::Clock::default()
+    });
 
     // Call the upgraded program
     instruction.data[0] += 1;

@@ -155,7 +155,7 @@ fn bench_sigverify_uneven(bencher: &mut Bencher) {
             };
             Packet::populate_packet(packet, None, &tx).expect("serialize request");
             if thread_rng().gen_ratio((num_packets - NUM) as u32, num_packets as u32) {
-                packet.meta.set_discard(true);
+                packet.meta_mut().set_discard(true);
             } else {
                 num_valid += 1;
             }

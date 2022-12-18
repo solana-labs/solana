@@ -538,12 +538,12 @@ impl AccountsHasher {
     }
 
     pub fn compute_merkle_root(hashes: Vec<(Pubkey, Hash)>, fanout: usize) -> Hash {
-        Self::compute_merkle_root_loop(hashes, fanout, |t| t.1)
+        Self::compute_merkle_root_loop(hashes, fanout, |t| &t.1)
     }
 
     // this function avoids an infinite recursion compiler error
     pub fn compute_merkle_root_recurse(hashes: Vec<Hash>, fanout: usize) -> Hash {
-        Self::compute_merkle_root_loop(hashes, fanout, |t: &Hash| *t)
+        Self::compute_merkle_root_loop(hashes, fanout, |t| t)
     }
 
     pub fn div_ceil(x: usize, y: usize) -> usize {
@@ -558,7 +558,7 @@ impl AccountsHasher {
     // Using extractor allows us to avoid an unnecessary array copy on the first iteration.
     pub fn compute_merkle_root_loop<T, F>(hashes: Vec<T>, fanout: usize, extractor: F) -> Hash
     where
-        F: Fn(&T) -> Hash + std::marker::Sync,
+        F: Fn(&T) -> &Hash + std::marker::Sync,
         T: std::marker::Sync,
     {
         if hashes.is_empty() {
@@ -806,7 +806,7 @@ impl AccountsHasher {
     pub fn accumulate_account_hashes(mut hashes: Vec<(Pubkey, Hash)>) -> Hash {
         Self::sort_hashes_by_pubkey(&mut hashes);
 
-        Self::compute_merkle_root_loop(hashes, MERKLE_FANOUT, |i| i.1)
+        Self::compute_merkle_root_loop(hashes, MERKLE_FANOUT, |i| &i.1)
     }
 
     pub fn sort_hashes_by_pubkey(hashes: &mut Vec<(Pubkey, Hash)>) {
@@ -823,10 +823,7 @@ impl AccountsHasher {
 
     pub fn checked_cast_for_capitalization(balance: u128) -> u64 {
         balance.try_into().unwrap_or_else(|_| {
-            panic!(
-                "overflow is detected while summing capitalization: {}",
-                balance
-            )
+            panic!("overflow is detected while summing capitalization: {balance}")
         })
     }
 
@@ -1450,20 +1447,12 @@ pub mod tests {
                     assert_eq!(
                         expected2,
                         hashes4.into_iter().flatten().collect::<Vec<_>>(),
-                        "last_slice: {}, start: {}, end: {}, slice: {:?}",
-                        last_slice,
-                        start,
-                        end,
-                        slice
+                        "last_slice: {last_slice}, start: {start}, end: {end}, slice: {slice:?}"
                     );
                     assert_eq!(
                         expected2.clone(),
                         hashes5.iter().flatten().copied().collect::<Vec<_>>(),
-                        "last_slice: {}, start: {}, end: {}, slice: {:?}",
-                        last_slice,
-                        start,
-                        end,
-                        slice
+                        "last_slice: {last_slice}, start: {start}, end: {end}, slice: {slice:?}"
                     );
                     assert_eq!(
                         expected2.clone(),
@@ -1491,7 +1480,7 @@ pub mod tests {
                         })
                         .collect::<String>();
 
-                    let hash_result_as_string = format!("{:?}", hashes2);
+                    let hash_result_as_string = format!("{hashes2:?}");
 
                     let packaged_result: ExpectedType = (
                         human_readable,

@@ -173,7 +173,10 @@ pub struct RepairInfo {
     pub cluster_slots: Arc<ClusterSlots>,
     pub epoch_schedule: EpochSchedule,
     pub duplicate_slots_reset_sender: DuplicateSlotsResetSender,
+    // Validators from which repairs are requested
     pub repair_validators: Option<HashSet<Pubkey>>,
+    // Validators which should be given priority when serving
+    pub repair_whitelist: Arc<RwLock<HashSet<Pubkey>>>,
 }
 
 pub struct RepairSlotRange {
@@ -251,6 +254,7 @@ impl RepairService {
         let serve_repair = ServeRepair::new(
             repair_info.cluster_info.clone(),
             repair_info.bank_forks.clone(),
+            repair_info.repair_whitelist.clone(),
         );
         let id = repair_info.cluster_info.id();
         let mut repair_stats = RepairStats::default();
@@ -1084,7 +1088,11 @@ mod test {
         let cluster_slots = ClusterSlots::default();
         let cluster_info = Arc::new(new_test_cluster_info(Node::new_localhost().info));
         let identity_keypair = cluster_info.keypair().clone();
-        let serve_repair = ServeRepair::new(cluster_info, bank_forks);
+        let serve_repair = ServeRepair::new(
+            cluster_info,
+            bank_forks,
+            Arc::new(RwLock::new(HashSet::default())),
+        );
         let mut duplicate_slot_repair_statuses = HashMap::new();
         let dead_slot = 9;
         let receive_socket = &UdpSocket::bind("0.0.0.0:0").unwrap();
@@ -1179,7 +1187,11 @@ mod test {
             UdpSocket::bind("0.0.0.0:0").unwrap().local_addr().unwrap(),
         ));
         let cluster_info = Arc::new(new_test_cluster_info(Node::new_localhost().info));
-        let serve_repair = ServeRepair::new(cluster_info.clone(), bank_forks);
+        let serve_repair = ServeRepair::new(
+            cluster_info.clone(),
+            bank_forks,
+            Arc::new(RwLock::new(HashSet::default())),
+        );
         let valid_repair_peer = Node::new_localhost().info;
 
         // Signal that this peer has confirmed the dead slot, and is thus

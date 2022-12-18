@@ -292,7 +292,7 @@ impl Tower {
                         "tower_warn",
                         (
                             "warn",
-                            format!("Unable to get vote_state from account {}", key),
+                            format!("Unable to get vote_state from account {key}"),
                             String
                         ),
                     );
@@ -621,10 +621,7 @@ impl Tower {
                 // non-descendants of the root every time root is set
                 assert!(
                     ancestors.contains(&root_slot),
-                    "ancestors: {:?}, slot: {} root: {}",
-                    ancestors,
-                    slot,
-                    root_slot
+                    "ancestors: {ancestors:?}, slot: {slot} root: {root_slot}"
                 );
             }
         }
@@ -654,285 +651,298 @@ impl Tower {
         latest_validator_votes_for_frozen_banks: &LatestValidatorVotesForFrozenBanks,
         heaviest_subtree_fork_choice: &HeaviestSubtreeForkChoice,
     ) -> SwitchForkDecision {
-        self.last_voted_slot_hash()
-            .map(|(last_voted_slot, last_voted_hash)| {
-                let root = self.root();
-                let empty_ancestors = HashSet::default();
-                let empty_ancestors_due_to_minor_unsynced_ledger = || {
-                    // This condition (stale stray last vote) shouldn't occur under normal validator
-                    // operation, indicating something unusual happened.
-                    // This condition could be introduced by manual ledger mishandling,
-                    // validator SEGV, OS/HW crash, or plain No Free Space FS error.
+        let (last_voted_slot, last_voted_hash) = match self.last_voted_slot_hash() {
+            None => return SwitchForkDecision::SameFork,
+            Some(slot_hash) => slot_hash,
+        };
+        let root = self.root();
+        let empty_ancestors = HashSet::default();
+        let empty_ancestors_due_to_minor_unsynced_ledger = || {
+            // This condition (stale stray last vote) shouldn't occur under normal validator
+            // operation, indicating something unusual happened.
+            // This condition could be introduced by manual ledger mishandling,
+            // validator SEGV, OS/HW crash, or plain No Free Space FS error.
 
-                    // However, returning empty ancestors as a fallback here shouldn't result in
-                    // slashing by itself (Note that we couldn't fully preclude any kind of slashing if
-                    // the failure was OS or HW level).
+            // However, returning empty ancestors as a fallback here shouldn't result in
+            // slashing by itself (Note that we couldn't fully preclude any kind of slashing if
+            // the failure was OS or HW level).
 
-                    // Firstly, lockout is ensured elsewhere.
+            // Firstly, lockout is ensured elsewhere.
 
-                    // Also, there is no risk of optimistic conf. violation. Although empty ancestors
-                    // could result in incorrect (= more than actual) locked_out_stake and
-                    // false-positive SwitchProof later in this function, there should be no such a
-                    // heavier fork candidate, first of all, if the last vote (or any of its
-                    // unavailable ancestors) were already optimistically confirmed.
-                    // The only exception is that other validator is already violating it...
-                    if self.is_first_switch_check() && switch_slot < last_voted_slot {
-                        // `switch < last` is needed not to warn! this message just because of using
-                        // newer snapshots on validator restart
-                        let message = format!(
+            // Also, there is no risk of optimistic conf. violation. Although empty ancestors
+            // could result in incorrect (= more than actual) locked_out_stake and
+            // false-positive SwitchProof later in this function, there should be no such a
+            // heavier fork candidate, first of all, if the last vote (or any of its
+            // unavailable ancestors) were already optimistically confirmed.
+            // The only exception is that other validator is already violating it...
+            if self.is_first_switch_check() && switch_slot < last_voted_slot {
+                // `switch < last` is needed not to warn! this message just because of using
+                // newer snapshots on validator restart
+                let message = format!(
                             "bank_forks doesn't have corresponding data for the stray restored \
-                           last vote({}), meaning some inconsistency between saved tower and ledger.",
-                           last_voted_slot
+                           last vote({last_voted_slot}), meaning some inconsistency between saved tower and ledger."
                         );
-                        warn!("{}", message);
-                        datapoint_warn!("tower_warn", ("warn", message, String));
+                warn!("{}", message);
+                datapoint_warn!("tower_warn", ("warn", message, String));
+            }
+            &empty_ancestors
+        };
+
+        let suspended_decision_due_to_major_unsynced_ledger = || {
+            // This peculiar corner handling is needed mainly for a tower which is newer than
+            // blockstore. (Yeah, we tolerate it for ease of maintaining validator by operators)
+            // This condition could be introduced by manual ledger mishandling,
+            // validator SEGV, OS/HW crash, or plain No Free Space FS error.
+
+            // When we're in this clause, it basically means validator is badly running
+            // with a future tower while replaying past slots, especially problematic is
+            // last_voted_slot.
+            // So, don't re-vote on it by returning pseudo FailedSwitchThreshold, otherwise
+            // there would be slashing because of double vote on one of last_vote_ancestors.
+            // (Well, needless to say, re-creating the duplicate block must be handled properly
+            // at the banking stage: https://github.com/solana-labs/solana/issues/8232)
+            //
+            // To be specific, the replay stage is tricked into a false perception where
+            // last_vote_ancestors is AVAILABLE for descendant-of-`switch_slot`,  stale, and
+            // stray slots (which should always be empty_ancestors).
+            //
+            // This is covered by test_future_tower_* in local_cluster
+            SwitchForkDecision::FailedSwitchThreshold(0, total_stake)
+        };
+
+        let rollback_due_to_to_to_duplicate_ancestor = |latest_duplicate_ancestor| {
+            SwitchForkDecision::FailedSwitchDuplicateRollback(latest_duplicate_ancestor)
+        };
+
+        // `heaviest_subtree_fork_choice` entries are not cleaned by duplicate block purging/rollback logic,
+        // so this is safe to check here. We return here if the last voted slot was rolled back/purged due to
+        // being a duplicate because `ancestors`/`descendants`/`progress` structures may be missing this slot due
+        // to duplicate purging. This would cause many of the `unwrap()` checks below to fail.
+        //
+        // TODO: Handle if the last vote is on a dupe, and then we restart. The dupe won't be in
+        // heaviest_subtree_fork_choice, so `heaviest_subtree_fork_choice.latest_invalid_ancestor()` will return
+        // None, but the last vote will be persisted in tower.
+        let switch_hash = progress
+            .get_hash(switch_slot)
+            .expect("Slot we're trying to switch to must exist AND be frozen in progress map");
+        if let Some(latest_duplicate_ancestor) = heaviest_subtree_fork_choice
+            .latest_invalid_ancestor(&(last_voted_slot, last_voted_hash))
+        {
+            // We're rolling back because one of the ancestors of the last vote was a duplicate. In this
+            // case, it's acceptable if the switch candidate is one of ancestors of the previous vote,
+            // just fail the switch check because there's no point in voting on an ancestor. ReplayStage
+            // should then have a special case continue building an alternate fork from this ancestor, NOT
+            // the `last_voted_slot`. This is in contrast to usual SwitchFailure where ReplayStage continues to build blocks
+            // on latest vote. See `ReplayStage::select_vote_and_reset_forks()` for more details.
+            if heaviest_subtree_fork_choice.is_strict_ancestor(
+                &(switch_slot, switch_hash),
+                &(last_voted_slot, last_voted_hash),
+            ) {
+                return rollback_due_to_to_to_duplicate_ancestor(latest_duplicate_ancestor);
+            } else if progress
+                .get_hash(last_voted_slot)
+                .map(|current_slot_hash| current_slot_hash != last_voted_hash)
+                .unwrap_or(true)
+            {
+                // Our last vote slot was purged because it was on a duplicate fork, don't continue below
+                // where checks may panic. We allow a freebie vote here that may violate switching
+                // thresholds
+                // TODO: Properly handle this case
+                info!(
+                    "Allowing switch vote on {:?} because last vote {:?} was rolled back",
+                    (switch_slot, switch_hash),
+                    (last_voted_slot, last_voted_hash)
+                );
+                return SwitchForkDecision::SwitchProof(Hash::default());
+            }
+        }
+
+        let last_vote_ancestors = ancestors.get(&last_voted_slot).unwrap_or_else(|| {
+            if self.is_stray_last_vote() {
+                // Unless last vote is stray and stale, ancestors.get(last_voted_slot) must
+                // return Some(_), justifying to panic! here.
+                // Also, adjust_lockouts_after_replay() correctly makes last_voted_slot None,
+                // if all saved votes are ancestors of replayed_root_slot. So this code shouldn't be
+                // touched in that case as well.
+                // In other words, except being stray, all other slots have been voted on while
+                // this validator has been running, so we must be able to fetch ancestors for
+                // all of them.
+                empty_ancestors_due_to_minor_unsynced_ledger()
+            } else {
+                panic!("no ancestors found with slot: {last_voted_slot}");
+            }
+        });
+
+        let switch_slot_ancestors = ancestors.get(&switch_slot).unwrap();
+
+        if switch_slot == last_voted_slot || switch_slot_ancestors.contains(&last_voted_slot) {
+            // If the `switch_slot is a descendant of the last vote,
+            // no switching proof is necessary
+            return SwitchForkDecision::SameFork;
+        }
+
+        if last_vote_ancestors.contains(&switch_slot) {
+            if self.is_stray_last_vote() {
+                return suspended_decision_due_to_major_unsynced_ledger();
+            } else {
+                panic!(
+                            "Should never consider switching to ancestor ({switch_slot}) of last vote: {last_voted_slot}, ancestors({last_vote_ancestors:?})",
+                        );
+            }
+        }
+
+        // By this point, we know the `switch_slot` is on a different fork
+        // (is neither an ancestor nor descendant of `last_vote`), so a
+        // switching proof is necessary
+        let switch_proof = Hash::default();
+        let mut locked_out_stake = 0;
+        let mut locked_out_vote_accounts = HashSet::new();
+        for (candidate_slot, descendants) in descendants.iter() {
+            // 1) Don't consider any banks that haven't been frozen yet
+            //    because the needed stats are unavailable
+            // 2) Only consider lockouts at the latest `frozen` bank
+            //    on each fork, as that bank will contain all the
+            //    lockout intervals for ancestors on that fork as well.
+            // 3) Don't consider lockouts on the `last_vote` itself
+            // 4) Don't consider lockouts on any descendants of
+            //    `last_vote`
+            // 5) Don't consider any banks before the root because
+            //    all lockouts must be ancestors of `last_vote`
+            if !progress
+                .get_fork_stats(*candidate_slot)
+                .map(|stats| stats.computed)
+                .unwrap_or(false)
+                || {
+                    // If any of the descendants have the `computed` flag set, then there must be a more
+                    // recent frozen bank on this fork to use, so we can ignore this one. Otherwise,
+                    // even if this bank has descendants, if they have not yet been frozen / stats computed,
+                    // then use this bank as a representative for the fork.
+                    descendants.iter().any(|d| {
+                        progress
+                            .get_fork_stats(*d)
+                            .map(|stats| stats.computed)
+                            .unwrap_or(false)
+                    })
+                }
+                || *candidate_slot == last_voted_slot
+                || {
+                    // Ignore if the `candidate_slot` is a descendant of the `last_voted_slot`, since we do not
+                    // want to count votes on the same fork.
+                    Self::is_candidate_slot_descendant_of_last_vote(
+                        *candidate_slot,
+                        last_voted_slot,
+                        ancestors,
+                    )
+                    .expect("exists in descendants map, so must exist in ancestors map")
+                }
+                || *candidate_slot <= root
+            {
+                continue;
+            }
+
+            // By the time we reach here, any ancestors of the `last_vote`,
+            // should have been filtered out, as they all have a descendant,
+            // namely the `last_vote` itself.
+            assert!(!last_vote_ancestors.contains(candidate_slot));
+
+            // Evaluate which vote accounts in the bank are locked out
+            // in the interval candidate_slot..last_vote, which means
+            // finding any lockout intervals in the `lockout_intervals` tree
+            // for this bank that contain `last_vote`.
+            let lockout_intervals = &progress
+                .get(candidate_slot)
+                .unwrap()
+                .fork_stats
+                .lockout_intervals;
+            // Find any locked out intervals for vote accounts in this bank with
+            // `lockout_interval_end` >= `last_vote`, which implies they are locked out at
+            // `last_vote` on another fork.
+            for (_lockout_interval_end, intervals_keyed_by_end) in
+                lockout_intervals.range((Included(last_voted_slot), Unbounded))
+            {
+                for (lockout_interval_start, vote_account_pubkey) in intervals_keyed_by_end {
+                    if locked_out_vote_accounts.contains(vote_account_pubkey) {
+                        continue;
                     }
-                    &empty_ancestors
-                };
 
-                let suspended_decision_due_to_major_unsynced_ledger = || {
-                    // This peculiar corner handling is needed mainly for a tower which is newer than
-                    // blockstore. (Yeah, we tolerate it for ease of maintaining validator by operators)
-                    // This condition could be introduced by manual ledger mishandling,
-                    // validator SEGV, OS/HW crash, or plain No Free Space FS error.
+                    // Only count lockouts on slots that are:
+                    // 1) Not ancestors of `last_vote`, meaning being on different fork
+                    // 2) Not from before the current root as we can't determine if
+                    // anything before the root was an ancestor of `last_vote` or not
+                    if !last_vote_ancestors.contains(lockout_interval_start) && {
+                        // Given a `lockout_interval_start` < root that appears in a
+                        // bank for a `candidate_slot`, it must be that `lockout_interval_start`
+                        // is an ancestor of the current root, because `candidate_slot` is a
+                        // descendant of the current root
+                        *lockout_interval_start > root
+                    } {
+                        let stake = epoch_vote_accounts
+                            .get(vote_account_pubkey)
+                            .map(|(stake, _)| *stake)
+                            .unwrap_or(0);
+                        locked_out_stake += stake;
+                        if (locked_out_stake as f64 / total_stake as f64) > SWITCH_FORK_THRESHOLD {
+                            return SwitchForkDecision::SwitchProof(switch_proof);
+                        }
+                        locked_out_vote_accounts.insert(vote_account_pubkey);
+                    }
+                }
+            }
+        }
 
-                    // When we're in this clause, it basically means validator is badly running
-                    // with a future tower while replaying past slots, especially problematic is
-                    // last_voted_slot.
-                    // So, don't re-vote on it by returning pseudo FailedSwitchThreshold, otherwise
-                    // there would be slashing because of double vote on one of last_vote_ancestors.
-                    // (Well, needless to say, re-creating the duplicate block must be handled properly
-                    // at the banking stage: https://github.com/solana-labs/solana/issues/8232)
-                    //
-                    // To be specific, the replay stage is tricked into a false perception where
-                    // last_vote_ancestors is AVAILABLE for descendant-of-`switch_slot`,  stale, and
-                    // stray slots (which should always be empty_ancestors).
-                    //
-                    // This is covered by test_future_tower_* in local_cluster
-                    SwitchForkDecision::FailedSwitchThreshold(0, total_stake)
-                };
+        // Check the latest votes for potentially gossip votes that haven't landed yet
+        for (
+            vote_account_pubkey,
+            (candidate_latest_frozen_vote, _candidate_latest_frozen_vote_hash),
+        ) in latest_validator_votes_for_frozen_banks.max_gossip_frozen_votes()
+        {
+            if locked_out_vote_accounts.contains(&vote_account_pubkey) {
+                continue;
+            }
 
-                let rollback_due_to_to_to_duplicate_ancestor = |latest_duplicate_ancestor| {
-                    SwitchForkDecision::FailedSwitchDuplicateRollback(latest_duplicate_ancestor)
-                };
-
-                // `heaviest_subtree_fork_choice` entries are not cleaned by duplicate block purging/rollback logic,
-                // so this is safe to check here. We return here if the last voted slot was rolled back/purged due to
-                // being a duplicate because `ancestors`/`descendants`/`progress` structures may be missing this slot due
-                // to duplicate purging. This would cause many of the `unwrap()` checks below to fail.
+            if *candidate_latest_frozen_vote > last_voted_slot && {
+                // Because `candidate_latest_frozen_vote` is the last vote made by some validator
+                // in the cluster for a frozen bank `B` observed through gossip, we may have cleared
+                // that frozen bank `B` because we `set_root(root)` for a `root` on a different fork,
+                // like so:
                 //
-                // TODO: Handle if the last vote is on a dupe, and then we restart. The dupe won't be in
-                // heaviest_subtree_fork_choice, so `heaviest_subtree_fork_choice.latest_invalid_ancestor()` will return
-                // None, but the last vote will be persisted in tower.
-                let switch_hash = progress
-                    .get_hash(switch_slot)
-                    .expect("Slot we're trying to switch to must exist AND be frozen in progress map");
-                if let Some(latest_duplicate_ancestor) = heaviest_subtree_fork_choice
-                    .latest_invalid_ancestor(&(last_voted_slot, last_voted_hash))
-                {
-                    // We're rolling back because one of the ancestors of the last vote was a duplicate. In this
-                    // case, it's acceptable if the switch candidate is one of ancestors of the previous vote,
-                    // just fail the switch check because there's no point in voting on an ancestor. ReplayStage
-                    // should then have a special case continue building an alternate fork from this ancestor, NOT
-                    // the `last_voted_slot`. This is in contrast to usual SwitchFailure where ReplayStage continues to build blocks
-                    // on latest vote. See `ReplayStage::select_vote_and_reset_forks()` for more details.
-                    if heaviest_subtree_fork_choice.is_strict_ancestor(
-                        &(switch_slot, switch_hash),
-                        &(last_voted_slot, last_voted_hash),
-                    ) {
-                        return rollback_due_to_to_to_duplicate_ancestor(latest_duplicate_ancestor);
-                    } else if progress
-                        .get_hash(last_voted_slot)
-                            .map(|current_slot_hash| current_slot_hash != last_voted_hash)
-                            .unwrap_or(true)
-                    {
-                        // Our last vote slot was purged because it was on a duplicate fork, don't continue below
-                        // where checks may panic. We allow a freebie vote here that may violate switching
-                        // thresholds
-                        // TODO: Properly handle this case
-                        info!(
-                            "Allowing switch vote on {:?} because last vote {:?} was rolled back",
-                            (switch_slot, switch_hash),
-                            (last_voted_slot, last_voted_hash)
-                        );
-                        return SwitchForkDecision::SwitchProof(Hash::default());
-                    }
+                //    |----------X ------candidate_latest_frozen_vote (frozen)
+                // old root
+                //    |----------new root ----last_voted_slot
+                //
+                // In most cases, because `last_voted_slot` must be a descendant of `root`, then
+                // if `candidate_latest_frozen_vote` is not found in the ancestors/descendants map (recall these
+                // directly reflect the state of BankForks), this implies that `B` was pruned from BankForks
+                // because it was on a different fork than `last_voted_slot`, and thus this vote for `candidate_latest_frozen_vote`
+                // should be safe to count towards the switching proof:
+                //
+                // However, there is also the possibility that `last_voted_slot` is a stray, in which
+                // case we cannot make this conclusion as we do not know the ancestors/descendants
+                // of strays. Hence we err on the side of caution here and ignore this vote. This
+                // is ok because validators voting on different unrooted forks should eventually vote
+                // on some descendant of the root, at which time they can be included in switching proofs.
+                !Self::is_candidate_slot_descendant_of_last_vote(
+                    *candidate_latest_frozen_vote,
+                    last_voted_slot,
+                    ancestors,
+                )
+                .unwrap_or(true)
+            } {
+                let stake = epoch_vote_accounts
+                    .get(vote_account_pubkey)
+                    .map(|(stake, _)| *stake)
+                    .unwrap_or(0);
+                locked_out_stake += stake;
+                if (locked_out_stake as f64 / total_stake as f64) > SWITCH_FORK_THRESHOLD {
+                    return SwitchForkDecision::SwitchProof(switch_proof);
                 }
+                locked_out_vote_accounts.insert(vote_account_pubkey);
+            }
+        }
 
-                let last_vote_ancestors = ancestors.get(&last_voted_slot).unwrap_or_else(|| {
-                    if self.is_stray_last_vote() {
-                        // Unless last vote is stray and stale, ancestors.get(last_voted_slot) must
-                        // return Some(_), justifying to panic! here.
-                        // Also, adjust_lockouts_after_replay() correctly makes last_voted_slot None,
-                        // if all saved votes are ancestors of replayed_root_slot. So this code shouldn't be
-                        // touched in that case as well.
-                        // In other words, except being stray, all other slots have been voted on while
-                        // this validator has been running, so we must be able to fetch ancestors for
-                        // all of them.
-                        empty_ancestors_due_to_minor_unsynced_ledger()
-                    } else {
-                        panic!("no ancestors found with slot: {}", last_voted_slot);
-                    }
-                });
-
-                let switch_slot_ancestors = ancestors.get(&switch_slot).unwrap();
-
-                if switch_slot == last_voted_slot || switch_slot_ancestors.contains(&last_voted_slot) {
-                    // If the `switch_slot is a descendant of the last vote,
-                    // no switching proof is necessary
-                    return SwitchForkDecision::SameFork;
-                }
-
-                if last_vote_ancestors.contains(&switch_slot) {
-                    if self.is_stray_last_vote() {
-                        return suspended_decision_due_to_major_unsynced_ledger();
-                    } else {
-                        panic!(
-                            "Should never consider switching to ancestor ({}) of last vote: {}, ancestors({:?})",
-                            switch_slot,
-                            last_voted_slot,
-                            last_vote_ancestors,
-                        );
-                    }
-                }
-
-                // By this point, we know the `switch_slot` is on a different fork
-                // (is neither an ancestor nor descendant of `last_vote`), so a
-                // switching proof is necessary
-                let switch_proof = Hash::default();
-                let mut locked_out_stake = 0;
-                let mut locked_out_vote_accounts = HashSet::new();
-                for (candidate_slot, descendants) in descendants.iter() {
-                    // 1) Don't consider any banks that haven't been frozen yet
-                    //    because the needed stats are unavailable
-                    // 2) Only consider lockouts at the latest `frozen` bank
-                    //    on each fork, as that bank will contain all the
-                    //    lockout intervals for ancestors on that fork as well.
-                    // 3) Don't consider lockouts on the `last_vote` itself
-                    // 4) Don't consider lockouts on any descendants of
-                    //    `last_vote`
-                    // 5) Don't consider any banks before the root because
-                    //    all lockouts must be ancestors of `last_vote`
-                    if !progress.get_fork_stats(*candidate_slot).map(|stats| stats.computed).unwrap_or(false)
-                        // If any of the descendants have the `computed` flag set, then there must be a more
-                        // recent frozen bank on this fork to use, so we can ignore this one. Otherwise,
-                        // even if this bank has descendants, if they have not yet been frozen / stats computed,
-                        // then use this bank as a representative for the fork.
-                        || descendants.iter().any(|d| progress.get_fork_stats(*d).map(|stats| stats.computed).unwrap_or(false))
-                        || *candidate_slot == last_voted_slot
-                        // Ignore if the `candidate_slot` is a descendant of the `last_voted_slot`, since we do not
-                        // want to count votes on the same fork.
-                        || Self::is_candidate_slot_descendant_of_last_vote(*candidate_slot, last_voted_slot, ancestors).expect("exists in descendants map, so must exist in ancestors map")
-                        || *candidate_slot <= root
-                    {
-                        continue;
-                    }
-
-                    // By the time we reach here, any ancestors of the `last_vote`,
-                    // should have been filtered out, as they all have a descendant,
-                    // namely the `last_vote` itself.
-                    assert!(!last_vote_ancestors.contains(candidate_slot));
-
-                    // Evaluate which vote accounts in the bank are locked out
-                    // in the interval candidate_slot..last_vote, which means
-                    // finding any lockout intervals in the `lockout_intervals` tree
-                    // for this bank that contain `last_vote`.
-                    let lockout_intervals = &progress
-                        .get(candidate_slot)
-                        .unwrap()
-                        .fork_stats
-                        .lockout_intervals;
-                    // Find any locked out intervals for vote accounts in this bank with
-                    // `lockout_interval_end` >= `last_vote`, which implies they are locked out at
-                    // `last_vote` on another fork.
-                    for (_lockout_interval_end, intervals_keyed_by_end) in
-                        lockout_intervals.range((Included(last_voted_slot), Unbounded))
-                            {
-                                for (lockout_interval_start, vote_account_pubkey) in intervals_keyed_by_end {
-                                    if locked_out_vote_accounts.contains(vote_account_pubkey) {
-                                        continue;
-                                    }
-
-                                    // Only count lockouts on slots that are:
-                                    // 1) Not ancestors of `last_vote`, meaning being on different fork
-                                    // 2) Not from before the current root as we can't determine if
-                                    // anything before the root was an ancestor of `last_vote` or not
-                                    if !last_vote_ancestors.contains(lockout_interval_start)
-                                        // Given a `lockout_interval_start` < root that appears in a
-                                        // bank for a `candidate_slot`, it must be that `lockout_interval_start`
-                                        // is an ancestor of the current root, because `candidate_slot` is a
-                                        // descendant of the current root
-                                        && *lockout_interval_start > root
-                                    {
-                                        let stake = epoch_vote_accounts
-                                            .get(vote_account_pubkey)
-                                            .map(|(stake, _)| *stake)
-                                            .unwrap_or(0);
-                                        locked_out_stake += stake;
-                                        if (locked_out_stake as f64 / total_stake as f64)
-                                            > SWITCH_FORK_THRESHOLD
-                                        {
-                                            return SwitchForkDecision::SwitchProof(switch_proof);
-                                        }
-                                        locked_out_vote_accounts.insert(vote_account_pubkey);
-                                    }
-                                }
-                            }
-                }
-
-                // Check the latest votes for potentially gossip votes that haven't landed yet
-                for (
-                    vote_account_pubkey,
-                    (candidate_latest_frozen_vote, _candidate_latest_frozen_vote_hash),
-                ) in latest_validator_votes_for_frozen_banks.max_gossip_frozen_votes()
-                {
-                    if locked_out_vote_accounts.contains(&vote_account_pubkey) {
-                        continue;
-                    }
-
-                    if *candidate_latest_frozen_vote > last_voted_slot
-                        &&
-                            // Because `candidate_latest_frozen_vote` is the last vote made by some validator
-                            // in the cluster for a frozen bank `B` observed through gossip, we may have cleared
-                            // that frozen bank `B` because we `set_root(root)` for a `root` on a different fork,
-                            // like so:
-                            //
-                            //    |----------X ------candidate_latest_frozen_vote (frozen)
-                            // old root
-                            //    |----------new root ----last_voted_slot
-                            //
-                            // In most cases, because `last_voted_slot` must be a descendant of `root`, then
-                            // if `candidate_latest_frozen_vote` is not found in the ancestors/descendants map (recall these
-                            // directly reflect the state of BankForks), this implies that `B` was pruned from BankForks
-                            // because it was on a different fork than `last_voted_slot`, and thus this vote for `candidate_latest_frozen_vote`
-                            // should be safe to count towards the switching proof:
-                            //
-                            // However, there is also the possibility that `last_voted_slot` is a stray, in which
-                            // case we cannot make this conclusion as we do not know the ancestors/descendants
-                            // of strays. Hence we err on the side of caution here and ignore this vote. This
-                            // is ok because validators voting on different unrooted forks should eventually vote
-                            // on some descendant of the root, at which time they can be included in switching proofs.
-                            !Self::is_candidate_slot_descendant_of_last_vote(
-                                *candidate_latest_frozen_vote, last_voted_slot, ancestors)
-                            .unwrap_or(true)
-                            {
-                                let stake = epoch_vote_accounts
-                                    .get(vote_account_pubkey)
-                                    .map(|(stake, _)| *stake)
-                                    .unwrap_or(0);
-                                locked_out_stake += stake;
-                                if (locked_out_stake as f64 / total_stake as f64) > SWITCH_FORK_THRESHOLD {
-                                    return SwitchForkDecision::SwitchProof(switch_proof);
-                                }
-                                locked_out_vote_accounts.insert(vote_account_pubkey);
-                            }
-                }
-
-                // We have not detected sufficient lockout past the last voted slot to generate
-                // a switching proof
-                SwitchForkDecision::FailedSwitchThreshold(locked_out_stake, total_stake)
-            })
-        .unwrap_or(SwitchForkDecision::SameFork)
+        // We have not detected sufficient lockout past the last voted slot to generate
+        // a switching proof
+        SwitchForkDecision::FailedSwitchThreshold(locked_out_stake, total_stake)
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -1106,8 +1116,7 @@ impl Tower {
                 let message = format!(
                     "For some reason, we're REPROCESSING slots which has already been \
                      voted and ROOTED by us; \
-                     VOTING will be SUSPENDED UNTIL {}!",
-                    last_voted_slot,
+                     VOTING will be SUSPENDED UNTIL {last_voted_slot}!",
                 );
                 error!("{}", message);
                 datapoint_error!("tower_error", ("error", message, String));
@@ -1371,9 +1380,8 @@ pub fn reconcile_blockstore_roots_with_external_source(
                 Ordering::Greater => true,
                 Ordering::Equal => false,
                 Ordering::Less => panic!(
-                    "last_blockstore_root({}) is skipped while traversing \
-                     blockstore (currently at {}) from external root ({:?})!?",
-                    last_blockstore_root, current, external_source,
+                    "last_blockstore_root({last_blockstore_root}) is skipped while traversing \
+                     blockstore (currently at {current}) from external root ({external_source:?})!?",
                 ),
             })
             .collect();
@@ -2824,7 +2832,7 @@ pub mod test {
                     .write(true)
                     .truncate(true)
                     .open(path)
-                    .unwrap_or_else(|_| panic!("Failed to truncate file: {:?}", path));
+                    .unwrap_or_else(|_| panic!("Failed to truncate file: {path:?}"));
             },
         );
         assert_matches!(loaded, Err(TowerError::SerializeError(_)))

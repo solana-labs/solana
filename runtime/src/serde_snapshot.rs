@@ -312,7 +312,6 @@ pub(crate) fn bank_from_streams<R>(
     debug_keys: Option<Arc<HashSet<Pubkey>>>,
     additional_builtins: Option<&Builtins>,
     account_secondary_indexes: AccountSecondaryIndexes,
-    caching_enabled: bool,
     limit_load_slot_count_from_snapshot: Option<usize>,
     shrink_ratio: AccountShrinkThreshold,
     verify_index: bool,
@@ -335,7 +334,6 @@ where
         debug_keys,
         additional_builtins,
         account_secondary_indexes,
-        caching_enabled,
         limit_load_slot_count_from_snapshot,
         shrink_ratio,
         verify_index,
@@ -526,7 +524,6 @@ fn reconstruct_bank_from_fields<E>(
     debug_keys: Option<Arc<HashSet<Pubkey>>>,
     additional_builtins: Option<&Builtins>,
     account_secondary_indexes: AccountSecondaryIndexes,
-    caching_enabled: bool,
     limit_load_slot_count_from_snapshot: Option<usize>,
     shrink_ratio: AccountShrinkThreshold,
     verify_index: bool,
@@ -544,7 +541,6 @@ where
         storage_and_next_append_vec_id,
         genesis_config,
         account_secondary_indexes,
-        caching_enabled,
         limit_load_slot_count_from_snapshot,
         shrink_ratio,
         verify_index,
@@ -667,7 +663,6 @@ fn reconstruct_accountsdb_from_fields<E>(
     storage_and_next_append_vec_id: StorageAndNextAppendVecId,
     genesis_config: &GenesisConfig,
     account_secondary_indexes: AccountSecondaryIndexes,
-    caching_enabled: bool,
     limit_load_slot_count_from_snapshot: Option<usize>,
     shrink_ratio: AccountShrinkThreshold,
     verify_index: bool,
@@ -683,7 +678,6 @@ where
         account_paths.to_vec(),
         &genesis_config.cluster_type,
         account_secondary_indexes,
-        caching_enabled,
         shrink_ratio,
         accounts_db_config,
         accounts_update_notifier,
@@ -735,8 +729,7 @@ where
     let max_append_vec_id = next_append_vec_id - 1;
     assert!(
         max_append_vec_id <= AppendVecId::MAX / 2,
-        "Storage id {} larger than allowed max",
-        max_append_vec_id
+        "Storage id {max_append_vec_id} larger than allowed max"
     );
 
     // Process deserialized data, set necessary fields in self
@@ -745,7 +738,7 @@ where
         .write()
         .unwrap()
         .insert(snapshot_slot, snapshot_bank_hash_info);
-    accounts_db.storage.map.extend(storage.into_iter());
+    accounts_db.storage.extend(storage);
     accounts_db
         .next_id
         .store(next_append_vec_id, Ordering::Release);

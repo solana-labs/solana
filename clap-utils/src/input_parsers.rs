@@ -219,7 +219,7 @@ mod tests {
         use std::env;
         let out_dir = env::var("FARF_DIR").unwrap_or_else(|_| "farf".to_string());
 
-        format!("{}/tmp/{}-{}", out_dir, name, pubkey)
+        format!("{out_dir}/tmp/{name}-{pubkey}")
     }
 
     #[test]
@@ -338,8 +338,8 @@ mod tests {
         let key2 = solana_sdk::pubkey::new_rand();
         let sig1 = Keypair::new().sign_message(&[0u8]);
         let sig2 = Keypair::new().sign_message(&[1u8]);
-        let signer1 = format!("{}={}", key1, sig1);
-        let signer2 = format!("{}={}", key2, sig2);
+        let signer1 = format!("{key1}={sig1}");
+        let signer2 = format!("{key2}={sig2}");
         let matches = app().clone().get_matches_from(vec![
             "test",
             "--multiple",

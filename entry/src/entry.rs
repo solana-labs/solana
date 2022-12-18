@@ -46,7 +46,7 @@ use {
 lazy_static! {
     static ref PAR_THREAD_POOL: ThreadPool = rayon::ThreadPoolBuilder::new()
         .num_threads(get_max_thread_count())
-        .thread_name(|ix| format!("solEntry{:02}", ix))
+        .thread_name(|ix| format!("solEntry{ix:02}"))
         .build()
         .unwrap();
 }
@@ -511,7 +511,7 @@ pub fn start_verify_transactions(
                         .map(|tx| tx.to_versioned_transaction());
 
                     let res = packet_batch.par_iter_mut().zip(entry_tx_iter).all(|pair| {
-                        pair.0.meta = Meta::default();
+                        *pair.0.meta_mut() = Meta::default();
                         Packet::populate_packet(pair.0, None, &pair.1).is_ok()
                     });
                     if res {
@@ -538,7 +538,7 @@ pub fn start_verify_transactions(
                     );
                     let verified = packet_batches
                         .iter()
-                        .all(|batch| batch.iter().all(|p| !p.meta.discard()));
+                        .all(|batch| batch.iter().all(|p| !p.meta().discard()));
                     verify_time.stop();
                     (verified, verify_time.as_us())
                 })
@@ -678,7 +678,7 @@ impl EntrySlice for [Entry] {
                             );
                         },
                         _ => {
-                            panic!("unsupported simd len: {}", simd_len);
+                            panic!("unsupported simd len: {simd_len}");
                         }
                     }
                     let entry_start = i * simd_len;

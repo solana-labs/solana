@@ -195,7 +195,7 @@ impl<'a> StorableAccounts<'a, StoredAccountMeta<'a>>
         self.1[index].hash
     }
     fn write_version(&self, index: usize) -> u64 {
-        self.1[index].meta.write_version
+        self.1[index].meta.write_version_obsolete
     }
 }
 
@@ -238,7 +238,7 @@ impl<'a> StorableAccounts<'a, StoredAccountMeta<'a>>
         self.1[index].account.hash
     }
     fn write_version(&self, index: usize) -> u64 {
-        self.1[index].account.meta.write_version
+        self.1[index].account.meta.write_version_obsolete
     }
 }
 #[cfg(test)]
@@ -281,7 +281,7 @@ pub mod tests {
         let executable = false;
         let rent_epoch = 0;
         let meta = StoredMeta {
-            write_version: 5,
+            write_version_obsolete: 5,
             pubkey: pk,
             data_len: 7,
         };
@@ -338,7 +338,7 @@ pub mod tests {
                             account.clone(),
                             starting_slot % max_slots,
                             StoredMeta {
-                                write_version: 0, // just something
+                                write_version_obsolete: 0, // just something
                                 pubkey: pk,
                                 data_len: u64::MAX, // just something
                             },

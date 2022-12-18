@@ -209,7 +209,7 @@ function FungibleTokenMintAccountCard({
               {normalizeTokenAmount(info.supply, info.decimals).toLocaleString(
                 "en-US",
                 {
-                  minimumFractionDigits: info.decimals,
+                  maximumFractionDigits: 20,
                 }
               )}
             </td>

@@ -1,7 +1,8 @@
 use {
     crate::{
+        account_storage::AccountStorageMap,
         accounts_db::{
-            AccountShrinkThreshold, AccountStorageMap, AccountsDbConfig, AtomicAppendVecId,
+            AccountShrinkThreshold, AccountsDbConfig, AtomicAppendVecId,
             CalcAccountsHashDataSource, SnapshotStorage, SnapshotStorages,
         },
         accounts_index::AccountSecondaryIndexes,
@@ -636,8 +637,7 @@ where
     let consumed_size = data_file_stream.stream_position()?;
     if consumed_size > maximum_file_size {
         let error_message = format!(
-            "too large snapshot data file to serialize: {:?} has {} bytes",
-            data_file_path, consumed_size
+            "too large snapshot data file to serialize: {data_file_path:?} has {consumed_size} bytes"
         );
         return Err(get_io_error(&error_message));
     }
@@ -961,7 +961,6 @@ pub fn bank_from_snapshot_archives(
     debug_keys: Option<Arc<HashSet<Pubkey>>>,
     additional_builtins: Option<&Builtins>,
     account_secondary_indexes: AccountSecondaryIndexes,
-    accounts_db_caching_enabled: bool,
     limit_load_slot_count_from_snapshot: Option<usize>,
     shrink_ratio: AccountShrinkThreshold,
     test_hash_calculation: bool,
@@ -1007,7 +1006,6 @@ pub fn bank_from_snapshot_archives(
         debug_keys,
         additional_builtins,
         account_secondary_indexes,
-        accounts_db_caching_enabled,
         limit_load_slot_count_from_snapshot,
         shrink_ratio,
         verify_index,
@@ -1067,7 +1065,6 @@ pub fn bank_from_latest_snapshot_archives(
     debug_keys: Option<Arc<HashSet<Pubkey>>>,
     additional_builtins: Option<&Builtins>,
     account_secondary_indexes: AccountSecondaryIndexes,
-    accounts_db_caching_enabled: bool,
     limit_load_slot_count_from_snapshot: Option<usize>,
     shrink_ratio: AccountShrinkThreshold,
     test_hash_calculation: bool,
@@ -1113,7 +1110,6 @@ pub fn bank_from_latest_snapshot_archives(
         debug_keys,
         additional_builtins,
         account_secondary_indexes,
-        accounts_db_caching_enabled,
         limit_load_slot_count_from_snapshot,
         shrink_ratio,
         test_hash_calculation,
@@ -1797,8 +1793,6 @@ fn rebuild_bank_from_snapshots(
     debug_keys: Option<Arc<HashSet<Pubkey>>>,
     additional_builtins: Option<&Builtins>,
     account_secondary_indexes: AccountSecondaryIndexes,
-    // this parameter will be removed when all plumbing for disabling write cache is removed
-    _accounts_db_caching_enabled: bool,
     limit_load_slot_count_from_snapshot: Option<usize>,
     shrink_ratio: AccountShrinkThreshold,
     verify_index: bool,
@@ -1807,7 +1801,6 @@ fn rebuild_bank_from_snapshots(
     exit: &Arc<AtomicBool>,
     bpf_tracer_plugin_manager: Option<Arc<RwLock<dyn BpfTracerPluginManager>>>,
 ) -> Result<Bank> {
-    let accounts_db_caching_enabled = true;
     let (full_snapshot_version, full_snapshot_root_paths) =
         verify_unpacked_snapshots_dir_and_version(
             full_snapshot_unpacked_snapshots_dir_and_version,
@@ -1850,7 +1843,6 @@ fn rebuild_bank_from_snapshots(
                     debug_keys,
                     additional_builtins,
                     account_secondary_indexes,
-                    accounts_db_caching_enabled,
                     limit_load_slot_count_from_snapshot,
                     shrink_ratio,
                     verify_index,
@@ -1895,8 +1887,6 @@ fn rebuild_bank_from_snapshots(
     verify_slot_deltas(slot_deltas.as_slice(), &bank)?;
 
     bank.status_cache.write().unwrap().append(&slot_deltas);
-
-    bank.prepare_rewrites_for_hash();
 
     info!("Loaded bank for slot: {}", bank.slot());
     Ok(bank)
@@ -2982,8 +2972,7 @@ mod tests {
         for snap_name in expected_snapshots {
             assert!(
                 retained_snaps.contains(snap_name.as_str()),
-                "{} not found",
-                snap_name
+                "{snap_name} not found"
             );
         }
         assert_eq!(retained_snaps.len(), expected_snapshots.len());
@@ -3270,7 +3259,6 @@ mod tests {
             None,
             None,
             AccountSecondaryIndexes::default(),
-            false,
             None,
             AccountShrinkThreshold::default(),
             false,
@@ -3384,7 +3372,6 @@ mod tests {
             None,
             None,
             AccountSecondaryIndexes::default(),
-            false,
             None,
             AccountShrinkThreshold::default(),
             false,
@@ -3518,7 +3505,6 @@ mod tests {
             None,
             None,
             AccountSecondaryIndexes::default(),
-            false,
             None,
             AccountShrinkThreshold::default(),
             false,
@@ -3642,7 +3628,6 @@ mod tests {
             None,
             None,
             AccountSecondaryIndexes::default(),
-            false,
             None,
             AccountShrinkThreshold::default(),
             false,
@@ -3702,7 +3687,6 @@ mod tests {
             Arc::<RuntimeConfig>::default(),
             vec![accounts_dir.path().to_path_buf()],
             AccountSecondaryIndexes::default(),
-            false,
             AccountShrinkThreshold::default(),
         ));
         bank0
@@ -3784,7 +3768,6 @@ mod tests {
             None,
             None,
             AccountSecondaryIndexes::default(),
-            false,
             None,
             AccountShrinkThreshold::default(),
             false,
@@ -3850,7 +3833,6 @@ mod tests {
             None,
             None,
             AccountSecondaryIndexes::default(),
-            false,
             None,
             AccountShrinkThreshold::default(),
             false,

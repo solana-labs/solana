@@ -106,7 +106,7 @@ fn wait_for_restart_window(
     let admin_client = admin_rpc_service::connect(ledger_path);
     let rpc_addr = admin_rpc_service::runtime()
         .block_on(async move { admin_client.await?.rpc_addr().await })
-        .map_err(|err| format!("Unable to get validator RPC address: {}", err))?;
+        .map_err(|err| format!("Unable to get validator RPC address: {err}"))?;
 
     let rpc_client = match rpc_addr {
         None => return Err("RPC not available".into()),
@@ -119,16 +119,10 @@ fn wait_for_restart_window(
     println_name_value("Identity:", &identity.to_string());
     println_name_value(
         "Minimum Idle Time:",
-        &format!(
-            "{} slots (~{} minutes)",
-            min_idle_slots, min_idle_time_in_minutes
-        ),
+        &format!("{min_idle_slots} slots (~{min_idle_time_in_minutes} minutes)"),
     );
 
-    println!(
-        "Maximum permitted delinquency: {}%",
-        max_delinquency_percentage
-    );
+    println!("Maximum permitted delinquency: {max_delinquency_percentage}%");
 
     let mut current_epoch = None;
     let mut leader_schedule = VecDeque::new();
@@ -183,10 +177,7 @@ fn wait_for_restart_window(
                     },
                 )?
                 .ok_or_else(|| {
-                    format!(
-                        "Unable to get leader schedule from slot {}",
-                        first_slot_in_epoch
-                    )
+                    format!("Unable to get leader schedule from slot {first_slot_in_epoch}")
                 })?
                 .get(&identity.to_string())
                 .cloned()
@@ -266,8 +257,7 @@ fn wait_for_restart_window(
                                         )
                                     }
                                     None => format!(
-                                        "Validator will be leader soon. Next leader slot is {}",
-                                        next_leader_slot
+                                        "Validator will be leader soon. Next leader slot is {next_leader_slot}"
                                     ),
                                 })
                             }
@@ -354,6 +344,22 @@ fn wait_for_restart_window(
     Ok(())
 }
 
+fn set_repair_whitelist(
+    ledger_path: &Path,
+    whitelist: Vec<Pubkey>,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let admin_client = admin_rpc_service::connect(ledger_path);
+    admin_rpc_service::runtime()
+        .block_on(async move { admin_client.await?.set_repair_whitelist(whitelist).await })
+        .map_err(|err| {
+            std::io::Error::new(
+                std::io::ErrorKind::Other,
+                format!("setRepairWhitelist request failed: {}", err),
+            )
+        })?;
+    Ok(())
+}
+
 /// Returns the default fifo shred storage size (include both data and coding
 /// shreds) based on the validator config.
 fn default_fifo_shred_storage_size(vc: &ValidatorConfig) -> Option<u64> {
@@ -388,10 +394,7 @@ fn validators_set(
             .into_iter()
             .collect();
         if validators_set.contains(identity_pubkey) {
-            eprintln!(
-                "The validator's identity pubkey cannot be a {}: {}",
-                arg_name, identity_pubkey
-            );
+            eprintln!("The validator's identity pubkey cannot be a {arg_name}: {identity_pubkey}");
             exit(1);
         }
         Some(validators_set)
@@ -408,8 +411,8 @@ fn get_cluster_shred_version(entrypoints: &[SocketAddr]) -> Option<u16> {
     };
     for entrypoint in entrypoints {
         match solana_net_utils::get_cluster_shred_version(entrypoint) {
-            Err(err) => eprintln!("get_cluster_shred_version failed: {}, {}", entrypoint, err),
-            Ok(0) => eprintln!("zero shred-version from entrypoint: {}", entrypoint),
+            Err(err) => eprintln!("get_cluster_shred_version failed: {entrypoint}, {err}"),
+            Ok(0) => eprintln!("zero shred-version from entrypoint: {entrypoint}"),
             Ok(shred_version) => {
                 info!(
                     "obtained shred-version {} from {}",
@@ -443,8 +446,7 @@ pub fn main() {
                         let authorized_voter_keypair = fs::canonicalize(&authorized_voter_keypair)
                             .unwrap_or_else(|err| {
                                 println!(
-                                    "Unable to access path: {}: {:?}",
-                                    authorized_voter_keypair, err
+                                    "Unable to access path: {authorized_voter_keypair}: {err:?}"
                                 );
                                 exit(1);
                             });
@@ -464,14 +466,14 @@ pub fn main() {
                                     .await
                             })
                             .unwrap_or_else(|err| {
-                                println!("addAuthorizedVoter request failed: {}", err);
+                                println!("addAuthorizedVoter request failed: {err}");
                                 exit(1);
                             });
                     } else {
                         let mut stdin = std::io::stdin();
                         let authorized_voter_keypair =
                             read_keypair(&mut stdin).unwrap_or_else(|err| {
-                                println!("Unable to read JSON keypair from stdin: {:?}", err);
+                                println!("Unable to read JSON keypair from stdin: {err:?}");
                                 exit(1);
                             });
                         println!(
@@ -490,7 +492,7 @@ pub fn main() {
                                     .await
                             })
                             .unwrap_or_else(|err| {
-                                println!("addAuthorizedVoterFromBytes request failed: {}", err);
+                                println!("addAuthorizedVoterFromBytes request failed: {err}");
                                 exit(1);
                             });
                     }
@@ -504,7 +506,7 @@ pub fn main() {
                             admin_client.await?.remove_all_authorized_voters().await
                         })
                         .unwrap_or_else(|err| {
-                            println!("removeAllAuthorizedVoters request failed: {}", err);
+                            println!("removeAllAuthorizedVoters request failed: {err}");
                             exit(1);
                         });
                     println!("All authorized voters removed");
@@ -519,7 +521,7 @@ pub fn main() {
             let contact_info = admin_rpc_service::runtime()
                 .block_on(async move { admin_client.await?.contact_info().await })
                 .unwrap_or_else(|err| {
-                    eprintln!("Contact info query failed: {}", err);
+                    eprintln!("Contact info query failed: {err}");
                     exit(1);
                 });
             if let Some(mode) = output_mode {
@@ -529,7 +531,7 @@ pub fn main() {
                     _ => unreachable!(),
                 }
             } else {
-                print!("{}", contact_info);
+                print!("{contact_info}");
             }
             return;
         }
@@ -551,7 +553,7 @@ pub fn main() {
                     skip_new_snapshot_check,
                 )
                 .unwrap_or_else(|err| {
-                    println!("{}", err);
+                    println!("{err}");
                     exit(1);
                 });
             }
@@ -560,7 +562,7 @@ pub fn main() {
             admin_rpc_service::runtime()
                 .block_on(async move { admin_client.await?.exit().await })
                 .unwrap_or_else(|err| {
-                    println!("exit request failed: {}", err);
+                    println!("exit request failed: {err}");
                     exit(1);
                 });
             println!("Exit request sent");
@@ -593,7 +595,7 @@ pub fn main() {
                         .await
                 })
                 .unwrap_or_else(|err| {
-                    println!("setStakedNodesOverrides request failed: {}", err);
+                    println!("setStakedNodesOverrides request failed: {err}");
                     exit(1);
                 });
             return;
@@ -603,7 +605,7 @@ pub fn main() {
 
             if let Some(identity_keypair) = value_t!(subcommand_matches, "identity", String).ok() {
                 let identity_keypair = fs::canonicalize(&identity_keypair).unwrap_or_else(|err| {
-                    println!("Unable to access path: {}: {:?}", identity_keypair, err);
+                    println!("Unable to access path: {identity_keypair}: {err:?}");
                     exit(1);
                 });
                 println!(
@@ -620,13 +622,13 @@ pub fn main() {
                             .await
                     })
                     .unwrap_or_else(|err| {
-                        println!("setIdentity request failed: {}", err);
+                        println!("setIdentity request failed: {err}");
                         exit(1);
                     });
             } else {
                 let mut stdin = std::io::stdin();
                 let identity_keypair = read_keypair(&mut stdin).unwrap_or_else(|err| {
-                    println!("Unable to read JSON keypair from stdin: {:?}", err);
+                    println!("Unable to read JSON keypair from stdin: {err:?}");
                     exit(1);
                 });
                 println!("New validator identity: {}", identity_keypair.pubkey());
@@ -643,7 +645,7 @@ pub fn main() {
                             .await
                     })
                     .unwrap_or_else(|err| {
-                        println!("setIdentityFromBytes request failed: {}", err);
+                        println!("setIdentityFromBytes request failed: {err}");
                         exit(1);
                     });
             };
@@ -656,7 +658,7 @@ pub fn main() {
             admin_rpc_service::runtime()
                 .block_on(async move { admin_client.await?.set_log_filter(filter).await })
                 .unwrap_or_else(|err| {
-                    println!("set log filter failed: {}", err);
+                    println!("set log filter failed: {err}");
                     exit(1);
                 });
             return;
@@ -676,10 +678,63 @@ pub fn main() {
                 skip_new_snapshot_check,
             )
             .unwrap_or_else(|err| {
-                println!("{}", err);
+                println!("{err}");
                 exit(1);
             });
             return;
+        }
+        ("repair-whitelist", Some(repair_whitelist_subcommand_matches)) => {
+            match repair_whitelist_subcommand_matches.subcommand() {
+                ("get", Some(subcommand_matches)) => {
+                    let output_mode = subcommand_matches.value_of("output");
+                    let admin_client = admin_rpc_service::connect(&ledger_path);
+                    let repair_whitelist = admin_rpc_service::runtime()
+                        .block_on(async move { admin_client.await?.repair_whitelist().await })
+                        .unwrap_or_else(|err| {
+                            eprintln!("Repair whitelist query failed: {}", err);
+                            exit(1);
+                        });
+                    if let Some(mode) = output_mode {
+                        match mode {
+                            "json" => println!(
+                                "{}",
+                                serde_json::to_string_pretty(&repair_whitelist).unwrap()
+                            ),
+                            "json-compact" => {
+                                print!("{}", serde_json::to_string(&repair_whitelist).unwrap())
+                            }
+                            _ => unreachable!(),
+                        }
+                    } else {
+                        print!("{}", repair_whitelist);
+                    }
+                    return;
+                }
+                ("set", Some(subcommand_matches)) => {
+                    let whitelist = if subcommand_matches.is_present("whitelist") {
+                        let validators_set: HashSet<_> =
+                            values_t_or_exit!(subcommand_matches, "whitelist", Pubkey)
+                                .into_iter()
+                                .collect();
+                        validators_set.into_iter().collect::<Vec<_>>()
+                    } else {
+                        return;
+                    };
+                    set_repair_whitelist(&ledger_path, whitelist).unwrap_or_else(|err| {
+                        eprintln!("{err}");
+                        exit(1);
+                    });
+                    return;
+                }
+                ("remove-all", _) => {
+                    set_repair_whitelist(&ledger_path, Vec::default()).unwrap_or_else(|err| {
+                        eprintln!("{err}");
+                        exit(1);
+                    });
+                    return;
+                }
+                _ => unreachable!(),
+            }
         }
         _ => unreachable!(),
     };
@@ -701,7 +756,7 @@ pub fn main() {
         if logfile == "-" {
             None
         } else {
-            println!("log file: {}", logfile);
+            println!("log file: {logfile}");
             Some(logfile)
         }
     };
@@ -774,7 +829,7 @@ pub fn main() {
     // Canonicalize ledger path to avoid issues with symlink creation
     let _ = fs::create_dir_all(&ledger_path);
     let ledger_path = fs::canonicalize(&ledger_path).unwrap_or_else(|err| {
-        eprintln!("Unable to access ledger path: {:?}", err);
+        eprintln!("Unable to access ledger path: {err:?}");
         exit(1);
     });
 
@@ -800,6 +855,13 @@ pub fn main() {
         "repair_validators",
         "--repair-validator",
     );
+    let repair_whitelist = validators_set(
+        &identity_keypair.pubkey(),
+        &matches,
+        "repair_whitelist",
+        "--repair-whitelist",
+    );
+    let repair_whitelist = Arc::new(RwLock::new(repair_whitelist.unwrap_or_default()));
     let gossip_validators = validators_set(
         &identity_keypair.pubkey(),
         &matches,
@@ -837,8 +899,7 @@ pub fn main() {
     let shrink_ratio = value_t_or_exit!(matches, "accounts_shrink_ratio", f64);
     if !(0.0..=1.0).contains(&shrink_ratio) {
         eprintln!(
-            "The specified account-shrink-ratio is invalid, it must be between 0. and 1.0 inclusive: {}",
-            shrink_ratio
+            "The specified account-shrink-ratio is invalid, it must be between 0. and 1.0 inclusive: {shrink_ratio}"
         );
         exit(1);
     }
@@ -853,7 +914,7 @@ pub fn main() {
         .into_iter()
         .map(|entrypoint| {
             solana_net_utils::parse_host_port(&entrypoint).unwrap_or_else(|e| {
-                eprintln!("failed to parse entrypoint address: {}", e);
+                eprintln!("failed to parse entrypoint address: {e}");
                 exit(1);
             })
         })
@@ -862,7 +923,7 @@ pub fn main() {
         .collect::<Vec<_>>();
     for addr in &entrypoint_addrs {
         if !socket_addr_space.check(addr) {
-            eprintln!("invalid entrypoint address: {}", addr);
+            eprintln!("invalid entrypoint address: {addr}");
             exit(1);
         }
     }
@@ -892,7 +953,7 @@ pub fn main() {
 
                 let read = |file| {
                     fs::read(&file).unwrap_or_else(|err| {
-                        eprintln!("Unable to read {}: {}", file, err);
+                        eprintln!("Unable to read {file}: {err}");
                         exit(1)
                     })
                 };
@@ -907,7 +968,7 @@ pub fn main() {
                 Arc::new(
                     tower_storage::EtcdTowerStorage::new(endpoints, Some(tls_config))
                         .unwrap_or_else(|err| {
-                            eprintln!("Failed to connect to etcd: {}", err);
+                            eprintln!("Failed to connect to etcd: {err}");
                             exit(1);
                         }),
                 )
@@ -1010,8 +1071,7 @@ pub fn main() {
 
     if rpc_send_batch_send_rate_ms > rpc_send_retry_rate_ms {
         eprintln!(
-            "The specified rpc-send-batch-ms ({}) is invalid, it must be <= rpc-send-retry-ms ({})",
-            rpc_send_batch_send_rate_ms, rpc_send_retry_rate_ms
+            "The specified rpc-send-batch-ms ({rpc_send_batch_send_rate_ms}) is invalid, it must be <= rpc-send-retry-ms ({rpc_send_retry_rate_ms})"
         );
         exit(1);
     }
@@ -1110,6 +1170,7 @@ pub fn main() {
         wait_for_supermajority: value_t!(matches, "wait_for_supermajority", Slot).ok(),
         known_validators,
         repair_validators,
+        repair_whitelist: repair_whitelist.clone(),
         gossip_validators,
         wal_recovery_mode,
         poh_verify: !matches.is_present("skip_poh_verify"),
@@ -1147,7 +1208,6 @@ pub fn main() {
             .unwrap_or(poh_service::DEFAULT_HASHES_PER_BATCH),
         process_ledger_before_services: matches.is_present("process_ledger_before_services"),
         account_indexes,
-        accounts_db_caching_enabled: true,
         accounts_db_test_hash_calculation: matches.is_present("accounts_db_test_hash_calculation"),
         accounts_db_config,
         accounts_db_skip_shrink: matches.is_present("accounts_db_skip_shrink"),
@@ -1198,10 +1258,7 @@ pub fn main() {
             match fs::create_dir_all(&account_path).and_then(|_| fs::canonicalize(&account_path)) {
                 Ok(account_path) => account_path,
                 Err(err) => {
-                    eprintln!(
-                        "Unable to access account path: {:?}, err: {:?}",
-                        account_path, err
-                    );
+                    eprintln!("Unable to access account path: {account_path:?}, err: {err:?}");
                     exit(1);
                 }
             }
@@ -1217,10 +1274,7 @@ pub fn main() {
                 {
                     Ok(account_path) => account_path,
                     Err(err) => {
-                        eprintln!(
-                            "Unable to access account path: {:?}, err: {:?}",
-                            account_path, err
-                        );
+                        eprintln!("Unable to access account path: {account_path:?}, err: {err:?}");
                         exit(1);
                     }
                 }
@@ -1277,7 +1331,7 @@ pub fn main() {
     let archive_format = {
         let archive_format_str = value_t_or_exit!(matches, "snapshot_archive_format", String);
         ArchiveFormat::from_cli_arg(&archive_format_str)
-            .unwrap_or_else(|| panic!("Archive format not recognized: {}", archive_format_str))
+            .unwrap_or_else(|| panic!("Archive format not recognized: {archive_format_str}"))
     };
 
     let snapshot_version =
@@ -1285,7 +1339,7 @@ pub fn main() {
             .value_of("snapshot_version")
             .map_or(SnapshotVersion::default(), |s| {
                 s.parse::<SnapshotVersion>().unwrap_or_else(|err| {
-                    eprintln!("Error: {}", err);
+                    eprintln!("Error: {err}");
                     exit(1)
                 })
             });
@@ -1306,7 +1360,7 @@ pub fn main() {
             (Slot::MAX, Slot::MAX)
         };
 
-    validator_config.snapshot_config = Some(SnapshotConfig {
+    validator_config.snapshot_config = SnapshotConfig {
         usage: if full_snapshot_archive_interval_slots == Slot::MAX {
             SnapshotUsage::LoadOnly
         } else {
@@ -1323,14 +1377,12 @@ pub fn main() {
         maximum_incremental_snapshot_archives_to_retain,
         accounts_hash_debug_verify: validator_config.accounts_db_test_hash_calculation,
         packager_thread_niceness_adj: snapshot_packager_niceness_adj,
-    });
+    };
 
     validator_config.accounts_hash_interval_slots =
         value_t_or_exit!(matches, "accounts-hash-interval-slots", u64);
     if !is_snapshot_config_valid(
-        // SAFETY: Calling `.unwrap()` is safe here because `validator_config.snapshot_config` must
-        // be `Some`. The Option<> wrapper will be removed later to solidify this requirement.
-        validator_config.snapshot_config.as_ref().unwrap(),
+        &validator_config.snapshot_config,
         validator_config.accounts_hash_interval_slots,
     ) {
         eprintln!("Invalid snapshot configuration provided: snapshot intervals are incompatible. \
@@ -1355,8 +1407,7 @@ pub fn main() {
         };
         if limit_ledger_size < DEFAULT_MIN_MAX_LEDGER_SHREDS {
             eprintln!(
-                "The provided --limit-ledger-size value was too small, the minimum value is {}",
-                DEFAULT_MIN_MAX_LEDGER_SHREDS
+                "The provided --limit-ledger-size value was too small, the minimum value is {DEFAULT_MIN_MAX_LEDGER_SHREDS}"
             );
             exit(1);
         }
@@ -1371,10 +1422,7 @@ pub fn main() {
                 "snappy" => BlockstoreCompressionType::Snappy,
                 "lz4" => BlockstoreCompressionType::Lz4,
                 "zlib" => BlockstoreCompressionType::Zlib,
-                _ => panic!(
-                    "Unsupported ledger_compression: {}",
-                    ledger_compression_string
-                ),
+                _ => panic!("Unsupported ledger_compression: {ledger_compression_string}"),
             },
         },
         shred_storage_type: match matches.value_of("rocksdb_shred_compaction") {
@@ -1391,10 +1439,7 @@ pub fn main() {
                         u64
                     ))),
                 },
-                _ => panic!(
-                    "Unrecognized rocksdb-shred-compaction: {}",
-                    shred_compaction_string
-                ),
+                _ => panic!("Unrecognized rocksdb-shred-compaction: {shred_compaction_string}"),
             },
         },
         rocks_perf_sample_interval: value_t_or_exit!(
@@ -1410,7 +1455,7 @@ pub fn main() {
 
     let public_rpc_addr = matches.value_of("public_rpc_addr").map(|addr| {
         solana_net_utils::parse_host_port(addr).unwrap_or_else(|e| {
-            eprintln!("failed to parse public rpc address: {}", e);
+            eprintln!("failed to parse public rpc address: {e}");
             exit(1);
         })
     });
@@ -1447,7 +1492,7 @@ pub fn main() {
         .value_of("gossip_host")
         .map(|gossip_host| {
             solana_net_utils::parse_host(gossip_host).unwrap_or_else(|err| {
-                eprintln!("Failed to parse --gossip-host: {}", err);
+                eprintln!("Failed to parse --gossip-host: {err}");
                 exit(1);
             })
         })
@@ -1465,8 +1510,7 @@ pub fn main() {
                     solana_net_utils::get_public_ip_addr(entrypoint_addr).map_or_else(
                         |err| {
                             eprintln!(
-                                "Failed to contact cluster entrypoint {}: {}",
-                                entrypoint_addr, err
+                                "Failed to contact cluster entrypoint {entrypoint_addr}: {err}"
                             );
                             None
                         },
@@ -1488,7 +1532,7 @@ pub fn main() {
         value_t!(matches, "gossip_port", u16).unwrap_or_else(|_| {
             solana_net_utils::find_available_port_in_range(bind_address, (0, 1)).unwrap_or_else(
                 |err| {
-                    eprintln!("Unable to find an available gossip port: {}", err);
+                    eprintln!("Unable to find an available gossip port: {err}");
                     exit(1);
                 },
             )
@@ -1497,7 +1541,7 @@ pub fn main() {
 
     let overwrite_tpu_addr = matches.value_of("tpu_host_addr").map(|tpu_addr| {
         solana_net_utils::parse_host_port(tpu_addr).unwrap_or_else(|err| {
-            eprintln!("Failed to parse --overwrite-tpu-addr: {}", err);
+            eprintln!("Failed to parse --overwrite-tpu-addr: {err}");
             exit(1);
         })
     });
@@ -1542,7 +1586,7 @@ pub fn main() {
 
     solana_metrics::set_host_id(identity_keypair.pubkey().to_string());
     solana_metrics::set_panic_hook("validator", {
-        let version = format!("{:?}", solana_version);
+        let version = format!("{solana_version:?}");
         Some(version)
     });
     solana_entry::entry::init_poh();
@@ -1605,6 +1649,7 @@ pub fn main() {
             bank_forks: validator.bank_forks.clone(),
             cluster_info: validator.cluster_info.clone(),
             vote_account,
+            repair_whitelist,
         });
 
     if let Some(filename) = init_complete_file {

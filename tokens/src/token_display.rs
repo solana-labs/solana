@@ -26,11 +26,11 @@ impl Token {
         match &self.token_type {
             TokenType::Sol => {
                 let amount = lamports_to_sol(self.amount);
-                write!(f, "{}{}", SOL_SYMBOL, amount)
+                write!(f, "{SOL_SYMBOL}{amount}")
             }
             TokenType::SplToken => {
                 let amount = real_number_string_trimmed(self.amount, self.decimals);
-                write!(f, "{} tokens", amount)
+                write!(f, "{amount} tokens")
             }
         }
     }

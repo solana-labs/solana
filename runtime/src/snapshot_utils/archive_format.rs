@@ -80,7 +80,7 @@ impl fmt::Display for ParseError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             ParseError::InvalidExtension(extension) => {
-                write!(f, "Invalid archive extension: {}", extension)
+                write!(f, "Invalid archive extension: {extension}")
             }
         }
     }

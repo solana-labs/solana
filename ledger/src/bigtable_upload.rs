@@ -55,20 +55,13 @@ pub async fn upload_confirmed_blocks(
     let blockstore_slots: Vec<_> = blockstore
         .rooted_slot_iterator(starting_slot)
         .map_err(|err| {
-            format!(
-                "Failed to load entries starting from slot {}: {:?}",
-                starting_slot, err
-            )
+            format!("Failed to load entries starting from slot {starting_slot}: {err:?}")
         })?
         .map_while(|slot| (slot <= ending_slot).then_some(slot))
         .collect();
 
     if blockstore_slots.is_empty() {
-        return Err(format!(
-            "Ledger has no slots from {} to {:?}",
-            starting_slot, ending_slot
-        )
-        .into());
+        return Err(format!("Ledger has no slots from {starting_slot} to {ending_slot:?}").into());
     }
 
     let first_blockstore_slot = blockstore_slots.first().unwrap();
@@ -274,7 +267,7 @@ pub async fn upload_confirmed_blocks(
     );
 
     if failures > 0 {
-        Err(format!("Incomplete upload, {} operations failed", failures).into())
+        Err(format!("Incomplete upload, {failures} operations failed").into())
     } else {
         Ok(last_slot)
     }

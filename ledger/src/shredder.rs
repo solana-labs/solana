@@ -24,7 +24,7 @@ use {
 lazy_static! {
     static ref PAR_THREAD_POOL: ThreadPool = rayon::ThreadPoolBuilder::new()
         .num_threads(get_thread_count())
-        .thread_name(|ix| format!("solShredder{:02}", ix))
+        .thread_name(|ix| format!("solShredder{ix:02}"))
         .build()
         .unwrap();
 }

@@ -41,6 +41,17 @@ macro_rules! u64_align {
     };
 }
 
+/// size of the fixed sized fields in an append vec
+/// we need to add data len and align it to get the actual stored size
+pub const STORE_META_OVERHEAD: usize = 136;
+
+/// Returns the size this item will take to store plus possible alignment padding bytes before the next entry.
+/// fixed-size portion of per-account data written
+/// plus 'data_len', aligned to next boundary
+pub fn aligned_stored_size(data_len: usize) -> usize {
+    u64_align!(STORE_META_OVERHEAD + data_len)
+}
+
 pub const MAXIMUM_APPEND_VEC_FILE_SIZE: u64 = 16 * 1024 * 1024 * 1024; // 16 GiB
 
 pub type StoredMetaWriteVersion = u64;
@@ -139,7 +150,10 @@ impl<'a: 'b, 'b, T: ReadableAccount + Sync + 'b, U: StorableAccounts<'a, T>, V: 
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct StoredMeta {
     /// global write version
-    pub write_version: StoredMetaWriteVersion,
+    /// This will be made completely obsolete such that we stop storing it.
+    /// We will not support multiple append vecs per slot anymore, so this concept is no longer necessary.
+    /// Order of stores of an account to an append vec will determine 'latest' account data per pubkey.
+    pub write_version_obsolete: StoredMetaWriteVersion,
     /// key for the account
     pub pubkey: Pubkey,
     pub data_len: u64,
@@ -333,7 +347,7 @@ impl AppendVec {
         // expensive.
         data.seek(SeekFrom::Start((size - 1) as u64)).unwrap();
         data.write_all(&[0]).unwrap();
-        data.seek(SeekFrom::Start(0)).unwrap();
+        data.rewind().unwrap();
         data.flush().unwrap();
 
         //UNSAFE: Required to create a Mmap
@@ -368,7 +382,7 @@ impl AppendVec {
         if file_size == 0 {
             Err(std::io::Error::new(
                 std::io::ErrorKind::Other,
-                format!("too small file size {} for AppendVec", file_size),
+                format!("too small file size {file_size} for AppendVec"),
             ))
         } else if usize::try_from(MAXIMUM_APPEND_VEC_FILE_SIZE)
             .map(|max| file_size > max)
@@ -376,12 +390,12 @@ impl AppendVec {
         {
             Err(std::io::Error::new(
                 std::io::ErrorKind::Other,
-                format!("too large file size {} for AppendVec", file_size),
+                format!("too large file size {file_size} for AppendVec"),
             ))
         } else if current_len > file_size {
             Err(std::io::Error::new(
                 std::io::ErrorKind::Other,
-                format!("current_len is larger than file size ({})", file_size),
+                format!("current_len is larger than file size ({file_size})"),
             ))
         } else {
             Ok(())
@@ -417,7 +431,7 @@ impl AppendVec {
     }
 
     pub fn file_name(slot: Slot, id: impl std::fmt::Display) -> String {
-        format!("{}.{}", slot, id)
+        format!("{slot}.{id}")
     }
 
     pub fn new_from_file<P: AsRef<Path>>(path: P, current_len: usize) -> io::Result<(Self, usize)> {
@@ -645,7 +659,7 @@ impl AppendVec {
                 data_len: account
                     .map(|account| account.data().len())
                     .unwrap_or_default() as u64,
-                write_version: accounts.write_version(i),
+                write_version_obsolete: accounts.write_version(i),
             };
             let meta_ptr = &stored_meta as *const StoredMeta;
             let account_meta_ptr = &account_meta as *const AccountMeta;
@@ -705,7 +719,7 @@ pub mod tests {
                 StorableAccountsWithHashesAndWriteVersions::new_with_hashes_and_write_versions(
                     &account_data,
                     vec![&hash],
-                    vec![data.0.write_version],
+                    vec![data.0.write_version_obsolete],
                 );
 
             self.append_accounts(&storable_accounts, 0)
@@ -737,6 +751,16 @@ pub mod tests {
             }
         }
     }
+
+    static_assertions::const_assert_eq!(
+        STORE_META_OVERHEAD,
+        std::mem::size_of::<StoredMeta>()
+            + std::mem::size_of::<AccountMeta>()
+            + std::mem::size_of::<Hash>()
+    );
+
+    // Hash is [u8; 32], which has no alignment
+    static_assertions::assert_eq_align!(u64, StoredMeta, AccountMeta);
 
     #[test]
     #[should_panic(expected = "assertion failed: accounts.has_hash_and_write_version()")]
@@ -999,10 +1023,9 @@ pub mod tests {
         assert_eq!(av.capacity(), sz64);
         assert_eq!(av.remaining_bytes(), sz64);
         let account = create_test_account(0);
-        let acct_size = 136;
         av.append_account_test(&account).unwrap();
         assert_eq!(av.capacity(), sz64);
-        assert_eq!(av.remaining_bytes(), sz64 - acct_size);
+        assert_eq!(av.remaining_bytes(), sz64 - (STORE_META_OVERHEAD as u64));
     }
 
     #[test]

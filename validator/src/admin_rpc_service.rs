@@ -17,7 +17,7 @@ use {
         signature::{read_keypair_file, Keypair, Signer},
     },
     std::{
-        collections::HashMap,
+        collections::{HashMap, HashSet},
         error,
         fmt::{self, Display},
         net::SocketAddr,
@@ -33,6 +33,7 @@ pub struct AdminRpcRequestMetadataPostInit {
     pub cluster_info: Arc<ClusterInfo>,
     pub bank_forks: Arc<RwLock<BankForks>>,
     pub vote_account: Pubkey,
+    pub repair_whitelist: Arc<RwLock<HashSet<Pubkey>>>,
 }
 
 #[derive(Clone)]
@@ -78,6 +79,11 @@ pub struct AdminRpcContactInfo {
     pub serve_repair: SocketAddr,
     pub last_updated_timestamp: u64,
     pub shred_version: u16,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+pub struct AdminRpcRepairWhitelist {
+    pub whitelist: Vec<Pubkey>,
 }
 
 impl From<ContactInfo> for AdminRpcContactInfo {
@@ -133,6 +139,12 @@ impl Display for AdminRpcContactInfo {
     }
 }
 
+impl Display for AdminRpcRepairWhitelist {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        writeln!(f, "Repair whitelist: {:?}", &self.whitelist)
+    }
+}
+
 #[rpc]
 pub trait AdminRpc {
     type Metadata;
@@ -183,6 +195,12 @@ pub trait AdminRpc {
 
     #[rpc(meta, name = "contactInfo")]
     fn contact_info(&self, meta: Self::Metadata) -> Result<AdminRpcContactInfo>;
+
+    #[rpc(meta, name = "repairWhitelist")]
+    fn repair_whitelist(&self, meta: Self::Metadata) -> Result<AdminRpcRepairWhitelist>;
+
+    #[rpc(meta, name = "setRepairWhitelist")]
+    fn set_repair_whitelist(&self, meta: Self::Metadata, whitelist: Vec<Pubkey>) -> Result<()>;
 }
 
 pub struct AdminRpcImpl;
@@ -239,7 +257,7 @@ impl AdminRpc for AdminRpcImpl {
         debug!("add_authorized_voter request received");
 
         let authorized_voter = read_keypair_file(keypair_file)
-            .map_err(|err| jsonrpc_core::error::Error::invalid_params(format!("{}", err)))?;
+            .map_err(|err| jsonrpc_core::error::Error::invalid_params(format!("{err}")))?;
 
         AdminRpcImpl::add_authorized_voter_keypair(meta, authorized_voter)
     }
@@ -253,8 +271,7 @@ impl AdminRpc for AdminRpcImpl {
 
         let authorized_voter = Keypair::from_bytes(&keypair).map_err(|err| {
             jsonrpc_core::error::Error::invalid_params(format!(
-                "Failed to read authorized voter keypair from provided byte array: {}",
-                err
+                "Failed to read authorized voter keypair from provided byte array: {err}"
             ))
         })?;
 
@@ -277,8 +294,7 @@ impl AdminRpc for AdminRpcImpl {
 
         let identity_keypair = read_keypair_file(&keypair_file).map_err(|err| {
             jsonrpc_core::error::Error::invalid_params(format!(
-                "Failed to read identity keypair from {}: {}",
-                keypair_file, err
+                "Failed to read identity keypair from {keypair_file}: {err}"
             ))
         })?;
 
@@ -295,8 +311,7 @@ impl AdminRpc for AdminRpcImpl {
 
         let identity_keypair = Keypair::from_bytes(&identity_keypair).map_err(|err| {
             jsonrpc_core::error::Error::invalid_params(format!(
-                "Failed to read identity keypair from provided byte array: {}",
-                err
+                "Failed to read identity keypair from provided byte array: {err}"
             ))
         })?;
 
@@ -323,6 +338,35 @@ impl AdminRpc for AdminRpcImpl {
 
     fn contact_info(&self, meta: Self::Metadata) -> Result<AdminRpcContactInfo> {
         meta.with_post_init(|post_init| Ok(post_init.cluster_info.my_contact_info().into()))
+    }
+
+    fn repair_whitelist(&self, meta: Self::Metadata) -> Result<AdminRpcRepairWhitelist> {
+        debug!("repair_whitelist request received");
+
+        meta.with_post_init(|post_init| {
+            let whitelist: Vec<_> = post_init
+                .repair_whitelist
+                .read()
+                .unwrap()
+                .iter()
+                .copied()
+                .collect();
+            Ok(AdminRpcRepairWhitelist { whitelist })
+        })
+    }
+
+    fn set_repair_whitelist(&self, meta: Self::Metadata, whitelist: Vec<Pubkey>) -> Result<()> {
+        debug!("set_repair_whitelist request received");
+
+        let whitelist: HashSet<Pubkey> = whitelist.into_iter().collect();
+        meta.with_post_init(|post_init| {
+            *post_init.repair_whitelist.write().unwrap() = whitelist;
+            warn!(
+                "Repair whitelist set to {:?}",
+                &post_init.repair_whitelist.read().unwrap()
+            );
+            Ok(())
+        })
     }
 }
 
@@ -482,10 +526,6 @@ pub fn load_staked_nodes_overrides(
         let file = std::fs::File::open(path)?;
         Ok(serde_yaml::from_reader(file)?)
     } else {
-        Err(format!(
-            "Staked nodes overrides provided '{}' a non-existing file path.",
-            path
-        )
-        .into())
+        Err(format!("Staked nodes overrides provided '{path}' a non-existing file path.").into())
     }
 }
