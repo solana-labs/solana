@@ -248,10 +248,10 @@ impl RepairWeight {
         repairs
     }
 
-    /// Orphan `slot` and descendants in repair weighting
-    /// Orphaned slots should be removed from `unrooted_slots` as on proper repair these slots might
+    /// Split `slot` and descendants into an orphan tree in repair weighting
+    /// These orphaned slots should be removed from `unrooted_slots` as on proper repair these slots might
     /// now be part of the rooted path
-    pub fn orphan_slot(&mut self, slot: Slot) {
+    pub fn split_off(&mut self, slot: Slot) {
         if slot == self.root {
             error!("Trying to orphan root of repair tree {}", slot);
             return;
@@ -1440,9 +1440,9 @@ mod test {
 
         // Simulate dump from replay
         blockstore.clear_unconfirmed_slot(3);
-        repair_weight.orphan_slot(3);
+        repair_weight.split_off(3);
         blockstore.clear_unconfirmed_slot(10);
-        repair_weight.orphan_slot(10);
+        repair_weight.split_off(10);
 
         // Verify orphans
         let mut orphans = repair_weight.trees.keys().copied().collect_vec();

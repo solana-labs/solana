@@ -87,6 +87,7 @@ impl UpdateOperation {
     }
 }
 
+#[derive(Clone)]
 struct ForkInfo {
     // Amount of stake that has voted for exactly this slot
     stake_voted_at: ForkWeight,
@@ -420,22 +421,18 @@ impl HeaviestSubtreeForkChoice {
     /// Returns the subtree originating from `slot_hash_key`
     pub fn split_off(&mut self, slot_hash_key: &SlotHashKey) -> Self {
         assert_ne!(self.tree_root, *slot_hash_key);
-        let mut tree = HeaviestSubtreeForkChoice::new(*slot_hash_key);
-        let (parent, stake_voted_subtree, stake_voted_at) = {
-            let mut node_to_dump = self
+        let split_tree_root = {
+            let mut node_to_split_at = self
                 .fork_infos
                 .get_mut(slot_hash_key)
                 .expect("Slot hash key must exist in tree");
+            let split_tree_fork_info = node_to_split_at.clone();
             // Remove stake to be aggregated up the tree
-            let stake_voted_subtree = std::mem::take(&mut node_to_dump.stake_voted_subtree);
-            let stake_voted_at = std::mem::take(&mut node_to_dump.stake_voted_at);
+            node_to_split_at.stake_voted_subtree = 0;
+            node_to_split_at.stake_voted_at = 0;
             // Mark this node as invalid so that it cannot be chosen as best child
-            node_to_dump.latest_invalid_ancestor = Some(slot_hash_key.0);
-            (
-                node_to_dump.parent.expect("Cannot split off from root"),
-                stake_voted_subtree,
-                stake_voted_at,
-            )
+            node_to_split_at.latest_invalid_ancestor = Some(slot_hash_key.0);
+            split_tree_fork_info
         };
 
         let mut update_operations: UpdateOperations = BTreeMap::new();
@@ -443,7 +440,8 @@ impl HeaviestSubtreeForkChoice {
         self.insert_aggregate_operations(&mut update_operations, *slot_hash_key);
         self.process_update_operations(update_operations);
 
-        // Remove node + all children
+        // Remove node + all children and add to new tree
+        let mut split_tree_fork_infos = HashMap::new();
         let mut to_visit = vec![*slot_hash_key];
 
         while !to_visit.is_empty() {
@@ -454,26 +452,33 @@ impl HeaviestSubtreeForkChoice {
                 .expect("Node must exist in tree");
 
             to_visit.extend(current_fork_info.children.iter());
-            tree.fork_infos.insert(current_node, current_fork_info);
+            split_tree_fork_infos.insert(current_node, current_fork_info);
         }
 
         // Remove link from parent
         let parent_fork_info = self
             .fork_infos
-            .get_mut(&parent)
+            .get_mut(&split_tree_root.parent.expect("Cannot split off from root"))
             .expect("Parent must exist in fork infos");
         parent_fork_info.children.remove(slot_hash_key);
 
-        // Reset fork info
-        let root = tree
-            .fork_infos
-            .get_mut(slot_hash_key)
-            .expect("Slot hash key is the root must exist");
-        root.stake_voted_subtree = stake_voted_subtree;
-        root.stake_voted_at = stake_voted_at;
-        root.latest_invalid_ancestor = None;
+        // Update the root of the new tree with the proper info, now that we have finished
+        // aggregating
+        split_tree_fork_infos.insert(*slot_hash_key, split_tree_root);
 
-        tree
+        // Split off the relevant votes to the new tree
+        let mut split_tree_latest_votes = self.latest_votes.clone();
+        split_tree_latest_votes.retain(|_, node| split_tree_fork_infos.contains_key(node));
+        self.latest_votes
+            .retain(|_, node| self.fork_infos.contains_key(node));
+
+        // Create a new tree from the split
+        HeaviestSubtreeForkChoice {
+            tree_root: *slot_hash_key,
+            fork_infos: split_tree_fork_infos,
+            latest_votes: split_tree_latest_votes,
+            last_root_time: Instant::now(),
+        }
     }
 
     #[cfg(test)]

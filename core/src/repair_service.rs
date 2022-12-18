@@ -304,7 +304,7 @@ impl RepairService {
                             // `slot` is dumped in blockstore wanting to be repaired, we orphan it along with
                             // descendants while copying the weighting heurstic so that it can be
                             // repaired with correct ancestor information
-                            repair_weight.orphan_slot(slot);
+                            repair_weight.split_off(slot);
                         }
                     });
                 dump_slots_elapsed.stop();
