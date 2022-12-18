@@ -16,11 +16,14 @@ use {
     },
     solana_runtime::{
         accounts_background_service::{AbsRequestSender, SnapshotRequestType},
-        bank::Bank,
+        bank::{Bank, StakeVoteAccountRewardResult},
         bank_forks::BankForks,
         builtins::Builtin,
         commitment::BlockCommitmentCache,
         epoch_accounts_hash::EpochAccountsHash,
+        epoch_reward_calc_service::{
+            EpochRewardCalcRequestHandler, EpochRewardCalculator, EpochRewardResult,
+        },
         genesis_utils::{create_genesis_config_with_leader_ex, GenesisConfigInfo},
         runtime_config::RuntimeConfig,
     },
@@ -1154,32 +1157,49 @@ impl ProgramTestContext {
                     )
             });
 
-        // Simulate reward calculation
-        let (epoch_reward_calc_sender, epoch_reward_calc_receiver) = crossbeam_channel::unbounded();
-        let results = Arc::new(RwLock::new(EpochRewardResult::new()));
-
-        {
-            let root_bank = bank_forks.root_bank();
-            root_bank.set_epoch_reward_calculator(EpochRewardCalculator::<
-                StakeVoteAccountRewardResult,
-            >::new(
-                epoch_reward_calc_sender, results.clone()
-            ));
-        }
-
-        let epoch_reward_calc_request_handler =
-            EpochRewardCalcRequestHandler::new(epoch_reward_calc_receiver, epoch_rewards_results);
-
-        epoch_reward_calc_receiver.try_iter().for_each(|request| {
-            epoch_reward_calc_request_handler.process(request);
-        });
-
         // warp_bank is frozen so go forward to get unfrozen bank at warp_slot
         bank_forks.insert(Bank::new_from_parent(
             &warp_bank,
             &Pubkey::default(),
             warp_slot,
         ));
+
+        // handle reward calculation
+        let (epoch_reward_calc_sender, epoch_reward_calc_receiver) = crossbeam_channel::unbounded();
+        let epoch_rewards_results = Arc::new(RwLock::new(EpochRewardResult::new()));
+
+        {
+            let root_bank = bank_forks.root_bank();
+            root_bank.set_epoch_reward_calculator(EpochRewardCalculator::<
+                StakeVoteAccountRewardResult,
+            >::new(
+                epoch_reward_calc_sender,
+                epoch_rewards_results.clone(),
+            ));
+        }
+
+        let epoch_reward_calc_request_handler = EpochRewardCalcRequestHandler::new(
+            epoch_reward_calc_receiver.clone(),
+            epoch_rewards_results,
+        );
+
+        let bank = bank_forks.working_bank();
+        if bank.start_epoch_reward_calc() {
+            let calc = bank.get_epoch_reward_calculator();
+            let inner = calc.read().unwrap();
+            if let Some(calc) = &*inner {
+                calc.send(bank.epoch(), bank.clone());
+                info!(
+                    "send reward calc request: epoch={} slot={}",
+                    bank.epoch(),
+                    bank.slot()
+                );
+            }
+        }
+
+        epoch_reward_calc_receiver.try_iter().for_each(|request| {
+            epoch_reward_calc_request_handler.process(request);
+        });
 
         // Update block commitment cache, otherwise banks server will poll at
         // the wrong slot
