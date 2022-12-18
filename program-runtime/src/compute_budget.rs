@@ -136,6 +136,8 @@ pub struct ComputeBudget {
     /// + alt_bn128_pairing_one_pair_cost_other * (num_elems - 1)
     pub alt_bn128_pairing_one_pair_cost_first: u64,
     pub alt_bn128_pairing_one_pair_cost_other: u64,
+    /// Number of compute units consumed to calculate a Poseidon hash
+    pub poseidon_cost: u64,
 }
 
 impl Default for ComputeBudget {
@@ -184,6 +186,7 @@ impl ComputeBudget {
             alt_bn128_multiplication_cost: 3_840,
             alt_bn128_pairing_one_pair_cost_first: 36_364,
             alt_bn128_pairing_one_pair_cost_other: 12_121,
+            poseidon_cost: 666,
         }
     }
 

@@ -36,7 +36,7 @@ use {
             self, blake3_syscall_enabled, check_syscall_outputs_do_not_overlap,
             curve25519_syscall_enabled, disable_cpi_setting_executable_and_rent_epoch,
             disable_fees_sysvar, enable_alt_bn128_syscall,
-            enable_early_verification_of_account_modifications,
+            enable_early_verification_of_account_modifications, enable_poseidon_syscall,
             error_on_syscall_bpf_function_hash_collisions, libsecp256k1_0_5_upgrade_enabled,
             limit_secp256k1_recovery_id, reject_callx_r10,
             stop_sibling_instruction_search_at_parent,
@@ -47,6 +47,7 @@ use {
             TRANSACTION_LEVEL_STACK_HEIGHT,
         },
         keccak, native_loader,
+        poseidon::prelude::{poseidon_hash, POSEIDON_HASH_BYTES},
         precompiles::is_precompile,
         program::MAX_RETURN_DATA,
         program_stubs::is_nonoverlapping,
@@ -188,6 +189,7 @@ pub fn create_loader<'a>(
     let enable_alt_bn128_syscall = feature_set.is_active(&enable_alt_bn128_syscall::id());
     let blake3_syscall_enabled = feature_set.is_active(&blake3_syscall_enabled::id());
     let curve25519_syscall_enabled = feature_set.is_active(&curve25519_syscall_enabled::id());
+    let enable_poseidon_syscall = feature_set.is_active(&enable_poseidon_syscall::id());
     let disable_fees_sysvar = feature_set.is_active(&disable_fees_sysvar::id());
     let is_abi_v2 = false;
 
@@ -305,6 +307,14 @@ pub fn create_loader<'a>(
             enable_alt_bn128_syscall,
             "sol_alt_bn128_group_op",
             SyscallAltBn128::call,
+        )?;
+
+        // Poseidon
+        register_feature_gated_function!(
+            result,
+            enable_poseidon_syscall,
+            "sol_poseidon",
+            SyscallPoseidon::call,
         )?;
     }
 
@@ -1714,6 +1724,48 @@ declare_syscall!(
         }
 
         call_result.copy_from_slice(&result_point);
+        Ok(SUCCESS)
+    }
+);
+
+declare_syscall!(
+    // Poseidon
+    SyscallPoseidon,
+    fn inner_call(
+        invoke_context: &mut InvokeContext,
+        vals_addr: u64,
+        vals_len: u64,
+        result_addr: u64,
+        _arg4: u64,
+        _arg5: u64,
+        memory_mapping: &mut MemoryMapping,
+    ) -> Result<u64, EbpfError> {
+        let budget = invoke_context.get_compute_budget();
+        consume_compute_meter(invoke_context, budget.poseidon_cost)?;
+
+        let input = translate_slice::<&[u8]>(
+            memory_mapping,
+            vals_addr,
+            vals_len,
+            invoke_context.get_check_aligned(),
+            invoke_context.get_check_size(),
+        )?;
+
+        let hash_result = translate_slice_mut::<u8>(
+            memory_mapping,
+            result_addr,
+            POSEIDON_HASH_BYTES as u64,
+            invoke_context.get_check_aligned(),
+            invoke_context.get_check_size(),
+        )?;
+        let hash = match poseidon_hash(input) {
+            Ok(hash) => hash,
+            Err(e) => {
+                return Ok(e.into());
+            }
+        };
+        hash_result.copy_from_slice(&hash.to_bytes());
+
         Ok(SUCCESS)
     }
 );

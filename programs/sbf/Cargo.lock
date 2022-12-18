@@ -2411,6 +2411,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "light-poseidon"
+version = "0.0.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "926696e3091580355cadb023fffd24999ccce2ed88302d01b411bf42023b6b7b"
+dependencies = [
+ "ark-bn254",
+ "ark-ff",
+ "thiserror",
+]
+
+[[package]]
 name = "linux-raw-sys"
 version = "0.0.46"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4983,6 +4994,7 @@ dependencies = [
  "lazy_static",
  "libc",
  "libsecp256k1 0.6.0",
+ "light-poseidon",
  "log",
  "memoffset",
  "num-derive",
@@ -5554,6 +5566,13 @@ dependencies = [
 
 [[package]]
 name = "solana-sbf-rust-param-passing-dep"
+version = "1.15.0"
+dependencies = [
+ "solana-program 1.15.0",
+]
+
+[[package]]
+name = "solana-sbf-rust-poseidon"
 version = "1.15.0"
 dependencies = [
  "solana-program 1.15.0",
