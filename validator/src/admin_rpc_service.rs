@@ -48,7 +48,6 @@ pub struct AdminRpcRequestMetadata {
     pub tower_storage: Arc<dyn TowerStorage>,
     pub staked_nodes_overrides: Arc<RwLock<HashMap<Pubkey, u64>>>,
     pub post_init: Arc<RwLock<Option<AdminRpcRequestMetadataPostInit>>>,
-    pub full_api: bool,
 }
 impl Metadata for AdminRpcRequestMetadata {}
 
@@ -64,10 +63,6 @@ impl AdminRpcRequestMetadata {
                 "Retry once validator start up is complete",
             ))
         }
-    }
-
-    fn supports_full_api(&self) -> bool {
-        self.full_api
     }
 }
 
@@ -388,8 +383,6 @@ impl AdminRpc for AdminRpcImpl {
         meta: Self::Metadata,
         pubkey_str: String,
     ) -> Result<HashMap<RpcAccountIndex, usize>> {
-        AdminRpcImpl::supports_full_api(&meta)?;
-
         debug!(
             "get_secondary_index_key_size rpc request received: {:?}",
             pubkey_str
@@ -482,16 +475,6 @@ impl AdminRpcImpl {
             warn!("Identity set to {}", post_init.cluster_info.id());
             Ok(())
         })
-    }
-
-    fn supports_full_api(meta: &AdminRpcRequestMetadata) -> Result<()> {
-        if meta.supports_full_api() {
-            Ok(())
-        } else {
-            Err(jsonrpc_core::error::Error::invalid_params(
-                "RPC endpoint not supported by nodes without `--full-rpc-api`",
-            ))
-        }
     }
 }
 
@@ -690,7 +673,6 @@ mod tests {
                     repair_whitelist,
                 }))),
                 staked_nodes_overrides: Arc::new(RwLock::new(HashMap::new())),
-                full_api: true,
             };
             let mut io = MetaIoHandler::default();
             io.extend_with(AdminRpcImpl.to_delegate());
