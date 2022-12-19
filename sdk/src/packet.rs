@@ -40,6 +40,31 @@ pub struct Meta {
     pub sender_stake: u64,
 }
 
+// serde_as is used as a work around because array isn't supported by serde
+// (and serde_bytes).
+//
+// the root cause is of a historical special handling for [T; 0] in rust's
+// `Default` and supposedly mirrored serde's `Serialize` (macro) impls,
+// pre-dating stabilized const generics, meaning it'll take long time...:
+//   https://github.com/rust-lang/rust/issues/61415
+//   https://github.com/rust-lang/rust/issues/88744#issuecomment-1138678928
+//
+// Due to the nature of the root cause, the current situation is complicated.
+// All in all, the serde_as solution is chosen for good perf and low maintenance
+// need at the cost of another crate dependency..
+//
+// For details, please refer to the below various links...
+//
+// relevant merged/published pr for this serde_as functionality used here:
+//   https://github.com/jonasbb/serde_with/pull/277
+// open pr at serde_bytes:
+//   https://github.com/serde-rs/bytes/pull/28
+// open issue at serde:
+//   https://github.com/serde-rs/serde/issues/1937
+// closed pr at serde (due to the above mentioned [N; 0] issue):
+//   https://github.com/serde-rs/serde/pull/1860
+// ryoqun's dirty experiments:
+//   https://github.com/ryoqun/serde-array-comparisons
 #[serde_as]
 #[derive(Clone, Eq, Serialize, Deserialize)]
 #[repr(C)]
