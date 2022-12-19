@@ -165,7 +165,9 @@ impl RentCollector {
         filler_account_suffix: Option<&Pubkey>,
         set_exempt_rent_epoch_max: bool,
     ) -> RentResult {
-        if account.rent_epoch() > self.epoch {
+        if account.rent_epoch() == RENT_EXEMPT_RENT_EPOCH {
+            return RentResult::Exempt;
+        } else if account.rent_epoch() > self.epoch {
             // potentially rent paying account
             // Maybe collect rent later, leave account alone for now.
             return RentResult::NoRentCollectionNow;
