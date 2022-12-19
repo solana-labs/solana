@@ -140,7 +140,7 @@ impl<'a> Write for GroupedWriter<'a> {
     }
 }
 
-pub fn sender_overhead_minimized_receiver_loop<T, E, const SLEEP_MS: u64>(
+pub fn receiving_loop_with_minimized_sender_overhead<T, E, const SLEEP_MS: u64>(
     exit: Arc<AtomicBool>,
     receiver: Receiver<T>,
     mut on_recv: impl FnMut(T) -> Result<(), E>,
@@ -321,7 +321,7 @@ impl BankingTracer {
     ) -> Result<JoinHandle<TracerThreadResult>, TraceError> {
         let thread = thread::Builder::new().name("solBanknTracer".into()).spawn(
             move || -> TracerThreadResult {
-                sender_overhead_minimized_receiver_loop::<
+                receiving_loop_with_minimized_sender_overhead::<
                     _,
                     TraceError,
                     TRACE_FILE_WRITE_INTERVAL_MS,
@@ -427,7 +427,7 @@ mod tests {
         let (non_vote_sender, non_vote_receiver) = tracer.create_channel_non_vote();
 
         let dummy_main_thread = thread::spawn(move || {
-            sender_overhead_minimized_receiver_loop::<_, TraceError, 0>(
+            receiving_loop_with_minimized_sender_overhead::<_, TraceError, 0>(
                 exit,
                 non_vote_receiver,
                 |_packet_batch| Ok(()),
@@ -452,7 +452,7 @@ mod tests {
         let exit_for_dummy_thread = Arc::<AtomicBool>::default();
         let exit_for_dummy_thread2 = exit_for_dummy_thread.clone();
         let dummy_main_thread = thread::spawn(move || {
-            sender_overhead_minimized_receiver_loop::<_, TraceError, 0>(
+            receiving_loop_with_minimized_sender_overhead::<_, TraceError, 0>(
                 exit_for_dummy_thread,
                 non_vote_receiver,
                 |_packet_batch| Ok(()),
@@ -488,7 +488,7 @@ mod tests {
         let (non_vote_sender, non_vote_receiver) = tracer.create_channel_non_vote();
 
         let dummy_main_thread = thread::spawn(move || {
-            sender_overhead_minimized_receiver_loop::<_, TraceError, 0>(
+            receiving_loop_with_minimized_sender_overhead::<_, TraceError, 0>(
                 exit,
                 non_vote_receiver,
                 |_packet_batch| Ok(()),
