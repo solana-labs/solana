@@ -6338,6 +6338,7 @@ dependencies = [
  "solana-frozen-abi-macro 1.15.0",
  "solana-logger 1.15.0",
  "solana-measure",
+ "solana-merkle-tree",
  "solana-metrics",
  "solana-perf",
  "solana-program-runtime",

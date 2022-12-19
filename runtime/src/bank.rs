@@ -88,6 +88,7 @@ use {
         ThreadPool, ThreadPoolBuilder,
     },
     solana_measure::{measure, measure::Measure},
+    solana_merkle_tree::merkle_tree::MerkleTree,
     solana_metrics::{inc_new_counter_debug, inc_new_counter_info},
     solana_perf::perf_libs,
     solana_program_runtime::{
@@ -1241,7 +1242,7 @@ pub struct CommitTransactionCounts {
     pub signature_count: u64,
 }
 
-#[derive(AbiExample, Debug)]
+#[derive(AbiExample, Debug, Serialize, Deserialize)]
 pub struct StakeReward {
     stake_pubkey: Pubkey,
     stake_reward_info: RewardInfo,
@@ -1290,7 +1291,7 @@ impl StakeReward {
     }
 }
 
-#[derive(AbiExample, Debug)]
+#[derive(AbiExample, Debug, Serialize, Deserialize)]
 pub struct VoteReward {
     pub vote_pubkey: Pubkey,
     pub vote_reward_info: Option<RewardInfo>,
@@ -3622,6 +3623,36 @@ impl Bank {
                         .map(|r| r.reward() as u128)
                         .sum::<u128>();
                     return Some((total_stake_rewards, total_vote_rewards));
+                }
+            }
+        }
+        None
+    }
+
+    pub fn merkle_tree_from_calculated_rewards(&self) -> Option<(MerkleTree, MerkleTree)> {
+        let calc = self.epoch_reward_calculator.read();
+        let inner = calc.unwrap();
+        if let Some(calc) = &*inner {
+            if let Some((start_slot, _)) = self.epoch_reward_calc_start {
+                let result = calc.get(start_slot);
+                if let Some(calc_result) = result {
+                    let stake_rewards = &calc_result.0;
+                    let vote_rewards = &calc_result.1;
+
+                    return Some((
+                        MerkleTree::new(
+                            &stake_rewards
+                                .par_iter()
+                                .map(|r| bincode::serialize(r).unwrap())
+                                .collect::<Vec<Vec<u8>>>(),
+                        ),
+                        MerkleTree::new(
+                            &vote_rewards
+                                .par_iter()
+                                .map(|r| bincode::serialize(r).unwrap())
+                                .collect::<Vec<Vec<u8>>>(),
+                        ),
+                    ));
                 }
             }
         }
