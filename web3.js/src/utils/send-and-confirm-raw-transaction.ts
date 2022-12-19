@@ -4,7 +4,7 @@ import {
   BlockheightBasedTransactionConfirmationStrategy,
   Connection,
   DurableNonceTransactionConfirmationStrategy,
-} from '../connection';
+TransactionConfirmationStrategy} from '../connection';
 import type {TransactionSignature} from '../transaction';
 import type {ConfirmOptions} from '../connection';
 
@@ -42,16 +42,12 @@ export async function sendAndConfirmRawTransaction(
   connection: Connection,
   rawTransaction: Buffer,
   confirmationStrategyOrConfirmOptions:
-    | BlockheightBasedTransactionConfirmationStrategy
-    | DurableNonceTransactionConfirmationStrategy
+    | TransactionConfirmationStrategy
     | ConfirmOptions
     | undefined,
   maybeConfirmOptions?: ConfirmOptions,
 ): Promise<TransactionSignature> {
-  let confirmationStrategy:
-    | BlockheightBasedTransactionConfirmationStrategy
-    | DurableNonceTransactionConfirmationStrategy
-    | undefined;
+  let confirmationStrategy: TransactionConfirmationStrategy | undefined;
   let options: ConfirmOptions | undefined;
   if (
     confirmationStrategyOrConfirmOptions &&

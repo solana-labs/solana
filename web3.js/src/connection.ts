@@ -347,6 +347,13 @@ export type BaseTransactionConfirmationStrategy = Readonly<{
   signature: TransactionSignature;
 }>;
 
+/**
+ * This type represents all transaction confirmation strategies
+ */
+export type TransactionConfirmationStrategy =
+  | BlockheightBasedTransactionConfirmationStrategy
+  | DurableNonceTransactionConfirmationStrategy;
+
 /* @internal */
 function assertEndpointUrl(putativeUrl: string) {
   if (/^https?:/.test(putativeUrl) === false) {
@@ -3597,13 +3604,11 @@ export class Connection {
   }
 
   confirmTransaction(
-    strategy:
-      | BlockheightBasedTransactionConfirmationStrategy
-      | DurableNonceTransactionConfirmationStrategy,
+    strategy: TransactionConfirmationStrategy,
     commitment?: Commitment,
   ): Promise<RpcResponseAndContext<SignatureResult>>;
 
-  /** @deprecated Instead, call `confirmTransaction` and pass in `BlockheightBasedTransactionConfirmationStrategy` or `DurableNonceTransactionConfirmationStrategy`  */
+  /** @deprecated Instead, call `confirmTransaction` and pass in {@link TransactionConfirmationStrategy}  @ */
   // eslint-disable-next-line no-dupe-class-members
   confirmTransaction(
     strategy: TransactionSignature,
@@ -3612,10 +3617,7 @@ export class Connection {
 
   // eslint-disable-next-line no-dupe-class-members
   async confirmTransaction(
-    strategy:
-      | BlockheightBasedTransactionConfirmationStrategy
-      | DurableNonceTransactionConfirmationStrategy
-      | TransactionSignature,
+    strategy: TransactionConfirmationStrategy | TransactionSignature,
     commitment?: Commitment,
   ): Promise<RpcResponseAndContext<SignatureResult>> {
     let rawSignature: string;
@@ -3623,9 +3625,8 @@ export class Connection {
     if (typeof strategy == 'string') {
       rawSignature = strategy;
     } else {
-      const config = strategy as
-        | BlockheightBasedTransactionConfirmationStrategy
-        | DurableNonceTransactionConfirmationStrategy;
+      const config = strategy as TransactionConfirmationStrategy;
+
       if (config.abortSignal?.aborted) {
         return Promise.reject(config.abortSignal.reason);
       }
