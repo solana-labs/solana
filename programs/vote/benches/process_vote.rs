@@ -65,7 +65,8 @@ fn create_accounts() -> (
             data: vote_account_data,
             owner: solana_vote_program::id(),
             executable: false,
-            rent_epoch: 0,
+            has_application_fees: false,
+            rent_epoch_or_application_fees: 0,
         }
     };
 

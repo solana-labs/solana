@@ -549,7 +549,8 @@ impl ProgramTest {
                 })),
                 owner,
                 executable: false,
-                rent_epoch: 0,
+                has_application_fees: false,
+                rent_epoch_or_application_fees: 0,
             },
         );
     }
@@ -571,7 +572,8 @@ impl ProgramTest {
                     .unwrap_or_else(|err| panic!("Failed to base64 decode: {err}")),
                 owner,
                 executable: false,
-                rent_epoch: 0,
+                has_application_fees: false,
+                rent_epoch_or_application_fees: 0,
             },
         );
     }
@@ -620,7 +622,8 @@ impl ProgramTest {
                     data,
                     owner: solana_sdk::bpf_loader::id(),
                     executable: true,
-                    rent_epoch: 0,
+                    has_application_fees: false,
+                    rent_epoch_or_application_fees: 0,
                 },
             );
         };

@@ -4923,6 +4923,8 @@ pub mod tests {
                     solana_address_lookup_table_program::id(),
                     false,
                     0,
+                    false,
+                    0,
                 )
             };
             bank.store_account(&address_table_pubkey, &address_table_account);
@@ -5499,7 +5501,8 @@ pub mod tests {
         let pubkey = Pubkey::new_unique();
         let address = pubkey.to_string();
         let data = vec![1, 2, 3, 4, 5];
-        let account = AccountSharedData::create(42, data.clone(), Pubkey::default(), false, 0);
+        let account =
+            AccountSharedData::create(42, data.clone(), Pubkey::default(), false, 0, false, 0);
         bank.store_account(&pubkey, &account);
 
         let request = create_test_request(
@@ -5552,7 +5555,8 @@ pub mod tests {
         let pubkey = Pubkey::new_unique();
         let address = pubkey.to_string();
         let data = vec![1, 2, 3, 4, 5];
-        let account = AccountSharedData::create(42, data.clone(), Pubkey::default(), false, 0);
+        let account =
+            AccountSharedData::create(42, data.clone(), Pubkey::default(), false, 0, false, 0);
         bank.store_account(&pubkey, &account);
 
         // Test 3 accounts, one empty, one non-existent, and one with data

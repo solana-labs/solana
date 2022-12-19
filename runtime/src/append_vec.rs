@@ -11,7 +11,7 @@ use {
     serde::{Deserialize, Serialize},
     solana_sdk::{
         account::{Account, AccountSharedData, ReadableAccount},
-        clock::{Epoch, Slot},
+        clock::Slot,
         hash::Hash,
         pubkey::Pubkey,
     },
@@ -168,6 +168,9 @@ pub struct AccountMeta {
     pub owner: Pubkey,
     /// this account's data contains a loaded program (and is now read-only)
     pub executable: bool,
+    /// the epoch at which this account will next owe rent or application fees for the account
+    /// switched by the boolean above
+    pub application_fees: u64,
 }
 
 impl<'a, T: ReadableAccount> From<&'a T> for AccountMeta {
@@ -176,7 +179,12 @@ impl<'a, T: ReadableAccount> From<&'a T> for AccountMeta {
             lamports: account.lamports(),
             owner: *account.owner(),
             executable: account.executable(),
-            rent_epoch: account.rent_epoch(),
+            has_application_fees: account.has_application_fees(),
+            application_fees: if account.has_application_fees() {
+                account.application_fees()
+            } else {
+                0
+            },
         }
     }
 }
@@ -210,7 +218,8 @@ impl<'a> StoredAccountMeta<'a> {
             lamports: self.account_meta.lamports,
             owner: self.account_meta.owner,
             executable: self.account_meta.executable,
-            rent_epoch: self.account_meta.rent_epoch,
+            has_application_fees: self.account_meta.has_application_fees,
+            rent_epoch_or_application_fees: self.account_meta.rent_epoch_or_application_fees,
             data: self.data.to_vec(),
         })
     }
@@ -220,12 +229,19 @@ impl<'a> StoredAccountMeta<'a> {
     }
 
     fn sanitize(&self) -> bool {
-        self.sanitize_executable() && self.sanitize_lamports()
+        self.sanitize_executable()
+            && self.sanitize_lamports()
+            && self.sanitize_has_application_fees()
     }
 
     fn sanitize_executable(&self) -> bool {
         // Sanitize executable to ensure higher 7-bits are cleared correctly.
         self.ref_executable_byte() & !1 == 0
+    }
+
+    fn sanitize_has_application_fees(&self) -> bool {
+        // Sanitize executable to ensure higher 7-bits are cleared correctly.
+        self.ref_has_application_fees_byte() & !1 == 0
     }
 
     fn sanitize_lamports(&self) -> bool {
@@ -240,6 +256,16 @@ impl<'a> StoredAccountMeta<'a> {
         // UNSAFE: Force to interpret mmap-backed bool as u8 to really read the actual memory content
         let executable_byte: &u8 = unsafe { &*(executable_bool as *const bool as *const u8) };
         executable_byte
+    }
+
+    fn ref_has_application_fees_byte(&self) -> &u8 {
+        // Use extra references to avoid value silently clamped to 1 (=true) and 0 (=false)
+        // Yes, this really happens; see test_new_from_file_crafted_executable
+        let has_application_fees: &bool = &self.account_meta.has_application_fees;
+        // UNSAFE: Force to interpret mmap-backed bool as u8 to really read the actual memory content
+        let has_application_fees_byte: &u8 =
+            unsafe { &*(has_application_fees as *const bool as *const u8) };
+        has_application_fees_byte
     }
 }
 
@@ -649,8 +675,13 @@ impl AppendVec {
                 .map(|account| AccountMeta {
                     lamports: account.lamports(),
                     owner: *account.owner(),
-                    rent_epoch: account.rent_epoch(),
                     executable: account.executable(),
+                    has_application_fees: account.has_application_fees(),
+                    rent_epoch_or_application_fees: if account.has_application_fees() {
+                        account.application_fees()
+                    } else {
+                        account.rent_epoch()
+                    },
                 })
                 .unwrap_or_default();
 
@@ -931,13 +962,15 @@ pub mod tests {
             lamports: 1,
             owner: Pubkey::new_unique(),
             executable: true,
-            rent_epoch: 3,
+            has_application_fees: false,
+            rent_epoch_or_application_fees: 3,
         };
         let def2_account = Account {
             lamports: def1.lamports,
             owner: def1.owner,
             executable: def1.executable,
-            rent_epoch: def1.rent_epoch,
+            has_application_fees: def1.has_application_fees,
+            rent_epoch_or_application_fees: def1.rent_epoch_or_application_fees,
             data: Vec::new(),
         };
         let def2 = AccountMeta::from(&def2_account);

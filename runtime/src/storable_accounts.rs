@@ -337,7 +337,8 @@ pub mod tests {
         let lamports = 1;
         let owner = Pubkey::default();
         let executable = false;
-        let rent_epoch = 0;
+        let has_application_fees = false;
+        let rent_epoch_or_application_fees = 0;
         let meta = StoredMeta {
             write_version_obsolete: 5,
             pubkey: pk,
@@ -347,7 +348,8 @@ pub mod tests {
             lamports,
             owner,
             executable,
-            rent_epoch,
+            has_application_fees,
+            rent_epoch_or_application_fees,
         };
         let data = Vec::default();
         let offset = 99;
@@ -389,6 +391,8 @@ pub mod tests {
                             Pubkey::default(),
                             false,
                             0,
+                            false,
+                            0,
                         );
 
                         raw.push((
@@ -404,7 +408,12 @@ pub mod tests {
                                 lamports: account.lamports(),
                                 owner: *account.owner(),
                                 executable: account.executable(),
-                                rent_epoch: account.rent_epoch(),
+                                has_application_fees: account.has_application_fees(),
+                                rent_epoch_or_application_fees: if account.has_application_fees() {
+                                    account.application_fees()
+                                } else {
+                                    account.rent_epoch()
+                                },
                             },
                         ));
                     }

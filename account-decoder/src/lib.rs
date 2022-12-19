@@ -20,7 +20,6 @@ use {
     crate::parse_account_data::{parse_account_data, AccountAdditionalData, ParsedAccount},
     solana_sdk::{
         account::{ReadableAccount, WritableAccount},
-        clock::Epoch,
         fee_calculator::FeeCalculator,
         pubkey::Pubkey,
     },
@@ -42,8 +41,9 @@ pub struct UiAccount {
     pub data: UiAccountData,
     pub owner: String,
     pub executable: bool,
-    pub rent_epoch: Epoch,
+    pub rent_epoch: u64,
     pub space: Option<u64>,
+    pub application_fees: Option<u64>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -131,6 +131,11 @@ impl UiAccount {
             executable: account.executable(),
             rent_epoch: account.rent_epoch(),
             space: Some(space as u64),
+            application_fees: if account.has_application_fees() {
+                Some(account.application_fees())
+            } else {
+                None
+            },
         }
     }
 
@@ -151,12 +156,16 @@ impl UiAccount {
                 UiAccountEncoding::Binary | UiAccountEncoding::JsonParsed => None,
             },
         }?;
+        let has_app_fees: bool = self.application_fees.is_some();
         Some(T::create(
             self.lamports,
             data,
             Pubkey::from_str(&self.owner).ok()?,
             self.executable,
-            self.rent_epoch,
+            if has_app_fees { 0 } else { self.rent_epoch },
+            // TODO APPLICATION_FEES
+            has_app_fees,
+            self.application_fees.map_or(0, |x| x),
         ))
     }
 }

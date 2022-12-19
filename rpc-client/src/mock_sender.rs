@@ -464,7 +464,8 @@ impl RpcSender for MockSender {
                     data: vec![],
                     owner: pubkey,
                     executable: false,
-                    rent_epoch: 0,
+                    has_application_fees: false,
+                    rent_epoch_or_application_fees: 0,
                 };
                 serde_json::to_value(vec![
                     RpcKeyedAccount {

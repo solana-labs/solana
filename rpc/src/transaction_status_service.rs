@@ -228,6 +228,7 @@ pub(crate) mod tests {
         dashmap::DashMap,
         solana_account_decoder::parse_token::token_amount_to_ui_amount,
         solana_ledger::{genesis_utils::create_genesis_config, get_tmp_ledger_path},
+        solana_program_runtime::invoke_context::ApplicationFeeChanges,
         solana_runtime::bank::{Bank, NonceFull, NoncePartial, RentDebits, TransactionBalancesSet},
         solana_sdk::{
             account_utils::StateMut,
@@ -387,6 +388,7 @@ pub(crate) mod tests {
             return_data: None,
             executed_units: 0,
             accounts_data_len_delta: 0,
+            application_fees_changes: ApplicationFeeChanges::new(),
         });
 
         let balances = TransactionBalancesSet {

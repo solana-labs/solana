@@ -534,7 +534,8 @@ mod tests {
                     data: vec![],
                     owner: bpf_loader::id(),
                     executable: true,
-                    rent_epoch: 0,
+                    has_application_fees: false,
+                    rent_epoch_or_application_fees: 0,
                 }),
             )];
 
@@ -549,7 +550,8 @@ mod tests {
                         data: vec![],
                         owner: program_id,
                         executable: false,
-                        rent_epoch: 0,
+                        has_application_fees: false,
+                        rent_epoch_or_application_fees: 0,
                     }),
                 ));
             }
@@ -629,7 +631,8 @@ mod tests {
                     data: vec![],
                     owner: bpf_loader::id(),
                     executable: true,
-                    rent_epoch: 0,
+                    has_application_fees: false,
+                    rent_epoch_or_application_fees: 0,
                 }),
             ),
             (
@@ -639,7 +642,8 @@ mod tests {
                     data: vec![1u8, 2, 3, 4, 5],
                     owner: bpf_loader::id(),
                     executable: false,
-                    rent_epoch: 100,
+                    has_application_fees: false,
+                    rent_epoch_or_application_fees: 100,
                 }),
             ),
             (
@@ -649,7 +653,8 @@ mod tests {
                     data: vec![11u8, 12, 13, 14, 15, 16, 17, 18, 19],
                     owner: bpf_loader::id(),
                     executable: true,
-                    rent_epoch: 200,
+                    has_application_fees: false,
+                    rent_epoch_or_application_fees: 200,
                 }),
             ),
             (
@@ -659,7 +664,8 @@ mod tests {
                     data: vec![],
                     owner: bpf_loader::id(),
                     executable: false,
-                    rent_epoch: 3100,
+                    has_application_fees: false,
+                    rent_epoch_or_application_fees: 3100,
                 }),
             ),
             (
@@ -669,7 +675,8 @@ mod tests {
                     data: vec![1u8, 2, 3, 4, 5],
                     owner: bpf_loader::id(),
                     executable: false,
-                    rent_epoch: 100,
+                    has_application_fees: false,
+                    rent_epoch_or_application_fees: 100,
                 }),
             ),
             (
@@ -679,7 +686,8 @@ mod tests {
                     data: vec![11u8, 12, 13, 14, 15, 16, 17, 18, 19],
                     owner: bpf_loader::id(),
                     executable: true,
-                    rent_epoch: 200,
+                    has_application_fees: false,
+                    rent_epoch_or_application_fees: 200,
                 }),
             ),
             (
@@ -689,7 +697,8 @@ mod tests {
                     data: vec![],
                     owner: bpf_loader::id(),
                     executable: false,
-                    rent_epoch: 3100,
+                    has_application_fees: false,
+                    rent_epoch_or_application_fees: 3100,
                 }),
             ),
         ];

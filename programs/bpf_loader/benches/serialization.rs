@@ -24,7 +24,8 @@ fn create_inputs(owner: Pubkey, num_instruction_accounts: usize) -> TransactionC
                 data: vec![],
                 owner,
                 executable: true,
-                rent_epoch: 0,
+                has_application_fees: false,
+                rent_epoch_or_application_fees: 0,
             }),
         ),
         (
@@ -34,7 +35,8 @@ fn create_inputs(owner: Pubkey, num_instruction_accounts: usize) -> TransactionC
                 data: vec![1u8; 100000],
                 owner,
                 executable: false,
-                rent_epoch: 100,
+                has_application_fees: false,
+                rent_epoch_or_application_fees: 100,
             }),
         ),
         (
@@ -44,7 +46,8 @@ fn create_inputs(owner: Pubkey, num_instruction_accounts: usize) -> TransactionC
                 data: vec![11u8; 100000],
                 owner,
                 executable: true,
-                rent_epoch: 200,
+                has_application_fees: false,
+                rent_epoch_or_application_fees: 200,
             }),
         ),
         (
@@ -54,7 +57,8 @@ fn create_inputs(owner: Pubkey, num_instruction_accounts: usize) -> TransactionC
                 data: vec![],
                 owner,
                 executable: false,
-                rent_epoch: 3100,
+                has_application_fees: false,
+                rent_epoch_or_application_fees: 3100,
             }),
         ),
         (
@@ -64,7 +68,8 @@ fn create_inputs(owner: Pubkey, num_instruction_accounts: usize) -> TransactionC
                 data: vec![1u8; 100000],
                 owner,
                 executable: false,
-                rent_epoch: 100,
+                has_application_fees: false,
+                rent_epoch_or_application_fees: 100,
             }),
         ),
         (
@@ -74,7 +79,8 @@ fn create_inputs(owner: Pubkey, num_instruction_accounts: usize) -> TransactionC
                 data: vec![11u8; 10000],
                 owner,
                 executable: true,
-                rent_epoch: 200,
+                has_application_fees: false,
+                rent_epoch_or_application_fees: 200,
             }),
         ),
         (
@@ -84,7 +90,8 @@ fn create_inputs(owner: Pubkey, num_instruction_accounts: usize) -> TransactionC
                 data: vec![],
                 owner,
                 executable: false,
-                rent_epoch: 3100,
+                has_application_fees: false,
+                rent_epoch_or_application_fees: 3100,
             }),
         ),
     ];

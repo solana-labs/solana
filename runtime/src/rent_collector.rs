@@ -5,6 +5,7 @@ use solana_sdk::{
     epoch_schedule::EpochSchedule,
     genesis_config::GenesisConfig,
     incinerator,
+    instruction::InstructionError,
     pubkey::Pubkey,
     rent::{Rent, RentDue},
 };
@@ -132,18 +133,18 @@ impl RentCollector {
             } => match account.lamports().checked_sub(rent_due) {
                 None | Some(0) => {
                     let account = std::mem::take(account);
-                    CollectedInfo {
+                    Ok(CollectedInfo {
                         rent_amount: account.lamports(),
                         account_data_len_reclaimed: account.data().len() as u64,
-                    }
+                    })
                 }
                 Some(lamports) => {
                     account.set_lamports(lamports);
-                    account.set_rent_epoch(new_rent_epoch);
-                    CollectedInfo {
+                    account.set_rent_epoch(new_rent_epoch)?;
+                    Ok(CollectedInfo {
                         rent_amount: rent_due,
                         account_data_len_reclaimed: 0u64,
-                    }
+                    })
                 }
             },
         }
@@ -232,13 +233,14 @@ mod tests {
             set_exempt_rent_epoch_max: bool,
         ) -> CollectedInfo {
             // initialize rent_epoch as created at this epoch
-            account.set_rent_epoch(self.epoch);
+            account.set_rent_epoch(self.epoch).unwrap();
             self.collect_from_existing_account(
                 address,
                 account,
                 /*filler_account_suffix:*/ None,
                 set_exempt_rent_epoch_max,
             )
+            .unwrap()
         }
     }
 

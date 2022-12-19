@@ -15,19 +15,24 @@ crate::declare_id!("NativeLoader1111111111111111111111111111111");
     note = "Please use `create_loadable_account_for_test` instead"
 )]
 pub fn create_loadable_account(name: &str, lamports: u64) -> AccountSharedData {
-    create_loadable_account_with_fields(name, (lamports, INITIAL_RENT_EPOCH))
+    create_loadable_account_with_fields(name, (lamports, INITIAL_RENT_EPOCH, false, 0))
 }
 
 pub fn create_loadable_account_with_fields(
     name: &str,
-    (lamports, rent_epoch): InheritableAccountFields,
+    (lamports, rent_epoch, has_application_fees, application_fees): InheritableAccountFields,
 ) -> AccountSharedData {
     AccountSharedData::from(Account {
         lamports,
         owner: id(),
         data: name.as_bytes().to_vec(),
         executable: true,
-        rent_epoch,
+        has_application_fees: has_application_fees,
+        rent_epoch_or_application_fees: if has_application_fees {
+            application_fees
+        } else {
+            rent_epoch
+        },
     })
 }
 

@@ -47,7 +47,10 @@ where
     I: IntoIterator<Item = IterItem<'a>>,
 {
     #[allow(deprecated)]
-    create_account_with_data_and_fields(recent_blockhash_iter, (lamports, INITIAL_RENT_EPOCH))
+    create_account_with_data_and_fields(
+        recent_blockhash_iter,
+        (lamports, INITIAL_RENT_EPOCH, false, 0),
+    )
 }
 
 #[deprecated(

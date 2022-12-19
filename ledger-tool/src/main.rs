@@ -390,6 +390,8 @@ fn output_account(
     }
     println!("  rent_epoch: {}", account.rent_epoch());
     println!("  data_len: {}", account.data().len());
+    println!("  has_application_fees: {}", account.has_application_fees());
+    println!("  application_fees: {}", account.application_fees());
     if print_account_data {
         let account_data = UiAccount::encode(pubkey, account, encoding, None, None).data;
         match account_data {

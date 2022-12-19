@@ -156,7 +156,8 @@ mod test {
             data: data.to_vec(),
             owner: pubkey_from_spl_token(&spl_token::id()),
             executable: false,
-            rent_epoch: 0,
+            has_application_fees: false,
+            rent_epoch_or_application_fees: 0,
         };
         let other_mint_pubkey = Pubkey::new_unique();
         let other_mint = Account {
@@ -164,7 +165,8 @@ mod test {
             data: data.to_vec(),
             owner: Pubkey::new_unique(), // !is_known_spl_token_id
             executable: false,
-            rent_epoch: 0,
+            has_application_fees: false,
+            rent_epoch_or_application_fees: 0,
         };
 
         let token_owner = Pubkey::new_unique();
@@ -186,14 +188,16 @@ mod test {
             data: data.to_vec(),
             owner: pubkey_from_spl_token(&spl_token::id()),
             executable: false,
-            rent_epoch: 0,
+            has_application_fees: false,
+            rent_epoch_or_application_fees: 0,
         };
         let other_account = Account {
             lamports: 100,
             data: data.to_vec(),
             owner: Pubkey::new_unique(), // !is_known_spl_token_id
             executable: false,
-            rent_epoch: 0,
+            has_application_fees: false,
+            rent_epoch_or_application_fees: 0,
         };
 
         let other_mint_data = TokenAccount {
@@ -214,7 +218,8 @@ mod test {
             data: data.to_vec(),
             owner: pubkey_from_spl_token(&spl_token::id()),
             executable: false,
-            rent_epoch: 0,
+            has_application_fees: false,
+            rent_epoch_or_application_fees: 0,
         };
 
         let mut accounts = BTreeMap::new();
@@ -319,7 +324,8 @@ mod test {
             data: mint_data.to_vec(),
             owner: pubkey_from_spl_token(&spl_token_2022::id()),
             executable: false,
-            rent_epoch: 0,
+            has_application_fees: false,
+            rent_epoch_or_application_fees: 0,
         };
         let other_mint_pubkey = Pubkey::new_unique();
         let other_mint = Account {
@@ -327,7 +333,8 @@ mod test {
             data: mint_data.to_vec(),
             owner: Pubkey::new_unique(),
             executable: false,
-            rent_epoch: 0,
+            has_application_fees: false,
+            rent_epoch_or_application_fees: 0,
         };
 
         let token_owner = Pubkey::new_unique();
@@ -363,14 +370,16 @@ mod test {
             data: account_data.to_vec(),
             owner: pubkey_from_spl_token(&spl_token_2022::id()),
             executable: false,
-            rent_epoch: 0,
+            has_application_fees: false,
+            rent_epoch_or_application_fees: 0,
         };
         let other_account = Account {
             lamports: 100,
             data: account_data.to_vec(),
             owner: Pubkey::new_unique(),
             executable: false,
-            rent_epoch: 0,
+            has_application_fees: false,
+            rent_epoch_or_application_fees: 0,
         };
 
         let other_mint_token_base = TokenAccount {
@@ -405,7 +414,8 @@ mod test {
             data: account_data.to_vec(),
             owner: pubkey_from_spl_token(&spl_token_2022::id()),
             executable: false,
-            rent_epoch: 0,
+            has_application_fees: false,
+            rent_epoch_or_application_fees: 0,
         };
 
         let mut accounts = BTreeMap::new();

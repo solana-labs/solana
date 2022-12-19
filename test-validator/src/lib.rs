@@ -404,7 +404,8 @@ impl TestValidatorGenesis {
                 ),
                 owner,
                 executable: false,
-                rent_epoch: 0,
+                has_application_fees: false,
+                rent_epoch_or_application_fees: 0,
             }),
         )
     }
@@ -426,7 +427,8 @@ impl TestValidatorGenesis {
                     .unwrap_or_else(|err| panic!("Failed to base64 decode: {err}")),
                 owner,
                 executable: false,
-                rent_epoch: 0,
+                has_application_fees: false,
+                rent_epoch_or_application_fees: 0,
             }),
         )
     }
@@ -636,7 +638,8 @@ impl TestValidator {
                     data,
                     owner: program.loader,
                     executable: true,
-                    rent_epoch: 0,
+                    has_application_fees: false,
+                    rent_epoch_or_application_fees: 0,
                 }),
             );
         }

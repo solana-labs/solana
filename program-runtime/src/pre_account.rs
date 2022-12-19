@@ -118,6 +118,13 @@ impl PreAccount {
             return Err(InstructionError::RentEpochModified);
         }
 
+        // no one modifies application fees (yet)
+        let application_fees_changed = pre.has_application_fees() != post.has_application_fees()
+            || pre.application_fees() != post.application_fees();
+        if application_fees_changed {
+            return Err(InstructionError::CannotChangeApplicationFees);
+        }
+
         if outermost_call {
             timings.total_account_count = timings.total_account_count.saturating_add(1);
             if owner_changed
@@ -134,12 +141,13 @@ impl PreAccount {
         Ok(())
     }
 
-    pub fn update(&mut self, account: AccountSharedData) {
+    pub fn update(&mut self, account: AccountSharedData) -> Result<(), InstructionError> {
         let rent_epoch = self.account.rent_epoch();
         self.account = account;
-        self.account.set_rent_epoch(rent_epoch);
+        self.account.set_rent_epoch(rent_epoch)?;
 
         self.changed = true;
+        Ok(())
     }
 
     pub fn key(&self) -> &Pubkey {
@@ -156,6 +164,14 @@ impl PreAccount {
 
     pub fn executable(&self) -> bool {
         self.account.executable()
+    }
+
+    pub fn has_application_fees(&self) -> bool {
+        self.account.has_application_fees()
+    }
+
+    pub fn application_fees(&self) -> u64 {
+        self.account.application_fees()
     }
 
     pub fn is_zeroed(buf: &[u8]) -> bool {
@@ -251,10 +267,19 @@ mod tests {
             self.post.set_data(post);
             self
         }
-        pub fn rent_epoch(mut self, pre: u64, post: u64) -> Self {
-            self.pre.account.set_rent_epoch(pre);
-            self.post.set_rent_epoch(post);
-            self
+        pub fn rent_epoch(mut self, pre: u64, post: u64) -> Result<Self, InstructionError> {
+            self.pre.account.set_rent_epoch(pre)?;
+            self.post.set_rent_epoch(post)?;
+            Ok(self)
+        }
+        pub fn change_application_fees(
+            mut self,
+            pre: u64,
+            post: u64,
+        ) -> Result<Self, InstructionError> {
+            self.pre.account.set_application_fees(pre)?;
+            self.post.set_application_fees(post)?;
+            Ok(self)
         }
         pub fn verify(&self) -> Result<(), InstructionError> {
             self.pre.verify(
@@ -498,9 +523,29 @@ mod tests {
         assert_eq!(
             Change::new(&alice_program_id, &system_program::id())
                 .rent_epoch(0, 1)
+                .unwrap()
                 .verify(),
             Err(InstructionError::RentEpochModified),
             "no one touches rent_epoch"
+        );
+    }
+
+    #[test]
+    fn test_verify_account_changes_application_fees() {
+        let alice_program_id = solana_sdk::pubkey::new_rand();
+
+        assert_eq!(
+            Change::new(&alice_program_id, &system_program::id()).verify(),
+            Ok(()),
+            "nothing changed!"
+        );
+        assert_eq!(
+            Change::new(&alice_program_id, &system_program::id())
+                .change_application_fees(0, 1)
+                .unwrap()
+                .verify(),
+            Err(InstructionError::CannotChangeApplicationFees),
+            "no one touches application fees"
         );
     }
 

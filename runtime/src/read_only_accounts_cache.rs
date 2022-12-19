@@ -274,7 +274,8 @@ mod tests {
                     lamports: rng.gen(),
                     data,
                     executable: rng.gen(),
-                    rent_epoch: rng.gen(),
+                    has_application_fees: rng.gen(),
+                    rent_epoch_or_application_fees: rng.gen(),
                     owner: Pubkey::default(),
                 });
                 let slot = *slots.choose(&mut rng).unwrap();

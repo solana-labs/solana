@@ -1024,9 +1024,12 @@ fn update_callee_account(
         {
             return Err(SyscallError::InstructionError(InstructionError::RentEpochModified).into());
         } else {
-            callee_account
+            if let Err(e) = callee_account
                 .borrow_mut()
-                .set_rent_epoch(caller_account.rent_epoch);
+                .set_rent_epoch(caller_account.rent_epoch)
+            {
+                return Err(SyscallError::InstructionError(e).into());
+            }
         }
     }
 
@@ -1665,7 +1668,8 @@ mod tests {
             data,
             owner: program_id,
             executable: false,
-            rent_epoch: 100,
+            has_application_fees: false,
+            rent_epoch_or_application_fees: 100,
         });
         vec![
             (
@@ -1675,7 +1679,8 @@ mod tests {
                     data: vec![],
                     owner: bpf_loader::id(),
                     executable: true,
-                    rent_epoch: 0,
+                    has_application_fees: false,
+                    rent_epoch_or_application_fees: 0,
                 }),
                 false,
             ),

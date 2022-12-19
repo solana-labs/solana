@@ -123,6 +123,8 @@ pub struct Accounts {
     pub(crate) account_locks: Mutex<AccountLocks>,
 }
 
+pub type ApplicationFees = HashMap<Pubkey, u64>;
+
 // for the load instructions
 pub type TransactionRent = u64;
 pub type TransactionProgramIndices = Vec<Vec<IndexOfAccount>>;
@@ -132,6 +134,7 @@ pub struct LoadedTransaction {
     pub program_indices: TransactionProgramIndices,
     pub rent: TransactionRent,
     pub rent_debits: RentDebits,
+    pub application_fees: ApplicationFees,
 }
 
 pub type TransactionLoadResult = (Result<LoadedTransaction>, Option<NonceFull>);
@@ -309,7 +312,11 @@ impl Accounts {
         let requested_loaded_accounts_data_size_limit =
             Self::get_requested_loaded_accounts_data_size_limit(feature_set);
         let mut accumulated_accounts_data_size: usize = 0;
+        let mut account_application_fees: HashMap<Pubkey, u64> = HashMap::new();
+        let mut payer_index = 0;
 
+        // we reverse the iteration over keys so that we collect all the application fees
+        // and then validate fees at the last
         let mut accounts = account_keys
             .iter()
             .enumerate()
@@ -365,21 +372,16 @@ impl Accounts {
                         error_counters,
                     )?;
 
+                    if account.has_application_fees {
+                        // if account has application fees insert the fees in the map
+                        account_application_fees.insert(*key, account.rent_epoch_or_application_fees);
+                    }
+
                     if !validated_fee_payer && message.is_non_loader_key(i) {
                         if i != 0 {
                             warn!("Payer index should be 0! {:?}", tx);
                         }
-
-                        Self::validate_fee_payer(
-                            key,
-                            &mut account,
-                            i as IndexOfAccount,
-                            error_counters,
-                            rent_collector,
-                            feature_set,
-                            fee,
-                        )?;
-
+                        payer_index = i;
                         validated_fee_payer = true;
                     }
 
@@ -431,10 +433,22 @@ impl Accounts {
 
                 account_found_and_dep_index.push((account_found, account_dep_index));
                 Ok((*key, account))
-            })
-            .collect::<Result<Vec<_>>>()?;
+            }).collect::<Result<Vec<_>>>()?;
 
-        if !validated_fee_payer {
+        if validated_fee_payer {
+            let key_and_account = &mut accounts[payer_index];
+            let application_fees_sum = account_application_fees.iter().map(|x| *x.1).sum::<u64>();
+
+            Self::validate_fee_payer(
+                &key_and_account.0,
+                &mut key_and_account.1,
+                payer_index as IndexOfAccount,
+                error_counters,
+                rent_collector,
+                feature_set,
+                fee.saturating_add(application_fees_sum),
+            )?;
+        } else {
             error_counters.account_not_found += 1;
             return Err(TransactionError::AccountNotFound);
         }
@@ -521,6 +535,7 @@ impl Accounts {
             program_indices,
             rent: tx_rent,
             rent_debits,
+            application_fees,
         })
     }
 
@@ -1253,7 +1268,7 @@ impl Accounts {
             let execution_status = match &execution_results[i] {
                 TransactionExecutionResult::Executed { details, .. } => &details.status,
                 // Don't store any accounts if tx wasn't executed
-                TransactionExecutionResult::NotExecuted(_) => continue,
+                TransactionExecutionResult::NotExecuted { .. } => continue,
             };
 
             let maybe_nonce = match (execution_status, &*nonce) {
@@ -1357,6 +1372,8 @@ fn prepare_if_nonce_account(
 
 #[cfg(test)]
 mod tests {
+    use std::str::FromStr;
+
     use {
         super::*,
         crate::{
@@ -1364,8 +1381,12 @@ mod tests {
             rent_collector::RentCollector,
         },
         assert_matches::assert_matches,
+        itertools::Itertools,
         solana_address_lookup_table_program::state::LookupTableMeta,
-        solana_program_runtime::executor_cache::TransactionExecutorCache,
+        solana_program_runtime::{
+            compute_budget, executor_cache::TransactionExecutorCache,
+            invoke_context::ApplicationFeeChanges,
+        },
         solana_sdk::{
             account::{AccountSharedData, WritableAccount},
             epoch_schedule::EpochSchedule,
@@ -1414,6 +1435,7 @@ mod tests {
                 return_data: None,
                 executed_units: 0,
                 accounts_data_len_delta: 0,
+                application_fees_changes: ApplicationFeeChanges::new(),
             },
             tx_executor_cache: Rc::new(RefCell::new(TransactionExecutorCache::default())),
         }
@@ -1783,11 +1805,11 @@ mod tests {
         let key1 = Pubkey::from([5u8; 32]);
 
         let mut account = AccountSharedData::new(1, 0, &Pubkey::default());
-        account.set_rent_epoch(1);
+        account.set_rent_epoch(1).unwrap();
         accounts.push((key0, account));
 
         let mut account = AccountSharedData::new(2, 1, &Pubkey::default());
-        account.set_rent_epoch(1);
+        account.set_rent_epoch(1).unwrap();
         accounts.push((key1, account));
 
         let instructions = vec![CompiledInstruction::new(2, &(), vec![0, 1])];
@@ -1895,18 +1917,18 @@ mod tests {
         let key2 = Pubkey::from([6u8; 32]);
 
         let mut account = AccountSharedData::new(1, 0, &Pubkey::default());
-        account.set_rent_epoch(1);
+        account.set_rent_epoch(1).unwrap();
         accounts.push((key0, account));
 
         let mut account = AccountSharedData::new(40, 1, &Pubkey::default());
         account.set_executable(true);
-        account.set_rent_epoch(1);
+        account.set_rent_epoch(1).unwrap();
         account.set_owner(native_loader::id());
         accounts.push((key1, account));
 
         let mut account = AccountSharedData::new(41, 1, &Pubkey::default());
         account.set_executable(true);
-        account.set_rent_epoch(1);
+        account.set_rent_epoch(1).unwrap();
         account.set_owner(key1);
         accounts.push((key2, account));
 
@@ -2064,6 +2086,8 @@ mod tests {
                 solana_address_lookup_table_program::id(),
                 false,
                 0,
+                false,
+                0,
             )
         };
         accounts.store_slow_uncached(0, &table_key, &table_account);
@@ -2126,17 +2150,17 @@ mod tests {
         let key2 = Pubkey::from([6u8; 32]);
 
         let mut account = AccountSharedData::new(1, 0, &Pubkey::default());
-        account.set_rent_epoch(1);
+        account.set_rent_epoch(1).unwrap();
         accounts.push((key0, account));
 
         let mut account = AccountSharedData::new(40, 1, &native_loader::id());
         account.set_executable(true);
-        account.set_rent_epoch(1);
+        account.set_rent_epoch(1).unwrap();
         accounts.push((key1, account));
 
         let mut account = AccountSharedData::new(40, 1, &native_loader::id());
         account.set_executable(true);
-        account.set_rent_epoch(1);
+        account.set_rent_epoch(1).unwrap();
         accounts.push((key2, account));
 
         let instructions = vec![CompiledInstruction::new(2, &(), vec![0, 1])];
@@ -2189,7 +2213,7 @@ mod tests {
         let programdata_key2 = Pubkey::from([8u8; 32]);
 
         let mut account = AccountSharedData::new(1, 0, &Pubkey::default());
-        account.set_rent_epoch(1);
+        account.set_rent_epoch(1).unwrap();
         accounts.push((key0, account));
 
         let program_data = UpgradeableLoaderState::ProgramData {
@@ -2203,11 +2227,11 @@ mod tests {
         let mut account =
             AccountSharedData::new_data(40, &program, &bpf_loader_upgradeable::id()).unwrap();
         account.set_executable(true);
-        account.set_rent_epoch(1);
+        account.set_rent_epoch(1).unwrap();
         accounts.push((key1, account));
         let mut account =
             AccountSharedData::new_data(40, &program_data, &bpf_loader_upgradeable::id()).unwrap();
-        account.set_rent_epoch(1);
+        account.set_rent_epoch(1).unwrap();
         accounts.push((programdata_key1, account));
 
         let program = UpgradeableLoaderState::Program {
@@ -2216,16 +2240,16 @@ mod tests {
         let mut account =
             AccountSharedData::new_data(40, &program, &bpf_loader_upgradeable::id()).unwrap();
         account.set_executable(true);
-        account.set_rent_epoch(1);
+        account.set_rent_epoch(1).unwrap();
         accounts.push((key2, account));
         let mut account =
             AccountSharedData::new_data(40, &program_data, &bpf_loader_upgradeable::id()).unwrap();
-        account.set_rent_epoch(1);
+        account.set_rent_epoch(1).unwrap();
         accounts.push((programdata_key2, account));
 
         let mut account = AccountSharedData::new(40, 1, &native_loader::id()); // create mock bpf_loader_upgradeable
         account.set_executable(true);
-        account.set_rent_epoch(1);
+        account.set_rent_epoch(1).unwrap();
         accounts.push((bpf_loader_upgradeable::id(), account));
 
         let instructions = vec![CompiledInstruction::new(2, &(), vec![0, 1])];
@@ -2299,7 +2323,7 @@ mod tests {
         let key2 = Pubkey::from([6u8; 32]);
 
         let mut account = AccountSharedData::new(1, 0, &Pubkey::default());
-        account.set_rent_epoch(1);
+        account.set_rent_epoch(1).unwrap();
         accounts.push((key0, account));
 
         let program_data = UpgradeableLoaderState::ProgramData {
@@ -2308,12 +2332,12 @@ mod tests {
         };
         let mut account =
             AccountSharedData::new_data(40, &program_data, &bpf_loader_upgradeable::id()).unwrap();
-        account.set_rent_epoch(1);
+        account.set_rent_epoch(1).unwrap();
         accounts.push((key1, account));
 
         let mut account = AccountSharedData::new(40, 1, &native_loader::id());
         account.set_executable(true);
-        account.set_rent_epoch(1);
+        account.set_rent_epoch(1).unwrap();
         accounts.push((key2, account));
 
         let instructions = vec![CompiledInstruction::new(2, &(), vec![0, 1])];
@@ -2339,7 +2363,7 @@ mod tests {
         // Solution 1: include bpf_loader_upgradeable account
         let mut account = AccountSharedData::new(40, 1, &native_loader::id()); // create mock bpf_loader_upgradeable
         account.set_executable(true);
-        account.set_rent_epoch(1);
+        account.set_rent_epoch(1).unwrap();
         let accounts_with_upgradeable_loader = vec![
             accounts[0].clone(),
             accounts[1].clone(),
@@ -2898,6 +2922,7 @@ mod tests {
                 program_indices: vec![],
                 rent: 0,
                 rent_debits: RentDebits::default(),
+                application_fees: ApplicationFees::new(),
             }),
             None,
         );
@@ -2908,6 +2933,7 @@ mod tests {
                 program_indices: vec![],
                 rent: 0,
                 rent_debits: RentDebits::default(),
+                application_fees: ApplicationFees::new(),
             }),
             None,
         );
@@ -3387,6 +3413,7 @@ mod tests {
                 program_indices: vec![],
                 rent: 0,
                 rent_debits: RentDebits::default(),
+                application_fees: ApplicationFees::new(),
             }),
             nonce.clone(),
         );
@@ -3500,6 +3527,7 @@ mod tests {
                 program_indices: vec![],
                 rent: 0,
                 rent_debits: RentDebits::default(),
+                application_fees: ApplicationFees::new(),
             }),
             nonce.clone(),
         );
@@ -3851,5 +3879,242 @@ mod tests {
                 Err(TransactionError::MaxLoadedAccountsDataSizeExceeded)
             );
         }
+    }
+
+    #[test]
+    fn test_cannot_set_application_fees_for_account_with_rentepoch() {
+        let mut account = AccountSharedData::new(1000, 0, &Pubkey::default());
+        account.set_rent_epoch(100).unwrap();
+        assert_eq!(
+            account.set_application_fees(100),
+            Err(InstructionError::CannotSetAppFeesForAccountWithRentEpoch)
+        );
+    }
+
+    #[test]
+    fn test_cannot_set_rent_epoch_for_with_application_fees() {
+        let mut account = AccountSharedData::new(1000, 0, &Pubkey::default());
+        account.set_application_fees(100).unwrap();
+        assert_eq!(
+            account.set_rent_epoch(100),
+            Err(InstructionError::CannotSetRentEpochForAccountWithAppFees)
+        );
+    }
+
+    fn load_accounts_with_app_fees(
+        accounts: &Accounts,
+        txs: &[SanitizedTransaction],
+    ) -> Vec<TransactionLoadResult> {
+        let rent_collector = RentCollector::default();
+        let mut hash_queue = BlockhashQueue::new(100);
+        hash_queue.register_hash(txs[0].message().recent_blockhash(), 10);
+
+        let ancestors = vec![(0, 0)].into_iter().collect();
+        let mut error_counters = TransactionErrorMetrics::default();
+        accounts.load_accounts(
+            &ancestors,
+            &txs,
+            txs.iter().map(|_| (Ok(()), None)).collect_vec(),
+            &hash_queue,
+            &mut error_counters,
+            &rent_collector,
+            &FeatureSet::all_enabled(),
+            &FeeStructure::default(),
+            None,
+        )
+    }
+
+    fn create_transfer_transaction(
+        from: &Keypair,
+        to: &Pubkey,
+        blockhash: Hash,
+    ) -> SanitizedTransaction {
+        let ix = system_instruction::transfer(&from.pubkey(), &to, 42);
+        let instructions = vec![ix];
+        let message = Message::new(&instructions, Some(&from.pubkey()));
+        new_sanitized_tx(&[from], message, blockhash)
+    }
+
+    fn create_transfer_transaction_with_multiple_instructions(
+        to: &[Pubkey],
+        from: &Keypair,
+    ) -> SanitizedTransaction {
+        let instructions = to
+            .iter()
+            .map(|x| system_instruction::transfer(&from.pubkey(), &x, 42))
+            .collect_vec();
+        let message = Message::new(&instructions, Some(&from.pubkey()));
+        let blockhash = Hash::new_unique();
+        new_sanitized_tx(&[from], message, blockhash)
+    }
+
+    fn hashmap_with_elements(elements: &[(Pubkey, u64)]) -> HashMap<Pubkey, u64> {
+        let mut map: HashMap<Pubkey, u64> = HashMap::new();
+        elements.iter().for_each(|x| {
+            map.insert(x.0, x.1);
+        });
+        map
+    }
+
+    #[test]
+    fn test_application_fees_are_applied() {
+        solana_logger::setup();
+        let accounts = Accounts::new_with_config_for_tests(
+            Vec::new(),
+            &ClusterType::Development,
+            AccountSecondaryIndexes::default(),
+            AccountShrinkThreshold::default(),
+        );
+
+        // call chain: native_loader -> key0 -> upgradeable bpf loader -> program_key (that has programdata_key)
+        let payer = Keypair::new();
+        let owner = Keypair::new();
+        let native_loader =
+            Pubkey::from_str("NativeLoader1111111111111111111111111111111").unwrap();
+        let key1 = Pubkey::new_unique();
+        let key2 = Pubkey::new_unique();
+        let key3 = Pubkey::new_unique();
+
+        let mut dummy_program =
+            AccountSharedData::new_data(1, &[1, 2, 3, 4], &native_loader).unwrap();
+        dummy_program.set_executable(true);
+        accounts.store_slow_uncached(0, &system_program::id(), &dummy_program);
+
+        let mut payer_acc = AccountSharedData::new(10000000, 0, &system_program::id());
+        payer_acc.set_lamports(1000000000);
+        accounts.store_slow_uncached(0, &payer.pubkey(), &payer_acc);
+
+        let mut key1_acc = AccountSharedData::new(100, 0, &owner.pubkey());
+        key1_acc.has_application_fees = true;
+        key1_acc.rent_epoch_or_application_fees = 100;
+        accounts.store_slow_uncached(0, &key1, &key1_acc);
+
+        let mut key2_acc = AccountSharedData::new(100, 0, &owner.pubkey());
+        key2_acc.has_application_fees = true;
+        key2_acc.rent_epoch_or_application_fees = 1000;
+        accounts.store_slow_uncached(0, &key2, &key2_acc);
+
+        let mut key3_acc = AccountSharedData::new(100, 0, &owner.pubkey());
+        key3_acc.has_application_fees = true;
+        key3_acc.rent_epoch_or_application_fees = 10000;
+        accounts.store_slow_uncached(0, &key3, &key3_acc);
+
+        let blockhash = Hash::new_unique();
+        let tx1 = create_transfer_transaction(&payer, &key1, blockhash);
+        let tx2 = create_transfer_transaction(&payer, &key2, blockhash);
+        let tx3 = create_transfer_transaction(&payer, &key3, blockhash);
+
+        let result = load_accounts_with_app_fees(&accounts, &[tx1.clone()]);
+        assert_eq!(result.len(), 1);
+        // testing application fees for tx1
+        let result = result[0].0.clone();
+        assert!(result.is_ok());
+        let result = result.unwrap();
+        assert_eq!(
+            result.application_fees,
+            hashmap_with_elements(&[(key1, 100)])
+        );
+
+        // testing application fees for t1,tx2
+        let load_result = load_accounts_with_app_fees(&accounts, &[tx1.clone(), tx2.clone()]);
+        assert_eq!(load_result.len(), 2);
+        // testing application fees for tx1
+        let result = load_result[0].0.clone();
+        assert!(result.is_ok());
+        let result = result.unwrap();
+        assert_eq!(
+            result.application_fees,
+            hashmap_with_elements(&[(key1, 100)])
+        );
+        // testing application fees for tx2
+        let result = load_result[1].0.clone();
+        assert!(result.is_ok());
+        let result = result.unwrap();
+        assert_eq!(
+            result.application_fees,
+            hashmap_with_elements(&[(key2, 1000)])
+        );
+
+        // testing application fees for tx1,tx2,tx3
+        let load_result = load_accounts_with_app_fees(&accounts, &[tx1, tx2, tx3]);
+        assert_eq!(load_result.len(), 3);
+        // testing application fees for tx1
+        let result = load_result[0].0.clone();
+        assert!(result.is_ok());
+        let result = result.unwrap();
+        assert_eq!(
+            result.application_fees,
+            hashmap_with_elements(&[(key1, 100)])
+        );
+        // testing application fees for tx2
+        let result = load_result[1].0.clone();
+        assert!(result.is_ok());
+        let result = result.unwrap();
+        assert_eq!(
+            result.application_fees,
+            hashmap_with_elements(&[(key2, 1000)])
+        );
+        let result = load_result[2].0.clone();
+        assert!(result.is_ok());
+        let result = result.unwrap();
+        assert_eq!(
+            result.application_fees,
+            hashmap_with_elements(&[(key3, 10000)])
+        );
+
+        // all 3 in one instruction
+        let tx_multi =
+            create_transfer_transaction_with_multiple_instructions(&[key1, key2, key3], &payer);
+        let result = load_accounts_with_app_fees(&accounts, &[tx_multi]);
+        assert_eq!(result.len(), 1);
+        // testing application fees for tx1
+        let result = result[0].0.clone();
+        assert!(result.is_ok());
+        let result = result.unwrap();
+        assert_eq!(
+            result.application_fees,
+            hashmap_with_elements(&[(key1, 100), (key2, 1000), (key3, 10000)])
+        );
+    }
+
+    #[test]
+    fn test_application_fees_fails_if_payer_does_not_have_enough_balance() {
+        solana_logger::setup();
+        let accounts = Accounts::new_with_config_for_tests(
+            Vec::new(),
+            &ClusterType::Development,
+            AccountSecondaryIndexes::default(),
+            AccountShrinkThreshold::default(),
+        );
+
+        // call chain: native_loader -> key0 -> upgradeable bpf loader -> program_key (that has programdata_key)
+        let payer = Keypair::new();
+        let owner = Keypair::new();
+        let native_loader =
+            Pubkey::from_str("NativeLoader1111111111111111111111111111111").unwrap();
+        let key1 = Pubkey::new_unique();
+
+        let mut dummy_program =
+            AccountSharedData::new_data(1, &[1, 2, 3, 4], &native_loader).unwrap();
+        dummy_program.set_executable(true);
+        accounts.store_slow_uncached(0, &system_program::id(), &dummy_program);
+
+        let mut payer_acc = AccountSharedData::new(10000000, 0, &system_program::id());
+        payer_acc.set_lamports(10000);
+        accounts.store_slow_uncached(0, &payer.pubkey(), &payer_acc);
+
+        let mut key1_acc = AccountSharedData::new(100, 0, &owner.pubkey());
+        key1_acc.has_application_fees = true;
+        key1_acc.rent_epoch_or_application_fees = 10001;
+        accounts.store_slow_uncached(0, &key1, &key1_acc);
+        let blockhash = Hash::new_unique();
+        let tx1 = create_transfer_transaction(&payer, &key1, blockhash);
+        let result = load_accounts_with_app_fees(&accounts, &[tx1]);
+
+        // testing application fees for tx1
+        assert_eq!(result.len(), 1);
+        let result = result[0].0.clone();
+        assert!(result.is_err());
+        assert_eq!(result, Err(TransactionError::InsufficientFundsForFee));
     }
 }

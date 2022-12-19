@@ -604,6 +604,8 @@ pub mod remove_congestion_multiplier_from_fee_calculation {
 
 pub mod enable_request_heap_frame_ix {
     solana_sdk::declare_id!("Hr1nUA9b7NJ6eChS26o7Vi8gYYDDwWD3YeBfzJkTbU86");
+pub mod add_application_fees_program {
+    solana_sdk::declare_id!("7hwmoguW2KEXkznQEsGfqGA9XTpGvScVae5MroWX5A9o");
 }
 
 lazy_static! {
@@ -752,6 +754,7 @@ lazy_static! {
         (cap_transaction_accounts_data_size::id(), "cap transaction accounts data size up to a limit #27839"),
         (remove_congestion_multiplier_from_fee_calculation::id(), "Remove congestion multiplier from transaction fee calculation #29881"),
         (enable_request_heap_frame_ix::id(), "Enable transaction to request heap frame using compute budget instruction #30076"),
+        (add_application_fees_program::id(), "Add application fees program"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()

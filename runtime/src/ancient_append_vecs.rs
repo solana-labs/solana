@@ -230,7 +230,8 @@ pub mod tests {
             lamports: 1,
             owner: Pubkey::from([2; 32]),
             executable: false,
-            rent_epoch: 0,
+            has_application_fees: false,
+            rent_epoch_or_application_fees: 0,
         };
         let offset = 3;
         let hash = Hash::new(&[2; 32]);

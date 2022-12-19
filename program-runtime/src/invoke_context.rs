@@ -30,6 +30,7 @@ use {
         alloc::Layout,
         borrow::Cow,
         cell::RefCell,
+        collections::HashMap,
         fmt::{self, Debug},
         rc::Rc,
         sync::Arc,
@@ -101,6 +102,29 @@ struct SyscallContext {
     allocator: Rc<RefCell<dyn Alloc>>,
 }
 
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub struct ApplicationFeeChanges {
+    pub application_fees: HashMap<Pubkey, u64>,
+    pub rebated: HashMap<Pubkey, u64>,
+    pub updated: Vec<(Pubkey, u64)>,
+}
+
+impl ApplicationFeeChanges {
+    pub fn new() -> Self {
+        Self {
+            application_fees: HashMap::new(),
+            rebated: HashMap::new(),
+            updated: Vec::new(),
+        }
+    }
+}
+
+impl Default for ApplicationFeeChanges {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 pub struct InvokeContext<'a> {
     pub transaction_context: &'a mut TransactionContext,
     rent: Rent,
@@ -119,6 +143,7 @@ pub struct InvokeContext<'a> {
     pub blockhash: Hash,
     pub lamports_per_signature: u64,
     syscall_context: Vec<Option<SyscallContext>>,
+    pub application_fee_changes: ApplicationFeeChanges,
 }
 
 impl<'a> InvokeContext<'a> {
@@ -135,6 +160,7 @@ impl<'a> InvokeContext<'a> {
         blockhash: Hash,
         lamports_per_signature: u64,
         prev_accounts_data_len: u64,
+        application_fees: HashMap<Pubkey, u64>,
     ) -> Self {
         Self {
             transaction_context,
@@ -154,6 +180,11 @@ impl<'a> InvokeContext<'a> {
             blockhash,
             lamports_per_signature,
             syscall_context: Vec::new(),
+            application_fee_changes: ApplicationFeeChanges {
+                application_fees,
+                rebated: HashMap::new(),
+                updated: Vec::new(),
+            },
         }
     }
 
@@ -191,6 +222,7 @@ impl<'a> InvokeContext<'a> {
             Hash::default(),
             0,
             0,
+            HashMap::new(),
         )
     }
 
@@ -369,6 +401,24 @@ impl<'a> InvokeContext<'a> {
                 .checked_add(u128::from(account.lamports()))
                 .ok_or(InstructionError::UnbalancedInstruction)?;
 
+            // additional check on application fees if they are balanced / ie if account has application fees then they should be either in application fees or in rebates
+            if pre_account.has_application_fees() {
+                let key = pre_account.key();
+                let app_fees = self
+                    .application_fee_changes
+                    .application_fees
+                    .get(key)
+                    .map_or(0, |x| *x);
+                let rebates = self
+                    .application_fee_changes
+                    .rebated
+                    .get(key)
+                    .map_or(0, |x| *x);
+                if pre_account.application_fees() != app_fees + rebates {
+                    return Err(InstructionError::UnbalancedInstruction);
+                }
+            }
+
             let pre_data_len = pre_account.data().len() as i64;
             let post_data_len = account.data().len() as i64;
             let data_len_delta = post_data_len.saturating_sub(pre_data_len);
@@ -454,7 +504,7 @@ impl<'a> InvokeContext<'a> {
                             .checked_add(u128::from(account.lamports()))
                             .ok_or(InstructionError::UnbalancedInstruction)?;
                         if is_writable && !pre_account.executable() {
-                            pre_account.update(account.clone());
+                            pre_account.update(account.clone())?;
                         }
 
                         let pre_data_len = pre_account.data().len() as i64;

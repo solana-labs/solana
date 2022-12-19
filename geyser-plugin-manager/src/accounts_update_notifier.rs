@@ -132,7 +132,13 @@ impl AccountsUpdateNotifierImpl {
             lamports: stored_account_meta.account_meta.lamports,
             owner: stored_account_meta.account_meta.owner.as_ref(),
             executable: stored_account_meta.account_meta.executable,
-            rent_epoch: stored_account_meta.account_meta.rent_epoch,
+            rent_epoch: if stored_account_meta.account_meta.has_application_fees {
+                0
+            } else {
+                stored_account_meta
+                    .account_meta
+                    .rent_epoch_or_application_fees
+            },
             data: stored_account_meta.data,
             write_version: stored_account_meta.meta.write_version_obsolete,
             txn_signature: None,

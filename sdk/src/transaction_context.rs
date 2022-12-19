@@ -716,10 +716,44 @@ impl<'a> BorrowedAccount<'a> {
         Ok(())
     }
 
+    #[cfg(not(target_os = "solana"))]
+    pub fn set_application_fees(&mut self, application_fees: u64) -> Result<(), InstructionError> {
+        if self
+            .transaction_context
+            .is_early_verification_of_account_modifications_enabled()
+        {
+            // The application fees may not be applied for read only account
+            if !self.is_writable() {
+                return Err(InstructionError::ReadonlyLamportChange);
+            }
+            if !self.has_application_fees() && self.get_rent_epoch() != 0 {
+                return Err(InstructionError::CannotSetAppFeesForAccountWithRentEpoch);
+            }
+            // don't touch the account if the lamports do not change
+            if self.has_application_fees() && self.get_application_fees() == application_fees {
+                return Ok(());
+            }
+            self.touch()?;
+        }
+
+        // and only if the account is writable
+        self.account.set_application_fees(application_fees)
+    }
+
     /// Returns the number of lamports of this account (transaction wide)
     #[inline]
     pub fn get_lamports(&self) -> u64 {
         self.account.lamports()
+    }
+
+    #[inline]
+    pub fn has_application_fees(&self) -> bool {
+        self.account.has_application_fees()
+    }
+
+    #[inline]
+    pub fn get_application_fees(&self) -> u64 {
+        self.account.application_fees()
     }
 
     /// Overwrites the number of lamports of this account (transaction wide)

@@ -57,6 +57,10 @@ pub enum ProgramError {
     InvalidRealloc,
     #[error("Instruction trace length exceeded the maximum allowed per transaction")]
     MaxInstructionTraceLengthExceeded,
+    #[error("Cannot set rent epoch for account which has application fees")]
+    CannotSetRentEpochForAccountWithAppFees,
+    #[error("Cannot set application fees for account which has rent epoch")]
+    CannotSetAppFeesForAccountWithRentEpoch,
 }
 
 pub trait PrintProgramError {
@@ -102,6 +106,12 @@ impl PrintProgramError for ProgramError {
             Self::MaxInstructionTraceLengthExceeded => {
                 msg!("Error: MaxInstructionTraceLengthExceeded")
             }
+            Self::CannotSetAppFeesForAccountWithRentEpoch => {
+                msg!("Error: CannotSetAppFeesForAccountWithRentEpoch")
+            }
+            Self::CannotSetRentEpochForAccountWithAppFees => {
+                msg!("Error: CannotSetRentEpochForAccountWithAppFees")
+            }
         }
     }
 }
@@ -135,6 +145,8 @@ pub const ILLEGAL_OWNER: u64 = to_builtin!(18);
 pub const MAX_ACCOUNTS_DATA_ALLOCATIONS_EXCEEDED: u64 = to_builtin!(19);
 pub const INVALID_ACCOUNT_DATA_REALLOC: u64 = to_builtin!(20);
 pub const MAX_INSTRUCTION_TRACE_LENGTH_EXCEEDED: u64 = to_builtin!(21);
+pub const SETTING_RENT_EPOCH_FOR_APP_FEES: u64 = to_builtin!(22);
+pub const SETTING_APP_FEES_FOR_RENT_EPOCH: u64 = to_builtin!(23);
 // Warning: Any new program errors added here must also be:
 // - Added to the below conversions
 // - Added as an equivalent to InstructionError
@@ -175,6 +187,12 @@ impl From<ProgramError> for u64 {
                     error as u64
                 }
             }
+            ProgramError::CannotSetAppFeesForAccountWithRentEpoch => {
+                SETTING_APP_FEES_FOR_RENT_EPOCH
+            }
+            ProgramError::CannotSetRentEpochForAccountWithAppFees => {
+                SETTING_RENT_EPOCH_FOR_APP_FEES
+            }
         }
     }
 }
@@ -203,6 +221,8 @@ impl From<u64> for ProgramError {
             MAX_ACCOUNTS_DATA_ALLOCATIONS_EXCEEDED => Self::MaxAccountsDataAllocationsExceeded,
             INVALID_ACCOUNT_DATA_REALLOC => Self::InvalidRealloc,
             MAX_INSTRUCTION_TRACE_LENGTH_EXCEEDED => Self::MaxInstructionTraceLengthExceeded,
+            SETTING_APP_FEES_FOR_RENT_EPOCH => Self::CannotSetAppFeesForAccountWithRentEpoch,
+            SETTING_RENT_EPOCH_FOR_APP_FEES => Self::CannotSetRentEpochForAccountWithAppFees,
             _ => Self::Custom(error as u32),
         }
     }
@@ -238,6 +258,12 @@ impl TryFrom<InstructionError> for ProgramError {
             Self::Error::MaxInstructionTraceLengthExceeded => {
                 Ok(Self::MaxInstructionTraceLengthExceeded)
             }
+            Self::Error::CannotSetAppFeesForAccountWithRentEpoch => {
+                Ok(Self::CannotSetAppFeesForAccountWithRentEpoch)
+            }
+            Self::Error::CannotSetRentEpochForAccountWithAppFees => {
+                Ok(Self::CannotSetRentEpochForAccountWithAppFees)
+            }
             _ => Err(error),
         }
     }
@@ -271,6 +297,8 @@ where
             MAX_ACCOUNTS_DATA_ALLOCATIONS_EXCEEDED => Self::MaxAccountsDataAllocationsExceeded,
             INVALID_ACCOUNT_DATA_REALLOC => Self::InvalidRealloc,
             MAX_INSTRUCTION_TRACE_LENGTH_EXCEEDED => Self::MaxInstructionTraceLengthExceeded,
+            SETTING_APP_FEES_FOR_RENT_EPOCH => Self::CannotSetAppFeesForAccountWithRentEpoch,
+            SETTING_RENT_EPOCH_FOR_APP_FEES => Self::CannotSetRentEpochForAccountWithAppFees,
             _ => {
                 // A valid custom error has no bits set in the upper 32
                 if error >> BUILTIN_BIT_SHIFT == 0 {

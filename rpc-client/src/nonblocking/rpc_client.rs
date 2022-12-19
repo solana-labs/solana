@@ -5448,7 +5448,8 @@ pub fn create_rpc_client_mocks() -> crate::mock_sender::Mocks {
                 data: vec![],
                 owner: pubkey,
                 executable: false,
-                rent_epoch: 0,
+                has_application_fees: false,
+                rent_epoch_or_application_fees: 0,
             };
             UiAccount::encode(&pubkey, &account, UiAccountEncoding::Base64, None, None)
         },

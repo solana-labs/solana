@@ -166,6 +166,14 @@ fn builtin_feature_transitions() -> Vec<BuiltinFeatureTransition> {
             ),
             feature_id: feature_set::zk_token_sdk_enabled::id(),
         },
+        BuiltinFeatureTransition::Add {
+            builtin: Builtin::new(
+                "application_fees_program",
+                solana_application_fees_program::id(),
+                solana_application_fees_program::processor::process_instruction,
+            ),
+            feature_id: feature_set::add_application_fees_program::id(),
+        },
     ]
 }
 

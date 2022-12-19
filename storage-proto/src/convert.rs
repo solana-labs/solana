@@ -94,6 +94,7 @@ impl From<Reward> for generated::Reward {
                 Some(RewardType::Rent) => generated::RewardType::Rent,
                 Some(RewardType::Staking) => generated::RewardType::Staking,
                 Some(RewardType::Voting) => generated::RewardType::Voting,
+                Some(RewardType::ApplicationFee) => generated::RewardType::Fee,
             } as i32,
             commission: reward.commission.map(|c| c.to_string()).unwrap_or_default(),
         }
@@ -1070,6 +1071,15 @@ impl From<TransactionError> for tx_by_addr::TransactionError {
                             }
                             InstructionError::MaxInstructionTraceLengthExceeded => {
                                 tx_by_addr::InstructionErrorType::MaxInstructionTraceLengthExceeded
+                            }
+                            InstructionError::CannotSetAppFeesForAccountWithRentEpoch => {
+                                tx_by_addr::InstructionErrorType::InvalidAccountData
+                            }
+                            InstructionError::CannotSetRentEpochForAccountWithAppFees => {
+                                tx_by_addr::InstructionErrorType::InvalidAccountData
+                            }
+                            InstructionError::CannotChangeApplicationFees => {
+                                tx_by_addr::InstructionErrorType::InvalidAccountData
                             }
                         } as i32,
                         custom: match instruction_error {
