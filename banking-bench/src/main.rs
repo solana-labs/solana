@@ -417,7 +417,7 @@ fn main() {
         let (exit, poh_recorder, poh_service, signal_receiver) =
             create_test_recorder(&bank, &blockstore, None, Some(leader_schedule_cache));
         let banking_tracer = BankingTracer::new(matches.is_present("trace_banking").then_some((
-            blockstore.banking_tracer_path(),
+            blockstore.banking_trace_path(),
             exit.clone(),
             DEFAULT_BANKING_TRACE_SIZE,
         )))
