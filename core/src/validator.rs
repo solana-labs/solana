@@ -936,7 +936,7 @@ impl Validator {
         );
 
         let banking_tracer = BankingTracer::new((config.banking_trace_size > 0).then_some((
-            blockstore.banking_tracer_path(),
+            blockstore.banking_trace_path(),
             exit.clone(),
             config.banking_trace_size,
         )))

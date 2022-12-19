@@ -225,7 +225,7 @@ impl Blockstore {
         &self.ledger_path
     }
 
-    pub fn banking_tracer_path(&self) -> PathBuf {
+    pub fn banking_trace_path(&self) -> PathBuf {
         self.ledger_path.join("banking_trace")
     }
 
