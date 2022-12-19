@@ -4099,7 +4099,7 @@ fn main() {
                             .unwrap()
                             .hash;
 
-                        writeln!(output, "{}: {:?}", slot, blockhash).expect("failed to write");
+                        writeln!(output, "{slot}: {blockhash:?}").expect("failed to write");
                     });
             }
             ("latest-optimistic-slots", Some(arg_matches)) => {

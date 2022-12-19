@@ -354,7 +354,7 @@ fn set_repair_whitelist(
         .map_err(|err| {
             std::io::Error::new(
                 std::io::ErrorKind::Other,
-                format!("setRepairWhitelist request failed: {}", err),
+                format!("setRepairWhitelist request failed: {err}"),
             )
         })?;
     Ok(())
@@ -691,7 +691,7 @@ pub fn main() {
                     let repair_whitelist = admin_rpc_service::runtime()
                         .block_on(async move { admin_client.await?.repair_whitelist().await })
                         .unwrap_or_else(|err| {
-                            eprintln!("Repair whitelist query failed: {}", err);
+                            eprintln!("Repair whitelist query failed: {err}");
                             exit(1);
                         });
                     if let Some(mode) = output_mode {
@@ -706,7 +706,7 @@ pub fn main() {
                             _ => unreachable!(),
                         }
                     } else {
-                        print!("{}", repair_whitelist);
+                        print!("{repair_whitelist}");
                     }
                     return;
                 }
