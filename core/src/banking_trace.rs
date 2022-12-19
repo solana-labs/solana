@@ -171,7 +171,7 @@ impl BankingTracer {
         maybe_config: Option<(PathBuf, Arc<AtomicBool>, u64)>,
     ) -> Result<Arc<Self>, TraceError> {
         let enabled_tracer = maybe_config
-            .map(|(path, exit, total_size)| -> Result<_, TraceError> {
+            .map(|(path, exit, total_size)| {
                 let rotate_threshold_size = total_size / TRACE_FILE_ROTATE_COUNT;
                 if rotate_threshold_size == 0 {
                     return Err(TraceError::TooSmallTraceSize(
@@ -321,15 +321,15 @@ impl BankingTracer {
     ) -> Result<JoinHandle<TracerThreadResult>, TraceError> {
         let thread = thread::Builder::new().name("solBanknTracer".into()).spawn(
             move || -> TracerThreadResult {
-                receiving_loop_with_minimized_sender_overhead::<
-                    _,
-                    TraceError,
-                    TRACE_FILE_WRITE_INTERVAL_MS,
-                >(exit, trace_receiver, |event| -> Result<(), TraceError> {
-                    file_appender.condition_mut().reset();
-                    serialize_into(&mut GroupedWriter::new(&mut file_appender), &event)?;
-                    Ok(())
-                })?;
+                receiving_loop_with_minimized_sender_overhead::<_, _, TRACE_FILE_WRITE_INTERVAL_MS>(
+                    exit,
+                    trace_receiver,
+                    |event| -> Result<(), TraceError> {
+                        file_appender.condition_mut().reset();
+                        serialize_into(&mut GroupedWriter::new(&mut file_appender), &event)?;
+                        Ok(())
+                    },
+                )?;
                 file_appender.flush()?;
                 Ok(())
             },
