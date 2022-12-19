@@ -2921,6 +2921,40 @@ fn test_program_sbf_realloc() {
         TransactionError::InstructionError(0, InstructionError::InvalidRealloc)
     );
 
+    // Realloc to 6 bytes
+    bank_client
+        .send_and_confirm_message(
+            signer,
+            Message::new(
+                &[
+                    realloc(&program_id, &pubkey, 6, &mut bump),
+                    ComputeBudgetInstruction::set_accounts_data_size_limit(u32::MAX),
+                ],
+                Some(&mint_pubkey),
+            ),
+        )
+        .unwrap();
+    let data = bank_client.get_account_data(&pubkey).unwrap().unwrap();
+    assert_eq!(6, data.len());
+
+    // Extend by 2 bytes and write a u64. This ensures that we can do writes that span the original
+    // account length (6 bytes) and the realloc data (2 bytes).
+    bank_client
+        .send_and_confirm_message(
+            signer,
+            Message::new(
+                &[
+                    extend_and_write_u64(&program_id, &pubkey, 0x1122334455667788),
+                    ComputeBudgetInstruction::set_accounts_data_size_limit(u32::MAX),
+                ],
+                Some(&mint_pubkey),
+            ),
+        )
+        .unwrap();
+    let data = bank_client.get_account_data(&pubkey).unwrap().unwrap();
+    assert_eq!(8, data.len());
+    assert_eq!(0x1122334455667788, unsafe { *data.as_ptr().cast::<u64>() });
+
     // Realloc to 0
     bank_client
         .send_and_confirm_message(
