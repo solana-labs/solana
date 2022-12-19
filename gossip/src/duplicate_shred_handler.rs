@@ -11,26 +11,31 @@ use {
         leader_schedule_cache::LeaderScheduleCache, shred::Shred,
     },
     solana_sdk::{clock::Slot, pubkey::Pubkey},
-    std::{collections::HashMap, sync::Arc},
+    std::{
+        collections::{HashMap, HashSet},
+        sync::Arc,
+    },
 };
 
 const CLEANUP_EVERY_N_LOOPS: usize = 10;
+// Normally num_chunks is 3, because there are two shreds (each is one packet)
+// and meta data. So we discard anything larger than 3 chunks.
+const MAX_NUM_CHUNKS: u8 = 3;
+// We only allow each pubkey to send proofs for 5 slots, because normally there
+// is only 1 person sending out duplicate proofs, 1 person is leader for 4 slots,
+// so we allow 5 here to limit the chunk map size.
+const ALLOWED_SLOTS_PER_PUBKEY: usize = 5;
 
 struct ProofChunkMap {
     num_chunks: u8,
     missing_chunks: u8,
-    chunks: HashMap<u8, Vec<u8>>,
-}
-
-#[derive(Eq, PartialEq, Hash, Clone)]
-struct DuplicateSlotProofKey {
-    from: Pubkey,
     wallclock: u64,
+    chunks: HashMap<u8, Vec<u8>>,
 }
 
 // Group received chunks by peer pubkey, when we receive an invalid proof,
 // set the value to Frozen so we don't accept future proofs with the same key.
-type SlotChunkMap = HashMap<DuplicateSlotProofKey, ProofChunkMap>;
+type SlotChunkMap = HashMap<Pubkey, ProofChunkMap>;
 
 enum SlotStatus {
     Frozen,
@@ -46,6 +51,9 @@ pub struct DuplicateShredHandler {
     // When a valid proof has been inserted, we change the entry for that slot to Frozen
     // to indicate we no longer accept proofs for this slot.
     chunk_map: HashMap<Slot, SlotStatus>,
+    // We don't want bad guys to inflate the chunk map, so we limit the number of
+    // pending proofs from each pubkey to ALLOWED_SLOTS_PER_PUBKEY.
+    validator_pending_proof_map: HashMap<Pubkey, HashSet<Slot>>,
     // remember the last root slot handled, clear anything older than last_root.
     last_root: Slot,
     blockstore: Arc<Blockstore>,
@@ -78,6 +86,7 @@ impl DuplicateShredHandler {
     ) -> Self {
         Self {
             chunk_map: HashMap::new(),
+            validator_pending_proof_map: HashMap::new(),
             last_root: 0,
             blockstore,
             leader_schedule_cache,
@@ -102,23 +111,54 @@ impl DuplicateShredHandler {
 
     fn should_insert_chunk(&self, data: &DuplicateShred) -> bool {
         let slot = data.slot;
+        // Do not insert if this slot is rooted or has a proof already.
         if slot <= self.blockstore.last_root() || self.blockstore.has_duplicate_shreds_in_slot(slot)
         {
             return false;
         }
-        !matches!(self.chunk_map.get(&slot), Some(SlotStatus::Frozen))
+        // Discard all proofs with abnormal num_chunks.
+        if data.num_chunks == 0 || data.num_chunks > MAX_NUM_CHUNKS {
+            return false;
+        }
+        // Only allow limited unfinished proofs per pubkey to reject attackers.
+        if let Some(current_slots_set) = self.validator_pending_proof_map.get(&data.from) {
+            if !current_slots_set.contains(&slot)
+                && current_slots_set.len() >= ALLOWED_SLOTS_PER_PUBKEY
+            {
+                return false;
+            }
+        }
+        // Also skip frozen slots or slots with a newer proof than me.
+        match self.chunk_map.get(&slot) {
+            Some(SlotStatus::Frozen) => {
+                return false;
+            }
+            Some(SlotStatus::UnfinishedProof(slot_map)) => {
+                if let Some(proof_chunkmap) = slot_map.get(&data.from) {
+                    if proof_chunkmap.wallclock > data.wallclock {
+                        return false;
+                    }
+                }
+            }
+            None => {}
+        }
+        true
     }
 
-    fn new_proof_chunk_map(num_chunks: u8) -> ProofChunkMap {
+    fn new_proof_chunk_map(num_chunks: u8, wallclock: u64) -> ProofChunkMap {
         ProofChunkMap {
             num_chunks,
             missing_chunks: num_chunks,
             chunks: HashMap::new(),
+            wallclock,
         }
     }
 
     fn mark_slot_proof_received(&mut self, slot: u64) {
         self.chunk_map.insert(slot, SlotStatus::Frozen);
+        for (_, current_slots_set) in self.validator_pending_proof_map.iter_mut() {
+            current_slots_set.remove(&slot);
+        }
     }
 
     fn insert_chunk(
@@ -130,13 +170,15 @@ impl DuplicateShredHandler {
             .entry(data.slot)
             .or_insert_with(|| SlotStatus::UnfinishedProof(HashMap::new()))
         {
-            let proof_key = DuplicateSlotProofKey {
-                from: data.from,
-                wallclock: data.wallclock,
-            };
             let proof_chunk_map = slot_chunk_map
-                .entry(proof_key)
-                .or_insert_with(|| Self::new_proof_chunk_map(data.num_chunks));
+                .entry(data.from)
+                .or_insert_with(|| Self::new_proof_chunk_map(data.num_chunks, data.wallclock));
+            if proof_chunk_map.wallclock < data.wallclock {
+                proof_chunk_map.num_chunks = data.num_chunks;
+                proof_chunk_map.missing_chunks = data.num_chunks;
+                proof_chunk_map.wallclock = data.wallclock;
+                proof_chunk_map.chunks.clear();
+            }
             let num_chunks = data.num_chunks;
             let chunk_index = data.chunk_index;
             if num_chunks == proof_chunk_map.num_chunks
@@ -153,6 +195,10 @@ impl DuplicateShredHandler {
                     return Ok(Some((data.slot, proof)));
                 }
             }
+            self.validator_pending_proof_map
+                .entry(data.from)
+                .or_insert_with(HashSet::new)
+                .insert(data.slot);
         }
         Ok(None)
     }
@@ -190,6 +236,9 @@ impl DuplicateShredHandler {
         let new_last_root = self.blockstore.last_root();
         if self.last_root < new_last_root {
             self.chunk_map.retain(|k, _| k > &new_last_root);
+            for (_, slots_sets) in self.validator_pending_proof_map.iter_mut() {
+                slots_sets.retain(|k| k > &new_last_root);
+            }
             self.last_root = new_last_root
         }
     }
@@ -200,17 +249,20 @@ mod tests {
     use {
         super::*,
         crate::{
+            cluster_info::DUPLICATE_SHRED_MAX_PAYLOAD_SIZE,
             cluster_info_entry_listener::ClusterInfoEntryHandler,
             duplicate_shred::{from_shred, tests::new_rand_shred, DuplicateShred, Error},
         },
-        rand::Rng,
         solana_ledger::{
             genesis_utils::{create_genesis_config_with_leader, GenesisConfigInfo},
             get_tmp_ledger_path_auto_delete,
             shred::Shredder,
         },
         solana_runtime::{bank::Bank, bank_forks::BankForks},
-        solana_sdk::signature::{Keypair, Signer},
+        solana_sdk::{
+            signature::{Keypair, Signer},
+            timing::timestamp,
+        },
         std::sync::Arc,
     };
 
@@ -218,6 +270,7 @@ mod tests {
         keypair: Arc<Keypair>,
         slot: u64,
         expected_error: Option<Error>,
+        chunk_size: usize,
     ) -> Result<Box<dyn Iterator<Item = DuplicateShred>>, Error> {
         let my_keypair = match expected_error {
             Some(Error::InvalidSignature) => Arc::new(Keypair::new()),
@@ -243,8 +296,8 @@ mod tests {
             my_keypair.pubkey(),
             shred2.payload().clone(),
             None::<fn(Slot) -> Option<Pubkey>>,
-            rng.gen(), // wallclock
-            512,       // max_size
+            timestamp(), // wallclock
+            chunk_size,  // max_size
         )?;
         Ok(Box::new(chunks))
     }
@@ -265,8 +318,20 @@ mod tests {
         ));
         let mut duplicate_shred_handler =
             DuplicateShredHandler::new(blockstore.clone(), leader_schedule_cache);
-        let chunks = create_duplicate_proof(my_keypair.clone(), 1, None).unwrap();
-        let chunks1 = create_duplicate_proof(my_keypair.clone(), 2, None).unwrap();
+        let chunks = create_duplicate_proof(
+            my_keypair.clone(),
+            1,
+            None,
+            DUPLICATE_SHRED_MAX_PAYLOAD_SIZE,
+        )
+        .unwrap();
+        let chunks1 = create_duplicate_proof(
+            my_keypair.clone(),
+            2,
+            None,
+            DUPLICATE_SHRED_MAX_PAYLOAD_SIZE,
+        )
+        .unwrap();
         assert!(!blockstore.has_duplicate_shreds_in_slot(1));
         assert!(!blockstore.has_duplicate_shreds_in_slot(2));
         let mut index = 0;
@@ -286,7 +351,12 @@ mod tests {
             Error::ShredIndexMismatch,
             Error::InvalidDuplicateShreds,
         ] {
-            match create_duplicate_proof(my_keypair.clone(), 3, Some(error)) {
+            match create_duplicate_proof(
+                my_keypair.clone(),
+                3,
+                Some(error),
+                DUPLICATE_SHRED_MAX_PAYLOAD_SIZE,
+            ) {
                 Err(_) => (),
                 Ok(chunks) => {
                     for chunk in chunks {
@@ -297,5 +367,97 @@ mod tests {
                 }
             }
         }
+    }
+
+    #[test]
+    fn test_reject_abuses() {
+        solana_logger::setup();
+
+        let ledger_path = get_tmp_ledger_path_auto_delete!();
+        let blockstore = Arc::new(Blockstore::open(ledger_path.path()).unwrap());
+        let my_keypair = Arc::new(Keypair::new());
+        let my_pubkey = my_keypair.pubkey();
+        let genesis_config_info = create_genesis_config_with_leader(10_000, &my_pubkey, 10_000);
+        let GenesisConfigInfo { genesis_config, .. } = genesis_config_info;
+        let bank_forks = BankForks::new(Bank::new_for_tests(&genesis_config));
+        let leader_schedule_cache = Arc::new(LeaderScheduleCache::new_from_bank(
+            &bank_forks.working_bank(),
+        ));
+        let mut duplicate_shred_handler =
+            DuplicateShredHandler::new(blockstore.clone(), leader_schedule_cache);
+
+        // This proof will not be accepted because num_chunks is too large.
+        let chunks = create_duplicate_proof(
+            my_keypair.clone(),
+            1,
+            None,
+            DUPLICATE_SHRED_MAX_PAYLOAD_SIZE / 10,
+        )
+        .unwrap();
+        let mut index = 0;
+        for chunk in chunks {
+            duplicate_shred_handler.handle(CrdsData::DuplicateShred(index, chunk));
+            index += 1
+        }
+        assert!(!blockstore.has_duplicate_shreds_in_slot(1));
+
+        // Send in two proofs, only the proof with later wallclock will be accepted.
+        let chunks = create_duplicate_proof(
+            my_keypair.clone(),
+            1,
+            None,
+            DUPLICATE_SHRED_MAX_PAYLOAD_SIZE,
+        )
+        .unwrap();
+        let chunks1 = create_duplicate_proof(
+            my_keypair.clone(),
+            1,
+            None,
+            DUPLICATE_SHRED_MAX_PAYLOAD_SIZE,
+        )
+        .unwrap();
+        for (chunk1, chunk2) in chunks.zip(chunks1) {
+            duplicate_shred_handler.handle(CrdsData::DuplicateShred(index, chunk1));
+            // The first proof will never succeed because it's replaced in chunkmap by next one
+            // with newer wallclock.
+            assert!(!blockstore.has_duplicate_shreds_in_slot(1));
+            duplicate_shred_handler.handle(CrdsData::DuplicateShred(index + 1, chunk2));
+            index += 2
+        }
+        // The second proof will succeed.
+        assert!(blockstore.has_duplicate_shreds_in_slot(1));
+
+        let mut all_chunks = vec![];
+        for i in 0..ALLOWED_SLOTS_PER_PUBKEY + 1 {
+            all_chunks.push(
+                create_duplicate_proof(
+                    my_keypair.clone(),
+                    (2 + i).try_into().unwrap(),
+                    None,
+                    DUPLICATE_SHRED_MAX_PAYLOAD_SIZE,
+                )
+                .unwrap(),
+            )
+        }
+        let mut done_count = 0;
+        let len = all_chunks.len();
+        while done_count < len {
+            done_count = 0;
+            for chunk_iterator in &mut all_chunks {
+                match chunk_iterator.next() {
+                    Some(new_chunk) => {
+                        duplicate_shred_handler.handle(CrdsData::DuplicateShred(index, new_chunk));
+                        index += 1
+                    }
+                    _ => done_count += 1,
+                }
+            }
+        }
+        for i in 0..ALLOWED_SLOTS_PER_PUBKEY {
+            assert!(blockstore.has_duplicate_shreds_in_slot((2 + i).try_into().unwrap()));
+        }
+        // The last proof should fail because we only allow limited entries per pubkey.
+        assert!(!blockstore
+            .has_duplicate_shreds_in_slot((2 + ALLOWED_SLOTS_PER_PUBKEY).try_into().unwrap()));
     }
 }
