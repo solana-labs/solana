@@ -322,8 +322,6 @@ pull_or_push_steps() {
     if [ -z "$diff_other_than_version_bump" ]; then
       echo "Diff only contains version bump."
       command_step checks ". ci/rust-version.sh; ci/docker-run.sh \$\$rust_nightly_docker_image ci/test-checks.sh" 20
-      wait_step
-      command_step coverage ". ci/rust-version.sh; ci/docker-run.sh \$\$rust_nightly_docker_image ci/test-coverage.sh" 80
       exit 0
     fi
   fi
