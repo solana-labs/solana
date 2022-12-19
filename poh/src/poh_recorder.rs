@@ -835,7 +835,6 @@ impl PohRecorder {
         let poh = Arc::new(Mutex::new(Poh::new_with_slot_info(
             last_entry_hash,
             poh_config.hashes_per_tick,
-            ticks_per_slot,
             tick_number,
         )));
 

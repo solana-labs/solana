@@ -47,15 +47,10 @@ impl CrdsGossip {
     /// Returns unique origins' pubkeys of upserted values.
     pub fn process_push_message(
         &self,
-        from: &Pubkey,
-        values: Vec<CrdsValue>,
+        messages: Vec<(/*from:*/ Pubkey, Vec<CrdsValue>)>,
         now: u64,
     ) -> HashSet<Pubkey> {
-        self.push
-            .process_push_message(&self.crds, from, values, now)
-            .into_iter()
-            .filter_map(Result::ok)
-            .collect()
+        self.push.process_push_message(&self.crds, messages, now)
     }
 
     /// Remove redundant paths in the network.
@@ -68,8 +63,7 @@ impl CrdsGossip {
     where
         I: IntoIterator<Item = Pubkey>,
     {
-        self.push
-            .prune_received_cache_many(self_pubkey, origins, stakes)
+        self.push.prune_received_cache(self_pubkey, origins, stakes)
     }
 
     pub fn new_push_messages(
@@ -163,11 +157,9 @@ impl CrdsGossip {
         wallclock: u64,
         now: u64,
     ) -> Result<(), CrdsGossipError> {
-        let expired = now > wallclock + self.push.prune_timeout;
-        if expired {
-            return Err(CrdsGossipError::PruneMessageTimeout);
-        }
-        if self_pubkey == destination {
+        if now > wallclock.saturating_add(self.push.prune_timeout) {
+            Err(CrdsGossipError::PruneMessageTimeout)
+        } else if self_pubkey == destination {
             self.push.process_prune_msg(self_pubkey, peer, origin);
             Ok(())
         } else {
@@ -318,10 +310,6 @@ impl CrdsGossip {
         timeouts: &HashMap<Pubkey, u64>,
     ) -> usize {
         let mut rv = 0;
-        if now > 5 * self.push.msg_timeout {
-            let min = now - 5 * self.push.msg_timeout;
-            self.push.purge_old_received_cache(min);
-        }
         if now > self.pull.crds_timeout {
             //sanity check
             assert_eq!(timeouts[self_pubkey], std::u64::MAX);
