@@ -721,11 +721,9 @@ where
     );
 
     let next_append_vec_id = next_append_vec_id.load(Ordering::Acquire);
-    assert!(
-        next_append_vec_id.checked_sub(1).is_some(),
-        "subtraction underflow"
-    );
-    let max_append_vec_id = next_append_vec_id - 1;
+    let max_append_vec_id = next_append_vec_id
+        .checked_sub(1)
+        .expect("next_append_vec_id should be > 0");
     assert!(
         max_append_vec_id <= AppendVecId::MAX / 2,
         "Storage id {max_append_vec_id} larger than allowed max"
