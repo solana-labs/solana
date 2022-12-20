@@ -37,7 +37,3 @@ jobs:
           stale-issue-message: "" # Leave no comment when marking as stale
           stale-pr-label: stale
           stale-pr-message: "" # Leave no comment when marking as stale
-          # Time immemorial when in debug-only mode (ie. on pull requests).
-          # `STALEBOT_START_DATE` otherwise.
-          # You can use this as a killswitch by setting `STALEBOT_START_DATE` in the far future.
-          start-date: ${{ github.event_name == 'pull_request' && '1970-01-01T00:00:00Z' || secrets.STALEBOT_START_DATE_RFC_2822 }} # ISO 8601 or RFC 2822
