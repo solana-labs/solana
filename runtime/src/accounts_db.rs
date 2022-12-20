@@ -4044,9 +4044,7 @@ impl AccountsDb {
                 let mut list = slot_stores.write().unwrap();
                 list.retain(|_key, store| {
                     if !should_retain(store) {
-                        if shrink_in_progress.is_none() {
-                            not_retaining_store(store);
-                        }
+                        not_retaining_store(store);
                         false
                     } else {
                         true
