@@ -1026,13 +1026,13 @@ fn load_bank_forks(
     incremental_snapshot_archive_path: Option<PathBuf>,
 ) -> Result<(Arc<RwLock<BankForks>>, Option<StartingSnapshotHashes>), BlockstoreProcessorError> {
     let arg_snapshot_from_file = arg_matches.is_present("snapshot_from_file");
-    let bank_snapshots_dir = blockstore.ledger_path().join(
-        if blockstore.is_primary_access() || arg_snapshot_from_file {
+    let bank_snapshots_dir = blockstore
+        .ledger_path()
+        .join(if blockstore.is_primary_access() {
             "snapshot"
         } else {
             "snapshot.ledger-tool"
-        },
-    );
+        });
 
     let mut starting_slot = 0; // default start check with genesis
     let snapshot_config = if arg_matches.is_present("no_snapshot") {
@@ -1081,7 +1081,7 @@ fn load_bank_forks(
             exit(1);
         }
         account_paths.split(',').map(PathBuf::from).collect()
-    } else if blockstore.is_primary_access() || arg_snapshot_from_file {
+    } else if blockstore.is_primary_access() {
         vec![blockstore.ledger_path().join("accounts")]
     } else {
         let non_primary_accounts_path = blockstore.ledger_path().join("accounts.ledger-tool");
