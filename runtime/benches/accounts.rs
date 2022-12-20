@@ -8,8 +8,8 @@ use {
     rand::Rng,
     rayon::iter::{IntoParallelRefIterator, ParallelIterator},
     solana_runtime::{
-        accounts::{test_utils::create_test_accounts, AccountAddressFilter, Accounts},
-        accounts_db::AccountShrinkThreshold,
+        accounts::{AccountAddressFilter, Accounts},
+        accounts_db::{test_utils::create_test_accounts, AccountShrinkThreshold},
         accounts_index::{AccountSecondaryIndexes, ScanConfig},
         ancestors::Ancestors,
         bank::*,
