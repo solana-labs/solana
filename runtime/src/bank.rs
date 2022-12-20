@@ -759,6 +759,7 @@ pub struct BankFieldsToDeserialize {
     pub(crate) accounts_data_len: u64,
     pub(crate) incremental_snapshot_persistence: Option<BankIncrementalSnapshotPersistence>,
     pub(crate) epoch_accounts_hash: Option<Hash>,
+    pub(crate) application_fees_collected: Vec<(Pubkey, u64)>,
 }
 
 // Bank's common fields shared by all supported snapshot versions for serialization.
@@ -798,6 +799,7 @@ pub(crate) struct BankFieldsToSerialize<'a> {
     pub(crate) epoch_stakes: &'a HashMap<Epoch, EpochStakes>,
     pub(crate) is_delta: bool,
     pub(crate) accounts_data_len: u64,
+    pub(crate) application_fees_collected: Vec<(Pubkey, u64)>,
 }
 
 // Can't derive PartialEq because RwLock doesn't implement PartialEq
@@ -834,6 +836,7 @@ impl PartialEq for Bank {
             block_height,
             collector_id,
             collector_fees,
+            application_fees_collected,
             fee_calculator,
             fee_rate_governor,
             collected_rent,
@@ -891,6 +894,11 @@ impl PartialEq for Bank {
             && block_height == &other.block_height
             && collector_id == &other.collector_id
             && collector_fees.load(Relaxed) == other.collector_fees.load(Relaxed)
+            && other.application_fees_collected.len() == application_fees_collected.len()
+            && other.application_fees_collected.into_iter().all(|(k,v)| { match application_fees_collected.get(&k) {
+                Some(x) => *x.value() == v,
+                None => false
+            } })
             && fee_calculator == &other.fee_calculator
             && fee_rate_governor == &other.fee_rate_governor
             && collected_rent.load(Relaxed) == other.collected_rent.load(Relaxed)
@@ -1031,6 +1039,9 @@ pub struct Bank {
 
     /// Fees that have been collected
     collector_fees: AtomicU64,
+
+    /// Fees by applications
+    application_fees_collected: dashmap::DashMap<Pubkey, u64>,
 
     /// Deprecated, do not use
     /// Latest transaction fees for transactions processed by this bank
@@ -1287,6 +1298,7 @@ impl Bank {
             block_height: u64::default(),
             collector_id: Pubkey::default(),
             collector_fees: AtomicU64::default(),
+            application_fees_collected : dashmap::DashMap::new(),
             fee_calculator: FeeCalculator::default(),
             fee_rate_governor: FeeRateGovernor::default(),
             collected_rent: AtomicU64::default(),
@@ -1592,6 +1604,7 @@ impl Bank {
             parent_slot: parent.slot(),
             collector_id: *collector_id,
             collector_fees: AtomicU64::new(0),
+            application_fees_collected: dashmap::DashMap::new(),
             ancestors: Ancestors::default(),
             hash: RwLock::new(Hash::default()),
             is_delta: AtomicBool::new(false),
@@ -1939,6 +1952,9 @@ impl Bank {
             T::default()
         }
         let feature_set = new();
+        let application_fees_collected = dashmap::DashMap::new();
+        application_fees_collected.extend(fields.application_fees_collected);
+
         let mut bank = Self {
             incremental_snapshot_persistence: fields.incremental_snapshot_persistence,
             rc: bank_rc,
@@ -1968,6 +1984,7 @@ impl Bank {
             block_height: fields.block_height,
             collector_id: fields.collector_id,
             collector_fees: AtomicU64::new(fields.collector_fees),
+            application_fees_collected,
             fee_calculator: fields.fee_calculator,
             fee_rate_governor: fields.fee_rate_governor,
             collected_rent: AtomicU64::new(fields.collected_rent),
@@ -2103,6 +2120,7 @@ impl Bank {
             epoch_stakes: &self.epoch_stakes,
             is_delta: self.is_delta.load(Relaxed),
             accounts_data_len: self.load_accounts_data_size(),
+            application_fees_collected: self.application_fees_collected.into_iter().collect_vec(),
         }
     }
 
@@ -3171,6 +3189,37 @@ impl Bank {
                     burn += deposit;
                 }
             }
+
+            // apply application fees
+            let application_fees_collected = self.application_fees_collected;
+            if application_fees_collected.len() > 0 {
+                application_fees_collected.into_iter().map(|(k,v)|{
+                    if v > 0 {
+                        match self.deposit( &k, v) {
+                            Ok(post_balance) => {
+                                self.rewards.write().unwrap().push((
+                                    k,
+                                    RewardInfo {
+                                        reward_type: RewardType::ApplicationFee,
+                                        lamports: v as i64,
+                                        post_balance,
+                                        commission: None,
+                                    },
+                                ));
+                            },
+                            Err(_) => {
+                                error!(
+                                    "Burning {} fee instead of crediting {}",
+                                    v, k
+                                );
+                                inc_new_counter_error!("bank-burned_fee_lamports", v as usize);
+                                burn += v;
+                            }
+                        }
+                    }
+                });
+            }
+
             self.capitalization.fetch_sub(burn, Relaxed);
         }
     }

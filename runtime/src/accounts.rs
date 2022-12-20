@@ -134,6 +134,14 @@ pub struct ApplicationFees {
     pub pda_to_fees_maps: Arc<HashMap<Pubkey, u64>>,
 }
 
+impl ApplicationFees {
+    pub fn new_empty() -> Self {
+        ApplicationFees {
+            pda_to_fees_maps : Arc::new(HashMap::new())
+        }
+    }
+}
+
 // for the load instructions
 pub type TransactionRent = u64;
 pub type TransactionProgramIndices = Vec<Vec<IndexOfAccount>>;
@@ -3158,7 +3166,7 @@ mod tests {
                 program_indices: vec![],
                 rent: 0,
                 rent_debits: RentDebits::default(),
-                application_fees: Arc::new(HashMap::new()),
+                application_fees: ApplicationFees::new_empty(),
             }),
             None,
         );
@@ -3169,7 +3177,7 @@ mod tests {
                 program_indices: vec![],
                 rent: 0,
                 rent_debits: RentDebits::default(),
-                application_fees: Arc::new(HashMap::new()),
+                application_fees: ApplicationFees::new_empty(),
             }),
             None,
         );
@@ -3648,7 +3656,7 @@ mod tests {
                 program_indices: vec![],
                 rent: 0,
                 rent_debits: RentDebits::default(),
-                application_fees: Arc::new(HashMap::new()),
+                application_fees: ApplicationFees::new_empty(),
             }),
             nonce.clone(),
         );
@@ -3762,7 +3770,7 @@ mod tests {
                 program_indices: vec![],
                 rent: 0,
                 rent_debits: RentDebits::default(),
-                application_fees: Arc::new(HashMap::new()),
+                application_fees: ApplicationFees::new_empty(),
             }),
             nonce.clone(),
         );
