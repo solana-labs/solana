@@ -366,7 +366,13 @@ impl TracedSender {
                         SystemTime::now(),
                         TracedEvent::PacketBatch(self.label, BankingPacketBatch::clone(&batch)),
                     ))
-                    .expect("active tracer thread unless exited");
+                    .map_err(|err| {
+                        error!(
+                            "unexpected error when tracing a banking event...: {:?}",
+                            err
+                        );
+                        SendError(BankingPacketBatch::clone(&batch))
+                    })?;
             }
         }
         self.sender.send(batch)
