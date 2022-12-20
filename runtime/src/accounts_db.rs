@@ -424,6 +424,44 @@ impl<'a> FoundStoredAccount<'a> {
     }
 }
 
+/// this tuple assumes storing from a slot to the same slot
+/// accounts are `StoredAccountMeta` inside `FoundStoredAccount`
+impl<'a> StorableAccounts<'a, StoredAccountMeta<'a>>
+    for (Slot, &'a [&FoundStoredAccount<'a>], IncludeSlotInHash)
+{
+    fn pubkey(&self, index: usize) -> &Pubkey {
+        self.1[index].pubkey()
+    }
+    fn account(&self, index: usize) -> &StoredAccountMeta<'a> {
+        &self.1[index].account
+    }
+    fn slot(&self, _index: usize) -> Slot {
+        // same other slot for all accounts
+        self.0
+    }
+    fn target_slot(&self) -> Slot {
+        self.0
+    }
+    fn len(&self) -> usize {
+        self.1.len()
+    }
+    fn contains_multiple_slots(&self) -> bool {
+        false
+    }
+    fn include_slot_in_hash(&self) -> IncludeSlotInHash {
+        self.2
+    }
+    fn has_hash_and_write_version(&self) -> bool {
+        true
+    }
+    fn hash(&self, index: usize) -> &Hash {
+        self.1[index].account.hash
+    }
+    fn write_version(&self, index: usize) -> u64 {
+        self.1[index].account.meta.write_version_obsolete
+    }
+}
+
 #[cfg(not(test))]
 const ABSURD_CONSECUTIVE_FAILED_ITERATIONS: usize = 100;
 
@@ -1828,11 +1866,6 @@ impl ShrinkStats {
                 (
                     "index_read_elapsed",
                     self.index_read_elapsed.swap(0, Ordering::Relaxed) as i64,
-                    i64
-                ),
-                (
-                    "find_alive_elapsed",
-                    self.find_alive_elapsed.swap(0, Ordering::Relaxed) as i64,
                     i64
                 ),
                 (
@@ -3866,19 +3899,7 @@ impl AccountsDb {
         let mut create_and_insert_store_elapsed_us = 0;
         let mut remove_old_stores_shrink_us = 0;
         let mut store_accounts_timing = StoreAccountsTiming::default();
-        let mut find_alive_elapsed = Measure::start("find_alive_elapsed");
         if shrink_collect.aligned_total_bytes > 0 {
-            let mut accounts = Vec::with_capacity(total_accounts_after_shrink);
-            let mut hashes = Vec::with_capacity(total_accounts_after_shrink);
-            let mut write_versions = Vec::with_capacity(total_accounts_after_shrink);
-
-            for alive_account in &shrink_collect.alive_accounts {
-                accounts.push(&alive_account.account);
-                hashes.push(alive_account.account.hash);
-                write_versions.push(alive_account.account.meta.write_version_obsolete);
-            }
-            find_alive_elapsed.stop();
-
             let (shrunken_store, time) =
                 measure!(self.get_store_for_shrink(slot, shrink_collect.aligned_total_bytes));
             create_and_insert_store_elapsed_us = time.as_us();
@@ -3889,12 +3910,12 @@ impl AccountsDb {
             store_accounts_timing = self.store_accounts_frozen(
                 (
                     slot,
-                    &accounts[..],
+                    &shrink_collect.alive_accounts[..],
                     INCLUDE_SLOT_IN_HASH_IRRELEVANT_APPEND_VEC_OPERATION,
                 ),
-                Some(hashes),
+                None::<Vec<&Hash>>,
                 Some(&shrunken_store),
-                Some(Box::new(write_versions.into_iter())),
+                None,
                 StoreReclaims::Ignore,
             );
 
@@ -3921,7 +3942,7 @@ impl AccountsDb {
 
         Self::update_shrink_stats(
             &self.shrink_stats,
-            find_alive_elapsed,
+            Measure::start("ignored"), // find_alive_elapsed
             create_and_insert_store_elapsed_us,
             store_accounts_timing,
             rewrite_elapsed,

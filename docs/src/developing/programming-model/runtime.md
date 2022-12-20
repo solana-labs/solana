@@ -44,7 +44,7 @@ The policy is as follows:
 ## Balancing the balances
 
 Before and after each instruction, the sum of all account balances must stay the same.
-E.g. if one account's balance is increased, another's must be decreased by the same ammount.
+E.g. if one account's balance is increased, another's must be decreased by the same amount.
 Because the runtime can not see changes to accounts which were not passed to it,
 all accounts for which the balances were modified must be passed,
 even if they are not needed in the called instruction.
