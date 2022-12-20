@@ -39,7 +39,7 @@ pub struct DuplicateShred {
     pub(crate) num_chunks: u8,
     pub(crate) chunk_index: u8,
     #[serde(with = "serde_bytes")]
-    pub(crate) chunk: Vec<u8>,
+    chunk: Vec<u8>,
 }
 
 #[derive(Debug, Error)]

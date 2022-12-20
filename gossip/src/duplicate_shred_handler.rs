@@ -1,14 +1,10 @@
 use {
     crate::{
-        duplicate_shred::{DuplicateShred, Error},
+        duplicate_shred::{into_shreds, DuplicateShred, Error},
         duplicate_shred_listener::DuplicateShredHandlerTrait,
     },
-    itertools::Itertools,
     log::*,
-    solana_ledger::{
-        blockstore::Blockstore, blockstore_meta::DuplicateSlotProof,
-        leader_schedule_cache::LeaderScheduleCache, shred::Shred,
-    },
+    solana_ledger::{blockstore::Blockstore, leader_schedule_cache::LeaderScheduleCache},
     solana_sdk::{clock::Slot, pubkey::Pubkey},
     std::{
         collections::{HashMap, HashSet},
@@ -29,7 +25,7 @@ struct ProofChunkMap {
     num_chunks: u8,
     missing_chunks: u8,
     wallclock: u64,
-    chunks: HashMap<u8, Vec<u8>>,
+    chunks: HashMap<u8, DuplicateShred>,
 }
 
 // Group received chunks by peer pubkey, when we receive an invalid proof,
@@ -93,10 +89,11 @@ impl DuplicateShredHandler {
 
     fn handle_shred_data(&mut self, data: DuplicateShred) -> Result<(), Error> {
         if self.should_insert_chunk(&data) {
+            let slot = data.slot;
             match self.insert_chunk(data) {
                 Err(error) => return Err(error),
-                Ok(Some((slot, proof))) => {
-                    self.verify_and_apply_proof(slot, proof)?;
+                Ok(Some(chunks)) => {
+                    self.verify_and_apply_proof(slot, chunks)?;
                     // We stored the duplicate proof in this slot, no need to accept any future proof.
                     self.mark_slot_proof_received(slot);
                 }
@@ -158,10 +155,7 @@ impl DuplicateShredHandler {
         }
     }
 
-    fn insert_chunk(
-        &mut self,
-        data: DuplicateShred,
-    ) -> Result<Option<(Slot, DuplicateSlotProof)>, Error> {
+    fn insert_chunk(&mut self, data: DuplicateShred) -> Result<Option<Vec<DuplicateShred>>, Error> {
         if let SlotStatus::UnfinishedProof(slot_chunk_map) = self
             .chunk_map
             .entry(data.slot)
@@ -178,55 +172,41 @@ impl DuplicateShredHandler {
             }
             let num_chunks = data.num_chunks;
             let chunk_index = data.chunk_index;
+            let slot = data.slot;
+            let from = data.from;
             if num_chunks == proof_chunk_map.num_chunks
                 && chunk_index < num_chunks
                 && !proof_chunk_map.chunks.contains_key(&chunk_index)
             {
                 proof_chunk_map.missing_chunks = proof_chunk_map.missing_chunks.saturating_sub(1);
-                proof_chunk_map.chunks.insert(chunk_index, data.chunk);
+                proof_chunk_map.chunks.insert(chunk_index, data);
                 if proof_chunk_map.missing_chunks == 0 {
-                    let proof_data = (0..num_chunks)
-                        .map(|k| proof_chunk_map.chunks.remove(&k).unwrap())
-                        .concat();
-                    let proof: DuplicateSlotProof = bincode::deserialize(&proof_data)?;
-                    return Ok(Some((data.slot, proof)));
+                    let mut result: Vec<DuplicateShred> = Vec::new();
+                    for i in 0..num_chunks {
+                        result.push(proof_chunk_map.chunks.remove(&i).unwrap())
+                    }
+                    return Ok(Some(result));
                 }
             }
             self.validator_pending_proof_map
-                .entry(data.from)
+                .entry(from)
                 .or_insert_with(HashSet::new)
-                .insert(data.slot);
+                .insert(slot);
         }
         Ok(None)
     }
 
-    fn verify_and_apply_proof(&self, slot: Slot, proof: DuplicateSlotProof) -> Result<(), Error> {
+    fn verify_and_apply_proof(&self, slot: Slot, chunks: Vec<DuplicateShred>) -> Result<(), Error> {
         if slot <= self.blockstore.last_root() || self.blockstore.has_duplicate_shreds_in_slot(slot)
         {
             return Ok(());
         }
-        match self.leader_schedule_cache.slot_leader_at(slot, None) {
-            Some(slot_leader) => {
-                let shred1 = Shred::new_from_serialized_shred(proof.shred1.clone())?;
-                let shred2 = Shred::new_from_serialized_shred(proof.shred2.clone())?;
-                if shred1.slot() != slot || shred2.slot() != slot {
-                    Err(Error::SlotMismatch)
-                } else if shred1.index() != shred2.index() {
-                    Err(Error::ShredIndexMismatch)
-                } else if shred1.shred_type() != shred2.shred_type() {
-                    Err(Error::ShredTypeMismatch)
-                } else if shred1.payload() == shred2.payload() {
-                    Err(Error::InvalidDuplicateShreds)
-                } else if !shred1.verify(&slot_leader) || !shred2.verify(&slot_leader) {
-                    Err(Error::InvalidSignature)
-                } else {
-                    self.blockstore
-                        .store_duplicate_slot(slot, proof.shred1, proof.shred2)?;
-                    Ok(())
-                }
-            }
-            _ => Err(Error::UnknownSlotLeader),
-        }
+        let (shred1, shred2) = into_shreds(chunks, |slot| {
+            self.leader_schedule_cache.slot_leader_at(slot, None)
+        })?;
+        self.blockstore
+            .store_duplicate_slot(slot, shred1.into_payload(), shred2.into_payload())?;
+        Ok(())
     }
 
     fn cleanup_old_slots(&mut self) {
