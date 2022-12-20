@@ -858,7 +858,7 @@ describe('Transaction', () => {
       toPubkey: recipient,
       lamports: 49,
     });
-    let expectedTransaction : Transaction;
+    let expectedTransaction: Transaction;
     beforeEach(() => {
       expectedTransaction = new Transaction({
         blockhash: recentBlockhash,
@@ -866,7 +866,6 @@ describe('Transaction', () => {
       }).add(transfer);
       // To have 2 required signers we add a feepayer
       expectedTransaction.feePayer = feePayer.publicKey;
-
     });
 
     it('verifies for no sigs', () => {
@@ -886,7 +885,9 @@ describe('Transaction', () => {
       // Add one required sig
       expectedTransaction.partialSign(sender);
 
-      expect(expectedTransaction.signatures.filter(sig => sig.signature !== null)).to.have.length(1);
+      expect(
+        expectedTransaction.signatures.filter(sig => sig.signature !== null),
+      ).to.have.length(1);
 
       // No extra param should require all sigs, should be false for one missing sig
       expect(expectedTransaction.verifySignatures()).to.be.false;
@@ -903,7 +904,9 @@ describe('Transaction', () => {
       expectedTransaction.partialSign(sender);
       expectedTransaction.partialSign(feePayer);
 
-      expect(expectedTransaction.signatures.filter(sig => sig.signature !== null)).to.have.length(2);
+      expect(
+        expectedTransaction.signatures.filter(sig => sig.signature !== null),
+      ).to.have.length(2);
 
       // No extra param should require all sigs, should be true for no missing sig
       expect(expectedTransaction.verifySignatures()).to.be.true;
@@ -923,13 +926,19 @@ describe('Transaction', () => {
       expectedTransaction.signatures[0].publicKey = fakeKey.publicKey;
 
       // No extra param should require all sigs, should throw for wrong sig
-      expect(() => expectedTransaction.verifySignatures()).to.throw('unknown signer: ' + fakeKey.publicKey.toBase58());
+      expect(() => expectedTransaction.verifySignatures()).to.throw(
+        'unknown signer: ' + fakeKey.publicKey.toBase58(),
+      );
 
       // True should require all sigs, should throw for wrong sig
-      expect(() => expectedTransaction.verifySignatures(true)).to.throw('unknown signer: ' + fakeKey.publicKey.toBase58());
+      expect(() => expectedTransaction.verifySignatures(true)).to.throw(
+        'unknown signer: ' + fakeKey.publicKey.toBase58(),
+      );
 
       // False should verify only the available sigs, should throw for wrong sig
-      expect(() => expectedTransaction.verifySignatures(false)).to.throw('unknown signer: ' + fakeKey.publicKey.toBase58());
+      expect(() => expectedTransaction.verifySignatures(false)).to.throw(
+        'unknown signer: ' + fakeKey.publicKey.toBase58(),
+      );
     });
 
     it('throws for wrong sig with all sigs present', () => {
@@ -941,16 +950,20 @@ describe('Transaction', () => {
       expectedTransaction.signatures[0].publicKey = fakeKey.publicKey;
 
       // No extra param should require all sigs, should throw for wrong sig
-      expect(() => expectedTransaction.verifySignatures()).to.throw('unknown signer: ' + fakeKey.publicKey.toBase58());
+      expect(() => expectedTransaction.verifySignatures()).to.throw(
+        'unknown signer: ' + fakeKey.publicKey.toBase58(),
+      );
 
       // True should require all sigs, should throw for wrong sig
-      expect(() => expectedTransaction.verifySignatures(true)).to.throw('unknown signer: ' + fakeKey.publicKey.toBase58());
+      expect(() => expectedTransaction.verifySignatures(true)).to.throw(
+        'unknown signer: ' + fakeKey.publicKey.toBase58(),
+      );
 
       // False should verify only the available sigs, should throw for wrong sig
-      expect(() => expectedTransaction.verifySignatures(false)).to.throw('unknown signer: ' + fakeKey.publicKey.toBase58());
+      expect(() => expectedTransaction.verifySignatures(false)).to.throw(
+        'unknown signer: ' + fakeKey.publicKey.toBase58(),
+      );
     });
-
-
   });
 
   it('deprecated - externally signed stake delegate', () => {
