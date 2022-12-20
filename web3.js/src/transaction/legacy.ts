@@ -726,7 +726,7 @@ export class Transaction {
   }
 
   /**
-   * Verify signatures of a complete Transaction
+   * Verify signatures of a Transaction
    * Optional parameter specifies if we're expecting a fully signed Transaction or a partially signed one.
    * If no boolean is provided, we expect a fully signed Transaction by default.
    */
