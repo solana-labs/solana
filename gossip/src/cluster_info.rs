@@ -33,6 +33,7 @@ use {
             self, CrdsData, CrdsValue, CrdsValueLabel, EpochSlotsIndex, IncrementalSnapshotHashes,
             LowestSlot, NodeInstance, SnapshotHashes, Version, Vote, MAX_WALLCLOCK,
         },
+        duplicate_shred::DuplicateShred,
         epoch_slots::EpochSlots,
         gossip_error::GossipError,
         ping_pong::{self, PingCache, Pong},
@@ -1145,23 +1146,17 @@ impl ClusterInfo {
     }
 
     /// Returns DuplicateShred entries inserted since the given cursor.
-    /// In the future if we want to filter out other events, we should
-    /// pass in a vector of expected entry type and filter accordingly
-    /// so the result can be used in cluster_info_entry_listener.
-    pub fn get_duplicate_shred_entries(&self, cursor: &mut Cursor) -> Vec<CrdsData> {
-        let entries: Vec<CrdsData> = self
-            .time_gossip_read_lock("get_entries", &self.stats.get_entries)
-            .get_entries(cursor)
-            .filter_map(|entry| {
-                if let CrdsData::DuplicateShred(..) = entry.value.data {
-                    Some(entry.value.data.clone())
-                } else {
-                    None
-                }
+    pub fn get_duplicate_shreds(&self, cursor: &mut Cursor) -> Vec<DuplicateShred> {
+        let entries: Vec<DuplicateShred> = self
+            .time_gossip_read_lock("get_duplicate_shreds", &self.stats.get_duplicate_shreds)
+            .get_duplicate_shreds(cursor)
+            .map(|entry| match &entry.value.data {
+                CrdsData::DuplicateShred(_, shred) => shred.clone(),
+                _ => panic!("this should not happen!"),
             })
             .collect();
         self.stats
-            .get_entries_count
+            .get_duplicate_shreds_count
             .add_relaxed(entries.len() as u64);
         entries
     }
@@ -4740,7 +4735,7 @@ RPC Enabled Nodes: 1"#;
     }
 
     #[test]
-    fn test_get_entries() {
+    fn test_get_duplicate_shreds() {
         let node = Node::new_localhost();
         let host1_key = Arc::new(Keypair::new());
         let cluster_info = Arc::new(ClusterInfo::new(
@@ -4749,9 +4744,7 @@ RPC Enabled Nodes: 1"#;
             SocketAddrSpace::Unspecified,
         ));
         let mut cursor = Cursor::default();
-        assert!(cluster_info
-            .get_duplicate_shred_entries(&mut cursor)
-            .is_empty());
+        assert!(cluster_info.get_duplicate_shreds(&mut cursor).is_empty());
 
         let mut rng = rand::thread_rng();
         let (slot, parent_slot, reference_tick, version) = (53084024, 53084023, 0, 0);
@@ -4764,18 +4757,13 @@ RPC Enabled Nodes: 1"#;
             .push_duplicate_shred(&shred1, shred2.payload())
             .is_ok());
         cluster_info.flush_push_queue();
-        let entries = cluster_info.get_duplicate_shred_entries(&mut cursor);
+        let entries = cluster_info.get_duplicate_shreds(&mut cursor);
         // One duplicate shred proof is split into 3 chunks.
         assert_eq!(3, entries.len());
-        for (i, item) in entries.iter().enumerate() {
-            if let CrdsData::DuplicateShred(shred_index, shred_data) = item {
-                assert_eq!(*shred_index as usize, i);
-                assert_eq!(shred_data.from, host1_key.pubkey());
-                assert_eq!(shred_data.slot, 53084024);
-                assert_eq!(shred_data.chunk_index as usize, i);
-            } else {
-                panic!("unknown type of data {:?}", item);
-            }
+        for (i, shred_data) in entries.iter().enumerate() {
+            assert_eq!(shred_data.from, host1_key.pubkey());
+            assert_eq!(shred_data.slot, 53084024);
+            assert_eq!(shred_data.chunk_index as usize, i);
         }
 
         let slot = 53084025;
@@ -4787,18 +4775,13 @@ RPC Enabled Nodes: 1"#;
             .push_duplicate_shred(&shred3, shred4.payload())
             .is_ok());
         cluster_info.flush_push_queue();
-        let entries1 = cluster_info.get_duplicate_shred_entries(&mut cursor);
+        let entries1 = cluster_info.get_duplicate_shreds(&mut cursor);
         // One duplicate shred proof is split into 3 chunks.
         assert_eq!(3, entries1.len());
-        for (i, item) in entries1.iter().enumerate() {
-            if let CrdsData::DuplicateShred(shred_index, shred_data) = item {
-                assert_eq!(*shred_index as usize, i + 3);
-                assert_eq!(shred_data.from, host1_key.pubkey());
-                assert_eq!(shred_data.slot, 53084025);
-                assert_eq!(shred_data.chunk_index as usize, i);
-            } else {
-                panic!("unknown type of data {:?}", item);
-            }
+        for (i, shred_data) in entries1.iter().enumerate() {
+            assert_eq!(shred_data.from, host1_key.pubkey());
+            assert_eq!(shred_data.slot, 53084025);
+            assert_eq!(shred_data.chunk_index as usize, i);
         }
     }
 }

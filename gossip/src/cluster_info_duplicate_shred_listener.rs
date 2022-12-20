@@ -2,7 +2,7 @@ use {
     crate::{
         cluster_info::{ClusterInfo, GOSSIP_SLEEP_MILLIS},
         crds::Cursor,
-        crds_value::CrdsData,
+        duplicate_shred::DuplicateShred,
     },
     log::*,
     std::{
@@ -15,21 +15,21 @@ use {
     },
 };
 
-pub trait ClusterInfoEntryHandler: Send {
-    fn handle(&mut self, data: CrdsData);
+pub trait ClusterInfoDuplicateShredHandler: Send {
+    fn handle(&mut self, data: DuplicateShred);
 }
 
-pub struct ClusterInfoEntryListener {
+pub struct ClusterInfoDuplicateShredListener {
     thread_hdls: Vec<JoinHandle<()>>,
 }
 
 // Right now we only need to process duplicate proof, in the future the receiver
 // should be a map from enum value to handlers.
-impl ClusterInfoEntryListener {
+impl ClusterInfoDuplicateShredListener {
     pub fn new(
         exit: Arc<AtomicBool>,
         cluster_info: Arc<ClusterInfo>,
-        handler: impl ClusterInfoEntryHandler + 'static,
+        handler: impl ClusterInfoDuplicateShredHandler + 'static,
     ) -> Self {
         let listen_thread = {
             Builder::new()
@@ -54,12 +54,15 @@ impl ClusterInfoEntryListener {
     fn recv_loop(
         exit: Arc<AtomicBool>,
         cluster_info: &ClusterInfo,
-        mut handler: impl ClusterInfoEntryHandler + 'static,
+        mut handler: impl ClusterInfoDuplicateShredHandler + 'static,
     ) {
         let mut cursor = Cursor::default();
         while !exit.load(Ordering::Relaxed) {
-            let entries: Vec<CrdsData> = cluster_info.get_duplicate_shred_entries(&mut cursor);
-            inc_new_counter_debug!("cluster_info_entry_listener-recv_count", entries.len());
+            let entries: Vec<DuplicateShred> = cluster_info.get_duplicate_shreds(&mut cursor);
+            inc_new_counter_debug!(
+                "cluster_info_duplicate_shred_listener-recv_count",
+                entries.len()
+            );
             for x in entries {
                 handler.handle(x);
             }
@@ -73,7 +76,8 @@ mod tests {
     use {
         super::*,
         crate::{
-            cluster_info::Node, cluster_info_entry_listener::ClusterInfoEntryHandler,
+            cluster_info::Node,
+            cluster_info_duplicate_shred_listener::ClusterInfoDuplicateShredHandler,
             duplicate_shred::tests::new_rand_shred,
         },
         solana_ledger::shred::Shredder,
@@ -94,9 +98,9 @@ mod tests {
         }
     }
 
-    impl ClusterInfoEntryHandler for FakeHandler {
-        fn handle(&mut self, data: CrdsData) {
-            assert!(matches!(data, CrdsData::DuplicateShred(_, _)));
+    impl ClusterInfoDuplicateShredHandler for FakeHandler {
+        fn handle(&mut self, data: DuplicateShred) {
+            assert!(data.num_chunks > 0);
             self.count.fetch_add(1, Ordering::Relaxed);
         }
     }
@@ -113,7 +117,8 @@ mod tests {
         let exit = Arc::new(AtomicBool::new(false));
         let count = Arc::new(AtomicU32::new(0));
         let handler = FakeHandler::new(count.clone());
-        let listener = ClusterInfoEntryListener::new(exit.clone(), cluster_info.clone(), handler);
+        let listener =
+            ClusterInfoDuplicateShredListener::new(exit.clone(), cluster_info.clone(), handler);
         let mut rng = rand::thread_rng();
         let (slot, parent_slot, reference_tick, version) = (53084024, 53084023, 0, 0);
         let shredder = Shredder::new(slot, parent_slot, reference_tick, version).unwrap();

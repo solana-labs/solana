@@ -2,7 +2,7 @@
 #![allow(clippy::integer_arithmetic)]
 
 pub mod cluster_info;
-pub mod cluster_info_entry_listener;
+pub mod cluster_info_duplicate_shred_listener;
 pub mod cluster_info_metrics;
 #[macro_use]
 pub mod contact_info;

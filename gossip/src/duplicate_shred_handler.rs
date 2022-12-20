@@ -1,7 +1,6 @@
 use {
     crate::{
-        cluster_info_entry_listener::ClusterInfoEntryHandler,
-        crds_value::CrdsData,
+        cluster_info_duplicate_shred_listener::ClusterInfoDuplicateShredHandler,
         duplicate_shred::{DuplicateShred, Error},
     },
     itertools::Itertools,
@@ -63,18 +62,16 @@ pub struct DuplicateShredHandler {
     cleanup_count: usize,
 }
 
-impl ClusterInfoEntryHandler for DuplicateShredHandler {
+impl ClusterInfoDuplicateShredHandler for DuplicateShredHandler {
     // Here we are sending data one by one rather than in a batch because in the future
     // we may send different type of CrdsData to different senders.
-    fn handle(&mut self, data: CrdsData) {
-        if let CrdsData::DuplicateShred(_, shred_data) = data {
-            if let Err(error) = self.handle_shred_data(shred_data) {
-                error!("handle packet: {:?}", error)
-            }
-            if self.cleanup_count.saturating_sub(1) == 0 {
-                self.cleanup_old_slots();
-                self.cleanup_count = CLEANUP_EVERY_N_LOOPS;
-            }
+    fn handle(&mut self, shred_data: DuplicateShred) {
+        if let Err(error) = self.handle_shred_data(shred_data) {
+            error!("handle packet: {:?}", error)
+        }
+        if self.cleanup_count.saturating_sub(1) == 0 {
+            self.cleanup_old_slots();
+            self.cleanup_count = CLEANUP_EVERY_N_LOOPS;
         }
     }
 }
@@ -250,7 +247,7 @@ mod tests {
         super::*,
         crate::{
             cluster_info::DUPLICATE_SHRED_MAX_PAYLOAD_SIZE,
-            cluster_info_entry_listener::ClusterInfoEntryHandler,
+            cluster_info_duplicate_shred_listener::ClusterInfoDuplicateShredHandler,
             duplicate_shred::{from_shred, tests::new_rand_shred, DuplicateShred, Error},
         },
         solana_ledger::{
@@ -334,12 +331,10 @@ mod tests {
         .unwrap();
         assert!(!blockstore.has_duplicate_shreds_in_slot(1));
         assert!(!blockstore.has_duplicate_shreds_in_slot(2));
-        let mut index = 0;
         // Test that two proofs are mixed together, but we can store the proofs fine.
         for (chunk1, chunk2) in chunks.zip(chunks1) {
-            duplicate_shred_handler.handle(CrdsData::DuplicateShred(index, chunk1));
-            duplicate_shred_handler.handle(CrdsData::DuplicateShred(index + 1, chunk2));
-            index += 2
+            duplicate_shred_handler.handle(chunk1);
+            duplicate_shred_handler.handle(chunk2);
         }
         assert!(blockstore.has_duplicate_shreds_in_slot(1));
         assert!(blockstore.has_duplicate_shreds_in_slot(2));
@@ -360,8 +355,7 @@ mod tests {
                 Err(_) => (),
                 Ok(chunks) => {
                     for chunk in chunks {
-                        duplicate_shred_handler.handle(CrdsData::DuplicateShred(index, chunk));
-                        index += 1
+                        duplicate_shred_handler.handle(chunk);
                     }
                     assert!(!blockstore.has_duplicate_shreds_in_slot(3));
                 }
@@ -394,10 +388,8 @@ mod tests {
             DUPLICATE_SHRED_MAX_PAYLOAD_SIZE / 10,
         )
         .unwrap();
-        let mut index = 0;
         for chunk in chunks {
-            duplicate_shred_handler.handle(CrdsData::DuplicateShred(index, chunk));
-            index += 1
+            duplicate_shred_handler.handle(chunk);
         }
         assert!(!blockstore.has_duplicate_shreds_in_slot(1));
 
@@ -417,12 +409,11 @@ mod tests {
         )
         .unwrap();
         for (chunk1, chunk2) in chunks.zip(chunks1) {
-            duplicate_shred_handler.handle(CrdsData::DuplicateShred(index, chunk1));
+            duplicate_shred_handler.handle(chunk1);
             // The first proof will never succeed because it's replaced in chunkmap by next one
             // with newer wallclock.
             assert!(!blockstore.has_duplicate_shreds_in_slot(1));
-            duplicate_shred_handler.handle(CrdsData::DuplicateShred(index + 1, chunk2));
-            index += 2
+            duplicate_shred_handler.handle(chunk2);
         }
         // The second proof will succeed.
         assert!(blockstore.has_duplicate_shreds_in_slot(1));
@@ -445,10 +436,7 @@ mod tests {
             done_count = 0;
             for chunk_iterator in &mut all_chunks {
                 match chunk_iterator.next() {
-                    Some(new_chunk) => {
-                        duplicate_shred_handler.handle(CrdsData::DuplicateShred(index, new_chunk));
-                        index += 1
-                    }
+                    Some(new_chunk) => duplicate_shred_handler.handle(new_chunk),
                     _ => done_count += 1,
                 }
             }
