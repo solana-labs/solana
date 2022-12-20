@@ -79,6 +79,8 @@ pub const REPAIR_PING_CACHE_TTL: Duration = Duration::from_secs(1280);
 const REPAIR_PING_CACHE_RATE_LIMIT_DELAY: Duration = Duration::from_secs(2);
 pub(crate) const REPAIR_RESPONSE_SERIALIZED_PING_BYTES: usize =
     4 /*enum discriminator*/ + PUBKEY_BYTES + REPAIR_PING_TOKEN_SIZE + SIGNATURE_BYTES;
+const REPAIR_REQUEST_SERIALIZED_PONG_BYTES: usize =
+    4 /*enum discriminator*/ + PUBKEY_BYTES + HASH_BYTES + SIGNATURE_BYTES;
 const SIGNED_REPAIR_TIME_WINDOW: Duration = Duration::from_secs(60 * 10); // 10 min
 
 #[cfg(test)]
@@ -181,6 +183,7 @@ struct ServeRepairStats {
     err_sig_verify: usize,
     err_unsigned: usize,
     err_id_mismatch: usize,
+    recv_batching_us: u64,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -236,6 +239,8 @@ pub enum RepairProtocol {
         slot: Slot,
     },
 }
+
+const PONG_DISCRIMINANT_VALUE: u32 = 7;
 
 #[derive(Serialize, Deserialize, Debug)]
 pub(crate) enum RepairResponse {
@@ -446,6 +451,27 @@ impl ServeRepair {
         }
     }
 
+    fn is_pong(pkt: &Packet) -> bool {
+        pkt.meta().size == REPAIR_REQUEST_SERIALIZED_PONG_BYTES
+            && Some(PONG_DISCRIMINANT_VALUE)
+                == pkt
+                    .data(..4)
+                    .and_then(|data| <[u8; 4]>::try_from(data).ok())
+                    .map(u32::from_le_bytes)
+    }
+
+    fn retain_pongs(batch: &mut PacketBatch, drop_counter: &mut usize) -> bool {
+        let mut drop_count = 0;
+        for pkt in batch.iter_mut() {
+            if !Self::is_pong(pkt) {
+                pkt.meta_mut().set_discard(true);
+                drop_count += 1;
+            }
+        }
+        *drop_counter += drop_count;
+        drop_count != batch.len()
+    }
+
     /// Process messages from the network
     fn run_listen(
         &self,
@@ -462,7 +488,6 @@ impl ServeRepair {
         let mut reqs_v = vec![requests_receiver.recv_timeout(timeout)?];
         const MAX_REQUESTS_PER_ITERATION: usize = 1024;
         let mut total_requests = reqs_v[0].len();
-
         let socket_addr_space = *self.cluster_info.socket_addr_space();
         let root_bank = self.bank_forks.read().unwrap().root_bank();
         let epoch_staked_nodes = root_bank.epoch_staked_nodes(root_bank.epoch());
@@ -480,16 +505,20 @@ impl ServeRepair {
         };
 
         let mut dropped_requests = 0;
-        while let Ok(more) = requests_receiver.try_recv() {
+        let recv_start = Instant::now();
+        while let Ok(mut more) = requests_receiver.try_recv() {
             total_requests += more.len();
-            if total_requests > max_buffered_packets {
-                dropped_requests += more.len();
-            } else {
+
+            if total_requests <= max_buffered_packets
+                || Self::retain_pongs(&mut more, &mut stats.dropped_requests_load_shed)
+            {
                 reqs_v.push(more);
+            } else {
+                dropped_requests += more.len();
             }
         }
-
         stats.dropped_requests_load_shed += dropped_requests;
+        stats.recv_batching_us += recv_start.elapsed().as_micros() as u64;
         stats.total_requests += total_requests;
 
         let decode_start = Instant::now();
@@ -648,6 +677,7 @@ impl ServeRepair {
             ("err_sig_verify", stats.err_sig_verify, i64),
             ("err_unsigned", stats.err_unsigned, i64),
             ("err_id_mismatch", stats.err_id_mismatch, i64),
+            ("recv_batching_us", stats.recv_batching_us, i64),
         );
 
         *stats = ServeRepairStats::default();
@@ -820,18 +850,20 @@ impl ServeRepair {
     ) {
         let identity_keypair = self.cluster_info.keypair().clone();
         let mut pending_pings = Vec::default();
-
-        let requests_len = requests.len();
-        for (
-            i,
-            RepairRequestWithMeta {
-                request,
-                from_addr,
-                stake,
-                ..
-            },
-        ) in requests.into_iter().enumerate()
+        let mut bandwidth_consumed = false;
+        for RepairRequestWithMeta {
+            request,
+            from_addr,
+            stake,
+            ..
+        } in requests.into_iter()
         {
+            // Always process pong messages
+            if bandwidth_consumed && !matches!(&request, RepairProtocol::Pong(_)) {
+                stats.dropped_requests_outbound_bandwidth += 1;
+                continue;
+            }
+
             if !matches!(&request, RepairProtocol::Pong(_)) {
                 let (check, ping_pkt) =
                     Self::check_ping_cache(ping_cache, &request, &from_addr, &identity_keypair);
@@ -859,9 +891,9 @@ impl ServeRepair {
                     false => stats.total_response_bytes_unstaked += num_response_bytes,
                 }
             } else {
-                stats.dropped_requests_outbound_bandwidth += requests_len - i;
+                bandwidth_consumed = true;
+                stats.dropped_requests_outbound_bandwidth += 1;
                 stats.total_dropped_response_packets += num_response_packets;
-                break;
             }
         }
 
@@ -1281,6 +1313,68 @@ mod tests {
         } else {
             assert!(res.is_err());
         }
+    }
+
+    #[test]
+    fn test_is_pong() {
+        let mut rng = rand::thread_rng();
+        let keypair = Keypair::new();
+
+        let ping = Ping::new_rand(&mut rng, &keypair).unwrap();
+        let pong = Pong::new(&ping, &keypair).unwrap();
+        let repair_pong = RepairProtocol::Pong(pong);
+        let pkt = Packet::from_data(None, repair_pong).unwrap();
+        assert!(ServeRepair::is_pong(&pkt));
+
+        let ping = Ping::new_rand(&mut rng, &keypair).unwrap();
+        let repair_ping = RepairResponse::Ping(ping);
+        let pkt = Packet::from_data(None, repair_ping).unwrap();
+        assert!(!ServeRepair::is_pong(&pkt));
+    }
+
+    #[test]
+    fn test_retain_pongs() {
+        let mut rng = rand::thread_rng();
+        let my_id = Pubkey::new_unique();
+        let mut pkts = Vec::default();
+        let mut pongs = 0;
+        for _ in 0..100 {
+            let keypair = Keypair::new();
+            let pkt = if rng.gen_range(0, 2) == 0 {
+                pongs += 1;
+                let ping = Ping::new_rand(&mut rng, &keypair).unwrap();
+                let pong = Pong::new(&ping, &keypair).unwrap();
+                let repair_pong = RepairProtocol::Pong(pong);
+                Packet::from_data(None, repair_pong).unwrap()
+            } else {
+                let header = RepairRequestHeader::new(
+                    keypair.pubkey(),
+                    my_id,
+                    timestamp(),
+                    /*nonce*/ 456,
+                );
+                let repair_orphan = RepairProtocol::Orphan { header, slot: 123 };
+                Packet::from_data(None, repair_orphan).unwrap()
+            };
+            pkts.push(pkt);
+        }
+        let mut batch = PacketBatch::new(pkts);
+
+        let mut drop_counter = 0;
+        let found_pongs = ServeRepair::retain_pongs(&mut batch, &mut drop_counter);
+
+        assert_eq!(found_pongs, drop_counter != 100);
+        assert_eq!(drop_counter, 100 - pongs);
+        let mut discard_count = 0;
+        for pkt in &batch {
+            if pkt.meta().discard() {
+                discard_count += 1;
+            } else {
+                let request: RepairProtocol = pkt.deserialize_slice(..).unwrap();
+                assert!(matches!(&request, RepairProtocol::Pong(_)));
+            }
+        }
+        assert_eq!(discard_count, drop_counter);
     }
 
     #[test]
