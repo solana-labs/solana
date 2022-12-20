@@ -155,7 +155,6 @@ impl RequestResponse for AncestorHashesRepairType {
 #[derive(Default)]
 struct ServeRepairStats {
     total_requests: usize,
-    unsigned_requests: usize,
     dropped_requests_outbound_bandwidth: usize,
     dropped_requests_load_shed: usize,
     dropped_requests_low_stake: usize,
@@ -512,11 +511,8 @@ impl ServeRepair {
                     continue;
                 }
 
-                if request.supports_signature() {
-                    // collect stats for signature verification
-                    Self::verify_signed_packet(&my_id, packet, &request, stats);
-                } else {
-                    stats.unsigned_requests += 1;
+                if !Self::verify_signed_packet(&my_id, packet, &request, stats) {
+                    continue;
                 }
 
                 if request.sender() == &my_id {
@@ -582,7 +578,6 @@ impl ServeRepair {
         datapoint_info!(
             "serve_repair-requests_received",
             ("total_requests", stats.total_requests, i64),
-            ("unsigned_requests", stats.unsigned_requests, i64),
             (
                 "dropped_requests_outbound_bandwidth",
                 stats.dropped_requests_outbound_bandwidth,
@@ -707,6 +702,7 @@ impl ServeRepair {
             .unwrap()
     }
 
+    #[must_use]
     fn verify_signed_packet(
         my_id: &Pubkey,
         packet: &Packet,
@@ -721,7 +717,6 @@ impl ServeRepair {
             | RepairProtocol::LegacyHighestWindowIndexWithNonce(_, _, _, _)
             | RepairProtocol::LegacyOrphanWithNonce(_, _, _)
             | RepairProtocol::LegacyAncestorHashes(_, _, _) => {
-                debug_assert!(false); // expecting only signed request types
                 stats.err_unsigned += 1;
                 return false;
             }
