@@ -4,7 +4,7 @@ pub use solana_perf::report_target_features;
 use {
     crate::{
         accounts_hash_verifier::AccountsHashVerifier,
-        banking_trace::BankingTracer,
+        banking_trace::{self, BankingTracer},
         broadcast_stage::BroadcastStageType,
         cache_block_meta_service::{CacheBlockMetaSender, CacheBlockMetaService},
         cluster_info_vote_listener::VoteTracker,
@@ -176,7 +176,7 @@ pub struct ValidatorConfig {
     pub ledger_column_options: LedgerColumnOptions,
     pub runtime_config: RuntimeConfig,
     pub replay_slots_concurrently: bool,
-    pub banking_trace_size: u64,
+    pub banking_trace_dir_byte_limit: banking_trace::DirByteLimit,
 }
 
 impl Default for ValidatorConfig {
@@ -238,7 +238,7 @@ impl Default for ValidatorConfig {
             ledger_column_options: LedgerColumnOptions::default(),
             runtime_config: RuntimeConfig::default(),
             replay_slots_concurrently: false,
-            banking_trace_size: 0,
+            banking_trace_dir_byte_limit: 0,
         }
     }
 }
@@ -930,12 +930,13 @@ impl Validator {
             exit.clone(),
         );
 
-        let banking_tracer = BankingTracer::new((config.banking_trace_size > 0).then_some((
-            blockstore.banking_trace_path(),
-            exit.clone(),
-            config.banking_trace_size,
-        )))
-        .map_err(|err| format!("{} [{:?}]", &err, &err))?;
+        let banking_tracer =
+            BankingTracer::new((config.banking_trace_dir_byte_limit > 0).then_some((
+                blockstore.banking_trace_path(),
+                exit.clone(),
+                config.banking_trace_dir_byte_limit,
+            )))
+            .map_err(|err| format!("{} [{:?}]", &err, &err))?;
 
         let (replay_vote_sender, replay_vote_receiver) = unbounded();
         let tvu = Tvu::new(
