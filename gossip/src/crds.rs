@@ -66,6 +66,8 @@ pub struct Crds {
     votes: BTreeMap<u64 /*insert order*/, usize /*index*/>,
     // Indices of EpochSlots keyed by insert order.
     epoch_slots: BTreeMap<u64 /*insert order*/, usize /*index*/>,
+    // Indices of DuplicateShred keyed by insert order.
+    duplicate_shreds: BTreeMap<u64 /*insert order*/, usize /*index*/>,
     // Indices of all crds values associated with a node.
     records: HashMap<Pubkey, IndexSet<usize>>,
     // Indices of all entries keyed by insert order.
@@ -157,6 +159,7 @@ impl Default for Crds {
             nodes: IndexSet::default(),
             votes: BTreeMap::default(),
             epoch_slots: BTreeMap::default(),
+            duplicate_shreds: BTreeMap::default(),
             records: HashMap::default(),
             entries: BTreeMap::default(),
             purged: VecDeque::default(),
@@ -227,6 +230,9 @@ impl Crds {
                     CrdsData::EpochSlots(_, _) => {
                         self.epoch_slots.insert(value.ordinal, entry_index);
                     }
+                    CrdsData::DuplicateShred(_, _) => {
+                        self.duplicate_shreds.insert(value.ordinal, entry_index);
+                    }
                     _ => (),
                 };
                 self.entries.insert(value.ordinal, entry_index);
@@ -254,6 +260,10 @@ impl Crds {
                     CrdsData::EpochSlots(_, _) => {
                         self.epoch_slots.remove(&entry.get().ordinal);
                         self.epoch_slots.insert(value.ordinal, entry_index);
+                    }
+                    CrdsData::DuplicateShred(_, _) => {
+                        self.duplicate_shreds.remove(&entry.get().ordinal);
+                        self.duplicate_shreds.insert(value.ordinal, entry_index);
                     }
                     _ => (),
                 }
@@ -338,6 +348,21 @@ impl Crds {
             cursor.consume(*ordinal);
             self.table.index(*index)
         })
+    }
+
+    /// Returns duplicate-shreds inserted since the given cursor.
+    /// Updates the cursor as the values are consumed.
+    pub(crate) fn get_duplicate_shreds<'a>(
+        &'a self,
+        cursor: &'a mut Cursor,
+    ) -> impl Iterator<Item = &'a VersionedCrdsValue> {
+        let range = (Bound::Included(cursor.ordinal()), Bound::Unbounded);
+        self.duplicate_shreds
+            .range(range)
+            .map(move |(ordinal, index)| {
+                cursor.consume(*ordinal);
+                self.table.index(*index)
+            })
     }
 
     /// Returns all entries inserted since the given cursor.
@@ -499,6 +524,9 @@ impl Crds {
             CrdsData::EpochSlots(_, _) => {
                 self.epoch_slots.remove(&value.ordinal);
             }
+            CrdsData::DuplicateShred(_, _) => {
+                self.duplicate_shreds.remove(&value.ordinal);
+            }
             _ => (),
         }
         self.entries.remove(&value.ordinal);
@@ -533,6 +561,9 @@ impl Crds {
                 }
                 CrdsData::EpochSlots(_, _) => {
                     self.epoch_slots.insert(value.ordinal, index);
+                }
+                CrdsData::DuplicateShred(_, _) => {
+                    self.duplicate_shreds.insert(value.ordinal, index);
                 }
                 _ => (),
             };
@@ -618,6 +649,7 @@ impl Crds {
             nodes: self.nodes.clone(),
             votes: self.votes.clone(),
             epoch_slots: self.epoch_slots.clone(),
+            duplicate_shreds: self.duplicate_shreds.clone(),
             records: self.records.clone(),
             entries: self.entries.clone(),
             purged: self.purged.clone(),
