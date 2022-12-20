@@ -16191,7 +16191,7 @@ pub mod tests {
     impl AccountsDb {
         /// useful to adapt tests written prior to introduction of the write cache
         /// to use the write cache
-        fn add_root_and_flush_write_cache(&self, slot: Slot) {
+        pub fn add_root_and_flush_write_cache(&self, slot: Slot) {
             self.add_root(slot);
             self.flush_root_write_cache(slot);
         }
@@ -16212,7 +16212,7 @@ pub mod tests {
         }
 
         /// callers use to call store_uncached. But, this is not allowed anymore.
-        fn store_for_tests(&self, slot: Slot, accounts: &[(&Pubkey, &AccountSharedData)]) {
+        pub fn store_for_tests(&self, slot: Slot, accounts: &[(&Pubkey, &AccountSharedData)]) {
             self.store(
                 (slot, accounts, INCLUDE_SLOT_IN_HASH_TESTS),
                 true,
