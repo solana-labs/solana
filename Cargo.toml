@@ -59,6 +59,7 @@ members = [
     "programs/stake",
     "programs/vote",
     "programs/zk-token-proof",
+    "programs/application-fees",
     "pubsub-client",
     "quic-client",
     "rayon-threadlimit",

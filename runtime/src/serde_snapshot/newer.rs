@@ -100,7 +100,7 @@ impl From<DeserializableVersionedBank> for BankFieldsToDeserialize {
             is_delta: dvb.is_delta,
             incremental_snapshot_persistence: None,
             epoch_accounts_hash: None,
-            application_fees_collected : dvb.application_fees_collected,
+            application_fees_collected: dvb.application_fees_collected,
         }
     }
 }
@@ -180,7 +180,7 @@ impl<'a> From<crate::bank::BankFieldsToSerialize<'a>> for SerializableVersionedB
             unused_accounts: UnusedAccounts::default(),
             epoch_stakes: rhs.epoch_stakes,
             is_delta: rhs.is_delta,
-            application_fees_collected : rhs.application_fees_collected,
+            application_fees_collected: rhs.application_fees_collected,
         }
     }
 }

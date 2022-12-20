@@ -137,7 +137,7 @@ pub struct ApplicationFees {
 impl ApplicationFees {
     pub fn new_empty() -> Self {
         ApplicationFees {
-            pda_to_fees_maps : Arc::new(HashMap::new())
+            pda_to_fees_maps: Arc::new(HashMap::new()),
         }
     }
 }

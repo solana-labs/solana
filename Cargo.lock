@@ -4731,6 +4731,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "solana-application-fees"
+version = "1.15.0"
+dependencies = [
+ "bincode",
+ "log",
+ "rustc_version 0.4.0",
+ "solana-program 1.15.0",
+ "solana-program-runtime",
+ "solana-sdk 1.15.0",
+]
+
+[[package]]
 name = "solana-banking-bench"
 version = "1.15.0"
 dependencies = [
