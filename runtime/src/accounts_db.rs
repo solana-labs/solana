@@ -1306,10 +1306,6 @@ pub struct AccountsDb {
 
     pub thread_pool_clean: ThreadPool,
 
-    /// Number of append vecs to create to maximize parallelism when scanning
-    /// the accounts
-    min_num_stores: usize,
-
     pub bank_hashes: RwLock<HashMap<Slot, BankHashInfo>>,
 
     pub stats: AccountsStats,
@@ -2314,7 +2310,6 @@ impl AccountsDb {
                 .build()
                 .unwrap(),
             thread_pool_clean: make_min_priority_thread_pool(),
-            min_num_stores: num_threads,
             bank_hashes: RwLock::new(bank_hashes),
             external_purge_slots_stats: PurgeStats::default(),
             clean_accounts_stats: CleanAccountsStats::default(),
@@ -2474,17 +2469,11 @@ impl AccountsDb {
     }
 
     pub fn new_single_for_tests() -> Self {
-        AccountsDb {
-            min_num_stores: 0,
-            ..AccountsDb::new_for_tests(Vec::new(), &ClusterType::Development)
-        }
+        AccountsDb::new_for_tests(Vec::new(), &ClusterType::Development)
     }
 
     pub fn new_single_for_tests_with_caching() -> Self {
-        AccountsDb {
-            min_num_stores: 0,
-            ..AccountsDb::new_for_tests_with_caching(Vec::new(), &ClusterType::Development)
-        }
+        AccountsDb::new_for_tests_with_caching(Vec::new(), &ClusterType::Development)
     }
 
     fn next_id(&self) -> AppendVecId {
@@ -5450,7 +5439,6 @@ impl AccountsDb {
     }
 
     fn find_storage_candidate(&self, slot: Slot, size: usize) -> Arc<AccountStorageEntry> {
-        let mut create_extra = false;
         let mut get_slot_stores = Measure::start("get_slot_stores");
         let slot_stores_lock = self.storage.get_slot_stores(slot);
         get_slot_stores.stop();
@@ -5461,18 +5449,6 @@ impl AccountsDb {
         if let Some(slot_stores_lock) = slot_stores_lock {
             let slot_stores = slot_stores_lock.read().unwrap();
             if !slot_stores.is_empty() {
-                if slot_stores.len() <= self.min_num_stores {
-                    let mut total_accounts = 0;
-                    for store in slot_stores.values() {
-                        total_accounts += store.count();
-                    }
-
-                    // Create more stores so that when scanning the storage all CPUs have work
-                    if (total_accounts / 16) >= slot_stores.len() {
-                        create_extra = true;
-                    }
-                }
-
                 // pick an available store at random by iterating from a random point
                 let to_skip = thread_rng().gen_range(0, slot_stores.len());
 
@@ -5480,13 +5456,6 @@ impl AccountsDb {
                     if store.try_available() {
                         let ret = store.clone();
                         drop(slot_stores);
-                        if create_extra
-                            && self
-                                .try_recycle_and_insert_store(slot, size as u64, std::u64::MAX)
-                                .is_none()
-                        {
-                            self.create_and_insert_store(slot, self.file_size, "store extra");
-                        }
                         find_existing.stop();
                         self.stats
                             .store_find_existing
@@ -9434,7 +9403,6 @@ impl AccountsDb {
     pub fn new_sized_no_extra_stores(paths: Vec<PathBuf>, file_size: u64) -> Self {
         AccountsDb {
             file_size,
-            min_num_stores: 0,
             ..AccountsDb::new(paths, &ClusterType::Development)
         }
     }
