@@ -1470,7 +1470,7 @@ mod tests {
         super::*,
         crate::{
             bank::{DurableNonceFee, TransactionExecutionDetails},
-            rent_collector::{RentCollector, RENT_EXEMPT_RENT_EPOCH},
+            rent_collector::RentCollector,
         },
         assert_matches::assert_matches,
         solana_address_lookup_table_program::state::LookupTableMeta,
@@ -1841,9 +1841,7 @@ mod tests {
             lamports_per_signature,
             &rent_collector,
             &mut error_counters,
-            &all_features_except(Some(&[
-                solana_sdk::feature_set::set_exempt_rent_epoch_max::id(),
-            ])),
+            &all_features_except(None),
             &FeeStructure::default(),
         );
         assert_eq!(loaded_accounts.len(), 1);
@@ -1886,7 +1884,6 @@ mod tests {
 
     #[test]
     fn test_load_accounts_no_loaders() {
-        let initial_rent_epoch = 1;
         let mut accounts: Vec<TransactionAccount> = Vec::new();
         let mut error_counters = TransactionErrorMetrics::default();
 
@@ -1895,11 +1892,11 @@ mod tests {
         let key1 = Pubkey::new(&[5u8; 32]);
 
         let mut account = AccountSharedData::new(1, 0, &Pubkey::default());
-        account.set_rent_epoch(initial_rent_epoch);
+        account.set_rent_epoch(1);
         accounts.push((key0, account));
 
         let mut account = AccountSharedData::new(2, 1, &Pubkey::default());
-        account.set_rent_epoch(initial_rent_epoch);
+        account.set_rent_epoch(1);
         accounts.push((key1, account));
 
         let instructions = vec![CompiledInstruction::new(2, &(), vec![0, 1])];
@@ -1911,13 +1908,8 @@ mod tests {
             instructions,
         );
 
-        let loaded_accounts = load_accounts_with_excluded_features(
-            tx,
-            &accounts,
-            &mut error_counters,
-            (!set_exempt_rent_epoch_max)
-                .then_some(&[solana_sdk::feature_set::set_exempt_rent_epoch_max::id()]),
-        );
+        let loaded_accounts =
+            load_accounts_with_excluded_features(tx, &accounts, &mut error_counters, None);
 
         assert_eq!(error_counters.account_not_found, 0);
         assert_eq!(loaded_accounts.len(), 1);
@@ -2069,7 +2061,6 @@ mod tests {
 
     #[test]
     fn test_load_accounts_multiple_loaders() {
-        let initial_rent_epoch = 1;
         let mut accounts: Vec<TransactionAccount> = Vec::new();
         let mut error_counters = TransactionErrorMetrics::default();
 
@@ -2079,18 +2070,18 @@ mod tests {
         let key2 = Pubkey::new(&[6u8; 32]);
 
         let mut account = AccountSharedData::new(1, 0, &Pubkey::default());
-        account.set_rent_epoch(initial_rent_epoch);
+        account.set_rent_epoch(1);
         accounts.push((key0, account));
 
         let mut account = AccountSharedData::new(40, 1, &Pubkey::default());
         account.set_executable(true);
-        account.set_rent_epoch(initial_rent_epoch);
+        account.set_rent_epoch(1);
         account.set_owner(native_loader::id());
         accounts.push((key1, account));
 
         let mut account = AccountSharedData::new(41, 1, &Pubkey::default());
         account.set_executable(true);
-        account.set_rent_epoch(initial_rent_epoch);
+        account.set_rent_epoch(1);
         account.set_owner(key1);
         accounts.push((key2, account));
 
@@ -2106,13 +2097,8 @@ mod tests {
             instructions,
         );
 
-        let loaded_accounts = load_accounts_with_excluded_features(
-            tx,
-            &accounts,
-            &mut error_counters,
-            (!set_exempt_rent_epoch_max)
-                .then_some(&[solana_sdk::feature_set::set_exempt_rent_epoch_max::id()]),
-        );
+        let loaded_accounts =
+            load_accounts_with_excluded_features(tx, &accounts, &mut error_counters, None);
 
         assert_eq!(error_counters.account_not_found, 0);
         assert_eq!(loaded_accounts.len(), 1);
@@ -2306,89 +2292,67 @@ mod tests {
 
     #[test]
     fn test_load_accounts_executable_with_write_lock() {
-        let initial_rent_epoch = 1;
-        for (expected_rent_epoch, set_exempt_rent_epoch_max) in
-            [(RENT_EXEMPT_RENT_EPOCH, true), (initial_rent_epoch, false)]
-        {
-            let mut accounts: Vec<TransactionAccount> = Vec::new();
-            let mut error_counters = TransactionErrorMetrics::default();
+        let mut accounts: Vec<TransactionAccount> = Vec::new();
+        let mut error_counters = TransactionErrorMetrics::default();
 
-            let keypair = Keypair::new();
-            let key0 = keypair.pubkey();
-            let key1 = Pubkey::new(&[5u8; 32]);
-            let key2 = Pubkey::new(&[6u8; 32]);
+        let keypair = Keypair::new();
+        let key0 = keypair.pubkey();
+        let key1 = Pubkey::new(&[5u8; 32]);
+        let key2 = Pubkey::new(&[6u8; 32]);
 
-            let mut account = AccountSharedData::new(1, 0, &Pubkey::default());
-            account.set_rent_epoch(initial_rent_epoch);
-            accounts.push((key0, account));
+        let mut account = AccountSharedData::new(1, 0, &Pubkey::default());
+        account.set_rent_epoch(1);
+        accounts.push((key0, account));
 
-            let mut account = AccountSharedData::new(40, 1, &native_loader::id());
-            account.set_executable(true);
-            account.set_rent_epoch(initial_rent_epoch);
-            accounts.push((key1, account));
+        let mut account = AccountSharedData::new(40, 1, &native_loader::id());
+        account.set_executable(true);
+        account.set_rent_epoch(1);
+        accounts.push((key1, account));
 
-            let mut account = AccountSharedData::new(40, 1, &native_loader::id());
-            account.set_executable(true);
-            account.set_rent_epoch(initial_rent_epoch);
-            accounts.push((key2, account));
+        let mut account = AccountSharedData::new(40, 1, &native_loader::id());
+        account.set_executable(true);
+        account.set_rent_epoch(1);
+        accounts.push((key2, account));
 
-            let instructions = vec![CompiledInstruction::new(2, &(), vec![0, 1])];
-            let mut message = Message::new_with_compiled_instructions(
-                1,
-                0,
-                1, // only one executable marked as readonly
-                vec![key0, key1, key2],
-                Hash::default(),
-                instructions,
-            );
-            let tx = Transaction::new(&[&keypair], message.clone(), Hash::default());
-            let loaded_accounts = load_accounts_with_excluded_features(
-                tx,
-                &accounts,
-                &mut error_counters,
-                (!set_exempt_rent_epoch_max)
-                    .then_some(&[solana_sdk::feature_set::set_exempt_rent_epoch_max::id()]),
-            );
+        let instructions = vec![CompiledInstruction::new(2, &(), vec![0, 1])];
+        let mut message = Message::new_with_compiled_instructions(
+            1,
+            0,
+            1, // only one executable marked as readonly
+            vec![key0, key1, key2],
+            Hash::default(),
+            instructions,
+        );
+        let tx = Transaction::new(&[&keypair], message.clone(), Hash::default());
+        let loaded_accounts =
+            load_accounts_with_excluded_features(tx, &accounts, &mut error_counters, None);
 
-            assert_eq!(error_counters.invalid_writable_account, 1);
-            assert_eq!(loaded_accounts.len(), 1);
-            assert_eq!(
-                loaded_accounts[0],
-                (Err(TransactionError::InvalidWritableAccount), None)
-            );
+        assert_eq!(error_counters.invalid_writable_account, 1);
+        assert_eq!(loaded_accounts.len(), 1);
+        assert_eq!(
+            loaded_accounts[0],
+            (Err(TransactionError::InvalidWritableAccount), None)
+        );
 
-            // Mark executables as readonly
-            message.account_keys = vec![key0, key1, key2]; // revert key change
-            message.header.num_readonly_unsigned_accounts = 2; // mark both executables as readonly
-            let tx = Transaction::new(&[&keypair], message, Hash::default());
-            let loaded_accounts = load_accounts_with_excluded_features(
-                tx,
-                &accounts,
-                &mut error_counters,
-                (!set_exempt_rent_epoch_max)
-                    .then_some(&[solana_sdk::feature_set::set_exempt_rent_epoch_max::id()]),
-            );
+        // Mark executables as readonly
+        message.account_keys = vec![key0, key1, key2]; // revert key change
+        message.header.num_readonly_unsigned_accounts = 2; // mark both executables as readonly
+        let tx = Transaction::new(&[&keypair], message, Hash::default());
+        let loaded_accounts =
+            load_accounts_with_excluded_features(tx, &accounts, &mut error_counters, None);
 
-            assert_eq!(error_counters.invalid_writable_account, 1);
-            assert_eq!(loaded_accounts.len(), 1);
-            let result = loaded_accounts[0].0.as_ref().unwrap();
-            assert_eq!(
-                result.accounts[..2],
-                accounts[..2],
-                "{}, {}",
-                set_exempt_rent_epoch_max,
-                expected_rent_epoch
-            );
-            assert_eq!(
-                result.accounts[result.program_indices[0][0] as usize],
-                accounts[2]
-            );
-        }
+        assert_eq!(error_counters.invalid_writable_account, 1);
+        assert_eq!(loaded_accounts.len(), 1);
+        let result = loaded_accounts[0].0.as_ref().unwrap();
+        assert_eq!(result.accounts[..2], accounts[..2]);
+        assert_eq!(
+            result.accounts[result.program_indices[0][0] as usize],
+            accounts[2]
+        );
     }
 
     #[test]
     fn test_load_accounts_upgradeable_with_write_lock() {
-        let initial_rent_epoch = 1;
         let mut accounts: Vec<TransactionAccount> = Vec::new();
         let mut error_counters = TransactionErrorMetrics::default();
 
@@ -2400,7 +2364,7 @@ mod tests {
         let programdata_key2 = Pubkey::new(&[8u8; 32]);
 
         let mut account = AccountSharedData::new(1, 0, &Pubkey::default());
-        account.set_rent_epoch(initial_rent_epoch);
+        account.set_rent_epoch(1);
         accounts.push((key0, account));
 
         let program_data = UpgradeableLoaderState::ProgramData {
@@ -2414,28 +2378,29 @@ mod tests {
         let mut account =
             AccountSharedData::new_data(40, &program, &bpf_loader_upgradeable::id()).unwrap();
         account.set_executable(true);
-        account.set_rent_epoch(initial_rent_epoch);
+        account.set_rent_epoch(1);
         accounts.push((key1, account));
         let mut account =
             AccountSharedData::new_data(40, &program_data, &bpf_loader_upgradeable::id()).unwrap();
-        account.set_rent_epoch(initial_rent_epoch);
+        account.set_rent_epoch(1);
         accounts.push((programdata_key1, account));
+
         let program = UpgradeableLoaderState::Program {
             programdata_address: programdata_key2,
         };
         let mut account =
             AccountSharedData::new_data(40, &program, &bpf_loader_upgradeable::id()).unwrap();
         account.set_executable(true);
-        account.set_rent_epoch(initial_rent_epoch);
+        account.set_rent_epoch(1);
         accounts.push((key2, account));
         let mut account =
             AccountSharedData::new_data(40, &program_data, &bpf_loader_upgradeable::id()).unwrap();
-        account.set_rent_epoch(initial_rent_epoch);
+        account.set_rent_epoch(1);
         accounts.push((programdata_key2, account));
 
         let mut account = AccountSharedData::new(40, 1, &native_loader::id()); // create mock bpf_loader_upgradeable
         account.set_executable(true);
-        account.set_rent_epoch(initial_rent_epoch);
+        account.set_rent_epoch(1);
         accounts.push((bpf_loader_upgradeable::id(), account));
 
         let instructions = vec![CompiledInstruction::new(2, &(), vec![0, 1])];
@@ -2448,13 +2413,8 @@ mod tests {
             instructions,
         );
         let tx = Transaction::new(&[&keypair], message.clone(), Hash::default());
-        let loaded_accounts = load_accounts_with_excluded_features(
-            tx,
-            &accounts,
-            &mut error_counters,
-            (!set_exempt_rent_epoch_max)
-                .then_some(&[solana_sdk::feature_set::set_exempt_rent_epoch_max::id()]),
-        );
+        let loaded_accounts =
+            load_accounts_with_excluded_features(tx, &accounts, &mut error_counters, None);
 
         assert_eq!(error_counters.invalid_writable_account, 1);
         assert_eq!(loaded_accounts.len(), 1);
@@ -2466,18 +2426,13 @@ mod tests {
         // Solution 1: include bpf_loader_upgradeable account
         message.account_keys = vec![key0, key1, bpf_loader_upgradeable::id()];
         let tx = Transaction::new(&[&keypair], message.clone(), Hash::default());
-        let loaded_accounts = load_accounts_with_excluded_features(
-            tx,
-            &accounts,
-            &mut error_counters,
-            (!set_exempt_rent_epoch_max)
-                .then_some(&[solana_sdk::feature_set::set_exempt_rent_epoch_max::id()]),
-        );
+        let loaded_accounts =
+            load_accounts_with_excluded_features(tx, &accounts, &mut error_counters, None);
 
         assert_eq!(error_counters.invalid_writable_account, 1);
         assert_eq!(loaded_accounts.len(), 1);
         let result = loaded_accounts[0].0.as_ref().unwrap();
-        assert_eq!(result.accounts[..2], accounts[..2],);
+        assert_eq!(result.accounts[..2], accounts[..2]);
         assert_eq!(
             result.accounts[result.program_indices[0][0] as usize],
             accounts[5]
@@ -2487,13 +2442,8 @@ mod tests {
         message.account_keys = vec![key0, key1, key2]; // revert key change
         message.header.num_readonly_unsigned_accounts = 2; // mark both executables as readonly
         let tx = Transaction::new(&[&keypair], message, Hash::default());
-        let loaded_accounts = load_accounts_with_excluded_features(
-            tx,
-            &accounts,
-            &mut error_counters,
-            (!set_exempt_rent_epoch_max)
-                .then_some(&[solana_sdk::feature_set::set_exempt_rent_epoch_max::id()]),
-        );
+        let loaded_accounts =
+            load_accounts_with_excluded_features(tx, &accounts, &mut error_counters, None);
 
         assert_eq!(error_counters.invalid_writable_account, 1);
         assert_eq!(loaded_accounts.len(), 1);
@@ -2515,7 +2465,6 @@ mod tests {
 
     #[test]
     fn test_load_accounts_programdata_with_write_lock() {
-        let initial_rent_epoch = 1;
         let mut accounts: Vec<TransactionAccount> = Vec::new();
         let mut error_counters = TransactionErrorMetrics::default();
 
@@ -2525,7 +2474,7 @@ mod tests {
         let key2 = Pubkey::new(&[6u8; 32]);
 
         let mut account = AccountSharedData::new(1, 0, &Pubkey::default());
-        account.set_rent_epoch(initial_rent_epoch);
+        account.set_rent_epoch(1);
         accounts.push((key0, account));
 
         let program_data = UpgradeableLoaderState::ProgramData {
@@ -2534,12 +2483,12 @@ mod tests {
         };
         let mut account =
             AccountSharedData::new_data(40, &program_data, &bpf_loader_upgradeable::id()).unwrap();
-        account.set_rent_epoch(initial_rent_epoch);
+        account.set_rent_epoch(1);
         accounts.push((key1, account));
 
         let mut account = AccountSharedData::new(40, 1, &native_loader::id());
         account.set_executable(true);
-        account.set_rent_epoch(initial_rent_epoch);
+        account.set_rent_epoch(1);
         accounts.push((key2, account));
 
         let instructions = vec![CompiledInstruction::new(2, &(), vec![0, 1])];
@@ -2552,13 +2501,8 @@ mod tests {
             instructions,
         );
         let tx = Transaction::new(&[&keypair], message.clone(), Hash::default());
-        let loaded_accounts = load_accounts_with_excluded_features(
-            tx,
-            &accounts,
-            &mut error_counters,
-            (!set_exempt_rent_epoch_max)
-                .then_some(&[solana_sdk::feature_set::set_exempt_rent_epoch_max::id()]),
-        );
+        let loaded_accounts =
+            load_accounts_with_excluded_features(tx, &accounts, &mut error_counters, None);
 
         assert_eq!(error_counters.invalid_writable_account, 1);
         assert_eq!(loaded_accounts.len(), 1);
@@ -2570,7 +2514,7 @@ mod tests {
         // Solution 1: include bpf_loader_upgradeable account
         let mut account = AccountSharedData::new(40, 1, &native_loader::id()); // create mock bpf_loader_upgradeable
         account.set_executable(true);
-        account.set_rent_epoch(initial_rent_epoch);
+        account.set_rent_epoch(1);
         let accounts_with_upgradeable_loader = vec![
             accounts[0].clone(),
             accounts[1].clone(),
@@ -2582,8 +2526,7 @@ mod tests {
             tx,
             &accounts_with_upgradeable_loader,
             &mut error_counters,
-            (!set_exempt_rent_epoch_max)
-                .then_some(&[solana_sdk::feature_set::set_exempt_rent_epoch_max::id()]),
+            None,
         );
 
         assert_eq!(error_counters.invalid_writable_account, 1);
@@ -2599,23 +2542,13 @@ mod tests {
         message.account_keys = vec![key0, key1, key2]; // revert key change
         message.header.num_readonly_unsigned_accounts = 2; // extend readonly set to include programdata
         let tx = Transaction::new(&[&keypair], message, Hash::default());
-        let loaded_accounts = load_accounts_with_excluded_features(
-            tx,
-            &accounts,
-            &mut error_counters,
-            (!set_exempt_rent_epoch_max)
-                .then_some(&[solana_sdk::feature_set::set_exempt_rent_epoch_max::id()]),
-        );
+        let loaded_accounts =
+            load_accounts_with_excluded_features(tx, &accounts, &mut error_counters, None);
 
         assert_eq!(error_counters.invalid_writable_account, 1);
         assert_eq!(loaded_accounts.len(), 1);
         let result = loaded_accounts[0].0.as_ref().unwrap();
-        assert_eq!(
-            result.accounts[..2],
-            accounts[..2],
-            "{}",
-            set_exempt_rent_epoch_max
-        );
+        assert_eq!(result.accounts[..2], accounts[..2]);
         assert_eq!(
             result.accounts[result.program_indices[0][0] as usize],
             accounts[2]

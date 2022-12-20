@@ -7981,7 +7981,7 @@ pub(crate) mod tests {
                 genesis_sysvar_and_builtin_program_lamports, GenesisConfigInfo,
                 ValidatorVoteKeypairs,
             },
-            rent_collector::{RENT_EXEMPT_RENT_EPOCH, TEST_SET_EXEMPT_RENT_EPOCH_MAX},
+            rent_collector::TEST_SET_EXEMPT_RENT_EPOCH_MAX,
             rent_paying_accounts_by_partition::RentPayingAccountsByPartition,
             status_cache::MAX_CACHE_ENTRIES,
         },
@@ -9913,8 +9913,7 @@ pub(crate) mod tests {
         let zero_lamport_pubkey = solana_sdk::pubkey::new_rand();
         let rent_due_pubkey = solana_sdk::pubkey::new_rand();
         let rent_exempt_pubkey = solana_sdk::pubkey::new_rand();
-        let bank = Bank::new_for_tests(&genesis_config);
-        let mut bank = Arc::new(bank);
+        let mut bank = Arc::new(Bank::new_for_tests(&genesis_config));
         let zero_lamports = 0;
         let little_lamports = 1234;
         let large_lamports = 123_456_789;
@@ -11937,7 +11936,6 @@ pub(crate) mod tests {
 
     #[test]
     fn test_bank_update_sysvar_account() {
-        let initial_rent_epoch = 1;
         solana_logger::setup();
         // flushing the write cache is destructive, so test has to restart each time we flush and want to do 'illegal' operations once flushed
         for pass in 0..5 {
@@ -11952,11 +11950,6 @@ pub(crate) mod tests {
 
             // First, initialize the clock sysvar
             for feature_id in FeatureSet::default().inactive {
-                if !set_exempt_rent_epoch_max
-                    && feature_id == solana_sdk::feature_set::set_exempt_rent_epoch_max::id()
-                {
-                    continue;
-                }
                 activate_feature(&mut genesis_config, feature_id);
             }
             let bank1 = Arc::new(Bank::new_for_tests_with_config(
@@ -12054,10 +12047,7 @@ pub(crate) mod tests {
                         expected_next_slot,
                         from_account::<Clock, _>(&current_account).unwrap().slot
                     );
-                    assert_eq!(
-                        /*expected_rent_epoch*/ dummy_rent_epoch,
-                        current_account.rent_epoch()
-                    );
+                    assert_eq!(dummy_rent_epoch, current_account.rent_epoch());
                 },
                 |old, new| {
                     // if existing, capitalization shouldn't change
