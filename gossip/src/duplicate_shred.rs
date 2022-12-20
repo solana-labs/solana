@@ -44,6 +44,8 @@ pub struct DuplicateShred {
 
 #[derive(Debug, Error)]
 pub enum Error {
+    #[error("block store save error")]
+    BlockstoreInsertFailed(#[from] BlockstoreError),
     #[error("data chunk mismatch")]
     DataChunkMismatch,
     #[error("invalid chunk index")]
@@ -74,8 +76,6 @@ pub enum Error {
     TryFromIntError(#[from] TryFromIntError),
     #[error("unknown slot leader")]
     UnknownSlotLeader,
-    #[error("block store save error")]
-    BlockstoreInsertFailed(#[from] BlockstoreError),
 }
 
 // Asserts that the two shreds can indicate duplicate proof for

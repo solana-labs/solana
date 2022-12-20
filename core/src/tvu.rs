@@ -31,9 +31,8 @@ use {
     solana_client::connection_cache::ConnectionCache,
     solana_geyser_plugin_manager::block_metadata_notifier_interface::BlockMetadataNotifierLock,
     solana_gossip::{
-        cluster_info::ClusterInfo,
-        cluster_info_duplicate_shred_listener::ClusterInfoDuplicateShredListener,
-        duplicate_shred_handler::DuplicateShredHandler,
+        cluster_info::ClusterInfo, duplicate_shred_handler::DuplicateShredHandler,
+        duplicate_shred_listener::DuplicateShredListener,
     },
     solana_ledger::{
         blockstore::Blockstore, blockstore_processor::TransactionStatusSender,
@@ -70,7 +69,7 @@ pub struct Tvu {
     voting_service: VotingService,
     warm_quic_cache_service: Option<WarmQuicCacheService>,
     drop_bank_service: DropBankService,
-    cluster_info_duplicate_shred_listener: ClusterInfoDuplicateShredListener,
+    duplicate_shred_listener: DuplicateShredListener,
 }
 
 pub struct TvuSockets {
@@ -304,7 +303,7 @@ impl Tvu {
             )
         });
 
-        let cluster_info_duplicate_shred_listener = ClusterInfoDuplicateShredListener::new(
+        let duplicate_shred_listener = DuplicateShredListener::new(
             exit.clone(),
             cluster_info.clone(),
             DuplicateShredHandler::new(blockstore, leader_schedule_cache.clone()),
@@ -322,7 +321,7 @@ impl Tvu {
             voting_service,
             warm_quic_cache_service,
             drop_bank_service,
-            cluster_info_duplicate_shred_listener,
+            duplicate_shred_listener,
         })
     }
 
@@ -342,7 +341,7 @@ impl Tvu {
             warmup_service.join()?;
         }
         self.drop_bank_service.join()?;
-        self.cluster_info_duplicate_shred_listener.join()?;
+        self.duplicate_shred_listener.join()?;
         Ok(())
     }
 }

@@ -1,7 +1,7 @@
 use {
     crate::{
-        cluster_info_duplicate_shred_listener::ClusterInfoDuplicateShredHandler,
         duplicate_shred::{DuplicateShred, Error},
+        duplicate_shred_listener::DuplicateShredHandlerTrait,
     },
     itertools::Itertools,
     log::*,
@@ -62,7 +62,7 @@ pub struct DuplicateShredHandler {
     cleanup_count: usize,
 }
 
-impl ClusterInfoDuplicateShredHandler for DuplicateShredHandler {
+impl DuplicateShredHandlerTrait for DuplicateShredHandler {
     // Here we are sending data one by one rather than in a batch because in the future
     // we may send different type of CrdsData to different senders.
     fn handle(&mut self, shred_data: DuplicateShred) {
@@ -247,8 +247,8 @@ mod tests {
         super::*,
         crate::{
             cluster_info::DUPLICATE_SHRED_MAX_PAYLOAD_SIZE,
-            cluster_info_duplicate_shred_listener::ClusterInfoDuplicateShredHandler,
             duplicate_shred::{from_shred, tests::new_rand_shred, DuplicateShred, Error},
+            duplicate_shred_listener::DuplicateShredHandlerTrait,
         },
         solana_ledger::{
             genesis_utils::{create_genesis_config_with_leader, GenesisConfigInfo},

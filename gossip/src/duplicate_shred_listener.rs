@@ -4,7 +4,6 @@ use {
         crds::Cursor,
         duplicate_shred::DuplicateShred,
     },
-    log::*,
     std::{
         sync::{
             atomic::{AtomicBool, Ordering},
@@ -15,21 +14,21 @@ use {
     },
 };
 
-pub trait ClusterInfoDuplicateShredHandler: Send {
+pub trait DuplicateShredHandlerTrait: Send {
     fn handle(&mut self, data: DuplicateShred);
 }
 
-pub struct ClusterInfoDuplicateShredListener {
+pub struct DuplicateShredListener {
     thread_hdls: Vec<JoinHandle<()>>,
 }
 
 // Right now we only need to process duplicate proof, in the future the receiver
 // should be a map from enum value to handlers.
-impl ClusterInfoDuplicateShredListener {
+impl DuplicateShredListener {
     pub fn new(
         exit: Arc<AtomicBool>,
         cluster_info: Arc<ClusterInfo>,
-        handler: impl ClusterInfoDuplicateShredHandler + 'static,
+        handler: impl DuplicateShredHandlerTrait + 'static,
     ) -> Self {
         let listen_thread = {
             Builder::new()
@@ -54,15 +53,11 @@ impl ClusterInfoDuplicateShredListener {
     fn recv_loop(
         exit: Arc<AtomicBool>,
         cluster_info: &ClusterInfo,
-        mut handler: impl ClusterInfoDuplicateShredHandler + 'static,
+        mut handler: impl DuplicateShredHandlerTrait + 'static,
     ) {
         let mut cursor = Cursor::default();
         while !exit.load(Ordering::Relaxed) {
             let entries: Vec<DuplicateShred> = cluster_info.get_duplicate_shreds(&mut cursor);
-            inc_new_counter_debug!(
-                "cluster_info_duplicate_shred_listener-recv_count",
-                entries.len()
-            );
             for x in entries {
                 handler.handle(x);
             }
@@ -76,9 +71,8 @@ mod tests {
     use {
         super::*,
         crate::{
-            cluster_info::Node,
-            cluster_info_duplicate_shred_listener::ClusterInfoDuplicateShredHandler,
-            duplicate_shred::tests::new_rand_shred,
+            cluster_info::Node, duplicate_shred::tests::new_rand_shred,
+            duplicate_shred_listener::DuplicateShredHandlerTrait,
         },
         solana_ledger::shred::Shredder,
         solana_sdk::signature::Keypair,
@@ -98,7 +92,7 @@ mod tests {
         }
     }
 
-    impl ClusterInfoDuplicateShredHandler for FakeHandler {
+    impl DuplicateShredHandlerTrait for FakeHandler {
         fn handle(&mut self, data: DuplicateShred) {
             assert!(data.num_chunks > 0);
             self.count.fetch_add(1, Ordering::Relaxed);
@@ -117,8 +111,7 @@ mod tests {
         let exit = Arc::new(AtomicBool::new(false));
         let count = Arc::new(AtomicU32::new(0));
         let handler = FakeHandler::new(count.clone());
-        let listener =
-            ClusterInfoDuplicateShredListener::new(exit.clone(), cluster_info.clone(), handler);
+        let listener = DuplicateShredListener::new(exit.clone(), cluster_info.clone(), handler);
         let mut rng = rand::thread_rng();
         let (slot, parent_slot, reference_tick, version) = (53084024, 53084023, 0, 0);
         let shredder = Shredder::new(slot, parent_slot, reference_tick, version).unwrap();
