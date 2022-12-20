@@ -4919,6 +4919,7 @@ impl Bank {
 
                 fees += fee;
                 // treat application fees
+                let mut application_fee_sum : u64 = 0;
                 match &transaction_load_result.0 {
                     Ok(x) => {
                         for fee in x.application_fees.pda_to_fees_maps.iter() {
@@ -4926,11 +4927,16 @@ impl Bank {
                                 Some(v) => *v = *v + *fee.1,
                                 None => { application_fees.insert(*fee.0, *fee.1);},
                             }
+                            application_fee_sum += *fee.1;
                         }
                     },
                     Err(_)=> {
                         // do nothing
                     }
+                }
+                // In similar way above we charge the application fee to the payer
+                if application_fee_sum > 0 {
+                    self.withdraw(tx.message().fee_payer(), application_fee_sum)?;
                 }
                 Ok(())
             })

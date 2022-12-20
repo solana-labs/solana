@@ -142,6 +142,7 @@ struct SerializableVersionedBank<'a> {
     unused_accounts: UnusedAccounts,
     epoch_stakes: &'a HashMap<Epoch, EpochStakes>,
     is_delta: bool,
+    application_fees_collected: Vec<(Pubkey, u64)>,
 }
 
 impl<'a> From<crate::bank::BankFieldsToSerialize<'a>> for SerializableVersionedBank<'a> {
@@ -179,6 +180,7 @@ impl<'a> From<crate::bank::BankFieldsToSerialize<'a>> for SerializableVersionedB
             unused_accounts: UnusedAccounts::default(),
             epoch_stakes: rhs.epoch_stakes,
             is_delta: rhs.is_delta,
+            application_fees_collected : rhs.application_fees_collected,
         }
     }
 }
@@ -398,6 +400,7 @@ impl<'a> TypeContext<'a> for Context {
             unused_accounts: UnusedAccounts::default(),
             epoch_stakes: &rhs.epoch_stakes,
             is_delta: rhs.is_delta,
+            application_fees_collected: rhs.application_fees_collected,
         };
 
         bincode::serialize_into(
