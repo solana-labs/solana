@@ -327,9 +327,9 @@ impl RepairService {
             for r in &repairs {
                 if let Some(x) = repairs_cache.get_mut(r) {
                     *x += 1;
-                    error!(">>> {:04} -- {:?}", x, r);
+                    //error!(">>> {:04} -- {:?}", x, r);
                 } else {
-                    repairs_cache.put(*r, 0);
+                    repairs_cache.put(*r, 1);
                 }
             }
 
@@ -397,6 +397,25 @@ impl RepairService {
                     })
                     .collect();
                 info!("repair_stats: {:?}", slot_to_count);
+
+                let mut repair_retry_1x = 0;
+                let mut repair_retry_2x = 0;
+                let mut repair_retry_3plus = 0;
+                repairs_cache.iter().for_each(|(_, count)| {
+                    match *count {
+                        1 => repair_retry_1x += 1,
+                        2 => repair_retry_2x += 1,
+                        _ => repair_retry_3plus += 1,
+                    }
+                });
+                repairs_cache.clear();
+                datapoint_info!(
+                    "repair_service-retry",
+                    ("repair_retry_1x", repair_retry_1x, i64),
+                    ("repair_retry_2x", repair_retry_2x, i64),
+                    ("repair_retry_3plus", repair_retry_3plus, i64),
+                );
+
                 if repair_total > 0 {
                     datapoint_info!(
                         "repair_service-my_requests",
