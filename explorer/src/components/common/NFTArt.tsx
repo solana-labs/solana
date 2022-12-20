@@ -170,6 +170,52 @@ const VideoArtContent = ({
   return content;
 };
 
+const AudioArtContent = ({
+  files,
+  uri,
+  animationURL,
+}: {
+  files?: (MetadataJsonFile | string)[];
+  uri?: string;
+  animationURL?: string;
+}) => {
+  const likelyAudio = (files || []).filter((f, index, arr) => {
+    if (typeof f !== "string") {
+      return false;
+    }
+    return arr.length >= 2 ? index === 1 : index === 0;
+  })?.[0] as string;
+
+
+  const content =
+    <div className={"d-block"}>
+      {uri && (
+        <img
+          className={"rounded mx-auto d-block"}
+          src={uri}
+          alt={"nft"}
+          style={{
+            width: 150,
+            maxHeight: 200,
+          }}
+        />
+      )}
+      {animationURL && (
+        <div>
+            <audio controls id="audio">
+              <source src={animationURL} />
+              Your browser does not support the <code>audio</code> element.
+            </audio>
+        </div>
+      )}
+      {(likelyAudio || animationURL) && (
+        <ViewOriginalArtContentLink src={(likelyAudio || animationURL)!} />
+      )}
+    </div>
+
+  return content;
+};
+
 const HTMLContent = ({
   animationUrl,
   files,
@@ -255,6 +301,8 @@ export const ArtContent = ({
       <VideoArtContent files={files} uri={uri} animationURL={animationURL} />
     ) : category === "html" || animationUrlExt === "html" ? (
       <HTMLContent animationUrl={animationURL} files={files} />
+    ) : category === "audio" ? (
+      <AudioArtContent animationURL={animationURL} uri={uri} files={files} />
     ) : (
       <CachedImageContent uri={uri} />
     );
