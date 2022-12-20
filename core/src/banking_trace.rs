@@ -364,7 +364,7 @@ impl TracedSender {
                 trace_sender
                     .send(TimedTracedEvent(
                         SystemTime::now(),
-                        TracedEvent::PacketBatch(self.label, Arc::clone(&batch)),
+                        TracedEvent::PacketBatch(self.label, BankingPacketBatch::clone(&batch)),
                     ))
                     .expect("active tracer thread unless exited");
             }
