@@ -8657,9 +8657,9 @@ impl AccountsDb {
         })
     }
 
-    fn generate_index_for_slot<'a>(
+    fn generate_index_for_slot(
         &self,
-        accounts_map: GenerateIndexAccountsMap<'a>,
+        accounts_map: GenerateIndexAccountsMap<'_>,
         slot: &Slot,
         rent_collector: &RentCollector,
     ) -> SlotIndexGenerationInfo {
