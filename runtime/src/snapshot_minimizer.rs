@@ -657,14 +657,14 @@ mod tests {
             current_slot += 1;
 
             for (index, pubkey) in pubkeys.iter().enumerate() {
-                accounts.store_uncached(current_slot, &[(pubkey, &account)]);
+                accounts.store_for_tests(current_slot, &[(pubkey, &account)]);
 
                 if current_slot % 2 == 0 && index % 100 == 0 {
                     minimized_account_set.insert(*pubkey);
                 }
             }
             accounts.get_accounts_delta_hash(current_slot);
-            accounts.add_root(current_slot);
+            accounts.add_root_and_flush_write_cache(current_slot);
         }
 
         assert_eq!(minimized_account_set.len(), 6);
