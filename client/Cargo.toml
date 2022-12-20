@@ -14,7 +14,7 @@ async-trait = "0.1.57"
 bincode = "1.3.3"
 enum_dispatch = "0.3.8"
 futures = "0.3"
-futures-util = "0.3.21"
+futures-util = "0.3.25"
 indexmap = "1.9.1"
 indicatif = { version = "0.17.1" }
 log = "0.4.17"
