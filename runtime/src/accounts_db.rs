@@ -9490,17 +9490,6 @@ pub mod test_utils {
                 data_size,
                 AccountSharedData::default().owner(),
             );
-            /*
-                if we have to change to using the cache
-                accounts.accounts_db.store_cached(
-                (
-                    slot,
-                    &[(&pubkey, &account)][..],
-                    crate::accounts_db::INCLUDE_SLOT_IN_HASH_TESTS,
-                ),
-                None,
-            );
-             */
             accounts.store_slow_uncached(slot, &pubkey, &account);
             pubkeys.push(pubkey);
         }
