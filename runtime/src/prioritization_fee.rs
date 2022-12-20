@@ -16,16 +16,16 @@ struct PrioritizationFeeMetrics {
     // Count of transactions that have non-zero prioritization fee.
     prioritized_transactions_count: u64,
 
-    // Count of transactions that have no prioritization fee.
+    // Count of transactions that have zero prioritization fee.
     non_prioritized_transactions_count: u64,
 
     // Total prioritization fees included in this slot.
     total_prioritization_fee: u64,
 
-    // The minimum prioritization fee in this slot.
+    // The minimum prioritization fee of prioritized transactions in this slot.
     min_prioritization_fee: Option<u64>,
 
-    // The maximum prioritization fee in this slot.
+    // The maximum prioritization fee of prioritized transactions in this slot.
     max_prioritization_fee: u64,
 
     // Accumulated time spent on tracking prioritization fee for each slot.
@@ -44,9 +44,11 @@ impl PrioritizationFeeMetrics {
     fn update_prioritization_fee(&mut self, fee: u64) {
         if fee == 0 {
             saturating_add_assign!(self.non_prioritized_transactions_count, 1);
-        } else {
-            saturating_add_assign!(self.prioritized_transactions_count, 1);
+            return;
         }
+
+        // update prioritized transaction fee metrics.
+        saturating_add_assign!(self.prioritized_transactions_count, 1);
 
         if fee > self.max_prioritization_fee {
             self.max_prioritization_fee = fee;
