@@ -339,11 +339,11 @@ impl UnprocessedTransactionStorage {
     /// of the unprocessed packets that are eligible for retry. A return value of None means that
     /// all packets are unprocessed and eligible for retry.
     #[must_use]
-    pub fn process_packets<'a, F>(
+    pub fn process_packets<F>(
         &mut self,
         bank: Arc<Bank>,
         banking_stage_stats: &BankingStageStats,
-        slot_metrics_tracker: &'a mut LeaderSlotMetricsTracker,
+        slot_metrics_tracker: &mut LeaderSlotMetricsTracker,
         processing_function: F,
     ) -> bool
     where
@@ -430,11 +430,11 @@ impl VoteStorage {
     }
 
     // returns `true` if the end of slot is reached
-    fn process_packets<'a, F>(
+    fn process_packets<F>(
         &mut self,
         bank: Arc<Bank>,
         banking_stage_stats: &BankingStageStats,
-        slot_metrics_tracker: &'a mut LeaderSlotMetricsTracker,
+        slot_metrics_tracker: &mut LeaderSlotMetricsTracker,
         mut processing_function: F,
     ) -> bool
     where
@@ -852,11 +852,11 @@ impl ThreadLocalUnprocessedPackets {
     }
 
     // returns `true` if reached end of slot
-    fn process_packets<'a, F>(
+    fn process_packets<F>(
         &mut self,
         bank: &Bank,
         banking_stage_stats: &BankingStageStats,
-        slot_metrics_tracker: &'a mut LeaderSlotMetricsTracker,
+        slot_metrics_tracker: &mut LeaderSlotMetricsTracker,
         mut processing_function: F,
     ) -> bool
     where
