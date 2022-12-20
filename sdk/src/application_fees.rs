@@ -8,7 +8,7 @@
 #![cfg(feature = "full")]
 
 use borsh::{BorshDeserialize, BorshSerialize};
-use solana_program::{instruction::Instruction, pubkey::Pubkey};
+use solana_program::{instruction::Instruction};
 crate::declare_id!("App1icationFees1111111111111111111111111111");
 
 #[derive(Serialize, Deserialize, Clone, Copy)]

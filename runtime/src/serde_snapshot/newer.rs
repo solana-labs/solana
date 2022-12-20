@@ -61,6 +61,7 @@ struct DeserializableVersionedBank {
     unused_accounts: UnusedAccounts,
     epoch_stakes: HashMap<Epoch, EpochStakes>,
     is_delta: bool,
+    application_fees_collected: Vec<(Pubkey, u64)>,
 }
 
 impl From<DeserializableVersionedBank> for BankFieldsToDeserialize {
@@ -99,6 +100,7 @@ impl From<DeserializableVersionedBank> for BankFieldsToDeserialize {
             is_delta: dvb.is_delta,
             incremental_snapshot_persistence: None,
             epoch_accounts_hash: None,
+            application_fees_collected : dvb.application_fees_collected,
         }
     }
 }

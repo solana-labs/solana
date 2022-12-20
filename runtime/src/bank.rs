@@ -895,8 +895,8 @@ impl PartialEq for Bank {
             && collector_id == &other.collector_id
             && collector_fees.load(Relaxed) == other.collector_fees.load(Relaxed)
             && other.application_fees_collected.len() == application_fees_collected.len()
-            && other.application_fees_collected.into_iter().all(|(k,v)| { match application_fees_collected.get(&k) {
-                Some(x) => *x.value() == v,
+            && other.application_fees_collected.iter().all(|iter| { match application_fees_collected.get(iter.key()) {
+                Some(x) => *x.value() == *iter.value(),
                 None => false
             } })
             && fee_calculator == &other.fee_calculator
@@ -1952,7 +1952,7 @@ impl Bank {
             T::default()
         }
         let feature_set = new();
-        let application_fees_collected = dashmap::DashMap::new();
+        let mut application_fees_collected = dashmap::DashMap::new();
         application_fees_collected.extend(fields.application_fees_collected);
 
         let mut bank = Self {
@@ -2120,7 +2120,7 @@ impl Bank {
             epoch_stakes: &self.epoch_stakes,
             is_delta: self.is_delta.load(Relaxed),
             accounts_data_len: self.load_accounts_data_size(),
-            application_fees_collected: self.application_fees_collected.into_iter().collect_vec(),
+            application_fees_collected: self.application_fees_collected.iter().map(|x| (*x.key(), *x.value())).collect_vec(),
         }
     }
 
@@ -3191,14 +3191,16 @@ impl Bank {
             }
 
             // apply application fees
-            let application_fees_collected = self.application_fees_collected;
+            let application_fees_collected = &self.application_fees_collected;
             if application_fees_collected.len() > 0 {
-                application_fees_collected.into_iter().map(|(k,v)|{
+                application_fees_collected.iter().for_each(|iter|{
+                    let k = iter.key();
+                    let v = *iter.value();
                     if v > 0 {
-                        match self.deposit( &k, v) {
+                        match self.deposit( k, v) {
                             Ok(post_balance) => {
                                 self.rewards.write().unwrap().push((
-                                    k,
+                                    *k,
                                     RewardInfo {
                                         reward_type: RewardType::ApplicationFee,
                                         lamports: v as i64,
@@ -4842,18 +4844,35 @@ impl Bank {
             .round() as u64
     }
 
+    fn merge_application_fees<'a, I>( result: &dashmap::DashMap<Pubkey, u64>, fees : I) where I : Iterator<Item = (&'a Pubkey, &'a u64)> {
+        for f in fees {
+            match result.entry(*f.0) {
+                dashmap::mapref::entry::Entry::Occupied(mut x) => {
+                    let v = x.get_mut();
+                    *v = *v + *f.1;
+                },
+                dashmap::mapref::entry::Entry::Vacant(x) => {
+                    x.insert(*f.1);
+                }
+            }
+        }
+    }
+
     fn filter_program_errors_and_collect_fee(
         &self,
         txs: &[SanitizedTransaction],
         execution_results: &[TransactionExecutionResult],
+        loaded_transactions: &[TransactionLoadResult],
     ) -> Vec<Result<()>> {
         let hash_queue = self.blockhash_queue.read().unwrap();
         let mut fees = 0;
+        let mut application_fees : HashMap<Pubkey, u64> = HashMap::new();
 
         let results = txs
             .iter()
             .zip(execution_results)
-            .map(|(tx, execution_result)| {
+            .zip(loaded_transactions)
+            .map(|((tx, execution_result), transaction_load_result)| {
                 let (execution_status, durable_nonce_fee) = match &execution_result {
                     TransactionExecutionResult::Executed { details, .. } => {
                         Ok((&details.status, details.durable_nonce_fee.as_ref()))
@@ -4899,11 +4918,27 @@ impl Bank {
                 }
 
                 fees += fee;
+                // treat application fees
+                match &transaction_load_result.0 {
+                    Ok(x) => {
+                        for fee in x.application_fees.pda_to_fees_maps.iter() {
+                            match application_fees.get_mut(fee.0) {
+                                Some(v) => *v = *v + *fee.1,
+                                None => { application_fees.insert(*fee.0, *fee.1);},
+                            }
+                        }
+                    },
+                    Err(_)=> {
+                        // do nothing
+                    }
+                }
                 Ok(())
             })
             .collect();
 
         self.collector_fees.fetch_add(fees, Relaxed);
+        // treat application fees
+        Self::merge_application_fees( &self.application_fees_collected, application_fees.iter());
         results
     }
 
@@ -5025,7 +5060,7 @@ impl Bank {
         let mut update_transaction_statuses_time = Measure::start("update_transaction_statuses");
         self.update_transaction_statuses(sanitized_txs, &execution_results);
         let fee_collection_results =
-            self.filter_program_errors_and_collect_fee(sanitized_txs, &execution_results);
+            self.filter_program_errors_and_collect_fee(sanitized_txs, &execution_results, loaded_txs);
         update_transaction_statuses_time.stop();
         timings.saturating_add_in_place(
             ExecuteTimingType::UpdateTransactionStatuses,
@@ -11153,9 +11188,27 @@ pub(crate) mod tests {
                 None,
             ),
         ];
+
+        let keyA = solana_sdk::pubkey::new_rand();
+        let keyB = solana_sdk::pubkey::new_rand();
+        let keyC = solana_sdk::pubkey::new_rand();
+        let mut loaded_tx1 = LoadedTransaction::default_for_test();
+        let mut loaded_tx2 = LoadedTransaction::default_for_test();
+        loaded_tx1.application_fees.pda_to_fees_maps.insert(keyA, 10);
+        loaded_tx1.application_fees.pda_to_fees_maps.insert(keyB, 10);
+        loaded_tx2.application_fees.pda_to_fees_maps.insert(keyB, 30);
+        loaded_tx2.application_fees.pda_to_fees_maps.insert(keyC, 30);
+
+        let loaded_results : [TransactionLoadResult] = [
+            (Ok(loaded_tx1), None)
+            (Ok(loaded_tx2), None)
+        ];
         let initial_balance = bank.get_balance(&leader);
 
-        let results = bank.filter_program_errors_and_collect_fee(&[tx1, tx2], &results);
+        let results = bank.filter_program_errors_and_collect_fee(&[tx1, tx2], &results, &loaded_results);
+        assert_eq!(bank.application_fees_collected.get(&keyA), Some(10));
+        assert_eq!(bank.application_fees_collected.get(&keyB), Some(40));
+        assert_eq!(bank.application_fees_collected.get(&keyC), Some(30));
         bank.freeze();
         assert_eq!(
             bank.get_balance(&leader),
@@ -11206,7 +11259,12 @@ pub(crate) mod tests {
         ];
         let initial_balance = bank.get_balance(&leader);
 
-        let results = bank.filter_program_errors_and_collect_fee(&[tx1, tx2], &results);
+        let loaded_results : [TransactionLoadResult] = [
+            (Ok(LoadedTransaction::default_for_test()), None)
+            (Ok(LoadedTransaction::default_for_test()), None)
+        ];
+
+        let results = bank.filter_program_errors_and_collect_fee(&[tx1, tx2], &results, &loaded_results);
         bank.freeze();
         assert_eq!(
             bank.get_balance(&leader),
@@ -11260,6 +11318,16 @@ pub(crate) mod tests {
 
         // Assert bad transactions aren't counted.
         assert_eq!(bank.transaction_count(), 1);
+    }
+
+    pub fn default_for_test () -> LoadedTransaction {
+        LoadedTransaction {
+            accounts : vec![],
+            program_indices : vec![],
+            rent : 0,
+            rent_debits : RentDebits::default(),
+            application_fees: ApplicationFees::new_empty(),
+        }
     }
 
     #[test]
