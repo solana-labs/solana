@@ -2314,7 +2314,7 @@ impl AccountsDb {
                 .build()
                 .unwrap(),
             thread_pool_clean: make_min_priority_thread_pool(),
-            min_num_stores: num_threads,
+            min_num_stores: 0,
             bank_hashes: RwLock::new(bank_hashes),
             external_purge_slots_stats: PurgeStats::default(),
             clean_accounts_stats: CleanAccountsStats::default(),
