@@ -845,7 +845,7 @@ describe('Transaction', () => {
     expect(expectedTransaction.signatures).to.have.length(1);
   });
 
-  it('partially signed transaction', () => {
+  describe('partially signed transaction signature verification tests', () => {
     const sender = Keypair.fromSeed(Uint8Array.from(Array(32).fill(8))); // Arbitrary known account
     const feePayer = Keypair.fromSeed(Uint8Array.from(Array(32).fill(9))); // Arbitrary known account
     const fakeKey = Keypair.fromSeed(Uint8Array.from(Array(32).fill(10))); // Arbitrary known account
@@ -858,64 +858,99 @@ describe('Transaction', () => {
       toPubkey: recipient,
       lamports: 49,
     });
-    const expectedTransaction = new Transaction({
-      blockhash: recentBlockhash,
-      lastValidBlockHeight: 9999,
-    }).add(transfer);
+    let expectedTransaction : Transaction;
+    beforeEach(() => {
+      expectedTransaction = new Transaction({
+        blockhash: recentBlockhash,
+        lastValidBlockHeight: 9999,
+      }).add(transfer);
+      // To have 2 required signers we add a feepayer
+      expectedTransaction.feePayer = feePayer.publicKey;
 
-    // To have 2 required signers we add a feepayer
-    expectedTransaction.feePayer = feePayer.publicKey;
+    });
 
-    expect(expectedTransaction.signatures).to.have.length(0);
+    it('verifies for no sigs', () => {
+      expect(expectedTransaction.signatures).to.have.length(0);
 
-    // No extra param should require all sigs, should be false for no sigs
-    expect(expectedTransaction.verifySignatures()).to.be.false;
+      // No extra param should require all sigs, should be false for no sigs
+      expect(expectedTransaction.verifySignatures()).to.be.false;
 
-    // True should require all sigs, should be false for no sigs
-    expect(expectedTransaction.verifySignatures(true)).to.be.false;
+      // True should require all sigs, should be false for no sigs
+      expect(expectedTransaction.verifySignatures(true)).to.be.false;
 
-    // False should verify only the available sigs, should be true for no sigs
-    expect(expectedTransaction.verifySignatures(false)).to.be.true;
+      // False should verify only the available sigs, should be true for no sigs
+      expect(expectedTransaction.verifySignatures(false)).to.be.true;
+    });
 
-    // Add one required sig
-    expectedTransaction.partialSign(sender);
+    it('verifies for one sig', () => {
+      // Add one required sig
+      expectedTransaction.partialSign(sender);
 
-    expect(expectedTransaction.signatures.filter(sig => sig.signature !== null)).to.have.length(1);
+      expect(expectedTransaction.signatures.filter(sig => sig.signature !== null)).to.have.length(1);
 
-    // No extra param should require all sigs, should be false for one missing sig
-    expect(expectedTransaction.verifySignatures()).to.be.false;
+      // No extra param should require all sigs, should be false for one missing sig
+      expect(expectedTransaction.verifySignatures()).to.be.false;
 
-    // True should require all sigs, should be false one missing sigs
-    expect(expectedTransaction.verifySignatures(true)).to.be.false;
+      // True should require all sigs, should be false one missing sigs
+      expect(expectedTransaction.verifySignatures(true)).to.be.false;
 
-    // False should verify only the available sigs, should be true one valid sig
-    expect(expectedTransaction.verifySignatures(false)).to.be.true;
+      // False should verify only the available sigs, should be true one valid sig
+      expect(expectedTransaction.verifySignatures(false)).to.be.true;
+    });
 
-    // Add all required sigs
-    expectedTransaction.partialSign(feePayer);
+    it('verifies for all sigs', () => {
+      // Add all required sigs
+      expectedTransaction.partialSign(sender);
+      expectedTransaction.partialSign(feePayer);
 
-    expect(expectedTransaction.signatures.filter(sig => sig.signature !== null)).to.have.length(2);
+      expect(expectedTransaction.signatures.filter(sig => sig.signature !== null)).to.have.length(2);
 
-    // No extra param should require all sigs, should be true for no missing sig
-    expect(expectedTransaction.verifySignatures()).to.be.true;
+      // No extra param should require all sigs, should be true for no missing sig
+      expect(expectedTransaction.verifySignatures()).to.be.true;
 
-    // True should require all sigs, should be true for no missing sig
-    expect(expectedTransaction.verifySignatures(true)).to.be.true;
+      // True should require all sigs, should be true for no missing sig
+      expect(expectedTransaction.verifySignatures(true)).to.be.true;
 
-    // False should verify only the available sigs, should be true for no missing sig
-    expect(expectedTransaction.verifySignatures(false)).to.be.true;
+      // False should verify only the available sigs, should be true for no missing sig
+      expect(expectedTransaction.verifySignatures(false)).to.be.true;
+    });
 
-    // Add a wrong signature
-    expectedTransaction.signatures[0].publicKey = fakeKey.publicKey;
+    it('throws for wrong sig with only one sig present', () => {
+      // Add one required sigs
+      expectedTransaction.partialSign(feePayer);
 
-    // No extra param should require all sigs, should throw for wrong sig
-    expect(() => expectedTransaction.verifySignatures()).to.throw('unknown signer: ' + fakeKey.publicKey.toBase58());
+      // Add a wrong signature
+      expectedTransaction.signatures[0].publicKey = fakeKey.publicKey;
 
-    // True should require all sigs, should throw for wrong sig
-    expect(() => expectedTransaction.verifySignatures(true)).to.throw('unknown signer: ' + fakeKey.publicKey.toBase58());
+      // No extra param should require all sigs, should throw for wrong sig
+      expect(() => expectedTransaction.verifySignatures()).to.throw('unknown signer: ' + fakeKey.publicKey.toBase58());
 
-    // False should verify only the available sigs, should throw for wrong sig
-    expect(() => expectedTransaction.verifySignatures(false)).to.throw('unknown signer: ' + fakeKey.publicKey.toBase58());
+      // True should require all sigs, should throw for wrong sig
+      expect(() => expectedTransaction.verifySignatures(true)).to.throw('unknown signer: ' + fakeKey.publicKey.toBase58());
+
+      // False should verify only the available sigs, should throw for wrong sig
+      expect(() => expectedTransaction.verifySignatures(false)).to.throw('unknown signer: ' + fakeKey.publicKey.toBase58());
+    });
+
+    it('throws for wrong sig with all sigs present', () => {
+      // Add all required sigs
+      expectedTransaction.partialSign(sender);
+      expectedTransaction.partialSign(feePayer);
+
+      // Add a wrong signature
+      expectedTransaction.signatures[0].publicKey = fakeKey.publicKey;
+
+      // No extra param should require all sigs, should throw for wrong sig
+      expect(() => expectedTransaction.verifySignatures()).to.throw('unknown signer: ' + fakeKey.publicKey.toBase58());
+
+      // True should require all sigs, should throw for wrong sig
+      expect(() => expectedTransaction.verifySignatures(true)).to.throw('unknown signer: ' + fakeKey.publicKey.toBase58());
+
+      // False should verify only the available sigs, should throw for wrong sig
+      expect(() => expectedTransaction.verifySignatures(false)).to.throw('unknown signer: ' + fakeKey.publicKey.toBase58());
+    });
+
+
   });
 
   it('deprecated - externally signed stake delegate', () => {
