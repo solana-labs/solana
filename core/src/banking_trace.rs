@@ -29,6 +29,7 @@ pub type BankingPacketSender = TracedSender;
 pub type BankingPacketReceiver = Receiver<BankingPacketBatch>;
 pub type TracerThreadResult = Result<(), TraceError>;
 pub type TracerThread = Option<JoinHandle<TracerThreadResult>>;
+pub type DirByteLimit = u64;
 
 #[derive(Error, Debug)]
 pub enum TraceError {
@@ -41,8 +42,8 @@ pub enum TraceError {
     #[error("Integer Cast Error: {0}")]
     IntegerCastError(#[from] std::num::TryFromIntError),
 
-    #[error("Trace size is too small (must be larger than {1}): {0}")]
-    TooSmallTraceSize(u64, u64),
+    #[error("dir byte limit is too small (must be larger than {1}): {0}")]
+    TooSmallDirByteLimit(DirByteLimit, DirByteLimit),
 }
 
 const BASENAME: &str = "events";
@@ -50,8 +51,8 @@ const TRACE_FILE_ROTATE_COUNT: u64 = 14; // target 2 weeks retention under norma
 const TRACE_FILE_WRITE_INTERVAL_MS: u64 = 100;
 const BUF_WRITER_CAPACITY: usize = 10 * 1024 * 1024;
 pub const TRACE_FILE_DEFAULT_ROTATE_BYTE_THRESHOLD: u64 = 1024 * 1024 * 1024;
-pub const EMPTY_BANKING_TRACE_SIZE: u64 = 0;
-pub const DEFAULT_BANKING_TRACE_SIZE: u64 =
+pub const DISABLED_BAKING_TRACE_DIR: DirByteLimit = 0;
+pub const BANKING_TRACE_DIR_DEFAULT_BYTE_LIMIT: DirByteLimit =
     TRACE_FILE_DEFAULT_ROTATE_BYTE_THRESHOLD * TRACE_FILE_ROTATE_COUNT;
 
 #[allow(clippy::type_complexity)]
@@ -168,14 +169,14 @@ pub fn receiving_loop_with_minimized_sender_overhead<T, E, const SLEEP_MS: u64>(
 
 impl BankingTracer {
     pub fn new(
-        maybe_config: Option<(PathBuf, Arc<AtomicBool>, u64)>,
+        maybe_config: Option<(PathBuf, Arc<AtomicBool>, DirByteLimit)>,
     ) -> Result<Arc<Self>, TraceError> {
         let enabled_tracer = maybe_config
-            .map(|(path, exit, total_size)| {
-                let rotate_threshold_size = total_size / TRACE_FILE_ROTATE_COUNT;
+            .map(|(path, exit, dir_byte_limit)| {
+                let rotate_threshold_size = dir_byte_limit / TRACE_FILE_ROTATE_COUNT;
                 if rotate_threshold_size == 0 {
-                    return Err(TraceError::TooSmallTraceSize(
-                        total_size,
+                    return Err(TraceError::TooSmallDirByteLimit(
+                        dir_byte_limit,
                         TRACE_FILE_ROTATE_COUNT,
                     ));
                 }
@@ -451,7 +452,8 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let path = temp_dir.path().join("banking-trace");
         let exit = Arc::<AtomicBool>::default();
-        let tracer = BankingTracer::new(Some((path, exit.clone(), u64::max_value()))).unwrap();
+        let tracer =
+            BankingTracer::new(Some((path, exit.clone(), DirByteLimit::max_value()))).unwrap();
         let tracer_thread = tracer.take_tracer_thread_join_handle();
         let (non_vote_sender, non_vote_receiver) = tracer.create_channel_non_vote();
 
@@ -489,8 +491,12 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let path = temp_dir.path().join("banking-trace");
         let exit = Arc::<AtomicBool>::default();
-        let tracer =
-            BankingTracer::new(Some((path.clone(), exit.clone(), u64::max_value()))).unwrap();
+        let tracer = BankingTracer::new(Some((
+            path.clone(),
+            exit.clone(),
+            DirByteLimit::max_value(),
+        )))
+        .unwrap();
         let (non_vote_sender, non_vote_receiver) = tracer.create_channel_non_vote();
 
         let dummy_main_thread = thread::spawn(move || {

@@ -8,7 +8,7 @@ use {
             drop_and_clean_temp_dir_unless_suppressed, sample_packet_batch, terminate_tracer,
         },
         receiving_loop_with_minimized_sender_overhead, BankingPacketBatch, BankingTracer,
-        TraceError, TracerThreadResult, DEFAULT_BANKING_TRACE_SIZE,
+        TraceError, TracerThreadResult, BANKING_TRACE_DIR_DEFAULT_BYTE_LIMIT,
     },
     std::{
         path::PathBuf,
@@ -61,7 +61,7 @@ fn bench_banking_tracer_main_thread_overhead_under_peak_write(bencher: &mut Benc
     let tracer = BankingTracer::new(Some((
         temp_dir.path().join("banking-trace"),
         exit.clone(),
-        DEFAULT_BANKING_TRACE_SIZE,
+        BANKING_TRACE_DIR_DEFAULT_BYTE_LIMIT,
     )))
     .unwrap();
     let (non_vote_sender, non_vote_receiver) = tracer.create_channel_non_vote();

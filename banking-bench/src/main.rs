@@ -8,7 +8,7 @@ use {
     solana_client::connection_cache::ConnectionCache,
     solana_core::{
         banking_stage::BankingStage,
-        banking_trace::{BankingPacketBatch, BankingTracer, DEFAULT_BANKING_TRACE_SIZE},
+        banking_trace::{BankingPacketBatch, BankingTracer, BANKING_TRACE_DIR_DEFAULT_BYTE_LIMIT},
     },
     solana_gossip::cluster_info::{ClusterInfo, Node},
     solana_ledger::{
@@ -419,7 +419,7 @@ fn main() {
         let banking_tracer = BankingTracer::new(matches.is_present("trace_banking").then_some((
             blockstore.banking_trace_path(),
             exit.clone(),
-            DEFAULT_BANKING_TRACE_SIZE,
+            BANKING_TRACE_DIR_DEFAULT_BYTE_LIMIT,
         )))
         .unwrap();
         let (non_vote_sender, non_vote_receiver) = banking_tracer.create_channel_non_vote();
