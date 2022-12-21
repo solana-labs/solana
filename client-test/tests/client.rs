@@ -605,12 +605,16 @@ async fn test_slot_subscription_async() {
     unsubscribe().await;
 }
 
-fn check_server_is_ready_or_panic(socket_addr: &SocketAddr, retry: u8, sleep_duration: Duration) {
+fn check_server_is_ready_or_panic(
+    socket_addr: &SocketAddr,
+    mut retry: u8,
+    sleep_duration: Duration,
+) {
     loop {
         if retry == 0 {
             break;
         } else {
-            retry.checked_sub(1).unwrap();
+            retry = retry.checked_sub(1).unwrap();
         }
 
         if connect(format!("ws://{socket_addr}")).is_ok() {
