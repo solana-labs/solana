@@ -120,12 +120,7 @@ impl RentCollector {
         filler_account_suffix: Option<&Pubkey>,
         set_exempt_rent_epoch_max: bool,
     ) -> CollectedInfo {
-        match self.calculate_rent_result(
-            address,
-            account,
-            filler_account_suffix,
-            set_exempt_rent_epoch_max,
-        ) {
+        match self.calculate_rent_result(address, account, filler_account_suffix) {
             RentResult::Exempt => {
                 if set_exempt_rent_epoch_max {
                     account.set_rent_epoch(RENT_EXEMPT_RENT_EPOCH);
@@ -163,7 +158,6 @@ impl RentCollector {
         address: &Pubkey,
         account: &impl ReadableAccount,
         filler_account_suffix: Option<&Pubkey>,
-        set_exempt_rent_epoch_max: bool,
     ) -> RentResult {
         if account.rent_epoch() == RENT_EXEMPT_RENT_EPOCH {
             return RentResult::Exempt;
@@ -183,16 +177,7 @@ impl RentCollector {
         }
         match self.get_rent_due(account) {
             // account will not have rent collected ever
-            RentDue::Exempt => {
-                if set_exempt_rent_epoch_max {
-                    RentResult::CollectRent {
-                        new_rent_epoch: RENT_EXEMPT_RENT_EPOCH,
-                        rent_due: 0,
-                    }
-                } else {
-                    RentResult::Exempt
-                }
-            }
+            RentDue::Exempt => RentResult::Exempt,
             // potentially rent paying account
             // Maybe collect rent later, leave account alone for now.
             RentDue::Paying(0) => RentResult::NoRentCollectionNow,
@@ -267,12 +252,7 @@ mod tests {
 
             let mut account = AccountSharedData::default();
             assert!(matches!(
-                rent_collector.calculate_rent_result(
-                    &Pubkey::default(),
-                    &account,
-                    None,
-                    set_exempt_rent_epoch_max
-                ),
+                rent_collector.calculate_rent_result(&Pubkey::default(), &account, None,),
                 RentResult::NoRentCollectionNow,
             ));
             {
@@ -291,12 +271,7 @@ mod tests {
 
             account.set_executable(true);
             assert!(matches!(
-                rent_collector.calculate_rent_result(
-                    &Pubkey::default(),
-                    &account,
-                    None,
-                    set_exempt_rent_epoch_max
-                ),
+                rent_collector.calculate_rent_result(&Pubkey::default(), &account, None,),
                 RentResult::Exempt
             ));
             {
@@ -319,12 +294,7 @@ mod tests {
 
             account.set_executable(false);
             assert!(matches!(
-                rent_collector.calculate_rent_result(
-                    &incinerator::id(),
-                    &account,
-                    None,
-                    set_exempt_rent_epoch_max
-                ),
+                rent_collector.calculate_rent_result(&incinerator::id(), &account, None,),
                 RentResult::Exempt
             ));
             {
@@ -356,17 +326,11 @@ mod tests {
                     let new_rent_epoch_expected = rent_collector.epoch + 1;
                     assert!(
                         matches!(
-                            rent_collector.calculate_rent_result(&Pubkey::default(), &account, filler_accounts,
-                            set_exempt_rent_epoch_max),
+                            rent_collector.calculate_rent_result(&Pubkey::default(), &account, filler_accounts),
                             RentResult::CollectRent{ new_rent_epoch, rent_due} if new_rent_epoch == new_rent_epoch_expected && rent_due == rent_due_expected,
                         ),
                         "{:?}",
-                        rent_collector.calculate_rent_result(
-                            &Pubkey::default(),
-                            &account,
-                            None,
-                            set_exempt_rent_epoch_max
-                        )
+                        rent_collector.calculate_rent_result(&Pubkey::default(), &account, None,)
                     );
 
                     {
@@ -393,23 +357,12 @@ mod tests {
 
             // enough lamports to make us exempt
             account.set_lamports(1_000_000);
-            let result = rent_collector.calculate_rent_result(
-                &Pubkey::default(),
-                &account,
-                None,
-                set_exempt_rent_epoch_max,
-            );
+            let result = rent_collector.calculate_rent_result(&Pubkey::default(), &account, None);
             assert!(
-                if set_exempt_rent_epoch_max {
-                    matches!(
-                        result,
-                        RentResult::CollectRent {new_rent_epoch, rent_due} if new_rent_epoch == RENT_EXEMPT_RENT_EPOCH && rent_due == 0
-                    )
-                } else {
-                    matches!(result, RentResult::Exempt)
-                },
-                "{:?}",
-                result
+                matches!(result, RentResult::Exempt),
+                "{:?}, set_exempt_rent_epoch_max: {}",
+                result,
+                set_exempt_rent_epoch_max,
             );
             {
                 let mut account_clone = account.clone();
@@ -434,12 +387,7 @@ mod tests {
             // We don't calculate rent amount vs data if the rent_epoch is already in the future.
             account.set_rent_epoch(1_000_000);
             assert!(matches!(
-                rent_collector.calculate_rent_result(
-                    &Pubkey::default(),
-                    &account,
-                    None,
-                    set_exempt_rent_epoch_max
-                ),
+                rent_collector.calculate_rent_result(&Pubkey::default(), &account, None,),
                 RentResult::NoRentCollectionNow,
             ));
             {
@@ -464,7 +412,6 @@ mod tests {
                     &filler_account,
                     &account,
                     Some(&filler_account),
-                    set_exempt_rent_epoch_max
                 ),
                 RentResult::Exempt,
             ));
