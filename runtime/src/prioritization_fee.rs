@@ -50,9 +50,8 @@ impl PrioritizationFeeMetrics {
         // update prioritized transaction fee metrics.
         saturating_add_assign!(self.prioritized_transactions_count, 1);
 
-        if fee > self.max_prioritization_fee {
-            self.max_prioritization_fee = fee;
-        }
+        self.max_prioritization_fee =
+            self.max_prioritization_fee.max(fee);
 
         if self.min_prioritization_fee.is_none() || fee < self.min_prioritization_fee.unwrap() {
             self.min_prioritization_fee = Some(fee);
