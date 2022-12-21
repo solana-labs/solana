@@ -53,10 +53,9 @@ impl PrioritizationFeeMetrics {
         self.max_prioritization_fee =
             self.max_prioritization_fee.max(fee);
 
-        if self.min_prioritization_fee.is_none() || fee < self.min_prioritization_fee.unwrap() {
-            self.min_prioritization_fee = Some(fee);
-        }
-    }
+        self.min_prioritization_fee = self
+            .min_prioritization_fee
+            .map_or(fee, |min_fee| min_fee.min(fee));
 
     fn report(&self, slot: Slot) {
         datapoint_info!(
