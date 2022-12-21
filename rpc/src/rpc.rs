@@ -408,7 +408,7 @@ impl JsonRpcRequestProcessor {
             commitment,
             min_context_slot,
         })?;
-        let encoding = encoding.unwrap_or(UiAccountEncoding::Binary);
+        let encoding = encoding.unwrap_or(UiAccountEncoding::Base64);
 
         let response = get_encoded_account(&bank, pubkey, encoding, data_slice)?;
         Ok(new_response(&bank, response))
@@ -464,7 +464,7 @@ impl JsonRpcRequestProcessor {
             commitment,
             min_context_slot,
         })?;
-        let encoding = encoding.unwrap_or(UiAccountEncoding::Binary);
+        let encoding = encoding.unwrap_or(UiAccountEncoding::Base64);
         optimize_filters(&mut filters);
         let keyed_accounts = {
             if let Some(owner) = get_spl_token_owner_filter(program_id, &filters) {
@@ -1880,7 +1880,7 @@ impl JsonRpcRequestProcessor {
             commitment,
             min_context_slot,
         })?;
-        let encoding = encoding.unwrap_or(UiAccountEncoding::Binary);
+        let encoding = encoding.unwrap_or(UiAccountEncoding::Base64);
         let (token_program_id, mint) = get_token_program_id_and_mint(&bank, token_account_filter)?;
 
         let mut filters = vec![];
@@ -1930,7 +1930,7 @@ impl JsonRpcRequestProcessor {
             commitment,
             min_context_slot,
         })?;
-        let encoding = encoding.unwrap_or(UiAccountEncoding::Binary);
+        let encoding = encoding.unwrap_or(UiAccountEncoding::Base64);
         let (token_program_id, mint) = get_token_program_id_and_mint(&bank, token_account_filter)?;
 
         let mut filters = vec![
@@ -5648,7 +5648,7 @@ pub mod tests {
             account: UiAccount::encode(
                 &new_program_account_key,
                 &new_program_account,
-                UiAccountEncoding::Binary,
+                UiAccountEncoding::Base64,
                 None,
                 None,
             ),
