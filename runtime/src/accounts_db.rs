@@ -9427,6 +9427,53 @@ impl AccountsDb {
     }
 }
 
+/// A set of utility functions used for testing and benchmarking
+pub mod test_utils {
+    use {
+        super::*,
+        crate::{accounts::Accounts, append_vec::aligned_stored_size},
+    };
+
+    pub fn create_test_accounts(
+        accounts: &Accounts,
+        pubkeys: &mut Vec<Pubkey>,
+        num: usize,
+        slot: Slot,
+    ) {
+        let data_size = 0;
+        if accounts.accounts_db.storage.get_slot_stores(slot).is_none() {
+            let bytes_required = num * aligned_stored_size(data_size);
+            // allocate an append vec for this slot that can hold all the test accounts. This prevents us from creating more than 1 append vec for this slot.
+            _ = accounts.accounts_db.create_and_insert_store(
+                slot,
+                bytes_required as u64,
+                "create_test_accounts",
+            );
+        }
+
+        for t in 0..num {
+            let pubkey = solana_sdk::pubkey::new_rand();
+            let account = AccountSharedData::new(
+                (t + 1) as u64,
+                data_size,
+                AccountSharedData::default().owner(),
+            );
+            accounts.store_slow_uncached(slot, &pubkey, &account);
+            pubkeys.push(pubkey);
+        }
+    }
+
+    // Only used by bench, not safe to call otherwise accounts can conflict with the
+    // accounts cache!
+    pub fn update_accounts_bench(accounts: &Accounts, pubkeys: &[Pubkey], slot: u64) {
+        for pubkey in pubkeys {
+            let amount = thread_rng().gen_range(0, 10);
+            let account = AccountSharedData::new(amount, 0, AccountSharedData::default().owner());
+            accounts.store_slow_uncached(slot, pubkey, &account);
+        }
+    }
+}
+
 #[cfg(test)]
 pub mod tests {
     use {
