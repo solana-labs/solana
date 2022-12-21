@@ -1780,7 +1780,7 @@ impl TransactionStatusSender {
                     .into_iter()
                     .map(|result| match result {
                         TransactionExecutionResult::Executed { details, .. } => Some(details),
-                        TransactionExecutionResult::NotExecuted{ .. } => None,
+                        TransactionExecutionResult::NotExecuted { .. } => None,
                     })
                     .collect(),
                 balances,

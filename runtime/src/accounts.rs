@@ -1,5 +1,3 @@
-use solana_sdk::application_fees::{self, ApplicationFeeStructure};
-
 use {
     crate::{
         account_overrides::AccountOverrides,
@@ -35,6 +33,7 @@ use {
     solana_sdk::{
         account::{Account, AccountSharedData, ReadableAccount, WritableAccount},
         account_utils::StateMut,
+        application_fees::{self, ApplicationFeeStructure},
         bpf_loader_upgradeable::{self, UpgradeableLoaderState},
         clock::{BankId, Slot},
         feature_set::{

@@ -7,10 +7,12 @@
 
 #![cfg(feature = "full")]
 
-use borsh::{BorshDeserialize, BorshSerialize};
-use solana_program::{
-    instruction::{AccountMeta, Instruction},
-    pubkey::Pubkey,
+use {
+    borsh::{BorshDeserialize, BorshSerialize},
+    solana_program::{
+        instruction::{AccountMeta, Instruction},
+        pubkey::Pubkey,
+    },
 };
 crate::declare_id!("App1icationFees1111111111111111111111111111");
 
@@ -18,10 +20,10 @@ crate::declare_id!("App1icationFees1111111111111111111111111111");
 pub struct ApplicationFeeStructure {
     pub fee_lamports: u64,
     pub version: u32,
-    pub _padding : [u8;8],
+    pub _padding: [u8; 8],
 }
 
-pub const APPLICATION_FEE_STRUCTURE_SIZE : usize = 8 + 4 + 8;
+pub const APPLICATION_FEE_STRUCTURE_SIZE: usize = 8 + 4 + 8;
 
 // application fees instructions
 #[derive(
@@ -47,7 +49,12 @@ pub enum ApplicationFeesInstuctions {
 }
 
 impl ApplicationFeesInstuctions {
-    pub fn add_or_update_fees(fees: u64, writable_account: Pubkey, owner: Pubkey, payer: Pubkey) -> Instruction {
+    pub fn add_or_update_fees(
+        fees: u64,
+        writable_account: Pubkey,
+        owner: Pubkey,
+        payer: Pubkey,
+    ) -> Instruction {
         let (pda, _bump) = Pubkey::find_program_address(
             &[&writable_account.to_bytes()],
             &crate::application_fees::id(),

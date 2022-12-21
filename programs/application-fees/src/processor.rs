@@ -1,6 +1,16 @@
-use solana_program::{pubkey::Pubkey, system_instruction};
-use solana_program_runtime::{invoke_context::InvokeContext, ic_msg};
-use solana_sdk::{instruction::InstructionError, transaction_context::IndexOfAccount, program_utils::limited_deserialize, application_fees::{ApplicationFeesInstuctions, self, APPLICATION_FEE_STRUCTURE_SIZE, ApplicationFeeStructure},};
+use {
+    solana_program::{pubkey::Pubkey, system_instruction},
+    solana_program_runtime::{ic_msg, invoke_context::InvokeContext},
+    solana_sdk::{
+        account::ReadableAccount,
+        application_fees::{
+            ApplicationFeeStructure, ApplicationFeesInstuctions, APPLICATION_FEE_STRUCTURE_SIZE,
+        },
+        instruction::InstructionError,
+        program_utils::limited_deserialize,
+        transaction_context::IndexOfAccount,
+    },
+};
 
 pub fn process_instruction(
     _first_instruction_account: IndexOfAccount,
@@ -13,27 +23,25 @@ pub fn process_instruction(
     match limited_deserialize(instruction_data)? {
         ApplicationFeesInstuctions::AddOrUpdateFee { fees } => {
             Processor::add_or_update_fees(invoke_context, fees)
-        },
-        ApplicationFeesInstuctions::RemoveFees => {
-            Processor::remove_fees(invoke_context)
-        },
-        ApplicationFeesInstuctions::Rebate => {
-            Processor::rebate(invoke_context)
-        },
-        ApplicationFeesInstuctions::RebateAll => {
-            Processor::rebate_all(invoke_context)
         }
+        ApplicationFeesInstuctions::RemoveFees => Processor::remove_fees(invoke_context),
+        ApplicationFeesInstuctions::Rebate => Processor::rebate(invoke_context),
+        ApplicationFeesInstuctions::RebateAll => Processor::rebate_all(invoke_context),
     }
 }
 
 pub struct Processor;
 
 impl Processor {
-    fn add_or_update_fees (invoke_context: &mut InvokeContext, fees : u64) -> Result<(), InstructionError> {
+    fn add_or_update_fees(
+        invoke_context: &mut InvokeContext,
+        fees: u64,
+    ) -> Result<(), InstructionError> {
         let transaction_context = &invoke_context.transaction_context;
         let instruction_context = transaction_context.get_current_instruction_context()?;
 
-        let writable_account = instruction_context.try_borrow_instruction_account(transaction_context, 0)?;
+        let writable_account =
+            instruction_context.try_borrow_instruction_account(transaction_context, 0)?;
         let owner = instruction_context.try_borrow_instruction_account(transaction_context, 1)?;
         let pda = instruction_context.try_borrow_instruction_account(transaction_context, 2)?;
 
@@ -48,7 +56,8 @@ impl Processor {
         }
         drop(owner);
 
-        let (calculated_pda, _bump) = Pubkey::find_program_address(&[&writable_account.get_key().to_bytes()], &crate::id());
+        let (calculated_pda, _bump) =
+            Pubkey::find_program_address(&[&writable_account.get_key().to_bytes()], &crate::id());
         if !calculated_pda.eq(pda.get_key()) {
             ic_msg!(invoke_context, "Invalid pda to store fee info");
             return Err(InstructionError::InvalidArgument);
@@ -61,7 +70,8 @@ impl Processor {
         drop(pda);
         // allocate pda to store application fee strucutre
         if is_pda_empty {
-            let payer = instruction_context.try_borrow_instruction_account(transaction_context, 3)?;
+            let payer =
+                instruction_context.try_borrow_instruction_account(transaction_context, 3)?;
             let payer_key = *payer.get_key();
             if !payer.is_signer() {
                 ic_msg!(invoke_context, "Payer account must be a signer");
@@ -75,14 +85,14 @@ impl Processor {
                 .minimum_balance(account_data_len)
                 .max(1)
                 .saturating_sub(pda_lamports);
-                
+
             if required_lamports > 0 {
                 invoke_context.native_invoke(
                     system_instruction::transfer(&payer_key, &pda_key, required_lamports),
                     &[payer_key],
                 )?;
             }
-    
+
             invoke_context.native_invoke(
                 system_instruction::allocate(&pda_key, account_data_len as u64),
                 &[pda_key],
@@ -98,23 +108,24 @@ impl Processor {
         let instruction_context = transaction_context.get_current_instruction_context()?;
         let mut pda_account =
             instruction_context.try_borrow_instruction_account(transaction_context, 2)?;
-        
+
         let application_fee_structure = ApplicationFeeStructure {
-            fee_lamports : fees,
-            version : 1,
-            _padding : [0;8],
+            fee_lamports: fees,
+            version: 1,
+            _padding: [0; 8],
         };
         let seralized = bincode::serialize(&application_fee_structure).unwrap();
         pda_account.set_data(seralized)?;
 
         Ok(())
-    } 
+    }
 
-    fn remove_fees( invoke_context: &mut InvokeContext) -> Result<(), InstructionError> {
+    fn remove_fees(invoke_context: &mut InvokeContext) -> Result<(), InstructionError> {
         let transaction_context = &invoke_context.transaction_context;
         let instruction_context = transaction_context.get_current_instruction_context()?;
 
-        let writable_account = instruction_context.try_borrow_instruction_account(transaction_context, 0)?;
+        let writable_account =
+            instruction_context.try_borrow_instruction_account(transaction_context, 0)?;
         let owner = instruction_context.try_borrow_instruction_account(transaction_context, 1)?;
         let pda = instruction_context.try_borrow_instruction_account(transaction_context, 2)?;
 
@@ -127,15 +138,19 @@ impl Processor {
             ic_msg!(invoke_context, "Invalid account owner");
             return Err(InstructionError::IllegalOwner);
         }
-        
-        let (calculated_pda, _bump) = Pubkey::find_program_address(&[&writable_account.get_key().to_bytes()], &crate::id());
+
+        let (calculated_pda, _bump) =
+            Pubkey::find_program_address(&[&writable_account.get_key().to_bytes()], &crate::id());
         if !calculated_pda.eq(pda.get_key()) {
             ic_msg!(invoke_context, "Invalid pda to store fee info");
             return Err(InstructionError::InvalidArgument);
         }
 
         if pda.get_data().is_empty() {
-            ic_msg!(invoke_context, "No fees structure associated with the writable account");
+            ic_msg!(
+                invoke_context,
+                "No fees structure associated with the writable account"
+            );
             return Err(InstructionError::InvalidArgument);
         }
         let withdrawn_lamports = pda.get_lamports();
@@ -155,11 +170,12 @@ impl Processor {
         Ok(())
     }
 
-    fn rebate( invoke_context: &mut InvokeContext) -> Result<(), InstructionError> {
+    fn rebate(invoke_context: &mut InvokeContext) -> Result<(), InstructionError> {
         let transaction_context = &invoke_context.transaction_context;
         let instruction_context = transaction_context.get_current_instruction_context()?;
 
-        let writable_account = instruction_context.try_borrow_instruction_account(transaction_context, 0)?;
+        let writable_account =
+            instruction_context.try_borrow_instruction_account(transaction_context, 0)?;
         let owner = instruction_context.try_borrow_instruction_account(transaction_context, 1)?;
         if !owner.is_signer() {
             ic_msg!(invoke_context, "Authority account must be a signer");
@@ -173,33 +189,34 @@ impl Processor {
         let writable_account_key = *writable_account.get_key();
         drop(writable_account);
         drop(owner);
-        invoke_context.application_fees.remove(&writable_account_key);
+        invoke_context
+            .application_fees
+            .remove(&writable_account_key);
         Ok(())
     }
 
-    fn rebate_all( invoke_context: &mut InvokeContext) -> Result<(), InstructionError> {
-        
+    fn rebate_all(invoke_context: &mut InvokeContext) -> Result<(), InstructionError> {
         let transaction_context = &invoke_context.transaction_context;
         let instruction_context = transaction_context.get_current_instruction_context()?;
-        let owner = instruction_context.try_borrow_instruction_account(transaction_context, 1)?;
+        let owner = instruction_context.try_borrow_instruction_account(transaction_context, 0)?;
+        let owner_key = owner.get_key();
         if !owner.is_signer() {
             ic_msg!(invoke_context, "Authority account must be a signer");
             return Err(InstructionError::MissingRequiredSignature);
         }
 
-        // let number_of_accounts = transaction_context.get_number_of_accounts();
-        // for i in 0..number_of_accounts {
-        //     let account = transaction_context.get_account_at_index(i);
-        //     match account {
-        //         Ok(x)=> {
-        //             let account = x.borrow();
-        //             account.
-        //         },
-        //         Err(_e) => {
-        //             // do nothing
-        //         }
-        //     }
-        // }
+        let number_of_accounts = transaction_context.get_number_of_accounts();
+        for i in 0..number_of_accounts {
+            let account = transaction_context.get_account_at_index(i)?;
+            let key = transaction_context.get_key_of_account_at_index(i)?;
+            let borrowed_account = account.borrow();
+            let account_owner = borrowed_account.owner();
+            if owner_key.eq(account_owner) {
+                if invoke_context.application_fees.contains_key(key) {
+                    invoke_context.application_fees.remove(key);
+                }
+            }
+        }
         Ok(())
     }
 }

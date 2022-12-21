@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 use {
     crate::{
         accounts_data_meter::AccountsDataMeter,
@@ -32,6 +30,7 @@ use {
         alloc::Layout,
         borrow::Cow,
         cell::RefCell,
+        collections::HashMap,
         fmt::{self, Debug},
         rc::Rc,
         sync::Arc,
@@ -118,7 +117,7 @@ pub struct InvokeContext<'a> {
     pub blockhash: Hash,
     pub lamports_per_signature: u64,
     syscall_context: Vec<Option<SyscallContext>>,
-    pub application_fees : HashMap<Pubkey, u64>,
+    pub application_fees: HashMap<Pubkey, u64>,
 }
 
 impl<'a> InvokeContext<'a> {
@@ -135,7 +134,7 @@ impl<'a> InvokeContext<'a> {
         blockhash: Hash,
         lamports_per_signature: u64,
         prev_accounts_data_len: u64,
-        application_fees : HashMap<Pubkey, u64>,
+        application_fees: HashMap<Pubkey, u64>,
     ) -> Self {
         Self {
             transaction_context,
