@@ -374,11 +374,99 @@ pub struct AddressSignatureMeta {
     pub writeable: bool,
 }
 
-#[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq, Eq)]
+/// Performance information on the validator execution during a time slice.
+///
+/// We can not implement [`Deserialize`] directly on `PerfSample` as we have two encodings -
+/// [`PerfSampleV1`] and [`PerfSampleV2`].  As `bincode` does not encode any information that we can
+/// rely on during deserialization in order to distinguish between the versions, we store different
+/// versions of this struct in different columns.  The expectation is that newer slots will only
+/// have a value in the [`PerfSampleV2`] format.  While older slots will only have value in the
+/// [`PerfSampleV1`] format in the older column.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct PerfSample {
+    pub num_transactions: u64,
+    /// Number of non-voting transactions.
+    /// Absent in V1 and always present in V2.
+    pub num_non_vote_transactions: Option<u64>,
+    pub num_slots: u64,
+    pub sample_period_secs: u16,
+}
+
+impl From<PerfSampleV1> for PerfSample {
+    fn from(value: PerfSampleV1) -> PerfSample {
+        let PerfSampleV1 {
+            num_transactions,
+            num_slots,
+            sample_period_secs,
+        } = value;
+
+        PerfSample {
+            num_transactions,
+            num_non_vote_transactions: None,
+            num_slots,
+            sample_period_secs,
+        }
+    }
+}
+
+impl From<PerfSampleV2> for PerfSample {
+    fn from(value: PerfSampleV2) -> PerfSample {
+        let PerfSampleV2 {
+            num_transactions,
+            num_non_vote_transactions,
+            num_slots,
+            sample_period_secs,
+        } = value;
+
+        PerfSample {
+            num_transactions,
+            num_non_vote_transactions: Some(num_non_vote_transactions),
+            num_slots,
+            sample_period_secs,
+        }
+    }
+}
+
+/// Older encoding of `PerfSample` - without the `num_non_vote_transactions` field.
+///
+/// See [`PerfSample`] doc for details.
+#[derive(Clone, Debug, PartialEq, Eq, Deserialize, Serialize)]
+pub struct PerfSampleV1 {
     pub num_transactions: u64,
     pub num_slots: u64,
     pub sample_period_secs: u16,
+}
+
+/// Current encoding of the `PerfSample` type, with the `num_non_vote_transactions` field.
+///
+/// See [`PerfSample`] doc for details.
+#[derive(Clone, Debug, PartialEq, Eq, Deserialize, Serialize)]
+pub struct PerfSampleV2 {
+    pub num_transactions: u64,
+    pub num_non_vote_transactions: u64,
+    pub num_slots: u64,
+    pub sample_period_secs: u16,
+}
+
+impl From<PerfSample> for PerfSampleV2 {
+    fn from(value: PerfSample) -> PerfSampleV2 {
+        let PerfSample {
+            num_transactions,
+            num_non_vote_transactions,
+            num_slots,
+            sample_period_secs,
+        } = value;
+
+        PerfSampleV2 {
+            num_transactions,
+            num_non_vote_transactions: num_non_vote_transactions.expect(
+                "`num_non_vote_transactions` should never be `None`, except when deserializing an \
+                 old representation.",
+            ),
+            num_slots,
+            sample_period_secs,
+        }
+    }
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq, Eq)]
@@ -418,6 +506,7 @@ impl OptimisticSlotMetaVersioned {
 mod test {
     use {
         super::*,
+        bincode::{deserialize, serialize},
         rand::{seq::SliceRandom, thread_rng},
     };
 
@@ -568,5 +657,68 @@ mod test {
         let mut expected = SlotMeta::new_orphan(5);
         expected.next_slots = vec![6, 7];
         assert_eq!(slot_meta, expected);
+    }
+
+    #[test]
+    fn perf_sample_deserialize_v1() {
+        let input = PerfSampleV1 {
+            num_transactions: 1001,
+            num_slots: 2002,
+            sample_period_secs: 273,
+        };
+        let binary_form = serialize(&input).unwrap();
+
+        let as_v1 = deserialize::<PerfSampleV1>(&binary_form)
+            .expect("Deserialization of a v1 binary representation works");
+
+        let actual = PerfSample::from(as_v1);
+        let expected = PerfSample {
+            num_transactions: input.num_transactions,
+            num_non_vote_transactions: None,
+            num_slots: input.num_slots,
+            sample_period_secs: input.sample_period_secs,
+        };
+        assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn perf_sample_deserialize_v2() {
+        let input = PerfSampleV2 {
+            num_transactions: 2597,
+            num_non_vote_transactions: 337,
+            num_slots: 286,
+            sample_period_secs: 49,
+        };
+        let binary_form = serialize(&input).unwrap();
+
+        let as_v2 = deserialize::<PerfSampleV2>(&binary_form)
+            .expect("Deserialization of a v2 binary representation works");
+
+        let actual = PerfSample::from(as_v2);
+        let expected = PerfSample {
+            num_transactions: input.num_transactions,
+            num_non_vote_transactions: Some(input.num_non_vote_transactions),
+            num_slots: input.num_slots,
+            sample_period_secs: input.sample_period_secs,
+        };
+        assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn perf_sample_serialization_roundtrip() {
+        let input = PerfSample {
+            num_transactions: 3870,
+            num_non_vote_transactions: Some(3029),
+            num_slots: 1891,
+            sample_period_secs: 581,
+        };
+
+        let binary_form = serialize(&PerfSampleV2::from(input.clone())).unwrap();
+
+        let as_v2 = deserialize::<PerfSampleV2>(&binary_form)
+            .expect("Deserialization of a v2 binary representation works");
+
+        let actual = PerfSample::from(as_v2);
+        assert_eq!(input, actual);
     }
 }

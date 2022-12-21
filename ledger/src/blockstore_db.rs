@@ -86,8 +86,10 @@ const TRANSACTION_STATUS_INDEX_CF: &str = "transaction_status_index";
 const REWARDS_CF: &str = "rewards";
 /// Column family for Blocktime
 const BLOCKTIME_CF: &str = "blocktime";
-/// Column family for Performance Samples
-const PERF_SAMPLES_CF: &str = "perf_samples";
+/// Column family for Performance Samples V1
+const PERF_SAMPLES_V1_CF: &str = "perf_samples";
+/// Column family for Performance Samples V2
+const PERF_SAMPLES_V2_CF: &str = "perf_samples_v2";
 /// Column family for BlockHeight
 const BLOCK_HEIGHT_CF: &str = "block_height";
 /// Column family for ProgramCosts
@@ -282,11 +284,18 @@ pub mod columns {
     pub struct Blocktime;
 
     #[derive(Debug)]
-    /// The performance samples column
+    /// The performance samples column, v1
     ///
     /// index type: u64 (see `SlotColumn`)
-    /// value type: `blockstore_meta::PerfSample`
-    pub struct PerfSamples;
+    /// value type: `blockstore_meta::PerfSampleV1`
+    pub struct PerfSamplesV1;
+
+    #[derive(Debug)]
+    /// The performance samples column, v2
+    ///
+    /// index type: u64 (see `SlotColumn`)
+    /// value type: `blockstore_meta::PerfSampleV2`
+    pub struct PerfSamplesV2;
 
     #[derive(Debug)]
     /// The block height column
@@ -431,7 +440,8 @@ impl Rocks {
             new_cf_descriptor::<TransactionStatusIndex>(options, oldest_slot),
             new_cf_descriptor::<Rewards>(options, oldest_slot),
             new_cf_descriptor::<Blocktime>(options, oldest_slot),
-            new_cf_descriptor::<PerfSamples>(options, oldest_slot),
+            new_cf_descriptor::<PerfSamplesV1>(options, oldest_slot),
+            new_cf_descriptor::<PerfSamplesV2>(options, oldest_slot),
             new_cf_descriptor::<BlockHeight>(options, oldest_slot),
             new_cf_descriptor::<ProgramCosts>(options, oldest_slot),
             new_cf_descriptor::<OptimisticSlots>(options, oldest_slot),
@@ -458,7 +468,8 @@ impl Rocks {
             TransactionStatusIndex::NAME,
             Rewards::NAME,
             Blocktime::NAME,
-            PerfSamples::NAME,
+            PerfSamplesV1::NAME,
+            PerfSamplesV2::NAME,
             BlockHeight::NAME,
             ProgramCosts::NAME,
             OptimisticSlots::NAME,
@@ -828,12 +839,20 @@ impl TypedColumn for columns::Blocktime {
     type Type = UnixTimestamp;
 }
 
-impl SlotColumn for columns::PerfSamples {}
-impl ColumnName for columns::PerfSamples {
-    const NAME: &'static str = PERF_SAMPLES_CF;
+impl SlotColumn for columns::PerfSamplesV1 {}
+impl ColumnName for columns::PerfSamplesV1 {
+    const NAME: &'static str = PERF_SAMPLES_V1_CF;
 }
-impl TypedColumn for columns::PerfSamples {
-    type Type = blockstore_meta::PerfSample;
+impl TypedColumn for columns::PerfSamplesV1 {
+    type Type = blockstore_meta::PerfSampleV1;
+}
+
+impl SlotColumn for columns::PerfSamplesV2 {}
+impl ColumnName for columns::PerfSamplesV2 {
+    const NAME: &'static str = PERF_SAMPLES_V2_CF;
+}
+impl TypedColumn for columns::PerfSamplesV2 {
+    type Type = blockstore_meta::PerfSampleV2;
 }
 
 impl SlotColumn for columns::BlockHeight {}

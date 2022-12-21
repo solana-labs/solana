@@ -485,6 +485,9 @@ pub struct RpcConfirmedTransactionStatusWithSignature {
 pub struct RpcPerfSample {
     pub slot: Slot,
     pub num_transactions: u64,
+    /// `num_non_vote_transactions` is only reported starting from version 1.15.X.
+    // TODO Make sure the version number is correct.
+    pub num_non_vote_transactions: Option<u64>,
     pub num_slots: u64,
     pub sample_period_secs: u16,
 }
@@ -546,4 +549,68 @@ pub struct RpcSnapshotSlotInfo {
 pub struct RpcPrioritizationFee {
     pub slot: Slot,
     pub prioritization_fee: u64,
+}
+
+#[cfg(test)]
+pub mod tests {
+
+    use {super::RpcPerfSample, serde::Serialize, serde_json, solana_sdk::clock::Slot};
+
+    /// Make sure that `RpcPerfSample` can read previous version JSON, one without the
+    /// `num_non_vote_transactions` field.
+    #[test]
+    fn rpc_perf_sample_deserialize_old() {
+        #[derive(Debug, PartialEq, Eq, Serialize)]
+        #[serde(rename_all = "camelCase")]
+        struct OldRpcPerfSample {
+            slot: Slot,
+            num_transactions: u64,
+            num_slots: u64,
+            sample_period_secs: u16,
+        }
+
+        let input = OldRpcPerfSample {
+            slot: 424,
+            num_transactions: 2597,
+            num_slots: 2783,
+            sample_period_secs: 398,
+        };
+        let input_str =
+            serde_json::to_string(&input).expect("Can convert OldRpcPerfSample into a JSON string");
+
+        let actual: RpcPerfSample =
+            serde_json::from_str(&input_str).expect("Can parse RpcPerfSample from string as JSON");
+        let expected = RpcPerfSample {
+            slot: 424,
+            num_transactions: 2597,
+            num_non_vote_transactions: None,
+            num_slots: 2783,
+            sample_period_secs: 398,
+        };
+
+        assert_eq!(actual, expected);
+    }
+
+    /// Make sure that `RpcPerfSample` writes the new `num_non_vote_transactions` field.
+    #[test]
+    fn rpc_perf_sample_serializes_num_non_vote_transactions() {
+        let input = RpcPerfSample {
+            slot: 1286,
+            num_transactions: 1732,
+            num_non_vote_transactions: Some(757),
+            num_slots: 393,
+            sample_period_secs: 197,
+        };
+        let actual =
+            serde_json::to_value(&input).expect("Can convert RpcPerfSample into a JSON value");
+        let expected = serde_json::json!({
+            "slot": 1286,
+            "numTransactions": 1732,
+            "numNonVoteTransactions": 757,
+            "numSlots": 393,
+            "samplePeriodSecs": 197,
+        });
+
+        assert_eq!(actual, expected);
+    }
 }

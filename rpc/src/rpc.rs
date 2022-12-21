@@ -3439,6 +3439,7 @@ pub mod rpc_full {
                 .map(|(slot, sample)| RpcPerfSample {
                     slot: *slot,
                     num_transactions: sample.num_transactions,
+                    num_non_vote_transactions: sample.num_non_vote_transactions,
                     num_slots: sample.num_slots,
                     sample_period_secs: sample.sample_period_secs,
                 })
@@ -5116,6 +5117,7 @@ pub mod tests {
         let slot = 0;
         let num_slots = 1;
         let num_transactions = 4;
+        let num_non_vote_transactions = 1;
         let sample_period_secs = 60;
         rpc.blockstore
             .write_perf_sample(
@@ -5123,6 +5125,7 @@ pub mod tests {
                 &PerfSample {
                     num_slots,
                     num_transactions,
+                    num_non_vote_transactions: Some(num_non_vote_transactions),
                     sample_period_secs,
                 },
             )
@@ -5134,6 +5137,7 @@ pub mod tests {
             "slot": slot,
             "numSlots": num_slots,
             "numTransactions": num_transactions,
+            "numNonVoteTransactions": num_non_vote_transactions,
             "samplePeriodSecs": sample_period_secs,
         }]);
         assert_eq!(result, expected);

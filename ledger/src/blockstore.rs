@@ -26,6 +26,7 @@ use {
     bincode::deserialize,
     crossbeam_channel::{bounded, Receiver, Sender, TrySendError},
     dashmap::DashSet,
+    itertools::Itertools,
     log::*,
     rayon::{
         iter::{IntoParallelIterator, IntoParallelRefIterator, ParallelIterator},
@@ -166,7 +167,8 @@ pub struct Blockstore {
     active_transaction_status_index: RwLock<u64>,
     rewards_cf: LedgerColumn<cf::Rewards>,
     blocktime_cf: LedgerColumn<cf::Blocktime>,
-    perf_samples_cf: LedgerColumn<cf::PerfSamples>,
+    perf_samples_v1_cf: LedgerColumn<cf::PerfSamplesV1>,
+    perf_samples_v2_cf: LedgerColumn<cf::PerfSamplesV2>,
     block_height_cf: LedgerColumn<cf::BlockHeight>,
     program_costs_cf: LedgerColumn<cf::ProgramCosts>,
     bank_hash_cf: LedgerColumn<cf::BankHash>,
@@ -271,7 +273,8 @@ impl Blockstore {
         let transaction_status_index_cf = db.column();
         let rewards_cf = db.column();
         let blocktime_cf = db.column();
-        let perf_samples_cf = db.column();
+        let perf_samples_v1_cf = db.column();
+        let perf_samples_v2_cf = db.column();
         let block_height_cf = db.column();
         let program_costs_cf = db.column();
         let bank_hash_cf = db.column();
@@ -323,7 +326,8 @@ impl Blockstore {
             active_transaction_status_index: RwLock::new(active_transaction_status_index),
             rewards_cf,
             blocktime_cf,
-            perf_samples_cf,
+            perf_samples_v1_cf,
+            perf_samples_v2_cf,
             block_height_cf,
             program_costs_cf,
             bank_hash_cf,
@@ -681,7 +685,8 @@ impl Blockstore {
         self.transaction_status_index_cf.submit_rocksdb_cf_metrics();
         self.rewards_cf.submit_rocksdb_cf_metrics();
         self.blocktime_cf.submit_rocksdb_cf_metrics();
-        self.perf_samples_cf.submit_rocksdb_cf_metrics();
+        self.perf_samples_v1_cf.submit_rocksdb_cf_metrics();
+        self.perf_samples_v2_cf.submit_rocksdb_cf_metrics();
         self.block_height_cf.submit_rocksdb_cf_metrics();
         self.program_costs_cf.submit_rocksdb_cf_metrics();
         self.bank_hash_cf.submit_rocksdb_cf_metrics();
@@ -2712,19 +2717,45 @@ impl Blockstore {
     }
 
     pub fn get_recent_perf_samples(&self, num: usize) -> Result<Vec<(Slot, PerfSample)>> {
-        Ok(self
-            .db
-            .iter::<cf::PerfSamples>(IteratorMode::End)?
-            .take(num)
-            .map(|(slot, data)| {
-                let perf_sample = deserialize(&data).unwrap();
-                (slot, perf_sample)
-            })
-            .collect())
+        // When reading `PerfSamples` the database may contains samples of both v1 and v2.  So we
+        // need to read both and merge the results.  It is tempting to assume that v2 samples are
+        // always newer, but that breaks should someone first start a v2 capable binary, but then
+        // roll back to a v1-only binary.
+
+        let v1_samples =
+            self.db
+                .iter::<cf::PerfSamplesV1>(IteratorMode::End)?
+                .map(|(slot, data)| {
+                    let sample: PerfSampleV1 = deserialize(&data).unwrap();
+                    // (slot, PerfSample::from(sample))
+                    (slot, sample.into())
+                });
+
+        let v2_samples =
+            self.db
+                .iter::<cf::PerfSamplesV2>(IteratorMode::End)?
+                .map(|(slot, data)| {
+                    let sample: PerfSampleV2 = deserialize(&data).unwrap();
+                    // (slot, PerfSample::from(sample))
+                    (slot, sample.into())
+                });
+
+        // In case both v1 and v2 columns contain a value for the same slot, we want to pick just
+        // the v2 version.  `dedup_by` does that, but it needs v2 samples to come first, as it takes
+        // the first from a pair of elements that are considered equal.
+        let result = Itertools::merge_by(v2_samples, v1_samples, |(v2_slot, _), (v1_slot, _)| {
+            v2_slot > v1_slot
+        })
+        .dedup_by(|(slot1, _), (slot2, _)| slot1 == slot2)
+        .take(num);
+
+        Ok(result.collect())
     }
 
     pub fn write_perf_sample(&self, index: Slot, perf_sample: &PerfSample) -> Result<()> {
-        self.perf_samples_cf.put(index, perf_sample)
+        // Always write as the current version.
+        self.perf_samples_v2_cf
+            .put(index, &perf_sample.clone().into())
     }
 
     pub fn read_program_costs(&self) -> Result<Vec<(Pubkey, u64)>> {
@@ -8504,6 +8535,116 @@ pub mod tests {
     }
 
     #[test]
+    fn test_get_recent_perf_samples_v1_only() {
+        let ledger_path = get_tmp_ledger_path_auto_delete!();
+        let blockstore = Blockstore::open(ledger_path.path()).unwrap();
+
+        let num_entries: usize = 10;
+
+        let slot_sample = |i: u64| PerfSampleV1 {
+            num_transactions: 1406 + i,
+            num_slots: 34 + i / 2,
+            sample_period_secs: (40 + i / 5) as u16,
+        };
+
+        let mut perf_samples: Vec<(Slot, PerfSample)> = vec![];
+        for i in 0..num_entries {
+            let slot = (i + 1) as u64 * 50;
+            let sample = slot_sample(i as u64);
+
+            blockstore.perf_samples_v1_cf.put(slot, &sample).unwrap();
+            perf_samples.push((slot, sample.into()));
+        }
+
+        for i in 0..num_entries {
+            let mut expected_samples = perf_samples[num_entries - 1 - i..].to_vec();
+            expected_samples.sort_by(|a, b| b.0.cmp(&a.0));
+            assert_eq!(
+                blockstore.get_recent_perf_samples(i + 1).unwrap(),
+                expected_samples
+            );
+        }
+    }
+
+    #[test]
+    fn test_get_recent_perf_samples_v2_only() {
+        let ledger_path = get_tmp_ledger_path_auto_delete!();
+        let blockstore = Blockstore::open(ledger_path.path()).unwrap();
+
+        let num_entries: usize = 10;
+
+        let slot_sample = |i: u64| PerfSampleV2 {
+            num_transactions: 2495 + i,
+            num_non_vote_transactions: 1672 + i,
+            num_slots: 167 + i / 2,
+            sample_period_secs: (37 + i / 5) as u16,
+        };
+
+        let mut perf_samples: Vec<(Slot, PerfSample)> = vec![];
+        for i in 0..num_entries {
+            let slot = (i + 1) as u64 * 50;
+            let sample = slot_sample(i as u64);
+
+            blockstore.perf_samples_v2_cf.put(slot, &sample).unwrap();
+            perf_samples.push((slot, sample.into()));
+        }
+
+        for i in 0..num_entries {
+            let mut expected_samples = perf_samples[num_entries - 1 - i..].to_vec();
+            expected_samples.sort_by(|a, b| b.0.cmp(&a.0));
+            assert_eq!(
+                blockstore.get_recent_perf_samples(i + 1).unwrap(),
+                expected_samples
+            );
+        }
+    }
+
+    #[test]
+    fn test_get_recent_perf_samples_v1_and_v2() {
+        let ledger_path = get_tmp_ledger_path_auto_delete!();
+        let blockstore = Blockstore::open(ledger_path.path()).unwrap();
+
+        let num_entries: usize = 10;
+
+        let slot_sample_v1 = |i: u64| PerfSampleV1 {
+            num_transactions: 1599 + i,
+            num_slots: 123 + i / 2,
+            sample_period_secs: (42 + i / 5) as u16,
+        };
+
+        let slot_sample_v2 = |i: u64| PerfSampleV2 {
+            num_transactions: 5809 + i,
+            num_non_vote_transactions: 2209 + i,
+            num_slots: 81 + i / 2,
+            sample_period_secs: (35 + i / 5) as u16,
+        };
+
+        let mut perf_samples: Vec<(Slot, PerfSample)> = vec![];
+        for i in 0..num_entries {
+            let slot = (i + 1) as u64 * 50;
+
+            if i % 3 == 0 {
+                let sample = slot_sample_v1(i as u64);
+                blockstore.perf_samples_v1_cf.put(slot, &sample).unwrap();
+                perf_samples.push((slot, sample.into()));
+            } else {
+                let sample = slot_sample_v2(i as u64);
+                blockstore.perf_samples_v2_cf.put(slot, &sample).unwrap();
+                perf_samples.push((slot, sample.into()));
+            }
+        }
+
+        for i in 0..num_entries {
+            let mut expected_samples = perf_samples[num_entries - 1 - i..].to_vec();
+            expected_samples.sort_by(|a, b| b.0.cmp(&a.0));
+            assert_eq!(
+                blockstore.get_recent_perf_samples(i + 1).unwrap(),
+                expected_samples
+            );
+        }
+    }
+
+    #[test]
     fn test_write_get_perf_samples() {
         let ledger_path = get_tmp_ledger_path_auto_delete!();
         let blockstore = Blockstore::open(ledger_path.path()).unwrap();
@@ -8515,6 +8656,7 @@ pub mod tests {
                 x as u64 * 50,
                 PerfSample {
                     num_transactions: 1000 + x as u64,
+                    num_non_vote_transactions: Some(300 + x as u64),
                     num_slots: 50,
                     sample_period_secs: 20,
                 },

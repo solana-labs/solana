@@ -830,7 +830,8 @@ fn analyze_storage(database: &Database) {
     analyze_column::<TransactionStatusIndex>(database, "TransactionStatusIndex");
     analyze_column::<Rewards>(database, "Rewards");
     analyze_column::<Blocktime>(database, "Blocktime");
-    analyze_column::<PerfSamples>(database, "PerfSamples");
+    analyze_column::<PerfSamplesV1>(database, "PerfSamplesV1");
+    analyze_column::<PerfSamplesV2>(database, "PerfSamplesV2");
     analyze_column::<BlockHeight>(database, "BlockHeight");
     analyze_column::<ProgramCosts>(database, "ProgramCosts");
     analyze_column::<OptimisticSlots>(database, "OptimisticSlots");
@@ -966,7 +967,8 @@ fn raw_key_to_slot(key: &[u8], column_name: &str) -> Option<Slot> {
         cf::TransactionStatusIndex::NAME => None, // does not implement slot()
         cf::Rewards::NAME => Some(cf::Rewards::slot(cf::Rewards::index(key))),
         cf::Blocktime::NAME => Some(cf::Blocktime::slot(cf::Blocktime::index(key))),
-        cf::PerfSamples::NAME => Some(cf::PerfSamples::slot(cf::PerfSamples::index(key))),
+        cf::PerfSamplesV1::NAME => Some(cf::PerfSamplesV1::slot(cf::PerfSamplesV1::index(key))),
+        cf::PerfSamplesV2::NAME => Some(cf::PerfSamplesV2::slot(cf::PerfSamplesV2::index(key))),
         cf::BlockHeight::NAME => Some(cf::BlockHeight::slot(cf::BlockHeight::index(key))),
         cf::ProgramCosts::NAME => None, // does not implement slot()
         cf::OptimisticSlots::NAME => {

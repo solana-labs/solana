@@ -438,6 +438,8 @@ pub struct LoadAndExecuteTransactionsOutput {
     pub retryable_transaction_indexes: Vec<usize>,
     // Total number of transactions that were executed
     pub executed_transactions_count: usize,
+    // Number of non-vote transactions that were executed
+    pub executed_non_vote_transactions_count: usize,
     // Total number of the executed transactions that returned success/not
     // an error.
     pub executed_with_successful_result_count: usize,
@@ -816,6 +818,7 @@ impl PartialEq for Bank {
             parent_slot,
             hard_forks,
             transaction_count,
+            non_vote_transaction_count: _,
             transaction_error_count: _,
             transaction_entries_count: _,
             transactions_per_entry_max: _,
@@ -978,6 +981,9 @@ pub struct Bank {
 
     /// The number of transactions processed without error
     transaction_count: AtomicU64,
+
+    /// The number of non-vote transactions processed without error
+    non_vote_transaction_count: AtomicU64,
 
     /// The number of transaction errors in this slot
     transaction_error_count: AtomicU64,
@@ -1157,6 +1163,7 @@ struct PrevEpochInflationRewards {
 
 pub struct CommitTransactionCounts {
     pub committed_transactions_count: u64,
+    pub committed_non_vote_transactions_count: u64,
     pub committed_with_failure_result_count: u64,
     pub signature_count: u64,
 }
@@ -1269,6 +1276,7 @@ impl Bank {
             parent_slot: Slot::default(),
             hard_forks: Arc::<RwLock<HardForks>>::default(),
             transaction_count: AtomicU64::default(),
+            non_vote_transaction_count: AtomicU64::default(),
             transaction_error_count: AtomicU64::default(),
             transaction_entries_count: AtomicU64::default(),
             transactions_per_entry_max: AtomicU64::default(),
@@ -1582,6 +1590,7 @@ impl Bank {
             vote_only_bank,
             inflation: parent.inflation.clone(),
             transaction_count: AtomicU64::new(parent.transaction_count()),
+            non_vote_transaction_count: AtomicU64::new(parent.non_vote_transaction_count()),
             transaction_error_count: AtomicU64::new(0),
             transaction_entries_count: AtomicU64::new(0),
             transactions_per_entry_max: AtomicU64::new(0),
@@ -1950,6 +1959,7 @@ impl Bank {
             parent_slot: fields.parent_slot,
             hard_forks: Arc::new(RwLock::new(fields.hard_forks)),
             transaction_count: AtomicU64::new(fields.transaction_count),
+            non_vote_transaction_count: new(),
             transaction_error_count: new(),
             transaction_entries_count: new(),
             transactions_per_entry_max: new(),
@@ -4504,6 +4514,7 @@ impl Bank {
         timings.saturating_add_in_place(ExecuteTimingType::ExecuteUs, execution_time.as_us());
 
         let mut executed_transactions_count: usize = 0;
+        let mut executed_non_vote_transactions_count: usize = 0;
         let mut executed_with_successful_result_count: usize = 0;
         let err_count = &mut error_counters.total;
         let transaction_log_collector_config =
@@ -4520,6 +4531,8 @@ impl Bank {
                     }
                 }
             }
+
+            let is_vote = vote_parser::is_simple_vote_transaction(tx);
 
             if execution_result.was_executed() // Skip log collection for unprocessed transactions
                 && transaction_log_collector_config.filter != TransactionLogCollectorFilter::None
@@ -4539,7 +4552,6 @@ impl Bank {
                     }
                 }
 
-                let is_vote = vote_parser::is_simple_vote_transaction(tx);
                 let store = match transaction_log_collector_config.filter {
                     TransactionLogCollectorFilter::All => {
                         !is_vote || !filtered_mentioned_addresses.is_empty()
@@ -4589,6 +4601,9 @@ impl Bank {
 
             match execution_result.flattened_result() {
                 Ok(()) => {
+                    if !is_vote {
+                        executed_non_vote_transactions_count += 1;
+                    }
                     executed_with_successful_result_count += 1;
                 }
                 Err(err) => {
@@ -4615,6 +4630,7 @@ impl Bank {
             execution_results,
             retryable_transaction_indexes,
             executed_transactions_count,
+            executed_non_vote_transactions_count,
             executed_with_successful_result_count,
             signature_count,
             error_counters,
@@ -4879,6 +4895,7 @@ impl Bank {
 
         let CommitTransactionCounts {
             committed_transactions_count,
+            committed_non_vote_transactions_count,
             committed_with_failure_result_count,
             signature_count,
         } = counts;
@@ -4890,11 +4907,16 @@ impl Bank {
         };
 
         self.increment_transaction_count(tx_count);
+        self.increment_non_vote_transaction_count(committed_non_vote_transactions_count);
         self.increment_signature_count(signature_count);
 
         inc_new_counter_info!(
             "bank-process_transactions-txs",
             committed_transactions_count as usize
+        );
+        inc_new_counter_info!(
+            "bank-process_non_vote_transactions-txs",
+            committed_non_vote_transactions_count as usize
         );
         inc_new_counter_info!("bank-process_transactions-sigs", signature_count as usize);
 
@@ -6056,6 +6078,7 @@ impl Bank {
             mut loaded_transactions,
             execution_results,
             executed_transactions_count,
+            executed_non_vote_transactions_count,
             executed_with_successful_result_count,
             signature_count,
             ..
@@ -6080,6 +6103,7 @@ impl Bank {
             lamports_per_signature,
             CommitTransactionCounts {
                 committed_transactions_count: executed_transactions_count as u64,
+                committed_non_vote_transactions_count: executed_non_vote_transactions_count as u64,
                 committed_with_failure_result_count: executed_transactions_count
                     .saturating_sub(executed_with_successful_result_count)
                     as u64,
@@ -6604,6 +6628,10 @@ impl Bank {
         self.transaction_count.load(Relaxed)
     }
 
+    pub fn non_vote_transaction_count(&self) -> u64 {
+        self.non_vote_transaction_count.load(Relaxed)
+    }
+
     pub fn transaction_error_count(&self) -> u64 {
         self.transaction_error_count.load(Relaxed)
     }
@@ -6618,6 +6646,10 @@ impl Bank {
 
     fn increment_transaction_count(&self, tx_count: u64) {
         self.transaction_count.fetch_add(tx_count, Relaxed);
+    }
+
+    fn increment_non_vote_transaction_count(&self, tx_count: u64) {
+        self.non_vote_transaction_count.fetch_add(tx_count, Relaxed);
     }
 
     pub fn signature_count(&self) -> u64 {
@@ -10467,6 +10499,7 @@ pub(crate) mod tests {
         bank.transfer(amount * 2, &mint_keypair, &pubkey).unwrap();
         assert_eq!(bank.get_balance(&pubkey), amount * 3);
         assert_eq!(bank.transaction_count(), 2);
+        assert_eq!(bank.non_vote_transaction_count(), 2);
     }
 
     #[test]
@@ -10591,6 +10624,7 @@ pub(crate) mod tests {
             Err(TransactionError::AccountNotFound)
         );
         assert_eq!(bank.transaction_count(), 0);
+        assert_eq!(bank.non_vote_transaction_count(), 0);
     }
 
     #[test]
@@ -10602,6 +10636,7 @@ pub(crate) mod tests {
         let amount = genesis_config.rent.minimum_balance(0);
         bank.transfer(amount, &mint_keypair, &pubkey).unwrap();
         assert_eq!(bank.transaction_count(), 1);
+        assert_eq!(bank.non_vote_transaction_count(), 1);
         assert_eq!(bank.get_balance(&pubkey), amount);
         assert_eq!(
             bank.transfer((mint_amount - amount) + 1, &mint_keypair, &pubkey),
@@ -10611,6 +10646,7 @@ pub(crate) mod tests {
             ))
         );
         assert_eq!(bank.transaction_count(), 1);
+        assert_eq!(bank.non_vote_transaction_count(), 1);
 
         let mint_pubkey = mint_keypair.pubkey();
         assert_eq!(bank.get_balance(&mint_pubkey), mint_amount - amount);
@@ -11211,6 +11247,7 @@ pub(crate) mod tests {
 
         // Assert bad transactions aren't counted.
         assert_eq!(bank.transaction_count(), 1);
+        assert_eq!(bank.non_vote_transaction_count(), 1);
     }
 
     #[test]
@@ -11768,6 +11805,7 @@ pub(crate) mod tests {
         assert_eq!(parent.process_transaction(&tx_transfer_mint_to_1), Ok(()));
         trace!("done parent process tx ");
         assert_eq!(parent.transaction_count(), 1);
+        assert_eq!(parent.non_vote_transaction_count(), 1);
         assert_eq!(
             parent.get_signature_status(&tx_transfer_mint_to_1.signatures[0]),
             Some(Ok(()))
@@ -11782,11 +11820,17 @@ pub(crate) mod tests {
         );
 
         assert_eq!(bank.transaction_count(), parent.transaction_count());
+        assert_eq!(
+            bank.non_vote_transaction_count(),
+            parent.non_vote_transaction_count()
+        );
         let tx_transfer_1_to_2 =
             system_transaction::transfer(&key1, &key2.pubkey(), amount, genesis_config.hash());
         assert_eq!(bank.process_transaction(&tx_transfer_1_to_2), Ok(()));
         assert_eq!(bank.transaction_count(), 2);
+        assert_eq!(bank.non_vote_transaction_count(), 2);
         assert_eq!(parent.transaction_count(), 1);
+        assert_eq!(parent.non_vote_transaction_count(), 1);
         assert_eq!(
             parent.get_signature_status(&tx_transfer_1_to_2.signatures[0]),
             None
@@ -11812,7 +11856,9 @@ pub(crate) mod tests {
             bank.squash();
 
             assert_eq!(parent.transaction_count(), 1);
+            assert_eq!(parent.non_vote_transaction_count(), 1);
             assert_eq!(bank.transaction_count(), 2);
+            assert_eq!(bank.non_vote_transaction_count(), 2);
         }
     }
 
@@ -12293,21 +12339,30 @@ pub(crate) mod tests {
         );
 
         assert_eq!(bank0.transaction_count(), 0);
+        assert_eq!(bank0.non_vote_transaction_count(), 0);
         assert_eq!(bank2.transaction_count(), 0);
+        assert_eq!(bank2.non_vote_transaction_count(), 0);
         assert_eq!(bank1.transaction_count(), 1);
+        assert_eq!(bank1.non_vote_transaction_count(), 1);
 
         bank1.squash();
 
         assert_eq!(bank0.transaction_count(), 0);
+        assert_eq!(bank0.non_vote_transaction_count(), 0);
         assert_eq!(bank2.transaction_count(), 0);
+        assert_eq!(bank2.non_vote_transaction_count(), 0);
         assert_eq!(bank1.transaction_count(), 1);
+        assert_eq!(bank1.non_vote_transaction_count(), 1);
 
         let bank6 = Bank::new_from_parent(&bank1, &solana_sdk::pubkey::new_rand(), 3);
         assert_eq!(bank1.transaction_count(), 1);
+        assert_eq!(bank1.non_vote_transaction_count(), 1);
         assert_eq!(bank6.transaction_count(), 1);
+        assert_eq!(bank6.non_vote_transaction_count(), 1);
 
         bank6.squash();
         assert_eq!(bank6.transaction_count(), 1);
+        assert_eq!(bank6.non_vote_transaction_count(), 1);
     }
 
     #[test]

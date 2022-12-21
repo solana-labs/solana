@@ -16,6 +16,7 @@ const SLEEP_INTERVAL: u64 = 500;
 
 pub struct SamplePerformanceSnapshot {
     pub num_transactions: u64,
+    pub num_non_vote_transactions: u64,
     pub num_slots: u64,
 }
 
@@ -57,6 +58,7 @@ impl SamplePerformanceService {
 
         let mut sample_snapshot = SamplePerformanceSnapshot {
             num_transactions: bank.transaction_count(),
+            num_non_vote_transactions: bank.non_vote_transaction_count(),
             num_slots: highest_slot,
         };
 
@@ -75,14 +77,22 @@ impl SamplePerformanceService {
                 let highest_slot = bank_forks.highest_slot();
                 drop(bank_forks);
 
+                let num_slots = highest_slot
+                    .checked_sub(sample_snapshot.num_slots)
+                    .unwrap_or_default();
+                let num_transactions = bank
+                    .transaction_count()
+                    .checked_sub(sample_snapshot.num_transactions)
+                    .unwrap_or_default();
+                let num_non_vote_transactions = bank
+                    .non_vote_transaction_count()
+                    .checked_sub(sample_snapshot.num_non_vote_transactions)
+                    .unwrap_or_default();
+
                 let perf_sample = PerfSample {
-                    num_slots: highest_slot
-                        .checked_sub(sample_snapshot.num_slots)
-                        .unwrap_or_default(),
-                    num_transactions: bank
-                        .transaction_count()
-                        .checked_sub(sample_snapshot.num_transactions)
-                        .unwrap_or_default(),
+                    num_slots,
+                    num_transactions,
+                    num_non_vote_transactions: Some(num_non_vote_transactions),
                     sample_period_secs: elapsed.as_secs() as u16,
                 };
 
@@ -91,7 +101,8 @@ impl SamplePerformanceService {
                 }
 
                 sample_snapshot = SamplePerformanceSnapshot {
-                    num_transactions: bank.transaction_count(),
+                    num_transactions,
+                    num_non_vote_transactions,
                     num_slots: highest_slot,
                 };
             }

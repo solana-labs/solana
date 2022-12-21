@@ -205,7 +205,11 @@ impl Blockstore {
                 .is_ok()
             & self
                 .db
-                .delete_range_cf::<cf::PerfSamples>(&mut write_batch, from_slot, to_slot)
+                .delete_range_cf::<cf::PerfSamplesV1>(&mut write_batch, from_slot, to_slot)
+                .is_ok()
+            & self
+                .db
+                .delete_range_cf::<cf::PerfSamplesV2>(&mut write_batch, from_slot, to_slot)
                 .is_ok()
             & self
                 .db
@@ -327,7 +331,11 @@ impl Blockstore {
                 .is_ok()
             & self
                 .db
-                .delete_file_in_range_cf::<cf::PerfSamples>(from_slot, to_slot)
+                .delete_file_in_range_cf::<cf::PerfSamplesV1>(from_slot, to_slot)
+                .is_ok()
+            & self
+                .db
+                .delete_file_in_range_cf::<cf::PerfSamplesV2>(from_slot, to_slot)
                 .is_ok()
             & self
                 .db
