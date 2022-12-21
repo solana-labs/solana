@@ -216,6 +216,10 @@ impl BankingTracer {
         })
     }
 
+    pub fn is_enabled(&self) -> bool {
+        self.enabled_tracer.is_some()
+    }
+
     fn create_channel(&self, label: ChannelLabel) -> (BankingPacketSender, BankingPacketReceiver) {
         Self::channel(
             label,

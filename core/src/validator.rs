@@ -942,6 +942,14 @@ impl Validator {
                 config.banking_trace_dir_byte_limit,
             )))
             .map_err(|err| format!("{} [{:?}]", &err, &err))?;
+        if banking_tracer.is_enabled() {
+            info!(
+                "Enabled banking tracer (dir_byte_limit: {})",
+                config.banking_trace_dir_byte_limit
+            );
+        } else {
+            info!("Disabled banking tracer");
+        }
 
         let (replay_vote_sender, replay_vote_receiver) = unbounded();
         let tvu = Tvu::new(
