@@ -5338,14 +5338,16 @@ impl Bank {
         let mut time_hashing_skipped_rewrites_us = 0;
         let mut time_storing_accounts_us = 0;
         let can_skip_rewrites = self.rc.accounts.accounts_db.skip_rewrites;
+        let set_exempt_rent_epoch_max: bool = self
+            .feature_set
+            .is_active(&solana_sdk::feature_set::set_exempt_rent_epoch_max::id());
         for (pubkey, account, _loaded_slot) in accounts.iter_mut() {
             let (rent_collected_info, measure) =
                 measure!(self.rent_collector.collect_from_existing_account(
                     pubkey,
                     account,
                     self.rc.accounts.accounts_db.filler_account_suffix.as_ref(),
-                    self.feature_set
-                        .is_active(&solana_sdk::feature_set::set_exempt_rent_epoch_max::id()),
+                    set_exempt_rent_epoch_max,
                 ));
             time_collecting_rent_us += measure.as_us();
 
