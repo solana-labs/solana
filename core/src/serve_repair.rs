@@ -986,18 +986,20 @@ impl ServeRepair {
         let (peer, addr) = if let Some(shred_id) = shred_id {
             let x = cluster_nodes.get_broadcast_peer(&shred_id);
             if let Some(ci) = x {
-                error!(">>> PEER for shred_id {:?}: {:?}", &shred_id, &ci.id);
+                //error!(">>> PEER for shred_id {:?}: {:?}", &shred_id, &ci.id);
                 (ci.id, ci.serve_repair)
             } else {
+                /*
                 error!(
                     ">>> LEADER for shred_id nodes.len={} clusternodes_leader={:?}",
                     cluster_nodes.nodes.len(),
                     &cluster_nodes.pubkey,
                 );
+                */
                 (slot_leader, leader_repair_addr)
             }
         } else {
-            error!(">>> LEADER NO shred_id {:?}", slot);
+            //error!(">>> LEADER NO shred_id {:?}", slot);
             (slot_leader, leader_repair_addr)
         };
 

@@ -139,11 +139,7 @@ impl ClusterNodes<BroadcastStage> {
         let shred_seed = shred.seed(&self.pubkey);
         let mut rng = ChaChaRng::from_seed(shred_seed);
         let index = self.weighted_shuffle.first(&mut rng)?;
-        let ci = self.nodes[index].contact_info();
-        if ci.is_none() {
-            error!(">>> node does not have contact info {:?}", &self.nodes[index]);
-        }
-        ci
+        self.nodes[index].contact_info()
     }
 }
 
