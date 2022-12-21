@@ -90,7 +90,13 @@ impl RetransmitStats {
             return;
         }
         cluster_nodes_cache
-            .get(root_bank.slot(), root_bank, working_bank, cluster_info)
+            .get(
+                root_bank.slot(),
+                root_bank,
+                working_bank,
+                cluster_info,
+                None,
+            )
             .submit_metrics("cluster_nodes_retransmit", timestamp());
         datapoint_info!(
             "retransmit-stage",
@@ -228,7 +234,7 @@ fn retransmit(
                 }
             };
             let cluster_nodes =
-                cluster_nodes_cache.get(slot, &root_bank, &working_bank, cluster_info);
+                cluster_nodes_cache.get(slot, &root_bank, &working_bank, cluster_info, None);
             Some(izip!(shreds, repeat(slot_leader), repeat(cluster_nodes)))
         })
         .flatten()

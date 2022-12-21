@@ -13,7 +13,10 @@ use {
     crossbeam_channel::{Receiver as CrossbeamReceiver, Sender as CrossbeamSender},
     lru::LruCache,
     solana_gossip::cluster_info::ClusterInfo,
-    solana_ledger::blockstore::{Blockstore, SlotMeta},
+    solana_ledger::{
+        blockstore::{Blockstore, SlotMeta},
+        leader_schedule_cache::LeaderScheduleCache,
+    },
     solana_measure::measure::Measure,
     solana_runtime::{bank_forks::BankForks, contains::Contains},
     solana_sdk::{
@@ -177,6 +180,7 @@ pub struct RepairInfo {
     pub repair_validators: Option<HashSet<Pubkey>>,
     // Validators which should be given priority when serving
     pub repair_whitelist: Arc<RwLock<HashSet<Pubkey>>>,
+    pub leader_schedule_cache: Arc<LeaderScheduleCache>,
 }
 
 pub struct RepairSlotRange {
@@ -251,10 +255,11 @@ impl RepairService {
         outstanding_requests: &RwLock<OutstandingShredRepairs>,
     ) {
         let mut repair_weight = RepairWeight::new(repair_info.bank_forks.read().unwrap().root());
-        let serve_repair = ServeRepair::new(
+        let mut serve_repair = ServeRepair::new(
             repair_info.cluster_info.clone(),
             repair_info.bank_forks.clone(),
             repair_info.repair_whitelist.clone(),
+            repair_info.leader_schedule_cache.clone(),
         );
         let id = repair_info.cluster_info.id();
         let mut repair_stats = RepairStats::default();

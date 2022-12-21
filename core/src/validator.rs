@@ -876,6 +876,7 @@ impl Validator {
             cluster_info.clone(),
             bank_forks.clone(),
             config.repair_whitelist.clone(),
+            leader_schedule_cache.clone(),
         );
         let serve_repair_service = ServeRepairService::new(
             serve_repair,

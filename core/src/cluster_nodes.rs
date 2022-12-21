@@ -36,6 +36,7 @@ use {
 };
 
 #[allow(clippy::large_enum_variant)]
+#[derive(Debug)]
 enum NodeId {
     // TVU node obtained through gossip (staked or not).
     ContactInfo(ContactInfo),
@@ -43,16 +44,17 @@ enum NodeId {
     Pubkey(Pubkey),
 }
 
+#[derive(Debug)]
 pub struct Node {
     node: NodeId,
     stake: u64,
 }
 
 pub struct ClusterNodes<T> {
-    pubkey: Pubkey, // The local node itself.
+    pub pubkey: Pubkey, // The local node itself.
     // All staked nodes + other known tvu-peers + the node itself;
     // sorted by (stake, pubkey) in descending order.
-    nodes: Vec<Node>,
+    pub nodes: Vec<Node>,
     // Reverse index from nodes pubkey to their index in self.nodes.
     index: HashMap<Pubkey, /*index:*/ usize>,
     weighted_shuffle: WeightedShuffle</*stake:*/ u64>,
@@ -130,14 +132,18 @@ impl<T> ClusterNodes<T> {
 
 impl ClusterNodes<BroadcastStage> {
     pub fn new(cluster_info: &ClusterInfo, stakes: &HashMap<Pubkey, u64>) -> Self {
-        new_cluster_nodes(cluster_info, stakes)
+        new_cluster_nodes(cluster_info, stakes, None)
     }
 
     pub(crate) fn get_broadcast_peer(&self, shred: &ShredId) -> Option<&ContactInfo> {
         let shred_seed = shred.seed(&self.pubkey);
         let mut rng = ChaChaRng::from_seed(shred_seed);
         let index = self.weighted_shuffle.first(&mut rng)?;
-        self.nodes[index].contact_info()
+        let ci = self.nodes[index].contact_info();
+        if ci.is_none() {
+            error!(">>> node does not have contact info {:?}", &self.nodes[index]);
+        }
+        ci
     }
 }
 
@@ -269,8 +275,9 @@ impl ClusterNodes<RetransmitStage> {
 pub fn new_cluster_nodes<T: 'static>(
     cluster_info: &ClusterInfo,
     stakes: &HashMap<Pubkey, u64>,
+    leader: Option<Pubkey>,
 ) -> ClusterNodes<T> {
-    let self_pubkey = cluster_info.id();
+    let self_pubkey = leader.unwrap_or(cluster_info.id());
     let nodes = get_nodes(cluster_info, stakes);
     let index: HashMap<_, _> = nodes
         .iter()
@@ -390,6 +397,7 @@ impl<T: 'static> ClusterNodesCache<T> {
         root_bank: &Bank,
         working_bank: &Bank,
         cluster_info: &ClusterInfo,
+        leader: Option<Pubkey>,
     ) -> Arc<ClusterNodes<T>> {
         let epoch = root_bank.get_leader_schedule_epoch(shred_slot);
         let entry = self.get_cache_entry(epoch);
@@ -407,13 +415,20 @@ impl<T: 'static> ClusterNodesCache<T> {
         if epoch_staked_nodes.is_none() {
             inc_new_counter_info!("cluster_nodes-unknown_epoch_staked_nodes", 1);
             if epoch != root_bank.get_leader_schedule_epoch(root_bank.slot()) {
-                return self.get(root_bank.slot(), root_bank, working_bank, cluster_info);
+                return self.get(
+                    root_bank.slot(),
+                    root_bank,
+                    working_bank,
+                    cluster_info,
+                    leader,
+                );
             }
             inc_new_counter_info!("cluster_nodes-unknown_epoch_staked_nodes_root", 1);
         }
         let nodes = Arc::new(new_cluster_nodes::<T>(
             cluster_info,
             &epoch_staked_nodes.unwrap_or_default(),
+            leader,
         ));
         *entry = Some((Instant::now(), Arc::clone(&nodes)));
         nodes

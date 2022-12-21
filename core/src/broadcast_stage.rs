@@ -52,8 +52,8 @@ pub(crate) mod broadcast_utils;
 mod fail_entry_verification_broadcast_run;
 mod standard_broadcast_run;
 
-const CLUSTER_NODES_CACHE_NUM_EPOCH_CAP: usize = 8;
-const CLUSTER_NODES_CACHE_TTL: Duration = Duration::from_secs(5);
+pub(crate) const CLUSTER_NODES_CACHE_NUM_EPOCH_CAP: usize = 8;
+pub(crate) const CLUSTER_NODES_CACHE_TTL: Duration = Duration::from_secs(5);
 
 pub(crate) const NUM_INSERT_THREADS: usize = 2;
 pub(crate) type RetransmitSlotsSender = Sender<Slot>;
@@ -409,7 +409,7 @@ pub fn broadcast_shreds(
         .into_iter()
         .flat_map(|(slot, shreds)| {
             let cluster_nodes =
-                cluster_nodes_cache.get(slot, &root_bank, &working_bank, cluster_info);
+                cluster_nodes_cache.get(slot, &root_bank, &working_bank, cluster_info, None);
             update_peer_stats(&cluster_nodes, last_datapoint_submit);
             shreds.flat_map(move |shred| {
                 let node = cluster_nodes.get_broadcast_peer(&shred.id())?;

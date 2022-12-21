@@ -299,7 +299,7 @@ impl BroadcastRun for BroadcastDuplicatesRun {
         // Broadcast data
         let cluster_nodes =
             self.cluster_nodes_cache
-                .get(slot, &root_bank, &working_bank, cluster_info);
+                .get(slot, &root_bank, &working_bank, cluster_info, None);
         let socket_addr_space = cluster_info.socket_addr_space();
         let packets: Vec<_> = shreds
             .iter()

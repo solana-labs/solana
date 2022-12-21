@@ -524,6 +524,7 @@ impl AncestorHashesService {
             repair_info.cluster_info.clone(),
             repair_info.bank_forks.clone(),
             repair_info.repair_whitelist.clone(),
+            repair_info.leader_schedule_cache.clone(),
         );
         let mut repair_stats = AncestorRepairRequestsStats::default();
 

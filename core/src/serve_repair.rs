@@ -1,5 +1,9 @@
 use {
     crate::{
+        broadcast_stage::{
+            BroadcastStage, CLUSTER_NODES_CACHE_NUM_EPOCH_CAP, CLUSTER_NODES_CACHE_TTL,
+        },
+        cluster_nodes::ClusterNodesCache,
         cluster_slots::ClusterSlots,
         duplicate_repair_status::ANCESTOR_HASH_REPAIR_SAMPLE_SIZE,
         repair_response,
@@ -22,7 +26,8 @@ use {
     solana_ledger::{
         ancestor_iterator::{AncestorIterator, AncestorIteratorWithHash},
         blockstore::Blockstore,
-        shred::{Nonce, Shred, ShredFetchStats, SIZE_OF_NONCE},
+        leader_schedule_cache::LeaderScheduleCache,
+        shred::{Nonce, Shred, ShredFetchStats, ShredId, ShredType, SIZE_OF_NONCE},
     },
     solana_metrics::inc_new_counter_debug,
     solana_perf::{
@@ -283,6 +288,8 @@ pub struct ServeRepair {
     cluster_info: Arc<ClusterInfo>,
     bank_forks: Arc<RwLock<BankForks>>,
     repair_whitelist: Arc<RwLock<HashSet<Pubkey>>>,
+    leader_schedule_cache: Arc<LeaderScheduleCache>,
+    cluster_nodes_cache: Arc<ClusterNodesCache<BroadcastStage>>,
 }
 
 // Cache entry for repair peers for a slot.
@@ -330,11 +337,17 @@ impl ServeRepair {
         cluster_info: Arc<ClusterInfo>,
         bank_forks: Arc<RwLock<BankForks>>,
         repair_whitelist: Arc<RwLock<HashSet<Pubkey>>>,
+        leader_schedule_cache: Arc<LeaderScheduleCache>,
     ) -> Self {
         Self {
             cluster_info,
             bank_forks,
             repair_whitelist,
+            leader_schedule_cache,
+            cluster_nodes_cache: Arc::new(ClusterNodesCache::<BroadcastStage>::new(
+                CLUSTER_NODES_CACHE_NUM_EPOCH_CAP,
+                CLUSTER_NODES_CACHE_TTL,
+            )),
         }
     }
 
@@ -894,18 +907,101 @@ impl ServeRepair {
     }
 
     pub(crate) fn repair_request(
-        &self,
-        cluster_slots: &ClusterSlots,
+        &mut self,
+        _cluster_slots: &ClusterSlots,
         repair_request: ShredRepairType,
-        peers_cache: &mut LruCache<Slot, RepairPeers>,
+        _peers_cache: &mut LruCache<Slot, RepairPeers>,
         repair_stats: &mut RepairStats,
-        repair_validators: &Option<HashSet<Pubkey>>,
+        _repair_validators: &Option<HashSet<Pubkey>>,
         outstanding_requests: &mut OutstandingShredRepairs,
         identity_keypair: &Keypair,
     ) -> Result<(SocketAddr, Vec<u8>)> {
         // find a peer that appears to be accepting replication and has the desired slot, as indicated
         // by a valid tvu port location
         let slot = repair_request.slot();
+
+        let (working_bank, root_bank) = {
+            let bank_forks = self.bank_forks.read().unwrap();
+            (bank_forks.working_bank(), bank_forks.root_bank())
+        };
+
+        let slot_leader = match self
+            .leader_schedule_cache
+            .slot_leader_at(slot, Some(&working_bank))
+        {
+            Some(pubkey) => pubkey,
+            None => {
+                error!("failed to get slot_leader");
+                return Err(Error::from(ClusterInfoError::NoLeader));
+            }
+        };
+
+        let leader_repair_addr = if slot_leader == self.my_id() {
+            error!("failed to get leader addr");
+            return Err(Error::from(ClusterInfoError::NoPeers));
+        } else {
+            //self.cluster_info.lookup_contact_info(&slot_leader, |ci| ci.repair.clone()).ok_or(ClusterInfoError::NoPeers)?
+            let addr = self
+                .cluster_info
+                .lookup_contact_info(&slot_leader, |ci| ci.serve_repair);
+            match addr {
+                Some(addr) => addr,
+                None => {
+                    error!("failed to get repair addr");
+                    return Err(Error::from(ClusterInfoError::NoPeers));
+                }
+            }
+        };
+
+        let cluster_nodes = self.cluster_nodes_cache.get(
+            repair_request.slot(),
+            &root_bank,
+            &working_bank,
+            &self.cluster_info,
+            Some(slot_leader),
+        );
+
+        // TODO use cluster_nodes for repair targets
+
+        let shred_id = match repair_request {
+            ShredRepairType::HighestShred(_slot, _index) => {
+                // TODO compute broadcast layers to get peers
+                // as in broadcast_stage::broadcast_shreds for slot/index peer selection
+                None
+            }
+            ShredRepairType::Shred(slot, index) => {
+                // TODO use index to guess at peers for subsequent indices
+                Some(ShredId::new(
+                    slot,
+                    index as u32,
+                    ShredType::Data,
+                ))
+            }
+            ShredRepairType::Orphan(_slot) => {
+                // TODO use slot?
+                None
+            }
+        };
+
+        let (peer, addr) = if let Some(shred_id) = shred_id {
+            let x = cluster_nodes.get_broadcast_peer(&shred_id);
+            if let Some(ci) = x {
+                error!(">>> PEER for shred_id {:?}: {:?}", &shred_id, &ci.id);
+                (ci.id, ci.serve_repair)
+            } else {
+                error!(
+                    ">>> LEADER for shred_id nodes.len={} clusternodes_leader={:?}",
+                    cluster_nodes.nodes.len(),
+                    &cluster_nodes.pubkey,
+                );
+                (slot_leader, leader_repair_addr)
+            }
+        } else {
+            error!(">>> LEADER NO shred_id {:?}", slot);
+            (slot_leader, leader_repair_addr)
+        };
+
+        /*
         let repair_peers = match peers_cache.get(&slot) {
             Some(entry) if entry.asof.elapsed() < REPAIR_PEERS_CACHE_TTL => entry,
             _ => {
@@ -918,6 +1014,16 @@ impl ServeRepair {
             }
         };
         let (peer, addr) = repair_peers.sample(&mut rand::thread_rng());
+        */
+
+        /*
+        //let (peer, addr) = (slot_leader, leader_repair_addr);
+        warn!(
+            ">>> repair using {:?} {:?} {:?}",
+            &peer, &addr, &repair_request
+        );
+        */
+
         let nonce = outstanding_requests.add_request(repair_request, timestamp());
         let out = self.map_repair_request(
             &repair_request,
