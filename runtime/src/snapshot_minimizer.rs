@@ -351,6 +351,7 @@ impl<'a> SnapshotMinimizer<'a> {
         let _ = self.accounts_db().purge_keys_exact(purge_pubkeys.iter());
 
         let aligned_total: u64 = AccountsDb::page_align(total_bytes as u64);
+        let mut shrink_in_progress = None;
         if aligned_total > 0 {
             let mut accounts = Vec::with_capacity(keep_accounts.len());
             let mut hashes = Vec::with_capacity(keep_accounts.len());
@@ -362,7 +363,8 @@ impl<'a> SnapshotMinimizer<'a> {
                 write_versions.push(alive_account.account.meta.write_version_obsolete);
             }
 
-            let new_storage = self.accounts_db().get_store_for_shrink(slot, aligned_total);
+            shrink_in_progress = Some(self.accounts_db().get_store_for_shrink(slot, aligned_total));
+            let new_storage = shrink_in_progress.as_ref().unwrap().new_storage();
             self.accounts_db().store_accounts_frozen(
                 (
                     slot,
@@ -370,7 +372,7 @@ impl<'a> SnapshotMinimizer<'a> {
                     crate::accounts_db::INCLUDE_SLOT_IN_HASH_IRRELEVANT_APPEND_VEC_OPERATION,
                 ),
                 Some(hashes),
-                Some(&new_storage),
+                Some(new_storage),
                 Some(Box::new(write_versions.into_iter())),
                 StoreReclaims::Default,
             );
@@ -378,14 +380,11 @@ impl<'a> SnapshotMinimizer<'a> {
             new_storage.flush().unwrap();
         }
 
-        let append_vec_set: HashSet<_> = storages
-            .iter()
-            .map(|storage| storage.append_vec_id())
-            .collect();
         let (_, mut dead_storages_this_time) = self.accounts_db().mark_dirty_dead_stores(
             slot,
-            |store| !append_vec_set.contains(&store.append_vec_id()),
-            true, // add_dirty_stores
+            |_store| true, /* ignored if shrink_in_progress is passed, otherwise retain all */
+            true,          // add_dirty_stores
+            shrink_in_progress,
         );
         dead_storages
             .lock()
