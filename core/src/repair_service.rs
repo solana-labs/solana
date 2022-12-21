@@ -264,7 +264,7 @@ impl RepairService {
         let duplicate_slot_repair_statuses: HashMap<Slot, DuplicateSlotRepairStatus> =
             HashMap::new();
         let mut peers_cache = LruCache::new(REPAIR_PEERS_CACHE_CAPACITY);
-        let mut repairs_cache = LruCache::new(1_000); // TODO choose const
+        let mut repairs_cache = LruCache::new(2_000); // TODO
 
         loop {
             if exit.load(Ordering::Relaxed) {
