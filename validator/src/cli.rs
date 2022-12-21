@@ -1310,7 +1310,7 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                 // expose friendly alternative name to cli than internal
                 // implementation-oriented one
                 .long("enable-banking-trace")
-                .value_name("MAX_BYTES")
+                .value_name("BYTES")
                 .validator(is_parsable::<DirByteLimit>)
                 .takes_value(true)
                 // Firstly, zero limit value causes tracer to be disabled
