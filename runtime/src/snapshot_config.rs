@@ -82,19 +82,6 @@ impl SnapshotConfig {
         }
     }
 
-    /// This is to construct the initial bank state from the directory files, not from the archives.
-    pub fn new_from_file(bank_snapshots_dir: PathBuf) -> Self {
-        Self {
-            bank_snapshots_dir,
-            snapshot_from: Some(SnapshotFrom::File),
-            archive_format: ArchiveFormat::None,
-            // The archive related fields are not used.  The clean way is to make all the related
-            // fields optional, set them to None in the from_file case.  But that would require
-            // too many changes.
-            ..Self::new_load_only()
-        }
-    }
-
     /// Should snapshots be generated?
     #[must_use]
     pub fn should_generate_snapshots(&self) -> bool {

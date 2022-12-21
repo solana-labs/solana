@@ -60,7 +60,7 @@ use {
         snapshot_hash::StartingSnapshotHashes,
         snapshot_minimizer::SnapshotMinimizer,
         snapshot_utils::{
-            self, move_and_async_delete_path, ArchiveFormat, SnapshotVersion,
+            self, move_and_async_delete_path, ArchiveFormat, SnapshotFrom, SnapshotVersion,
             DEFAULT_ARCHIVE_COMPRESSION, SUPPORTED_ARCHIVE_COMPRESSION,
         },
     },
@@ -1037,8 +1037,6 @@ fn load_bank_forks(
     let mut starting_slot = 0; // default start check with genesis
     let snapshot_config = if arg_matches.is_present("no_snapshot") {
         None
-    } else if arg_snapshot_from_file {
-        Some(SnapshotConfig::new_from_file(bank_snapshots_dir))
     } else {
         let full_snapshot_archives_dir =
             snapshot_archive_path.unwrap_or_else(|| blockstore.ledger_path().to_path_buf());
@@ -1056,12 +1054,23 @@ fn load_bank_forks(
             starting_slot = std::cmp::max(full_snapshot_slot, incremental_snapshot_slot);
         }
 
-        Some(SnapshotConfig {
+        let archive_config = SnapshotConfig {
             full_snapshot_archives_dir,
             incremental_snapshot_archives_dir,
             bank_snapshots_dir,
             ..SnapshotConfig::new_load_only()
-        })
+        };
+        if !arg_snapshot_from_file {
+            Some(archive_config)
+        } else {
+            // Even in the from_file case, still get all the archive config info because they are
+            // needed if the fallback happens.
+            Some(SnapshotConfig {
+                snapshot_from: Some(SnapshotFrom::File),
+                archive_format: ArchiveFormat::None,
+                ..archive_config
+            })
+        }
     };
 
     if let Some(halt_slot) = process_options.halt_at_slot {
@@ -1100,6 +1109,11 @@ fn load_bank_forks(
 
         vec![non_primary_accounts_path]
     };
+
+    // Ensure the accounts paths exist.
+    for account_path in &account_paths {
+        std::fs::create_dir_all(account_path).unwrap_or_default();
+    }
 
     let mut accounts_update_notifier = Option::<AccountsUpdateNotifier>::default();
     if arg_matches.is_present("geyser_plugin_config") {
