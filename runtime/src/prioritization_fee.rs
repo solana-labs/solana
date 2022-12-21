@@ -50,12 +50,13 @@ impl PrioritizationFeeMetrics {
         // update prioritized transaction fee metrics.
         saturating_add_assign!(self.prioritized_transactions_count, 1);
 
-        self.max_prioritization_fee =
-            self.max_prioritization_fee.max(fee);
+        self.max_prioritization_fee = self.max_prioritization_fee.max(fee);
 
-        self.min_prioritization_fee = self
-            .min_prioritization_fee
-            .map_or(fee, |min_fee| min_fee.min(fee));
+        self.min_prioritization_fee = Some(
+            self.min_prioritization_fee
+                .map_or(fee, |min_fee| min_fee.min(fee)),
+        );
+    }
 
     fn report(&self, slot: Slot) {
         datapoint_info!(
