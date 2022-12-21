@@ -6897,6 +6897,7 @@ dependencies = [
  "solana-program 1.15.0",
  "solana-program-runtime",
  "solana-sdk 1.15.0",
+ "test-case",
  "thiserror",
 ]
 

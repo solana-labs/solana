@@ -1,7 +1,7 @@
 //! Vote program processor
 
 use {
-    crate::vote_state,
+    crate::{vote_error::VoteError, vote_state},
     log::*,
     solana_program::vote::{instruction::VoteInstruction, program::id, state::VoteAuthorize},
     solana_program_runtime::{
@@ -135,6 +135,17 @@ pub fn process_instruction(
             vote_state::update_validator_identity(&mut me, node_pubkey, &signers)
         }
         VoteInstruction::UpdateCommission(commission) => {
+            if invoke_context
+                .feature_set
+                .is_active(&feature_set::prevent_commission_update_in_second_half_of_epoch::id())
+            {
+                let sysvar_cache = invoke_context.get_sysvar_cache();
+                let epoch_schedule = sysvar_cache.get_epoch_schedule()?;
+                let clock = sysvar_cache.get_clock()?;
+                if !vote_state::is_commission_update_allowed(clock.slot, &epoch_schedule) {
+                    return Err(VoteError::CommissionUpdateTooLate.into());
+                }
+            }
             vote_state::update_commission(&mut me, commission, &signers)
         }
         VoteInstruction::Vote(vote) | VoteInstruction::VoteSwitch(vote, _) => {

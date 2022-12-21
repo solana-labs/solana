@@ -9,6 +9,7 @@ use {
     solana_sdk::{
         account::{AccountSharedData, ReadableAccount, WritableAccount},
         clock::{Epoch, Slot, UnixTimestamp},
+        epoch_schedule::EpochSchedule,
         feature_set::{self, filter_votes_outside_slot_hashes, FeatureSet},
         hash::Hash,
         instruction::InstructionError,
@@ -797,6 +798,22 @@ pub fn update_commission<S: std::hash::BuildHasher>(
     vote_account.set_state(&VoteStateVersions::new_current(vote_state))
 }
 
+/// Given the current slot and epoch schedule, determine if a commission change
+/// is allowed
+pub fn is_commission_update_allowed(slot: Slot, epoch_schedule: &EpochSchedule) -> bool {
+    // always allowed during warmup epochs
+    if let Some(relative_slot) = slot
+        .saturating_sub(epoch_schedule.first_normal_slot)
+        .checked_rem(epoch_schedule.slots_per_epoch)
+    {
+        // allowed up to the midpoint of the epoch
+        relative_slot.saturating_mul(2) <= epoch_schedule.slots_per_epoch
+    } else {
+        // no slots per epoch, just allow it, even though this should never happen
+        true
+    }
+}
+
 fn verify_authorized_signer<S: std::hash::BuildHasher>(
     authorized: &Pubkey,
     signers: &HashSet<Pubkey, S>,
@@ -1020,8 +1037,12 @@ mod tests {
     use {
         super::*,
         crate::vote_state,
-        solana_sdk::{account::AccountSharedData, account_utils::StateMut, hash::hash},
+        solana_sdk::{
+            account::AccountSharedData, account_utils::StateMut, clock::DEFAULT_SLOTS_PER_EPOCH,
+            epoch_schedule::DEFAULT_FIRST_NORMAL_SLOT, hash::hash,
+        },
         std::cell::RefCell,
+        test_case::test_case,
     };
 
     const MAX_RECENT_VOTES: usize = 16;
@@ -2953,6 +2974,21 @@ mod tests {
                 Some(&FeatureSet::all_enabled())
             ),
             Err(VoteError::SlotHashMismatch),
+        );
+    }
+
+    #[test_case(0, true; "first slot")]
+    #[test_case(DEFAULT_FIRST_NORMAL_SLOT - 1, true; "right before first normal slot")]
+    #[test_case(DEFAULT_FIRST_NORMAL_SLOT, true; "first normal slot")]
+    #[test_case(DEFAULT_FIRST_NORMAL_SLOT + DEFAULT_SLOTS_PER_EPOCH / 2, true; "halfway first normal epoch")]
+    #[test_case(DEFAULT_FIRST_NORMAL_SLOT + DEFAULT_SLOTS_PER_EPOCH / 2 + 1, false; "halfway first normal epoch plus one")]
+    #[test_case(DEFAULT_FIRST_NORMAL_SLOT + DEFAULT_SLOTS_PER_EPOCH - 1, false; "last slot in first normal epoch")]
+    #[test_case(DEFAULT_FIRST_NORMAL_SLOT + DEFAULT_SLOTS_PER_EPOCH, true; "first slot in second normal epoch")]
+    fn test_epoch_half_check(slot: Slot, expected_allowed: bool) {
+        let epoch_schedule = EpochSchedule::default();
+        assert_eq!(
+            is_commission_update_allowed(slot, &epoch_schedule),
+            expected_allowed
         );
     }
 }
