@@ -2060,8 +2060,9 @@ Result:
 
 ### getRecentPerformanceSamples
 
-Returns a list of recent performance samples, in reverse slot order. Performance samples are taken every 60 seconds and
-include the number of transactions and slots that occur in a given time window.
+Returns a list of recent performance samples, in reverse slot order. Performance
+samples are taken every 60 seconds and include the number of transactions and
+slots that occur in a given time window.
 
 #### Parameters:
 
@@ -2074,6 +2075,11 @@ An array of:
 - `RpcPerfSample<object>`
   - `slot: <u64>` - Slot in which sample was taken at
   - `numTransactions: <u64>` - Number of transactions in sample
+  - `numNonVoteTransaction: <u64>` - Number of non-vote transactions in
+      sample.<br/>
+      To get a number of voting transactions compute `numTransactions -
+      numNonVoteTransaction`.<br/>
+      This field is present starting with v1.15.
   - `numSlots: <u64>` - Number of slots in sample
   - `samplePeriodSecs: <u16>` - Number of seconds in a sample window
 
@@ -2097,24 +2103,28 @@ Result:
     {
       "numSlots": 126,
       "numTransactions": 126,
+      "numNonVoteTransaction": 1,
       "samplePeriodSecs": 60,
       "slot": 348125
     },
     {
       "numSlots": 126,
       "numTransactions": 126,
+      "numNonVoteTransaction": 1,
       "samplePeriodSecs": 60,
       "slot": 347999
     },
     {
       "numSlots": 125,
       "numTransactions": 125,
+      "numNonVoteTransaction": 0,
       "samplePeriodSecs": 60,
       "slot": 347873
     },
     {
       "numSlots": 125,
       "numTransactions": 125,
+      "numNonVoteTransaction": 0,
       "samplePeriodSecs": 60,
       "slot": 347748
     }
