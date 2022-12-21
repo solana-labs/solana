@@ -749,7 +749,7 @@ impl BankingSimulator {
         let banking_tracer = BankingTracer::new(Some((
             blockstore.banking_retracer_path(),
             exit.clone(),
-            DEFAULT_BANKING_TRACE_SIZE
+            BANKING_TRACE_DIR_DEFAULT_BYTE_LIMIT,
         ))).unwrap();
         let (non_vote_sender, non_vote_receiver) = banking_tracer.create_channel_non_vote();
         let (tpu_vote_sender, tpu_vote_receiver) = banking_tracer.create_channel_tpu_vote();
