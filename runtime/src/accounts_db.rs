@@ -21,6 +21,7 @@
 use {
     crate::{
         account_info::{AccountInfo, Offset, StorageLocation, StoredSize},
+        account_storage::{AccountStorage, AccountStorageStatus, ShrinkInProgress},
         accounts_background_service::{DroppedSlotsSender, SendDroppedBankCallback},
         accounts_cache::{AccountsCache, CachedAccount, SlotCache},
         accounts_hash::{
@@ -204,12 +205,27 @@ impl CurrentAncientAppendVec {
             slot_and_append_vec: Some((slot, append_vec)),
         }
     }
-    fn create_ancient_append_vec(&mut self, slot: Slot, db: &AccountsDb) {
-        *self = Self::new(slot, db.create_ancient_append_vec(slot));
+
+    #[must_use]
+    fn create_ancient_append_vec<'a>(
+        &mut self,
+        slot: Slot,
+        db: &'a AccountsDb,
+    ) -> ShrinkInProgress<'a> {
+        let shrink_in_progress = db.create_ancient_append_vec(slot);
+        *self = Self::new(slot, Arc::clone(shrink_in_progress.new_storage()));
+        shrink_in_progress
     }
-    fn create_if_necessary(&mut self, slot: Slot, db: &AccountsDb) {
+    #[must_use]
+    fn create_if_necessary<'a>(
+        &mut self,
+        slot: Slot,
+        db: &'a AccountsDb,
+    ) -> Option<ShrinkInProgress<'a>> {
         if self.slot_and_append_vec.is_none() {
-            self.create_ancient_append_vec(slot, db);
+            Some(self.create_ancient_append_vec(slot, db))
+        } else {
+            None
         }
     }
 
@@ -420,6 +436,44 @@ pub struct FoundStoredAccount<'a> {
 impl<'a> FoundStoredAccount<'a> {
     pub fn pubkey(&self) -> &Pubkey {
         self.account.pubkey()
+    }
+}
+
+/// this tuple assumes storing from a slot to the same slot
+/// accounts are `StoredAccountMeta` inside `FoundStoredAccount`
+impl<'a> StorableAccounts<'a, StoredAccountMeta<'a>>
+    for (Slot, &'a [&FoundStoredAccount<'a>], IncludeSlotInHash)
+{
+    fn pubkey(&self, index: usize) -> &Pubkey {
+        self.1[index].pubkey()
+    }
+    fn account(&self, index: usize) -> &StoredAccountMeta<'a> {
+        &self.1[index].account
+    }
+    fn slot(&self, _index: usize) -> Slot {
+        // same other slot for all accounts
+        self.0
+    }
+    fn target_slot(&self) -> Slot {
+        self.0
+    }
+    fn len(&self) -> usize {
+        self.1.len()
+    }
+    fn contains_multiple_slots(&self) -> bool {
+        false
+    }
+    fn include_slot_in_hash(&self) -> IncludeSlotInHash {
+        self.2
+    }
+    fn has_hash_and_write_version(&self) -> bool {
+        true
+    }
+    fn hash(&self, index: usize) -> &Hash {
+        self.1[index].account.hash
+    }
+    fn write_version(&self, index: usize) -> u64 {
+        self.1[index].account.meta.write_version_obsolete
     }
 }
 
@@ -744,7 +798,9 @@ impl<'a> LoadedAccount<'a> {
 
     pub fn write_version(&self) -> StoredMetaWriteVersion {
         match self {
-            LoadedAccount::Stored(stored_account_meta) => stored_account_meta.meta.write_version,
+            LoadedAccount::Stored(stored_account_meta) => {
+                stored_account_meta.meta.write_version_obsolete
+            }
             LoadedAccount::Cached(_) => CACHE_VIRTUAL_WRITE_VERSION,
         }
     }
@@ -834,55 +890,6 @@ impl<'a> ReadableAccount for LoadedAccount<'a> {
             // clone here to prevent data copy
             LoadedAccount::Cached(cached_account) => cached_account.account.clone(),
         }
-    }
-}
-
-pub type AccountStorageMap = DashMap<Slot, SlotStores>;
-
-#[derive(Clone, Default, Debug)]
-pub struct AccountStorage {
-    pub map: AccountStorageMap,
-}
-
-impl AccountStorage {
-    fn get_account_storage_entry(
-        &self,
-        slot: Slot,
-        store_id: AppendVecId,
-    ) -> Option<Arc<AccountStorageEntry>> {
-        self.get_slot_stores(slot)
-            .and_then(|storage_map| storage_map.read().unwrap().get(&store_id).cloned())
-    }
-
-    pub fn get_slot_stores(&self, slot: Slot) -> Option<SlotStores> {
-        self.map.get(&slot).map(|result| result.value().clone())
-    }
-
-    fn get_slot_storage_entries(&self, slot: Slot) -> Option<Vec<Arc<AccountStorageEntry>>> {
-        self.get_slot_stores(slot)
-            .map(|res| res.read().unwrap().values().cloned().collect())
-    }
-
-    fn slot_store_count(&self, slot: Slot, store_id: AppendVecId) -> Option<usize> {
-        self.get_account_storage_entry(slot, store_id)
-            .map(|store| store.count())
-    }
-
-    fn all_slots(&self) -> Vec<Slot> {
-        self.map.iter().map(|iter_item| *iter_item.key()).collect()
-    }
-}
-
-#[derive(Debug, Eq, PartialEq, Copy, Clone, Deserialize, Serialize, AbiExample, AbiEnumVisitor)]
-pub enum AccountStorageStatus {
-    Available = 0,
-    Full = 1,
-    Candidate = 2,
-}
-
-impl Default for AccountStorageStatus {
-    fn default() -> Self {
-        Self::Available
     }
 }
 
@@ -1191,7 +1198,7 @@ impl RecycleStores {
         self.entries.iter()
     }
 
-    fn add_entries(&mut self, new_entries: Vec<Arc<AccountStorageEntry>>) {
+    fn add_entries(&mut self, new_entries: SnapshotStorage) {
         self.total_bytes += new_entries.iter().map(|e| e.total_bytes()).sum::<u64>();
         let now = Instant::now();
         for new_entry in new_entries {
@@ -1199,7 +1206,7 @@ impl RecycleStores {
         }
     }
 
-    fn expire_old_entries(&mut self) -> Vec<Arc<AccountStorageEntry>> {
+    fn expire_old_entries(&mut self) -> SnapshotStorage {
         let mut expired = vec![];
         let now = Instant::now();
         let mut expired_bytes = 0;
@@ -1271,7 +1278,7 @@ pub struct AccountsDb {
     /// true iff we want to skip the initial hash calculation on startup
     pub skip_initial_hash_calc: bool,
 
-    pub storage: AccountStorage,
+    pub(crate) storage: AccountStorage,
 
     pub accounts_cache: AccountsCache,
 
@@ -1287,9 +1294,6 @@ pub struct AccountsDb {
 
     /// Set of shrinkable stores organized by map of slot to append_vec_id
     pub shrink_candidate_slots: Mutex<ShrinkCandidates>,
-
-    /// Legacy shrink slots to support non-cached code-path.
-    pub shrink_candidate_slots_v1: Mutex<Vec<Slot>>,
 
     pub(crate) write_version: AtomicU64,
 
@@ -1316,10 +1320,6 @@ pub struct AccountsDb {
     pub thread_pool: ThreadPool,
 
     pub thread_pool_clean: ThreadPool,
-
-    /// Number of append vecs to create to maximize parallelism when scanning
-    /// the accounts
-    min_num_stores: usize,
 
     pub bank_hashes: RwLock<HashMap<Slot, BankHashInfo>>,
 
@@ -1880,11 +1880,6 @@ impl ShrinkStats {
                     i64
                 ),
                 (
-                    "find_alive_elapsed",
-                    self.find_alive_elapsed.swap(0, Ordering::Relaxed) as i64,
-                    i64
-                ),
-                (
                     "create_and_insert_store_elapsed",
                     self.create_and_insert_store_elapsed
                         .swap(0, Ordering::Relaxed) as i64,
@@ -2314,7 +2309,6 @@ impl AccountsDb {
             recycle_stores: RwLock::new(RecycleStores::default()),
             uncleaned_pubkeys: DashMap::new(),
             next_id: AtomicAppendVecId::new(0),
-            shrink_candidate_slots_v1: Mutex::new(Vec::new()),
             shrink_candidate_slots: Mutex::new(HashMap::new()),
             write_cache_limit_bytes: None,
             write_version: AtomicU64::new(0),
@@ -2331,7 +2325,6 @@ impl AccountsDb {
                 .build()
                 .unwrap(),
             thread_pool_clean: make_min_priority_thread_pool(),
-            min_num_stores: num_threads,
             bank_hashes: RwLock::new(bank_hashes),
             external_purge_slots_stats: PurgeStats::default(),
             clean_accounts_stats: CleanAccountsStats::default(),
@@ -2491,17 +2484,11 @@ impl AccountsDb {
     }
 
     pub fn new_single_for_tests() -> Self {
-        AccountsDb {
-            min_num_stores: 0,
-            ..AccountsDb::new_for_tests(Vec::new(), &ClusterType::Development)
-        }
+        AccountsDb::new_for_tests(Vec::new(), &ClusterType::Development)
     }
 
     pub fn new_single_for_tests_with_caching() -> Self {
-        AccountsDb {
-            min_num_stores: 0,
-            ..AccountsDb::new_for_tests_with_caching(Vec::new(), &ClusterType::Development)
-        }
+        AccountsDb::new_for_tests_with_caching(Vec::new(), &ClusterType::Development)
     }
 
     fn next_id(&self) -> AppendVecId {
@@ -3721,8 +3708,8 @@ impl AccountsDb {
                     match stored_accounts.entry(*new_entry.account.pubkey()) {
                         Entry::Occupied(mut occupied_entry) => {
                             assert!(
-                                new_entry.account.meta.write_version
-                                    > occupied_entry.get().account.meta.write_version
+                                new_entry.account.meta.write_version_obsolete
+                                    > occupied_entry.get().account.meta.write_version_obsolete
                             );
                             occupied_entry.insert(new_entry);
                         }
@@ -3855,6 +3842,7 @@ impl AccountsDb {
         shrink_collect: &ShrinkCollect,
         slot: Slot,
         stats: &ShrinkStats,
+        shrink_in_progress: Option<ShrinkInProgress>,
     ) -> usize {
         // Purge old, overwritten storage entries
         let (remaining_stores, dead_storages) = self.mark_dirty_dead_stores(
@@ -3863,6 +3851,7 @@ impl AccountsDb {
             // If all accounts are zero lamports, then we want to mark the entire OLD append vec as dirty.
             // otherwise, we'll call 'add_uncleaned_pubkeys_after_shrink' just on the unref'd keys below.
             shrink_collect.all_are_zero_lamports,
+            shrink_in_progress,
         );
 
         if !shrink_collect.all_are_zero_lamports {
@@ -3916,20 +3905,8 @@ impl AccountsDb {
         let mut create_and_insert_store_elapsed_us = 0;
         let mut remove_old_stores_shrink_us = 0;
         let mut store_accounts_timing = StoreAccountsTiming::default();
-        let mut find_alive_elapsed = Measure::start("find_alive_elapsed");
         if shrink_collect.aligned_total_bytes > 0 {
-            let mut accounts = Vec::with_capacity(total_accounts_after_shrink);
-            let mut hashes = Vec::with_capacity(total_accounts_after_shrink);
-            let mut write_versions = Vec::with_capacity(total_accounts_after_shrink);
-
-            for alive_account in &shrink_collect.alive_accounts {
-                accounts.push(&alive_account.account);
-                hashes.push(alive_account.account.hash);
-                write_versions.push(alive_account.account.meta.write_version);
-            }
-            find_alive_elapsed.stop();
-
-            let (shrunken_store, time) =
+            let (shrink_in_progress, time) =
                 measure!(self.get_store_for_shrink(slot, shrink_collect.aligned_total_bytes));
             create_and_insert_store_elapsed_us = time.as_us();
 
@@ -3939,12 +3916,12 @@ impl AccountsDb {
             store_accounts_timing = self.store_accounts_frozen(
                 (
                     slot,
-                    &accounts[..],
+                    &shrink_collect.alive_accounts[..],
                     INCLUDE_SLOT_IN_HASH_IRRELEVANT_APPEND_VEC_OPERATION,
                 ),
-                Some(hashes),
-                Some(&shrunken_store),
-                Some(Box::new(write_versions.into_iter())),
+                None::<Vec<&Hash>>,
+                Some(shrink_in_progress.new_storage()),
+                None,
                 StoreReclaims::Ignore,
             );
 
@@ -3957,8 +3934,13 @@ impl AccountsDb {
             // those here
             self.shrink_candidate_slots.lock().unwrap().remove(&slot);
 
-            let (remaining_stores, remove_old_stores_shrink) =
-                measure!(self.remove_old_stores_shrink(&shrink_collect, slot, &self.shrink_stats));
+            let (remaining_stores, remove_old_stores_shrink) = measure!(self
+                .remove_old_stores_shrink(
+                    &shrink_collect,
+                    slot,
+                    &self.shrink_stats,
+                    Some(shrink_in_progress)
+                ));
             remove_old_stores_shrink_us = remove_old_stores_shrink.as_us();
             if remaining_stores > 1 {
                 inc_new_counter_info!("accounts_db_shrink_extra_stores", 1);
@@ -3971,7 +3953,7 @@ impl AccountsDb {
 
         Self::update_shrink_stats(
             &self.shrink_stats,
-            find_alive_elapsed,
+            Measure::start("ignored"), // find_alive_elapsed
             create_and_insert_store_elapsed_us,
             store_accounts_timing,
             rewrite_elapsed,
@@ -4023,29 +4005,44 @@ impl AccountsDb {
     /// get stores for 'slot'
     /// retain only the stores where 'should_retain(store)' == true
     /// for stores not retained, insert in 'dead_storages' and optionally 'dirty_stores'
+    /// This is the end of the life cycle of `shrink_in_progress`.
+    /// Dropping 'shrink_in_progress' here will cause the old store to be removed from the storage map.
     /// returns: (# of remaining stores for this slot, dead storages)
     pub(crate) fn mark_dirty_dead_stores(
         &self,
         slot: Slot,
         should_retain: impl Fn(&AccountStorageEntry) -> bool,
         add_dirty_stores: bool,
-    ) -> (usize, Vec<Arc<AccountStorageEntry>>) {
+        shrink_in_progress: Option<ShrinkInProgress>,
+    ) -> (usize, SnapshotStorage) {
         let mut dead_storages = Vec::default();
+
+        let mut not_retaining_store = |store: &Arc<AccountStorageEntry>| {
+            if add_dirty_stores {
+                self.dirty_stores
+                    .insert((slot, store.append_vec_id()), store.clone());
+            }
+            dead_storages.push(store.clone());
+        };
+
         let remaining_stores = if let Some(slot_stores) = self.storage.get_slot_stores(slot) {
-            let mut list = slot_stores.write().unwrap();
-            list.retain(|_key, store| {
-                if !should_retain(store) {
-                    if add_dirty_stores {
-                        self.dirty_stores
-                            .insert((slot, store.append_vec_id()), store.clone());
+            if let Some(shrink_in_progress) = shrink_in_progress {
+                let store = shrink_in_progress.old_storage().clone();
+                not_retaining_store(&store);
+                drop(shrink_in_progress);
+                slot_stores.read().unwrap().len()
+            } else {
+                let mut list = slot_stores.write().unwrap();
+                list.retain(|_key, store| {
+                    if !should_retain(store) {
+                        not_retaining_store(store);
+                        false
+                    } else {
+                        true
                     }
-                    dead_storages.push(store.clone());
-                    false
-                } else {
-                    true
-                }
-            });
-            list.len()
+                });
+                list.len()
+            }
         } else {
             0
         };
@@ -4054,7 +4051,7 @@ impl AccountsDb {
 
     pub(crate) fn drop_or_recycle_stores(
         &self,
-        dead_storages: Vec<Arc<AccountStorageEntry>>,
+        dead_storages: SnapshotStorage,
         stats: &ShrinkStats,
     ) {
         let mut recycle_stores_write_elapsed = Measure::start("recycle_stores_write_time");
@@ -4086,25 +4083,18 @@ impl AccountsDb {
         &self,
         slot: Slot,
         aligned_total: u64,
-    ) -> Arc<AccountStorageEntry> {
-        let shrunken_store = if let Some(new_store) =
-            self.try_recycle_and_insert_store(slot, aligned_total, aligned_total + 1024)
-        {
-            new_store
-        } else {
-            let maybe_shrink_paths = self.shrink_paths.read().unwrap();
-            if let Some(ref shrink_paths) = *maybe_shrink_paths {
-                self.create_and_insert_store_with_paths(
-                    slot,
-                    aligned_total,
-                    "shrink-w-path",
-                    shrink_paths,
-                )
-            } else {
-                self.create_and_insert_store(slot, aligned_total, "shrink")
-            }
-        };
-        shrunken_store
+    ) -> ShrinkInProgress<'_> {
+        let shrunken_store = self
+            .try_recycle_store(slot, aligned_total, aligned_total + 1024)
+            .unwrap_or_else(|| {
+                let maybe_shrink_paths = self.shrink_paths.read().unwrap();
+                let (shrink_paths, from) = maybe_shrink_paths
+                    .as_ref()
+                    .map(|paths| (paths, "shrink-w-path"))
+                    .unwrap_or_else(|| (&self.paths, "shrink"));
+                self.create_store(slot, aligned_total, from, shrink_paths)
+            });
+        self.storage.shrinking_in_progress(slot, shrunken_store)
     }
 
     // Reads all accounts in given slot's AppendVecs and filter only to alive,
@@ -4113,8 +4103,7 @@ impl AccountsDb {
         debug!("shrink_slot_forced: slot: {}", slot);
 
         if let Some(stores_lock) = self.storage.get_slot_stores(slot) {
-            let stores: Vec<Arc<AccountStorageEntry>> =
-                stores_lock.read().unwrap().values().cloned().collect();
+            let stores: SnapshotStorage = stores_lock.read().unwrap().values().cloned().collect();
             if !Self::is_shrinking_productive(slot, stores.iter()) {
                 return 0;
             }
@@ -4267,16 +4256,15 @@ impl AccountsDb {
     }
 
     /// create and return new ancient append vec
-    fn create_ancient_append_vec(&self, slot: Slot) -> Arc<AccountStorageEntry> {
-        let new_ancient_storage =
-            self.get_store_for_shrink(slot, get_ancient_append_vec_capacity());
+    fn create_ancient_append_vec(&self, slot: Slot) -> ShrinkInProgress<'_> {
+        let shrink_in_progress = self.get_store_for_shrink(slot, get_ancient_append_vec_capacity());
         info!(
             "ancient_append_vec: creating initial ancient append vec: {}, size: {}, id: {}",
             slot,
             get_ancient_append_vec_capacity(),
-            new_ancient_storage.append_vec_id(),
+            shrink_in_progress.new_storage().append_vec_id(),
         );
-        new_ancient_storage
+        shrink_in_progress
     }
 
     #[cfg(test)]
@@ -4297,10 +4285,9 @@ impl AccountsDb {
     }
 
     fn get_storages_for_slot(&self, slot: Slot) -> Option<SnapshotStorage> {
-        self.storage.map.get(&slot).map(|storages| {
+        self.storage.get(&slot).map(|storages| {
             // per slot, get the storages. There should usually only be 1.
             storages
-                .value()
                 .read()
                 .unwrap()
                 .values()
@@ -4519,7 +4506,7 @@ impl AccountsDb {
             return; // skipping slot with no useful accounts to write
         }
 
-        let (_, time) = measure!(current_ancient.create_if_necessary(slot, self));
+        let (shrink_in_progress, time) = measure!(current_ancient.create_if_necessary(slot, self));
         let mut create_and_insert_store_elapsed_us = time.as_us();
         let available_bytes = current_ancient.append_vec().accounts.remaining_bytes();
         // split accounts in 'slot' into:
@@ -4569,7 +4556,8 @@ impl AccountsDb {
             .remove_old_stores_shrink(
                 &shrink_collect,
                 slot,
-                &self.shrink_ancient_stats.shrink_stats
+                &self.shrink_ancient_stats.shrink_stats,
+                shrink_in_progress,
             ));
 
         // we should not try to shrink any of the stores from this slot anymore. All shrinking for this slot is now handled by ancient append vec code.
@@ -4596,7 +4584,6 @@ impl AccountsDb {
                 // all storages have been removed from here and recycled or dropped
                 assert!(self
                     .storage
-                    .map
                     .remove(slot)
                     .unwrap()
                     .1
@@ -4902,7 +4889,7 @@ impl AccountsDb {
             // If the slot is not in the cache, then all the account information must have
             // been flushed. This is guaranteed because we only remove the rooted slot from
             // the cache *after* we've finished flushing in `flush_slot_cache`.
-            let storage_maps: Vec<Arc<AccountStorageEntry>> = self
+            let storage_maps: SnapshotStorage = self
                 .storage
                 .get_slot_storage_entries(slot)
                 .unwrap_or_default();
@@ -5488,7 +5475,6 @@ impl AccountsDb {
     }
 
     fn find_storage_candidate(&self, slot: Slot, size: usize) -> Arc<AccountStorageEntry> {
-        let mut create_extra = false;
         let mut get_slot_stores = Measure::start("get_slot_stores");
         let slot_stores_lock = self.storage.get_slot_stores(slot);
         get_slot_stores.stop();
@@ -5499,18 +5485,6 @@ impl AccountsDb {
         if let Some(slot_stores_lock) = slot_stores_lock {
             let slot_stores = slot_stores_lock.read().unwrap();
             if !slot_stores.is_empty() {
-                if slot_stores.len() <= self.min_num_stores {
-                    let mut total_accounts = 0;
-                    for store in slot_stores.values() {
-                        total_accounts += store.count();
-                    }
-
-                    // Create more stores so that when scanning the storage all CPUs have work
-                    if (total_accounts / 16) >= slot_stores.len() {
-                        create_extra = true;
-                    }
-                }
-
                 // pick an available store at random by iterating from a random point
                 let to_skip = thread_rng().gen_range(0, slot_stores.len());
 
@@ -5518,13 +5492,6 @@ impl AccountsDb {
                     if store.try_available() {
                         let ret = store.clone();
                         drop(slot_stores);
-                        if create_extra
-                            && self
-                                .try_recycle_and_insert_store(slot, size as u64, std::u64::MAX)
-                                .is_none()
-                        {
-                            self.create_and_insert_store(slot, self.file_size, "store extra");
-                        }
                         find_existing.stop();
                         self.stats
                             .store_find_existing
@@ -5629,22 +5596,7 @@ impl AccountsDb {
     }
 
     fn insert_store(&self, slot: Slot, store: Arc<AccountStorageEntry>) {
-        let slot_storages: SlotStores = self.storage.get_slot_stores(slot).unwrap_or_else(||
-            // DashMap entry.or_insert() returns a RefMut, essentially a write lock,
-            // which is dropped after this block ends, minimizing time held by the lock.
-            // However, we still want to persist the reference to the `SlotStores` behind
-            // the lock, hence we clone it out, (`SlotStores` is an Arc so is cheap to clone).
-            self.storage
-                .map
-                .entry(slot)
-                .or_insert(Arc::new(RwLock::new(HashMap::new())))
-                .clone());
-
-        assert!(slot_storages
-            .write()
-            .unwrap()
-            .insert(store.append_vec_id(), store)
-            .is_none());
+        self.storage.insert(slot, store)
     }
 
     pub fn create_drop_bank_callback(
@@ -5801,7 +5753,7 @@ impl AccountsDb {
         let mut remove_storage_entries_elapsed = Measure::start("remove_storage_entries_elapsed");
         for remove_slot in removed_slots {
             // Remove the storage entries and collect some metrics
-            if let Some((_, slot_storages_to_be_removed)) = self.storage.map.remove(remove_slot) {
+            if let Some((_, slot_storages_to_be_removed)) = self.storage.remove(remove_slot) {
                 {
                     let r_slot_removed_storages = slot_storages_to_be_removed.read().unwrap();
                     total_removed_storage_entries += r_slot_removed_storages.len();
@@ -6765,7 +6717,7 @@ impl AccountsDb {
         let mut oldest_slot = std::u64::MAX;
         let mut total_bytes = 0;
         let mut total_alive_bytes = 0;
-        for iter_item in self.storage.map.iter() {
+        for iter_item in self.storage.iter() {
             let slot = iter_item.key();
             let slot_stores = iter_item.value().read().unwrap();
             total_count += slot_stores.len();
@@ -7029,10 +6981,12 @@ impl AccountsDb {
                 Vec::<(StoredMetaWriteVersion, Option<StoredAccountMeta<'_>>)>::with_capacity(len);
             for storage in storages {
                 let mut iterator = storage.accounts.account_iter();
-                if let Some(item) = iterator
-                    .next()
-                    .map(|stored_account| (stored_account.meta.write_version, Some(stored_account)))
-                {
+                if let Some(item) = iterator.next().map(|stored_account| {
+                    (
+                        stored_account.meta.write_version_obsolete,
+                        Some(stored_account),
+                    )
+                }) {
                     current.push(item);
                     progress.push(iterator);
                 }
@@ -7058,7 +7012,10 @@ impl AccountsDb {
                     scanner.found_account(&LoadedAccount::Stored(account.1.unwrap()));
                 }
                 let next = progress[min_index].next().map(|stored_account| {
-                    (stored_account.meta.write_version, Some(stored_account))
+                    (
+                        stored_account.meta.write_version_obsolete,
+                        Some(stored_account),
+                    )
                 });
                 match next {
                     Some(item) => {
@@ -7074,11 +7031,7 @@ impl AccountsDb {
         }
     }
 
-    fn update_old_slot_stats(
-        &self,
-        stats: &HashStats,
-        sub_storages: Option<&Vec<Arc<AccountStorageEntry>>>,
-    ) {
+    fn update_old_slot_stats(&self, stats: &HashStats, sub_storages: Option<&SnapshotStorage>) {
         if let Some(sub_storages) = sub_storages {
             stats.roots_older_than_epoch.fetch_add(1, Ordering::Relaxed);
             let mut ancients = 0;
@@ -7134,7 +7087,7 @@ impl AccountsDb {
     /// return true iff storages are valid for loading from cache
     fn hash_storage_info(
         hasher: &mut impl StdHasher,
-        storages: Option<&Vec<Arc<AccountStorageEntry>>>,
+        storages: Option<&SnapshotStorage>,
         slot: Slot,
     ) -> bool {
         if let Some(sub_storages) = storages {
@@ -7236,7 +7189,7 @@ impl AccountsDb {
                         hash
                     );
                     if load_from_cache {
-                        if let Ok(mapped_file) = cache_hash_data.load_map(&Path::new(&file_name)) {
+                        if let Ok(mapped_file) = cache_hash_data.load_map(&file_name) {
                             return Some(mapped_file);
                         }
                     }
@@ -7278,8 +7231,7 @@ impl AccountsDb {
                         assert!(!file_name.is_empty());
                         (!r.is_empty() && r.iter().any(|b| !b.is_empty())).then(|| {
                             // error if we can't write this
-                            let file_name = Path::new(&file_name);
-                            cache_hash_data.save(Path::new(&file_name), &r).unwrap();
+                            cache_hash_data.save(&file_name, &r).unwrap();
                             cache_hash_data.load_map(&file_name).unwrap()
                         })
                     })
@@ -8168,7 +8120,7 @@ impl AccountsDb {
         pubkeys_removed_from_accounts_index: &PubkeysRemovedFromAccountsIndex,
     ) {
         let mut measure = Measure::start("clean_stored_dead_slots-ms");
-        let mut stores: Vec<Arc<AccountStorageEntry>> = vec![];
+        let mut stores: SnapshotStorage = vec![];
         // get all stores in a vec so we can iterate in parallel
         for slot in dead_slots.iter() {
             if let Some(slot_storage) = self.storage.get_slot_stores(*slot) {
@@ -8586,7 +8538,6 @@ impl AccountsDb {
         let mut m = Measure::start("get slots");
         let slots = self
             .storage
-            .map
             .iter()
             .map(|k| *k.key() as Slot)
             .collect::<Vec<_>>();
@@ -8607,11 +8558,10 @@ impl AccountsDb {
                                         .map(|ancestors| ancestors.contains_key(slot))
                                         .unwrap_or_default())
                             {
-                                self.storage.map.get(slot).map_or_else(
+                                self.storage.get(slot).map_or_else(
                                     || None,
                                     |item| {
                                         let storages = item
-                                            .value()
                                             .read()
                                             .unwrap()
                                             .values()
@@ -8668,7 +8618,7 @@ impl AccountsDb {
         let mut accounts_map = GenerateIndexAccountsMap::with_capacity(num_accounts);
         storage_maps.iter().for_each(|storage| {
             storage.accounts.account_iter().for_each(|stored_account| {
-                let this_version = stored_account.meta.write_version;
+                let this_version = stored_account.meta.write_version_obsolete;
                 let pubkey = stored_account.pubkey();
                 assert!(!self.is_filler_account(pubkey));
                 match accounts_map.entry(*pubkey) {
@@ -8712,9 +8662,9 @@ impl AccountsDb {
         })
     }
 
-    fn generate_index_for_slot<'a>(
+    fn generate_index_for_slot(
         &self,
-        accounts_map: GenerateIndexAccountsMap<'a>,
+        accounts_map: GenerateIndexAccountsMap<'_>,
         slot: &Slot,
         rent_collector: &RentCollector,
     ) -> SlotIndexGenerationInfo {
@@ -8918,7 +8868,7 @@ impl AccountsDb {
                 .take(per_pass)
                 .collect::<Vec<_>>();
             roots_in_this_pass.into_par_iter().for_each(|slot| {
-                let storage_maps: Vec<Arc<AccountStorageEntry>> = self
+                let storage_maps: SnapshotStorage = self
                     .storage
                     .get_slot_storage_entries(*slot)
                     .unwrap_or_default();
@@ -9032,11 +8982,12 @@ impl AccountsDb {
                     for (index, slot) in slots.iter().enumerate() {
                         let mut scan_time = Measure::start("scan");
                         log_status.report(index as u64);
-                        let storage_maps: Vec<Arc<AccountStorageEntry>> = self
-                            .storage
-                            .get_slot_storage_entries(*slot)
+                        let storage_maps = self.storage.get_slot_storage_entries(*slot);
+                        let accounts_map = storage_maps
+                            .as_ref()
+                            .map(|storage_maps| self.process_storage_slot(storage_maps))
                             .unwrap_or_default();
-                        let accounts_map = self.process_storage_slot(&storage_maps);
+
                         scan_time.stop();
                         scan_time_sum += scan_time.as_us();
                         Self::update_storage_info(
@@ -9351,7 +9302,7 @@ impl AccountsDb {
     ) {
         // store count and size for each storage
         let mut storage_size_storages_time = Measure::start("storage_size_storages");
-        for slot_stores in self.storage.map.iter() {
+        for slot_stores in self.storage.iter() {
             for (id, store) in slot_stores.value().read().unwrap().iter() {
                 // Should be default at this point
                 assert_eq!(store.alive_bytes(), 0);
@@ -9488,7 +9439,6 @@ impl AccountsDb {
     pub fn new_sized_no_extra_stores(paths: Vec<PathBuf>, file_size: u64) -> Self {
         AccountsDb {
             file_size,
-            min_num_stores: 0,
             ..AccountsDb::new(paths, &ClusterType::Development)
         }
     }
@@ -9510,6 +9460,53 @@ impl AccountsDb {
                     .map(|slot_cache| slot_cache.len())
                     .unwrap_or_default(),
             )
+    }
+}
+
+/// A set of utility functions used for testing and benchmarking
+pub mod test_utils {
+    use {
+        super::*,
+        crate::{accounts::Accounts, append_vec::aligned_stored_size},
+    };
+
+    pub fn create_test_accounts(
+        accounts: &Accounts,
+        pubkeys: &mut Vec<Pubkey>,
+        num: usize,
+        slot: Slot,
+    ) {
+        let data_size = 0;
+        if accounts.accounts_db.storage.get_slot_stores(slot).is_none() {
+            let bytes_required = num * aligned_stored_size(data_size);
+            // allocate an append vec for this slot that can hold all the test accounts. This prevents us from creating more than 1 append vec for this slot.
+            _ = accounts.accounts_db.create_and_insert_store(
+                slot,
+                bytes_required as u64,
+                "create_test_accounts",
+            );
+        }
+
+        for t in 0..num {
+            let pubkey = solana_sdk::pubkey::new_rand();
+            let account = AccountSharedData::new(
+                (t + 1) as u64,
+                data_size,
+                AccountSharedData::default().owner(),
+            );
+            accounts.store_slow_uncached(slot, &pubkey, &account);
+            pubkeys.push(pubkey);
+        }
+    }
+
+    // Only used by bench, not safe to call otherwise accounts can conflict with the
+    // accounts cache!
+    pub fn update_accounts_bench(accounts: &Accounts, pubkeys: &[Pubkey], slot: u64) {
+        for pubkey in pubkeys {
+            let amount = thread_rng().gen_range(0, 10);
+            let account = AccountSharedData::new(amount, 0, AccountSharedData::default().owner());
+            accounts.store_slow_uncached(slot, pubkey, &account);
+        }
     }
 }
 
@@ -9568,7 +9565,7 @@ pub mod tests {
             let temp_dir = TempDir::new().unwrap();
             let accounts_hash_cache_path = temp_dir.path();
             self.scan_snapshot_stores_with_cache(
-                &CacheHashData::new(&accounts_hash_cache_path),
+                &CacheHashData::new(accounts_hash_cache_path),
                 storage,
                 stats,
                 bins,
@@ -9693,7 +9690,7 @@ pub mod tests {
         let hash = Hash::new(&[2; 32]);
         let stored_meta = StoredMeta {
             /// global write version
-            write_version: 0,
+            write_version_obsolete: 0,
             /// key for the account
             pubkey,
             data_len: 43,
@@ -9713,7 +9710,9 @@ pub mod tests {
         let to_store = AccountsToStore::new(available_bytes, &map, alive_total_bytes, slot0);
         // Done: setup 'to_store'
 
-        current_ancient.create_ancient_append_vec(slot0, &db);
+        // there has to be an existing append vec at this slot for a new current ancient at the slot to make sense
+        let _existing_append_vec = db.create_and_insert_store(slot0, 1000, "test");
+        let _shrink_in_progress = current_ancient.create_ancient_append_vec(slot0, &db);
         let mut ancient_slot_pubkeys = AncientSlotPubkeys::default();
         assert!(ancient_slot_pubkeys.inner.is_none());
         // same slot as current_ancient, so no-op
@@ -9725,7 +9724,9 @@ pub mod tests {
         );
         assert!(ancient_slot_pubkeys.inner.is_none());
         // different slot than current_ancient, so update 'ancient_slot_pubkeys'
-        current_ancient.create_ancient_append_vec(slot1, &db);
+        // there has to be an existing append vec at this slot for a new current ancient at the slot to make sense
+        let _existing_append_vec = db.create_and_insert_store(slot1, 1000, "test");
+        let _shrink_in_progress = current_ancient.create_ancient_append_vec(slot1, &db);
         let slot2 = 2;
         ancient_slot_pubkeys.maybe_unref_accounts_already_in_ancient(
             slot2,
@@ -9761,22 +9762,22 @@ pub mod tests {
         let pubkey4 = solana_sdk::pubkey::new_rand();
 
         let meta = StoredMeta {
-            write_version: 5,
+            write_version_obsolete: 5,
             pubkey,
             data_len: 7,
         };
         let meta2 = StoredMeta {
-            write_version: 5,
+            write_version_obsolete: 5,
             pubkey: pubkey2,
             data_len: 7,
         };
         let meta3 = StoredMeta {
-            write_version: 5,
+            write_version_obsolete: 5,
             pubkey: pubkey3,
             data_len: 7,
         };
         let meta4 = StoredMeta {
-            write_version: 5,
+            write_version_obsolete: 5,
             pubkey: pubkey4,
             data_len: 7,
         };
@@ -10457,7 +10458,7 @@ pub mod tests {
         };
 
         let result = accounts_db.scan_account_storage_no_bank(
-            &CacheHashData::new(&accounts_hash_cache_path),
+            &CacheHashData::new(accounts_hash_cache_path),
             &CalcAccountsHashConfig::default(),
             &get_storage_refs(&storages),
             test_scan,
@@ -10972,7 +10973,7 @@ pub mod tests {
         assert!(db.load_without_fixed_root(&ancestors, &key).is_none());
         assert!(db.bank_hashes.read().unwrap().get(&unrooted_slot).is_none());
         assert!(db.accounts_cache.slot_cache(unrooted_slot).is_none());
-        assert!(db.storage.map.get(&unrooted_slot).is_none());
+        assert!(db.storage.get(&unrooted_slot).is_none());
         assert!(db.accounts_index.get_account_read_entry(&key).is_none());
         assert!(db
             .accounts_index
@@ -11218,7 +11219,7 @@ pub mod tests {
 
         let mut append_vec_histogram = HashMap::new();
         let mut all_storages = vec![];
-        for slot_storage in accounts.storage.map.iter() {
+        for slot_storage in accounts.storage.iter() {
             all_storages.extend(slot_storage.read().unwrap().values().cloned())
         }
         for storage in all_storages {
@@ -11254,7 +11255,7 @@ pub mod tests {
 
             if pass == 1 {
                 accounts.add_root_and_flush_write_cache(0);
-                assert_eq!(accounts.storage.map.len(), 1);
+                assert_eq!(accounts.storage.len(), 1);
                 let stores = &accounts.storage.get_slot_stores(0).unwrap();
                 let r_stores = stores.read().unwrap();
                 assert_eq!(r_stores.len(), 1);
@@ -11284,7 +11285,7 @@ pub mod tests {
                 let flush = pass == i + 2;
                 if flush {
                     accounts.add_root_and_flush_write_cache(0);
-                    assert_eq!(accounts.storage.map.len(), 1);
+                    assert_eq!(accounts.storage.len(), 1);
                     let stores = &accounts.storage.get_slot_stores(0).unwrap();
                     let r_stores = stores.read().unwrap();
                     assert_eq!(r_stores.len(), 1);
@@ -11355,7 +11356,7 @@ pub mod tests {
         accounts.print_accounts_stats("pre-clean");
         accounts.add_root_and_flush_write_cache(1);
         accounts.clean_accounts_for_tests();
-        assert!(accounts.storage.map.get(&0).is_none());
+        assert!(accounts.storage.get(&0).is_none());
 
         //new value is there
         let ancestors = vec![(1, 1)].into_iter().collect();
@@ -12402,7 +12403,7 @@ pub mod tests {
         let executable = true;
         let rent_epoch = 2;
         let meta = StoredMeta {
-            write_version: 5,
+            write_version_obsolete: 5,
             pubkey: Pubkey::new_unique(),
             data_len: 7,
         };
@@ -14249,7 +14250,7 @@ pub mod tests {
         }
     }
 
-    fn slot_stores(db: &AccountsDb, slot: Slot) -> Vec<Arc<AccountStorageEntry>> {
+    fn slot_stores(db: &AccountsDb, slot: Slot) -> SnapshotStorage {
         db.storage
             .get_slot_storage_entries(slot)
             .unwrap_or_default()
@@ -14624,7 +14625,7 @@ pub mod tests {
         accounts_db.add_root(slot);
         accounts_db.flush_accounts_cache(true, None);
 
-        let mut storage_maps: Vec<Arc<AccountStorageEntry>> = accounts_db
+        let mut storage_maps: SnapshotStorage = accounts_db
             .storage
             .get_slot_storage_entries(slot)
             .unwrap_or_default();
@@ -15968,7 +15969,7 @@ pub mod tests {
         accounts.add_root_and_flush_write_cache(slot0);
 
         // fake out the store count to avoid the assert
-        for slot_stores in accounts.storage.map.iter() {
+        for slot_stores in accounts.storage.iter() {
             for (_id, store) in slot_stores.value().read().unwrap().iter() {
                 store.alive_bytes.store(0, Ordering::Release);
             }
@@ -15984,8 +15985,8 @@ pub mod tests {
             },
         );
         accounts.set_storage_count_and_alive_bytes(dashmap, &mut GenerateIndexTimings::default());
-        assert_eq!(accounts.storage.map.len(), 1);
-        for slot_stores in accounts.storage.map.iter() {
+        assert_eq!(accounts.storage.len(), 1);
+        for slot_stores in accounts.storage.iter() {
             for (id, store) in slot_stores.value().read().unwrap().iter() {
                 assert_eq!(id, &0);
                 assert_eq!(store.count_and_status.read().unwrap().0, 3);
@@ -16245,7 +16246,7 @@ pub mod tests {
     impl AccountsDb {
         /// useful to adapt tests written prior to introduction of the write cache
         /// to use the write cache
-        fn add_root_and_flush_write_cache(&self, slot: Slot) {
+        pub fn add_root_and_flush_write_cache(&self, slot: Slot) {
             self.add_root(slot);
             self.flush_root_write_cache(slot);
         }
@@ -16266,7 +16267,7 @@ pub mod tests {
         }
 
         /// callers use to call store_uncached. But, this is not allowed anymore.
-        fn store_for_tests(&self, slot: Slot, accounts: &[(&Pubkey, &AccountSharedData)]) {
+        pub fn store_for_tests(&self, slot: Slot, accounts: &[(&Pubkey, &AccountSharedData)]) {
             self.store(
                 (slot, accounts, INCLUDE_SLOT_IN_HASH_TESTS),
                 true,
@@ -16507,6 +16508,7 @@ pub mod tests {
                 false
             },
             add_dirty_stores,
+            None,
         );
         assert_eq!(0, called.load(Ordering::Relaxed));
         assert_eq!(0, remaining_stores);
@@ -16521,6 +16523,7 @@ pub mod tests {
                 true // retain
             },
             add_dirty_stores,
+            None,
         );
         assert_eq!(1, called.load(Ordering::Relaxed));
         assert_eq!(1, remaining_stores);
@@ -16534,6 +16537,7 @@ pub mod tests {
                 false // don't retain
             },
             add_dirty_stores,
+            None,
         );
         assert_eq!(1, called.load(Ordering::Relaxed));
         assert!(db
@@ -16843,8 +16847,13 @@ pub mod tests {
             };
 
             let db = AccountsDb::new_single_for_tests();
+            // there has to be an existing append vec at this slot for a new current ancient at the slot to make sense
+            let _existing_append_vec = db.create_and_insert_store(slot1_ancient, 1000, "test");
+
             let ancient = db.create_ancient_append_vec(slot1_ancient);
+            let _existing_append_vec = db.create_and_insert_store(slot1_plus_ancient, 1000, "test");
             let ancient_1_plus = db.create_ancient_append_vec(slot1_plus_ancient);
+            let _existing_append_vec = db.create_and_insert_store(slot3_ancient, 1000, "test");
             let ancient3 = db.create_ancient_append_vec(slot3_ancient);
             let temp_dir = TempDir::new().unwrap();
             let path = temp_dir.path();
@@ -16864,7 +16873,7 @@ pub mod tests {
             assert_eq!(Vec::<Slot>::default(), ancient_slots);
 
             // now test with an ancient append vec
-            let raw_storages = vec![vec![ancient.clone()]];
+            let raw_storages = vec![vec![ancient.new_storage().clone()]];
             let snapshot_storages = SortedStorages::new(&raw_storages);
             let one_epoch_old_slot = 0;
             let ancient_slots =
@@ -16876,7 +16885,10 @@ pub mod tests {
             assert_eq!(vec![slot1_ancient], ancient_slots);
 
             // now test with an ancient append vec and then a non-ancient append vec
-            let raw_storages = vec![vec![ancient.clone()], vec![non_ancient_storage.clone()]];
+            let raw_storages = vec![
+                vec![ancient.new_storage().clone()],
+                vec![non_ancient_storage.clone()],
+            ];
             let snapshot_storages = SortedStorages::new(&raw_storages);
             let one_epoch_old_slot = 0;
             let ancient_slots =
@@ -16889,9 +16901,9 @@ pub mod tests {
 
             // ancient, non-ancient, ancient
             let raw_storages = vec![
-                vec![ancient.clone()],
+                vec![ancient.new_storage().clone()],
                 vec![non_ancient_storage.clone()],
-                vec![ancient3.clone()],
+                vec![ancient3.new_storage().clone()],
             ];
             let snapshot_storages = SortedStorages::new(&raw_storages);
             let one_epoch_old_slot = 0;
@@ -16906,12 +16918,12 @@ pub mod tests {
             if sparse {
                 // ancient, ancient, non-ancient, ancient
                 let raw_storages = vec![
-                    vec![ancient],
-                    vec![ancient_1_plus],
+                    vec![Arc::clone(ancient.new_storage())],
+                    vec![Arc::clone(ancient_1_plus.new_storage())],
                     vec![non_ancient_storage],
-                    vec![ancient3],
+                    vec![Arc::clone(ancient3.new_storage())],
                 ];
-                let snapshot_storages = SortedStorages::new(&raw_storages);
+                let snapshot_storages = SortedStorages::new(&raw_storages[..]);
                 let one_epoch_old_slot = 0;
                 let ancient_slots =
                     SplitAncientStorages::get_ancient_slots(one_epoch_old_slot, &snapshot_storages);
@@ -17046,7 +17058,7 @@ pub mod tests {
                 append_vec.append_vec_id()
             );
 
-            current_ancient.create_if_necessary(slot2, &db);
+            let _shrink_in_progress = current_ancient.create_if_necessary(slot2, &db);
             assert_eq!(current_ancient.slot(), slot);
             assert_eq!(current_ancient.append_vec_id(), append_vec.append_vec_id());
         }
@@ -17054,14 +17066,17 @@ pub mod tests {
         {
             // create_if_necessary
             let db = AccountsDb::new_single_for_tests();
+            // there has to be an existing append vec at this slot for a new current ancient at the slot to make sense
+            let _existing_append_vec = db.create_and_insert_store(slot2, 1000, "test");
+
             let mut current_ancient = CurrentAncientAppendVec::default();
-            current_ancient.create_if_necessary(slot2, &db);
+            let mut _shrink_in_progress = current_ancient.create_if_necessary(slot2, &db);
             let id = current_ancient.append_vec_id();
             assert_eq!(current_ancient.slot(), slot2);
             assert!(is_ancient(&current_ancient.append_vec().accounts));
             let slot3 = 3;
             // should do nothing
-            current_ancient.create_if_necessary(slot3, &db);
+            let _shrink_in_progress = current_ancient.create_if_necessary(slot3, &db);
             assert_eq!(current_ancient.slot(), slot2);
             assert_eq!(current_ancient.append_vec_id(), id);
             assert!(is_ancient(&current_ancient.append_vec().accounts));
@@ -17071,11 +17086,18 @@ pub mod tests {
             // create_ancient_append_vec
             let db = AccountsDb::new_single_for_tests();
             let mut current_ancient = CurrentAncientAppendVec::default();
-            current_ancient.create_ancient_append_vec(slot2, &db);
+            // there has to be an existing append vec at this slot for a new current ancient at the slot to make sense
+            let _existing_append_vec = db.create_and_insert_store(slot2, 1000, "test");
+
+            let mut _shrink_in_progress = current_ancient.create_ancient_append_vec(slot2, &db);
             let id = current_ancient.append_vec_id();
             assert_eq!(current_ancient.slot(), slot2);
             assert!(is_ancient(&current_ancient.append_vec().accounts));
-            current_ancient.create_ancient_append_vec(slot3, &db);
+
+            // there has to be an existing append vec at this slot for a new current ancient at the slot to make sense
+            let _existing_append_vec = db.create_and_insert_store(slot3, 1000, "test");
+
+            let mut _shrink_in_progress = current_ancient.create_ancient_append_vec(slot3, &db);
             assert_eq!(current_ancient.slot(), slot3);
             assert!(is_ancient(&current_ancient.append_vec().accounts));
             assert_ne!(current_ancient.append_vec_id(), id);
@@ -17111,12 +17133,6 @@ pub mod tests {
             .alive_roots
             .remove(&root0);
         assert_eq!(db.get_sorted_potential_ancient_slots(), vec![root1]);
-    }
-
-    impl CurrentAncientAppendVec {
-        fn is_none(&self) -> bool {
-            self.slot_and_append_vec.is_none()
-        }
     }
 
     #[test]
@@ -17689,7 +17705,7 @@ pub mod tests {
             .write()
             .unwrap()
             .insert(slot0, BankHashInfo::default());
-        db.storage.map.insert(slot0, Arc::default());
+        db.storage.insert_empty_at_slot(slot0);
         assert!(!db.bank_hashes.read().unwrap().is_empty());
         db.accounts_index.add_root(slot0);
         db.accounts_index.add_uncleaned_roots([slot0].into_iter());
@@ -17702,16 +17718,12 @@ pub mod tests {
     }
 
     fn insert_store(db: &AccountsDb, append_vec: Arc<AccountStorageEntry>) {
-        let mut hm = HashMap::default();
-        hm.insert(append_vec.append_vec_id(), Arc::clone(&append_vec));
-        db.storage
-            .map
-            .insert(append_vec.slot(), Arc::new(RwLock::new(hm)));
+        db.storage.insert(append_vec.slot(), append_vec);
     }
 
     #[test]
     #[should_panic(
-        expected = "assertion failed: self.storage.map.remove(slot).unwrap().1.read().unwrap().is_empty()"
+        expected = "assertion failed: self.storage.remove(slot).unwrap().1.read().unwrap().is_empty()"
     )]
     fn test_handle_dropped_roots_for_ancient_assert() {
         solana_logger::setup();
@@ -17755,10 +17767,9 @@ pub mod tests {
             slot5,
             CAN_RANDOMLY_SHRINK_FALSE,
         );
-        assert!(current_ancient.is_none());
+        assert!(current_ancient.slot_and_append_vec.is_none());
         // slot is not ancient, so it is good to move
         assert!(should_move);
-
         // try 2 storages in 1 slot, should not be able to move
         current_ancient = CurrentAncientAppendVec::new(slot5, Arc::clone(&storages[0])); // just 'some', contents don't matter
         let two_storages = vec![storages[0].clone(), storages[0].clone()];
@@ -17768,7 +17779,7 @@ pub mod tests {
             slot5,
             CAN_RANDOMLY_SHRINK_FALSE,
         );
-        assert!(current_ancient.is_none());
+        assert!(current_ancient.slot_and_append_vec.is_none());
         assert!(!should_move);
 
         current_ancient = CurrentAncientAppendVec::new(slot5, Arc::clone(&storages[0])); // just 'some', contents don't matter
@@ -17789,40 +17800,53 @@ pub mod tests {
         // now, create an ancient slot and make sure that it does NOT think it needs to be moved and that it becomes the ancient append vec to use
         let mut current_ancient = CurrentAncientAppendVec::default();
         let slot1_ancient = 1;
+        // there has to be an existing append vec at this slot for a new current ancient at the slot to make sense
+        let _existing_append_vec = db.create_and_insert_store(slot1_ancient, 1000, "test");
         let ancient1 = db.create_ancient_append_vec(slot1_ancient);
         let should_move = db.should_move_to_ancient_append_vec(
-            &vec![ancient1.clone()],
+            &vec![ancient1.new_storage().clone()],
             &mut current_ancient,
             slot1_ancient,
             CAN_RANDOMLY_SHRINK_FALSE,
         );
         assert!(!should_move);
-        assert_eq!(current_ancient.append_vec_id(), ancient1.append_vec_id());
+        assert_eq!(
+            current_ancient.append_vec_id(),
+            ancient1.new_storage().append_vec_id()
+        );
         assert_eq!(current_ancient.slot(), slot1_ancient);
 
         // current is ancient1
         // try to move ancient2
         // current should become ancient2
         let slot2_ancient = 2;
-        let mut current_ancient = CurrentAncientAppendVec::new(slot1_ancient, ancient1.clone());
+        let mut current_ancient =
+            CurrentAncientAppendVec::new(slot1_ancient, ancient1.new_storage().clone());
+        // there has to be an existing append vec at this slot for a new current ancient at the slot to make sense
+        let _existing_append_vec = db.create_and_insert_store(slot2_ancient, 1000, "test");
         let ancient2 = db.create_ancient_append_vec(slot2_ancient);
         let should_move = db.should_move_to_ancient_append_vec(
-            &vec![ancient2.clone()],
+            &vec![ancient2.new_storage().clone()],
             &mut current_ancient,
             slot2_ancient,
             CAN_RANDOMLY_SHRINK_FALSE,
         );
         assert!(!should_move);
-        assert_eq!(current_ancient.append_vec_id(), ancient2.append_vec_id());
+        assert_eq!(
+            current_ancient.append_vec_id(),
+            ancient2.new_storage().append_vec_id()
+        );
         assert_eq!(current_ancient.slot(), slot2_ancient);
 
         // now try a full ancient append vec
         // current is None
         let slot3_full_ancient = 3;
         let mut current_ancient = CurrentAncientAppendVec::default();
+        // there has to be an existing append vec at this slot for a new current ancient at the slot to make sense
+        let _existing_append_vec = db.create_and_insert_store(slot3_full_ancient, 1000, "test");
         let full_ancient_3 = make_full_ancient_append_vec(&db, slot3_full_ancient);
         let should_move = db.should_move_to_ancient_append_vec(
-            &vec![full_ancient_3.clone()],
+            &vec![full_ancient_3.new_storage().clone()],
             &mut current_ancient,
             slot3_full_ancient,
             CAN_RANDOMLY_SHRINK_FALSE,
@@ -17830,14 +17854,15 @@ pub mod tests {
         assert!(!should_move);
         assert_eq!(
             current_ancient.append_vec_id(),
-            full_ancient_3.append_vec_id()
+            full_ancient_3.new_storage().append_vec_id()
         );
         assert_eq!(current_ancient.slot(), slot3_full_ancient);
 
         // now set current_ancient to something
-        let mut current_ancient = CurrentAncientAppendVec::new(slot1_ancient, ancient1.clone());
+        let mut current_ancient =
+            CurrentAncientAppendVec::new(slot1_ancient, ancient1.new_storage().clone());
         let should_move = db.should_move_to_ancient_append_vec(
-            &vec![full_ancient_3.clone()],
+            &vec![full_ancient_3.new_storage().clone()],
             &mut current_ancient,
             slot3_full_ancient,
             CAN_RANDOMLY_SHRINK_FALSE,
@@ -17845,35 +17870,39 @@ pub mod tests {
         assert!(!should_move);
         assert_eq!(
             current_ancient.append_vec_id(),
-            full_ancient_3.append_vec_id()
+            full_ancient_3.new_storage().append_vec_id()
         );
         assert_eq!(current_ancient.slot(), slot3_full_ancient);
 
         // now mark the full ancient as candidate for shrink
-        adjust_alive_bytes(&full_ancient_3, 0);
+        adjust_alive_bytes(full_ancient_3.new_storage(), 0);
 
         // should shrink here, returning none for current
         let mut current_ancient = CurrentAncientAppendVec::default();
         let should_move = db.should_move_to_ancient_append_vec(
-            &vec![full_ancient_3.clone()],
+            &vec![full_ancient_3.new_storage().clone()],
             &mut current_ancient,
             slot3_full_ancient,
             CAN_RANDOMLY_SHRINK_FALSE,
         );
         assert!(should_move);
-        assert!(current_ancient.is_none());
+        assert!(current_ancient.slot_and_append_vec.is_none());
 
         // should return true here, returning current from prior
         // now set current_ancient to something and see if it still goes to None
-        let mut current_ancient = CurrentAncientAppendVec::new(slot1_ancient, ancient1.clone());
+        let mut current_ancient =
+            CurrentAncientAppendVec::new(slot1_ancient, ancient1.new_storage().clone());
         let should_move = db.should_move_to_ancient_append_vec(
-            &vec![full_ancient_3],
+            &vec![Arc::clone(full_ancient_3.new_storage())],
             &mut current_ancient,
             slot3_full_ancient,
             CAN_RANDOMLY_SHRINK_FALSE,
         );
         assert!(should_move);
-        assert_eq!(current_ancient.append_vec_id(), ancient1.append_vec_id());
+        assert_eq!(
+            current_ancient.append_vec_id(),
+            ancient1.new_storage().append_vec_id()
+        );
         assert_eq!(current_ancient.slot(), slot1_ancient);
     }
 
@@ -17889,9 +17918,9 @@ pub mod tests {
         adjust_alive_bytes(ancient, ancient.total_bytes() as usize);
     }
 
-    fn make_full_ancient_append_vec(db: &AccountsDb, slot: Slot) -> Arc<AccountStorageEntry> {
+    fn make_full_ancient_append_vec(db: &AccountsDb, slot: Slot) -> ShrinkInProgress<'_> {
         let full = db.create_ancient_append_vec(slot);
-        make_ancient_append_vec_full(&full);
+        make_ancient_append_vec_full(full.new_storage());
         full
     }
 }

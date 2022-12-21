@@ -733,7 +733,7 @@ where
         .write()
         .unwrap()
         .insert(snapshot_slot, snapshot_bank_hash_info);
-    accounts_db.storage.map.extend(storage.into_iter());
+    accounts_db.storage.extend(storage);
     accounts_db
         .next_id
         .store(next_append_vec_id, Ordering::Release);
