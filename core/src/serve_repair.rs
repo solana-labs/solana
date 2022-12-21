@@ -961,8 +961,6 @@ impl ServeRepair {
             Some(slot_leader),
         );
 
-        // TODO use cluster_nodes for repair targets
-
         let shred_id = match repair_request {
             ShredRepairType::HighestShred(_slot, _index) => {
                 // TODO compute broadcast layers to get peers

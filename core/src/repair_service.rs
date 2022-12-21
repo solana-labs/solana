@@ -270,6 +270,7 @@ impl RepairService {
             HashMap::new();
         let mut peers_cache = LruCache::new(REPAIR_PEERS_CACHE_CAPACITY);
         let mut repairs_cache = LruCache::new(2_000); // TODO
+        let mut repair_peers: HashSet<SocketAddr> = HashSet::default();
 
         loop {
             if exit.load(Ordering::Relaxed) {
@@ -357,6 +358,7 @@ impl RepairService {
                                 identity_keypair,
                             )
                             .ok()?;
+                        repair_peers.insert(to);
                         Some((req, to))
                     })
                     .collect()
@@ -419,7 +421,9 @@ impl RepairService {
                     ("repair_retry_1x", repair_retry_1x, i64),
                     ("repair_retry_2x", repair_retry_2x, i64),
                     ("repair_retry_3plus", repair_retry_3plus, i64),
+                    ("peers_count", repair_peers.len(), i64),
                 );
+                repair_peers.clear();
 
                 if repair_total > 0 {
                     datapoint_info!(
