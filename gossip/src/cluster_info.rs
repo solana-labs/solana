@@ -33,6 +33,7 @@ use {
             self, CrdsData, CrdsValue, CrdsValueLabel, EpochSlotsIndex, IncrementalSnapshotHashes,
             LowestSlot, NodeInstance, SnapshotHashes, Version, Vote, MAX_WALLCLOCK,
         },
+        duplicate_shred::DuplicateShred,
         epoch_slots::EpochSlots,
         gossip_error::GossipError,
         ping_pong::{self, PingCache, Pong},
@@ -1220,6 +1221,19 @@ impl ClusterInfo {
             })
             .map(|entry| match &entry.value.data {
                 CrdsData::EpochSlots(_, slots) => slots.clone(),
+                _ => panic!("this should not happen!"),
+            })
+            .collect()
+    }
+
+    /// Returns duplicate-shreds inserted since the given cursor.
+    #[allow(dead_code)]
+    pub(crate) fn get_duplicate_shreds(&self, cursor: &mut Cursor) -> Vec<DuplicateShred> {
+        let gossip_crds = self.gossip.crds.read().unwrap();
+        gossip_crds
+            .get_duplicate_shreds(cursor)
+            .map(|entry| match &entry.value.data {
+                CrdsData::DuplicateShred(_, dup) => dup.clone(),
                 _ => panic!("this should not happen!"),
             })
             .collect()
