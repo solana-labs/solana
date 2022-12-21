@@ -91,6 +91,7 @@ pub enum ChannelLabel {
 
 struct RollingConditionGrouped {
     basic: RollingConditionBasic,
+    tried_rollover_after_opened: bool,
     is_checked: bool,
 }
 
@@ -98,6 +99,7 @@ impl RollingConditionGrouped {
     fn new(basic: RollingConditionBasic) -> Self {
         Self {
             basic,
+            tried_rollover_after_opened: bool::default(),
             is_checked: bool::default(),
         }
     }
@@ -123,6 +125,18 @@ impl<'a> GroupedWriter<'a> {
 
 impl RollingCondition for RollingConditionGrouped {
     fn should_rollover(&mut self, now: &DateTime<Local>, current_filesize: u64) -> bool {
+        if !self.tried_rollover_after_opened {
+            self.tried_rollover_after_opened = true;
+
+            // rollover normally if empty to reuse it if possible
+            if current_filesize > 0 {
+                // forcibly rollover anew, so that we always avoid to append
+                // to a possibly-damaged tracing file even after unclean
+                // restarts
+                return true;
+            }
+        }
+
         if !self.is_checked {
             self.is_checked = true;
             self.basic.should_rollover(now, current_filesize)
