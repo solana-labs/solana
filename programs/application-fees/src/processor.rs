@@ -1,6 +1,6 @@
 use solana_program::{pubkey::Pubkey, system_instruction};
 use solana_program_runtime::{invoke_context::InvokeContext, ic_msg};
-use solana_sdk::{instruction::InstructionError, transaction_context::IndexOfAccount, program_utils::limited_deserialize, application_fees::{ApplicationFeesInstuctions, self, APPLICATION_FEE_STRUCTURE_SIZE, ApplicationFeeStructure}, feature_set};
+use solana_sdk::{instruction::InstructionError, transaction_context::IndexOfAccount, program_utils::limited_deserialize, application_fees::{ApplicationFeesInstuctions, self, APPLICATION_FEE_STRUCTURE_SIZE, ApplicationFeeStructure},};
 
 pub fn process_instruction(
     _first_instruction_account: IndexOfAccount,
@@ -18,10 +18,10 @@ pub fn process_instruction(
             Processor::remove_fees(invoke_context)
         },
         ApplicationFeesInstuctions::Rebate => {
-            Ok(())
+            Processor::rebate(invoke_context)
         },
         ApplicationFeesInstuctions::RebateAll => {
-            Ok(())
+            Processor::rebate_all(invoke_context)
         }
     }
 }
@@ -152,6 +152,54 @@ impl Processor {
         pda.set_data_length(0)?;
         pda.set_lamports(0)?;
 
+        Ok(())
+    }
+
+    fn rebate( invoke_context: &mut InvokeContext) -> Result<(), InstructionError> {
+        let transaction_context = &invoke_context.transaction_context;
+        let instruction_context = transaction_context.get_current_instruction_context()?;
+
+        let writable_account = instruction_context.try_borrow_instruction_account(transaction_context, 0)?;
+        let owner = instruction_context.try_borrow_instruction_account(transaction_context, 1)?;
+        if !owner.is_signer() {
+            ic_msg!(invoke_context, "Authority account must be a signer");
+            return Err(InstructionError::MissingRequiredSignature);
+        }
+
+        if !writable_account.get_owner().eq(owner.get_key()) {
+            ic_msg!(invoke_context, "Invalid account owner");
+            return Err(InstructionError::IllegalOwner);
+        }
+        let writable_account_key = *writable_account.get_key();
+        drop(writable_account);
+        drop(owner);
+        invoke_context.application_fees.remove(&writable_account_key);
+        Ok(())
+    }
+
+    fn rebate_all( invoke_context: &mut InvokeContext) -> Result<(), InstructionError> {
+        
+        let transaction_context = &invoke_context.transaction_context;
+        let instruction_context = transaction_context.get_current_instruction_context()?;
+        let owner = instruction_context.try_borrow_instruction_account(transaction_context, 1)?;
+        if !owner.is_signer() {
+            ic_msg!(invoke_context, "Authority account must be a signer");
+            return Err(InstructionError::MissingRequiredSignature);
+        }
+
+        // let number_of_accounts = transaction_context.get_number_of_accounts();
+        // for i in 0..number_of_accounts {
+        //     let account = transaction_context.get_account_at_index(i);
+        //     match account {
+        //         Ok(x)=> {
+        //             let account = x.borrow();
+        //             account.
+        //         },
+        //         Err(_e) => {
+        //             // do nothing
+        //         }
+        //     }
+        // }
         Ok(())
     }
 }

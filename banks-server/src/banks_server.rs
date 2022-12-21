@@ -356,7 +356,7 @@ impl Banks for BanksServer {
     ) -> BanksTransactionResultWithMetadata {
         let bank = self.bank_forks.read().unwrap().working_bank();
         match bank.process_transaction_with_metadata(transaction) {
-            TransactionExecutionResult::NotExecuted(error) => BanksTransactionResultWithMetadata {
+            TransactionExecutionResult::NotExecuted{ error, .. } => BanksTransactionResultWithMetadata {
                 result: Err(error),
                 metadata: None,
             },

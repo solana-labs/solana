@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use {
     crate::{
         accounts_data_meter::AccountsDataMeter,
@@ -116,6 +118,7 @@ pub struct InvokeContext<'a> {
     pub blockhash: Hash,
     pub lamports_per_signature: u64,
     syscall_context: Vec<Option<SyscallContext>>,
+    pub application_fees : HashMap<Pubkey, u64>,
 }
 
 impl<'a> InvokeContext<'a> {
@@ -132,6 +135,7 @@ impl<'a> InvokeContext<'a> {
         blockhash: Hash,
         lamports_per_signature: u64,
         prev_accounts_data_len: u64,
+        application_fees : HashMap<Pubkey, u64>,
     ) -> Self {
         Self {
             transaction_context,
@@ -151,6 +155,7 @@ impl<'a> InvokeContext<'a> {
             blockhash,
             lamports_per_signature,
             syscall_context: Vec::new(),
+            application_fees,
         }
     }
 
@@ -188,6 +193,7 @@ impl<'a> InvokeContext<'a> {
             Hash::default(),
             0,
             0,
+            HashMap::new(),
         )
     }
 

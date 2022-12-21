@@ -131,13 +131,13 @@ pub struct Accounts {
 
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct ApplicationFees {
-    pub pda_to_fees_maps: Arc<HashMap<Pubkey, u64>>,
+    pub pda_to_fees_maps: HashMap<Pubkey, u64>,
 }
 
 impl ApplicationFees {
     pub fn new_empty() -> Self {
         ApplicationFees {
-            pda_to_fees_maps: Arc::new(HashMap::new()),
+            pda_to_fees_maps: HashMap::new(),
         }
     }
 }
@@ -468,7 +468,7 @@ impl Accounts {
                 rent: tx_rent,
                 rent_debits,
                 application_fees: ApplicationFees {
-                    pda_to_fees_maps: Arc::new(application_fees),
+                    pda_to_fees_maps: application_fees,
                 },
             })
         } else {
@@ -1409,7 +1409,7 @@ impl Accounts {
             let execution_status = match &execution_results[i] {
                 TransactionExecutionResult::Executed { details, .. } => &details.status,
                 // Don't store any accounts if tx wasn't executed
-                TransactionExecutionResult::NotExecuted(_) => continue,
+                TransactionExecutionResult::NotExecuted { .. } => continue,
             };
 
             let maybe_nonce = match (execution_status, &*nonce) {
@@ -1600,6 +1600,7 @@ mod tests {
                 return_data: None,
                 executed_units: 0,
                 accounts_data_len_delta: 0,
+                application_fees: HashMap::new(),
             },
             tx_executor_cache: Rc::new(RefCell::new(TransactionExecutorCache::default())),
         }

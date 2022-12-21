@@ -81,17 +81,12 @@ impl ApplicationFeesInstuctions {
     }
 
     pub fn rebate(writable_account: Pubkey, owner: Pubkey) -> Instruction {
-        let (pda, _bump) = Pubkey::find_program_address(
-            &[&writable_account.to_bytes()],
-            &crate::application_fees::id(),
-        );
         Instruction::new_with_borsh(
             id(),
             &Self::Rebate,
             vec![
                 AccountMeta::new_readonly(writable_account, false),
                 AccountMeta::new_readonly(owner, true),
-                AccountMeta::new(pda, false),
             ],
         )
     }
