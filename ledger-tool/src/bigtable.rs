@@ -60,7 +60,7 @@ async fn upload(
             ending_slot,
             starting_slot.saturating_add(config.max_num_slots_to_check as u64 * 2),
         );
-        let last_slot_uploaded = solana_ledger::bigtable_upload::upload_confirmed_blocks(
+        let last_slot_checked = solana_ledger::bigtable_upload::upload_confirmed_blocks(
             blockstore.clone(),
             bigtable.clone(),
             starting_slot,
@@ -69,8 +69,8 @@ async fn upload(
             Arc::new(AtomicBool::new(false)),
         )
         .await?;
-        info!("last slot uploaded: {}", last_slot_uploaded);
-        starting_slot = last_slot_uploaded.saturating_add(1);
+        info!("last slot checked: {}", last_slot_checked);
+        starting_slot = last_slot_checked.saturating_add(1);
     }
     info!("No more blocks to upload.");
     Ok(())
