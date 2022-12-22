@@ -1,5 +1,6 @@
 ---
 title: "QUIC"
+description: "The QUIC network protocol is used to provide both low latency connections, as well as protections against certain types of denial of service attacks."
 ---
 
 The Solana blockchain used the QUIC network protocol to provide both low latency connections, as well as protections against certain types of denial of service attacks.
