@@ -427,6 +427,15 @@ impl Banks for BanksServer {
         let bank = self.bank(commitment);
         bank.get_calculated_rewards()
     }
+
+    async fn get_reward_merkle_tree_root_with_commitment_and_context(
+        self,
+        _: Context,
+        commitment: CommitmentLevel,
+    ) -> Option<(Hash, Hash)> {
+        let bank = self.bank(commitment);
+        bank.get_reward_merkle_tree_root()
+    }
 }
 
 pub async fn start_local_server(

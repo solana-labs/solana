@@ -562,6 +562,32 @@ impl BanksClient {
             .get_calculated_rewards_with_commitment_and_context(ctx, commitment)
             .map_err(Into::into)
     }
+
+    /// Return reward merkle tree root from the most recently rooted bank
+    pub fn get_reward_merkle_tree_root(
+        &mut self,
+    ) -> impl Future<Output = Result<Option<(Hash, Hash)>, BanksClientError>> + '_ {
+        self.get_reward_merkle_tree_root_with_commitment(CommitmentLevel::default())
+    }
+
+    /// Return reward merkle tree root from the most recently bank given the commit level
+    pub fn get_reward_merkle_tree_root_with_commitment(
+        &mut self,
+        commitment: CommitmentLevel,
+    ) -> impl Future<Output = Result<Option<(Hash, Hash)>, BanksClientError>> + '_ {
+        self.get_reward_merkle_tree_root_with_commitment_and_context(context::current(), commitment)
+    }
+
+    /// Return reward merkel tree root from the most recently bank given the commit level and context
+    pub fn get_reward_merkle_tree_root_with_commitment_and_context(
+        &mut self,
+        ctx: Context,
+        commitment: CommitmentLevel,
+    ) -> impl Future<Output = Result<Option<(Hash, Hash)>, BanksClientError>> + '_ {
+        self.inner
+            .get_reward_merkle_tree_root_with_commitment_and_context(ctx, commitment)
+            .map_err(Into::into)
+    }
 }
 
 pub async fn start_client<C>(transport: C) -> Result<BanksClient, BanksClientError>

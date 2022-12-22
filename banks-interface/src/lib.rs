@@ -102,6 +102,7 @@ pub trait Banks {
     ) -> Option<u64>;
     async fn get_reward_interval_with_commitment_and_context(commitment: CommitmentLevel) -> u64;
     async fn get_calculated_rewards_with_commitment_and_context(commitment: CommitmentLevel) -> Option<(u128, u128)>;
+    async fn get_reward_merkle_tree_root_with_commitment_and_context(commitment: CommitmentLevel) -> Option<(Hash, Hash)>;
 }
 
 #[cfg(test)]
