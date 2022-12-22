@@ -1,3 +1,7 @@
+//! Calculation of [shred] versions.
+//!
+//! [shred]: https://docs.solana.com/terminology#shred
+
 #![cfg(feature = "full")]
 
 use solana_sdk::{

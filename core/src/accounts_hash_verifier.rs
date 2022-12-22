@@ -19,7 +19,7 @@ use {
         sorted_storages::SortedStorages,
     },
     solana_sdk::{
-        clock::{Slot, SLOT_MS},
+        clock::{Slot, DEFAULT_MS_PER_SLOT},
         hash::Hash,
         pubkey::Pubkey,
     },
@@ -51,7 +51,7 @@ impl AccountsHashVerifier {
         snapshot_config: SnapshotConfig,
     ) -> Self {
         // If there are no accounts packages to process, limit how often we re-check
-        const LOOP_LIMITER: Duration = Duration::from_millis(SLOT_MS);
+        const LOOP_LIMITER: Duration = Duration::from_millis(DEFAULT_MS_PER_SLOT);
         let exit = exit.clone();
         let cluster_info = cluster_info.clone();
         let t_accounts_hash_verifier = Builder::new()

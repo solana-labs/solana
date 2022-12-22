@@ -6,11 +6,11 @@ use {
     rayon::prelude::*,
     solana_measure::measure::Measure,
     solana_runtime::{
-        accounts::{
+        accounts::Accounts,
+        accounts_db::{
             test_utils::{create_test_accounts, update_accounts_bench},
-            Accounts,
+            AccountShrinkThreshold, CalcAccountsHashDataSource,
         },
-        accounts_db::{AccountShrinkThreshold, CalcAccountsHashDataSource},
         accounts_index::AccountSecondaryIndexes,
         ancestors::Ancestors,
         rent_collector::RentCollector,

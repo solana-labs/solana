@@ -835,7 +835,6 @@ impl PohRecorder {
         let poh = Arc::new(Mutex::new(Poh::new_with_slot_info(
             last_entry_hash,
             poh_config.hashes_per_tick,
-            ticks_per_slot,
             tick_number,
         )));
 
@@ -928,8 +927,8 @@ impl PohRecorder {
 
     // Filters the return result of PohRecorder::bank_start(), returns the bank
     // if it's still processing transactions
-    pub fn get_working_bank_if_not_expired<'a, 'b>(
-        bank_start: &'b Option<&'a BankStart>,
+    pub fn get_working_bank_if_not_expired<'a>(
+        bank_start: &Option<&'a BankStart>,
     ) -> Option<&'a Arc<Bank>> {
         bank_start
             .as_ref()

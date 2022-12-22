@@ -47,15 +47,10 @@ impl CrdsGossip {
     /// Returns unique origins' pubkeys of upserted values.
     pub fn process_push_message(
         &self,
-        from: &Pubkey,
-        values: Vec<CrdsValue>,
+        messages: Vec<(/*from:*/ Pubkey, Vec<CrdsValue>)>,
         now: u64,
     ) -> HashSet<Pubkey> {
-        self.push
-            .process_push_message(&self.crds, from, values, now)
-            .into_iter()
-            .filter_map(Result::ok)
-            .collect()
+        self.push.process_push_message(&self.crds, messages, now)
     }
 
     /// Remove redundant paths in the network.
@@ -162,11 +157,9 @@ impl CrdsGossip {
         wallclock: u64,
         now: u64,
     ) -> Result<(), CrdsGossipError> {
-        let expired = now > wallclock + self.push.prune_timeout;
-        if expired {
-            return Err(CrdsGossipError::PruneMessageTimeout);
-        }
-        if self_pubkey == destination {
+        if now > wallclock.saturating_add(self.push.prune_timeout) {
+            Err(CrdsGossipError::PruneMessageTimeout)
+        } else if self_pubkey == destination {
             self.push.process_prune_msg(self_pubkey, peer, origin);
             Ok(())
         } else {

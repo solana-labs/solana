@@ -88,7 +88,8 @@ mod stats;
 mod traits;
 
 pub type Nonce = u32;
-pub const SIZE_OF_NONCE: usize = 4;
+const_assert_eq!(SIZE_OF_NONCE, 4);
+pub const SIZE_OF_NONCE: usize = std::mem::size_of::<Nonce>();
 
 /// The following constants are computed by hand, and hardcoded.
 /// `test_shred_constants` ensures that the values are correct.
