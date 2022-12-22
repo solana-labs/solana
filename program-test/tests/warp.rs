@@ -264,12 +264,20 @@ async fn stake_rewards_from_warp() {
         .banks_client
         .get_calculated_rewards()
         .await
-        .expect("reward_interval exists")
+        .expect("rewards exists")
         .unwrap();
     // stake rewards should be greater than 0
     assert!(rewards.0 > 0);
     // vote rewards is zero because vote comission is 0
     assert!(rewards.1 == 0);
+
+    // assert reward merkle tree root
+    let merkle_root = context
+        .banks_client
+        .get_reward_merkle_tree_root()
+        .await
+        .expect("reward merkle tree exists");
+    assert!(merkle_root.is_some());
 
     // for normal epoch, reward interval should be 100+50
     let reward_interval = context
