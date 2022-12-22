@@ -34,10 +34,10 @@ echo --- build environment
   rustup run "$rust_nightly" rustc --version --verbose
 
   cargo --version --verbose
-  "$cargoNightly" --version --verbose
+  $cargoNightly --version --verbose
 
   cargo clippy --version --verbose
-  "$cargoNightly" clippy --version --verbose
+  $cargoNightly clippy --version --verbose
 
   # audit is done only with "$cargo stable"
   cargo audit --version
