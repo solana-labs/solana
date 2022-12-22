@@ -52,7 +52,7 @@ solana config set --url localhost
 
 ## Create a new Rust library with Cargo
 
-Solana programs written in Rust are _libraries_ which are compiled to [BPF bytecode](../developing/on-chain-programs/overview#berkeley-packet-filter-bpf) and saved in the `.so` format.
+Solana programs written in Rust are _libraries_ which are compiled to [BPF bytecode](../developing/on-chain-programs/faq.md#berkeley-packet-filter-bpf) and saved in the `.so` format.
 
 Initialize a new Rust library named `hello_world` via the Cargo command line:
 

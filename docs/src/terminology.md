@@ -53,7 +53,7 @@ The [validator](#validator) that produces the genesis (first) [block](#block) of
 
 ## BPF loader
 
-The Solana program that owns and loads [BPF](developing/on-chain-programs/overview#berkeley-packet-filter-bpf) smart contract programs, allowing the program to interface with the runtime.
+The Solana program that owns and loads [BPF](developing/on-chain-programs/faq#berkeley-packet-filter-bpf) smart contract programs, allowing the program to interface with the runtime.
 
 ## client
 
