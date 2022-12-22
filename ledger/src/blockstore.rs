@@ -3189,6 +3189,10 @@ impl Blockstore {
         Ok(duplicate_slots_iterator.map(|(slot, _)| slot))
     }
 
+    pub fn first_root(&self) -> Result<Option<Slot>> {
+        Ok(self.rooted_slot_iterator(0)?.next())
+    }
+
     pub fn last_root(&self) -> Slot {
         *self.last_root.read().unwrap()
     }
