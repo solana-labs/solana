@@ -123,17 +123,14 @@ declare_syscall!(
             cmp_result_addr,
             invoke_context.get_check_aligned(),
         )?;
-        let mut i = 0;
-        while i < n as usize {
-            let a = *s1.get(i).ok_or(SyscallError::InvalidLength)?;
-            let b = *s2.get(i).ok_or(SyscallError::InvalidLength)?;
-            if a != b {
-                *cmp_result = (a as i32).saturating_sub(b as i32);
-                return Ok(0);
-            };
-            i = i.saturating_add(1);
-        }
-        *cmp_result = 0;
+
+        debug_assert_eq!(s1.len(), n as usize);
+        debug_assert_eq!(s2.len(), n as usize);
+        // Safety:
+        // memcmp is marked unsafe since it assumes that the inputs are at least
+        // `n` bytes long. `s1` and `s2` are guaranteed to be exactly `n` bytes
+        // long because `translate_slice` would have failed otherwise.
+        *cmp_result = unsafe { memcmp(s1, s2, n as usize) };
         Ok(0)
     }
 );
@@ -165,3 +162,17 @@ declare_syscall!(
         Ok(0)
     }
 );
+
+// Marked unsafe since it assumes that the slices are at least `n` bytes long.
+#[allow(clippy::indexing_slicing)]
+unsafe fn memcmp(s1: &[u8], s2: &[u8], n: usize) -> i32 {
+    for i in 0..n {
+        let a = *s1.get_unchecked(i);
+        let b = *s2.get_unchecked(i);
+        if a != b {
+            return (a as i32).saturating_sub(b as i32);
+        };
+    }
+
+    0
+}
