@@ -74,23 +74,21 @@ impl ConnectionPool {
 
 impl ConnectionCache {
     pub fn new(connection_pool_size: usize) -> Self {
-        // The minimum pool size is 1.
-        let connection_pool_size = 1.max(connection_pool_size);
-        Self {
-            use_quic: true,
-            connection_pool_size,
-            ..Self::default()
-        }
+        Self::_new_with_endpoint(connection_pool_size, None)
     }
 
     /// Create a connection cache with a specific quic client endpoint.
     pub fn new_with_endpoint(connection_pool_size: usize, client_endpoint: Endpoint) -> Self {
+        Self::_new_with_endpoint(connection_pool_size, Some(client_endpoint))
+    }
+
+    fn _new_with_endpoint(connection_pool_size: usize, client_endpoint: Option<Endpoint>) -> Self {
         // The minimum pool size is 1.
         let connection_pool_size = 1.max(connection_pool_size);
         Self {
             use_quic: true,
             connection_pool_size,
-            client_endpoint: Some(client_endpoint),
+            client_endpoint,
             ..Self::default()
         }
     }
