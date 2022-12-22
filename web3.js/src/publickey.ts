@@ -120,7 +120,13 @@ export class PublicKey extends Struct {
    * Checks if two publicKeys are equal
    */
   equals(publicKey: PublicKey): boolean {
-    return this._bn === publicKey._bn;
+    if (typeof publicKey._bn === 'bigint') {
+      return this._bn === publicKey._bn;
+    } else {
+      // If it's not a bigint, the other type comes from an old library, so we
+      // just check the underlying buffer representation.
+      return this.toBuffer().equals(publicKey.toBuffer());
+    }
   }
 
   /**
