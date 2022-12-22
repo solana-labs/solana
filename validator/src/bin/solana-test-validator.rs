@@ -332,7 +332,6 @@ fn main() {
     let mut genesis = TestValidatorGenesis::default();
     genesis.max_ledger_shreds = value_of(&matches, "limit_ledger_size");
     genesis.max_genesis_archive_unpacked_size = Some(u64::MAX);
-    genesis.accounts_db_caching_enabled = true;
     genesis.log_messages_bytes_limit = value_t!(matches, "log_messages_bytes_limit", usize).ok();
     genesis.transaction_account_lock_limit =
         value_t!(matches, "transaction_account_lock_limit", usize).ok();
@@ -499,6 +498,7 @@ fn main() {
                     bank_forks: test_validator.bank_forks(),
                     cluster_info: test_validator.cluster_info(),
                     vote_account: test_validator.vote_account_address(),
+                    repair_whitelist: test_validator.repair_whitelist(),
                 });
             if let Some(dashboard) = dashboard {
                 dashboard.run(Duration::from_millis(250));

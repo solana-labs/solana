@@ -28,7 +28,6 @@ import { NonceAccount } from "validators/accounts/nonce";
 import { SysvarAccount } from "validators/accounts/sysvar";
 import { ConfigAccount } from "validators/accounts/config";
 import { ParsedAddressLookupTableAccount } from "validators/accounts/address-lookup-table";
-import { FlaggedAccountsProvider } from "./flagged-accounts";
 import {
   ProgramDataAccount,
   ProgramDataAccountInfo,
@@ -177,9 +176,7 @@ export function AccountsProvider({ children }: AccountsProviderProps) {
         <FetchersContext.Provider value={fetchers}>
           <TokensProvider>
             <HistoryProvider>
-              <RewardsProvider>
-                <FlaggedAccountsProvider>{children}</FlaggedAccountsProvider>
-              </RewardsProvider>
+              <RewardsProvider>{children}</RewardsProvider>
             </HistoryProvider>
           </TokensProvider>
         </FetchersContext.Provider>

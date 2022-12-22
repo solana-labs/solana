@@ -538,12 +538,12 @@ impl AccountsHasher {
     }
 
     pub fn compute_merkle_root(hashes: Vec<(Pubkey, Hash)>, fanout: usize) -> Hash {
-        Self::compute_merkle_root_loop(hashes, fanout, |t| t.1)
+        Self::compute_merkle_root_loop(hashes, fanout, |t| &t.1)
     }
 
     // this function avoids an infinite recursion compiler error
     pub fn compute_merkle_root_recurse(hashes: Vec<Hash>, fanout: usize) -> Hash {
-        Self::compute_merkle_root_loop(hashes, fanout, |t: &Hash| *t)
+        Self::compute_merkle_root_loop(hashes, fanout, |t| t)
     }
 
     pub fn div_ceil(x: usize, y: usize) -> usize {
@@ -558,7 +558,7 @@ impl AccountsHasher {
     // Using extractor allows us to avoid an unnecessary array copy on the first iteration.
     pub fn compute_merkle_root_loop<T, F>(hashes: Vec<T>, fanout: usize, extractor: F) -> Hash
     where
-        F: Fn(&T) -> Hash + std::marker::Sync,
+        F: Fn(&T) -> &Hash + std::marker::Sync,
         T: std::marker::Sync,
     {
         if hashes.is_empty() {
@@ -806,7 +806,7 @@ impl AccountsHasher {
     pub fn accumulate_account_hashes(mut hashes: Vec<(Pubkey, Hash)>) -> Hash {
         Self::sort_hashes_by_pubkey(&mut hashes);
 
-        Self::compute_merkle_root_loop(hashes, MERKLE_FANOUT, |i| i.1)
+        Self::compute_merkle_root_loop(hashes, MERKLE_FANOUT, |i| &i.1)
     }
 
     pub fn sort_hashes_by_pubkey(hashes: &mut Vec<(Pubkey, Hash)>) {

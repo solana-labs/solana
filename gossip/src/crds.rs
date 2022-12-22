@@ -79,6 +79,7 @@ pub struct Crds {
 
 #[derive(PartialEq, Eq, Debug)]
 pub enum CrdsError {
+    DuplicatePush(/*num dups:*/ u8),
     InsertFailed,
     UnknownStakes,
 }
@@ -115,6 +116,8 @@ pub struct VersionedCrdsValue {
     pub(crate) local_timestamp: u64,
     /// value hash
     pub(crate) value_hash: Hash,
+    /// Number of times duplicates of this value are recevied from gossip push.
+    num_push_dups: u8,
 }
 
 #[derive(Clone, Copy, Default)]
@@ -140,6 +143,7 @@ impl VersionedCrdsValue {
             value,
             local_timestamp,
             value_hash,
+            num_push_dups: 0u8,
         }
     }
 }
@@ -263,17 +267,25 @@ impl Crds {
                 entry.insert(value);
                 Ok(())
             }
-            Entry::Occupied(entry) => {
+            Entry::Occupied(mut entry) => {
                 self.stats.lock().unwrap().record_fail(&value, route);
                 trace!(
                     "INSERT FAILED data: {} new.wallclock: {}",
                     value.value.label(),
                     value.value.wallclock(),
                 );
+                // Identify if the message is outdated (as opposed to
+                // duplicate) by comparing value hashes.
                 if entry.get().value_hash != value.value_hash {
                     self.purged.push_back((value.value_hash, now));
+                    Err(CrdsError::InsertFailed)
+                } else if matches!(route, GossipRoute::PushMessage) {
+                    let entry = entry.get_mut();
+                    entry.num_push_dups = entry.num_push_dups.saturating_add(1);
+                    Err(CrdsError::DuplicatePush(entry.num_push_dups))
+                } else {
+                    Err(CrdsError::InsertFailed)
                 }
-                Err(CrdsError::InsertFailed)
             }
         }
     }

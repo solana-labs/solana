@@ -93,6 +93,18 @@ impl ConnectionCache {
         }
     }
 
+    /// Create a connection cache with a specific quic client endpoint.
+    pub fn new_with_endpoint(connection_pool_size: usize, client_endpoint: Endpoint) -> Self {
+        // The minimum pool size is 1.
+        let connection_pool_size = 1.max(connection_pool_size);
+        Self {
+            use_quic: true,
+            connection_pool_size,
+            client_endpoint: Some(client_endpoint),
+            ..Self::default()
+        }
+    }
+
     pub fn update_client_certificate(
         &mut self,
         keypair: &Keypair,

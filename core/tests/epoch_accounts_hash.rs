@@ -221,7 +221,6 @@ impl BackgroundServices {
                 snapshot_request_handler,
                 pruned_banks_request_handler,
             },
-            true,
             false,
             None,
         );
@@ -444,7 +443,7 @@ fn test_snapshots_have_expected_epoch_accounts_hash() {
 
             let accounts_dir = TempDir::new().unwrap();
             let deserialized_bank = snapshot_utils::bank_from_snapshot_archives(
-                &[accounts_dir.into_path()],
+                &[accounts_dir.path().to_path_buf()],
                 &snapshot_config.bank_snapshots_dir,
                 &full_snapshot_archive_info,
                 None,
