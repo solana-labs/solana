@@ -3629,17 +3629,19 @@ impl Bank {
         None
     }
 
-    pub fn merkle_tree_from_calculated_rewards(&self) -> Option<(MerkleTree, MerkleTree)> {
+    pub fn get_merkle_tree_from_calculated_rewards(&self) -> Option<(MerkleTree, MerkleTree)> {
         let calc = self.epoch_reward_calculator.read();
         let inner = calc.unwrap();
         if let Some(calc) = &*inner {
             if let Some((start_slot, _)) = self.epoch_reward_calc_start {
                 let result = calc.get(start_slot);
                 if let Some(calc_result) = result {
+                    let mut tt = Measure::start("reward_merkle_tree_timestamp");
+
                     let stake_rewards = &calc_result.0;
                     let vote_rewards = &calc_result.1;
 
-                    return Some((
+                    let ret = Some((
                         MerkleTree::new(
                             &stake_rewards
                                 .par_iter()
@@ -3653,10 +3655,25 @@ impl Bank {
                                 .collect::<Vec<Vec<u8>>>(),
                         ),
                     ));
+                    tt.stop();
+
+                    datapoint_info!(
+                        "bank-reward-merkle-tree-timestamp",
+                        ("get_merkle_tree__timestamp_us", tt.as_us(), i64),
+                    );
+                    return ret;
                 }
             }
         }
         None
+    }
+
+    pub fn get_reward_merkle_tree_root(&self) -> Option<(Hash, Hash)> {
+        if let Some((t1, t2)) = self.get_merkle_tree_from_calculated_rewards() {
+            Some((*t1.get_root().unwrap(), *t2.get_root().unwrap()))
+        } else {
+            None
+        }
     }
 
     fn credit_epoch_rewards_in_partition(&mut self, start_slot: Slot, partition_index: u64) {
