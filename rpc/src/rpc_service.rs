@@ -1,5 +1,4 @@
 //! The `rpc_service` module implements the Solana JSON RPC service.
-
 use {
     crate::{
         cluster_tpu_info::ClusterTpuInfo,
@@ -13,6 +12,8 @@ use {
         rpc_health::*,
     },
     crossbeam_channel::unbounded,
+    http_range::HttpRange,
+    hyper::header::HeaderValue,
     jsonrpc_core::{futures::prelude::*, MetaIoHandler},
     jsonrpc_http_server::{
         hyper, AccessControlAllowOrigin, CloseHandle, DomainsValidation, RequestMiddleware,
@@ -43,6 +44,7 @@ use {
     solana_storage_bigtable::CredentialType,
     std::{
         collections::HashSet,
+        io::SeekFrom,
         net::SocketAddr,
         path::{Path, PathBuf},
         sync::{
@@ -51,6 +53,7 @@ use {
         },
         thread::{self, Builder, JoinHandle},
     },
+    tokio::io::AsyncSeekExt,
     tokio_util::codec::{BytesCodec, FramedRead},
 };
 
@@ -110,6 +113,13 @@ impl RpcRequestMiddleware {
     fn not_found() -> hyper::Response<hyper::Body> {
         hyper::Response::builder()
             .status(hyper::StatusCode::NOT_FOUND)
+            .body(hyper::Body::empty())
+            .unwrap()
+    }
+
+    fn range_not_satisfiable() -> hyper::Response<hyper::Body> {
+        hyper::Response::builder()
+            .status(hyper::StatusCode::RANGE_NOT_SATISFIABLE)
             .body(hyper::Body::empty())
             .unwrap()
     }
@@ -188,7 +198,7 @@ impl RpcRequestMiddleware {
         }
     }
 
-    fn process_file_get(&self, path: &str) -> RequestMiddlewareAction {
+    fn process_file_get(&self, path: &str, range: Option<HeaderValue>) -> RequestMiddlewareAction {
         let stem = path.split_at(1).1; // Drop leading '/' from path
         let filename = {
             match path {
@@ -217,15 +227,47 @@ impl RpcRequestMiddleware {
                     } else {
                         Self::internal_server_error()
                     }),
-                    Ok(file) => {
-                        let stream =
-                            FramedRead::new(file, BytesCodec::new()).map_ok(|b| b.freeze());
-                        let body = hyper::Body::wrap_stream(stream);
+                    Ok(mut file) => {
+                        if let Some(range) = range {
+                            if let Ok(range) = range.to_str() {
+                                let file_size = file.metadata().await.unwrap().len();
+                                let range_parse_status = match HttpRange::parse(range, file_size) {
+                                    Ok(rngs) => {
+                                        if rngs.len() == 1 {
+                                            Ok((rngs[0].start, rngs[0].length))
+                                        } else {
+                                            Err("HttpRange parse error: only single range is supported".to_string())
+                                        }
+                                    }
+                                    Err(err) => Err(format!("HttpRange parse error: {:?}", err)),
+                                };
 
-                        Ok(hyper::Response::builder()
-                            .header(hyper::header::CONTENT_LENGTH, file_length)
-                            .body(body)
-                            .unwrap())
+                                match range_parse_status {
+                                    Ok((start_bytes, length)) => {
+                                        let _ = file.seek(SeekFrom::Start(start_bytes)).await;
+                                        let stream = FramedRead::new(file, BytesCodec::new())
+                                            .map_ok(|b| b.freeze());
+                                        let body = hyper::Body::wrap_stream(stream);
+                                        return Ok(hyper::Response::builder()
+                                            .status(hyper::StatusCode::PARTIAL_CONTENT)
+                                            .header(hyper::header::CONTENT_RANGE, range)
+                                            .header(hyper::header::CONTENT_LENGTH, length)
+                                            .body(body)
+                                            .unwrap());
+                                    }
+                                    Err(err) => debug!("{}", err),
+                                }
+                            }
+                            Ok(Self::range_not_satisfiable())
+                        } else {
+                            let stream =
+                                FramedRead::new(file, BytesCodec::new()).map_ok(|b| b.freeze());
+                            let body = hyper::Body::wrap_stream(stream);
+                            Ok(hyper::Response::builder()
+                                .header(hyper::header::CONTENT_LENGTH, file_length)
+                                .body(body)
+                                .unwrap())
+                        }
                     }
                 }
             }),
@@ -298,7 +340,8 @@ impl RequestMiddleware for RpcRequestMiddleware {
                 .unwrap()
                 .into()
         } else if self.is_file_get_path(request.uri().path()) {
-            self.process_file_get(request.uri().path())
+            let range_header = request.headers().get(hyper::header::RANGE);
+            self.process_file_get(request.uri().path(), range_header.cloned())
         } else if request.uri().path() == "/health" {
             hyper::Response::builder()
                 .status(hyper::StatusCode::OK)
@@ -574,6 +617,7 @@ mod tests {
     use {
         super::*,
         crate::rpc::create_validator_exit,
+        jsonrpc_http_server::hyper::HeaderMap,
         solana_gossip::{
             contact_info::ContactInfo,
             crds::GossipRoute,
@@ -775,7 +819,7 @@ mod tests {
         );
 
         // File does not exist => request should fail.
-        let action = rrm.process_file_get(DEFAULT_GENESIS_DOWNLOAD_PATH);
+        let action = rrm.process_file_get(DEFAULT_GENESIS_DOWNLOAD_PATH, None);
         if let RequestMiddlewareAction::Respond { response, .. } = action {
             let response = runtime.block_on(response);
             let response = response.unwrap();
@@ -790,11 +834,29 @@ mod tests {
         }
 
         // Normal file exist => request should succeed.
-        let action = rrm.process_file_get(DEFAULT_GENESIS_DOWNLOAD_PATH);
+        let action = rrm.process_file_get(DEFAULT_GENESIS_DOWNLOAD_PATH, None);
         if let RequestMiddlewareAction::Respond { response, .. } = action {
             let response = runtime.block_on(response);
             let response = response.unwrap();
             assert_eq!(response.status(), 200);
+        } else {
+            panic!("Unexpected RequestMiddlewareAction variant");
+        }
+
+        // Partial file exist => request should succeed.
+        let mut headers = HeaderMap::new();
+        headers.insert(
+            hyper::header::RANGE,
+            HeaderValue::from_static("bytes=0-1000"),
+        );
+        let action = rrm.process_file_get(
+            DEFAULT_GENESIS_DOWNLOAD_PATH,
+            headers.get(hyper::header::RANGE).cloned(),
+        );
+        if let RequestMiddlewareAction::Respond { response, .. } = action {
+            let response = runtime.block_on(response);
+            let response = response.unwrap();
+            assert_eq!(response.status(), 206);
         } else {
             panic!("Unexpected RequestMiddlewareAction variant");
         }
@@ -809,7 +871,7 @@ mod tests {
             symlink::symlink_file("wrong", &genesis_path).unwrap();
 
             // File is a symbolic link => request should fail.
-            let action = rrm.process_file_get(DEFAULT_GENESIS_DOWNLOAD_PATH);
+            let action = rrm.process_file_get(DEFAULT_GENESIS_DOWNLOAD_PATH, None);
             if let RequestMiddlewareAction::Respond { response, .. } = action {
                 let response = runtime.block_on(response);
                 let response = response.unwrap();

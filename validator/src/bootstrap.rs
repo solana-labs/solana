@@ -3,7 +3,7 @@ use {
     rand::{seq::SliceRandom, thread_rng, Rng},
     rayon::prelude::*,
     solana_core::validator::{ValidatorConfig, ValidatorStartProgress},
-    solana_download_utils::{download_snapshot_archive, DownloadProgressRecord},
+    solana_download_utils::{download_snapshot_archive, ProgressCallback},
     solana_genesis_utils::download_then_check_genesis_hash,
     solana_gossip::{
         cluster_info::{ClusterInfo, Node},
@@ -52,6 +52,12 @@ pub struct RpcBootstrapConfig {
     pub max_genesis_archive_unpacked_size: u64,
     pub check_vote_account: Option<String>,
     pub incremental_snapshot_fetch: bool,
+}
+
+struct RpcSnapshotDownloadInfo {
+    pub rpc_contact_info: ContactInfo,
+    snapshot_hash: Option<SnapshotHash>,
+    rpc_client: RpcClient,
 }
 
 fn verify_reachable_ports(
@@ -346,14 +352,12 @@ pub fn fail_rpc_node(
 }
 
 #[allow(clippy::too_many_arguments)]
-pub fn attempt_download_genesis_and_snapshot(
-    rpc_contact_info: &ContactInfo,
+fn attempt_download_genesis_and_snapshot(
     ledger_path: &Path,
     validator_config: &mut ValidatorConfig,
     bootstrap_config: &RpcBootstrapConfig,
     use_progress_bar: bool,
     gossip: &mut Option<(Arc<ClusterInfo>, Arc<AtomicBool>, GossipService)>,
-    rpc_client: &RpcClient,
     full_snapshot_archives_dir: &Path,
     incremental_snapshot_archives_dir: &Path,
     maximum_local_snapshot_age: Slot,
@@ -361,13 +365,13 @@ pub fn attempt_download_genesis_and_snapshot(
     minimal_snapshot_download_speed: f32,
     maximum_snapshot_download_abort: u64,
     download_abort_count: &mut u64,
-    snapshot_hash: Option<SnapshotHash>,
     identity_keypair: &Arc<Keypair>,
     vote_account: &Pubkey,
     authorized_voter_keypairs: Arc<RwLock<Vec<Arc<Keypair>>>>,
+    rpc_nodes: &[RpcSnapshotDownloadInfo],
 ) -> Result<(), String> {
     let genesis_config = download_then_check_genesis_hash(
-        &rpc_contact_info.rpc,
+        &rpc_nodes[0].rpc_contact_info.rpc,
         ledger_path,
         validator_config.expected_genesis_hash,
         bootstrap_config.max_genesis_archive_unpacked_size,
@@ -383,29 +387,44 @@ pub fn attempt_download_genesis_and_snapshot(
         }
     }
 
-    if let Some(expected_genesis_hash) = validator_config.expected_genesis_hash {
-        // Sanity check that the RPC node is using the expected genesis hash before
-        // downloading a snapshot from it
-        let rpc_genesis_hash = rpc_client
-            .get_genesis_hash()
-            .map_err(|err| format!("Failed to get genesis hash: {err}"))?;
-
-        if expected_genesis_hash != rpc_genesis_hash {
-            return Err(format!(
-                "Genesis hash mismatch: expected {expected_genesis_hash} but RPC node genesis hash is {rpc_genesis_hash}"
-            ));
+    let remaining_rpc_addrs = if let Some(expected_genesis_hash) =
+        validator_config.expected_genesis_hash
+    {
+        // Sanity check that the RPC nodes are using the expected genesis hash before
+        // downloading snapshots from them
+        rpc_nodes.iter().filter_map(|rpc_snapshot_download_info|{
+            match rpc_snapshot_download_info
+                .rpc_client
+                .get_genesis_hash(){
+                    Ok(rpc_genesis_hash) => {
+                        if expected_genesis_hash != rpc_genesis_hash {
+                            warn!("Genesis hash mismatch: expected {expected_genesis_hash} but RPC node genesis hash is {rpc_genesis_hash}");
+                            return None;
+                        }
+                        Some(rpc_snapshot_download_info.rpc_contact_info.rpc)
+                    }
+                    Err(err) => {
+                        warn!("Failed to get genesis hash: {err}");
+                        None
+                    }
+                }
+        }).collect()
+    } else {
+        let mut remaining_rpc_addrs = vec![];
+        for rpc_snapshot_download_info in rpc_nodes {
+            remaining_rpc_addrs.push(rpc_snapshot_download_info.rpc_contact_info.rpc);
         }
+        remaining_rpc_addrs
+    };
+
+    if remaining_rpc_addrs.is_empty() {
+        return Err("No good RPCs remaining to download from".to_string());
     }
 
     let (cluster_info, gossip_exit_flag, gossip_service) = gossip.take().unwrap();
     cluster_info.save_contact_info();
     gossip_exit_flag.store(true, Ordering::Relaxed);
     gossip_service.join().unwrap();
-
-    let rpc_client_slot = rpc_client
-        .get_slot_with_commitment(CommitmentConfig::finalized())
-        .map_err(|err| format!("Failed to get RPC node slot: {err}"))?;
-    info!("RPC node root slot: {}", rpc_client_slot);
 
     download_snapshots(
         full_snapshot_archives_dir,
@@ -418,8 +437,9 @@ pub fn attempt_download_genesis_and_snapshot(
         minimal_snapshot_download_speed,
         maximum_snapshot_download_abort,
         download_abort_count,
-        snapshot_hash,
-        rpc_contact_info,
+        rpc_nodes[0].snapshot_hash,
+        &rpc_nodes[0].rpc_contact_info.id,
+        &remaining_rpc_addrs,
     )?;
 
     if let Some(url) = bootstrap_config.check_vote_account.as_ref() {
@@ -491,7 +511,7 @@ pub fn rpc_bootstrap(
 
     let blacklisted_rpc_nodes = RwLock::new(HashSet::new());
     let mut gossip = None;
-    let mut vetted_rpc_nodes: Vec<(ContactInfo, Option<SnapshotHash>, RpcClient)> = vec![];
+    let mut vetted_rpc_nodes: Vec<RpcSnapshotDownloadInfo> = vec![];
     let mut download_abort_count = 0;
     loop {
         if gossip.is_none() {
@@ -538,11 +558,14 @@ pub fn rpc_bootstrap(
                         rpc_contact_info.rpc,
                         Duration::from_secs(5),
                     );
-
-                    (rpc_contact_info, snapshot_hash, rpc_client)
+                    RpcSnapshotDownloadInfo {
+                        rpc_contact_info,
+                        snapshot_hash,
+                        rpc_client,
+                    }
                 })
-                .filter(|(rpc_contact_info, _snapshot_hash, rpc_client)| {
-                    match rpc_client.get_version() {
+                .filter(|rpc_snapshot_download_info| {
+                    let version_okay = match rpc_snapshot_download_info.rpc_client.get_version() {
                         Ok(rpc_version) => {
                             info!("RPC node version: {}", rpc_version.solana_core);
                             true
@@ -551,7 +574,36 @@ pub fn rpc_bootstrap(
                             fail_rpc_node(
                                 format!("Failed to get RPC node version: {err}"),
                                 &validator_config.known_validators,
-                                &rpc_contact_info.id,
+                                &rpc_snapshot_download_info.rpc_contact_info.id,
+                                &mut blacklisted_rpc_nodes.write().unwrap(),
+                            );
+                            false
+                        }
+                    };
+
+                    if !version_okay {
+                        return false;
+                    }
+
+                    match rpc_snapshot_download_info
+                        .rpc_client
+                        .get_slot_with_commitment(CommitmentConfig::finalized())
+                    {
+                        Ok(rpc_client_slot) => {
+                            info!(
+                                "RPC node {} root slot: {}",
+                                rpc_snapshot_download_info.rpc_contact_info.id, rpc_client_slot
+                            );
+                            true
+                        }
+                        Err(err) => {
+                            fail_rpc_node(
+                                format!(
+                                    "Failed to get RPC node {} slot: {err}",
+                                    rpc_snapshot_download_info.rpc_contact_info.id
+                                ),
+                                &validator_config.known_validators,
+                                &rpc_snapshot_download_info.rpc_contact_info.id,
                                 &mut blacklisted_rpc_nodes.write().unwrap(),
                             );
                             false
@@ -561,16 +613,12 @@ pub fn rpc_bootstrap(
                 .collect();
         }
 
-        let (rpc_contact_info, snapshot_hash, rpc_client) = vetted_rpc_nodes.pop().unwrap();
-
         match attempt_download_genesis_and_snapshot(
-            &rpc_contact_info,
             ledger_path,
             validator_config,
             &bootstrap_config,
             use_progress_bar,
             &mut gossip,
-            &rpc_client,
             full_snapshot_archives_dir,
             incremental_snapshot_archives_dir,
             maximum_local_snapshot_age,
@@ -578,19 +626,21 @@ pub fn rpc_bootstrap(
             minimal_snapshot_download_speed,
             maximum_snapshot_download_abort,
             &mut download_abort_count,
-            snapshot_hash,
             identity_keypair,
             vote_account,
             authorized_voter_keypairs.clone(),
+            &vetted_rpc_nodes,
         ) {
             Ok(()) => break,
             Err(err) => {
-                fail_rpc_node(
-                    err,
-                    &validator_config.known_validators,
-                    &rpc_contact_info.id,
-                    &mut blacklisted_rpc_nodes.write().unwrap(),
-                );
+                for rpc_snapshot_download_info in &vetted_rpc_nodes {
+                    fail_rpc_node(
+                        err.clone(),
+                        &validator_config.known_validators,
+                        &rpc_snapshot_download_info.rpc_contact_info.id,
+                        &mut blacklisted_rpc_nodes.write().unwrap(),
+                    );
+                }
             }
         }
     }
@@ -1138,7 +1188,8 @@ fn download_snapshots(
     maximum_snapshot_download_abort: u64,
     download_abort_count: &mut u64,
     snapshot_hash: Option<SnapshotHash>,
-    rpc_contact_info: &ContactInfo,
+    first_rpc_pubkey: &Pubkey,
+    rpc_addrs: &[SocketAddr],
 ) -> Result<(), String> {
     if snapshot_hash.is_none() {
         return Ok(());
@@ -1160,6 +1211,15 @@ fn download_snapshots(
         return Ok(());
     }
 
+    // This is used later to ensure we don't abort download if there's only 1 viable RPC option
+    let single_known_rpc = if let Some(known_validators) = &validator_config.known_validators {
+        known_validators.contains(first_rpc_pubkey)
+            && known_validators.len() == 1
+            && bootstrap_config.only_known_rpc
+    } else {
+        false
+    };
+
     // Check and see if we've already got the full snapshot; if not, download it
     if snapshot_utils::get_full_snapshot_archives(full_snapshot_archives_dir)
         .into_iter()
@@ -1177,15 +1237,15 @@ fn download_snapshots(
             full_snapshot_archives_dir,
             incremental_snapshot_archives_dir,
             validator_config,
-            bootstrap_config,
             use_progress_bar,
             start_progress,
             minimal_snapshot_download_speed,
             maximum_snapshot_download_abort,
             download_abort_count,
-            rpc_contact_info,
             full_snapshot_hash,
             SnapshotType::FullSnapshot,
+            rpc_addrs,
+            single_known_rpc,
         )?;
     }
 
@@ -1208,15 +1268,15 @@ fn download_snapshots(
                 full_snapshot_archives_dir,
                 incremental_snapshot_archives_dir,
                 validator_config,
-                bootstrap_config,
                 use_progress_bar,
                 start_progress,
                 minimal_snapshot_download_speed,
                 maximum_snapshot_download_abort,
                 download_abort_count,
-                rpc_contact_info,
                 incremental_snapshot_hash,
                 SnapshotType::IncrementalSnapshot(full_snapshot_hash.0),
+                rpc_addrs,
+                single_known_rpc,
             )?;
         }
     }
@@ -1230,15 +1290,15 @@ fn download_snapshot(
     full_snapshot_archives_dir: &Path,
     incremental_snapshot_archives_dir: &Path,
     validator_config: &ValidatorConfig,
-    bootstrap_config: &RpcBootstrapConfig,
     use_progress_bar: bool,
     start_progress: &Arc<RwLock<ValidatorStartProgress>>,
     minimal_snapshot_download_speed: f32,
     maximum_snapshot_download_abort: u64,
     download_abort_count: &mut u64,
-    rpc_contact_info: &ContactInfo,
     desired_snapshot_hash: (Slot, Hash),
     snapshot_type: SnapshotType,
+    rpc_addrs: &[SocketAddr],
+    single_known_rpc: bool,
 ) -> Result<(), String> {
     let maximum_full_snapshot_archives_to_retain = validator_config
         .snapshot_config
@@ -1249,14 +1309,15 @@ fn download_snapshot(
 
     *start_progress.write().unwrap() = ValidatorStartProgress::DownloadingSnapshot {
         slot: desired_snapshot_hash.0,
-        rpc_addr: rpc_contact_info.rpc,
+        rpc_addr: rpc_addrs[0],
     };
     let desired_snapshot_hash = (
         desired_snapshot_hash.0,
         solana_runtime::snapshot_hash::SnapshotHash(desired_snapshot_hash.1),
     );
+
     download_snapshot_archive(
-        &rpc_contact_info.rpc,
+        rpc_addrs,
         full_snapshot_archives_dir,
         incremental_snapshot_archives_dir,
         desired_snapshot_hash,
@@ -1264,47 +1325,12 @@ fn download_snapshot(
         maximum_full_snapshot_archives_to_retain,
         maximum_incremental_snapshot_archives_to_retain,
         use_progress_bar,
-        &mut Some(Box::new(|download_progress: &DownloadProgressRecord| {
-            debug!("Download progress: {:?}", download_progress);
-            if download_progress.last_throughput < minimal_snapshot_download_speed
-                && download_progress.notification_count <= 1
-                && download_progress.percentage_done <= 2_f32
-                && download_progress.estimated_remaining_time > 60_f32
-                && *download_abort_count < maximum_snapshot_download_abort
-            {
-                if let Some(ref known_validators) = validator_config.known_validators {
-                    if known_validators.contains(&rpc_contact_info.id)
-                        && known_validators.len() == 1
-                        && bootstrap_config.only_known_rpc
-                    {
-                        warn!(
-                            "The snapshot download is too slow, throughput: {} < min speed {} \
-                            bytes/sec, but will NOT abort and try a different node as it is the \
-                            only known validator and the --only-known-rpc flag is set. \
-                            Abort count: {}, Progress detail: {:?}",
-                            download_progress.last_throughput,
-                            minimal_snapshot_download_speed,
-                            download_abort_count,
-                            download_progress,
-                        );
-                        return true; // Do not abort download from the one-and-only known validator
-                    }
-                }
-                warn!(
-                    "The snapshot download is too slow, throughput: {} < min speed {} \
-                    bytes/sec, will abort and try a different node. \
-                    Abort count: {}, Progress detail: {:?}",
-                    download_progress.last_throughput,
-                    minimal_snapshot_download_speed,
-                    download_abort_count,
-                    download_progress,
-                );
-                *download_abort_count += 1;
-                false
-            } else {
-                true
-            }
-        })),
+        Some(ProgressCallback {
+            minimal_snapshot_download_speed,
+            maximum_snapshot_download_abort,
+            single_known_rpc,
+        }),
+        download_abort_count,
     )
 }
 

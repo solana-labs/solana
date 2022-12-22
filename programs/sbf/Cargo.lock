@@ -1860,6 +1860,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "http-range"
+version = "0.1.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "21dec9db110f5f872ed9699c3ecf50cf16f423502706ba5c72462e28d3157573"
+
+[[package]]
 name = "http-range-header"
 version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4518,6 +4524,7 @@ dependencies = [
  "console",
  "indicatif",
  "log",
+ "rayon",
  "reqwest",
  "solana-runtime",
  "solana-sdk 1.15.0",
@@ -5140,6 +5147,7 @@ dependencies = [
  "bs58",
  "crossbeam-channel",
  "dashmap",
+ "http-range",
  "itertools",
  "jsonrpc-core",
  "jsonrpc-core-client",
@@ -5150,6 +5158,7 @@ dependencies = [
  "log",
  "rayon",
  "regex",
+ "reqwest",
  "serde",
  "serde_derive",
  "serde_json",

@@ -1444,39 +1444,39 @@ pub fn build_snapshot_archives_remote_dir(snapshot_archives_dir: impl AsRef<Path
         .join(SNAPSHOT_ARCHIVE_DOWNLOAD_DIR)
 }
 
-/// Build the full snapshot archive path from its components: the snapshot archives directory, the
-/// snapshot slot, the accounts hash, and the archive format.
-pub fn build_full_snapshot_archive_path(
-    full_snapshot_archives_dir: impl AsRef<Path>,
+pub fn build_snapshot_archive_path(
+    snapshot_type: SnapshotType,
+    base_dir: impl AsRef<Path>,
     slot: Slot,
     hash: &SnapshotHash,
     archive_format: ArchiveFormat,
+    chunk_number: Option<u64>,
 ) -> PathBuf {
-    full_snapshot_archives_dir.as_ref().join(format!(
-        "snapshot-{}-{}.{}",
-        slot,
-        hash.0,
-        archive_format.extension(),
-    ))
-}
+    let prefix = match snapshot_type {
+        SnapshotType::FullSnapshot => "snapshot".to_owned(),
+        SnapshotType::IncrementalSnapshot(base_slot) => {
+            format!("incremental-snapshot-{}", base_slot)
+        }
+    };
 
-/// Build the incremental snapshot archive path from its components: the snapshot archives
-/// directory, the snapshot base slot, the snapshot slot, the accounts hash, and the archive
-/// format.
-pub fn build_incremental_snapshot_archive_path(
-    incremental_snapshot_archives_dir: impl AsRef<Path>,
-    base_slot: Slot,
-    slot: Slot,
-    hash: &SnapshotHash,
-    archive_format: ArchiveFormat,
-) -> PathBuf {
-    incremental_snapshot_archives_dir.as_ref().join(format!(
-        "incremental-snapshot-{}-{}-{}.{}",
-        base_slot,
-        slot,
-        hash.0,
-        archive_format.extension(),
-    ))
+    if let Some(chunk_number) = chunk_number {
+        base_dir.as_ref().join(format!(
+            "{}-{}-{}-{}.{}",
+            prefix,
+            slot,
+            hash.0,
+            chunk_number,
+            archive_format.extension(),
+        ))
+    } else {
+        base_dir.as_ref().join(format!(
+            "{}-{}-{}.{}",
+            prefix,
+            slot,
+            hash.0,
+            archive_format.extension(),
+        ))
+    }
 }
 
 /// Parse a full snapshot archive filename into its Slot, Hash, and Archive Format

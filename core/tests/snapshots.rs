@@ -148,11 +148,13 @@ fn restore_from_snapshot(
     let old_last_bank = old_bank_forks.get(old_last_slot).unwrap();
 
     let check_hash_calculation = false;
-    let full_snapshot_archive_path = snapshot_utils::build_full_snapshot_archive_path(
+    let full_snapshot_archive_path = snapshot_utils::build_snapshot_archive_path(
+        SnapshotType::FullSnapshot,
         full_snapshot_archives_dir,
         old_last_bank.slot(),
         &old_last_bank.get_snapshot_hash(),
         ArchiveFormat::TarBzip2,
+        None,
     );
     let full_snapshot_archive_info =
         FullSnapshotArchiveInfo::new_from_path(full_snapshot_archive_path).unwrap();
@@ -475,13 +477,15 @@ fn test_concurrent_snapshot_packaging(
             let options = CopyOptions::new();
             fs_extra::dir::copy(last_snapshot_path, &saved_snapshots_dir, &options).unwrap();
 
-            saved_archive_path = Some(snapshot_utils::build_full_snapshot_archive_path(
+            saved_archive_path = Some(snapshot_utils::build_snapshot_archive_path(
+                SnapshotType::FullSnapshot,
                 full_snapshot_archives_dir,
                 slot,
                 // this needs to match the hash value that we reserialize with later. It is complicated, so just use default.
                 // This hash value is just used to build the file name. Since this is mocked up test code, it is sufficient to pass default here.
                 &SnapshotHash(Hash::default()),
                 ArchiveFormat::TarBzip2,
+                None,
             ));
         }
     }

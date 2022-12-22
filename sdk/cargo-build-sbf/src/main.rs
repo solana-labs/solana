@@ -181,7 +181,7 @@ fn install_if_missing(
         if download_file_path.exists() {
             fs::remove_file(&download_file_path).map_err(|err| err.to_string())?;
         }
-        download_file(url.as_str(), &download_file_path, true, &mut None)?;
+        download_file(url.as_str(), &download_file_path, true, None, None)?;
         let zip = File::open(&download_file_path).map_err(|err| err.to_string())?;
         let tar = BzDecoder::new(BufReader::new(zip));
         let mut archive = Archive::new(tar);

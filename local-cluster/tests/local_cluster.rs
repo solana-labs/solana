@@ -499,7 +499,7 @@ fn test_snapshot_download() {
 
     // Download the snapshot, then boot a validator from it.
     download_snapshot_archive(
-        &cluster.entry_point_info.rpc,
+        &[cluster.entry_point_info.rpc],
         &validator_snapshot_test_config
             .validator_config
             .snapshot_config
@@ -522,7 +522,8 @@ fn test_snapshot_download() {
             .snapshot_config
             .maximum_incremental_snapshot_archives_to_retain,
         false,
-        &mut None,
+        None,
+        &mut 0,
     )
     .unwrap();
 
@@ -630,7 +631,7 @@ fn test_incremental_snapshot_download() {
 
     // Download the snapshots, then boot a validator from them.
     download_snapshot_archive(
-        &cluster.entry_point_info.rpc,
+        &[cluster.entry_point_info.rpc],
         &validator_snapshot_test_config
             .validator_config
             .snapshot_config
@@ -653,12 +654,13 @@ fn test_incremental_snapshot_download() {
             .snapshot_config
             .maximum_incremental_snapshot_archives_to_retain,
         false,
-        &mut None,
+        None,
+        &mut 0,
     )
     .unwrap();
 
     download_snapshot_archive(
-        &cluster.entry_point_info.rpc,
+        &[cluster.entry_point_info.rpc],
         &validator_snapshot_test_config
             .validator_config
             .snapshot_config
@@ -681,7 +683,8 @@ fn test_incremental_snapshot_download() {
             .snapshot_config
             .maximum_incremental_snapshot_archives_to_retain,
         false,
-        &mut None,
+        None,
+        &mut 0,
     )
     .unwrap();
 
@@ -806,7 +809,7 @@ fn test_incremental_snapshot_download_with_crossing_full_snapshot_interval_at_st
     // Download the snapshots, then boot a validator from them.
     info!("Downloading full snapshot to validator...");
     download_snapshot_archive(
-        &cluster.entry_point_info.rpc,
+        &[cluster.entry_point_info.rpc],
         validator_snapshot_test_config
             .full_snapshot_archives_dir
             .path(),
@@ -824,7 +827,8 @@ fn test_incremental_snapshot_download_with_crossing_full_snapshot_interval_at_st
             .snapshot_config
             .maximum_incremental_snapshot_archives_to_retain,
         false,
-        &mut None,
+        None,
+        &mut 0,
     )
     .unwrap();
     let downloaded_full_snapshot_archive = snapshot_utils::get_highest_full_snapshot_archive_info(
@@ -840,7 +844,7 @@ fn test_incremental_snapshot_download_with_crossing_full_snapshot_interval_at_st
 
     info!("Downloading incremental snapshot to validator...");
     download_snapshot_archive(
-        &cluster.entry_point_info.rpc,
+        &[cluster.entry_point_info.rpc],
         validator_snapshot_test_config
             .full_snapshot_archives_dir
             .path(),
@@ -861,7 +865,8 @@ fn test_incremental_snapshot_download_with_crossing_full_snapshot_interval_at_st
             .snapshot_config
             .maximum_incremental_snapshot_archives_to_retain,
         false,
-        &mut None,
+        None,
+        &mut 0,
     )
     .unwrap();
     let downloaded_incremental_snapshot_archive =
@@ -1253,13 +1258,15 @@ fn test_snapshot_restart_tower() {
     );
 
     // Copy archive to validator's snapshot output directory
-    let validator_archive_path = snapshot_utils::build_full_snapshot_archive_path(
+    let validator_archive_path = snapshot_utils::build_snapshot_archive_path(
+        SnapshotType::FullSnapshot,
         validator_snapshot_test_config
             .full_snapshot_archives_dir
             .into_path(),
         full_snapshot_archive_info.slot(),
         full_snapshot_archive_info.hash(),
         full_snapshot_archive_info.archive_format(),
+        None,
     );
     fs::hard_link(full_snapshot_archive_info.path(), validator_archive_path).unwrap();
 
@@ -1324,13 +1331,15 @@ fn test_snapshots_blockstore_floor() {
     };
 
     // Copy archive to validator's snapshot output directory
-    let validator_archive_path = snapshot_utils::build_full_snapshot_archive_path(
+    let validator_archive_path = snapshot_utils::build_snapshot_archive_path(
+        SnapshotType::FullSnapshot,
         validator_snapshot_test_config
             .full_snapshot_archives_dir
             .into_path(),
         archive_info.slot(),
         archive_info.hash(),
         ArchiveFormat::TarBzip2,
+        None,
     );
     fs::hard_link(archive_info.path(), validator_archive_path).unwrap();
     let slot_floor = archive_info.slot();

@@ -1586,9 +1586,9 @@ dependencies = [
 
 [[package]]
 name = "fastrand"
-version = "1.6.0"
+version = "1.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "779d043b6a0b90cc4c0ed7ee380a6504394cee7efd7db050e3774eee387324b2"
+checksum = "a7a407cfaa3385c4ae6b23e84623d48c2798d06e3e6a1878f7f59f17b3f86499"
 dependencies = [
  "instant",
 ]
@@ -2120,6 +2120,12 @@ dependencies = [
  "http",
  "pin-project-lite",
 ]
+
+[[package]]
+name = "http-range"
+version = "0.1.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "21dec9db110f5f872ed9699c3ecf50cf16f423502706ba5c72462e28d3157573"
 
 [[package]]
 name = "http-range-header"
@@ -5282,6 +5288,7 @@ dependencies = [
  "console",
  "indicatif",
  "log",
+ "rayon",
  "reqwest",
  "solana-runtime",
  "solana-sdk 1.15.0",
@@ -6157,6 +6164,7 @@ dependencies = [
  "bs58",
  "crossbeam-channel",
  "dashmap 4.0.2",
+ "http-range",
  "itertools",
  "jsonrpc-core",
  "jsonrpc-core-client",
@@ -6167,6 +6175,7 @@ dependencies = [
  "log",
  "rayon",
  "regex",
+ "reqwest",
  "serde",
  "serde_derive",
  "serde_json",

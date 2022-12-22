@@ -256,11 +256,13 @@ impl SnapshotPackage {
             SnapshotHash::new(&accounts_hash, snapshot_info.epoch_accounts_hash.as_ref());
         let mut snapshot_storages = accounts_package.snapshot_storages;
         let snapshot_archive_path = match snapshot_type {
-            SnapshotType::FullSnapshot => snapshot_utils::build_full_snapshot_archive_path(
+            SnapshotType::FullSnapshot => snapshot_utils::build_snapshot_archive_path(
+                snapshot_type,
                 snapshot_info.full_snapshot_archives_dir,
                 accounts_package.slot,
                 &snapshot_hash,
                 snapshot_info.archive_format,
+                None,
             ),
             SnapshotType::IncrementalSnapshot(incremental_snapshot_base_slot) => {
                 snapshot_storages.retain(|storages| {
@@ -275,12 +277,13 @@ impl SnapshotPackage {
                         .all(|entry| entry.slot() > incremental_snapshot_base_slot)),
                     "Incremental snapshot package must only contain storage entries where slot > incremental snapshot base slot (i.e. full snapshot slot)!"
                 );
-                snapshot_utils::build_incremental_snapshot_archive_path(
+                snapshot_utils::build_snapshot_archive_path(
+                    snapshot_type,
                     snapshot_info.incremental_snapshot_archives_dir,
-                    incremental_snapshot_base_slot,
                     accounts_package.slot,
                     &snapshot_hash,
                     snapshot_info.archive_format,
+                    None,
                 )
             }
         };

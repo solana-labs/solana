@@ -312,11 +312,13 @@ mod tests {
         let slot = 42;
         let hash = SnapshotHash(Hash::default());
         let archive_format = ArchiveFormat::TarBzip2;
-        let output_tar_path = snapshot_utils::build_full_snapshot_archive_path(
+        let output_tar_path = snapshot_utils::build_snapshot_archive_path(
+            SnapshotType::FullSnapshot,
             &full_snapshot_archives_dir,
             slot,
             &hash,
             archive_format,
+            None,
         );
         let snapshot_package = SnapshotPackage {
             snapshot_archive_info: SnapshotArchiveInfo {
