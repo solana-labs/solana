@@ -158,6 +158,16 @@ module.exports = {
               id: "developing/lookup-tables",
               label: "Address Lookup Tables",
             },
+            {
+              type: "doc",
+              id: "developing/intro/transaction_fees",
+              label: "Transaction Fees",
+            },
+            {
+              type: "doc",
+              id: "developing/transaction_confirmation",
+              label: "Transaction Confirmation",
+            },
           ],
         },
         {
