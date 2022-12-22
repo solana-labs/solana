@@ -3648,7 +3648,7 @@ pub mod rpc_full {
                     post_simulation_accounts: _,
                     units_consumed,
                     return_data,
-                } = preflight_bank.simulate_transaction(transaction)
+                } = preflight_bank.simulate_transaction(transaction, None)
                 {
                     match err {
                         TransactionError::BlockhashNotFound => {
@@ -3696,6 +3696,7 @@ pub mod rpc_full {
                 encoding,
                 accounts: config_accounts,
                 min_context_slot,
+                account_overrides,
             } = config.unwrap_or_default();
             let tx_encoding = encoding.unwrap_or(UiTransactionEncoding::Base58);
             let binary_encoding = tx_encoding.into_binary_encoding().ok_or_else(|| {
@@ -3733,7 +3734,7 @@ pub mod rpc_full {
                 post_simulation_accounts,
                 units_consumed,
                 return_data,
-            } = bank.simulate_transaction(transaction);
+            } = bank.simulate_transaction(transaction, account_overrides);
 
             let accounts = if let Some(config_accounts) = config_accounts {
                 let accounts_encoding = config_accounts
@@ -6079,6 +6080,70 @@ pub mod tests {
             "id": 1,
         });
 
+        let expected: Response =
+            serde_json::from_value(expected).expect("expected response deserialization");
+        let result: Response = serde_json::from_str(&res.expect("actual response"))
+            .expect("actual response deserialization");
+        assert_eq!(result, expected);
+
+        // With account overrides
+        let req = format!(
+            r#"{{"jsonrpc":"2.0",
+                 "id":1,
+                 "method":"simulateTransaction",
+                 "params":[
+                   "{}",
+                   {{
+                     "sigVerify": true,
+                     "accounts": {{
+                       "encoding": "jsonParsed",
+                       "addresses": ["{}", "{}"]
+                     }},
+                     "accountOverrides": {{
+                       "{}": {{
+                         "lamports": 10,
+                         "data": [],
+                         "owner": "11111111111111111111111111111111",
+                         "executable": false,
+                         "rentEpoch": 0
+                       }}
+                     }}
+                   }}
+                 ]
+            }}"#,
+            tx_serialized_encoded,
+            solana_sdk::pubkey::new_rand(),
+            bob_pubkey,
+            bob_pubkey,
+        );
+        let res = io.handle_request_sync(&req, meta.clone());
+        let expected = json!({
+            "jsonrpc": "2.0",
+            "result": {
+                "context": {"slot": 0, "apiVersion": RpcApiVersion::default()},
+                "value":{
+                    "accounts": [
+                        null,
+                        {
+                            "data": ["", "base64"],
+                            "executable": false,
+                            "owner": "11111111111111111111111111111111",
+                            "lamports": rent_exempt_amount + 10,
+                            "rentEpoch": 0,
+                            "space": 0,
+                        }
+                    ],
+                    "err":null,
+                    "logs":[
+                        "Program 11111111111111111111111111111111 invoke [1]",
+                        "Program 11111111111111111111111111111111 success"
+                    ],
+                    "returnData":null,
+                    "unitsConsumed":0
+                }
+            },
+            "id": 1,
+        });
         let expected: Response =
             serde_json::from_value(expected).expect("expected response deserialization");
         let result: Response = serde_json::from_str(&res.expect("actual response"))

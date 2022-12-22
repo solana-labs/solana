@@ -38,7 +38,6 @@ use solana_sdk::recent_blockhashes_account;
 pub use solana_sdk::reward_type::RewardType;
 use {
     crate::{
-        account_overrides::AccountOverrides,
         account_rent_state::RentState,
         accounts::{
             AccountAddressFilter, Accounts, LoadedTransaction, PubkeyAccountSlot,
@@ -104,6 +103,7 @@ use {
             create_account_shared_data_with_fields as create_account, from_account, Account,
             AccountSharedData, InheritableAccountFields, ReadableAccount, WritableAccount,
         },
+        account_overrides::AccountOverrides,
         account_utils::StateMut,
         bpf_loader, bpf_loader_deprecated,
         bpf_loader_upgradeable::{self, UpgradeableLoaderState},
@@ -3782,10 +3782,11 @@ impl Bank {
     pub fn simulate_transaction(
         &self,
         transaction: SanitizedTransaction,
+        additional_overrides: Option<AccountOverrides>,
     ) -> TransactionSimulationResult {
         assert!(self.is_frozen(), "simulation bank must be frozen");
 
-        self.simulate_transaction_unchecked(transaction)
+        self.simulate_transaction_unchecked(transaction, additional_overrides)
     }
 
     /// Run transactions against a bank without committing the results; does not check if the bank
@@ -3793,10 +3794,12 @@ impl Bank {
     pub fn simulate_transaction_unchecked(
         &self,
         transaction: SanitizedTransaction,
+        additional_overrides: Option<AccountOverrides>,
     ) -> TransactionSimulationResult {
         let account_keys = transaction.message().account_keys();
         let number_of_accounts = account_keys.len();
-        let account_overrides = self.get_account_overrides_for_simulation(&account_keys);
+        let account_overrides =
+            self.get_account_overrides_for_simulation(&account_keys, additional_overrides);
         let batch = self.prepare_simulation_batch(transaction);
         let mut timings = ExecuteTimings::default();
 
@@ -3862,8 +3865,12 @@ impl Bank {
         }
     }
 
-    fn get_account_overrides_for_simulation(&self, account_keys: &AccountKeys) -> AccountOverrides {
-        let mut account_overrides = AccountOverrides::default();
+    fn get_account_overrides_for_simulation(
+        &self,
+        account_keys: &AccountKeys,
+        additional_overrides: Option<AccountOverrides>,
+    ) -> AccountOverrides {
+        let mut account_overrides = additional_overrides.unwrap_or_default();
         let slot_history_id = sysvar::slot_history::id();
         if account_keys.iter().any(|pubkey| *pubkey == slot_history_id) {
             let current_account = self.get_account_with_fixed_root(&slot_history_id);

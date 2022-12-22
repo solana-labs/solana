@@ -2,6 +2,7 @@ use {
     crate::filter::RpcFilterType,
     solana_account_decoder::{UiAccountEncoding, UiDataSliceConfig},
     solana_sdk::{
+        account_overrides::AccountOverrides,
         clock::{Epoch, Slot},
         commitment_config::{CommitmentConfig, CommitmentLevel},
     },
@@ -44,6 +45,7 @@ pub struct RpcSimulateTransactionConfig {
     pub encoding: Option<UiTransactionEncoding>,
     pub accounts: Option<RpcSimulateTransactionAccountsConfig>,
     pub min_context_slot: Option<Slot>,
+    pub account_overrides: Option<AccountOverrides>,
 }
 
 #[derive(Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize)]

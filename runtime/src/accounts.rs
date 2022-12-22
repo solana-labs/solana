@@ -1,6 +1,5 @@
 use {
     crate::{
-        account_overrides::AccountOverrides,
         account_rent_state::{check_rent_state_with_account, RentState},
         accounts_db::{
             AccountShrinkThreshold, AccountsAddRootTiming, AccountsDb, AccountsDbConfig,
@@ -28,6 +27,7 @@ use {
     solana_program_runtime::compute_budget::{self, ComputeBudget},
     solana_sdk::{
         account::{Account, AccountSharedData, ReadableAccount, WritableAccount},
+        account_overrides::AccountOverrides,
         account_utils::StateMut,
         bpf_loader_upgradeable::{self, UpgradeableLoaderState},
         clock::{BankId, Slot},
