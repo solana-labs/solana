@@ -555,7 +555,7 @@ pub mod enable_program_redeployment_cooldown {
 }
 
 pub mod commission_updates_only_allowed_in_first_half_of_epoch {
-    solana_sdk::declare_id!("ComffCcTMthDAx5AbFA4LeRzGRUB4Z1wNhXz354zvAmT");
+    solana_sdk::declare_id!("noRuG2kzACwgaY7TVmLRnUNPLKNVQE1fb7X55YWBehp");
 }
 
 lazy_static! {
