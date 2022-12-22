@@ -1,6 +1,6 @@
 ---
 title: "Transaction Journey"
-description: ""
+description: "Explore how each transaction starts with the user, processed by validators, and is finally included in a block and propagated to the rest of the network."
 ---
 
 In this article we’ll explore a Solana transaction's journey through the network. We’ll discuss how each transaction starts with the user, gets processed by the validators, and is finally included in a block and propagated to the rest of the network.

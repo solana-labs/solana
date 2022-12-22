@@ -1,7 +1,7 @@
 ---
 title: Transaction Processing Unit (TPU)
 sidebar_label: TPU
-description: ""
+description: "A Solana validator's Transaction Processing unit receives transactions from the client, performs validation, and eventually propagates them to the network."
 ---
 
 Within the Solana validators, the [Transaction Processing Unit (TPU)](./tpu.md) is the logic that is responsible for receiving transactions from the client and eventually forming [blocks](./../terminology.md#block) that get broadcast to the network.
@@ -15,8 +15,7 @@ After an RPC node receives a transaction, it looks up the [leader schedule](./..
 The TPU processes transactions in the following four distinct phases:
 
 - [Fetch stage](#fetch-stage): allocates packet memory and reads the packet data from
-  the network socket and applies some coalescing of packets received at
-  the same time.
+  the network socket and applies some coalescing of packets received at the same time.
 
 - [SigVerify stage](#signature-verification-stage): de-duplicates packets and applies some load-shedding
   to remove excessive packets before then filtering packets with invalid
