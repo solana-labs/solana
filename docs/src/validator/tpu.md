@@ -26,9 +26,9 @@ The TPU processes transactions in the following four distinct phases:
   received. Once it detects the node is the block producer it processes
   held packets and newly received packets with a Bank at the tip slot.
 
-- [Broadcast stage](#broadcast-stage): receives the valid transactions formed into Entry's from
-  banking stage and packages them into shreds to send to network peers through
-  the turbine tree structure. Serializes, signs, and generates erasure codes
+- [Broadcast stage](#broadcast-stage): receives the valid transactions formed into [entries](./../terminology.md#entry)
+  from banking stage and packages them into shreds to send to network peers through
+  the turbine tree structure. In the end, this stage serializes, signs, and generates erasure codes
   before sending the packets to the appropriate network peer.
 
 ## Fetch Stage
