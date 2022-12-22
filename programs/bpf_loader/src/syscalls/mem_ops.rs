@@ -156,9 +156,7 @@ declare_syscall!(
             invoke_context.get_check_aligned(),
             invoke_context.get_check_size(),
         )?;
-        for val in s.iter_mut().take(n as usize) {
-            *val = c as u8;
-        }
+        s.fill(c as u8);
         Ok(0)
     }
 );
