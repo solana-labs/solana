@@ -6,6 +6,7 @@ use {
         nonblocking::tpu_connection::NonblockingConnection, tpu_connection::BlockingConnection,
     },
     indexmap::map::{Entry, IndexMap},
+    quinn::Endpoint,
     rand::{thread_rng, Rng},
     solana_measure::measure::Measure,
     solana_quic_client::nonblocking::quic_client::{
@@ -40,6 +41,10 @@ pub struct ConnectionCache {
     use_quic: bool,
     maybe_staked_nodes: Option<Arc<RwLock<StakedNodes>>>,
     maybe_client_pubkey: Option<Pubkey>,
+
+    // The optional specified endpoint for the quic based client connections
+    // If not specified, the connection cache we create as needed.
+    client_endpoint: Option<Endpoint>,
 }
 
 /// Models the pool of connections
@@ -69,11 +74,21 @@ impl ConnectionPool {
 
 impl ConnectionCache {
     pub fn new(connection_pool_size: usize) -> Self {
+        Self::_new_with_endpoint(connection_pool_size, None)
+    }
+
+    /// Create a connection cache with a specific quic client endpoint.
+    pub fn new_with_endpoint(connection_pool_size: usize, client_endpoint: Endpoint) -> Self {
+        Self::_new_with_endpoint(connection_pool_size, Some(client_endpoint))
+    }
+
+    fn _new_with_endpoint(connection_pool_size: usize, client_endpoint: Option<Endpoint>) -> Self {
         // The minimum pool size is 1.
         let connection_pool_size = 1.max(connection_pool_size);
         Self {
             use_quic: true,
             connection_pool_size,
+            client_endpoint,
             ..Self::default()
         }
     }
@@ -118,7 +133,7 @@ impl ConnectionCache {
         if self.use_quic() && !force_use_udp {
             Some(Arc::new(QuicLazyInitializedEndpoint::new(
                 self.client_certificate.clone(),
-                None,
+                self.client_endpoint.as_ref().cloned(),
             )))
         } else {
             None
@@ -377,6 +392,7 @@ impl Default for ConnectionCache {
             use_quic: DEFAULT_TPU_USE_QUIC,
             maybe_staked_nodes: None,
             maybe_client_pubkey: None,
+            client_endpoint: None,
         }
     }
 }
@@ -445,6 +461,7 @@ mod tests {
             connection_cache::{ConnectionCache, MAX_CONNECTIONS},
             tpu_connection::TpuConnection,
         },
+        crossbeam_channel::unbounded,
         rand::{Rng, SeedableRng},
         rand_chacha::ChaChaRng,
         solana_sdk::{
@@ -453,13 +470,33 @@ mod tests {
                 QUIC_MAX_UNSTAKED_CONCURRENT_STREAMS, QUIC_MIN_STAKED_CONCURRENT_STREAMS,
                 QUIC_PORT_OFFSET, QUIC_TOTAL_STAKED_CONCURRENT_STREAMS,
             },
+            signature::Keypair,
         },
-        solana_streamer::streamer::StakedNodes,
+        solana_streamer::{quic::StreamStats, streamer::StakedNodes},
         std::{
-            net::{IpAddr, Ipv4Addr, SocketAddr},
-            sync::{Arc, RwLock},
+            net::{IpAddr, Ipv4Addr, SocketAddr, UdpSocket},
+            sync::{
+                atomic::{AtomicBool, Ordering},
+                Arc, RwLock,
+            },
         },
     };
+
+    fn server_args() -> (
+        UdpSocket,
+        Arc<AtomicBool>,
+        Keypair,
+        IpAddr,
+        Arc<StreamStats>,
+    ) {
+        (
+            UdpSocket::bind("127.0.0.1:0").unwrap(),
+            Arc::new(AtomicBool::new(false)),
+            Keypair::new(),
+            "127.0.0.1".parse().unwrap(),
+            Arc::new(StreamStats::default()),
+        )
+    }
 
     fn get_addr(rng: &mut ChaChaRng) -> SocketAddr {
         let a = rng.gen_range(1, 255);
@@ -599,5 +636,55 @@ mod tests {
         // and is the same as the input port (falling back on UDP)
         assert!(conn.tpu_addr().port() != 0);
         assert!(conn.tpu_addr().port() == port);
+    }
+
+    #[test]
+    fn test_connection_with_specified_client_endpoint() {
+        let port = u16::MAX - QUIC_PORT_OFFSET + 1;
+        assert!(port.checked_add(QUIC_PORT_OFFSET).is_none());
+
+        // Start a response receiver:
+        let (
+            response_recv_socket,
+            response_recv_exit,
+            keypair2,
+            response_recv_ip,
+            response_recv_stats,
+        ) = server_args();
+        let (sender2, _receiver2) = unbounded();
+
+        let staked_nodes = Arc::new(RwLock::new(StakedNodes::default()));
+
+        let (response_recv_endpoint, response_recv_thread) = solana_streamer::quic::spawn_server(
+            response_recv_socket,
+            &keypair2,
+            response_recv_ip,
+            sender2,
+            response_recv_exit.clone(),
+            1,
+            staked_nodes,
+            10,
+            10,
+            response_recv_stats,
+            1000,
+        )
+        .unwrap();
+
+        let connection_cache = ConnectionCache::new_with_endpoint(1, response_recv_endpoint);
+
+        // server port 1:
+        let port1 = 9001;
+        let addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), port1);
+        let conn = connection_cache.get_connection(&addr);
+        assert_eq!(conn.tpu_addr().port(), port1 + QUIC_PORT_OFFSET);
+
+        // server port 2:
+        let port2 = 9002;
+        let addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), port2);
+        let conn = connection_cache.get_connection(&addr);
+        assert_eq!(conn.tpu_addr().port(), port2 + QUIC_PORT_OFFSET);
+
+        response_recv_exit.store(true, Ordering::Relaxed);
+        response_recv_thread.join().unwrap();
     }
 }
