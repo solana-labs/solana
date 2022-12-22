@@ -528,8 +528,13 @@ fn test_slot_subscription() {
 async fn test_slot_subscription_async() {
     let sync_service = Arc::new(AtomicU64::new(0));
     let sync_client = Arc::clone(&sync_service);
+
     fn wait_until(atomic: &Arc<AtomicU64>, value: u64) {
+        let now = Instant::now();
         while atomic.load(Ordering::Relaxed) != value {
+            if now.elapsed() > Duration::from_secs(5) {
+                panic!("wait for too long")
+            }
             sleep(Duration::from_millis(1))
         }
     }
@@ -605,12 +610,16 @@ async fn test_slot_subscription_async() {
     unsubscribe().await;
 }
 
-fn check_server_is_ready_or_panic(socket_addr: &SocketAddr, retry: u8, sleep_duration: Duration) {
+fn check_server_is_ready_or_panic(
+    socket_addr: &SocketAddr,
+    mut retry: u8,
+    sleep_duration: Duration,
+) {
     loop {
         if retry == 0 {
             break;
         } else {
-            retry.checked_sub(1).unwrap();
+            retry = retry.checked_sub(1).unwrap();
         }
 
         if connect(format!("ws://{socket_addr}")).is_ok() {
