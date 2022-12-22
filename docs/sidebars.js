@@ -242,6 +242,11 @@ module.exports = {
         },
         {
           type: "doc",
+          id: "developing/on-chain-programs/limitations",
+          label: "Limitations",
+        },
+        {
+          type: "doc",
           id: "developing/on-chain-programs/faq",
           label: "FAQ",
         },
