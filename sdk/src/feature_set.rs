@@ -554,7 +554,7 @@ pub mod enable_program_redeployment_cooldown {
     solana_sdk::declare_id!("J4HFT8usBxpcF63y46t1upYobJgChmKyZPm5uTBRg25Z");
 }
 
-pub mod prevent_commission_update_in_second_half_of_epoch {
+pub mod commission_updates_only_allowed_in_first_half_of_epoch {
     // This is a feature-proposal *feature id*.  The feature keypair address is `ComffCcTMthDAx5AbFA4LeRzGRUB4Z1wNhXz354zvAmT`.
     solana_sdk::declare_id!("8K7PhS5tViXeTXn3ycyWakme98UwfFJYPPcijtSHWsyi");
 }
@@ -692,7 +692,7 @@ lazy_static! {
         (cap_transaction_accounts_data_size::id(), "cap transaction accounts data size up to its compute unit limits #27839"),
         (enable_alt_bn128_syscall::id(), "add alt_bn128 syscalls #27961"),
         (enable_program_redeployment_cooldown::id(), "enable program redeployment cooldown #29135"),
-        (prevent_commission_update_in_second_half_of_epoch::id(), "prevent updating validator commission in the second half of an epoch"),
+        (commission_updates_only_allowed_in_first_half_of_epoch::id(), "validator commission updates are only allowed in the first half of an epoch #29362"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()

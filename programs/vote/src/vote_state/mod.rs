@@ -1039,7 +1039,7 @@ mod tests {
         crate::vote_state,
         solana_sdk::{
             account::AccountSharedData, account_utils::StateMut, clock::DEFAULT_SLOTS_PER_EPOCH,
-            epoch_schedule::DEFAULT_FIRST_NORMAL_SLOT, hash::hash,
+            hash::hash,
         },
         std::cell::RefCell,
         test_case::test_case,
@@ -2978,16 +2978,42 @@ mod tests {
     }
 
     #[test_case(0, true; "first slot")]
-    #[test_case(DEFAULT_FIRST_NORMAL_SLOT - 1, true; "right before first normal slot")]
-    #[test_case(DEFAULT_FIRST_NORMAL_SLOT, true; "first normal slot")]
-    #[test_case(DEFAULT_FIRST_NORMAL_SLOT + DEFAULT_SLOTS_PER_EPOCH / 2, true; "halfway first normal epoch")]
-    #[test_case(DEFAULT_FIRST_NORMAL_SLOT + DEFAULT_SLOTS_PER_EPOCH / 2 + 1, false; "halfway first normal epoch plus one")]
-    #[test_case(DEFAULT_FIRST_NORMAL_SLOT + DEFAULT_SLOTS_PER_EPOCH - 1, false; "last slot in first normal epoch")]
-    #[test_case(DEFAULT_FIRST_NORMAL_SLOT + DEFAULT_SLOTS_PER_EPOCH, true; "first slot in second normal epoch")]
+    #[test_case(DEFAULT_SLOTS_PER_EPOCH / 2, true; "halfway through epoch")]
+    #[test_case(DEFAULT_SLOTS_PER_EPOCH / 2 + 1, false; "halfway through epoch plus one")]
+    #[test_case(DEFAULT_SLOTS_PER_EPOCH - 1, false; "last slot in epoch")]
+    #[test_case(DEFAULT_SLOTS_PER_EPOCH, true; "first slot in second epoch")]
     fn test_epoch_half_check(slot: Slot, expected_allowed: bool) {
-        let epoch_schedule = EpochSchedule::default();
+        let epoch_schedule = EpochSchedule::without_warmup();
         assert_eq!(
             is_commission_update_allowed(slot, &epoch_schedule),
+            expected_allowed
+        );
+    }
+
+    #[test]
+    fn test_warmup_epoch_half_check_with_warmup() {
+        let epoch_schedule = EpochSchedule::default();
+        let first_normal_slot = epoch_schedule.first_normal_slot;
+        // first slot works
+        assert!(is_commission_update_allowed(0, &epoch_schedule));
+        // right before first normal slot works, since all warmup slots allow
+        // commission updates
+        assert!(is_commission_update_allowed(
+            first_normal_slot - 1,
+            &epoch_schedule
+        ));
+    }
+
+    #[test_case(0, true; "first slot")]
+    #[test_case(DEFAULT_SLOTS_PER_EPOCH / 2, true; "halfway through epoch")]
+    #[test_case(DEFAULT_SLOTS_PER_EPOCH / 2 + 1, false; "halfway through epoch plus one")]
+    #[test_case(DEFAULT_SLOTS_PER_EPOCH - 1, false; "last slot in epoch")]
+    #[test_case(DEFAULT_SLOTS_PER_EPOCH, true; "first slot in second epoch")]
+    fn test_epoch_half_check_with_warmup(slot: Slot, expected_allowed: bool) {
+        let epoch_schedule = EpochSchedule::default();
+        let first_normal_slot = epoch_schedule.first_normal_slot;
+        assert_eq!(
+            is_commission_update_allowed(first_normal_slot + slot, &epoch_schedule),
             expected_allowed
         );
     }

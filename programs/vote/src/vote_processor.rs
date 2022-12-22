@@ -135,10 +135,9 @@ pub fn process_instruction(
             vote_state::update_validator_identity(&mut me, node_pubkey, &signers)
         }
         VoteInstruction::UpdateCommission(commission) => {
-            if invoke_context
-                .feature_set
-                .is_active(&feature_set::prevent_commission_update_in_second_half_of_epoch::id())
-            {
+            if invoke_context.feature_set.is_active(
+                &feature_set::commission_updates_only_allowed_in_first_half_of_epoch::id(),
+            ) {
                 let sysvar_cache = invoke_context.get_sysvar_cache();
                 let epoch_schedule = sysvar_cache.get_epoch_schedule()?;
                 let clock = sysvar_cache.get_clock()?;

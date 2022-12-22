@@ -28,12 +28,6 @@ pub const MAX_LEADER_SCHEDULE_EPOCH_OFFSET: u64 = 3;
 /// Based on `MAX_LOCKOUT_HISTORY` from `vote_program`.
 pub const MINIMUM_SLOTS_PER_EPOCH: u64 = 32;
 
-/// The default first normal slot on the epoch schedule, given warmup
-pub const DEFAULT_FIRST_NORMAL_SLOT: u64 = first_normal_epoch_and_slot(DEFAULT_SLOTS_PER_EPOCH).1;
-
-#[cfg(test)]
-static_assertions::const_assert_eq!(DEFAULT_FIRST_NORMAL_SLOT, 524_256);
-
 #[repr(C)]
 #[derive(Debug, CloneZeroed, Copy, PartialEq, Eq, Deserialize, Serialize, AbiExample)]
 #[serde(rename_all = "camelCase")]
@@ -69,18 +63,6 @@ impl Default for EpochSchedule {
     }
 }
 
-const fn first_normal_epoch_and_slot(slots_per_epoch: u64) -> (u64, u64) {
-    let next_power_of_two = slots_per_epoch.next_power_of_two();
-    let log2_slots_per_epoch = next_power_of_two
-        .trailing_zeros()
-        .saturating_sub(MINIMUM_SLOTS_PER_EPOCH.trailing_zeros());
-
-    (
-        log2_slots_per_epoch as u64, // safe cast from u32
-        next_power_of_two.saturating_sub(MINIMUM_SLOTS_PER_EPOCH),
-    )
-}
-
 impl EpochSchedule {
     pub fn new(slots_per_epoch: u64) -> Self {
         Self::custom(slots_per_epoch, slots_per_epoch, true)
@@ -95,7 +77,15 @@ impl EpochSchedule {
     pub fn custom(slots_per_epoch: u64, leader_schedule_slot_offset: u64, warmup: bool) -> Self {
         assert!(slots_per_epoch >= MINIMUM_SLOTS_PER_EPOCH);
         let (first_normal_epoch, first_normal_slot) = if warmup {
-            first_normal_epoch_and_slot(slots_per_epoch)
+            let next_power_of_two = slots_per_epoch.next_power_of_two();
+            let log2_slots_per_epoch = next_power_of_two
+                .trailing_zeros()
+                .saturating_sub(MINIMUM_SLOTS_PER_EPOCH.trailing_zeros());
+
+            (
+                u64::from(log2_slots_per_epoch),
+                next_power_of_two.saturating_sub(MINIMUM_SLOTS_PER_EPOCH),
+            )
         } else {
             (0, 0)
         };
