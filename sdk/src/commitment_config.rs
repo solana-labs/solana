@@ -1,3 +1,5 @@
+//! Definitions of commitment levels.
+
 #![allow(deprecated)]
 #![cfg(feature = "full")]
 
