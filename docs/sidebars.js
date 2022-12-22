@@ -148,6 +148,11 @@ module.exports = {
             },
             {
               type: "doc",
+              id: "developing/programming-model/transaction-journey",
+              label: "Transaction Journey",
+            },
+            {
+              type: "doc",
               id: "developing/versioned-transactions",
               label: "Versioned Transactions",
             },
@@ -387,6 +392,7 @@ module.exports = {
           label: "Overview",
           id: "validator/anatomy",
         },
+        "validator/quic",
         "validator/tpu",
         "validator/tvu",
         "validator/blockstore",
