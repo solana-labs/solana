@@ -4228,10 +4228,9 @@ fn main() {
                             }
                             bounds
                         };
-                        
+
                         // Print collected data
                         println!("{}", output_format.formatted_string(&slot_bounds));
-
                     }
                     Err(err) => {
                         eprintln!("Unable to read the Ledger: {:?}", err);

@@ -59,10 +59,18 @@ impl Display for SlotBounds<'_> {
         }
 
         if let Some(rooted) = &self.roots {
-            writeln!(f, "  with {:?} rooted slots from {:?} to {:?}", rooted.total, rooted.first, rooted.last)?;
+            writeln!(
+                f,
+                "  with {:?} rooted slots from {:?} to {:?}",
+                rooted.total, rooted.first, rooted.last
+            )?;
 
             if let Some(num_after_last_root) = rooted.num_after_last_root {
-                writeln!(f, "  and {:?} slots past the last root", num_after_last_root)?;
+                writeln!(
+                    f,
+                    "  and {:?} slots past the last root",
+                    num_after_last_root
+                )?;
             }
         } else {
             writeln!(f, "  with no rooted slots")?;
