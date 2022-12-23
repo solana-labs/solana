@@ -22,6 +22,7 @@ use {
     solana_ledger::{
         blockstore::{Blockstore, SignatureInfosForAddress},
         blockstore_db::BlockstoreError,
+        blockstore_meta::{PerfSample, PerfSampleV1, PerfSampleV2},
         get_tmp_ledger_path,
         leader_schedule_cache::LeaderScheduleCache,
     },
@@ -3437,13 +3438,8 @@ pub mod rpc_full {
                     warn!("get_recent_performance_samples failed: {:?}", err);
                     Error::invalid_request()
                 })?
-                .iter()
-                .map(|(slot, sample)| RpcPerfSample {
-                    slot: *slot,
-                    num_transactions: sample.num_transactions,
-                    num_slots: sample.num_slots,
-                    sample_period_secs: sample.sample_period_secs,
-                })
+                .into_iter()
+                .map(|(slot, sample)| rpc_perf_sample_from_perf_sample(slot, sample))
                 .collect())
         }
 
@@ -4012,6 +4008,32 @@ pub mod rpc_full {
                 .collect::<Result<Vec<_>>>()?;
             meta.get_recent_prioritization_fees(pubkeys)
         }
+    }
+}
+
+fn rpc_perf_sample_from_perf_sample(slot: u64, sample: PerfSample) -> RpcPerfSample {
+    match sample {
+        PerfSample::V1(PerfSampleV1 {
+            num_transactions,
+            num_slots,
+            sample_period_secs,
+        }) => RpcPerfSample {
+            slot,
+            num_transactions,
+            num_slots,
+            sample_period_secs,
+        },
+        PerfSample::V2(PerfSampleV2 {
+            num_transactions,
+            num_non_vote_transactions: _,
+            num_slots,
+            sample_period_secs,
+        }) => RpcPerfSample {
+            slot,
+            num_transactions,
+            num_slots,
+            sample_period_secs,
+        },
     }
 }
 
@@ -4602,7 +4624,7 @@ pub mod tests {
         solana_entry::entry::next_versioned_entry,
         solana_gossip::socketaddr,
         solana_ledger::{
-            blockstore_meta::PerfSample,
+            blockstore_meta::PerfSampleV2,
             blockstore_processor::fill_blockstore_slot_with_ticks,
             genesis_utils::{create_genesis_config, GenesisConfigInfo},
         },
@@ -5120,13 +5142,15 @@ pub mod tests {
         let slot = 0;
         let num_slots = 1;
         let num_transactions = 4;
+        let num_non_vote_transactions = 1;
         let sample_period_secs = 60;
         rpc.blockstore
             .write_perf_sample(
                 slot,
-                &PerfSample {
+                &PerfSampleV2 {
                     num_slots,
                     num_transactions,
+                    num_non_vote_transactions,
                     sample_period_secs,
                 },
             )
