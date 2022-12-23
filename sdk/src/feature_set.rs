@@ -516,6 +516,29 @@ pub mod check_syscall_outputs_do_not_overlap {
     solana_sdk::declare_id!("3uRVPBpyEJRo1emLCrq38eLRFGcu6uKSpUXqGvU8T7SZ");
 }
 
+<<<<<<< HEAD
+=======
+pub mod enable_bpf_loader_set_authority_checked_ix {
+    solana_sdk::declare_id!("5x3825XS7M2A3Ekbn5VGGkvFoAg5qrRWkTrY4bARP1GL");
+}
+
+pub mod cap_transaction_accounts_data_size {
+    solana_sdk::declare_id!("DdLwVYuvDz26JohmgSbA7mjpJFgX5zP2dkp8qsF2C33V");
+}
+
+pub mod enable_alt_bn128_syscall {
+    solana_sdk::declare_id!("A16q37opZdQMCbe5qJ6xpBB9usykfv8jZaMkxvZQi4GJ");
+}
+
+pub mod enable_program_redeployment_cooldown {
+    solana_sdk::declare_id!("J4HFT8usBxpcF63y46t1upYobJgChmKyZPm5uTBRg25Z");
+}
+
+pub mod commission_updates_only_allowed_in_first_half_of_epoch {
+    solana_sdk::declare_id!("noRuG2kzACwgaY7TVmLRnUNPLKNVQE1fb7X55YWBehp");
+}
+
+>>>>>>> 968b15849 (vote: Prevent commission update in the second half of epochs (#29362))
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -639,6 +662,14 @@ lazy_static! {
         (return_none_for_zero_lamport_accounts::id(), "return none for zero lamport accounts #27800"),
         (increase_tx_account_lock_limit::id(), "increase tx account lock limit to 128 #27241"),
         (check_syscall_outputs_do_not_overlap::id(), "check syscall outputs do_not overlap #28600"),
+<<<<<<< HEAD
+=======
+        (enable_bpf_loader_set_authority_checked_ix::id(), "enable bpf upgradeable loader SetAuthorityChecked instruction #28424"),
+        (cap_transaction_accounts_data_size::id(), "cap transaction accounts data size up to its compute unit limits #27839"),
+        (enable_alt_bn128_syscall::id(), "add alt_bn128 syscalls #27961"),
+        (enable_program_redeployment_cooldown::id(), "enable program redeployment cooldown #29135"),
+        (commission_updates_only_allowed_in_first_half_of_epoch::id(), "validator commission updates are only allowed in the first half of an epoch #29362"),
+>>>>>>> 968b15849 (vote: Prevent commission update in the second half of epochs (#29362))
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()
