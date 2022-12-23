@@ -926,6 +926,11 @@ impl ServeRepair {
             nonce,
             identity_keypair,
         )?;
+        info!(
+            "Sending repair request from {} for {:#?}",
+            identity_keypair.pubkey(),
+            repair_request
+        );
         Ok((addr, out))
     }
 
