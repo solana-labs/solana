@@ -30,7 +30,7 @@ use {
         clock::{Slot, MAX_PROCESSING_AGE},
         hash::Hash,
         pubkey::Pubkey,
-        signature::Signer,
+        signature::{Keypair, Signer},
         vote::state::VoteStateUpdate,
     },
     solana_streamer::socket::SocketAddrSpace,
@@ -484,6 +484,21 @@ fn restart_dup_validator(
     }
 }
 
+
+// We want to simulate the following:
+//   /--- 1 --- 3 (duplicate block)
+// 0
+//   \--- 2
+//
+// 1. > DUPLICATE_THRESHOLD of the nodes vote on some version of the the duplicate block 3,
+// but don't immediately duplicate confirm so they remove 3 from fork choice and reset PoH back to 1.
+// 2. All the votes on 3 don't land because there are no further blocks building off 3.
+// 3. Some < SWITCHING_THRESHOLD of nodes vote on 2, making it the heaviest fork because no votes on 3 landed
+// 4. Nodes then see duplicate confirmation on 3. 
+// 5. Unless somebody builds off of 3 to include the duplicate confirmed votes, 2 will still be the heaviest.
+// However, because 2 has < SWITCHING_THRESHOLD of the votes, people who voted on 3 can't switch, leading to a
+// stall 
+
 #[test]
 #[serial]
 #[allow(unused_attributes)]
@@ -503,8 +518,10 @@ fn test_duplicate_shreds_switch_failure() {
         .map(|(kp, _)| kp.pubkey())
         .collect::<Vec<_>>();
 
-    // Create 3 nodes:
-    // 1) One with > DUPLICATE_THRESHOLD but < 2/3+ supermajority
+    // Create 4 nodes:
+    // 1) Two nodes that sum to > DUPLICATE_THRESHOLD but < 2/3+ supermajority. It's important no
+    // one of them individually has > DUPLICATE_THRESHOLD to avoid duplicate confirming their own blocks
+    // immediately upon voting
     // 2) One with < SWITCHING_THRESHOLD so that validator from 1) can't switch to it
     // 3) One bad leader to make duplicate slots
     let total_stake = 100 * DEFAULT_NODE_STAKE;

@@ -455,7 +455,7 @@ impl Blockstore {
 
     pub fn is_connected(&self, slot: Slot) -> bool {
         if let Ok(Some(meta)) = self.meta_cf.get(slot) {
-            return meta.is_connected;
+            return meta.is_connected();
         }
         false
     }
