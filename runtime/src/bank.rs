@@ -1337,9 +1337,10 @@ impl VoteReward {
 
     pub fn reward(&self) -> i64 {
         if let Some(info) = &self.vote_reward_info {
-            info.lamports;
+            info.lamports
+        } else {
+            0
         }
-        0
     }
 }
 
