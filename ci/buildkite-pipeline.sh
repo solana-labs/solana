@@ -236,6 +236,10 @@ EOF
              ^programs/ \
              ^sdk/ \
              ^scripts/build-downstream-projects.sh \
+             cargo-build-bpf$ \
+             cargo-test-bpf$ \
+             cargo-build-sbf$ \
+             cargo-test-sbf$ \
       ; then
     cat >> "$output_file" <<"EOF"
   - command: "scripts/build-downstream-projects.sh"
