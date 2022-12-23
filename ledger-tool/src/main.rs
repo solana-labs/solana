@@ -4182,27 +4182,23 @@ fn main() {
                         let all = matches.is_present("all");
 
                         let slots: Vec<_> = metas.map(|(slot, _)| slot).collect();
-                        let mut slot_bounds = SlotBounds::default();
 
-                        if slots.is_empty() {
-                            match output_format {
-                                OutputFormat::Json | OutputFormat::JsonCompact => {
-                                    println!("{}", output_format.formatted_string(&slot_bounds))
-                                }
-                                _ => println!("Ledger is empty"),
-                            }
+                        let slot_bounds = if slots.is_empty() {
+                            SlotBounds::default()
                         } else {
-                            let first = slots.first().unwrap();
-                            let last = slots.last().unwrap_or(first);
-
-                            slot_bounds.total_slots = Some(SlotInfo {
-                                start: *first,
-                                end: *last,
-                                total: slots.len(),
+                            
+                            // Collect info about slot bounds
+                            let mut bounds = SlotBounds {
+                                slots: Some(SlotInfo {
+                                    total: slots.len(),
+                                    first: Some(*slots.first().unwrap()),
+                                    last: Some(*slots.last().unwrap()),
+                                    ..Default::default()
+                                }),
                                 ..Default::default()
-                            });
+                            };
 
-                            // Rooted Slots
+                            // Consider also rooted slots, if present
                             if let Ok(rooted) = blockstore.rooted_slot_iterator(0) {
                                 let mut first_rooted = 0;
                                 let mut last_rooted = 0;
@@ -4214,23 +4210,63 @@ fn main() {
                                     last_rooted = slot;
                                     total_rooted += 1;
                                 }
-                                let mut count_past_root = 0;
-                                for slot in slots.iter().rev() {
-                                    if *slot > last_rooted {
-                                        count_past_root += 1;
-                                    } else {
-                                        break;
-                                    }
-                                }
 
-                                slot_bounds.rooted_slots = Some(SlotInfo {
-                                    start: first_rooted,
-                                    end: last_rooted,
+                                let count_past_root = slots.iter()
+                                    .rev()
+                                    .take_while(|slot| *slot > &last_rooted)
+                                    .count();
+
+                                bounds.roots = Some(SlotInfo {
                                     total: total_rooted,
-                                    from_last: Some(count_past_root),
+                                    first: Some(first_rooted),
+                                    last: Some(last_rooted),
+                                    num_after_last_root: Some(count_past_root)
                                 });
                             }
-                        }
+                            bounds
+                        };
+
+                        // if slots.is_empty() {
+                        //     match output_format {
+                        //         OutputFormat::Json | OutputFormat::JsonCompact => {
+                        //             println!("{}", output_format.formatted_string(&slot_bounds))
+                        //         }
+                        //         _ => println!("Ledger is empty"),
+                        //     }
+                        // } else {
+                        //     slot_bounds.total_slots = Some(SlotInfo {
+                        //         start: *slots.first().unwrap(),
+                        //         end: *slots.last().unwrap(),
+                        //         total: slots.len(),
+                        //         ..Default::default()
+                        //     });
+                        
+                        //     // Rooted Slots
+                        //     if let Ok(rooted) = blockstore.rooted_slot_iterator(0) {
+                        //         let mut first_rooted = 0;
+                        //         let mut last_rooted = 0;
+                        //         let mut total_rooted = 0;
+                        //         for (i, slot) in rooted.into_iter().enumerate() {
+                        //             if i == 0 {
+                        //                 first_rooted = slot;
+                        //             }
+                        //             last_rooted = slot;
+                        //             total_rooted += 1;
+                        //         }
+
+                        //         let count_past_root = slots.iter()
+                        //             .rev()
+                        //             .take_while(|slot| *slot > &last_rooted)
+                        //             .count();
+
+                        //         slot_bounds.rooted_slots = Some(SlotInfo {
+                        //             start: first_rooted,
+                        //             end: last_rooted,
+                        //             total: total_rooted,
+                        //             from_last: Some(count_past_root),
+                        //         });
+                        //     }
+                        // }
 
                         // Print collected data
                         match output_format {
@@ -4240,11 +4276,11 @@ fn main() {
                             _ => {
                                 // Simple text print in other cases.
 
-                                if let Some(total_slots) = slot_bounds.total_slots {
-                                    if total_slots.start != total_slots.end {
+                                if let Some(total_slots) = slot_bounds.slots {
+                                    if total_slots.first != total_slots.last {
                                         println!(
                                             "Ledger has data for {:?} slots {:?} to {:?}",
-                                            total_slots.total, total_slots.start, total_slots.end
+                                            total_slots.total, total_slots.first, total_slots.last
                                         );
                                         if all {
                                             println!("Non-empty slots: {:?}", slots);
@@ -4252,20 +4288,20 @@ fn main() {
                                     } else {
                                         println!(
                                             "Ledger has data for slot {:?}",
-                                            total_slots.start
+                                            total_slots.first
                                         );
                                     }
 
-                                    if let Some(rooted_slots) = slot_bounds.rooted_slots {
+                                    if let Some(rooted_slots) = slot_bounds.roots {
                                         println!(
                                             "  with {:?} rooted slots from {:?} to {:?}",
                                             rooted_slots.total,
-                                            rooted_slots.start,
-                                            rooted_slots.end
+                                            rooted_slots.first,
+                                            rooted_slots.last
                                         );
                                         println!(
                                             "  and {:?} slots past the last root",
-                                            rooted_slots.from_last
+                                            rooted_slots.num_after_last_root
                                         )
                                     } else {
                                         println!("  with no rooted slots")
