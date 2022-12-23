@@ -554,6 +554,10 @@ pub mod enable_program_redeployment_cooldown {
     solana_sdk::declare_id!("J4HFT8usBxpcF63y46t1upYobJgChmKyZPm5uTBRg25Z");
 }
 
+pub mod commission_updates_only_allowed_in_first_half_of_epoch {
+    solana_sdk::declare_id!("noRuG2kzACwgaY7TVmLRnUNPLKNVQE1fb7X55YWBehp");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -687,6 +691,7 @@ lazy_static! {
         (cap_transaction_accounts_data_size::id(), "cap transaction accounts data size up to its compute unit limits #27839"),
         (enable_alt_bn128_syscall::id(), "add alt_bn128 syscalls #27961"),
         (enable_program_redeployment_cooldown::id(), "enable program redeployment cooldown #29135"),
+        (commission_updates_only_allowed_in_first_half_of_epoch::id(), "validator commission updates are only allowed in the first half of an epoch #29362"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()

@@ -1,7 +1,7 @@
 //! Vote program processor
 
 use {
-    crate::vote_state,
+    crate::{vote_error::VoteError, vote_state},
     log::*,
     solana_program::vote::{instruction::VoteInstruction, program::id, state::VoteAuthorize},
     solana_program_runtime::{
@@ -135,6 +135,16 @@ pub fn process_instruction(
             vote_state::update_validator_identity(&mut me, node_pubkey, &signers)
         }
         VoteInstruction::UpdateCommission(commission) => {
+            if invoke_context.feature_set.is_active(
+                &feature_set::commission_updates_only_allowed_in_first_half_of_epoch::id(),
+            ) {
+                let sysvar_cache = invoke_context.get_sysvar_cache();
+                let epoch_schedule = sysvar_cache.get_epoch_schedule()?;
+                let clock = sysvar_cache.get_clock()?;
+                if !vote_state::is_commission_update_allowed(clock.slot, &epoch_schedule) {
+                    return Err(VoteError::CommissionUpdateTooLate.into());
+                }
+            }
             vote_state::update_commission(&mut me, commission, &signers)
         }
         VoteInstruction::Vote(vote) | VoteInstruction::VoteSwitch(vote, _) => {
@@ -276,7 +286,10 @@ mod tests {
             hash::Hash,
             instruction::{AccountMeta, Instruction},
             pubkey::Pubkey,
-            sysvar::{self, clock::Clock, rent::Rent, slot_hashes::SlotHashes},
+            sysvar::{
+                self, clock::Clock, epoch_schedule::EpochSchedule, rent::Rent,
+                slot_hashes::SlotHashes,
+            },
         },
         std::{collections::HashSet, str::FromStr},
     };
@@ -344,6 +357,7 @@ mod tests {
             .map(|meta| meta.pubkey)
             .collect();
         pubkeys.insert(sysvar::clock::id());
+        pubkeys.insert(sysvar::epoch_schedule::id());
         pubkeys.insert(sysvar::rent::id());
         pubkeys.insert(sysvar::slot_hashes::id());
         let transaction_accounts: Vec<_> = pubkeys
@@ -353,6 +367,10 @@ mod tests {
                     *pubkey,
                     if sysvar::clock::check_id(pubkey) {
                         account::create_account_shared_data_for_test(&Clock::default())
+                    } else if sysvar::epoch_schedule::check_id(pubkey) {
+                        account::create_account_shared_data_for_test(
+                            &EpochSchedule::without_warmup(),
+                        )
                     } else if sysvar::slot_hashes::check_id(pubkey) {
                         account::create_account_shared_data_for_test(&SlotHashes::default())
                     } else if sysvar::rent::check_id(pubkey) {
@@ -667,6 +685,15 @@ mod tests {
         let transaction_accounts = vec![
             (vote_pubkey, vote_account),
             (authorized_withdrawer, AccountSharedData::default()),
+            // Add the sysvar accounts so they're in the cache for mock processing
+            (
+                sysvar::clock::id(),
+                account::create_account_shared_data_for_test(&Clock::default()),
+            ),
+            (
+                sysvar::epoch_schedule::id(),
+                account::create_account_shared_data_for_test(&EpochSchedule::without_warmup()),
+            ),
         ];
         let mut instruction_accounts = vec![
             AccountMeta {
