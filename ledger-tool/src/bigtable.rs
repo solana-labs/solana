@@ -38,7 +38,7 @@ use {
 
 async fn upload(
     blockstore: Blockstore,
-    mut starting_slot: Slot,
+    starting_slot: Option<Slot>,
     ending_slot: Option<Slot>,
     force_reupload: bool,
     config: solana_storage_bigtable::LedgerStorageConfig,
@@ -52,6 +52,15 @@ async fn upload(
         ..ConfirmedBlockUploadConfig::default()
     };
     let blockstore = Arc::new(blockstore);
+
+    let mut starting_slot = match starting_slot {
+        Some(slot) => slot,
+        // It is possible that the slot returned below could get purged by
+        // LedgerCleanupService before upload_confirmed_blocks() receives the
+        // value. This is ok because upload_confirmed_blocks() doesn't need
+        // the exact slot to be in ledger, the slot is only used as a bound.
+        None => blockstore.get_first_available_block()?,
+    };
 
     let ending_slot = ending_slot.unwrap_or_else(|| blockstore.last_root());
 
@@ -640,7 +649,7 @@ pub fn bigtable_process_command(
 
     let future = match (subcommand, sub_matches) {
         ("upload", Some(arg_matches)) => {
-            let starting_slot = value_t!(arg_matches, "starting_slot", Slot).unwrap_or(0);
+            let starting_slot = value_t!(arg_matches, "starting_slot", Slot).ok();
             let ending_slot = value_t!(arg_matches, "ending_slot", Slot).ok();
             let force_reupload = arg_matches.is_present("force_reupload");
             let blockstore = crate::open_blockstore(
