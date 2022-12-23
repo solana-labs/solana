@@ -402,6 +402,7 @@ module.exports = {
           label: "Overview",
           id: "validator/anatomy",
         },
+        "validator/quic",
         "validator/tpu",
         "validator/tvu",
         "validator/blockstore",
