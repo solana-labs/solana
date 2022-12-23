@@ -41,7 +41,7 @@ Due to [IP spoofing](https://www.cloudflare.com/learning/ddos/glossary/ip-spoofi
 
 In the past, bots have spammed validators with almost 400k transactions per second (show in the graph below) while trying to outbid one another on an anticipated token sale and unwittingly executing a distributed denial of service on the network.
 
-![Solana nodes receiving almost 400k transactions per second](/img/nodes-400k-tps-spike.png)
+![Solana nodes receiving almost 400k transactions per second](/img/nodes-400k-tps-spike.jpeg)
 
 ## Solana upgraded to QUIC
 
