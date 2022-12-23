@@ -41,6 +41,9 @@ struct BlockstoreLoadStats {
     pub elapsed: Duration,
 }
 
+/// Uploads a range of blocks from a Blockstore to bigtable LedgerStorage
+/// Returns the Slot of the last block checked. If no blocks in the range `[staring_slot,
+/// ending_slot]` are found in Blockstore, this value is equal to `ending_slot`.
 pub async fn upload_confirmed_blocks(
     blockstore: Arc<Blockstore>,
     bigtable: solana_storage_bigtable::LedgerStorage,
@@ -61,7 +64,8 @@ pub async fn upload_confirmed_blocks(
         .collect();
 
     if blockstore_slots.is_empty() {
-        return Err(format!("Ledger has no slots from {starting_slot} to {ending_slot:?}").into());
+        warn!("Ledger has no slots from {starting_slot} to {ending_slot:?}");
+        return Ok(ending_slot);
     }
 
     let first_blockstore_slot = blockstore_slots.first().unwrap();
