@@ -38,6 +38,7 @@ pub mod leader_slot_banking_stage_timing_metrics;
 pub mod ledger_cleanup_service;
 pub mod ledger_metric_report_service;
 pub mod multi_iterator_scanner;
+pub mod next_leader;
 pub mod optimistic_confirmation_verifier;
 pub mod outstanding_requests;
 pub mod packet_deserializer;
