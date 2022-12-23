@@ -51,7 +51,7 @@ impl Display for SlotBounds<'_> {
                 &self.slots.total, &self.slots.first, &self.slots.last
             )?;
 
-            if let Some(all_slots) = &self.all_slots {
+            if let Some(all_slots) = self.all_slots {
                 writeln!(f, "Non-empty slots: {:?}", all_slots)?;
             }
         } else {
