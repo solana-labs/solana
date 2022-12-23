@@ -6518,6 +6518,7 @@ dependencies = [
  "solana-metrics",
  "solana-program-runtime",
  "solana-sdk 1.14.12",
+ "test-case",
  "thiserror",
 ]
 

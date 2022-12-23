@@ -27,6 +27,7 @@ thiserror = "1.0"
 itertools = "0.10.3"
 rand = "0.7.0"
 solana-logger = { path = "../../logger", version = "=1.14.12" }
+test-case = "2.1.0"
 
 [build-dependencies]
 rustc_version = "0.4"
