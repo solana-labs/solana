@@ -141,7 +141,7 @@ pub struct ReplicaBlockInfoV2<'a> {
     pub rewards: &'a [Reward],
     pub block_time: Option<UnixTimestamp>,
     pub block_height: Option<u64>,
-    pub transaction_entries_count: u64,
+    pub executed_transaction_count: u64,
 }
 
 pub enum ReplicaBlockInfoVersions<'a> {

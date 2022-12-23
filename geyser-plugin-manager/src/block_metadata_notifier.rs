@@ -28,7 +28,7 @@ impl BlockMetadataNotifier for BlockMetadataNotifierImpl {
         rewards: &RwLock<Vec<(Pubkey, RewardInfo)>>,
         block_time: Option<UnixTimestamp>,
         block_height: Option<u64>,
-        transaction_entries_count: u64,
+        executed_transaction_count: u64,
     ) {
         let mut plugin_manager = self.plugin_manager.write().unwrap();
         if plugin_manager.plugins.is_empty() {
@@ -44,7 +44,7 @@ impl BlockMetadataNotifier for BlockMetadataNotifierImpl {
                 &rewards,
                 block_time,
                 block_height,
-                transaction_entries_count,
+                executed_transaction_count,
             );
             let block_info = ReplicaBlockInfoVersions::V0_0_2(&block_info);
             match plugin.notify_block_metadata(block_info) {
@@ -96,7 +96,7 @@ impl BlockMetadataNotifierImpl {
         rewards: &'a [Reward],
         block_time: Option<UnixTimestamp>,
         block_height: Option<u64>,
-        transaction_entries_count: u64,
+        executed_transaction_count: u64,
     ) -> ReplicaBlockInfoV2<'a> {
         ReplicaBlockInfoV2 {
             slot,
@@ -104,7 +104,7 @@ impl BlockMetadataNotifierImpl {
             rewards,
             block_time,
             block_height,
-            transaction_entries_count,
+            executed_transaction_count,
         }
     }
 
