@@ -27,7 +27,6 @@ use {
         DashMap,
     },
     log::*,
-    rand::{thread_rng, Rng},
     solana_address_lookup_table_program::{error::AddressLookupError, state::AddressLookupTable},
     solana_program_runtime::compute_budget::ComputeBudget,
     solana_sdk::{
@@ -1459,36 +1458,6 @@ fn prepare_if_nonce_account(
         }
     } else {
         false
-    }
-}
-
-/// A set of utility functions used for testing and benchmarking
-pub mod test_utils {
-    use super::*;
-
-    pub fn create_test_accounts(
-        accounts: &Accounts,
-        pubkeys: &mut Vec<Pubkey>,
-        num: usize,
-        slot: Slot,
-    ) {
-        for t in 0..num {
-            let pubkey = solana_sdk::pubkey::new_rand();
-            let account =
-                AccountSharedData::new((t + 1) as u64, 0, AccountSharedData::default().owner());
-            accounts.store_slow_uncached(slot, &pubkey, &account);
-            pubkeys.push(pubkey);
-        }
-    }
-
-    // Only used by bench, not safe to call otherwise accounts can conflict with the
-    // accounts cache!
-    pub fn update_accounts_bench(accounts: &Accounts, pubkeys: &[Pubkey], slot: u64) {
-        for pubkey in pubkeys {
-            let amount = thread_rng().gen_range(0, 10);
-            let account = AccountSharedData::new(amount, 0, AccountSharedData::default().owner());
-            accounts.store_slow_uncached(slot, pubkey, &account);
-        }
     }
 }
 

@@ -18,6 +18,7 @@ futures-util = "0.3.21"
 indexmap = "1.9.1"
 indicatif = { version = "0.17.1" }
 log = "0.4.17"
+quinn = "0.8.4"
 rand = "0.7.0"
 rayon = "1.5.3"
 solana-measure = { path = "../measure", version = "=1.15.0" }
@@ -37,6 +38,7 @@ thiserror = "1.0"
 tokio = { version = "1", features = ["full"] }
 
 [dev-dependencies]
+crossbeam-channel = "0.5"
 rand_chacha = "0.2.2"
 solana-logger = { path = "../logger", version = "=1.15.0" }
 

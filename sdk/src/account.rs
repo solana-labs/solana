@@ -1,3 +1,5 @@
+//! The Solana [`Account`] type.
+
 use {
     crate::{
         clock::{Epoch, INITIAL_RENT_EPOCH},
