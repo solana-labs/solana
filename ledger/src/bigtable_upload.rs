@@ -64,7 +64,7 @@ pub async fn upload_confirmed_blocks(
         .collect();
 
     if blockstore_slots.is_empty() {
-        info!("Ledger has no slots from {starting_slot} to {ending_slot:?}");
+        warn!("Ledger has no slots from {starting_slot} to {ending_slot:?}");
         return Ok(ending_slot);
     }
 
