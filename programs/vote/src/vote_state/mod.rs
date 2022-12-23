@@ -1668,16 +1668,12 @@ mod tests {
     use {
         super::*,
         crate::vote_state,
-<<<<<<< HEAD
         itertools::Itertools,
         rand::Rng,
-        solana_sdk::{account::AccountSharedData, account_utils::StateMut, hash::hash},
-=======
         solana_sdk::{
             account::AccountSharedData, account_utils::StateMut, clock::DEFAULT_SLOTS_PER_EPOCH,
             hash::hash,
         },
->>>>>>> 968b15849 (vote: Prevent commission update in the second half of epochs (#29362))
         std::cell::RefCell,
         test_case::test_case,
     };
@@ -4053,7 +4049,6 @@ mod tests {
         );
     }
 
-<<<<<<< HEAD
     #[test]
     fn test_serde_compact_vote_state_update() {
         let mut rng = rand::thread_rng();
@@ -4098,7 +4093,8 @@ mod tests {
         let vote = VoteInstruction::UpdateVoteStateSwitch(vote_state_update, hash);
         let bytes = bincode::serialize(&vote).unwrap();
         assert_eq!(vote, bincode::deserialize(&bytes).unwrap());
-=======
+    }
+
     #[test_case(0, true; "first slot")]
     #[test_case(DEFAULT_SLOTS_PER_EPOCH / 2, true; "halfway through epoch")]
     #[test_case(DEFAULT_SLOTS_PER_EPOCH / 2 + 1, false; "halfway through epoch plus one")]
@@ -4138,6 +4134,5 @@ mod tests {
             is_commission_update_allowed(first_normal_slot + slot, &epoch_schedule),
             expected_allowed
         );
->>>>>>> 968b15849 (vote: Prevent commission update in the second half of epochs (#29362))
     }
 }

@@ -1,15 +1,12 @@
 //! Vote program processor
 
 use {
-<<<<<<< HEAD
     crate::{
         id,
+        vote_error::VoteError,
         vote_instruction::VoteInstruction,
         vote_state::{self, VoteAuthorize},
     },
-=======
-    crate::{vote_error::VoteError, vote_state},
->>>>>>> 968b15849 (vote: Prevent commission update in the second half of epochs (#29362))
     log::*,
     solana_program_runtime::{
         invoke_context::InvokeContext, sysvar_cache::get_sysvar_with_account_check,

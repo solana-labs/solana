@@ -6517,12 +6517,8 @@ dependencies = [
  "solana-logger 1.14.12",
  "solana-metrics",
  "solana-program-runtime",
-<<<<<<< HEAD
  "solana-sdk 1.14.12",
-=======
- "solana-sdk 1.15.0",
  "test-case",
->>>>>>> 968b15849 (vote: Prevent commission update in the second half of epochs (#29362))
  "thiserror",
 ]
 
