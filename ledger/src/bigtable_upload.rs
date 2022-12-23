@@ -54,13 +54,16 @@ pub async fn upload_confirmed_blocks(
 ) -> Result<Slot, Box<dyn std::error::Error>> {
     let mut measure = Measure::start("entire upload");
 
-    info!("Loading ledger slots starting at {}...", starting_slot);
+    info!(
+        "Loading ledger slots from {} to {}",
+        starting_slot, ending_slot
+    );
     let blockstore_slots: Vec<_> = blockstore
         .rooted_slot_iterator(starting_slot)
         .map_err(|err| {
             format!("Failed to load entries starting from slot {starting_slot}: {err:?}")
         })?
-        .map_while(|slot| (slot <= ending_slot).then_some(slot))
+        .take_while(|slot| *slot <= ending_slot)
         .collect();
 
     if blockstore_slots.is_empty() {
@@ -68,8 +71,8 @@ pub async fn upload_confirmed_blocks(
         return Ok(ending_slot);
     }
 
-    let first_blockstore_slot = blockstore_slots.first().unwrap();
-    let last_blockstore_slot = blockstore_slots.last().unwrap();
+    let first_blockstore_slot = *blockstore_slots.first().unwrap();
+    let last_blockstore_slot = *blockstore_slots.last().unwrap();
     info!(
         "Found {} slots in the range ({}, {})",
         blockstore_slots.len(),
@@ -85,8 +88,8 @@ pub async fn upload_confirmed_blocks(
             first_blockstore_slot, last_blockstore_slot
         );
 
-        let mut start_slot = *first_blockstore_slot;
-        while start_slot <= *last_blockstore_slot {
+        let mut start_slot = first_blockstore_slot;
+        while start_slot <= last_blockstore_slot {
             let mut next_bigtable_slots = loop {
                 let num_bigtable_blocks = min(1000, config.max_num_slots_to_check * 2);
                 match bigtable
@@ -109,7 +112,7 @@ pub async fn upload_confirmed_blocks(
         }
         bigtable_slots
             .into_iter()
-            .filter(|slot| slot <= last_blockstore_slot)
+            .filter(|slot| *slot <= last_blockstore_slot)
             .collect::<Vec<_>>()
     } else {
         Vec::new()
@@ -118,7 +121,7 @@ pub async fn upload_confirmed_blocks(
     // The blocks that still need to be uploaded is the difference between what's already in the
     // bigtable and what's in blockstore...
     let blocks_to_upload = {
-        let blockstore_slots = blockstore_slots.iter().cloned().collect::<HashSet<_>>();
+        let blockstore_slots = blockstore_slots.into_iter().collect::<HashSet<_>>();
         let bigtable_slots = bigtable_slots.into_iter().collect::<HashSet<_>>();
 
         let mut blocks_to_upload = blockstore_slots
@@ -131,8 +134,11 @@ pub async fn upload_confirmed_blocks(
     };
 
     if blocks_to_upload.is_empty() {
-        info!("No blocks need to be uploaded to bigtable");
-        return Ok(*last_blockstore_slot);
+        info!(
+            "No blocks between {} and {} need to be uploaded to bigtable",
+            starting_slot, ending_slot
+        );
+        return Ok(last_blockstore_slot);
     }
     let last_slot = *blocks_to_upload.last().unwrap();
     info!(
