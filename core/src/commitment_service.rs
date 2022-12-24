@@ -506,7 +506,8 @@ mod tests {
 
         // Fill bank_forks with banks with votes landing in the next slot
         // Create enough banks such that vote account will root slots 0 and 1
-        for x in 0..32 {
+        let mut reward_account_lock_hit = false;
+        for x in 0..33 {
             let previous_bank = bank_forks.get(x).unwrap();
             let bank = Bank::new_from_parent(&previous_bank, &Pubkey::default(), x + 1);
             let vote = vote_transaction::new_vote_transaction(
@@ -532,9 +533,11 @@ mod tests {
                 // This should result in an error for `LockedRewardAccountsDuringRewardInterval`
                 let r = bank.process_transaction(&tx);
                 assert!(r == Err(LockedRewardAccountsDuringRewardInterval));
+                reward_account_lock_hit = true;
             }
             bank_forks.insert(bank);
         }
+        assert!(reward_account_lock_hit);
     }
 
     #[test]
