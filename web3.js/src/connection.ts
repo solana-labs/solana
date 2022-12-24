@@ -794,7 +794,7 @@ export type InflationRate = {
   foundation: number;
   /** epoch for which these values are valid */
   epoch: number;
-}
+};
 
 /**
  * Expected JSON RPC response for the "getInflationRate" message
@@ -804,7 +804,7 @@ const GetInflationRateResult = pick({
   validator: number(),
   foundation: number(),
   epoch: number(),
-})
+});
 
 /**
  * Information about the current epoch
@@ -4279,11 +4279,11 @@ export class Connection {
     }
     return res.result;
   }
-  
+
   /**
    * Fetch the specific inflation values for the current epoch
    */
- async getInflationRate(): Promise<InflationRate> {
+  async getInflationRate(): Promise<InflationRate> {
     const unsafeRes = await this._rpcRequest('getInflationRate', []);
     const res = create(unsafeRes, GetInflationRateRpcResult);
     if ('error' in res) {

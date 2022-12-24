@@ -826,7 +826,7 @@ describe('Connection', function () {
   });
 
   it('get inflation rate', async () => {
-     await mockRpcResponse({
+    await mockRpcResponse({
       method: 'getInflationRate',
       params: [],
       value: {
