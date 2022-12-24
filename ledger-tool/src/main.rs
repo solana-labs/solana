@@ -24,10 +24,7 @@ use {
         },
     },
     solana_cli_output::{CliAccount, CliAccountNewConfig, OutputFormat},
-    solana_core::{
-        system_monitor_service::{SystemMonitorService, SystemMonitorStatsReportConfig},
-        validator::move_and_async_delete_path,
-    },
+    solana_core::system_monitor_service::{SystemMonitorService, SystemMonitorStatsReportConfig},
     solana_entry::entry::Entry,
     solana_geyser_plugin_manager::geyser_plugin_service::GeyserPluginService,
     solana_ledger::{
@@ -63,8 +60,8 @@ use {
         snapshot_hash::StartingSnapshotHashes,
         snapshot_minimizer::SnapshotMinimizer,
         snapshot_utils::{
-            self, ArchiveFormat, SnapshotVersion, DEFAULT_ARCHIVE_COMPRESSION,
-            SUPPORTED_ARCHIVE_COMPRESSION,
+            self, move_and_async_delete_path, ArchiveFormat, SnapshotVersion,
+            DEFAULT_ARCHIVE_COMPRESSION, SUPPORTED_ARCHIVE_COMPRESSION,
         },
     },
     solana_sdk::{
