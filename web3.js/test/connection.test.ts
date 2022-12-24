@@ -39,6 +39,7 @@ import {
   Context,
   EpochInfo,
   InflationGovernor,
+  InflationRate,
   Logs,
   SignatureResult,
   SlotInfo,
@@ -821,6 +822,32 @@ describe('Connection', function () {
       );
 
       expect(inflationReward).to.have.lengthOf(2);
+    }
+  });
+
+  it('get inflation rate', async () => {
+    await mockRpcResponse({
+      method: 'getInflationRate',
+      params: [],
+      value: {
+        total: 0.08,
+        validator: 0.076,
+        foundation: 0.004,
+        epoch: 1,
+      },
+    });
+
+    const inflation = await connection.getInflationRate();
+    const inflationKeys: (keyof InflationRate)[] = [
+      'total',
+      'validator',
+      'foundation',
+      'epoch',
+    ];
+
+    for (const key of inflationKeys) {
+      expect(inflation).to.have.property(key);
+      expect(inflation[key]).to.be.greaterThan(0);
     }
   });
 
