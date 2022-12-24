@@ -49,6 +49,7 @@ fn clean_target(crate_name: &str) {
     fs::remove_dir_all(target).expect("Failed to remove target dir");
 }
 
+#[ignore]
 #[test]
 #[serial]
 fn test_build() {
@@ -56,6 +57,7 @@ fn test_build() {
     clean_target("noop");
 }
 
+#[ignore]
 #[test]
 #[serial]
 fn test_dump() {
@@ -77,6 +79,7 @@ fn test_dump() {
     clean_target("noop");
 }
 
+#[ignore]
 #[test]
 #[serial]
 fn test_out_dir() {
@@ -88,6 +91,7 @@ fn test_out_dir() {
     clean_target("noop");
 }
 
+#[ignore]
 #[test]
 #[serial]
 fn test_generate_child_script_on_failure() {
@@ -103,6 +107,7 @@ fn test_generate_child_script_on_failure() {
     clean_target("fail");
 }
 
+#[ignore]
 #[test]
 #[serial]
 fn test_sbfv2() {
