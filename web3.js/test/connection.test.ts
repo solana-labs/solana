@@ -847,7 +847,11 @@ describe('Connection', function () {
 
     for (const key of inflationKeys) {
       expect(inflation).to.have.property(key);
-      expect(inflation[key]).to.be.greaterThan(0);
+      if (mockServer) {
+        expect(inflation[key]).to.be.greaterThan(0);
+      } else {
+        expect(inflation[key]).to.be.at.least(0);
+      }
     }
   });
 
