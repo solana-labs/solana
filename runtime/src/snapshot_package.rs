@@ -3,7 +3,7 @@ use {
         accounts::Accounts,
         accounts_db::AccountStorageEntry,
         accounts_hash::AccountsHash,
-        bank::{Bank, BankSlotDelta},
+        bank::Bank,
         epoch_accounts_hash::EpochAccountsHash,
         rent_collector::RentCollector,
         snapshot_archive_info::{SnapshotArchiveInfo, SnapshotArchiveInfoGetter},
@@ -59,7 +59,6 @@ impl AccountsPackage {
         bank: &Bank,
         bank_snapshot_info: &BankSnapshotInfo,
         bank_snapshots_dir: impl AsRef<Path>,
-        slot_deltas: Vec<BankSlotDelta>,
         full_snapshot_archives_dir: impl AsRef<Path>,
         incremental_snapshot_archives_dir: impl AsRef<Path>,
         snapshot_storages: Vec<Arc<AccountStorageEntry>>,
@@ -98,10 +97,15 @@ impl AccountsPackage {
                 &bank_snapshot_info.snapshot_path,
                 snapshot_hardlink_dir.join(file_name),
             )?;
+            let status_cache_file_name =
+                snapshot_utils::path_to_file_name_str(&bank_snapshot_info.status_cache_path)?;
+            fs::hard_link(
+                &bank_snapshot_info.status_cache_path,
+                snapshot_links.path().join(status_cache_file_name),
+            )?;
         }
 
         let snapshot_info = SupplementalSnapshotInfo {
-            slot_deltas,
             snapshot_links,
             archive_format,
             snapshot_version,
@@ -174,7 +178,6 @@ impl AccountsPackage {
             epoch_schedule: EpochSchedule::default(),
             rent_collector: RentCollector::default(),
             snapshot_info: Some(SupplementalSnapshotInfo {
-                slot_deltas: Vec::default(),
                 snapshot_links: TempDir::new().unwrap(),
                 archive_format: ArchiveFormat::Tar,
                 snapshot_version: SnapshotVersion::default(),
@@ -215,7 +218,6 @@ impl std::fmt::Debug for AccountsPackage {
 
 /// Supplemental information needed for snapshots
 pub struct SupplementalSnapshotInfo {
-    pub slot_deltas: Vec<BankSlotDelta>,
     pub snapshot_links: TempDir,
     pub archive_format: ArchiveFormat,
     pub snapshot_version: SnapshotVersion,
@@ -237,7 +239,6 @@ pub enum AccountsPackageType {
 pub struct SnapshotPackage {
     pub snapshot_archive_info: SnapshotArchiveInfo,
     pub block_height: Slot,
-    pub slot_deltas: Vec<BankSlotDelta>,
     pub snapshot_links: TempDir,
     pub snapshot_storages: Vec<Arc<AccountStorageEntry>>,
     pub snapshot_version: SnapshotVersion,
@@ -286,7 +287,6 @@ impl SnapshotPackage {
                 archive_format: snapshot_info.archive_format,
             },
             block_height: accounts_package.block_height,
-            slot_deltas: snapshot_info.slot_deltas,
             snapshot_links: snapshot_info.snapshot_links,
             snapshot_storages,
             snapshot_version: snapshot_info.snapshot_version,

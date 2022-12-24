@@ -140,6 +140,8 @@ pub struct BankSnapshotInfo {
     pub snapshot_path: PathBuf,
     /// Type of the snapshot
     pub snapshot_type: BankSnapshotType,
+    /// Path to the status cache (transaction history)
+    pub status_cache_path: PathBuf,
 }
 
 impl PartialOrd for BankSnapshotInfo {
@@ -396,15 +398,6 @@ pub fn archive_snapshot_package(
         snapshot_package.slot()
     );
 
-    serialize_status_cache(
-        snapshot_package.slot(),
-        &snapshot_package.slot_deltas,
-        &snapshot_package
-            .snapshot_links
-            .path()
-            .join(SNAPSHOT_STATUS_CACHE_FILENAME),
-    )?;
-
     let mut timer = Measure::start("snapshot_package-package_snapshots");
     let tar_dir = snapshot_package
         .path()
@@ -607,6 +600,8 @@ pub fn get_bank_snapshots(bank_snapshots_dir: impl AsRef<Path>) -> Vec<BankSnaps
                         slot,
                         snapshot_path: bank_snapshot_pre_path,
                         snapshot_type: BankSnapshotType::Pre,
+                        status_cache_path: bank_snapshot_outer_dir
+                            .join(SNAPSHOT_STATUS_CACHE_FILENAME),
                     });
                 }
 
@@ -615,6 +610,8 @@ pub fn get_bank_snapshots(bank_snapshots_dir: impl AsRef<Path>) -> Vec<BankSnaps
                         slot,
                         snapshot_path: bank_snapshot_post_path,
                         snapshot_type: BankSnapshotType::Post,
+                        status_cache_path: bank_snapshot_outer_dir
+                            .join(SNAPSHOT_STATUS_CACHE_FILENAME),
                     });
                 }
             }),
@@ -872,15 +869,16 @@ pub fn add_bank_snapshot(
     bank: &Bank,
     snapshot_storages: &[Arc<AccountStorageEntry>],
     snapshot_version: SnapshotVersion,
+    slot_deltas: Vec<BankSlotDelta>,
 ) -> Result<BankSnapshotInfo> {
     let mut add_snapshot_time = Measure::start("add-snapshot-ms");
     let slot = bank.slot();
     // bank_snapshots_dir/slot
-    let bank_snapshots_dir = get_bank_snapshots_dir(bank_snapshots_dir, slot);
-    fs::create_dir_all(&bank_snapshots_dir)?;
+    let bank_snapshot_dir = get_bank_snapshots_dir(bank_snapshots_dir, slot);
+    fs::create_dir_all(&bank_snapshot_dir)?;
 
     // the bank snapshot is stored as bank_snapshots_dir/slot/slot.BANK_SNAPSHOT_PRE_FILENAME_EXTENSION
-    let mut bank_snapshot_path = bank_snapshots_dir.join(get_snapshot_file_name(slot));
+    let mut bank_snapshot_path = bank_snapshot_dir.join(get_snapshot_file_name(slot));
     bank_snapshot_path.set_extension(BANK_SNAPSHOT_PRE_FILENAME_EXTENSION);
 
     info!(
@@ -907,6 +905,9 @@ pub fn add_bank_snapshot(
     bank_serialize.stop();
     add_snapshot_time.stop();
 
+    let status_cache_path = bank_snapshot_dir.join(SNAPSHOT_STATUS_CACHE_FILENAME);
+    serialize_status_cache(slot, &slot_deltas, &status_cache_path)?;
+
     // Monitor sizes because they're capped to MAX_SNAPSHOT_DATA_FILE_SIZE
     datapoint_info!(
         "snapshot-bank-file",
@@ -928,6 +929,7 @@ pub fn add_bank_snapshot(
         slot,
         snapshot_path: bank_snapshot_path,
         snapshot_type: BankSnapshotType::Pre,
+        status_cache_path,
     })
 }
 
@@ -2253,8 +2255,14 @@ pub fn bank_to_full_snapshot_archive(
 
     let temp_dir = tempfile::tempdir_in(bank_snapshots_dir)?;
     let snapshot_storages = bank.get_snapshot_storages(None);
-    let bank_snapshot_info =
-        add_bank_snapshot(&temp_dir, bank, &snapshot_storages, snapshot_version)?;
+    let slot_deltas = bank.status_cache.read().unwrap().root_slot_deltas();
+    let bank_snapshot_info = add_bank_snapshot(
+        &temp_dir,
+        bank,
+        &snapshot_storages,
+        snapshot_version,
+        slot_deltas,
+    )?;
 
     package_and_archive_full_snapshot(
         bank,
@@ -2300,8 +2308,14 @@ pub fn bank_to_incremental_snapshot_archive(
 
     let temp_dir = tempfile::tempdir_in(bank_snapshots_dir)?;
     let snapshot_storages = bank.get_snapshot_storages(Some(full_snapshot_slot));
-    let bank_snapshot_info =
-        add_bank_snapshot(&temp_dir, bank, &snapshot_storages, snapshot_version)?;
+    let slot_deltas = bank.status_cache.read().unwrap().root_slot_deltas();
+    let bank_snapshot_info = add_bank_snapshot(
+        &temp_dir,
+        bank,
+        &snapshot_storages,
+        snapshot_version,
+        slot_deltas,
+    )?;
 
     package_and_archive_incremental_snapshot(
         bank,
@@ -2332,13 +2346,11 @@ pub fn package_and_archive_full_snapshot(
     maximum_full_snapshot_archives_to_retain: usize,
     maximum_incremental_snapshot_archives_to_retain: usize,
 ) -> Result<FullSnapshotArchiveInfo> {
-    let slot_deltas = bank.status_cache.read().unwrap().root_slot_deltas();
     let accounts_package = AccountsPackage::new_for_snapshot(
         AccountsPackageType::Snapshot(SnapshotType::FullSnapshot),
         bank,
         bank_snapshot_info,
         bank_snapshots_dir,
-        slot_deltas,
         &full_snapshot_archives_dir,
         &incremental_snapshot_archives_dir,
         snapshot_storages,
@@ -2384,7 +2396,6 @@ pub fn package_and_archive_incremental_snapshot(
     maximum_full_snapshot_archives_to_retain: usize,
     maximum_incremental_snapshot_archives_to_retain: usize,
 ) -> Result<IncrementalSnapshotArchiveInfo> {
-    let slot_deltas = bank.status_cache.read().unwrap().root_slot_deltas();
     let accounts_package = AccountsPackage::new_for_snapshot(
         AccountsPackageType::Snapshot(SnapshotType::IncrementalSnapshot(
             incremental_snapshot_base_slot,
@@ -2392,7 +2403,6 @@ pub fn package_and_archive_incremental_snapshot(
         bank,
         bank_snapshot_info,
         bank_snapshots_dir,
-        slot_deltas,
         &full_snapshot_archives_dir,
         &incremental_snapshot_archives_dir,
         snapshot_storages,
