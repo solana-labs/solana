@@ -75,7 +75,7 @@ fn test_optimistic_confirmation_violation_without_tower() {
 //    `A` should not be able to generate a switching proof.
 //
 fn do_test_optimistic_confirmation_violation_with_or_without_tower(with_tower: bool) {
-    solana_logger::setup_with_default(RUST_LOG_FILTER);
+    solana_logger::setup_with("debug");
 
     // First set up the cluster with 4 nodes
     let slots_per_epoch = 2048;

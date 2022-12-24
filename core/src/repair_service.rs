@@ -636,7 +636,7 @@ impl RepairService {
                             nonce,
                             identity_keypair,
                         ) {
-                            info!(
+                            debug!(
                                 "repair req send_to {} ({}) error {:?}",
                                 repair_pubkey, repair_addr, e
                             );
