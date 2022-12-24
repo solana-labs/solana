@@ -27,6 +27,7 @@ struct Config<'a> {
     sbf_tools_version: &'a str,
     dump: bool,
     features: Vec<String>,
+    force_tools_install: bool,
     generate_child_script_on_failure: bool,
     no_default_features: bool,
     offline: bool,
@@ -53,6 +54,7 @@ impl Default for Config<'_> {
             sbf_tools_version: "(unknown)",
             dump: false,
             features: vec![],
+            force_tools_install: false,
             generate_child_script_on_failure: false,
             no_default_features: false,
             offline: false,
@@ -130,6 +132,18 @@ fn install_if_missing(
     download_file_name: &str,
     target_path: &Path,
 ) -> Result<(), String> {
+    if config.force_tools_install {
+        if target_path.is_dir() {
+            debug!("Remove directory {:?}", target_path);
+            fs::remove_dir_all(target_path).map_err(|err| err.to_string())?;
+        }
+        let source_base = config.sbf_sdk.join("dependencies");
+        if source_base.exists() {
+            let source_path = source_base.join(package);
+            debug!("Remove file {:?}", source_path);
+            fs::remove_file(source_path).map_err(|err| err.to_string())?;
+        }
+    }
     // Check whether the target path is an empty directory. This can
     // happen if package download failed on previous run of
     // cargo-build-sbf.  Remove the target_path directory in this
@@ -141,6 +155,7 @@ fn install_if_missing(
             .next()
             .is_none()
     {
+        debug!("Remove directory {:?}", target_path);
         fs::remove_dir(target_path).map_err(|err| err.to_string())?;
     }
 
@@ -153,6 +168,7 @@ fn install_if_missing(
             .unwrap_or(false)
     {
         if target_path.exists() {
+            debug!("Remove file {:?}", target_path);
             fs::remove_file(target_path).map_err(|err| err.to_string())?;
         }
         fs::create_dir_all(target_path).map_err(|err| err.to_string())?;
@@ -887,6 +903,12 @@ fn main() {
                 .help("Space-separated list of features to activate"),
         )
         .arg(
+            Arg::new("force_tools_install")
+                .long("force-tools-install")
+                .takes_value(false)
+                .help("Download and install sbf-tools even when existing tools are located"),
+        )
+        .arg(
             Arg::new("generate_child_script_on_failure")
                 .long("generate-child-script-on-failure")
                 .takes_value(false)
@@ -970,6 +992,7 @@ fn main() {
         sbf_tools_version,
         dump: matches.is_present("dump"),
         features: matches.values_of_t("features").ok().unwrap_or_default(),
+        force_tools_install: matches.is_present("force_tools_install"),
         generate_child_script_on_failure: matches.is_present("generate_child_script_on_failure"),
         no_default_features: matches.is_present("no_default_features"),
         remap_cwd: !matches.is_present("remap_cwd"),
