@@ -867,7 +867,7 @@ impl BankingSimulator {
 
 
 
-        let sender_thread = std::thread::spawn(move || {
+        let sender_thread = std::thread::spawn( { let exit = exit.clone(); move || {
             let (adjusted_reference, range_iter) = if let Some((most_recent_past_leader_slot, starts)) = bank_starts_by_slot.range(bank_slot..).next() {
                 let start = starts.values().map(|a| a.0).min().unwrap();
                 (Some(({
@@ -922,7 +922,7 @@ impl BankingSimulator {
                         ChannelLabel::Dummy => unreachable!(),
                     }
 
-                    if exit.load.load(Ordering::Relaxed) {
+                    if exit.load(Ordering::Relaxed) {
                         break
                     }
                 }
@@ -930,7 +930,7 @@ impl BankingSimulator {
             info!("finished sending...(non_vote: {}({}), tpu_vote: {}({}), gossip_vote: {}({}))", non_vote_count, non_vote_tx_count, tpu_vote_count, tpu_vote_tx_count, gossip_vote_count, gossip_vote_tx_count);
             // hold these senders in join_handle to control banking stage termination!
             (non_vote_sender, tpu_vote_sender, gossip_vote_sender)
-        });
+        }});
 
 
         let cluster_info = solana_gossip::cluster_info::ClusterInfo::new(
@@ -998,12 +998,6 @@ impl BankingSimulator {
                 bank_forks.write().unwrap().insert(new_bank);
                 bank = bank_forks.read().unwrap().working_bank();
             }
-            // set cost tracker limits to MAX so it will not filter out TXs
-            bank.write_cost_tracker().unwrap().set_limits(
-                std::u64::MAX,
-                std::u64::MAX,
-                std::u64::MAX,
-            );
 
             if clear_sigs {
                 bank.clear_signatures();
