@@ -771,9 +771,9 @@ impl BankingSimulator {
 
 
 
-        use std::str::FromStr;
-        let collector = solana_sdk::pubkey::Pubkey::from_str("ryo1vM57RXAayYZhCK6k13d5uS4b9tfH7BhScgqtBCx").unwrap();
         let leader_schedule_cache = Arc::new(LeaderScheduleCache::new_from_bank(&bank));
+        let simulated_leader = leader_schedule_cache.slot_leader_at(bank.slot() + 1, None).unwrap();
+        info!("simulated leader: {}", simulated_leader);
         let (exit, poh_recorder, poh_service, _signal_receiver) = {
             use std::sync::RwLock;
             use solana_poh::poh_service::PohService;
@@ -788,7 +788,7 @@ impl BankingSimulator {
                 bank.clone(),
                 None,
                 bank.ticks_per_slot(),
-                &collector,
+                &simulated_leader,
                 &blockstore,
                 blockstore.get_new_shred_signal(0),
                 &leader_schedule_cache,
@@ -921,6 +921,10 @@ impl BankingSimulator {
                         }
                         ChannelLabel::Dummy => unreachable!(),
                     }
+
+                    if exit.load.load(Ordering::Relaxed) {
+                        break
+                    }
                 }
             //}
             info!("finished sending...(non_vote: {}({}), tpu_vote: {}({}), gossip_vote: {}({}))", non_vote_count, non_vote_tx_count, tpu_vote_count, tpu_vote_tx_count, gossip_vote_count, gossip_vote_tx_count);
@@ -968,18 +972,6 @@ impl BankingSimulator {
         poh_recorder.write().unwrap().set_bank(&bank, false);
 
         use solana_sdk::hash::Hash;
-        let blockhash_overrides =std::collections::HashMap::from([
-            (167249284, Hash::from_str("84HMxHV6W4o6BvJh455Zk6Yg2aU1K2TDBFpTvxuEuYG4").unwrap()),
-            (167249285, Hash::from_str("5BxWarhTStdTBrPAdYRpBsrCgZoB7QSYsLbzd4Shz8uJ").unwrap()),
-            (167249286, Hash::from_str("FEmFN2zPnuaR6tYn2uxTF7Rq1hDnYbtKejbUW8KDJwVv").unwrap()),
-            (167249287, Hash::from_str("9iZHWHaMBemZPrtRfcw5LmVTxEhq8biAxsp9UupVuu2V").unwrap()),
-        ]);
-        let bank_hash_overrides =std::collections::HashMap::from([
-            (167249284, Hash::from_str("HmeLnLAeaF5zjLcLr5xBqxCLZbf11Gi2kcG1phVhJW22").unwrap()),
-            (167249285, Hash::from_str("BxueduRmDa12A1soB9obebgx34pmicFFab37cXzGfP8r").unwrap()),
-            (167249286, Hash::from_str("9kFZNx49fQ5ugE3i3dzfAFvPPpw4EWVQYqnkxGH8GFWp").unwrap()),
-            (167249287, Hash::from_str("7Lc3dTaGrSouBPVAUjKWxqGJJEY13fhsT3u3vMMmJNwN").unwrap()),
-        ]);
 
         for _ in 0..500 {
             if poh_recorder.read().unwrap().bank().is_none() {
@@ -993,11 +985,16 @@ impl BankingSimulator {
                 let old_slot = bank.slot();
                 bank.freeze_with_bank_hash_override(hashes_by_slot.get(&old_slot).map(|hh| hh.1));
                 let new_slot = bank.slot() + 1;
+                let new_leader = leader_schedule_cache.slot_leader_at(new_slot, None).unwrap();
+                if simulated_leader != new_leader {
+                    info!("{} isn't leader anymore at slot {}; new leader: {}", simulated_leader, new_slot, new_leader);
+                    break;
+                }
                 let options = NewBankOptions {
                     blockhash_override: hashes_by_slot.get(&new_slot).map(|hh| hh.0),
                     ..Default::default()
                 };
-                let new_bank = Bank::new_from_parent_with_options(&bank, &collector, new_slot, options);
+                let new_bank = Bank::new_from_parent_with_options(&bank, &simulated_leader, new_slot, options);
                 bank_forks.write().unwrap().insert(new_bank);
                 bank = bank_forks.read().unwrap().working_bank();
             }

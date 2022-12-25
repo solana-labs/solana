@@ -61,10 +61,19 @@ type Result<T> = std::result::Result<T, PohRecorderError>;
 
 pub type WorkingBankEntry = (Arc<Bank>, (Entry, u64));
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct BankStart {
     pub working_bank: Arc<Bank>,
     pub bank_creation_time: Arc<Instant>,
+}
+
+impl std::fmt::Debug for BankStart {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("BankStart")
+            .field("working_bank", &format!("Bank slot: {}", &self.working_bank.slot()))
+            .field("bank_creation_time", &self.bank_creation_time)
+            .finish_non_exhaustive()
+    }
 }
 
 impl BankStart {
