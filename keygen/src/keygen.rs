@@ -469,7 +469,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                         .multiple_occurrences(true)
                         .multiple_values(true)
                         .validator(grind_validator_starts_and_ends_with)
-                        .help("Saves specified number of keypairs whos public key starts and ends with the indicated perfix and suffix\nExample: --starts-and-ends-with sol:ana:4\nPREFIX and SUFFIX type is Base58\nCOUNT type is u64"),
+                        .help("Saves specified number of keypairs whos public key starts and ends with the indicated prefix and suffix\nExample: --starts-and-ends-with sol:ana:4\nPREFIX and SUFFIX type is Base58\nCOUNT type is u64"),
                 )
                 .arg(
                     Arg::new("num_threads")
@@ -750,7 +750,7 @@ fn do_main(matches: &ArgMatches) -> Result<(), Box<dyn error::Error>> {
                             break;
                         }
                         let attempts = attempts.fetch_add(1, Ordering::Relaxed);
-                        if attempts % 1_000_000 == 0 {
+                        if (!use_mnemonic && attempts % 1_000_000 == 0) || (use_mnemonic && attempts % 100_000 == 0) {
                             println!(
                                 "Searched {} keypairs in {}s. {} matches found.",
                                 attempts,
