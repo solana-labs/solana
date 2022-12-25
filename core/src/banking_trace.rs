@@ -772,22 +772,24 @@ impl BankingSimulator {
 
 
         let leader_schedule_cache = Arc::new(LeaderScheduleCache::new_from_bank(&bank));
-        let simulated_leader = leader_schedule_cache.slot_leader_at(bank.slot() + 1, None).unwrap();
+        let simulated_slot = bank.slot() + 1;
+        let simulated_leader = leader_schedule_cache.slot_leader_at(simulated_slot, None).unwrap();
         info!("simulated leader: {}", simulated_leader);
+        let start_bank = bank_forks.read().unwrap().root_bank();
+
         let (exit, poh_recorder, poh_service, _signal_receiver) = {
             use std::sync::RwLock;
             use solana_poh::poh_service::PohService;
             use solana_poh::poh_recorder::PohRecorder;
 
-
             let exit = Arc::new(AtomicBool::default());
             //create_test_recorder(&bank, &blockstore, None, Some(leader_schedule_cache));
             let (r, entry_receiver, record_receiver) = PohRecorder::new_with_clear_signal(
-                bank.tick_height(),
-                bank.last_blockhash(),
-                bank.clone(),
-                None,
-                bank.ticks_per_slot(),
+                start_bank.tick_height(),
+                start_bank.last_blockhash(),
+                start_bank.clone(),
+                Some((simulated_slot, simulated_slot + 1)),
+                start_bank.ticks_per_slot(),
                 &simulated_leader,
                 &blockstore,
                 blockstore.get_new_shred_signal(0),
@@ -801,7 +803,7 @@ impl BankingSimulator {
                 r.clone(),
                 &genesis_config.poh_config,
                 &exit,
-                bank_forks.read().unwrap().root_bank().ticks_per_slot(),
+                start_bank.ticks_per_slot(),
                 solana_poh::poh_service::DEFAULT_PINNED_CPU_CORE + 4,
                 solana_poh::poh_service::DEFAULT_HASHES_PER_BATCH,
                 record_receiver,
@@ -969,9 +971,17 @@ impl BankingSimulator {
         if clear_sigs {
             bank.clear_signatures();
         }
-        poh_recorder.write().unwrap().set_bank(&bank, false);
+        poh_recorder.write().unwrap().set_bank(&start_bank, false);
 
         use solana_sdk::hash::Hash;
+        for i in 0..500 {
+            let slot = poh_recorder.read().unwrap().slot();
+            info!("poh: {}, {}", i, slot);
+            if slot >= simulated_slot {
+                break;
+            }
+            sleep(std::time::Duration::from_millis(10));
+        }
 
         for _ in 0..500 {
             if poh_recorder.read().unwrap().bank().is_none() {
