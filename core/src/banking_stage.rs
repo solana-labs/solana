@@ -800,7 +800,7 @@ impl BankingStage {
         slot_metrics_tracker: &mut LeaderSlotMetricsTracker,
         unprocessed_transaction_count: usize,
     ) -> (MetricsTrackerAction, BufferedPacketsDecision) {
-        let (leader_at_slot_offset, bank_start, would_be_leader, would_be_leader_shortly) = {
+        let details = {
             let poh = poh_recorder.read().unwrap();
             let bank_start = poh
                 .bank_start()
@@ -814,17 +814,23 @@ impl BankingStage {
                 ),
             )
         };
+        info!("make_consume_or_forward_decision: {:?}", details);
+        let (leader_at_slot_offset, bank_start, would_be_leader, would_be_leader_shortly) = details; 
 
         slot_metrics_tracker.refresh_unprocessed_transaction_count(unprocessed_transaction_count);
+        let check_boundary = slot_metrics_tracker.check_leader_slot_boundary(&bank_start);
+        let decision = Self::consume_or_forward_packets(
+            my_pubkey,
+            leader_at_slot_offset,
+            bank_start,
+            would_be_leader,
+            would_be_leader_shortly,
+        );
+        info!("make_consume_or_forward_decision: {:?}", decision);
+
         (
-            slot_metrics_tracker.check_leader_slot_boundary(&bank_start),
-            Self::consume_or_forward_packets(
-                my_pubkey,
-                leader_at_slot_offset,
-                bank_start,
-                would_be_leader,
-                would_be_leader_shortly,
-            ),
+            check_boundary,
+            decision,
         )
     }
 
