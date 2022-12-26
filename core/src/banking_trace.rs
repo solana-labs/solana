@@ -1046,7 +1046,9 @@ impl BankingSimulator {
         banking_stage.join().unwrap();
         poh_service.join().unwrap();
 
-        // TODO: add flat to store shreds into ledger so that we can even benchmark replay stgage with
+        // TODO: add flag to store shreds into ledger so that we can even benchmark replay stgage with
         // actua blocks created by these simulation
+        // also sadly need to feed these overriding hashes into replaying stage for those recreted
+        // simulated blocks...
     }
 }
