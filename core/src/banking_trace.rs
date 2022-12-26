@@ -973,18 +973,12 @@ impl BankingSimulator {
         }
 
         use solana_sdk::hash::Hash;
-        poh_recorder.write().unwrap().set_bank(&bank, false);
         for i in 0..5000 {
             let slot = poh_recorder.read().unwrap().slot();
             info!("poh: {}, {}", i, slot);
-            if poh_recorder.read().unwrap().bank().is_none() {
-                info!("break out of no working bank");
+            if slot >= simulated_slot {
                 break;
             }
-            //if slot >= simulated_slot {
-            //    info!("break out of target slot");
-            //    break;
-            //}
             sleep(std::time::Duration::from_millis(10));
         }
 
@@ -1012,12 +1006,12 @@ impl BankingSimulator {
                 let new_bank = Bank::new_from_parent_with_options(&bank, &simulated_leader, new_slot, options);
                 bank_forks.write().unwrap().insert(new_bank);
                 bank = bank_forks.read().unwrap().working_bank();
+                poh_recorder.write().unwrap().set_bank(&bank, false);
             }
 
             if clear_sigs {
                 bank.clear_signatures();
             }
-            poh_recorder.write().unwrap().set_bank(&bank, false);
 
             sleep(std::time::Duration::from_millis(10));
         }
