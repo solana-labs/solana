@@ -774,7 +774,7 @@ impl BankingSimulator {
         let leader_schedule_cache = Arc::new(LeaderScheduleCache::new_from_bank(&bank));
         let simulated_slot = bank.slot() + 1;
         let simulated_leader = leader_schedule_cache.slot_leader_at(simulated_slot, None).unwrap();
-        info!("simulated leader: {}", simulated_leader);
+        info!("simulated leader and slot: {}, {}", simulated_leader, simulated_slot);
         let start_bank = bank_forks.read().unwrap().root_bank();
 
         let (exit, poh_recorder, poh_service, _signal_receiver) = {
@@ -788,7 +788,7 @@ impl BankingSimulator {
                 start_bank.tick_height(),
                 start_bank.last_blockhash(),
                 start_bank.clone(),
-                Some((simulated_slot, simulated_slot + 1)),
+                Some((simulated_slot, simulated_slot + 4)),
                 start_bank.ticks_per_slot(),
                 &simulated_leader,
                 &blockstore,
@@ -936,7 +936,7 @@ impl BankingSimulator {
 
 
         let cluster_info = solana_gossip::cluster_info::ClusterInfo::new(
-            Node::new_localhost().info,
+            Node::new_localhost_with_pubkey(&simulated_leader).info,
             Arc::new(Keypair::new()),
             SocketAddrSpace::Unspecified,
         );
@@ -971,15 +971,20 @@ impl BankingSimulator {
         if clear_sigs {
             bank.clear_signatures();
         }
-        poh_recorder.write().unwrap().set_bank(&start_bank, false);
 
         use solana_sdk::hash::Hash;
-        for i in 0..500 {
+        poh_recorder.write().unwrap().set_bank(&bank, false);
+        for i in 0..5000 {
             let slot = poh_recorder.read().unwrap().slot();
             info!("poh: {}, {}", i, slot);
-            if slot >= simulated_slot {
+            if poh_recorder.read().unwrap().bank().is_none() {
+                info!("break out of no working bank");
                 break;
             }
+            //if slot >= simulated_slot {
+            //    info!("break out of target slot");
+            //    break;
+            //}
             sleep(std::time::Duration::from_millis(10));
         }
 
