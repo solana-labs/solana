@@ -10,15 +10,8 @@ use {
     itertools::{izip, Itertools},
     lru::LruCache,
     rayon::{prelude::*, ThreadPool, ThreadPoolBuilder},
-<<<<<<< HEAD
     solana_client::rpc_response::SlotUpdate,
-    solana_gossip::{
-        cluster_info::{ClusterInfo, DATA_PLANE_FANOUT},
-        contact_info::ContactInfo,
-    },
-=======
     solana_gossip::{cluster_info::ClusterInfo, contact_info::ContactInfo},
->>>>>>> 456d06785 (experiments different turbine fanouts for propagating shreds (#29393))
     solana_ledger::{
         leader_schedule_cache::LeaderScheduleCache,
         shred::{self, ShredId},
