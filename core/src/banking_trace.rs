@@ -585,11 +585,11 @@ mod tests {
     }
 }
 
-// This creates a simulated environment around banking stage to reproduce leader's blocks based on
-// recorded banking trace events (`TimedTracedEvent`).
+// This creates a simulated environment around the banking stage to reproduce leader's blocks based
+// on recorded banking trace events (`TimedTracedEvent`).
 //
 // The task of banking stage at the highest level is to pack transactions into their blocks as much
-// as possible for scheduled fixed duration.  So, there's 3 abstract inputs to simulate: blocks,
+// as possible for scheduled fixed duration. So, there's 3 abstract inputs to simulate: blocks,
 // time, and transactions.
 //
 // In the context of simulation, the first two are simple; both are well defined.
@@ -598,29 +598,30 @@ mod tests {
 // simulation leader's slot with halt_at_slot mechanism, possibly priming various caches,
 // ultimately freezing the ancestor block with expected and deterministic hashes.
 //
-// After replay, a minor tweak is applied: we forcibly override leader's block hashes as simulated
+// After replay, a minor tweak is applied: we forcibly override leader's hashes as simulated
 // banking stage creates them, using recorded `BlockAndBankHash` events. This is to provide
-// undistinguishable sysvars to TX execution and identical TX age resolution as simulation goes on.
-// Otherwise, these overridden hashes would definitely differ as slight block composition
-// difference is inevitable.
+// undistinguishable sysvars to TX execution and identical TX age resolution as the simulation goes
+// on. Otherwise, these orignal hashes would definitely differ than the recorded ones as slight
+// block composition difference is inevitable.
 //
 // For poh time, we just use PohRecorder as same as real environment, which is just 400ms timer,
-// external to banking stage and thus mostly irrelevant to banking stage performance.  For wall
-// time, we use the first BankStatus::Started and `SystemTime::now()` to define T=0 for simulation
-// after calculating the offset. Then, simulation progress is timed accordingly. (TODO: maybe we
-// can use first `BlockAndBankHash`?)  That's needed because all trace events are recorded in UTC,
-// not relative to poh nor to leader schedule for simplicity at recording.
+// external to banking stage and thus mostly irrelevant to banking stage performance. For wall
+// time, we use the first BankStatus::BlockAndBankHash and `SystemTime::now()` to define T=0 for
+// simulation.  Then, simulation progress is timed accordingly. As a context, this syncing is
+// needed because all trace events are recorded in UTC, not relative to poh nor to leader schedule
+// for simplicity at recording.
 //
 // Lastly, here's the last and most complicated input to simulate: transactions.
 //
 // A bit closer look of transaction load profile is like below, regardless of internal banking
 // implementation and simulation:
 //
-// There's ever accumulated transactions to be processed as leader slot nears. This is due to
-// solana's general tx broadcast strategy of node's forwarding and client's submission, which are
-// unlikely to chabge soon. So, we take this as granted. Then, any initial leader block creation
-// starts with rather large number of schedule-able transactions. Also, note that additional
-// transactions arrive for the 4 leader slot window (roughly ~1.6 seconds).
+// There's ever `BufferedPacketsDecision::Hold`-ed transactions to be processed as the first leader
+// slot nears. This is due to solana's general tx broadcast strategy of node's forwarding and
+// client's submission, which are unlikely to chabge soon. So, we take this as granted. Then, any
+// initial leader block creation starts with rather large number of schedule-able transactions.
+// Also, note that additional transactions arrive for the 4 leader slot window (roughly ~1.6
+// seconds).
 //
 // Simulation have to mimic this load pattern while being agnostic to internal bnaking impl as much
 // as possible. For that agnostic objective, `TracedSender`s are sneaked into the SigVerify stage
@@ -639,7 +640,7 @@ mod tests {
 // wait time...)
 //
 // Then, at T=0, we invoke `BankingStage::new_num_threads()`. At the same time, we set leader's
-// first bank to PoHRecorder's working bank. Then, BankingStage starts to pack transactions into
+// first bank to PohRecorder's working bank. Then, BankingStage starts to pack transactions into
 // banks.
 //
 // At the simulation side, it's now on-the-fly mode. In this, BankingSimulator just sends
@@ -681,6 +682,7 @@ impl BankingSimulator {
             let datetime: chrono::DateTime<chrono::Utc> = event_time.into();
 
             match event {
+                // todo: just insert BlockAndBankHash!!
                 TracedEvent::Bank(slot, id, BankStatus::Started, unprocessed_count) => {
                     bank_starts_by_slot.entry(*slot)
                         .and_modify(|e: &mut std::collections::HashMap<u32, (SystemTime, usize)>| {e.insert(*id, (event_time, *unprocessed_count));})
@@ -931,6 +933,7 @@ impl BankingSimulator {
 
                     if !burst && time > reference_time {
                         let target_duration = time.duration_since(reference_time).unwrap();
+                        // cache last simulation_time!
                         while simulation_time.elapsed().unwrap() < target_duration {
                         }
                     }
