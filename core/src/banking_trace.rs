@@ -598,16 +598,17 @@ mod tests {
 // simulation leader's slot with halt_at_slot mechanism, possibly priming various caches,
 // ultimately freezing the ancestor block with expected and deterministic hashes.
 //
-// After replay, a minor tweak is applied: we forcibly override leader's hashes as simulated
-// banking stage creates them, using recorded `BlockAndBankHash` events. This is to provide
-// undistinguishable sysvars to TX execution and identical TX age resolution as the simulation goes
-// on. Otherwise, these orignal hashes would definitely differ than the recorded ones as slight
-// block composition difference is inevitable.
+// After replay, a minor tweak is applied during simulation: we forcibly override leader's hashes
+// as simulated banking stage creates them, using recorded `BlockAndBankHash` events. This is to
+// provide undistinguishable sysvars to TX execution and identical TX age resolution as the
+// simulation goes on. Otherwise, vast majority of tx processing would differ because simulated
+// block's hashes would definitely differ than the recorded ones as slight block composition
+// difference is inevitable.
 //
-// For poh time, we just use PohRecorder as same as real environment, which is just 400ms timer,
-// external to banking stage and thus mostly irrelevant to banking stage performance. For wall
-// time, we use the first BankStatus::BlockAndBankHash and `SystemTime::now()` to define T=0 for
-// simulation. Then, simulation progress is timed accordingly. As a context, this syncing is
+// For poh time, we just use PohRecorder as same as the real environment, which is just 400ms
+// timer, external to banking stage and thus mostly irrelevant to banking stage performance. For
+// wall time, we use the first BankStatus::BlockAndBankHash and `SystemTime::now()` to define T=0
+// for simulation. Then, simulation progress is timed accordingly. As a context, this syncing is
 // needed because all trace events are recorded in UTC, not relative to poh nor to leader schedule
 // for simplicity at recording.
 //
