@@ -34,7 +34,7 @@ use {
         elf::Executable,
         error::{EbpfError, UserDefinedError},
         memory_region::MemoryRegion,
-        static_analysis::Analysis,
+        static_analysis::{Analysis, TraceLogEntry},
         verifier::{RequisiteVerifier, VerifierError},
         vm::{ContextObject, EbpfVm, ProgramResult, VerifiedExecutable},
     },
@@ -1374,8 +1374,8 @@ fn process_loader_instruction(
     Ok(())
 }
 
-fn trace_bpf<'a, 'b>(
-    trace_log: &[[u64; 12]],
+fn trace_bpf(
+    trace_log: &[TraceLogEntry],
     bpf_executor: Arc<BpfExecutor>,
     bpf_tracer_plugin_manager: Option<Arc<RwLock<dyn BpfTracerPluginManager>>>,
     block_hash: &Hash,
@@ -1400,18 +1400,13 @@ fn trace_bpf<'a, 'b>(
     }
 
     for plugin in bpf_tracing_plugins.into_iter() {
-        let bpf_executor = Arc::clone(&bpf_executor);
+        let executable = Arc::clone(bpf_executor.verified_executable.get_executable());
         if let Err(err) = plugin.trace_bpf(
             program_id,
             block_hash,
             transaction_id,
             trace_log,
-            Box::new(move || {
-                Analysis::from_executable(Arc::clone(
-                    bpf_executor.verified_executable.get_executable(),
-                ))
-                .unwrap()
-            }),
+            Box::new(move || Analysis::from_executable(Arc::clone(&executable)).unwrap()),
         ) {
             error!(
                 "Error running BPF tracing plugin: {} for program ID: {}. Error: {:?}",
@@ -1495,7 +1490,10 @@ impl Executor for BpfExecutor {
             );
 
             trace_bpf(
-                &invoke_context.trace_log,
+                invoke_context
+                    .transaction_context
+                    .get_current_instruction_context()?
+                    .trace_log(),
                 Arc::clone(&self),
                 bpf_tracer_plugin_manager,
                 &blockhash,
