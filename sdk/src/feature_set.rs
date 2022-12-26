@@ -558,6 +558,14 @@ pub mod commission_updates_only_allowed_in_first_half_of_epoch {
     solana_sdk::declare_id!("noRuG2kzACwgaY7TVmLRnUNPLKNVQE1fb7X55YWBehp");
 }
 
+pub mod enable_turbine_fanout_experiments {
+    solana_sdk::declare_id!("D31EFnLgdiysi84Woo3of4JMu7VmasUS3Z7j9HYXCeLY");
+}
+
+pub mod disable_turbine_fanout_experiments {
+    solana_sdk::declare_id!("Gz1aLrbeQ4Q6PTSafCZcGWZXz91yVRi7ASFzFEr1U4sa");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -692,6 +700,8 @@ lazy_static! {
         (enable_alt_bn128_syscall::id(), "add alt_bn128 syscalls #27961"),
         (enable_program_redeployment_cooldown::id(), "enable program redeployment cooldown #29135"),
         (commission_updates_only_allowed_in_first_half_of_epoch::id(), "validator commission updates are only allowed in the first half of an epoch #29362"),
+        (enable_turbine_fanout_experiments::id(), "enable turbine fanout experiments #29393"),
+        (disable_turbine_fanout_experiments::id(), "disable turbine fanout experiments #29393"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()
