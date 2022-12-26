@@ -784,6 +784,7 @@ impl BankingSimulator {
 
             let exit = Arc::new(AtomicBool::default());
             //create_test_recorder(&bank, &blockstore, None, Some(leader_schedule_cache));
+            info!("poh is starting!");
             let (r, entry_receiver, record_receiver) = PohRecorder::new_with_clear_signal(
                 start_bank.tick_height(),
                 start_bank.last_blockhash(),
@@ -810,16 +811,32 @@ impl BankingSimulator {
             );
             (exit, r, s, entry_receiver)
         };
+        let target_ns_per_slot = solana_poh::poh_service::PohService::target_ns_per_tick(
+            start_bank.ticks_per_slot(),
+            genesis_config.poh_config.target_tick_duration.as_nanos() as u64,
+        ) * start_bank.ticks_per_slot();
+        let warmup_duration = std::time::Duration::from_nanos((simulated_slot - bank_slot) * target_ns_per_slot);
+        // if slot is too short => bail
+        info!("warmup_duration: {:?}", warmup_duration);
 
-        let banking_tracer = BankingTracer::new(Some((
+        let banking_retracer = BankingTracer::new(Some((
             blockstore.banking_retracer_path(),
             exit.clone(),
             BANKING_TRACE_DIR_DEFAULT_BYTE_LIMIT,
         ))).unwrap();
-        let (non_vote_sender, non_vote_receiver) = banking_tracer.create_channel_non_vote();
-        let (tpu_vote_sender, tpu_vote_receiver) = banking_tracer.create_channel_tpu_vote();
+        if banking_retracer.is_enabled() {
+            info!(
+                "Enabled banking retracer (dir_byte_limit: {})",
+                BANKING_TRACE_DIR_DEFAULT_BYTE_LIMIT,
+            );
+        } else {
+            info!("Disabled banking retracer");
+        }
+
+        let (non_vote_sender, non_vote_receiver) = banking_retracer.create_channel_non_vote();
+        let (tpu_vote_sender, tpu_vote_receiver) = banking_retracer.create_channel_tpu_vote();
         let (gossip_vote_sender, gossip_vote_receiver) =
-            banking_tracer.create_channel_gossip_vote();
+            banking_retracer.create_channel_gossip_vote();
 
         let (mut non_vote_tx_count, mut tpu_vote_tx_count, mut gossip_vote_tx_count) = (0, 0, 0);
         if let Some((most_recent_past_leader_slot, starts)) = bank_starts_by_slot.range(bank_slot..).next() {
@@ -956,7 +973,7 @@ impl BankingSimulator {
             None,
             Arc::new(connection_cache),
             bank_forks.clone(),
-            banking_tracer,
+            banking_retracer.clone(),
         );
 
         let clear_sigs = std::env::var("CLEAR_SIGS").is_ok();
@@ -1004,6 +1021,9 @@ impl BankingSimulator {
                     ..Default::default()
                 };
                 let new_bank = Bank::new_from_parent_with_options(&bank, &simulated_leader, new_slot, options);
+                // make sure parent is frozen for finalized hashes via the above
+                // new()-ing of its child bank
+                banking_retracer.hash_event(bank.slot(), bank.last_blockhash(), bank.hash());
                 bank_forks.write().unwrap().insert(new_bank);
                 bank = bank_forks.read().unwrap().working_bank();
                 poh_recorder.write().unwrap().set_bank(&bank, false);
@@ -1019,7 +1039,7 @@ impl BankingSimulator {
         sleep(std::time::Duration::from_millis(3000));
         exit.store(true, Ordering::Relaxed);
         // the order is important. dropping sender_thread will terminate banking_stage, in turn
-        // banking_tracer thread
+        // banking_retracer thread
         sender_thread.join().unwrap();
         banking_stage.join().unwrap();
         poh_service.join().unwrap();
