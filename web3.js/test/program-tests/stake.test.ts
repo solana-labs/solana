@@ -1,5 +1,6 @@
 import {expect, use} from 'chai';
 import chaiAsPromised from 'chai-as-promised';
+import {describe} from 'mocha';
 
 import {
   Keypair,

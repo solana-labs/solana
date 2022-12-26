@@ -128,7 +128,7 @@ const latestBlockhash = async ({
   commitment?: Commitment;
 }) => {
   const blockhash = uniqueBlockhash();
-  const params = [];
+  const params: Array<Object> = [];
   if (commitment) {
     params.push({commitment});
   }
@@ -154,7 +154,7 @@ const recentBlockhash = async ({
   commitment?: Commitment;
 }) => {
   const blockhash = uniqueBlockhash();
-  const params = [];
+  const params: Array<Object> = [];
   if (commitment) {
     params.push({commitment});
   }

@@ -1,4 +1,5 @@
 import {expect} from 'chai';
+import {describe} from 'mocha';
 
 import {CompiledKeyMeta, CompiledKeys} from '../../src/message/compiled-keys';
 import {AddressLookupTableAccount} from '../../src/programs';

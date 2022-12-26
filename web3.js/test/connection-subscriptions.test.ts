@@ -1,4 +1,5 @@
 import chai from 'chai';
+import {describe} from 'mocha';
 import {Client} from 'rpc-websockets';
 import {stub, SinonStubbedInstance, SinonSpy, spy} from 'sinon';
 import sinonChai from 'sinon-chai';

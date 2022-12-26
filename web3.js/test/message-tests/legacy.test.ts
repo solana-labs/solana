@@ -1,5 +1,6 @@
 import bs58 from 'bs58';
 import {expect} from 'chai';
+import {describe} from 'mocha';
 import {sha256} from '@noble/hashes/sha256';
 
 import {Message} from '../../src/message';

@@ -1,5 +1,6 @@
 import base58 from 'bs58';
 import {expect} from 'chai';
+import {describe} from 'mocha';
 
 import {
   Keypair,
