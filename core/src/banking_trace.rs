@@ -278,7 +278,7 @@ impl BankingTracer {
     fn trace_event(&self, event: TimedTracedEvent) {
         if let Some((sender, _, exit)) = &self.enabled_tracer {
             if !exit.load(Ordering::Relaxed) {
-                info!("send bank event!: {:?}", &event);
+                info!("send trace event!: {:?}", &event);
                 sender
                     .send(event)
                     .expect("active tracer thread unless exited");
@@ -838,6 +838,16 @@ impl BankingSimulator {
         let (gossip_vote_sender, gossip_vote_receiver) =
             banking_retracer.create_channel_gossip_vote();
 
+        let cluster_info = solana_gossip::cluster_info::ClusterInfo::new(
+            Node::new_localhost_with_pubkey(&simulated_leader).info,
+            Arc::new(Keypair::new()),
+            SocketAddrSpace::Unspecified,
+        );
+        let cluster_info = Arc::new(cluster_info);
+        let connection_cache = ConnectionCache::new(DEFAULT_TPU_CONNECTION_POOL_SIZE);
+        let (replay_vote_sender, _replay_vote_receiver) = unbounded();
+
+        /*
         let (mut non_vote_tx_count, mut tpu_vote_tx_count, mut gossip_vote_tx_count) = (0, 0, 0);
         if let Some((most_recent_past_leader_slot, starts)) = bank_starts_by_slot.range(bank_slot..).next() {
             let start = starts.values().map(|a| a.0).min().unwrap();
@@ -883,15 +893,18 @@ impl BankingSimulator {
             }
             info!("finished buffered sending...(non_vote: {}, tpu_vote: {}, gossip_vote: {})", non_vote_tx_count, tpu_vote_tx_count, gossip_vote_tx_count);
         };
+        */
 
 
 
         let sender_thread = std::thread::spawn( { let exit = exit.clone(); move || {
             let (adjusted_reference, range_iter) = if let Some((most_recent_past_leader_slot, starts)) = bank_starts_by_slot.range(bank_slot..).next() {
-                let start = starts.values().map(|a| a.0).min().unwrap();
+                let mut start = starts.values().map(|a| a.0).min().unwrap();
+                start -= warmup_duration;
+
                 (Some(({
                     let datetime: chrono::DateTime<chrono::Utc> = (start).into();
-                    format!("{}", datetime.format("%Y-%m-%d %H:%M:%S.%f"))
+                    format!("{} (warmup: -{warmup_duration:?})", datetime.format("%Y-%m-%d %H:%M:%S.%f"))
                 }, most_recent_past_leader_slot, start)), packet_batches_by_time.range(start..))
             } else {
                 (None, packet_batches_by_time.range(..))
@@ -952,14 +965,6 @@ impl BankingSimulator {
         }});
 
 
-        let cluster_info = solana_gossip::cluster_info::ClusterInfo::new(
-            Node::new_localhost_with_pubkey(&simulated_leader).info,
-            Arc::new(Keypair::new()),
-            SocketAddrSpace::Unspecified,
-        );
-        let cluster_info = Arc::new(cluster_info);
-        let connection_cache = ConnectionCache::new(DEFAULT_TPU_CONNECTION_POOL_SIZE);
-        let (replay_vote_sender, _replay_vote_receiver) = unbounded();
         info!("start banking stage!...");
         let banking_stage = BankingStage::new_num_threads(
             &cluster_info,
