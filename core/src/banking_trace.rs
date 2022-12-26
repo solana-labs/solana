@@ -607,7 +607,7 @@ mod tests {
 // For poh time, we just use PohRecorder as same as real environment, which is just 400ms timer,
 // external to banking stage and thus mostly irrelevant to banking stage performance. For wall
 // time, we use the first BankStatus::BlockAndBankHash and `SystemTime::now()` to define T=0 for
-// simulation.  Then, simulation progress is timed accordingly. As a context, this syncing is
+// simulation. Then, simulation progress is timed accordingly. As a context, this syncing is
 // needed because all trace events are recorded in UTC, not relative to poh nor to leader schedule
 // for simplicity at recording.
 //
@@ -630,22 +630,16 @@ mod tests {
 // placement is not to be affected by any banking-tage's capping (if any) and its channel
 // consumption pattern.
 //
-// Then, BankingSimulator consists of 2 modes chronologically: pre-loading and on-the-fly. The 2
-// stage is segregated by the aforementioned T=0.
+// Then, BankingSimulator consists of 2 phases chronologically: warm-up and on-the-fly. The 2
+// phases are segregated by the aforementioned T=0.
 //
-// Pre-load firstly buffers transactions into crossbeam_channels. it traverses trace file in
-// reverse chronological order until it hit the unprocessed_count in TracedEvent::Bank. this is
-// done for each `ChannelLabel`s. (todo: Come to think of it, maybe this can be replaced with
-// T-120secs ideling-but-only-sending mode (say, _priming_ or warmup mode?) at the cost of some
-// wait time...)
+// Warm up is defined as T=-N secs using slot distance between immediate ancestor of first
+// simulated block and root block. As soon as warm up is initiated, we invoke
+// `BankingStage::new_num_threads()` as well.
 //
-// Then, at T=0, we invoke `BankingStage::new_num_threads()`. At the same time, we set leader's
-// first bank to PohRecorder's working bank. Then, BankingStage starts to pack transactions into
-// banks.
-//
-// At the simulation side, it's now on-the-fly mode. In this, BankingSimulator just sends
-// BankingPacketBatch pretending to be sigveirfy stage while burning 1 thread to busy loop for
-// precise T=N at ~1us granularity.
+// At the BankingSimulator's perspective , both phases just sends BankingPacketBatch in the same
+// fashion, pretending to be sigveirfy stage/gossip while burning 1 thread to busy loop for precise
+// T=N at ~1us granularity.
 pub struct BankingSimulator {
     path: PathBuf,
 }
