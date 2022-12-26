@@ -815,7 +815,7 @@ impl BankingSimulator {
             start_bank.ticks_per_slot(),
             genesis_config.poh_config.target_tick_duration.as_nanos() as u64,
         ) * start_bank.ticks_per_slot();
-        let warmup_duration = std::time::Duration::from_nanos((simulated_slot - bank_slot) * target_ns_per_slot);
+        let warmup_duration = std::time::Duration::from_nanos((simulated_slot - (start_bank.slot() + 1)) * target_ns_per_slot);
         // if slot is too short => bail
         info!("warmup_duration: {:?}", warmup_duration);
 
