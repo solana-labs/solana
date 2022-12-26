@@ -627,20 +627,19 @@ mod tests {
 // Simulation have to mimic this load pattern while being agnostic to internal bnaking impl as much
 // as possible. For that agnostic objective, `TracedSender`s are sneaked into the SigVerify stage
 // and gossip subsystem by `BankingTracer` to trace **all** of `BankingPacketBatch`s' exact payload
-// and _sender's timing with `SystemTime::now()` for all `ChannelLabel`s. This deliberate tracing
+// and _sender_'s timing with `SystemTime::now()` for all `ChannelLabel`s. This deliberate tracing
 // placement is not to be affected by any banking-tage's capping (if any) and its channel
 // consumption pattern.
 //
-// Then, BankingSimulator consists of 2 phases chronologically: warm-up and on-the-fly. The 2
-// phases are segregated by the aforementioned T=0.
+// BankingSimulator consists of 2 phases chronologically: warm-up and on-the-fly. The 2 phases are
+// segregated by the aforementioned T=0.
+//
+// Both phases just sends BankingPacketBatch in the same fashion, pretending to be sigveirfy
+// stage/gossip while burning 1 thread to busy loop for precise T=N at ~1us granularity.
 //
 // Warm up is defined as T=-N secs using slot distance between immediate ancestor of first
 // simulated block and root block. As soon as warm up is initiated, we invoke
-// `BankingStage::new_num_threads()` as well.
-//
-// At the BankingSimulator's perspective , both phases just sends BankingPacketBatch in the same
-// fashion, pretending to be sigveirfy stage/gossip while burning 1 thread to busy loop for precise
-// T=N at ~1us granularity.
+// `BankingStage::new_num_threads()` as well to simulate the pre-leader slot's tx-buffering time.
 pub struct BankingSimulator {
     path: PathBuf,
 }
