@@ -6,7 +6,7 @@ steps:
       CLOUD_PROVIDER: "gce"
       ENABLE_GPU: "false"
       NUMBER_OF_VALIDATOR_NODES: 4
-      VALIDATOR_NODE_MACHINE_TYPE: "--machine-type n1-standard-16"
+      VALIDATOR_NODE_MACHINE_TYPE: "--machine-type n2-standard-16"
       NUMBER_OF_CLIENT_NODES: 1
       ADDITIONAL_FLAGS: "--dedicated"
       SKIP_PERF_RESULTS: "true"

@@ -19,7 +19,6 @@ import { TokenLendingDetailsCard } from "components/instruction/TokenLendingDeta
 import { TokenSwapDetailsCard } from "components/instruction/TokenSwapDetailsCard";
 import { WormholeDetailsCard } from "components/instruction/WormholeDetailsCard";
 import { UnknownDetailsCard } from "components/instruction/UnknownDetailsCard";
-import { BonfidaBotDetailsCard } from "components/instruction/BonfidaBotDetails";
 import {
   INNER_INSTRUCTIONS_START_SLOT,
   SignatureProps,
@@ -29,7 +28,6 @@ import { isAddressLookupTableInstruction } from "components/instruction/address-
 import { isSerumInstruction } from "components/instruction/serum/types";
 import { isTokenLendingInstruction } from "components/instruction/token-lending/types";
 import { isTokenSwapInstruction } from "components/instruction/token-swap/types";
-import { isBonfidaBotInstruction } from "components/instruction/bonfida-bot/types";
 import { useFetchTransactionDetails } from "providers/transactions/parsed";
 import {
   useTransactionDetails,
@@ -228,8 +226,6 @@ function InstructionCard({
 
   if (isAddressLookupTableInstruction(transactionIx)) {
     return <AddressLookupTableDetailsCard key={key} {...props} />;
-  } else if (isBonfidaBotInstruction(transactionIx)) {
-    return <BonfidaBotDetailsCard key={key} {...props} />;
   } else if (isMangoInstruction(transactionIx)) {
     return <MangoDetailsCard key={key} {...props} />;
   } else if (isSerumInstruction(transactionIx)) {

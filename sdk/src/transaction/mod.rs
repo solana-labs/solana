@@ -129,7 +129,7 @@ use {
     serde::Serialize,
     solana_program::{system_instruction::SystemInstruction, system_program},
     solana_sdk::feature_set,
-    std::{result, sync::Arc},
+    std::result,
 };
 
 mod error;
@@ -707,7 +707,7 @@ impl Transaction {
     /// ```
     pub fn sign<T: Signers>(&mut self, keypairs: &T, recent_blockhash: Hash) {
         if let Err(e) = self.try_sign(keypairs, recent_blockhash) {
-            panic!("Transaction::sign failed with error {:?}", e);
+            panic!("Transaction::sign failed with error {e:?}");
         }
     }
 
@@ -733,7 +733,7 @@ impl Transaction {
     /// conditions.
     pub fn partial_sign<T: Signers>(&mut self, keypairs: &T, recent_blockhash: Hash) {
         if let Err(e) = self.try_partial_sign(keypairs, recent_blockhash) {
-            panic!("Transaction::partial_sign failed with error {:?}", e);
+            panic!("Transaction::partial_sign failed with error {e:?}");
         }
     }
 
@@ -757,10 +757,7 @@ impl Transaction {
         recent_blockhash: Hash,
     ) {
         if let Err(e) = self.try_partial_sign_unchecked(keypairs, positions, recent_blockhash) {
-            panic!(
-                "Transaction::partial_sign_unchecked failed with error {:?}",
-                e
-            );
+            panic!("Transaction::partial_sign_unchecked failed with error {e:?}");
         }
     }
 
@@ -1014,7 +1011,7 @@ impl Transaction {
     }
 
     /// Verify the precompiled programs in this transaction.
-    pub fn verify_precompiles(&self, feature_set: &Arc<feature_set::FeatureSet>) -> Result<()> {
+    pub fn verify_precompiles(&self, feature_set: &feature_set::FeatureSet) -> Result<()> {
         for instruction in &self.message().instructions {
             // The Transaction may not be sanitized at this point
             if instruction.program_id_index as usize >= self.message().account_keys.len() {

@@ -347,7 +347,7 @@ impl ClusterInfoVoteListener {
             .filter(|(_, packet_batch)| {
                 // to_packet_batches() above splits into 1 packet long batches
                 assert_eq!(packet_batch.len(), 1);
-                !packet_batch[0].meta.discard()
+                !packet_batch[0].meta().discard()
             })
             .filter_map(|(tx, packet_batch)| {
                 let (vote_account_key, vote, ..) = vote_parser::parse_vote_transaction(&tx)?;
@@ -411,7 +411,7 @@ impl ClusterInfoVoteListener {
                 }
             }
 
-            if time_since_lock.elapsed().as_millis() > BANK_SEND_VOTES_LOOP_SLEEP_MS as u128 {
+            if time_since_lock.elapsed().as_millis() > BANK_SEND_VOTES_LOOP_SLEEP_MS {
                 // Always set this to avoid taking the poh lock too often
                 time_since_lock = Instant::now();
                 // We will take this lock at most once every `BANK_SEND_VOTES_LOOP_SLEEP_MS`

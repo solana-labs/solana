@@ -44,6 +44,18 @@ main {
   padding: 0 var(--ifm-pre-padding);
 }
 
+.button {
+  background-color: var(--ifm-link-color);
+  color: var(--ifm-background-surface-color) !important;
+  padding: 0.5em 0.8em;
+  border: 0px solid red;
+  font-size: 1em !important;
+}
+
+.container__spacer {
+  margin: 0em 1em 3em 1em;
+}
+
 .cards__container {
   margin: 3em 0;
 }

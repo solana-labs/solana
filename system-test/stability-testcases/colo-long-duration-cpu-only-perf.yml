@@ -3,6 +3,7 @@ steps:
     label: "COLO 1 hour performance & stability CPU only"
     env:
       UPLOAD_RESULTS_TO_SLACK: "true"
+      UPLOAD_RESULTS_TO_DISCORD: "true"
       CLOUD_PROVIDER: "colo"
       TESTNET_TAG: "colo-perf-cpu-only"
       ENABLE_GPU: "false"

@@ -1,4 +1,4 @@
-import { Message, ParsedMessage } from "@solana/web3.js";
+import { ParsedMessage, PublicKey, VersionedMessage } from "@solana/web3.js";
 import { Cluster } from "providers/cluster";
 import { TableCardBody } from "components/common/TableCardBody";
 import { InstructionLogs } from "utils/program-logs";
@@ -21,27 +21,24 @@ export function ProgramLogsCardBody({
   cluster,
   url,
 }: {
-  message: Message | ParsedMessage;
+  message: VersionedMessage | ParsedMessage;
   logs: InstructionLogs[];
   cluster: Cluster;
   url: string;
 }) {
   let logIndex = 0;
+  let instructionProgramIds: PublicKey[];
+  if ("compiledInstructions" in message) {
+    instructionProgramIds = message.compiledInstructions.map((ix) => {
+      return message.staticAccountKeys[ix.programIdIndex];
+    });
+  } else {
+    instructionProgramIds = message.instructions.map((ix) => ix.programId);
+  }
+
   return (
     <TableCardBody>
-      {message.instructions.map((ix, index) => {
-        let programId;
-        if ("programIdIndex" in ix) {
-          const programAccount = message.accountKeys[ix.programIdIndex];
-          if ("pubkey" in programAccount) {
-            programId = programAccount.pubkey;
-          } else {
-            programId = programAccount;
-          }
-        } else {
-          programId = ix.programId;
-        }
-
+      {instructionProgramIds.map((programId, index) => {
         const programAddress = programId.toBase58();
         let programLogs: InstructionLogs | undefined = logs[logIndex];
         if (programLogs?.invokedProgram === programAddress) {

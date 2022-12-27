@@ -177,7 +177,7 @@ fn run_simulation(stakes: &[u64], fanout: usize) {
     range.chunks(chunk_size).for_each(|chunk| {
         chunk.iter().for_each(|i| {
             //distribute neighbors across threads to maximize parallel compute
-            let batch_ix = *i as usize % batches.len();
+            let batch_ix = *i % batches.len();
             let node = ContactInfo::new_localhost(&solana_sdk::pubkey::new_rand(), 0);
             staked_nodes.insert(node.id, stakes[*i - 1]);
             cluster_info.insert_info(node.clone());
@@ -227,8 +227,7 @@ fn run_simulation(stakes: &[u64], fanout: usize) {
             for (id, (layer1_done, recv, r)) in batch.iter_mut() {
                 assert!(
                     now.elapsed().as_secs() < timeout,
-                    "Timed out with {:?} remaining nodes",
-                    remaining
+                    "Timed out with {remaining:?} remaining nodes"
                 );
                 let cluster = c_info.clone_with_id(id);
                 if !*layer1_done {

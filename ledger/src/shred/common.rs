@@ -51,14 +51,28 @@ macro_rules! impl_shred_common {
 
         // Only for tests.
         fn set_index(&mut self, index: u32) {
-            self.common_header.index = index;
-            bincode::serialize_into(&mut self.payload[..], &self.common_header).unwrap();
+            match self.common_header.shred_variant {
+                ShredVariant::LegacyCode | ShredVariant::LegacyData => {
+                    self.common_header.index = index;
+                    bincode::serialize_into(&mut self.payload[..], &self.common_header).unwrap();
+                }
+                ShredVariant::MerkleCode(_) | ShredVariant::MerkleData(_) => {
+                    panic!("Not Implemented!");
+                }
+            }
         }
 
         // Only for tests.
         fn set_slot(&mut self, slot: Slot) {
-            self.common_header.slot = slot;
-            bincode::serialize_into(&mut self.payload[..], &self.common_header).unwrap();
+            match self.common_header.shred_variant {
+                ShredVariant::LegacyCode | ShredVariant::LegacyData => {
+                    self.common_header.slot = slot;
+                    bincode::serialize_into(&mut self.payload[..], &self.common_header).unwrap();
+                }
+                ShredVariant::MerkleCode(_) | ShredVariant::MerkleData(_) => {
+                    panic!("Not Implemented!");
+                }
+            }
         }
     };
 }

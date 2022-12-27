@@ -393,7 +393,7 @@ to be reverted and the issue reproduced before help can be provided.
 The validator log file, as specified by `--log ~/solana-validator.log`, can get
 very large over time and it's recommended that log rotation be configured.
 
-The validator will re-open its when it receives the `USR1` signal, which is the
+The validator will re-open its log file when it receives the `USR1` signal, which is the
 basic primitive that enables log rotation.
 
 If the validator is being started by a wrapper shell script, it is important to

@@ -26,7 +26,7 @@ native instructions.
 
 ## Memory map
 
-The virtual address memory map used by Solana BPF programs is fixed and laid out
+The virtual address memory map used by Solana SBF programs is fixed and laid out
 as follows
 
 - Program code starts at 0x100000000
@@ -42,7 +42,7 @@ the attempted violation.
 
 ## Stack
 
-BPF uses stack frames instead of a variable stack pointer. Each stack frame is
+SBF uses stack frames instead of a variable stack pointer. Each stack frame is
 4KB in size.
 
 If a program violates that stack frame size, the compiler will report the
@@ -67,7 +67,7 @@ crates may include functionality that violates the stack frame restrictions even
 if the program doesn't use that functionality. If the program violates the stack
 size at runtime, an `AccessViolation` error will be reported.
 
-BPF stack frames occupy a virtual address range starting at 0x200000000.
+SBF stack frames occupy a virtual address range starting at 0x200000000.
 
 ## Call Depth
 
@@ -126,7 +126,7 @@ added to support writable data.
 
 ## Signed division
 
-The BPF instruction set does not support [signed
+The SBF instruction set does not support [signed
 division](https://www.kernel.org/doc/html/latest/bpf/bpf_design_QA.html#q-why-there-is-no-bpf-sdiv-for-signed-divide-operation).
 Adding a signed division instruction is a consideration.
 
@@ -156,19 +156,19 @@ loader see:
 
 ### Deployment
 
-BPF program deployment is the process of uploading a BPF shared object into a
+SBF program deployment is the process of uploading a BPF shared object into a
 program account's data and marking the account executable. A client breaks the
-BPF shared object into smaller pieces and sends them as the instruction data of
+SBF shared object into smaller pieces and sends them as the instruction data of
 [`Write`](https://github.com/solana-labs/solana/blob/bc7133d7526a041d1aaee807b80922baa89b6f90/sdk/program/src/loader_instruction.rs#L13)
 instructions to the loader where loader writes that data into the program's
 account data. Once all the pieces are received the client sends a
 [`Finalize`](https://github.com/solana-labs/solana/blob/bc7133d7526a041d1aaee807b80922baa89b6f90/sdk/program/src/loader_instruction.rs#L30)
-instruction to the loader, the loader then validates that the BPF data is valid
+instruction to the loader, the loader then validates that the SBF data is valid
 and marks the program account as _executable_. Once the program account is
 marked executable, subsequent transactions may issue instructions for that
 program to process.
 
-When an instruction is directed at an executable BPF program the loader
+When an instruction is directed at an executable SBF program the loader
 configures the program's execution environment, serializes the program's input
 parameters, calls the program's entrypoint, and reports any errors encountered.
 
@@ -176,7 +176,7 @@ For further information see [deploying](deploying.md)
 
 ### Input Parameter Serialization
 
-BPF loaders serialize the program input parameters into a byte array that is
+SBF loaders serialize the program input parameters into a byte array that is
 then passed to the program's entrypoint, where the program is responsible for
 deserializing it on-chain. One of the changes between the deprecated loader and
 the current loader is that the input parameters are serialized in a way that

@@ -1,7 +1,6 @@
 import * as BufferLayout from '@solana/buffer-layout';
 import {Buffer} from 'buffer';
 
-import type {Blockhash} from './blockhash';
 import * as Layout from './layout';
 import {PublicKey} from './publickey';
 import type {FeeCalculator} from './fee-calculator';
@@ -36,9 +35,14 @@ const NonceAccountLayout = BufferLayout.struct<
 
 export const NONCE_ACCOUNT_LENGTH = NonceAccountLayout.span;
 
+/**
+ * A durable nonce is a 32 byte value encoded as a base58 string.
+ */
+export type DurableNonce = string;
+
 type NonceAccountArgs = {
   authorizedPubkey: PublicKey;
-  nonce: Blockhash;
+  nonce: DurableNonce;
   feeCalculator: FeeCalculator;
 };
 
@@ -47,7 +51,7 @@ type NonceAccountArgs = {
  */
 export class NonceAccount {
   authorizedPubkey: PublicKey;
-  nonce: Blockhash;
+  nonce: DurableNonce;
   feeCalculator: FeeCalculator;
 
   /**

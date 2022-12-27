@@ -5,6 +5,9 @@
 //! [JSON-RPC], using the [`RpcClient`] type.
 //!
 //! [JSON-RPC]: https://www.jsonrpc.org/specification
+//!
+//! This is a blocking API. For a non-blocking API use the asynchronous client
+//! in [`crate::nonblocking::rpc_client`].
 
 pub use crate::mock_sender::Mocks;
 #[allow(deprecated)]
@@ -18,6 +21,7 @@ use {
         nonblocking::{self, rpc_client::get_rpc_request_str},
         rpc_sender::*,
     },
+    serde::Serialize,
     serde_json::Value,
     solana_account_decoder::{
         parse_token::{UiTokenAccount, UiTokenAmount},
@@ -37,10 +41,10 @@ use {
         epoch_schedule::EpochSchedule,
         fee_calculator::{FeeCalculator, FeeRateGovernor},
         hash::Hash,
-        message::Message,
+        message::{v0, Message as LegacyMessage},
         pubkey::Pubkey,
         signature::Signature,
-        transaction::{self, Transaction},
+        transaction::{self, uses_durable_nonce, Transaction, VersionedTransaction},
     },
     solana_transaction_status::{
         EncodedConfirmedBlock, EncodedConfirmedTransactionWithStatusMeta, TransactionStatus,
@@ -61,6 +65,42 @@ impl RpcClientConfig {
             commitment_config,
             ..Self::default()
         }
+    }
+}
+
+/// Trait used to add support for versioned messages to RPC APIs while
+/// retaining backwards compatibility
+pub trait SerializableMessage: Serialize {}
+impl SerializableMessage for LegacyMessage {}
+impl SerializableMessage for v0::Message {}
+
+/// Trait used to add support for versioned transactions to RPC APIs while
+/// retaining backwards compatibility
+pub trait SerializableTransaction: Serialize {
+    fn get_signature(&self) -> &Signature;
+    fn get_recent_blockhash(&self) -> &Hash;
+    fn uses_durable_nonce(&self) -> bool;
+}
+impl SerializableTransaction for Transaction {
+    fn get_signature(&self) -> &Signature {
+        &self.signatures[0]
+    }
+    fn get_recent_blockhash(&self) -> &Hash {
+        &self.message.recent_blockhash
+    }
+    fn uses_durable_nonce(&self) -> bool {
+        uses_durable_nonce(self).is_some()
+    }
+}
+impl SerializableTransaction for VersionedTransaction {
+    fn get_signature(&self) -> &Signature {
+        &self.signatures[0]
+    }
+    fn get_recent_blockhash(&self) -> &Hash {
+        self.message.recent_blockhash()
+    }
+    fn uses_durable_nonce(&self) -> bool {
+        self.uses_durable_nonce()
     }
 }
 
@@ -368,7 +408,7 @@ impl RpcClient {
     /// behavior in specific scenarios:
     ///
     /// - It is customary to set the `url` to "succeeds" for mocks that should
-    ///   return sucessfully, though this value is not actually interpreted.
+    ///   return successfully, though this value is not actually interpreted.
     ///
     /// - If `url` is "fails" then any call to `send` will return `Ok(Value::Null)`.
     ///
@@ -423,7 +463,7 @@ impl RpcClient {
     ///    scenarios.
     ///
     ///    It is customary to set the `url` to "succeeds" for mocks that should
-    ///    return sucessfully, though this value is not actually interpreted.
+    ///    return successfully, though this value is not actually interpreted.
     ///
     ///    If `url` is "fails" then any call to `send` will return `Ok(Value::Null)`.
     ///
@@ -626,7 +666,7 @@ impl RpcClient {
     /// ```
     pub fn send_and_confirm_transaction(
         &self,
-        transaction: &Transaction,
+        transaction: &impl SerializableTransaction,
     ) -> ClientResult<Signature> {
         self.invoke((self.rpc_client.as_ref()).send_and_confirm_transaction(transaction))
     }
@@ -634,7 +674,7 @@ impl RpcClient {
     #[cfg(feature = "spinner")]
     pub fn send_and_confirm_transaction_with_spinner(
         &self,
-        transaction: &Transaction,
+        transaction: &impl SerializableTransaction,
     ) -> ClientResult<Signature> {
         self.invoke(
             (self.rpc_client.as_ref()).send_and_confirm_transaction_with_spinner(transaction),
@@ -644,7 +684,7 @@ impl RpcClient {
     #[cfg(feature = "spinner")]
     pub fn send_and_confirm_transaction_with_spinner_and_commitment(
         &self,
-        transaction: &Transaction,
+        transaction: &impl SerializableTransaction,
         commitment: CommitmentConfig,
     ) -> ClientResult<Signature> {
         self.invoke(
@@ -656,7 +696,7 @@ impl RpcClient {
     #[cfg(feature = "spinner")]
     pub fn send_and_confirm_transaction_with_spinner_and_config(
         &self,
-        transaction: &Transaction,
+        transaction: &impl SerializableTransaction,
         commitment: CommitmentConfig,
         config: RpcSendTransactionConfig,
     ) -> ClientResult<Signature> {
@@ -737,7 +777,10 @@ impl RpcClient {
     /// let signature = rpc_client.send_transaction(&tx)?;
     /// # Ok::<(), Error>(())
     /// ```
-    pub fn send_transaction(&self, transaction: &Transaction) -> ClientResult<Signature> {
+    pub fn send_transaction(
+        &self,
+        transaction: &impl SerializableTransaction,
+    ) -> ClientResult<Signature> {
         self.invoke((self.rpc_client.as_ref()).send_transaction(transaction))
     }
 
@@ -822,7 +865,7 @@ impl RpcClient {
     /// ```
     pub fn send_transaction_with_config(
         &self,
-        transaction: &Transaction,
+        transaction: &impl SerializableTransaction,
         config: RpcSendTransactionConfig,
     ) -> ClientResult<Signature> {
         self.invoke((self.rpc_client.as_ref()).send_transaction_with_config(transaction, config))
@@ -1022,7 +1065,7 @@ impl RpcClient {
     /// ```
     pub fn simulate_transaction(
         &self,
-        transaction: &Transaction,
+        transaction: &impl SerializableTransaction,
     ) -> RpcResult<RpcSimulateTransactionResult> {
         self.invoke((self.rpc_client.as_ref()).simulate_transaction(transaction))
     }
@@ -1099,7 +1142,7 @@ impl RpcClient {
     /// ```
     pub fn simulate_transaction_with_config(
         &self,
-        transaction: &Transaction,
+        transaction: &impl SerializableTransaction,
         config: RpcSimulateTransactionConfig,
     ) -> RpcResult<RpcSimulateTransactionResult> {
         self.invoke(
@@ -3938,7 +3981,7 @@ impl RpcClient {
     }
 
     #[allow(deprecated)]
-    pub fn get_fee_for_message(&self, message: &Message) -> ClientResult<u64> {
+    pub fn get_fee_for_message(&self, message: &impl SerializableMessage) -> ClientResult<u64> {
         self.invoke((self.rpc_client.as_ref()).get_fee_for_message(message))
     }
 
@@ -4247,6 +4290,85 @@ mod tests {
                 .get_stake_minimum_delegation_with_commitment(CommitmentConfig::confirmed())
                 .unwrap();
             assert_eq!(expected_minimum_delegation, actual_minimum_delegation);
+        }
+    }
+
+    #[test]
+    fn test_get_program_accounts_with_config() {
+        let program_id = Pubkey::new_unique();
+        let pubkey = Pubkey::new_unique();
+        let account = Account {
+            lamports: 1_000_000,
+            data: vec![],
+            owner: program_id,
+            executable: false,
+            rent_epoch: 0,
+        };
+        let keyed_account = RpcKeyedAccount {
+            pubkey: pubkey.to_string(),
+            account: UiAccount::encode(&pubkey, &account, UiAccountEncoding::Base64, None, None),
+        };
+        let expected_result = vec![(pubkey, account)];
+        // Test: without context
+        {
+            let mocks: Mocks = [(
+                RpcRequest::GetProgramAccounts,
+                serde_json::to_value(OptionalContext::NoContext(vec![keyed_account.clone()]))
+                    .unwrap(),
+            )]
+            .into_iter()
+            .collect();
+            let rpc_client = RpcClient::new_mock_with_mocks("mock_client".to_string(), mocks);
+            let result = rpc_client
+                .get_program_accounts_with_config(
+                    &program_id,
+                    RpcProgramAccountsConfig {
+                        filters: None,
+                        account_config: RpcAccountInfoConfig {
+                            encoding: Some(UiAccountEncoding::Base64),
+                            data_slice: None,
+                            commitment: None,
+                            min_context_slot: None,
+                        },
+                        with_context: None,
+                    },
+                )
+                .unwrap();
+            assert_eq!(expected_result, result);
+        }
+
+        // Test: with context
+        {
+            let mocks: Mocks = [(
+                RpcRequest::GetProgramAccounts,
+                serde_json::to_value(OptionalContext::Context(Response {
+                    context: RpcResponseContext {
+                        slot: 1,
+                        api_version: None,
+                    },
+                    value: vec![keyed_account],
+                }))
+                .unwrap(),
+            )]
+            .into_iter()
+            .collect();
+            let rpc_client = RpcClient::new_mock_with_mocks("mock_client".to_string(), mocks);
+            let result = rpc_client
+                .get_program_accounts_with_config(
+                    &program_id,
+                    RpcProgramAccountsConfig {
+                        filters: None,
+                        account_config: RpcAccountInfoConfig {
+                            encoding: Some(UiAccountEncoding::Base64),
+                            data_slice: None,
+                            commitment: None,
+                            min_context_slot: None,
+                        },
+                        with_context: Some(true),
+                    },
+                )
+                .unwrap();
+            assert_eq!(expected_result, result);
         }
     }
 }

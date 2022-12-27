@@ -66,7 +66,7 @@ async function fetchAccountTokens(
       "processed"
     ).getParsedTokenAccountsByOwner(pubkey, { programId: TOKEN_PROGRAM_ID });
     data = {
-      tokens: value.map((accountInfo) => {
+      tokens: value.slice(0, 101).map((accountInfo) => {
         const parsedInfo = accountInfo.account.data.parsed.info;
         const info = create(parsedInfo, TokenAccountInfo);
         return { info, pubkey: accountInfo.pubkey };

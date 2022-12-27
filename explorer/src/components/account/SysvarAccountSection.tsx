@@ -107,7 +107,7 @@ function SysvarAccountRecentBlockhashesCard({
     <div className="card">
       <AccountHeader
         title="Sysvar: Recent Blockhashes"
-        refresh={() => refresh(account.pubkey)}
+        refresh={() => refresh(account.pubkey, "parsed")}
       />
 
       <TableCardBody>
@@ -129,7 +129,7 @@ function SysvarAccountSlotHashes({
     <div className="card">
       <AccountHeader
         title="Sysvar: Slot Hashes"
-        refresh={() => refresh(account.pubkey)}
+        refresh={() => refresh(account.pubkey, "parsed")}
       />
 
       <TableCardBody>
@@ -158,7 +158,7 @@ function SysvarAccountSlotHistory({
     <div className="card">
       <AccountHeader
         title="Sysvar: Slot History"
-        refresh={() => refresh(account.pubkey)}
+        refresh={() => refresh(account.pubkey, "parsed")}
       />
 
       <TableCardBody>
@@ -194,7 +194,7 @@ function SysvarAccountStakeHistory({
     <div className="card">
       <AccountHeader
         title="Sysvar: Stake History"
-        refresh={() => refresh(account.pubkey)}
+        refresh={() => refresh(account.pubkey, "parsed")}
       />
 
       <TableCardBody>
@@ -217,7 +217,7 @@ function SysvarAccountFeesCard({
     <div className="card">
       <AccountHeader
         title="Sysvar: Fees"
-        refresh={() => refresh(account.pubkey)}
+        refresh={() => refresh(account.pubkey, "parsed")}
       />
 
       <TableCardBody>
@@ -247,7 +247,7 @@ function SysvarAccountEpochScheduleCard({
     <div className="card">
       <AccountHeader
         title="Sysvar: Epoch Schedule"
-        refresh={() => refresh(account.pubkey)}
+        refresh={() => refresh(account.pubkey, "parsed")}
       />
 
       <TableCardBody>
@@ -301,7 +301,7 @@ function SysvarAccountClockCard({
     <div className="card">
       <AccountHeader
         title="Sysvar: Clock"
-        refresh={() => refresh(account.pubkey)}
+        refresh={() => refresh(account.pubkey, "parsed")}
       />
 
       <TableCardBody>
@@ -352,7 +352,7 @@ function SysvarAccountRentCard({
     <div className="card">
       <AccountHeader
         title="Sysvar: Rent"
-        refresh={() => refresh(account.pubkey)}
+        refresh={() => refresh(account.pubkey, "parsed")}
       />
 
       <TableCardBody>
@@ -401,7 +401,7 @@ function SysvarAccountRewardsCard({
     <div className="card">
       <AccountHeader
         title="Sysvar: Rewards"
-        refresh={() => refresh(account.pubkey)}
+        refresh={() => refresh(account.pubkey, "parsed")}
       />
 
       <TableCardBody>

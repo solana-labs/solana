@@ -214,36 +214,6 @@ pub(in crate::parse_token) fn parse_confidential_transfer_instruction(
                 info: value,
             })
         }
-        ConfidentialTransferInstruction::TransferWithFee => {
-            check_num_token_accounts(account_indexes, 5)?;
-            let transfer_data: TransferInstructionData = *decode_instruction_data(instruction_data)
-                .map_err(|_| {
-                    ParseInstructionError::InstructionNotParsable(ParsableProgram::SplToken)
-                })?;
-            let proof_instruction_offset: i8 = transfer_data.proof_instruction_offset;
-            let mut value = json!({
-                "source": account_keys[account_indexes[0] as usize].to_string(),
-                "destination": account_keys[account_indexes[1] as usize].to_string(),
-                "mint": account_keys[account_indexes[2] as usize].to_string(),
-                "instructionsSysvar": account_keys[account_indexes[3] as usize].to_string(),
-                "newSourceDecryptableAvailableBalance": format!("{}", transfer_data.new_source_decryptable_available_balance),
-                "proofInstructionOffset": proof_instruction_offset,
-
-            });
-            let map = value.as_object_mut().unwrap();
-            parse_signers(
-                map,
-                4,
-                account_keys,
-                account_indexes,
-                "owner",
-                "multisigOwner",
-            );
-            Ok(ParsedInstructionEnum {
-                instruction_type: "confidentialTransferWithFee".to_string(),
-                info: value,
-            })
-        }
         ConfidentialTransferInstruction::ApplyPendingBalance => {
             check_num_token_accounts(account_indexes, 2)?;
             let apply_pending_balance_data: ApplyPendingBalanceData =
@@ -273,7 +243,7 @@ pub(in crate::parse_token) fn parse_confidential_transfer_instruction(
                 info: value,
             })
         }
-        ConfidentialTransferInstruction::EnableBalanceCredits => {
+        ConfidentialTransferInstruction::EnableConfidentialCredits => {
             check_num_token_accounts(account_indexes, 2)?;
             let mut value = json!({
                 "account": account_keys[account_indexes[0] as usize].to_string(),
@@ -289,11 +259,11 @@ pub(in crate::parse_token) fn parse_confidential_transfer_instruction(
                 "multisigOwner",
             );
             Ok(ParsedInstructionEnum {
-                instruction_type: "enableConfidentialTransferBalanceCredits".to_string(),
+                instruction_type: "enableConfidentialTransferConfidentialCredits".to_string(),
                 info: value,
             })
         }
-        ConfidentialTransferInstruction::DisableBalanceCredits => {
+        ConfidentialTransferInstruction::DisableConfidentialCredits => {
             check_num_token_accounts(account_indexes, 2)?;
             let mut value = json!({
                 "account": account_keys[account_indexes[0] as usize].to_string(),
@@ -309,7 +279,47 @@ pub(in crate::parse_token) fn parse_confidential_transfer_instruction(
                 "multisigOwner",
             );
             Ok(ParsedInstructionEnum {
-                instruction_type: "disableConfidentialTransferBalanceCredits".to_string(),
+                instruction_type: "disableConfidentialTransferConfidentialCredits".to_string(),
+                info: value,
+            })
+        }
+        ConfidentialTransferInstruction::EnableNonConfidentialCredits => {
+            check_num_token_accounts(account_indexes, 2)?;
+            let mut value = json!({
+                "account": account_keys[account_indexes[0] as usize].to_string(),
+
+            });
+            let map = value.as_object_mut().unwrap();
+            parse_signers(
+                map,
+                1,
+                account_keys,
+                account_indexes,
+                "owner",
+                "multisigOwner",
+            );
+            Ok(ParsedInstructionEnum {
+                instruction_type: "enableConfidentialTransferNonConfidentialCredits".to_string(),
+                info: value,
+            })
+        }
+        ConfidentialTransferInstruction::DisableNonConfidentialCredits => {
+            check_num_token_accounts(account_indexes, 2)?;
+            let mut value = json!({
+                "account": account_keys[account_indexes[0] as usize].to_string(),
+
+            });
+            let map = value.as_object_mut().unwrap();
+            parse_signers(
+                map,
+                1,
+                account_keys,
+                account_indexes,
+                "owner",
+                "multisigOwner",
+            );
+            Ok(ParsedInstructionEnum {
+                instruction_type: "disableNonConfidentialTransferConfidentialCredits".to_string(),
                 info: value,
             })
         }

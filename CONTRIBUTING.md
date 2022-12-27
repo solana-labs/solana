@@ -255,7 +255,7 @@ directory and viewable on the official [Solana Documentation](https://docs.solan
 
 Current design proposals may be viewed on the docs site:
 
-1. [Accepted Proposals](https://docs.solana.com/proposals/accepted-design-proposals.md).
-2. [Implemented Proposals](https://docs.solana.com/implemented-proposals/implemented-proposals.md)
+1. [Accepted Proposals](https://docs.solana.com/proposals/accepted-design-proposals)
+2. [Implemented Proposals](https://docs.solana.com/implemented-proposals/implemented-proposals)
 
 New design proposals should follow this guide on [how to submit a design proposal](./docs/src/proposals.md#submit-a-design-proposal).

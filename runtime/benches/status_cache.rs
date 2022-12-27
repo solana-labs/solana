@@ -25,7 +25,7 @@ fn bench_status_cache_serialize(bencher: &mut Bencher) {
             id = hash(id.as_ref());
             sigbytes.extend(id.as_ref());
             let sig = Signature::new(&sigbytes);
-            status_cache.insert(&blockhash, &sig, 0, Ok(()));
+            status_cache.insert(&blockhash, sig, 0, Ok(()));
         }
     }
     assert!(status_cache.roots().contains(&0));

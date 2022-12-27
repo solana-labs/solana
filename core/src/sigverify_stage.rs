@@ -253,8 +253,8 @@ impl SigVerifyStage {
             .iter_mut()
             .rev()
             .flat_map(|batch| batch.iter_mut().rev())
-            .filter(|packet| !packet.meta.discard())
-            .map(|packet| (packet.meta.addr, packet))
+            .filter(|packet| !packet.meta().discard())
+            .map(|packet| (packet.meta().addr, packet))
             .into_group_map();
         // Allocate max_packets evenly across addresses.
         while max_packets > 0 && !addrs.is_empty() {
@@ -269,7 +269,7 @@ impl SigVerifyStage {
         // Discard excess packets from each address.
         for packet in addrs.into_values().flatten() {
             process_excess_packet(packet);
-            packet.meta.set_discard(true);
+            packet.meta_mut().set_discard(true);
         }
     }
 
@@ -472,13 +472,9 @@ mod tests {
     fn count_non_discard(packet_batches: &[PacketBatch]) -> usize {
         packet_batches
             .iter()
-            .map(|batch| {
-                batch
-                    .iter()
-                    .map(|p| if p.meta.discard() { 0 } else { 1 })
-                    .sum::<usize>()
-            })
-            .sum::<usize>()
+            .flatten()
+            .filter(|p| !p.meta().discard())
+            .count()
     }
 
     #[test]
@@ -487,18 +483,18 @@ mod tests {
         let batch_size = 10;
         let mut batch = PacketBatch::with_capacity(batch_size);
         let mut tracer_packet = Packet::default();
-        tracer_packet.meta.flags |= PacketFlags::TRACER_PACKET;
+        tracer_packet.meta_mut().flags |= PacketFlags::TRACER_PACKET;
         batch.resize(batch_size, tracer_packet);
-        batch[3].meta.addr = std::net::IpAddr::from([1u16; 8]);
-        batch[3].meta.set_discard(true);
+        batch[3].meta_mut().addr = std::net::IpAddr::from([1u16; 8]);
+        batch[3].meta_mut().set_discard(true);
         let num_discarded_before_filter = 1;
-        batch[4].meta.addr = std::net::IpAddr::from([2u16; 8]);
+        batch[4].meta_mut().addr = std::net::IpAddr::from([2u16; 8]);
         let total_num_packets = batch.len();
         let mut batches = vec![batch];
         let max = 3;
         let mut total_tracer_packets_discarded = 0;
         SigVerifyStage::discard_excess_packets(&mut batches, max, |packet| {
-            if packet.meta.is_tracer_packet() {
+            if packet.meta().is_tracer_packet() {
                 total_tracer_packets_discarded += 1;
             }
         });
@@ -512,9 +508,9 @@ mod tests {
             total_discarded - num_discarded_before_filter
         );
         assert_eq!(total_non_discard, max);
-        assert!(!batches[0][0].meta.discard());
-        assert!(batches[0][3].meta.discard());
-        assert!(!batches[0][4].meta.discard());
+        assert!(!batches[0][0].meta().discard());
+        assert!(batches[0][3].meta().discard());
+        assert!(!batches[0][4].meta().discard());
     }
 
     fn gen_batches(
@@ -560,7 +556,7 @@ mod tests {
                 sent_len += batch.len();
                 batch
                     .iter_mut()
-                    .for_each(|packet| packet.meta.flags |= PacketFlags::TRACER_PACKET);
+                    .for_each(|packet| packet.meta_mut().flags |= PacketFlags::TRACER_PACKET);
                 assert_eq!(batch.len(), packets_per_batch);
                 packet_s.send(vec![batch]).unwrap();
             }
@@ -641,7 +637,7 @@ mod tests {
             batches.iter_mut().for_each(|batch| {
                 batch.iter_mut().for_each(|p| {
                     if ((index + 1) as f64 / num_packets as f64) < MAX_DISCARDED_PACKET_RATE {
-                        p.meta.set_discard(true);
+                        p.meta_mut().set_discard(true);
                     }
                     index += 1;
                 })
@@ -651,7 +647,7 @@ mod tests {
         assert_eq!(SigVerifyStage::maybe_shrink_batches(&mut batches).1, 0);
 
         // discard one more to exceed shrink threshold
-        batches.last_mut().unwrap()[0].meta.set_discard(true);
+        batches.last_mut().unwrap()[0].meta_mut().set_discard(true);
 
         let expected_num_shrunk_batches =
             1.max((num_generated_batches as f64 * MAX_DISCARDED_PACKET_RATE) as usize);

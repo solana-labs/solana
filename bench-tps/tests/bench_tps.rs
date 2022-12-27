@@ -4,8 +4,14 @@ use {
     serial_test::serial,
     solana_bench_tps::{
         bench::{do_bench_tps, generate_and_fund_keypairs},
-        cli::Config,
+        cli::{Config, InstructionPaddingConfig},
         send_batch::generate_durable_nonce_accounts,
+        spl_convert::FromOtherSolana,
+    },
+    solana_client::{
+        connection_cache::ConnectionCache,
+        thin_client::ThinClient,
+        tpu_client::{TpuClient, TpuClientConfig},
     },
     solana_core::validator::ValidatorConfig,
     solana_faucet::faucet::run_local_faucet,
@@ -16,21 +22,33 @@ use {
     solana_rpc::rpc::JsonRpcConfig,
     solana_rpc_client::rpc_client::RpcClient,
     solana_sdk::{
+        account::{Account, AccountSharedData},
         commitment_config::CommitmentConfig,
+        fee_calculator::FeeRateGovernor,
+        rent::Rent,
         signature::{Keypair, Signer},
     },
     solana_streamer::socket::SocketAddrSpace,
-    solana_test_validator::TestValidator,
-    solana_thin_client::thin_client::ThinClient,
-    solana_tpu_client::{
-        connection_cache::ConnectionCache,
-        tpu_client::{TpuClient, TpuClientConfig},
-    },
+    solana_test_validator::TestValidatorGenesis,
     std::{sync::Arc, time::Duration},
 };
 
+fn program_account(program_data: &[u8]) -> AccountSharedData {
+    AccountSharedData::from(Account {
+        lamports: Rent::default().minimum_balance(program_data.len()).min(1),
+        data: program_data.to_vec(),
+        owner: solana_sdk::bpf_loader::id(),
+        executable: true,
+        rent_epoch: 0,
+    })
+}
+
 fn test_bench_tps_local_cluster(config: Config) {
     let native_instruction_processors = vec![];
+    let additional_accounts = vec![(
+        FromOtherSolana::from(spl_instruction_padding::ID),
+        program_account(include_bytes!("fixtures/spl_instruction_padding.so")),
+    )];
 
     solana_logger::setup();
 
@@ -54,6 +72,7 @@ fn test_bench_tps_local_cluster(config: Config) {
                 NUM_NODES,
             ),
             native_instruction_processors,
+            additional_accounts,
             ..ClusterConfig::default()
         },
         SocketAddrSpace::Unspecified,
@@ -92,8 +111,20 @@ fn test_bench_tps_test_validator(config: Config) {
 
     let faucet_addr = run_local_faucet(mint_keypair, None);
 
-    let test_validator =
-        TestValidator::with_no_fees(mint_pubkey, Some(faucet_addr), SocketAddrSpace::Unspecified);
+    let test_validator = TestValidatorGenesis::default()
+        .fee_rate_governor(FeeRateGovernor::new(0, 0))
+        .rent(Rent {
+            lamports_per_byte_year: 1,
+            exemption_threshold: 1.0,
+            ..Rent::default()
+        })
+        .faucet_addr(Some(faucet_addr))
+        .add_program(
+            "spl_instruction_padding",
+            FromOtherSolana::from(spl_instruction_padding::ID),
+        )
+        .start_with_mint_address(mint_pubkey, SocketAddrSpace::Unspecified)
+        .expect("validator start failed");
 
     let rpc_client = Arc::new(RpcClient::new_with_commitment(
         test_validator.rpc_url(),
@@ -161,6 +192,34 @@ fn test_bench_tps_tpu_client_nonce() {
         tx_count: 100,
         duration: Duration::from_secs(10),
         use_durable_nonce: true,
+        ..Config::default()
+    });
+}
+
+#[test]
+#[serial]
+fn test_bench_tps_local_cluster_with_padding() {
+    test_bench_tps_local_cluster(Config {
+        tx_count: 100,
+        duration: Duration::from_secs(10),
+        instruction_padding_config: Some(InstructionPaddingConfig {
+            program_id: FromOtherSolana::from(spl_instruction_padding::ID),
+            data_size: 0,
+        }),
+        ..Config::default()
+    });
+}
+
+#[test]
+#[serial]
+fn test_bench_tps_tpu_client_with_padding() {
+    test_bench_tps_test_validator(Config {
+        tx_count: 100,
+        duration: Duration::from_secs(10),
+        instruction_padding_config: Some(InstructionPaddingConfig {
+            program_id: FromOtherSolana::from(spl_instruction_padding::ID),
+            data_size: 0,
+        }),
         ..Config::default()
     });
 }

@@ -296,7 +296,7 @@ impl BucketStorage {
         data.seek(SeekFrom::Start(capacity * cell_size as u64 - 1))
             .unwrap();
         data.write_all(&[0]).unwrap();
-        data.seek(SeekFrom::Start(0)).unwrap();
+        data.rewind().unwrap();
         measure_new_file.stop();
         let mut measure_flush = Measure::start("measure_flush");
         data.flush().unwrap(); // can we skip this?
@@ -381,16 +381,12 @@ impl BucketStorage {
 
 #[cfg(test)]
 mod test {
-    use super::*;
+    use {super::*, tempfile::tempdir};
 
     #[test]
     fn test_bucket_storage() {
-        let tmpdir1 = std::env::temp_dir().join("bucket_map_test_mt");
-        let paths: Vec<PathBuf> = [tmpdir1]
-            .iter()
-            .filter(|x| std::fs::create_dir_all(x).is_ok())
-            .cloned()
-            .collect();
+        let tmpdir = tempdir().unwrap();
+        let paths: Vec<PathBuf> = vec![tmpdir.path().to_path_buf()];
         assert!(!paths.is_empty());
 
         let mut storage =

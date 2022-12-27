@@ -45,7 +45,7 @@ If an account is marked "executable" in its metadata, then it is considered a
 program which can be executed by including the account's public key in an
 instruction's [program id](transactions.md#program-id). Accounts are marked as
 executable during a successful program deployment process by the loader that
-owns the account. When a program is deployed to the execution engine (BPF deployment),
+owns the account. When a program is deployed to the execution engine (SBF deployment),
 the loader determines that the bytecode in the account's data is valid.
 If so, the loader permanently marks the program account as executable.
 
@@ -58,7 +58,9 @@ possible to upload a totally new program to an existing program address.
 To create an account, a client generates a _keypair_ and registers its public key
 using the `SystemProgram::CreateAccount` instruction with a fixed
 storage size in bytes preallocated.
-The current maximum size of an account's data is 10 megabytes.
+The current maximum size of an account's data is 10 MiB, which can be changed
+(increased or decreased) at a rate over all accounts of 20 MiB per transaction,
+and the size can be increased by 10 KiB per account and per instruction.
 
 An account address can be any arbitrary 256 bit value, and there are mechanisms
 for advanced users to create derived addresses

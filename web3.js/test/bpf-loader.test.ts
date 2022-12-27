@@ -27,7 +27,7 @@ if (process.env.TEST_LIVE) {
       before(async function () {
         this.timeout(60_000);
         programData = await fs.readFile(
-          'test/fixtures/noop-program/solana_bpf_rust_noop.so',
+          'test/fixtures/noop-program/solana_sbf_rust_noop.so',
         );
 
         const {feeCalculator} = await connection.getRecentBlockhash();

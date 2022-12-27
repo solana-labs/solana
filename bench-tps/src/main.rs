@@ -4,11 +4,16 @@ use {
     clap::value_t,
     log::*,
     solana_bench_tps::{
-        bench::{do_bench_tps, max_lamporots_for_prioritization},
+        bench::{do_bench_tps, max_lamports_for_prioritization},
         bench_tps_client::BenchTpsClient,
         cli::{self, ExternalClientType},
         keypairs::get_keypairs,
         send_batch::{generate_durable_nonce_accounts, generate_keypairs},
+    },
+    solana_client::{
+        connection_cache::ConnectionCache,
+        thin_client::ThinClient,
+        tpu_client::{TpuClient, TpuClientConfig},
     },
     solana_genesis::Base64Account,
     solana_gossip::gossip_service::{discover_cluster, get_client, get_multi_client},
@@ -18,11 +23,6 @@ use {
         system_program,
     },
     solana_streamer::socket::SocketAddrSpace,
-    solana_thin_client::thin_client::ThinClient,
-    solana_tpu_client::{
-        connection_cache::ConnectionCache,
-        tpu_client::{TpuClient, TpuClientConfig},
-    },
     std::{
         collections::HashMap, fs::File, io::prelude::*, net::SocketAddr, path::Path, process::exit,
         sync::Arc,
@@ -62,7 +62,7 @@ fn create_client(
                 let nodes =
                     discover_cluster(entrypoint_addr, num_nodes, SocketAddrSpace::Unspecified)
                         .unwrap_or_else(|err| {
-                            eprintln!("Failed to discover {} nodes: {:?}", num_nodes, err);
+                            eprintln!("Failed to discover {num_nodes} nodes: {err:?}");
                             exit(1);
                         });
                 if multi_client {
@@ -70,8 +70,7 @@ fn create_client(
                         get_multi_client(&nodes, &SocketAddrSpace::Unspecified, connection_cache);
                     if nodes.len() < num_clients {
                         eprintln!(
-                            "Error: Insufficient nodes discovered.  Expecting {} or more",
-                            num_nodes
+                            "Error: Insufficient nodes discovered.  Expecting {num_nodes} or more"
                         );
                         exit(1);
                     }
@@ -90,7 +89,7 @@ fn create_client(
                         }
                     }
                     Arc::new(target_client.unwrap_or_else(|| {
-                        eprintln!("Target node {} not found", target_node);
+                        eprintln!("Target node {target_node} not found");
                         exit(1);
                     }))
                 } else {
@@ -120,7 +119,7 @@ fn create_client(
                     Arc::new(connection_cache),
                 )
                 .unwrap_or_else(|err| {
-                    eprintln!("Could not create TpuClient {:?}", err);
+                    eprintln!("Could not create TpuClient {err:?}");
                     exit(1);
                 }),
             )
@@ -155,6 +154,7 @@ fn main() {
         tpu_connection_pool_size,
         use_randomized_compute_unit_price,
         use_durable_nonce,
+        instruction_padding_config,
         ..
     } = &cli_config;
 
@@ -165,7 +165,7 @@ fn main() {
         let num_accounts = keypairs.len() as u64;
         let max_fee = FeeRateGovernor::new(*target_lamports_per_signature, 0)
             .max_lamports_per_signature
-            .saturating_add(max_lamporots_for_prioritization(
+            .saturating_add(max_lamports_for_prioritization(
                 *use_randomized_compute_unit_price,
             ));
         let num_lamports_per_account = (num_accounts - 1 + NUM_SIGNATURES_FOR_TXS * max_fee)
@@ -188,6 +188,7 @@ fn main() {
         let serialized = serde_yaml::to_string(&accounts).unwrap();
         let path = Path::new(&client_ids_and_stake_file);
         let mut file = File::create(path).unwrap();
+        file.write_all(b"---\n").unwrap();
         file.write_all(&serialized.into_bytes()).unwrap();
         return;
     }
@@ -196,14 +197,14 @@ fn main() {
     let rpc_tpu_sockets: Option<(SocketAddr, SocketAddr)> =
         if let Ok(rpc_addr) = value_t!(matches, "rpc_addr", String) {
             let rpc = rpc_addr.parse().unwrap_or_else(|e| {
-                eprintln!("RPC address should parse as socketaddr {:?}", e);
+                eprintln!("RPC address should parse as socketaddr {e:?}");
                 exit(1);
             });
             let tpu = value_t!(matches, "tpu_addr", String)
                 .unwrap()
                 .parse()
                 .unwrap_or_else(|e| {
-                    eprintln!("TPU address should parse to a socket: {:?}", e);
+                    eprintln!("TPU address should parse to a socket: {e:?}");
                     exit(1);
                 });
             Some((rpc, tpu))
@@ -223,6 +224,15 @@ fn main() {
         *num_nodes,
         *target_node,
     );
+    if let Some(instruction_padding_config) = instruction_padding_config {
+        info!(
+            "Checking for existence of instruction padding program: {}",
+            instruction_padding_config.program_id
+        );
+        client
+            .get_account(&instruction_padding_config.program_id)
+            .expect("Instruction padding program must be deployed to this cluster. Deploy the program using `solana program deploy ./bench-tps/tests/fixtures/spl_instruction_padding.so` and pass the resulting program id with `--instruction-padding-program-id`");
+    }
     let keypairs = get_keypairs(
         client.clone(),
         id,

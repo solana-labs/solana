@@ -5,7 +5,8 @@ use {
         blockstore_metrics::{
             maybe_enable_rocksdb_perf, report_rocksdb_read_perf, report_rocksdb_write_perf,
             BlockstoreRocksDbColumnFamilyMetrics, PerfSamplingStatus, PERF_METRIC_OP_NAME_GET,
-            PERF_METRIC_OP_NAME_PUT, PERF_METRIC_OP_NAME_WRITE_BATCH,
+            PERF_METRIC_OP_NAME_MULTI_GET, PERF_METRIC_OP_NAME_PUT,
+            PERF_METRIC_OP_NAME_WRITE_BATCH,
         },
         blockstore_options::{
             AccessType, BlockstoreOptions, LedgerColumnOptions, ShredStorageType,
@@ -20,8 +21,8 @@ use {
         compaction_filter::CompactionFilter,
         compaction_filter_factory::{CompactionFilterContext, CompactionFilterFactory},
         properties as RocksProperties, ColumnFamily, ColumnFamilyDescriptor, CompactionDecision,
-        DBCompactionStyle, DBIterator, DBRawIterator, FifoCompactOptions,
-        IteratorMode as RocksIteratorMode, Options, WriteBatch as RWriteBatch, DB,
+        DBCompactionStyle, DBIterator, DBPinnableSlice, DBRawIterator, FifoCompactOptions,
+        IteratorMode as RocksIteratorMode, LiveFile, Options, WriteBatch as RWriteBatch, DB,
     },
     serde::{de::DeserializeOwned, Serialize},
     solana_runtime::hardened_unpack::UnpackError,
@@ -94,9 +95,6 @@ const PROGRAM_COSTS_CF: &str = "program_costs";
 /// Column family for optimistic slots
 const OPTIMISTIC_SLOTS_CF: &str = "optimistic_slots";
 
-// 1 day is chosen for the same reasoning of DEFAULT_COMPACTION_SLOT_INTERVAL
-const PERIODIC_COMPACTION_SECONDS: u64 = 60 * 60 * 24;
-
 #[derive(Error, Debug)]
 pub enum BlockstoreError {
     ShredForIndexExists,
@@ -136,83 +134,179 @@ pub enum IteratorMode<Index> {
 
 pub mod columns {
     #[derive(Debug)]
-    /// The slot metadata column
+    /// The slot metadata column.
+    ///
+    /// This column family tracks the status of the received shred data for a
+    /// given slot.  Tracking the progress as the slot fills up allows us to
+    /// know if the slot (or pieces of the slot) are ready to be replayed.
+    ///
+    /// index type: u64 (see `SlotColumn`)
+    /// value type: `blockstore_meta::SlotMeta`
     pub struct SlotMeta;
 
     #[derive(Debug)]
-    /// The orphans column
+    /// The orphans column.
+    ///
+    /// This column family tracks whether a slot has a parent.  Slots without a
+    /// parent are by definition orphan slots.  Orphans will have an entry in
+    /// this column family with true value.  Once an orphan slot has a parent,
+    /// its entry in this column will be deleted.
+    ///
+    /// index type: u64 (see `SlotColumn`)
+    /// value type: bool
     pub struct Orphans;
 
     #[derive(Debug)]
-    /// The dead slots column
+    /// The dead slots column.
+    /// This column family tracks whether a slot is dead.
+    ///
+    /// A slot is marked as dead if the validator thinks it will never be able
+    /// to successfully replay this slot.  Example scenarios include errors
+    /// during the replay of a slot, or the validator believes it will never
+    /// receive all the shreds of a slot.
+    ///
+    /// If a slot has been mistakenly marked as dead, the ledger-tool's
+    /// --remove-dead-slot can unmark a dead slot.
+    ///
+    /// index type: u64 (see `SlotColumn`)
+    /// value type: bool
     pub struct DeadSlots;
 
     #[derive(Debug)]
     /// The duplicate slots column
+    ///
+    /// index type: u64 (see `SlotColumn`)
+    /// value type: `blockstore_meta::DuplicateSlotProof`
     pub struct DuplicateSlots;
 
     #[derive(Debug)]
-    /// The erasure meta column
+    /// The erasure meta column.
+    ///
+    /// This column family stores ErasureMeta which includes metadata about
+    /// dropped network packets (or erasures) that can be used to recover
+    /// missing data shreds.
+    ///
+    /// Its index type is ErasureSetId, which consists of a Slot ID
+    /// and a FEC (Forward Error Correction) set index.
+    ///
+    /// index type: `ErasureSetId` (Slot, fec_set_index: u64)
+    /// value type: `blockstore_meta::ErasureMeta`
     pub struct ErasureMeta;
 
     #[derive(Debug)]
-    /// The bank hash column
+    /// The bank hash column.
+    ///
+    /// This column family persists the bank hash of a given slot.  Note that
+    /// not every slot has a bank hash (e.g., a dead slot.)
+    ///
+    /// The bank hash of a slot is derived from hashing the delta state of all
+    /// the accounts in a slot combined with the bank hash of its parent slot.
+    /// A bank hash of a slot essentially represents all the account states at
+    /// that slot.
+    ///
+    /// index type: u64 (see `SlotColumn`)
+    /// value type: `blockstore_meta::FrozenHashVersioned`
     pub struct BankHash;
 
     #[derive(Debug)]
-    /// The root column
+    /// The root column.
+    ///
+    /// This column family persists whether a slot is a root.  Slots on the
+    /// main fork will be inserted into this column when they are finalized.
+    ///
+    /// index type: u64 (see `SlotColumn`)
+    /// value type: bool
     pub struct Root;
 
     #[derive(Debug)]
     /// The index column
+    ///
+    /// index type: u64 (see `SlotColumn`)
+    /// value type: `blockstore_meta::Index`
     pub struct Index;
 
     #[derive(Debug)]
     /// The shred data column
+    ///
+    /// index type: (u64, u64)
+    /// value type: Vec<u8>
     pub struct ShredData;
 
     #[derive(Debug)]
     /// The shred erasure code column
+    ///
+    /// index type: (u64, u64)
+    /// value type: Vec<u8>
     pub struct ShredCode;
 
     #[derive(Debug)]
     /// The transaction status column
+    ///
+    /// index type: (u64, Signature, Slot)
+    /// value type: `generated::TransactionStatusMeta`
     pub struct TransactionStatus;
 
     #[derive(Debug)]
     /// The address signatures column
+    ///
+    /// index type: (u64, Pubkey, Slot, Signature)
+    /// value type: `blockstore_meta::AddressSignatureMeta`
     pub struct AddressSignatures;
 
     #[derive(Debug)]
     /// The transaction memos column
+    ///
+    /// index type: Signature
+    /// value type: String
     pub struct TransactionMemos;
 
     #[derive(Debug)]
-    /// The transaction status index column
+    /// The transaction status index column.
+    ///
+    /// index type: u64 (see `SlotColumn`)
+    /// value type: `blockstore_meta::TransactionStatusIndexMeta`
     pub struct TransactionStatusIndex;
 
     #[derive(Debug)]
     /// The rewards column
+    ///
+    /// index type: u64 (see `SlotColumn`)
+    /// value type: `generated::Rewards`
     pub struct Rewards;
 
     #[derive(Debug)]
     /// The blocktime column
+    ///
+    /// index type: u64 (see `SlotColumn`)
+    /// value type: `UnixTimestamp`
     pub struct Blocktime;
 
     #[derive(Debug)]
     /// The performance samples column
+    ///
+    /// index type: u64 (see `SlotColumn`)
+    /// value type: `blockstore_meta::PerfSample`
     pub struct PerfSamples;
 
     #[derive(Debug)]
     /// The block height column
+    ///
+    /// index type: u64 (see `SlotColumn`)
+    /// value type: u64
     pub struct BlockHeight;
 
     #[derive(Debug)]
     /// The program costs column
+    ///
+    /// index type: `Pubkey`
+    /// value type: `blockstore_meta::ProgramCost`
     pub struct ProgramCosts;
 
     #[derive(Debug)]
     /// The optimistic slot column
+    ///
+    /// index type: u64 (see `SlotColumn`)
+    /// value type: `blockstore_meta::OptimisticSlotMetaVersioned`
     pub struct OptimisticSlots;
 
     // When adding a new column ...
@@ -259,7 +353,7 @@ impl Rocks {
         let access_type = options.access_type.clone();
         let recovery_mode = options.recovery_mode.clone();
 
-        fs::create_dir_all(&path)?;
+        fs::create_dir_all(path)?;
 
         // Use default database options
         if should_disable_auto_compactions(&access_type) {
@@ -280,7 +374,7 @@ impl Rocks {
                     path,
                     Self::cf_descriptors(&options, &oldest_slot),
                 )?,
-                access_type: access_type.clone(),
+                access_type,
                 oldest_slot,
                 column_options,
                 write_batch_perf_status: PerfSamplingStatus::default(),
@@ -301,70 +395,13 @@ impl Rocks {
                         &secondary_path,
                         Self::cf_descriptors(&options, &oldest_slot),
                     )?,
-                    access_type: access_type.clone(),
+                    access_type,
                     oldest_slot,
                     column_options,
                     write_batch_perf_status: PerfSamplingStatus::default(),
                 }
             }
         };
-        // This is only needed by solana-validator for LedgerCleanupService so guard with AccessType::Primary
-        if matches!(access_type, AccessType::Primary) {
-            for cf_name in Self::columns() {
-                // these special column families must be excluded from LedgerCleanupService's rocksdb
-                // compactions
-                if should_exclude_from_compaction(cf_name) {
-                    continue;
-                }
-
-                // This is the crux of our write-stall-free storage cleaning strategy with consistent
-                // state view for higher-layers
-                //
-                // For the consistent view, we commit delete_range on pruned slot range by LedgerCleanupService.
-                // simple story here.
-                //
-                // For actual storage cleaning, we employ RocksDB compaction. But default RocksDB compaction
-                // settings don't work well for us. That's because we're using it rather like a really big
-                // (100 GBs) ring-buffer. RocksDB is basically assuming uniform data write over the key space for
-                // efficient compaction, which isn't true for our use as a ring buffer.
-                //
-                // So, we customize the compaction strategy with 2 combined tweaks:
-                // (1) compaction_filter and (2) shortening its periodic cycles.
-                //
-                // Via the compaction_filter, we finally reclaim previously delete_range()-ed storage occupied
-                // by pruned slots. When compaction_filter is set, each SST files are re-compacted periodically
-                // to hunt for keys newly expired by the compaction_filter re-evaluation. But RocksDb's default
-                // `periodic_compaction_seconds` is 30 days, which is too long for our case. So, we
-                // shorten it to a day (24 hours).
-                //
-                // As we write newer SST files over time at rather consistent rate of speed, this
-                // effectively makes each newly-created sets be re-compacted for the filter at
-                // well-dispersed different timings.
-                // As a whole, we rewrite the whole dataset at every PERIODIC_COMPACTION_SECONDS,
-                // slowly over the duration of PERIODIC_COMPACTION_SECONDS. So, this results in
-                // amortization.
-                // So, there is a bit inefficiency here because we'll rewrite not-so-old SST files
-                // too. But longer period would introduce higher variance of ledger storage sizes over
-                // the long period. And it's much better than the daily IO spike caused by compact_range() by
-                // previous implementation.
-                //
-                // `ttl` and `compact_range`(`ManualCompaction`), doesn't work nicely. That's
-                // because its original intention is delete_range()s to reclaim disk space. So it tries to merge
-                // them with N+1 SST files all way down to the bottommost SSTs, often leading to vastly large amount
-                // (= all) of invalidated SST files, when combined with newer writes happening at the opposite
-                // edge of the key space. This causes a long and heavy disk IOs and possible write
-                // stall and ultimately, the deadly Replay/Banking stage stall at higher layers.
-                db.db
-                    .set_options_cf(
-                        db.cf_handle(cf_name),
-                        &[(
-                            "periodic_compaction_seconds",
-                            &format!("{}", PERIODIC_COMPACTION_SECONDS),
-                        )],
-                    )
-                    .unwrap();
-            }
-        }
 
         Ok(db)
     }
@@ -445,9 +482,31 @@ impl Rocks {
         Ok(opt)
     }
 
+    fn get_pinned_cf(&self, cf: &ColumnFamily, key: &[u8]) -> Result<Option<DBPinnableSlice>> {
+        let opt = self.db.get_pinned_cf(cf, key)?;
+        Ok(opt)
+    }
+
     fn put_cf(&self, cf: &ColumnFamily, key: &[u8], value: &[u8]) -> Result<()> {
         self.db.put_cf(cf, key, value)?;
         Ok(())
+    }
+
+    fn multi_get_cf(
+        &self,
+        cf: &ColumnFamily,
+        keys: Vec<&[u8]>,
+    ) -> Vec<Result<Option<DBPinnableSlice>>> {
+        let values = self
+            .db
+            .batched_multi_get_cf(cf, keys, false)
+            .into_iter()
+            .map(|result| match result {
+                Ok(opt) => Ok(opt),
+                Err(e) => Err(BlockstoreError::RocksDb(e)),
+            })
+            .collect::<Vec<_>>();
+        values
     }
 
     fn delete_cf(&self, cf: &ColumnFamily, key: &[u8]) -> Result<()> {
@@ -527,6 +586,13 @@ impl Rocks {
             Err(e) => Err(BlockstoreError::RocksDb(e)),
         }
     }
+
+    fn live_files_metadata(&self) -> Result<Vec<LiveFile>> {
+        match self.db.live_files() {
+            Ok(live_files) => Ok(live_files),
+            Err(e) => Err(BlockstoreError::RocksDb(e)),
+        }
+    }
 }
 
 pub trait Column {
@@ -571,26 +637,37 @@ pub trait ProtobufColumn: Column {
     type Type: prost::Message + Default;
 }
 
+/// SlotColumn is a trait for slot-based column families.  Its index is
+/// essentially Slot (or more generally speaking, has a 1:1 mapping to Slot).
+///
+/// The clean-up of any LedgerColumn that implements SlotColumn is managed by
+/// [`LedgerCleanupService`], which will periodically deprecate and purge
+/// oldest entries that are older than the latest root in order to maintain the
+/// configured --limit-ledger-size under the validator argument.
 pub trait SlotColumn<Index = u64> {}
 
 impl<T: SlotColumn> Column for T {
     type Index = u64;
 
+    /// Converts a u64 Index to its RocksDB key.
     fn key(slot: u64) -> Vec<u8> {
         let mut key = vec![0; 8];
         BigEndian::write_u64(&mut key[..], slot);
         key
     }
 
+    /// Converts a RocksDB key to its u64 Index.
     fn index(key: &[u8]) -> u64 {
         BigEndian::read_u64(&key[..8])
     }
 
+    /// Obtains the primary index from the specified index.
     fn primary_index(index: u64) -> Slot {
         index
     }
 
     #[allow(clippy::wrong_self_convention)]
+    /// Converts a Slot to its u64 Index.
     fn as_index(slot: Slot) -> u64 {
         slot
     }
@@ -1052,9 +1129,11 @@ impl Database {
     where
         C: TypedColumn + ColumnName,
     {
-        if let Some(serialized_value) = self.backend.get_cf(self.cf_handle::<C>(), &C::key(key))? {
-            let value = deserialize(&serialized_value)?;
-
+        if let Some(pinnable_slice) = self
+            .backend
+            .get_pinned_cf(self.cf_handle::<C>(), &C::key(key))?
+        {
+            let value = deserialize(pinnable_slice.as_ref())?;
             Ok(Some(value))
         } else {
             Ok(None)
@@ -1120,7 +1199,10 @@ impl Database {
         Ok(fs_extra::dir::get_size(&self.path)?)
     }
 
-    /// Adds a \[`from`, `to`\] range to delete to the given write batch
+    /// Adds a \[`from`, `to`\] range that deletes all entries between the `from` slot
+    /// and `to` slot inclusively.  If `from` slot and `to` slot are the same, then all
+    /// entries in that slot will be removed.
+    ///
     pub fn delete_range_cf<C>(&self, batch: &mut WriteBatch, from: Slot, to: Slot) -> Result<()>
     where
         C: Column + ColumnName,
@@ -1155,6 +1237,10 @@ impl Database {
     pub fn set_oldest_slot(&self, oldest_slot: Slot) {
         self.backend.oldest_slot.set(oldest_slot);
     }
+
+    pub fn live_files_metadata(&self) -> Result<Vec<LiveFile>> {
+        self.backend.live_files_metadata()
+    }
 }
 
 impl<C> LedgerColumn<C>
@@ -1176,6 +1262,40 @@ where
             );
         }
         result
+    }
+
+    pub fn multi_get_bytes(&self, keys: Vec<C::Index>) -> Vec<Result<Option<Vec<u8>>>> {
+        let rocks_keys: Vec<_> = keys.into_iter().map(|key| C::key(key)).collect();
+        {
+            let ref_rocks_keys: Vec<_> = rocks_keys.iter().map(|k| &k[..]).collect();
+            let is_perf_enabled = maybe_enable_rocksdb_perf(
+                self.column_options.rocks_perf_sample_interval,
+                &self.read_perf_status,
+            );
+            let result = self
+                .backend
+                .multi_get_cf(self.handle(), ref_rocks_keys)
+                .into_iter()
+                .map(|r| match r {
+                    Ok(opt) => match opt {
+                        Some(pinnable_slice) => Ok(Some(pinnable_slice.as_ref().to_vec())),
+                        None => Ok(None),
+                    },
+                    Err(e) => Err(e),
+                })
+                .collect::<Vec<Result<Option<_>>>>();
+            if let Some(op_start_instant) = is_perf_enabled {
+                // use multi-get instead
+                report_rocksdb_read_perf(
+                    C::NAME,
+                    PERF_METRIC_OP_NAME_MULTI_GET,
+                    &op_start_instant.elapsed(),
+                    &self.column_options,
+                );
+            }
+
+            result
+        }
     }
 
     pub fn iter(
@@ -1278,15 +1398,48 @@ impl<C> LedgerColumn<C>
 where
     C: TypedColumn + ColumnName,
 {
+    pub fn multi_get(&self, keys: Vec<C::Index>) -> Vec<Result<Option<C::Type>>> {
+        let rocks_keys: Vec<_> = keys.into_iter().map(|key| C::key(key)).collect();
+        {
+            let ref_rocks_keys: Vec<_> = rocks_keys.iter().map(|k| &k[..]).collect();
+            let is_perf_enabled = maybe_enable_rocksdb_perf(
+                self.column_options.rocks_perf_sample_interval,
+                &self.read_perf_status,
+            );
+            let result = self
+                .backend
+                .multi_get_cf(self.handle(), ref_rocks_keys)
+                .into_iter()
+                .map(|r| match r {
+                    Ok(opt) => match opt {
+                        Some(pinnable_slice) => Ok(Some(deserialize(pinnable_slice.as_ref())?)),
+                        None => Ok(None),
+                    },
+                    Err(e) => Err(e),
+                })
+                .collect::<Vec<Result<Option<_>>>>();
+            if let Some(op_start_instant) = is_perf_enabled {
+                // use multi-get instead
+                report_rocksdb_read_perf(
+                    C::NAME,
+                    PERF_METRIC_OP_NAME_MULTI_GET,
+                    &op_start_instant.elapsed(),
+                    &self.column_options,
+                );
+            }
+
+            result
+        }
+    }
+
     pub fn get(&self, key: C::Index) -> Result<Option<C::Type>> {
         let mut result = Ok(None);
         let is_perf_enabled = maybe_enable_rocksdb_perf(
             self.column_options.rocks_perf_sample_interval,
             &self.read_perf_status,
         );
-        if let Some(serialized_value) = self.backend.get_cf(self.handle(), &C::key(key))? {
-            let value = deserialize(&serialized_value)?;
-
+        if let Some(pinnable_slice) = self.backend.get_pinned_cf(self.handle(), &C::key(key))? {
+            let value = deserialize(pinnable_slice.as_ref())?;
             result = Ok(Some(value))
         }
 
@@ -1353,7 +1506,7 @@ where
             self.column_options.rocks_perf_sample_interval,
             &self.read_perf_status,
         );
-        let result = self.backend.get_cf(self.handle(), &C::key(key));
+        let result = self.backend.get_pinned_cf(self.handle(), &C::key(key));
         if let Some(op_start_instant) = is_perf_enabled {
             report_rocksdb_read_perf(
                 C::NAME,
@@ -1363,10 +1516,10 @@ where
             );
         }
 
-        if let Some(serialized_value) = result? {
-            let value = match C::Type::decode(&serialized_value[..]) {
+        if let Some(pinnable_slice) = result? {
+            let value = match C::Type::decode(pinnable_slice.as_ref()) {
                 Ok(value) => value,
-                Err(_) => deserialize::<T>(&serialized_value)?.into(),
+                Err(_) => deserialize::<T>(pinnable_slice.as_ref())?.into(),
             };
             Ok(Some(value))
         } else {
@@ -1379,7 +1532,7 @@ where
             self.column_options.rocks_perf_sample_interval,
             &self.read_perf_status,
         );
-        let result = self.backend.get_cf(self.handle(), &C::key(key));
+        let result = self.backend.get_pinned_cf(self.handle(), &C::key(key));
         if let Some(op_start_instant) = is_perf_enabled {
             report_rocksdb_read_perf(
                 C::NAME,
@@ -1389,8 +1542,8 @@ where
             );
         }
 
-        if let Some(serialized_value) = result? {
-            Ok(Some(C::Type::decode(&serialized_value[..])?))
+        if let Some(pinnable_slice) = result? {
+            Ok(Some(C::Type::decode(pinnable_slice.as_ref())?))
         } else {
             Ok(None)
         }

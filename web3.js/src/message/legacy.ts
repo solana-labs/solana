@@ -13,6 +13,9 @@ import {
   MessageAddressTableLookup,
   MessageCompiledInstruction,
 } from './index';
+import {TransactionInstruction} from '../transaction';
+import {CompiledKeys} from './compiled-keys';
+import {MessageAccountKeys} from './account-keys';
 
 /**
  * An instruction to execute by a program
@@ -37,11 +40,17 @@ export type MessageArgs = {
   /** The message header, identifying signed and read-only `accountKeys` */
   header: MessageHeader;
   /** All the account keys used by this transaction */
-  accountKeys: string[];
+  accountKeys: string[] | PublicKey[];
   /** The hash of a recent ledger block */
   recentBlockhash: Blockhash;
   /** Instructions that will be executed in sequence and committed in one atomic transaction if all succeed. */
   instructions: CompiledInstruction[];
+};
+
+export type CompileLegacyArgs = {
+  payerKey: PublicKey;
+  instructions: Array<TransactionInstruction>;
+  recentBlockhash: Blockhash;
 };
 
 /**
@@ -93,19 +102,46 @@ export class Message {
     return [];
   }
 
+  getAccountKeys(): MessageAccountKeys {
+    return new MessageAccountKeys(this.staticAccountKeys);
+  }
+
+  static compile(args: CompileLegacyArgs): Message {
+    const compiledKeys = CompiledKeys.compile(args.instructions, args.payerKey);
+    const [header, staticAccountKeys] = compiledKeys.getMessageComponents();
+    const accountKeys = new MessageAccountKeys(staticAccountKeys);
+    const instructions = accountKeys.compileInstructions(args.instructions).map(
+      (ix: MessageCompiledInstruction): CompiledInstruction => ({
+        programIdIndex: ix.programIdIndex,
+        accounts: ix.accountKeyIndexes,
+        data: bs58.encode(ix.data),
+      }),
+    );
+    return new Message({
+      header,
+      accountKeys: staticAccountKeys,
+      recentBlockhash: args.recentBlockhash,
+      instructions,
+    });
+  }
+
   isAccountSigner(index: number): boolean {
     return index < this.header.numRequiredSignatures;
   }
 
   isAccountWritable(index: number): boolean {
-    return (
-      index <
-        this.header.numRequiredSignatures -
-          this.header.numReadonlySignedAccounts ||
-      (index >= this.header.numRequiredSignatures &&
-        index <
-          this.accountKeys.length - this.header.numReadonlyUnsignedAccounts)
-    );
+    const numSignedAccounts = this.header.numRequiredSignatures;
+    if (index >= this.header.numRequiredSignatures) {
+      const unsignedAccountIndex = index - numSignedAccounts;
+      const numUnsignedAccounts = this.accountKeys.length - numSignedAccounts;
+      const numWritableUnsignedAccounts =
+        numUnsignedAccounts - this.header.numReadonlyUnsignedAccounts;
+      return unsignedAccountIndex < numWritableUnsignedAccounts;
+    } else {
+      const numWritableSignedAccounts =
+        numSignedAccounts - this.header.numReadonlySignedAccounts;
+      return index < numWritableSignedAccounts;
+    }
   }
 
   isProgramId(index: number): boolean {
@@ -232,7 +268,7 @@ export class Message {
     // Slice up wire data
     let byteArray = [...buffer];
 
-    const numRequiredSignatures = byteArray.shift() as number;
+    const numRequiredSignatures = byteArray.shift()!;
     if (
       numRequiredSignatures !==
       (numRequiredSignatures & VERSION_PREFIX_MASK)
@@ -242,15 +278,15 @@ export class Message {
       );
     }
 
-    const numReadonlySignedAccounts = byteArray.shift() as number;
-    const numReadonlyUnsignedAccounts = byteArray.shift() as number;
+    const numReadonlySignedAccounts = byteArray.shift()!;
+    const numReadonlyUnsignedAccounts = byteArray.shift()!;
 
     const accountCount = shortvec.decodeLength(byteArray);
     let accountKeys = [];
     for (let i = 0; i < accountCount; i++) {
       const account = byteArray.slice(0, PUBLIC_KEY_LENGTH);
       byteArray = byteArray.slice(PUBLIC_KEY_LENGTH);
-      accountKeys.push(bs58.encode(Buffer.from(account)));
+      accountKeys.push(new PublicKey(Buffer.from(account)));
     }
 
     const recentBlockhash = byteArray.slice(0, PUBLIC_KEY_LENGTH);
@@ -259,7 +295,7 @@ export class Message {
     const instructionCount = shortvec.decodeLength(byteArray);
     let instructions: CompiledInstruction[] = [];
     for (let i = 0; i < instructionCount; i++) {
-      const programIdIndex = byteArray.shift() as number;
+      const programIdIndex = byteArray.shift()!;
       const accountCount = shortvec.decodeLength(byteArray);
       const accounts = byteArray.slice(0, accountCount);
       byteArray = byteArray.slice(accountCount);

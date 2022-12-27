@@ -23,15 +23,7 @@ pub fn is_simple_vote_transaction(transaction: &SanitizedTransaction) -> bool {
         if program_pubkey == &solana_vote_program::id() {
             if let Ok(vote_instruction) = limited_deserialize::<VoteInstruction>(&instruction.data)
             {
-                return matches!(
-                    vote_instruction,
-                    VoteInstruction::Vote(_)
-                        | VoteInstruction::VoteSwitch(_, _)
-                        | VoteInstruction::UpdateVoteState(_)
-                        | VoteInstruction::UpdateVoteStateSwitch(_, _)
-                        | VoteInstruction::CompactUpdateVoteState(_)
-                        | VoteInstruction::CompactUpdateVoteStateSwitch(..)
-                );
+                return vote_instruction.is_simple_vote();
             }
         }
     }
@@ -82,17 +74,11 @@ fn parse_vote_instruction_data(
         VoteInstruction::UpdateVoteStateSwitch(vote_state_update, hash) => {
             Some((VoteTransaction::from(vote_state_update), Some(hash)))
         }
-        VoteInstruction::CompactUpdateVoteState(compact_vote_state_update) => {
-            compact_vote_state_update
-                .uncompact()
-                .ok()
-                .map(|vote_state_update| (VoteTransaction::from(vote_state_update), None))
+        VoteInstruction::CompactUpdateVoteState(vote_state_update) => {
+            Some((VoteTransaction::from(vote_state_update), None))
         }
-        VoteInstruction::CompactUpdateVoteStateSwitch(compact_vote_state_update, hash) => {
-            compact_vote_state_update
-                .uncompact()
-                .ok()
-                .map(|vote_state_update| (VoteTransaction::from(vote_state_update), Some(hash)))
+        VoteInstruction::CompactUpdateVoteStateSwitch(vote_state_update, hash) => {
+            Some((VoteTransaction::from(vote_state_update), Some(hash)))
         }
         VoteInstruction::Authorize(_, _)
         | VoteInstruction::AuthorizeChecked(_)

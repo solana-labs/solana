@@ -12,9 +12,12 @@
 
 #[cfg(not(target_os = "solana"))]
 use {
-    crate::encryption::{
-        elgamal::{ElGamalCiphertext, ElGamalKeypair, ElGamalPubkey},
-        pedersen::{PedersenCommitment, PedersenOpening, G, H},
+    crate::{
+        encryption::{
+            elgamal::{ElGamalCiphertext, ElGamalKeypair, ElGamalPubkey},
+            pedersen::{PedersenCommitment, PedersenOpening, G, H},
+        },
+        errors::ProofVerificationError,
     },
     curve25519_dalek::traits::MultiscalarMul,
     rand::rngs::OsRng,
@@ -153,9 +156,18 @@ impl CtxtCommEqualityProof {
         let ww_negated = -&ww;
 
         // check that the required algebraic condition holds
-        let Y_0 = self.Y_0.decompress().ok_or(EqualityProofError::Format)?;
-        let Y_1 = self.Y_1.decompress().ok_or(EqualityProofError::Format)?;
-        let Y_2 = self.Y_2.decompress().ok_or(EqualityProofError::Format)?;
+        let Y_0 = self
+            .Y_0
+            .decompress()
+            .ok_or(ProofVerificationError::Deserialization)?;
+        let Y_1 = self
+            .Y_1
+            .decompress()
+            .ok_or(ProofVerificationError::Deserialization)?;
+        let Y_2 = self
+            .Y_2
+            .decompress()
+            .ok_or(ProofVerificationError::Deserialization)?;
 
         let check = RistrettoPoint::vartime_multiscalar_mul(
             vec![
@@ -189,7 +201,7 @@ impl CtxtCommEqualityProof {
         if check.is_identity() {
             Ok(())
         } else {
-            Err(EqualityProofError::AlgebraicRelation)
+            Err(ProofVerificationError::AlgebraicRelation.into())
         }
     }
 
@@ -206,7 +218,7 @@ impl CtxtCommEqualityProof {
 
     pub fn from_bytes(bytes: &[u8]) -> Result<Self, EqualityProofError> {
         if bytes.len() != 192 {
-            return Err(EqualityProofError::Format);
+            return Err(ProofVerificationError::Deserialization.into());
         }
 
         let bytes = array_ref![bytes, 0, 192];
@@ -216,9 +228,12 @@ impl CtxtCommEqualityProof {
         let Y_1 = CompressedRistretto::from_slice(Y_1);
         let Y_2 = CompressedRistretto::from_slice(Y_2);
 
-        let z_s = Scalar::from_canonical_bytes(*z_s).ok_or(EqualityProofError::Format)?;
-        let z_x = Scalar::from_canonical_bytes(*z_x).ok_or(EqualityProofError::Format)?;
-        let z_r = Scalar::from_canonical_bytes(*z_r).ok_or(EqualityProofError::Format)?;
+        let z_s =
+            Scalar::from_canonical_bytes(*z_s).ok_or(ProofVerificationError::Deserialization)?;
+        let z_x =
+            Scalar::from_canonical_bytes(*z_x).ok_or(ProofVerificationError::Deserialization)?;
+        let z_r =
+            Scalar::from_canonical_bytes(*z_r).ok_or(ProofVerificationError::Deserialization)?;
 
         Ok(CtxtCommEqualityProof {
             Y_0,
@@ -368,10 +383,22 @@ impl CtxtCtxtEqualityProof {
         let www_negated = -&www;
 
         // check that the required algebraic condition holds
-        let Y_0 = self.Y_0.decompress().ok_or(EqualityProofError::Format)?;
-        let Y_1 = self.Y_1.decompress().ok_or(EqualityProofError::Format)?;
-        let Y_2 = self.Y_2.decompress().ok_or(EqualityProofError::Format)?;
-        let Y_3 = self.Y_3.decompress().ok_or(EqualityProofError::Format)?;
+        let Y_0 = self
+            .Y_0
+            .decompress()
+            .ok_or(ProofVerificationError::Deserialization)?;
+        let Y_1 = self
+            .Y_1
+            .decompress()
+            .ok_or(ProofVerificationError::Deserialization)?;
+        let Y_2 = self
+            .Y_2
+            .decompress()
+            .ok_or(ProofVerificationError::Deserialization)?;
+        let Y_3 = self
+            .Y_3
+            .decompress()
+            .ok_or(ProofVerificationError::Deserialization)?;
 
         let check = RistrettoPoint::vartime_multiscalar_mul(
             vec![
@@ -411,7 +438,7 @@ impl CtxtCtxtEqualityProof {
         if check.is_identity() {
             Ok(())
         } else {
-            Err(EqualityProofError::AlgebraicRelation)
+            Err(ProofVerificationError::AlgebraicRelation.into())
         }
     }
 
@@ -429,7 +456,7 @@ impl CtxtCtxtEqualityProof {
 
     pub fn from_bytes(bytes: &[u8]) -> Result<Self, EqualityProofError> {
         if bytes.len() != 224 {
-            return Err(EqualityProofError::Format);
+            return Err(ProofVerificationError::Deserialization.into());
         }
 
         let bytes = array_ref![bytes, 0, 224];
@@ -440,9 +467,12 @@ impl CtxtCtxtEqualityProof {
         let Y_2 = CompressedRistretto::from_slice(Y_2);
         let Y_3 = CompressedRistretto::from_slice(Y_3);
 
-        let z_s = Scalar::from_canonical_bytes(*z_s).ok_or(EqualityProofError::Format)?;
-        let z_x = Scalar::from_canonical_bytes(*z_x).ok_or(EqualityProofError::Format)?;
-        let z_r = Scalar::from_canonical_bytes(*z_r).ok_or(EqualityProofError::Format)?;
+        let z_s =
+            Scalar::from_canonical_bytes(*z_s).ok_or(ProofVerificationError::Deserialization)?;
+        let z_x =
+            Scalar::from_canonical_bytes(*z_x).ok_or(ProofVerificationError::Deserialization)?;
+        let z_r =
+            Scalar::from_canonical_bytes(*z_r).ok_or(ProofVerificationError::Deserialization)?;
 
         Ok(CtxtCtxtEqualityProof {
             Y_0,

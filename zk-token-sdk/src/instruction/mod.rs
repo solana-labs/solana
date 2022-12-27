@@ -1,4 +1,5 @@
 pub mod close_account;
+pub mod pubkey_validity;
 pub mod transfer;
 pub mod transfer_with_fee;
 pub mod withdraw;
@@ -14,10 +15,9 @@ use {
         errors::ProofError,
     },
     curve25519_dalek::scalar::Scalar,
-    subtle::ConstantTimeEq,
 };
 pub use {
-    close_account::CloseAccountData, transfer::TransferData,
+    close_account::CloseAccountData, pubkey_validity::PubkeyValidityData, transfer::TransferData,
     transfer_with_fee::TransferWithFeeData, withdraw::WithdrawData,
     withdraw_withheld::WithdrawWithheldTokensData,
 };
@@ -31,30 +31,32 @@ pub trait Verifiable {
 #[derive(Debug, Copy, Clone)]
 pub enum Role {
     Source,
-    Dest,
+    Destination,
     Auditor,
+    WithdrawWithheldAuthority,
 }
 
 /// Takes in a 64-bit number `amount` and a bit length `bit_length`. It returns:
 ///  - the `bit_length` low bits of `amount` interpretted as u64
 ///  - the (64 - `bit_length`) high bits of `amount` interpretted as u64
 #[cfg(not(target_os = "solana"))]
-pub fn split_u64(
-    amount: u64,
-    lo_bit_length: usize,
-    hi_bit_length: usize,
-) -> Result<(u64, u64), ProofError> {
-    assert!(lo_bit_length <= 64);
-    assert!(hi_bit_length <= 64);
-
-    if !bool::from((amount >> (lo_bit_length + hi_bit_length)).ct_eq(&0u64)) {
-        return Err(ProofError::TransferAmount);
+pub fn split_u64(amount: u64, bit_length: usize) -> (u64, u64) {
+    if bit_length == 64 {
+        (amount, 0)
+    } else {
+        let lo = amount << (64 - bit_length) >> (64 - bit_length);
+        let hi = amount >> bit_length;
+        (lo, hi)
     }
+}
 
-    let lo = amount << (64 - lo_bit_length) >> (64 - lo_bit_length);
-    let hi = amount >> lo_bit_length;
-
-    Ok((lo, hi))
+#[cfg(not(target_os = "solana"))]
+pub fn combine_lo_hi_u64(amount_lo: u64, amount_hi: u64, bit_length: usize) -> u64 {
+    if bit_length == 64 {
+        amount_lo
+    } else {
+        amount_lo + (amount_hi << bit_length)
+    }
 }
 
 #[cfg(not(target_os = "solana"))]

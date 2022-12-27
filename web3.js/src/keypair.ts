@@ -88,6 +88,6 @@ export class Keypair {
    * The raw secret key for this keypair
    */
   get secretKey(): Uint8Array {
-    return this._keypair.secretKey;
+    return new Uint8Array(this._keypair.secretKey);
   }
 }

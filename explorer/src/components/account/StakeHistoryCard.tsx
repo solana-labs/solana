@@ -1,5 +1,5 @@
 import React from "react";
-import { SolBalance } from "utils";
+import { SolBalance } from "components/common/SolBalance";
 import { Epoch } from "components/common/Epoch";
 import {
   SysvarAccount,

@@ -5,7 +5,7 @@ use {
     },
     crossbeam_channel::Sender,
     pem::Pem,
-    quinn::{IdleTimeout, ServerConfig, VarInt},
+    quinn::{Endpoint, IdleTimeout, ServerConfig, VarInt},
     rustls::{server::ClientCertVerified, Certificate, DistinguishedNames},
     solana_perf::packet::PacketBatch,
     solana_sdk::{
@@ -27,7 +27,7 @@ use {
 
 pub const MAX_STAKED_CONNECTIONS: usize = 2000;
 pub const MAX_UNSTAKED_CONNECTIONS: usize = 500;
-const NUM_QUIC_STREAMER_WORKER_THREADS: usize = 4;
+const NUM_QUIC_STREAMER_WORKER_THREADS: usize = 1;
 
 struct SkipClientVerification;
 
@@ -81,10 +81,15 @@ pub(crate) fn configure_server(
     let config = Arc::get_mut(&mut server_config.transport).unwrap();
 
     // QUIC_MAX_CONCURRENT_STREAMS doubled, which was found to improve reliability
-    const MAX_CONCURRENT_UNI_STREAMS: u32 = (QUIC_MAX_UNSTAKED_CONCURRENT_STREAMS * 2) as u32;
+    const MAX_CONCURRENT_UNI_STREAMS: u32 =
+        (QUIC_MAX_UNSTAKED_CONCURRENT_STREAMS.saturating_mul(2)) as u32;
     config.max_concurrent_uni_streams(MAX_CONCURRENT_UNI_STREAMS.into());
     config.stream_receive_window((PACKET_DATA_SIZE as u32).into());
-    config.receive_window((PACKET_DATA_SIZE as u32 * MAX_CONCURRENT_UNI_STREAMS).into());
+    config.receive_window(
+        (PACKET_DATA_SIZE as u32)
+            .saturating_mul(MAX_CONCURRENT_UNI_STREAMS)
+            .into(),
+    );
     let timeout = IdleTimeout::from(VarInt::from_u32(QUIC_MAX_TIMEOUT_MS));
     config.max_idle_timeout(Some(timeout));
 
@@ -99,6 +104,7 @@ pub(crate) fn configure_server(
 fn rt() -> Runtime {
     Builder::new_multi_thread()
         .worker_threads(NUM_QUIC_STREAMER_WORKER_THREADS)
+        .thread_name("quic-server")
         .enable_all()
         .build()
         .unwrap()
@@ -306,9 +312,10 @@ pub fn spawn_server(
     max_staked_connections: usize,
     max_unstaked_connections: usize,
     stats: Arc<StreamStats>,
-) -> Result<thread::JoinHandle<()>, QuicServerError> {
+    wait_for_chunk_timeout_ms: u64,
+) -> Result<(Endpoint, thread::JoinHandle<()>), QuicServerError> {
     let runtime = rt();
-    let task = {
+    let (endpoint, task) = {
         let _guard = runtime.enter();
         crate::nonblocking::quic::spawn_server(
             sock,
@@ -321,6 +328,7 @@ pub fn spawn_server(
             max_staked_connections,
             max_unstaked_connections,
             stats,
+            wait_for_chunk_timeout_ms,
         )
     }?;
     let handle = thread::Builder::new()
@@ -331,7 +339,7 @@ pub fn spawn_server(
             }
         })
         .unwrap();
-    Ok(handle)
+    Ok((endpoint, handle))
 }
 
 #[cfg(test)]
@@ -355,7 +363,7 @@ mod test {
         let server_address = s.local_addr().unwrap();
         let staked_nodes = Arc::new(RwLock::new(StakedNodes::default()));
         let stats = Arc::new(StreamStats::default());
-        let t = spawn_server(
+        let (_, t) = spawn_server(
             s,
             &keypair,
             ip,
@@ -366,6 +374,7 @@ mod test {
             MAX_STAKED_CONNECTIONS,
             MAX_UNSTAKED_CONNECTIONS,
             stats,
+            100,
         )
         .unwrap();
         (t, exit, receiver, server_address)
@@ -410,7 +419,7 @@ mod test {
         let server_address = s.local_addr().unwrap();
         let staked_nodes = Arc::new(RwLock::new(StakedNodes::default()));
         let stats = Arc::new(StreamStats::default());
-        let t = spawn_server(
+        let (_, t) = spawn_server(
             s,
             &keypair,
             ip,
@@ -421,6 +430,7 @@ mod test {
             MAX_STAKED_CONNECTIONS,
             MAX_UNSTAKED_CONNECTIONS,
             stats,
+            100,
         )
         .unwrap();
 
@@ -452,7 +462,7 @@ mod test {
         let server_address = s.local_addr().unwrap();
         let staked_nodes = Arc::new(RwLock::new(StakedNodes::default()));
         let stats = Arc::new(StreamStats::default());
-        let t = spawn_server(
+        let (_, t) = spawn_server(
             s,
             &keypair,
             ip,
@@ -463,6 +473,7 @@ mod test {
             MAX_STAKED_CONNECTIONS,
             0, // Do not allow any connection from unstaked clients/nodes
             stats,
+            100,
         )
         .unwrap();
 

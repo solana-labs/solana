@@ -1,25 +1,20 @@
 import React from "react";
-import { SignatureResult, TransactionInstruction } from "@solana/web3.js";
 import { InstructionCard } from "../InstructionCard";
 import { Address } from "components/common/Address";
-import { MatchOrders } from "./types";
+import { MatchOrders, SerumIxDetailsProps } from "./types";
 
-export function MatchOrdersDetailsCard(props: {
-  ix: TransactionInstruction;
-  index: number;
-  result: SignatureResult;
-  info: MatchOrders;
-  innerCards?: JSX.Element[];
-  childIndex?: number;
-}) {
-  const { ix, index, result, info, innerCards, childIndex } = props;
+export function MatchOrdersDetailsCard(
+  props: SerumIxDetailsProps<MatchOrders>
+) {
+  const { ix, index, result, programName, info, innerCards, childIndex } =
+    props;
 
   return (
     <InstructionCard
       ix={ix}
       index={index}
       result={result}
-      title="Serum Program: Match Orders"
+      title={`${programName} Program: Match Orders`}
       innerCards={innerCards}
       childIndex={childIndex}
     >

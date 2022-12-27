@@ -36,7 +36,7 @@ fn get_retransmit_peers_deterministic(
     root_bank: &Bank,
     num_simulated_shreds: usize,
 ) {
-    let parent_offset = if slot == 0 { 0 } else { 1 };
+    let parent_offset = u16::from(slot != 0);
     for i in 0..num_simulated_shreds {
         let index = i as u32;
         let shred = Shred::new_from_data(
@@ -49,7 +49,7 @@ fn get_retransmit_peers_deterministic(
             0,
             0,
         );
-        let (_root_distance, _neighbors, _children) = cluster_nodes.get_retransmit_peers(
+        let _retransmit_peers = cluster_nodes.get_retransmit_peers(
             slot_leader,
             &shred.id(),
             root_bank,

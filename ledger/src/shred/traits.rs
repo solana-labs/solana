@@ -54,9 +54,6 @@ pub(super) trait ShredData: Shred {
     }
 
     fn data(&self) -> Result<&[u8], Error>;
-
-    // Only for tests.
-    fn set_last_in_slot(&mut self);
 }
 
 pub(super) trait ShredCode: Shred {

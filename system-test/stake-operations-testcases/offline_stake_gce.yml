@@ -3,11 +3,12 @@ steps:
     label: "Running Offline Stake Operations Tests on GCE"
     env:
       UPLOAD_RESULTS_TO_SLACK: "true"
+      UPLOAD_RESULTS_TO_DISCORD: "true"
       CLOUD_PROVIDER: "gce"
       ENABLE_GPU: "false"
       TEST_DURATION_SECONDS: 30
       NUMBER_OF_VALIDATOR_NODES: 1
-      VALIDATOR_NODE_MACHINE_TYPE: "--machine-type n1-standard-16"
+      VALIDATOR_NODE_MACHINE_TYPE: "--machine-type n2-standard-16"
       NUMBER_OF_CLIENT_NODES: 0
       ADDITIONAL_FLAGS: "--dedicated"
       BOOTSTRAP_VALIDATOR_MAX_STAKE_THRESHOLD: 100

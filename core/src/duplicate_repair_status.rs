@@ -695,7 +695,7 @@ pub mod tests {
                     test_setup.correct_ancestors_response
                 );
             }
-            x => panic!("Incorrect decision {:?}", x),
+            x => panic!("Incorrect decision {x:?}"),
         };
     }
 
@@ -748,7 +748,7 @@ pub mod tests {
                 {
                     repair_status
                 }
-                x => panic!("Incorrect decision {:?}", x),
+                x => panic!("Incorrect decision {x:?}"),
             };
 
         // Expect to find everything after 92 in the `correct_ancestors_to_repair`.
@@ -783,7 +783,7 @@ pub mod tests {
                     test_setup.correct_ancestors_response
                 );
             }
-            x => panic!("Incorrect decision {:?}", x),
+            x => panic!("Incorrect decision {x:?}"),
         };
     }
 
@@ -829,7 +829,7 @@ pub mod tests {
                     expected_mismatched_slots
                 );
             }
-            x => panic!("Incorrect decision {:?}", x),
+            x => panic!("Incorrect decision {x:?}"),
         };
     }
 

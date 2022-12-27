@@ -1,17 +1,11 @@
 import React from "react";
-import { SignatureResult, TransactionInstruction } from "@solana/web3.js";
 import { InstructionCard } from "../InstructionCard";
 import { Address } from "components/common/Address";
-import { CancelOrderByClientIdV2 } from "./types";
+import { CancelOrderByClientIdV2, SerumIxDetailsProps } from "./types";
 
-export function CancelOrderByClientIdV2DetailsCard(props: {
-  ix: TransactionInstruction;
-  index: number;
-  result: SignatureResult;
-  info: CancelOrderByClientIdV2;
-  innerCards?: JSX.Element[];
-  childIndex?: number;
-}) {
+export function CancelOrderByClientIdV2DetailsCard(
+  props: SerumIxDetailsProps<CancelOrderByClientIdV2>
+) {
   const { ix, index, result, info, innerCards, childIndex } = props;
 
   return (

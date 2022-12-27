@@ -1,6 +1,6 @@
 [package]
 name = "solana-cargo-test-sbf"
-version = "1.12.0"
+version = "1.15.0"
 description = "Execute all unit and integration tests after building with the Solana SBF SDK"
 authors = ["Solana Maintainers <maintainers@solana.foundation>"]
 repository = "https://github.com/solana-labs/solana"
@@ -12,6 +12,8 @@ publish = false
 [dependencies]
 cargo_metadata = "0.15.0"
 clap = { version = "3.1.5", features = ["cargo"] }
+log = { version = "0.4.14", features = ["std"] }
+solana-logger = { path = "../../logger", version = "=1.15.0" }
 
 [[bin]]
 name = "cargo-test-sbf"

@@ -236,6 +236,15 @@ pub trait RemoteWallet<T> {
     ) -> Result<Signature, RemoteWalletError> {
         unimplemented!();
     }
+
+    /// Sign off-chain message with wallet managing pubkey at derivation path m/44'/501'/<account>'/<change>'.
+    fn sign_offchain_message(
+        &self,
+        derivation_path: &DerivationPath,
+        message: &[u8],
+    ) -> Result<Signature, RemoteWalletError> {
+        unimplemented!();
+    }
 }
 
 /// `RemoteWallet` device
@@ -402,7 +411,7 @@ mod tests {
         };
         assert_eq!(
             remote_wallet_info.get_pretty_path(),
-            format!("usb://ledger/{}", pubkey_str)
+            format!("usb://ledger/{pubkey_str}")
         );
     }
 }

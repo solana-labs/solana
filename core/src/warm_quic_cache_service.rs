@@ -3,9 +3,9 @@
 
 use {
     rand::{thread_rng, Rng},
+    solana_client::{connection_cache::ConnectionCache, tpu_connection::TpuConnection},
     solana_gossip::cluster_info::ClusterInfo,
     solana_poh::poh_recorder::PohRecorder,
-    solana_tpu_client::{connection_cache::ConnectionCache, tpu_connection::TpuConnection},
     std::{
         sync::{
             atomic::{AtomicBool, Ordering},
@@ -50,7 +50,7 @@ impl WarmQuicCacheService {
                                 .lookup_contact_info(&leader_pubkey, |leader| leader.tpu)
                             {
                                 let conn = connection_cache.get_connection(&addr);
-                                if let Err(err) = conn.send_wire_transaction(&[0u8]) {
+                                if let Err(err) = conn.send_wire_transaction([0u8]) {
                                     warn!(
                                         "Failed to warmup QUIC connection to the leader {:?}, Error {:?}",
                                         leader_pubkey, err

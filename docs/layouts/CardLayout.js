@@ -12,17 +12,10 @@ function CardLayout({
   path = "",
 }) {
   // load the sidebar item from the master `sidebars.js` file
-  const sidebarItems = (sidebarKey && sidebar?.[sidebarKey]) || [];
+  let sidebarItems = (sidebarKey && sidebar?.[sidebarKey]) || [];
 
   // process each of the loaded sidebar items for formatting
-  if (sidebarItems?.length) {
-    Object.keys(sidebarItems).forEach((key) => {
-      if (sidebarItems[key]?.type?.toLowerCase() === "category") {
-        for (let i = 0; i < sidebarItems[key]?.items?.length; i++)
-          sidebarItems[key].items[i] = formatter(sidebarItems[key].items[i]);
-      } else sidebarItems[key] = formatter(sidebarItems[key]);
-    });
-  }
+  if (sidebarItems?.length) sidebarItems = parseSidebar(sidebarItems);
 
   // return the page layout, ready to go
   return (
@@ -52,6 +45,18 @@ const computeLabel = (label) => {
 };
 
 /*
+  Recursively parse the sidebar
+*/
+const parseSidebar = (sidebarItems) => {
+  Object.keys(sidebarItems).forEach((key) => {
+    if (sidebarItems[key]?.type?.toLowerCase() === "category") {
+      sidebarItems[key].items = parseSidebar(sidebarItems[key].items);
+    } else sidebarItems[key] = formatter(sidebarItems[key]);
+  });
+  return sidebarItems;
+};
+
+/*
   Parser to format a sidebar item to be compatible with the `DocSidebar` component
 */
 const formatter = (item) => {
@@ -63,6 +68,7 @@ const formatter = (item) => {
       label: computeLabel(item) || item || "[unknown label]",
     };
   }
+
   // handle object style docs
   else if (item?.type?.toLowerCase() === "doc") {
     item.type = "link";
@@ -70,6 +76,16 @@ const formatter = (item) => {
     item.label = item.label || computeLabel(item.href) || "[unknown label]";
     delete item.id;
   }
+
+  // fix for local routing that does not specify starting at the site root
+  if (
+    !(
+      item?.href?.startsWith("/") ||
+      item?.href?.startsWith("http:") ||
+      item?.href?.startsWith("https")
+    )
+  )
+    item.href = `/${item?.href}`;
 
   return item;
 };

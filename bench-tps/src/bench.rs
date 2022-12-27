@@ -1,9 +1,10 @@
 use {
     crate::{
         bench_tps_client::*,
-        cli::Config,
+        cli::{Config, InstructionPaddingConfig},
         perf_utils::{sample_txs, SampleStats},
         send_batch::*,
+        spl_convert::FromOtherSolana,
     },
     log::*,
     rand::distributions::{Distribution, Uniform},
@@ -20,10 +21,11 @@ use {
         native_token::Sol,
         pubkey::Pubkey,
         signature::{Keypair, Signer},
-        system_instruction, system_transaction,
+        system_instruction,
         timing::{duration_as_ms, duration_as_s, duration_as_us, timestamp},
         transaction::Transaction,
     },
+    spl_instruction_padding::instruction::wrap_instruction,
     std::{
         collections::{HashSet, VecDeque},
         process::exit,
@@ -45,9 +47,9 @@ const MAX_TX_QUEUE_AGE: u64 = (MAX_PROCESSING_AGE as f64 * DEFAULT_S_PER_SLOT) a
 // max additional cost is `TRANSFER_TRANSACTION_COMPUTE_UNIT * MAX_COMPUTE_UNIT_PRICE / 1_000_000`
 const MAX_COMPUTE_UNIT_PRICE: u64 = 50;
 const TRANSFER_TRANSACTION_COMPUTE_UNIT: u32 = 200;
-/// calculate maximum possible prioritizatino fee, if `use-randomized-compute-unit-price` is
+/// calculate maximum possible prioritization fee, if `use-randomized-compute-unit-price` is
 /// enabled, round to nearest lamports.
-pub fn max_lamporots_for_prioritization(use_randomized_compute_unit_price: bool) -> u64 {
+pub fn max_lamports_for_prioritization(use_randomized_compute_unit_price: bool) -> u64 {
     if use_randomized_compute_unit_price {
         const MICRO_LAMPORTS_PER_LAMPORT: u64 = 1_000_000;
         let micro_lamport_fee: u128 = (MAX_COMPUTE_UNIT_PRICE as u128)
@@ -94,6 +96,7 @@ struct TransactionChunkGenerator<'a, 'b, T: ?Sized> {
     chunk_index: usize,
     reclaim_lamports_back_to_source_account: bool,
     use_randomized_compute_unit_price: bool,
+    instruction_padding_config: Option<InstructionPaddingConfig>,
 }
 
 impl<'a, 'b, T> TransactionChunkGenerator<'a, 'b, T>
@@ -106,6 +109,7 @@ where
         nonce_keypairs: Option<&'b Vec<Keypair>>,
         chunk_size: usize,
         use_randomized_compute_unit_price: bool,
+        instruction_padding_config: Option<InstructionPaddingConfig>,
     ) -> Self {
         let account_chunks = KeypairChunks::new(gen_keypairs, chunk_size);
         let nonce_chunks =
@@ -118,6 +122,7 @@ where
             chunk_index: 0,
             reclaim_lamports_back_to_source_account: false,
             use_randomized_compute_unit_price,
+            instruction_padding_config,
         }
     }
 
@@ -143,6 +148,7 @@ where
                 source_nonce_chunk,
                 dest_nonce_chunk,
                 self.reclaim_lamports_back_to_source_account,
+                &self.instruction_padding_config,
             )
         } else {
             assert!(blockhash.is_some());
@@ -151,6 +157,7 @@ where
                 dest_chunk,
                 self.reclaim_lamports_back_to_source_account,
                 blockhash.unwrap(),
+                &self.instruction_padding_config,
                 self.use_randomized_compute_unit_price,
             )
         };
@@ -345,6 +352,7 @@ where
         target_slots_per_epoch,
         use_randomized_compute_unit_price,
         use_durable_nonce,
+        instruction_padding_config,
         ..
     } = config;
 
@@ -355,6 +363,7 @@ where
         nonce_keypairs.as_ref(),
         tx_count,
         use_randomized_compute_unit_price,
+        instruction_padding_config,
     );
 
     let first_tx_count = loop {
@@ -479,6 +488,7 @@ fn generate_system_txs(
     dest: &VecDeque<&Keypair>,
     reclaim: bool,
     blockhash: &Hash,
+    instruction_padding_config: &Option<InstructionPaddingConfig>,
     use_randomized_compute_unit_price: bool,
 ) -> Vec<TimestampedTransaction> {
     let pairs: Vec<_> = if !reclaim {
@@ -490,9 +500,8 @@ fn generate_system_txs(
     if use_randomized_compute_unit_price {
         let mut rng = rand::thread_rng();
         let range = Uniform::from(0..MAX_COMPUTE_UNIT_PRICE);
-        let compute_unit_prices: Vec<_> = (0..pairs.len())
-            .map(|_| range.sample(&mut rng) as u64)
-            .collect();
+        let compute_unit_prices: Vec<_> =
+            (0..pairs.len()).map(|_| range.sample(&mut rng)).collect();
         let pairs_with_compute_unit_prices: Vec<_> =
             pairs.iter().zip(compute_unit_prices.iter()).collect();
 
@@ -500,12 +509,13 @@ fn generate_system_txs(
             .par_iter()
             .map(|((from, to), compute_unit_price)| {
                 (
-                    transfer_with_compute_unit_price(
+                    transfer_with_compute_unit_price_and_padding(
                         from,
                         &to.pubkey(),
                         1,
                         *blockhash,
-                        **compute_unit_price,
+                        instruction_padding_config,
+                        Some(**compute_unit_price),
                     ),
                     Some(timestamp()),
                 )
@@ -516,7 +526,14 @@ fn generate_system_txs(
             .par_iter()
             .map(|(from, to)| {
                 (
-                    system_transaction::transfer(from, &to.pubkey(), 1, *blockhash),
+                    transfer_with_compute_unit_price_and_padding(
+                        from,
+                        &to.pubkey(),
+                        1,
+                        *blockhash,
+                        instruction_padding_config,
+                        None,
+                    ),
                     Some(timestamp()),
                 )
             })
@@ -524,19 +541,36 @@ fn generate_system_txs(
     }
 }
 
-fn transfer_with_compute_unit_price(
+fn transfer_with_compute_unit_price_and_padding(
     from_keypair: &Keypair,
     to: &Pubkey,
     lamports: u64,
     recent_blockhash: Hash,
-    compute_unit_price: u64,
+    instruction_padding_config: &Option<InstructionPaddingConfig>,
+    compute_unit_price: Option<u64>,
 ) -> Transaction {
     let from_pubkey = from_keypair.pubkey();
-    let instructions = vec![
-        system_instruction::transfer(&from_pubkey, to, lamports),
-        ComputeBudgetInstruction::set_compute_unit_limit(TRANSFER_TRANSACTION_COMPUTE_UNIT),
-        ComputeBudgetInstruction::set_compute_unit_price(compute_unit_price),
-    ];
+    let transfer_instruction = system_instruction::transfer(&from_pubkey, to, lamports);
+    let instruction = if let Some(instruction_padding_config) = instruction_padding_config {
+        FromOtherSolana::from(
+            wrap_instruction(
+                FromOtherSolana::from(instruction_padding_config.program_id),
+                FromOtherSolana::from(transfer_instruction),
+                vec![],
+                instruction_padding_config.data_size,
+            )
+            .expect("Could not create padded instruction"),
+        )
+    } else {
+        transfer_instruction
+    };
+    let mut instructions = vec![instruction];
+    if let Some(compute_unit_price) = compute_unit_price {
+        instructions.extend_from_slice(&[
+            ComputeBudgetInstruction::set_compute_unit_limit(TRANSFER_TRANSACTION_COMPUTE_UNIT),
+            ComputeBudgetInstruction::set_compute_unit_price(compute_unit_price),
+        ])
+    }
     let message = Message::new(&instructions, Some(&from_pubkey));
     Transaction::new(&[from_keypair], message, recent_blockhash)
 }
@@ -601,6 +635,39 @@ fn get_nonce_blockhashes<T: 'static + BenchTpsClient + Send + Sync + ?Sized>(
     blockhashes
 }
 
+fn nonced_transfer_with_padding(
+    from_keypair: &Keypair,
+    to: &Pubkey,
+    lamports: u64,
+    nonce_account: &Pubkey,
+    nonce_authority: &Keypair,
+    nonce_hash: Hash,
+    instruction_padding_config: &Option<InstructionPaddingConfig>,
+) -> Transaction {
+    let from_pubkey = from_keypair.pubkey();
+    let transfer_instruction = system_instruction::transfer(&from_pubkey, to, lamports);
+    let instruction = if let Some(instruction_padding_config) = instruction_padding_config {
+        FromOtherSolana::from(
+            wrap_instruction(
+                FromOtherSolana::from(instruction_padding_config.program_id),
+                FromOtherSolana::from(transfer_instruction),
+                vec![],
+                instruction_padding_config.data_size,
+            )
+            .expect("Could not create padded instruction"),
+        )
+    } else {
+        transfer_instruction
+    };
+    let message = Message::new_with_nonce(
+        vec![instruction],
+        Some(&from_pubkey),
+        nonce_account,
+        &nonce_authority.pubkey(),
+    );
+    Transaction::new(&[from_keypair, nonce_authority], message, nonce_hash)
+}
+
 fn generate_nonced_system_txs<T: 'static + BenchTpsClient + Send + Sync + ?Sized>(
     client: Arc<T>,
     source: &[&Keypair],
@@ -608,6 +675,7 @@ fn generate_nonced_system_txs<T: 'static + BenchTpsClient + Send + Sync + ?Sized
     source_nonce: &[&Keypair],
     dest_nonce: &VecDeque<&Keypair>,
     reclaim: bool,
+    instruction_padding_config: &Option<InstructionPaddingConfig>,
 ) -> Vec<TimestampedTransaction> {
     let length = source.len();
     let mut transactions: Vec<TimestampedTransaction> = Vec::with_capacity(length);
@@ -620,13 +688,14 @@ fn generate_nonced_system_txs<T: 'static + BenchTpsClient + Send + Sync + ?Sized
         let blockhashes: Vec<Hash> = get_nonce_blockhashes(&client, &pubkeys);
         for i in 0..length {
             transactions.push((
-                system_transaction::nonced_transfer(
+                nonced_transfer_with_padding(
                     source[i],
                     &dest[i].pubkey(),
                     1,
                     &source_nonce[i].pubkey(),
                     source[i],
                     blockhashes[i],
+                    instruction_padding_config,
                 ),
                 None,
             ));
@@ -637,13 +706,14 @@ fn generate_nonced_system_txs<T: 'static + BenchTpsClient + Send + Sync + ?Sized
 
         for i in 0..length {
             transactions.push((
-                system_transaction::nonced_transfer(
+                nonced_transfer_with_padding(
                     dest[i],
                     &source[i].pubkey(),
                     1,
                     &dest_nonce[i].pubkey(),
                     dest[i],
                     blockhashes[i],
+                    instruction_padding_config,
                 ),
                 None,
             ));

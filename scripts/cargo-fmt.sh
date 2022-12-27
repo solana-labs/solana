@@ -13,7 +13,7 @@ fi
 set -ex
 
 "$cargo" nightly fmt --all
-(cd programs/bpf && "$cargo" nightly fmt --all)
+(cd programs/sbf && "$cargo" nightly fmt --all)
 (cd sdk/cargo-build-sbf/tests/crates/fail && "$cargo" nightly fmt --all)
 (cd sdk/cargo-build-sbf/tests/crates/noop && "$cargo" nightly fmt --all)
 (cd storage-bigtable/build-proto && "$cargo" nightly fmt --all)

@@ -4,7 +4,7 @@ import {
   SignatureResult,
   ParsedInstruction,
 } from "@solana/web3.js";
-import { SolBalance } from "utils";
+import { SolBalance } from "components/common/SolBalance";
 import { InstructionCard } from "../InstructionCard";
 import { Address } from "components/common/Address";
 import { TransferInfo } from "./types";

@@ -76,7 +76,7 @@ let airdropSignature = await connection.requestAirdrop(
   web3.LAMPORTS_PER_SOL,
 );
 
-await connection.confirmTransaction(airdropSignature);
+await connection.confirmTransaction({ signature: airdropSignature });
 
 let toAccount = web3.Keypair.generate();
 
@@ -253,7 +253,7 @@ let airdropSignature = await connection.requestAirdrop(
   web3.LAMPORTS_PER_SOL,
 );
 
-await connection.confirmTransaction(airdropSignature);
+await connection.confirmTransaction({ signature: airdropSignature });
 
 // Allocate Account Data
 let allocatedAccount = web3.Keypair.generate();
@@ -365,7 +365,8 @@ let airdropSignature = await connection.requestAirdrop(
   fromPublicKey.publicKey,
   web3.LAMPORTS_PER_SOL,
 );
-await connection.confirmTransaction(airdropSignature);
+
+await connection.confirmTransaction({ signature: airdropSignature });
 
 // Sign Message with Ethereum Key
 let plaintext = Buffer.from("string address");
@@ -412,7 +413,7 @@ let airdropSignature = await connection.requestAirdrop(
   web3.LAMPORTS_PER_SOL,
 );
 
-await connection.confirmTransaction(airdropSignature);
+await connection.confirmTransaction({ signature: airdropSignature });
 
 let type = web3.SYSTEM_INSTRUCTION_LAYOUTS.Transfer;
 let data = Buffer.alloc(type.layout.span);
@@ -532,7 +533,7 @@ let airdropSignature = await connection.requestAirdrop(
   web3.LAMPORTS_PER_SOL,
 );
 
-await connection.confirmTransaction(airdropSignature);
+await connection.confirmTransaction({ signature: airdropSignature });
 
 // Get Minimum amount for rent exemption
 let minimumAmount = await connection.getMinimumBalanceForRentExemption(
@@ -681,7 +682,7 @@ let airdropSignature = await connection.requestAirdrop(
   fromPublicKey.publicKey,
   web3.LAMPORTS_PER_SOL,
 );
-await connection.confirmTransaction(airdropSignature);
+await connection.confirmTransaction({ signature: airdropSignature });
 
 // Create Account
 let stakeAccount = web3.Keypair.generate();

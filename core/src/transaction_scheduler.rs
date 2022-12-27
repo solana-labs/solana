@@ -161,7 +161,7 @@ impl PacketBatchHandler {
             let packet_indices = packet_batch
                 .into_iter()
                 .enumerate()
-                .filter_map(|(idx, p)| if !p.meta.discard() { Some(idx) } else { None })
+                .filter_map(|(idx, p)| if !p.meta().discard() { Some(idx) } else { None })
                 .collect::<Vec<_>>();
             let transactions =
                 unprocessed_packet_batches::deserialize_packets(&packet_batch, &packet_indices)

@@ -102,10 +102,10 @@ MAYBE_TARBALLS=
 if [[ "$CI_OS_NAME" = linux ]]; then
   (
     set -x
-    sdk/bpf/scripts/package.sh
-    [[ -f bpf-sdk.tar.bz2 ]]
+    sdk/sbf/scripts/package.sh
+    [[ -f sbf-sdk.tar.bz2 ]]
   )
-  MAYBE_TARBALLS="bpf-sdk.tar.bz2"
+  MAYBE_TARBALLS="sbf-sdk.tar.bz2"
 fi
 
 source ci/upload-ci-artifact.sh

@@ -1,12 +1,13 @@
 #![cfg(feature = "full")]
 
+pub use crate::message::{AddressLoader, SimpleAddressLoader};
 use {
     super::SanitizedVersionedTransaction,
     crate::{
         hash::Hash,
         message::{
             legacy,
-            v0::{self, LoadedAddresses, MessageAddressTableLookup},
+            v0::{self, LoadedAddresses},
             LegacyMessage, SanitizedMessage, VersionedMessage,
         },
         precompiles::verify_if_precompile,
@@ -17,16 +18,15 @@ use {
         transaction::{Result, Transaction, TransactionError, VersionedTransaction},
     },
     solana_program::message::SanitizedVersionedMessage,
-    std::sync::Arc,
 };
 
 /// Maximum number of accounts that a transaction may lock.
-/// 64 was chosen because it is roughly twice the previous
-/// number of account keys that could fit in a legacy tx.
-pub const MAX_TX_ACCOUNT_LOCKS: usize = 64;
+/// 128 was chosen because it is the minimum number of accounts
+/// needed for the Neon EVM implementation.
+pub const MAX_TX_ACCOUNT_LOCKS: usize = 128;
 
 /// Sanitized transaction and the hash of its message
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub struct SanitizedTransaction {
     message: SanitizedMessage,
     message_hash: Hash,
@@ -38,7 +38,7 @@ use serde_with::*;
 
 /// Set of accounts that must be locked for safe transaction processing
 #[serde_as]
-#[derive(Debug, Clone, Default, Serialize)]
+#[derive(Debug, Clone, Default, Eq, PartialEq, Serialize)]
 pub struct TransactionAccountLocks<'a> {
     /// List of readonly account key locks
     #[serde_as(as = "Vec<DisplayFromStr>")]
@@ -46,25 +46,6 @@ pub struct TransactionAccountLocks<'a> {
     /// List of writable account key locks
     #[serde_as(as = "Vec<DisplayFromStr>")]
     pub writable: Vec<&'a Pubkey>,
-}
-
-pub trait AddressLoader: Clone {
-    fn load_addresses(self, lookups: &[MessageAddressTableLookup]) -> Result<LoadedAddresses>;
-}
-
-#[derive(Clone)]
-pub enum SimpleAddressLoader {
-    Disabled,
-    Enabled(LoadedAddresses),
-}
-
-impl AddressLoader for SimpleAddressLoader {
-    fn load_addresses(self, _lookups: &[MessageAddressTableLookup]) -> Result<LoadedAddresses> {
-        match self {
-            Self::Disabled => Err(TransactionError::AddressLookupTableNotFound),
-            Self::Enabled(loaded_addresses) => Ok(loaded_addresses),
-        }
-    }
 }
 
 /// Type that represents whether the transaction message has been precomputed or
@@ -222,13 +203,8 @@ impl SanitizedTransaction {
         &self,
         tx_account_lock_limit: usize,
     ) -> Result<TransactionAccountLocks> {
-        if self.message.has_duplicates() {
-            Err(TransactionError::AccountLoadedTwice)
-        } else if self.message.account_keys().len() > tx_account_lock_limit {
-            Err(TransactionError::TooManyAccountLocks)
-        } else {
-            Ok(self.get_account_locks_unchecked())
-        }
+        Self::validate_account_locks(self.message(), tx_account_lock_limit)?;
+        Ok(self.get_account_locks_unchecked())
     }
 
     /// Return the list of accounts that must be locked during processing this transaction.
@@ -292,7 +268,7 @@ impl SanitizedTransaction {
     }
 
     /// Verify the precompiled programs in this transaction
-    pub fn verify_precompiles(&self, feature_set: &Arc<feature_set::FeatureSet>) -> Result<()> {
+    pub fn verify_precompiles(&self, feature_set: &feature_set::FeatureSet) -> Result<()> {
         for (program_id, instruction) in self.message.program_instructions_iter() {
             verify_if_precompile(
                 program_id,
@@ -303,5 +279,19 @@ impl SanitizedTransaction {
             .map_err(|_| TransactionError::InvalidAccountIndex)?;
         }
         Ok(())
+    }
+
+    /// Validate a transaction message against locked accounts
+    pub fn validate_account_locks(
+        message: &SanitizedMessage,
+        tx_account_lock_limit: usize,
+    ) -> Result<()> {
+        if message.has_duplicates() {
+            Err(TransactionError::AccountLoadedTwice)
+        } else if message.account_keys().len() > tx_account_lock_limit {
+            Err(TransactionError::TooManyAccountLocks)
+        } else {
+            Ok(())
+        }
     }
 }

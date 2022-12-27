@@ -1,5 +1,7 @@
 import {PublicKey} from '../publickey';
 
+export * from './account-keys';
+// note: compiled-keys is internal and doesn't need to be exported
 export * from './legacy';
 export * from './versioned';
 export * from './v0';

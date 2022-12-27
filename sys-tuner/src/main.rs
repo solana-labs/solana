@@ -50,9 +50,9 @@ fn tune_poh_service_priority(uid: u32) {
         })
     }) {
         info!("PoH thread PID is {}", pid);
-        let pid = format!("{}", pid);
+        let pid = format!("{pid}");
         let output = Command::new("chrt")
-            .args(&["-r", "-p", "99", pid.as_str()])
+            .args(["-r", "-p", "99", pid.as_str()])
             .output()
             .expect("Expected to set priority of thread");
         if output.status.success() {
@@ -67,18 +67,33 @@ fn tune_poh_service_priority(uid: u32) {
 
 #[cfg(target_os = "linux")]
 fn tune_kernel_udp_buffers_and_vmmap() {
-    use sysctl::{CtlValue::String, Sysctl};
-    fn sysctl_write(name: &str, value: &str) {
+    use sysctl::{CtlValue::String, Sysctl, SysctlError};
+    fn sysctl_increase_to(name: &str, value: i64) {
         if let Ok(ctl) = sysctl::Ctl::new(name) {
-            info!("Old {} value {:?}", name, ctl.value());
-            let ctl_value = String(value.to_string());
-            match ctl.set_value(String(value.to_string())) {
-                Ok(v) if v == ctl_value => info!("Updated {} to {:?}", name, ctl_value),
-                Ok(v) => info!(
-                    "Update returned success but {} was set to {:?}, instead of {:?}",
-                    name, v, ctl_value
-                ),
-                Err(e) => error!("Failed to set {} to {:?}. Err {:?}", name, ctl_value, e),
+            if let Ok(old_value) = ctl.value().and_then(|v| {
+                v.to_string()
+                    .parse::<i64>()
+                    .map_err(|_| SysctlError::ParseError)
+            }) {
+                if old_value < value {
+                    info!("Old {} value {}", name, old_value);
+                    let ctl_value = String(value.to_string());
+                    match ctl.set_value(String(value.to_string())) {
+                        Ok(v) if v == ctl_value => info!("Updated {} to {:?}", name, ctl_value),
+                        Ok(v) => info!(
+                            "Update returned success but {} was set to {:?}, instead of {:?}",
+                            name, v, ctl_value
+                        ),
+                        Err(e) => error!("Failed to set {} to {:?}. Err {:?}", name, ctl_value, e),
+                    }
+                } else {
+                    info!(
+                        "Current {} value ({}) >= new value ({}), not changing",
+                        name, old_value, value
+                    );
+                }
+            } else {
+                error!("Failed to read current value of sysctl {} as i64", name);
             }
         } else {
             error!("Failed to find sysctl {}", name);
@@ -86,13 +101,13 @@ fn tune_kernel_udp_buffers_and_vmmap() {
     }
 
     // Reference: https://medium.com/@CameronSparr/increase-os-udp-buffers-to-improve-performance-51d167bb1360
-    sysctl_write("net.core.rmem_max", "134217728");
-    sysctl_write("net.core.rmem_default", "134217728");
-    sysctl_write("net.core.wmem_max", "134217728");
-    sysctl_write("net.core.wmem_default", "134217728");
+    sysctl_increase_to("net.core.rmem_max", 134217728);
+    sysctl_increase_to("net.core.rmem_default", 134217728);
+    sysctl_increase_to("net.core.wmem_max", 134217728);
+    sysctl_increase_to("net.core.wmem_default", 134217728);
 
     // increase mmap counts for many append_vecs
-    sysctl_write("vm.max_map_count", "1000000");
+    sysctl_increase_to("vm.max_map_count", 1000000);
 }
 
 #[cfg(unix)]
@@ -121,7 +136,7 @@ fn main() {
     unsafe { libc::umask(0o077) };
     if let Err(e) = std::fs::remove_file(solana_sys_tuner::SOLANA_SYS_TUNER_PATH) {
         if e.kind() != std::io::ErrorKind::NotFound {
-            panic!("Failed to remove stale socket file: {:?}", e)
+            panic!("Failed to remove stale socket file: {e:?}")
         }
     }
 
@@ -141,7 +156,7 @@ fn main() {
         )
         .expect("Expected to change UID of the socket file");
     } else {
-        panic!("Could not find UID for {:?} user", user);
+        panic!("Could not find UID for {user:?} user");
     }
 
     info!("Waiting for tuning requests");

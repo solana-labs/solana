@@ -16,6 +16,7 @@ use {
         },
         time::Instant,
     },
+    tokio::time,
 };
 
 fn load_credentials(filepath: Option<String>) -> Result<Credentials, String> {
@@ -26,11 +27,11 @@ fn load_credentials(filepath: Option<String>) -> Result<Credentials, String> {
         })?,
     };
     Credentials::from_file(&path)
-        .map_err(|err| format!("Failed to read GCP credentials from {}: {}", path, err))
+        .map_err(|err| format!("Failed to read GCP credentials from {path}: {err}"))
 }
 
 fn load_stringified_credentials(credential: String) -> Result<Credentials, String> {
-    Credentials::from_str(&credential).map_err(|err| format!("{}", err))
+    Credentials::from_str(&credential).map_err(|err| format!("{err}"))
 }
 
 #[derive(Clone)]
@@ -49,7 +50,7 @@ impl AccessToken {
         };
 
         if let Err(err) = credentials.rsa_key() {
-            Err(format!("Invalid rsa key: {}", err))
+            Err(format!("Invalid rsa key: {err}"))
         } else {
             let token = Arc::new(RwLock::new(Self::get_token(&credentials, &scope).await?));
             let access_token = Self {
@@ -83,7 +84,7 @@ impl AccessToken {
 
         let token = goauth::get_token(&jwt, credentials)
             .await
-            .map_err(|err| format!("Failed to refresh access token: {}", err))?;
+            .map_err(|err| format!("Failed to refresh access token: {err}"))?;
 
         info!("Token expires in {} seconds", token.expires_in());
         Ok((token, Instant::now()))
@@ -109,15 +110,22 @@ impl AccessToken {
         }
 
         info!("Refreshing token");
-        let new_token = Self::get_token(&self.credentials, &self.scope).await;
+        match time::timeout(
+            time::Duration::from_secs(5),
+            Self::get_token(&self.credentials, &self.scope),
+        )
+        .await
         {
-            let mut token_w = self.token.write().unwrap();
-            match new_token {
-                Ok(new_token) => *token_w = new_token,
-                Err(err) => warn!("{}", err),
+            Ok(new_token) => match (new_token, self.token.write()) {
+                (Ok(new_token), Ok(mut token_w)) => *token_w = new_token,
+                (Ok(_new_token), Err(err)) => warn!("{}", err),
+                (Err(err), _) => warn!("{}", err),
+            },
+            Err(_) => {
+                warn!("Token refresh timeout")
             }
-            self.refresh_active.store(false, Ordering::Relaxed);
         }
+        self.refresh_active.store(false, Ordering::Relaxed);
     }
 
     /// Return an access token suitable for use in an HTTP authorization header

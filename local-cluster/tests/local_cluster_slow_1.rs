@@ -29,13 +29,13 @@ use {
         clock::{Slot, MAX_PROCESSING_AGE},
         hash::Hash,
         pubkey::Pubkey,
-        signature::{KeypairInsecureClone, Signer},
+        signature::Signer,
+        vote::state::VoteStateUpdate,
     },
     solana_streamer::socket::SocketAddrSpace,
     solana_vote_program::{vote_state::MAX_LOCKOUT_HISTORY, vote_transaction},
     std::{
         collections::{BTreeSet, HashSet},
-        ops::Deref,
         path::Path,
         sync::{
             atomic::{AtomicBool, Ordering},
@@ -464,7 +464,7 @@ fn test_duplicate_shreds_broadcast_leader() {
     let (gossip_service, _tcp_listener, cluster_info) = gossip_service::make_gossip_node(
         // Need to use our validator's keypair to gossip EpochSlots and votes for our
         // node later.
-        node_keypair.deref().clone(),
+        node_keypair.insecure_clone(),
         Some(&cluster.entry_point_info.gossip),
         &exit,
         None,
@@ -542,22 +542,31 @@ fn test_duplicate_shreds_broadcast_leader() {
                             // root by this validator, but we're not concerned with lockout violations
                             // by this validator so it's fine.
                             let leader_blockstore = open_blockstore(&bad_leader_ledger_path);
-                            let mut vote_slots: Vec<Slot> = AncestorIterator::new_inclusive(
+                            let mut vote_slots: Vec<(Slot, u32)> = AncestorIterator::new_inclusive(
                                 latest_vote_slot,
                                 &leader_blockstore,
                             )
                             .take(MAX_LOCKOUT_HISTORY)
+                            .zip(1..)
                             .collect();
                             vote_slots.reverse();
-                            let vote_tx = vote_transaction::new_vote_transaction(
-                                vote_slots,
-                                vote_hash,
-                                leader_vote_tx.message.recent_blockhash,
-                                &node_keypair,
-                                &vote_keypair,
-                                &vote_keypair,
-                                None,
-                            );
+                            let mut vote = VoteStateUpdate::from(vote_slots);
+                            let root = AncestorIterator::new_inclusive(
+                                latest_vote_slot,
+                                &leader_blockstore,
+                            )
+                            .nth(MAX_LOCKOUT_HISTORY);
+                            vote.root = root;
+                            vote.hash = vote_hash;
+                            let vote_tx =
+                                vote_transaction::new_compact_vote_state_update_transaction(
+                                    vote,
+                                    leader_vote_tx.message.recent_blockhash,
+                                    &node_keypair,
+                                    &vote_keypair,
+                                    &vote_keypair,
+                                    None,
+                                );
                             gossip_vote_index += 1;
                             gossip_vote_index %= MAX_LOCKOUT_HISTORY;
                             cluster_info.push_vote_at_index(vote_tx, gossip_vote_index as u8)
@@ -595,7 +604,7 @@ fn test_switch_threshold_uses_gossip_votes() {
     let total_stake = 100 * DEFAULT_NODE_STAKE;
 
     // Minimum stake needed to generate a switching proof
-    let minimum_switch_stake = (SWITCH_FORK_THRESHOLD as f64 * total_stake as f64) as u64;
+    let minimum_switch_stake = (SWITCH_FORK_THRESHOLD * total_stake as f64) as u64;
 
     // Make the heavier stake insufficient for switching so tha the lighter validator
     // cannot switch without seeing a vote from the dead/failure_stake validator.

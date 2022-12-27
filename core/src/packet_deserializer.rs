@@ -45,26 +45,36 @@ impl PacketDeserializer {
     ) -> Result<ReceivePacketResults, RecvTimeoutError> {
         let (packet_batches, sigverify_tracer_stats_option) =
             self.receive_until(recv_timeout, capacity)?;
+        Ok(Self::deserialize_and_collect_packets(
+            &packet_batches,
+            sigverify_tracer_stats_option,
+        ))
+    }
 
+    /// Deserialize packet batches and collect them into ReceivePacketResults
+    fn deserialize_and_collect_packets(
+        packet_batches: &[PacketBatch],
+        sigverify_tracer_stats_option: Option<SigverifyTracerPacketStats>,
+    ) -> ReceivePacketResults {
         let packet_count: usize = packet_batches.iter().map(|x| x.len()).sum();
         let mut passed_sigverify_count: usize = 0;
         let mut failed_sigverify_count: usize = 0;
         let mut deserialized_packets = Vec::with_capacity(packet_count);
         for packet_batch in packet_batches {
-            let packet_indexes = Self::generate_packet_indexes(&packet_batch);
+            let packet_indexes = Self::generate_packet_indexes(packet_batch);
 
             passed_sigverify_count += packet_indexes.len();
             failed_sigverify_count += packet_batch.len().saturating_sub(packet_indexes.len());
 
-            deserialized_packets.extend(Self::deserialize_packets(&packet_batch, &packet_indexes));
+            deserialized_packets.extend(Self::deserialize_packets(packet_batch, &packet_indexes));
         }
 
-        Ok(ReceivePacketResults {
+        ReceivePacketResults {
             deserialized_packets,
             new_tracer_stats_option: sigverify_tracer_stats_option,
             passed_sigverify_count: passed_sigverify_count as u64,
             failed_sigverify_count: failed_sigverify_count as u64,
-        })
+        }
     }
 
     /// Receives packet batches from sigverify stage with a timeout, and aggregates tracer packet stats
@@ -112,7 +122,7 @@ impl PacketDeserializer {
         packet_batch
             .iter()
             .enumerate()
-            .filter(|(_, pkt)| !pkt.meta.discard())
+            .filter(|(_, pkt)| !pkt.meta().discard())
             .map(|(index, _)| index)
             .collect()
     }
@@ -124,5 +134,57 @@ impl PacketDeserializer {
         packet_indexes.iter().filter_map(move |packet_index| {
             ImmutableDeserializedPacket::new(packet_batch[*packet_index].clone(), None).ok()
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use {
+        super::*,
+        solana_perf::packet::to_packet_batches,
+        solana_sdk::{
+            hash::Hash, pubkey::Pubkey, signature::Keypair, system_transaction,
+            transaction::Transaction,
+        },
+    };
+
+    fn random_transfer() -> Transaction {
+        system_transaction::transfer(&Keypair::new(), &Pubkey::new_unique(), 1, Hash::default())
+    }
+
+    #[test]
+    fn test_deserialize_and_collect_packets_empty() {
+        let results = PacketDeserializer::deserialize_and_collect_packets(&[], None);
+        assert_eq!(results.deserialized_packets.len(), 0);
+        assert!(results.new_tracer_stats_option.is_none());
+        assert_eq!(results.passed_sigverify_count, 0);
+        assert_eq!(results.failed_sigverify_count, 0);
+    }
+
+    #[test]
+    fn test_deserialize_and_collect_packets_simple_batches() {
+        let transactions = vec![random_transfer(), random_transfer()];
+        let packet_batches = to_packet_batches(&transactions, 1);
+        assert_eq!(packet_batches.len(), 2);
+
+        let results = PacketDeserializer::deserialize_and_collect_packets(&packet_batches, None);
+        assert_eq!(results.deserialized_packets.len(), 2);
+        assert!(results.new_tracer_stats_option.is_none());
+        assert_eq!(results.passed_sigverify_count, 2);
+        assert_eq!(results.failed_sigverify_count, 0);
+    }
+
+    #[test]
+    fn test_deserialize_and_collect_packets_simple_batches_with_failure() {
+        let transactions = vec![random_transfer(), random_transfer()];
+        let mut packet_batches = to_packet_batches(&transactions, 1);
+        assert_eq!(packet_batches.len(), 2);
+        packet_batches[0][0].meta_mut().set_discard(true);
+
+        let results = PacketDeserializer::deserialize_and_collect_packets(&packet_batches, None);
+        assert_eq!(results.deserialized_packets.len(), 1);
+        assert!(results.new_tracer_stats_option.is_none());
+        assert_eq!(results.passed_sigverify_count, 1);
+        assert_eq!(results.failed_sigverify_count, 1);
     }
 }

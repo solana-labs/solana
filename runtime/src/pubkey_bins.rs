@@ -30,7 +30,7 @@ impl PubkeyBinCalculator24 {
 
     pub fn bin_from_pubkey(&self, pubkey: &Pubkey) -> usize {
         let as_ref = pubkey.as_ref();
-        (((as_ref[0] as usize * 256 + as_ref[1] as usize) * 256 + as_ref[2] as usize) as usize)
+        ((as_ref[0] as usize * 256 + as_ref[1] as usize) * 256 + as_ref[2] as usize)
             >> self.shift_bits
     }
 
@@ -63,7 +63,7 @@ pub mod tests {
         for i in 0..=24 {
             let bins = 2u32.pow(i);
             let calc = PubkeyBinCalculator24::new(bins as usize);
-            assert_eq!(calc.shift_bits, 24 - i, "i: {}", i);
+            assert_eq!(calc.shift_bits, 24 - i, "i: {i}");
             for bin in 0..bins {
                 assert_eq!(
                     bin as usize,

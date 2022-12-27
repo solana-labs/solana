@@ -14,7 +14,7 @@ use {
     solana_account_decoder::parse_token::spl_token_ids,
     solana_sdk::{
         instruction::CompiledInstruction, message::AccountKeys, pubkey::Pubkey, stake,
-        system_program,
+        system_program, vote,
     },
     std::{
         collections::HashMap,
@@ -32,7 +32,7 @@ lazy_static! {
     static ref MEMO_V3_PROGRAM_ID: Pubkey = spl_memo_id_v3();
     static ref STAKE_PROGRAM_ID: Pubkey = stake::program::id();
     static ref SYSTEM_PROGRAM_ID: Pubkey = system_program::id();
-    static ref VOTE_PROGRAM_ID: Pubkey = solana_vote_program::id();
+    static ref VOTE_PROGRAM_ID: Pubkey = vote::program::id();
     static ref PARSABLE_PROGRAM_IDS: HashMap<Pubkey, ParsableProgram> = {
         let mut m = HashMap::new();
         m.insert(
@@ -81,6 +81,7 @@ pub struct ParsedInstruction {
     pub program: String,
     pub program_id: String,
     pub parsed: Value,
+    pub stack_height: Option<u32>,
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
@@ -110,6 +111,7 @@ pub fn parse(
     program_id: &Pubkey,
     instruction: &CompiledInstruction,
     account_keys: &AccountKeys,
+    stack_height: Option<u32>,
 ) -> Result<ParsedInstruction, ParseInstructionError> {
     let program_name = PARSABLE_PROGRAM_IDS
         .get(program_id)
@@ -134,9 +136,10 @@ pub fn parse(
         ParsableProgram::Vote => serde_json::to_value(parse_vote(instruction, account_keys)?)?,
     };
     Ok(ParsedInstruction {
-        program: format!("{:?}", program_name).to_kebab_case(),
+        program: format!("{program_name:?}").to_kebab_case(),
         program_id: program_id.to_string(),
         parsed: parsed_json,
+        stack_height,
     })
 }
 
@@ -177,24 +180,26 @@ mod test {
             data: vec![240, 159, 166, 150],
         };
         assert_eq!(
-            parse(&MEMO_V1_PROGRAM_ID, &memo_instruction, &no_keys).unwrap(),
+            parse(&MEMO_V1_PROGRAM_ID, &memo_instruction, &no_keys, None).unwrap(),
             ParsedInstruction {
                 program: "spl-memo".to_string(),
                 program_id: MEMO_V1_PROGRAM_ID.to_string(),
                 parsed: json!("🦖"),
+                stack_height: None,
             }
         );
         assert_eq!(
-            parse(&MEMO_V3_PROGRAM_ID, &memo_instruction, &no_keys).unwrap(),
+            parse(&MEMO_V3_PROGRAM_ID, &memo_instruction, &no_keys, Some(1)).unwrap(),
             ParsedInstruction {
                 program: "spl-memo".to_string(),
                 program_id: MEMO_V3_PROGRAM_ID.to_string(),
                 parsed: json!("🦖"),
+                stack_height: Some(1),
             }
         );
 
         let non_parsable_program_id = Pubkey::new(&[1; 32]);
-        assert!(parse(&non_parsable_program_id, &memo_instruction, &no_keys).is_err());
+        assert!(parse(&non_parsable_program_id, &memo_instruction, &no_keys, None).is_err());
     }
 
     #[test]

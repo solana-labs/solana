@@ -48,7 +48,7 @@ impl Default for Config<'_> {
                 .expect("Unable to get parent directory")
                 .to_path_buf()
                 .join("sdk")
-                .join("bpf"),
+                .join("sbf"),
             sbf_out_dir: None,
             sbf_tools_version: "(unknown)",
             dump: false,
@@ -72,7 +72,7 @@ where
     S: AsRef<OsStr>,
 {
     let args = args.into_iter().collect::<Vec<_>>();
-    let mut msg = format!("cargo-build-sbf child: {}", program.display());
+    let mut msg = format!("spawn: {}", program.display());
     for arg in args.iter() {
         msg = msg + &format!(" {}", arg.as_ref().to_str().unwrap_or("?")).to_string();
     }
@@ -100,7 +100,7 @@ where
         let file = File::create(&script_name).unwrap();
         let mut out = BufWriter::new(file);
         for (key, value) in env::vars() {
-            writeln!(out, "{}=\"{}\" \\", key, value).unwrap();
+            writeln!(out, "{key}=\"{value}\" \\").unwrap();
         }
         write!(out, "{}", program.display()).unwrap();
         for arg in args.iter() {
@@ -141,7 +141,7 @@ fn install_if_missing(
             .next()
             .is_none()
     {
-        fs::remove_dir(&target_path).map_err(|err| err.to_string())?;
+        fs::remove_dir(target_path).map_err(|err| err.to_string())?;
     }
 
     // Check whether the package is already in ~/.cache/solana.
@@ -153,9 +153,9 @@ fn install_if_missing(
             .unwrap_or(false)
     {
         if target_path.exists() {
-            fs::remove_file(&target_path).map_err(|err| err.to_string())?;
+            fs::remove_file(target_path).map_err(|err| err.to_string())?;
         }
-        fs::create_dir_all(&target_path).map_err(|err| err.to_string())?;
+        fs::create_dir_all(target_path).map_err(|err| err.to_string())?;
         let mut url = String::from(url);
         url.push('/');
         url.push_str(config.sbf_tools_version);
@@ -169,9 +169,7 @@ fn install_if_missing(
         let zip = File::open(&download_file_path).map_err(|err| err.to_string())?;
         let tar = BzDecoder::new(BufReader::new(zip));
         let mut archive = Archive::new(tar);
-        archive
-            .unpack(&target_path)
-            .map_err(|err| err.to_string())?;
+        archive.unpack(target_path).map_err(|err| err.to_string())?;
         fs::remove_file(download_file_path).map_err(|err| err.to_string())?;
     }
     // Make a symbolic link source_path -> target_path in the
@@ -265,7 +263,7 @@ fn postprocess_dump(program_dump: &Path) {
         if head_re.is_match(line) {
             let captures = head_re.captures(line).unwrap();
             pc = u64::from_str_radix(&captures[1], 16).unwrap();
-            writeln!(out, "{}", line).unwrap();
+            writeln!(out, "{line}").unwrap();
             continue;
         }
         if insn_re.is_match(line) {
@@ -288,11 +286,11 @@ fn postprocess_dump(program_dump: &Path) {
                 if a2n.contains_key(&address) {
                     writeln!(out, "{} ; {}", line, a2n[&address]).unwrap();
                 } else {
-                    writeln!(out, "{}", line).unwrap();
+                    writeln!(out, "{line}").unwrap();
                 }
             }
         } else {
-            writeln!(out, "{}", line).unwrap();
+            writeln!(out, "{line}").unwrap();
         }
         pc = pc.checked_add(step).unwrap();
     }
@@ -372,7 +370,7 @@ fn link_sbf_toolchain(config: &Config) {
     let rustup_args = vec!["toolchain", "list", "-v"];
     let rustup_output = spawn(
         &rustup,
-        &rustup_args,
+        rustup_args,
         config.generate_child_script_on_failure,
     );
     if config.verbose {
@@ -392,7 +390,7 @@ fn link_sbf_toolchain(config: &Config) {
                 ];
                 let output = spawn(
                     &rustup,
-                    &rustup_args,
+                    rustup_args,
                     config.generate_child_script_on_failure,
                 );
                 if config.verbose {
@@ -413,7 +411,7 @@ fn link_sbf_toolchain(config: &Config) {
         ];
         let output = spawn(
             &rustup,
-            &rustup_args,
+            rustup_args,
             config.generate_child_script_on_failure,
         );
         if config.verbose {
@@ -475,7 +473,7 @@ fn build_sbf_package(config: &Config, target_directory: &Path, package: &cargo_m
         })
         .join("release");
 
-    env::set_current_dir(&root_package_dir).unwrap_or_else(|err| {
+    env::set_current_dir(root_package_dir).unwrap_or_else(|err| {
         error!(
             "Unable to set current directory to {}: {}",
             root_package_dir, err
@@ -528,7 +526,7 @@ fn build_sbf_package(config: &Config, target_directory: &Path, package: &cargo_m
     install_if_missing(
         config,
         package,
-        "https://github.com/solana-labs/bpf-tools/releases/download",
+        "https://github.com/solana-labs/sbf-tools/releases/download",
         sbf_tools_download_file_name,
         &target_path,
     )
@@ -536,7 +534,7 @@ fn build_sbf_package(config: &Config, target_directory: &Path, package: &cargo_m
         // The package version directory doesn't contain a valid
         // installation, and it should be removed.
         let target_path_parent = target_path.parent().expect("Invalid package path");
-        fs::remove_dir_all(&target_path_parent).unwrap_or_else(|err| {
+        fs::remove_dir_all(target_path_parent).unwrap_or_else(|err| {
             error!(
                 "Failed to remove {} while recovering from installation failure: {}",
                 target_path_parent.to_string_lossy(),
@@ -601,7 +599,7 @@ fn build_sbf_package(config: &Config, target_directory: &Path, package: &cargo_m
         target_rustflags = Cow::Owned(format!("{} -C target_cpu=sbfv2", &target_rustflags));
     }
     if let Cow::Owned(flags) = target_rustflags {
-        env::set_var(cargo_target, &flags);
+        env::set_var(cargo_target, flags);
     }
     if config.verbose {
         debug!(
@@ -661,11 +659,11 @@ fn build_sbf_package(config: &Config, target_directory: &Path, package: &cargo_m
     }
 
     if let Some(program_name) = program_name {
-        let program_unstripped_so = target_build_directory.join(&format!("{}.so", program_name));
-        let program_dump = sbf_out_dir.join(&format!("{}-dump.txt", program_name));
-        let program_so = sbf_out_dir.join(&format!("{}.so", program_name));
-        let program_debug = sbf_out_dir.join(&format!("{}.debug", program_name));
-        let program_keypair = sbf_out_dir.join(&format!("{}-keypair.json", program_name));
+        let program_unstripped_so = target_build_directory.join(format!("{program_name}.so"));
+        let program_dump = sbf_out_dir.join(format!("{program_name}-dump.txt"));
+        let program_so = sbf_out_dir.join(format!("{program_name}.so"));
+        let program_debug = sbf_out_dir.join(format!("{program_name}.debug"));
+        let program_keypair = sbf_out_dir.join(format!("{program_name}-keypair.json"));
 
         fn file_older_or_missing(prerequisite_file: &Path, target_file: &Path) -> bool {
             let prerequisite_metadata = fs::metadata(prerequisite_file).unwrap_or_else(|err| {
@@ -701,7 +699,7 @@ fn build_sbf_package(config: &Config, target_directory: &Path, package: &cargo_m
             #[cfg(windows)]
             let output = spawn(
                 &llvm_bin.join("llvm-objcopy"),
-                &[
+                [
                     "--strip-all".as_ref(),
                     program_unstripped_so.as_os_str(),
                     program_so.as_os_str(),
@@ -711,7 +709,7 @@ fn build_sbf_package(config: &Config, target_directory: &Path, package: &cargo_m
             #[cfg(not(windows))]
             let output = spawn(
                 &config.sbf_sdk.join("scripts").join("strip.sh"),
-                &[&program_unstripped_so, &program_so],
+                [&program_unstripped_so, &program_so],
                 config.generate_child_script_on_failure,
             );
             if config.verbose {
@@ -734,7 +732,7 @@ fn build_sbf_package(config: &Config, target_directory: &Path, package: &cargo_m
             {
                 let output = spawn(
                     &dump_script,
-                    &[&program_unstripped_so, &program_dump],
+                    [&program_unstripped_so, &program_dump],
                     config.generate_child_script_on_failure,
                 );
                 if config.verbose {
@@ -752,7 +750,7 @@ fn build_sbf_package(config: &Config, target_directory: &Path, package: &cargo_m
 
             let output = spawn(
                 llvm_objcopy,
-                &[
+                [
                     "--only-keep-debug".as_ref(),
                     program_unstripped_so.as_os_str(),
                     program_debug.as_os_str(),
@@ -832,7 +830,7 @@ fn main() {
 
     // The following line is scanned by CI configuration script to
     // separate cargo caches according to the version of sbf-tools.
-    let sbf_tools_version = "v1.29";
+    let sbf_tools_version = "v1.31";
     let version = format!("{}\nsbf-tools {}", crate_version!(), sbf_tools_version);
     let matches = clap::Command::new(crate_name!())
         .about(crate_description!())
@@ -939,7 +937,7 @@ fn main() {
         .arg(
             Arg::new("arch")
                 .long("arch")
-                .possible_values(&["bpf", "sbf", "sbfv2"])
+                .possible_values(["bpf", "sbf", "sbfv2"])
                 .default_value("sbf")
                 .help("Build for the given SBF version"),
         )

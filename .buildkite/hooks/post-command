@@ -20,12 +20,9 @@ else
     SUCCESS=false
   fi
 
-  if [[ "$BUILDKITE_BRANCH" == 'master' && -f "results.json" ]]; then
+  if [[ -n $BUILDKITE && -f "results.json" ]]; then
     # prepare result file
     awk '/{ "type": .* }/' results.json > sanitized-results.json
-
-    # upload to buildkite
-    buildkite-test-collector < sanitized-results.json
 
     # upload to datadog
     cargo2junit > results.xml < sanitized-results.json

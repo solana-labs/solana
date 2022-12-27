@@ -5,8 +5,7 @@ import { NftokenTypes } from "./nftoken-types";
 
 export function isNFTokenAccount(account: Account): boolean {
   return Boolean(
-    account.details?.owner.toBase58() === NFTOKEN_ADDRESS &&
-      account.details.rawData
+    account.owner.toBase58() === NFTOKEN_ADDRESS && account.data.raw
   );
 }
 
@@ -20,9 +19,7 @@ export const parseNFTokenNFTAccount = (
   }
 
   try {
-    const parsed = NftokenTypes.nftAccountLayout.decode(
-      account!.details!.rawData!
-    );
+    const parsed = NftokenTypes.nftAccountLayout.decode(account.data.raw!);
 
     if (!parsed) {
       return null;
@@ -36,7 +33,7 @@ export const parseNFTokenNFTAccount = (
     }
 
     return {
-      address: account!.pubkey.toBase58(),
+      address: account.pubkey.toBase58(),
       holder: new PublicKey(parsed.holder).toBase58(),
       authority: new PublicKey(parsed.authority).toBase58(),
       authority_can_update: Boolean(parsed.authority_can_update),
@@ -62,7 +59,7 @@ export const parseNFTokenCollectionAccount = (
 
   try {
     const parsed = NftokenTypes.collectionAccountLayout.decode(
-      account!.details!.rawData!
+      account.data.raw!
     );
 
     if (!parsed) {
@@ -76,7 +73,7 @@ export const parseNFTokenCollectionAccount = (
     }
 
     return {
-      address: account!.pubkey.toBase58(),
+      address: account.pubkey.toBase58(),
       authority: parsed.authority,
       authority_can_update: Boolean(parsed.authority_can_update),
       metadata_url: parsed.metadata_url?.replace(/\0/g, "") ?? null,

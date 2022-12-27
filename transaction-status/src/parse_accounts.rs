@@ -6,27 +6,42 @@ pub struct ParsedAccount {
     pub pubkey: String,
     pub writable: bool,
     pub signer: bool,
+    pub source: Option<ParsedAccountSource>,
 }
 
-pub fn parse_accounts(message: &Message) -> Vec<ParsedAccount> {
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum ParsedAccountSource {
+    Transaction,
+    LookupTable,
+}
+
+pub fn parse_legacy_message_accounts(message: &Message) -> Vec<ParsedAccount> {
     let mut accounts: Vec<ParsedAccount> = vec![];
     for (i, account_key) in message.account_keys.iter().enumerate() {
         accounts.push(ParsedAccount {
             pubkey: account_key.to_string(),
             writable: message.is_writable(i),
             signer: message.is_signer(i),
+            source: Some(ParsedAccountSource::Transaction),
         });
     }
     accounts
 }
 
-pub fn parse_static_accounts(message: &LoadedMessage) -> Vec<ParsedAccount> {
+pub fn parse_v0_message_accounts(message: &LoadedMessage) -> Vec<ParsedAccount> {
     let mut accounts: Vec<ParsedAccount> = vec![];
-    for (i, account_key) in message.static_account_keys().iter().enumerate() {
+    for (i, account_key) in message.account_keys().iter().enumerate() {
+        let source = if i < message.static_account_keys().len() {
+            ParsedAccountSource::Transaction
+        } else {
+            ParsedAccountSource::LookupTable
+        };
         accounts.push(ParsedAccount {
             pubkey: account_key.to_string(),
             writable: message.is_writable(i),
             signer: message.is_signer(i),
+            source: Some(source),
         });
     }
     accounts
@@ -43,7 +58,7 @@ mod test {
     };
 
     #[test]
-    fn test_parse_accounts() {
+    fn test_parse_legacy_message_accounts() {
         let pubkey0 = Pubkey::new_unique();
         let pubkey1 = Pubkey::new_unique();
         let pubkey2 = Pubkey::new_unique();
@@ -59,38 +74,44 @@ mod test {
         };
 
         assert_eq!(
-            parse_accounts(&message),
+            parse_legacy_message_accounts(&message),
             vec![
                 ParsedAccount {
                     pubkey: pubkey0.to_string(),
                     writable: true,
                     signer: true,
+                    source: Some(ParsedAccountSource::Transaction),
                 },
                 ParsedAccount {
                     pubkey: pubkey1.to_string(),
                     writable: false,
                     signer: true,
+                    source: Some(ParsedAccountSource::Transaction),
                 },
                 ParsedAccount {
                     pubkey: pubkey2.to_string(),
                     writable: true,
                     signer: false,
+                    source: Some(ParsedAccountSource::Transaction),
                 },
                 ParsedAccount {
                     pubkey: pubkey3.to_string(),
                     writable: false,
                     signer: false,
+                    source: Some(ParsedAccountSource::Transaction),
                 },
             ]
         );
     }
 
     #[test]
-    fn test_parse_static_accounts() {
+    fn test_parse_v0_message_accounts() {
         let pubkey0 = Pubkey::new_unique();
         let pubkey1 = Pubkey::new_unique();
         let pubkey2 = Pubkey::new_unique();
         let pubkey3 = Pubkey::new_unique();
+        let pubkey4 = Pubkey::new_unique();
+        let pubkey5 = Pubkey::new_unique();
         let message = LoadedMessage::new(
             v0::Message {
                 header: MessageHeader {
@@ -102,33 +123,49 @@ mod test {
                 ..v0::Message::default()
             },
             LoadedAddresses {
-                writable: vec![Pubkey::new_unique()],
-                readonly: vec![Pubkey::new_unique()],
+                writable: vec![pubkey4],
+                readonly: vec![pubkey5],
             },
         );
 
         assert_eq!(
-            parse_static_accounts(&message),
+            parse_v0_message_accounts(&message),
             vec![
                 ParsedAccount {
                     pubkey: pubkey0.to_string(),
                     writable: true,
                     signer: true,
+                    source: Some(ParsedAccountSource::Transaction),
                 },
                 ParsedAccount {
                     pubkey: pubkey1.to_string(),
                     writable: false,
                     signer: true,
+                    source: Some(ParsedAccountSource::Transaction),
                 },
                 ParsedAccount {
                     pubkey: pubkey2.to_string(),
                     writable: true,
                     signer: false,
+                    source: Some(ParsedAccountSource::Transaction),
                 },
                 ParsedAccount {
                     pubkey: pubkey3.to_string(),
                     writable: false,
                     signer: false,
+                    source: Some(ParsedAccountSource::Transaction),
+                },
+                ParsedAccount {
+                    pubkey: pubkey4.to_string(),
+                    writable: true,
+                    signer: false,
+                    source: Some(ParsedAccountSource::LookupTable),
+                },
+                ParsedAccount {
+                    pubkey: pubkey5.to_string(),
+                    writable: false,
+                    signer: false,
+                    source: Some(ParsedAccountSource::LookupTable),
                 },
             ]
         );

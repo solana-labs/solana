@@ -3,6 +3,7 @@
 use {
     log::*,
     solana_cli_output::CliAccount,
+    solana_client::rpc_request::MAX_MULTIPLE_ACCOUNTS,
     solana_core::{
         tower_storage::TowerStorage,
         validator::{Validator, ValidatorConfig, ValidatorStartProgress},
@@ -43,7 +44,9 @@ use {
         signature::{read_keypair_file, write_keypair_file, Keypair, Signer},
     },
     solana_streamer::socket::SocketAddrSpace,
-    solana_tpu_client::connection_cache::{DEFAULT_TPU_CONNECTION_POOL_SIZE, DEFAULT_TPU_USE_QUIC},
+    solana_tpu_client::tpu_connection_cache::{
+        DEFAULT_TPU_CONNECTION_POOL_SIZE, DEFAULT_TPU_ENABLE_UDP, DEFAULT_TPU_USE_QUIC,
+    },
     std::{
         collections::{HashMap, HashSet},
         ffi::OsStr,
@@ -122,6 +125,7 @@ pub struct TestValidatorGenesis {
     compute_unit_limit: Option<u64>,
     pub log_messages_bytes_limit: Option<usize>,
     pub transaction_account_lock_limit: Option<usize>,
+    pub tpu_enable_udp: bool,
 }
 
 impl Default for TestValidatorGenesis {
@@ -148,11 +152,12 @@ impl Default for TestValidatorGenesis {
             max_ledger_shreds: Option::<u64>::default(),
             max_genesis_archive_unpacked_size: Option::<u64>::default(),
             geyser_plugin_config_files: Option::<Vec<PathBuf>>::default(),
-            accounts_db_caching_enabled: bool::default(),
+            accounts_db_caching_enabled: true,
             deactivate_feature_set: HashSet::<Pubkey>::default(),
             compute_unit_limit: Option::<u64>::default(),
             log_messages_bytes_limit: Option::<usize>::default(),
             transaction_account_lock_limit: Option::<usize>::default(),
+            tpu_enable_udp: DEFAULT_TPU_ENABLE_UDP,
         }
     }
 }
@@ -178,6 +183,11 @@ impl TestValidatorGenesis {
     /// Check if a given TestValidator ledger has already been initialized
     pub fn ledger_exists(ledger_path: &Path) -> bool {
         ledger_path.join("vote-account-keypair.json").exists()
+    }
+
+    pub fn tpu_enable_udp(&mut self, tpu_enable_udp: bool) -> &mut Self {
+        self.tpu_enable_udp = tpu_enable_udp;
+        self
     }
 
     pub fn fee_rate_governor(&mut self, fee_rate_governor: FeeRateGovernor) -> &mut Self {
@@ -285,15 +295,20 @@ impl TestValidatorGenesis {
     where
         T: IntoIterator<Item = Pubkey>,
     {
-        for address in addresses {
-            info!("Fetching {} over RPC...", address);
-            let res = rpc_client.get_account(&address);
-            if let Ok(account) = res {
-                self.add_account(address, AccountSharedData::from(account));
-            } else if skip_missing {
-                warn!("Could not find {}, skipping.", address);
-            } else {
-                return Err(format!("Failed to fetch {}: {}", address, res.unwrap_err()));
+        let addresses: Vec<Pubkey> = addresses.into_iter().collect();
+        for chunk in addresses.chunks(MAX_MULTIPLE_ACCOUNTS) {
+            info!("Fetching {:?} over RPC...", chunk);
+            let responses = rpc_client
+                .get_multiple_accounts(chunk)
+                .map_err(|err| format!("Failed to fetch: {err}"))?;
+            for (address, res) in chunk.iter().zip(responses) {
+                if let Some(account) = res {
+                    self.add_account(*address, AccountSharedData::from(account));
+                } else if skip_missing {
+                    warn!("Could not find {}, skipping.", address);
+                } else {
+                    return Err(format!("Failed to fetch {address}"));
+                }
             }
         }
         Ok(self)
@@ -386,7 +401,7 @@ impl TestValidatorGenesis {
                 lamports,
                 data: solana_program_test::read_file(
                     solana_program_test::find_file(filename).unwrap_or_else(|| {
-                        panic!("Unable to locate {}", filename);
+                        panic!("Unable to locate {filename}");
                     }),
                 ),
                 owner,
@@ -410,7 +425,7 @@ impl TestValidatorGenesis {
             AccountSharedData::from(Account {
                 lamports,
                 data: base64::decode(data_base64)
-                    .unwrap_or_else(|err| panic!("Failed to base64 decode: {}", err)),
+                    .unwrap_or_else(|err| panic!("Failed to base64 decode: {err}")),
                 owner,
                 executable: false,
                 rent_epoch: 0,
@@ -418,13 +433,13 @@ impl TestValidatorGenesis {
         )
     }
 
-    /// Add a BPF program to the test environment.
+    /// Add a SBF program to the test environment.
     ///
-    /// `program_name` will also used to locate the BPF shared object in the current or fixtures
+    /// `program_name` will also used to locate the SBF shared object in the current or fixtures
     /// directory.
     pub fn add_program(&mut self, program_name: &str, program_id: Pubkey) -> &mut Self {
-        let program_path = solana_program_test::find_file(&format!("{}.so", program_name))
-            .unwrap_or_else(|| panic!("Unable to locate program {}", program_name));
+        let program_path = solana_program_test::find_file(&format!("{program_name}.so"))
+            .unwrap_or_else(|| panic!("Unable to locate program {program_name}"));
 
         self.programs.push(ProgramInfo {
             program_id,
@@ -485,7 +500,7 @@ impl TestValidatorGenesis {
         let mint_keypair = Keypair::new();
         self.start_with_mint_address(mint_keypair.pubkey(), socket_addr_space)
             .map(|test_validator| (test_validator, mint_keypair))
-            .unwrap_or_else(|err| panic!("Test validator failed to start: {}", err))
+            .unwrap_or_else(|err| panic!("Test validator failed to start: {err}"))
     }
 
     pub async fn start_async(&self) -> (TestValidator, Keypair) {
@@ -505,7 +520,7 @@ impl TestValidatorGenesis {
                 test_validator.wait_for_nonzero_fees().await;
                 (test_validator, mint_keypair)
             }
-            Err(err) => panic!("Test validator failed to start: {}", err),
+            Err(err) => panic!("Test validator failed to start: {err}"),
         }
     }
 }
@@ -543,6 +558,25 @@ impl TestValidator {
             .expect("validator start failed")
     }
 
+    /// Create a test validator using udp for TPU.
+    pub fn with_no_fees_udp(
+        mint_address: Pubkey,
+        faucet_addr: Option<SocketAddr>,
+        socket_addr_space: SocketAddrSpace,
+    ) -> Self {
+        TestValidatorGenesis::default()
+            .tpu_enable_udp(true)
+            .fee_rate_governor(FeeRateGovernor::new(0, 0))
+            .rent(Rent {
+                lamports_per_byte_year: 1,
+                exemption_threshold: 1.0,
+                ..Rent::default()
+            })
+            .faucet_addr(faucet_addr)
+            .start_with_mint_address(mint_address, socket_addr_space)
+            .expect("validator start failed")
+    }
+
     /// Create and start a `TestValidator` with custom transaction fees and minimal rent.
     /// Faucet optional.
     ///
@@ -566,7 +600,7 @@ impl TestValidator {
     }
 
     /// allow tests to indicate that validator has completed initialization
-    pub fn set_startup_verification_complete(&self) {
+    pub fn set_startup_verification_complete_for_tests(&self) {
         self.bank_forks()
             .read()
             .unwrap()
@@ -760,7 +794,6 @@ impl TestValidator {
 
         let mut validator_config = ValidatorConfig {
             geyser_plugin_config_files: config.geyser_plugin_config_files.clone(),
-            accounts_db_caching_enabled: config.accounts_db_caching_enabled,
             rpc_addrs: Some((
                 SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), node.info.rpc.port()),
                 SocketAddr::new(
@@ -773,23 +806,23 @@ impl TestValidator {
             accounts_hash_interval_slots: 100,
             account_paths: vec![ledger_path.join("accounts")],
             poh_verify: false, // Skip PoH verification of ledger on startup for speed
-            snapshot_config: Some(SnapshotConfig {
+            snapshot_config: SnapshotConfig {
                 full_snapshot_archive_interval_slots: 100,
                 incremental_snapshot_archive_interval_slots: Slot::MAX,
                 bank_snapshots_dir: ledger_path.join("snapshot"),
                 full_snapshot_archives_dir: ledger_path.to_path_buf(),
                 incremental_snapshot_archives_dir: ledger_path.to_path_buf(),
                 ..SnapshotConfig::default()
-            }),
+            },
             enforce_ulimit_nofile: false,
             warp_slot: config.warp_slot,
             validator_exit: config.validator_exit.clone(),
-            rocksdb_compaction_interval: Some(100), // Compact every 100 slots
             max_ledger_shreds: config.max_ledger_shreds,
             no_wait_for_vote_to_start_leader: true,
             staked_nodes_overrides: config.staked_nodes_overrides.clone(),
             accounts_db_config,
             runtime_config,
+            account_indexes: config.rpc_config.account_indexes.clone(),
             ..ValidatorConfig::default_for_test()
         };
         if let Some(ref tower_storage) = config.tower_storage {
@@ -809,12 +842,13 @@ impl TestValidator {
             socket_addr_space,
             DEFAULT_TPU_USE_QUIC,
             DEFAULT_TPU_CONNECTION_POOL_SIZE,
+            config.tpu_enable_udp,
         )?);
 
         // Needed to avoid panics in `solana-responder-gossip` in tests that create a number of
         // test validators concurrently...
         discover_cluster(&gossip, 1, socket_addr_space)
-            .map_err(|err| format!("TestValidator startup failed: {:?}", err))?;
+            .map_err(|err| format!("TestValidator startup failed: {err:?}"))?;
 
         let test_validator = TestValidator {
             ledger_path,
@@ -852,7 +886,7 @@ impl TestValidator {
             if num_tries > MAX_TRIES {
                 break;
             }
-            println!("Waiting for fees to stabilize {:?}...", num_tries);
+            println!("Waiting for fees to stabilize {num_tries:?}...");
             match rpc_client.get_latest_blockhash().await {
                 Ok(blockhash) => {
                     message.recent_blockhash = blockhash;
@@ -968,7 +1002,7 @@ mod test {
     #[test]
     fn get_health() {
         let (test_validator, _payer) = TestValidatorGenesis::default().start();
-        test_validator.set_startup_verification_complete();
+        test_validator.set_startup_verification_complete_for_tests();
         let rpc_client = test_validator.get_rpc_client();
         rpc_client.get_health().expect("health");
     }
@@ -976,7 +1010,7 @@ mod test {
     #[tokio::test]
     async fn nonblocking_get_health() {
         let (test_validator, _payer) = TestValidatorGenesis::default().start_async().await;
-        test_validator.set_startup_verification_complete();
+        test_validator.set_startup_verification_complete_for_tests();
         let rpc_client = test_validator.get_async_rpc_client();
         rpc_client.get_health().await.expect("health");
     }

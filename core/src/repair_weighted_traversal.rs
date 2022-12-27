@@ -34,7 +34,7 @@ impl<'a> RepairWeightTraversal<'a> {
     fn new(tree: &'a HeaviestSubtreeForkChoice) -> Self {
         Self {
             tree,
-            pending: vec![Visit::Unvisited(tree.root().0)],
+            pending: vec![Visit::Unvisited(tree.tree_root().0)],
         }
     }
 }
@@ -52,7 +52,6 @@ impl<'a> Iterator for RepairWeightTraversal<'a> {
                     .tree
                     .children(&(slot, Hash::default()))
                     .unwrap()
-                    .iter()
                     .map(|(child_slot, _)| Visit::Unvisited(*child_slot))
                     .collect();
 
@@ -71,7 +70,9 @@ impl<'a> Iterator for RepairWeightTraversal<'a> {
     }
 }
 
-// Generate shred repairs for main subtree rooted at `self.slot`
+/// Generate shred repairs for `tree` starting at `tree.root`.
+/// Prioritized by stake weight, additionally considers children not present in `tree` but in
+/// blockstore.
 pub fn get_best_repair_shreds<'a>(
     tree: &HeaviestSubtreeForkChoice,
     blockstore: &Blockstore,
@@ -140,7 +141,10 @@ pub fn get_best_repair_shreds<'a>(
 pub mod test {
     use {
         super::*,
-        solana_ledger::{get_tmp_ledger_path, shred::Shred},
+        solana_ledger::{
+            get_tmp_ledger_path,
+            shred::{Shred, ShredFlags},
+        },
         solana_runtime::bank_utils,
         solana_sdk::hash::Hash,
         trees::tr,
@@ -272,15 +276,18 @@ pub mod test {
         let completed_shreds: Vec<Shred> = [0, 2, 4, 6]
             .iter()
             .map(|slot| {
-                let mut shred = Shred::new_from_serialized_shred(
-                    blockstore
-                        .get_data_shred(*slot, last_shred - 1)
-                        .unwrap()
-                        .unwrap(),
-                )
-                .unwrap();
-                shred.set_index(last_shred as u32);
-                shred.set_last_in_slot();
+                let parent_offset = u16::from(*slot != 0);
+                let shred = Shred::new_from_data(
+                    *slot,
+                    last_shred as u32, // index
+                    parent_offset,
+                    &[0u8; 8], // data
+                    ShredFlags::LAST_SHRED_IN_SLOT,
+                    8,                 // reference_tick
+                    0,                 // version
+                    last_shred as u32, // fec_set_index
+                );
+                assert!(shred.sanitize().is_ok());
                 shred
             })
             .collect();

@@ -23,7 +23,6 @@ export const PUBLIC_KEY_LENGTH = 32;
 export type PublicKeyInitData =
   | number
   | string
-  | Buffer
   | Uint8Array
   | Array<number>
   | PublicKeyData;
@@ -39,6 +38,9 @@ export type PublicKeyData = {
 function isPublicKeyData(value: PublicKeyInitData): value is PublicKeyData {
   return (value as PublicKeyData)._bn !== undefined;
 }
+
+// local counter used by PublicKey.unique()
+let uniquePublicKeyCounter = 1;
 
 /**
  * A public key
@@ -67,14 +69,24 @@ export class PublicKey extends Struct {
         this._bn = new BN(value);
       }
 
-      if (this._bn.byteLength() > 32) {
+      if (this._bn.byteLength() > PUBLIC_KEY_LENGTH) {
         throw new Error(`Invalid public key input`);
       }
     }
   }
 
   /**
-   * Default public key value. (All zeros)
+   * Returns a unique PublicKey for tests and benchmarks using a counter
+   */
+  static unique(): PublicKey {
+    const key = new PublicKey(uniquePublicKeyCounter);
+    uniquePublicKeyCounter += 1;
+    return new PublicKey(key.toBuffer());
+  }
+
+  /**
+   * Default public key value. The base58-encoded string representation is all ones (as seen below)
+   * The underlying BN number is 32 bytes that are all zeros
    */
   static default: PublicKey = new PublicKey('11111111111111111111111111111111');
 
@@ -115,6 +127,10 @@ export class PublicKey extends Struct {
     const zeroPad = Buffer.alloc(32);
     b.copy(zeroPad, 32 - b.length);
     return zeroPad;
+  }
+
+  get [Symbol.toStringTag](): string {
+    return `PublicKey(${this.toString()})`;
   }
 
   /**
@@ -174,6 +190,8 @@ export class PublicKey extends Struct {
   /**
    * Async version of createProgramAddressSync
    * For backwards compatibility
+   *
+   * @deprecated Use {@link createProgramAddressSync} instead
    */
   /* eslint-disable require-await */
   static async createProgramAddress(
@@ -215,6 +233,8 @@ export class PublicKey extends Struct {
   /**
    * Async version of findProgramAddressSync
    * For backwards compatibility
+   *
+   * @deprecated Use {@link findProgramAddressSync} instead
    */
   static async findProgramAddress(
     seeds: Array<Buffer | Uint8Array>,

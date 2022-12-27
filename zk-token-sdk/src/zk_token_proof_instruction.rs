@@ -59,6 +59,16 @@ pub enum ProofInstruction {
     ///   `TransferWithFeeData`
     ///
     VerifyTransferWithFee,
+
+    /// Verify a `PubkeyValidityData` struct
+    ///
+    /// Accounts expected by this instruction:
+    ///   None
+    ///
+    /// Data expected by this instruction:
+    ///   `PubkeyValidityData`
+    ///
+    VerifyPubkeyValidity,
 }
 
 impl ProofInstruction {
@@ -103,4 +113,8 @@ pub fn verify_transfer(proof_data: &TransferData) -> Instruction {
 
 pub fn verify_transfer_with_fee(proof_data: &TransferWithFeeData) -> Instruction {
     ProofInstruction::VerifyTransferWithFee.encode(proof_data)
+}
+
+pub fn verify_pubkey_validity(proof_data: &PubkeyValidityData) -> Instruction {
+    ProofInstruction::VerifyPubkeyValidity.encode(proof_data)
 }

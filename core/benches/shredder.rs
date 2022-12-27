@@ -8,8 +8,8 @@ use {
     raptorq::{Decoder, Encoder},
     solana_entry::entry::{create_ticks, Entry},
     solana_ledger::shred::{
-        max_entries_per_n_shred, max_ticks_per_n_shreds, ProcessShredsStats, Shred, ShredFlags,
-        Shredder, DATA_SHREDS_PER_FEC_BLOCK, LEGACY_SHRED_DATA_CAPACITY,
+        max_entries_per_n_shred, max_ticks_per_n_shreds, ProcessShredsStats, ReedSolomonCache,
+        Shred, ShredFlags, Shredder, DATA_SHREDS_PER_FEC_BLOCK, LEGACY_SHRED_DATA_CAPACITY,
     },
     solana_perf::test_tx,
     solana_sdk::{hash::Hash, packet::PACKET_DATA_SIZE, signature::Keypair},
@@ -49,9 +49,11 @@ fn make_shreds(num_shreds: usize) -> Vec<Shred> {
     let (data_shreds, _) = shredder.entries_to_shreds(
         &Keypair::new(),
         &entries,
-        true, // is_last_in_slot
-        0,    // next_shred_index
-        0,    // next_code_index
+        true,  // is_last_in_slot
+        0,     // next_shred_index
+        0,     // next_code_index
+        false, // merkle_variant
+        &ReedSolomonCache::default(),
         &mut ProcessShredsStats::default(),
     );
     assert!(data_shreds.len() >= num_shreds);
@@ -77,6 +79,7 @@ fn bench_shredder_ticks(bencher: &mut Bencher) {
     // ~1Mb
     let num_ticks = max_ticks_per_n_shreds(1, Some(LEGACY_SHRED_DATA_CAPACITY)) * num_shreds as u64;
     let entries = create_ticks(num_ticks, 0, Hash::default());
+    let reed_solomon_cache = ReedSolomonCache::default();
     bencher.iter(|| {
         let shredder = Shredder::new(1, 0, 0, 0).unwrap();
         shredder.entries_to_shreds(
@@ -85,6 +88,8 @@ fn bench_shredder_ticks(bencher: &mut Bencher) {
             true,
             0,
             0,
+            true, // merkle_variant
+            &reed_solomon_cache,
             &mut ProcessShredsStats::default(),
         );
     })
@@ -102,6 +107,7 @@ fn bench_shredder_large_entries(bencher: &mut Bencher) {
         Some(shred_size),
     );
     let entries = make_large_unchained_entries(txs_per_entry, num_entries);
+    let reed_solomon_cache = ReedSolomonCache::default();
     // 1Mb
     bencher.iter(|| {
         let shredder = Shredder::new(1, 0, 0, 0).unwrap();
@@ -111,6 +117,8 @@ fn bench_shredder_large_entries(bencher: &mut Bencher) {
             true,
             0,
             0,
+            true, // merkle_variant
+            &reed_solomon_cache,
             &mut ProcessShredsStats::default(),
         );
     })
@@ -131,6 +139,8 @@ fn bench_deshredder(bencher: &mut Bencher) {
         true,
         0,
         0,
+        true, // merkle_variant
+        &ReedSolomonCache::default(),
         &mut ProcessShredsStats::default(),
     );
     bencher.iter(|| {
@@ -155,10 +165,12 @@ fn bench_deserialize_hdr(bencher: &mut Bencher) {
 fn bench_shredder_coding(bencher: &mut Bencher) {
     let symbol_count = DATA_SHREDS_PER_FEC_BLOCK;
     let data_shreds = make_shreds(symbol_count);
+    let reed_solomon_cache = ReedSolomonCache::default();
     bencher.iter(|| {
         Shredder::generate_coding_shreds(
             &data_shreds[..symbol_count],
             0, // next_code_index
+            &reed_solomon_cache,
         )
         .len();
     })
@@ -168,12 +180,14 @@ fn bench_shredder_coding(bencher: &mut Bencher) {
 fn bench_shredder_decoding(bencher: &mut Bencher) {
     let symbol_count = DATA_SHREDS_PER_FEC_BLOCK;
     let data_shreds = make_shreds(symbol_count);
+    let reed_solomon_cache = ReedSolomonCache::default();
     let coding_shreds = Shredder::generate_coding_shreds(
         &data_shreds[..symbol_count],
         0, // next_code_index
+        &reed_solomon_cache,
     );
     bencher.iter(|| {
-        Shredder::try_recovery(coding_shreds[..].to_vec()).unwrap();
+        Shredder::try_recovery(coding_shreds[..].to_vec(), &reed_solomon_cache).unwrap();
     })
 }
 
@@ -203,7 +217,7 @@ fn bench_shredder_decoding_raptorq(bencher: &mut Bencher) {
         let mut result = None;
         for packet in &packets {
             result = decoder.decode(packet.clone());
-            if result != None {
+            if result.is_some() {
                 break;
             }
         }

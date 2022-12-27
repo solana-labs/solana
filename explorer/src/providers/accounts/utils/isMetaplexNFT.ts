@@ -1,16 +1,16 @@
 import { MintAccountInfo } from "validators/accounts/token";
-import { ProgramData } from "..";
+import { ParsedData } from "..";
 
 export default function isMetaplexNFT(
-  data?: ProgramData,
+  parsedData?: ParsedData,
   mintInfo?: MintAccountInfo
 ) {
   return (
-    data?.program === "spl-token" &&
-    data?.parsed.type === "mint" &&
-    data?.nftData &&
+    parsedData?.program === "spl-token" &&
+    parsedData?.parsed.type === "mint" &&
+    parsedData?.nftData &&
     mintInfo?.decimals === 0 &&
     (parseInt(mintInfo.supply) === 1 ||
-      data?.nftData?.metadata?.tokenStandard === 1)
+      parsedData?.nftData?.metadata?.tokenStandard === 1)
   );
 }

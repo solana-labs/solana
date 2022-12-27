@@ -10,9 +10,12 @@
 
 #[cfg(not(target_os = "solana"))]
 use {
-    crate::encryption::{
-        elgamal::{DecryptHandle, ElGamalPubkey},
-        pedersen::{PedersenCommitment, PedersenOpening, G, H},
+    crate::{
+        encryption::{
+            elgamal::{DecryptHandle, ElGamalPubkey},
+            pedersen::{PedersenCommitment, PedersenOpening, G, H},
+        },
+        errors::ProofVerificationError,
     },
     curve25519_dalek::traits::MultiscalarMul,
     rand::rngs::OsRng,
@@ -137,9 +140,18 @@ impl ValidityProof {
         let ww_negated = -&ww;
 
         // check the required algebraic conditions
-        let Y_0 = self.Y_0.decompress().ok_or(ValidityProofError::Format)?;
-        let Y_1 = self.Y_1.decompress().ok_or(ValidityProofError::Format)?;
-        let Y_2 = self.Y_2.decompress().ok_or(ValidityProofError::Format)?;
+        let Y_0 = self
+            .Y_0
+            .decompress()
+            .ok_or(ProofVerificationError::Deserialization)?;
+        let Y_1 = self
+            .Y_1
+            .decompress()
+            .ok_or(ProofVerificationError::Deserialization)?;
+        let Y_2 = self
+            .Y_2
+            .decompress()
+            .ok_or(ProofVerificationError::Deserialization)?;
 
         let P_dest = destination_pubkey.get_point();
         let P_auditor = auditor_pubkey.get_point();
@@ -178,7 +190,7 @@ impl ValidityProof {
         if check.is_identity() {
             Ok(())
         } else {
-            Err(ValidityProofError::AlgebraicRelation)
+            Err(ProofVerificationError::AlgebraicRelation.into())
         }
     }
 
@@ -194,7 +206,7 @@ impl ValidityProof {
 
     pub fn from_bytes(bytes: &[u8]) -> Result<Self, ValidityProofError> {
         if bytes.len() != 160 {
-            return Err(ValidityProofError::Format);
+            return Err(ProofVerificationError::Deserialization.into());
         }
 
         let bytes = array_ref![bytes, 0, 160];
@@ -204,8 +216,10 @@ impl ValidityProof {
         let Y_1 = CompressedRistretto::from_slice(Y_1);
         let Y_2 = CompressedRistretto::from_slice(Y_2);
 
-        let z_r = Scalar::from_canonical_bytes(*z_r).ok_or(ValidityProofError::Format)?;
-        let z_x = Scalar::from_canonical_bytes(*z_x).ok_or(ValidityProofError::Format)?;
+        let z_r =
+            Scalar::from_canonical_bytes(*z_r).ok_or(ProofVerificationError::Deserialization)?;
+        let z_x =
+            Scalar::from_canonical_bytes(*z_x).ok_or(ProofVerificationError::Deserialization)?;
 
         Ok(ValidityProof {
             Y_0,

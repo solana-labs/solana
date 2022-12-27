@@ -1,4 +1,3 @@
-[![Build status][travis-image]][travis-url]
 [![codecov][codecov-image]][codecov-url]
 <br>
 [![npm][npm-image]][npm-url]
@@ -7,8 +6,6 @@
 [![semantic-release][semantic-release-image]][semantic-release-url]
 [![code-style-prettier][code-style-prettier-image]][code-style-prettier-url]
 
-[travis-image]: https://api.travis-ci.org/solana-labs/solana-web3.js.svg?branch=master
-[travis-url]: https://travis-ci.org/solana-labs/solana-web3.js
 [codecov-image]: https://codecov.io/gh/solana-labs/solana-web3.js/branch/master/graph/badge.svg
 [codecov-url]: https://codecov.io/gh/solana-labs/solana-web3.js
 [npm-image]: https://img.shields.io/npm/v/@solana/web3.js.svg?style=flat
@@ -60,7 +57,7 @@ Install the latest Solana release from https://docs.solana.com/cli/install-solan
 
 **Use `solana-test-validator` from the latest Solana release**
 
-### BPF program development
+### SBF program development
 
 **Use `cargo build-bpf` from the latest Solana release**
 
@@ -87,18 +84,23 @@ console.log(solanaWeb3);
 console.log(solanaWeb3);
 ```
 
-## Flow Support (Discontinued)
+## Compatibility
 
-Flow types are no longer supported in new releases. The last release with Flow support is v1.37.2 and its
-[Flow library definition](https://flow.org/en/docs/libdefs/) is provided at
-https://unpkg.com/@solana/web3.js@v1.37.2/module.flow.js.
-Download the file and add the following line under the [libs] section of your project's `.flowconfig` to
-activate it:
+This library requires a JavaScript runtime that supports [`BigInt`](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/BigInt) and the [exponentiation operator](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Operators/Exponentiation). Both are supported in the following runtimes:
 
-```ini
-[libs]
-node_modules/@solana/web3.js/module.flow.js
-```
+- Browsers, by [release date](https://caniuse.com/bigint):
+  - Chrome: May 2018
+  - Firefox: July 2019
+  - Safari: September 2020
+  - Mobile Safari: September 2020
+  - Edge: January 2020
+  - Opera: June 2018
+  - Samsung Internet: April 2019
+- Runtimes, [by version](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/BigInt):
+  - Deno: >=1.0
+  - Node: >=10.4.0
+- React Native:
+  - \>=0.7.0 using the [Hermes](https://reactnative.dev/blog/2022/07/08/hermes-as-the-default) engine ([integration guide](https://solanacookbook.com/integrations/react-native.html#how-to-use-solana-web3-js-in-a-react-native-app)):
 
 ## Releases
 

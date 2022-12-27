@@ -21,14 +21,14 @@ use {
             state::{Authorized, Lockup},
         },
         sysvar::clock::Clock,
-        transaction_context::{InstructionContext, TransactionContext},
+        transaction_context::{IndexOfAccount, InstructionContext, TransactionContext},
     },
 };
 
 fn get_optional_pubkey<'a>(
     transaction_context: &'a TransactionContext,
     instruction_context: &'a InstructionContext,
-    instruction_account_index: usize,
+    instruction_account_index: IndexOfAccount,
     should_be_signer: bool,
 ) -> Result<Option<&'a Pubkey>, InstructionError> {
     Ok(
@@ -52,7 +52,7 @@ fn get_optional_pubkey<'a>(
 }
 
 pub fn process_instruction(
-    _first_instruction_account: usize,
+    _first_instruction_account: IndexOfAccount,
     invoke_context: &mut InvokeContext,
 ) -> Result<(), InstructionError> {
     let transaction_context = &invoke_context.transaction_context;
@@ -69,7 +69,7 @@ pub fn process_instruction(
         Ok(me)
     };
 
-    let signers = instruction_context.get_signers(transaction_context);
+    let signers = instruction_context.get_signers(transaction_context)?;
     match limited_deserialize(data) {
         Ok(StakeInstruction::Initialize(authorized, lockup)) => {
             let mut me = get_stake_account()?;

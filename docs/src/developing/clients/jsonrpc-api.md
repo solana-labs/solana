@@ -215,7 +215,7 @@ JSON parsing for the following native and SPL programs:
 
 | Program | Account State | Instructions |
 | --- | --- | --- |
-| Address Lookup | v1.12.0 | v1.12.0 |
+| Address Lookup | v1.15.0 | v1.15.0 |
 | BPF Loader | n/a | stable |
 | BPF Upgradeable Loader | stable | stable |
 | Config | stable |   |
@@ -257,7 +257,7 @@ Returns all information associated with the account of provided Pubkey
     "base64" will return base64 encoded data for Account data of any size.
     "base64+zstd" compresses the Account data using [Zstandard](https://facebook.github.io/zstd/) and base64-encodes the result.
     ["jsonParsed" encoding](jsonrpc-api.md#parsed-responses) attempts to use program-specific state parsers to return more human-readable and explicit account state data. If "jsonParsed" is requested but a parser cannot be found, the field falls back to "base64" encoding, detectable when the `data` field is type `<string>`.
-  - (optional) `dataSlice: <object>` - limit the returned account data using the provided `offset: <usize>` and `length: <usize>` fields; only available for "base58", "base64" or "base64+zstd" encodings.
+  - (optional) `dataSlice: <object>` - limit the returned account data using the provided `offset: <usize>` and `length: <usize>` fields; has no effect on parsed account data.
   - (optional) `minContextSlot: <number>` - set the minimum slot that the request can be evaluated at.
 
 #### Results:
@@ -309,7 +309,8 @@ Response:
       "executable": false,
       "lamports": 1000000000,
       "owner": "11111111111111111111111111111111",
-      "rentEpoch": 2
+      "rentEpoch": 2,
+      "space": 80
     }
   },
   "id": 1
@@ -360,7 +361,8 @@ Response:
       "executable": false,
       "lamports": 1000000000,
       "owner": "11111111111111111111111111111111",
-      "rentEpoch": 2
+      "rentEpoch": 2,
+      "space": 80
     }
   },
   "id": 1
@@ -412,7 +414,7 @@ Returns identity and transaction information about a confirmed block in the ledg
 - (optional) `<object>` - Configuration object containing the following optional fields:
   - (optional) `encoding: <string>` - encoding for each returned Transaction, either "json", "jsonParsed", "base58" (_slow_), "base64". If parameter not provided, the default encoding is "json".
     ["jsonParsed" encoding](jsonrpc-api.md#parsed-responses) attempts to use program-specific instruction parsers to return more human-readable and explicit data in the `transaction.message.instructions` list. If "jsonParsed" is requested but a parser cannot be found, the instruction falls back to regular JSON encoding (`accounts`, `data`, and `programIdIndex` fields).
-  - (optional) `transactionDetails: <string>` - level of transaction detail to return, either "full", "signatures", or "none". If parameter not provided, the default detail level is "full".
+  - (optional) `transactionDetails: <string>` - level of transaction detail to return, either "full", "accounts", "signatures", or "none". If parameter not provided, the default detail level is "full". If "accounts" are requested, transaction details only include signatures and an annotated list of accounts in each transaction. Transaction metadata is limited to only: fee, err, pre_balances, post_balances, pre_token_balances, and post_token_balances.
   - (optional) `rewards: bool` - whether to populate the `rewards` array. If parameter not provided, the default includes rewards.
   - (optional) `commitment: <string>` - [Commitment](jsonrpc-api.md#configuring-state-commitment); "processed" is not supported. If parameter not provided, the default is "finalized".
   - (optional) `maxSupportedTransactionVersion: <number>` - set the max transaction version to return in responses. If the requested block contains a transaction with a higher version, an error will be returned. If this parameter is omitted, only legacy transactions will be returned, and a block containing any versioned transaction will prompt the error.
@@ -429,7 +431,7 @@ The result field will be an object with the following fields:
   - `transactions: <array>` - present if "full" transaction details are requested; an array of JSON objects containing:
     - `transaction: <object|[string,encoding]>` - [Transaction](#transaction-structure) object, either in JSON format or encoded binary data, depending on encoding parameter
     - `meta: <object>` - transaction status metadata object, containing `null` or:
-      - `err: <object | null>` - Error if transaction failed, null if transaction succeeded. [TransactionError definitions](https://github.com/solana-labs/solana/blob/c0c60386544ec9a9ec7119229f37386d9f070523/sdk/src/transaction/error.rs#L13)
+      - `err: <object|null>` - Error if transaction failed, null if transaction succeeded. [TransactionError definitions](https://github.com/solana-labs/solana/blob/c0c60386544ec9a9ec7119229f37386d9f070523/sdk/src/transaction/error.rs#L13)
       - `fee: <u64>` - fee this transaction was charged, as u64 integer
       - `preBalances: <array>` - array of u64 account balances from before the transaction was processed
       - `postBalances: <array>` - array of u64 account balances after the transaction was processed
@@ -437,22 +439,32 @@ The result field will be an object with the following fields:
       - `preTokenBalances: <array|undefined>` - List of [token balances](#token-balances-structure) from before the transaction was processed or omitted if token balance recording was not yet enabled during this transaction
       - `postTokenBalances: <array|undefined>` - List of [token balances](#token-balances-structure) from after the transaction was processed or omitted if token balance recording was not yet enabled during this transaction
       - `logMessages: <array|null>` - array of string log messages or `null` if log message recording was not enabled during this transaction
+      - `rewards: <array|null>` - transaction-level rewards, populated if rewards are requested; an array of JSON objects containing:
+        - `pubkey: <string>` - The public key, as base-58 encoded string, of the account that received the reward
+        - `lamports: <i64>`- number of reward lamports credited or debited by the account, as a i64
+        - `postBalance: <u64>` - account balance in lamports after the reward was applied
+        - `rewardType: <string|undefined>` - type of reward: "fee", "rent", "voting", "staking"
+        - `commission: <u8|undefined>` - vote account commission when the reward was credited, only present for voting and staking rewards
       - DEPRECATED: `status: <object>` - Transaction status
         - `"Ok": <null>` - Transaction was successful
         - `"Err": <ERR>` - Transaction failed with TransactionError
       - `loadedAddresses: <object|undefined>` - Transaction addresses loaded from address lookup tables. Undefined if `maxSupportedTransactionVersion` is not set in request params.
         - `writable: <array[string]>` - Ordered list of base-58 encoded addresses for writable loaded accounts
         - `readonly: <array[string]>` - Ordered list of base-58 encoded addresses for readonly loaded accounts
+      - `returnData: <object|undefined>` - the most-recent return data generated by an instruction in the transaction, with the following fields:
+        - `programId: <string>`, the program that generated the return data, as base-58 encoded Pubkey
+        - `data: <[string, encoding]>`, the return data itself, as base-64 encoded binary data
+      - `computeUnitsConsumed: <u64|undefined>`, number of [compute units](developing/programming-model/runtime.md#compute-budget) consumed by the transaction
     - `version: <"legacy"|number|undefined>` - Transaction version. Undefined if `maxSupportedTransactionVersion` is not set in request params.
   - `signatures: <array>` - present if "signatures" are requested for transaction details; an array of signatures strings, corresponding to the transaction order in the block
-  - `rewards: <array>` - present if rewards are requested; an array of JSON objects containing:
+  - `rewards: <array|undefined>` - block-level rewards, present if rewards are requested; an array of JSON objects containing:
     - `pubkey: <string>` - The public key, as base-58 encoded string, of the account that received the reward
     - `lamports: <i64>`- number of reward lamports credited or debited by the account, as a i64
     - `postBalance: <u64>` - account balance in lamports after the reward was applied
     - `rewardType: <string|undefined>` - type of reward: "fee", "rent", "voting", "staking"
     - `commission: <u8|undefined>` - vote account commission when the reward was credited, only present for voting and staking rewards
-  - `blockTime: <i64 | null>` - estimated production time, as Unix timestamp (seconds since the Unix epoch). null if not available
-  - `blockHeight: <u64 | null>` - the number of blocks beneath this block
+  - `blockTime: <i64|null>` - estimated production time, as Unix timestamp (seconds since the Unix epoch). null if not available
+  - `blockHeight: <u64|null>` - the number of blocks beneath this block
 
 #### Example:
 
@@ -460,7 +472,7 @@ Request:
 
 ```bash
 curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
-  {"jsonrpc": "2.0","id":1,"method":"getBlock","params":[430, {"encoding": "json","transactionDetails":"full","rewards":false}]}
+  {"jsonrpc": "2.0","id":1,"method":"getBlock","params":[430, {"encoding": "json","maxSupportedTransactionVersion":0,"transactionDetails":"full","rewards":false}]}
 '
 ```
 
@@ -486,6 +498,7 @@ Result:
           "postTokenBalances": [],
           "preBalances": [499998937500, 26858640, 1, 1, 1],
           "preTokenBalances": [],
+          "rewards": null,
           "status": {
             "Ok": null
           }
@@ -557,6 +570,7 @@ Result:
           "postTokenBalances": [],
           "preBalances": [499998937500, 26858640, 1, 1, 1],
           "preTokenBalances": [],
+          "rewards": [],
           "status": {
             "Ok": null
           }
@@ -613,12 +627,12 @@ The JSON structure of token balances is defined as a list of objects in the foll
 
 - `accountIndex: <number>` - Index of the account in which the token balance is provided for.
 - `mint: <string>` - Pubkey of the token's mint.
-- `owner: <string | undefined>` - Pubkey of token balance's owner.
-- `programId: <string | undefined>` - Pubkey of the Token program that owns the account.
+- `owner: <string|undefined>` - Pubkey of token balance's owner.
+- `programId: <string|undefined>` - Pubkey of the Token program that owns the account.
 - `uiTokenAmount: <object>` -
   - `amount: <string>` - Raw amount of tokens as a string, ignoring decimals.
   - `decimals: <number>` - Number of decimals configured for token's mint.
-  - `uiAmount: <number | null>` - Token amount as a float, accounting for decimals. **DEPRECATED**
+  - `uiAmount: <number|null>` - Token amount as a float, accounting for decimals. **DEPRECATED**
   - `uiAmountString: <string>` - Token amount as a string, accounting for decimals.
 
 ### getBlockHeight
@@ -910,12 +924,12 @@ None
 The result field will be an array of JSON objects, each with the following sub fields:
 
 - `pubkey: <string>` - Node public key, as base-58 encoded string
-- `gossip: <string | null>` - Gossip network address for the node
-- `tpu: <string | null>` - TPU network address for the node
-- `rpc: <string | null>` - JSON RPC network address for the node, or `null` if the JSON RPC service is not enabled
-- `version: <string | null>` - The software version of the node, or `null` if the version information is not available
-- `featureSet: <u32 | null >` - The unique identifier of the node's feature set
-- `shredVersion: <u16 | null>` - The shred version the node has been configured to use
+- `gossip: <string|null>` - Gossip network address for the node
+- `tpu: <string|null>` - TPU network address for the node
+- `rpc: <string|null>` - JSON RPC network address for the node, or `null` if the JSON RPC service is not enabled
+- `version: <string|null>` - The software version of the node, or `null` if the version information is not available
+- `featureSet: <u32|null >` - The unique identifier of the node's feature set
+- `shredVersion: <u16|null>` - The shred version the node has been configured to use
 
 #### Example:
 
@@ -964,7 +978,7 @@ The result field will be an object with the following fields:
 - `epoch: <u64>`, the current epoch
 - `slotIndex: <u64>`, the current slot relative to the start of the current epoch
 - `slotsInEpoch: <u64>`, the number of slots in this epoch
-- `transactionCount: <u64 | null>`, total number of transactions processed without error since genesis
+- `transactionCount: <u64|null>`, total number of transactions processed without error since genesis
 
 #### Example:
 
@@ -1053,7 +1067,7 @@ Get the fee the network will charge for a particular Message
 
 #### Results:
 
-- `<u64 | null>` - Fee corresponding to the message at the specified blockhash
+- `<u64|null>` - Fee corresponding to the message at the specified blockhash
 
 #### Example:
 
@@ -1229,7 +1243,7 @@ None
 
 - `<object>`
   - `full: <u64>` - Highest full snapshot slot
-  - `incremental: <u64 | undefined>` - Highest incremental snapshot slot _based on_ `full`
+  - `incremental: <u64|undefined>` - Highest incremental snapshot slot _based on_ `full`
 
 #### Example:
 
@@ -1783,7 +1797,7 @@ Returns the account information for a list of Pubkeys.
     "base64" will return base64 encoded data for Account data of any size.
     "base64+zstd" compresses the Account data using [Zstandard](https://facebook.github.io/zstd/) and base64-encodes the result.
     ["jsonParsed" encoding](jsonrpc-api.md#parsed-responses) attempts to use program-specific state parsers to return more human-readable and explicit account state data. If "jsonParsed" is requested but a parser cannot be found, the field falls back to "base64" encoding, detectable when the `data` field is type `<string>`.
-  - (optional) `dataSlice: <object>` - limit the returned account data using the provided `offset: <usize>` and `length: <usize>` fields; only available for "base58", "base64" or "base64+zstd" encodings.
+  - (optional) `dataSlice: <object>` - limit the returned account data using the provided `offset: <usize>` and `length: <usize>` fields; has no effect on parsed account data.
   - (optional) `minContextSlot: <number>` - set the minimum slot that the request can be evaluated at.
 
 #### Results:
@@ -1837,18 +1851,20 @@ Result:
     },
     "value": [
       {
-        "data": ["AAAAAAEAAAACtzNsyJrW0g==", "base64"],
+        "data": ["", "base64"],
         "executable": false,
         "lamports": 1000000000,
         "owner": "11111111111111111111111111111111",
-        "rentEpoch": 2
+        "rentEpoch": 2,
+        "space": 16
       },
       {
         "data": ["", "base64"],
         "executable": false,
         "lamports": 5000000000,
         "owner": "11111111111111111111111111111111",
-        "rentEpoch": 2
+        "rentEpoch": 2,
+        "space": 0
       }
     ]
   },
@@ -1897,14 +1913,16 @@ Result:
         "executable": false,
         "lamports": 1000000000,
         "owner": "11111111111111111111111111111111",
-        "rentEpoch": 2
+        "rentEpoch": 2,
+        "space": 80
       },
       {
         "data": ["", "base58"],
         "executable": false,
         "lamports": 5000000000,
         "owner": "11111111111111111111111111111111",
-        "rentEpoch": 2
+        "rentEpoch": 2,
+        "space": 0
       }
     ]
   },
@@ -1926,7 +1944,7 @@ Returns all accounts owned by the provided program Pubkey
     "base64" will return base64 encoded data for Account data of any size.
     "base64+zstd" compresses the Account data using [Zstandard](https://facebook.github.io/zstd/) and base64-encodes the result.
     ["jsonParsed" encoding](jsonrpc-api.md#parsed-responses) attempts to use program-specific state parsers to return more human-readable and explicit account state data. If "jsonParsed" is requested but a parser cannot be found, the field falls back to "base64" encoding, detectable when the `data` field is type `<string>`.
-  - (optional) `dataSlice: <object>` - limit the returned account data using the provided `offset: <usize>` and `length: <usize>` fields; only available for "base58", "base64" or "base64+zstd" encodings.
+  - (optional) `dataSlice: <object>` - limit the returned account data using the provided `offset: <usize>` and `length: <usize>` fields; has no effect on parsed account data.
   - (optional) `filters: <array>` - filter results using up to 4 [filter objects](jsonrpc-api.md#filters); account must meet all filter criteria to be included in results
   - (optional) `withContext: bool` - wrap the result in an RpcResponse JSON object.
   - (optional) `minContextSlot: <number>` - set the minimum slot that the request can be evaluated at.
@@ -1938,7 +1956,7 @@ Returns all accounts owned by the provided program Pubkey
   - `offset: <usize>` - offset into program account data to start comparison
   - `bytes: <string>` - data to match, as encoded string
   - `encoding: <string>` - encoding for filter `bytes` data, either "base58" or "base64". Data is limited in size to 128 or fewer decoded bytes.
-    **NEW: This field, and base64 support generally, is only available in solana-core v1.12.0 or newer. Please omit when querying nodes on earlier versions**
+    **NEW: This field, and base64 support generally, is only available in solana-core v1.14.0 or newer. Please omit when querying nodes on earlier versions**
 
 - `dataSize: <u64>` - compares the program account data length with the provided data size
 
@@ -1978,7 +1996,8 @@ Result:
         "executable": false,
         "lamports": 15298080,
         "owner": "4Nd1mBQtrMJVYVfKf2PJy9NZUZdTAsp7D4xWLs4gDB4T",
-        "rentEpoch": 28
+        "rentEpoch": 28,
+        "space": 16
       },
       "pubkey": "CxELquR1gPP8wHe33gZ4QxqGB3sZ9RSwsJ2KshVewkFY"
     }
@@ -2029,7 +2048,8 @@ Result:
         "executable": false,
         "lamports": 15298080,
         "owner": "4Nd1mBQtrMJVYVfKf2PJy9NZUZdTAsp7D4xWLs4gDB4T",
-        "rentEpoch": 28
+        "rentEpoch": 28,
+        "space": 42
       },
       "pubkey": "CxELquR1gPP8wHe33gZ4QxqGB3sZ9RSwsJ2KshVewkFY"
     }
@@ -2139,23 +2159,23 @@ Result:
   "result": [
     {
       "slot": 348125,
-      "prioritizationFee": 0,
+      "prioritizationFee": 0
     },
     {
       "slot": 348126,
-      "prioritizationFee": 1000,
+      "prioritizationFee": 1000
     },
     {
       "slot": 348127,
-      "prioritizationFee": 500,
+      "prioritizationFee": 500
     },
     {
       "slot": 348128,
-      "prioritizationFee": 0,
+      "prioritizationFee": 0
     },
     {
       "slot": 348129,
-      "prioritizationFee": 1234,
+      "prioritizationFee": 1234
     }
   ],
   "id": 1
@@ -2187,9 +2207,10 @@ from newest to oldest transaction:
 - `<object>`
   - `signature: <string>` - transaction signature as base-58 encoded string
   - `slot: <u64>` - The slot that contains the block with the transaction
-  - `err: <object | null>` - Error if transaction failed, null if transaction succeeded. [TransactionError definitions](https://github.com/solana-labs/solana/blob/c0c60386544ec9a9ec7119229f37386d9f070523/sdk/src/transaction/error.rs#L13)
-  - `memo: <string |null>` - Memo associated with the transaction, null if no memo is present
-  - `blockTime: <i64 | null>` - estimated production time, as Unix timestamp (seconds since the Unix epoch) of when transaction was processed. null if not available.
+  - `err: <object|null>` - Error if transaction failed, null if transaction succeeded. [TransactionError definitions](https://github.com/solana-labs/solana/blob/c0c60386544ec9a9ec7119229f37386d9f070523/sdk/src/transaction/error.rs#L13)
+  - `memo: <string|null>` - Memo associated with the transaction, null if no memo is present
+  - `blockTime: <i64|null>` - estimated production time, as Unix timestamp (seconds since the Unix epoch) of when transaction was processed. null if not available.
+  - `confirmationStatus: <string|null>` - The transaction's cluster confirmation status; either `processed`, `confirmed`, or `finalized`. See [Commitment](jsonrpc-api.md#configuring-state-commitment) for more on optimistic confirmation.
 
 #### Example:
 
@@ -2253,9 +2274,9 @@ An array of:
 - `<null>` - Unknown transaction
 - `<object>`
   - `slot: <u64>` - The slot the transaction was processed
-  - `confirmations: <usize | null>` - Number of blocks since signature confirmation, null if rooted, as well as finalized by a supermajority of the cluster
-  - `err: <object | null>` - Error if transaction failed, null if transaction succeeded. [TransactionError definitions](https://github.com/solana-labs/solana/blob/c0c60386544ec9a9ec7119229f37386d9f070523/sdk/src/transaction/error.rs#L13)
-  - `confirmationStatus: <string | null>` - The transaction's cluster confirmation status; either `processed`, `confirmed`, or `finalized`. See [Commitment](jsonrpc-api.md#configuring-state-commitment) for more on optimistic confirmation.
+  - `confirmations: <usize|null>` - Number of blocks since signature confirmation, null if rooted, as well as finalized by a supermajority of the cluster
+  - `err: <object|null>` - Error if transaction failed, null if transaction succeeded. [TransactionError definitions](https://github.com/solana-labs/solana/blob/c0c60386544ec9a9ec7119229f37386d9f070523/sdk/src/transaction/error.rs#L13)
+  - `confirmationStatus: <string|null>` - The transaction's cluster confirmation status; either `processed`, `confirmed`, or `finalized`. See [Commitment](jsonrpc-api.md#configuring-state-commitment) for more on optimistic confirmation.
   - DEPRECATED: `status: <object>` - Transaction status
     - `"Ok": <null>` - Transaction was successful
     - `"Err": <ERR>` - Transaction failed with TransactionError
@@ -2650,7 +2671,7 @@ The result will be an RpcResponse JSON object with `value` equal to a JSON objec
 
 - `amount: <string>` - the raw balance without decimals, a string representation of u64
 - `decimals: <u8>` - number of base 10 digits to the right of the decimal place
-- `uiAmount: <number | null>` - the balance, using mint-prescribed decimals **DEPRECATED**
+- `uiAmount: <number|null>` - the balance, using mint-prescribed decimals **DEPRECATED**
 - `uiAmountString: <string>` - the balance as a string, using mint-prescribed decimals
 
 For more details on returned data: The
@@ -2703,7 +2724,7 @@ Returns all SPL Token accounts by approved Delegate.
     "base64" will return base64 encoded data for Account data of any size.
     "base64+zstd" compresses the Account data using [Zstandard](https://facebook.github.io/zstd/) and base64-encodes the result.
     ["jsonParsed" encoding](jsonrpc-api.md#parsed-responses) attempts to use program-specific state parsers to return more human-readable and explicit account state data. If "jsonParsed" is requested but a parser cannot be found, the field falls back to "base64" encoding, detectable when the `data` field is type `<string>`.
-  - (optional) `dataSlice: <object>` - limit the returned account data using the provided `offset: <usize>` and `length: <usize>` fields; only available for "base58", "base64" or "base64+zstd" encodings.
+  - (optional) `dataSlice: <object>` - limit the returned account data using the provided `offset: <usize>` and `length: <usize>` fields; has no effect on parsed account data.
   - (optional) `minContextSlot: <number>` - set the minimum slot that the request can be evaluated at.
 
 #### Results:
@@ -2782,7 +2803,8 @@ Result:
           "executable": false,
           "lamports": 1726080,
           "owner": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
-          "rentEpoch": 4
+          "rentEpoch": 4,
+          "space": 165
         },
         "pubkey": "28YTZEwqtMHWrhWcvv34se7pjS7wctgqzCPB3gReCFKp"
       }
@@ -2809,7 +2831,7 @@ Returns all SPL Token accounts by token owner.
     "base64" will return base64 encoded data for Account data of any size.
     "base64+zstd" compresses the Account data using [Zstandard](https://facebook.github.io/zstd/) and base64-encodes the result.
     ["jsonParsed" encoding](jsonrpc-api.md#parsed-responses) attempts to use program-specific state parsers to return more human-readable and explicit account state data. If "jsonParsed" is requested but a parser cannot be found, the field falls back to "base64" encoding, detectable when the `data` field is type `<string>`.
-  - (optional) `dataSlice: <object>` - limit the returned account data using the provided `offset: <usize>` and `length: <usize>` fields; only available for "base58", "base64" or "base64+zstd" encodings.
+  - (optional) `dataSlice: <object>` - limit the returned account data using the provided `offset: <usize>` and `length: <usize>` fields; has no effect on parsed account data.
   - (optional) `minContextSlot: <number>` - set the minimum slot that the request can be evaluated at.
 
 #### Results:
@@ -2889,7 +2911,8 @@ Result:
           "executable": false,
           "lamports": 1726080,
           "owner": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
-          "rentEpoch": 4
+          "rentEpoch": 4,
+          "space": 165
         },
         "pubkey": "C2gJg6tKpQs41PRS1nC8aw3ZKNZK3HQQZGVrDFDup5nx"
       }
@@ -2916,7 +2939,7 @@ The result will be an RpcResponse JSON object with `value` equal to an array of 
 - `address: <string>` - the address of the token account
 - `amount: <string>` - the raw token account balance without decimals, a string representation of u64
 - `decimals: <u8>` - number of base 10 digits to the right of the decimal place
-- `uiAmount: <number | null>` - the token account balance, using mint-prescribed decimals **DEPRECATED**
+- `uiAmount: <number|null>` - the token account balance, using mint-prescribed decimals **DEPRECATED**
 - `uiAmountString: <string>` - the token account balance as a string, using mint-prescribed decimals
 
 #### Example:
@@ -2973,7 +2996,7 @@ The result will be an RpcResponse JSON object with `value` equal to a JSON objec
 
 - `amount: <string>` - the raw total token supply without decimals, a string representation of u64
 - `decimals: <u8>` - number of base 10 digits to the right of the decimal place
-- `uiAmount: <number | null>` - the total token supply, using mint-prescribed decimals **DEPRECATED**
+- `uiAmount: <number|null>` - the total token supply, using mint-prescribed decimals **DEPRECATED**
 - `uiAmountString: <string>` - the total token supply as a string, using mint-prescribed decimals
 
 #### Example:
@@ -3023,9 +3046,9 @@ Returns transaction details for a confirmed transaction
 - `<object>` - if transaction is confirmed, an object with the following fields:
   - `slot: <u64>` - the slot this transaction was processed in
   - `transaction: <object|[string,encoding]>` - [Transaction](#transaction-structure) object, either in JSON format or encoded binary data, depending on encoding parameter
-  - `blockTime: <i64 | null>` - estimated production time, as Unix timestamp (seconds since the Unix epoch) of when the transaction was processed. null if not available
-  - `meta: <object | null>` - transaction status metadata object:
-    - `err: <object | null>` - Error if transaction failed, null if transaction succeeded. [TransactionError definitions](https://docs.rs/solana-sdk/VERSION_FOR_DOCS_RS/solana_sdk/transaction/enum.TransactionError.html)
+  - `blockTime: <i64|null>` - estimated production time, as Unix timestamp (seconds since the Unix epoch) of when the transaction was processed. null if not available
+  - `meta: <object|null>` - transaction status metadata object:
+    - `err: <object|null>` - Error if transaction failed, null if transaction succeeded. [TransactionError definitions](https://docs.rs/solana-sdk/VERSION_FOR_DOCS_RS/solana_sdk/transaction/enum.TransactionError.html)
     - `fee: <u64>` - fee this transaction was charged, as u64 integer
     - `preBalances: <array>` - array of u64 account balances from before the transaction was processed
     - `postBalances: <array>` - array of u64 account balances after the transaction was processed
@@ -3036,7 +3059,7 @@ Returns transaction details for a confirmed transaction
     - DEPRECATED: `status: <object>` - Transaction status
       - `"Ok": <null>` - Transaction was successful
       - `"Err": <ERR>` - Transaction failed with TransactionError
-    - `rewards: <array>` - present if rewards are requested; an array of JSON objects containing:
+    - `rewards: <array|null>` - transaction-level rewards, populated if rewards are requested; an array of JSON objects containing:
       - `pubkey: <string>` - The public key, as base-58 encoded string, of the account that received the reward
       - `lamports: <i64>`- number of reward lamports credited or debited by the account, as a i64
       - `postBalance: <u64>` - account balance in lamports after the reward was applied
@@ -3045,6 +3068,10 @@ Returns transaction details for a confirmed transaction
     - `loadedAddresses: <object|undefined>` - Transaction addresses loaded from address lookup tables. Undefined if `maxSupportedTransactionVersion` is not set in request params.
       - `writable: <array[string]>` - Ordered list of base-58 encoded addresses for writable loaded accounts
       - `readonly: <array[string]>` - Ordered list of base-58 encoded addresses for readonly loaded accounts
+    - `returnData: <object|undefined>` - the most-recent return data generated by an instruction in the transaction, with the following fields:
+      - `programId: <string>`, the program that generated the return data, as base-58 encoded Pubkey
+      - `data: <[string, encoding]>`, the return data itself, as base-64 encoded binary data
+    - `computeUnitsConsumed: <u64|undefined>`, number of [compute units](developing/programming-model/runtime.md#compute-budget) consumed by the transaction
   - `version: <"legacy"|number|undefined>` - Transaction version. Undefined if `maxSupportedTransactionVersion` is not set in request params.
 
 #### Example:
@@ -3079,6 +3106,7 @@ Result:
       "postTokenBalances": [],
       "preBalances": [499998937500, 26858640, 1, 1, 1],
       "preTokenBalances": [],
+      "rewards": [],
       "status": {
         "Ok": null
       }
@@ -3149,6 +3177,7 @@ Result:
       "postTokenBalances": [],
       "preBalances": [499998937500, 26858640, 1, 1, 1],
       "preTokenBalances": [],
+      "rewards": null,
       "status": {
         "Ok": null
       }
@@ -3220,7 +3249,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 Result:
 
 ```json
-{ "jsonrpc": "2.0", "result": { "solana-core": "1.12.0" }, "id": 1 }
+{ "jsonrpc": "2.0", "result": { "solana-core": "1.15.0" }, "id": 1 }
 ```
 
 ### getVoteAccounts
@@ -3246,7 +3275,8 @@ each containing an array of JSON objects with the following sub fields:
 - `epochVoteAccount: <bool>` - bool, whether the vote account is staked for this epoch
 - `commission: <number>`, percentage (0-100) of rewards payout owed to the vote account
 - `lastVote: <u64>` - Most recent slot voted on by this vote account
-- `epochCredits: <array>` - History of how many credits earned by the end of each epoch, as an array of arrays containing: `[epoch, credits, previousCredits]`
+- `epochCredits: <array>` - Latest history of earned credits for up to five epochs, as an array of arrays containing: `[epoch, credits, previousCredits]`.
+- `rootSlot: <u64>` - Current root slot for this vote account
 
 #### Example:
 
@@ -3548,9 +3578,9 @@ Simulate sending a transaction
 An RpcResponse containing a TransactionStatus object
 The result will be an RpcResponse JSON object with `value` set to a JSON object with the following fields:
 
-- `err: <object | string | null>` - Error if transaction failed, null if transaction succeeded. [TransactionError definitions](https://github.com/solana-labs/solana/blob/c0c60386544ec9a9ec7119229f37386d9f070523/sdk/src/transaction/error.rs#L13)
-- `logs: <array | null>` - Array of log messages the transaction instructions output during execution, null if simulation failed before the transaction was able to execute (for example due to an invalid blockhash or signature verification failure)
-- `accounts: <array | null>` - array of accounts with the same length as the `accounts.addresses` array in the request
+- `err: <object|string|null>` - Error if transaction failed, null if transaction succeeded. [TransactionError definitions](https://github.com/solana-labs/solana/blob/c0c60386544ec9a9ec7119229f37386d9f070523/sdk/src/transaction/error.rs#L13)
+- `logs: <array|null>` - Array of log messages the transaction instructions output during execution, null if simulation failed before the transaction was able to execute (for example due to an invalid blockhash or signature verification failure)
+- `accounts: <array|null>` - array of accounts with the same length as the `accounts.addresses` array in the request
   - `<null>` - if the account doesn't exist or if `err` is not null
   - `<object>` - otherwise, a JSON object containing:
     - `lamports: <u64>`, number of lamports assigned to this account, as a u64
@@ -3558,8 +3588,8 @@ The result will be an RpcResponse JSON object with `value` set to a JSON object 
     - `data: <[string, encoding]|object>`, data associated with the account, either as encoded binary data or JSON format `{<program>: <state>}`, depending on encoding parameter
     - `executable: <bool>`, boolean indicating if the account contains a program \(and is strictly read-only\)
     - `rentEpoch: <u64>`, the epoch at which this account will next owe rent, as u64
-- `unitsConsumed: <u64 | undefined>`, The number of compute budget units consumed during the processing of this transaction
-- `returnData: <object | null>` - the most-recent return data generated by an instruction in the transaction, with the following fields:
+- `unitsConsumed: <u64|undefined>`, The number of compute budget units consumed during the processing of this transaction
+- `returnData: <object|null>` - the most-recent return data generated by an instruction in the transaction, with the following fields:
   - `programId: <string>`, the program that generated the return data, as base-58 encoded Pubkey
   - `data: <[string, encoding]>`, the return data itself, as base-64 encoded binary data
 
@@ -3600,10 +3630,7 @@ Result:
         "Program 83astBRguLMdt2h5U1Tpdq5tjFoJ6noeGwaY3mDLVcri success"
       ],
       "returnData": {
-        "data": [
-          "Kg==",
-          "base64"
-        ],
+        "data": ["Kg==", "base64"],
         "programId": "83astBRguLMdt2h5U1Tpdq5tjFoJ6noeGwaY3mDLVcri"
       },
       "unitsConsumed": 2366
@@ -3696,7 +3723,8 @@ Base58 encoding:
         "executable": false,
         "lamports": 33594,
         "owner": "11111111111111111111111111111111",
-        "rentEpoch": 635
+        "rentEpoch": 635,
+        "space": 80
       }
     },
     "subscription": 23784
@@ -3732,7 +3760,8 @@ Parsed-JSON encoding:
         "executable": false,
         "lamports": 33594,
         "owner": "11111111111111111111111111111111",
-        "rentEpoch": 635
+        "rentEpoch": 635,
+        "space": 80
       }
     },
     "subscription": 23784
@@ -3829,8 +3858,8 @@ The notification will be an object with the following fields:
 
 -`slot: <u64>` - The corresponding slot.
 
-- `err: <object | null>` - Error if something went wrong publishing the notification otherwise null.
-- `block: <object | null>` - A block object as seen in the [getBlock](jsonrpc-api.md#getblock) RPC HTTP method.
+- `err: <object|null>` - Error if something went wrong publishing the notification otherwise null.
+- `block: <object|null>` - A block object as seen in the [getBlock](jsonrpc-api.md#getblock) RPC HTTP method.
 
 ```json
 {
@@ -4113,8 +4142,8 @@ Result:
 The notification will be an RpcResponse JSON object with value equal to:
 
 - `signature: <string>` - The transaction signature base58 encoded.
-- `err: <object | null>` - Error if transaction failed, null if transaction succeeded. [TransactionError definitions](https://github.com/solana-labs/solana/blob/c0c60386544ec9a9ec7119229f37386d9f070523/sdk/src/transaction/error.rs#L13)
-- `logs: <array | null>` - Array of log messages the transaction instructions output during execution, null if simulation failed before the transaction was able to execute (for example due to an invalid blockhash or signature verification failure)
+- `err: <object|null>` - Error if transaction failed, null if transaction succeeded. [TransactionError definitions](https://github.com/solana-labs/solana/blob/c0c60386544ec9a9ec7119229f37386d9f070523/sdk/src/transaction/error.rs#L13)
+- `logs: <array|null>` - Array of log messages the transaction instructions output during execution, null if simulation failed before the transaction was able to execute (for example due to an invalid blockhash or signature verification failure)
 
 Example:
 
@@ -4131,7 +4160,7 @@ Example:
         "signature": "5h6xBEauJ3PK6SWCZ1PGjBvj8vDdWG3KpwATGy1ARAXFSDwt8GFXM7W5Ncn16wmqokgpiKRLuS83KUxyZyv2sUYv",
         "err": null,
         "logs": [
-          "BPF program 83astBRguLMdt2h5U1Tpdq5tjFoJ6noeGwaY3mDLVcri success"
+          "SBF program 83astBRguLMdt2h5U1Tpdq5tjFoJ6noeGwaY3mDLVcri success"
         ]
       }
     },
@@ -4168,7 +4197,7 @@ Result:
 
 ### programSubscribe
 
-Subscribe to a program to receive notifications when the lamports or data for a given account owned by the program changes
+Subscribe to a program to receive notifications when the lamports or data for an account owned by the given program changes
 
 #### Parameters:
 
@@ -4260,7 +4289,8 @@ Base58 encoding:
           "executable": false,
           "lamports": 33594,
           "owner": "11111111111111111111111111111111",
-          "rentEpoch": 636
+          "rentEpoch": 636,
+          "space": 80
         }
       }
     },
@@ -4299,7 +4329,8 @@ Parsed-JSON encoding:
           "executable": false,
           "lamports": 33594,
           "owner": "11111111111111111111111111111111",
-          "rentEpoch": 636
+          "rentEpoch": 636,
+          "space": 80
         }
       }
     },
@@ -4336,7 +4367,7 @@ Result:
 
 ### signatureSubscribe
 
-Subscribe to a transaction signature to receive notification when the transaction is confirmed On `signatureNotification`, the subscription is automatically cancelled
+Subscribe to a transaction signature to receive notification when a given transaction is committed. On `signatureNotification`, the subscription is automatically cancelled.
 
 #### Parameters:
 
@@ -4385,7 +4416,7 @@ Result:
 
 The notification will be an RpcResponse JSON object with value containing an object with:
 
-- `err: <object | null>` - Error if transaction failed, null if transaction succeeded. [TransactionError definitions](https://github.com/solana-labs/solana/blob/c0c60386544ec9a9ec7119229f37386d9f070523/sdk/src/transaction/error.rs#L13)
+- `err: <object|null>` - Error if transaction failed, null if transaction succeeded. [TransactionError definitions](https://github.com/solana-labs/solana/blob/c0c60386544ec9a9ec7119229f37386d9f070523/sdk/src/transaction/error.rs#L13)
 
 Example:
 
@@ -4708,7 +4739,7 @@ The notification will be an object with the following fields:
 
 - `hash: <string>` - The vote hash
 - `slots: <array>` - The slots covered by the vote, as an array of u64 integers
-- `timestamp: <i64 | null>` - The timestamp of the vote
+- `timestamp: <i64|null>` - The timestamp of the vote
 - `signature: <string>` - The signature of the transaction that contained this vote
 
 ```json
@@ -4783,7 +4814,7 @@ The result field will be an object with the following fields:
   - `transactions: <array>` - present if "full" transaction details are requested; an array of JSON objects containing:
     - `transaction: <object|[string,encoding]>` - [Transaction](#transaction-structure) object, either in JSON format or encoded binary data, depending on encoding parameter
     - `meta: <object>` - transaction status metadata object, containing `null` or:
-      - `err: <object | null>` - Error if transaction failed, null if transaction succeeded. [TransactionError definitions](https://github.com/solana-labs/solana/blob/c0c60386544ec9a9ec7119229f37386d9f070523/sdk/src/transaction/error.rs#L13)
+      - `err: <object|null>` - Error if transaction failed, null if transaction succeeded. [TransactionError definitions](https://github.com/solana-labs/solana/blob/c0c60386544ec9a9ec7119229f37386d9f070523/sdk/src/transaction/error.rs#L13)
       - `fee: <u64>` - fee this transaction was charged, as u64 integer
       - `preBalances: <array>` - array of u64 account balances from before the transaction was processed
       - `postBalances: <array>` - array of u64 account balances after the transaction was processed
@@ -4801,7 +4832,7 @@ The result field will be an object with the following fields:
     - `postBalance: <u64>` - account balance in lamports after the reward was applied
     - `rewardType: <string|undefined>` - type of reward: "fee", "rent", "voting", "staking"
     - `commission: <u8|undefined>` - vote account commission when the reward was credited, only present for voting and staking rewards
-  - `blockTime: <i64 | null>` - estimated production time, as Unix timestamp (seconds since the Unix epoch). null if not available
+  - `blockTime: <i64|null>` - estimated production time, as Unix timestamp (seconds since the Unix epoch). null if not available
 
 #### Example:
 
@@ -5022,9 +5053,9 @@ from newest to oldest transaction:
 - `<object>`
   - `signature: <string>` - transaction signature as base-58 encoded string
   - `slot: <u64>` - The slot that contains the block with the transaction
-  - `err: <object | null>` - Error if transaction failed, null if transaction succeeded. [TransactionError definitions](https://github.com/solana-labs/solana/blob/c0c60386544ec9a9ec7119229f37386d9f070523/sdk/src/transaction/error.rs#L13)
-  - `memo: <string |null>` - Memo associated with the transaction, null if no memo is present
-  - `blockTime: <i64 | null>` - estimated production time, as Unix timestamp (seconds since the Unix epoch) of when transaction was processed. null if not available.
+  - `err: <object|null>` - Error if transaction failed, null if transaction succeeded. [TransactionError definitions](https://github.com/solana-labs/solana/blob/c0c60386544ec9a9ec7119229f37386d9f070523/sdk/src/transaction/error.rs#L13)
+  - `memo: <string|null>` - Memo associated with the transaction, null if no memo is present
+  - `blockTime: <i64|null>` - estimated production time, as Unix timestamp (seconds since the Unix epoch) of when transaction was processed. null if not available.
 
 #### Example:
 
@@ -5085,9 +5116,9 @@ Returns transaction details for a confirmed transaction
 - `<object>` - if transaction is confirmed, an object with the following fields:
   - `slot: <u64>` - the slot this transaction was processed in
   - `transaction: <object|[string,encoding]>` - [Transaction](#transaction-structure) object, either in JSON format or encoded binary data, depending on encoding parameter
-  - `blockTime: <i64 | null>` - estimated production time, as Unix timestamp (seconds since the Unix epoch) of when the transaction was processed. null if not available
-  - `meta: <object | null>` - transaction status metadata object:
-    - `err: <object | null>` - Error if transaction failed, null if transaction succeeded. [TransactionError definitions](https://docs.rs/solana-sdk/VERSION_FOR_DOCS_RS/solana_sdk/transaction/enum.TransactionError.html)
+  - `blockTime: <i64|null>` - estimated production time, as Unix timestamp (seconds since the Unix epoch) of when the transaction was processed. null if not available
+  - `meta: <object|null>` - transaction status metadata object:
+    - `err: <object|null>` - Error if transaction failed, null if transaction succeeded. [TransactionError definitions](https://docs.rs/solana-sdk/VERSION_FOR_DOCS_RS/solana_sdk/transaction/enum.TransactionError.html)
     - `fee: <u64>` - fee this transaction was charged, as u64 integer
     - `preBalances: <array>` - array of u64 account balances from before the transaction was processed
     - `postBalances: <array>` - array of u64 account balances after the transaction was processed

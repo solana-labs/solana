@@ -98,7 +98,7 @@ pub fn serialize_points(points: &Vec<DataPoint>, host_id: &str) -> String {
     for point in points {
         let _ = write!(line, "{},host_id={}", &point.name, host_id);
         for (name, value) in point.tags.iter() {
-            let _ = write!(line, ",{}={}", name, value);
+            let _ = write!(line, ",{name}={value}");
         }
 
         let mut first = true;
@@ -108,7 +108,7 @@ pub fn serialize_points(points: &Vec<DataPoint>, host_id: &str) -> String {
         }
         let timestamp = point.timestamp.duration_since(UNIX_EPOCH);
         let nanos = timestamp.unwrap().as_nanos();
-        let _ = writeln!(line, " {}", nanos);
+        let _ = writeln!(line, " {nanos}");
     }
     line
 }
@@ -390,13 +390,13 @@ impl MetricsConfig {
 fn get_metrics_config() -> Result<MetricsConfig, String> {
     let mut config = MetricsConfig::default();
 
-    let config_var = env::var("SOLANA_METRICS_CONFIG")
-        .map_err(|err| format!("SOLANA_METRICS_CONFIG: {}", err))?;
+    let config_var =
+        env::var("SOLANA_METRICS_CONFIG").map_err(|err| format!("SOLANA_METRICS_CONFIG: {err}"))?;
 
     for pair in config_var.split(',') {
         let nv: Vec<_> = pair.split('=').collect();
         if nv.len() != 2 {
-            return Err(format!("SOLANA_METRICS_CONFIG is invalid: '{}'", pair));
+            return Err(format!("SOLANA_METRICS_CONFIG is invalid: '{pair}'"));
         }
         let v = nv[1].to_string();
         match nv[0] {
@@ -404,7 +404,7 @@ fn get_metrics_config() -> Result<MetricsConfig, String> {
             "db" => config.db = v,
             "u" => config.username = v,
             "p" => config.password = v,
-            _ => return Err(format!("SOLANA_METRICS_CONFIG is invalid: '{}'", pair)),
+            _ => return Err(format!("SOLANA_METRICS_CONFIG is invalid: '{pair}'")),
         }
     }
 

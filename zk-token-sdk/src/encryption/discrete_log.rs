@@ -17,7 +17,7 @@
 #![cfg(not(target_os = "solana"))]
 
 use {
-    crate::errors::ProofError,
+    crate::encryption::errors::DiscreteLogError,
     curve25519_dalek::{
         constants::RISTRETTO_BASEPOINT_POINT as G,
         ristretto::RistrettoPoint,
@@ -100,10 +100,10 @@ impl DiscreteLog {
     }
 
     /// Adjusts number of threads in a discrete log instance.
-    pub fn num_threads(&mut self, num_threads: usize) -> Result<(), ProofError> {
+    pub fn num_threads(&mut self, num_threads: usize) -> Result<(), DiscreteLogError> {
         // number of threads must be a positive power-of-two integer
         if num_threads == 0 || (num_threads & (num_threads - 1)) != 0 || num_threads > 65536 {
-            return Err(ProofError::DiscreteLogThreads);
+            return Err(DiscreteLogError::DiscreteLogThreads);
         }
 
         self.num_threads = num_threads;
@@ -117,9 +117,9 @@ impl DiscreteLog {
     pub fn set_compression_batch_size(
         &mut self,
         compression_batch_size: usize,
-    ) -> Result<(), ProofError> {
+    ) -> Result<(), DiscreteLogError> {
         if compression_batch_size >= TWO16 as usize {
-            return Err(ProofError::DiscreteLogBatchSize);
+            return Err(DiscreteLogError::DiscreteLogBatchSize);
         }
         self.compression_batch_size = compression_batch_size;
 
@@ -127,7 +127,7 @@ impl DiscreteLog {
     }
 
     /// Solves the discrete log problem under the assumption that the solution
-    /// is a 32-bit number.
+    /// is a positive 32-bit number.
     pub fn decode_u32(self) -> Option<u64> {
         let mut starting_point = self.target;
         let handles = (0..self.num_threads)
@@ -144,7 +144,6 @@ impl DiscreteLog {
                         self.range_bound,
                         self.compression_batch_size,
                     )
-                    // Self::decode_range(ristretto_iterator, self.range_bound)
                 });
 
                 starting_point -= G;
@@ -174,6 +173,7 @@ impl DiscreteLog {
             .take(range_bound)
             .chunks(compression_batch_size)
         {
+            // batch compression currently errors if any point in the batch is the identity point
             let (batch_points, batch_indices): (Vec<_>, Vec<_>) = batch
                 .filter(|(point, index)| {
                     if point.is_identity() {
@@ -199,7 +199,7 @@ impl DiscreteLog {
     }
 }
 
-/// HashableRistretto iterator.
+/// Hashable Ristretto iterator.
 ///
 /// Given an initial point X and a stepping point P, the iterator iterates through
 /// X + 0*P, X + 1*P, X + 2*P, X + 3*P, ...
@@ -260,10 +260,7 @@ mod tests {
 
         assert_eq!(amount, decoded.unwrap());
 
-        println!(
-            "single thread discrete log computation secs: {:?} sec",
-            computation_secs
-        );
+        println!("single thread discrete log computation secs: {computation_secs:?} sec");
     }
 
     #[test]
@@ -281,10 +278,7 @@ mod tests {
 
         assert_eq!(amount, decoded.unwrap());
 
-        println!(
-            "4 thread discrete log computation: {:?} sec",
-            computation_secs
-        );
+        println!("4 thread discrete log computation: {computation_secs:?} sec");
 
         // amount 0
         let amount: u64 = 0;
@@ -319,7 +313,7 @@ mod tests {
         assert_eq!(amount, decoded.unwrap());
 
         // max amount
-        let amount: u64 = ((1_u64 << 32) - 1) as u64;
+        let amount: u64 = (1_u64 << 32) - 1;
 
         let instance = DiscreteLog::new(G, Scalar::from(amount) * G);
 

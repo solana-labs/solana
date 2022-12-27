@@ -95,18 +95,6 @@ impl CostTracker {
         Ok(self.block_cost)
     }
 
-    /// Using user requested compute-units to track cost.
-    pub fn try_add_requested_cus(
-        &mut self,
-        write_lock_accounts: &[Pubkey],
-        requested_cus: u64,
-        is_vote: bool,
-    ) -> Result<u64, CostTrackerError> {
-        self.would_fit_internal(write_lock_accounts.iter(), requested_cus, is_vote, 0)?;
-        self.add_transaction_cost_internal(write_lock_accounts.iter(), requested_cus, is_vote, 0);
-        Ok(self.block_cost)
-    }
-
     pub fn update_execution_cost(
         &mut self,
         estimated_tx_cost: &TransactionCost,
@@ -164,35 +152,16 @@ impl CostTracker {
     }
 
     fn find_costliest_account(&self) -> (Pubkey, u64) {
-        let mut costliest_account = Pubkey::default();
-        let mut costliest_account_cost = 0;
-        for (key, cost) in self.cost_by_writable_accounts.iter() {
-            if *cost > costliest_account_cost {
-                costliest_account = *key;
-                costliest_account_cost = *cost;
-            }
-        }
-
-        (costliest_account, costliest_account_cost)
+        self.cost_by_writable_accounts
+            .iter()
+            .max_by_key(|(_, &cost)| cost)
+            .map(|(&pubkey, &cost)| (pubkey, cost))
+            .unwrap_or_default()
     }
 
     fn would_fit(&self, tx_cost: &TransactionCost) -> Result<(), CostTrackerError> {
-        self.would_fit_internal(
-            tx_cost.writable_accounts.iter(),
-            tx_cost.sum(),
-            tx_cost.is_simple_vote,
-            tx_cost.account_data_size,
-        )
-    }
-
-    fn would_fit_internal<'a>(
-        &self,
-        write_lock_accounts: impl Iterator<Item = &'a Pubkey>,
-        cost: u64,
-        is_vote: bool,
-        account_data_size: u64,
-    ) -> Result<(), CostTrackerError> {
-        let vote_cost = if is_vote { cost } else { 0 };
+        let cost: u64 = tx_cost.sum();
+        let vote_cost = if tx_cost.is_simple_vote { cost } else { 0 };
 
         // check against the total package cost
         if self.block_cost.saturating_add(cost) > self.block_cost_limit {
@@ -211,7 +180,9 @@ impl CostTracker {
 
         // NOTE: Check if the total accounts data size is exceeded *before* the block accounts data
         // size.  This way, transactions are not unnecessarily retried.
-        let account_data_size = self.account_data_size.saturating_add(account_data_size);
+        let account_data_size = self
+            .account_data_size
+            .saturating_add(tx_cost.account_data_size);
         if let Some(account_data_size_limit) = self.account_data_size_limit {
             if account_data_size > account_data_size_limit {
                 return Err(CostTrackerError::WouldExceedAccountDataTotalLimit);
@@ -223,7 +194,7 @@ impl CostTracker {
         }
 
         // check each account against account_cost_limit,
-        for account_key in write_lock_accounts {
+        for account_key in tx_cost.writable_accounts.iter() {
             match self.cost_by_writable_accounts.get(account_key) {
                 Some(chained_cost) => {
                     if chained_cost.saturating_add(cost) > self.account_cost_limit {
@@ -240,23 +211,8 @@ impl CostTracker {
     }
 
     fn add_transaction_cost(&mut self, tx_cost: &TransactionCost) {
-        self.add_transaction_cost_internal(
-            tx_cost.writable_accounts.iter(),
-            tx_cost.sum(),
-            tx_cost.is_simple_vote,
-            tx_cost.account_data_size,
-        )
-    }
-
-    fn add_transaction_cost_internal<'a>(
-        &mut self,
-        write_lock_accounts: impl Iterator<Item = &'a Pubkey>,
-        cost: u64,
-        is_vote: bool,
-        account_data_size: u64,
-    ) {
-        self.add_transaction_execution_cost_internal(write_lock_accounts, is_vote, cost);
-        saturating_add_assign!(self.account_data_size, account_data_size);
+        self.add_transaction_execution_cost(tx_cost, tx_cost.sum());
+        saturating_add_assign!(self.account_data_size, tx_cost.account_data_size);
         saturating_add_assign!(self.transaction_count, 1);
     }
 
@@ -271,20 +227,7 @@ impl CostTracker {
 
     /// Apply additional actual execution units to cost_tracker
     fn add_transaction_execution_cost(&mut self, tx_cost: &TransactionCost, adjustment: u64) {
-        self.add_transaction_execution_cost_internal(
-            tx_cost.writable_accounts.iter(),
-            tx_cost.is_simple_vote,
-            adjustment,
-        )
-    }
-
-    fn add_transaction_execution_cost_internal<'a>(
-        &mut self,
-        write_lock_accounts: impl Iterator<Item = &'a Pubkey>,
-        is_vote: bool,
-        adjustment: u64,
-    ) {
-        for account_key in write_lock_accounts {
+        for account_key in tx_cost.writable_accounts.iter() {
             let account_cost = self
                 .cost_by_writable_accounts
                 .entry(*account_key)
@@ -292,12 +235,12 @@ impl CostTracker {
             *account_cost = account_cost.saturating_add(adjustment);
         }
         self.block_cost = self.block_cost.saturating_add(adjustment);
-        if is_vote {
+        if tx_cost.is_simple_vote {
             self.vote_cost = self.vote_cost.saturating_add(adjustment);
         }
     }
 
-    /// Substract extra execution units from cost_tracker
+    /// Subtract extra execution units from cost_tracker
     fn sub_transaction_execution_cost(&mut self, tx_cost: &TransactionCost, adjustment: u64) {
         for account_key in tx_cost.writable_accounts.iter() {
             let account_cost = self
@@ -315,9 +258,9 @@ impl CostTracker {
     /// count number of none-zero CU accounts
     fn number_of_accounts(&self) -> usize {
         self.cost_by_writable_accounts
-            .iter()
-            .map(|(_key, units)| if *units > 0 { 1 } else { 0 })
-            .sum()
+            .values()
+            .filter(|units| **units > 0)
+            .count()
     }
 }
 

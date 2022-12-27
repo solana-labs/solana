@@ -43,8 +43,8 @@ pub struct WithdrawData {
     pub proof: WithdrawProof, // 736 bytes
 }
 
+#[cfg(not(target_os = "solana"))]
 impl WithdrawData {
-    #[cfg(not(target_os = "solana"))]
     pub fn new(
         amount: u64,
         keypair: &ElGamalKeypair,

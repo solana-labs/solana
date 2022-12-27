@@ -1,7 +1,7 @@
 use crate::native_token::sol_to_lamports;
 
 /// A fee and its associated compute unit limit
-#[derive(Debug, Default, Clone)]
+#[derive(Debug, Default, Clone, Eq, PartialEq)]
 pub struct FeeBin {
     /// maximum compute units for which this fee will be charged
     pub limit: u64,
@@ -10,7 +10,7 @@ pub struct FeeBin {
 }
 
 /// Information used to calculate fees
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub struct FeeStructure {
     /// lamports per signature
     pub lamports_per_signature: u64,

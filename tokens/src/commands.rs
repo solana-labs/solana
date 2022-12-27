@@ -76,7 +76,7 @@ impl std::fmt::Debug for FundingSources {
             if i > 0 {
                 write!(f, "/")?;
             }
-            write!(f, "{:?}", source)?;
+            write!(f, "{source:?}")?;
         }
         Ok(())
     }
@@ -924,7 +924,7 @@ pub fn test_process_distribute_tokens_with_client(
     let allocations_file = NamedTempFile::new().unwrap();
     let input_csv = allocations_file.path().to_str().unwrap().to_string();
     let mut wtr = csv::WriterBuilder::new().from_writer(allocations_file);
-    wtr.write_record(&["recipient", "amount"]).unwrap();
+    wtr.write_record(["recipient", "amount"]).unwrap();
     wtr.write_record(&[
         alice_pubkey.to_string(),
         lamports_to_sol(expected_amount).to_string(),
@@ -1024,7 +1024,7 @@ pub fn test_process_create_stake_with_client(client: &RpcClient, sender_keypair:
     let file = NamedTempFile::new().unwrap();
     let input_csv = file.path().to_str().unwrap().to_string();
     let mut wtr = csv::WriterBuilder::new().from_writer(file);
-    wtr.write_record(&["recipient", "amount", "lockup_date"])
+    wtr.write_record(["recipient", "amount", "lockup_date"])
         .unwrap();
     wtr.write_record(&[
         alice_pubkey.to_string(),
@@ -1146,7 +1146,7 @@ pub fn test_process_distribute_stake_with_client(client: &RpcClient, sender_keyp
     let file = NamedTempFile::new().unwrap();
     let input_csv = file.path().to_str().unwrap().to_string();
     let mut wtr = csv::WriterBuilder::new().from_writer(file);
-    wtr.write_record(&["recipient", "amount", "lockup_date"])
+    wtr.write_record(["recipient", "amount", "lockup_date"])
         .unwrap();
     wtr.write_record(&[
         alice_pubkey.to_string(),
@@ -1279,7 +1279,7 @@ mod tests {
     fn simple_test_validator_no_fees(pubkey: Pubkey) -> TestValidator {
         let test_validator =
             TestValidator::with_no_fees(pubkey, None, SocketAddrSpace::Unspecified);
-        test_validator.set_startup_verification_complete();
+        test_validator.set_startup_verification_complete_for_tests();
         test_validator
     }
 
@@ -1581,7 +1581,7 @@ mod tests {
         use std::env;
         let out_dir = env::var("FARF_DIR").unwrap_or_else(|_| "farf".to_string());
 
-        format!("{}/tmp/{}-{}", out_dir, name, pubkey)
+        format!("{out_dir}/tmp/{name}-{pubkey}")
     }
 
     fn initialize_check_payer_balances_inputs(
@@ -1826,7 +1826,7 @@ mod tests {
     fn simple_test_validator(alice: Pubkey) -> TestValidator {
         let test_validator =
             TestValidator::with_custom_fees(alice, 10_000, None, SocketAddrSpace::Unspecified);
-        test_validator.set_startup_verification_complete();
+        test_validator.set_startup_verification_complete_for_tests();
         test_validator
     }
 

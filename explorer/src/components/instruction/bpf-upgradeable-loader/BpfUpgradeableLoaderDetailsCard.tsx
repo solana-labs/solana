@@ -13,7 +13,9 @@ import { ParsedInfo } from "validators";
 import { InstructionCard } from "../InstructionCard";
 import { UnknownDetailsCard } from "../UnknownDetailsCard";
 import {
+  CloseInfo,
   DeployWithMaxDataLenInfo,
+  ExtendProgramInfo,
   InitializeBufferInfo,
   SetAuthorityInfo,
   UpgradeInfo,
@@ -33,14 +35,15 @@ export function BpfUpgradeableLoaderDetailsCard(props: DetailsProps) {
   try {
     const parsed = create(props.ix.parsed, ParsedInfo);
     switch (parsed.type) {
+      case "initializeBuffer": {
+        return renderDetails<InitializeBufferInfo>(
+          props,
+          parsed,
+          InitializeBufferInfo
+        );
+      }
       case "write": {
         return renderDetails<WriteInfo>(props, parsed, WriteInfo);
-      }
-      case "upgrade": {
-        return renderDetails<UpgradeInfo>(props, parsed, UpgradeInfo);
-      }
-      case "setAuthority": {
-        return renderDetails<SetAuthorityInfo>(props, parsed, SetAuthorityInfo);
       }
       case "deployWithMaxDataLen": {
         return renderDetails<DeployWithMaxDataLenInfo>(
@@ -49,11 +52,20 @@ export function BpfUpgradeableLoaderDetailsCard(props: DetailsProps) {
           DeployWithMaxDataLenInfo
         );
       }
-      case "initializeBuffer": {
-        return renderDetails<InitializeBufferInfo>(
+      case "upgrade": {
+        return renderDetails<UpgradeInfo>(props, parsed, UpgradeInfo);
+      }
+      case "setAuthority": {
+        return renderDetails<SetAuthorityInfo>(props, parsed, SetAuthorityInfo);
+      }
+      case "close": {
+        return renderDetails<CloseInfo>(props, parsed, CloseInfo);
+      }
+      case "extendProgram": {
+        return renderDetails<ExtendProgramInfo>(
           props,
           parsed,
-          InitializeBufferInfo
+          ExtendProgramInfo
         );
       }
       default:

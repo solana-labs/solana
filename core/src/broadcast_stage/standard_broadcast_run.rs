@@ -9,8 +9,9 @@ use {
         broadcast_stage::broadcast_utils::UnfinishedSlotInfo, cluster_nodes::ClusterNodesCache,
     },
     solana_entry::entry::Entry,
-    solana_ledger::shred::{ProcessShredsStats, Shred, ShredFlags, Shredder},
+    solana_ledger::shred::{ProcessShredsStats, ReedSolomonCache, Shred, ShredFlags, Shredder},
     solana_sdk::{
+        genesis_config::ClusterType,
         signature::Keypair,
         timing::{duration_as_us, AtomicInterval},
     },
@@ -29,6 +30,7 @@ pub struct StandardBroadcastRun {
     last_datapoint_submit: Arc<AtomicInterval>,
     num_batches: usize,
     cluster_nodes_cache: Arc<ClusterNodesCache<BroadcastStage>>,
+    reed_solomon_cache: Arc<ReedSolomonCache>,
 }
 
 impl StandardBroadcastRun {
@@ -48,6 +50,7 @@ impl StandardBroadcastRun {
             last_datapoint_submit: Arc::default(),
             num_batches: 0,
             cluster_nodes_cache,
+            reed_solomon_cache: Arc::<ReedSolomonCache>::default(),
         }
     }
 
@@ -58,6 +61,7 @@ impl StandardBroadcastRun {
         &mut self,
         keypair: &Keypair,
         max_ticks_in_slot: u8,
+        cluster_type: ClusterType,
         stats: &mut ProcessShredsStats,
     ) -> Vec<Shred> {
         const SHRED_TICK_REFERENCE_MASK: u8 = ShredFlags::SHRED_TICK_REFERENCE_MASK.bits();
@@ -70,14 +74,22 @@ impl StandardBroadcastRun {
                 let shredder =
                     Shredder::new(state.slot, state.parent, reference_tick, self.shred_version)
                         .unwrap();
+                let merkle_variant =
+                    should_use_merkle_variant(state.slot, cluster_type, self.shred_version);
                 let (mut shreds, coding_shreds) = shredder.entries_to_shreds(
                     keypair,
                     &[],  // entries
                     true, // is_last_in_slot,
                     state.next_shred_index,
                     state.next_code_index,
+                    merkle_variant,
+                    &self.reed_solomon_cache,
                     stats,
                 );
+                if merkle_variant {
+                    stats.num_merkle_data_shreds += shreds.len();
+                    stats.num_merkle_coding_shreds += coding_shreds.len();
+                }
                 self.report_and_reset_stats(true);
                 self.unfinished_slot = None;
                 shreds.extend(coding_shreds);
@@ -93,6 +105,7 @@ impl StandardBroadcastRun {
         blockstore: &Blockstore,
         reference_tick: u8,
         is_slot_end: bool,
+        cluster_type: ClusterType,
         process_stats: &mut ProcessShredsStats,
     ) -> (
         Vec<Shred>, // data shreds
@@ -118,14 +131,21 @@ impl StandardBroadcastRun {
         };
         let shredder =
             Shredder::new(slot, parent_slot, reference_tick, self.shred_version).unwrap();
+        let merkle_variant = should_use_merkle_variant(slot, cluster_type, self.shred_version);
         let (data_shreds, coding_shreds) = shredder.entries_to_shreds(
             keypair,
             entries,
             is_slot_end,
             next_shred_index,
             next_code_index,
+            merkle_variant,
+            &self.reed_solomon_cache,
             process_stats,
         );
+        if merkle_variant {
+            process_stats.num_merkle_data_shreds += data_shreds.len();
+            process_stats.num_merkle_coding_shreds += coding_shreds.len();
+        }
         let next_shred_index = match data_shreds.iter().map(Shred::index).max() {
             Some(index) => index + 1,
             None => next_shred_index,
@@ -177,6 +197,7 @@ impl StandardBroadcastRun {
         receive_results: ReceiveResults,
     ) -> Result<()> {
         let mut receive_elapsed = receive_results.time_elapsed;
+        let mut coalesce_elapsed = receive_results.time_coalesced;
         let num_entries = receive_results.entries.len();
         let bank = receive_results.bank.clone();
         let last_tick_height = receive_results.last_tick_height;
@@ -193,15 +214,21 @@ impl StandardBroadcastRun {
 
             self.current_slot_and_parent = Some((slot, parent_slot));
             receive_elapsed = Duration::new(0, 0);
+            coalesce_elapsed = Duration::new(0, 0);
         }
 
         let mut process_stats = ProcessShredsStats::default();
 
         let mut to_shreds_time = Measure::start("broadcast_to_shreds");
+        let cluster_type = bank.cluster_type();
 
         // 1) Check if slot was interrupted
-        let prev_slot_shreds =
-            self.finish_prev_slot(keypair, bank.ticks_per_slot() as u8, &mut process_stats);
+        let prev_slot_shreds = self.finish_prev_slot(
+            keypair,
+            bank.ticks_per_slot() as u8,
+            cluster_type,
+            &mut process_stats,
+        );
 
         // 2) Convert entries to shreds and coding shreds
         let is_last_in_slot = last_tick_height == bank.max_tick_height();
@@ -212,6 +239,7 @@ impl StandardBroadcastRun {
             blockstore,
             reference_tick as u8,
             is_last_in_slot,
+            cluster_type,
             &mut process_stats,
         );
         // Insert the first data shred synchronously so that blockstore stores
@@ -291,6 +319,7 @@ impl StandardBroadcastRun {
         process_stats.shredding_elapsed = to_shreds_time.as_us();
         process_stats.get_leader_schedule_elapsed = get_leader_schedule_time.as_us();
         process_stats.receive_elapsed = duration_as_us(&receive_elapsed);
+        process_stats.coalesce_elapsed = duration_as_us(&coalesce_elapsed);
         process_stats.coding_send_elapsed = coding_send_time.as_us();
 
         self.process_shreds_stats += process_stats;
@@ -444,6 +473,10 @@ impl BroadcastRun for StandardBroadcastRun {
     }
 }
 
+fn should_use_merkle_variant(slot: Slot, cluster_type: ClusterType, shred_version: u16) -> bool {
+    cluster_type == ClusterType::Testnet && shred_version == 6995 && (slot % 19 < 4)
+}
+
 #[cfg(test)]
 mod test {
     use {
@@ -527,7 +560,12 @@ mod test {
         run.current_slot_and_parent = Some((4, 2));
 
         // Slot 2 interrupted slot 1
-        let shreds = run.finish_prev_slot(&keypair, 0, &mut ProcessShredsStats::default());
+        let shreds = run.finish_prev_slot(
+            &keypair,
+            0,
+            ClusterType::Devnet,
+            &mut ProcessShredsStats::default(),
+        );
         let shred = shreds
             .get(0)
             .expect("Expected a shred that signals an interrupt");
@@ -552,6 +590,7 @@ mod test {
         let receive_results = ReceiveResults {
             entries: ticks0.clone(),
             time_elapsed: Duration::new(3, 0),
+            time_coalesced: Duration::new(2, 0),
             bank: bank0.clone(),
             last_tick_height: (ticks0.len() - 1) as u64,
         };
@@ -620,6 +659,7 @@ mod test {
         let receive_results = ReceiveResults {
             entries: ticks1.clone(),
             time_elapsed: Duration::new(2, 0),
+            time_coalesced: Duration::new(1, 0),
             bank: bank2,
             last_tick_height: (ticks1.len() - 1) as u64,
         };
@@ -684,6 +724,7 @@ mod test {
             let receive_results = ReceiveResults {
                 entries: ticks,
                 time_elapsed: Duration::new(1, 0),
+                time_coalesced: Duration::new(0, 0),
                 bank: bank.clone(),
                 last_tick_height,
             };
@@ -727,6 +768,7 @@ mod test {
         let receive_results = ReceiveResults {
             entries: ticks.clone(),
             time_elapsed: Duration::new(3, 0),
+            time_coalesced: Duration::new(2, 0),
             bank: bank0,
             last_tick_height: ticks.len() as u64,
         };

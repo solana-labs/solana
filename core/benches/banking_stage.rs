@@ -8,11 +8,13 @@ use {
     log::*,
     rand::{thread_rng, Rng},
     rayon::prelude::*,
+    solana_client::connection_cache::ConnectionCache,
     solana_core::{
         banking_stage::{BankingStage, BankingStageStats},
         leader_slot_banking_stage_metrics::LeaderSlotMetricsTracker,
         qos_service::QosService,
         unprocessed_packet_batches::*,
+        unprocessed_transaction_storage::{ThreadType, UnprocessedTransactionStorage},
     },
     solana_entry::entry::{next_hash, Entry},
     solana_gossip::cluster_info::{ClusterInfo, Node},
@@ -24,7 +26,7 @@ use {
     },
     solana_perf::{packet::to_packet_batches, test_tx::test_tx},
     solana_poh::poh_recorder::{create_test_recorder, WorkingBankEntry},
-    solana_runtime::{bank::Bank, bank_forks::BankForks, cost_model::CostModel},
+    solana_runtime::{bank::Bank, bank_forks::BankForks},
     solana_sdk::{
         genesis_config::GenesisConfig,
         hash::Hash,
@@ -36,7 +38,9 @@ use {
         transaction::{Transaction, VersionedTransaction},
     },
     solana_streamer::socket::SocketAddrSpace,
-    solana_tpu_client::connection_cache::ConnectionCache,
+    solana_vote_program::{
+        vote_state::VoteStateUpdate, vote_transaction::new_vote_state_update_transaction,
+    },
     std::{
         sync::{atomic::Ordering, Arc, RwLock},
         time::{Duration, Instant},
@@ -66,7 +70,6 @@ fn bench_consume_buffered(bencher: &mut Bencher) {
     let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(100_000);
     let bank = Arc::new(Bank::new_for_benches(&genesis_config));
     let ledger_path = get_tmp_ledger_path!();
-    let my_pubkey = pubkey::new_rand();
     {
         let blockstore = Arc::new(
             Blockstore::open(&ledger_path).expect("Expected to be able to open database ledger"),
@@ -75,30 +78,30 @@ fn bench_consume_buffered(bencher: &mut Bencher) {
             create_test_recorder(&bank, &blockstore, None, None);
 
         let recorder = poh_recorder.read().unwrap().recorder();
+        let bank_start = poh_recorder.read().unwrap().bank_start().unwrap();
 
         let tx = test_tx();
         let transactions = vec![tx; 4194304];
         let batches = transactions_to_deserialized_packets(&transactions).unwrap();
         let batches_len = batches.len();
-        let mut transaction_buffer =
-            UnprocessedPacketBatches::from_iter(batches.into_iter(), 2 * batches_len);
+        let mut transaction_buffer = UnprocessedTransactionStorage::new_transaction_storage(
+            UnprocessedPacketBatches::from_iter(batches.into_iter(), 2 * batches_len),
+            ThreadType::Transactions,
+        );
         let (s, _r) = unbounded();
         // This tests the performance of buffering packets.
         // If the packet buffers are copied, performance will be poor.
         bencher.iter(move || {
             BankingStage::consume_buffered_packets(
-                &my_pubkey,
-                std::u128::MAX,
-                &poh_recorder,
+                &bank_start,
                 &mut transaction_buffer,
-                None,
+                &None,
                 &s,
                 None::<Box<dyn Fn()>>,
                 &BankingStageStats::default(),
                 &recorder,
-                &QosService::new(Arc::new(RwLock::new(CostModel::default())), 1),
+                &QosService::new(1),
                 &mut LeaderSlotMetricsTracker::new(0),
-                10,
                 None,
             );
         });
@@ -142,9 +145,37 @@ fn make_programs_txs(txes: usize, hash: Hash) -> Vec<Transaction> {
         .collect()
 }
 
+fn make_vote_txs(txes: usize) -> Vec<Transaction> {
+    // 1000 voters
+    let num_voters = 1000;
+    let (keypairs, vote_keypairs): (Vec<_>, Vec<_>) = (0..num_voters)
+        .map(|_| (Keypair::new(), Keypair::new()))
+        .unzip();
+    (0..txes)
+        .map(|i| {
+            // Quarter of the votes should be filtered out
+            let vote = if i % 4 == 0 {
+                VoteStateUpdate::from(vec![(2, 1)])
+            } else {
+                VoteStateUpdate::from(vec![(i as u64, 1)])
+            };
+            new_vote_state_update_transaction(
+                vote,
+                Hash::new_unique(),
+                &keypairs[i % num_voters],
+                &vote_keypairs[i % num_voters],
+                &vote_keypairs[i % num_voters],
+                None,
+            )
+        })
+        .collect()
+}
+
 enum TransactionType {
     Accounts,
     Programs,
+    AccountsAndVotes,
+    ProgramsAndVotes,
 }
 
 fn bench_banking(bencher: &mut Bencher, tx_type: TransactionType) {
@@ -182,8 +213,18 @@ fn bench_banking(bencher: &mut Bencher, tx_type: TransactionType) {
     debug!("threads: {} txs: {}", num_threads, txes);
 
     let transactions = match tx_type {
-        TransactionType::Accounts => make_accounts_txs(txes, &mint_keypair, genesis_config.hash()),
-        TransactionType::Programs => make_programs_txs(txes, genesis_config.hash()),
+        TransactionType::Accounts | TransactionType::AccountsAndVotes => {
+            make_accounts_txs(txes, &mint_keypair, genesis_config.hash())
+        }
+        TransactionType::Programs | TransactionType::ProgramsAndVotes => {
+            make_programs_txs(txes, genesis_config.hash())
+        }
+    };
+    let vote_txs = match tx_type {
+        TransactionType::AccountsAndVotes | TransactionType::ProgramsAndVotes => {
+            Some(make_vote_txs(txes))
+        }
+        _ => None,
     };
 
     // fund all the accounts
@@ -210,6 +251,16 @@ fn bench_banking(bencher: &mut Bencher, tx_type: TransactionType) {
     }
     bank.clear_signatures();
     let verified: Vec<_> = to_packet_batches(&transactions, PACKETS_PER_BATCH);
+    let vote_packets = vote_txs.map(|vote_txs| {
+        let mut packet_batches = to_packet_batches(&vote_txs, PACKETS_PER_BATCH);
+        for batch in packet_batches.iter_mut() {
+            for packet in batch.iter_mut() {
+                packet.meta_mut().set_simple_vote(true);
+            }
+        }
+        packet_batches
+    });
+
     let ledger_path = get_tmp_ledger_path!();
     {
         let blockstore = Arc::new(
@@ -232,7 +283,6 @@ fn bench_banking(bencher: &mut Bencher, tx_type: TransactionType) {
             vote_receiver,
             None,
             s,
-            Arc::new(RwLock::new(CostModel::default())),
             None,
             Arc::new(ConnectionCache::default()),
             bank_forks,
@@ -250,7 +300,14 @@ fn bench_banking(bencher: &mut Bencher, tx_type: TransactionType) {
         bencher.iter(move || {
             let now = Instant::now();
             let mut sent = 0;
-
+            if let Some(vote_packets) = &vote_packets {
+                tpu_vote_sender
+                    .send((vote_packets[start..start + chunk_len].to_vec(), None))
+                    .unwrap();
+                vote_sender
+                    .send((vote_packets[start..start + chunk_len].to_vec(), None))
+                    .unwrap();
+            }
             for v in verified[start..start + chunk_len].chunks(chunk_len / num_threads) {
                 debug!(
                     "sending... {}..{} {} v.len: {}",
@@ -264,6 +321,7 @@ fn bench_banking(bencher: &mut Bencher, tx_type: TransactionType) {
                 }
                 verified_sender.send((v.to_vec(), None)).unwrap();
             }
+
             check_txs(&signal_receiver2, txes / CHUNKS);
 
             // This signature clear may not actually clear the signatures
@@ -279,8 +337,6 @@ fn bench_banking(bencher: &mut Bencher, tx_type: TransactionType) {
             start += chunk_len;
             start %= verified.len();
         });
-        drop(tpu_vote_sender);
-        drop(vote_sender);
         exit.store(true, Ordering::Relaxed);
         poh_service.join().unwrap();
     }
@@ -295,6 +351,16 @@ fn bench_banking_stage_multi_accounts(bencher: &mut Bencher) {
 #[bench]
 fn bench_banking_stage_multi_programs(bencher: &mut Bencher) {
     bench_banking(bencher, TransactionType::Programs);
+}
+
+#[bench]
+fn bench_banking_stage_multi_accounts_with_voting(bencher: &mut Bencher) {
+    bench_banking(bencher, TransactionType::AccountsAndVotes);
+}
+
+#[bench]
+fn bench_banking_stage_multi_programs_with_voting(bencher: &mut Bencher) {
+    bench_banking(bencher, TransactionType::ProgramsAndVotes);
 }
 
 fn simulate_process_entries(

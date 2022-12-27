@@ -56,6 +56,7 @@ use {
     crate::blockstore::{self, MAX_DATA_SHREDS_PER_SLOT},
     bitflags::bitflags,
     num_enum::{IntoPrimitive, TryFromPrimitive},
+    rayon::ThreadPool,
     reed_solomon_erasure::Error::TooFewShardsPresent,
     serde::{Deserialize, Serialize},
     solana_entry::entry::{create_ticks, Entry},
@@ -67,7 +68,7 @@ use {
         signature::{Keypair, Signature, Signer, SIGNATURE_BYTES},
     },
     static_assertions::const_assert_eq,
-    std::fmt::Debug,
+    std::{fmt::Debug, time::Instant},
     thiserror::Error,
 };
 pub use {
@@ -75,7 +76,7 @@ pub use {
         shred_data::ShredData,
         stats::{ProcessShredsStats, ShredFetchStats},
     },
-    crate::shredder::Shredder,
+    crate::shredder::{ReedSolomonCache, Shredder},
 };
 
 mod common;
@@ -134,7 +135,7 @@ pub enum Error {
     #[error("Invalid data size: {size}, payload: {payload}")]
     InvalidDataSize { size: u16, payload: usize },
     #[error("Invalid erasure shard index: {0:?}")]
-    InvalidErasureShardIndex(/*headers:*/ Box<dyn Debug>),
+    InvalidErasureShardIndex(/*headers:*/ Box<dyn Debug + Send>),
     #[error("Invalid merkle proof")]
     InvalidMerkleProof,
     #[error("Invalid num coding shreds: {0}")]
@@ -161,6 +162,8 @@ pub enum Error {
     InvalidShredVariant,
     #[error(transparent)]
     IoError(#[from] std::io::Error),
+    #[error("Unknown proof size")]
+    UnknownProofSize,
 }
 
 #[repr(u8)]
@@ -327,7 +330,7 @@ impl Shred {
         let payload = self.payload();
         let size = payload.len();
         packet.buffer_mut()[..size].copy_from_slice(&payload[..]);
-        packet.meta.size = size;
+        packet.meta_mut().size = size;
     }
 
     // TODO: Should this sanitize output?
@@ -539,7 +542,7 @@ pub mod layout {
 
     fn get_shred_size(packet: &Packet) -> Option<usize> {
         let size = packet.data(..)?.len();
-        if packet.meta.repair() {
+        if packet.meta().repair() {
             size.checked_sub(SIZE_OF_NONCE)
         } else {
             Some(size)
@@ -623,7 +626,7 @@ pub mod layout {
                 merkle::ShredData::get_signed_message_range(proof_size)?
             }
         };
-        (shred.len() <= range.end).then_some(range)
+        (range.end <= shred.len()).then_some(range)
     }
 
     pub(crate) fn get_reference_tick(shred: &[u8]) -> Result<u8, Error> {
@@ -714,25 +717,65 @@ impl TryFrom<u8> for ShredVariant {
     }
 }
 
-pub(crate) fn recover(shreds: Vec<Shred>) -> Result<Vec<Shred>, Error> {
+pub(crate) fn recover(
+    shreds: Vec<Shred>,
+    reed_solomon_cache: &ReedSolomonCache,
+) -> Result<Vec<Shred>, Error> {
     match shreds
         .first()
         .ok_or(TooFewShardsPresent)?
         .common_header()
         .shred_variant
     {
-        ShredVariant::LegacyData | ShredVariant::LegacyCode => Shredder::try_recovery(shreds),
+        ShredVariant::LegacyData | ShredVariant::LegacyCode => {
+            Shredder::try_recovery(shreds, reed_solomon_cache)
+        }
         ShredVariant::MerkleCode(_) | ShredVariant::MerkleData(_) => {
             let shreds = shreds
                 .into_iter()
                 .map(merkle::Shred::try_from)
                 .collect::<Result<_, _>>()?;
-            Ok(merkle::recover(shreds)?
+            Ok(merkle::recover(shreds, reed_solomon_cache)?
                 .into_iter()
                 .map(Shred::from)
                 .collect())
         }
     }
+}
+
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn make_merkle_shreds_from_entries(
+    thread_pool: &ThreadPool,
+    keypair: &Keypair,
+    entries: &[Entry],
+    slot: Slot,
+    parent_slot: Slot,
+    shred_version: u16,
+    reference_tick: u8,
+    is_last_in_slot: bool,
+    next_shred_index: u32,
+    next_code_index: u32,
+    reed_solomon_cache: &ReedSolomonCache,
+    stats: &mut ProcessShredsStats,
+) -> Result<Vec<Shred>, Error> {
+    let now = Instant::now();
+    let entries = bincode::serialize(entries)?;
+    stats.serialize_elapsed += now.elapsed().as_micros() as u64;
+    let shreds = merkle::make_shreds_from_data(
+        thread_pool,
+        keypair,
+        &entries[..],
+        slot,
+        parent_slot,
+        shred_version,
+        reference_tick,
+        is_last_in_slot,
+        next_shred_index,
+        next_code_index,
+        reed_solomon_cache,
+        stats,
+    )?;
+    Ok(shreds.into_iter().flatten().map(Shred::from).collect())
 }
 
 // Accepts shreds in the slot range [root + 1, max_slot].
@@ -1023,7 +1066,7 @@ mod tests {
         ));
         assert_eq!(stats, ShredFetchStats::default());
 
-        packet.meta.size = OFFSET_OF_SHRED_VARIANT;
+        packet.meta_mut().size = OFFSET_OF_SHRED_VARIANT;
         assert!(should_discard_shred(
             &packet,
             root,
@@ -1033,7 +1076,7 @@ mod tests {
         ));
         assert_eq!(stats.index_overrun, 1);
 
-        packet.meta.size = OFFSET_OF_SHRED_INDEX;
+        packet.meta_mut().size = OFFSET_OF_SHRED_INDEX;
         assert!(should_discard_shred(
             &packet,
             root,
@@ -1043,7 +1086,7 @@ mod tests {
         ));
         assert_eq!(stats.index_overrun, 2);
 
-        packet.meta.size = OFFSET_OF_SHRED_INDEX + 1;
+        packet.meta_mut().size = OFFSET_OF_SHRED_INDEX + 1;
         assert!(should_discard_shred(
             &packet,
             root,
@@ -1053,7 +1096,7 @@ mod tests {
         ));
         assert_eq!(stats.index_overrun, 3);
 
-        packet.meta.size = OFFSET_OF_SHRED_INDEX + SIZE_OF_SHRED_INDEX - 1;
+        packet.meta_mut().size = OFFSET_OF_SHRED_INDEX + SIZE_OF_SHRED_INDEX - 1;
         assert!(should_discard_shred(
             &packet,
             root,
@@ -1063,7 +1106,7 @@ mod tests {
         ));
         assert_eq!(stats.index_overrun, 4);
 
-        packet.meta.size = OFFSET_OF_SHRED_INDEX + SIZE_OF_SHRED_INDEX + 2;
+        packet.meta_mut().size = OFFSET_OF_SHRED_INDEX + SIZE_OF_SHRED_INDEX + 2;
         assert!(should_discard_shred(
             &packet,
             root,
@@ -1376,7 +1419,7 @@ mod tests {
         });
         let mut packet = Packet::default();
         packet.buffer_mut()[..payload.len()].copy_from_slice(&payload);
-        packet.meta.size = payload.len();
+        packet.meta_mut().size = payload.len();
         assert_eq!(shred.bytes_to_store(), payload);
         assert_eq!(shred, Shred::new_from_serialized_shred(payload).unwrap());
         verify_shred_layout(&shred, &packet);
@@ -1409,7 +1452,7 @@ mod tests {
         let payload = bs58_decode(PAYLOAD);
         let mut packet = Packet::default();
         packet.buffer_mut()[..payload.len()].copy_from_slice(&payload);
-        packet.meta.size = payload.len();
+        packet.meta_mut().size = payload.len();
         assert_eq!(shred.bytes_to_store(), payload);
         assert_eq!(shred, Shred::new_from_serialized_shred(payload).unwrap());
         verify_shred_layout(&shred, &packet);
@@ -1449,7 +1492,7 @@ mod tests {
         });
         let mut packet = Packet::default();
         packet.buffer_mut()[..payload.len()].copy_from_slice(&payload);
-        packet.meta.size = payload.len();
+        packet.meta_mut().size = payload.len();
         assert_eq!(shred.bytes_to_store(), payload);
         assert_eq!(shred, Shred::new_from_serialized_shred(payload).unwrap());
         verify_shred_layout(&shred, &packet);

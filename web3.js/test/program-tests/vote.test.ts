@@ -11,6 +11,7 @@ import {
   sendAndConfirmTransaction,
   SystemInstruction,
   Connection,
+  PublicKey,
 } from '../../src';
 import {helpers} from '../mocks/rpc-http';
 import {url} from '../url';
@@ -96,6 +97,29 @@ describe('VoteProgram', () => {
     );
   });
 
+  it('authorize with seed', () => {
+    const votePubkey = Keypair.generate().publicKey;
+    const currentAuthorityDerivedKeyBasePubkey = Keypair.generate().publicKey;
+    const currentAuthorityDerivedKeyOwnerPubkey = Keypair.generate().publicKey;
+    const currentAuthorityDerivedKeySeed = 'sunflower';
+    const newAuthorizedPubkey = Keypair.generate().publicKey;
+    const voteAuthorizationType = VoteAuthorizationLayout.Voter;
+    const params = {
+      currentAuthorityDerivedKeyBasePubkey,
+      currentAuthorityDerivedKeyOwnerPubkey,
+      currentAuthorityDerivedKeySeed,
+      newAuthorizedPubkey,
+      voteAuthorizationType,
+      votePubkey,
+    };
+    const transaction = VoteProgram.authorizeWithSeed(params);
+    expect(transaction.instructions).to.have.length(1);
+    const [authorizeWithSeedInstruction] = transaction.instructions;
+    expect(params).to.eql(
+      VoteInstruction.decodeAuthorizeWithSeed(authorizeWithSeedInstruction),
+    );
+  });
+
   it('withdraw', () => {
     const votePubkey = Keypair.generate().publicKey;
     const authorizedWithdrawerPubkey = Keypair.generate().publicKey;
@@ -113,6 +137,107 @@ describe('VoteProgram', () => {
   });
 
   if (process.env.TEST_LIVE) {
+    it('change authority from derived key', async () => {
+      const connection = new Connection(url, 'confirmed');
+
+      const newVoteAccount = Keypair.generate();
+      const nodeAccount = Keypair.generate();
+      const derivedKeyOwnerProgram = Keypair.generate();
+      const derivedKeySeed = 'sunflower';
+      const newAuthorizedWithdrawer = Keypair.generate();
+
+      const derivedKeyBaseKeypair = Keypair.generate();
+      const [
+        _1, // eslint-disable-line @typescript-eslint/no-unused-vars
+        _2, // eslint-disable-line @typescript-eslint/no-unused-vars
+        minimumAmount,
+        derivedKey,
+      ] = await Promise.all([
+        (async () => {
+          await helpers.airdrop({
+            connection,
+            address: derivedKeyBaseKeypair.publicKey,
+            amount: 12 * LAMPORTS_PER_SOL,
+          });
+          expect(
+            await connection.getBalance(derivedKeyBaseKeypair.publicKey),
+          ).to.eq(12 * LAMPORTS_PER_SOL);
+        })(),
+        (async () => {
+          await helpers.airdrop({
+            connection,
+            address: newAuthorizedWithdrawer.publicKey,
+            amount: 0.1 * LAMPORTS_PER_SOL,
+          });
+          expect(
+            await connection.getBalance(newAuthorizedWithdrawer.publicKey),
+          ).to.eq(0.1 * LAMPORTS_PER_SOL);
+        })(),
+        connection.getMinimumBalanceForRentExemption(VoteProgram.space),
+        PublicKey.createWithSeed(
+          derivedKeyBaseKeypair.publicKey,
+          derivedKeySeed,
+          derivedKeyOwnerProgram.publicKey,
+        ),
+      ]);
+
+      // Create initialized Vote account
+      const createAndInitialize = VoteProgram.createAccount({
+        fromPubkey: derivedKeyBaseKeypair.publicKey,
+        votePubkey: newVoteAccount.publicKey,
+        voteInit: new VoteInit(
+          nodeAccount.publicKey,
+          derivedKey,
+          derivedKey,
+          5,
+        ),
+        lamports: minimumAmount + 10 * LAMPORTS_PER_SOL,
+      });
+      await sendAndConfirmTransaction(
+        connection,
+        createAndInitialize,
+        [derivedKeyBaseKeypair, newVoteAccount, nodeAccount],
+        {preflightCommitment: 'confirmed'},
+      );
+      expect(await connection.getBalance(newVoteAccount.publicKey)).to.eq(
+        minimumAmount + 10 * LAMPORTS_PER_SOL,
+      );
+
+      // Authorize a new Withdrawer.
+      const authorize = VoteProgram.authorizeWithSeed({
+        currentAuthorityDerivedKeyBasePubkey: derivedKeyBaseKeypair.publicKey,
+        currentAuthorityDerivedKeyOwnerPubkey: derivedKeyOwnerProgram.publicKey,
+        currentAuthorityDerivedKeySeed: derivedKeySeed,
+        newAuthorizedPubkey: newAuthorizedWithdrawer.publicKey,
+        voteAuthorizationType: VoteAuthorizationLayout.Withdrawer,
+        votePubkey: newVoteAccount.publicKey,
+      });
+      await sendAndConfirmTransaction(
+        connection,
+        authorize,
+        [derivedKeyBaseKeypair],
+        {preflightCommitment: 'confirmed'},
+      );
+
+      // Test newAuthorizedWithdrawer may withdraw.
+      const recipient = Keypair.generate();
+      const withdraw = VoteProgram.withdraw({
+        votePubkey: newVoteAccount.publicKey,
+        authorizedWithdrawerPubkey: newAuthorizedWithdrawer.publicKey,
+        lamports: LAMPORTS_PER_SOL,
+        toPubkey: recipient.publicKey,
+      });
+      await sendAndConfirmTransaction(
+        connection,
+        withdraw,
+        [newAuthorizedWithdrawer],
+        {preflightCommitment: 'confirmed'},
+      );
+      expect(await connection.getBalance(recipient.publicKey)).to.eq(
+        LAMPORTS_PER_SOL,
+      );
+    });
+
     it('live vote actions', async () => {
       const connection = new Connection(url, 'confirmed');
 

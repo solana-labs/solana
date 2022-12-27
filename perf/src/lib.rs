@@ -27,7 +27,7 @@ fn is_rosetta_emulated() -> bool {
     {
         use std::str::FromStr;
         std::process::Command::new("sysctl")
-            .args(&["-in", "sysctl.proc_translated"])
+            .args(["-in", "sysctl.proc_translated"])
             .output()
             .map_err(|_| ())
             .and_then(|output| String::from_utf8(output.stdout).map_err(|_| ()))

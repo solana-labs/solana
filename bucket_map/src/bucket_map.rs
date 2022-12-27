@@ -105,8 +105,8 @@ impl<T: Clone + Copy + Debug> BucketMap<T> {
 
     fn erase_previous_drives(drives: &[PathBuf]) {
         drives.iter().for_each(|folder| {
-            let _ = fs::remove_dir_all(&folder);
-            let _ = fs::create_dir_all(&folder);
+            let _ = fs::remove_dir_all(folder);
+            let _ = fs::create_dir_all(folder);
         })
     }
 
@@ -468,7 +468,7 @@ mod tests {
                             map.insert(&k, (&v, rc))
                         } else {
                             map.update(&k, |current| {
-                                assert_eq!(current, v_old.map(|(v, rc)| (&v[..], *rc)), "{}", k);
+                                assert_eq!(current, v_old.map(|(v, rc)| (&v[..], *rc)), "{k}");
                                 Some((v.clone(), rc))
                             })
                         }

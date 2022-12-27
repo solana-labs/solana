@@ -77,13 +77,6 @@ impl Blockstore {
 
     pub fn purge_and_compact_slots(&self, from_slot: Slot, to_slot: Slot) {
         self.purge_slots(from_slot, to_slot, PurgeType::Exact);
-        if let Err(e) = self.compact_storage(from_slot, to_slot) {
-            // This error is not fatal and indicates an internal error?
-            error!(
-                "Error: {:?}; Couldn't compact storage from {:?} to {:?}",
-                e, from_slot, to_slot
-            );
-        }
     }
 
     /// Ensures that the SlotMeta::next_slots vector for all slots contain no references in the
@@ -344,97 +337,6 @@ impl Blockstore {
                 .db
                 .delete_file_in_range_cf::<cf::OptimisticSlots>(from_slot, to_slot)
                 .is_ok()
-    }
-
-    pub fn compact_storage(&self, from_slot: Slot, to_slot: Slot) -> Result<bool> {
-        if self.no_compaction {
-            info!("compact_storage: compaction disabled");
-            return Ok(false);
-        }
-        info!("compact_storage: from {} to {}", from_slot, to_slot);
-        let mut compact_timer = Measure::start("compact_range");
-        let result = self
-            .meta_cf
-            .compact_range(from_slot, to_slot)
-            .unwrap_or(false)
-            && self
-                .db
-                .column::<cf::Root>()
-                .compact_range(from_slot, to_slot)
-                .unwrap_or(false)
-            && self
-                .data_shred_cf
-                .compact_range(from_slot, to_slot)
-                .unwrap_or(false)
-            && self
-                .code_shred_cf
-                .compact_range(from_slot, to_slot)
-                .unwrap_or(false)
-            && self
-                .dead_slots_cf
-                .compact_range(from_slot, to_slot)
-                .unwrap_or(false)
-            && self
-                .duplicate_slots_cf
-                .compact_range(from_slot, to_slot)
-                .unwrap_or(false)
-            && self
-                .erasure_meta_cf
-                .compact_range(from_slot, to_slot)
-                .unwrap_or(false)
-            && self
-                .orphans_cf
-                .compact_range(from_slot, to_slot)
-                .unwrap_or(false)
-            && self
-                .bank_hash_cf
-                .compact_range(from_slot, to_slot)
-                .unwrap_or(false)
-            && self
-                .index_cf
-                .compact_range(from_slot, to_slot)
-                .unwrap_or(false)
-            && self
-                .transaction_status_cf
-                .compact_range(0, 2)
-                .unwrap_or(false)
-            && self
-                .address_signatures_cf
-                .compact_range(0, 2)
-                .unwrap_or(false)
-            && self
-                .transaction_status_index_cf
-                .compact_range(0, 2)
-                .unwrap_or(false)
-            && self
-                .rewards_cf
-                .compact_range(from_slot, to_slot)
-                .unwrap_or(false)
-            && self
-                .blocktime_cf
-                .compact_range(from_slot, to_slot)
-                .unwrap_or(false)
-            && self
-                .perf_samples_cf
-                .compact_range(from_slot, to_slot)
-                .unwrap_or(false)
-            && self
-                .block_height_cf
-                .compact_range(from_slot, to_slot)
-                .unwrap_or(false)
-            && self
-                .optimistic_slots_cf
-                .compact_range(from_slot, to_slot)
-                .unwrap_or(false);
-        compact_timer.stop();
-        if !result {
-            info!("compact_storage incomplete");
-        }
-        datapoint_info!(
-            "blockstore-compact",
-            ("compact_range_us", compact_timer.as_us() as i64, i64),
-        );
-        Ok(result)
     }
 
     /// Purges special columns (using a non-Slot primary-index) exactly, by
@@ -803,7 +705,14 @@ pub mod tests {
 
         for x in 0..index0_max_slot + 1 {
             let entries = make_slot_entries_with_transactions(1);
-            let shreds = entries_to_test_shreds(&entries, x, x.saturating_sub(1), true, 0);
+            let shreds = entries_to_test_shreds(
+                &entries,
+                x,                   // slot
+                x.saturating_sub(1), // parent_slot
+                true,                // is_full_slot
+                0,                   // version
+                true,                // merkle_variant
+            );
             blockstore.insert_shreds(shreds, None, false).unwrap();
             let signature = entries
                 .iter()
@@ -839,7 +748,14 @@ pub mod tests {
 
         for x in index0_max_slot + 1..index1_max_slot + 1 {
             let entries = make_slot_entries_with_transactions(1);
-            let shreds = entries_to_test_shreds(&entries, x, x.saturating_sub(1), true, 0);
+            let shreds = entries_to_test_shreds(
+                &entries,
+                x,                   // slot
+                x.saturating_sub(1), // parent_slot
+                true,                // is_full_slot
+                0,                   // version
+                true,                // merkle_variant
+            );
             blockstore.insert_shreds(shreds, None, false).unwrap();
             let signature: Signature = entries
                 .iter()
@@ -1239,7 +1155,14 @@ pub mod tests {
             let mut tick = create_ticks(1, 0, hash(&serialize(&x).unwrap()));
             entries.append(&mut tick);
         }
-        let shreds = entries_to_test_shreds(&entries, slot, slot - 1, true, 0);
+        let shreds = entries_to_test_shreds(
+            &entries,
+            slot,
+            slot - 1, // parent_slot
+            true,     // is_full_slot
+            0,        // version
+            true,     // merkle_variant
+        );
         blockstore.insert_shreds(shreds, None, false).unwrap();
 
         let mut write_batch = blockstore.db.batch().unwrap();

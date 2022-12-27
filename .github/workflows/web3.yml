@@ -5,10 +5,12 @@ on:
     branches: [ master ]
     paths:
       - "web3.js/**"
+      - ".github/workflows/web3.yml"
   pull_request:
     branches: [ master ]
     paths:
       - "web3.js/**"
+      - ".github/workflows/web3.yml"
 
 jobs:
   # needed for grouping check-web3 strategies into one check for mergify
@@ -30,11 +32,11 @@ jobs:
         working-directory: web3.js
 
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
         with:
           # maybe needed for base sha below
           fetch-depth: 0
-      - uses: actions/setup-node@v2
+      - uses: actions/setup-node@v3
         with:
           node-version: '16'
           cache: 'npm'
@@ -55,17 +57,17 @@ jobs:
 
     strategy:
       matrix:
-        node: [ '12', '14', '16' ]
+        node:
+          - '14'
+          - '16'
 
     name: Node ${{ matrix.node }}
     steps:
-      - uses: actions/checkout@v2
-      - uses: actions/setup-node@v2
+      - uses: actions/checkout@v3
+      - uses: actions/setup-node@v3
         with:
           node-version: ${{ matrix.node }}
           cache: 'npm'
           cache-dependency-path: web3.js/package-lock.json
       - run: |
-          source .travis/before_install.sh
-          npm install
-          source .travis/script.sh
+          scripts/test.sh

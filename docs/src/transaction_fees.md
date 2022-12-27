@@ -19,24 +19,22 @@ Transaction fees offer many benefits in the Solana [economic design](#basic-econ
 
 - they provide compensation to the validator network for the CPU/GPU resources necessary to process transactions,
 - reduce network spam by introducing real cost to transactions,
-- and provide potential long-term economic stability of the network through a protocol-captured minimum fee amount per transaction
+- and provide long-term economic stability to the network through a protocol-captured minimum fee amount per transaction
 
 > **NOTE:** Network consensus votes are sent as normal system transfers, which means that validators pay transaction fees to participate in consensus.
 
 ## Basic economic design
 
-Many current blockchain economies \(e.g. Bitcoin, Ethereum\), rely on _protocol-based rewards_ to support the economy in the short term. And when the protocol derived rewards expire, predict that the revenue generated through _transaction fees_ will support the economy in the long term.
+Many blockchain networks \(e.g. Bitcoin and Ethereum\), rely on inflationary _protocol-based rewards_ to secure the network in the short-term. Over the long-term, these networks will increasingly rely on _transaction fees_ to sustain security.
 
-In an attempt to create a sustainable economy on Solana through _protocol-based rewards_ and _transaction fees_:
+The same is true on Solana. Specifically:
 
-- a fixed portion (initially 50%) of each transaction fee is _burned_ (aka destroyed),
-- with the remaining fee going to the current [leader](./terminology.md#leader) processing the transaction.
-
-A scheduled global inflation rate provides a source for [rewards](./implemented-proposals/staking-rewards.md) distributed to [Solana Validators](../src/running-validator.md).
+- A fixed proportion (initially 50%) of each transaction fee is _burned_ (destroyed), with the remaining going to the current [leader](./terminology.md#leader) processing the transaction.
+- A scheduled global inflation rate provides a source for [rewards](./implemented-proposals/staking-rewards.md) distributed to [Solana Validators](../src/running-validator.md).
 
 ### Why burn some fees?
 
-As mentioned above, a fixed proportion of each transaction fee is _burned_ (aka destroyed). The intent of this design is to retain leader incentive to include as many transactions as possible within the leader-slot time. While still providing an inflation limiting mechanism that protects against "tax evasion" attacks \(i.e. side-channel fee payments\).
+As mentioned above, a fixed proportion of each transaction fee is _burned_ (destroyed). This is intended to cement the economic value of SOL and thus sustain the network's security. Unlike a scheme where transactions fees are completely burned, leaders are still incentivized to include as many transactions as possible in their slots.
 
 Burnt fees can also help prevent malicious validators from censoring transactions by being considered in [fork](./terminology.md#fork) selection.
 
@@ -44,7 +42,7 @@ Burnt fees can also help prevent malicious validators from censoring transaction
 
 In the case of a [Proof of History (PoH)](./terminology.md#proof-of-history-poh) fork with a malicious, censoring leader:
 
-- due to the fees lost from censoring, we would expect the total fees destroyed to be **_less than_** a comparable honest fork
+- due to the fees lost from censoring, we would expect the total fees burned to be **_less than_** a comparable honest fork
 - if the censoring leader is to compensate for these lost protocol fees, they would have to replace the burnt fees on their fork themselves
 - thus potentially reducing the incentive to censor in the first place
 
@@ -57,7 +55,7 @@ Transactions fees are calculated based on two main parts:
 
 Since each transaction may require a different amount of computational resources, they are alloted a maximum number of _compute units_ per transaction known as the "[_compute budget_](./terminology.md#compute-budget)".
 
-The execution of each instruction within a transactions consumes a different number of _compute units_. After the maximum number of _computer units_ has been consumed (aka compute budget exhaustion), the runtime will halt the transaction and return an error. Resulting in a failed transaction.
+The execution of each instruction within a transaction consumes a different number of _compute units_. After the maximum number of _compute units_ has been consumed (aka compute budget exhaustion), the runtime will halt the transaction and return an error. This results in a failed transaction.
 
 > **Learn more:** compute units and the [Compute Budget](./developing/programming-model/runtime#compute-budget) in the Runtime and [requesting a fee estimate](./developing/clients/jsonrpc-api.md#getfeeformessage) from the RPC.
 

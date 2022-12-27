@@ -106,7 +106,7 @@ fn lockup_epoch_arg<'a, 'b>() -> Arg<'a, 'b> {
         .long("lockup-epoch")
         .takes_value(true)
         .value_name("NUMBER")
-        .help("The epoch height at which each account will be available for withdrawl")
+        .help("The epoch height at which each account will be available for withdrawal")
 }
 
 fn lockup_date_arg<'a, 'b>() -> Arg<'a, 'b> {
@@ -115,7 +115,7 @@ fn lockup_date_arg<'a, 'b>() -> Arg<'a, 'b> {
         .value_name("RFC3339 DATETIME")
         .validator(is_rfc3339_datetime)
         .takes_value(true)
-        .help("The date and time at which each account will be available for withdrawl")
+        .help("The date and time at which each account will be available for withdrawal")
 }
 
 fn num_accounts_arg<'a, 'b>() -> Arg<'a, 'b> {

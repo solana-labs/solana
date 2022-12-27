@@ -1,19 +1,32 @@
 /* eslint-disable @typescript-eslint/no-redeclare */
 
-import { enums, nullable, number, type, string, Infer } from "superstruct";
+import { enums, number, type, string, Infer, optional } from "superstruct";
 import { PublicKeyFromString } from "validators/pubkey";
-
-export type WriteInfo = Infer<typeof WriteInfo>;
-export const WriteInfo = type({
-  account: PublicKeyFromString,
-  authority: PublicKeyFromString,
-  bytes: string(),
-  offset: number(),
-});
 
 export type InitializeBufferInfo = Infer<typeof InitializeBufferInfo>;
 export const InitializeBufferInfo = type({
   account: PublicKeyFromString,
+  authority: PublicKeyFromString,
+});
+
+export type WriteInfo = Infer<typeof WriteInfo>;
+export const WriteInfo = type({
+  offset: number(),
+  bytes: string(),
+  account: PublicKeyFromString,
+  authority: PublicKeyFromString,
+});
+
+export type DeployWithMaxDataLenInfo = Infer<typeof DeployWithMaxDataLenInfo>;
+export const DeployWithMaxDataLenInfo = type({
+  maxDataLen: number(),
+  payerAccount: PublicKeyFromString,
+  programDataAccount: PublicKeyFromString,
+  programAccount: PublicKeyFromString,
+  bufferAccount: PublicKeyFromString,
+  rentSysvar: PublicKeyFromString,
+  clockSysvar: PublicKeyFromString,
+  systemProgram: PublicKeyFromString,
   authority: PublicKeyFromString,
 });
 
@@ -23,29 +36,33 @@ export const UpgradeInfo = type({
   programAccount: PublicKeyFromString,
   bufferAccount: PublicKeyFromString,
   spillAccount: PublicKeyFromString,
-  authority: PublicKeyFromString,
   rentSysvar: PublicKeyFromString,
   clockSysvar: PublicKeyFromString,
+  authority: PublicKeyFromString,
 });
 
 export type SetAuthorityInfo = Infer<typeof SetAuthorityInfo>;
 export const SetAuthorityInfo = type({
   account: PublicKeyFromString,
   authority: PublicKeyFromString,
-  newAuthority: nullable(PublicKeyFromString),
+  newAuthority: optional(PublicKeyFromString),
 });
 
-export type DeployWithMaxDataLenInfo = Infer<typeof DeployWithMaxDataLenInfo>;
-export const DeployWithMaxDataLenInfo = type({
+export type CloseInfo = Infer<typeof CloseInfo>;
+export const CloseInfo = type({
+  account: PublicKeyFromString,
+  recipient: PublicKeyFromString,
+  authority: PublicKeyFromString,
+  programAccount: optional(PublicKeyFromString),
+});
+
+export type ExtendProgramInfo = Infer<typeof ExtendProgramInfo>;
+export const ExtendProgramInfo = type({
+  additionalBytes: number(),
   programDataAccount: PublicKeyFromString,
   programAccount: PublicKeyFromString,
-  payerAccount: PublicKeyFromString,
-  bufferAccount: PublicKeyFromString,
-  authority: PublicKeyFromString,
-  rentSysvar: PublicKeyFromString,
-  clockSysvar: PublicKeyFromString,
-  systemProgram: PublicKeyFromString,
-  maxDataLen: number(),
+  systemProgram: optional(PublicKeyFromString),
+  payerAccount: optional(PublicKeyFromString),
 });
 
 export type UpgradeableBpfLoaderInstructionType = Infer<
@@ -53,8 +70,10 @@ export type UpgradeableBpfLoaderInstructionType = Infer<
 >;
 export const UpgradeableBpfLoaderInstructionType = enums([
   "initializeBuffer",
-  "deployWithMaxDataLen",
-  "setAuthority",
   "write",
-  "finalize",
+  "deployWithMaxDataLen",
+  "upgrade",
+  "setAuthority",
+  "close",
+  "extendProgram",
 ]);

@@ -5,12 +5,14 @@ use {
             AccountShrinkThreshold, AccountStorageEntry, AccountsDb, AccountsDbConfig, AppendVecId,
             AtomicAppendVecId, BankHashInfo, IndexGenerationInfo, SnapshotStorage,
         },
+        accounts_hash::AccountsHash,
         accounts_index::AccountSecondaryIndexes,
         accounts_update_notifier_interface::AccountsUpdateNotifier,
         append_vec::{AppendVec, StoredMetaWriteVersion},
         bank::{Bank, BankFieldsToDeserialize, BankIncrementalSnapshotPersistence, BankRc},
         blockhash_queue::BlockhashQueue,
         builtins::Builtins,
+        epoch_accounts_hash::EpochAccountsHash,
         epoch_stakes::EpochStakes,
         rent_collector::RentCollector,
         runtime_config::RuntimeConfig,
@@ -39,7 +41,7 @@ use {
         path::{Path, PathBuf},
         result::Result,
         sync::{
-            atomic::{AtomicUsize, Ordering},
+            atomic::{AtomicBool, AtomicUsize, Ordering},
             Arc,
         },
         thread::Builder,
@@ -64,7 +66,7 @@ pub(crate) enum SerdeStyle {
 
 const MAX_STREAM_SIZE: u64 = 32 * 1024 * 1024 * 1024;
 
-#[derive(Clone, Debug, Default, Deserialize, Serialize, AbiExample, PartialEq, Eq)]
+#[derive(Clone, Debug, Deserialize, Serialize, AbiExample, PartialEq, Eq)]
 pub struct AccountsDbFields<T>(
     HashMap<Slot, Vec<T>>,
     StoredMetaWriteVersion,
@@ -191,7 +193,7 @@ trait TypeContext<'a>: PartialEq {
     fn reserialize_bank_fields_with_hash<R, W>(
         stream_reader: &mut BufReader<R>,
         stream_writer: &mut BufWriter<W>,
-        accounts_hash: &Hash,
+        accounts_hash: &AccountsHash,
         incremental_snapshot_persistence: Option<&BankIncrementalSnapshotPersistence>,
     ) -> std::result::Result<(), Box<bincode::ErrorKind>>
     where
@@ -315,6 +317,7 @@ pub(crate) fn bank_from_streams<R>(
     verify_index: bool,
     accounts_db_config: Option<AccountsDbConfig>,
     accounts_update_notifier: Option<AccountsUpdateNotifier>,
+    exit: &Arc<AtomicBool>,
 ) -> std::result::Result<Bank, Error>
 where
     R: Read,
@@ -336,6 +339,7 @@ where
         verify_index,
         accounts_db_config,
         accounts_update_notifier,
+        exit,
     )
 }
 
@@ -388,7 +392,7 @@ where
 fn reserialize_bank_fields_with_new_hash<W, R>(
     stream_reader: &mut BufReader<R>,
     stream_writer: &mut BufWriter<W>,
-    accounts_hash: &Hash,
+    accounts_hash: &AccountsHash,
     incremental_snapshot_persistence: Option<&BankIncrementalSnapshotPersistence>,
 ) -> Result<(), Error>
 where
@@ -411,7 +415,7 @@ where
 pub fn reserialize_bank_with_new_accounts_hash(
     bank_snapshots_dir: impl AsRef<Path>,
     slot: Slot,
-    accounts_hash: &Hash,
+    accounts_hash: &AccountsHash,
     incremental_snapshot_persistence: Option<&BankIncrementalSnapshotPersistence>,
 ) -> bool {
     let bank_post = snapshot_utils::get_bank_snapshots_dir(bank_snapshots_dir, slot);
@@ -525,6 +529,7 @@ fn reconstruct_bank_from_fields<E>(
     verify_index: bool,
     accounts_db_config: Option<AccountsDbConfig>,
     accounts_update_notifier: Option<AccountsUpdateNotifier>,
+    exit: &Arc<AtomicBool>,
 ) -> Result<Bank, Error>
 where
     E: SerializableStorage + std::marker::Sync,
@@ -541,6 +546,8 @@ where
         verify_index,
         accounts_db_config,
         accounts_update_notifier,
+        exit,
+        bank_fields.epoch_accounts_hash,
     )?;
 
     let bank_rc = BankRc::new(Accounts::new_empty(accounts_db), bank_fields.slot);
@@ -591,7 +598,7 @@ fn remap_append_vec_file(
     let (remapped_append_vec_id, remapped_append_vec_path) = loop {
         let remapped_append_vec_id = next_append_vec_id.fetch_add(1, Ordering::AcqRel);
         let remapped_file_name = AppendVec::file_name(slot, remapped_append_vec_id);
-        let remapped_append_vec_path = append_vec_path.parent().unwrap().join(&remapped_file_name);
+        let remapped_append_vec_path = append_vec_path.parent().unwrap().join(remapped_file_name);
 
         // Break out of the loop in the following situations:
         // 1. The new ID is the same as the original ID.  This means we do not need to
@@ -661,6 +668,8 @@ fn reconstruct_accountsdb_from_fields<E>(
     verify_index: bool,
     accounts_db_config: Option<AccountsDbConfig>,
     accounts_update_notifier: Option<AccountsUpdateNotifier>,
+    exit: &Arc<AtomicBool>,
+    epoch_accounts_hash: Option<Hash>,
 ) -> Result<(AccountsDb, ReconstructedAccountsDbInfo), Error>
 where
     E: SerializableStorage + std::marker::Sync,
@@ -673,7 +682,14 @@ where
         shrink_ratio,
         accounts_db_config,
         accounts_update_notifier,
+        exit,
     );
+
+    if let Some(epoch_accounts_hash) = epoch_accounts_hash {
+        accounts_db
+            .epoch_accounts_hash_manager
+            .set_valid(EpochAccountsHash::new(epoch_accounts_hash), 0);
+    }
 
     let AccountsDbFields(
         _snapshot_storages,
@@ -714,8 +730,7 @@ where
     let max_append_vec_id = next_append_vec_id - 1;
     assert!(
         max_append_vec_id <= AppendVecId::MAX / 2,
-        "Storage id {} larger than allowed max",
-        max_append_vec_id
+        "Storage id {max_append_vec_id} larger than allowed max"
     );
 
     // Process deserialized data, set necessary fields in self

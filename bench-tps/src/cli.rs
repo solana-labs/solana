@@ -1,4 +1,5 @@
 use {
+    crate::spl_convert::FromOtherSolana,
     clap::{crate_description, crate_name, App, Arg, ArgMatches},
     solana_clap_utils::input_validators::{is_url, is_url_or_moniker},
     solana_cli_config::{ConfigInput, CONFIG_FILE},
@@ -7,7 +8,9 @@ use {
         pubkey::Pubkey,
         signature::{read_keypair_file, Keypair},
     },
-    solana_tpu_client::connection_cache::{DEFAULT_TPU_CONNECTION_POOL_SIZE, DEFAULT_TPU_USE_QUIC},
+    solana_tpu_client::tpu_connection_cache::{
+        DEFAULT_TPU_CONNECTION_POOL_SIZE, DEFAULT_TPU_USE_QUIC,
+    },
     std::{net::SocketAddr, process::exit, time::Duration},
 };
 
@@ -28,6 +31,11 @@ impl Default for ExternalClientType {
     fn default() -> Self {
         Self::ThinClient
     }
+}
+
+pub struct InstructionPaddingConfig {
+    pub program_id: Pubkey,
+    pub data_size: u32,
 }
 
 /// Holds the configuration for a single run of the benchmark
@@ -56,6 +64,7 @@ pub struct Config {
     pub tpu_connection_pool_size: usize,
     pub use_randomized_compute_unit_price: bool,
     pub use_durable_nonce: bool,
+    pub instruction_padding_config: Option<InstructionPaddingConfig>,
 }
 
 impl Default for Config {
@@ -85,6 +94,7 @@ impl Default for Config {
             tpu_connection_pool_size: DEFAULT_TPU_CONNECTION_POOL_SIZE,
             use_randomized_compute_unit_price: false,
             use_durable_nonce: false,
+            instruction_padding_config: None,
         }
     }
 }
@@ -318,6 +328,20 @@ pub fn build_args<'a, 'b>(version: &'b str) -> App<'a, 'b> {
                 .long("use-durable-nonce")
                 .help("Use durable transaction nonce instead of recent blockhash"),
         )
+        .arg(
+            Arg::with_name("instruction_padding_program_id")
+                .long("instruction-padding-program-id")
+                .requires("instruction_padding_data_size")
+                .takes_value(true)
+                .value_name("PUBKEY")
+                .help("If instruction data is padded, optionally specify the padding program id to target"),
+        )
+        .arg(
+            Arg::with_name("instruction_padding_data_size")
+                .long("instruction-padding-data-size")
+                .takes_value(true)
+                .help("If set, wraps all instructions in the instruction padding program, with the given amount of padding bytes in instruction data."),
+        )
 }
 
 /// Parses a clap `ArgMatches` structure into a `Config`
@@ -376,7 +400,7 @@ pub fn extract_args(matches: &ArgMatches) -> Config {
 
     if let Some(addr) = matches.value_of("entrypoint") {
         args.entrypoint_addr = solana_net_utils::parse_host_port(addr).unwrap_or_else(|e| {
-            eprintln!("failed to parse entrypoint address: {}", e);
+            eprintln!("failed to parse entrypoint address: {e}");
             exit(1)
         });
     }
@@ -454,6 +478,20 @@ pub fn extract_args(matches: &ArgMatches) -> Config {
 
     if matches.is_present("use_durable_nonce") {
         args.use_durable_nonce = true;
+    }
+
+    if let Some(data_size) = matches.value_of("instruction_padding_data_size") {
+        let program_id = matches
+            .value_of("instruction_padding_program_id")
+            .map(|target_str| target_str.parse().unwrap())
+            .unwrap_or_else(|| FromOtherSolana::from(spl_instruction_padding::ID));
+        args.instruction_padding_config = Some(InstructionPaddingConfig {
+            program_id,
+            data_size: data_size
+                .to_string()
+                .parse()
+                .expect("Can't parse padded instruction data size"),
+        });
     }
 
     args

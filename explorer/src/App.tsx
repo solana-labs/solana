@@ -42,9 +42,13 @@ function App() {
           <Route
             exact
             path={["/tx/inspector", "/tx/:signature/inspect"]}
-            render={({ match }) => (
-              <TransactionInspectorPage signature={match.params.signature} />
-            )}
+            render={({ match }) => {
+              const signature =
+                "signature" in match.params
+                  ? match.params.signature
+                  : undefined;
+              return <TransactionInspectorPage signature={signature} />;
+            }}
           />
           <Route
             exact
@@ -61,9 +65,10 @@ function App() {
           <Route
             exact
             path={["/block/:id", "/block/:id/:tab"]}
-            render={({ match }) => (
-              <BlockDetailsPage slot={match.params.id} tab={match.params.tab} />
-            )}
+            render={({ match }) => {
+              const tab = "tab" in match.params ? match.params.tab : undefined;
+              return <BlockDetailsPage slot={match.params.id} tab={tab} />;
+            }}
           />
           <Route
             exact
@@ -82,12 +87,12 @@ function App() {
           <Route
             exact
             path={["/address/:address", "/address/:address/:tab"]}
-            render={({ match }) => (
-              <AccountDetailsPage
-                address={match.params.address}
-                tab={match.params.tab}
-              />
-            )}
+            render={({ match }) => {
+              const tab = "tab" in match.params ? match.params.tab : undefined;
+              return (
+                <AccountDetailsPage address={match.params.address} tab={tab} />
+              );
+            }}
           />
           <Route exact path="/">
             <ClusterStatsPage />

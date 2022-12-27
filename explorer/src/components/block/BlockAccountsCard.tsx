@@ -1,5 +1,5 @@
 import React from "react";
-import { BlockResponse, PublicKey } from "@solana/web3.js";
+import { PublicKey, VersionedBlockResponse } from "@solana/web3.js";
 import { Address } from "components/common/Address";
 import { Link } from "react-router-dom";
 import { clusterPath } from "utils/url";
@@ -15,7 +15,7 @@ export function BlockAccountsCard({
   block,
   blockSlot,
 }: {
-  block: BlockResponse;
+  block: VersionedBlockResponse;
   blockSlot: number;
 }) {
   const [numDisplayed, setNumDisplayed] = React.useState(10);
@@ -26,9 +26,12 @@ export function BlockAccountsCard({
     block.transactions.forEach((tx) => {
       const message = tx.transaction.message;
       const txSet = new Map<string, boolean>();
-      message.instructions.forEach((ix) => {
-        ix.accounts.forEach((index) => {
-          const address = message.accountKeys[index].toBase58();
+      const accountKeys = message.getAccountKeys({
+        accountKeysFromLookups: tx.meta?.loadedAddresses,
+      });
+      message.compiledInstructions.forEach((ix) => {
+        ix.accountKeyIndexes.forEach((index) => {
+          const address = accountKeys.get(index)!.toBase58();
           txSet.set(address, message.isAccountWritable(index));
         });
       });

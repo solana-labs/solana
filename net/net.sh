@@ -111,6 +111,9 @@ Operate a configured testnet
    --tpu-disable-quic
                                       - Disable quic for tpu packet forwarding
 
+   --tpu-enable-udp
+                                      - Enable UDP for tpu transactions
+
  sanity/start-specific options:
    -F                   - Discard validator nodes that didn't bootup successfully
    -o noInstallCheck    - Skip solana-install sanity
@@ -139,7 +142,7 @@ Operate a configured testnet
  startclients-specific options:
    $CLIENT_OPTIONS
 
-Note: if RUST_LOG is set in the environment it will be propogated into the
+Note: if RUST_LOG is set in the environment it will be propagated into the
       network nodes.
 EOF
   exit $exitcode
@@ -325,6 +328,7 @@ startBootstrapLeader() {
          \"$extraPrimordialStakes\" \
          \"$TMPFS_ACCOUNTS\" \
          \"$disableQuic\" \
+         \"$enableUdp\" \
       "
 
   ) >> "$logFile" 2>&1 || {
@@ -398,6 +402,7 @@ startNode() {
          \"$extraPrimordialStakes\" \
          \"$TMPFS_ACCOUNTS\" \
          \"$disableQuic\" \
+         \"$enableUdp\" \
       "
   ) >> "$logFile" 2>&1 &
   declare pid=$!
@@ -420,7 +425,7 @@ startClient() {
     startCommon "$ipAddress"
     ssh "${sshOptions[@]}" -f "$ipAddress" \
       "./solana/net/remote/remote-client.sh $deployMethod $entrypointIp \
-      $clientToRun \"$RUST_LOG\" \"$benchTpsExtraArgs\" $clientIndex"
+      $clientToRun \"$RUST_LOG\" \"$benchTpsExtraArgs\" $clientIndex $clientType"
   ) >> "$logFile" 2>&1 || {
     cat "$logFile"
     echo "^^^ +++"
@@ -807,6 +812,8 @@ maybeFullRpc=false
 waitForNodeInit=true
 extraPrimordialStakes=0
 disableQuic=false
+enableUdp=false
+clientType=thin-client
 
 command=$1
 [[ -n $command ]] || usage
@@ -922,6 +929,9 @@ while [[ -n $1 ]]; do
     elif [[ $1 == --tpu-disable-quic ]]; then
       disableQuic=true
       shift 1
+    elif [[ $1 == --tpu-enable-udp ]]; then
+      enableUdp=true
+      shift 1
     elif [[ $1 == --async-node-init ]]; then
       waitForNodeInit=false
       shift 1
@@ -939,6 +949,17 @@ while [[ -n $1 ]]; do
     elif [[ $1 = --skip-require-tower ]]; then
       maybeSkipRequireTower="$1"
       shift 1
+    elif [[ $1 = --client-type ]]; then
+      clientType=$2
+      case "$clientType" in
+        thin-client|tpu-client|rpc-client)
+          ;;
+        *)
+          echo "Unexpected client type: \"$clientType\""
+          exit 1
+          ;;
+      esac
+      shift 2
     else
       usage "Unknown long option: $1"
     fi

@@ -4,14 +4,19 @@ import { decodeInstruction, MARKETS } from "@project-serum/serum";
 import {
   AccountMeta,
   PublicKey,
+  SignatureResult,
   TransactionInstruction,
 } from "@solana/web3.js";
 import { enums, number, type, Infer, create } from "superstruct";
-import { BigNumFromString } from "validators/bignum";
+import { BigIntFromString } from "validators/number";
+
+export const OPEN_BOOK_PROGRAM_ID =
+  "srmqPvymJeFKQ4zGQed1GFppgkRHL9kaELCbyksJtPX";
 
 const SERUM_PROGRAM_IDS = [
   "4ckmDgGdxQoPDLUkDT3vHgSAkzA3QRdNq5ywwY4sUSJn",
   "9xQeWvG816bUx9EPjHmaT23yvVM2ZWbrrpZb9PusVFin",
+  OPEN_BOOK_PROGRAM_ID,
 ];
 
 export const SERUM_DECODED_MAX = 6;
@@ -60,11 +65,11 @@ export type InitializeMarket = {
 };
 
 export const InitializeMarketInstruction = type({
-  baseLotSize: BigNumFromString,
-  quoteLotSize: BigNumFromString,
+  baseLotSize: BigIntFromString,
+  quoteLotSize: BigIntFromString,
   feeRateBps: number(),
-  quoteDustThreshold: BigNumFromString,
-  vaultSignerNonce: BigNumFromString,
+  quoteDustThreshold: BigIntFromString,
+  vaultSignerNonce: BigIntFromString,
 });
 
 export function decodeInitializeMarket(
@@ -110,10 +115,10 @@ export type NewOrder = {
 
 export const NewOrderInstruction = type({
   side: Side,
-  limitPrice: BigNumFromString,
-  maxQuantity: BigNumFromString,
+  limitPrice: BigIntFromString,
+  maxQuantity: BigIntFromString,
   orderType: OrderType,
-  clientId: BigNumFromString,
+  clientId: BigIntFromString,
 });
 
 export function decodeNewOrder(ix: TransactionInstruction): NewOrder {
@@ -208,7 +213,7 @@ export type CancelOrder = {
 
 export const CancelOrderInstruction = type({
   side: Side,
-  orderId: BigNumFromString,
+  orderId: BigIntFromString,
   openOrdersSlot: number(),
 });
 
@@ -272,7 +277,7 @@ export type CancelOrderByClientId = {
 };
 
 export const CancelOrderByClientIdInstruction = type({
-  clientId: BigNumFromString,
+  clientId: BigIntFromString,
 });
 
 export function decodeCancelOrderByClientId(
@@ -355,12 +360,12 @@ export type NewOrderV3 = {
 
 export const NewOrderV3Instruction = type({
   side: Side,
-  limitPrice: BigNumFromString,
-  maxBaseQuantity: BigNumFromString,
-  maxQuoteQuantity: BigNumFromString,
+  limitPrice: BigIntFromString,
+  maxBaseQuantity: BigIntFromString,
+  maxQuoteQuantity: BigIntFromString,
   selfTradeBehavior: SelfTradeBehavior,
   orderType: OrderType,
-  clientId: BigNumFromString,
+  clientId: BigIntFromString,
   limit: number(),
 });
 
@@ -399,7 +404,7 @@ export type CancelOrderV2 = {
 
 export const CancelOrderV2Instruction = type({
   side: Side,
-  orderId: BigNumFromString,
+  orderId: BigIntFromString,
 });
 
 export function decodeCancelOrderV2(ix: TransactionInstruction): CancelOrderV2 {
@@ -434,7 +439,7 @@ export type CancelOrderByClientIdV2 = {
 };
 
 export const CancelOrderByClientIdV2Instruction = type({
-  clientId: BigNumFromString,
+  clientId: BigIntFromString,
 });
 
 export function decodeCancelOrderByClientIdV2(
@@ -631,3 +636,13 @@ export function parseSerumInstructionTitle(
 
   return SERUM_CODE_LOOKUP[code];
 }
+
+export type SerumIxDetailsProps<T> = {
+  ix: TransactionInstruction;
+  index: number;
+  result: SignatureResult;
+  info: T;
+  programName: string;
+  innerCards?: JSX.Element[];
+  childIndex?: number;
+};

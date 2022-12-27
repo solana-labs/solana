@@ -11,7 +11,7 @@ use {
         message::Message,
         pubkey::Pubkey,
         signature::Signature,
-        transaction::{self, Transaction, TransactionError},
+        transaction::{self, TransactionError, VersionedTransaction},
         transaction_context::TransactionReturnData,
     },
 };
@@ -40,14 +40,28 @@ pub struct TransactionSimulationDetails {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TransactionMetadata {
+    pub log_messages: Vec<String>,
+    pub compute_units_consumed: u64,
+    pub return_data: Option<TransactionReturnData>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct BanksTransactionResultWithSimulation {
     pub result: Option<transaction::Result<()>>,
     pub simulation_details: Option<TransactionSimulationDetails>,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct BanksTransactionResultWithMetadata {
+    pub result: transaction::Result<()>,
+    pub metadata: Option<TransactionMetadata>,
+}
+
 #[tarpc::service]
 pub trait Banks {
-    async fn send_transaction_with_context(transaction: Transaction);
+    async fn send_transaction_with_context(transaction: VersionedTransaction);
     #[deprecated(
         since = "1.9.0",
         note = "Please use `get_fee_for_message_with_commitment_and_context` instead"
@@ -60,15 +74,18 @@ pub trait Banks {
     async fn get_slot_with_context(commitment: CommitmentLevel) -> Slot;
     async fn get_block_height_with_context(commitment: CommitmentLevel) -> u64;
     async fn process_transaction_with_preflight_and_commitment_and_context(
-        transaction: Transaction,
+        transaction: VersionedTransaction,
         commitment: CommitmentLevel,
     ) -> BanksTransactionResultWithSimulation;
     async fn process_transaction_with_commitment_and_context(
-        transaction: Transaction,
+        transaction: VersionedTransaction,
         commitment: CommitmentLevel,
     ) -> Option<transaction::Result<()>>;
+    async fn process_transaction_with_metadata_and_context(
+        transaction: VersionedTransaction,
+    ) -> BanksTransactionResultWithMetadata;
     async fn simulate_transaction_with_commitment_and_context(
-        transaction: Transaction,
+        transaction: VersionedTransaction,
         commitment: CommitmentLevel,
     ) -> BanksTransactionResultWithSimulation;
     async fn get_account_with_commitment_and_context(

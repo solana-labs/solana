@@ -1,6 +1,4 @@
 use {
-    crate::{quic_client::QuicTpuConnection, udp_client::UdpTpuConnection},
-    enum_dispatch::enum_dispatch,
     rayon::iter::{IntoParallelIterator, ParallelIterator},
     solana_metrics::MovingStat,
     solana_sdk::{transaction::VersionedTransaction, transport::Result as TransportResult},
@@ -21,15 +19,9 @@ pub struct ClientStats {
     pub tx_data_blocked: MovingStat,
     pub tx_acks: MovingStat,
     pub make_connection_ms: AtomicU64,
+    pub send_timeout: AtomicU64,
 }
 
-#[enum_dispatch]
-pub enum BlockingConnection {
-    UdpTpuConnection,
-    QuicTpuConnection,
-}
-
-#[enum_dispatch(BlockingConnection)]
 pub trait TpuConnection {
     fn tpu_addr(&self) -> &SocketAddr;
 
@@ -39,7 +31,7 @@ pub trait TpuConnection {
     ) -> TransportResult<()> {
         let wire_transaction =
             bincode::serialize(transaction).expect("serialize Transaction in send_batch");
-        self.send_wire_transaction(&wire_transaction)
+        self.send_wire_transaction(wire_transaction)
     }
 
     fn send_wire_transaction<T>(&self, wire_transaction: T) -> TransportResult<()>

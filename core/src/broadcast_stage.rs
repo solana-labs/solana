@@ -381,14 +381,7 @@ fn update_peer_stats(
     last_datapoint_submit: &AtomicInterval,
 ) {
     if last_datapoint_submit.should_update(1000) {
-        let now = timestamp();
-        let num_live_peers = cluster_nodes.num_peers_live(now);
-        let broadcast_len = cluster_nodes.num_peers() + 1;
-        datapoint_info!(
-            "cluster_info-num_nodes",
-            ("live_count", num_live_peers, i64),
-            ("broadcast_count", broadcast_len, i64)
-        );
+        cluster_nodes.submit_metrics("cluster_nodes_broadcast", timestamp());
     }
 }
 
@@ -450,7 +443,7 @@ pub mod test {
             blockstore::Blockstore,
             genesis_utils::{create_genesis_config, GenesisConfigInfo},
             get_tmp_ledger_path,
-            shred::{max_ticks_per_n_shreds, ProcessShredsStats, Shredder},
+            shred::{max_ticks_per_n_shreds, ProcessShredsStats, ReedSolomonCache, Shredder},
         },
         solana_runtime::bank::Bank,
         solana_sdk::{
@@ -488,6 +481,8 @@ pub mod test {
             true, // is_last_in_slot
             0,    // next_shred_index,
             0,    // next_code_index
+            true, // merkle_variant
+            &ReedSolomonCache::default(),
             &mut ProcessShredsStats::default(),
         );
         (

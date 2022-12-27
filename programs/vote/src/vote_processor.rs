@@ -12,7 +12,9 @@ use {
         instruction::InstructionError,
         program_utils::limited_deserialize,
         pubkey::Pubkey,
-        transaction_context::{BorrowedAccount, InstructionContext, TransactionContext},
+        transaction_context::{
+            BorrowedAccount, IndexOfAccount, InstructionContext, TransactionContext,
+        },
     },
     std::collections::HashSet,
 };
@@ -56,7 +58,7 @@ fn process_authorize_with_seed_instruction(
 }
 
 pub fn process_instruction(
-    _first_instruction_account: usize,
+    _first_instruction_account: IndexOfAccount,
     invoke_context: &mut InvokeContext,
 ) -> Result<(), InstructionError> {
     let transaction_context = &invoke_context.transaction_context;
@@ -70,7 +72,7 @@ pub fn process_instruction(
         return Err(InstructionError::InvalidAccountOwner);
     }
 
-    let signers = instruction_context.get_signers(transaction_context);
+    let signers = instruction_context.get_signers(transaction_context)?;
     match limited_deserialize(data)? {
         VoteInstruction::InitializeAccount(vote_init) => {
             let rent = get_sysvar_with_account_check::rent(invoke_context, instruction_context, 1)?;
@@ -170,8 +172,8 @@ pub fn process_instruction(
                 Err(InstructionError::InvalidInstructionData)
             }
         }
-        VoteInstruction::CompactUpdateVoteState(compact_vote_state_update)
-        | VoteInstruction::CompactUpdateVoteStateSwitch(compact_vote_state_update, _) => {
+        VoteInstruction::CompactUpdateVoteState(vote_state_update)
+        | VoteInstruction::CompactUpdateVoteStateSwitch(vote_state_update, _) => {
             if invoke_context
                 .feature_set
                 .is_active(&feature_set::allow_votes_to_directly_update_vote_state::id())
@@ -182,7 +184,6 @@ pub fn process_instruction(
                 let sysvar_cache = invoke_context.get_sysvar_cache();
                 let slot_hashes = sysvar_cache.get_slot_hashes()?;
                 let clock = sysvar_cache.get_clock()?;
-                let vote_state_update = compact_vote_state_update.uncompact()?;
                 vote_state::process_vote_state_update(
                     &mut me,
                     slot_hashes.slot_hashes(),

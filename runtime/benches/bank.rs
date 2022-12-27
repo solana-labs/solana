@@ -20,6 +20,7 @@ use {
         pubkey::Pubkey,
         signature::{Keypair, Signer},
         transaction::Transaction,
+        transaction_context::IndexOfAccount,
     },
     std::{sync::Arc, thread::sleep, time::Duration},
     test::Bencher,
@@ -37,7 +38,7 @@ const NOOP_PROGRAM_ID: [u8; 32] = [
 
 #[allow(clippy::unnecessary_wraps)]
 fn process_instruction(
-    _first_instruction_account: usize,
+    _first_instruction_account: IndexOfAccount,
     _invoke_context: &mut InvokeContext,
 ) -> Result<(), InstructionError> {
     Ok(())
@@ -155,7 +156,7 @@ fn do_bench_transactions(
         bench_work(&bank, &bank_client, &transactions);
     });
 
-    let summary = bencher.bench(|_bencher| {}).unwrap();
+    let summary = bencher.bench(|_bencher| Ok(())).unwrap().unwrap();
     info!("  {:?} transactions", transactions.len());
     info!("  {:?} ns/iter median", summary.median as u64);
     assert!(0f64 != summary.median);

@@ -15,24 +15,12 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v3
         with:
-          node-version: "lts/*"
+          node-version: 16
           cache: "npm"
 
       - name: Build
         run: |
-          sh -c "$(curl -sSfL https://release.solana.com/edge/install)"
-          PATH="$HOME/.local/share/solana/install/active_release/bin:$PATH"
-          solana --version
-          npm install -g npm@7
-          npm install
-          npm run build
-          ls -l lib
-          test -r lib/index.iife.js
-          test -r lib/index.cjs.js
-          test -r lib/index.esm.js
-          npm run ok
-          npm run codecov
-          npm run test:live-with-test-validator
+          scripts/test.sh
 
       - name: Publish NPM
         run: |

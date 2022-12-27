@@ -6,6 +6,10 @@ use {
     reqwest::{self, header::CONTENT_TYPE},
     serde_json::{json, Value},
     solana_account_decoder::UiAccount,
+    solana_client::{
+        connection_cache::{ConnectionCache, DEFAULT_TPU_CONNECTION_POOL_SIZE},
+        tpu_client::{TpuClient, TpuClientConfig},
+    },
     solana_pubsub_client::nonblocking::pubsub_client::PubsubClient,
     solana_rpc_client::rpc_client::RpcClient,
     solana_rpc_client_api::{
@@ -25,10 +29,6 @@ use {
     },
     solana_streamer::socket::SocketAddrSpace,
     solana_test_validator::TestValidator,
-    solana_tpu_client::{
-        connection_cache::{ConnectionCache, DEFAULT_TPU_CONNECTION_POOL_SIZE},
-        tpu_client::{TpuClient, TpuClientConfig},
-    },
     solana_transaction_status::TransactionStatus,
     std::{
         collections::HashSet,
@@ -245,7 +245,7 @@ fn test_rpc_subscriptions() {
 
     let alice = Keypair::new();
     let test_validator =
-        TestValidator::with_no_fees(alice.pubkey(), None, SocketAddrSpace::Unspecified);
+        TestValidator::with_no_fees_udp(alice.pubkey(), None, SocketAddrSpace::Unspecified);
 
     let transactions_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
     transactions_socket.connect(test_validator.tpu()).unwrap();

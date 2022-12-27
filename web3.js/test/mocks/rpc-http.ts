@@ -71,6 +71,7 @@ export const mockRpcResponse = async ({
   params,
   value,
   error,
+  slot,
   withContext,
   withHeaders,
 }: {
@@ -78,6 +79,7 @@ export const mockRpcResponse = async ({
   params: Array<any>;
   value?: Promise<any> | any;
   error?: any;
+  slot?: number;
   withContext?: boolean;
   withHeaders?: HttpHeaders;
 }) => {
@@ -98,7 +100,7 @@ export const mockRpcResponse = async ({
         if (withContext) {
           result = {
             context: {
-              slot: 11,
+              slot: slot != null ? slot : 11,
             },
             value: unwrappedValue,
           };

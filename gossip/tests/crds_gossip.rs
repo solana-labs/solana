@@ -52,10 +52,7 @@ impl Node {
         gossip: Arc<CrdsGossip>,
         stake: u64,
     ) -> Self {
-        let ping_cache = Arc::new(Mutex::new(PingCache::new(
-            Duration::from_secs(20 * 60), // ttl
-            2048,                         // capacity
-        )));
+        let ping_cache = Arc::new(new_ping_cache());
         Node {
             keypair,
             contact_info,
@@ -267,12 +264,13 @@ fn network_simulator(thread_pool: &ThreadPool, network: &mut Network, max_conver
     // make sure there is someone in the active set
     let network_values: Vec<Node> = network.values().cloned().collect();
     network_values.par_iter().for_each(|node| {
-        let node_pubkey = node.keypair.pubkey();
         node.gossip.refresh_push_active_set(
-            &node_pubkey,
+            &node.keypair,
             0,               // shred version
             &HashMap::new(), // stakes
             None,            // gossip validators
+            &node.ping_cache,
+            &mut Vec::new(), // pings
             &SocketAddrSpace::Unspecified,
         );
     });
@@ -349,7 +347,7 @@ fn network_run_push(
                     Duration::from_millis(node.gossip.pull.crds_timeout),
                 );
                 node.gossip.purge(&node_pubkey, thread_pool, now, &timeouts);
-                (node_pubkey, node.gossip.new_push_messages(vec![], now))
+                (node_pubkey, node.gossip.new_push_messages(vec![], now).0)
             })
             .collect();
         let transfered: Vec<_> = requests
@@ -427,12 +425,13 @@ fn network_run_push(
         }
         if now % CRDS_GOSSIP_PUSH_MSG_TIMEOUT_MS == 0 && now > 0 {
             network_values.par_iter().for_each(|node| {
-                let node_pubkey = node.keypair.pubkey();
                 node.gossip.refresh_push_active_set(
-                    &node_pubkey,
+                    &node.keypair,
                     0,               // shred version
                     &HashMap::new(), // stakes
                     None,            // gossip validators
+                    &node.ping_cache,
+                    &mut Vec::new(), // pings
                     &SocketAddrSpace::Unspecified,
                 );
             });
@@ -608,9 +607,18 @@ fn network_run_pull(
 fn build_gossip_thread_pool() -> ThreadPool {
     ThreadPoolBuilder::new()
         .num_threads(get_thread_count().min(2))
-        .thread_name(|i| format!("gossipTest{:02}", i))
+        .thread_name(|i| format!("gossipTest{i:02}"))
         .build()
         .unwrap()
+}
+
+fn new_ping_cache() -> Mutex<PingCache> {
+    let ping_cache = PingCache::new(
+        Duration::from_secs(20 * 60),      // ttl
+        Duration::from_secs(20 * 60) / 64, // rate_limit_delay
+        2048,                              // capacity
+    );
+    Mutex::new(ping_cache)
 }
 
 #[test]
@@ -712,7 +720,8 @@ fn test_star_network_large_push() {
 #[test]
 fn test_prune_errors() {
     let crds_gossip = CrdsGossip::default();
-    let id = Pubkey::new(&[0; 32]);
+    let keypair = Keypair::new();
+    let id = keypair.pubkey();
     let ci = ContactInfo::new_localhost(&Pubkey::new(&[1; 32]), 0);
     let prune_pubkey = Pubkey::new(&[2; 32]);
     crds_gossip
@@ -725,11 +734,14 @@ fn test_prune_errors() {
             GossipRoute::LocalMessage,
         )
         .unwrap();
+    let ping_cache = new_ping_cache();
     crds_gossip.refresh_push_active_set(
-        &id,
+        &keypair,
         0,               // shred version
         &HashMap::new(), // stakes
         None,            // gossip validators
+        &ping_cache,
+        &mut Vec::new(), // pings
         &SocketAddrSpace::Unspecified,
     );
     let now = timestamp();

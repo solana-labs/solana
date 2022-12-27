@@ -1,9 +1,13 @@
 import React from "react";
-import { BlockResponse, PublicKey } from "@solana/web3.js";
+import { PublicKey, VersionedBlockResponse } from "@solana/web3.js";
 import { Address } from "components/common/Address";
 import { TableCardBody } from "components/common/TableCardBody";
 
-export function BlockProgramsCard({ block }: { block: BlockResponse }) {
+export function BlockProgramsCard({
+  block,
+}: {
+  block: VersionedBlockResponse;
+}) {
   const totalTransactions = block.transactions.length;
   const txSuccesses = new Map<string, number>();
   const txFrequency = new Map<string, number>();
@@ -12,18 +16,23 @@ export function BlockProgramsCard({ block }: { block: BlockResponse }) {
   let totalInstructions = 0;
   block.transactions.forEach((tx) => {
     const message = tx.transaction.message;
-    totalInstructions += message.instructions.length;
+    totalInstructions += message.compiledInstructions.length;
     const programUsed = new Set<string>();
+    const accountKeys = tx.transaction.message.getAccountKeys({
+      accountKeysFromLookups: tx.meta?.loadedAddresses,
+    });
     const trackProgram = (index: number) => {
-      if (index >= message.accountKeys.length) return;
-      const programId = message.accountKeys[index];
+      if (index >= accountKeys.length) return;
+      const programId = accountKeys.get(index)!;
       const programAddress = programId.toBase58();
       programUsed.add(programAddress);
       const frequency = ixFrequency.get(programAddress);
       ixFrequency.set(programAddress, frequency ? frequency + 1 : 1);
     };
 
-    message.instructions.forEach((ix) => trackProgram(ix.programIdIndex));
+    message.compiledInstructions.forEach((ix) =>
+      trackProgram(ix.programIdIndex)
+    );
     tx.meta?.innerInstructions?.forEach((inner) => {
       totalInstructions += inner.instructions.length;
       inner.instructions.forEach((innerIx) =>

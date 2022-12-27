@@ -60,6 +60,7 @@ impl HttpSender {
             reqwest::Client::builder()
                 .default_headers(default_headers)
                 .timeout(timeout)
+                .pool_idle_timeout(timeout)
                 .build()
                 .expect("build rpc client"),
         );

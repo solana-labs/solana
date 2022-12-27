@@ -17,7 +17,11 @@ scripts/increment-cargo-version.sh check
   _ scripts/cargo-for-all-lock-files.sh tree >/dev/null
   set +e
   if ! _ git diff --exit-code; then
-    echo -e "\nError: Uncommitted Cargo.lock changes" 1>&2
+    cat <<EOF 1>&2
+
+Error: Uncommitted Cargo.lock changes.
+Run './scripts/cargo-for-all-lock-files.sh tree' and commit the result.
+EOF
     exit 1
   fi
 )
@@ -65,18 +69,7 @@ fi
 
  _ ci/order-crates-for-publishing.py
 
-nightly_clippy_allows=(
-  # This lint occurs all over the code base
-  "--allow=clippy::significant_drop_in_scrutinee"
-
-  # The prost crate, used by solana-storage-proto, generates Rust source that
-  # triggers this lint. Need to resolve upstream in prost
-  "--allow=clippy::derive_partial_eq_without_eq"
-
-  # This link seems to incorrectly trigger in
-  # `programs/bpf_loader/src/syscalls/{lib,cpi}.rs`
-  "--allow=clippy::explicit_auto_deref"
-)
+nightly_clippy_allows=()
 
 # -Z... is needed because of clippy bug: https://github.com/rust-lang/rust-clippy/issues/4612
 # run nightly clippy for `sdk/` as there's a moderate amount of nightly-only code there

@@ -3,6 +3,7 @@ steps:
     label: "Running Offline Stake Operations Tests on Colo"
     env:
       UPLOAD_RESULTS_TO_SLACK: "true"
+      UPLOAD_RESULTS_TO_DISCORD: "true"
       CLOUD_PROVIDER: "colo"
       ENABLE_GPU: "false"
       TEST_DURATION_SECONDS: 30

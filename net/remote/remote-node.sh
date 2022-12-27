@@ -29,6 +29,7 @@ waitForNodeInit="${20}"
 extraPrimordialStakes="${21:=0}"
 tmpfsAccounts="${22:false}"
 disableQuic="${23}"
+enableUdp="${24}"
 
 set +x
 
@@ -290,6 +291,10 @@ EOF
       args+=(--tpu-disable-quic)
     fi
 
+    if $enableUdp; then
+      args+=(--tpu-enable-udp)
+    fi
+
     if [[ $airdropsEnabled = true ]]; then
 cat >> ~/solana/on-reboot <<EOF
       ./multinode-demo/faucet.sh > faucet.log 2>&1 &
@@ -422,6 +427,10 @@ EOF
       args+=(--tpu-disable-quic)
     fi
 
+    if $enableUdp; then
+      args+=(--tpu-enable-udp)
+    fi
+
 cat >> ~/solana/on-reboot <<EOF
     $maybeSkipAccountsCreation
     nohup multinode-demo/validator.sh ${args[@]} > validator.log.\$now 2>&1 &
@@ -454,6 +463,7 @@ EOF
         echo "0 Primordial stakes, staking with $internalNodesStakeLamports"
         multinode-demo/delegate-stake.sh --vote-account "$SOLANA_CONFIG_DIR"/vote-account.json \
                                          --stake-account "$SOLANA_CONFIG_DIR"/stake-account.json \
+                                         --force \
                                          "${args[@]}" "$internalNodesStakeLamports"
       else
         echo "Skipping staking with extra stakes: ${extraPrimordialStakes}"

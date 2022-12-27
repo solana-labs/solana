@@ -11,39 +11,48 @@ use {
     itertools::Itertools,
     log::*,
     regex::Regex,
-    serde::Serialize,
+    serde::{
+        ser::{SerializeSeq, Serializer},
+        Serialize,
+    },
     serde_json::json,
+    solana_account_decoder::{UiAccount, UiAccountData, UiAccountEncoding},
     solana_clap_utils::{
         input_parsers::{cluster_type_of, pubkey_of, pubkeys_of},
         input_validators::{
             is_parsable, is_pow2, is_pubkey, is_pubkey_or_keypair, is_slot, is_valid_percentage,
         },
     },
-    solana_core::system_monitor_service::SystemMonitorService,
+    solana_cli_output::{CliAccount, CliAccountNewConfig, OutputFormat},
+    solana_core::{
+        system_monitor_service::{SystemMonitorService, SystemMonitorStatsReportConfig},
+        validator::move_and_async_delete_path,
+    },
     solana_entry::entry::Entry,
     solana_geyser_plugin_manager::geyser_plugin_service::GeyserPluginService,
     solana_ledger::{
         ancestor_iterator::AncestorIterator,
         bank_forks_utils,
         blockstore::{create_new_ledger, Blockstore, BlockstoreError, PurgeType},
-        blockstore_db::{self, Database},
+        blockstore_db::{self, columns as cf, Column, ColumnName, Database},
         blockstore_options::{
             AccessType, BlockstoreOptions, BlockstoreRecoveryMode, LedgerColumnOptions,
-            ShredStorageType,
+            ShredStorageType, BLOCKSTORE_DIRECTORY_ROCKS_FIFO,
         },
         blockstore_processor::{self, BlockstoreProcessorError, ProcessOptions},
         shred::Shred,
     },
     solana_measure::{measure, measure::Measure},
     solana_runtime::{
+        accounts::Accounts,
         accounts_background_service::{
             AbsRequestHandlers, AbsRequestSender, AccountsBackgroundService,
-            PrunedBanksRequestHandler,
+            PrunedBanksRequestHandler, SnapshotRequestHandler,
         },
         accounts_db::{AccountsDbConfig, FillerAccountsConfig},
         accounts_index::{AccountsIndexConfig, IndexLimitMb, ScanConfig},
         accounts_update_notifier_interface::AccountsUpdateNotifier,
-        bank::{Bank, RewardCalculationEvent},
+        bank::{Bank, RewardCalculationEvent, TotalAccountsStats},
         bank_forks::BankForks,
         cost_model::CostModel,
         cost_tracker::CostTracker,
@@ -55,8 +64,7 @@ use {
         snapshot_minimizer::SnapshotMinimizer,
         snapshot_utils::{
             self, ArchiveFormat, SnapshotVersion, DEFAULT_ARCHIVE_COMPRESSION,
-            DEFAULT_MAX_FULL_SNAPSHOT_ARCHIVES_TO_RETAIN,
-            DEFAULT_MAX_INCREMENTAL_SNAPSHOT_ARCHIVES_TO_RETAIN, SUPPORTED_ARCHIVE_COMPRESSION,
+            SUPPORTED_ARCHIVE_COMPRESSION,
         },
     },
     solana_scheduler::{
@@ -67,7 +75,7 @@ use {
         account_utils::StateMut,
         clock::{Epoch, Slot},
         feature::{self, Feature},
-        feature_set,
+        feature_set::{self, FeatureSet},
         genesis_config::{ClusterType, GenesisConfig},
         hash::Hash,
         inflation::Inflation,
@@ -109,6 +117,15 @@ enum LedgerOutputMethod {
     Json,
 }
 
+fn parse_encoding_format(matches: &ArgMatches<'_>) -> UiAccountEncoding {
+    match matches.value_of("encoding") {
+        Some("jsonParsed") => UiAccountEncoding::JsonParsed,
+        Some("base64") => UiAccountEncoding::Base64,
+        Some("base64+zstd") => UiAccountEncoding::Base64Zstd,
+        _ => UiAccountEncoding::Base64,
+    }
+}
+
 fn output_slot_rewards(blockstore: &Blockstore, slot: Slot, method: &LedgerOutputMethod) {
     // Note: rewards are not output in JSON yet
     if *method == LedgerOutputMethod::Print {
@@ -126,7 +143,7 @@ fn output_slot_rewards(blockstore: &Blockstore, slot: Slot, method: &LedgerOutpu
                         "    {:<44}  {:^15}  {}◎{:<14.9}  ◎{:<18.9}   {}",
                         reward.pubkey,
                         if let Some(reward_type) = reward.reward_type {
-                            format!("{}", reward_type)
+                            format!("{reward_type}")
                         } else {
                             "-".to_string()
                         },
@@ -135,7 +152,7 @@ fn output_slot_rewards(blockstore: &Blockstore, slot: Slot, method: &LedgerOutpu
                         lamports_to_sol(reward.post_balance),
                         reward
                             .commission
-                            .map(|commission| format!("{:>9}%", commission))
+                            .map(|commission| format!("{commission:>9}%"))
                             .unwrap_or_else(|| "    -".to_string())
                     );
                 }
@@ -191,6 +208,7 @@ fn output_entry(
                     to_schedule_stage.push(Box::new((sanitized_tx, locks)));
                 }
                 /*
+                println!("    Transaction {transactions_index}");
                 let tx_signature = transaction.signatures[0];
                 let tx_status_meta = blockstore
                     .read_transaction_status((tx_signature, slot))
@@ -241,17 +259,18 @@ fn output_slot(
 
     let (entries, num_shreds, is_full) = blockstore
         .get_slot_entries_with_shred_info(slot, 0, allow_dead_slots)
-        .map_err(|err| format!("Failed to load entries for slot {}: {:?}", slot, err))?;
+        .map_err(|err| format!("Failed to load entries for slot {slot}: {err:?}"))?;
 
     if *method == LedgerOutputMethod::Print {
         if let Ok(Some(meta)) = blockstore.meta(slot) {
-            if verbose_level >= 2 {
-                println!(" Slot Meta {:?} is_full: {}", meta, is_full);
+            if verbose_level >= 1 {
+                println!("  {meta:?} is_full: {is_full}");
             } else {
                 println!(
-                    " num_shreds: {}, parent_slot: {:?}, num_entries: {}, is_full: {}",
+                    "  num_shreds: {}, parent_slot: {:?}, next_slots: {:?}, num_entries: {}, is_full: {}",
                     num_shreds,
                     meta.parent_slot,
+                    meta.next_slots,
                     entries.len(),
                     is_full,
                 );
@@ -504,10 +523,7 @@ fn output_slot(
             }
         }
 
-        println!(
-            "  Transactions: {}, hashes: {}, block_hash: {}",
-            transactions, num_hashes, blockhash,
-        );
+        println!("  Transactions: {transactions}, hashes: {num_hashes}, block_hash: {blockhash}",);
         for (pubkey, count) in program_ids.iter() {
             *all_program_ids.entry(*pubkey).or_insert(0) += count;
         }
@@ -530,10 +546,7 @@ fn output_ledger(
     let slot_iterator = blockstore
         .slot_meta_iterator(starting_slot)
         .unwrap_or_else(|err| {
-            eprintln!(
-                "Failed to load entries starting from slot {}: {:?}",
-                starting_slot, err
-            );
+            eprintln!("Failed to load entries starting from slot {starting_slot}: {err:?}");
             exit(1);
         });
 
@@ -570,7 +583,7 @@ fn output_ledger(
             verbose_level,
             &mut all_program_ids,
         ) {
-            eprintln!("{}", err);
+            eprintln!("{err}");
         }
         num_printed += 1;
         if num_printed >= num_slots as usize {
@@ -600,29 +613,47 @@ fn output_account(
     account: &AccountSharedData,
     modified_slot: Option<Slot>,
     print_account_data: bool,
+    encoding: UiAccountEncoding,
 ) {
-    println!("{}", pubkey);
+    println!("{pubkey}:");
     println!("  balance: {} SOL", lamports_to_sol(account.lamports()));
     println!("  owner: '{}'", account.owner());
     println!("  executable: {}", account.executable());
     if let Some(slot) = modified_slot {
-        println!("  slot: {}", slot);
+        println!("  slot: {slot}");
     }
     println!("  rent_epoch: {}", account.rent_epoch());
     println!("  data_len: {}", account.data().len());
     if print_account_data {
-        println!("  data: '{}'", bs58::encode(account.data()).into_string());
+        let account_data = UiAccount::encode(pubkey, account, encoding, None, None).data;
+        match account_data {
+            UiAccountData::Binary(data, data_encoding) => {
+                println!("  data: '{data}'");
+                println!(
+                    "  encoding: {}",
+                    serde_json::to_string(&data_encoding).unwrap()
+                );
+            }
+            UiAccountData::Json(account_data) => {
+                println!(
+                    "  data: '{}'",
+                    serde_json::to_string(&account_data).unwrap()
+                );
+                println!("  encoding: \"jsonParsed\"");
+            }
+            UiAccountData::LegacyBinary(_) => {}
+        };
     }
 }
 
 fn render_dot(dot: String, output_file: &str, output_format: &str) -> io::Result<()> {
     let mut child = Command::new("dot")
-        .arg(format!("-T{}", output_format))
-        .arg(format!("-o{}", output_file))
+        .arg(format!("-T{output_format}"))
+        .arg(format!("-o{output_file}"))
         .stdin(Stdio::piped())
         .spawn()
         .map_err(|err| {
-            eprintln!("Failed to spawn dot: {:?}", err);
+            eprintln!("Failed to spawn dot: {err:?}");
             err
         })?;
 
@@ -1077,6 +1108,20 @@ fn open_blockstore_with_temporary_primary_access(
     )
 }
 
+fn get_shred_storage_type(ledger_path: &Path, warn_message: &str) -> ShredStorageType {
+    // TODO: the following shred_storage_type inference must be updated once
+    // the rocksdb options can be constructed via load_options_file() as the
+    // value picked by passing None for `max_shred_storage_size` could affect
+    // the persisted rocksdb options file.
+    match ShredStorageType::from_ledger_path(ledger_path, None) {
+        Some(s) => s,
+        None => {
+            warn!("{}", warn_message);
+            ShredStorageType::RocksLevel
+        }
+    }
+}
+
 fn open_blockstore(
     ledger_path: &Path,
     access_type: AccessType,
@@ -1127,10 +1172,77 @@ fn open_blockstore(
             })
         }
         Err(err) => {
-            eprintln!("Failed to open blockstore at {:?}: {:?}", ledger_path, err);
+            eprintln!("Failed to open blockstore at {ledger_path:?}: {err:?}");
             exit(1);
         }
     }
+}
+
+fn raw_key_to_slot(key: &[u8], column_name: &str) -> Option<Slot> {
+    match column_name {
+        cf::SlotMeta::NAME => Some(cf::SlotMeta::slot(cf::SlotMeta::index(key))),
+        cf::Orphans::NAME => Some(cf::Orphans::slot(cf::Orphans::index(key))),
+        cf::DeadSlots::NAME => Some(cf::SlotMeta::slot(cf::SlotMeta::index(key))),
+        cf::DuplicateSlots::NAME => Some(cf::SlotMeta::slot(cf::SlotMeta::index(key))),
+        cf::ErasureMeta::NAME => Some(cf::ErasureMeta::slot(cf::ErasureMeta::index(key))),
+        cf::BankHash::NAME => Some(cf::BankHash::slot(cf::BankHash::index(key))),
+        cf::Root::NAME => Some(cf::Root::slot(cf::Root::index(key))),
+        cf::Index::NAME => Some(cf::Index::slot(cf::Index::index(key))),
+        cf::ShredData::NAME => Some(cf::ShredData::slot(cf::ShredData::index(key))),
+        cf::ShredCode::NAME => Some(cf::ShredCode::slot(cf::ShredCode::index(key))),
+        cf::TransactionStatus::NAME => Some(cf::TransactionStatus::slot(
+            cf::TransactionStatus::index(key),
+        )),
+        cf::AddressSignatures::NAME => Some(cf::AddressSignatures::slot(
+            cf::AddressSignatures::index(key),
+        )),
+        cf::TransactionMemos::NAME => None, // does not implement slot()
+        cf::TransactionStatusIndex::NAME => None, // does not implement slot()
+        cf::Rewards::NAME => Some(cf::Rewards::slot(cf::Rewards::index(key))),
+        cf::Blocktime::NAME => Some(cf::Blocktime::slot(cf::Blocktime::index(key))),
+        cf::PerfSamples::NAME => Some(cf::PerfSamples::slot(cf::PerfSamples::index(key))),
+        cf::BlockHeight::NAME => Some(cf::BlockHeight::slot(cf::BlockHeight::index(key))),
+        cf::ProgramCosts::NAME => None, // does not implement slot()
+        cf::OptimisticSlots::NAME => {
+            Some(cf::OptimisticSlots::slot(cf::OptimisticSlots::index(key)))
+        }
+        &_ => None,
+    }
+}
+
+fn print_blockstore_file_metadata(
+    blockstore: &Blockstore,
+    file_name: &Option<&str>,
+) -> Result<(), String> {
+    let live_files = blockstore
+        .live_files_metadata()
+        .map_err(|err| format!("{err:?}"))?;
+
+    // All files under live_files_metadata are prefixed with "/".
+    let sst_file_name = file_name.as_ref().map(|name| format!("/{name}"));
+    for file in live_files {
+        if sst_file_name.is_none() || file.name.eq(sst_file_name.as_ref().unwrap()) {
+            println!(
+                "[{}] cf_name: {}, level: {}, start_slot: {:?}, end_slot: {:?}, size: {}, num_entries: {}",
+                file.name,
+                file.column_family_name,
+                file.level,
+                raw_key_to_slot(&file.start_key.unwrap(), &file.column_family_name),
+                raw_key_to_slot(&file.end_key.unwrap(), &file.column_family_name),
+                file.size,
+                file.num_entries,
+            );
+            if sst_file_name.is_some() {
+                return Ok(());
+            }
+        }
+    }
+    if sst_file_name.is_some() {
+        return Err(format!(
+            "Failed to find or load the metadata of the specified file {file_name:?}"
+        ));
+    }
+    Ok(())
 }
 
 // This function is duplicated in validator/src/main.rs...
@@ -1190,10 +1302,7 @@ fn load_bank_forks(
         // Check if we have the slot data necessary to replay from starting_slot to >= halt_slot.
         //  - This will not catch the case when loading from genesis without a full slot 0.
         if !blockstore.slot_range_connected(starting_slot, halt_slot) {
-            eprintln!(
-                "Unable to load bank forks at slot {} due to disconnected blocks.",
-                halt_slot,
-            );
+            eprintln!("Unable to load bank forks at slot {halt_slot} due to disconnected blocks.",);
             exit(1);
         }
     }
@@ -1217,13 +1326,10 @@ fn load_bank_forks(
 
         if non_primary_accounts_path.exists() {
             info!("Clearing {:?}", non_primary_accounts_path);
-            if let Err(err) = std::fs::remove_dir_all(&non_primary_accounts_path) {
-                eprintln!(
-                    "error deleting accounts path {:?}: {}",
-                    non_primary_accounts_path, err
-                );
-                exit(1);
-            }
+            let mut measure_time = Measure::start("clean_non_primary_accounts_paths");
+            move_and_async_delete_path(&non_primary_accounts_path);
+            measure_time.stop();
+            info!("done. {}", measure_time);
         }
 
         vec![non_primary_accounts_path]
@@ -1241,7 +1347,7 @@ fn load_bank_forks(
         let geyser_service =
             GeyserPluginService::new(confirmed_bank_receiver, &geyser_config_files).unwrap_or_else(
                 |err| {
-                    eprintln!("Failed to setup Geyser service: {:?}", err);
+                    eprintln!("Failed to setup Geyser service: {err:?}");
                     exit(1);
                 },
             );
@@ -1258,15 +1364,25 @@ fn load_bank_forks(
             &process_options,
             None,
             accounts_update_notifier,
+            &Arc::default(),
         );
 
+    let (snapshot_request_sender, snapshot_request_receiver) = crossbeam_channel::unbounded();
+    let (accounts_package_sender, _accounts_package_receiver) = crossbeam_channel::unbounded();
+    let accounts_background_request_sender = AbsRequestSender::new(snapshot_request_sender.clone());
+    let snapshot_request_handler = SnapshotRequestHandler {
+        snapshot_config: SnapshotConfig::new_load_only(),
+        snapshot_request_sender,
+        snapshot_request_receiver,
+        accounts_package_sender,
+    };
     let pruned_banks_receiver =
         AccountsBackgroundService::setup_bank_drop_callback(bank_forks.clone());
     let pruned_banks_request_handler = PrunedBanksRequestHandler {
         pruned_banks_receiver,
     };
     let abs_request_handler = AbsRequestHandlers {
-        snapshot_request_handler: None,
+        snapshot_request_handler,
         pruned_banks_request_handler,
     };
     let exit = Arc::new(AtomicBool::new(false));
@@ -1286,7 +1402,7 @@ fn load_bank_forks(
         &process_options,
         None,
         None,
-        &AbsRequestSender::default(),
+        &accounts_background_request_sender,
     )
     .map(|_| (bank_forks, starting_snapshot_hashes));
 
@@ -1303,15 +1419,13 @@ fn compute_slot_cost(blockstore: &Blockstore, slot: Slot) -> Result<(), String> 
 
     let (entries, _num_shreds, _is_full) = blockstore
         .get_slot_entries_with_shred_info(slot, 0, false)
-        .map_err(|err| format!(" Slot: {}, Failed to load entries, err {:?}", slot, err))?;
+        .map_err(|err| format!(" Slot: {slot}, Failed to load entries, err {err:?}"))?;
 
     let num_entries = entries.len();
     let mut num_transactions = 0;
     let mut num_programs = 0;
 
     let mut program_ids = HashMap::new();
-    let mut cost_model = CostModel::default();
-    cost_model.initialize_cost_table(&blockstore.read_program_costs().unwrap());
     let mut cost_tracker = CostTracker::default();
 
     for entry in entries {
@@ -1335,12 +1449,11 @@ fn compute_slot_cost(blockstore: &Blockstore, slot: Slot) -> Result<(), String> 
             .for_each(|transaction| {
                 num_programs += transaction.message().instructions().len();
 
-                let tx_cost = cost_model.calculate_cost(&transaction);
+                let tx_cost = CostModel::calculate_cost(&transaction, &FeatureSet::all_enabled());
                 let result = cost_tracker.try_add(&tx_cost);
                 if result.is_err() {
                     println!(
-                        "Slot: {}, CostModel rejected transaction {:?}, reason {:?}",
-                        slot, transaction, result,
+                        "Slot: {slot}, CostModel rejected transaction {transaction:?}, reason {result:?}",
                     );
                 }
                 for (program_id, _instruction) in transaction.message().program_instructions_iter()
@@ -1351,10 +1464,9 @@ fn compute_slot_cost(blockstore: &Blockstore, slot: Slot) -> Result<(), String> 
     }
 
     println!(
-        "Slot: {}, Entries: {}, Transactions: {}, Programs {}",
-        slot, num_entries, num_transactions, num_programs,
+        "Slot: {slot}, Entries: {num_entries}, Transactions: {num_transactions}, Programs {num_programs}",
     );
-    println!("  Programs: {:?}", program_ids);
+    println!("  Programs: {program_ids:?}");
 
     Ok(())
 }
@@ -1395,10 +1507,6 @@ use jemallocator::Jemalloc;
 #[global_allocator]
 static GLOBAL: Jemalloc = Jemalloc;
 
-/// The default size for data and coding shred column families in FIFO compaction.
-/// u64::MAX as the default value means it won't delete any files by default.
-const DEFAULT_LEDGER_TOOL_ROCKS_FIFO_SHRED_STORAGE_SIZE_BYTES: u64 = std::u64::MAX;
-
 #[allow(clippy::cognitive_complexity)]
 fn main() {
     // Ignore SIGUSR1 to prevent long-running calls being killed by logrotate
@@ -1435,10 +1543,6 @@ fn main() {
         .long("no-bpf-jit")
         .takes_value(false)
         .help("Disable the just-in-time compiler and instead use the interpreter for BP");
-    let no_accounts_db_caching_arg = Arg::with_name("no_accounts_db_caching")
-        .long("no-accounts-db-caching")
-        .takes_value(false)
-        .help("Disables accounts-db caching");
     let accounts_index_bins = Arg::with_name("accounts_index_bins")
         .long("accounts-index-bins")
         .value_name("BINS")
@@ -1461,6 +1565,12 @@ fn main() {
             "Enables faster starting of ledger-tool by skipping shrink. \
                       This option is for use during testing.",
         );
+    let accountsdb_verify_refcounts = Arg::with_name("accounts_db_verify_refcounts")
+        .long("accounts-db-verify-refcounts")
+        .help(
+            "Debug option to scan all append vecs and verify account index refcounts prior to clean",
+        )
+        .hidden(true);
     let accounts_filler_count = Arg::with_name("accounts_filler_count")
         .long("accounts-filler-count")
         .value_name("COUNT")
@@ -1517,7 +1627,12 @@ fn main() {
             .hidden(true);
     let ancient_append_vecs = Arg::with_name("accounts_db_ancient_append_vecs")
         .long("accounts-db-ancient-append-vecs")
-        .help("AppendVecs that are older than an epoch are squashed together.")
+        .value_name("SLOT-OFFSET")
+        .validator(is_parsable::<u64>)
+        .takes_value(true)
+        .help(
+            "AppendVecs that are older than (slots_per_epoch - SLOT-OFFSET) are squashed together.",
+        )
         .hidden(true);
     let halt_at_slot_store_hash_raw_data = Arg::with_name("halt_at_slot_store_hash_raw_data")
             .long("halt-at-slot-store-hash-raw-data")
@@ -1575,8 +1690,9 @@ fn main() {
         .takes_value(true)
         .help("Log when transactions are processed that reference the given key(s).");
 
-    let default_max_full_snapshot_archives_to_retain =
-        &DEFAULT_MAX_FULL_SNAPSHOT_ARCHIVES_TO_RETAIN.to_string();
+    // Use std::usize::MAX for maximum_*_snapshots_to_retain such that
+    // ledger-tool commands will not remove any snapshots by default
+    let default_max_full_snapshot_archives_to_retain = &std::usize::MAX.to_string();
     let maximum_full_snapshot_archives_to_retain = Arg::with_name(
         "maximum_full_snapshots_to_retain",
     )
@@ -1589,8 +1705,7 @@ fn main() {
         "The maximum number of full snapshot archives to hold on to when purging older snapshots.",
     );
 
-    let default_max_incremental_snapshot_archives_to_retain =
-        &DEFAULT_MAX_INCREMENTAL_SNAPSHOT_ARCHIVES_TO_RETAIN.to_string();
+    let default_max_incremental_snapshot_archives_to_retain = &std::usize::MAX.to_string();
     let maximum_incremental_snapshot_archives_to_retain = Arg::with_name(
         "maximum_incremental_snapshots_to_retain",
     )
@@ -1607,6 +1722,13 @@ fn main() {
         .multiple(true)
         .help("Specify the configuration file for the Geyser plugin.");
 
+    let accounts_data_encoding_arg = Arg::with_name("encoding")
+        .long("encoding")
+        .takes_value(true)
+        .possible_values(&["base64", "base64+zstd", "jsonParsed"])
+        .default_value("base64")
+        .help("Print account data in specified format when printing account contents.");
+
     let rent = Rent::default();
     let default_bootstrap_validator_lamports = &sol_to_lamports(500.0)
         .max(VoteState::get_rent_exempt_reserve(&rent))
@@ -1617,6 +1739,7 @@ fn main() {
     let default_graph_vote_account_mode = GraphVoteAccountMode::default();
 
     let mut measure_total_execution_time = Measure::start("ledger tool");
+
     let matches = App::new(crate_name!())
         .about(crate_description!())
         .version(solana_version::version!())
@@ -1796,6 +1919,7 @@ fn main() {
                     .requires("accounts")
                     .help("Do not print account data when printing account contents."),
             )
+            .arg(&accounts_data_encoding_arg.clone().requires("accounts"))
         )
         .subcommand(
             SubCommand::with_name("genesis-hash")
@@ -1884,6 +2008,7 @@ fn main() {
             .arg(&accounts_index_limit)
             .arg(&disable_disk_index)
             .arg(&accountsdb_skip_shrink)
+            .arg(&accountsdb_verify_refcounts)
             .arg(&accounts_filler_count)
             .arg(&accounts_filler_size)
             .arg(&verify_index_arg)
@@ -1892,7 +2017,6 @@ fn main() {
             .arg(&ancient_append_vecs)
             .arg(&halt_at_slot_store_hash_raw_data)
             .arg(&hard_forks_arg)
-            .arg(&no_accounts_db_caching_arg)
             .arg(&accounts_db_test_hash_calculation_arg)
             .arg(&no_os_memory_stats_reporting_arg)
             .arg(&no_bpf_jit_arg)
@@ -1966,8 +2090,7 @@ fn main() {
                             Ok(())
                         } else {
                             Err(format!(
-                                "Unable to parse as a number or the keyword ROOT, provided: {}",
-                                value
+                                "Unable to parse as a number or the keyword ROOT, provided: {value}"
                             ))
                         }
                     })
@@ -2128,6 +2251,7 @@ fn main() {
             .arg(&halt_at_slot_arg)
             .arg(&hard_forks_arg)
             .arg(&geyser_plugin_args)
+            .arg(&accounts_data_encoding_arg)
             .arg(
                 Arg::with_name("include_sysvars")
                     .long("include-sysvars")
@@ -2333,6 +2457,19 @@ fn main() {
                     .help("Slots that their blocks are computed for cost, default to all slots in ledger"),
             )
         )
+        .subcommand(
+            SubCommand::with_name("print-file-metadata")
+            .about("Print the metadata of the specified ledger-store file. \
+                    If no file name is specified, it will print the metadata of all ledger files.")
+            .arg(
+                Arg::with_name("file_name")
+                    .long("file-name")
+                    .takes_value(true)
+                    .value_name("SST_FILE_NAME")
+                    .help("The ledger file name (e.g. 011080.sst.) \
+                           If no file name is specified, it will print the metadata of all ledger files.")
+            )
+        )
         .get_matches();
 
     info!("{} {}", crate_name!(), solana_version::version!());
@@ -2352,21 +2489,10 @@ fn main() {
         .map(BlockstoreRecoveryMode::from);
     let force_update_to_open = matches.is_present("force_update_to_open");
     let verbose_level = matches.occurrences_of("verbose");
-
-    // TODO: the following shred_storage_type inference must be updated once the
-    // rocksdb options can be constructed via load_options_file() as the
-    // temporary use of DEFAULT_LEDGER_TOOL_ROCKS_FIFO_SHRED_STORAGE_SIZE_BYTES
-    // could affect the persisted rocksdb options file.
-    let shred_storage_type = match ShredStorageType::from_ledger_path(
+    let shred_storage_type = get_shred_storage_type(
         &ledger_path,
-        DEFAULT_LEDGER_TOOL_ROCKS_FIFO_SHRED_STORAGE_SIZE_BYTES,
-    ) {
-        Some(s) => s,
-        None => {
-            error!("Shred storage type cannot be inferred, the default RocksLevel will be used");
-            ShredStorageType::RocksLevel
-        }
-    };
+        "Shred storage type cannot be inferred, the default RocksLevel will be used",
+    );
 
     if let ("bigtable", Some(arg_matches)) = matches.subcommand() {
         bigtable_process_command(&ledger_path, arg_matches, &shred_storage_type)
@@ -2401,6 +2527,16 @@ fn main() {
                 let starting_slot = value_t_or_exit!(arg_matches, "starting_slot", Slot);
                 let ending_slot = value_t_or_exit!(arg_matches, "ending_slot", Slot);
                 let target_db = PathBuf::from(value_t_or_exit!(arg_matches, "target_db", String));
+                let target_shred_storage_type = get_shred_storage_type(
+                    &target_db,
+                    &format!(
+                        "Shred storage type of target_db cannot be inferred, \
+                     the default RocksLevel will be used. \
+                     If you want to use FIFO shred_storage_type on an empty target_db, \
+                     create {BLOCKSTORE_DIRECTORY_ROCKS_FIFO} foldar the specified target_db directory.",
+                    ),
+                );
+
                 let source = open_blockstore(
                     &ledger_path,
                     AccessType::Secondary,
@@ -2412,10 +2548,9 @@ fn main() {
                     &target_db,
                     AccessType::Primary,
                     None,
-                    &shred_storage_type,
+                    &target_shred_storage_type,
                     force_update_to_open,
                 );
-
                 for (slot, _meta) in source.slot_meta_iterator(starting_slot).unwrap() {
                     if slot > ending_slot {
                         break;
@@ -2429,19 +2564,21 @@ fn main() {
             }
             ("genesis", Some(arg_matches)) => {
                 let genesis_config = open_genesis_config_by(&ledger_path, arg_matches);
-                let print_accouunts = arg_matches.is_present("accounts");
-                if print_accouunts {
+                let print_accounts = arg_matches.is_present("accounts");
+                if print_accounts {
                     let print_account_data = !arg_matches.is_present("no_account_data");
+                    let print_encoding_format = parse_encoding_format(arg_matches);
                     for (pubkey, account) in genesis_config.accounts {
                         output_account(
                             &pubkey,
                             &AccountSharedData::from(account),
                             None,
                             print_account_data,
+                            print_encoding_format,
                         );
                     }
                 } else {
-                    println!("{}", genesis_config);
+                    println!("{genesis_config}");
                 }
             }
             ("genesis-hash", Some(arg_matches)) => {
@@ -2474,7 +2611,7 @@ fn main() {
                     LedgerColumnOptions::default(),
                 )
                 .unwrap_or_else(|err| {
-                    eprintln!("Failed to write genesis config: {:?}", err);
+                    eprintln!("Failed to write genesis config: {err:?}");
                     exit(1);
                 });
 
@@ -2521,7 +2658,7 @@ fn main() {
                         );
                     }
                     Err(err) => {
-                        eprintln!("Failed to load ledger: {:?}", err);
+                        eprintln!("Failed to load ledger: {err:?}");
                         exit(1);
                     }
                 }
@@ -2600,7 +2737,7 @@ fn main() {
                         println!("{}", &bank_forks.read().unwrap().working_bank().hash());
                     }
                     Err(err) => {
-                        eprintln!("Failed to load ledger: {:?}", err);
+                        eprintln!("Failed to load ledger: {err:?}");
                         exit(1);
                     }
                 }
@@ -2616,7 +2753,7 @@ fn main() {
                     force_update_to_open,
                 );
                 for slot in slots {
-                    println!("Slot {}", slot);
+                    println!("Slot {slot}");
                     if let Err(err) = output_slot(
                         &blockstore,
                         slot,
@@ -2625,7 +2762,7 @@ fn main() {
                         verbose_level,
                         &mut HashMap::new(),
                     ) {
-                        eprintln!("{}", err);
+                        eprintln!("{err}");
                     }
                 }
             }
@@ -2659,7 +2796,7 @@ fn main() {
                 );
                 let starting_slot = value_t_or_exit!(arg_matches, "starting_slot", Slot);
                 for slot in blockstore.dead_slots_iterator(starting_slot).unwrap() {
-                    println!("{}", slot);
+                    println!("{slot}");
                 }
             }
             ("duplicate-slots", Some(arg_matches)) => {
@@ -2672,7 +2809,7 @@ fn main() {
                 );
                 let starting_slot = value_t_or_exit!(arg_matches, "starting_slot", Slot);
                 for slot in blockstore.duplicate_slots_iterator(starting_slot).unwrap() {
-                    println!("{}", slot);
+                    println!("{slot}");
                 }
             }
             ("set-dead-slot", Some(arg_matches)) => {
@@ -2686,8 +2823,8 @@ fn main() {
                 );
                 for slot in slots {
                     match blockstore.set_dead_slot(slot) {
-                        Ok(_) => println!("Slot {} dead", slot),
-                        Err(err) => eprintln!("Failed to set slot {} dead slot: {:?}", slot, err),
+                        Ok(_) => println!("Slot {slot} dead"),
+                        Err(err) => eprintln!("Failed to set slot {slot} dead slot: {err:?}"),
                     }
                 }
             }
@@ -2702,9 +2839,9 @@ fn main() {
                 );
                 for slot in slots {
                     match blockstore.remove_dead_slot(slot) {
-                        Ok(_) => println!("Slot {} not longer marked dead", slot),
+                        Ok(_) => println!("Slot {slot} not longer marked dead"),
                         Err(err) => {
-                            eprintln!("Failed to remove dead flag for slot {}, {:?}", slot, err)
+                            eprintln!("Failed to remove dead flag for slot {slot}, {err:?}")
                         }
                     }
                 }
@@ -2773,10 +2910,7 @@ fn main() {
 
                 for ((slot1, frozen_log), (slot2, full_log)) in frozen.iter().zip(full.iter()) {
                     assert_eq!(slot1, slot2);
-                    println!(
-                        "Slot: {}\n, full: {}\n, frozen: {}",
-                        slot1, full_log, frozen_log
-                    );
+                    println!("Slot: {slot1}\n, full: {full_log}\n, frozen: {frozen_log}");
                 }
             }
             ("verify", Some(arg_matches)) => {
@@ -2791,10 +2925,12 @@ fn main() {
                     arg_matches.is_present("no_os_memory_stats_reporting");
                 let system_monitor_service = SystemMonitorService::new(
                     Arc::clone(&exit_signal),
-                    !no_os_memory_stats_reporting,
-                    false,
-                    false,
-                    false,
+                    SystemMonitorStatsReportConfig {
+                        report_os_memory_stats: !no_os_memory_stats_reporting,
+                        report_os_network_stats: false,
+                        report_os_cpu_stats: false,
+                        report_os_disk_stats: false,
+                    },
                 );
 
                 accounts_index_config.index_limit_mb = if let Some(limit) =
@@ -2833,7 +2969,14 @@ fn main() {
                     accounts_hash_cache_path: Some(ledger_path.clone()),
                     filler_accounts_config,
                     skip_rewrites: arg_matches.is_present("accounts_db_skip_rewrites"),
-                    ancient_append_vecs: arg_matches.is_present("accounts_db_ancient_append_vecs"),
+                    ancient_append_vec_offset: value_t!(
+                        matches,
+                        "accounts_db_ancient_append_vecs",
+                        u64
+                    )
+                    .ok(),
+                    exhaustively_verify_refcounts: arg_matches
+                        .is_present("accounts_db_verify_refcounts"),
                     skip_initial_hash_calc: arg_matches
                         .is_present("accounts_db_skip_initial_hash_calculation"),
                     ..AccountsDbConfig::default()
@@ -2847,9 +2990,11 @@ fn main() {
                     poh_verify: !arg_matches.is_present("skip_poh_verify"),
                     on_halt_store_hash_raw_data_for_debug: arg_matches
                         .is_present("halt_at_slot_store_hash_raw_data"),
+                    // ledger tool verify always runs the accounts hash calc at the end of processing the blockstore
+                    run_final_accounts_hash_calc: true,
                     halt_at_slot: value_t!(arg_matches, "halt_at_slot", Slot).ok(),
                     debug_keys,
-                    accounts_db_caching_enabled: !arg_matches.is_present("no_accounts_db_caching"),
+                    accounts_db_caching_enabled: true,
                     limit_load_slot_count_from_snapshot: value_t!(
                         arg_matches,
                         "limit_load_slot_count_from_snapshot",
@@ -2890,7 +3035,7 @@ fn main() {
                     incremental_snapshot_archive_path,
                 )
                 .unwrap_or_else(|err| {
-                    eprintln!("Ledger verification failed: {:?}", err);
+                    eprintln!("Ledger verification failed: {err:?}");
                     exit(1);
                 });
                 if print_accounts_stats {
@@ -2948,12 +3093,12 @@ fn main() {
                         };
 
                         match result {
-                            Ok(_) => println!("Wrote {}", output_file),
-                            Err(err) => eprintln!("Unable to write {}: {}", output_file, err),
+                            Ok(_) => println!("Wrote {output_file}"),
+                            Err(err) => eprintln!("Unable to write {output_file}: {err}"),
                         }
                     }
                     Err(err) => {
-                        eprintln!("Failed to load ledger: {:?}", err);
+                        eprintln!("Failed to load ledger: {err:?}");
                         exit(1);
                     }
                 }
@@ -2995,8 +3140,7 @@ fn main() {
                 if bootstrap_validator_stake_lamports < minimum_stake_lamports {
                     eprintln!(
                         "Error: insufficient --bootstrap-validator-stake-lamports. \
-                           Minimum amount is {}",
-                        minimum_stake_lamports
+                           Minimum amount is {minimum_stake_lamports}"
                     );
                     exit(1);
                 }
@@ -3012,7 +3156,7 @@ fn main() {
                     SnapshotVersion::default(),
                     |s| {
                         s.parse::<SnapshotVersion>().unwrap_or_else(|e| {
-                            eprintln!("Error: {}", e);
+                            eprintln!("Error: {e}");
                             exit(1)
                         })
                     },
@@ -3022,7 +3166,7 @@ fn main() {
                     let archive_format_str =
                         value_t_or_exit!(arg_matches, "snapshot_archive_format", String);
                     ArchiveFormat::from_cli_arg(&archive_format_str).unwrap_or_else(|| {
-                        panic!("Archive format not recognized: {}", archive_format_str)
+                        panic!("Archive format not recognized: {archive_format_str}")
                     })
                 };
 
@@ -3052,17 +3196,23 @@ fn main() {
                     value_t_or_exit!(arg_matches, "snapshot_slot", Slot)
                 };
 
-                assert!(
-                    blockstore.meta(snapshot_slot).unwrap().is_some(),
-                    "snapshot slot doesn't exist"
-                );
+                if blockstore
+                    .meta(snapshot_slot)
+                    .unwrap()
+                    .filter(|m| m.is_full())
+                    .is_none()
+                {
+                    eprintln!(
+                        "Error: snapshot slot {snapshot_slot} does not exist in blockstore or is not full.",
+                    );
+                    exit(1);
+                }
 
                 let ending_slot = if is_minimized {
                     let ending_slot = value_t_or_exit!(arg_matches, "ending_slot", Slot);
                     if ending_slot <= snapshot_slot {
                         eprintln!(
-                            "ending_slot ({}) must be greater than snapshot_slot ({})",
-                            ending_slot, snapshot_slot
+                            "Error: ending_slot ({ending_slot}) must be greater than snapshot_slot ({snapshot_slot})"
                         );
                         exit(1);
                     }
@@ -3089,7 +3239,12 @@ fn main() {
 
                 let accounts_db_config = Some(AccountsDbConfig {
                     skip_rewrites: arg_matches.is_present("accounts_db_skip_rewrites"),
-                    ancient_append_vecs: arg_matches.is_present("accounts_db_ancient_append_vecs"),
+                    ancient_append_vec_offset: value_t!(
+                        matches,
+                        "accounts_db_ancient_append_vecs",
+                        u64
+                    )
+                    .ok(),
                     skip_initial_hash_calc: arg_matches
                         .is_present("accounts_db_skip_initial_hash_calculation"),
                     ..AccountsDbConfig::default()
@@ -3100,6 +3255,7 @@ fn main() {
                     &genesis_config,
                     &blockstore,
                     ProcessOptions {
+                        accounts_db_caching_enabled: true,
                         new_hard_forks,
                         halt_at_slot: Some(snapshot_slot),
                         poh_verify: false,
@@ -3115,7 +3271,7 @@ fn main() {
                             .unwrap()
                             .get(snapshot_slot)
                             .unwrap_or_else(|| {
-                                eprintln!("Error: Slot {} is not available", snapshot_slot);
+                                eprintln!("Error: Slot {snapshot_slot} is not available");
                                 exit(1);
                             });
 
@@ -3168,8 +3324,7 @@ fn main() {
                         for address in accounts_to_remove {
                             let mut account = bank.get_account(&address).unwrap_or_else(|| {
                                 eprintln!(
-                                    "Error: Account does not exist, unable to remove it: {}",
-                                    address
+                                    "Error: Account does not exist, unable to remove it: {address}"
                                 );
                                 exit(1);
                             });
@@ -3285,8 +3440,7 @@ fn main() {
                             if let Some(warp_slot) = warp_slot {
                                 if warp_slot < minimum_warp_slot {
                                     eprintln!(
-                                        "Error: --warp-slot too close.  Must be >= {}",
-                                        minimum_warp_slot
+                                        "Error: --warp-slot too close.  Must be >= {minimum_warp_slot}"
                                     );
                                     exit(1);
                                 }
@@ -3309,6 +3463,7 @@ fn main() {
                                 &bank,
                                 bank.collector_id(),
                                 warp_slot,
+                                solana_runtime::accounts_db::CalcAccountsHashDataSource::IndexForTests,
                             ))
                         } else {
                             bank
@@ -3358,7 +3513,7 @@ fn main() {
                                     maximum_incremental_snapshot_archives_to_retain,
                                 )
                                 .unwrap_or_else(|err| {
-                                    eprintln!("Unable to create incremental snapshot: {}", err);
+                                    eprintln!("Unable to create incremental snapshot: {err}");
                                     exit(1);
                                 });
 
@@ -3382,7 +3537,7 @@ fn main() {
                                     maximum_incremental_snapshot_archives_to_retain,
                                 )
                                 .unwrap_or_else(|err| {
-                                    eprintln!("Unable to create snapshot: {}", err);
+                                    eprintln!("Unable to create snapshot: {err}");
                                     exit(1);
                                 });
 
@@ -3413,7 +3568,7 @@ fn main() {
                         );
                     }
                     Err(err) => {
-                        eprintln!("Failed to load ledger: {:?}", err);
+                        eprintln!("Failed to load ledger: {err:?}");
                         exit(1);
                     }
                 }
@@ -3444,45 +3599,69 @@ fn main() {
                     incremental_snapshot_archive_path,
                 )
                 .unwrap_or_else(|err| {
-                    eprintln!("Failed to load ledger: {:?}", err);
+                    eprintln!("Failed to load ledger: {err:?}");
                     exit(1);
                 });
 
                 let bank = bank_forks.read().unwrap().working_bank();
-                let mut measure = Measure::start("getting accounts");
-                let accounts: BTreeMap<_, _> = bank
-                    .get_all_accounts_with_modified_slots()
-                    .unwrap()
-                    .into_iter()
-                    .filter(|(pubkey, _account, _slot)| {
-                        include_sysvars || !solana_sdk::sysvar::is_sysvar_id(pubkey)
-                    })
-                    .map(|(pubkey, account, slot)| (pubkey, (account, slot)))
-                    .collect();
-                measure.stop();
-                info!("{}", measure);
-
-                let mut measure = Measure::start("calculating total accounts stats");
-                let total_accounts_stats = bank.calculate_total_accounts_stats(
-                    accounts
-                        .iter()
-                        .map(|(pubkey, (account, _slot))| (pubkey, account)),
-                );
-                measure.stop();
-                info!("{}", measure);
-
+                let mut serializer = serde_json::Serializer::new(stdout());
+                let (summarize, mut json_serializer) =
+                    match OutputFormat::from_matches(arg_matches, "output_format", false) {
+                        OutputFormat::Json | OutputFormat::JsonCompact => {
+                            (false, Some(serializer.serialize_seq(None).unwrap()))
+                        }
+                        _ => (true, None),
+                    };
+                let mut total_accounts_stats = TotalAccountsStats::default();
+                let rent_collector = bank.rent_collector();
                 let print_account_contents = !arg_matches.is_present("no_account_contents");
-                if print_account_contents {
-                    let print_account_data = !arg_matches.is_present("no_account_data");
-                    let mut measure = Measure::start("printing account contents");
-                    for (pubkey, (account, slot)) in accounts.into_iter() {
-                        output_account(&pubkey, &account, Some(slot), print_account_data);
-                    }
-                    measure.stop();
-                    info!("{}", measure);
-                }
+                let print_account_data = !arg_matches.is_present("no_account_data");
+                let data_encoding = parse_encoding_format(arg_matches);
+                let cli_account_new_config = CliAccountNewConfig {
+                    data_encoding,
+                    ..CliAccountNewConfig::default()
+                };
+                let scan_func = |some_account_tuple: Option<(&Pubkey, AccountSharedData, Slot)>| {
+                    if let Some((pubkey, account, slot)) = some_account_tuple
+                        .filter(|(_, account, _)| Accounts::is_loadable(account.lamports()))
+                    {
+                        if !include_sysvars && solana_sdk::sysvar::is_sysvar_id(pubkey) {
+                            return;
+                        }
 
-                println!("{:#?}", total_accounts_stats);
+                        total_accounts_stats.accumulate_account(pubkey, &account, rent_collector);
+
+                        if print_account_contents {
+                            if let Some(json_serializer) = json_serializer.as_mut() {
+                                let cli_account = CliAccount::new_with_config(
+                                    pubkey,
+                                    &account,
+                                    &cli_account_new_config,
+                                );
+                                json_serializer.serialize_element(&cli_account).unwrap();
+                            } else {
+                                output_account(
+                                    pubkey,
+                                    &account,
+                                    Some(slot),
+                                    print_account_data,
+                                    data_encoding,
+                                );
+                            }
+                        }
+                    }
+                };
+                let mut measure = Measure::start("scanning accounts");
+                bank.scan_all_accounts_with_modified_slots(scan_func)
+                    .unwrap();
+                measure.stop();
+                info!("{}", measure);
+                if let Some(json_serializer) = json_serializer {
+                    json_serializer.end().unwrap();
+                }
+                if summarize {
+                    println!("\n{total_accounts_stats:#?}");
+                }
             }
             ("capitalization", Some(arg_matches)) => {
                 let halt_at_slot = value_t!(arg_matches, "halt_at_slot", Slot).ok();
@@ -3512,7 +3691,7 @@ fn main() {
                         let bank_forks = bank_forks.read().unwrap();
                         let slot = bank_forks.working_bank().slot();
                         let bank = bank_forks.get(slot).unwrap_or_else(|| {
-                            eprintln!("Error: Slot {} is not available", slot);
+                            eprintln!("Error: Slot {slot} is not available");
                             exit(1);
                         });
 
@@ -3732,10 +3911,10 @@ fn main() {
                                     }
                                     InflationPointCalculationEvent::Skipped(skipped_reason) => {
                                         if detail.skipped_reasons.is_empty() {
-                                            detail.skipped_reasons = format!("{:?}", skipped_reason);
+                                            detail.skipped_reasons = format!("{skipped_reason:?}");
                                         } else {
                                             use std::fmt::Write;
-                                            let _ = write!(&mut detail.skipped_reasons, "/{:?}", skipped_reason);
+                                            let _ = write!(&mut detail.skipped_reasons, "/{skipped_reason:?}");
                                         }
                                     }
                                 }
@@ -3751,7 +3930,7 @@ fn main() {
                             let mut csv_writer = if arg_matches.is_present("csv_filename") {
                                 let csv_filename =
                                     value_t_or_exit!(arg_matches, "csv_filename", String);
-                                let file = File::create(&csv_filename).unwrap();
+                                let file = File::create(csv_filename).unwrap();
                                 Some(csv::WriterBuilder::new().from_writer(file))
                             } else {
                                 None
@@ -3840,7 +4019,7 @@ fn main() {
                                         detail_ref.as_ref().map(|detail_ref| detail_ref.value());
                                     println!(
                                         "{:<45}({}): {} => {} (+{} {:>4.9}%) {:?}",
-                                        format!("{}", pubkey), // format! is needed to pad/justify correctly.
+                                        format!("{pubkey}"), // format! is needed to pad/justify correctly.
                                         base_account.owner(),
                                         Sol(base_account.lamports()),
                                         Sol(warped_account.lamports()),
@@ -3887,7 +4066,7 @@ fn main() {
                                         fn format_or_na<T: std::fmt::Display>(
                                             data: Option<T>,
                                         ) -> String {
-                                            data.map(|data| format!("{}", data))
+                                            data.map(|data| format!("{data}"))
                                                 .unwrap_or_else(|| "N/A".to_owned())
                                         }
                                         let mut point_details = detail
@@ -3906,7 +4085,7 @@ fn main() {
                                                     base_bank.cluster_type()
                                                 ),
                                                 rewarded_epoch: base_bank.epoch(),
-                                                account: format!("{}", pubkey),
+                                                account: format!("{pubkey}"),
                                                 owner: format!("{}", base_account.owner()),
                                                 old_balance: base_account.lamports(),
                                                 new_balance: warped_account.lamports(),
@@ -4013,7 +4192,7 @@ fn main() {
                         }
                     }
                     Err(err) => {
-                        eprintln!("Failed to load ledger: {:?}", err);
+                        eprintln!("Failed to load ledger: {err:?}");
                         exit(1);
                     }
                 }
@@ -4049,17 +4228,14 @@ fn main() {
                             *slots.last().unwrap()
                         }
                         Err(err) => {
-                            eprintln!("Unable to read the Ledger: {:?}", err);
+                            eprintln!("Unable to read the Ledger: {err:?}");
                             exit(1);
                         }
                     },
                 };
 
                 if end_slot < start_slot {
-                    eprintln!(
-                        "end slot {} is less than start slot {}",
-                        end_slot, start_slot
-                    );
+                    eprintln!("end slot {end_slot} is less than start slot {start_slot}");
                     exit(1);
                 }
                 info!(
@@ -4168,7 +4344,7 @@ fn main() {
                     .for_each(|(i, (slot, hash))| {
                         if i < num_roots {
                             output_file
-                                .write_all(format!("{:?}: {:?}\n", slot, hash).as_bytes())
+                                .write_all(format!("{slot:?}: {hash:?}\n").as_bytes())
                                 .expect("failed to write");
                         }
                     });
@@ -4194,7 +4370,7 @@ fn main() {
                         let datetime: DateTime<Utc> = t.into();
                         datetime.to_rfc3339()
                     };
-                    let hash_str = format!("{}", hash);
+                    let hash_str = format!("{hash}");
                     println!("{:>20} {:>44} {:>32}", slot, &hash_str, &time_str);
                 }
             }
@@ -4222,10 +4398,9 @@ fn main() {
                 let num_slots = start_root - end_root - 1; // Adjust by one since start_root need not be checked
                 if arg_matches.is_present("end_root") && num_slots > max_slots {
                     eprintln!(
-                        "Requested range {} too large, max {}. \
+                        "Requested range {num_slots} too large, max {max_slots}. \
                     Either adjust `--until` value, or pass a larger `--repair-limit` \
                     to override the limit",
-                        num_slots, max_slots,
                     );
                     exit(1);
                 }
@@ -4237,19 +4412,16 @@ fn main() {
                 if !roots_to_fix.is_empty() {
                     eprintln!("{} slots to be rooted", roots_to_fix.len());
                     for chunk in roots_to_fix.chunks(100) {
-                        eprintln!("{:?}", chunk);
+                        eprintln!("{chunk:?}");
                         blockstore
                             .set_roots(roots_to_fix.iter())
                             .unwrap_or_else(|err| {
-                                eprintln!("Unable to set roots {:?}: {}", roots_to_fix, err);
+                                eprintln!("Unable to set roots {roots_to_fix:?}: {err}");
                                 exit(1);
                             });
                     }
                 } else {
-                    println!(
-                        "No missing roots found in range {} to {}",
-                        end_root, start_root
-                    );
+                    println!("No missing roots found in range {end_root} to {start_root}");
                 }
             }
             ("bounds", Some(arg_matches)) => {
@@ -4278,10 +4450,10 @@ fn main() {
                                     last
                                 );
                                 if all {
-                                    println!("Non-empty slots: {:?}", slots);
+                                    println!("Non-empty slots: {slots:?}");
                                 }
                             } else {
-                                println!("Ledger has data for slot {:?}", first);
+                                println!("Ledger has data for slot {first:?}");
                             }
                         }
                         if let Ok(rooted) = blockstore.rooted_slot_iterator(0) {
@@ -4304,16 +4476,15 @@ fn main() {
                                 }
                             }
                             println!(
-                                "  with {} rooted slots from {:?} to {:?}",
-                                total_rooted, first_rooted, last_rooted
+                                "  with {total_rooted} rooted slots from {first_rooted:?} to {last_rooted:?}"
                             );
-                            println!("  and {} slots past the last root", count_past_root);
+                            println!("  and {count_past_root} slots past the last root");
                         } else {
                             println!("  with no rooted slots");
                         }
                     }
                     Err(err) => {
-                        eprintln!("Unable to read the Ledger: {:?}", err);
+                        eprintln!("Unable to read the Ledger: {err:?}");
                         exit(1);
                     }
                 };
@@ -4351,8 +4522,21 @@ fn main() {
 
                 for slot in slots {
                     if let Err(err) = compute_slot_cost(&blockstore, slot) {
-                        eprintln!("{}", err);
+                        eprintln!("{err}");
                     }
+                }
+            }
+            ("print-file-metadata", Some(arg_matches)) => {
+                let blockstore = open_blockstore(
+                    &ledger_path,
+                    AccessType::Secondary,
+                    wal_recovery_mode,
+                    &shred_storage_type,
+                    false,
+                );
+                let sst_file_name = arg_matches.value_of("file_name");
+                if let Err(err) = print_blockstore_file_metadata(&blockstore, &sst_file_name) {
+                    eprintln!("{err}");
                 }
             }
             ("", _) => {
