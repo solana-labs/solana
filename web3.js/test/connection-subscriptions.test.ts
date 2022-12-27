@@ -1,5 +1,4 @@
 import chai from 'chai';
-import {describe} from 'mocha';
 import {Client} from 'rpc-websockets';
 import {stub, SinonStubbedInstance, SinonSpy, spy} from 'sinon';
 import sinonChai from 'sinon-chai';
@@ -552,7 +551,7 @@ describe('Subscriptions', () => {
                   });
                 });
                 describe('upon the socket connection reopening', () => {
-                  let fatalPriorUnubscribe;
+                  let fatalPriorUnubscribe: () => void;
                   beforeEach(() => {
                     fatalPriorUnubscribe = fatalUnsubscribe;
                     stubbedSocket.call.resetHistory();
@@ -700,7 +699,7 @@ describe('Subscriptions', () => {
               });
             });
             describe('upon the socket connection reopening', () => {
-              let fatalPriorSubscription;
+              let fatalPriorSubscription: () => void;
               beforeEach(() => {
                 fatalPriorSubscription = fatalSubscription;
                 stubbedSocket.call.resetHistory();

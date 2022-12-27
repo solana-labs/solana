@@ -2,7 +2,6 @@ import bs58 from 'bs58';
 import {Buffer} from 'buffer';
 import {expect, use} from 'chai';
 import chaiAsPromised from 'chai-as-promised';
-import {describe} from 'mocha';
 
 import {Connection} from '../src';
 import {url, wsUrl} from './url';

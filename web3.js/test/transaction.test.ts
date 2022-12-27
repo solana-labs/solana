@@ -1,7 +1,6 @@
 import bs58 from 'bs58';
 import {Buffer} from 'buffer';
 import {expect} from 'chai';
-import {describe} from 'mocha';
 
 import {Connection} from '../src/connection';
 import {Keypair} from '../src/keypair';
@@ -293,6 +292,7 @@ describe('Transaction', () => {
               foundIndex = ii;
               return true;
             }
+            return;
           });
           return foundIndex;
         })(),
@@ -343,6 +343,7 @@ describe('Transaction', () => {
               foundIndex = ii;
               return true;
             }
+            return;
           });
           return foundIndex;
         })(),

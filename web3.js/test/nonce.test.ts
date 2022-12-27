@@ -1,7 +1,6 @@
 import bs58 from 'bs58';
 import {Buffer} from 'buffer';
 import {expect} from 'chai';
-import {describe} from 'mocha';
 
 import {
   Connection,

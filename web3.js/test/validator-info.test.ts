@@ -1,6 +1,5 @@
 import {Buffer} from 'buffer';
 import {expect} from 'chai';
-import {describe} from 'mocha';
 
 import {Keypair} from '../src/keypair';
 import {PublicKey} from '../src/publickey';

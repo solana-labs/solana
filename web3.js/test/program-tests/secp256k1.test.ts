@@ -1,6 +1,5 @@
 import {Buffer} from 'buffer';
 import {keccak_256} from '@noble/hashes/sha3';
-import {describe} from 'mocha';
 
 import {
   ecdsaSign,

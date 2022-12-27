@@ -1,4 +1,4 @@
-import {AbortController} from 'node-abort-controller';
+import {AbortController as AbortControllerPolyfill} from 'node-abort-controller';
 /**
  * The connection url to use when running unit tests against a live cluster
  */
@@ -19,16 +19,11 @@ export const wsUrl = process.env.TEST_LIVE
   ? 'ws://localhost:8900/'
   : 'ws://localhost:9999/';
 
-const nodeVersion = Number(process.version.split('.')[0]);
+export const nodeVersion = Number(process.version.split('.')[0]);
 
-export const Controller = function () {
-  if (nodeVersion < 16) {
-    import('node-abort-controller').then(importedModule => {
-      return new importedModule.AbortController();
-    });
-  } else {
-    return new AbortController();
-  }
+export const Node14Controller = function () {
+  return new AbortControllerPolyfill();
 };
+
 //export const url = 'https://api.devnet.solana.com/';
 //export const url = 'http://api.devnet.solana.com/';

@@ -1,5 +1,4 @@
 import {expect} from 'chai';
-import {describe} from 'mocha';
 
 import {EpochSchedule} from '../src';
 

@@ -1,7 +1,6 @@
 import BN from 'bn.js';
 import {Buffer} from 'buffer';
 import {expect, use} from 'chai';
-import {describe} from 'mocha';
 import chaiAsPromised from 'chai-as-promised';
 
 import {Keypair} from '../src/keypair';

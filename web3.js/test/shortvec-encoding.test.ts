@@ -1,5 +1,4 @@
 import {expect} from 'chai';
-import {describe} from 'mocha';
 
 import {decodeLength, encodeLength} from '../src/utils/shortvec-encoding';
 

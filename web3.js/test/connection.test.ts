@@ -2,7 +2,6 @@ import bs58 from 'bs58';
 import {Buffer} from 'buffer';
 import * as splToken from '@solana/spl-token';
 import {expect, use} from 'chai';
-import {describe} from 'mocha';
 import chaiAsPromised from 'chai-as-promised';
 import {Agent as HttpAgent} from 'http';
 import {Agent as HttpsAgent} from 'https';
@@ -26,10 +25,11 @@ import {
   AddressLookupTableProgram,
   SYSTEM_INSTRUCTION_LAYOUTS,
   NONCE_ACCOUNT_LENGTH,
+  MessageAddressTableLookup,
 } from '../src';
 import invariant from '../src/utils/assert';
 import {toBuffer} from '../src/utils/to-buffer';
-import {MOCK_PORT, url, Controller} from './url';
+import {MOCK_PORT, url, Node14Controller, nodeVersion} from './url';
 import {
   AccountInfo,
   BLOCKHASH_CACHE_TIMEOUT_MS,
@@ -198,7 +198,7 @@ describe('Connection', function () {
   }
 
   describe('override HTTP agent', () => {
-    let previousBrowserEnv;
+    let previousBrowserEnv: string | undefined;
     beforeEach(() => {
       previousBrowserEnv = process.env.BROWSER;
       delete process.env.BROWSER;
@@ -1256,7 +1256,8 @@ describe('Connection', function () {
         it('rejects if called with an already-aborted `abortSignal`', () => {
           const mockSignature =
             'w2Zeq8YkpyB463DttvfzARD7k9ZxGEwbsEw4boEK7jDp3pfoxZbTdLFSsEPhzXhpCcjGi2kHtHFobgX49MMhbWt';
-          const abortController: any = Controller();
+          const abortController: any =
+            nodeVersion >= 16 ? new AbortController() : Node14Controller();
           abortController.abort();
           expect(
             connection.confirmTransaction({
@@ -1271,7 +1272,8 @@ describe('Connection', function () {
         it('rejects upon receiving an abort signal', async () => {
           const mockSignature =
             'w2Zeq8YkpyB463DttvfzARD7k9ZxGEwbsEw4boEK7jDp3pfoxZbTdLFSsEPhzXhpCcjGi2kHtHFobgX49MMhbWt';
-          const abortController: any = Controller();
+          const abortController: any =
+            nodeVersion >= 16 ? new AbortController() : Node14Controller();
           // Keep the subscription from ever returning data.
           await mockRpcMessage({
             method: 'signatureSubscribe',
@@ -1427,7 +1429,8 @@ describe('Connection', function () {
         it('rejects if called with an already-aborted `abortSignal`', () => {
           const mockSignature =
             'w2Zeq8YkpyB463DttvfzARD7k9ZxGEwbsEw4boEK7jDp3pfoxZbTdLFSsEPhzXhpCcjGi2kHtHFobgX49MMhbWt';
-          const abortController: any = Controller();
+          const abortController: any =
+            nodeVersion >= 16 ? new AbortController() : Node14Controller();
           abortController.abort();
           expect(
             connection.confirmTransaction({
@@ -1443,7 +1446,8 @@ describe('Connection', function () {
         it('rejects upon receiving an abort signal', async () => {
           const mockSignature =
             'w2Zeq8YkpyB463DttvfzARD7k9ZxGEwbsEw4boEK7jDp3pfoxZbTdLFSsEPhzXhpCcjGi2kHtHFobgX49MMhbWt';
-          const abortController: any = Controller();
+          const abortController: any =
+            nodeVersion >= 16 ? new AbortController() : Node14Controller();
           // Keep the subscription from ever returning data.
           await mockRpcMessage({
             method: 'signatureSubscribe',
@@ -5752,8 +5756,8 @@ describe('Connection', function () {
         }
       });
 
-      let signature;
-      let addressTableLookups;
+      let signature: any;
+      let addressTableLookups: MessageAddressTableLookup[];
       it('send and confirm', async () => {
         const {blockhash, lastValidBlockHeight} =
           await connection.getLatestBlockhash();
@@ -5821,7 +5825,7 @@ describe('Connection', function () {
         );
       });
 
-      let transactionSlot;
+      let transactionSlot: number;
       it('getTransaction', async () => {
         // fetch v0 transaction
         const fetchedTransaction = await connection.getTransaction(signature, {
