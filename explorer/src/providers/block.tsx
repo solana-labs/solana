@@ -135,7 +135,7 @@ export function useFetchBlock() {
     throw new Error(`useFetchBlock must be used within a BlockProvider`);
   }
 
-  const { cluster, url } = useCluster();
+  const { cluster, url } = useCluster({ cached: true });
   return React.useCallback(
     (key: number) => fetchBlock(dispatch, url, cluster, key),
     [dispatch, cluster, url]

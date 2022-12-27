@@ -60,7 +60,20 @@ export const MAINNET_BETA_URL = clusterApiUrl("mainnet-beta");
 export const TESTNET_URL = clusterApiUrl("testnet");
 export const DEVNET_URL = clusterApiUrl("devnet");
 
-export function clusterUrl(cluster: Cluster, customUrl: string): string {
+export function clusterUrl(
+  cluster: Cluster,
+  customUrl: string,
+  cached: boolean
+): string {
+  if (cached) {
+    if (cluster === Cluster.Custom) {
+      console.warn(
+        "Custom clusters can not be used with `cached: true`. Responses will not be cached."
+      );
+    } else {
+      return `/api/rpc/${cluster}`;
+    }
+  }
   const modifyUrl = (url: string): string => {
     if (window.location.hostname === "localhost") {
       return url;
@@ -197,7 +210,9 @@ async function updateCluster(
     // validate url
     new URL(customUrl);
 
-    const connection = new Connection(clusterUrl(cluster, customUrl));
+    const connection = new Connection(
+      clusterUrl(cluster, customUrl, false /* cached */)
+    );
     const [firstAvailableBlock, epochSchedule, epochInfo, genesisHash] =
       await Promise.all([
         connection.getFirstAvailableBlock(),
@@ -219,7 +234,9 @@ async function updateCluster(
     });
   } catch (error) {
     if (cluster !== Cluster.Custom) {
-      reportError(error, { clusterUrl: clusterUrl(cluster, customUrl) });
+      reportError(error, {
+        clusterUrl: clusterUrl(cluster, customUrl, false /* cached */),
+      });
     }
     dispatch({
       status: ClusterStatus.Failure,
@@ -240,14 +257,14 @@ export function useUpdateCustomUrl() {
   };
 }
 
-export function useCluster() {
+export function useCluster(config?: { cached: boolean }) {
   const context = React.useContext(StateContext);
   if (!context) {
     throw new Error(`useCluster must be used within a ClusterProvider`);
   }
   return {
     ...context,
-    url: clusterUrl(context.cluster, context.customUrl),
+    url: clusterUrl(context.cluster, context.customUrl, !!config?.cached),
     name: clusterName(context.cluster),
   };
 }
