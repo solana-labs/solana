@@ -5756,7 +5756,7 @@ describe('Connection', function () {
         }
       });
 
-      let signature: any;
+      let signature: TransactionSignature;
       let addressTableLookups: MessageAddressTableLookup[];
       it('send and confirm', async () => {
         const {blockhash, lastValidBlockHeight} =
