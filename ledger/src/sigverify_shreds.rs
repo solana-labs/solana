@@ -31,6 +31,7 @@ lazy_static! {
         .unwrap();
 }
 
+#[must_use]
 pub fn verify_shred_cpu(
     packet: &Packet,
     slot_leaders: &HashMap<Slot, /*pubkey:*/ [u8; 32]>,
@@ -86,11 +87,10 @@ fn verify_shreds_cpu(
 }
 
 fn slot_key_data_for_gpu<T>(
-    offset_start: usize,
     batches: &[PacketBatch],
     slot_keys: &HashMap<Slot, /*pubkey:*/ T>,
     recycler_cache: &RecyclerCache,
-) -> (PinnedVec<u8>, TxOffset, usize)
+) -> (/*pubkeys:*/ PinnedVec<u8>, TxOffset)
 where
     T: AsRef<[u8]> + Copy + Debug + Default + Eq + std::hash::Hash + Sync,
 {
@@ -115,56 +115,53 @@ where
     });
     let keys_to_slots: HashMap<T, Vec<Slot>> = slots
         .iter()
-        .map(|slot| (*slot_keys.get(slot).unwrap(), *slot))
+        .map(|slot| (slot_keys[slot], *slot))
         .into_group_map();
     let mut keyvec = recycler_cache.buffer().allocate("shred_gpu_pubkeys");
     keyvec.set_pinnable();
 
     let keyvec_size = keys_to_slots.len() * size_of::<T>();
-    keyvec.resize(keyvec_size, 0);
+    resize_buffer(&mut keyvec, keyvec_size);
 
-    let slot_to_key_ix: HashMap<Slot, /*key index:*/ usize> = keys_to_slots
-        .into_iter()
-        .enumerate()
-        .flat_map(|(i, (k, slots))| {
-            let start = i * size_of::<T>();
-            let end = start + size_of::<T>();
-            keyvec[start..end].copy_from_slice(k.as_ref());
-            slots.into_iter().zip(repeat(i))
-        })
-        .collect();
-
+    let key_offsets: HashMap<Slot, /*key offset:*/ usize> = {
+        let mut size = 0;
+        keys_to_slots
+            .into_iter()
+            .flat_map(|(key, slots)| {
+                let offset = size;
+                size += std::mem::size_of::<T>();
+                keyvec[offset..size].copy_from_slice(key.as_ref());
+                slots.into_iter().zip(repeat(offset))
+            })
+            .collect()
+    };
     let mut offsets = recycler_cache.offsets().allocate("shred_offsets");
     offsets.set_pinnable();
     for slot in slots {
-        let key_offset = slot_to_key_ix.get(&slot).unwrap() * size_of::<T>();
-        offsets.push((offset_start + key_offset) as u32);
+        offsets.push(key_offsets[&slot] as u32);
     }
-    let num_in_packets = resize_vec(&mut keyvec);
     trace!("keyvec.len: {}", keyvec.len());
     trace!("keyvec: {:?}", keyvec);
     trace!("offsets: {:?}", offsets);
-    (keyvec, offsets, num_in_packets)
+    (keyvec, offsets)
 }
 
-fn vec_size_in_packets(keyvec: &PinnedVec<u8>) -> usize {
-    (keyvec.len() + (size_of::<Packet>() - 1)) / size_of::<Packet>()
-}
-
-fn resize_vec(keyvec: &mut PinnedVec<u8>) -> usize {
+// Resizes the buffer to >= size and a multiple of
+// std::mem::size_of::<Packet>().
+fn resize_buffer(buffer: &mut PinnedVec<u8>, size: usize) {
     //HACK: Pubkeys vector is passed along as a `PacketBatch` buffer to the GPU
     //TODO: GPU needs a more opaque interface, which can handle variable sized structures for data
     //Pad the Pubkeys buffer such that it is bigger than a buffer of Packet sized elems
-    let num_in_packets = (keyvec.len() + (size_of::<Packet>() - 1)) / size_of::<Packet>();
-    keyvec.resize(num_in_packets * size_of::<Packet>(), 0u8);
-    num_in_packets
+    let num_packets = (size + std::mem::size_of::<Packet>() - 1) / std::mem::size_of::<Packet>();
+    let size = num_packets * std::mem::size_of::<Packet>();
+    buffer.resize(size, 0u8);
 }
 
 fn shred_gpu_offsets(
-    mut pubkeys_end: usize,
+    offset: usize,
     batches: &[PacketBatch],
     recycler_cache: &RecyclerCache,
-) -> (TxOffset, TxOffset, TxOffset, Vec<Vec<u32>>) {
+) -> (TxOffset, TxOffset, TxOffset) {
     fn add_offset(range: Range<usize>, offset: usize) -> Range<usize> {
         range.start + offset..range.end + offset
     }
@@ -174,28 +171,25 @@ fn shred_gpu_offsets(
     msg_start_offsets.set_pinnable();
     let mut msg_sizes = recycler_cache.offsets().allocate("shred_msg_sizes");
     msg_sizes.set_pinnable();
-    let mut v_sig_lens = vec![];
-    for batch in batches.iter() {
-        let mut sig_lens = Vec::new();
-        for packet in batch.iter() {
-            let sig = shred::layout::get_signature_range();
-            let sig = add_offset(sig, pubkeys_end);
-            debug_assert_eq!(sig.end - sig.start, std::mem::size_of::<Signature>());
-            let shred = shred::layout::get_shred(packet);
-            // Signature may verify for an empty message but the packet will be
-            // discarded during deserialization.
-            let msg = shred.and_then(shred::layout::get_signed_message_range);
-            let msg = add_offset(msg.unwrap_or_default(), pubkeys_end);
-            signature_offsets.push(sig.start as u32);
-            msg_start_offsets.push(msg.start as u32);
-            let msg_size = msg.end.saturating_sub(msg.start);
-            msg_sizes.push(msg_size as u32);
-            sig_lens.push(1);
-            pubkeys_end += size_of::<Packet>();
-        }
-        v_sig_lens.push(sig_lens);
+    let offsets = std::iter::successors(Some(offset), |offset| {
+        offset.checked_add(std::mem::size_of::<Packet>())
+    });
+    let packets = batches.iter().flatten();
+    for (offset, packet) in offsets.zip(packets) {
+        let sig = shred::layout::get_signature_range();
+        let sig = add_offset(sig, offset);
+        debug_assert_eq!(sig.end - sig.start, std::mem::size_of::<Signature>());
+        let shred = shred::layout::get_shred(packet);
+        // Signature may verify for an empty message but the packet will be
+        // discarded during deserialization.
+        let msg = shred.and_then(shred::layout::get_signed_message_range);
+        let msg = add_offset(msg.unwrap_or_default(), offset);
+        signature_offsets.push(sig.start as u32);
+        msg_start_offsets.push(msg.start as u32);
+        let msg_size = msg.end.saturating_sub(msg.start);
+        msg_sizes.push(msg_size as u32);
     }
-    (signature_offsets, msg_start_offsets, msg_sizes, v_sig_lens)
+    (signature_offsets, msg_start_offsets, msg_sizes)
 }
 
 pub fn verify_shreds_gpu(
@@ -207,37 +201,26 @@ pub fn verify_shreds_gpu(
         None => return verify_shreds_cpu(batches, slot_leaders),
         Some(api) => api,
     };
-    let mut elems = Vec::new();
-    let mut rvs = Vec::new();
-    let packet_count = count_packets_in_batches(batches);
-    let (pubkeys, pubkey_offsets, mut num_packets) =
-        slot_key_data_for_gpu(0, batches, slot_leaders, recycler_cache);
+    let (pubkeys, pubkey_offsets) = slot_key_data_for_gpu(batches, slot_leaders, recycler_cache);
     //HACK: Pubkeys vector is passed along as a `PacketBatch` buffer to the GPU
     //TODO: GPU needs a more opaque interface, which can handle variable sized structures for data
-    let pubkeys_len = num_packets * size_of::<Packet>();
-    trace!("num_packets: {}", num_packets);
-    trace!("pubkeys_len: {}", pubkeys_len);
-    let (signature_offsets, msg_start_offsets, msg_sizes, v_sig_lens) =
-        shred_gpu_offsets(pubkeys_len, batches, recycler_cache);
+    let offset = pubkeys.len();
+    let (signature_offsets, msg_start_offsets, msg_sizes) =
+        shred_gpu_offsets(offset, batches, recycler_cache);
     let mut out = recycler_cache.buffer().allocate("out_buffer");
     out.set_pinnable();
-    elems.push(perf_libs::Elems {
+    out.resize(signature_offsets.len(), 0u8);
+    debug_assert_eq!(pubkeys.len() % std::mem::size_of::<Packet>(), 0);
+    let num_pubkey_packets = pubkeys.len() / std::mem::size_of::<Packet>();
+    let mut elems = vec![perf_libs::Elems {
         elems: pubkeys.as_ptr().cast::<u8>(),
-        num: num_packets as u32,
-    });
-
-    for batch in batches {
-        elems.push(perf_libs::Elems {
-            elems: batch.as_ptr().cast::<u8>(),
-            num: batch.len() as u32,
-        });
-        let mut v = Vec::new();
-        v.resize(batch.len(), 0);
-        rvs.push(v);
-        num_packets += batch.len();
-    }
-    out.resize(signature_offsets.len(), 0);
-
+        num: num_pubkey_packets as u32,
+    }];
+    elems.extend(batches.iter().map(|batch| perf_libs::Elems {
+        elems: batch.as_ptr().cast::<u8>(),
+        num: batch.len() as u32,
+    }));
+    let num_packets = elems.iter().map(|elem| elem.num).sum();
     trace!("Starting verify num packets: {}", num_packets);
     trace!("elem len: {}", elems.len() as u32);
     trace!("packet sizeof: {}", size_of::<Packet>() as u32);
@@ -247,7 +230,7 @@ pub fn verify_shreds_gpu(
             elems.as_ptr(),
             elems.len() as u32,
             size_of::<Packet>() as u32,
-            num_packets as u32,
+            num_packets,
             signature_offsets.len() as u32,
             msg_sizes.as_ptr(),
             pubkey_offsets.as_ptr(),
@@ -263,9 +246,15 @@ pub fn verify_shreds_gpu(
     trace!("done verify");
     trace!("out buf {:?}", out);
 
+    // Each shred has exactly one signature.
+    let v_sig_lens: Vec<_> = batches
+        .iter()
+        .map(|batch| vec![1u32; batch.len()])
+        .collect();
+    let mut rvs: Vec<_> = batches.iter().map(|batch| vec![0u8; batch.len()]).collect();
     sigverify::copy_return_values(&v_sig_lens, &out, &mut rvs);
 
-    inc_new_counter_debug!("ed25519_shred_verify_gpu", packet_count);
+    inc_new_counter_debug!("ed25519_shred_verify_gpu", out.len());
     rvs
 }
 
@@ -306,10 +295,10 @@ pub fn sign_shreds_gpu_pinned_keypair(keypair: &Keypair, cache: &RecyclerCache) 
     result[0] &= 248;
     result[31] &= 63;
     result[31] |= 64;
-    vec.resize(pubkey.len() + result.len(), 0);
+    let size = pubkey.len() + result.len();
+    resize_buffer(&mut vec, size);
     vec[0..pubkey.len()].copy_from_slice(&pubkey);
-    vec[pubkey.len()..].copy_from_slice(&result);
-    resize_vec(&mut vec);
+    vec[pubkey.len()..size].copy_from_slice(&result);
     vec
 }
 
@@ -331,11 +320,6 @@ pub fn sign_shreds_gpu(
     };
     let pinned_keypair = pinned_keypair.as_ref().unwrap();
 
-    let mut elems = Vec::new();
-    let offset: usize = pinned_keypair.len();
-    let num_keypair_packets = vec_size_in_packets(pinned_keypair);
-    let mut num_packets = num_keypair_packets;
-
     //should be zero
     let mut pubkey_offsets = recycler_cache.offsets().allocate("pubkey offsets");
     pubkey_offsets.resize(packet_count, 0);
@@ -343,28 +327,26 @@ pub fn sign_shreds_gpu(
     let mut secret_offsets = recycler_cache.offsets().allocate("secret_offsets");
     secret_offsets.resize(packet_count, pubkey_size as u32);
 
+    let offset: usize = pinned_keypair.len();
     trace!("offset: {}", offset);
-    let (signature_offsets, msg_start_offsets, msg_sizes, _v_sig_lens) =
+    let (signature_offsets, msg_start_offsets, msg_sizes) =
         shred_gpu_offsets(offset, batches, recycler_cache);
     let total_sigs = signature_offsets.len();
     let mut signatures_out = recycler_cache.buffer().allocate("ed25519 signatures");
     signatures_out.set_pinnable();
     signatures_out.resize(total_sigs * sig_size, 0);
-    elems.push(perf_libs::Elems {
+
+    debug_assert_eq!(pinned_keypair.len() % std::mem::size_of::<Packet>(), 0);
+    let num_keypair_packets = pinned_keypair.len() / std::mem::size_of::<Packet>();
+    let mut elems = vec![perf_libs::Elems {
         elems: pinned_keypair.as_ptr().cast::<u8>(),
         num: num_keypair_packets as u32,
-    });
-
-    for batch in batches.iter() {
-        elems.push(perf_libs::Elems {
-            elems: batch.as_ptr().cast::<u8>(),
-            num: batch.len() as u32,
-        });
-        let mut v = Vec::new();
-        v.resize(batch.len(), 0);
-        num_packets += batch.len();
-    }
-
+    }];
+    elems.extend(batches.iter().map(|batch| perf_libs::Elems {
+        elems: batch.as_ptr().cast::<u8>(),
+        num: batch.len() as u32,
+    }));
+    let num_packets = elems.iter().map(|elem| elem.num).sum();
     trace!("Starting verify num packets: {}", num_packets);
     trace!("elem len: {}", elems.len() as u32);
     trace!("packet sizeof: {}", size_of::<Packet>() as u32);
@@ -374,7 +356,7 @@ pub fn sign_shreds_gpu(
             elems.as_mut_ptr(),
             elems.len() as u32,
             size_of::<Packet>() as u32,
-            num_packets as u32,
+            num_packets,
             total_sigs as u32,
             msg_sizes.as_ptr(),
             pubkey_offsets.as_ptr(),
@@ -388,20 +370,20 @@ pub fn sign_shreds_gpu(
         }
     }
     trace!("done sign");
-    let mut sizes: Vec<usize> = vec![0];
-    sizes.extend(batches.iter().map(|b| b.len()));
-    for i in 0..sizes.len() {
-        if i == 0 {
-            continue;
-        }
-        sizes[i] += sizes[i - 1];
-    }
+    // Cumulative number of packets within batches.
+    let num_packets: Vec<_> = batches
+        .iter()
+        .scan(0, |num_packets, batch| {
+            let out = *num_packets;
+            *num_packets += batch.len();
+            Some(out)
+        })
+        .collect();
     SIGVERIFY_THREAD_POOL.install(|| {
         batches
             .par_iter_mut()
-            .enumerate()
-            .for_each(|(batch_ix, batch)| {
-                let num_packets = sizes[batch_ix];
+            .zip(num_packets)
+            .for_each(|(batch, num_packets)| {
                 batch[..]
                     .par_iter_mut()
                     .enumerate()
@@ -825,15 +807,9 @@ mod tests {
         });
         let packets: Vec<_> = repeat_with(|| {
             let size = rng.gen_range(0, 16);
-            let packets: Vec<_> = repeat_with(|| packets.next())
-                .while_some()
-                .take(size)
-                .collect();
-            if size != 0 && packets.is_empty() {
-                None
-            } else {
-                Some(PacketBatch::new(packets))
-            }
+            let packets = packets.by_ref().take(size).collect();
+            let batch = PacketBatch::new(packets);
+            (size == 0 || !batch.is_empty()).then_some(batch)
         })
         .while_some()
         .collect();
@@ -860,8 +836,7 @@ mod tests {
             verify_shreds_gpu(&packets, &pubkeys, &recycler_cache),
             packets
                 .iter()
-                .map(PacketBatch::len)
-                .map(|size| vec![1u8; size])
+                .map(|batch| vec![1u8; batch.len()])
                 .collect::<Vec<_>>()
         );
         // Invalidate signatures for a random number of packets.
@@ -904,8 +879,7 @@ mod tests {
             verify_shreds_gpu(&packets, &pubkeys, &recycler_cache),
             packets
                 .iter()
-                .map(PacketBatch::len)
-                .map(|size| vec![0u8; size])
+                .map(|batch| vec![0u8; batch.len()])
                 .collect::<Vec<_>>()
         );
         let pinned_keypair = sign_shreds_gpu_pinned_keypair(&keypair, &recycler_cache);
@@ -916,8 +890,7 @@ mod tests {
             verify_shreds_gpu(&packets, &pubkeys, &recycler_cache),
             packets
                 .iter()
-                .map(PacketBatch::len)
-                .map(|size| vec![1u8; size])
+                .map(|batch| vec![1u8; batch.len()])
                 .collect::<Vec<_>>()
         );
     }
