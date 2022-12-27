@@ -4356,7 +4356,6 @@ RPC Enabled Nodes: 1"#;
     }
 
     #[test]
-    #[allow(clippy::same_item_push)]
     fn test_push_epoch_slots_large() {
         let node_keypair = Arc::new(Keypair::new());
         let cluster_info = ClusterInfo::new(
@@ -4364,12 +4363,15 @@ RPC Enabled Nodes: 1"#;
             node_keypair,
             SocketAddrSpace::Unspecified,
         );
-        let mut range: Vec<Slot> = vec![];
         //random should be hard to compress
-        for _ in 0..32000 {
-            let last = *range.last().unwrap_or(&0);
-            range.push(last + rand::thread_rng().gen_range(1, 32));
-        }
+        let mut rng = rand::thread_rng();
+        let range: Vec<Slot> = repeat_with(|| rng.gen_range(1, 32))
+            .scan(0, |slot, step| {
+                *slot += step;
+                Some(*slot)
+            })
+            .take(32000)
+            .collect();
         cluster_info.push_epoch_slots(&range[..16000]);
         cluster_info.push_epoch_slots(&range[16000..]);
         let slots = cluster_info.get_epoch_slots(&mut Cursor::default());

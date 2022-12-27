@@ -28,6 +28,7 @@ use {
     },
     solana_streamer::socket::SocketAddrSpace,
     std::{
+        iter::repeat_with,
         net::UdpSocket,
         sync::{
             atomic::{AtomicUsize, Ordering},
@@ -47,7 +48,6 @@ use {
 // threads loop indefinitely.
 #[ignore]
 #[bench]
-#[allow(clippy::same_item_push)]
 fn bench_retransmitter(bencher: &mut Bencher) {
     solana_logger::setup();
     let cluster_info = ClusterInfo::new(
@@ -56,8 +56,7 @@ fn bench_retransmitter(bencher: &mut Bencher) {
         SocketAddrSpace::Unspecified,
     );
     const NUM_PEERS: usize = 4;
-    let mut peer_sockets = Vec::new();
-    for _ in 0..NUM_PEERS {
+    let peer_sockets: Vec<_> = repeat_with(|| {
         let id = Pubkey::new_unique();
         let socket = UdpSocket::bind("0.0.0.0:0").unwrap();
         let mut contact_info = ContactInfo::new_localhost(&id, timestamp());
@@ -67,8 +66,10 @@ fn bench_retransmitter(bencher: &mut Bencher) {
         info!("local: {:?}", contact_info.tvu);
         cluster_info.insert_info(contact_info);
         socket.set_nonblocking(true).unwrap();
-        peer_sockets.push(socket);
-    }
+        socket
+    })
+    .take(NUM_PEERS)
+    .collect();
     let peer_sockets = Arc::new(peer_sockets);
     let cluster_info = Arc::new(cluster_info);
 

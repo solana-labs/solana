@@ -35,6 +35,7 @@ use {
     },
     std::{
         collections::{HashMap, HashSet},
+        iter::repeat_with,
         net::UdpSocket,
         sync::{
             atomic::{AtomicBool, Ordering},
@@ -235,7 +236,6 @@ impl BroadcastStage {
     /// which will then close FetchStage in the Tpu, and then the rest of the Tpu,
     /// completing the cycle.
     #[allow(clippy::too_many_arguments)]
-    #[allow(clippy::same_item_push)]
     fn new(
         socks: Vec<UdpSocket>,
         cluster_info: Arc<ClusterInfo>,
@@ -271,42 +271,43 @@ impl BroadcastStage {
         };
         let mut thread_hdls = vec![thread_hdl];
         let socket_receiver = Arc::new(Mutex::new(socket_receiver));
-        for sock in socks.into_iter() {
+        thread_hdls.extend(socks.into_iter().map(|sock| {
             let socket_receiver = socket_receiver.clone();
             let mut bs_transmit = broadcast_stage_run.clone();
             let cluster_info = cluster_info.clone();
             let bank_forks = bank_forks.clone();
-            let t = Builder::new()
+            let run_transmit = move || loop {
+                let res = bs_transmit.transmit(&socket_receiver, &cluster_info, &sock, &bank_forks);
+                let res = Self::handle_error(res, "solana-broadcaster-transmit");
+                if let Some(res) = res {
+                    return res;
+                }
+            };
+            Builder::new()
                 .name("solBroadcastTx".to_string())
-                .spawn(move || loop {
-                    let res =
-                        bs_transmit.transmit(&socket_receiver, &cluster_info, &sock, &bank_forks);
-                    let res = Self::handle_error(res, "solana-broadcaster-transmit");
-                    if let Some(res) = res {
-                        return res;
-                    }
-                })
-                .unwrap();
-            thread_hdls.push(t);
-        }
+                .spawn(run_transmit)
+                .unwrap()
+        }));
         let blockstore_receiver = Arc::new(Mutex::new(blockstore_receiver));
-        for _ in 0..NUM_INSERT_THREADS {
-            let blockstore_receiver = blockstore_receiver.clone();
-            let mut bs_record = broadcast_stage_run.clone();
-            let btree = blockstore.clone();
-            let t = Builder::new()
-                .name("solBroadcastRec".to_string())
-                .spawn(move || loop {
+        thread_hdls.extend(
+            repeat_with(|| {
+                let blockstore_receiver = blockstore_receiver.clone();
+                let mut bs_record = broadcast_stage_run.clone();
+                let btree = blockstore.clone();
+                let run_record = move || loop {
                     let res = bs_record.record(&blockstore_receiver, &btree);
                     let res = Self::handle_error(res, "solana-broadcaster-record");
                     if let Some(res) = res {
                         return res;
                     }
-                })
-                .unwrap();
-            thread_hdls.push(t);
-        }
-
+                };
+                Builder::new()
+                    .name("solBroadcastRec".to_string())
+                    .spawn(run_record)
+                    .unwrap()
+            })
+            .take(NUM_INSERT_THREADS),
+        );
         let retransmit_thread = Builder::new()
             .name("solBroadcastRtx".to_string())
             .spawn(move || loop {
