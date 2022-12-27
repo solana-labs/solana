@@ -441,6 +441,10 @@ impl ReplayStage {
             rpc_subscriptions.clone(),
         );
         let run_replay = move || {
+            let max_thread_priority = std::env::var("MAX_THREAD_PRIORITY").is_ok();
+            if max_thread_priority {
+                thread_priority::set_current_thread_priority(thread_priority::ThreadPriority::Max).unwrap();
+            }
             let verify_recyclers = VerifyRecyclers::default();
             let _exit = Finalizer::new(exit.clone());
             let mut identity_keypair = cluster_info.keypair().clone();
@@ -2549,13 +2553,48 @@ impl ReplayStage {
 
             assert_eq!(bank_slot, bank.slot());
             if bank.is_complete() {
+                info!("waiting for completed bank: slot: {}", bank.slot());
+                let cumulative_timings = bank.wait_for_scheduler(false);
+                if let Err(err) = cumulative_timings {
+                    // Error means the slot needs to be marked as dead
+                    Self::mark_dead_slot(
+                        blockstore,
+                        bank,
+                        bank_forks.read().unwrap().root(),
+                        &BlockstoreProcessorError::InvalidTransaction(err.into()),
+                        rpc_subscriptions,
+                        duplicate_slots_tracker,
+                        gossip_duplicate_confirmed_slots,
+                        epoch_slots_frozen_slots,
+                        progress,
+                        heaviest_subtree_fork_choice,
+                        duplicate_slots_to_repair,
+                        ancestor_hashes_replay_update_sender,
+                        purge_repair_slot_counter,
+                    );
+                    // If the bank was corrupted, don't try to run the below logic to check if the
+                    // bank is completed
+                    continue;
+                }
+                let cumulative_timings2 = solana_program_runtime::timings::ThreadExecuteTimings {
+                    execute_timings: cumulative_timings.unwrap(),
+                    ..Default::default()
+                };
+
                 let mut bank_complete_time = Measure::start("bank_complete_time");
                 let bank_progress = progress
                     .get_mut(&bank.slot())
                     .expect("Bank fork progress entry missing for completed bank");
 
                 let replay_stats = bank_progress.replay_stats.clone();
-                let r_replay_stats = replay_stats.read().unwrap();
+                let mut r_replay_stats = replay_stats.write().unwrap();
+                let mut metrics =
+                    solana_ledger::blockstore_processor::ExecuteBatchesInternalMetrics::default();
+                metrics
+                    .execution_timings_per_thread
+                    .insert(0, cumulative_timings2);
+                r_replay_stats.process_execute_batches_internal_metrics(metrics);
+
                 let replay_progress = bank_progress.replay_progress.clone();
                 let r_replay_progress = replay_progress.read().unwrap();
                 debug!("bank {} is completed replay from blockstore, contribute to update cost with {:?}",

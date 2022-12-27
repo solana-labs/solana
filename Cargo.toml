@@ -11,6 +11,7 @@ members = [
     "bench-tps",
     "bloom",
     "bucket_map",
+    "channel-latency",
     "clap-utils",
     "clap-v3-utils",
     "cli",
@@ -71,6 +72,7 @@ members = [
     "rpc-test",
     "runtime",
     "runtime/store-tool",
+    "scheduler",
     "sdk",
     "sdk/cargo-build-bpf",
     "sdk/cargo-build-sbf",
@@ -89,6 +91,7 @@ members = [
     "tpu-client",
     "transaction-dos",
     "transaction-status",
+    "transaction-scheduler-bench",
     "udp-client",
     "upload-perf",
     "validator",
@@ -107,3 +110,4 @@ resolver = "2"
 # for details, see https://github.com/solana-labs/crossbeam/commit/fd279d707025f0e60951e429bf778b4813d1b6bf
 [patch.crates-io]
 crossbeam-epoch = { git = "https://github.com/solana-labs/crossbeam", rev = "fd279d707025f0e60951e429bf778b4813d1b6bf" }
+crossbeam-channel = { git = "https://github.com/solana-labs/crossbeam", rev = "a8ef2a217c1ee3b54b57cc9117dceb8b64890a4b" }

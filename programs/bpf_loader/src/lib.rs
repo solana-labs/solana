@@ -73,7 +73,7 @@ use {
 solana_sdk::declare_builtin!(
     solana_sdk::bpf_loader::ID,
     solana_bpf_loader_program,
-    solana_bpf_loader_program::process_instruction
+    solana_bpf_loader_program::process_instruction_jit
 );
 
 /// Errors returned by functions the BPF Loader registers with the VM
@@ -358,12 +358,15 @@ pub fn create_vm<'a, 'b>(
     result
 }
 
+/*
 pub fn process_instruction(
     first_instruction_account: IndexOfAccount,
     invoke_context: &mut InvokeContext,
 ) -> Result<(), InstructionError> {
+    unreachable!();
     process_instruction_common(first_instruction_account, invoke_context, false)
 }
+*/
 
 pub fn process_instruction_jit(
     first_instruction_account: IndexOfAccount,
@@ -377,6 +380,7 @@ fn process_instruction_common(
     invoke_context: &mut InvokeContext,
     use_jit: bool,
 ) -> Result<(), InstructionError> {
+    assert!(use_jit);
     let log_collector = invoke_context.get_log_collector();
     let transaction_context = &invoke_context.transaction_context;
     let instruction_context = transaction_context.get_current_instruction_context()?;

@@ -13,7 +13,7 @@ use {
 pub type ParsedVote = (Pubkey, VoteTransaction, Option<Hash>, Signature);
 
 // Used for filtering out votes from the transaction log collector
-pub(crate) fn is_simple_vote_transaction(transaction: &SanitizedTransaction) -> bool {
+pub fn is_simple_vote_transaction(transaction: &SanitizedTransaction) -> bool {
     if transaction.message().instructions().len() == 1 {
         let (program_pubkey, instruction) = transaction
             .message()

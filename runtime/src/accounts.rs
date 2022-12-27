@@ -625,6 +625,7 @@ impl Accounts {
     }
 
     #[allow(clippy::too_many_arguments)]
+    #[inline(never)]
     pub fn load_accounts(
         &self,
         ancestors: &Ancestors,

@@ -17,6 +17,7 @@ bv = { version = "0.11.1", features = ["serde"] }
 bytemuck = "1.11.0"
 byteorder = "1.4.3"
 bzip2 = "0.4.3"
+cpu-time = "1.0.0"
 crossbeam-channel = "0.5"
 dashmap = { version = "4.0.2", features = ["rayon", "raw-api"] }
 dir-diff = "0.3.2"
@@ -40,6 +41,7 @@ rayon = "1.5.3"
 regex = "1.6.0"
 serde = { version = "1.0.144", features = ["rc"] }
 serde_derive = "1.0.103"
+serde_json = "1.0.81"
 solana-address-lookup-table-program = { path = "../programs/address-lookup-table", version = "=1.15.0" }
 solana-bpf-loader-program = { path = "../programs/bpf_loader", version = "=1.15.0" }
 solana-bucket-map = { path = "../bucket_map", version = "=1.15.0" }
@@ -52,6 +54,7 @@ solana-metrics = { path = "../metrics", version = "=1.15.0" }
 solana-perf = { path = "../perf", version = "=1.15.0" }
 solana-program-runtime = { path = "../program-runtime", version = "=1.15.0" }
 solana-rayon-threadlimit = { path = "../rayon-threadlimit", version = "=1.15.0" }
+solana-scheduler = { path = "../scheduler", version = "=1.15.0" }
 solana-sdk = { path = "../sdk", version = "=1.15.0" }
 solana-stake-program = { path = "../programs/stake", version = "=1.15.0" }
 solana-vote-program = { path = "../programs/vote", version = "=1.15.0" }
@@ -63,6 +66,7 @@ symlink = "0.1.0"
 tar = "0.4.38"
 tempfile = "3.3.0"
 thiserror = "1.0"
+thread-priority = "0.9.2"
 zstd = "0.11.2"
 
 [lib]
