@@ -29,7 +29,7 @@ import {
 } from '../src';
 import invariant from '../src/utils/assert';
 import {toBuffer} from '../src/utils/to-buffer';
-import {MOCK_PORT, url} from './url';
+import {MOCK_PORT, url, Controller} from './url';
 import {
   AccountInfo,
   BLOCKHASH_CACHE_TIMEOUT_MS,
@@ -1256,7 +1256,7 @@ describe('Connection', function () {
         it('rejects if called with an already-aborted `abortSignal`', () => {
           const mockSignature =
             'w2Zeq8YkpyB463DttvfzARD7k9ZxGEwbsEw4boEK7jDp3pfoxZbTdLFSsEPhzXhpCcjGi2kHtHFobgX49MMhbWt';
-          const abortController = new AbortController();
+          const abortController: any = Controller();
           abortController.abort();
           expect(
             connection.confirmTransaction({
@@ -1271,7 +1271,7 @@ describe('Connection', function () {
         it('rejects upon receiving an abort signal', async () => {
           const mockSignature =
             'w2Zeq8YkpyB463DttvfzARD7k9ZxGEwbsEw4boEK7jDp3pfoxZbTdLFSsEPhzXhpCcjGi2kHtHFobgX49MMhbWt';
-          const abortController = new AbortController();
+          const abortController: any = Controller();
           // Keep the subscription from ever returning data.
           await mockRpcMessage({
             method: 'signatureSubscribe',
@@ -1427,7 +1427,7 @@ describe('Connection', function () {
         it('rejects if called with an already-aborted `abortSignal`', () => {
           const mockSignature =
             'w2Zeq8YkpyB463DttvfzARD7k9ZxGEwbsEw4boEK7jDp3pfoxZbTdLFSsEPhzXhpCcjGi2kHtHFobgX49MMhbWt';
-          const abortController = new AbortController();
+          const abortController: any = Controller();
           abortController.abort();
           expect(
             connection.confirmTransaction({
@@ -1443,7 +1443,7 @@ describe('Connection', function () {
         it('rejects upon receiving an abort signal', async () => {
           const mockSignature =
             'w2Zeq8YkpyB463DttvfzARD7k9ZxGEwbsEw4boEK7jDp3pfoxZbTdLFSsEPhzXhpCcjGi2kHtHFobgX49MMhbWt';
-          const abortController = new AbortController();
+          const abortController: any = Controller();
           // Keep the subscription from ever returning data.
           await mockRpcMessage({
             method: 'signatureSubscribe',
