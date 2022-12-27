@@ -18,5 +18,5 @@
     "baseUrl": "src",
     "noFallthroughCasesInSwitch": true
   },
-  "include": ["src"]
+  "include": ["api", "src"]
 }
