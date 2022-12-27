@@ -64,6 +64,7 @@
     "@types/react-router-dom": "^5.3.3",
     "@types/react-select": "^3.1.2",
     "@types/socket.io-client": "^3.0.0",
+    "@vercel/node": "^2.8.2",
     "chai": "^4.3.6",
     "prettier": "^2.7.1",
     "sass": "^1.53.0",
