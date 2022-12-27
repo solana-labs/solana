@@ -736,11 +736,10 @@ impl EntrySlice for [Entry] {
         recyclers: VerifyRecyclers,
     ) -> EntryVerificationState {
         let start = Instant::now();
-        let api = perf_libs::api();
-        if api.is_none() {
-            return self.verify_cpu(start_hash);
-        }
-        let api = api.unwrap();
+        let api = match perf_libs::api() {
+            None => return self.verify_cpu(start_hash),
+            Some(api) => api,
+        };
         inc_new_counter_info!("entry_verify-num_entries", self.len());
 
         let genesis = [Entry {
