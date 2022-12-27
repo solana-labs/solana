@@ -5,7 +5,7 @@ use {
     rand::{seq::SliceRandom, Rng, SeedableRng},
     rand_chacha::ChaChaRng,
     solana_gossip::{
-        cluster_info::{compute_retransmit_peers, ClusterInfo},
+        cluster_info::{compute_retransmit_peers, ClusterInfo, DATA_PLANE_FANOUT},
         contact_info::ContactInfo,
         crds::GossipRoute,
         crds_gossip_pull::CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS,
@@ -34,6 +34,8 @@ use {
         time::{Duration, Instant},
     },
 };
+
+pub(crate) const MAX_NUM_TURBINE_HOPS: usize = 4;
 
 #[allow(clippy::large_enum_variant)]
 enum NodeId {
@@ -233,8 +235,10 @@ impl ClusterNodes<RetransmitStage> {
                 0
             } else if self_index <= fanout {
                 1
-            } else {
+            } else if self_index <= fanout.saturating_add(1).saturating_mul(fanout) {
                 2
+            } else {
+                3 // If changed, update MAX_NUM_TURBINE_HOPS.
             };
             let peers = get_retransmit_peers(fanout, self_index, &nodes);
             return RetransmitPeers {
@@ -249,8 +253,10 @@ impl ClusterNodes<RetransmitStage> {
             0
         } else if self_index < fanout {
             1
-        } else {
+        } else if self_index < fanout.saturating_add(1).saturating_mul(fanout) {
             2
+        } else {
+            3 // If changed, update MAX_NUM_TURBINE_HOPS.
         };
         let (neighbors, children) = compute_retransmit_peers(fanout, self_index, &nodes);
         // Assert that the node itself is included in the set of neighbors, at
@@ -480,11 +486,47 @@ pub fn make_test_cluster<R: Rng>(
     (nodes, stakes, cluster_info)
 }
 
+pub(crate) fn get_data_plane_fanout(shred_slot: Slot, root_bank: &Bank) -> usize {
+    if enable_turbine_fanout_experiments(shred_slot, root_bank) {
+        // Allocate ~2% of slots to turbine fanout experiments.
+        match shred_slot % 359 {
+            11 => 64,
+            61 => 768,
+            111 => 128,
+            161 => 640,
+            211 => 256,
+            261 => 512,
+            311 => 384,
+            _ => DATA_PLANE_FANOUT,
+        }
+    } else {
+        DATA_PLANE_FANOUT
+    }
+}
+
 fn drop_redundant_turbine_path(shred_slot: Slot, root_bank: &Bank) -> bool {
-    let feature_slot = root_bank
-        .feature_set
-        .activated_slot(&feature_set::drop_redundant_turbine_path::id());
-    match feature_slot {
+    check_feature_activation(
+        &feature_set::drop_redundant_turbine_path::id(),
+        shred_slot,
+        root_bank,
+    )
+}
+
+fn enable_turbine_fanout_experiments(shred_slot: Slot, root_bank: &Bank) -> bool {
+    check_feature_activation(
+        &feature_set::enable_turbine_fanout_experiments::id(),
+        shred_slot,
+        root_bank,
+    ) && !check_feature_activation(
+        &feature_set::disable_turbine_fanout_experiments::id(),
+        shred_slot,
+        root_bank,
+    )
+}
+
+// Returns true if the feature is effective for the shred slot.
+fn check_feature_activation(feature: &Pubkey, shred_slot: Slot, root_bank: &Bank) -> bool {
+    match root_bank.feature_set.activated_slot(feature) {
         None => false,
         Some(feature_slot) => {
             let epoch_schedule = root_bank.epoch_schedule();

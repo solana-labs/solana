@@ -16,7 +16,7 @@ use {
         shredder::{self, ReedSolomonCache},
     },
     assert_matches::debug_assert_matches,
-    itertools::Itertools,
+    itertools::{Either, Itertools},
     rayon::{prelude::*, ThreadPool},
     reed_solomon_erasure::Error::{InvalidIndex, TooFewParityShards, TooFewShards},
     solana_perf::packet::deserialize_from_with_limit,
@@ -208,11 +208,14 @@ impl ShredData {
             return Err(Error::InvalidShardSize(shard_size));
         }
         let data_header = deserialize_from_with_limit(&mut cursor)?;
-        Ok(Self {
+        let shred = Self {
             common_header,
             data_header,
             payload: shard,
-        })
+        };
+        // Merkle proof is not erasure coded and is not yet available here.
+        shred.sanitize(/*verify_merkle_proof:*/ false)?;
+        Ok(shred)
     }
 
     fn set_merkle_branch(&mut self, merkle_branch: &MerkleBranch) -> Result<(), Error> {
@@ -238,9 +241,7 @@ impl ShredData {
         if !matches!(shred_variant, ShredVariant::MerkleData(_)) {
             return Err(Error::InvalidShredVariant);
         }
-        if !verify_merkle_proof {
-            debug_assert_matches!(self.verify_merkle_proof(), Ok(true));
-        } else if !self.verify_merkle_proof()? {
+        if verify_merkle_proof && !self.verify_merkle_proof()? {
             return Err(Error::InvalidMerkleProof);
         }
         shred_data::sanitize(self)
@@ -342,11 +343,14 @@ impl ShredCode {
         let mut cursor = Cursor::new(&mut shard[..]);
         bincode::serialize_into(&mut cursor, &common_header)?;
         bincode::serialize_into(&mut cursor, &coding_header)?;
-        Ok(Self {
+        let shred = Self {
             common_header,
             coding_header,
             payload: shard,
-        })
+        };
+        // Merkle proof is not erasure coded and is not yet available here.
+        shred.sanitize(/*verify_merkle_proof:*/ false)?;
+        Ok(shred)
     }
 
     fn set_merkle_branch(&mut self, merkle_branch: &MerkleBranch) -> Result<(), Error> {
@@ -372,9 +376,7 @@ impl ShredCode {
         if !matches!(shred_variant, ShredVariant::MerkleCode(_)) {
             return Err(Error::InvalidShredVariant);
         }
-        if !verify_merkle_proof {
-            debug_assert_matches!(self.verify_merkle_proof(), Ok(true));
-        } else if !self.verify_merkle_proof()? {
+        if verify_merkle_proof && !self.verify_merkle_proof()? {
             return Err(Error::InvalidMerkleProof);
         }
         shred_code::sanitize(self)
@@ -771,6 +773,8 @@ pub(super) fn recover(
                 return Err(Error::InvalidMerkleProof);
             }
             shred.set_merkle_branch(&merkle_branch)?;
+            // Already sanitized in Shred{Code,Data}::from_recovered_shard.
+            debug_assert_matches!(shred.sanitize(/*verify_merkle_proof:*/ true), Ok(()));
             // Assert that shred payload is fully populated.
             debug_assert_eq!(shred, {
                 let shred = shred.payload().clone();
@@ -778,15 +782,12 @@ pub(super) fn recover(
             });
         }
     }
-    shreds
+    Ok(shreds
         .into_iter()
         .zip(mask)
         .filter(|(_, mask)| !mask)
-        .map(|(shred, _)| {
-            shred.sanitize(/*verify_merkle_proof:*/ false)?;
-            Ok(shred)
-        })
-        .collect()
+        .map(|(shred, _)| shred)
+        .collect())
 }
 
 // Maps number of (code + data) shreds to MerkleBranch.proof.len().
@@ -874,13 +875,16 @@ pub(super) fn make_shreds_from_data(
         }
         data = rest;
     }
-    if !data.is_empty() {
+    // If shreds.is_empty() then the data argument was empty. In that case we
+    // want to generate one data shred with empty data.
+    if !data.is_empty() || shreds.is_empty() {
         // Find the Merkle proof_size and data_buffer_size
         // which can embed the remaining data.
         let (proof_size, data_buffer_size) = (1u8..32)
             .find_map(|proof_size| {
                 let data_buffer_size = ShredData::capacity(proof_size).ok()?;
                 let num_data_shreds = (data.len() + data_buffer_size - 1) / data_buffer_size;
+                let num_data_shreds = num_data_shreds.max(1);
                 let erasure_batch_size = shredder::get_erasure_batch_size(num_data_shreds);
                 (proof_size == get_proof_size(erasure_batch_size))
                     .then_some((proof_size, data_buffer_size))
@@ -888,7 +892,13 @@ pub(super) fn make_shreds_from_data(
             .ok_or(Error::UnknownProofSize)?;
         common_header.shred_variant = ShredVariant::MerkleData(proof_size);
         common_header.fec_set_index = common_header.index;
-        for shred in data.chunks(data_buffer_size) {
+        let chunks = if data.is_empty() {
+            // Generate one data shred with empty data.
+            Either::Left(std::iter::once(data))
+        } else {
+            Either::Right(data.chunks(data_buffer_size))
+        };
+        for shred in chunks {
             let shred = new_shred_data(common_header, data_header, shred);
             shreds.push(shred);
             common_header.index += 1;
@@ -1273,12 +1283,8 @@ mod test {
         assert_eq!(shreds.iter().map(Shred::signature).dedup().count(), 1);
         for size in num_data_shreds..num_shreds {
             let mut shreds = shreds.clone();
-            let mut removed_shreds = Vec::new();
-            while shreds.len() > size {
-                let index = rng.gen_range(0, shreds.len());
-                removed_shreds.push(shreds.swap_remove(index));
-            }
             shreds.shuffle(rng);
+            let mut removed_shreds = shreds.split_off(size);
             // Should at least contain one coding shred.
             if shreds.iter().all(|shred| {
                 matches!(
@@ -1336,9 +1342,9 @@ mod test {
     #[test_case(46800)]
     fn test_make_shreds_from_data(data_size: usize) {
         let mut rng = rand::thread_rng();
-        let data_size = data_size.saturating_sub(16).max(1);
+        let data_size = data_size.saturating_sub(16);
         let reed_solomon_cache = ReedSolomonCache::default();
-        for data_size in (data_size..data_size + 32).step_by(3) {
+        for data_size in data_size..data_size + 32 {
             run_make_shreds_from_data(&mut rng, data_size, &reed_solomon_cache);
         }
     }
@@ -1391,7 +1397,7 @@ mod test {
                 Shred::ShredData(shred) => Some(shred),
             })
             .collect();
-        // Assert that the input data can be recovered from data sherds.
+        // Assert that the input data can be recovered from data shreds.
         assert_eq!(
             data,
             data_shreds

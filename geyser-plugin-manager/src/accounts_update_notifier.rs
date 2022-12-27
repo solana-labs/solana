@@ -134,7 +134,7 @@ impl AccountsUpdateNotifierImpl {
             executable: stored_account_meta.account_meta.executable,
             rent_epoch: stored_account_meta.account_meta.rent_epoch,
             data: stored_account_meta.data,
-            write_version: stored_account_meta.meta.write_version,
+            write_version: stored_account_meta.meta.write_version_obsolete,
             txn_signature: None,
         })
     }

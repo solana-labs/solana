@@ -305,7 +305,7 @@ pub mod add_get_processed_sibling_instruction_syscall {
     solana_sdk::declare_id!("CFK1hRCNy8JJuAAY8Pb2GjLFNdCThS2qwZNe3izzBMgn");
 }
 
-pub mod bank_tranaction_count_fix {
+pub mod bank_transaction_count_fix {
     solana_sdk::declare_id!("Vo5siZ442SaZBKPXNocthiXysNviW4UYPwRFggmbgAp");
 }
 
@@ -554,6 +554,18 @@ pub mod enable_program_redeployment_cooldown {
     solana_sdk::declare_id!("J4HFT8usBxpcF63y46t1upYobJgChmKyZPm5uTBRg25Z");
 }
 
+pub mod commission_updates_only_allowed_in_first_half_of_epoch {
+    solana_sdk::declare_id!("noRuG2kzACwgaY7TVmLRnUNPLKNVQE1fb7X55YWBehp");
+}
+
+pub mod enable_turbine_fanout_experiments {
+    solana_sdk::declare_id!("D31EFnLgdiysi84Woo3of4JMu7VmasUS3Z7j9HYXCeLY");
+}
+
+pub mod disable_turbine_fanout_experiments {
+    solana_sdk::declare_id!("Gz1aLrbeQ4Q6PTSafCZcGWZXz91yVRi7ASFzFEr1U4sa");
+}
+
 pub mod enable_big_mod_exp_syscall {
     solana_sdk::declare_id!("XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXBGMDEXP");
 }
@@ -628,7 +640,7 @@ lazy_static! {
         (spl_associated_token_account_v1_0_4::id(), "SPL Associated Token Account Program release version 1.0.4, tied to token 3.3.0 #22648"),
         (reject_vote_account_close_unless_zero_credit_epoch::id(), "fail vote account withdraw to 0 unless account earned 0 credits in last completed epoch"),
         (add_get_processed_sibling_instruction_syscall::id(), "add add_get_processed_sibling_instruction_syscall"),
-        (bank_tranaction_count_fix::id(), "fixes Bank::transaction_count to include all committed transactions, not just successful ones"),
+        (bank_transaction_count_fix::id(), "fixes Bank::transaction_count to include all committed transactions, not just successful ones"),
         (disable_bpf_deprecated_load_instructions::id(), "disable ldabs* and ldind* SBF instructions"),
         (disable_bpf_unresolved_symbols_at_runtime::id(), "disable reporting of unresolved SBF symbols at runtime"),
         (record_instruction_in_transaction_context_push::id(), "move the CPI stack overflow check to the end of push"),
@@ -691,6 +703,9 @@ lazy_static! {
         (cap_transaction_accounts_data_size::id(), "cap transaction accounts data size up to its compute unit limits #27839"),
         (enable_alt_bn128_syscall::id(), "add alt_bn128 syscalls #27961"),
         (enable_program_redeployment_cooldown::id(), "enable program redeployment cooldown #29135"),
+        (commission_updates_only_allowed_in_first_half_of_epoch::id(), "validator commission updates are only allowed in the first half of an epoch #29362"),
+        (enable_turbine_fanout_experiments::id(), "enable turbine fanout experiments #29393"),
+        (disable_turbine_fanout_experiments::id(), "disable turbine fanout experiments #29393"),
         (enable_big_mod_exp_syscall::id(), "add big_mod_exp syscall #28503"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]

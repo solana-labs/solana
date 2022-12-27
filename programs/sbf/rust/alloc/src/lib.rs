@@ -12,17 +12,6 @@ use {
 #[no_mangle]
 pub extern "C" fn entrypoint(_input: *mut u8) -> u64 {
     unsafe {
-        // Confirm large allocation fails
-
-        let layout = Layout::from_size_align(std::usize::MAX, mem::align_of::<u8>()).unwrap();
-        let ptr = alloc::alloc::alloc(layout);
-        if !ptr.is_null() {
-            msg!("Error: Alloc of very larger buffer should fail");
-            panic!();
-        }
-    }
-
-    unsafe {
         // Test modest allocation and de-allocation
 
         let layout = Layout::from_size_align(100, mem::align_of::<u8>()).unwrap();
