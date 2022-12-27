@@ -444,7 +444,7 @@ fn restart_dup_validator(
     );
     let ledger_path = cluster.ledger_path(pubkey);
 
-    // Lift the partition after `duplicate_fork_validator1_pubkey` votes on the `dup_slot`
+    // Lift the partition after `pubkey` votes on the `dup_slot`
     info!(
         "Waiting on duplicate fork to vote on duplicate slot: {}",
         dup_slot
@@ -484,7 +484,6 @@ fn restart_dup_validator(
     }
 }
 
-
 // We want to simulate the following:
 //   /--- 1 --- 3 (duplicate block)
 // 0
@@ -494,10 +493,10 @@ fn restart_dup_validator(
 // but don't immediately duplicate confirm so they remove 3 from fork choice and reset PoH back to 1.
 // 2. All the votes on 3 don't land because there are no further blocks building off 3.
 // 3. Some < SWITCHING_THRESHOLD of nodes vote on 2, making it the heaviest fork because no votes on 3 landed
-// 4. Nodes then see duplicate confirmation on 3. 
+// 4. Nodes then see duplicate confirmation on 3.
 // 5. Unless somebody builds off of 3 to include the duplicate confirmed votes, 2 will still be the heaviest.
 // However, because 2 has < SWITCHING_THRESHOLD of the votes, people who voted on 3 can't switch, leading to a
-// stall 
+// stall
 
 #[test]
 #[serial]
@@ -519,8 +518,8 @@ fn test_duplicate_shreds_switch_failure() {
         .collect::<Vec<_>>();
 
     // Create 4 nodes:
-    // 1) Two nodes that sum to > DUPLICATE_THRESHOLD but < 2/3+ supermajority. It's important no
-    // one of them individually has > DUPLICATE_THRESHOLD to avoid duplicate confirming their own blocks
+    // 1) Two nodes that sum to > DUPLICATE_THRESHOLD but < 2/3+ supermajority. It's important both
+    // of them individually have <= DUPLICATE_THRESHOLD to avoid duplicate confirming their own blocks
     // immediately upon voting
     // 2) One with < SWITCHING_THRESHOLD so that validator from 1) can't switch to it
     // 3) One bad leader to make duplicate slots
@@ -540,6 +539,8 @@ fn test_duplicate_shreds_switch_failure() {
         duplicate_fork_node1_stake + duplicate_fork_node2_stake
             >= (total_stake as f64 * DUPLICATE_THRESHOLD) as u64
     );
+    assert!(duplicate_fork_node1_stake < (total_stake as f64 * DUPLICATE_THRESHOLD) as u64);
+    assert!(duplicate_fork_node2_stake < (total_stake as f64 * DUPLICATE_THRESHOLD) as u64);
 
     let node_stakes = vec![
         duplicate_leader_stake,
@@ -570,15 +571,23 @@ fn test_duplicate_shreds_switch_failure() {
     let validator_to_slots = vec![
         (duplicate_leader_validator_pubkey, 80),
         (target_switch_fork_validator_pubkey, 80),
-        // Give the `duplicate_fork_validator1_pubkey` very few leader slots so we have ample time to:
-        // 1. Give him a duplicate version of the slot
-        // 2. Allow him to vote on that duplicate slot
-        // 3. See that the slot was duplicate AFTER he voted
+        // The ideal sequence of events for the `duplicate_fork_validator1_pubkey` validator would go:
+        // 1. Vote for duplicate block `D`
+        // 2. See `D` is duplicate, remove from fork choice and reset to ancestor `A`, potentially generating a fork off that ancestor
+        // 3. See `D` is duplicate confirmed, but because of the bug fixed by https://github.com/solana-labs/solana/pull/28172
+        // where we disallow resetting to a slot which matches the last vote slot, we still don't build off `D`,
+        // and continue building on `A`.
         //
-        // Only at this time do we want this validator to have a chance to build a block. Otherwise,
-        // if the validator has opportunity to build a block between 2 and 3, they'll build the block
-        // on top of the duplicate block, which will possibly includeh is vote for the duplicate block. We
-        // want to avoid this because this will make fork choice pick the duplicate block.
+        // The `target_switch_fork_validator_pubkey` fork is necessary in 2. to prevent the validator from making a freebie vote
+        // from `A` and allowing consensus to continue.
+
+        // It's important we give the `duplicate_fork_validator1_pubkey` very few leader slots so that
+        // 1. We have ample time to ensure he doesn't have a chance to make a block until after 2 when they see the block is duplicate.
+        // Otherwise, they'll build the block on top of the duplicate block, which will possibly include a vote for the duplicate block.
+        // We want to avoid this because this will make fork choice pick the duplicate block.
+        // 2. Ensure the `duplicate_fork_validator1_pubkey`1 sees the target switch fork before it can make another vote
+        // on any forks he himself generates from A. Otherwise, he will make a freebie vote on his own fork from `A` and
+        // consensus will continue on that fork.
         (duplicate_fork_validator1_pubkey, 4),
     ];
 
