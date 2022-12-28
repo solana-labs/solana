@@ -1137,7 +1137,7 @@ impl Scheduler<ExecuteTimings> {
                     ee.cu = details.executed_units;
                 } else {
                     let sig = ee.task.tx.0.signature().to_string();
-                    error!("found odd tx error: slot: {}, signature: {}, {:?}", slot, sig, tx_result);
+                    trace!("found odd tx error: slot: {}, signature: {}, {:?}", slot, sig, tx_result);
                 };
 
                 ee.execution_result = Some(tx_result);
@@ -1207,7 +1207,7 @@ impl Scheduler<ExecuteTimings> {
                             }
 
                             if let Some(Err(e)) = ee.execution_result.take() {
-                                warn!(
+                                trace!(
                                     "scheduler: Unexpected validator error: {:?}, transaction: {:?}",
                                     e, ee.task.tx.0
                                 );

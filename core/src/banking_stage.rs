@@ -895,20 +895,12 @@ impl BankingStage {
                     .increment_consume_buffered_packets_us(consume_buffered_packets_time.as_us());
                 */
 
-                // Gossip thread will almost always not wait because the transaction storage will most likely not be empty
-                let recv_timeout = if !unprocessed_transaction_storage.is_empty() {
-                    // If there are buffered packets, run the equivalent of try_recv to try reading more
-                    // packets. This prevents starving BankingStage::consume_buffered_packets due to
-                    // buffered_packet_batches containing transactions that exceed the cost model for
-                    // the current bank.
-                    Duration::from_millis(0)
-                } else {
-                    // Default wait time
-                    Duration::from_millis(100)
-                };
+                let recv_timeout = Duration::from_millis(10);
 
                 let bank = bank_start.working_bank;
-                if let Ok(aaa) = packet_deserializer.packet_batch_receiver.recv_timeout(recv_timeout) {
+                let start = Instant::now();
+
+                while let Ok(aaa) = packet_deserializer.packet_batch_receiver.recv_timeout(recv_timeout) {
                     for pp in &aaa.0 {
                         // over-provision
                         let mut task_id = banking_tracer.bulk_assign_task_ids(pp.len());
@@ -920,6 +912,10 @@ impl BankingStage {
                                 task_id += 1;
                             }
                         }
+                    }
+
+                    if start.elapsed() >= recv_timeout {
+                        break;
                     }
                 }
             }
