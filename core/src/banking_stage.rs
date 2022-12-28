@@ -853,6 +853,7 @@ impl BankingStage {
         connection_cache: &ConnectionCache,
         tracer_packet_stats: &mut TracerPacketStats,
         bank_forks: &Arc<RwLock<BankForks>>,
+        packet_deserializer: &mut PacketDeserializer,
     ) {
         if unprocessed_transaction_storage.should_not_process() {
             return;
@@ -892,6 +893,30 @@ impl BankingStage {
                 slot_metrics_tracker
                     .increment_consume_buffered_packets_us(consume_buffered_packets_time.as_us());
                 */
+
+                // Gossip thread will almost always not wait because the transaction storage will most likely not be empty
+                let recv_timeout = if !unprocessed_transaction_storage.is_empty() {
+                    // If there are buffered packets, run the equivalent of try_recv to try reading more
+                    // packets. This prevents starving BankingStage::consume_buffered_packets due to
+                    // buffered_packet_batches containing transactions that exceed the cost model for
+                    // the current bank.
+                    Duration::from_millis(0)
+                } else {
+                    // Default wait time
+                    Duration::from_millis(100)
+                };
+
+                let bank = bank_start.working_bank;
+                if let Ok(aaa) = packet_deserializer.packet_batch_receiver.recv_timeout(recv_timeout) {
+                    for pp in &aaa.0 {
+                        let indexes = PacketDeserializer::generate_packet_indexes(&pp);
+                        for p in PacketDeserializer::deserialize_packets(&pp, &indexes) {
+                            if let Some(t) = p.build_sanitized_transaction(&bank.feature_set, bank.vote_only_bank(), bank.as_ref()) {
+                                bank.schedule_and_commit_transactions(&bank, &[t], vec![3].into_iter());
+                            }
+                        }
+                    }
+                }
             }
             BufferedPacketsDecision::Forward => {
                 /*
@@ -1091,6 +1116,7 @@ impl BankingStage {
                         &connection_cache,
                         &mut tracer_packet_stats,
                         bank_forks,
+                        packet_deserializer,
                     ),
                     "process_buffered_packets",
                 );
