@@ -854,6 +854,7 @@ impl BankingStage {
         tracer_packet_stats: &mut TracerPacketStats,
         bank_forks: &Arc<RwLock<BankForks>>,
         packet_deserializer: &mut PacketDeserializer,
+        banking_tracer: Arc<BankingTracer>,
     ) {
         if unprocessed_transaction_storage.should_not_process() {
             return;
@@ -909,10 +910,14 @@ impl BankingStage {
                 let bank = bank_start.working_bank;
                 if let Ok(aaa) = packet_deserializer.packet_batch_receiver.recv_timeout(recv_timeout) {
                     for pp in &aaa.0 {
+                        // over-provision
+                        let mut task_id = banking_tracer.bulk_assign_task_ids(pp.len());
+
                         let indexes = PacketDeserializer::generate_packet_indexes(&pp);
                         for p in PacketDeserializer::deserialize_packets(&pp, &indexes) {
                             if let Some(t) = p.build_sanitized_transaction(&bank.feature_set, bank.vote_only_bank(), bank.as_ref()) {
-                                bank.schedule_and_commit_transactions(&bank, &[t], vec![3].into_iter());
+                                bank.schedule_and_commit_transactions(&bank, &[t], vec![task_id].into_iter());
+                                task_id += 1;
                             }
                         }
                     }
@@ -1090,7 +1095,7 @@ impl BankingStage {
         let mut tracer_packet_stats = TracerPacketStats::new(id);
         let qos_service = QosService::new(id);
 
-        let mut slot_metrics_tracker = LeaderSlotMetricsTracker::new(id, banking_tracer);
+        let mut slot_metrics_tracker = LeaderSlotMetricsTracker::new(id, banking_tracer.clone());
         let mut last_metrics_update = Instant::now();
 
         loop {
@@ -1117,6 +1122,7 @@ impl BankingStage {
                         &mut tracer_packet_stats,
                         bank_forks,
                         packet_deserializer,
+                        banking_tracer.clone(),
                     ),
                     "process_buffered_packets",
                 );

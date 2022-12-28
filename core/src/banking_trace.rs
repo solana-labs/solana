@@ -63,6 +63,7 @@ pub struct BankingTracer {
         Mutex<Option<JoinHandle<TracerThreadResult>>>,
         Arc<AtomicBool>,
     )>,
+    next_task_id: std::sync::atomic::AtomicUsize,
 }
 
 // Not all of TracedEvents need to be timed for proper simulation functioning; however, do so for
@@ -211,13 +212,19 @@ impl BankingTracer {
             })
             .transpose()?;
 
-        Ok(Arc::new(Self { enabled_tracer }))
+        Ok(Arc::new(Self { enabled_tracer, next_task_id: Default::default() }))
     }
 
     pub fn new_disabled() -> Arc<Self> {
         Arc::new(Self {
             enabled_tracer: None,
+            next_task_id: Default::default(),
         })
+    }
+
+    pub fn bulk_assign_task_ids(&self, count: usize) -> usize {
+        self.next_task_id
+            .fetch_add(count, Ordering::AcqRel)
     }
 
     pub fn is_enabled(&self) -> bool {
@@ -1012,7 +1019,9 @@ impl BankingSimulator {
 
                 let old_slot = bank.slot();
 
-                bank.wait_for_scheduler(false).unwrap();
+                if let Err(_) = bank.wait_for_scheduler(false) {
+                    error!("wait_for_scheduler returned error...");
+                }
                 bank.freeze_with_bank_hash_override(hashes_by_slot.get(&old_slot).map(|hh| hh.1));
                 let new_slot = bank.slot() + 1;
                 let new_leader = leader_schedule_cache.slot_leader_at(new_slot, None).unwrap();
