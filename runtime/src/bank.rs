@@ -7331,7 +7331,7 @@ impl Bank {
             bank_hash_override.map(|ho| format!("{ho} (overrode: {hash})")).unwrap_or_else(|| format!("{hash}")),
             bank_hash_info.accounts_delta_hash,
             self.signature_count(),
-            self.transaction_count(),
+            self.transaction_count() - self.parent().map(|p| p.transaction_count()).unwrap_or_default(),
             self.last_blockhash(),
             self.blockhash_override.map(|_| format!(" (overrode)")).unwrap_or_else(|| format!("")),
             self.capitalization(),
