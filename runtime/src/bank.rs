@@ -6608,6 +6608,12 @@ impl Bank {
         let s = {
             let r = self.scheduler2.read().unwrap();
 
+            if r.as_ref().is_none() {
+                let thread_name = std::thread::current().name().unwrap().to_string();
+                warn!("{thread_name} no scheduler...?!");
+                return;
+            }
+
             if r.as_ref().unwrap().bank.read().unwrap().is_none() {
                 drop(r);
                 //info!("reconfiguring scheduler with new bank...");

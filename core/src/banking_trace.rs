@@ -941,17 +941,17 @@ impl BankingSimulator {
 
                     match label {
                         ChannelLabel::NonVote => {
-                            non_vote_sender.send(batch.clone()).unwrap();
+                            non_vote_sender.send(batch.clone())?;
                             non_vote_count += batch.0.len();
                             non_vote_tx_count += batch.0.iter().map(|b| b.len()).sum::<usize>();
                         }
                         ChannelLabel::TpuVote => {
-                            tpu_vote_sender.send(batch.clone()).unwrap();
+                            tpu_vote_sender.send(batch.clone())?;
                             tpu_vote_count += batch.0.len();
                             tpu_vote_tx_count += batch.0.iter().map(|b| b.len()).sum::<usize>();
                         }
                         ChannelLabel::GossipVote => {
-                            gossip_vote_sender.send(batch.clone()).unwrap();
+                            gossip_vote_sender.send(batch.clone())?;
                             gossip_vote_count += batch.0.len();
                             gossip_vote_tx_count += batch.0.iter().map(|b| b.len()).sum::<usize>();
                         }
@@ -965,7 +965,7 @@ impl BankingSimulator {
             //}
             info!("finished sending...(non_vote: {}({}), tpu_vote: {}({}), gossip_vote: {}({}))", non_vote_count, non_vote_tx_count, tpu_vote_count, tpu_vote_tx_count, gossip_vote_count, gossip_vote_tx_count);
             // hold these senders in join_handle to control banking stage termination!
-            (non_vote_sender, tpu_vote_sender, gossip_vote_sender)
+            Ok::<_, SendError<_>>((non_vote_sender, tpu_vote_sender, gossip_vote_sender))
         }});
 
 
@@ -1053,7 +1053,9 @@ impl BankingSimulator {
         exit.store(true, Ordering::Relaxed);
         // the order is important. dropping sender_thread will terminate banking_stage, in turn
         // banking_retracer thread
-        sender_thread.join().unwrap();
+        if let Err(e) = sender_thread.join().unwrap() {
+            warn!("sender returned err: {:?}", e);
+        }
         banking_stage.join().unwrap();
         poh_service.join().unwrap();
 
