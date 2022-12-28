@@ -203,12 +203,10 @@ pub fn verify_shreds_gpu(
     slot_leaders: &HashMap<Slot, /*pubkey:*/ [u8; 32]>,
     recycler_cache: &RecyclerCache,
 ) -> Vec<Vec<u8>> {
-    let api = perf_libs::api();
-    if api.is_none() {
-        return verify_shreds_cpu(batches, slot_leaders);
-    }
-    let api = api.unwrap();
-
+    let api = match perf_libs::api() {
+        None => return verify_shreds_cpu(batches, slot_leaders),
+        Some(api) => api,
+    };
     let mut elems = Vec::new();
     let mut rvs = Vec::new();
     let packet_count = count_packets_in_batches(batches);
@@ -323,12 +321,14 @@ pub fn sign_shreds_gpu(
 ) {
     let sig_size = size_of::<Signature>();
     let pubkey_size = size_of::<Pubkey>();
-    let api = perf_libs::api();
     let packet_count = count_packets_in_batches(batches);
-    if api.is_none() || packet_count < SIGN_SHRED_GPU_MIN || pinned_keypair.is_none() {
+    if packet_count < SIGN_SHRED_GPU_MIN || pinned_keypair.is_none() {
         return sign_shreds_cpu(keypair, batches);
     }
-    let api = api.unwrap();
+    let api = match perf_libs::api() {
+        None => return sign_shreds_cpu(keypair, batches),
+        Some(api) => api,
+    };
     let pinned_keypair = pinned_keypair.as_ref().unwrap();
 
     let mut elems = Vec::new();
@@ -421,8 +421,21 @@ pub fn sign_shreds_gpu(
 mod tests {
     use {
         super::*,
-        crate::shred::{Shred, ShredFlags, LEGACY_SHRED_DATA_CAPACITY},
-        solana_sdk::signature::{Keypair, Signer},
+        crate::{
+            shred::{ProcessShredsStats, Shred, ShredFlags, LEGACY_SHRED_DATA_CAPACITY},
+            shredder::{ReedSolomonCache, Shredder},
+        },
+        matches::assert_matches,
+        rand::{seq::SliceRandom, Rng},
+        solana_entry::entry::Entry,
+        solana_sdk::{
+            hash,
+            hash::Hash,
+            signature::{Keypair, Signer, SIGNATURE_BYTES},
+            system_transaction,
+            transaction::Transaction,
+        },
+        std::iter::{once, repeat_with},
     };
 
     fn run_test_sigverify_shred_cpu(slot: Slot) {
@@ -670,5 +683,196 @@ mod tests {
     #[test]
     fn test_sigverify_shreds_sign_cpu() {
         run_test_sigverify_shreds_sign_cpu(0xdead_c0de);
+    }
+
+    fn make_transaction<R: Rng>(rng: &mut R) -> Transaction {
+        let block = rng.gen::<[u8; 32]>();
+        let recent_blockhash = hash::hashv(&[&block]);
+        system_transaction::transfer(
+            &Keypair::new(),       // from
+            &Pubkey::new_unique(), // to
+            rng.gen(),             // lamports
+            recent_blockhash,
+        )
+    }
+
+    fn make_entry<R: Rng>(rng: &mut R, prev_hash: &Hash) -> Entry {
+        let size = rng.gen_range(16, 32);
+        let txs = repeat_with(|| make_transaction(rng)).take(size).collect();
+        Entry::new(
+            prev_hash,
+            rng.gen_range(1, 64), // num_hashes
+            txs,
+        )
+    }
+
+    // Minimally corrupts the packet so that the signature no longer verifies.
+    fn corrupt_packet<R: Rng>(rng: &mut R, packet: &mut Packet, keypairs: &HashMap<Slot, Keypair>) {
+        let coin_flip: bool = rng.gen();
+        if coin_flip {
+            // Corrupt one byte within the signature offsets.
+            let k = rng.gen_range(0, SIGNATURE_BYTES);
+            let buffer = packet.buffer_mut();
+            buffer[k] = buffer[k].wrapping_add(1u8);
+        } else {
+            // Corrupt one byte within the signed message offsets.
+            let shred = shred::layout::get_shred(packet).unwrap();
+            let offsets: Range<usize> = shred::layout::get_signed_message_range(shred).unwrap();
+            let k = rng.gen_range(offsets.start, offsets.end);
+            let buffer = packet.buffer_mut();
+            buffer[k] = buffer[k].wrapping_add(1u8);
+        }
+        // Assert that the signature no longer verifies.
+        let shred = shred::layout::get_shred(packet).unwrap();
+        let slot = shred::layout::get_slot(shred).unwrap();
+        let signature = shred::layout::get_signature(shred).unwrap();
+        if coin_flip {
+            let pubkey = keypairs[&slot].pubkey();
+            let offsets = shred::layout::get_signed_message_range(shred).unwrap();
+            assert!(!signature.verify(pubkey.as_ref(), &shred[offsets]));
+        } else {
+            // Slot may have been corrupted and no longer mapping to a keypair.
+            let pubkey = keypairs.get(&slot).map(Keypair::pubkey).unwrap_or_default();
+            let offsets = shred::layout::get_signed_message_range(shred).unwrap_or_default();
+            assert!(!signature.verify(pubkey.as_ref(), &shred[offsets]));
+        };
+    }
+
+    #[test]
+    fn test_fuzz_sigverify_shreds() {
+        let mut rng = rand::thread_rng();
+        let recycler_cache = RecyclerCache::default();
+        let reed_solomon_cache = ReedSolomonCache::default();
+        let entries: Vec<_> = {
+            let prev_hash = hash::hashv(&[&rng.gen::<[u8; 32]>()]);
+            let entry = make_entry(&mut rng, &prev_hash);
+            let num_entries = rng.gen_range(64, 128);
+            std::iter::successors(Some(entry), |entry| Some(make_entry(&mut rng, &entry.hash)))
+                .take(num_entries)
+                .collect()
+        };
+        let mut keypairs = HashMap::<Slot, Keypair>::new();
+        // Legacy shreds.
+        let (mut shreds, coding_shreds) = {
+            let slot = 169_367_809;
+            let parent_slot = slot - rng.gen::<u16>() as Slot;
+            keypairs.insert(slot, Keypair::new());
+            Shredder::new(
+                slot,
+                parent_slot,
+                rng.gen_range(0, 0x3F), // reference_tick
+                rng.gen(),              // version
+            )
+            .unwrap()
+            .entries_to_shreds(
+                &keypairs[&slot],
+                &entries,
+                true,                  // is_last_in_slot
+                rng.gen_range(0, 671), // next_shred_index
+                rng.gen_range(0, 781), // next_code_index
+                false,                 // merkle_variant
+                &reed_solomon_cache,
+                &mut ProcessShredsStats::default(),
+            )
+        };
+        shreds.extend(coding_shreds);
+        // Merkle shreds.
+        let (data_shreds, coding_shreds) = {
+            let slot = 169_376_655;
+            let parent_slot = slot - rng.gen::<u16>() as Slot;
+            keypairs.insert(slot, Keypair::new());
+            Shredder::new(
+                slot,
+                parent_slot,
+                rng.gen_range(0, 0x3F), // reference_tick
+                rng.gen(),              // version
+            )
+            .unwrap()
+            .entries_to_shreds(
+                &keypairs[&slot],
+                &entries,
+                true,                  // is_last_in_slot
+                rng.gen_range(0, 671), // next_shred_index
+                rng.gen_range(0, 781), // next_code_index
+                true,                  // merkle_variant
+                &reed_solomon_cache,
+                &mut ProcessShredsStats::default(),
+            )
+        };
+        shreds.extend(data_shreds);
+        shreds.extend(coding_shreds);
+        shreds.shuffle(&mut rng);
+        // Assert that all shreds verfiy and sanitize.
+        for shred in &shreds {
+            let pubkey = keypairs[&shred.slot()].pubkey();
+            assert!(shred.verify(&pubkey));
+            assert_matches!(shred.sanitize(), Ok(()));
+        }
+        // Verfiy using layout api.
+        for shred in &shreds {
+            let shred = shred.payload();
+            let slot = shred::layout::get_slot(shred).unwrap();
+            let signature = shred::layout::get_signature(shred).unwrap();
+            let offsets = shred::layout::get_signed_message_range(shred).unwrap();
+            let pubkey = keypairs[&slot].pubkey();
+            assert!(signature.verify(pubkey.as_ref(), &shred[offsets]));
+        }
+        let num_shreds = shreds.len();
+        let slot_leaders: HashMap<Slot, [u8; 32]> = keypairs
+            .iter()
+            .map(|(&slot, keypair)| (slot, keypair.pubkey().to_bytes()))
+            .chain(once((Slot::MAX, Pubkey::default().to_bytes())))
+            .collect();
+        let mut packets = shreds.into_iter().map(|shred| {
+            let mut packet = Packet::default();
+            shred.copy_to_packet(&mut packet);
+            packet
+        });
+        let mut packets: Vec<_> = repeat_with(|| {
+            let size = rng.gen_range(0, 16);
+            let packets: Vec<_> = repeat_with(|| packets.next())
+                .while_some()
+                .take(size)
+                .collect();
+            if size != 0 && packets.is_empty() {
+                None
+            } else {
+                Some(PacketBatch::new(packets))
+            }
+        })
+        .while_some()
+        .collect();
+        assert_eq!(
+            num_shreds,
+            packets.iter().map(PacketBatch::len).sum::<usize>()
+        );
+        assert_eq!(
+            verify_shreds_gpu(&packets, &slot_leaders, &recycler_cache),
+            packets
+                .iter()
+                .map(PacketBatch::len)
+                .map(|size| vec![1u8; size])
+                .collect::<Vec<_>>()
+        );
+        // Invalidate signatures for a random number of packets.
+        let out: Vec<_> = packets
+            .iter_mut()
+            .map(|packets| {
+                packets
+                    .iter_mut()
+                    .map(|packet| {
+                        let coin_flip: bool = rng.gen();
+                        if !coin_flip {
+                            corrupt_packet(&mut rng, packet, &keypairs);
+                        }
+                        u8::from(coin_flip)
+                    })
+                    .collect::<Vec<_>>()
+            })
+            .collect();
+        assert_eq!(
+            verify_shreds_gpu(&packets, &slot_leaders, &recycler_cache),
+            out
+        );
     }
 }
