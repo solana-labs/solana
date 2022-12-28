@@ -736,12 +736,20 @@ impl EntrySlice for [Entry] {
         recyclers: VerifyRecyclers,
     ) -> EntryVerificationState {
         let start = Instant::now();
+<<<<<<< HEAD
         let api = perf_libs::api();
         if api.is_none() {
             return self.verify_cpu(start_hash);
         }
         let api = api.unwrap();
         inc_new_counter_info!("entry_verify-num_entries", self.len() as usize);
+=======
+        let api = match perf_libs::api() {
+            None => return self.verify_cpu(start_hash),
+            Some(api) => api,
+        };
+        inc_new_counter_info!("entry_verify-num_entries", self.len());
+>>>>>>> d172ab342 (expands test coverage for merkle/legacy shreds sigverify (#29424))
 
         let genesis = [Entry {
             num_hashes: 0,
