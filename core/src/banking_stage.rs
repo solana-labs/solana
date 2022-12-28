@@ -815,7 +815,7 @@ impl BankingStage {
                 poh.slot(),
             )
         };
-        info!("make_consume_or_forward_decision_details: {} {:?}", my_pubkey, details);
+        trace!("make_consume_or_forward_decision_details: {} {:?}", my_pubkey, details);
         let (leader_at_slot_offset, bank_start, would_be_leader, would_be_leader_shortly, _) = details; 
 
         slot_metrics_tracker.refresh_unprocessed_transaction_count(unprocessed_transaction_count);
@@ -827,7 +827,7 @@ impl BankingStage {
             would_be_leader,
             would_be_leader_shortly,
         );
-        info!("make_consume_or_forward_decision_result: {:?}", decision);
+        trace!("make_consume_or_forward_decision_result: {:?}", decision);
 
         (
             check_boundary,
