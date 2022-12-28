@@ -1011,6 +1011,8 @@ impl BankingSimulator {
                 use solana_runtime::bank::NewBankOptions;
 
                 let old_slot = bank.slot();
+
+                bank.wait_for_scheduler(false);
                 bank.freeze_with_bank_hash_override(hashes_by_slot.get(&old_slot).map(|hh| hh.1));
                 let new_slot = bank.slot() + 1;
                 let new_leader = leader_schedule_cache.slot_leader_at(new_slot, None).unwrap();
