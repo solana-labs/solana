@@ -873,6 +873,7 @@ impl BankingStage {
                 // packet processing metrics from the next slot towards the metrics
                 // of the previous slot
                 slot_metrics_tracker.apply_action(metrics_action);
+                /*
                 let (_, consume_buffered_packets_time) = measure!(
                     Self::consume_buffered_packets(
                         &bank_start,
@@ -890,8 +891,10 @@ impl BankingStage {
                 );
                 slot_metrics_tracker
                     .increment_consume_buffered_packets_us(consume_buffered_packets_time.as_us());
+                */
             }
             BufferedPacketsDecision::Forward => {
+                /*
                 let (_, forward_time) = measure!(
                     Self::handle_forwarding(
                         cluster_info,
@@ -911,9 +914,11 @@ impl BankingStage {
                 slot_metrics_tracker.increment_forward_us(forward_time.as_us());
                 // Take metrics action after forwarding packets to include forwarded
                 // metrics into current slot
+                */
                 slot_metrics_tracker.apply_action(metrics_action);
             }
             BufferedPacketsDecision::ForwardAndHold => {
+                /*
                 let (_, forward_and_hold_time) = measure!(
                     Self::handle_forwarding(
                         cluster_info,
@@ -932,6 +937,7 @@ impl BankingStage {
                 );
                 slot_metrics_tracker.increment_forward_and_hold_us(forward_and_hold_time.as_us());
                 // Take metrics action after forwarding packets
+                */
                 slot_metrics_tracker.apply_action(metrics_action);
             }
             BufferedPacketsDecision::Hold => {
@@ -1107,6 +1113,7 @@ impl BankingStage {
                 Duration::from_millis(100)
             };
 
+            /*
             let (res, receive_and_buffer_packets_time) = measure!(
                 Self::receive_and_buffer_packets(
                     packet_deserializer,
@@ -1127,6 +1134,8 @@ impl BankingStage {
                 Ok(()) | Err(RecvTimeoutError::Timeout) => (),
                 Err(RecvTimeoutError::Disconnected) => break,
             }
+            */
+
             banking_stage_stats.report(1000);
         }
     }
