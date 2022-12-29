@@ -1,9 +1,12 @@
+import HttpKeepAliveAgent, {
+  HttpsAgent as HttpsKeepAliveAgent,
+} from 'agentkeepalive';
 import bs58 from 'bs58';
 import {Buffer} from 'buffer';
 // @ts-ignore
 import fastStableStringify from 'fast-stable-stringify';
-import type {Agent as HttpAgent} from 'http';
-import {Agent as HttpsAgent} from 'https';
+import type {Agent as NodeHttpAgent} from 'http';
+import {Agent as NodeHttpsAgent} from 'https';
 import {
   type as pick,
   number,
@@ -27,7 +30,6 @@ import {Client as RpcWebSocketClient} from 'rpc-websockets';
 import RpcClient from 'jayson/lib/client/browser';
 import {JSONRPCError} from 'jayson';
 
-import {AgentManager} from './agent-manager';
 import {EpochSchedule} from './epoch-schedule';
 import {SendTransactionError, SolanaJSONRPCError} from './errors';
 import fetchImpl, {Response} from './fetch-impl';
@@ -346,6 +348,13 @@ export type BaseTransactionConfirmationStrategy = Readonly<{
   abortSignal?: AbortSignal;
   signature: TransactionSignature;
 }>;
+
+/**
+ * This type represents all transaction confirmation strategies
+ */
+export type TransactionConfirmationStrategy =
+  | BlockheightBasedTransactionConfirmationStrategy
+  | DurableNonceTransactionConfirmationStrategy;
 
 /* @internal */
 function assertEndpointUrl(putativeUrl: string) {
@@ -775,6 +784,27 @@ const GetInflationRewardResult = jsonRpcResult(
     ),
   ),
 );
+
+export type InflationRate = {
+  /** total inflation */
+  total: number;
+  /** inflation allocated to validators */
+  validator: number;
+  /** inflation allocated to the foundation */
+  foundation: number;
+  /** epoch for which these values are valid */
+  epoch: number;
+};
+
+/**
+ * Expected JSON RPC response for the "getInflationRate" message
+ */
+const GetInflationRateResult = pick({
+  total: number(),
+  validator: number(),
+  foundation: number(),
+  epoch: number(),
+});
 
 /**
  * Information about the current epoch
@@ -1452,12 +1482,10 @@ function createRpcClient(
   customFetch?: FetchFn,
   fetchMiddleware?: FetchMiddleware,
   disableRetryOnRateLimit?: boolean,
-  httpAgent?: HttpAgent | HttpsAgent | false,
+  httpAgent?: NodeHttpAgent | NodeHttpsAgent | false,
 ): RpcClient {
   const fetch = customFetch ? customFetch : fetchImpl;
-  let agentManager:
-    | {requestEnd(): void; requestStart(): HttpAgent | HttpsAgent}
-    | undefined;
+  let agent: NodeHttpAgent | NodeHttpsAgent | undefined;
   if (process.env.BROWSER) {
     if (httpAgent != null) {
       console.warn(
@@ -1468,21 +1496,30 @@ function createRpcClient(
   } else {
     if (httpAgent == null) {
       if (process.env.NODE_ENV !== 'test') {
-        agentManager = new AgentManager(
-          url.startsWith('https:') /* useHttps */,
-        );
+        const agentOptions = {
+          // One second fewer than the Solana RPC's keepalive timeout.
+          // Read more: https://github.com/solana-labs/solana/issues/27859#issuecomment-1340097889
+          freeSocketTimeout: 19000,
+          keepAlive: true,
+          maxSockets: 25,
+        };
+        if (url.startsWith('https:')) {
+          agent = new HttpsKeepAliveAgent(agentOptions);
+        } else {
+          agent = new HttpKeepAliveAgent(agentOptions);
+        }
       }
     } else {
       if (httpAgent !== false) {
         const isHttps = url.startsWith('https:');
-        if (isHttps && !(httpAgent instanceof HttpsAgent)) {
+        if (isHttps && !(httpAgent instanceof NodeHttpsAgent)) {
           throw new Error(
             'The endpoint `' +
               url +
               '` can only be paired with an `https.Agent`. You have, instead, supplied an ' +
               '`http.Agent` through `httpAgent`.',
           );
-        } else if (!isHttps && httpAgent instanceof HttpsAgent) {
+        } else if (!isHttps && httpAgent instanceof NodeHttpsAgent) {
           throw new Error(
             'The endpoint `' +
               url +
@@ -1490,7 +1527,7 @@ function createRpcClient(
               '`https.Agent` through `httpAgent`.',
           );
         }
-        agentManager = {requestEnd() {}, requestStart: () => httpAgent};
+        agent = httpAgent;
       }
     }
   }
@@ -1515,7 +1552,6 @@ function createRpcClient(
   }
 
   const clientBrowser = new RpcClient(async (request, callback) => {
-    const agent = agentManager ? agentManager.requestStart() : undefined;
     const options = {
       method: 'POST',
       body: request,
@@ -1565,8 +1601,6 @@ function createRpcClient(
       }
     } catch (err) {
       if (err instanceof Error) callback(err);
-    } finally {
-      agentManager && agentManager.requestEnd();
     }
   }, {});
 
@@ -1612,6 +1646,11 @@ function createRpcBatchRequest(client: RpcClient): RpcBatchRequest {
  * Expected JSON RPC response for the "getInflationGovernor" message
  */
 const GetInflationGovernorRpcResult = jsonRpcResult(GetInflationGovernorResult);
+
+/**
+ * Expected JSON RPC response for the "getInflationRate" message
+ */
+const GetInflationRateRpcResult = jsonRpcResult(GetInflationRateResult);
 
 /**
  * Expected JSON RPC response for the "getEpochInfo" message
@@ -2898,7 +2937,7 @@ export type ConnectionConfig = {
    * persistence). Set this to `false` to create a connection that uses no agent. This applies to
    * Node environments only.
    */
-  httpAgent?: HttpAgent | HttpsAgent | false;
+  httpAgent?: NodeHttpAgent | NodeHttpsAgent | false;
   /** Optional commitment level */
   commitment?: Commitment;
   /** Optional endpoint URL to the fullnode JSON RPC PubSub WebSocket Endpoint */
@@ -3597,13 +3636,11 @@ export class Connection {
   }
 
   confirmTransaction(
-    strategy:
-      | BlockheightBasedTransactionConfirmationStrategy
-      | DurableNonceTransactionConfirmationStrategy,
+    strategy: TransactionConfirmationStrategy,
     commitment?: Commitment,
   ): Promise<RpcResponseAndContext<SignatureResult>>;
 
-  /** @deprecated Instead, call `confirmTransaction` using a `TransactionConfirmationConfig` */
+  /** @deprecated Instead, call `confirmTransaction` and pass in {@link TransactionConfirmationStrategy} */
   // eslint-disable-next-line no-dupe-class-members
   confirmTransaction(
     strategy: TransactionSignature,
@@ -3612,10 +3649,7 @@ export class Connection {
 
   // eslint-disable-next-line no-dupe-class-members
   async confirmTransaction(
-    strategy:
-      | BlockheightBasedTransactionConfirmationStrategy
-      | DurableNonceTransactionConfirmationStrategy
-      | TransactionSignature,
+    strategy: TransactionConfirmationStrategy | TransactionSignature,
     commitment?: Commitment,
   ): Promise<RpcResponseAndContext<SignatureResult>> {
     let rawSignature: string;
@@ -3623,9 +3657,8 @@ export class Connection {
     if (typeof strategy == 'string') {
       rawSignature = strategy;
     } else {
-      const config = strategy as
-        | BlockheightBasedTransactionConfirmationStrategy
-        | DurableNonceTransactionConfirmationStrategy;
+      const config = strategy as TransactionConfirmationStrategy;
+
       if (config.abortSignal?.aborted) {
         return Promise.reject(config.abortSignal.reason);
       }
@@ -4243,6 +4276,18 @@ export class Connection {
     const res = create(unsafeRes, GetInflationRewardResult);
     if ('error' in res) {
       throw new SolanaJSONRPCError(res.error, 'failed to get inflation reward');
+    }
+    return res.result;
+  }
+
+  /**
+   * Fetch the specific inflation values for the current epoch
+   */
+  async getInflationRate(): Promise<InflationRate> {
+    const unsafeRes = await this._rpcRequest('getInflationRate', []);
+    const res = create(unsafeRes, GetInflationRateRpcResult);
+    if ('error' in res) {
+      throw new SolanaJSONRPCError(res.error, 'failed to get inflation rate');
     }
     return res.result;
   }

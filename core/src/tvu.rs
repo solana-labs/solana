@@ -185,6 +185,7 @@ impl Tvu {
         let (duplicate_slots_sender, duplicate_slots_receiver) = unbounded();
         let (ancestor_hashes_replay_update_sender, ancestor_hashes_replay_update_receiver) =
             unbounded();
+        let (dumped_slots_sender, dumped_slots_receiver) = unbounded();
         let window_service = {
             let epoch_schedule = *bank_forks.read().unwrap().working_bank().epoch_schedule();
             let repair_info = RepairInfo {
@@ -209,6 +210,7 @@ impl Tvu {
                 completed_data_sets_sender,
                 duplicate_slots_sender,
                 ancestor_hashes_replay_update_receiver,
+                dumped_slots_receiver,
             )
         };
 
@@ -292,6 +294,7 @@ impl Tvu {
             block_metadata_notifier,
             log_messages_bytes_limit,
             prioritization_fee_cache.clone(),
+            dumped_slots_sender,
         )?;
 
         let ledger_cleanup_service = tvu_config.max_ledger_shreds.map(|max_ledger_shreds| {

@@ -12,7 +12,6 @@ source scripts/read-cargo-variable.sh
 
 solana_ver=$(readCargoVariable version sdk/Cargo.toml)
 solana_dir=$PWD
-cargo="$solana_dir"/cargo
 cargo_build_sbf="$solana_dir"/cargo-build-sbf
 cargo_test_sbf="$solana_dir"/cargo-test-sbf
 
@@ -24,6 +23,8 @@ example_helloworld() {
     set -x
     rm -rf example-helloworld
     git clone https://github.com/solana-labs/example-helloworld.git
+    # copy toolchain file to use solana's rust version
+    cp "$solana_dir"/rust-toolchain.toml example-helloworld/
     cd example-helloworld
 
     update_solana_dependencies src/program-rust "$solana_ver"
@@ -57,6 +58,8 @@ spl() {
     set -x
     rm -rf spl
     git clone https://github.com/solana-labs/solana-program-library.git spl
+    # copy toolchain file to use solana's rust version
+    cp "$solana_dir"/rust-toolchain.toml spl/
     cd spl
 
     project_used_solana_version=$(sed -nE 's/solana-sdk = \"[>=<~]*(.*)\"/\1/p' <"token/program/Cargo.toml")
@@ -75,8 +78,8 @@ spl() {
     # TODO better: `build.rs` for spl-token-cli doesn't seem to properly build
     # the required programs to run the tests, so instead we run the tests
     # after we know programs have been built
-    $cargo build
-    $cargo test
+    cargo build
+    cargo test
   )
 }
 
@@ -85,6 +88,8 @@ openbook_dex() {
     set -x
     rm -rf openbook-dex
     git clone https://github.com/openbook-dex/program.git openbook-dex
+    # copy toolchain file to use solana's rust version
+    cp "$solana_dir"/rust-toolchain.toml openbook-dex/
     cd openbook-dex
 
     update_solana_dependencies . "$solana_ver"
@@ -101,12 +106,12 @@ exclude = [
     "permissioned",
 ]
 EOF
-    $cargo build
+    cargo build
 
     $cargo_build_sbf \
       --manifest-path dex/Cargo.toml --no-default-features --features program
 
-    $cargo test \
+    cargo test \
       --manifest-path dex/Cargo.toml --no-default-features --features program
   )
 }
