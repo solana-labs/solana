@@ -1139,12 +1139,19 @@ impl Scheduler<ExecuteTimings> {
                     &mut timings,
                     None
                 );
+                match bank.commit_mode() {
+                    CommitMode::Replaying => {
+                        info!("replaying commit! {slot}");
+                    },
+                    CommitMode::Banking => {
+                        info!("banking commit! {slot}");
+                        POH.read().unwrap().as_ref().unwrap()(3).unwrap();
+                    },
+                }
                 drop(bank);
                 drop(batch);
                 drop(weak_bank);
                 drop(ro_bank);
-
-                POH.read().unwrap().as_ref().unwrap()(3).unwrap();
 
                 let TransactionResults {
                     fee_collection_results,

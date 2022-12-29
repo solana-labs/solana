@@ -814,6 +814,14 @@ impl BankingSimulator {
             );
             (exit, r, s, entry_receiver)
         };
+        use solana_runtime::bank::POH;
+        *POH.write().unwrap() = Some({
+            let poh_recorder = poh_recorder.clone();
+            Box::new(move |aa: usize| -> Result<(), ()> {
+                info!("hello with poh: {}", poh_recorder.read().unwrap().slot());
+                Ok(())
+            })
+        });
         let target_ns_per_slot = solana_poh::poh_service::PohService::target_ns_per_tick(
             start_bank.ticks_per_slot(),
             genesis_config.poh_config.target_tick_duration.as_nanos() as u64,
@@ -1034,8 +1042,10 @@ impl BankingSimulator {
                     ..Default::default()
                 };
                 let new_bank = Bank::new_from_parent_with_options(&bank, &simulated_leader, new_slot, options);
+                new_bank.enter_banking_commit_mode();
                 // make sure parent is frozen for finalized hashes via the above
                 // new()-ing of its child bank
+                // maybe hash_event_with_original for proper check at replaying simulated blocks...
                 banking_retracer.hash_event(bank.slot(), bank.last_blockhash(), bank.hash());
                 bank_forks.write().unwrap().insert(new_bank);
                 bank = bank_forks.read().unwrap().working_bank();
