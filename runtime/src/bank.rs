@@ -1004,6 +1004,8 @@ impl SchedulerPool<ExecuteTimings> {
 static SCHEDULER_POOL: std::sync::Mutex<SchedulerPool<ExecuteTimings>> =
     std::sync::Mutex::new(SchedulerPool::new());
 
+pub static POH: std::sync::RwLock<Option<Box<dyn Fn(usize) -> std::result::Result<(), ()> + Send + Sync>>> = std::sync::RwLock::new(None);
+
 #[derive(Debug)]
 struct Scheduler<C> {
     random_id: u64,
@@ -1124,6 +1126,8 @@ impl Scheduler<ExecuteTimings> {
                 drop(batch);
                 drop(weak_bank);
                 drop(ro_bank);
+
+                POH.read().unwrap().as_ref().unwrap()(3).unwrap();
 
                 let TransactionResults {
                     fee_collection_results,
