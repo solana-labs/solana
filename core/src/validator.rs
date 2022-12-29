@@ -945,14 +945,16 @@ impl Validator {
         } else {
             info!("Disabled banking tracer");
         }
+        /*
         use solana_runtime::bank::POH;
         *POH.write().unwrap() = Some({
             let poh_recorder = poh_recorder.clone();
-            Box::new(move |aa: usize| -> Result<(), ()> {
+            Box::new(move |bank: &Bank| -> Result<(), ()> {
                 info!("hello with poh: {}", poh_recorder.read().unwrap().slot());
                 Ok(())
             })
         });
+        */
 
         let (replay_vote_sender, replay_vote_receiver) = unbounded();
         let tvu = Tvu::new(

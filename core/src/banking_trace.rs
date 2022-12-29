@@ -817,7 +817,7 @@ impl BankingSimulator {
         use solana_runtime::bank::POH;
         *POH.write().unwrap() = Some({
             let poh_recorder = poh_recorder.clone();
-            Box::new(move |aa: usize| -> Result<(), ()> {
+            Box::new(move |bank: &Bank| -> Result<(), ()> {
                 info!("hello with poh: {}", poh_recorder.read().unwrap().slot());
                 Ok(())
             })

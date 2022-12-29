@@ -1005,7 +1005,7 @@ impl SchedulerPool<ExecuteTimings> {
 static SCHEDULER_POOL: std::sync::Mutex<SchedulerPool<ExecuteTimings>> =
     std::sync::Mutex::new(SchedulerPool::new());
 
-pub static POH: std::sync::RwLock<Option<Box<dyn Fn(usize) -> std::result::Result<(), ()> + Send + Sync>>> = std::sync::RwLock::new(None);
+pub static POH: std::sync::RwLock<Option<Box<dyn Fn(&Bank) -> std::result::Result<(), ()> + Send + Sync>>> = std::sync::RwLock::new(None);
 
 pub mod commit_mode {
     use std::result::Result; // restore shadowing for not fully qualified macro expansion in atomic_enum...
@@ -1156,8 +1156,11 @@ impl Scheduler<ExecuteTimings> {
                     },
                     CommitMode::Banking => {
                         info!("banking commit! {slot}");
-                        POH.read().unwrap().as_ref().unwrap()(3).unwrap();
-                        execution_results = vec![TransactionExecutionResult::NotExecuted(TransactionError::ClusterMaintenance)];
+                        if let Err(_) = POH.read().unwrap().as_ref().unwrap()(bank.as_ref()) {
+                            execution_results = vec![
+                                TransactionExecutionResult::NotExecuted(TransactionError::ClusterMaintenance)
+                            ];
+                        }
                     },
                 };
 
