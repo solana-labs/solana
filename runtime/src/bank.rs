@@ -1129,16 +1129,27 @@ impl Scheduler<ExecuteTimings> {
                 batch.set_needs_unlock(false);
 
                 let mut timings = Default::default();
-                let (tx_results, _balances) = bank.load_execute_and_commit_transactions(
+                let LoadAndExecuteTransactionsOutput {
+                    mut loaded_transactions,
+                    mut execution_results,
+                    executed_transactions_count,
+                    executed_with_successful_result_count,
+                    signature_count,
+                    ..
+                } = bank.load_and_execute_transactions(
                     &batch,
                     MAX_PROCESSING_AGE,
                     false,
                     false,
                     false,
-                    false,
                     &mut timings,
-                    None
+                    None,
+                    None,
                 );
+
+                let (last_blockhash, lamports_per_signature) =
+                    bank.last_blockhash_and_lamports_per_signature();
+
                 match bank.commit_mode() {
                     CommitMode::Replaying => {
                         info!("replaying commit! {slot}");
@@ -1146,8 +1157,26 @@ impl Scheduler<ExecuteTimings> {
                     CommitMode::Banking => {
                         info!("banking commit! {slot}");
                         POH.read().unwrap().as_ref().unwrap()(3).unwrap();
+                        execution_results = vec![TransactionExecutionResult::NotExecuted(TransactionError::ClusterMaintenance)];
                     },
-                }
+                };
+
+                let tx_results = bank.commit_transactions(
+                    batch.sanitized_transactions(),
+                    &mut loaded_transactions,
+                    execution_results,
+                    last_blockhash,
+                    lamports_per_signature,
+                    CommitTransactionCounts {
+                        committed_transactions_count: executed_transactions_count as u64,
+                        committed_with_failure_result_count: executed_transactions_count
+                            .saturating_sub(executed_with_successful_result_count)
+                            as u64,
+                        signature_count,
+                    },
+                    &mut timings,
+                );
+
                 drop(bank);
                 drop(batch);
                 drop(weak_bank);

@@ -159,6 +159,9 @@ pub enum TransactionError {
     /// LoadedAccountsDataSizeLimit set for transaction must be greater than 0.
     #[error("LoadedAccountsDataSizeLimit set for transaction must be greater than 0.")]
     InvalidLoadedAccountsDataSizeLimit,
+
+    //#[error("not commitable to poh")]
+    //NotCommitable,
 }
 
 impl From<SanitizeError> for TransactionError {
