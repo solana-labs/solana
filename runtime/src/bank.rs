@@ -867,6 +867,7 @@ impl PartialEq for Bank {
             fee_structure: _,
             incremental_snapshot_persistence: _,
             scheduler2: _,
+            commit_mode: _,
             blockhash_override: _,
             // Ignore new fields explicitly if they do not impact PartialEq.
             // Adding ".." will remove compile-time checks that if a new field
@@ -1005,6 +1006,22 @@ static SCHEDULER_POOL: std::sync::Mutex<SchedulerPool<ExecuteTimings>> =
     std::sync::Mutex::new(SchedulerPool::new());
 
 pub static POH: std::sync::RwLock<Option<Box<dyn Fn(usize) -> std::result::Result<(), ()> + Send + Sync>>> = std::sync::RwLock::new(None);
+
+pub mod commit_mode {
+    use std::result::Result; // restore shadowing for not fully qualified macro expansion in atomic_enum...
+    #[derive(Default)]
+    #[atomic_enum]
+    pub(crate) enum CommitMode {
+        Banking,
+        #[default]
+        Replaying,
+    }
+
+    impl Default for AtomicCommitMode {
+        fn default() -> Self { Self::new(Default::default()) }
+    }
+}
+use commit_mode::{AtomicCommitMode, CommitMode};
 
 #[derive(Debug)]
 struct Scheduler<C> {
@@ -1567,6 +1584,7 @@ pub struct Bank {
     pub incremental_snapshot_persistence: Option<BankIncrementalSnapshotPersistence>,
 
     scheduler2: RwLock<Option<Arc<Scheduler<ExecuteTimings>>>>,
+    commit_mode: AtomicCommitMode,
     pub blockhash_override: Option<Hash>,
 }
 
@@ -1774,6 +1792,7 @@ impl Bank {
             accounts_data_size_delta_off_chain: AtomicI64::new(0),
             fee_structure: FeeStructure::default(),
             scheduler2: RwLock::new(Some(SCHEDULER_POOL.lock().unwrap().take_from_pool())),
+            commit_mode: Default::default(),
             blockhash_override: Default::default(),
         };
 
@@ -2099,6 +2118,7 @@ impl Bank {
             accounts_data_size_delta_off_chain: AtomicI64::new(0),
             fee_structure: parent.fee_structure.clone(),
             scheduler2: scheduler,
+            commit_mode: Default::default(),
             blockhash_override,
         };
 
@@ -2466,6 +2486,7 @@ impl Bank {
             accounts_data_size_delta_off_chain: AtomicI64::new(0),
             fee_structure: FeeStructure::default(),
             scheduler2: RwLock::new(Some(SCHEDULER_POOL.lock().unwrap().take_from_pool())), // Default::default();Default::default(),
+            commit_mode: Default::default(),
             blockhash_override: Default::default(),
         };
         bank.finish_init(
@@ -6659,6 +6680,14 @@ impl Bank {
         scheduler.handle_aborted_executions()
     }
     */
+
+    pub fn enter_banking_commit_mode(&self) {
+        self.commit_mode.store(CommitMode::Banking, Relaxed);
+    }
+
+    fn commit_mode(&self) -> CommitMode {
+        self.commit_mode.load(Relaxed)
+    }
 
     /// Process a batch of transactions.
     #[must_use]
