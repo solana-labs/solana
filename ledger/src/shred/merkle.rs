@@ -46,7 +46,7 @@ const_assert_eq!(ShredData::SIZE_OF_PAYLOAD, 1203);
 const MERKLE_HASH_PREFIX_LEAF: &[u8] = &[0x00];
 const MERKLE_HASH_PREFIX_NODE: &[u8] = &[0x01];
 
-type MerkleRoot = MerkleProofEntry;
+pub(crate) type MerkleRoot = MerkleProofEntry;
 type MerkleProofEntry = [u8; 20];
 
 // Layout: {common, data} headers | data buffer | merkle branch
@@ -246,6 +246,27 @@ impl ShredData {
         }
         shred_data::sanitize(self)
     }
+
+    #[cfg(test)]
+    pub(super) fn get_merkle_root(shred: &[u8], proof_size: u8) -> Option<MerkleRoot> {
+        debug_assert_eq!(
+            shred::layout::get_shred_variant(shred).unwrap(),
+            ShredVariant::MerkleData(proof_size)
+        );
+        // Shred index in the erasure batch.
+        let index = {
+            let fec_set_index = <[u8; 4]>::try_from(shred.get(79..83)?)
+                .map(u32::from_le_bytes)
+                .ok()?;
+            shred::layout::get_index(shred)?
+                .checked_sub(fec_set_index)
+                .map(usize::try_from)?
+                .ok()?
+        };
+        // Where the merkle branch starts in the shred binary.
+        let offset = Self::SIZE_OF_HEADERS + Self::capacity(proof_size).ok()?;
+        get_merkle_root(shred, proof_size, index, offset)
+    }
 }
 
 impl ShredCode {
@@ -380,6 +401,29 @@ impl ShredCode {
             return Err(Error::InvalidMerkleProof);
         }
         shred_code::sanitize(self)
+    }
+
+    #[cfg(test)]
+    pub(super) fn get_merkle_root(shred: &[u8], proof_size: u8) -> Option<MerkleRoot> {
+        debug_assert_eq!(
+            shred::layout::get_shred_variant(shred).unwrap(),
+            ShredVariant::MerkleCode(proof_size)
+        );
+        // Shred index in the erasure batch.
+        let index = {
+            let num_data_shreds = <[u8; 2]>::try_from(shred.get(83..85)?)
+                .map(u16::from_le_bytes)
+                .map(usize::from)
+                .ok()?;
+            let position = <[u8; 2]>::try_from(shred.get(87..89)?)
+                .map(u16::from_le_bytes)
+                .map(usize::from)
+                .ok()?;
+            num_data_shreds.checked_add(position)?
+        };
+        // Where the merkle branch starts in the shred binary.
+        let offset = Self::SIZE_OF_HEADERS + Self::capacity(proof_size).ok()?;
+        get_merkle_root(shred, proof_size, index, offset)
     }
 }
 
@@ -575,17 +619,51 @@ fn join_nodes<S: AsRef<[u8]>, T: AsRef<[u8]>>(node: S, other: T) -> Hash {
 }
 
 fn verify_merkle_proof(index: usize, node: Hash, merkle_branch: &MerkleBranch) -> bool {
-    let proof = merkle_branch.proof.iter();
-    let (index, root) = proof.fold((index, node), |(index, node), other| {
-        let parent = if index % 2 == 0 {
-            join_nodes(node, other)
-        } else {
-            join_nodes(other, node)
-        };
-        (index >> 1, parent)
-    });
-    let root = &root.as_ref()[..SIZE_OF_MERKLE_ROOT];
-    (index, root) == (0usize, &merkle_branch.root[..])
+    let proof = merkle_branch.proof.iter().copied();
+    let root = fold_merkle_proof(index, node, proof);
+    root.as_ref() == Some(merkle_branch.root)
+}
+
+// Recovers root of the merkle tree from a leaf node
+// at the given index and the respective proof.
+fn fold_merkle_proof<'a, I>(index: usize, node: Hash, proof: I) -> Option<MerkleRoot>
+where
+    I: IntoIterator<Item = &'a MerkleProofEntry>,
+{
+    let (index, root) = proof
+        .into_iter()
+        .fold((index, node), |(index, node), other| {
+            let parent = if index % 2 == 0 {
+                join_nodes(node, other)
+            } else {
+                join_nodes(other, node)
+            };
+            (index >> 1, parent)
+        });
+    (index == 0).then(|| {
+        let root = &root.as_ref()[..SIZE_OF_MERKLE_ROOT];
+        MerkleRoot::try_from(root).ok()
+    })?
+}
+
+#[cfg(test)]
+fn get_merkle_root(
+    shred: &[u8],
+    proof_size: u8,
+    index: usize,  // Shred index in the erasure batch.
+    offset: usize, // Where the merkle branch starts in the shred binary.
+) -> Option<MerkleRoot> {
+    let node = shred.get(SIZE_OF_SIGNATURE..offset)?;
+    let node = hashv(&[MERKLE_HASH_PREFIX_LEAF, node]);
+    // Merkle proof embedded in the payload.
+    let offset = offset + SIZE_OF_MERKLE_ROOT;
+    let size = usize::from(proof_size) * SIZE_OF_MERKLE_PROOF_ENTRY;
+    let proof = shred
+        .get(offset..offset + size)?
+        .chunks(SIZE_OF_MERKLE_PROOF_ENTRY)
+        .map(<&MerkleProofEntry>::try_from)
+        .map(Result::unwrap);
+    fold_merkle_proof(index, node, proof)
 }
 
 fn make_merkle_tree(mut nodes: Vec<Hash>) -> Vec<Hash> {
@@ -1065,7 +1143,7 @@ fn make_erasure_batch(
 mod test {
     use {
         super::*,
-        crate::shred::ShredFlags,
+        crate::shred::{ShredFlags, ShredId},
         itertools::Itertools,
         matches::assert_matches,
         rand::{seq::SliceRandom, CryptoRng, Rng},
@@ -1418,15 +1496,21 @@ mod test {
                 version,
                 fec_set_index: _,
             } = *shred.common_header();
+            let shred_type = ShredType::from(shred_variant);
+            let key = ShredId::new(slot, index, shred_type);
+            let merkle_root = shred.merkle_root().copied().ok();
             let shred = shred.payload();
             assert_eq!(shred::layout::get_signature(shred), Some(signature));
             assert_eq!(
                 shred::layout::get_shred_variant(shred).unwrap(),
                 shred_variant
             );
+            assert_eq!(shred::layout::get_shred_type(shred).unwrap(), shred_type);
             assert_eq!(shred::layout::get_slot(shred), Some(slot));
             assert_eq!(shred::layout::get_index(shred), Some(index));
             assert_eq!(shred::layout::get_version(shred), Some(version));
+            assert_eq!(shred::layout::get_shred_id(shred), Some(key));
+            assert_eq!(shred::layout::get_merkle_root(shred), merkle_root);
             let slice = shred::layout::get_signed_message_range(shred).unwrap();
             let message = shred.get(slice).unwrap();
             assert!(signature.verify(keypair.pubkey().as_ref(), message));

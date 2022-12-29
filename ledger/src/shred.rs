@@ -100,7 +100,6 @@ const SIZE_OF_CODING_SHRED_HEADERS: usize = 89;
 const SIZE_OF_SIGNATURE: usize = SIGNATURE_BYTES;
 const SIZE_OF_SHRED_VARIANT: usize = 1;
 const SIZE_OF_SHRED_SLOT: usize = 8;
-const SIZE_OF_SHRED_INDEX: usize = 4;
 
 const OFFSET_OF_SHRED_VARIANT: usize = SIZE_OF_SIGNATURE;
 const OFFSET_OF_SHRED_SLOT: usize = SIZE_OF_SIGNATURE + SIZE_OF_SHRED_VARIANT;
@@ -539,6 +538,8 @@ impl Shred {
 // Helper methods to extract pieces of the shred from the payload
 // without deserializing the entire payload.
 pub mod layout {
+    #[cfg(test)]
+    use crate::shred::merkle::MerkleRoot;
     use {super::*, std::ops::Range};
 
     fn get_shred_size(packet: &Packet) -> Option<usize> {
@@ -592,17 +593,15 @@ pub mod layout {
     }
 
     pub fn get_version(shred: &[u8]) -> Option<u16> {
-        const OFFSET_OF_SHRED_VERSION: usize = OFFSET_OF_SHRED_INDEX + SIZE_OF_SHRED_INDEX;
-        <[u8; 2]>::try_from(shred.get(OFFSET_OF_SHRED_VERSION..)?.get(..2)?)
+        <[u8; 2]>::try_from(shred.get(77..79)?)
             .map(u16::from_le_bytes)
             .ok()
     }
 
     // The caller should verify first that the shred is data and not code!
     pub(super) fn get_parent_offset(shred: &[u8]) -> Option<u16> {
-        const OFFSET_OF_SHRED_PARENT: usize = SIZE_OF_COMMON_SHRED_HEADER;
         debug_assert_eq!(get_shred_type(shred).unwrap(), ShredType::Data);
-        <[u8; 2]>::try_from(shred.get(OFFSET_OF_SHRED_PARENT..)?.get(..2)?)
+        <[u8; 2]>::try_from(shred.get(83..85)?)
             .map(u16::from_le_bytes)
             .ok()
     }
@@ -631,16 +630,27 @@ pub mod layout {
     }
 
     pub(crate) fn get_reference_tick(shred: &[u8]) -> Result<u8, Error> {
-        const SIZE_OF_PARENT_OFFSET: usize = std::mem::size_of::<u16>();
-        const OFFSET_OF_SHRED_FLAGS: usize = SIZE_OF_COMMON_SHRED_HEADER + SIZE_OF_PARENT_OFFSET;
         if get_shred_type(shred)? != ShredType::Data {
             return Err(Error::InvalidShredType);
         }
-        let flags = match shred.get(OFFSET_OF_SHRED_FLAGS) {
+        let flags = match shred.get(85) {
             None => return Err(Error::InvalidPayloadSize(shred.len())),
             Some(flags) => flags,
         };
         Ok(flags & ShredFlags::SHRED_TICK_REFERENCE_MASK.bits())
+    }
+
+    #[cfg(test)]
+    pub(crate) fn get_merkle_root(shred: &[u8]) -> Option<MerkleRoot> {
+        match get_shred_variant(shred).ok()? {
+            ShredVariant::LegacyCode | ShredVariant::LegacyData => None,
+            ShredVariant::MerkleCode(proof_size) => {
+                merkle::ShredCode::get_merkle_root(shred, proof_size)
+            }
+            ShredVariant::MerkleData(proof_size) => {
+                merkle::ShredData::get_merkle_root(shred, proof_size)
+            }
+        }
     }
 }
 
@@ -931,6 +941,8 @@ mod tests {
         rand_chacha::{rand_core::SeedableRng, ChaChaRng},
         solana_sdk::{shred_version, signature::Signer},
     };
+
+    const SIZE_OF_SHRED_INDEX: usize = 4;
 
     fn bs58_decode<T: AsRef<[u8]>>(data: T) -> Vec<u8> {
         bs58::decode(data).into_vec().unwrap()
