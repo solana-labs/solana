@@ -309,7 +309,7 @@ use dispatch;
 impl Shred {
     dispatch!(fn common_header(&self) -> &ShredCommonHeader);
     dispatch!(fn set_signature(&mut self, signature: Signature));
-    dispatch!(fn signed_message(&self) -> &[u8]);
+    dispatch!(fn signed_data(&self) -> &[u8]);
 
     // Returns the portion of the shred's payload which is erasure coded.
     dispatch!(pub(crate) fn erasure_shard(self) -> Result<Vec<u8>, Error>);
@@ -460,7 +460,7 @@ impl Shred {
     }
 
     pub fn sign(&mut self, keypair: &Keypair) {
-        let signature = keypair.sign_message(self.signed_message());
+        let signature = keypair.sign_message(self.signed_data());
         self.set_signature(signature);
     }
 
@@ -508,8 +508,8 @@ impl Shred {
 
     #[must_use]
     pub fn verify(&self, pubkey: &Pubkey) -> bool {
-        let message = self.signed_message();
-        self.signature().verify(pubkey.as_ref(), message)
+        let data = self.signed_data();
+        self.signature().verify(pubkey.as_ref(), data)
     }
 
     // Returns true if the erasure coding of the two shreds mismatch.
@@ -538,9 +538,26 @@ impl Shred {
 // Helper methods to extract pieces of the shred from the payload
 // without deserializing the entire payload.
 pub mod layout {
+    use {super::*, crate::shred::merkle::MerkleRoot, std::ops::Range};
     #[cfg(test)]
-    use crate::shred::merkle::MerkleRoot;
-    use {super::*, std::ops::Range};
+    use {
+        rand::{seq::SliceRandom, Rng},
+        std::collections::HashMap,
+    };
+
+    pub(crate) enum SignedData<'a> {
+        Chunk(&'a [u8]),
+        MerkleRoot(MerkleRoot),
+    }
+
+    impl<'a> AsRef<[u8]> for SignedData<'a> {
+        fn as_ref(&self) -> &[u8] {
+            match self {
+                Self::Chunk(chunk) => chunk,
+                Self::MerkleRoot(root) => root,
+            }
+        }
+    }
 
     fn get_shred_size(packet: &Packet) -> Option<usize> {
         let size = packet.data(..)?.len();
@@ -615,18 +632,36 @@ pub mod layout {
         ))
     }
 
-    // Returns slice range of the shred payload which is signed.
-    pub(crate) fn get_signed_message_range(shred: &[u8]) -> Option<Range<usize>> {
-        let range = match get_shred_variant(shred).ok()? {
-            ShredVariant::LegacyCode | ShredVariant::LegacyData => legacy::SIGNED_MESSAGE_RANGE,
+    pub(crate) fn get_signed_data(shred: &[u8]) -> Option<SignedData> {
+        let data = match get_shred_variant(shred).ok()? {
+            ShredVariant::LegacyCode | ShredVariant::LegacyData => {
+                let chunk = shred.get(self::legacy::SIGNED_MESSAGE_OFFSETS)?;
+                SignedData::Chunk(chunk)
+            }
             ShredVariant::MerkleCode(proof_size) => {
-                merkle::ShredCode::get_signed_message_range(proof_size)?
+                let merkle_root = self::merkle::ShredCode::get_merkle_root(shred, proof_size)?;
+                SignedData::MerkleRoot(merkle_root)
             }
             ShredVariant::MerkleData(proof_size) => {
-                merkle::ShredData::get_signed_message_range(proof_size)?
+                let merkle_root = self::merkle::ShredData::get_merkle_root(shred, proof_size)?;
+                SignedData::MerkleRoot(merkle_root)
             }
         };
-        (range.end <= shred.len()).then_some(range)
+        Some(data)
+    }
+
+    // Returns offsets within the shred payload which is signed.
+    pub(crate) fn get_signed_data_offsets(shred: &[u8]) -> Option<Range<usize>> {
+        let offsets = match get_shred_variant(shred).ok()? {
+            ShredVariant::LegacyCode | ShredVariant::LegacyData => legacy::SIGNED_MESSAGE_OFFSETS,
+            ShredVariant::MerkleCode(proof_size) => {
+                merkle::ShredCode::get_signed_data_offsets(proof_size)?
+            }
+            ShredVariant::MerkleData(proof_size) => {
+                merkle::ShredData::get_signed_data_offsets(proof_size)?
+            }
+        };
+        (offsets.end <= shred.len()).then_some(offsets)
     }
 
     pub(crate) fn get_reference_tick(shred: &[u8]) -> Result<u8, Error> {
@@ -650,6 +685,62 @@ pub mod layout {
             ShredVariant::MerkleData(proof_size) => {
                 merkle::ShredData::get_merkle_root(shred, proof_size)
             }
+        }
+    }
+
+    // Minimally corrupts the packet so that the signature no longer verifies.
+    #[cfg(test)]
+    pub(crate) fn corrupt_packet<R: Rng>(
+        rng: &mut R,
+        packet: &mut Packet,
+        keypairs: &HashMap<Slot, Keypair>,
+    ) {
+        fn modify_packet<R: Rng>(rng: &mut R, packet: &mut Packet, offsets: Range<usize>) {
+            let buffer = packet.buffer_mut();
+            let byte = buffer[offsets].choose_mut(rng).unwrap();
+            *byte = rng.gen::<u8>().max(1u8).wrapping_add(*byte);
+        }
+        let shred = get_shred(packet).unwrap();
+        let merkle_proof_size = match get_shred_variant(shred).unwrap() {
+            ShredVariant::LegacyCode | ShredVariant::LegacyData => None,
+            ShredVariant::MerkleCode(proof_size) | ShredVariant::MerkleData(proof_size) => {
+                Some(proof_size)
+            }
+        };
+        let coin_flip: bool = rng.gen();
+        if coin_flip {
+            // Corrupt one byte within the signature offsets.
+            modify_packet(rng, packet, 0..SIGNATURE_BYTES);
+        } else {
+            // Corrupt one byte within the signed data offsets.
+            let size = shred.len();
+            let offsets = get_signed_data_offsets(shred).unwrap();
+            modify_packet(rng, packet, offsets);
+            if let Some(proof_size) = merkle_proof_size {
+                // Also need to corrupt the merkle proof.
+                // Proof entries are each 20 bytes at the end of shreds.
+                let offset = usize::from(proof_size) * 20;
+                modify_packet(rng, packet, size - offset..size);
+            }
+        }
+        // Assert that the signature no longer verifies.
+        let shred = get_shred(packet).unwrap();
+        let slot = get_slot(shred).unwrap();
+        let signature = get_signature(shred).unwrap();
+        if coin_flip {
+            let pubkey = keypairs[&slot].pubkey();
+            let data = get_signed_data(shred).unwrap();
+            assert!(!signature.verify(pubkey.as_ref(), data.as_ref()));
+            let offsets = get_signed_data_offsets(shred).unwrap();
+            assert!(!signature.verify(pubkey.as_ref(), &shred[offsets]));
+        } else {
+            // Slot may have been corrupted and no longer mapping to a keypair.
+            let pubkey = keypairs.get(&slot).map(Keypair::pubkey).unwrap_or_default();
+            if let Some(data) = get_signed_data(shred) {
+                assert!(!signature.verify(pubkey.as_ref(), data.as_ref()));
+            }
+            let offsets = get_signed_data_offsets(shred).unwrap_or_default();
+            assert!(!signature.verify(pubkey.as_ref(), &shred[offsets]));
         }
     }
 }

@@ -91,12 +91,12 @@ impl Shred {
     dispatch!(fn sanitize(&self, verify_merkle_proof: bool) -> Result<(), Error>);
     dispatch!(fn set_merkle_branch(&mut self, merkle_branch: &MerkleBranch) -> Result<(), Error>);
     dispatch!(fn set_signature(&mut self, signature: Signature));
-    dispatch!(fn signed_message(&self) -> &[u8]);
+    dispatch!(fn signed_data(&self) -> &[u8]);
 
     #[must_use]
     fn verify(&self, pubkey: &Pubkey) -> bool {
-        let message = self.signed_message();
-        self.signature().verify(pubkey.as_ref(), message)
+        let data = self.signed_data();
+        self.signature().verify(pubkey.as_ref(), data)
     }
 
     fn signature(&self) -> Signature {
@@ -147,7 +147,7 @@ impl ShredData {
             .ok_or(Error::InvalidProofSize(proof_size))
     }
 
-    pub(super) fn get_signed_message_range(proof_size: u8) -> Option<Range<usize>> {
+    pub(super) fn get_signed_data_offsets(proof_size: u8) -> Option<Range<usize>> {
         let data_buffer_size = Self::capacity(proof_size).ok()?;
         let offset = Self::SIZE_OF_HEADERS + data_buffer_size;
         Some(offset..offset + SIZE_OF_MERKLE_ROOT)
@@ -247,7 +247,6 @@ impl ShredData {
         shred_data::sanitize(self)
     }
 
-    #[cfg(test)]
     pub(super) fn get_merkle_root(shred: &[u8], proof_size: u8) -> Option<MerkleRoot> {
         debug_assert_eq!(
             shred::layout::get_shred_variant(shred).unwrap(),
@@ -332,7 +331,7 @@ impl ShredCode {
         Ok(verify_merkle_proof(index, node, &self.merkle_branch()?))
     }
 
-    pub(super) fn get_signed_message_range(proof_size: u8) -> Option<Range<usize>> {
+    pub(super) fn get_signed_data_offsets(proof_size: u8) -> Option<Range<usize>> {
         let offset = Self::SIZE_OF_HEADERS + Self::capacity(proof_size).ok()?;
         Some(offset..offset + SIZE_OF_MERKLE_ROOT)
     }
@@ -403,7 +402,6 @@ impl ShredCode {
         shred_code::sanitize(self)
     }
 
-    #[cfg(test)]
     pub(super) fn get_merkle_root(shred: &[u8], proof_size: u8) -> Option<MerkleRoot> {
         debug_assert_eq!(
             shred::layout::get_shred_variant(shred).unwrap(),
@@ -494,7 +492,7 @@ impl ShredTrait for ShredData {
         self.sanitize(/*verify_merkle_proof:*/ true)
     }
 
-    fn signed_message(&self) -> &[u8] {
+    fn signed_data(&self) -> &[u8] {
         self.merkle_root().map(AsRef::as_ref).unwrap_or_default()
     }
 }
@@ -559,7 +557,7 @@ impl ShredTrait for ShredCode {
         self.sanitize(/*verify_merkle_proof:*/ true)
     }
 
-    fn signed_message(&self) -> &[u8] {
+    fn signed_data(&self) -> &[u8] {
         self.merkle_root().map(AsRef::as_ref).unwrap_or_default()
     }
 }
@@ -646,7 +644,6 @@ where
     })?
 }
 
-#[cfg(test)]
 fn get_merkle_root(
     shred: &[u8],
     proof_size: u8,
@@ -1353,7 +1350,7 @@ mod test {
             let merkle_branch = make_merkle_branch(index, num_shreds, &tree).unwrap();
             assert_eq!(merkle_branch.proof.len(), usize::from(proof_size));
             shred.set_merkle_branch(&merkle_branch).unwrap();
-            let signature = keypair.sign_message(shred.signed_message());
+            let signature = keypair.sign_message(shred.signed_data());
             shred.set_signature(signature);
             assert!(shred.verify(&keypair.pubkey()));
             assert_matches!(shred.sanitize(/*verify_merkle_proof:*/ true), Ok(()));
@@ -1485,8 +1482,9 @@ mod test {
                 .collect::<Vec<_>>()
         );
         // Assert that shreds sanitize and verify.
+        let pubkey = keypair.pubkey();
         for shred in &shreds {
-            assert!(shred.verify(&keypair.pubkey()));
+            assert!(shred.verify(&pubkey));
             assert_matches!(shred.sanitize(/*verify_merkle_proof:*/ true), Ok(()));
             let ShredCommonHeader {
                 signature,
@@ -1511,9 +1509,11 @@ mod test {
             assert_eq!(shred::layout::get_version(shred), Some(version));
             assert_eq!(shred::layout::get_shred_id(shred), Some(key));
             assert_eq!(shred::layout::get_merkle_root(shred), merkle_root);
-            let slice = shred::layout::get_signed_message_range(shred).unwrap();
-            let message = shred.get(slice).unwrap();
-            assert!(signature.verify(keypair.pubkey().as_ref(), message));
+            let offsets = shred::layout::get_signed_data_offsets(shred).unwrap();
+            let data = shred.get(offsets).unwrap();
+            assert!(signature.verify(pubkey.as_ref(), data));
+            let data = shred::layout::get_signed_data(shred).unwrap();
+            assert!(signature.verify(pubkey.as_ref(), data.as_ref()));
         }
         // Verify common, data and coding headers.
         let mut num_data_shreds = 0;
