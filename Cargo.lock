@@ -6540,6 +6540,7 @@ dependencies = [
  "solana-bucket-map",
  "solana-compute-budget-program",
  "solana-config-program",
+ "solana-entry",
  "solana-frozen-abi 1.15.0",
  "solana-frozen-abi-macro 1.15.0",
  "solana-logger 1.15.0",

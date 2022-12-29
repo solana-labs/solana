@@ -1005,7 +1005,7 @@ impl SchedulerPool<ExecuteTimings> {
 static SCHEDULER_POOL: std::sync::Mutex<SchedulerPool<ExecuteTimings>> =
     std::sync::Mutex::new(SchedulerPool::new());
 
-pub static POH: std::sync::RwLock<Option<Box<dyn Fn(&Bank) -> std::result::Result<(), ()> + Send + Sync>>> = std::sync::RwLock::new(None);
+pub static POH: std::sync::RwLock<Option<Box<dyn Fn(&Bank, Vec<VersionedTransaction>, solana_sdk::hash::Hash) -> std::result::Result<(), ()> + Send + Sync>>> = std::sync::RwLock::new(None);
 
 pub mod commit_mode {
     use std::result::Result; // restore shadowing for not fully qualified macro expansion in atomic_enum...
@@ -1156,7 +1156,19 @@ impl Scheduler<ExecuteTimings> {
                     },
                     CommitMode::Banking => {
                         info!("banking commit! {slot}");
-                        if let Err(_) = POH.read().unwrap().as_ref().unwrap()(bank.as_ref()) {
+                        let executed_transactions: Vec<_> = execution_results
+                                .iter()
+                                .zip(batch.sanitized_transactions())
+                                .filter_map(|(execution_result, tx)| {
+                                    if execution_result.was_executed() {
+                                        Some(tx.to_versioned_transaction())
+                                    } else {
+                                        None
+                                    }
+                                })
+                                .collect();
+                        let hash = solana_entry::entry::hash_transactions(&executed_transactions);
+                        if let Err(_) = POH.read().unwrap().as_ref().unwrap()(bank.as_ref(), executed_transactions, hash) {
                             execution_results = vec![
                                 TransactionExecutionResult::NotExecuted(TransactionError::ClusterMaintenance)
                             ];

@@ -816,10 +816,16 @@ impl BankingSimulator {
         };
         use solana_runtime::bank::POH;
         *POH.write().unwrap() = Some({
-            let poh_recorder = poh_recorder.clone();
-            Box::new(move |bank: &Bank| -> Result<(), ()> {
-                info!("hello with poh: {}", poh_recorder.read().unwrap().slot());
-                Ok(())
+            let poh_recorder_lock = poh_recorder.clone();
+            Box::new(move |bank: &Bank, transactions, hash| -> Result<(), ()> {
+                let poh_recorder = poh_recorder_lock.read().unwrap();
+                let recorder = poh_recorder.recorder();
+                let res = recorder.record(bank.slot(), hash, transactions);
+                drop((recorder, poh_recorder));
+
+                info!("recorded {:?}", res);
+
+                res.map(|_| ()).map_err(|_| ())
             })
         });
         let target_ns_per_slot = solana_poh::poh_service::PohService::target_ns_per_tick(
