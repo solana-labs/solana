@@ -161,15 +161,17 @@ impl TransactionRecorder {
         let mut is_exited = false;
         loop {
             let res = result_receiver.recv_timeout(Duration::from_millis(1000));
+            let current_thread_name = std::thread::current().name().unwrap().to_string();
+            //info!("scEx: {current_thread_name} {res:?}");
             match res {
                 Err(RecvTimeoutError::Timeout) => {
-                    if is_exited {
+                    //if is_exited {
                         return Err(PohRecorderError::MaxHeightReached);
-                    } else {
+                    //} else {
                         // A result may have come in between when we timed out checking this
                         // bool, so check the channel again, even if is_exited == true
-                        is_exited = self.is_exited.load(Ordering::SeqCst);
-                    }
+                    //    is_exited = self.is_exited.load(Ordering::SeqCst);
+                    //}
                 }
                 Err(RecvTimeoutError::Disconnected) => {
                     return Err(PohRecorderError::MaxHeightReached);

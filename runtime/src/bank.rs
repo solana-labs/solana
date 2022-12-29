@@ -1132,9 +1132,9 @@ impl Scheduler<ExecuteTimings> {
                 let LoadAndExecuteTransactionsOutput {
                     mut loaded_transactions,
                     mut execution_results,
-                    executed_transactions_count,
+                    mut executed_transactions_count,
                     executed_with_successful_result_count,
-                    signature_count,
+                    mut signature_count,
                     ..
                 } = bank.load_and_execute_transactions(
                     &batch,
@@ -1152,10 +1152,10 @@ impl Scheduler<ExecuteTimings> {
 
                 match bank.commit_mode() {
                     CommitMode::Replaying => {
-                        info!("replaying commit! {slot}");
+                        //info!("replaying commit! {slot}");
                     },
                     CommitMode::Banking => {
-                        info!("banking commit! {slot}");
+                        //info!("banking commit! {slot}");
                         let executed_transactions: Vec<_> = execution_results
                                 .iter()
                                 .zip(batch.sanitized_transactions())
@@ -1169,10 +1169,15 @@ impl Scheduler<ExecuteTimings> {
                                 .collect();
                         if !executed_transactions.is_empty() {
                             let hash = solana_entry::entry::hash_transactions(&executed_transactions);
-                            if let Err(_) = POH.read().unwrap().as_ref().unwrap()(bank.as_ref(), executed_transactions, hash) {
+                            let poh = POH.read().unwrap();
+                            if let Err(e) = poh.as_ref().unwrap()(bank.as_ref(), executed_transactions, hash) {
+
+                                error!("poh error: {:?}", e);
                                 execution_results = vec![
                                     TransactionExecutionResult::NotExecuted(TransactionError::ClusterMaintenance)
                                 ];
+                                executed_transactions_count = 0;
+                                signature_count = 0;
                             }
                         }
                     },
