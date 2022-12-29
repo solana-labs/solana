@@ -6559,6 +6559,7 @@ name = "solana-scheduler"
 version = "1.15.0"
 dependencies = [
  "by_address",
+ "cpu-time",
  "crossbeam-channel",
  "dashmap 4.0.2",
  "log",

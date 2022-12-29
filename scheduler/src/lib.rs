@@ -1648,7 +1648,7 @@ impl ScheduleStage {
         never: &'a crossbeam_channel::Receiver<SchedulablePayload<C>>,
     ) -> Option<std::sync::Arc<Checkpoint<C>>> {
         let mut maybe_start_time = None;
-        let (mut last_time, mut last_processed_count) = (maybe_start_time.clone(), 0_usize);
+        let (mut last_time, mut last_processed_count) = (maybe_start_time.map(|(a, b)| b).clone(), 0_usize);
         info!("schedule_once:standby id_{:016x}", random_id);
 
         let mut executing_queue_count = 0_usize;
@@ -1763,8 +1763,8 @@ impl ScheduleStage {
                            Ok(SchedulablePayload(Flushable::Payload(task))) => {
                                if maybe_start_time.is_none() {
                                     info!("schedule_once:initial id_{:016x}", random_id);
-                                   maybe_start_time = Some(std::time::Instant::now());
-                                   last_time = maybe_start_time.clone();
+                                   maybe_start_time = Some((cpu_time::ThreadTime::now(), std::time::Instant::now()));
+                                   last_time = maybe_start_time.map(|(a, b)| b).clone();
                                }
                                //Self::register_runnable_task(task, runnable_queue, &mut sequence_time);
                                channel_backed_runnable_queue.buffer(task);
@@ -2008,15 +2008,16 @@ impl ScheduleStage {
             indexer_handle.join().unwrap().unwrap();
         }
 
-        if let Some(start_time) = maybe_start_time {
+        if let Some((cpu_time, start_time)) = maybe_start_time {
             let elapsed = start_time.elapsed();
+            let cpu_time2 = cpu_time.elapsed().as_micros();
             let elapsed2 = elapsed.as_micros();
             let tps_label = if elapsed2 > 0 {
                 format!("{}", 1_000_000_u128 * (processed_count as u128) / elapsed2)
             } else {
                 "-".into()
             };
-            info!("schedule_once:final id_{:016x} (no_more_work: {}) ch(prev: {}, exec: {}|{}), runnnable: {}, contended: {}, (immediate+provisional)/max: ({}+{})/{} uncontended: {} stuck: {} miss: {}, overall: {}txs/{}us={}tps!", random_id, no_more_work, (if from_disconnected { "-".to_string() } else { format!("{}", from_prev.len()) }), to_execute_substage.len(), (if from_exec_disconnected { "-".to_string() } else { format!("{}", from_exec.len())}), channel_backed_runnable_queue.task_count_hint(), contended_count, executing_queue_count, provisioning_tracker_count, max_executing_queue_count, address_book.uncontended_task_ids.len(), address_book.stuck_tasks.len(), failed_lock_count, processed_count, elapsed.as_micros(), tps_label);
+            info!("schedule_once:final id_{:016x} (no_more_work: {}) ch(prev: {}, exec: {}|{}), runnnable: {}, contended: {}, (immediate+provisional)/max: ({}+{})/{} uncontended: {} stuck: {} miss: {}, overall: {}txs/{}us={}tps! (cpu time: {cpu_time2}us)", random_id, no_more_work, (if from_disconnected { "-".to_string() } else { format!("{}", from_prev.len()) }), to_execute_substage.len(), (if from_exec_disconnected { "-".to_string() } else { format!("{}", from_exec.len())}), channel_backed_runnable_queue.task_count_hint(), contended_count, executing_queue_count, provisioning_tracker_count, max_executing_queue_count, address_book.uncontended_task_ids.len(), address_book.stuck_tasks.len(), failed_lock_count, processed_count, elapsed.as_micros(), tps_label);
         }
 
         maybe_checkpoint
