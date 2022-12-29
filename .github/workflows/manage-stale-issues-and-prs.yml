@@ -32,7 +32,7 @@ jobs:
           exempt-issue-labels: blocked,do-not-close,feature-gate,security
           exempt-pr-labels: blocked,do-not-close,feature-gate,security
           # No actual changes get made in debug-only mode, so we can raise the operations ceiling.
-          operations-per-run: ${{ github.event_name == 'pull_request' && 400 || 300}}
+          operations-per-run: ${{ github.event_name == 'pull_request' && 1000 || 900}}
           stale-issue-label: stale
           stale-issue-message: "" # Leave no comment when marking as stale
           stale-pr-label: stale
