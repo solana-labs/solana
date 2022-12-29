@@ -1,0 +1,8 @@
+{
+  "compilerOptions": {
+    "declaration": true,
+    "declarationDir": "declarations"
+  },
+  "extends": "./tsconfig.shared.json",
+  "include": ["src"]
+}
