@@ -292,6 +292,7 @@ describe('Transaction', () => {
               foundIndex = ii;
               return true;
             }
+            return;
           });
           return foundIndex;
         })(),
@@ -342,6 +343,7 @@ describe('Transaction', () => {
               foundIndex = ii;
               return true;
             }
+            return;
           });
           return foundIndex;
         })(),
