@@ -1167,11 +1167,13 @@ impl Scheduler<ExecuteTimings> {
                                     }
                                 })
                                 .collect();
-                        let hash = solana_entry::entry::hash_transactions(&executed_transactions);
-                        if let Err(_) = POH.read().unwrap().as_ref().unwrap()(bank.as_ref(), executed_transactions, hash) {
-                            execution_results = vec![
-                                TransactionExecutionResult::NotExecuted(TransactionError::ClusterMaintenance)
-                            ];
+                        if !executed_transactions.is_empty() {
+                            let hash = solana_entry::entry::hash_transactions(&executed_transactions);
+                            if let Err(_) = POH.read().unwrap().as_ref().unwrap()(bank.as_ref(), executed_transactions, hash) {
+                                execution_results = vec![
+                                    TransactionExecutionResult::NotExecuted(TransactionError::ClusterMaintenance)
+                                ];
+                            }
                         }
                     },
                 };

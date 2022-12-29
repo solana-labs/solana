@@ -818,10 +818,12 @@ impl BankingSimulator {
         *POH.write().unwrap() = Some({
             let poh_recorder_lock = poh_recorder.clone();
             Box::new(move |bank: &Bank, transactions, hash| -> Result<(), ()> {
+                info!("committing.. {} txes", transactions.len());
                 let poh_recorder = poh_recorder_lock.read().unwrap();
                 let recorder = poh_recorder.recorder();
+                drop(poh_recorder);
                 let res = recorder.record(bank.slot(), hash, transactions);
-                drop((recorder, poh_recorder));
+                drop(recorder);
 
                 info!("recorded {:?}", res);
 
