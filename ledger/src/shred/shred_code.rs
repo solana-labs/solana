@@ -39,7 +39,7 @@ impl ShredCode {
     dispatch!(pub(super) fn payload(&self) -> &Vec<u8>);
     dispatch!(pub(super) fn sanitize(&self) -> Result<(), Error>);
     dispatch!(pub(super) fn set_signature(&mut self, signature: Signature));
-    dispatch!(pub(super) fn signed_message(&self) -> &[u8]);
+    dispatch!(pub(super) fn signed_data(&self) -> &[u8]);
 
     // Only for tests.
     dispatch!(pub(super) fn set_index(&mut self, index: u32));
