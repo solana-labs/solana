@@ -768,7 +768,7 @@ export type InflationReward = {
   /** post balance of the account in lamports */
   postBalance: number;
   /** vote account commission when the reward was credited */
-  commission: number | null;
+  commission?: number | null;
 };
 
 /**
@@ -1236,7 +1236,7 @@ export type BlockResponse = {
     /** Type of reward received */
     rewardType: string | null;
     /** Vote account commission when the reward was credited, only present for voting and staking rewards */
-    commission: number | null;
+    commission?: number | null;
   }>;
   /** The unix timestamp of when the block was processed */
   blockTime: number | null;
@@ -1282,7 +1282,7 @@ export type ParsedBlockResponse = {
     /** Type of reward received */
     rewardType: string | null;
     /** Vote account commission when the reward was credited, only present for voting and staking rewards */
-    commission: number | null;
+    commission?: number | null;
   }>;
   /** The unix timestamp of when the block was processed */
   blockTime: number | null;
@@ -1352,7 +1352,7 @@ export type VersionedBlockResponse = {
     /** Type of reward received */
     rewardType: string | null;
     /** Vote account commission when the reward was credited, only present for voting and staking rewards */
-    commission: number | null;
+    commission?: number | null;
   }>;
   /** The unix timestamp of when the block was processed */
   blockTime: number | null;
@@ -1408,7 +1408,7 @@ export type ConfirmedBlock = {
     lamports: number;
     postBalance: number | null;
     rewardType: string | null;
-    commission: number | null;
+    commission?: number | null;
   }>;
   /** The unix timestamp of when the block was processed */
   blockTime: number | null;
