@@ -815,23 +815,7 @@ impl BankingSimulator {
             );
             (exit, r, s, entry_receiver)
         };
-        use solana_runtime::bank::POH;
-        *POH.write().unwrap() = Some({
-            let poh_recorder_lock = poh_recorder.clone();
-            let poh_recorder = poh_recorder_lock.read().unwrap();
-            let recorder = poh_recorder.recorder();
-            drop(poh_recorder);
-
-            Box::new(move |bank: &Bank, transactions, hash| -> Result<(), ()> {
-                let current_thread_name = std::thread::current().name().unwrap().to_string();
-                //info!("scEx: {current_thread_name} committing.. {} txes", transactions.len());
-                let res = recorder.record(bank.slot(), hash, transactions);
-
-                //info!("scEx: {current_thread_name} recorded {:?}", res);
-
-                res.map(|_| ()).map_err(|_| ())
-            })
-        });
+        crate::banking_stage::initialize_poh_callback(&poh_recorder);
         let target_ns_per_slot = solana_poh::poh_service::PohService::target_ns_per_tick(
             start_bank.ticks_per_slot(),
             genesis_config.poh_config.target_tick_duration.as_nanos() as u64,
