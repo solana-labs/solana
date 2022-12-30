@@ -2030,7 +2030,7 @@ pub(crate) fn initialize_poh_callback(poh_recorder: &Arc<RwLock<PohRecorder>>) {
         drop(poh_recorder);
 
         Box::new(move |bank: &Bank, transactions, hash| -> Result<(), ()> {
-            let current_thread_name = std::thread::current().name().unwrap().to_string();
+            //let current_thread_name = std::thread::current().name().unwrap().to_string();
             //info!("scEx: {current_thread_name} committing.. {} txes", transactions.len());
             let res = recorder.record(bank.slot(), hash, transactions);
 
