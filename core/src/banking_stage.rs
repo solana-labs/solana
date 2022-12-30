@@ -1165,7 +1165,7 @@ impl BankingStage {
             banking_stage_stats.report(1000);
             if packet_deserializer.packet_batch_receiver.is_disconnected() {
                 break;
-            } else {
+            } else if packet_deserializer.packet_batch_receiver.is_empty() {
                 std::thread::sleep(SLOT_BOUNDARY_CHECK_PERIOD);
             }
         }
