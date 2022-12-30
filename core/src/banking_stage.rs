@@ -1096,9 +1096,7 @@ impl BankingStage {
 
         let my_pubkey = cluster_info.id();
         loop {
-            if !unprocessed_transaction_storage.is_empty()
-                || last_metrics_update.elapsed() >= SLOT_BOUNDARY_CHECK_PERIOD
-            {
+            if true {
                 let (_, process_buffered_packets_time) = measure!(
                     Self::process_buffered_packets(
                         &my_pubkey,
@@ -1167,6 +1165,8 @@ impl BankingStage {
             banking_stage_stats.report(1000);
             if packet_deserializer.packet_batch_receiver.is_disconnected() {
                 break;
+            } else {
+                std::thread::sleep(SLOT_BOUNDARY_CHECK_PERIOD);
             }
         }
     }
