@@ -1148,7 +1148,7 @@ dependencies = [
 [[package]]
 name = "crossbeam-channel"
 version = "0.5.6"
-source = "git+https://github.com/solana-labs/crossbeam?rev=a8ef2a217c1ee3b54b57cc9117dceb8b64890a4b#a8ef2a217c1ee3b54b57cc9117dceb8b64890a4b"
+source = "git+https://github.com/solana-labs/crossbeam?rev=44c5aba9ac22f768f1d120ecb8ea186baf5341c3#44c5aba9ac22f768f1d120ecb8ea186baf5341c3"
 dependencies = [
  "cfg-if 1.0.0",
  "crossbeam-utils 0.8.11",
@@ -1190,7 +1190,7 @@ dependencies = [
 [[package]]
 name = "crossbeam-utils"
 version = "0.8.11"
-source = "git+https://github.com/solana-labs/crossbeam?rev=a8ef2a217c1ee3b54b57cc9117dceb8b64890a4b#a8ef2a217c1ee3b54b57cc9117dceb8b64890a4b"
+source = "git+https://github.com/solana-labs/crossbeam?rev=44c5aba9ac22f768f1d120ecb8ea186baf5341c3#44c5aba9ac22f768f1d120ecb8ea186baf5341c3"
 dependencies = [
  "cfg-if 1.0.0",
  "once_cell",

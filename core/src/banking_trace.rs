@@ -1082,7 +1082,9 @@ impl BankingSimulator {
         if let Err(e) = sender_thread.join().unwrap() {
             warn!("sender returned err: {:?}", e);
         }
+        info!("joining banking stage...");
         banking_stage.join().unwrap();
+        info!("joining poh service...");
         poh_service.join().unwrap();
 
         // TODO: add flag to store shreds into ledger so that we can even benchmark replay stgage with

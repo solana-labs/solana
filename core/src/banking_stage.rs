@@ -1094,8 +1094,8 @@ impl BankingStage {
         let mut slot_metrics_tracker = LeaderSlotMetricsTracker::new(id, banking_tracer.clone());
         let mut last_metrics_update = Instant::now();
 
+        let my_pubkey = cluster_info.id();
         loop {
-            let my_pubkey = cluster_info.id();
             if !unprocessed_transaction_storage.is_empty()
                 || last_metrics_update.elapsed() >= SLOT_BOUNDARY_CHECK_PERIOD
             {
@@ -1129,6 +1129,7 @@ impl BankingStage {
 
             tracer_packet_stats.report(1000);
 
+            /*
             // Gossip thread will almost always not wait because the transaction storage will most likely not be empty
             let recv_timeout = if !unprocessed_transaction_storage.is_empty() {
                 // If there are buffered packets, run the equivalent of try_recv to try reading more
@@ -1141,7 +1142,6 @@ impl BankingStage {
                 Duration::from_millis(100)
             };
 
-            /*
             let (res, receive_and_buffer_packets_time) = measure!(
                 Self::receive_and_buffer_packets(
                     packet_deserializer,
@@ -1165,6 +1165,9 @@ impl BankingStage {
             */
 
             banking_stage_stats.report(1000);
+            if packet_deserializer.packet_batch_receiver.is_disconnected() {
+                break;
+            }
         }
     }
 
