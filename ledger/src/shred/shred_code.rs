@@ -79,8 +79,15 @@ impl ShredCode {
     pub(super) fn erasure_mismatch(&self, other: &ShredCode) -> bool {
         match (self, other) {
             (Self::Legacy(shred), Self::Legacy(other)) => erasure_mismatch(shred, other),
-            (Self::Merkle(shred), Self::Merkle(other)) => shred.erasure_mismatch(other),
-            _ => true,
+            (Self::Legacy(_), Self::Merkle(_)) => true,
+            (Self::Merkle(_), Self::Legacy(_)) => true,
+            (Self::Merkle(shred), Self::Merkle(other)) => {
+                // Merkle shreds within the same erasure batch have the same
+                // merkle root. The root of the merkle tree is signed. So
+                // either the signatures match or one fails sigverify.
+                erasure_mismatch(shred, other)
+                    || shred.common_header().signature != other.common_header().signature
+            }
         }
     }
 }
