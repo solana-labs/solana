@@ -767,6 +767,8 @@ export type InflationReward = {
   amount: number;
   /** post balance of the account in lamports */
   postBalance: number;
+  /** vote account commission when the reward was credited */
+  commission?: number | null;
 };
 
 /**
@@ -780,6 +782,7 @@ const GetInflationRewardResult = jsonRpcResult(
         effectiveSlot: number(),
         amount: number(),
         postBalance: number(),
+        commission: optional(nullable(number())),
       }),
     ),
   ),
@@ -1232,6 +1235,8 @@ export type BlockResponse = {
     postBalance: number | null;
     /** Type of reward received */
     rewardType: string | null;
+    /** Vote account commission when the reward was credited, only present for voting and staking rewards */
+    commission?: number | null;
   }>;
   /** The unix timestamp of when the block was processed */
   blockTime: number | null;
@@ -1276,6 +1281,8 @@ export type ParsedBlockResponse = {
     postBalance: number | null;
     /** Type of reward received */
     rewardType: string | null;
+    /** Vote account commission when the reward was credited, only present for voting and staking rewards */
+    commission?: number | null;
   }>;
   /** The unix timestamp of when the block was processed */
   blockTime: number | null;
@@ -1344,6 +1351,8 @@ export type VersionedBlockResponse = {
     postBalance: number | null;
     /** Type of reward received */
     rewardType: string | null;
+    /** Vote account commission when the reward was credited, only present for voting and staking rewards */
+    commission?: number | null;
   }>;
   /** The unix timestamp of when the block was processed */
   blockTime: number | null;
@@ -1399,6 +1408,7 @@ export type ConfirmedBlock = {
     lamports: number;
     postBalance: number | null;
     rewardType: string | null;
+    commission?: number | null;
   }>;
   /** The unix timestamp of when the block was processed */
   blockTime: number | null;
@@ -2297,6 +2307,7 @@ const RewardsResult = pick({
   lamports: number(),
   postBalance: nullable(number()),
   rewardType: nullable(string()),
+  commission: optional(nullable(number())),
 });
 
 /**

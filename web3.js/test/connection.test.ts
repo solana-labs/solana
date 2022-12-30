@@ -816,6 +816,7 @@ describe('Connection', function () {
             effectiveSlot: 432000,
             epoch: 0,
             postBalance: 30504783,
+            commission: 0,
           },
           null,
         ],
