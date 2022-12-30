@@ -3631,20 +3631,29 @@ fn main() {
                     ..AccountsDbConfig::default()
                 });
 
+                let halt_at_slot = value_t!(arg_matches, "halt_at_slot", Slot).ok().unwrap();
                 let process_options = ProcessOptions {
                     poh_verify: false,
-                    halt_at_slot: value_t!(arg_matches, "halt_at_slot", Slot).ok(),
+                    halt_at_slot: Some(halt_at_slot),
                     accounts_db_config,
                     ..ProcessOptions::default()
                 };
 
                 let blockstore = open_blockstore(
                     &ledger_path,
-                    AccessType::Secondary,
+                    AccessType::Primary,
                     wal_recovery_mode,
                     &shred_storage_type,
                     force_update_to_open,
                 );
+                let first_simulated_slot = halt_at_slot + 1;
+                let end_slot = blockstore.slot_meta_iterator(first_simulated_slot).unwrap().map(|(s, _)| s).last().unwrap();
+                info!("purging slots {first_simulated_slot}, {end_slot}");
+
+                blockstore.purge_from_next_slots(first_simulated_slot, end_slot);
+                blockstore.purge_slots(first_simulated_slot, end_slot, PurgeType::Exact);
+                info!("done: purging");
+
                 let genesis_config = open_genesis_config_by(&ledger_path, arg_matches);
                 let (bank_forks, ..) = load_bank_forks(
                     arg_matches,
