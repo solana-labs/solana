@@ -1651,7 +1651,7 @@ pub struct Bank {
 
     scheduler2: RwLock<Option<Arc<Scheduler<ExecuteTimings>>>>,
     commit_mode: AtomicCommitMode,
-    pub blockhash_override: Option<Hash>,
+    pub blockhash_override: RwLock<Option<Hash>>,
 }
 
 struct VoteWithStakeDelegations {
@@ -1859,7 +1859,7 @@ impl Bank {
             fee_structure: FeeStructure::default(),
             scheduler2: RwLock::new(Some(SCHEDULER_POOL.lock().unwrap().take_from_pool())),
             commit_mode: Default::default(),
-            blockhash_override: Default::default(),
+            blockhash_override: RwLock::new(Default::default()),
         };
 
         let accounts_data_size_initial = bank.get_total_accounts_stats().unwrap().data_len as u64;
@@ -2185,7 +2185,7 @@ impl Bank {
             fee_structure: parent.fee_structure.clone(),
             scheduler2: scheduler,
             commit_mode: Default::default(),
-            blockhash_override,
+            blockhash_override: RwLock::new(blockhash_override),
         };
 
         let (_, ancestors_time) = measure!(
@@ -2553,7 +2553,7 @@ impl Bank {
             fee_structure: FeeStructure::default(),
             scheduler2: RwLock::new(Some(SCHEDULER_POOL.lock().unwrap().take_from_pool())), // Default::default();Default::default(),
             commit_mode: Default::default(),
-            blockhash_override: Default::default(),
+            blockhash_override: RwLock::new(Default::default()),
         };
         bank.finish_init(
             genesis_config,
@@ -3739,7 +3739,7 @@ impl Bank {
         }
     }
 
-    pub fn _freeze(&self, bank_hash_override: Option<Hash>) {
+    pub fn _freeze(&self, bank_hash_override: &mut Option<Hash>) {
         // This lock prevents any new commits from BankingStage
         // `process_and_record_transactions_locked()` from coming
         // in after the last tick is observed. This is because in
@@ -3769,10 +3769,10 @@ impl Bank {
     }
 
     pub fn freeze(&self) {
-        self._freeze(None);
+        self._freeze(&mut None);
     }
 
-    pub fn freeze_with_bank_hash_override(&self, bank_hash_override: Option<Hash>) {
+    pub fn freeze_with_bank_hash_override(&self, bank_hash_override: &mut Option<Hash>) {
         self._freeze(bank_hash_override);
     }
 
@@ -4231,7 +4231,11 @@ impl Bank {
             self.slot()
         );
 
-        w_blockhash_queue.register_hash(&self.blockhash_override.as_ref().unwrap_or(blockhash), self.fee_rate_governor.lamports_per_signature);
+        let mut blockhash = *blockhash;
+        if let Some(aa) = self.blockhash_override.write().unwrap().as_mut() {
+            std::mem::swap(aa, &mut blockhash);
+        }
+        w_blockhash_queue.register_hash(&blockhash, self.fee_rate_governor.lamports_per_signature);
         self.update_recent_blockhashes_locked(&w_blockhash_queue);
     }
 
@@ -7390,10 +7394,10 @@ impl Bank {
     /// Hash the `accounts` HashMap. This represents a validator's interpretation
     ///  of the delta of the ledger since the last vote and up to now
     fn hash_internal_state(&self) -> Hash {
-        self._hash_internal_state(None)
+        self._hash_internal_state(&mut None)
     }
 
-    fn _hash_internal_state(&self, bank_hash_override: Option<Hash>) -> Hash {
+    fn _hash_internal_state(&self, bank_hash_override: &mut Option<Hash>) -> Hash {
         // If there are no accounts, return the hash of the previous state and the latest blockhash
         let bank_hash_info = self.rc.accounts.bank_hash_info_at(self.slot());
         let mut signature_count_buf = [0u8; 8];
@@ -7429,16 +7433,16 @@ impl Bank {
             hash = hard_forked_hash;
         }
 
+        let last_blockhash = self.last_blockhash();
         info!(
-            "bank frozen: {} (parent: {}) hash: {} accounts_delta: {} sigs: {} txs: {}, last_blockhash: {}{} capitalization: {}{}",
+            "bank frozen: {} (parent: {}) hash: {} accounts_delta: {} sigs: {} txs: {}, last_blockhash: {} capitalization: {}{}",
             self.slot(),
             self.parent_slot(),
-            bank_hash_override.map(|ho| format!("{ho} (overrode: {hash})")).unwrap_or_else(|| format!("{hash}")),
+            bank_hash_override.map(|new_hash| format!("{new_hash} (was: {hash})")).unwrap_or_else(|| format!("{hash}")),
             bank_hash_info.accounts_delta_hash,
             self.signature_count(),
             self.transaction_count() - self.parent().map(|p| p.transaction_count()).unwrap_or_default(),
-            self.last_blockhash(),
-            self.blockhash_override.map(|_| format!(" (overrode)")).unwrap_or_else(|| format!("")),
+            self.blockhash_override.read().unwrap().map(|original| format!("{last_blockhash} (was: {original})")).unwrap_or_else(|| format!("{last_blockhash}")),
             self.capitalization(),
             if let Some(epoch_accounts_hash) = epoch_accounts_hash {
                 format!(", epoch_accounts_hash: {:?}", epoch_accounts_hash.as_ref())
@@ -7452,7 +7456,14 @@ impl Bank {
             self.slot(),
             bank_hash_info.stats,
         );
-        bank_hash_override.unwrap_or(hash)
+        if let Some(bank_hash_override) = bank_hash_override {
+            std::mem::swap(bank_hash_override, &mut hash);
+        }
+        hash
+    }
+
+    pub fn original_last_blockhash(&self) -> Option<Hash> {
+        *self.blockhash_override.read().unwrap()
     }
 
     /// The epoch accounts hash is hashed into the bank's hash once per epoch at a predefined slot.

@@ -77,6 +77,7 @@ enum TracedEvent {
     PacketBatch(ChannelLabel, BankingPacketBatch),
     Bank(Slot, u32, BankStatus, usize),
     BlockAndBankHash(Slot, Hash, Hash),
+    OriginalBlockAndBankHash(Slot, Hash, Hash),
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -279,6 +280,13 @@ impl BankingTracer {
         self.trace_event(TimedTracedEvent(
             SystemTime::now(),
             TracedEvent::BlockAndBankHash(slot, blockhash, bank_hash),
+        ))
+    }
+
+    pub fn original_hash_event(&self, slot: Slot, blockhash: Hash, bank_hash: Hash) {
+        self.trace_event(TimedTracedEvent(
+            SystemTime::now(),
+            TracedEvent::OriginalBlockAndBankHash(slot, blockhash, bank_hash),
         ))
     }
 
@@ -1047,7 +1055,8 @@ impl BankingSimulator {
                 if let Err(e) = bank.wait_for_scheduler(false) {
                     error!("wait_for_scheduler returned error...: {e:?}");
                 }
-                bank.freeze_with_bank_hash_override(hashes_by_slot.get(&old_slot).map(|hh| hh.1));
+                let mut hash_override = hashes_by_slot.get(&old_slot).map(|hh| hh.1);
+                bank.freeze_with_bank_hash_override(&mut hash_override);
                 poh_recorder
                     .write()
                     .unwrap()
@@ -1071,6 +1080,9 @@ impl BankingSimulator {
                 // new()-ing of its child bank
                 // maybe hash_event_with_original for proper check at replaying simulated blocks...
                 banking_retracer.hash_event(bank.slot(), bank.last_blockhash(), bank.hash());
+                if let Some(original_last_blockhash) = bank.original_last_blockhash() {
+                    banking_retracer.original_hash_event(bank.slot(), original_last_blockhash, hash_override.unwrap());
+                }
                 retransmit_slots_sender.send(bank.slot()).unwrap();
                 bank_forks.write().unwrap().insert(new_bank);
                 bank = bank_forks.read().unwrap().working_bank();
