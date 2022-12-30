@@ -15,7 +15,8 @@ use {
 
 // All payload including any zero paddings are signed.
 // Code and data shreds have the same payload size.
-pub(super) const SIGNED_MESSAGE_RANGE: Range<usize> = SIZE_OF_SIGNATURE..ShredData::SIZE_OF_PAYLOAD;
+pub(super) const SIGNED_MESSAGE_OFFSETS: Range<usize> =
+    SIZE_OF_SIGNATURE..ShredData::SIZE_OF_PAYLOAD;
 const_assert_eq!(ShredData::SIZE_OF_PAYLOAD, ShredCode::SIZE_OF_PAYLOAD);
 const_assert_eq!(ShredData::SIZE_OF_PAYLOAD, 1228);
 const_assert_eq!(ShredData::CAPACITY, 1051);
@@ -108,7 +109,7 @@ impl Shred for ShredData {
         shred_data::sanitize(self)
     }
 
-    fn signed_message(&self) -> &[u8] {
+    fn signed_data(&self) -> &[u8] {
         debug_assert_eq!(self.payload.len(), Self::SIZE_OF_PAYLOAD);
         &self.payload[SIZE_OF_SIGNATURE..]
     }
@@ -170,7 +171,7 @@ impl Shred for ShredCode {
         shred_code::sanitize(self)
     }
 
-    fn signed_message(&self) -> &[u8] {
+    fn signed_data(&self) -> &[u8] {
         debug_assert_eq!(self.payload.len(), Self::SIZE_OF_PAYLOAD);
         &self.payload[SIZE_OF_SIGNATURE..]
     }
