@@ -781,7 +781,7 @@ impl BankingSimulator {
         info!("simulated leader and slot: {}, {}", simulated_leader, simulated_slot);
         let start_bank = bank_forks.read().unwrap().root_bank();
 
-        let (exit, poh_recorder, poh_service, _signal_receiver) = {
+        let (exit, poh_recorder, poh_service, entry_receiver) = {
             use std::sync::RwLock;
             use solana_poh::poh_service::PohService;
             use solana_poh::poh_recorder::PohRecorder;
@@ -851,6 +851,30 @@ impl BankingSimulator {
         let cluster_info = Arc::new(cluster_info);
         let connection_cache = ConnectionCache::new(DEFAULT_TPU_CONNECTION_POOL_SIZE);
         let (replay_vote_sender, _replay_vote_receiver) = unbounded();
+        let (retransmit_slots_sender, retransmit_slots_receiver) = unbounded();
+        let shred_version = solana_sdk::shred_version::compute_shred_version(
+            &genesis_config.hash(),
+            Some(
+                &bank_forks
+                    .read()
+                    .unwrap()
+                    .root_bank()
+                    .hard_forks()
+                    .read()
+                    .unwrap(),
+            ),
+        );
+        use std::net::UdpSocket;
+        let broadcast_stage = crate::broadcast_stage::BroadcastStageType::Standard.new_broadcast_stage(
+            vec![UdpSocket::bind("127.0.0.1:0").unwrap()],
+            cluster_info.clone(),
+            entry_receiver,
+            retransmit_slots_receiver,
+            exit.clone(),
+            blockstore.clone(),
+            bank_forks.clone(),
+            shred_version,
+        );
 
         /*
         let (mut non_vote_tx_count, mut tpu_vote_tx_count, mut gossip_vote_tx_count) = (0, 0, 0);
@@ -1047,6 +1071,7 @@ impl BankingSimulator {
                 // new()-ing of its child bank
                 // maybe hash_event_with_original for proper check at replaying simulated blocks...
                 banking_retracer.hash_event(bank.slot(), bank.last_blockhash(), bank.hash());
+                retransmit_slots_sender.send(bank.slot()).unwrap();
                 bank_forks.write().unwrap().insert(new_bank);
                 bank = bank_forks.read().unwrap().working_bank();
                 poh_recorder.write().unwrap().set_bank(&bank, false);
@@ -1075,5 +1100,7 @@ impl BankingSimulator {
         // actua blocks created by these simulation
         // also sadly need to feed these overriding hashes into replaying stage for those recreted
         // simulated blocks...
+        info!("joining broadcast stage...");
+        broadcast_stage.join().unwrap();
     }
 }

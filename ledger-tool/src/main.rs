@@ -3647,12 +3647,15 @@ fn main() {
                     force_update_to_open,
                 );
                 let first_simulated_slot = halt_at_slot + 1;
-                let end_slot = blockstore.slot_meta_iterator(first_simulated_slot).unwrap().map(|(s, _)| s).last().unwrap();
-                info!("purging slots {first_simulated_slot}, {end_slot}");
+                if let Some(end_slot) = blockstore.slot_meta_iterator(first_simulated_slot).unwrap().map(|(s, _)| s).last() {
+                    info!("purging slots {first_simulated_slot}, {end_slot}");
 
-                blockstore.purge_from_next_slots(first_simulated_slot, end_slot);
-                blockstore.purge_slots(first_simulated_slot, end_slot, PurgeType::Exact);
-                info!("done: purging");
+                    blockstore.purge_from_next_slots(first_simulated_slot, end_slot);
+                    blockstore.purge_slots(first_simulated_slot, end_slot, PurgeType::Exact);
+                    info!("done: purging");
+                } else {
+                    info!("skipping purging...");
+                }
 
                 let genesis_config = open_genesis_config_by(&ledger_path, arg_matches);
                 let (bank_forks, ..) = load_bank_forks(
