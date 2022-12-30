@@ -1042,6 +1042,12 @@ impl BankingSimulator {
 
         for _ in 0..500 {
             if poh_recorder.read().unwrap().bank().is_none() {
+                let old_slot = bank.slot();
+
+                if let Err(e) = bank.wait_for_scheduler(false) {
+                    error!("wait_for_scheduler returned error...: {e:?}");
+                }
+                bank.freeze_with_bank_hash_override(hashes_by_slot.get(&old_slot).map(|hh| hh.1));
                 poh_recorder
                     .write()
                     .unwrap()
@@ -1049,12 +1055,6 @@ impl BankingSimulator {
                 info!("Bank::new_from_parent()!");
                 use solana_runtime::bank::NewBankOptions;
 
-                let old_slot = bank.slot();
-
-                if let Err(_) = bank.wait_for_scheduler(false) {
-                    error!("wait_for_scheduler returned error...");
-                }
-                bank.freeze_with_bank_hash_override(hashes_by_slot.get(&old_slot).map(|hh| hh.1));
                 let new_slot = bank.slot() + 1;
                 let new_leader = leader_schedule_cache.slot_leader_at(new_slot, None).unwrap();
                 if simulated_leader != new_leader {
@@ -1101,6 +1101,7 @@ impl BankingSimulator {
         // also sadly need to feed these overriding hashes into replaying stage for those recreted
         // simulated blocks...
         info!("joining broadcast stage...");
+        drop(poh_recorder);
         broadcast_stage.join().unwrap();
     }
 }
