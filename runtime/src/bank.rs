@@ -1150,7 +1150,8 @@ impl Scheduler<ExecuteTimings> {
                 let (last_blockhash, lamports_per_signature) =
                     bank.last_blockhash_and_lamports_per_signature();
 
-                match bank.commit_mode() {
+                let commit_mode = bank.commit_mode();
+                match commit_mode {
                     CommitMode::Replaying => {
                         //info!("replaying commit! {slot}");
                     },
@@ -1216,7 +1217,14 @@ impl Scheduler<ExecuteTimings> {
                     ee.cu = details.executed_units;
                 } else {
                     let sig = ee.task.tx.0.signature().to_string();
-                    trace!("found odd tx error: slot: {}, signature: {}, {:?}", slot, sig, tx_result);
+                    match commit_mode {
+                        CommitMode::Replaying => {
+                            error!("found odd tx error: slot: {}, signature: {}, {:?}", slot, sig, tx_result);
+                        },
+                        CommitMode::Banking => {
+                            trace!("found odd tx error: slot: {}, signature: {}, {:?}", slot, sig, tx_result);
+                        }
+                    }
                 };
 
                 ee.execution_result = Some(tx_result);
