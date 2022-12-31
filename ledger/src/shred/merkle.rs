@@ -336,12 +336,6 @@ impl ShredCode {
         Some(offset..offset + SIZE_OF_MERKLE_ROOT)
     }
 
-    pub(super) fn erasure_mismatch(&self, other: &ShredCode) -> bool {
-        shred_code::erasure_mismatch(self, other)
-            || self.merkle_root().ok() != other.merkle_root().ok()
-            || self.common_header.signature != other.common_header.signature
-    }
-
     fn from_recovered_shard(
         common_header: ShredCommonHeader,
         coding_header: CodingShredHeader,
