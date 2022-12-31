@@ -1034,6 +1034,8 @@ impl BankingSimulator {
             bank.skip_check_age();
         }
 
+        let no_fake_hash = std::env::var("NO_FAKE_HASH").is_ok();
+
         if clear_sigs {
             bank.clear_signatures();
         }
@@ -1055,7 +1057,11 @@ impl BankingSimulator {
                 if let Err(e) = bank.wait_for_scheduler(false) {
                     error!("wait_for_scheduler returned error...: {e:?}");
                 }
-                let mut hash_override = hashes_by_slot.get(&old_slot).map(|hh| hh.1);
+                let mut hash_override = if !no_fake_hash {
+                    hashes_by_slot.get(&old_slot).map(|hh| hh.1)
+                } else {
+                    None
+                };
                 bank.freeze_with_bank_hash_override(&mut hash_override);
                 poh_recorder
                     .write()
@@ -1070,8 +1076,14 @@ impl BankingSimulator {
                     info!("{} isn't leader anymore at slot {}; new leader: {}", simulated_leader, new_slot, new_leader);
                     break;
                 }
+                let mut faked_blockhash = if !no_fake_hash {
+                     hashes_by_slot.get(&new_slot).map(|hh| hh.0)
+                } else {
+                    None
+                };
+
                 let options = NewBankOptions {
-                    blockhash_override: hashes_by_slot.get(&new_slot).map(|hh| hh.0),
+                    blockhash_override: faked_blockhash,
                     ..Default::default()
                 };
                 let new_bank = Bank::new_from_parent_with_options(&bank, &simulated_leader, new_slot, options);
