@@ -1011,7 +1011,7 @@ pub mod commit_mode {
     use std::result::Result; // restore shadowing for not fully qualified macro expansion in atomic_enum...
     #[derive(Default)]
     #[atomic_enum]
-    pub(crate) enum CommitMode {
+    pub enum CommitMode {
         Banking,
         #[default]
         Replaying,
@@ -1021,7 +1021,7 @@ pub mod commit_mode {
         fn default() -> Self { Self::new(Default::default()) }
     }
 }
-use commit_mode::{AtomicCommitMode, CommitMode};
+pub use commit_mode::{AtomicCommitMode, CommitMode};
 
 #[derive(Debug)]
 struct Scheduler<C> {
@@ -6755,7 +6755,7 @@ impl Bank {
         self.commit_mode.store(CommitMode::Banking, Relaxed);
     }
 
-    fn commit_mode(&self) -> CommitMode {
+    pub fn commit_mode(&self) -> CommitMode {
         self.commit_mode.load(Relaxed)
     }
 

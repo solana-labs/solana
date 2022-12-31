@@ -1680,7 +1680,7 @@ impl ReplayStage {
             .get(parent_slot)
             .expect("parent_slot doesn't exist in bank forks");
         let wait = parent.wait_for_scheduler(false);
-        info!("tpu parent wait: {:?}", wait);
+        info!("tpu parent({}) wait: {:?}", parent.slot(), wait);
         parent.freeze();
 
         assert!(parent.is_frozen());
@@ -2559,45 +2559,57 @@ impl ReplayStage {
             if bank.is_complete() {
                 info!("waiting for completed bank: slot: {}", bank.slot());
                 let cumulative_timings = bank.wait_for_scheduler(false);
-                if let Err(err) = cumulative_timings {
-                    // Error means the slot needs to be marked as dead
-                    Self::mark_dead_slot(
-                        blockstore,
-                        bank,
-                        bank_forks.read().unwrap().root(),
-                        &BlockstoreProcessorError::InvalidTransaction(err.into()),
-                        rpc_subscriptions,
-                        duplicate_slots_tracker,
-                        gossip_duplicate_confirmed_slots,
-                        epoch_slots_frozen_slots,
-                        progress,
-                        heaviest_subtree_fork_choice,
-                        duplicate_slots_to_repair,
-                        ancestor_hashes_replay_update_sender,
-                        purge_repair_slot_counter,
-                    );
-                    // If the bank was corrupted, don't try to run the below logic to check if the
-                    // bank is completed
-                    continue;
-                }
-                let cumulative_timings2 = solana_program_runtime::timings::ThreadExecuteTimings {
-                    execute_timings: cumulative_timings.unwrap(),
-                    ..Default::default()
-                };
-
-                let mut bank_complete_time = Measure::start("bank_complete_time");
                 let bank_progress = progress
                     .get_mut(&bank.slot())
                     .expect("Bank fork progress entry missing for completed bank");
 
                 let replay_stats = bank_progress.replay_stats.clone();
                 let mut r_replay_stats = replay_stats.write().unwrap();
-                let mut metrics =
-                    solana_ledger::blockstore_processor::ExecuteBatchesInternalMetrics::default();
-                metrics
-                    .execution_timings_per_thread
-                    .insert(0, cumulative_timings2);
-                r_replay_stats.process_execute_batches_internal_metrics(metrics);
+                match cumulative_timings {
+                    Err(err) => {
+                        match bank.commit_mode() {
+                        solana_runtime::bank::CommitMode::Replaying => {
+                            // Error means the slot needs to be marked as dead
+                            Self::mark_dead_slot(
+                                blockstore,
+                                bank,
+                                bank_forks.read().unwrap().root(),
+                                &BlockstoreProcessorError::InvalidTransaction(err.into()),
+                                rpc_subscriptions,
+                                duplicate_slots_tracker,
+                                gossip_duplicate_confirmed_slots,
+                                epoch_slots_frozen_slots,
+                                progress,
+                                heaviest_subtree_fork_choice,
+                                duplicate_slots_to_repair,
+                                ancestor_hashes_replay_update_sender,
+                                purge_repair_slot_counter,
+                            );
+                            // If the bank was corrupted, don't try to run the below logic to check if the
+                            // bank is completed
+                            continue;
+                        },
+                        solana_runtime::bank::CommitMode::Banking => {
+                            // propagate timings for Err case for tpu bank
+                            info!("discarding harmless transaction error for tpu bank({}): {:?}", bank.slot(), err);
+                        }
+                    }
+                    },
+                    Ok(cumulative_timings) => {
+                        let cumulative_timings2 = solana_program_runtime::timings::ThreadExecuteTimings {
+                            execute_timings: cumulative_timings,
+                            ..Default::default()
+                        };
+                        let mut metrics =
+                            solana_ledger::blockstore_processor::ExecuteBatchesInternalMetrics::default();
+                        metrics
+                            .execution_timings_per_thread
+                            .insert(0, cumulative_timings2);
+                        r_replay_stats.process_execute_batches_internal_metrics(metrics);
+                    },
+                };
+
+                let mut bank_complete_time = Measure::start("bank_complete_time");
 
                 let replay_progress = bank_progress.replay_progress.clone();
                 let r_replay_progress = replay_progress.read().unwrap();
