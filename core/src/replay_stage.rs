@@ -2295,7 +2295,7 @@ impl ReplayStage {
             .reset(bank.clone(), next_leader_slot);
 
         let next_leader_msg = if let Some(next_leader_slot) = next_leader_slot {
-            format!("My next leader slot is {}", next_leader_slot.0)
+            format!("My next leader slot is {} (in {} slots)", next_leader_slot.0, next_leader_slot.0 - bank.slot())
         } else {
             "I am not in the leader schedule yet".to_owned()
         };
