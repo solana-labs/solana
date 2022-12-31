@@ -52,7 +52,7 @@
 #[cfg(test)]
 pub(crate) use shred_code::MAX_CODE_SHREDS_PER_SLOT;
 use {
-    self::{shred_code::ShredCode, traits::Shred as _},
+    self::{merkle::MerkleRoot, shred_code::ShredCode, traits::Shred as _},
     crate::blockstore::{self, MAX_DATA_SHREDS_PER_SLOT},
     bitflags::bitflags,
     num_enum::{IntoPrimitive, TryFromPrimitive},
@@ -230,6 +230,20 @@ pub enum Shred {
     ShredData(ShredData),
 }
 
+pub(crate) enum SignedData<'a> {
+    Chunk(&'a [u8]), // Chunk of payload past signature.
+    MerkleRoot(MerkleRoot),
+}
+
+impl<'a> AsRef<[u8]> for SignedData<'a> {
+    fn as_ref(&self) -> &[u8] {
+        match self {
+            Self::Chunk(chunk) => chunk,
+            Self::MerkleRoot(root) => root,
+        }
+    }
+}
+
 /// Tuple which uniquely identifies a shred should it exists.
 #[derive(Clone, Copy, Eq, Debug, Hash, PartialEq)]
 pub struct ShredId(Slot, /*shred index:*/ u32, ShredType);
@@ -309,7 +323,7 @@ use dispatch;
 impl Shred {
     dispatch!(fn common_header(&self) -> &ShredCommonHeader);
     dispatch!(fn set_signature(&mut self, signature: Signature));
-    dispatch!(fn signed_data(&self) -> &[u8]);
+    dispatch!(fn signed_data(&self) -> Result<SignedData, Error>);
 
     // Returns the portion of the shred's payload which is erasure coded.
     dispatch!(pub(crate) fn erasure_shard(self) -> Result<Vec<u8>, Error>);
@@ -455,12 +469,13 @@ impl Shred {
         ErasureSetId(self.slot(), self.fec_set_index())
     }
 
-    pub fn signature(&self) -> Signature {
-        self.common_header().signature
+    pub fn signature(&self) -> &Signature {
+        &self.common_header().signature
     }
 
     pub fn sign(&mut self, keypair: &Keypair) {
-        let signature = keypair.sign_message(self.signed_data());
+        let data = self.signed_data().unwrap();
+        let signature = keypair.sign_message(data.as_ref());
         self.set_signature(signature);
     }
 
@@ -508,8 +523,10 @@ impl Shred {
 
     #[must_use]
     pub fn verify(&self, pubkey: &Pubkey) -> bool {
-        let data = self.signed_data();
-        self.signature().verify(pubkey.as_ref(), data)
+        match self.signed_data() {
+            Ok(data) => self.signature().verify(pubkey.as_ref(), data.as_ref()),
+            Err(_) => false,
+        }
     }
 
     // Returns true if the erasure coding of the two shreds mismatch.
@@ -538,26 +555,12 @@ impl Shred {
 // Helper methods to extract pieces of the shred from the payload
 // without deserializing the entire payload.
 pub mod layout {
-    use {super::*, crate::shred::merkle::MerkleRoot, std::ops::Range};
+    use {super::*, std::ops::Range};
     #[cfg(test)]
     use {
         rand::{seq::SliceRandom, Rng},
         std::collections::HashMap,
     };
-
-    pub(crate) enum SignedData<'a> {
-        Chunk(&'a [u8]),
-        MerkleRoot(MerkleRoot),
-    }
-
-    impl<'a> AsRef<[u8]> for SignedData<'a> {
-        fn as_ref(&self) -> &[u8] {
-            match self {
-                Self::Chunk(chunk) => chunk,
-                Self::MerkleRoot(root) => root,
-            }
-        }
-    }
 
     fn get_shred_size(packet: &Packet) -> Option<usize> {
         let size = packet.data(..)?.len();
@@ -1467,7 +1470,7 @@ mod tests {
         assert_eq!(layout::get_index(data), Some(shred.index()));
         assert_eq!(layout::get_version(data), Some(shred.version()));
         assert_eq!(layout::get_shred_id(data), Some(shred.id()));
-        assert_eq!(layout::get_signature(data), Some(shred.signature()));
+        assert_eq!(layout::get_signature(data), Some(*shred.signature()));
         assert_eq!(layout::get_shred_type(data).unwrap(), shred.shred_type());
         match shred.shred_type() {
             ShredType::Code => {

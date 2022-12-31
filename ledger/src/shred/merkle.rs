@@ -91,16 +91,18 @@ impl Shred {
     dispatch!(fn sanitize(&self, verify_merkle_proof: bool) -> Result<(), Error>);
     dispatch!(fn set_merkle_branch(&mut self, merkle_branch: &MerkleBranch) -> Result<(), Error>);
     dispatch!(fn set_signature(&mut self, signature: Signature));
-    dispatch!(fn signed_data(&self) -> &[u8]);
+    dispatch!(fn signed_data(&self) -> Result<MerkleRoot, Error>);
 
     #[must_use]
     fn verify(&self, pubkey: &Pubkey) -> bool {
-        let data = self.signed_data();
-        self.signature().verify(pubkey.as_ref(), data)
+        match self.signed_data() {
+            Ok(data) => self.signature().verify(pubkey.as_ref(), data.as_ref()),
+            Err(_) => false,
+        }
     }
 
-    fn signature(&self) -> Signature {
-        self.common_header().signature
+    fn signature(&self) -> &Signature {
+        &self.common_header().signature
     }
 
     fn from_payload(shred: Vec<u8>) -> Result<Self, Error> {
@@ -419,7 +421,9 @@ impl ShredCode {
     }
 }
 
-impl ShredTrait for ShredData {
+impl<'a> ShredTrait<'a> for ShredData {
+    type SignedData = MerkleRoot;
+
     impl_shred_common!();
 
     // Also equal to:
@@ -486,12 +490,14 @@ impl ShredTrait for ShredData {
         self.sanitize(/*verify_merkle_proof:*/ true)
     }
 
-    fn signed_data(&self) -> &[u8] {
-        self.merkle_root().map(AsRef::as_ref).unwrap_or_default()
+    fn signed_data(&'a self) -> Result<Self::SignedData, Error> {
+        self.merkle_root().copied()
     }
 }
 
-impl ShredTrait for ShredCode {
+impl<'a> ShredTrait<'a> for ShredCode {
+    type SignedData = MerkleRoot;
+
     impl_shred_common!();
     const SIZE_OF_PAYLOAD: usize = shred_code::ShredCode::SIZE_OF_PAYLOAD;
     const SIZE_OF_HEADERS: usize = SIZE_OF_CODING_SHRED_HEADERS;
@@ -551,8 +557,8 @@ impl ShredTrait for ShredCode {
         self.sanitize(/*verify_merkle_proof:*/ true)
     }
 
-    fn signed_data(&self) -> &[u8] {
-        self.merkle_root().map(AsRef::as_ref).unwrap_or_default()
+    fn signed_data(&'a self) -> Result<Self::SignedData, Error> {
+        self.merkle_root().copied()
     }
 }
 
@@ -1344,7 +1350,8 @@ mod test {
             let merkle_branch = make_merkle_branch(index, num_shreds, &tree).unwrap();
             assert_eq!(merkle_branch.proof.len(), usize::from(proof_size));
             shred.set_merkle_branch(&merkle_branch).unwrap();
-            let signature = keypair.sign_message(shred.signed_data());
+            let data = shred.signed_data().unwrap();
+            let signature = keypair.sign_message(data.as_ref());
             shred.set_signature(signature);
             assert!(shred.verify(&keypair.pubkey()));
             assert_matches!(shred.sanitize(/*verify_merkle_proof:*/ true), Ok(()));
