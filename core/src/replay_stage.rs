@@ -1679,6 +1679,9 @@ impl ReplayStage {
             .unwrap()
             .get(parent_slot)
             .expect("parent_slot doesn't exist in bank forks");
+        let wait = parent.wait_for_scheduler(false);
+        info!("tpu parent wait: {:?}", wait);
+        parent.freeze();
 
         assert!(parent.is_frozen());
 
