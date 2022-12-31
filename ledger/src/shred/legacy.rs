@@ -48,7 +48,9 @@ pub struct ShredCode {
     payload: Vec<u8>,
 }
 
-impl Shred for ShredData {
+impl<'a> Shred<'a> for ShredData {
+    type SignedData = &'a [u8];
+
     impl_shred_common!();
     // Legacy data shreds are always zero padded and
     // the same size as coding shreds.
@@ -109,13 +111,15 @@ impl Shred for ShredData {
         shred_data::sanitize(self)
     }
 
-    fn signed_data(&self) -> &[u8] {
+    fn signed_data(&'a self) -> Result<Self::SignedData, Error> {
         debug_assert_eq!(self.payload.len(), Self::SIZE_OF_PAYLOAD);
-        &self.payload[SIZE_OF_SIGNATURE..]
+        Ok(&self.payload[SIZE_OF_SIGNATURE..])
     }
 }
 
-impl Shred for ShredCode {
+impl<'a> Shred<'a> for ShredCode {
+    type SignedData = &'a [u8];
+
     impl_shred_common!();
     const SIZE_OF_PAYLOAD: usize = shred_code::ShredCode::SIZE_OF_PAYLOAD;
     const SIZE_OF_HEADERS: usize = SIZE_OF_CODING_SHRED_HEADERS;
@@ -171,9 +175,9 @@ impl Shred for ShredCode {
         shred_code::sanitize(self)
     }
 
-    fn signed_data(&self) -> &[u8] {
+    fn signed_data(&'a self) -> Result<Self::SignedData, Error> {
         debug_assert_eq!(self.payload.len(), Self::SIZE_OF_PAYLOAD);
-        &self.payload[SIZE_OF_SIGNATURE..]
+        Ok(&self.payload[SIZE_OF_SIGNATURE..])
     }
 }
 
