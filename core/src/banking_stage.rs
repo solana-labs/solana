@@ -870,6 +870,18 @@ impl BankingStage {
 
         match decision {
             BufferedPacketsDecision::Consume(bank_start) => {
+                let bank = bank_start.working_bank;
+                match &metrics_action {
+                   MetricsTrackerAction::NewTracker(_) => {
+                       let mut count = 0;
+                       // discard buffered
+                       while let Ok(aaa) = packet_deserializer.packet_batch_receiver.try_recv() {
+                           count += aaa.0.len();
+                       }
+                       info!("discarded {count} transactions... slot: {}", bank.slot());
+                   },
+                   _ => {},
+                }
                 // Take metrics action before consume packets (potentially resetting the
                 // slot metrics tracker to the next slot) so that we don't count the
                 // packet processing metrics from the next slot towards the metrics
@@ -895,9 +907,9 @@ impl BankingStage {
                     .increment_consume_buffered_packets_us(consume_buffered_packets_time.as_us());
                 */
 
+
                 let recv_timeout = Duration::from_millis(10);
 
-                let bank = bank_start.working_bank;
                 let start = Instant::now();
 
                 while let Ok(aaa) = packet_deserializer.packet_batch_receiver.recv_timeout(recv_timeout) {
