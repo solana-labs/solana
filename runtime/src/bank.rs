@@ -4201,30 +4201,43 @@ impl Bank {
             self.slot()
         );
 
-        let last_result = self.wait_for_scheduler(false);
-        let scheduler = SCHEDULER_POOL.lock().unwrap().take_from_pool();
-        let mut s2 = self.scheduler2.write().unwrap();
-        *s2 = Some(scheduler);
 
-        // Only acquire the write lock for the blockhash queue on block boundaries because
-        // readers can starve this write lock acquisition and ticks would be slowed down too
-        // much if the write lock is acquired for each tick.
-        let mut w_blockhash_queue = self.blockhash_queue.write().unwrap();
-        //let new_scheduler = Scheduler::default();
-        if last_result.is_err() {
-            warn!(
-                "register_recent_blockhash: carrying over this error: {:?}",
-                last_result
-            );
-        }
-        //new_scheduler.collected_results.lock().unwrap().push(maybe_last_error);
-        s2.as_ref()
-            .unwrap()
-            .collected_results
-            .lock()
-            .unwrap()
-            .push(last_result);
-        //*self.scheduler.write().unwrap() = new_scheduler;
+        let commit_mode = self.commit_mode();
+        let mut w_blockhash_queue = match commit_mode {
+            CommitMode::Replaying => {
+                let last_result = self.wait_for_scheduler(false);
+                let scheduler = SCHEDULER_POOL.lock().unwrap().take_from_pool();
+                let mut s2 = self.scheduler2.write().unwrap();
+                *s2 = Some(scheduler);
+
+                // Only acquire the write lock for the blockhash queue on block boundaries because
+                // readers can starve this write lock acquisition and ticks would be slowed down too
+                // much if the write lock is acquired for each tick.
+                let w_blockhash_queue = self.blockhash_queue.write().unwrap();
+                //let new_scheduler = Scheduler::default();
+                if last_result.is_err() {
+                    warn!(
+                        "register_recent_blockhash: carrying over this error: {:?}",
+                        last_result
+                    );
+                }
+                //new_scheduler.collected_results.lock().unwrap().push(maybe_last_error);
+                s2.as_ref()
+                    .unwrap()
+                    .collected_results
+                    .lock()
+                    .unwrap()
+                    .push(last_result);
+                //*self.scheduler.write().unwrap() = new_scheduler;
+                w_blockhash_queue
+            },
+            CommitMode::Banking => {
+                // Only acquire the write lock for the blockhash queue on block boundaries because
+                // readers can starve this write lock acquisition and ticks would be slowed down too
+                // much if the write lock is acquired for each tick.
+                self.blockhash_queue.write().unwrap()
+            }
+        };
 
         debug!(
             "register_recent_blockhash: slot: {} reinitializing the scheduler: end",

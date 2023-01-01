@@ -302,6 +302,7 @@ impl PohService {
                     }
                     // check to see if a record request has been sent
                     if let Ok(record) = record_receiver.try_recv() {
+                        assert!(next_record.is_none());
                         // remember the record we just received as the next record to occur
                         *next_record = Some(record);
                         break;
