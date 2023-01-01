@@ -664,26 +664,18 @@ pub fn ed25519_verify_disabled(batches: &mut [PacketBatch]) {
     inc_new_counter_debug!("ed25519_verify_disabled", packet_count);
 }
 
-pub fn copy_return_values(sig_lens: &[Vec<u32>], out: &PinnedVec<u8>, rvs: &mut [Vec<u8>]) {
-    let mut num = 0;
-    for (vs, sig_vs) in rvs.iter_mut().zip(sig_lens.iter()) {
-        for (v, sig_v) in vs.iter_mut().zip(sig_vs.iter()) {
-            if *sig_v == 0 {
-                *v = 0;
-            } else {
-                let mut vout = 1;
-                for _ in 0..*sig_v {
-                    if 0 == out[num] {
-                        vout = 0;
-                    }
-                    num = num.saturating_add(1);
-                }
-                *v = vout;
-            }
-            if *v != 0 {
-                trace!("VERIFIED PACKET!!!!!");
-            }
-        }
+pub fn copy_return_values<I, T>(sig_lens: I, out: &PinnedVec<u8>, rvs: &mut [Vec<u8>])
+where
+    I: IntoIterator<Item = T>,
+    T: IntoIterator<Item = u32>,
+{
+    debug_assert!(rvs.iter().flatten().all(|&rv| rv == 0u8));
+    let mut offset = 0usize;
+    let rvs = rvs.iter_mut().flatten();
+    for (k, rv) in sig_lens.into_iter().flatten().zip(rvs) {
+        let out = out[offset..].iter().take(k as usize).all(|&x| x == 1u8);
+        *rv = u8::from(k != 0u32 && out);
+        offset = offset.saturating_add(k as usize);
     }
 }
 
@@ -796,7 +788,7 @@ pub fn ed25519_verify(
         }
     }
     trace!("done verify");
-    copy_return_values(&sig_lens, &out, &mut rvs);
+    copy_return_values(sig_lens, &out, &mut rvs);
     mark_disabled(batches, &rvs);
     inc_new_counter_debug!("ed25519_verify_gpu", valid_packet_count);
 }
@@ -869,7 +861,7 @@ mod tests {
             .iter()
             .map(|sig_lens| vec![0u8; sig_lens.len()])
             .collect();
-        copy_return_values(&sig_lens, &out, &mut rvs);
+        copy_return_values(sig_lens, &out, &mut rvs);
         assert_eq!(rvs, expected);
     }
 
