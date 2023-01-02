@@ -5342,6 +5342,15 @@ impl Bank {
         }
     }
 
+    /// true if rent collection does NOT rewrite accounts whose pubkey indicates
+    ///  it is time for rent collection, but the account is rent exempt.
+    /// false if rent collection DOES rewrite accounts if the account is rent exempt
+    /// This is the default behavior historically.
+    fn bank_hash_skips_rent_rewrites(&self) -> bool {
+        self.feature_set
+            .is_active(&feature_set::skip_rent_rewrites::id())
+    }
+
     /// Collect rent from `accounts`
     ///
     /// This fn is called inside a parallel loop from `collect_rent_in_partition()`.  Avoid adding
@@ -5363,7 +5372,7 @@ impl Bank {
             Vec::<(&Pubkey, &AccountSharedData)>::with_capacity(accounts.len());
         let mut time_collecting_rent_us = 0;
         let mut time_storing_accounts_us = 0;
-        let can_skip_rewrites = false; // this will be goverened by a feature soon
+        let can_skip_rewrites = self.bank_hash_skips_rent_rewrites();
         let set_exempt_rent_epoch_max: bool = self
             .feature_set
             .is_active(&solana_sdk::feature_set::set_exempt_rent_epoch_max::id());
