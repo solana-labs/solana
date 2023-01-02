@@ -10978,7 +10978,7 @@ pub mod tests {
         assert!(db.load_without_fixed_root(&ancestors, &key).is_none());
         assert!(db.bank_hashes.read().unwrap().get(&unrooted_slot).is_none());
         assert!(db.accounts_cache.slot_cache(unrooted_slot).is_none());
-        assert!(db.storage.get(&unrooted_slot).is_none());
+        assert!(db.storage.get_slot_stores(unrooted_slot).is_none());
         assert!(db.accounts_index.get_account_read_entry(&key).is_none());
         assert!(db
             .accounts_index
@@ -11360,8 +11360,9 @@ pub mod tests {
         //slot is gone
         accounts.print_accounts_stats("pre-clean");
         accounts.add_root_and_flush_write_cache(1);
+        assert!(accounts.storage.get_slot_stores(0).is_some());
         accounts.clean_accounts_for_tests();
-        assert!(accounts.storage.get(&0).is_none());
+        assert!(accounts.storage.get_slot_stores(0).is_none());
 
         //new value is there
         let ancestors = vec![(1, 1)].into_iter().collect();
