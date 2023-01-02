@@ -1770,8 +1770,6 @@ fn do_process_program_write_and_deploy(
     allow_excessive_balance: bool,
     skip_fee_check: bool,
 ) -> ProcessResult {
-    // Build messages to calculate fees
-    let mut messages: Vec<&Message> = Vec::new();
     let blockhash = rpc_client.get_latest_blockhash()?;
 
     // Initialize buffer account or complete if already partially initialized
@@ -1855,17 +1853,6 @@ fn do_process_program_write_and_deploy(
             (None, None, 0)
         };
 
-    if let Some(ref initial_message) = initial_message {
-        messages.push(initial_message);
-    }
-    if let Some(ref write_messages) = write_messages {
-        let mut write_message_refs = vec![];
-        for message in write_messages.iter() {
-            write_message_refs.push(message);
-        }
-        messages.append(&mut write_message_refs);
-    }
-
     // Create and add final message
 
     let final_message = if let Some(program_signers) = program_signers {
@@ -1895,9 +1882,6 @@ fn do_process_program_write_and_deploy(
     } else {
         None
     };
-    if let Some(ref message) = final_message {
-        messages.push(message);
-    }
 
     if !skip_fee_check {
         check_payer(
@@ -1951,7 +1935,6 @@ fn do_process_program_upgrade(
     )?;
 
     // Build messages to calculate fees
-    let mut messages: Vec<&Message> = Vec::new();
     let blockhash = rpc_client.get_latest_blockhash()?;
 
     let (initial_message, write_messages, balance_needed) =
@@ -2018,17 +2001,6 @@ fn do_process_program_upgrade(
             (None, None, 0)
         };
 
-    if let Some(ref message) = initial_message {
-        messages.push(message);
-    }
-    if let Some(ref write_messages) = write_messages {
-        let mut write_message_refs = vec![];
-        for message in write_messages.iter() {
-            write_message_refs.push(message);
-        }
-        messages.append(&mut write_message_refs);
-    }
-
     // Create and add final message
     let final_message = Message::new_with_blockhash(
         &[bpf_loader_upgradeable::upgrade(
@@ -2040,7 +2012,6 @@ fn do_process_program_upgrade(
         Some(&config.signers[0].pubkey()),
         &blockhash,
     );
-    messages.push(&final_message);
     let final_message = Some(final_message);
 
     if !skip_fee_check {
