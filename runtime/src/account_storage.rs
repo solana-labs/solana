@@ -83,22 +83,13 @@ impl AccountStorage {
 
     /// called when shrinking begins on a slot and append vec.
     /// When 'ShrinkInProgress' is dropped by caller, the old store will be removed from the storage map.
+    /// Fails if there are no existing stores at the slot.
     pub(crate) fn shrinking_in_progress(
         &self,
         slot: Slot,
         new_store: Arc<AccountStorageEntry>,
     ) -> ShrinkInProgress<'_> {
-        let slot_storages: SlotStores = self.get_slot_stores(slot).unwrap_or_else(||
-            // DashMap entry.or_insert() returns a RefMut, essentially a write lock,
-            // which is dropped after this block ends, minimizing time held by the lock.
-            // However, we still want to persist the reference to the `SlotStores` behind
-            // the lock, hence we clone it out, (`SlotStores` is an Arc so is cheap to clone).
-            self
-                .map
-                .entry(slot)
-                .or_insert(Arc::new(RwLock::new(HashMap::new())))
-                .clone());
-
+        let slot_storages = self.get_slot_stores(slot).unwrap();
         let shrinking_store = Arc::clone(slot_storages.read().unwrap().iter().next().unwrap().1);
 
         let new_id = new_store.append_vec_id();
