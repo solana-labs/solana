@@ -1,0 +1,64 @@
+---
+slug: /
+id: home
+title: Home
+sidebar_label: Home
+description: ""
+# displayed_sidebar: introductionSidebar
+---
+
+# Solana Blockchain Documentaion
+
+The Solana blockchain is an open source project implementing a new, high-performance, permissionless blockchain. The Solana Foundation is based in Geneva, Switzerland and maintains the open source project.
+
+## How Solana works
+
+Solana is a **proof-of-stake** blockchain that runs on a collection of **validators** known as a **cluster**.
+This **decentralized** network of validators are operated by many individual organizations around the world.
+
+Developers can build applications (sometimes called "**dApps**") that perform specific actions on top of
+the blockchain (like buying or selling an item). These applications will ask the user to "_sign_" a
+**transaction** using their **private key**, via the user's **wallet**, which then gets submitted to
+the Solana network.
+
+Once received by the cluster, the transaction gets validated by the validators and it can be
+**finalized**. After which it gets saved to the blockchain's public record know as the **ledger**.
+Once in the public ledger, the user's interaction is publicly viewable by **anyone** on the Solana blockchain.
+
+## Getting started
+
+Dive right into Solana to start building or setup your tooling.
+
+- [Solana CLI](/cli) - Install the Solana CLI to get your local development environment setup
+- [Hello World in your browser](getstarted/hello-world) - Build and deploy your first on-chain Solana program, directly in your browser using Solana Playground
+
+## Start learning
+
+Build a strong understanding of the core concepts that make Solana different from other blockchains.
+
+- [Transactions](./developing/programming-model/transactions) - Collection of instructions for the blockchain to execute
+- [Accounts](./developing/programming-model/accounts) - Data and state storage mechanism for Solana
+- [Programs](./developing/intro/programs) - The executable code used to perform actions on the blockchain
+<!-- - [Rent](./developing/intro/rent) - To store data on the blockchain, every Account pays a small "rent" fee -->
+- [Cross-Program Invocation](./developing/programming-model/calling-between-programs) - Core of the "composability" of Solana, this is how programs can "call" each other.
+
+## Understanding the architecture
+
+Get to know the underlying architecture of how the proof-of-stake blockchain works.
+
+- [Validators](./validator/anatomy) - the individual nodes that are the backbone of the network
+- [Clusters](./cluster/overview) - a collection of validators that work together for consensus
+<!-- - [Consensus](./cluster/overview) - a collection of validators that work together for consensus -->
+
+## Running a validator
+
+Explore what it takes to operate a Solana validator and help secure the network.
+
+- [System requirements](./running-validator/validator-reqs) - Recommended hardware requirements and expected SOL needed to operate a validator
+- [Quick start guide](./running-validator/validator-start) - Setup a validator and get connected to a cluster for the first time
+
+## Learn more
+
+import HomeCtaLinks from "../components/HomeCtaLinks";
+
+<HomeCtaLinks />
