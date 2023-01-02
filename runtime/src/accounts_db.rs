@@ -4288,15 +4288,7 @@ impl AccountsDb {
     }
 
     fn get_storages_for_slot(&self, slot: Slot) -> Option<SnapshotStorage> {
-        self.storage.get(&slot).map(|storages| {
-            // per slot, get the storages. There should usually only be 1.
-            storages
-                .read()
-                .unwrap()
-                .values()
-                .cloned()
-                .collect::<Vec<_>>()
-        })
+        self.storage.get_slot_storage_entries(slot)
     }
 
     /// 'accounts' that exist in the current slot we are combining into a different ancient slot
