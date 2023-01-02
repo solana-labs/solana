@@ -5335,7 +5335,6 @@ impl Bank {
         let mut accounts_to_store =
             Vec::<(&Pubkey, &AccountSharedData)>::with_capacity(accounts.len());
         let mut time_collecting_rent_us = 0;
-        let mut time_hashing_skipped_rewrites_us = 0;
         let mut time_storing_accounts_us = 0;
         let can_skip_rewrites = self.rc.accounts.accounts_db.skip_rewrites;
         let set_exempt_rent_epoch_max: bool = self
@@ -5360,13 +5359,12 @@ impl Bank {
                 // this would have been rewritten previously. Now we skip it.
                 // calculate the hash that we would have gotten if we did the rewrite.
                 // This will be needed to calculate the bank's hash.
-                let (hash, measure) = measure!(crate::accounts_db::AccountsDb::hash_account(
+                let (hash, _measure) = measure!(crate::accounts_db::AccountsDb::hash_account(
                     self.slot(),
                     account,
                     pubkey,
                     self.include_slot_in_hash(),
                 ));
-                time_hashing_skipped_rewrites_us += measure.as_us();
                 rewrites_skipped.push((*pubkey, hash));
                 assert_eq!(rent_collected_info, CollectedInfo::default());
             } else {
@@ -5407,7 +5405,6 @@ impl Bank {
             rent_collected_info: total_rent_collected_info,
             rent_rewards: rent_debits.into_unordered_rewards_iter().collect(),
             time_collecting_rent_us,
-            time_hashing_skipped_rewrites_us,
             time_storing_accounts_us,
             num_accounts: accounts.len(),
         }
@@ -5542,9 +5539,6 @@ impl Bank {
             metrics
                 .collect_us
                 .fetch_add(results.time_collecting_rent_us, Relaxed);
-            metrics
-                .hash_us
-                .fetch_add(results.time_hashing_skipped_rewrites_us, Relaxed);
             metrics
                 .store_us
                 .fetch_add(results.time_storing_accounts_us, Relaxed);
@@ -7817,7 +7811,6 @@ struct CollectRentFromAccountsInfo {
     rent_collected_info: CollectedInfo,
     rent_rewards: Vec<(Pubkey, RewardInfo)>,
     time_collecting_rent_us: u64,
-    time_hashing_skipped_rewrites_us: u64,
     time_storing_accounts_us: u64,
     num_accounts: usize,
 }
@@ -7831,7 +7824,6 @@ struct CollectRentInPartitionInfo {
     rent_rewards: Vec<(Pubkey, RewardInfo)>,
     time_loading_accounts_us: u64,
     time_collecting_rent_us: u64,
-    time_hashing_skipped_rewrites_us: u64,
     time_storing_accounts_us: u64,
     num_accounts: usize,
 }
@@ -7847,7 +7839,6 @@ impl CollectRentInPartitionInfo {
             rent_rewards: info.rent_rewards,
             time_loading_accounts_us: time_loading_accounts.as_micros() as u64,
             time_collecting_rent_us: info.time_collecting_rent_us,
-            time_hashing_skipped_rewrites_us: info.time_hashing_skipped_rewrites_us,
             time_storing_accounts_us: info.time_storing_accounts_us,
             num_accounts: info.num_accounts,
         }
@@ -7871,9 +7862,6 @@ impl CollectRentInPartitionInfo {
             time_collecting_rent_us: lhs
                 .time_collecting_rent_us
                 .saturating_add(rhs.time_collecting_rent_us),
-            time_hashing_skipped_rewrites_us: lhs
-                .time_hashing_skipped_rewrites_us
-                .saturating_add(rhs.time_hashing_skipped_rewrites_us),
             time_storing_accounts_us: lhs
                 .time_storing_accounts_us
                 .saturating_add(rhs.time_storing_accounts_us),
