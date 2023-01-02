@@ -262,7 +262,12 @@ impl ConnectionCache {
         let map = self.map.read().unwrap();
         get_connection_map_lock_measure.stop();
 
-        let port_offset = if self.use_quic() { QUIC_PORT_OFFSET } else { 0 };
+        let port_offset = if self.use_quic() {
+            match self.maybe_offset {
+                Some(offset) => offset,
+                None => QUIC_PORT_OFFSET
+            } 
+        } else { 0 };
 
         let port = addr
             .port()
