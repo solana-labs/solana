@@ -8544,7 +8544,10 @@ impl AccountsDb {
         let slots = self
             .storage
             .iter()
-            .map(|k| *k.key() as Slot)
+            .filter_map(|k| {
+                let slot = *k.key() as Slot;
+                requested_slots.contains(&slot).then_some(slot)
+            })
             .collect::<Vec<_>>();
         m.stop();
         let mut m2 = Measure::start("filter");
@@ -8557,11 +8560,10 @@ impl AccountsDb {
                     slots
                         .iter()
                         .filter_map(|slot| {
-                            if requested_slots.contains(slot)
-                                && (self.accounts_index.is_alive_root(*slot)
-                                    || ancestors
-                                        .map(|ancestors| ancestors.contains_key(slot))
-                                        .unwrap_or_default())
+                            if self.accounts_index.is_alive_root(*slot)
+                                || ancestors
+                                    .map(|ancestors| ancestors.contains_key(slot))
+                                    .unwrap_or_default()
                             {
                                 self.storage.get(slot).map_or_else(
                                     || None,
