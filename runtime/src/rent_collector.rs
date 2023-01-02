@@ -488,43 +488,49 @@ mod tests {
 
     #[test]
     fn test_rent_exempt_temporal_escape() {
-        let mut account = AccountSharedData::default();
-        let epoch = 3;
-        let huge_lamports = 123_456_789_012;
-        let tiny_lamports = 789_012;
-        let pubkey = solana_sdk::pubkey::new_rand();
+        for set_exempt_rent_epoch_max in [false, true] {
+            for pass in 0..2 {
+                let mut account = AccountSharedData::default();
+                let epoch = 3;
+                let huge_lamports = 123_456_789_012;
+                let tiny_lamports = 789_012;
+                let pubkey = solana_sdk::pubkey::new_rand();
 
-        account.set_lamports(huge_lamports);
-        assert_eq!(account.rent_epoch(), 0);
+                assert_eq!(account.rent_epoch(), 0);
 
-        // create a tested rent collector
-        let rent_collector = default_rent_collector_clone_with_epoch(epoch);
+                // create a tested rent collector
+                let rent_collector = default_rent_collector_clone_with_epoch(epoch);
 
-        // this test fails with set_exempt_rent_epoch_max = true atm
-        let set_exempt_rent_epoch_max = false;
+                if pass == 0 {
+                    account.set_lamports(huge_lamports);
+                    // first mark account as being collected while being rent-exempt
+                    let collected = rent_collector.collect_from_existing_account(
+                        &pubkey,
+                        &mut account,
+                        None, // filler_account_suffix
+                        set_exempt_rent_epoch_max,
+                    );
+                    assert_eq!(account.lamports(), huge_lamports);
+                    assert_eq!(collected, CollectedInfo::default());
+                    continue;
+                }
 
-        // first mark account as being collected while being rent-exempt
-        let collected = rent_collector.collect_from_existing_account(
-            &pubkey,
-            &mut account,
-            None, // filler_account_suffix
-            set_exempt_rent_epoch_max,
-        );
-        assert_eq!(account.lamports(), huge_lamports);
-        assert_eq!(collected, CollectedInfo::default());
+                // decrease the balance not to be rent-exempt
+                // In a real validator, it is not legal to reduce an account's lamports such that the account becomes rent paying.
+                // So, pass == 0 above tests the case of rent that is exempt. pass == 1 tests the case where we are rent paying.
+                account.set_lamports(tiny_lamports);
 
-        // decrease the balance not to be rent-exempt
-        account.set_lamports(tiny_lamports);
-
-        // ... and trigger another rent collection on the same epoch and check that rent is working
-        let collected = rent_collector.collect_from_existing_account(
-            &pubkey,
-            &mut account,
-            None, // filler_account_suffix
-            set_exempt_rent_epoch_max,
-        );
-        assert_eq!(account.lamports(), tiny_lamports - collected.rent_amount);
-        assert_ne!(collected, CollectedInfo::default());
+                // ... and trigger another rent collection on the same epoch and check that rent is working
+                let collected = rent_collector.collect_from_existing_account(
+                    &pubkey,
+                    &mut account,
+                    None, // filler_account_suffix
+                    set_exempt_rent_epoch_max,
+                );
+                assert_eq!(account.lamports(), tiny_lamports - collected.rent_amount);
+                assert_ne!(collected, CollectedInfo::default());
+            }
+        }
     }
 
     #[test]
