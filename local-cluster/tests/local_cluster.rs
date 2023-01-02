@@ -489,10 +489,6 @@ fn test_snapshot_download() {
         .validator_config
         .snapshot_config
         .full_snapshot_archives_dir;
-    let incremental_snapshot_archives_dir = &leader_snapshot_test_config
-        .validator_config
-        .snapshot_config
-        .incremental_snapshot_archives_dir;
 
     trace!("Waiting for snapshot");
     let full_snapshot_archive_info = cluster.wait_for_next_full_snapshot(
@@ -504,8 +500,14 @@ fn test_snapshot_download() {
     // Download the snapshot, then boot a validator from it.
     download_snapshot_archive(
         &cluster.entry_point_info.rpc,
-        full_snapshot_archives_dir,
-        incremental_snapshot_archives_dir,
+        &validator_snapshot_test_config
+            .validator_config
+            .snapshot_config
+            .full_snapshot_archives_dir,
+        &validator_snapshot_test_config
+            .validator_config
+            .snapshot_config
+            .incremental_snapshot_archives_dir,
         (
             full_snapshot_archive_info.slot(),
             *full_snapshot_archive_info.hash(),
@@ -629,8 +631,14 @@ fn test_incremental_snapshot_download() {
     // Download the snapshots, then boot a validator from them.
     download_snapshot_archive(
         &cluster.entry_point_info.rpc,
-        full_snapshot_archives_dir,
-        incremental_snapshot_archives_dir,
+        &validator_snapshot_test_config
+            .validator_config
+            .snapshot_config
+            .full_snapshot_archives_dir,
+        &validator_snapshot_test_config
+            .validator_config
+            .snapshot_config
+            .incremental_snapshot_archives_dir,
         (
             full_snapshot_archive_info.slot(),
             *full_snapshot_archive_info.hash(),
