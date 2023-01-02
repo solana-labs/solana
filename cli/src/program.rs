@@ -2159,7 +2159,7 @@ fn send_deploy_messages(
         if let Some(write_signer) = write_signer {
             trace!("Writing program data");
             let connection_cache = if config.use_quic {
-                Arc::new(ConnectionCache::new(1))
+                Arc::new(ConnectionCache::new(1, None))
             } else {
                 Arc::new(ConnectionCache::with_udp(1))
             };

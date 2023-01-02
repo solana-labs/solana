@@ -460,7 +460,7 @@ fn run_tpu_send_transaction(tpu_use_quic: bool) {
         CommitmentConfig::processed(),
     ));
     let connection_cache = match tpu_use_quic {
-        true => Arc::new(ConnectionCache::new(DEFAULT_TPU_CONNECTION_POOL_SIZE)),
+        true => Arc::new(ConnectionCache::new(DEFAULT_TPU_CONNECTION_POOL_SIZE, None)),
         false => Arc::new(ConnectionCache::with_udp(DEFAULT_TPU_CONNECTION_POOL_SIZE)),
     };
     let tpu_client = TpuClient::new_with_connection_cache(

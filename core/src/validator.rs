@@ -746,7 +746,7 @@ impl Validator {
 
         let connection_cache = match use_quic {
             true => {
-                let mut connection_cache = ConnectionCache::new(tpu_connection_pool_size);
+                let mut connection_cache = ConnectionCache::new(tpu_connection_pool_size, None);
                 connection_cache
                     .update_client_certificate(&identity_keypair, node.info.gossip.ip())
                     .expect("Failed to update QUIC client certificates");

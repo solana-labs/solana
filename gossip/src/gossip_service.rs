@@ -13,6 +13,7 @@ use {
         pubkey::Pubkey,
         signature::{Keypair, Signer},
         quic::MAX_QUIC_CONNECTIONS_PER_PEER,
+        quic::QUIC_PORT_OFFSET,
         timing::timestamp,
     },
     solana_streamer::{

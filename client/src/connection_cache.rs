@@ -45,6 +45,7 @@ pub struct ConnectionCache {
     // The optional specified endpoint for the quic based client connections
     // If not specified, the connection cache we create as needed.
     client_endpoint: Option<Endpoint>,
+    maybe_offset: Option<u16>,
 }
 
 /// Models the pool of connections
@@ -78,17 +79,18 @@ impl ConnectionCache {
     }
 
     /// Create a connection cache with a specific quic client endpoint.
-    pub fn new_with_endpoint(connection_pool_size: usize, client_endpoint: Endpoint) -> Self {
-        Self::_new_with_endpoint(connection_pool_size, Some(client_endpoint))
+    pub fn new_with_maybe_endpoint_and_offset(connection_pool_size: usize, client_endpoint: Option<Endpoint>, maybe_offset: Option<u16>) -> Self {
+        Self::_new_with_endpoint(connection_pool_size, client_endpoint, maybe_offset)
     }
 
-    fn _new_with_endpoint(connection_pool_size: usize, client_endpoint: Option<Endpoint>) -> Self {
+    fn _new_with_endpoint(connection_pool_size: usize, client_endpoint: Option<Endpoint>, maybe_offset: Option<u16>) -> Self {
         // The minimum pool size is 1.
         let connection_pool_size = 1.max(connection_pool_size);
         Self {
             use_quic: true,
             connection_pool_size,
             client_endpoint,
+            maybe_offset,
             ..Self::default()
         }
     }
@@ -407,6 +409,7 @@ impl Default for ConnectionCache {
             maybe_staked_nodes: None,
             maybe_client_pubkey: None,
             client_endpoint: None,
+            maybe_offset: None,
         }
     }
 }
@@ -644,7 +647,7 @@ mod tests {
         let port = u16::MAX - QUIC_PORT_OFFSET + 1;
         assert!(port.checked_add(QUIC_PORT_OFFSET).is_none());
         let addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), port);
-        let connection_cache = ConnectionCache::new(1);
+        let connection_cache = ConnectionCache::new(1, None);
 
         let conn = connection_cache.get_connection(&addr);
         // We (intentionally) don't have an interface that allows us to distinguish between

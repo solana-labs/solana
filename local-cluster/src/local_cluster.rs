@@ -304,7 +304,7 @@ impl LocalCluster {
             validators,
             genesis_config,
             connection_cache: match config.tpu_use_quic {
-                true => Arc::new(ConnectionCache::new(config.tpu_connection_pool_size)),
+                true => Arc::new(ConnectionCache::new(config.tpu_connection_pool_size, None)),
                 false => Arc::new(ConnectionCache::with_udp(config.tpu_connection_pool_size)),
             },
         };
