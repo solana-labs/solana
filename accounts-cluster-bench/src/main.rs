@@ -6,6 +6,7 @@ use {
     rayon::prelude::*,
     solana_account_decoder::parse_token::spl_token_pubkey,
     solana_clap_utils::input_parsers::pubkey_of,
+    solana_client::rpc_client::SerializableMessage,
     solana_client::transaction_executor::TransactionExecutor,
     solana_faucet::faucet::{request_airdrop_transaction, FAUCET_PORT},
     solana_gossip::gossip_service::discover,
@@ -46,6 +47,20 @@ pub fn get_latest_blockhash(client: &RpcClient) -> Option<Hash> {
         }
         if num_retries == 0 {
             panic!("failed to get_latest_blockhash(), rpc node down?")
+        }
+        num_retries -= 1;
+    }
+}
+
+pub fn get_fee_for_message(client: &RpcClient, message: &impl SerializableMessage) -> Option<u64> {
+    let mut num_retries = 5;
+    loop {
+        let fee = client.get_fee_for_message(message);
+        if fee.is_ok() {
+            return Some(fee.unwrap());
+        }
+        if num_retries == 0 {
+            panic!("failed to get_fee_for_message(), rpc node down?")
         }
         num_retries -= 1;
     }
@@ -299,9 +314,7 @@ fn run_accounts_bench(
         }
 
         message.recent_blockhash = blockhash;
-        let fee = client
-            .get_fee_for_message(&message)
-            .expect("get_fee_for_message");
+        let fee = get_fee_for_message(&client, &message).expect("get_fee_for_message");
         let lamports = min_balance + fee;
 
         for (i, balance) in balances.iter_mut().enumerate() {
@@ -426,9 +439,7 @@ fn run_accounts_bench(
                 latest_blockhash = Instant::now();
             }
             message.recent_blockhash = blockhash;
-            let fee = client
-                .get_fee_for_message(&message)
-                .expect("get_fee_for_message");
+            let fee = get_fee_for_message(&client, &message).expect("get_fee_for_message");
 
             let sigs_len = executor.num_outstanding();
             if sigs_len < batch_size && max_closed_seed < max_created_seed {
