@@ -5337,7 +5337,7 @@ impl Bank {
         let mut time_collecting_rent_us = 0;
         let mut time_hashing_skipped_rewrites_us = 0;
         let mut time_storing_accounts_us = 0;
-        let can_skip_rewrites = self.rc.accounts.accounts_db.skip_rewrites;
+        let can_skip_rewrites = false; // this will be goverened by a feature soon
         let set_exempt_rent_epoch_max: bool = self
             .feature_set
             .is_active(&solana_sdk::feature_set::set_exempt_rent_epoch_max::id());

@@ -353,7 +353,6 @@ pub const ACCOUNTS_DB_CONFIG_FOR_TESTING: AccountsDbConfig = AccountsDbConfig {
     accounts_hash_cache_path: None,
     filler_accounts_config: FillerAccountsConfig::const_default(),
     write_cache_limit_bytes: None,
-    skip_rewrites: false,
     ancient_append_vec_offset: None,
     skip_initial_hash_calc: false,
     exhaustively_verify_refcounts: false,
@@ -363,7 +362,6 @@ pub const ACCOUNTS_DB_CONFIG_FOR_BENCHMARKS: AccountsDbConfig = AccountsDbConfig
     accounts_hash_cache_path: None,
     filler_accounts_config: FillerAccountsConfig::const_default(),
     write_cache_limit_bytes: None,
-    skip_rewrites: false,
     ancient_append_vec_offset: None,
     skip_initial_hash_calc: false,
     exhaustively_verify_refcounts: false,
@@ -420,7 +418,6 @@ pub struct AccountsDbConfig {
     pub accounts_hash_cache_path: Option<PathBuf>,
     pub filler_accounts_config: FillerAccountsConfig,
     pub write_cache_limit_bytes: Option<u64>,
-    pub skip_rewrites: bool,
     /// if None, ancient append vecs are disabled
     /// Some(offset) means include slots up to (max_slot - (slots_per_epoch - 'offset'))
     pub ancient_append_vec_offset: Option<Slot>,
@@ -1267,9 +1264,6 @@ pub struct AccountsDb {
 
     /// slot that is one epoch older than the highest slot where accounts hash calculation has completed
     pub accounts_hash_complete_one_epoch_old: RwLock<Slot>,
-
-    /// true iff rent exempt accounts are not rewritten in their normal rent collection slot
-    pub skip_rewrites: bool,
 
     /// Some(offset) iff we want to squash old append vecs together into 'ancient append vecs'
     /// Some(offset) means for slots up to (max_slot - (slots_per_epoch - 'offset')), put them in ancient append vecs
@@ -2298,7 +2292,6 @@ impl AccountsDb {
             filler_account_slots_remaining: AtomicU64::default(),
             active_stats: ActiveStats::default(),
             accounts_hash_complete_one_epoch_old: RwLock::default(),
-            skip_rewrites: false,
             skip_initial_hash_calc: false,
             ancient_append_vec_offset: None,
             accounts_index,
@@ -2396,10 +2389,6 @@ impl AccountsDb {
             .as_ref()
             .map(|config| config.filler_accounts_config)
             .unwrap_or_default();
-        let skip_rewrites = accounts_db_config
-            .as_ref()
-            .map(|config| config.skip_rewrites)
-            .unwrap_or_default();
         let skip_initial_hash_calc = accounts_db_config
             .as_ref()
             .map(|config| config.skip_initial_hash_calc)
@@ -2423,7 +2412,6 @@ impl AccountsDb {
         let paths_is_empty = paths.is_empty();
         let mut new = Self {
             paths,
-            skip_rewrites,
             skip_initial_hash_calc,
             ancient_append_vec_offset,
             cluster_type: Some(*cluster_type),
