@@ -42,10 +42,15 @@ pub const MAX_RPC_CALL_RETRIES: usize = 5;
 pub fn poll_get_latest_blockhash(client: &RpcClient) -> Option<Hash> {
     let mut num_retries = MAX_RPC_CALL_RETRIES;
     loop {
-        if let Ok(blockhash) = client.get_latest_blockhash() {
+        let response = client.get_latest_blockhash();
+        if let Ok(blockhash) = response {
             return Some(blockhash);
         } else {
             num_retries -= 1;
+            warn!(
+                "get_latest_blockhash failure: {:?}. remaining retries {}",
+                response, num_retries
+            );
         }
         if num_retries == 0 {
             panic!("failed to get_latest_blockhash(), rpc node down?")
@@ -60,10 +65,15 @@ pub fn poll_get_fee_for_message(
 ) -> Option<u64> {
     let mut num_retries = MAX_RPC_CALL_RETRIES;
     loop {
-        if let Ok(fee) = client.get_fee_for_message(message) {
+        let response = client.get_fee_for_message(message);
+        if let Ok(fee) = response {
             return Some(fee);
         } else {
             num_retries -= 1;
+            warn!(
+                "get_fee_for_message failure: {:?}. remaining retries {}",
+                response, num_retries
+            );
         }
         if num_retries == 0 {
             panic!("failed to get_fee_for_message(), rpc node down?")
