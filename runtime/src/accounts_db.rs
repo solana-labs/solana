@@ -17399,6 +17399,83 @@ pub mod tests {
     }
 
     #[test]
+    fn test_shrink_ancient_overflow() {
+        solana_logger::setup();
+
+        let num_normal_slots = 2;
+        // build an ancient append vec at slot 'ancient_slot'
+        let (db, ancient_slot) = get_one_ancient_append_vec_and_others(true, num_normal_slots);
+
+        let max_slot_inclusive = ancient_slot + (num_normal_slots as Slot);
+        let initial_accounts = get_all_accounts(&db, ancient_slot..(max_slot_inclusive + 1));
+
+        let ancient = db
+            .get_storages_for_slot(ancient_slot)
+            .unwrap()
+            .first()
+            .unwrap()
+            .clone();
+        let initial_len = ancient.alive_bytes();
+        // set size of ancient to be 'full'
+        adjust_append_vec_len_for_tests(&ancient, ancient.accounts.capacity() as usize);
+
+        // combine 1 normal append vec into existing ancient append vec
+        // this will overflow the original ancient append vec because of the marking full above
+        db.combine_ancient_slots(
+            (ancient_slot..max_slot_inclusive).collect(),
+            CAN_RANDOMLY_SHRINK_FALSE,
+        );
+
+        // Restore size of ancient so we don't read garbage accounts when comparing. Now that we have created a second ancient append vec,
+        // This first one is happy to be quite empty.
+        adjust_append_vec_len_for_tests(&ancient, initial_len);
+
+        compare_all_accounts(
+            &initial_accounts,
+            &get_all_accounts(&db, ancient_slot..max_slot_inclusive),
+        );
+
+        // the append vec at max_slot_inclusive-1 should NOT have been removed since we created an ancient append vec there
+        assert!(is_ancient(
+            &db.get_storages_for_slot(max_slot_inclusive - 1)
+                .unwrap()
+                .first()
+                .unwrap()
+                .accounts
+        ));
+
+        // combine normal append vec(s) into existing ancient append vec
+        // this will overflow the original ancient append vec because of the marking full above
+        db.combine_ancient_slots(
+            (ancient_slot..=max_slot_inclusive).collect(),
+            CAN_RANDOMLY_SHRINK_FALSE,
+        );
+
+        // now, combine the next slot into the one that was just overflow
+        compare_all_accounts(
+            &initial_accounts,
+            &get_all_accounts(&db, ancient_slot..(max_slot_inclusive + 1)),
+        );
+
+        // 2 ancients and then missing (because combined into 2nd ancient)
+        assert!(is_ancient(
+            &db.get_storages_for_slot(ancient_slot)
+                .unwrap()
+                .first()
+                .unwrap()
+                .accounts
+        ));
+        assert!(is_ancient(
+            &db.get_storages_for_slot(max_slot_inclusive - 1)
+                .unwrap()
+                .first()
+                .unwrap()
+                .accounts
+        ));
+        assert!(db.get_storages_for_slot(max_slot_inclusive).is_none());
+    }
+
+    #[test]
     fn test_shrink_ancient() {
         solana_logger::setup();
 
@@ -17910,11 +17987,19 @@ pub mod tests {
         storage.alive_bytes.store(alive_bytes, Ordering::Release);
     }
 
+    /// cause 'ancient' to appear to contain 'len' bytes
+    fn adjust_append_vec_len_for_tests(ancient: &Arc<AccountStorageEntry>, len: usize) {
+        assert!(is_ancient(&ancient.accounts));
+        ancient.accounts.set_current_len_for_tests(len);
+        adjust_alive_bytes(ancient, len);
+    }
+
     fn make_ancient_append_vec_full(ancient: &Arc<AccountStorageEntry>) {
         let vecs = vec![vec![ancient.clone()]];
         for _ in 0..100 {
             append_sample_data_to_storage(&vecs, &Pubkey::default(), 0);
         }
+        // since we're not adding to the index, this is how we specify that all these accounts are alive
         adjust_alive_bytes(ancient, ancient.total_bytes() as usize);
     }
 
