@@ -1848,9 +1848,9 @@ fn do_process_program_write_and_deploy(
                 write_messages.push(create_msg((i * chunk_size) as u32, chunk.to_vec()));
             }
 
-            (initial_message, Some(write_messages), balance_needed)
+            (initial_message, write_messages, balance_needed)
         } else {
-            (None, None, 0)
+            (None, vec![], 0)
         };
 
     // Create and add final message
@@ -1996,9 +1996,9 @@ fn do_process_program_upgrade(
                 write_messages.push(create_msg((i * chunk_size) as u32, chunk.to_vec()));
             }
 
-            (initial_message, Some(write_messages), balance_needed)
+            (initial_message, write_messages, balance_needed)
         } else {
-            (None, None, 0)
+            (None, vec![], 0)
         };
 
     // Create and add final message
@@ -2126,14 +2126,14 @@ fn check_payer(
     config: &CliConfig,
     balance_needed: u64,
     initial_message: &Option<Message>,
-    write_messages: &Option<Vec<Message>>,
+    write_messages: &[Message],
     final_message: &Option<Message>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let mut fee = 0;
     if let Some(message) = initial_message {
         fee += rpc_client.get_fee_for_message(message)?;
     }
-    if let Some(write_messages) = write_messages {
+    if !write_messages.is_empty() {
         // Assume all write messages cost the same
         if let Some(message) = write_messages.get(0) {
             fee += rpc_client.get_fee_for_message(message)? * (write_messages.len() as u64);
@@ -2156,7 +2156,7 @@ fn send_deploy_messages(
     rpc_client: Arc<RpcClient>,
     config: &CliConfig,
     initial_message: &Option<Message>,
-    write_messages: &Option<Vec<Message>>,
+    write_messages: &[Message],
     final_message: &Option<Message>,
     initial_signer: Option<&dyn Signer>,
     write_signer: Option<&dyn Signer>,
@@ -2187,7 +2187,7 @@ fn send_deploy_messages(
         }
     }
 
-    if let Some(write_messages) = write_messages {
+    if !write_messages.is_empty() {
         if let Some(write_signer) = write_signer {
             trace!("Writing program data");
             let connection_cache = if config.use_quic {
