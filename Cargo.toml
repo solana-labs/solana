@@ -80,6 +80,7 @@ members = [
     "sdk/cargo-test-sbf",
     "sdk/gen-headers",
     "sdk/macro",
+    "sdk/program",
     "send-transaction-service",
     "stake-accounts",
     "storage-bigtable",
