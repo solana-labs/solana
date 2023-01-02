@@ -18,6 +18,7 @@ pub struct AccountStorage {
 }
 
 impl AccountStorage {
+    /// Return the append vec in 'slot' and with id='store_id'.
     pub(crate) fn get_account_storage_entry(
         &self,
         slot: Slot,
@@ -45,23 +46,31 @@ impl AccountStorage {
         self.map.iter().map(|iter_item| *iter_item.key()).collect()
     }
 
-    pub(crate) fn extend(&mut self, source: AccountStorageMap) {
-        self.map.extend(source.into_iter())
+    /// initialize the storage map to 'all_storages'
+    pub(crate) fn initialize(&mut self, all_storages: AccountStorageMap) {
+        assert!(self.map.is_empty());
+        self.map.extend(all_storages.into_iter())
     }
 
+    /// remove all append vecs at 'slot'
+    /// returns the current contents
     pub(crate) fn remove(&self, slot: &Slot) -> Option<(Slot, SlotStores)> {
         self.map.remove(slot)
     }
 
+    /// iterate through all (slot, append-vecs)
     pub(crate) fn iter(&self) -> dashmap::iter::Iter<Slot, SlotStores> {
         self.map.iter()
     }
+
     pub(crate) fn get(
         &self,
         slot: &Slot,
     ) -> Option<dashmap::mapref::one::Ref<'_, Slot, SlotStores, RandomState>> {
         self.map.get(slot)
     }
+
+    /// insert 'store' into 'map' at 'slot'
     pub(crate) fn insert(&self, slot: Slot, store: Arc<AccountStorageEntry>) {
         let slot_storages: SlotStores = self.get_slot_stores(slot).unwrap_or_else(||
             // DashMap entry.or_insert() returns a RefMut, essentially a write lock,
@@ -74,16 +83,14 @@ impl AccountStorage {
                 .or_insert(Arc::new(RwLock::new(HashMap::new())))
                 .clone());
 
-        assert!(slot_storages
-            .write()
-            .unwrap()
-            .insert(store.append_vec_id(), store)
-            .is_none());
+        let mut write = slot_storages.write().unwrap();
+        assert!(write.insert(store.append_vec_id(), store).is_none());
     }
 
     /// called when shrinking begins on a slot and append vec.
     /// When 'ShrinkInProgress' is dropped by caller, the old store will be removed from the storage map.
     /// Fails if there are no existing stores at the slot.
+    /// 'new_store' will be replacing the current store at 'slot' in 'map'
     pub(crate) fn shrinking_in_progress(
         &self,
         slot: Slot,
@@ -111,6 +118,7 @@ impl AccountStorage {
             .entry(slot)
             .or_insert(Arc::new(RwLock::new(HashMap::new())));
     }
+
     #[cfg(test)]
     pub(crate) fn len(&self) -> usize {
         self.map.len()
