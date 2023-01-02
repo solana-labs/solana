@@ -461,19 +461,9 @@ pub fn parse_program_subcommand(
                 pubkey_of_signer(matches, "program_id", wallet_manager)?
             };
 
-            let upgrade_authority_pubkey =
-                if let Ok((upgrade_authority_signer, Some(upgrade_authority_pubkey))) =
-                    signer_of(matches, "upgrade_authority", wallet_manager)
-                {
-                    bulk_signers.push(upgrade_authority_signer);
-                    Some(upgrade_authority_pubkey)
-                } else {
-                    Some(
-                        default_signer
-                            .signer_from_path(matches, wallet_manager)?
-                            .pubkey(),
-                    )
-                };
+            let (upgrade_authority, upgrade_authority_pubkey) =
+                signer_of(matches, "upgrade_authority", wallet_manager)?;
+            bulk_signers.push(upgrade_authority);
 
             let max_len = value_of(matches, "max_len");
 
