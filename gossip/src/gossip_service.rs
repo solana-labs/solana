@@ -13,7 +13,6 @@ use {
         pubkey::Pubkey,
         signature::{Keypair, Signer},
         quic::MAX_QUIC_CONNECTIONS_PER_PEER,
-        quic::QUIC_PORT_OFFSET,
         timing::timestamp,
     },
     solana_streamer::{
@@ -195,7 +194,7 @@ impl GossipService {
                 key: priv_key,
             }),
             Some(maybe_endpoint.unwrap()));
-            let connection_cache = ConnectionCache::new_with_endpoint(1, Arc::new(endpoint));
+            let connection_cache = ConnectionCache::new_with_endpoint(1, Arc::new(endpoint), Some(0));
             quic_responder(            
             "Gossip",
             connection_cache,

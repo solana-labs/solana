@@ -95,13 +95,14 @@ impl ConnectionCache {
         }
     }
 
-    pub fn new_with_endpoint(connection_pool_size: usize, endpoint: Arc<QuicLazyInitializedEndpoint>) -> Self {
+    pub fn new_with_endpoint(connection_pool_size: usize, endpoint: Arc<QuicLazyInitializedEndpoint>, maybe_offset: Option<u16>) -> Self {
                 // The minimum pool size is 1.
                 let connection_pool_size = 1.max(connection_pool_size);
                 Self {
                     use_quic: true,
                     connection_pool_size,
                     maybe_endpoint: Some(endpoint),
+                    maybe_offset,
                     ..Self::default()
                 }
     }
