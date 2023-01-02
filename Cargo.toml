@@ -24,6 +24,7 @@ members = [
     "entry",
     "faucet",
     "frozen-abi",
+    "frozen-abi/macro",
     "genesis",
     "genesis-utils",
     "geyser-plugin-interface",
