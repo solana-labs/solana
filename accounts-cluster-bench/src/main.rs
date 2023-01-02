@@ -38,31 +38,33 @@ use {
     },
 };
 
+pub const MAX_RPC_CALL_RETRIES: usize = 5;
+
 pub fn get_latest_blockhash(client: &RpcClient) -> Option<Hash> {
-    let mut num_retries = 5;
+    let mut num_retries = MAX_RPC_CALL_RETRIES;
     loop {
-        let blockhash = client.get_latest_blockhash();
-        if blockhash.is_ok() {
-            return Some(blockhash.unwrap());
+        if let Ok(blockhash) = client.get_latest_blockhash() {
+            return Some(blockhash);
+        } else {
+            num_retries -= 1;
         }
         if num_retries == 0 {
             panic!("failed to get_latest_blockhash(), rpc node down?")
         }
-        num_retries -= 1;
     }
 }
 
 pub fn get_fee_for_message(client: &RpcClient, message: &impl SerializableMessage) -> Option<u64> {
-    let mut num_retries = 5;
+    let mut num_retries = MAX_RPC_CALL_RETRIES;
     loop {
-        let fee = client.get_fee_for_message(message);
-        if fee.is_ok() {
-            return Some(fee.unwrap());
+        if let Ok(fee) = client.get_fee_for_message(message) {
+            return Some(fee);
+        } else {
+            num_retries -= 1;
         }
         if num_retries == 0 {
             panic!("failed to get_fee_for_message(), rpc node down?")
         }
-        num_retries -= 1;
     }
 }
 
