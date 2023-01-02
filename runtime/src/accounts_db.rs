@@ -8544,10 +8544,8 @@ impl AccountsDb {
         let slots = self
             .storage
             .iter()
-            .filter_map(|k| {
-                let slot = *k.key() as Slot;
-                requested_slots.contains(&slot).then_some(slot)
-            })
+            .map(|k| *k.key() as Slot)
+            .filter(|slot| requested_slots.contains(slot))
             .collect::<Vec<_>>();
         m.stop();
         let mut m2 = Measure::start("filter");
