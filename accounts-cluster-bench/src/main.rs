@@ -54,8 +54,24 @@ pub fn airdrop_lamports(
             id.pubkey(),
         );
 
-        let blockhash = client.get_latest_blockhash().unwrap();
-        match request_airdrop_transaction(faucet_addr, &id.pubkey(), airdrop_amount, blockhash) {
+        let mut num_retries = 5;
+        let blockhash = loop {
+            let blockhash = client.get_latest_blockhash();
+            if blockhash.is_ok() {
+                break blockhash;
+            }
+            if num_retries == 0 {
+                panic!("failed to get_latest_blockhash(), rpc node down?")
+            }
+            num_retries -= 1;
+        };
+
+        match request_airdrop_transaction(
+            faucet_addr,
+            &id.pubkey(),
+            airdrop_amount,
+            blockhash.unwrap(),
+        ) {
             Ok(transaction) => {
                 let mut tries = 0;
                 loop {
