@@ -11,6 +11,7 @@ use {
     solana_gossip::gossip_service::discover,
     solana_rpc_client::rpc_client::RpcClient,
     solana_runtime::inline_spl_token,
+    solana_sdk::hash::Hash,
     solana_sdk::{
         commitment_config::CommitmentConfig,
         instruction::{AccountMeta, Instruction},
@@ -36,6 +37,20 @@ use {
     },
 };
 
+pub fn get_latest_blockhash(client: &RpcClient) -> Option<Hash> {
+    let mut num_retries = 5;
+    loop {
+        let blockhash = client.get_latest_blockhash();
+        if blockhash.is_ok() {
+            return Some(blockhash.unwrap());
+        }
+        if num_retries == 0 {
+            panic!("failed to get_latest_blockhash(), rpc node down?")
+        }
+        num_retries -= 1;
+    }
+}
+
 pub fn airdrop_lamports(
     client: &RpcClient,
     faucet_addr: &SocketAddr,
@@ -54,18 +69,7 @@ pub fn airdrop_lamports(
             id.pubkey(),
         );
 
-        let mut num_retries = 5;
-        let blockhash = loop {
-            let blockhash = client.get_latest_blockhash();
-            if blockhash.is_ok() {
-                break blockhash;
-            }
-            if num_retries == 0 {
-                panic!("failed to get_latest_blockhash(), rpc node down?")
-            }
-            num_retries -= 1;
-        };
-
+        let blockhash = get_latest_blockhash(client);
         match request_airdrop_transaction(
             faucet_addr,
             &id.pubkey(),
@@ -243,7 +247,7 @@ fn run_accounts_bench(
     let mut latest_blockhash = Instant::now();
     let mut last_log = Instant::now();
     let mut count = 0;
-    let mut blockhash = client.get_latest_blockhash().expect("blockhash");
+    let mut blockhash = get_latest_blockhash(&client).expect("blockhash");
     let mut tx_sent_count = 0;
     let mut total_accounts_created = 0;
     let mut total_accounts_closed = 0;
@@ -290,7 +294,7 @@ fn run_accounts_bench(
 
     loop {
         if latest_blockhash.elapsed().as_millis() > 10_000 {
-            blockhash = client.get_latest_blockhash().expect("blockhash");
+            blockhash = get_latest_blockhash(&client).expect("blockhash");
             latest_blockhash = Instant::now();
         }
 
@@ -418,7 +422,7 @@ fn run_accounts_bench(
             let max_created_seed = seed_tracker.max_created.load(Ordering::Relaxed);
 
             if latest_blockhash.elapsed().as_millis() > 10_000 {
-                blockhash = client.get_latest_blockhash().expect("blockhash");
+                blockhash = get_latest_blockhash(&client).expect("blockhash");
                 latest_blockhash = Instant::now();
             }
             message.recent_blockhash = blockhash;
