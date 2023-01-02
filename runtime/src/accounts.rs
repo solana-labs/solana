@@ -275,6 +275,8 @@ impl Accounts {
             };
         let mut accumulated_accounts_data_size: usize = 0;
 
+        let set_exempt_rent_epoch_max =
+            feature_set.is_active(&solana_sdk::feature_set::set_exempt_rent_epoch_max::id());
         let mut accounts = account_keys
             .iter()
             .enumerate()
@@ -309,6 +311,7 @@ impl Accounts {
                                                 key,
                                                 &mut account,
                                                 self.accounts_db.filler_account_suffix.as_ref(),
+                                                set_exempt_rent_epoch_max,
                                             )
                                             .rent_amount;
                                         (account, rent_due)
