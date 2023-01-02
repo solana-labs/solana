@@ -4027,11 +4027,14 @@ impl AccountsDb {
 
         let remaining_stores = if let Some(slot_stores) = self.storage.get_slot_stores(slot) {
             if let Some(shrink_in_progress) = shrink_in_progress {
-                let store = shrink_in_progress.old_storage().clone();
-                not_retaining_store(&store);
+                // shrink is in progress, so 1 new append vec to keep, 1 old one to throw away
+                let store = shrink_in_progress.old_storage();
+                not_retaining_store(store);
+                // drop removes the old append vec that was being shrunk from db's storage
                 drop(shrink_in_progress);
                 slot_stores.read().unwrap().len()
             } else {
+                // no shrink_in_progress, so retain append vecs depending on 'should_retain'
                 let mut list = slot_stores.write().unwrap();
                 list.retain(|_key, store| {
                     if !should_retain(store) {
@@ -4581,7 +4584,7 @@ impl AccountsDb {
                 self.accounts_index
                     .clean_dead_slot(*slot, &mut AccountsIndexRootsStats::default());
                 self.bank_hashes.write().unwrap().remove(slot);
-                // all storages have been removed from here and recycled or dropped
+                // all storages have been removed from this slot and recycled or dropped
                 assert!(self
                     .storage
                     .remove(slot)
@@ -16493,6 +16496,19 @@ pub mod tests {
             db.get_one_epoch_old_slot_for_hash_calc_scan(slot + offset, &config),
             offset
         );
+    }
+
+    #[test]
+    fn test_mark_dirty_dead_stores_empty() {
+        let db = AccountsDb::new_single_for_tests();
+        let slot = 0;
+        for add_dirty_stores in [false, true] {
+            let (remaining_stores, dead_storages) =
+                db.mark_dirty_dead_stores(slot, |_| true, add_dirty_stores, None);
+            assert_eq!(remaining_stores, 0);
+            assert!(dead_storages.is_empty());
+            assert!(db.dirty_stores.is_empty());
+        }
     }
 
     #[test]
