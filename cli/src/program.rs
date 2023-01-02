@@ -1029,7 +1029,7 @@ fn process_program_deploy(
             Some(&[program_signer.unwrap(), upgrade_authority_signer]),
             buffer_signer,
             &buffer_pubkey,
-            Some(upgrade_authority_signer),
+            upgrade_authority_signer,
             allow_excessive_balance,
             skip_fee_check,
         )
@@ -1133,7 +1133,7 @@ fn process_write_buffer(
         None,
         buffer_signer,
         &buffer_pubkey,
-        Some(buffer_authority),
+        buffer_authority,
         true,
         skip_fee_check,
     );
@@ -1766,92 +1766,89 @@ fn do_process_program_write_and_deploy(
     program_signers: Option<&[&dyn Signer]>,
     buffer_signer: Option<&dyn Signer>,
     buffer_pubkey: &Pubkey,
-    buffer_authority_signer: Option<&dyn Signer>,
+    buffer_authority_signer: &dyn Signer,
     allow_excessive_balance: bool,
     skip_fee_check: bool,
 ) -> ProcessResult {
     let blockhash = rpc_client.get_latest_blockhash()?;
 
     // Initialize buffer account or complete if already partially initialized
-    let (initial_message, write_messages, balance_needed) =
-        if let Some(buffer_authority_signer) = buffer_authority_signer {
-            let (initial_instructions, balance_needed) = if let Some(account) = rpc_client
-                .get_account_with_commitment(buffer_pubkey, config.commitment)?
-                .value
-            {
-                complete_partial_program_init(
-                    loader_id,
+    let (initial_message, write_messages, balance_needed) = {
+        let (initial_instructions, balance_needed) = if let Some(account) = rpc_client
+            .get_account_with_commitment(buffer_pubkey, config.commitment)?
+            .value
+        {
+            complete_partial_program_init(
+                loader_id,
+                &config.signers[0].pubkey(),
+                buffer_pubkey,
+                &account,
+                if loader_id == &bpf_loader_upgradeable::id() {
+                    UpgradeableLoaderState::size_of_buffer(program_len)
+                } else {
+                    program_len
+                },
+                minimum_balance,
+                allow_excessive_balance,
+            )?
+        } else if loader_id == &bpf_loader_upgradeable::id() {
+            (
+                bpf_loader_upgradeable::create_buffer(
                     &config.signers[0].pubkey(),
                     buffer_pubkey,
-                    &account,
-                    if loader_id == &bpf_loader_upgradeable::id() {
-                        UpgradeableLoaderState::size_of_buffer(program_len)
-                    } else {
-                        program_len
-                    },
+                    &buffer_authority_signer.pubkey(),
                     minimum_balance,
-                    allow_excessive_balance,
-                )?
-            } else if loader_id == &bpf_loader_upgradeable::id() {
-                (
-                    bpf_loader_upgradeable::create_buffer(
-                        &config.signers[0].pubkey(),
-                        buffer_pubkey,
-                        &buffer_authority_signer.pubkey(),
-                        minimum_balance,
-                        program_len,
-                    )?,
-                    minimum_balance,
-                )
-            } else {
-                (
-                    vec![system_instruction::create_account(
-                        &config.signers[0].pubkey(),
-                        buffer_pubkey,
-                        minimum_balance,
-                        program_len as u64,
-                        loader_id,
-                    )],
-                    minimum_balance,
-                )
-            };
-            let initial_message = if !initial_instructions.is_empty() {
-                Some(Message::new_with_blockhash(
-                    &initial_instructions,
-                    Some(&config.signers[0].pubkey()),
-                    &blockhash,
-                ))
-            } else {
-                None
-            };
-
-            // Create and add write messages
-
-            let payer_pubkey = config.signers[0].pubkey();
-            let create_msg = |offset: u32, bytes: Vec<u8>| {
-                let instruction = if loader_id == &bpf_loader_upgradeable::id() {
-                    bpf_loader_upgradeable::write(
-                        buffer_pubkey,
-                        &buffer_authority_signer.pubkey(),
-                        offset,
-                        bytes,
-                    )
-                } else {
-                    loader_instruction::write(buffer_pubkey, loader_id, offset, bytes)
-                };
-                Message::new_with_blockhash(&[instruction], Some(&payer_pubkey), &blockhash)
-            };
-
-            let mut write_messages = vec![];
-            let chunk_size = calculate_max_chunk_size(&create_msg);
-            for (chunk, i) in program_data.chunks(chunk_size).zip(0..) {
-                write_messages.push(create_msg((i * chunk_size) as u32, chunk.to_vec()));
-            }
-
-            (initial_message, write_messages, balance_needed)
+                    program_len,
+                )?,
+                minimum_balance,
+            )
         } else {
-            (None, vec![], 0)
+            (
+                vec![system_instruction::create_account(
+                    &config.signers[0].pubkey(),
+                    buffer_pubkey,
+                    minimum_balance,
+                    program_len as u64,
+                    loader_id,
+                )],
+                minimum_balance,
+            )
         };
+        let initial_message = if !initial_instructions.is_empty() {
+            Some(Message::new_with_blockhash(
+                &initial_instructions,
+                Some(&config.signers[0].pubkey()),
+                &blockhash,
+            ))
+        } else {
+            None
+        };
+
+        // Create and add write messages
+
+        let payer_pubkey = config.signers[0].pubkey();
+        let create_msg = |offset: u32, bytes: Vec<u8>| {
+            let instruction = if loader_id == &bpf_loader_upgradeable::id() {
+                bpf_loader_upgradeable::write(
+                    buffer_pubkey,
+                    &buffer_authority_signer.pubkey(),
+                    offset,
+                    bytes,
+                )
+            } else {
+                loader_instruction::write(buffer_pubkey, loader_id, offset, bytes)
+            };
+            Message::new_with_blockhash(&[instruction], Some(&payer_pubkey), &blockhash)
+        };
+
+        let mut write_messages = vec![];
+        let chunk_size = calculate_max_chunk_size(&create_msg);
+        for (chunk, i) in program_data.chunks(chunk_size).zip(0..) {
+            write_messages.push(create_msg((i * chunk_size) as u32, chunk.to_vec()));
+        }
+
+        (initial_message, write_messages, balance_needed)
+    };
 
     // Create and add final message
 
@@ -1901,7 +1898,7 @@ fn do_process_program_write_and_deploy(
         &write_messages,
         &final_message,
         buffer_signer,
-        buffer_authority_signer,
+        Some(buffer_authority_signer),
         program_signers,
     )?;
 
