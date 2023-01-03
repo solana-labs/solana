@@ -102,7 +102,7 @@ if [[ ! -e criterion-$version.md || ! -e criterion ]]; then
 fi
 
 # Install Rust-SBF
-version=v1.31
+version=v1.32
 if [[ ! -e sbf-tools-$version.md || ! -e sbf-tools ]]; then
   (
     set -e

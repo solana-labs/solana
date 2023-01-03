@@ -52,7 +52,7 @@ For example:
   on Rand](#depending-on-rand).
 - Crates may overflow the stack even if the stack overflowing code isn't
   included in the program itself. For more information refer to
-  [Stack](overview.md#stack).
+  [Stack](./faq.md#stack).
 
 ## How to Build
 
@@ -95,10 +95,10 @@ program.
 ## Program Entrypoint
 
 Programs export a known entrypoint symbol which the Solana runtime looks up and
-calls when invoking a program. Solana supports multiple [versions of the BPF
-loader](overview.md#versions) and the entrypoints may vary between them.
+calls when invoking a program. Solana supports multiple versions of the BPF
+loader and the entrypoints may vary between them.
 Programs must be written for and deployed to the same loader. For more details
-see the [overview](overview#loaders).
+see the [FAQ section on Loaders](./faq.md#loaders).
 
 Currently there are two supported loaders [BPF
 Loader](https://github.com/solana-labs/solana/blob/d9b0fc0e3eec67dfe4a97d9298b15969b2804fab/sdk/program/src/bpf_loader.rs#L17)
@@ -159,7 +159,7 @@ their own deserialization function they need to ensure that any modifications
 the program wishes to commit be written back into the input byte array.
 
 Details on how the loader serializes the program inputs can be found in the
-[Input Parameter Serialization](overview.md#input-parameter-serialization) docs.
+[Input Parameter Serialization](./faq.md#input-parameter-serialization) docs.
 
 ### Data Types
 
@@ -211,7 +211,7 @@ On-chain Rust programs support most of Rust's libstd, libcore, and liballoc, as
 well as many 3rd party crates.
 
 There are some limitations since these programs run in a resource-constrained,
-single-threaded environment, and must be deterministic:
+single-threaded environment, as well as being deterministic:
 
 - No access to
   - `rand`

@@ -1,4 +1,4 @@
-//! Data shared between program runtime and built-in programs as well as SBF programs
+//! Data shared between program runtime and built-in programs as well as SBF programs.
 #![deny(clippy::indexing_slicing)]
 
 #[cfg(not(target_os = "solana"))]

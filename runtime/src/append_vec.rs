@@ -709,6 +709,10 @@ pub mod tests {
     };
 
     impl AppendVec {
+        pub(crate) fn set_current_len_for_tests(&self, len: usize) {
+            self.current_len.store(len, Ordering::Release);
+        }
+
         fn append_account_test(&self, data: &(StoredMeta, AccountSharedData)) -> Option<usize> {
             let slot_ignored = Slot::MAX;
             let accounts = [(&data.0.pubkey, &data.1)];
