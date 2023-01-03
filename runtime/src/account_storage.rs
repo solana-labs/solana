@@ -5,7 +5,7 @@ use {
     dashmap::DashMap,
     solana_sdk::clock::Slot,
     std::{
-        collections::{hash_map::RandomState, HashMap},
+        collections::HashMap,
         sync::{Arc, RwLock},
     },
 };
@@ -65,14 +65,6 @@ impl AccountStorage {
         self.map.iter()
     }
 
-    pub(crate) fn get(
-        &self,
-        slot: &Slot,
-    ) -> Option<dashmap::mapref::one::Ref<'_, Slot, SlotStores, RandomState>> {
-        self.map.get(slot)
-    }
-
-    /// insert 'store' into 'map' at 'slot'
     pub(crate) fn insert(&self, slot: Slot, store: Arc<AccountStorageEntry>) {
         let slot_storages: SlotStores = self.get_slot_stores(slot).unwrap_or_else(||
             // DashMap entry.or_insert() returns a RefMut, essentially a write lock,
