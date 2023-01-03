@@ -391,10 +391,10 @@ pub(crate) fn get_slot_and_append_vec_id(filename: &str) -> (Slot, usize) {
     STORAGE_FILE_REGEX
         .captures(filename)
         .map(|cap| {
-            let slot_str = cap.name("slot").map(|m| m.as_str());
-            let id_str = cap.name("id").map(|m| m.as_str());
-            let slot: Slot = slot_str.unwrap().parse::<u64>().unwrap();
-            let id = id_str.unwrap().parse::<u32>().unwrap() as usize;
+            let slot_str = cap.name("slot").map(|m| m.as_str()).unwrap();
+            let id_str = cap.name("id").map(|m| m.as_str()).unwrap();
+            let slot = slot_str.parse().unwrap();
+            let id = id_str.parse().unwrap();
             (slot, id)
         })
         .unwrap()
