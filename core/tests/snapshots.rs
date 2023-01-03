@@ -16,7 +16,7 @@ use {
             AbsRequestHandlers, AbsRequestSender, AccountsBackgroundService,
             PrunedBanksRequestHandler, SnapshotRequestHandler,
         },
-        accounts_db::{self, ACCOUNTS_DB_CONFIG_FOR_TESTING},
+        accounts_db::{self, SnapshotStorages, ACCOUNTS_DB_CONFIG_FOR_TESTING},
         accounts_hash::AccountsHash,
         accounts_index::AccountSecondaryIndexes,
         bank::Bank,
@@ -51,7 +51,7 @@ use {
     },
     solana_streamer::socket::SocketAddrSpace,
     std::{
-        collections::HashSet,
+        collections::{HashSet, VecDeque},
         fs,
         io::{Error, ErrorKind},
         path::PathBuf,
@@ -242,6 +242,7 @@ fn run_bank_forks_snapshot_n<F>(
         snapshot_request_receiver,
         accounts_package_sender,
     };
+    let mut snapshot_slot_storages: VecDeque<SnapshotStorages> = VecDeque::new();
     for slot in 1..=last_slot {
         let mut bank = Bank::new_from_parent(&bank_forks[slot - 1], &Pubkey::default(), slot);
         f(&mut bank, mint_keypair);
@@ -253,7 +254,12 @@ fn run_bank_forks_snapshot_n<F>(
             // set_root should send a snapshot request
             bank_forks.set_root(bank.slot(), &request_sender, None);
             bank.update_accounts_hash_for_tests();
-            snapshot_request_handler.handle_snapshot_requests(false, 0, &mut None);
+            snapshot_request_handler.handle_snapshot_requests(
+                false,
+                0,
+                &mut None,
+                &mut snapshot_slot_storages,
+            );
         }
     }
 
@@ -754,6 +760,7 @@ fn test_bank_forks_incremental_snapshot(
     };
 
     let mut last_full_snapshot_slot = None;
+    let mut snapshot_slot_storages: VecDeque<SnapshotStorages> = VecDeque::new();
     for slot in 1..=LAST_SLOT {
         // Make a new bank and perform some transactions
         let bank = {
@@ -785,6 +792,7 @@ fn test_bank_forks_incremental_snapshot(
                 false,
                 0,
                 &mut last_full_snapshot_slot,
+                &mut snapshot_slot_storages,
             );
         }
 

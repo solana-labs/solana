@@ -2,10 +2,12 @@
 //!
 //! This can be expensive since we have to walk the append vecs being cleaned up.
 
+use std::collections::VecDeque;
+
 mod stats;
 use {
     crate::{
-        accounts_db::CalcAccountsHashDataSource,
+        accounts_db::{CalcAccountsHashDataSource, SnapshotStorages},
         accounts_hash::CalcAccountsHashConfig,
         bank::{Bank, BankSlotDelta, DropCallback},
         bank_forks::BankForks,
@@ -148,6 +150,7 @@ impl SnapshotRequestHandler {
         test_hash_calculation: bool,
         non_snapshot_time_us: u128,
         last_full_snapshot_slot: &mut Option<Slot>,
+        snapshot_slot_storages: &mut VecDeque<SnapshotStorages>,
     ) -> Option<Result<u64, SnapshotError>> {
         let (
             snapshot_request,
@@ -181,6 +184,7 @@ impl SnapshotRequestHandler {
             last_full_snapshot_slot,
             snapshot_request,
             accounts_package_type,
+            snapshot_slot_storages,
         ))
     }
 
@@ -265,6 +269,7 @@ impl SnapshotRequestHandler {
         last_full_snapshot_slot: &mut Option<Slot>,
         snapshot_request: SnapshotRequest,
         accounts_package_type: AccountsPackageType,
+        snapshot_slot_storages: &mut VecDeque<SnapshotStorages>,
     ) -> Result<u64, SnapshotError> {
         debug!(
             "handling snapshot request: {:?}, {:?}",
@@ -360,19 +365,26 @@ impl SnapshotRequestHandler {
                     status_cache_slot_deltas,
                 )
                 .expect("snapshot bank");
-                AccountsPackage::new_for_snapshot(
+                let accounts_package = AccountsPackage::new_for_snapshot(
                     accounts_package_type,
                     &snapshot_root_bank,
                     &bank_snapshot_info,
                     &self.snapshot_config.bank_snapshots_dir,
                     &self.snapshot_config.full_snapshot_archives_dir,
                     &self.snapshot_config.incremental_snapshot_archives_dir,
-                    snapshot_storages,
+                    snapshot_storages.clone(),
                     self.snapshot_config.archive_format,
                     self.snapshot_config.snapshot_version,
                     accounts_hash_for_testing,
                 )
-                .expect("new accounts package for snapshot")
+                .expect("new accounts package for snapshot");
+                snapshot_slot_storages.push_back(snapshot_storages);
+
+                // Remove the older ones, causing them to release the reference counts of the appendvecs
+                while snapshot_slot_storages.len() > 1 {
+                    snapshot_slot_storages.pop_front();
+                }
+                accounts_package
             }
             SnapshotRequestType::EpochAccountsHash => {
                 // skip the bank snapshot, just make an accounts package to send to AHV
@@ -506,11 +518,13 @@ impl AbsRequestHandlers {
         test_hash_calculation: bool,
         non_snapshot_time_us: u128,
         last_full_snapshot_slot: &mut Option<Slot>,
+        snapshot_slot_storages: &mut VecDeque<SnapshotStorages>,
     ) -> Option<Result<u64, SnapshotError>> {
         self.snapshot_request_handler.handle_snapshot_requests(
             test_hash_calculation,
             non_snapshot_time_us,
             last_full_snapshot_slot,
+            snapshot_slot_storages,
         )
     }
 }
@@ -533,6 +547,7 @@ impl AccountsBackgroundService {
         let mut removed_slots_count = 0;
         let mut total_remove_slots_time = 0;
         let mut last_expiration_check_time = Instant::now();
+        let mut snapshot_slot_storages: VecDeque<SnapshotStorages> = VecDeque::new();
         let t_background = Builder::new()
             .name("solBgAccounts".to_string())
             .spawn(move || {
@@ -593,6 +608,7 @@ impl AccountsBackgroundService {
                                 test_hash_calculation,
                                 non_snapshot_time,
                                 &mut last_full_snapshot_slot,
+                                &mut snapshot_slot_storages,
                             )
                         })
                         .flatten();

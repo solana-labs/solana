@@ -7,6 +7,7 @@ use {
         },
         accounts_index::AccountSecondaryIndexes,
         accounts_update_notifier_interface::AccountsUpdateNotifier,
+        append_vec::AppendVec,
         bank::{Bank, BankFieldsToDeserialize, BankSlotDelta},
         builtins::Builtins,
         hardened_unpack::{
@@ -875,6 +876,47 @@ pub fn create_accounts_run_and_snapshot_dirs(
     }
 
     Ok((run_path, snapshot_path))
+
+}
+
+/// Hard-link the file from accounts/ to snapshot/<slot>/accounts/
+/// This keep-alives the appendvec files to stay with the bank snapshot files.  The slot and id
+/// in the file names are also updated in case its file is a recycled one with inconsistent slot
+/// and id.
+fn hard_link_appendvec_files_to_snapshot(
+    bank_snapshots_dir: impl AsRef<Path>,
+    snapshot_storages: &[SnapshotStorage],
+) -> Result<()> {
+    let dir_accounts_hard_links = bank_snapshots_dir.as_ref().join("accounts");
+    fs::create_dir(&dir_accounts_hard_links).map_err(|e| {
+        let err_msg = format!(
+            "Error: {}.  Failed to create the hard-link dir {}.",
+            e,
+            dir_accounts_hard_links.display(),
+        );
+        SnapshotError::Io(IoError::new(ErrorKind::Other, err_msg))
+    })?;
+
+    for slot_storages in snapshot_storages {
+        for storage in slot_storages {
+            storage.flush()?;
+            let path = storage.accounts.get_path();
+            let hard_link_path = dir_accounts_hard_links.clone().join(AppendVec::file_name(
+                storage.slot(),
+                storage.append_vec_id(),
+            ));
+            fs::hard_link(&path, &hard_link_path).map_err(|e| {
+                let err_msg = format!(
+                    "hard-link appendvec file {} to {} failed.  Error: {}",
+                    path.display(),
+                    hard_link_path.display(),
+                    e,
+                );
+                SnapshotError::Io(IoError::new(ErrorKind::Other, err_msg))
+            })?;
+        }
+    }
+    Ok(())
 }
 
 /// Serialize a bank to a snapshot
@@ -894,6 +936,10 @@ pub fn add_bank_snapshot(
     let slot = bank.slot();
     // bank_snapshots_dir/slot
     let bank_snapshot_dir = get_bank_snapshots_dir(bank_snapshots_dir, slot);
+    if fs::metadata(&bank_snapshot_dir).is_ok() {
+        // Could be left over by the previous process in an incomplete state.  If found, remove it.
+        move_and_async_delete_path(&bank_snapshot_dir);
+    }
     fs::create_dir_all(&bank_snapshot_dir)?;
 
     // the bank snapshot is stored as bank_snapshots_dir/slot/slot.BANK_SNAPSHOT_PRE_FILENAME_EXTENSION
@@ -905,6 +951,8 @@ pub fn add_bank_snapshot(
         slot,
         bank_snapshot_path.display(),
     );
+
+    hard_link_appendvec_files_to_snapshot(&bank_snapshot_dir, snapshot_storages)?;
 
     let mut bank_serialize = Measure::start("bank-serialize-ms");
     let bank_snapshot_serializer = move |stream: &mut BufWriter<File>| -> Result<()> {
@@ -2186,6 +2234,7 @@ pub fn verify_snapshot_archive<P, Q, R>(
     if let VerifyBank::NonDeterministic(slot) = verify_bank {
         // file contents may be different, but deserialized structs should be equal
         let slot = slot.to_string();
+        let snapshot_slot_dir = snapshots_to_verify.as_ref().join(&slot);
         let p1 = snapshots_to_verify.as_ref().join(&slot).join(&slot);
         let p2 = unpacked_snapshots.join(&slot).join(&slot);
 
@@ -2208,6 +2257,16 @@ pub fn verify_snapshot_archive<P, Q, R>(
             new_unpacked_status_cache_file,
         )
         .unwrap();
+
+        // Remove the new accounts/, version, and state_complete file to be consistent with the
+        // old archive structure.
+        let accounts_path = snapshot_slot_dir.join("accounts");
+        if accounts_path.is_dir() {
+            // Do not use the async move_and_async_delete_path because the assert below
+            // requires the job to be done.
+            // This is for test only, so the performance is not an issue.
+            std::fs::remove_dir_all(accounts_path).unwrap();
+        }
     }
 
     assert!(!dir_diff::is_different(&snapshots_to_verify, unpacked_snapshots).unwrap());
