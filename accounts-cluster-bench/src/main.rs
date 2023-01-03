@@ -6,13 +6,14 @@ use {
     rayon::prelude::*,
     solana_account_decoder::parse_token::spl_token_pubkey,
     solana_clap_utils::input_parsers::pubkey_of,
-    solana_client::transaction_executor::TransactionExecutor,
+    solana_client::{rpc_client::SerializableMessage, transaction_executor::TransactionExecutor},
     solana_faucet::faucet::{request_airdrop_transaction, FAUCET_PORT},
     solana_gossip::gossip_service::discover,
     solana_rpc_client::rpc_client::RpcClient,
     solana_runtime::inline_spl_token,
     solana_sdk::{
         commitment_config::CommitmentConfig,
+        hash::Hash,
         instruction::{AccountMeta, Instruction},
         message::Message,
         pubkey::Pubkey,
@@ -36,6 +37,41 @@ use {
     },
 };
 
+pub const MAX_RPC_CALL_RETRIES: usize = 5;
+
+pub fn poll_get_latest_blockhash(client: &RpcClient) -> Option<Hash> {
+    let mut num_retries = MAX_RPC_CALL_RETRIES;
+    loop {
+        if let Ok(blockhash) = client.get_latest_blockhash() {
+            return Some(blockhash);
+        } else {
+            num_retries -= 1;
+        }
+        if num_retries == 0 {
+            panic!("failed to get_latest_blockhash(), rpc node down?")
+        }
+        sleep(Duration::from_millis(100));
+    }
+}
+
+pub fn poll_get_fee_for_message(
+    client: &RpcClient,
+    message: &impl SerializableMessage,
+) -> Option<u64> {
+    let mut num_retries = MAX_RPC_CALL_RETRIES;
+    loop {
+        if let Ok(fee) = client.get_fee_for_message(message) {
+            return Some(fee);
+        } else {
+            num_retries -= 1;
+        }
+        if num_retries == 0 {
+            panic!("failed to get_fee_for_message(), rpc node down?")
+        }
+        sleep(Duration::from_millis(100));
+    }
+}
+
 pub fn airdrop_lamports(
     client: &RpcClient,
     faucet_addr: &SocketAddr,
@@ -54,8 +90,13 @@ pub fn airdrop_lamports(
             id.pubkey(),
         );
 
-        let blockhash = client.get_latest_blockhash().unwrap();
-        match request_airdrop_transaction(faucet_addr, &id.pubkey(), airdrop_amount, blockhash) {
+        let blockhash = poll_get_latest_blockhash(client);
+        match request_airdrop_transaction(
+            faucet_addr,
+            &id.pubkey(),
+            airdrop_amount,
+            blockhash.unwrap(),
+        ) {
             Ok(transaction) => {
                 let mut tries = 0;
                 loop {
@@ -227,7 +268,7 @@ fn run_accounts_bench(
     let mut latest_blockhash = Instant::now();
     let mut last_log = Instant::now();
     let mut count = 0;
-    let mut blockhash = client.get_latest_blockhash().expect("blockhash");
+    let mut blockhash = poll_get_latest_blockhash(&client).expect("blockhash");
     let mut tx_sent_count = 0;
     let mut total_accounts_created = 0;
     let mut total_accounts_closed = 0;
@@ -274,14 +315,12 @@ fn run_accounts_bench(
 
     loop {
         if latest_blockhash.elapsed().as_millis() > 10_000 {
-            blockhash = client.get_latest_blockhash().expect("blockhash");
+            blockhash = poll_get_latest_blockhash(&client).expect("blockhash");
             latest_blockhash = Instant::now();
         }
 
         message.recent_blockhash = blockhash;
-        let fee = client
-            .get_fee_for_message(&message)
-            .expect("get_fee_for_message");
+        let fee = poll_get_fee_for_message(&client, &message).expect("get_fee_for_message");
         let lamports = min_balance + fee;
 
         for (i, balance) in balances.iter_mut().enumerate() {
@@ -402,13 +441,11 @@ fn run_accounts_bench(
             let max_created_seed = seed_tracker.max_created.load(Ordering::Relaxed);
 
             if latest_blockhash.elapsed().as_millis() > 10_000 {
-                blockhash = client.get_latest_blockhash().expect("blockhash");
+                blockhash = poll_get_latest_blockhash(&client).expect("blockhash");
                 latest_blockhash = Instant::now();
             }
             message.recent_blockhash = blockhash;
-            let fee = client
-                .get_fee_for_message(&message)
-                .expect("get_fee_for_message");
+            let fee = poll_get_fee_for_message(&client, &message).expect("get_fee_for_message");
 
             let sigs_len = executor.num_outstanding();
             if sigs_len < batch_size && max_closed_seed < max_created_seed {
