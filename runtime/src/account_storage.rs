@@ -46,6 +46,13 @@ impl AccountStorage {
         self.map.iter().map(|iter_item| *iter_item.key()).collect()
     }
 
+    /// returns true if there are no append vecs for 'slot'
+    pub(crate) fn is_empty(&self, slot: Slot) -> bool {
+        self.get_slot_stores(slot)
+            .map(|storages| storages.read().unwrap().is_empty())
+            .unwrap_or(true)
+    }
+
     /// initialize the storage map to 'all_storages'
     pub(crate) fn initialize(&mut self, all_storages: AccountStorageMap) {
         assert!(self.map.is_empty());
