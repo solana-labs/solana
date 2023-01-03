@@ -8533,8 +8533,12 @@ impl AccountsDb {
         let slots = self
             .storage
             .iter()
-            .map(|k| *k.key() as Slot)
-            .filter(|slot| requested_slots.contains(slot))
+            .filter_map(|entry| {
+                let slot = *entry.key() as Slot;
+                requested_slots
+                    .contains(&slot)
+                    .then_some((slot, Arc::clone(entry.value())))
+            })
             .collect::<Vec<_>>();
         m.stop();
         let mut m2 = Measure::start("filter");
@@ -8546,29 +8550,24 @@ impl AccountsDb {
                 .map(|slots| {
                     slots
                         .iter()
-                        .filter_map(|slot| {
+                        .filter_map(|(slot, storages)| {
                             if self.accounts_index.is_alive_root(*slot)
                                 || ancestors
                                     .map(|ancestors| ancestors.contains_key(slot))
                                     .unwrap_or_default()
                             {
-                                self.storage.get(slot).map_or_else(
-                                    || None,
-                                    |item| {
-                                        let storages = item
-                                            .read()
-                                            .unwrap()
-                                            .values()
-                                            .filter(|x| x.has_accounts())
-                                            .cloned()
-                                            .collect::<Vec<_>>();
-                                        if !storages.is_empty() {
-                                            Some((storages, *slot))
-                                        } else {
-                                            None
-                                        }
-                                    },
-                                )
+                                let storages = storages
+                                    .read()
+                                    .unwrap()
+                                    .values()
+                                    .filter(|x| x.has_accounts())
+                                    .cloned()
+                                    .collect::<Vec<_>>();
+                                if !storages.is_empty() {
+                                    Some((storages, *slot))
+                                } else {
+                                    None
+                                }
                             } else {
                                 None
                             }
