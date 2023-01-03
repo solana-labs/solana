@@ -59,6 +59,14 @@ impl AccountStorage {
             .unwrap_or(true)
     }
 
+    /// returns true if there is an entry in the map for 'slot', but it contains no append vec
+    #[cfg(test)]
+    pub(crate) fn is_empty_entry(&self, slot: Slot) -> bool {
+        self.get_slot_stores(slot)
+            .map(|storages| storages.read().unwrap().is_empty())
+            .unwrap_or(false)
+    }
+
     /// initialize the storage map to 'all_storages'
     pub(crate) fn initialize(&mut self, all_storages: AccountStorageMap) {
         assert!(self.map.is_empty());

@@ -16509,7 +16509,7 @@ pub mod tests {
             } else {
                 assert!(db.dirty_stores.is_empty());
             }
-            assert!(db.get_storages_for_slot(slot).unwrap().is_empty());
+            assert!(db.storage.is_empty_entry(slot));
         }
     }
 
@@ -17538,7 +17538,7 @@ pub mod tests {
             &mut AncientSlotPubkeys::default(),
             &mut dropped_roots,
         );
-        assert!(db.get_storages_for_slot(next_slot).unwrap().is_empty());
+        assert!(db.storage.is_empty_entry(next_slot));
         // this removes the storages entry completely from the hashmap for 'next_slot'.
         // Otherwise, we have a zero length vec in that hashmap
         db.handle_dropped_roots_for_ancient(dropped_roots);
