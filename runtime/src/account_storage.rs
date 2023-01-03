@@ -32,6 +32,17 @@ impl AccountStorage {
         self.map.get(&slot).map(|result| result.value().clone())
     }
 
+    /// return the append vec for 'slot' if it exists
+    /// This is only ever called when shrink is not possibly running and there is a max of 1 append vec per slot.
+    pub(crate) fn get_slot_storage_entry(&self, slot: Slot) -> Option<Arc<AccountStorageEntry>> {
+        self.get_slot_stores(slot).and_then(|res| {
+            let read = res.read().unwrap();
+            assert!(read.len() <= 1);
+            read.values().next().cloned()
+        })
+    }
+
+    /// return all append vecs for 'slot' if any exist
     pub(crate) fn get_slot_storage_entries(&self, slot: Slot) -> Option<SnapshotStorage> {
         self.get_slot_stores(slot)
             .map(|res| res.read().unwrap().values().cloned().collect())
