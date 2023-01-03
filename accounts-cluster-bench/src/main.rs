@@ -50,6 +50,7 @@ pub fn get_latest_blockhash(client: &RpcClient) -> Option<Hash> {
         if num_retries == 0 {
             panic!("failed to get_latest_blockhash(), rpc node down?")
         }
+        sleep(Duration::from_millis(100));
     }
 }
 
@@ -64,6 +65,7 @@ pub fn get_fee_for_message(client: &RpcClient, message: &impl SerializableMessag
         if num_retries == 0 {
             panic!("failed to get_fee_for_message(), rpc node down?")
         }
+        sleep(Duration::from_millis(100));
     }
 }
 
