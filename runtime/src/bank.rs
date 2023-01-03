@@ -991,6 +991,7 @@ impl SchedulerPool<ExecuteTimings> {
         assert_eq!(1, Arc::strong_count(&scheduler));
         assert!(scheduler.collected_results.lock().unwrap().is_empty());
         assert!(scheduler.bank.read().unwrap().is_none());
+        assert_eq!(scheduler.slot.load(std::sync::atomic::Ordering::SeqCst), 0);
         assert!(scheduler
             .graceful_stop_initiated
             .load(std::sync::atomic::Ordering::SeqCst));
@@ -1098,9 +1099,10 @@ impl CommitStatus {
             return
         }
         let current_thread_name = std::thread::current().name().unwrap().to_string();
-        info!("CommitStatus: {current_thread_name} is paused...");
 
+        info!("CommitStatus: {current_thread_name} is paused...");
         self.condvar.wait_while(is_paused, |now_is_paused| *now_is_paused);
+        info!("CommitStatus: {current_thread_name} is resumed...");
     }
 
     fn notify_as_paused(&self) {
@@ -1116,10 +1118,12 @@ impl CommitStatus {
 
     fn notify_as_resumed(&self) {
         let current_thread_name = std::thread::current().name().unwrap().to_string();
-        info!("CommitStatus: {current_thread_name} is notifying as resumed...");
         let mut is_paused = self.is_paused.lock().unwrap();
-        *is_paused = false;
-        self.condvar.notify_all();
+        if *is_paused {
+            info!("CommitStatus: {current_thread_name} is notifying as resumed...");
+            *is_paused = false;
+            self.condvar.notify_all();
+        }
     }
 }
 
@@ -1508,11 +1512,17 @@ impl<C> Scheduler<C> {
 
     fn pause_commit_into_bank(&self) {
         self.commit_status.notify_as_paused();
-        *self.bank.write().unwrap() = None;
+        {
+            *self.bank.write().unwrap() = None;
+            self.slot.store(0, std::sync::atomic::Ordering::SeqCst);
+        }
     }
 
     fn resume_commit_into_bank(&self, bank: &Arc<Bank>) {
-        *self.bank.write().unwrap() = Some(Arc::downgrade(bank));
+        {
+            *self.bank.write().unwrap() = Some(Arc::downgrade(bank));
+            self.slot.store(bank.slot(), std::sync::atomic::Ordering::SeqCst);
+        }
         self.commit_status.notify_as_resumed();
     }
 }
@@ -2174,10 +2184,12 @@ impl Bank {
         } else {
             let s: Option<Arc<Scheduler<ExecuteTimings>>> = parent.scheduler2.write().unwrap().take();
             (if let Some(scheduler) = s {
-                info!("bank (slot: {}) NOT inheriting {}'s scheduler..", slot, parent.slot());
+                use assert_matches::assert_matches;
+                assert_matches!(parent.commit_mode(), CommitMode::Banking);
+                info!("bank (slot: {}) inheriting {}'s scheduler..", slot, parent.slot());
                 RwLock::new(Some(scheduler))
             } else {
-                info!("bank (slot: {}) inheriting {}'s scheduler..", slot, parent.slot());
+                info!("bank (slot: {}) NOT inheriting {}'s scheduler..", slot, parent.slot());
                 RwLock::new(Some(SCHEDULER_POOL.lock().unwrap().take_from_pool()))
             }, CommitMode::Banking.into())
         };
@@ -3830,7 +3842,14 @@ impl Bank {
         // committed before this write lock can be obtained here.
         let mut hash = self.hash.write().unwrap();
         if *hash == Hash::default() {
-            assert!(self.scheduler2.read().unwrap().is_none());
+            match self.commit_mode() {
+                CommitMode::Replaying => {
+                    assert!(self.scheduler2.read().unwrap().is_none());
+                }
+                CommitMode::Banking => {
+                    assert!(self.scheduler2.read().unwrap().is_some());
+                }
+            }
             // finish up any deferred changes to account state
             self.collect_rent_eagerly(false);
             self.collect_fees();
@@ -6812,7 +6831,7 @@ impl Bank {
                 drop(ss);
 
                 let s = self.scheduler2.read().unwrap();
-                trace!("reconfigured scheduler to the bank slot: {}", self.slot());
+                info!("reconfigured scheduler to the bank slot: {}", self.slot());
                 s
             } else {
                 assert_eq!(
@@ -8547,26 +8566,23 @@ impl Bank {
     }
 
     pub fn wait_for_scheduler(&self, via_drop: bool) -> Result<ExecuteTimings> {
-        let s: Option<Arc<Scheduler<ExecuteTimings>>> = self.scheduler2.write().unwrap().take();
+        let mut s = self.scheduler2.write().unwrap();
 
-        if let Some(scheduler) = s {
+        if let Some(scheduler) = s.as_ref() {
             let commit_mode = self.commit_mode();
-            match commit_mode {
-                CommitMode::Replaying => {
-                    let _r = scheduler.gracefully_stop().unwrap();
-                    let e = scheduler
-                        .handle_aborted_executions()
-                        .into_iter()
-                        .next()
-                        .unwrap();
-                    SCHEDULER_POOL.lock().unwrap().return_to_pool(scheduler);
-                    e
-                },
-                CommitMode::Banking => {
-                    info!("wait_for_scheduler(Banking): pausing commit into bank...");
-                    scheduler.pause_commit_into_bank();
-                    Ok(Default::default())
-                }
+            if matches!(commit_mode, CommitMode::Replaying) || via_drop {
+                let _r = scheduler.gracefully_stop().unwrap();
+                let e = scheduler
+                    .handle_aborted_executions()
+                    .into_iter()
+                    .next()
+                    .unwrap();
+                SCHEDULER_POOL.lock().unwrap().return_to_pool(s.take().unwrap());
+                e
+            } else {
+                info!("wait_for_scheduler(Banking): pausing commit into bank...");
+                scheduler.pause_commit_into_bank();
+                Ok(Default::default())
             }
         } else {
             let current_thread_name = std::thread::current().name().unwrap().to_string();

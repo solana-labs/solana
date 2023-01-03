@@ -1067,10 +1067,10 @@ impl BankingSimulator {
                     .write()
                     .unwrap()
                     .reset(bank.clone(), Some((bank.slot(), bank.slot() + 1)));
-                info!("Bank::new_from_parent()!");
                 use solana_runtime::bank::NewBankOptions;
 
                 let new_slot = bank.slot() + 1;
+                info!("Bank::new_from_parent(): {old_slot} => {new_slot}!");
                 let new_leader = leader_schedule_cache.slot_leader_at(new_slot, None).unwrap();
                 if simulated_leader != new_leader {
                     info!("{} isn't leader anymore at slot {}; new leader: {}", simulated_leader, new_slot, new_leader);
@@ -1084,6 +1084,7 @@ impl BankingSimulator {
 
                 let options = NewBankOptions {
                     blockhash_override: faked_blockhash,
+                    banking: true,
                     ..Default::default()
                 };
                 let new_bank = Bank::new_from_parent_with_options(&bank, &simulated_leader, new_slot, options);
@@ -1126,6 +1127,7 @@ impl BankingSimulator {
         // simulated blocks...
         info!("joining broadcast stage...");
         drop(poh_recorder);
+        drop(retransmit_slots_sender);
         broadcast_stage.join().unwrap();
     }
 }
