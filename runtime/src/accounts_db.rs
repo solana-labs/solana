@@ -3219,7 +3219,8 @@ impl AccountsDb {
                     );
                     let count = self
                         .storage
-                        .slot_store_count(*slot, account_info.store_id())
+                        .get_account_storage_entry(*slot, account_info.store_id())
+                        .map(|store| store.count())
                         .unwrap()
                         - 1;
                     debug!(
