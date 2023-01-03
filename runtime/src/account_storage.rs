@@ -37,11 +37,6 @@ impl AccountStorage {
             .map(|res| res.read().unwrap().values().cloned().collect())
     }
 
-    pub(crate) fn slot_store_count(&self, slot: Slot, store_id: AppendVecId) -> Option<usize> {
-        self.get_account_storage_entry(slot, store_id)
-            .map(|store| store.count())
-    }
-
     pub(crate) fn all_slots(&self) -> Vec<Slot> {
         self.map.iter().map(|iter_item| *iter_item.key()).collect()
     }
