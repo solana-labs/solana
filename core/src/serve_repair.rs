@@ -22,6 +22,7 @@ use {
     solana_ledger::{
         ancestor_iterator::{AncestorIterator, AncestorIteratorWithHash},
         blockstore::Blockstore,
+        leader_schedule_cache::LeaderScheduleCache,
         shred::{Nonce, Shred, ShredFetchStats, SIZE_OF_NONCE},
     },
     solana_metrics::inc_new_counter_debug,
@@ -166,6 +167,7 @@ struct ServeRepairStats {
     total_response_bytes_unstaked: usize,
     handle_requests_staked: usize,
     handle_requests_unstaked: usize,
+    handle_my_slot: usize,
     processed: usize,
     self_repair: usize,
     window_index: usize,
@@ -276,6 +278,23 @@ impl RepairProtocol {
             | Self::AncestorHashes { .. } => true,
         }
     }
+
+    fn slot(&self) -> Option<Slot> {
+        match self {
+            Self::LegacyWindowIndex(_, slot, _)
+            | Self::LegacyHighestWindowIndex(_, slot, _)
+            | Self::LegacyOrphan(_, slot)
+            | Self::LegacyWindowIndexWithNonce(_, slot, _, _)
+            | Self::LegacyHighestWindowIndexWithNonce(_, slot, _, _)
+            | Self::LegacyOrphanWithNonce(_, slot, _)
+            | Self::LegacyAncestorHashes(_, slot, _)
+            | Self::WindowIndex { slot, .. }
+            | Self::HighestWindowIndex { slot, .. }
+            | Self::Orphan { slot, .. }
+            | Self::AncestorHashes { slot, .. } => Some(*slot),
+            Self::Pong(_) => None,
+        }
+    }
 }
 
 #[derive(Clone)]
@@ -283,6 +302,7 @@ pub struct ServeRepair {
     cluster_info: Arc<ClusterInfo>,
     bank_forks: Arc<RwLock<BankForks>>,
     repair_whitelist: Arc<RwLock<HashSet<Pubkey>>>,
+    leader_schedule_cache: Arc<LeaderScheduleCache>,
 }
 
 // Cache entry for repair peers for a slot.
@@ -330,11 +350,13 @@ impl ServeRepair {
         cluster_info: Arc<ClusterInfo>,
         bank_forks: Arc<RwLock<BankForks>>,
         repair_whitelist: Arc<RwLock<HashSet<Pubkey>>>,
+        leader_schedule_cache: Arc<LeaderScheduleCache>,
     ) -> Self {
         Self {
             cluster_info,
             bank_forks,
             repair_whitelist,
+            leader_schedule_cache,
         }
     }
 
@@ -462,9 +484,13 @@ impl ServeRepair {
         let mut reqs_v = vec![requests_receiver.recv_timeout(timeout)?];
         const MAX_REQUESTS_PER_ITERATION: usize = 1024;
         let mut total_requests = reqs_v[0].len();
+        const MY_SLOT_PRIORITY_MULTIPLE: u64 = 2;
 
         let socket_addr_space = *self.cluster_info.socket_addr_space();
-        let root_bank = self.bank_forks.read().unwrap().root_bank();
+        let (working_bank, root_bank) = {
+            let bank_forks = self.bank_forks.read().unwrap();
+            (bank_forks.working_bank(), bank_forks.root_bank())
+        };
         let epoch_staked_nodes = root_bank.epoch_staked_nodes(root_bank.epoch());
         let identity_keypair = self.cluster_info.keypair().clone();
         let my_id = identity_keypair.pubkey();
@@ -524,14 +550,33 @@ impl ServeRepair {
                     continue;
                 }
 
-                let stake = epoch_staked_nodes
+                let my_slot = request
+                    .slot()
+                    .map(|slot| {
+                        self.leader_schedule_cache
+                            .slot_leader_at(slot, Some(&working_bank))
+                            .map(|pubkey| pubkey == my_id)
+                            .unwrap_or_default()
+                    })
+                    .unwrap_or_default();
+
+                let mut stake = *epoch_staked_nodes
                     .as_ref()
                     .and_then(|stakes| stakes.get(request.sender()))
                     .unwrap_or(&0);
-                if *stake == 0 {
+                if stake == 0 {
                     stats.handle_requests_unstaked += 1;
                 } else {
                     stats.handle_requests_staked += 1;
+                }
+
+                if my_slot {
+                    stats.handle_my_slot += 1;
+                    // Increase priority for this validator's leader slots.
+                    // Add 1 to the increased stake value to ensure an increased priority for unstaked nodes.
+                    stake = stake
+                        .saturating_mul(MY_SLOT_PRIORITY_MULTIPLE)
+                        .saturating_add(1);
                 }
 
                 let whitelisted = whitelist.contains(request.sender());
@@ -542,7 +587,7 @@ impl ServeRepair {
                 decoded_requests.push(RepairRequestWithMeta {
                     request,
                     from_addr,
-                    stake: *stake,
+                    stake,
                     whitelisted,
                 });
             }
@@ -610,6 +655,7 @@ impl ServeRepair {
                 stats.handle_requests_unstaked,
                 i64
             ),
+            ("handle_my_slot", stats.handle_my_slot, i64),
             ("processed", stats.processed, i64),
             ("total_response_packets", stats.total_response_packets, i64),
             (
@@ -1295,10 +1341,14 @@ mod tests {
         let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
         let me = ContactInfo::new_localhost(&solana_sdk::pubkey::new_rand(), timestamp());
         let cluster_info = Arc::new(new_test_cluster_info(me));
+        let leader_schedule_cache = Arc::new(LeaderScheduleCache::new_from_bank(
+            &bank_forks.read().unwrap().root_bank(),
+        ));
         let serve_repair = ServeRepair::new(
             cluster_info.clone(),
             bank_forks,
             Arc::new(RwLock::new(HashSet::default())),
+            leader_schedule_cache,
         );
         let keypair = cluster_info.keypair().clone();
         let repair_peer_id = solana_sdk::pubkey::new_rand();
@@ -1345,10 +1395,14 @@ mod tests {
         let mut bank = Bank::new_for_tests(&genesis_config);
         bank.feature_set = Arc::new(FeatureSet::all_enabled());
         let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
+        let leader_schedule_cache = Arc::new(LeaderScheduleCache::new_from_bank(
+            &bank_forks.read().unwrap().root_bank(),
+        ));
         let serve_repair = ServeRepair::new(
             cluster_info,
             bank_forks,
             Arc::new(RwLock::new(HashSet::default())),
+            leader_schedule_cache,
         );
 
         let request_bytes = serve_repair
@@ -1383,10 +1437,14 @@ mod tests {
         let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
         let me = ContactInfo::new_localhost(&solana_sdk::pubkey::new_rand(), timestamp());
         let cluster_info = Arc::new(new_test_cluster_info(me));
+        let leader_schedule_cache = Arc::new(LeaderScheduleCache::new_from_bank(
+            &bank_forks.read().unwrap().root_bank(),
+        ));
         let serve_repair = ServeRepair::new(
             cluster_info.clone(),
             bank_forks,
             Arc::new(RwLock::new(HashSet::default())),
+            leader_schedule_cache,
         );
         let keypair = cluster_info.keypair().clone();
         let repair_peer_id = solana_sdk::pubkey::new_rand();
@@ -1714,10 +1772,14 @@ mod tests {
         let cluster_slots = ClusterSlots::default();
         let me = ContactInfo::new_localhost(&solana_sdk::pubkey::new_rand(), timestamp());
         let cluster_info = Arc::new(new_test_cluster_info(me));
+        let leader_schedule_cache = Arc::new(LeaderScheduleCache::new_from_bank(
+            &bank_forks.read().unwrap().root_bank(),
+        ));
         let serve_repair = ServeRepair::new(
             cluster_info.clone(),
             bank_forks,
             Arc::new(RwLock::new(HashSet::default())),
+            leader_schedule_cache,
         );
         let identity_keypair = cluster_info.keypair().clone();
         let mut outstanding_requests = OutstandingShredRepairs::default();
@@ -2040,6 +2102,9 @@ mod tests {
         let cluster_slots = ClusterSlots::default();
         let me = ContactInfo::new_localhost(&solana_sdk::pubkey::new_rand(), timestamp());
         let cluster_info = Arc::new(new_test_cluster_info(me.clone()));
+        let leader_schedule_cache = Arc::new(LeaderScheduleCache::new_from_bank(
+            &bank_forks.read().unwrap().root_bank(),
+        ));
 
         // Insert two peers on the network
         let contact_info2 =
@@ -2053,6 +2118,7 @@ mod tests {
             cluster_info,
             bank_forks,
             Arc::new(RwLock::new(HashSet::default())),
+            leader_schedule_cache,
         );
 
         // If:

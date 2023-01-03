@@ -1,5 +1,6 @@
 //! The `repair_service` module implements the tools necessary to generate a thread which
 //! regularly finds missing shreds in the ledger and sends repair requests for those shreds
+
 use {
     crate::{
         ancestor_hashes_service::{AncestorHashesReplayUpdateReceiver, AncestorHashesService},
@@ -13,7 +14,10 @@ use {
     crossbeam_channel::{Receiver as CrossbeamReceiver, Sender as CrossbeamSender},
     lru::LruCache,
     solana_gossip::cluster_info::ClusterInfo,
-    solana_ledger::blockstore::{Blockstore, SlotMeta},
+    solana_ledger::{
+        blockstore::{Blockstore, SlotMeta},
+        leader_schedule_cache::LeaderScheduleCache,
+    },
     solana_measure::measure::Measure,
     solana_runtime::{bank_forks::BankForks, contains::Contains},
     solana_sdk::{
@@ -182,6 +186,7 @@ pub struct RepairInfo {
     pub repair_validators: Option<HashSet<Pubkey>>,
     // Validators which should be given priority when serving
     pub repair_whitelist: Arc<RwLock<HashSet<Pubkey>>>,
+    pub leader_schedule_cache: Arc<LeaderScheduleCache>,
 }
 
 pub struct RepairSlotRange {
@@ -263,6 +268,7 @@ impl RepairService {
             repair_info.cluster_info.clone(),
             repair_info.bank_forks.clone(),
             repair_info.repair_whitelist.clone(),
+            repair_info.leader_schedule_cache.clone(),
         );
         let id = repair_info.cluster_info.id();
         let mut repair_stats = RepairStats::default();
@@ -1116,10 +1122,14 @@ mod test {
         let cluster_slots = ClusterSlots::default();
         let cluster_info = Arc::new(new_test_cluster_info(Node::new_localhost().info));
         let identity_keypair = cluster_info.keypair().clone();
+        let leader_schedule_cache = Arc::new(LeaderScheduleCache::new_from_bank(
+            &bank_forks.read().unwrap().root_bank(),
+        ));
         let serve_repair = ServeRepair::new(
             cluster_info,
             bank_forks,
             Arc::new(RwLock::new(HashSet::default())),
+            leader_schedule_cache,
         );
         let mut duplicate_slot_repair_statuses = HashMap::new();
         let dead_slot = 9;
@@ -1215,10 +1225,14 @@ mod test {
             UdpSocket::bind("0.0.0.0:0").unwrap().local_addr().unwrap(),
         ));
         let cluster_info = Arc::new(new_test_cluster_info(Node::new_localhost().info));
+        let leader_schedule_cache = Arc::new(LeaderScheduleCache::new_from_bank(
+            &bank_forks.read().unwrap().root_bank(),
+        ));
         let serve_repair = ServeRepair::new(
             cluster_info.clone(),
             bank_forks,
             Arc::new(RwLock::new(HashSet::default())),
+            leader_schedule_cache,
         );
         let valid_repair_peer = Node::new_localhost().info;
 
