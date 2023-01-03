@@ -341,6 +341,10 @@ impl BucketStorage {
         self.stats.resize_us.fetch_add(m.as_us(), Ordering::Relaxed);
     }
 
+    pub fn update_max_size(&self) {
+        self.stats.update_max_size(self.capacity());
+    }
+
     /// allocate a new bucket, copying data from 'bucket'
     pub fn new_resized(
         drives: &Arc<Vec<PathBuf>>,
@@ -365,11 +369,7 @@ impl BucketStorage {
         if let Some(bucket) = bucket {
             new_bucket.copy_contents(bucket);
         }
-        let sz = new_bucket.capacity();
-        {
-            let mut max = new_bucket.stats.max_size.lock().unwrap();
-            *max = std::cmp::max(*max, sz);
-        }
+        new_bucket.update_max_size();
         new_bucket
     }
 

@@ -390,11 +390,7 @@ impl<T: Clone + Copy> Bucket<T> {
                     }
                 }
                 if valid {
-                    let sz = index.capacity();
-                    {
-                        let mut max = self.stats.index.max_size.lock().unwrap();
-                        *max = std::cmp::max(*max, sz);
-                    }
+                    self.stats.index.update_max_size(index.capacity());
                     let mut items = self.reallocated.items.lock().unwrap();
                     items.index = Some((random, index));
                     self.reallocated.add_reallocation();
