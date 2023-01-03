@@ -1744,16 +1744,11 @@ impl ScheduleStage {
             if !from_disconnected || executing_queue_count >= 1 {
                 crossbeam_channel::select! {
                    recv(from_exec) -> maybe_from_exec => {
-                       if let Ok(message) = maybe_from_exec {
-                           match message {
-                                UnlockablePayload(Interruptable::Payload((mut processed_execution_environment, extra))) => {
-                                   executing_queue_count = executing_queue_count.checked_sub(1).unwrap();
-                                   processed_count = processed_count.checked_add(1).unwrap();
-                                   Self::commit_processed_execution(ast, &mut processed_execution_environment, address_book, &mut commit_clock, &mut provisioning_tracker_count);
-                                   to_next_stage.send_buffered(ExaminablePayload(Flushable::Payload((processed_execution_environment, extra)))).unwrap();
-                                },
-                                _ => {},
-                           }
+                       if let Ok(UnlockablePayload(mut processed_execution_environment, extra)) = maybe_from_exec {
+                           executing_queue_count = executing_queue_count.checked_sub(1).unwrap();
+                           processed_count = processed_count.checked_add(1).unwrap();
+                           Self::commit_processed_execution(ast, &mut processed_execution_environment, address_book, &mut commit_clock, &mut provisioning_tracker_count);
+                           to_next_stage.send_buffered(ExaminablePayload(Flushable::Payload((processed_execution_environment, extra)))).unwrap();
                        } else {
                            assert_eq!(from_exec.len(), 0);
                            from_exec_disconnected = true;
@@ -1943,28 +1938,25 @@ impl ScheduleStage {
                     break;
                 } else {
                     if !empty_from_exec {
-                        match from_exec.recv().unwrap() {
-                            UnlockablePayload(Interruptable::Payload((mut processed_execution_environment, extra))) => {
-                                from_exec_len = from_exec_len.checked_sub(1).unwrap();
-                                empty_from_exec = from_exec_len == 0;
-                                executing_queue_count = executing_queue_count.checked_sub(1).unwrap();
-                                processed_count = processed_count.checked_add(1).unwrap();
-                                Self::commit_processed_execution(
-                                    ast,
-                                    &mut processed_execution_environment,
-                                    address_book,
-                                    &mut commit_clock,
-                                    &mut provisioning_tracker_count,
-                                );
-                                to_next_stage
-                                    .send_buffered(ExaminablePayload(Flushable::Payload((
-                                        processed_execution_environment,
-                                        extra,
-                                    ))))
-                                    .unwrap();
-                            },
-                            _ => {},
-                        }
+                        let UnlockablePayload(mut processed_execution_environment, extra) =
+                            from_exec.recv().unwrap();
+                        from_exec_len = from_exec_len.checked_sub(1).unwrap();
+                        empty_from_exec = from_exec_len == 0;
+                        executing_queue_count = executing_queue_count.checked_sub(1).unwrap();
+                        processed_count = processed_count.checked_add(1).unwrap();
+                        Self::commit_processed_execution(
+                            ast,
+                            &mut processed_execution_environment,
+                            address_book,
+                            &mut commit_clock,
+                            &mut provisioning_tracker_count,
+                        );
+                        to_next_stage
+                            .send_buffered(ExaminablePayload(Flushable::Payload((
+                                processed_execution_environment,
+                                extra,
+                            ))))
+                            .unwrap();
                     }
                     if !empty_from {
                         unreachable!();
@@ -2065,7 +2057,7 @@ impl ScheduleStage {
 
 pub struct SchedulablePayload<C>(pub Flushable<TaskInQueue, C>);
 pub struct ExecutablePayload(pub Box<ExecutionEnvironment>);
-pub struct UnlockablePayload<T>(pub Interruptable<(Box<ExecutionEnvironment>, T)>);
+pub struct UnlockablePayload<T>(pub Box<ExecutionEnvironment>, pub T);
 pub struct ExaminablePayload<T, C>(pub Flushable<(Box<ExecutionEnvironment>, T), C>);
 
 pub struct Checkpoint<T>(std::sync::Mutex<(usize, Option<T>)>, std::sync::Condvar);
@@ -2130,9 +2122,4 @@ impl<T> Checkpoint<T> {
 pub enum Flushable<T, C> {
     Payload(T),
     Flush(std::sync::Arc<Checkpoint<C>>),
-}
-
-pub enum Interruptable<T> {
-    Payload(T),
-    Interrupt,
 }
