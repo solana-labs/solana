@@ -1378,13 +1378,6 @@ fn main() {
     let no_os_memory_stats_reporting_arg = Arg::with_name("no_os_memory_stats_reporting")
         .long("no-os-memory-stats-reporting")
         .help("Disable reporting of OS memory statistics.");
-    let skip_rewrites_arg = Arg::with_name("accounts_db_skip_rewrites")
-        .long("accounts-db-skip-rewrites")
-        .help(
-            "Accounts that are rent exempt and have no changes are not rewritten. \
-                  This produces snapshots that older versions cannot read.",
-        )
-        .hidden(true);
     let accounts_db_skip_initial_hash_calc_arg =
         Arg::with_name("accounts_db_skip_initial_hash_calculation")
             .long("accounts-db-skip-initial-hash-calculation")
@@ -1777,7 +1770,6 @@ fn main() {
             .arg(&accounts_filler_count)
             .arg(&accounts_filler_size)
             .arg(&verify_index_arg)
-            .arg(&skip_rewrites_arg)
             .arg(&accounts_db_skip_initial_hash_calc_arg)
             .arg(&ancient_append_vecs)
             .arg(&halt_at_slot_store_hash_raw_data)
@@ -1835,7 +1827,6 @@ fn main() {
             .about("Create a new ledger snapshot")
             .arg(&no_snapshot_arg)
             .arg(&account_paths_arg)
-            .arg(&skip_rewrites_arg)
             .arg(&accounts_db_skip_initial_hash_calc_arg)
             .arg(&ancient_append_vecs)
             .arg(&hard_forks_arg)
@@ -2733,7 +2724,6 @@ fn main() {
                     index: Some(accounts_index_config),
                     accounts_hash_cache_path: Some(ledger_path.clone()),
                     filler_accounts_config,
-                    skip_rewrites: arg_matches.is_present("accounts_db_skip_rewrites"),
                     ancient_append_vec_offset: value_t!(
                         matches,
                         "accounts_db_ancient_append_vecs",
@@ -3002,7 +2992,6 @@ fn main() {
                 );
 
                 let accounts_db_config = Some(AccountsDbConfig {
-                    skip_rewrites: arg_matches.is_present("accounts_db_skip_rewrites"),
                     ancient_append_vec_offset: value_t!(
                         matches,
                         "accounts_db_ancient_append_vecs",
