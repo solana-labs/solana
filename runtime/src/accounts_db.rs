@@ -8861,11 +8861,7 @@ impl AccountsDb {
                 .take(per_pass)
                 .collect::<Vec<_>>();
             roots_in_this_pass.into_par_iter().for_each(|slot| {
-                let storage_maps = self
-                    .storage
-                    .get_slot_storage_entries(*slot)
-                    .unwrap_or_default();
-                if storage_maps.is_empty() {
+                if self.storage.is_empty(*slot) {
                     return;
                 }
 
@@ -14375,7 +14371,7 @@ pub mod tests {
         db.store_cached((0, &[(&other_account_key, &slot0_account)][..]), None);
         db.add_root(0);
         db.flush_accounts_cache(true, None);
-        assert!(!db.storage.get_slot_storage_entries(0).unwrap().is_empty());
+        assert!(!db.storage.is_empty(0));
 
         // Store into slot 1, a dummy slot that will be dead and purged before flush
         db.store_cached(
