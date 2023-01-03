@@ -726,10 +726,15 @@ export class Transaction {
   }
 
   /**
-   * Verify signatures of a complete, signed Transaction
+   * Verify signatures of a Transaction
+   * Optional parameter specifies if we're expecting a fully signed Transaction or a partially signed one.
+   * If no boolean is provided, we expect a fully signed Transaction by default.
    */
-  verifySignatures(): boolean {
-    return this._verifySignatures(this.serializeMessage(), true);
+  verifySignatures(requireAllSignatures?: boolean): boolean {
+    return this._verifySignatures(
+      this.serializeMessage(),
+      requireAllSignatures === undefined ? true : requireAllSignatures,
+    );
   }
 
   /**

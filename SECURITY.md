@@ -117,6 +117,8 @@ The following components are out of scope for the bounty program
 * Bugs in dependencies. Please take them upstream!
 * Attacks that require social engineering
 * Any undeveloped automated tooling (scanners, etc) results. (OK with developed PoC)
+* Any asset whose source code does not exist in this repository (including, but not limited
+to, any and all web properties not explicitly listed on this page)
 
 ### Eligibility:
 * The participant submitting the bug report shall follow the process outlined within this document

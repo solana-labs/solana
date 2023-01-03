@@ -1584,6 +1584,7 @@ mod test {
             ref cluster_slots,
             ..
         } = repair_info;
+        let (dumped_slots_sender, _dumped_slots_receiver) = unbounded();
 
         // Add the responder to the eligible list for requests
         let responder_id = responder_info.id;
@@ -1638,6 +1639,7 @@ mod test {
             &requester_blockstore,
             None,
             &mut PurgeRepairSlotCounter::default(),
+            &dumped_slots_sender,
         );
 
         // Simulate making a request

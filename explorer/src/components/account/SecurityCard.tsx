@@ -79,14 +79,24 @@ const ROWS: TableRow[] = [
     type: DisplayType.String,
   },
   {
+    display: "Secure Contact Encryption",
+    key: "encryption",
+    type: DisplayType.PGP,
+  },
+  {
     display: "Source Code URL",
     key: "source_code",
     type: DisplayType.URL,
   },
   {
-    display: "Secure Contact Encryption",
-    key: "encryption",
-    type: DisplayType.PGP,
+    display: "Source Code Release Version",
+    key: "source_release",
+    type: DisplayType.String,
+  },
+  {
+    display: "Source Code Revision",
+    key: "source_revision",
+    type: DisplayType.String,
   },
   {
     display: "Auditors",

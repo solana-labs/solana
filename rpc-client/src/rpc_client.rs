@@ -1194,7 +1194,7 @@ impl RpcClient {
     ///
     /// If the transaction has been processed with the default commitment level,
     /// and the transaction succeeded, this method returns `Ok(Some(Ok(())))`.
-    /// If the transaction has peen processed with the default commitment level,
+    /// If the transaction has been processed with the default commitment level,
     /// and the transaction failed, this method returns `Ok(Some(Err(_)))`,
     /// where the interior error is type [`TransactionError`].
     ///
@@ -1395,7 +1395,7 @@ impl RpcClient {
     ///
     /// If the transaction has been processed with the given commitment level,
     /// and the transaction succeeded, this method returns `Ok(Some(Ok(())))`.
-    /// If the transaction has peen processed with the given commitment level,
+    /// If the transaction has been processed with the given commitment level,
     /// and the transaction failed, this method returns `Ok(Some(Err(_)))`,
     /// where the interior error is type [`TransactionError`].
     ///
@@ -1462,7 +1462,7 @@ impl RpcClient {
     ///
     /// If the transaction has been processed with the given commitment level,
     /// and the transaction succeeded, this method returns `Ok(Some(Ok(())))`.
-    /// If the transaction has peen processed with the given commitment level,
+    /// If the transaction has been processed with the given commitment level,
     /// and the transaction failed, this method returns `Ok(Some(Err(_)))`,
     /// where the interior error is type [`TransactionError`].
     ///

@@ -5,9 +5,9 @@ import {expect, use} from 'chai';
 import chaiAsPromised from 'chai-as-promised';
 import {Agent as HttpAgent} from 'http';
 import {Agent as HttpsAgent} from 'https';
-import {AbortController} from 'node-abort-controller';
 import {match, mock, spy, useFakeTimers, SinonFakeTimers} from 'sinon';
 import sinonChai from 'sinon-chai';
+import {fail} from 'assert';
 
 import {
   Authorized,
@@ -25,10 +25,11 @@ import {
   AddressLookupTableProgram,
   SYSTEM_INSTRUCTION_LAYOUTS,
   NONCE_ACCOUNT_LENGTH,
+  MessageAddressTableLookup,
 } from '../src';
 import invariant from '../src/utils/assert';
 import {toBuffer} from '../src/utils/to-buffer';
-import {MOCK_PORT, url} from './url';
+import {MOCK_PORT, url, Node14Controller, nodeVersion} from './url';
 import {
   AccountInfo,
   BLOCKHASH_CACHE_TIMEOUT_MS,
@@ -39,6 +40,7 @@ import {
   Context,
   EpochInfo,
   InflationGovernor,
+  InflationRate,
   Logs,
   SignatureResult,
   SlotInfo,
@@ -170,10 +172,15 @@ describe('Connection', function () {
     it('should allow middleware to augment request', async () => {
       let connection = new Connection(url, {
         fetchMiddleware: (url, options, fetch) => {
-          options.headers = Object.assign(options.headers, {
-            Authorization: 'Bearer 123',
-          });
-          fetch(url, options);
+          if (options) {
+            options.headers = Object.assign(options.headers!, {
+              Authorization: 'Bearer 123',
+            });
+
+            fetch(url, options);
+          } else {
+            fail('options must be defined!');
+          }
         },
       });
 
@@ -191,7 +198,7 @@ describe('Connection', function () {
   }
 
   describe('override HTTP agent', () => {
-    let previousBrowserEnv;
+    let previousBrowserEnv: string | undefined;
     beforeEach(() => {
       previousBrowserEnv = process.env.BROWSER;
       delete process.env.BROWSER;
@@ -253,7 +260,9 @@ describe('Connection', function () {
   it('should not attribute fetch errors to the middleware', async () => {
     let connection = new Connection(url, {
       fetchMiddleware: (url, _options, fetch) => {
-        fetch(url, 'An `Object` was expected here; this is a `TypeError`.');
+        fetch(url, {
+          body: 'An `Object` was expected here; this is a `TypeError`.',
+        });
       },
     });
     const error = await expect(connection.getVersion()).to.be.rejected;
@@ -807,6 +816,7 @@ describe('Connection', function () {
             effectiveSlot: 432000,
             epoch: 0,
             postBalance: 30504783,
+            commission: 0,
           },
           null,
         ],
@@ -821,6 +831,36 @@ describe('Connection', function () {
       );
 
       expect(inflationReward).to.have.lengthOf(2);
+    }
+  });
+
+  it('get inflation rate', async () => {
+    await mockRpcResponse({
+      method: 'getInflationRate',
+      params: [],
+      value: {
+        total: 0.08,
+        validator: 0.076,
+        foundation: 0.004,
+        epoch: 1,
+      },
+    });
+
+    const inflation = await connection.getInflationRate();
+    const inflationKeys: (keyof InflationRate)[] = [
+      'total',
+      'validator',
+      'foundation',
+      'epoch',
+    ];
+
+    for (const key of inflationKeys) {
+      expect(inflation).to.have.property(key);
+      if (mockServer) {
+        expect(inflation[key]).to.be.greaterThan(0);
+      } else {
+        expect(inflation[key]).to.be.at.least(0);
+      }
     }
   });
 
@@ -1217,7 +1257,8 @@ describe('Connection', function () {
         it('rejects if called with an already-aborted `abortSignal`', () => {
           const mockSignature =
             'w2Zeq8YkpyB463DttvfzARD7k9ZxGEwbsEw4boEK7jDp3pfoxZbTdLFSsEPhzXhpCcjGi2kHtHFobgX49MMhbWt';
-          const abortController = new AbortController();
+          const abortController: any =
+            nodeVersion >= 16 ? new AbortController() : Node14Controller();
           abortController.abort();
           expect(
             connection.confirmTransaction({
@@ -1232,7 +1273,8 @@ describe('Connection', function () {
         it('rejects upon receiving an abort signal', async () => {
           const mockSignature =
             'w2Zeq8YkpyB463DttvfzARD7k9ZxGEwbsEw4boEK7jDp3pfoxZbTdLFSsEPhzXhpCcjGi2kHtHFobgX49MMhbWt';
-          const abortController = new AbortController();
+          const abortController: any =
+            nodeVersion >= 16 ? new AbortController() : Node14Controller();
           // Keep the subscription from ever returning data.
           await mockRpcMessage({
             method: 'signatureSubscribe',
@@ -1303,7 +1345,10 @@ describe('Connection', function () {
           const mockSignature =
             'LPJ18iiyfz3G1LpNNbcBnBtaS4dVBdPHKrnELqikjER2DcvB4iyTgz43nKQJH3JQAJHuZdM1xVh5Cnc5Hc7LrqC';
 
-          let resolveResultPromise: (result: SignatureResult) => void;
+          let resolveResultPromise = function (result: SignatureResult): any {
+            return result;
+          };
+
           await mockRpcMessage({
             method: 'signatureSubscribe',
             params: [mockSignature, {commitment: 'finalized'}],
@@ -1313,7 +1358,7 @@ describe('Connection', function () {
           });
 
           // Simulate a failure to fetch the block height.
-          let rejectBlockheightPromise: () => void;
+          let rejectBlockheightPromise = function (): void {};
           await mockRpcResponse({
             method: 'getBlockHeight',
             params: [],
@@ -1344,7 +1389,9 @@ describe('Connection', function () {
           const mockSignature =
             'LPJ18iiyfz3G1LpNNbcBnBtaS4dVBdPHKrnELqikjER2DcvB4iyTgz43nKQJH3JQAJHuZdM1xVh5Cnc5Hc7LrqC';
 
-          let resolveResultPromise: (result: SignatureResult) => void;
+          let resolveResultPromise = function (result: SignatureResult): any {
+            return result;
+          };
           await mockRpcMessage({
             method: 'signatureSubscribe',
             params: [mockSignature, {commitment: 'finalized'}],
@@ -1383,7 +1430,8 @@ describe('Connection', function () {
         it('rejects if called with an already-aborted `abortSignal`', () => {
           const mockSignature =
             'w2Zeq8YkpyB463DttvfzARD7k9ZxGEwbsEw4boEK7jDp3pfoxZbTdLFSsEPhzXhpCcjGi2kHtHFobgX49MMhbWt';
-          const abortController = new AbortController();
+          const abortController: any =
+            nodeVersion >= 16 ? new AbortController() : Node14Controller();
           abortController.abort();
           expect(
             connection.confirmTransaction({
@@ -1399,7 +1447,8 @@ describe('Connection', function () {
         it('rejects upon receiving an abort signal', async () => {
           const mockSignature =
             'w2Zeq8YkpyB463DttvfzARD7k9ZxGEwbsEw4boEK7jDp3pfoxZbTdLFSsEPhzXhpCcjGi2kHtHFobgX49MMhbWt';
-          const abortController = new AbortController();
+          const abortController: any =
+            nodeVersion >= 16 ? new AbortController() : Node14Controller();
           // Keep the subscription from ever returning data.
           await mockRpcMessage({
             method: 'signatureSubscribe',
@@ -1424,7 +1473,9 @@ describe('Connection', function () {
           const mockSignature =
             '4oCEqwGrMdBeMxpzuWiukCYqSfV4DsSKXSiVVCh1iJ6pS772X7y219JZP3mgqBz5PhsvprpKyhzChjYc3VSBQXzG';
 
-          let resolveResultPromise: (result: SignatureResult) => void;
+          let resolveResultPromise = function (result: SignatureResult): any {
+            return result;
+          };
           await mockRpcMessage({
             method: 'signatureSubscribe',
             params: [mockSignature, {commitment: 'finalized'}],
@@ -1635,7 +1686,9 @@ describe('Connection', function () {
           const mockSignature =
             'LPJ18iiyfz3G1LpNNbcBnBtaS4dVBdPHKrnELqikjER2DcvB4iyTgz43nKQJH3JQAJHuZdM1xVh5Cnc5Hc7LrqC';
 
-          let resolveResultPromise: (result: SignatureResult) => void;
+          let resolveResultPromise = function (result: SignatureResult): any {
+            return result;
+          };
           await mockRpcMessage({
             method: 'signatureSubscribe',
             params: [mockSignature, {commitment: 'finalized'}],
@@ -1645,7 +1698,7 @@ describe('Connection', function () {
           });
 
           // Simulate a failure to fetch the nonce account.
-          let rejectNonceAccountFetchPromise: () => void;
+          let rejectNonceAccountFetchPromise = function (): void {};
           await mockRpcResponse({
             method: 'getAccountInfo',
             params: [],
@@ -1731,7 +1784,9 @@ describe('Connection', function () {
           const mockSignature =
             'LPJ18iiyfz3G1LpNNbcBnBtaS4dVBdPHKrnELqikjER2DcvB4iyTgz43nKQJH3JQAJHuZdM1xVh5Cnc5Hc7LrqC';
 
-          let resolveResultPromise: (result: SignatureResult) => void;
+          let resolveResultPromise = function (result: SignatureResult): any {
+            return result;
+          };
           await mockRpcMessage({
             method: 'signatureSubscribe',
             params: [mockSignature, {commitment: 'finalized'}],
@@ -5360,9 +5415,9 @@ describe('Connection', function () {
       );
 
       await connection.confirmTransaction({
-        blockhash: transaction.recentBlockhash,
-        lastValidBlockHeight: transaction.lastValidBlockHeight,
-        signature,
+        blockhash: transaction.recentBlockhash!,
+        lastValidBlockHeight: transaction.lastValidBlockHeight!,
+        signature: signature,
       });
 
       const response = (await connection.getSignatureStatus(signature)).value;
@@ -5702,8 +5757,8 @@ describe('Connection', function () {
         }
       });
 
-      let signature;
-      let addressTableLookups;
+      let signature: TransactionSignature;
+      let addressTableLookups: MessageAddressTableLookup[];
       it('send and confirm', async () => {
         const {blockhash, lastValidBlockHeight} =
           await connection.getLatestBlockhash();
@@ -5771,7 +5826,7 @@ describe('Connection', function () {
         );
       });
 
-      let transactionSlot;
+      let transactionSlot: number;
       it('getTransaction', async () => {
         // fetch v0 transaction
         const fetchedTransaction = await connection.getTransaction(signature, {

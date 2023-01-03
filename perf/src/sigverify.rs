@@ -6,7 +6,7 @@
 use {
     crate::{
         cuda_runtime::PinnedVec,
-        packet::{Packet, PacketBatch, PacketFlags},
+        packet::{Packet, PacketBatch, PacketFlags, PACKET_DATA_SIZE},
         perf_libs,
         recycler::Recycler,
     },
@@ -732,14 +732,10 @@ pub fn ed25519_verify(
     reject_non_vote: bool,
     valid_packet_count: usize,
 ) {
-    let api = perf_libs::api();
-    if api.is_none() {
-        return ed25519_verify_cpu(batches, reject_non_vote, valid_packet_count);
-    }
-    let api = api.unwrap();
-
-    use crate::packet::PACKET_DATA_SIZE;
-
+    let api = match perf_libs::api() {
+        None => return ed25519_verify_cpu(batches, reject_non_vote, valid_packet_count),
+        Some(api) => api,
+    };
     let total_packet_count = count_packets_in_batches(batches);
     // micro-benchmarks show GPU time for smallest batch around 15-20ms
     // and CPU speed for 64-128 sigverifies around 10-20ms. 64 is a nice
@@ -811,7 +807,7 @@ mod tests {
     use {
         super::*,
         crate::{
-            packet::{to_packet_batches, Packet, PacketBatch, PACKETS_PER_BATCH, PACKET_DATA_SIZE},
+            packet::{to_packet_batches, Packet, PacketBatch, PACKETS_PER_BATCH},
             sigverify::{self, PacketOffsets},
             test_tx::{new_test_vote_tx, test_multisig_tx, test_tx},
         },
