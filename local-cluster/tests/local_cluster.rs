@@ -659,8 +659,14 @@ fn test_incremental_snapshot_download() {
 
     download_snapshot_archive(
         &cluster.entry_point_info.rpc,
-        full_snapshot_archives_dir,
-        incremental_snapshot_archives_dir,
+        &validator_snapshot_test_config
+            .validator_config
+            .snapshot_config
+            .full_snapshot_archives_dir,
+        &validator_snapshot_test_config
+            .validator_config
+            .snapshot_config
+            .incremental_snapshot_archives_dir,
         (
             incremental_snapshot_archive_info.slot(),
             *incremental_snapshot_archive_info.hash(),
