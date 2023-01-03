@@ -524,6 +524,7 @@ impl AncestorHashesService {
             repair_info.cluster_info.clone(),
             repair_info.bank_forks.clone(),
             repair_info.repair_whitelist.clone(),
+            repair_info.leader_schedule_cache.clone(),
         );
         let mut repair_stats = AncestorRepairRequestsStats::default();
 
@@ -774,7 +775,10 @@ mod test {
             cluster_info::{ClusterInfo, Node},
             contact_info::ContactInfo,
         },
-        solana_ledger::{blockstore::make_many_slot_entries, get_tmp_ledger_path},
+        solana_ledger::{
+            blockstore::make_many_slot_entries, get_tmp_ledger_path,
+            leader_schedule_cache::LeaderScheduleCache,
+        },
         solana_runtime::{accounts_background_service::AbsRequestSender, bank_forks::BankForks},
         solana_sdk::{
             hash::Hash,
@@ -970,10 +974,14 @@ mod test {
                 Arc::new(keypair),
                 SocketAddrSpace::Unspecified,
             );
+            let leader_schedule_cache = Arc::new(LeaderScheduleCache::new_from_bank(
+                &vote_simulator.bank_forks.read().unwrap().root_bank(),
+            ));
             let responder_serve_repair = ServeRepair::new(
                 Arc::new(cluster_info),
                 vote_simulator.bank_forks,
                 Arc::<RwLock<HashSet<_>>>::default(), // repair whitelist
+                leader_schedule_cache,
             );
 
             // Set up thread to give us responses
@@ -1059,10 +1067,14 @@ mod test {
                 SocketAddrSpace::Unspecified,
             ));
             let repair_whitelist = Arc::new(RwLock::new(HashSet::default()));
+            let leader_schedule_cache = Arc::new(LeaderScheduleCache::new_from_bank(
+                &bank_forks.read().unwrap().root_bank(),
+            ));
             let requester_serve_repair = ServeRepair::new(
                 requester_cluster_info.clone(),
                 bank_forks.clone(),
                 repair_whitelist.clone(),
+                leader_schedule_cache.clone(),
             );
             let (duplicate_slots_reset_sender, _duplicate_slots_reset_receiver) = unbounded();
             let repair_info = RepairInfo {
@@ -1073,6 +1085,7 @@ mod test {
                 duplicate_slots_reset_sender,
                 repair_validators: None,
                 repair_whitelist,
+                leader_schedule_cache,
             };
 
             let (ancestor_hashes_replay_update_sender, ancestor_hashes_replay_update_receiver) =
