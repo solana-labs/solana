@@ -1029,7 +1029,7 @@ fn process_program_deploy(
             Some(&[program_signer.unwrap(), upgrade_authority_signer]),
             buffer_signer,
             &buffer_pubkey,
-            Some(upgrade_authority_signer),
+            upgrade_authority_signer,
             allow_excessive_balance,
             skip_fee_check,
         )
@@ -1133,7 +1133,7 @@ fn process_write_buffer(
         None,
         buffer_signer,
         &buffer_pubkey,
-        Some(buffer_authority),
+        buffer_authority,
         true,
         skip_fee_check,
     );
@@ -1766,108 +1766,86 @@ fn do_process_program_write_and_deploy(
     program_signers: Option<&[&dyn Signer]>,
     buffer_signer: Option<&dyn Signer>,
     buffer_pubkey: &Pubkey,
-    buffer_authority_signer: Option<&dyn Signer>,
+    buffer_authority_signer: &dyn Signer,
     allow_excessive_balance: bool,
     skip_fee_check: bool,
 ) -> ProcessResult {
-    // Build messages to calculate fees
-    let mut messages: Vec<&Message> = Vec::new();
     let blockhash = rpc_client.get_latest_blockhash()?;
 
     // Initialize buffer account or complete if already partially initialized
-    let (initial_message, write_messages, balance_needed) =
-        if let Some(buffer_authority_signer) = buffer_authority_signer {
-            let (initial_instructions, balance_needed) = if let Some(account) = rpc_client
-                .get_account_with_commitment(buffer_pubkey, config.commitment)?
-                .value
-            {
-                complete_partial_program_init(
-                    loader_id,
-                    &config.signers[0].pubkey(),
-                    buffer_pubkey,
-                    &account,
-                    if loader_id == &bpf_loader_upgradeable::id() {
-                        UpgradeableLoaderState::size_of_buffer(program_len)
-                    } else {
-                        program_len
-                    },
-                    minimum_balance,
-                    allow_excessive_balance,
-                )?
-            } else if loader_id == &bpf_loader_upgradeable::id() {
-                (
-                    bpf_loader_upgradeable::create_buffer(
-                        &config.signers[0].pubkey(),
-                        buffer_pubkey,
-                        &buffer_authority_signer.pubkey(),
-                        minimum_balance,
-                        program_len,
-                    )?,
-                    minimum_balance,
-                )
+    let (initial_instructions, balance_needed) = if let Some(account) = rpc_client
+        .get_account_with_commitment(buffer_pubkey, config.commitment)?
+        .value
+    {
+        complete_partial_program_init(
+            loader_id,
+            &config.signers[0].pubkey(),
+            buffer_pubkey,
+            &account,
+            if loader_id == &bpf_loader_upgradeable::id() {
+                UpgradeableLoaderState::size_of_buffer(program_len)
             } else {
-                (
-                    vec![system_instruction::create_account(
-                        &config.signers[0].pubkey(),
-                        buffer_pubkey,
-                        minimum_balance,
-                        program_len as u64,
-                        loader_id,
-                    )],
-                    minimum_balance,
-                )
-            };
-            let initial_message = if !initial_instructions.is_empty() {
-                Some(Message::new_with_blockhash(
-                    &initial_instructions,
-                    Some(&config.signers[0].pubkey()),
-                    &blockhash,
-                ))
-            } else {
-                None
-            };
+                program_len
+            },
+            minimum_balance,
+            allow_excessive_balance,
+        )?
+    } else if loader_id == &bpf_loader_upgradeable::id() {
+        (
+            bpf_loader_upgradeable::create_buffer(
+                &config.signers[0].pubkey(),
+                buffer_pubkey,
+                &buffer_authority_signer.pubkey(),
+                minimum_balance,
+                program_len,
+            )?,
+            minimum_balance,
+        )
+    } else {
+        (
+            vec![system_instruction::create_account(
+                &config.signers[0].pubkey(),
+                buffer_pubkey,
+                minimum_balance,
+                program_len as u64,
+                loader_id,
+            )],
+            minimum_balance,
+        )
+    };
+    let initial_message = if !initial_instructions.is_empty() {
+        Some(Message::new_with_blockhash(
+            &initial_instructions,
+            Some(&config.signers[0].pubkey()),
+            &blockhash,
+        ))
+    } else {
+        None
+    };
 
-            // Create and add write messages
-
-            let payer_pubkey = config.signers[0].pubkey();
-            let create_msg = |offset: u32, bytes: Vec<u8>| {
-                let instruction = if loader_id == &bpf_loader_upgradeable::id() {
-                    bpf_loader_upgradeable::write(
-                        buffer_pubkey,
-                        &buffer_authority_signer.pubkey(),
-                        offset,
-                        bytes,
-                    )
-                } else {
-                    loader_instruction::write(buffer_pubkey, loader_id, offset, bytes)
-                };
-                Message::new_with_blockhash(&[instruction], Some(&payer_pubkey), &blockhash)
-            };
-
-            let mut write_messages = vec![];
-            let chunk_size = calculate_max_chunk_size(&create_msg);
-            for (chunk, i) in program_data.chunks(chunk_size).zip(0..) {
-                write_messages.push(create_msg((i * chunk_size) as u32, chunk.to_vec()));
-            }
-
-            (initial_message, Some(write_messages), balance_needed)
+    // Create and add write messages
+    let payer_pubkey = config.signers[0].pubkey();
+    let create_msg = |offset: u32, bytes: Vec<u8>| {
+        let instruction = if loader_id == &bpf_loader_upgradeable::id() {
+            bpf_loader_upgradeable::write(
+                buffer_pubkey,
+                &buffer_authority_signer.pubkey(),
+                offset,
+                bytes,
+            )
         } else {
-            (None, None, 0)
+            loader_instruction::write(buffer_pubkey, loader_id, offset, bytes)
         };
+        Message::new_with_blockhash(&[instruction], Some(&payer_pubkey), &blockhash)
+    };
 
-    if let Some(ref initial_message) = initial_message {
-        messages.push(initial_message);
-    }
-    if let Some(ref write_messages) = write_messages {
-        let mut write_message_refs = vec![];
-        for message in write_messages.iter() {
-            write_message_refs.push(message);
-        }
-        messages.append(&mut write_message_refs);
+    let mut write_messages = vec![];
+    let chunk_size = calculate_max_chunk_size(&create_msg);
+    for (chunk, i) in program_data.chunks(chunk_size).zip(0..) {
+        write_messages.push(create_msg((i * chunk_size) as u32, chunk.to_vec()));
     }
 
     // Create and add final message
-
     let final_message = if let Some(program_signers) = program_signers {
         let message = if loader_id == &bpf_loader_upgradeable::id() {
             Message::new_with_blockhash(
@@ -1895,9 +1873,6 @@ fn do_process_program_write_and_deploy(
     } else {
         None
     };
-    if let Some(ref message) = final_message {
-        messages.push(message);
-    }
 
     if !skip_fee_check {
         check_payer(
@@ -1917,7 +1892,7 @@ fn do_process_program_write_and_deploy(
         &write_messages,
         &final_message,
         buffer_signer,
-        buffer_authority_signer,
+        Some(buffer_authority_signer),
         program_signers,
     )?;
 
@@ -1951,7 +1926,6 @@ fn do_process_program_upgrade(
     )?;
 
     // Build messages to calculate fees
-    let mut messages: Vec<&Message> = Vec::new();
     let blockhash = rpc_client.get_latest_blockhash()?;
 
     let (initial_message, write_messages, balance_needed) =
@@ -2013,21 +1987,10 @@ fn do_process_program_upgrade(
                 write_messages.push(create_msg((i * chunk_size) as u32, chunk.to_vec()));
             }
 
-            (initial_message, Some(write_messages), balance_needed)
+            (initial_message, write_messages, balance_needed)
         } else {
-            (None, None, 0)
+            (None, vec![], 0)
         };
-
-    if let Some(ref message) = initial_message {
-        messages.push(message);
-    }
-    if let Some(ref write_messages) = write_messages {
-        let mut write_message_refs = vec![];
-        for message in write_messages.iter() {
-            write_message_refs.push(message);
-        }
-        messages.append(&mut write_message_refs);
-    }
 
     // Create and add final message
     let final_message = Message::new_with_blockhash(
@@ -2040,7 +2003,6 @@ fn do_process_program_upgrade(
         Some(&config.signers[0].pubkey()),
         &blockhash,
     );
-    messages.push(&final_message);
     let final_message = Some(final_message);
 
     if !skip_fee_check {
@@ -2155,14 +2117,14 @@ fn check_payer(
     config: &CliConfig,
     balance_needed: u64,
     initial_message: &Option<Message>,
-    write_messages: &Option<Vec<Message>>,
+    write_messages: &[Message],
     final_message: &Option<Message>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let mut fee = 0;
     if let Some(message) = initial_message {
         fee += rpc_client.get_fee_for_message(message)?;
     }
-    if let Some(write_messages) = write_messages {
+    if !write_messages.is_empty() {
         // Assume all write messages cost the same
         if let Some(message) = write_messages.get(0) {
             fee += rpc_client.get_fee_for_message(message)? * (write_messages.len() as u64);
@@ -2185,7 +2147,7 @@ fn send_deploy_messages(
     rpc_client: Arc<RpcClient>,
     config: &CliConfig,
     initial_message: &Option<Message>,
-    write_messages: &Option<Vec<Message>>,
+    write_messages: &[Message],
     final_message: &Option<Message>,
     initial_signer: Option<&dyn Signer>,
     write_signer: Option<&dyn Signer>,
@@ -2216,7 +2178,7 @@ fn send_deploy_messages(
         }
     }
 
-    if let Some(write_messages) = write_messages {
+    if !write_messages.is_empty() {
         if let Some(write_signer) = write_signer {
             trace!("Writing program data");
             let connection_cache = if config.use_quic {
