@@ -1196,13 +1196,11 @@ impl RecycleStores {
     }
 
     fn add_entries(&mut self, new_entries: SnapshotStorage) {
-        let mut total_bytes = 0;
         let now = Instant::now();
         for new_entry in new_entries {
-            total_bytes += new_entry.total_bytes();
+            self.total_bytes += new_entry.total_bytes();
             self.entries.push((now, new_entry));
         }
-        self.total_bytes += total_bytes;
     }
 
     fn expire_old_entries(&mut self) -> SnapshotStorage {
