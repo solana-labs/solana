@@ -39,7 +39,7 @@ use {
 
 pub const MAX_RPC_CALL_RETRIES: usize = 5;
 
-pub fn get_latest_blockhash(client: &RpcClient) -> Option<Hash> {
+pub fn poll_get_latest_blockhash(client: &RpcClient) -> Option<Hash> {
     let mut num_retries = MAX_RPC_CALL_RETRIES;
     loop {
         if let Ok(blockhash) = client.get_latest_blockhash() {
