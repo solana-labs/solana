@@ -81,7 +81,7 @@ pub enum ProgramCliCommand {
         program_location: String,
         buffer_signer_index: Option<SignerIndex>,
         buffer_pubkey: Option<Pubkey>,
-        buffer_authority_signer_index: Option<SignerIndex>,
+        buffer_authority_signer_index: SignerIndex,
         max_len: Option<usize>,
         skip_fee_check: bool,
     },
@@ -461,19 +461,9 @@ pub fn parse_program_subcommand(
                 pubkey_of_signer(matches, "program_id", wallet_manager)?
             };
 
-            let upgrade_authority_pubkey =
-                if let Ok((upgrade_authority_signer, Some(upgrade_authority_pubkey))) =
-                    signer_of(matches, "upgrade_authority", wallet_manager)
-                {
-                    bulk_signers.push(upgrade_authority_signer);
-                    Some(upgrade_authority_pubkey)
-                } else {
-                    Some(
-                        default_signer
-                            .signer_from_path(matches, wallet_manager)?
-                            .pubkey(),
-                    )
-                };
+            let (upgrade_authority, upgrade_authority_pubkey) =
+                signer_of(matches, "upgrade_authority", wallet_manager)?;
+            bulk_signers.push(upgrade_authority);
 
             let max_len = value_of(matches, "max_len");
 
@@ -512,19 +502,9 @@ pub fn parse_program_subcommand(
                 pubkey_of_signer(matches, "buffer", wallet_manager)?
             };
 
-            let buffer_authority_pubkey =
-                if let Ok((buffer_authority_signer, Some(buffer_authority_pubkey))) =
-                    signer_of(matches, "buffer_authority", wallet_manager)
-                {
-                    bulk_signers.push(buffer_authority_signer);
-                    Some(buffer_authority_pubkey)
-                } else {
-                    Some(
-                        default_signer
-                            .signer_from_path(matches, wallet_manager)?
-                            .pubkey(),
-                    )
-                };
+            let (buffer_authority, buffer_authority_pubkey) =
+                signer_of(matches, "buffer_authority", wallet_manager)?;
+            bulk_signers.push(buffer_authority);
 
             let max_len = value_of(matches, "max_len");
 
@@ -537,7 +517,8 @@ pub fn parse_program_subcommand(
                     buffer_signer_index: signer_info.index_of_or_none(buffer_pubkey),
                     buffer_pubkey,
                     buffer_authority_signer_index: signer_info
-                        .index_of_or_none(buffer_authority_pubkey),
+                        .index_of(buffer_authority_pubkey)
+                        .unwrap(),
                     max_len,
                     skip_fee_check,
                 }),
@@ -1067,7 +1048,7 @@ fn process_write_buffer(
     program_location: &str,
     buffer_signer_index: Option<SignerIndex>,
     buffer_pubkey: Option<Pubkey>,
-    buffer_authority_signer_index: Option<SignerIndex>,
+    buffer_authority_signer_index: SignerIndex,
     max_len: Option<usize>,
     skip_fee_check: bool,
 ) -> ProcessResult {
@@ -1083,11 +1064,7 @@ fn process_write_buffer(
             buffer_keypair.pubkey(),
         )
     };
-    let buffer_authority = if let Some(i) = buffer_authority_signer_index {
-        config.signers[i]
-    } else {
-        config.signers[0]
-    };
+    let buffer_authority = config.signers[buffer_authority_signer_index];
 
     if let Some(account) = rpc_client
         .get_account_with_commitment(&buffer_pubkey, config.commitment)?
@@ -2527,7 +2504,7 @@ mod tests {
                     program_location: "/Users/test/program.so".to_string(),
                     buffer_signer_index: None,
                     buffer_pubkey: None,
-                    buffer_authority_signer_index: Some(0),
+                    buffer_authority_signer_index: 0,
                     max_len: None,
                     skip_fee_check: false,
                 }),
@@ -2551,7 +2528,7 @@ mod tests {
                     program_location: "/Users/test/program.so".to_string(),
                     buffer_signer_index: None,
                     buffer_pubkey: None,
-                    buffer_authority_signer_index: Some(0),
+                    buffer_authority_signer_index: 0,
                     max_len: Some(42),
                     skip_fee_check: false,
                 }),
@@ -2578,7 +2555,7 @@ mod tests {
                     program_location: "/Users/test/program.so".to_string(),
                     buffer_signer_index: Some(1),
                     buffer_pubkey: Some(buffer_keypair.pubkey()),
-                    buffer_authority_signer_index: Some(0),
+                    buffer_authority_signer_index: 0,
                     max_len: None,
                     skip_fee_check: false,
                 }),
@@ -2608,7 +2585,7 @@ mod tests {
                     program_location: "/Users/test/program.so".to_string(),
                     buffer_signer_index: None,
                     buffer_pubkey: None,
-                    buffer_authority_signer_index: Some(1),
+                    buffer_authority_signer_index: 1,
                     max_len: None,
                     skip_fee_check: false,
                 }),
@@ -2643,7 +2620,7 @@ mod tests {
                     program_location: "/Users/test/program.so".to_string(),
                     buffer_signer_index: Some(1),
                     buffer_pubkey: Some(buffer_keypair.pubkey()),
-                    buffer_authority_signer_index: Some(2),
+                    buffer_authority_signer_index: 2,
                     max_len: None,
                     skip_fee_check: false,
                 }),
