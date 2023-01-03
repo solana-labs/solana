@@ -54,7 +54,7 @@ pub fn poll_get_latest_blockhash(client: &RpcClient) -> Option<Hash> {
     }
 }
 
-pub fn get_fee_for_message(client: &RpcClient, message: &impl SerializableMessage) -> Option<u64> {
+pub fn poll_get_fee_for_message(client: &RpcClient, message: &impl SerializableMessage) -> Option<u64> {
     let mut num_retries = MAX_RPC_CALL_RETRIES;
     loop {
         if let Ok(fee) = client.get_fee_for_message(message) {
