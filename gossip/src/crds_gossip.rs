@@ -17,6 +17,7 @@ use {
         duplicate_shred::{self, DuplicateShredIndex, LeaderScheduleFn, MAX_DUPLICATE_SHREDS},
         ping_pong::PingCache,
     },
+    itertools::Itertools,
     rayon::ThreadPool,
     solana_ledger::shred::Shred,
     solana_sdk::{
@@ -351,6 +352,22 @@ pub fn get_weight(max_weight: f32, time_since_last_selected: u32, stake: f32) ->
         weight = max_weight;
     }
     1.0_f32.max(weight.min(max_weight))
+}
+
+// Dedups gossip addresses, keeping only the one with the highest weight.
+pub(crate) fn dedup_gossip_addresses<I, T: PartialOrd>(
+    nodes: I,
+) -> HashMap</*gossip:*/ SocketAddr, (/*weight:*/ T, ContactInfo)>
+where
+    I: IntoIterator<Item = (/*weight:*/ T, ContactInfo)>,
+{
+    nodes
+        .into_iter()
+        .into_grouping_map_by(|(_weight, node)| node.gossip)
+        .aggregate(|acc, _node_gossip, (weight, node)| match acc {
+            Some((ref w, _)) if w >= &weight => acc,
+            Some(_) | None => Some((weight, node)),
+        })
 }
 
 #[cfg(test)]
