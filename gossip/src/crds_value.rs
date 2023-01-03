@@ -148,7 +148,8 @@ impl CrdsData {
         // the mainnet crds table.
         match kind {
             0 => CrdsData::ContactInfo(ContactInfo::new_rand(rng, pubkey)),
-            1 => CrdsData::LowestSlot(rng.gen(), LowestSlot::new_rand(rng, pubkey)),
+            // Index for LowestSlot is deprecated and should be zero.
+            1 => CrdsData::LowestSlot(0, LowestSlot::new_rand(rng, pubkey)),
             2 => CrdsData::SnapshotHashes(SnapshotHashes::new_rand(rng, pubkey)),
             3 => CrdsData::AccountsHashes(SnapshotHashes::new_rand(rng, pubkey)),
             4 => CrdsData::Version(Version::new_rand(rng, pubkey)),
@@ -864,7 +865,7 @@ mod test {
             let index = rng.gen_range(0, keys.len());
             CrdsValue::new_rand(&mut rng, Some(&keys[index]))
         })
-        .take(2048)
+        .take(1 << 12)
         .collect();
         let mut currents = HashMap::new();
         for value in filter_current(&values) {
@@ -888,10 +889,12 @@ mod test {
             }
         }
         assert_eq!(count, currents.len());
-        // Currently CrdsData::new_rand is only implemented for 5 different
-        // kinds and excludes EpochSlots, and so the unique labels cannot be
-        // more than (5 + MAX_VOTES) times number of keys.
-        assert!(currents.len() <= keys.len() * (5 + MAX_VOTES as usize));
+        // Currently CrdsData::new_rand is implemented for:
+        //   AccountsHashes, ContactInfo, LowestSlot, SnapshotHashes, Version
+        //   EpochSlots x MAX_EPOCH_SLOTS
+        //   Vote x MAX_VOTES
+        let num_kinds = 5 + MAX_VOTES as usize + MAX_EPOCH_SLOTS as usize;
+        assert!(currents.len() <= keys.len() * num_kinds);
     }
 
     #[test]
