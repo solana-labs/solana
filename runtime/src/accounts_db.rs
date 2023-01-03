@@ -2960,11 +2960,7 @@ impl AccountsDb {
             if slot > max_slot_inclusive {
                 return;
             }
-            for storage in self
-                .storage
-                .get_slot_storage_entries(slot)
-                .unwrap_or_default()
-            {
+            if let Some(storage) = self.storage.get_slot_storage_entry(slot) {
                 storage.all_accounts().iter().for_each(|account| {
                     let pk = account.pubkey();
                     match pubkey_refcount.entry(*pk) {
@@ -4833,7 +4829,7 @@ impl AccountsDb {
         Ok(used_index)
     }
 
-    /// Scan a specific slot through all the account storage in parallel
+    /// Scan a specific slot through all the account storage
     pub fn scan_account_storage<R, B>(
         &self,
         slot: Slot,
@@ -4875,17 +4871,12 @@ impl AccountsDb {
             // If the slot is not in the cache, then all the account information must have
             // been flushed. This is guaranteed because we only remove the rooted slot from
             // the cache *after* we've finished flushing in `flush_slot_cache`.
-            let storage_maps = self
-                .storage
-                .get_slot_storage_entries(slot)
-                .unwrap_or_default();
-            self.thread_pool.install(|| {
-                storage_maps.par_iter().for_each(|storage| {
-                    storage.accounts.account_iter().for_each(|account| {
-                        storage_scan_func(&retval, LoadedAccount::Stored(account))
-                    })
-                });
-            });
+            if let Some(storage) = self.storage.get_slot_storage_entry(slot) {
+                storage
+                    .accounts
+                    .account_iter()
+                    .for_each(|account| storage_scan_func(&retval, LoadedAccount::Stored(account)));
+            }
 
             ScanStorageResult::Stored(retval)
         }
@@ -8963,10 +8954,13 @@ impl AccountsDb {
                     for (index, slot) in slots.iter().enumerate() {
                         let mut scan_time = Measure::start("scan");
                         log_status.report(index as u64);
-                        let storage_maps = self.storage.get_slot_storage_entries(*slot);
-                        let accounts_map = storage_maps
+                        let storage = self
+                            .storage
+                            .get_slot_storage_entry(*slot)
+                            .map(|storage| vec![storage]);
+                        let accounts_map = storage
                             .as_ref()
-                            .map(|storage_maps| self.process_storage_slot(storage_maps))
+                            .map(|storage| self.process_storage_slot(storage))
                             .unwrap_or_default();
 
                         scan_time.stop();
