@@ -353,7 +353,7 @@ impl<T: Clone + Copy> Bucket<T> {
             let increment = 1;
             for i in increment.. {
                 //increasing the capacity by ^4 reduces the
-                //likelyhood of a re-index collision of 2^(max_search)^2
+                //likelihood of a re-index collision of 2^(max_search)^2
                 //1 in 2^32
                 let mut index = BucketStorage::new_with_capacity(
                     Arc::clone(&self.drives),
