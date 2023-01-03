@@ -181,6 +181,10 @@ all_test_steps() {
              ^fetch-perf-libs.sh \
              ^programs/ \
              ^sdk/ \
+             cargo-build-bpf$ \
+             cargo-test-bpf$ \
+             cargo-build-sbf$ \
+             cargo-test-sbf$ \
       ; then
     cat >> "$output_file" <<"EOF"
   - command: "ci/test-stable-sbf.sh"
@@ -236,6 +240,10 @@ EOF
              ^programs/ \
              ^sdk/ \
              ^scripts/build-downstream-projects.sh \
+             cargo-build-bpf$ \
+             cargo-test-bpf$ \
+             cargo-build-sbf$ \
+             cargo-test-sbf$ \
       ; then
     cat >> "$output_file" <<"EOF"
   - command: "scripts/build-downstream-projects.sh"

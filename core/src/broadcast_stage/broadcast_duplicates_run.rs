@@ -312,7 +312,7 @@ impl BroadcastRun for BroadcastDuplicatesRun {
                     .original_last_data_shreds
                     .lock()
                     .unwrap()
-                    .remove(&shred.signature())
+                    .remove(shred.signature())
                 {
                     if cluster_partition.contains(&node.id) {
                         info!(
@@ -327,7 +327,7 @@ impl BroadcastRun for BroadcastDuplicatesRun {
                     .partition_last_data_shreds
                     .lock()
                     .unwrap()
-                    .remove(&shred.signature())
+                    .remove(shred.signature())
                 {
                     // If the shred is part of the partition, broadcast it directly to the
                     // partition node. This is to account for cases when the partition stake

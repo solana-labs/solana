@@ -43,6 +43,8 @@ pub type DuplicateSlotsResetSender = CrossbeamSender<Vec<(Slot, Hash)>>;
 pub type DuplicateSlotsResetReceiver = CrossbeamReceiver<Vec<(Slot, Hash)>>;
 pub type ConfirmedSlotsSender = CrossbeamSender<Vec<Slot>>;
 pub type ConfirmedSlotsReceiver = CrossbeamReceiver<Vec<Slot>>;
+pub type DumpedSlotsSender = CrossbeamSender<Vec<(Slot, Hash)>>;
+pub type DumpedSlotsReceiver = CrossbeamReceiver<Vec<(Slot, Hash)>>;
 pub type OutstandingShredRepairs = OutstandingRequests<ShredRepairType>;
 
 #[derive(Default, Debug)]
@@ -95,6 +97,7 @@ pub struct RepairStats {
 #[derive(Default, Debug)]
 pub struct RepairTiming {
     pub set_root_elapsed: u64,
+    pub dump_slots_elapsed: u64,
     pub get_votes_elapsed: u64,
     pub add_votes_elapsed: u64,
     pub get_best_orphans_elapsed: u64,
@@ -110,12 +113,14 @@ impl RepairTiming {
     fn update(
         &mut self,
         set_root_elapsed: u64,
+        dump_slots_elapsed: u64,
         get_votes_elapsed: u64,
         add_votes_elapsed: u64,
         build_repairs_batch_elapsed: u64,
         batch_send_repairs_elapsed: u64,
     ) {
         self.set_root_elapsed += set_root_elapsed;
+        self.dump_slots_elapsed += dump_slots_elapsed;
         self.get_votes_elapsed += get_votes_elapsed;
         self.add_votes_elapsed += add_votes_elapsed;
         self.build_repairs_batch_elapsed += build_repairs_batch_elapsed;
@@ -212,6 +217,7 @@ impl RepairService {
         verified_vote_receiver: VerifiedVoteReceiver,
         outstanding_requests: Arc<RwLock<OutstandingShredRepairs>>,
         ancestor_hashes_replay_update_receiver: AncestorHashesReplayUpdateReceiver,
+        dumped_slots_receiver: DumpedSlotsReceiver,
     ) -> Self {
         let t_repair = {
             let blockstore = blockstore.clone();
@@ -227,6 +233,7 @@ impl RepairService {
                         repair_info,
                         verified_vote_receiver,
                         &outstanding_requests,
+                        dumped_slots_receiver,
                     )
                 })
                 .unwrap()
@@ -253,6 +260,7 @@ impl RepairService {
         repair_info: RepairInfo,
         verified_vote_receiver: VerifiedVoteReceiver,
         outstanding_requests: &RwLock<OutstandingShredRepairs>,
+        dumped_slots_receiver: DumpedSlotsReceiver,
     ) {
         let mut repair_weight = RepairWeight::new(repair_info.bank_forks.read().unwrap().root());
         let mut serve_repair = ServeRepair::new(
@@ -278,6 +286,7 @@ impl RepairService {
             }
 
             let mut set_root_elapsed;
+            let mut dump_slots_elapsed;
             let mut get_votes_elapsed;
             let mut add_votes_elapsed;
 
@@ -289,6 +298,23 @@ impl RepairService {
                 set_root_elapsed = Measure::start("set_root_elapsed");
                 repair_weight.set_root(new_root);
                 set_root_elapsed.stop();
+
+                // Remove dumped slots from the weighting heuristic
+                dump_slots_elapsed = Measure::start("dump_slots_elapsed");
+                dumped_slots_receiver
+                    .try_iter()
+                    .for_each(|slot_hash_keys_to_dump| {
+                        // Currently we don't use the correct_hash in repair. Since this dumped
+                        // slot is DuplicateConfirmed, we have a >= 52% chance on receiving the
+                        // correct version.
+                        for (slot, _correct_hash) in slot_hash_keys_to_dump {
+                            // `slot` is dumped in blockstore wanting to be repaired, we orphan it along with
+                            // descendants while copying the weighting heurstic so that it can be
+                            // repaired with correct ancestor information
+                            repair_weight.split_off(slot);
+                        }
+                    });
+                dump_slots_elapsed.stop();
 
                 // Add new votes to the weighting heuristic
                 get_votes_elapsed = Measure::start("get_votes_elapsed");
@@ -383,6 +409,7 @@ impl RepairService {
 
             repair_timing.update(
                 set_root_elapsed.as_us(),
+                dump_slots_elapsed.as_us(),
                 get_votes_elapsed.as_us(),
                 add_votes_elapsed.as_us(),
                 build_repairs_batch_elapsed.as_us(),
@@ -439,6 +466,7 @@ impl RepairService {
                 datapoint_info!(
                     "repair_service-repair_timing",
                     ("set-root-elapsed", repair_timing.set_root_elapsed, i64),
+                    ("dump-slots-elapsed", repair_timing.dump_slots_elapsed, i64),
                     ("get-votes-elapsed", repair_timing.get_votes_elapsed, i64),
                     ("add-votes-elapsed", repair_timing.add_votes_elapsed, i64),
                     (

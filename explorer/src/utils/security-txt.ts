@@ -6,8 +6,10 @@ export type SecurityTXT = {
   contacts: string;
   policy: string;
   preferred_languages?: string;
-  source_code?: string;
   encryption?: string;
+  source_code?: string;
+  source_release?: string;
+  source_revision?: string;
   auditors?: string;
   acknowledgements?: string;
   expiry?: string;
@@ -24,8 +26,10 @@ const VALID_KEYS: (keyof SecurityTXT)[] = [
   "contacts",
   "policy",
   "preferred_languages",
-  "source_code",
   "encryption",
+  "source_code",
+  "source_release",
+  "source_revision",
   "auditors",
   "acknowledgements",
   "expiry",
