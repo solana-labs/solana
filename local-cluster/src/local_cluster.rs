@@ -345,9 +345,7 @@ impl LocalCluster {
         (0..config.num_listeners).for_each(|_| {
             cluster.add_validator_listener(
                 &listener_config,
-                0,
                 Arc::new(Keypair::new()),
-                None,
                 socket_addr_space,
             );
         });
@@ -390,17 +388,15 @@ impl LocalCluster {
     pub fn add_validator_listener(
         &mut self,
         validator_config: &ValidatorConfig,
-        stake: u64,
         validator_keypair: Arc<Keypair>,
-        voting_keypair: Option<Arc<Keypair>>,
         socket_addr_space: SocketAddrSpace,
     ) -> Pubkey {
         self.do_add_validator(
             validator_config,
             true,
-            stake,
+            0u64,
             validator_keypair,
-            voting_keypair,
+            None,
             socket_addr_space,
         )
     }
