@@ -1266,7 +1266,6 @@ mod test {
         packet
             .meta_mut()
             .set_socket_addr(&responder_info.serve_repair);
-
         let decision = AncestorHashesService::verify_and_process_ancestor_response(
             packet,
             &ancestor_hashes_request_statuses,

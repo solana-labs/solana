@@ -512,13 +512,16 @@ impl ServeRepair {
                     continue;
                 }
 
-                if cluster_type != ClusterType::MainnetBeta {
-                    if !Self::verify_signed_packet(&my_id, packet, &request, stats) {
-                        continue;
+                match cluster_type {
+                    ClusterType::Testnet | ClusterType::Development => {
+                        if !Self::verify_signed_packet(&my_id, packet, &request, stats) {
+                            continue;
+                        }
                     }
-                } else {
-                    // collect stats for signature verification
-                    let _ = Self::verify_signed_packet(&my_id, packet, &request, stats);
+                    ClusterType::MainnetBeta | ClusterType::Devnet => {
+                        // collect stats for signature verification
+                        let _ = Self::verify_signed_packet(&my_id, packet, &request, stats);
+                    }
                 }
 
                 if request.sender() == &my_id {
@@ -843,8 +846,9 @@ impl ServeRepair {
                 }
                 if !check {
                     stats.ping_cache_check_failed += 1;
-                    if cluster_type != ClusterType::MainnetBeta {
-                        continue;
+                    match cluster_type {
+                        ClusterType::Testnet | ClusterType::Development => continue,
+                        ClusterType::MainnetBeta | ClusterType::Devnet => (),
                     }
                 }
             }
