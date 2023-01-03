@@ -256,11 +256,7 @@ impl CrdsGossipPull {
                     if let Some(ping) = ping {
                         pings.push((peer.gossip, ping));
                     }
-<<<<<<< HEAD
-                    check.then(|| (weight, peer))
-=======
                     check
->>>>>>> e5323166b (dedups gossip addresses, taking the one with highest weight (#29421))
                 })
                 .collect()
         };

@@ -15,13 +15,8 @@ use {
     crate::{
         cluster_info::{Ping, CRDS_UNIQUE_PUBKEY_CAPACITY},
         contact_info::ContactInfo,
-<<<<<<< HEAD
         crds::{Crds, Cursor, GossipRoute},
-        crds_gossip::{get_stake, get_weight},
-=======
-        crds::{Crds, CrdsError, Cursor, GossipRoute},
         crds_gossip::{self, get_stake, get_weight},
->>>>>>> e5323166b (dedups gossip addresses, taking the one with highest weight (#29421))
         crds_value::CrdsValue,
         ping_pong::PingCache,
         weighted_shuffle::WeightedShuffle,
@@ -391,11 +386,7 @@ impl CrdsGossipPush {
                     if let Some(ping) = ping {
                         pings.push((peer.gossip, ping));
                     }
-<<<<<<< HEAD
-                    check.then(|| (weight, peer.id))
-=======
                     check
->>>>>>> e5323166b (dedups gossip addresses, taking the one with highest weight (#29421))
                 })
                 .collect()
         };
