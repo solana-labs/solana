@@ -5,7 +5,7 @@ use {
     dashmap::DashMap,
     solana_sdk::clock::Slot,
     std::{
-        collections::{hash_map::RandomState, HashMap},
+        collections::HashMap,
         sync::{Arc, RwLock},
     },
 };
@@ -32,18 +32,39 @@ impl AccountStorage {
         self.map.get(&slot).map(|result| result.value().clone())
     }
 
+    /// return the append vec for 'slot' if it exists
+    /// This is only ever called when shrink is not possibly running and there is a max of 1 append vec per slot.
+    pub(crate) fn get_slot_storage_entry(&self, slot: Slot) -> Option<Arc<AccountStorageEntry>> {
+        self.get_slot_stores(slot).and_then(|res| {
+            let read = res.read().unwrap();
+            assert!(read.len() <= 1);
+            read.values().next().cloned()
+        })
+    }
+
+    /// return all append vecs for 'slot' if any exist
     pub(crate) fn get_slot_storage_entries(&self, slot: Slot) -> Option<SnapshotStorage> {
         self.get_slot_stores(slot)
             .map(|res| res.read().unwrap().values().cloned().collect())
     }
 
-    pub(crate) fn slot_store_count(&self, slot: Slot, store_id: AppendVecId) -> Option<usize> {
-        self.get_account_storage_entry(slot, store_id)
-            .map(|store| store.count())
-    }
-
     pub(crate) fn all_slots(&self) -> Vec<Slot> {
         self.map.iter().map(|iter_item| *iter_item.key()).collect()
+    }
+
+    /// returns true if there are no append vecs for 'slot'
+    pub(crate) fn is_empty(&self, slot: Slot) -> bool {
+        self.get_slot_stores(slot)
+            .map(|storages| storages.read().unwrap().is_empty())
+            .unwrap_or(true)
+    }
+
+    /// returns true if there is an entry in the map for 'slot', but it contains no append vec
+    #[cfg(test)]
+    pub(crate) fn is_empty_entry(&self, slot: Slot) -> bool {
+        self.get_slot_stores(slot)
+            .map(|storages| storages.read().unwrap().is_empty())
+            .unwrap_or(false)
     }
 
     /// initialize the storage map to 'all_storages'
@@ -63,14 +84,6 @@ impl AccountStorage {
         self.map.iter()
     }
 
-    pub(crate) fn get(
-        &self,
-        slot: &Slot,
-    ) -> Option<dashmap::mapref::one::Ref<'_, Slot, SlotStores, RandomState>> {
-        self.map.get(slot)
-    }
-
-    /// insert 'store' into 'map' at 'slot'
     pub(crate) fn insert(&self, slot: Slot, store: Arc<AccountStorageEntry>) {
         let slot_storages: SlotStores = self.get_slot_stores(slot).unwrap_or_else(||
             // DashMap entry.or_insert() returns a RefMut, essentially a write lock,

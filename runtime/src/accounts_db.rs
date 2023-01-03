@@ -1196,9 +1196,9 @@ impl RecycleStores {
     }
 
     fn add_entries(&mut self, new_entries: SnapshotStorage) {
-        self.total_bytes += new_entries.iter().map(|e| e.total_bytes()).sum::<u64>();
         let now = Instant::now();
         for new_entry in new_entries {
+            self.total_bytes += new_entry.total_bytes();
             self.entries.push((now, new_entry));
         }
     }
@@ -2960,11 +2960,7 @@ impl AccountsDb {
             if slot > max_slot_inclusive {
                 return;
             }
-            for storage in self
-                .storage
-                .get_slot_storage_entries(slot)
-                .unwrap_or_default()
-            {
+            if let Some(storage) = self.storage.get_slot_storage_entry(slot) {
                 storage.all_accounts().iter().for_each(|account| {
                     let pk = account.pubkey();
                     match pubkey_refcount.entry(*pk) {
@@ -3219,7 +3215,8 @@ impl AccountsDb {
                     );
                     let count = self
                         .storage
-                        .slot_store_count(*slot, account_info.store_id())
+                        .get_account_storage_entry(*slot, account_info.store_id())
+                        .map(|store| store.count())
                         .unwrap()
                         - 1;
                     debug!(
@@ -3835,7 +3832,6 @@ impl AccountsDb {
         // Purge old, overwritten storage entries
         let (remaining_stores, dead_storages) = self.mark_dirty_dead_stores(
             slot,
-            |store| !shrink_collect.store_ids.contains(&store.append_vec_id()),
             // If all accounts are zero lamports, then we want to mark the entire OLD append vec as dirty.
             // otherwise, we'll call 'add_uncleaned_pubkeys_after_shrink' just on the unref'd keys below.
             shrink_collect.all_are_zero_lamports,
@@ -3991,15 +3987,13 @@ impl AccountsDb {
     }
 
     /// get stores for 'slot'
-    /// retain only the stores where 'should_retain(store)' == true
-    /// for stores not retained, insert in 'dead_storages' and optionally 'dirty_stores'
+    /// Drop 'shrink_in_progress', which will cause the old store to be removed from the storage map.
+    /// For 'shrink_in_progress'.'old_storage' which is not retained, insert in 'dead_storages' and optionally 'dirty_stores'
     /// This is the end of the life cycle of `shrink_in_progress`.
-    /// Dropping 'shrink_in_progress' here will cause the old store to be removed from the storage map.
     /// returns: (# of remaining stores for this slot, dead storages)
     pub(crate) fn mark_dirty_dead_stores(
         &self,
         slot: Slot,
-        should_retain: impl Fn(&AccountStorageEntry) -> bool,
         add_dirty_stores: bool,
         shrink_in_progress: Option<ShrinkInProgress>,
     ) -> (usize, SnapshotStorage) {
@@ -4022,17 +4016,12 @@ impl AccountsDb {
                 drop(shrink_in_progress);
                 slot_stores.read().unwrap().len()
             } else {
-                // no shrink_in_progress, so retain append vecs depending on 'should_retain'
+                // no shrink in progress, so all append vecs in this slot are dead
                 let mut list = slot_stores.write().unwrap();
-                list.retain(|_key, store| {
-                    if !should_retain(store) {
-                        not_retaining_store(store);
-                        false
-                    } else {
-                        true
-                    }
+                list.drain().for_each(|(_key, store)| {
+                    not_retaining_store(&store);
                 });
-                list.len()
+                0
             }
         } else {
             0
@@ -4840,7 +4829,7 @@ impl AccountsDb {
         Ok(used_index)
     }
 
-    /// Scan a specific slot through all the account storage in parallel
+    /// Scan a specific slot through all the account storage
     pub fn scan_account_storage<R, B>(
         &self,
         slot: Slot,
@@ -4882,17 +4871,12 @@ impl AccountsDb {
             // If the slot is not in the cache, then all the account information must have
             // been flushed. This is guaranteed because we only remove the rooted slot from
             // the cache *after* we've finished flushing in `flush_slot_cache`.
-            let storage_maps: SnapshotStorage = self
-                .storage
-                .get_slot_storage_entries(slot)
-                .unwrap_or_default();
-            self.thread_pool.install(|| {
-                storage_maps.par_iter().for_each(|storage| {
-                    storage.accounts.account_iter().for_each(|account| {
-                        storage_scan_func(&retval, LoadedAccount::Stored(account))
-                    })
-                });
-            });
+            if let Some(storage) = self.storage.get_slot_storage_entry(slot) {
+                storage
+                    .accounts
+                    .account_iter()
+                    .for_each(|account| storage_scan_func(&retval, LoadedAccount::Stored(account)));
+            }
 
             ScanStorageResult::Stored(retval)
         }
@@ -8113,7 +8097,7 @@ impl AccountsDb {
         pubkeys_removed_from_accounts_index: &PubkeysRemovedFromAccountsIndex,
     ) {
         let mut measure = Measure::start("clean_stored_dead_slots-ms");
-        let mut stores: SnapshotStorage = vec![];
+        let mut stores = vec![];
         // get all stores in a vec so we can iterate in parallel
         for slot in dead_slots.iter() {
             if let Some(slot_storage) = self.storage.get_slot_stores(*slot) {
@@ -8529,48 +8513,41 @@ impl AccountsDb {
         ancestors: Option<&Ancestors>,
     ) -> (SnapshotStorages, Vec<Slot>) {
         let mut m = Measure::start("get slots");
-        let slots = self
+        let slots_and_storages = self
             .storage
             .iter()
-            .map(|k| *k.key() as Slot)
-            .filter(|slot| requested_slots.contains(slot))
+            .filter_map(|entry| {
+                let slot = *entry.key() as Slot;
+                requested_slots
+                    .contains(&slot)
+                    .then_some((slot, Arc::clone(entry.value())))
+            })
             .collect::<Vec<_>>();
         m.stop();
         let mut m2 = Measure::start("filter");
 
         let chunk_size = 5_000;
         let wide = self.thread_pool_clean.install(|| {
-            slots
+            slots_and_storages
                 .par_chunks(chunk_size)
-                .map(|slots| {
-                    slots
+                .map(|slots_and_storages| {
+                    slots_and_storages
                         .iter()
-                        .filter_map(|slot| {
-                            if self.accounts_index.is_alive_root(*slot)
+                        .filter(|(slot, _)| {
+                            self.accounts_index.is_alive_root(*slot)
                                 || ancestors
                                     .map(|ancestors| ancestors.contains_key(slot))
                                     .unwrap_or_default()
-                            {
-                                self.storage.get(slot).map_or_else(
-                                    || None,
-                                    |item| {
-                                        let storages = item
-                                            .read()
-                                            .unwrap()
-                                            .values()
-                                            .filter(|x| x.has_accounts())
-                                            .cloned()
-                                            .collect::<Vec<_>>();
-                                        if !storages.is_empty() {
-                                            Some((storages, *slot))
-                                        } else {
-                                            None
-                                        }
-                                    },
-                                )
-                            } else {
-                                None
-                            }
+                        })
+                        .filter_map(|(slot, storages)| {
+                            let storages = storages
+                                .read()
+                                .unwrap()
+                                .values()
+                                .filter(|x| x.has_accounts())
+                                .cloned()
+                                .collect::<Vec<_>>();
+                            (!storages.is_empty()).then_some((storages, *slot))
                         })
                         .collect::<Vec<(SnapshotStorage, Slot)>>()
                 })
@@ -8580,7 +8557,7 @@ impl AccountsDb {
         let mut m3 = Measure::start("flatten");
         // some slots we found above may not have been a root or met the slot # constraint.
         // So the resulting 'slots' vector we return will be a subset of the raw keys we got initially.
-        let mut slots = Vec::with_capacity(slots.len());
+        let mut slots = Vec::with_capacity(slots_and_storages.len());
         let result = wide
             .into_iter()
             .flatten()
@@ -8861,11 +8838,7 @@ impl AccountsDb {
                 .take(per_pass)
                 .collect::<Vec<_>>();
             roots_in_this_pass.into_par_iter().for_each(|slot| {
-                let storage_maps: SnapshotStorage = self
-                    .storage
-                    .get_slot_storage_entries(*slot)
-                    .unwrap_or_default();
-                if storage_maps.is_empty() {
+                if self.storage.is_empty(*slot) {
                     return;
                 }
 
@@ -8975,10 +8948,13 @@ impl AccountsDb {
                     for (index, slot) in slots.iter().enumerate() {
                         let mut scan_time = Measure::start("scan");
                         log_status.report(index as u64);
-                        let storage_maps = self.storage.get_slot_storage_entries(*slot);
-                        let accounts_map = storage_maps
+                        let storage = self
+                            .storage
+                            .get_slot_storage_entry(*slot)
+                            .map(|storage| vec![storage]);
+                        let accounts_map = storage
                             .as_ref()
-                            .map(|storage_maps| self.process_storage_slot(storage_maps))
+                            .map(|storage| self.process_storage_slot(storage))
                             .unwrap_or_default();
 
                         scan_time.stop();
@@ -14375,7 +14351,7 @@ pub mod tests {
         db.store_cached((0, &[(&other_account_key, &slot0_account)][..]), None);
         db.add_root(0);
         db.flush_accounts_cache(true, None);
-        assert!(!db.storage.get_slot_storage_entries(0).unwrap().is_empty());
+        assert!(!db.storage.is_empty(0));
 
         // Store into slot 1, a dummy slot that will be dead and purged before flush
         db.store_cached(
@@ -14600,6 +14576,18 @@ pub mod tests {
             .is_none());
     }
 
+    impl AccountsDb {
+        fn get_and_assert_single_storage(&self, slot: Slot) -> Arc<AccountStorageEntry> {
+            let mut storage_maps: SnapshotStorage = self
+                .storage
+                .get_slot_storage_entries(slot)
+                .unwrap_or_default();
+
+            assert_eq!(storage_maps.len(), 1);
+            storage_maps.pop().unwrap()
+        }
+    }
+
     #[test]
     fn test_alive_bytes() {
         let accounts_db = AccountsDb::new_with_config_for_tests(
@@ -14619,14 +14607,8 @@ pub mod tests {
         accounts_db.add_root(slot);
         accounts_db.flush_accounts_cache(true, None);
 
-        let mut storage_maps: SnapshotStorage = accounts_db
-            .storage
-            .get_slot_storage_entries(slot)
-            .unwrap_or_default();
-
         // Flushing cache should only create one storage entry
-        assert_eq!(storage_maps.len(), 1);
-        let storage0 = storage_maps.pop().unwrap();
+        let storage0 = accounts_db.get_and_assert_single_storage(slot);
         let accounts = storage0.all_accounts();
 
         for account in accounts {
@@ -15104,9 +15086,7 @@ pub mod tests {
         db.clean_accounts(Some(1), false, None);
 
         // Shrink Slot 0
-        let mut slot0_stores = db.storage.get_slot_storage_entries(0).unwrap();
-        assert_eq!(slot0_stores.len(), 1);
-        let slot0_store = slot0_stores.pop().unwrap();
+        let slot0_store = db.get_and_assert_single_storage(0);
         {
             let mut shrink_candidate_slots = db.shrink_candidate_slots.lock().unwrap();
             shrink_candidate_slots
@@ -15124,12 +15104,12 @@ pub mod tests {
         db.flush_accounts_cache(true, None);
 
         // Should be one store before clean for slot 0
-        assert_eq!(db.storage.get_slot_storage_entries(0).unwrap().len(), 1);
+        db.get_and_assert_single_storage(0);
         db.get_accounts_delta_hash(2);
         db.clean_accounts(Some(2), false, None);
 
         // No stores should exist for slot 0 after clean
-        assert!(db.storage.get_slot_storage_entries(0).is_none());
+        assert_no_storages_at_slot(&db, 0);
 
         // Ref count for `account_key1` (account removed earlier by shrink)
         // should be 1, since it was only stored in slot 0 and 1, and slot 0
@@ -15442,9 +15422,7 @@ pub mod tests {
                         return;
                     }
                     // Simulate adding shrink candidates from clean_accounts()
-                    let stores = db.storage.get_slot_storage_entries(slot).unwrap();
-                    assert_eq!(stores.len(), 1);
-                    let store = &stores[0];
+                    let store = db.get_and_assert_single_storage(slot);
                     let store_id = store.append_vec_id();
                     db.shrink_candidate_slots
                         .lock()
@@ -15653,7 +15631,7 @@ pub mod tests {
             // cache, storage, and index
 
             for (slot, _) in slots_to_dump {
-                assert!(db.storage.get_slot_storage_entries(*slot).is_none());
+                assert_no_storages_at_slot(&db, *slot);
                 assert!(db.accounts_cache.slot_cache(*slot).is_none());
                 let account_in_slot = slot_to_pubkey_map[slot];
                 let item = db.accounts_index.get_account_read_entry(&account_in_slot);
@@ -16035,7 +16013,12 @@ pub mod tests {
             .accounts_index
             .get_account_read_entry(&shared_key)
             .is_none());
-        assert!(accounts.storage.get_slot_storage_entries(slot0).is_none());
+        assert_no_storages_at_slot(&accounts, slot0);
+    }
+
+    /// asserts that not only are there 0 append vecs, but there is not even an entry in the storage map for 'slot'
+    fn assert_no_storages_at_slot(db: &AccountsDb, slot: Slot) {
+        assert!(db.storage.get_slot_storage_entries(slot).is_none());
     }
 
     /// Test to make sure `clean_accounts()` works properly with the `last_full_snapshot_slot`
@@ -16495,7 +16478,7 @@ pub mod tests {
         let slot = 0;
         for add_dirty_stores in [false, true] {
             let (remaining_stores, dead_storages) =
-                db.mark_dirty_dead_stores(slot, |_| true, add_dirty_stores, None);
+                db.mark_dirty_dead_stores(slot, add_dirty_stores, None);
             assert_eq!(remaining_stores, 0);
             assert!(dead_storages.is_empty());
             assert!(db.dirty_stores.is_empty());
@@ -16515,7 +16498,7 @@ pub mod tests {
             let existing_store = db.create_and_insert_store(slot, size, "test");
             let old_id = existing_store.append_vec_id();
             let (remaining_stores, dead_storages) =
-                db.mark_dirty_dead_stores(slot, |_| false, add_dirty_stores, None);
+                db.mark_dirty_dead_stores(slot, add_dirty_stores, None);
             assert_eq!(0, remaining_stores);
             assert_eq!(dead_storages.len(), 1);
             assert_eq!(dead_storages.first().unwrap().append_vec_id(), old_id);
@@ -16526,61 +16509,40 @@ pub mod tests {
             } else {
                 assert!(db.dirty_stores.is_empty());
             }
-            assert!(db.get_storages_for_slot(slot).unwrap().is_empty());
+            assert!(db.storage.is_empty_entry(slot));
         }
     }
 
     #[test]
     fn test_mark_dirty_dead_stores() {
-        let db = AccountsDb::new_single_for_tests();
         let slot = 0;
-        let called = AtomicUsize::default();
-        let add_dirty_stores = false;
-        let (remaining_stores, _) = db.mark_dirty_dead_stores(
-            slot,
-            |_store| {
-                called.fetch_add(1, Ordering::Relaxed);
-                false
-            },
-            add_dirty_stores,
-            None,
-        );
-        assert_eq!(0, called.load(Ordering::Relaxed));
-        assert_eq!(0, remaining_stores);
 
-        let size = 1;
-        let inserted_store = db.create_and_insert_store(slot, size, "test");
-        let (remaining_stores, _) = db.mark_dirty_dead_stores(
-            slot,
-            |store| {
-                assert_eq!(store.append_vec_id(), inserted_store.append_vec_id());
-                called.fetch_add(1, Ordering::Relaxed);
-                true // retain
-            },
-            add_dirty_stores,
-            None,
-        );
-        assert_eq!(1, called.load(Ordering::Relaxed));
-        assert_eq!(1, remaining_stores);
-
-        let called = AtomicUsize::default();
-        let (remaining_stores, _) = db.mark_dirty_dead_stores(
-            slot,
-            |store| {
-                assert_eq!(store.append_vec_id(), inserted_store.append_vec_id());
-                called.fetch_add(1, Ordering::Relaxed);
-                false // don't retain
-            },
-            add_dirty_stores,
-            None,
-        );
-        assert_eq!(1, called.load(Ordering::Relaxed));
-        assert!(db
-            .get_storages_for_slot(slot)
-            .unwrap_or_default()
-            .is_empty());
-        assert_eq!(0, remaining_stores);
-        assert!(db.dirty_stores.is_empty());
+        // use shrink_in_progress to cause us to drop the initial store
+        for add_dirty_stores in [false, true] {
+            let db = AccountsDb::new_single_for_tests();
+            let size = 1;
+            let old_store = db.create_and_insert_store(slot, size, "test");
+            let old_id = old_store.append_vec_id();
+            let shrink_in_progress = db.get_store_for_shrink(slot, 100);
+            let (remaining_stores, dead_storages) =
+                db.mark_dirty_dead_stores(slot, add_dirty_stores, Some(shrink_in_progress));
+            assert_eq!(1, remaining_stores);
+            assert_eq!(dead_storages.len(), 1);
+            assert_eq!(dead_storages.first().unwrap().append_vec_id(), old_id);
+            if add_dirty_stores {
+                assert_eq!(1, db.dirty_stores.len());
+                let dirty_store = db.dirty_stores.get(&(slot, old_id)).unwrap();
+                assert_eq!(dirty_store.append_vec_id(), old_id);
+            } else {
+                assert!(db.dirty_stores.is_empty());
+            }
+            assert_eq!(
+                1,
+                db.get_storages_for_slot(slot)
+                    .map(|storages| storages.len())
+                    .unwrap_or_default()
+            );
+        }
     }
 
     #[test]
@@ -17576,7 +17538,7 @@ pub mod tests {
             &mut AncientSlotPubkeys::default(),
             &mut dropped_roots,
         );
-        assert!(db.get_storages_for_slot(next_slot).unwrap().is_empty());
+        assert!(db.storage.is_empty_entry(next_slot));
         // this removes the storages entry completely from the hashmap for 'next_slot'.
         // Otherwise, we have a zero length vec in that hashmap
         db.handle_dropped_roots_for_ancient(dropped_roots);

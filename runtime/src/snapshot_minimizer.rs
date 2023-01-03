@@ -382,8 +382,7 @@ impl<'a> SnapshotMinimizer<'a> {
 
         let (_, mut dead_storages_this_time) = self.accounts_db().mark_dirty_dead_stores(
             slot,
-            |_store| true, /* ignored if shrink_in_progress is passed, otherwise retain all */
-            true,          // add_dirty_stores
+            true, // add_dirty_stores
             shrink_in_progress,
         );
         dead_storages
