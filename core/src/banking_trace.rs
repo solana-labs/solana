@@ -1087,7 +1087,6 @@ impl BankingSimulator {
                     ..Default::default()
                 };
                 let new_bank = Bank::new_from_parent_with_options(&bank, &simulated_leader, new_slot, options);
-                new_bank.enter_banking_commit_mode();
                 // make sure parent is frozen for finalized hashes via the above
                 // new()-ing of its child bank
                 // maybe hash_event_with_original for proper check at replaying simulated blocks...
@@ -1098,6 +1097,7 @@ impl BankingSimulator {
                 retransmit_slots_sender.send(bank.slot()).unwrap();
                 bank_forks.write().unwrap().insert(new_bank);
                 bank = bank_forks.read().unwrap().working_bank();
+                bank.resume_banking_commit();
                 poh_recorder.write().unwrap().set_bank(&bank, false);
             }
 

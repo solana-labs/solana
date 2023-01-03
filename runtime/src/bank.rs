@@ -990,6 +990,7 @@ impl SchedulerPool<ExecuteTimings> {
         );
         assert_eq!(1, Arc::strong_count(&scheduler));
         assert!(scheduler.collected_results.lock().unwrap().is_empty());
+        assert!(scheduler.bank.read().unwrap().is_none());
         assert!(scheduler
             .graceful_stop_initiated
             .load(std::sync::atomic::Ordering::SeqCst));
@@ -1035,6 +1036,7 @@ struct Scheduler<C> {
     collected_results: Arc<std::sync::Mutex<Vec<Result<C>>>>,
     bank: std::sync::Arc<std::sync::RwLock<std::option::Option<std::sync::Weak<Bank>>>>,
     slot: AtomicU64,
+    commit_status: Arc<CommitStatus>,
 }
 
 impl<C> Scheduler<C> {
@@ -1076,6 +1078,51 @@ impl<C> Scheduler<C> {
     }
 }
 
+#[derive(Debug)]
+struct CommitStatus {
+    is_paused: std::sync::Mutex<bool>,
+    condvar: std::sync::Condvar,
+}
+
+impl CommitStatus {
+    fn new() -> Self {
+        Self {
+            is_paused: Default::default(),
+            condvar: Default::default(),
+        }
+    }
+
+    fn check_and_wait(&self) {
+        let mut is_paused = self.is_paused.lock().unwrap();
+        if !*is_paused {
+            return
+        }
+        let current_thread_name = std::thread::current().name().unwrap().to_string();
+        info!("CommitStatus: {current_thread_name} is paused...");
+
+        self.condvar.wait_while(is_paused, |now_is_paused| *now_is_paused);
+    }
+
+    fn notify_as_paused(&self) {
+        let current_thread_name = std::thread::current().name().unwrap().to_string();
+        let mut is_paused = self.is_paused.lock().unwrap();
+        if *is_paused {
+            info!("CommitStatus: {current_thread_name} is skipped to notify as paused...");
+        } else {
+            info!("CommitStatus: {current_thread_name} is notifying as paused...");
+            *is_paused = true;
+        }
+    }
+
+    fn notify_as_resumed(&self) {
+        let current_thread_name = std::thread::current().name().unwrap().to_string();
+        info!("CommitStatus: {current_thread_name} is notifying as resumed...");
+        let mut is_paused = self.is_paused.lock().unwrap();
+        *is_paused = false;
+        self.condvar.notify_all();
+    }
+}
+
 impl Scheduler<ExecuteTimings> {
     fn default2() -> Self {
         let start = Instant::now();
@@ -1097,10 +1144,12 @@ impl Scheduler<ExecuteTimings> {
         let send_metrics = std::env::var("SOLANA_TRANSACTION_TIMINGS").is_ok();
 
         let max_thread_priority = std::env::var("MAX_THREAD_PRIORITY").is_ok();
+        let commit_status = Arc::new(CommitStatus::new());
 
         let executing_thread_handles = (0..(executing_thread_count * 2)).map(|thx| {
             let (scheduled_ee_receiver, scheduled_high_ee_receiver, processed_ee_sender) = (scheduled_ee_receiver.clone(), scheduled_high_ee_receiver.clone(), processed_ee_sender.clone());
             let bank = bank.clone();
+            let commit_status = commit_status.clone();
 
             std::thread::Builder::new().name(format!("solScExLane{:02}", thx)).spawn(move || {
             let started = (cpu_time::ThreadTime::now(), std::time::Instant::now());
@@ -1109,6 +1158,8 @@ impl Scheduler<ExecuteTimings> {
             }
 
             while let Ok(solana_scheduler::ExecutablePayload(mut ee)) = (if thx >= executing_thread_count { scheduled_high_ee_receiver.recv() } else { scheduled_ee_receiver.recv()}) {
+                'retry: loop {
+                commit_status.check_and_wait();
                 let (mut wall_time, cpu_time) = (Measure::start("process_message_time"), cpu_time::ThreadTime::now());
 
                 let current_execute_clock = ee.task.execute_time();
@@ -1172,13 +1223,11 @@ impl Scheduler<ExecuteTimings> {
                             let hash = solana_entry::entry::hash_transactions(&executed_transactions);
                             let poh = POH.read().unwrap();
                             if let Err(e) = poh.as_ref().unwrap()(bank.as_ref(), executed_transactions, hash) {
+                                let current_thread_name = std::thread::current().name().unwrap().to_string();
 
-                                error!("poh error: {:?}", e);
-                                execution_results = vec![
-                                    TransactionExecutionResult::NotExecuted(TransactionError::ClusterMaintenance)
-                                ];
-                                executed_transactions_count = 0;
-                                signature_count = 0;
+                                error!("{current_thread_name} pausing due to poh error...: {:?}", e);
+                                commit_status.notify_as_paused();
+                                continue 'retry;
                             }
                         }
                     },
@@ -1239,6 +1288,8 @@ impl Scheduler<ExecuteTimings> {
 
                 //ee.reindex_with_address_book();
                 processed_ee_sender.send(solana_scheduler::UnlockablePayload(ee, timings)).unwrap();
+                break;
+                }
             }
             todo!();
 
@@ -1379,6 +1430,7 @@ impl Scheduler<ExecuteTimings> {
             collected_results,
             bank,
             slot: Default::default(),
+            commit_status,
         };
         info!(
             "scheduler: id_{:016x} setup done with {}us",
@@ -1452,6 +1504,16 @@ impl<C> Scheduler<C> {
 
     fn handle_aborted_executions(&self) -> Vec<Result<C>> {
         std::mem::take(&mut self.collected_results.lock().unwrap())
+    }
+
+    fn pause_commit_into_bank(&self) {
+        self.commit_status.notify_as_paused();
+        *self.bank.write().unwrap() = None;
+    }
+
+    fn resume_commit_into_bank(&self, bank: &Arc<Bank>) {
+        *self.bank.write().unwrap() = Some(Arc::downgrade(bank));
+        self.commit_status.notify_as_resumed();
     }
 }
 
@@ -1675,6 +1737,7 @@ struct LoadVoteAndStakeAccountsResult {
 pub struct NewBankOptions {
     pub vote_only_bank: bool,
     pub blockhash_override: Option<Hash>,
+    pub banking: bool,
 }
 
 #[derive(Debug, Default)]
@@ -2013,7 +2076,7 @@ impl Bank {
         new_bank_options: NewBankOptions,
     ) -> Self {
         let mut time = Measure::start("bank::new_from_parent");
-        let NewBankOptions { vote_only_bank, blockhash_override } = new_bank_options;
+        let NewBankOptions { vote_only_bank, blockhash_override, banking } = new_bank_options;
 
         parent.freeze();
         assert_ne!(slot, parent.slot());
@@ -2103,7 +2166,21 @@ impl Bank {
             measure!(parent.feature_set.clone(), "feature_set_creation");
 
         let accounts_data_size_initial = parent.load_accounts_data_size();
-        let scheduler = RwLock::new(Some(SCHEDULER_POOL.lock().unwrap().take_from_pool())); // Default::default();
+        let (scheduler, commit_mode) = if !banking {
+            (
+                RwLock::new(Some(SCHEDULER_POOL.lock().unwrap().take_from_pool())),
+                CommitMode::Replaying.into(),
+            )
+        } else {
+            let s: Option<Arc<Scheduler<ExecuteTimings>>> = parent.scheduler2.write().unwrap().take();
+            (if let Some(scheduler) = s {
+                info!("bank (slot: {}) NOT inheriting {}'s scheduler..", slot, parent.slot());
+                RwLock::new(Some(scheduler))
+            } else {
+                info!("bank (slot: {}) inheriting {}'s scheduler..", slot, parent.slot());
+                RwLock::new(Some(SCHEDULER_POOL.lock().unwrap().take_from_pool()))
+            }, CommitMode::Banking.into())
+        };
 
         let mut new = Bank {
             incremental_snapshot_persistence: None,
@@ -2184,7 +2261,7 @@ impl Bank {
             accounts_data_size_delta_off_chain: AtomicI64::new(0),
             fee_structure: parent.fee_structure.clone(),
             scheduler2: scheduler,
-            commit_mode: Default::default(),
+            commit_mode,
             blockhash_override: RwLock::new(blockhash_override),
         };
 
@@ -6763,8 +6840,12 @@ impl Bank {
     }
     */
 
-    pub fn enter_banking_commit_mode(&self) {
-        self.commit_mode.store(CommitMode::Banking, Relaxed);
+    pub fn resume_banking_commit(self: &Arc<Self>) {
+        use assert_matches::assert_matches;
+        assert_matches!(self.commit_mode(), CommitMode::Banking);
+        let s = self.scheduler2.read().unwrap();
+        let scheduler = s.as_ref().unwrap();
+        scheduler.resume_commit_into_bank(self);
     }
 
     pub fn commit_mode(&self) -> CommitMode {
@@ -8469,14 +8550,24 @@ impl Bank {
         let s: Option<Arc<Scheduler<ExecuteTimings>>> = self.scheduler2.write().unwrap().take();
 
         if let Some(scheduler) = s {
-            let _r = scheduler.gracefully_stop().unwrap();
-            let e = scheduler
-                .handle_aborted_executions()
-                .into_iter()
-                .next()
-                .unwrap();
-            SCHEDULER_POOL.lock().unwrap().return_to_pool(scheduler);
-            e
+            let commit_mode = self.commit_mode();
+            match commit_mode {
+                CommitMode::Replaying => {
+                    let _r = scheduler.gracefully_stop().unwrap();
+                    let e = scheduler
+                        .handle_aborted_executions()
+                        .into_iter()
+                        .next()
+                        .unwrap();
+                    SCHEDULER_POOL.lock().unwrap().return_to_pool(scheduler);
+                    e
+                },
+                CommitMode::Banking => {
+                    info!("wait_for_scheduler(Banking): pausing commit into bank...");
+                    scheduler.pause_commit_into_bank();
+                    Ok(Default::default())
+                }
+            }
         } else {
             let current_thread_name = std::thread::current().name().unwrap().to_string();
             warn!(

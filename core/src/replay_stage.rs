@@ -1771,14 +1771,14 @@ impl ReplayStage {
                 root_slot,
                 my_pubkey,
                 rpc_subscriptions,
-                NewBankOptions { vote_only_bank, ..Default::default() },
+                NewBankOptions { vote_only_bank, banking: true, ..Default::default() },
             );
             // make sure parent is frozen for finalized hashes via the above
             // new()-ing of its child bank
             banking_tracer.hash_event(parent.slot(), parent.last_blockhash(), parent.hash());
-            tpu_bank.enter_banking_commit_mode();
 
             let tpu_bank = bank_forks.write().unwrap().insert(tpu_bank);
+            tpu_bank.resume_banking_commit();
             poh_recorder
                 .write()
                 .unwrap()
