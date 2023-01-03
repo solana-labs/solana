@@ -661,7 +661,7 @@ impl<'a> MultiThreadProgress<'a> {
 /// An offset into the AccountsDb::storage vector
 pub type AtomicAppendVecId = AtomicU32;
 pub type AppendVecId = u32;
-pub type SnapshotStorage = Vec<Arc<AccountStorageEntry>>;
+pub type SnapshotStorage = Arc<AccountStorageEntry>;
 pub type SnapshotStorages = Vec<SnapshotStorage>;
 
 // Each slot has a set of storage entries.
@@ -1198,6 +1198,7 @@ impl RecycleStores {
             self.total_bytes += new_entry.total_bytes();
             self.entries.push((now, new_entry));
         }
+        self.total_bytes += total_bytes;
     }
 
     fn expire_old_entries(&mut self) -> SnapshotStorage {
@@ -3671,13 +3672,10 @@ impl AccountsDb {
 
     /// get all accounts in all the storages passed in
     /// for duplicate pubkeys, the account with the highest write_value is returned
-    pub(crate) fn get_unique_accounts_from_storages<'a, I>(
+    pub(crate) fn get_unique_accounts_from_storages<'a>(
         &'a self,
-        stores: I,
-    ) -> GetUniqueAccountsResult<'a>
-    where
-        I: Iterator<Item = &'a Arc<AccountStorageEntry>>,
-    {
+        store: &'a Arc<AccountStorageEntry>,
+    ) -> GetUniqueAccountsResult<'a> {
         let mut stored_accounts: HashMap<Pubkey, FoundStoredAccount> = HashMap::new();
         let mut original_bytes = 0;
         let mut count = 0;
@@ -3715,14 +3713,12 @@ impl AccountsDb {
 
     /// shared code for shrinking normal slots and combining into ancient append vecs
     /// note 'stored_accounts' is passed by ref so we can return references to data within it, avoiding self-references
-    fn shrink_collect<'a: 'b, 'b, I>(
+    fn shrink_collect<'a: 'b, 'b>(
         &'a self,
-        stores: I,
+        stores: &'a Arc<AccountStorageEntry>,
         stored_accounts: &'b mut Vec<FoundStoredAccount<'b>>,
         stats: &ShrinkStats,
     ) -> ShrinkCollect<'b>
-    where
-        I: Iterator<Item = &'a Arc<AccountStorageEntry>>,
     {
         let (
             GetUniqueAccountsResult {
@@ -3832,13 +3828,13 @@ impl AccountsDb {
             );
         }
 
-        self.drop_or_recycle_stores(dead_storages, stats);
+        if let Some(dead_storages) = dead_storages {
+            self.drop_or_recycle_stores(vec![dead_storages], stats);
+        }
         remaining_stores
     }
 
-    fn do_shrink_slot_stores<'a, I>(&'a self, slot: Slot, stores: I) -> usize
-    where
-        I: Iterator<Item = &'a Arc<AccountStorageEntry>>,
+    fn do_shrink_slot_stores(&self, slot: Slot, stores: &Arc<AccountStorageEntry>) -> usize
     {
         let mut stored_accounts = Vec::default();
         debug!("do_shrink_slot_stores: slot: {}", slot);
@@ -3983,15 +3979,15 @@ impl AccountsDb {
         slot: Slot,
         add_dirty_stores: bool,
         shrink_in_progress: Option<ShrinkInProgress>,
-    ) -> (usize, SnapshotStorage) {
-        let mut dead_storages = Vec::default();
+    ) -> (usize, Option<SnapshotStorage>) {
+        let mut dead_storages = None;
 
         let mut not_retaining_store = |store: &Arc<AccountStorageEntry>| {
             if add_dirty_stores {
                 self.dirty_stores
                     .insert((slot, store.append_vec_id()), store.clone());
             }
-            dead_storages.push(store.clone());
+            dead_storages = Some(store.clone());
         };
 
         let remaining_stores = if let Some(slot_stores) = self.storage.get_slot_stores(slot) {
@@ -4018,7 +4014,7 @@ impl AccountsDb {
 
     pub(crate) fn drop_or_recycle_stores(
         &self,
-        dead_storages: SnapshotStorage,
+        dead_storages: SnapshotStorages,
         stats: &ShrinkStats,
     ) {
         let mut recycle_stores_write_elapsed = Measure::start("recycle_stores_write_time");
@@ -4027,7 +4023,7 @@ impl AccountsDb {
 
         let mut drop_storage_entries_elapsed = Measure::start("drop_storage_entries_elapsed");
         if recycle_stores.entry_count() < MAX_RECYCLE_STORES {
-            recycle_stores.add_entries(dead_storages);
+            recycle_stores.add_entries(dead_storages.into_iter());
             drop(recycle_stores);
         } else {
             self.stats
@@ -4417,7 +4413,7 @@ impl AccountsDb {
             let old_storages = [old_storage];
             self.combine_one_store_into_ancient(
                 slot,
-                &old_storages,
+                old_storages,
                 &mut current_ancient,
                 &mut ancient_slot_pubkeys,
                 &mut dropped_roots,
@@ -4442,14 +4438,14 @@ impl AccountsDb {
     fn combine_one_store_into_ancient(
         &self,
         slot: Slot,
-        old_storages: &[Arc<AccountStorageEntry>],
+        old_storages: &Arc<AccountStorageEntry>,
         current_ancient: &mut CurrentAncientAppendVec,
         ancient_slot_pubkeys: &mut AncientSlotPubkeys,
         dropped_roots: &mut Vec<Slot>,
     ) {
         let mut stored_accounts = Vec::default();
         let shrink_collect = self.shrink_collect(
-            old_storages.iter(),
+            old_storages,
             &mut stored_accounts,
             &self.shrink_ancient_stats.shrink_stats,
         );
@@ -4627,7 +4623,7 @@ impl AccountsDb {
                 .into_par_iter()
                 .map(|(slot, slot_shrink_candidates)| {
                     let mut measure = Measure::start("shrink_candidate_slots-ms");
-                    self.do_shrink_slot_stores(slot, slot_shrink_candidates.values());
+                    self.do_shrink_slot_stores(slot, slot_shrink_candidates.values().next());
                     measure.stop();
                     inc_new_counter_info!("shrink_candidate_slots-ms", measure.as_ms() as usize);
                     slot_shrink_candidates.len()
@@ -6919,7 +6915,7 @@ impl AccountsDb {
     }
 
     fn scan_multiple_account_storages_one_slot<S>(
-        storages: &[Arc<AccountStorageEntry>],
+        storages: &[&Arc<AccountStorageEntry>],
         scanner: &mut S,
     ) where
         S: AppendVecScan,
@@ -6993,19 +6989,13 @@ impl AccountsDb {
         if let Some(sub_storages) = sub_storages {
             stats.roots_older_than_epoch.fetch_add(1, Ordering::Relaxed);
             let mut ancients = 0;
-            let num_accounts = sub_storages
-                .iter()
-                .map(|storage| {
-                    if is_ancient(&storage.accounts) {
-                        ancients += 1;
-                    }
-                    storage.count()
-                })
-                .sum();
-            let sizes = sub_storages
-                .iter()
-                .map(|storage| storage.total_bytes())
-                .sum::<u64>();
+            let num_accounts = {
+                if is_ancient(&sub_storages.accounts) {
+                    ancients += 1;
+                }
+                sub_storages.count()
+            };
+            let sizes = sub_storages.total_bytes();
             stats
                 .append_vec_sizes_older_than_epoch
                 .fetch_add(sizes as usize, Ordering::Relaxed);
@@ -7049,12 +7039,8 @@ impl AccountsDb {
         slot: Slot,
     ) -> bool {
         if let Some(sub_storages) = storages {
-            if sub_storages.len() > 1 {
-                // Having > 1 appendvecs per slot is not expected. If we have that, we just fail to load from the cache for this slot.
-                return false;
-            }
             // hash info about this storage
-            let append_vec = sub_storages.first().unwrap();
+            let append_vec = sub_storages;
             append_vec.written_bytes().hash(hasher);
             let storage_file = append_vec.accounts.get_path();
             slot.hash(hasher);
@@ -7160,10 +7146,8 @@ impl AccountsDb {
                 // load from cache failed, so create the cache file for this chunk
                 for (slot, sub_storages) in snapshot_storages.iter_range(&range_this_chunk) {
                     let mut ancient = false;
-                    let (_, scan) = measure!(if let Some(sub_storages) = sub_storages {
-                        if let Some(storage) = sub_storages.first() {
-                            ancient = is_ancient(&storage.accounts);
-                        }
+                    let (_, scan) = measure!(if let Some(storage) = sub_storages {
+                        ancient = is_ancient(&storage.accounts);
                         if init_accum {
                             let range = bin_range.end - bin_range.start;
                             scanner.init_accum(range);
@@ -7171,7 +7155,7 @@ impl AccountsDb {
                         }
                         scanner.set_slot(slot);
 
-                        Self::scan_multiple_account_storages_one_slot(sub_storages, &mut scanner);
+                        Self::scan_multiple_account_storages_one_slot(&[storage], &mut scanner);
                     });
                     if ancient {
                         stats
@@ -7214,17 +7198,15 @@ impl AccountsDb {
         let sub = slots_per_epoch + acceptable_straggler_slot_count;
         let in_epoch_range_start = max.saturating_sub(sub);
         for (slot, storages) in storages.iter_range(&(..in_epoch_range_start)) {
-            if let Some(storages) = storages {
-                storages.iter().for_each(|store| {
-                    if !is_ancient(&store.accounts) {
-                        // ancient stores are managed separately - we expect them to be old and keeping accounts
-                        // We can expect the normal processes will keep them cleaned.
-                        // If we included them here then ALL accounts in ALL ancient append vecs will be visited by clean each time.
-                        self.dirty_stores
-                            .insert((slot, store.append_vec_id()), store.clone());
-                        num_dirty_slots += 1;
-                    }
-                });
+            if let Some(store) = storages {
+                if !is_ancient(&store.accounts) {
+                    // ancient stores are managed separately - we expect them to be old and keeping accounts
+                    // We can expect the normal processes will keep them cleaned.
+                    // If we included them here then ALL accounts in ALL ancient append vecs will be visited by clean each time.
+                    self.dirty_stores
+                        .insert((slot, store.append_vec_id()), store.clone());
+                    num_dirty_slots += 1;
+                }
             }
         }
         mark_time.stop();
@@ -8817,6 +8799,7 @@ impl AccountsDb {
                 if self.storage.is_empty(*slot) {
                     return;
                 }
+                let storage_maps = storage_maps.unwrap();
 
                 let partition = crate::bank::Bank::variable_cycle_partition_from_previous_slot(
                     epoch_schedule,

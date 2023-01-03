@@ -263,16 +263,10 @@ impl SnapshotPackage {
                 snapshot_info.archive_format,
             ),
             SnapshotType::IncrementalSnapshot(incremental_snapshot_base_slot) => {
-                snapshot_storages.retain(|storages| {
-                    storages
-                        .first() // storages are grouped by slot in the outer Vec, so all storages will have the same slot as the first
-                        .map(|storage| storage.slot() > incremental_snapshot_base_slot)
-                        .unwrap_or_default()
-                });
+                snapshot_storages
+                    .retain(|storages| storages.slot() > incremental_snapshot_base_slot);
                 assert!(
-                    snapshot_storages.iter().all(|storage| storage
-                        .iter()
-                        .all(|entry| entry.slot() > incremental_snapshot_base_slot)),
+                    snapshot_storages.iter().all(|storage| storage.slot() > incremental_snapshot_base_slot),
                     "Incremental snapshot package must only contain storage entries where slot > incremental snapshot base slot (i.e. full snapshot slot)!"
                 );
                 snapshot_utils::build_incremental_snapshot_archive_path(

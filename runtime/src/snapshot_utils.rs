@@ -446,7 +446,7 @@ pub fn archive_snapshot_package(
     .map_err(|e| SnapshotError::IoWithSource(e, "create staging symlinks"))?;
 
     // Add the AppendVecs into the compressible list
-    for storage in snapshot_package.snapshot_storages.iter().flatten() {
+    for storage in snapshot_package.snapshot_storages.iter() {
         storage.flush()?;
         let storage_path = storage.get_path();
         let output_path = staging_accounts_dir.join(crate::append_vec::AppendVec::file_name(
@@ -2169,7 +2169,7 @@ pub fn get_snapshot_storages(bank: &Bank) -> SnapshotStorages {
     let mut measure_snapshot_storages = Measure::start("snapshot-storages");
     let snapshot_storages = bank.get_snapshot_storages(None);
     measure_snapshot_storages.stop();
-    let snapshot_storages_count = snapshot_storages.iter().map(Vec::len).sum::<usize>();
+    let snapshot_storages_count = snapshot_storages.len();
     datapoint_info!(
         "get_snapshot_storages",
         ("snapshot-storages-count", snapshot_storages_count, i64),

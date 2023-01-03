@@ -273,7 +273,7 @@ impl<'a> SnapshotMinimizer<'a> {
     fn process_snapshot_storages(
         &self,
         minimized_slot_set: DashSet<Slot>,
-    ) -> (Vec<Slot>, SnapshotStorage) {
+    ) -> (Vec<Slot>, crate::accounts_db::SnapshotStorages) {
         let snapshot_storages = self
             .accounts_db()
             .get_snapshot_storages(..=self.starting_slot, None)
@@ -283,7 +283,7 @@ impl<'a> SnapshotMinimizer<'a> {
         let dead_storages = Mutex::new(Vec::new());
 
         snapshot_storages.into_par_iter().for_each(|storages| {
-            let slot = storages.first().unwrap().slot();
+            let slot = storages.slot();
             if slot != self.starting_slot {
                 if minimized_slot_set.contains(&slot) {
                     self.filter_storages(storages, &dead_storages);
@@ -299,13 +299,17 @@ impl<'a> SnapshotMinimizer<'a> {
     }
 
     /// Creates new storage replacing `storages` that contains only accounts in `minimized_account_set`.
-    fn filter_storages(&self, storages: SnapshotStorage, dead_storages: &Mutex<SnapshotStorage>) {
-        let slot = storages.first().unwrap().slot();
+    fn filter_storages(
+        &self,
+        storages: SnapshotStorage,
+        dead_storages: &Mutex<crate::accounts_db::SnapshotStorages>,
+    ) {
+        let slot = storages.slot();
         let GetUniqueAccountsResult {
             stored_accounts, ..
         } = self
             .accounts_db()
-            .get_unique_accounts_from_storages(storages.iter());
+            .get_unique_accounts_from_storages(&storages);
 
         let keep_accounts_collect = Mutex::new(Vec::with_capacity(stored_accounts.len()));
         let purge_pubkeys_collect = Mutex::new(Vec::with_capacity(stored_accounts.len()));
@@ -385,10 +389,9 @@ impl<'a> SnapshotMinimizer<'a> {
             true, // add_dirty_stores
             shrink_in_progress,
         );
-        dead_storages
-            .lock()
-            .unwrap()
-            .append(&mut dead_storages_this_time);
+        if let Some(dead_storages_this_time) = dead_storages_this_time {
+            dead_storages.lock().unwrap().push(dead_storages_this_time);
+        }
     }
 
     /// Purge dead slots from storage and cache

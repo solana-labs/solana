@@ -69,10 +69,7 @@ impl<'a> SortedStorages<'a> {
     // 2. SnapshotStorage.first().unwrap().get_slot() is unique from all other SnapshotStorage items.
     pub fn new(source: &'a [SnapshotStorage]) -> Self {
         let slots = source.iter().map(|storages| {
-            let first = storages.first();
-            assert!(first.is_some(), "SnapshotStorage.is_empty()");
-            let storage = first.unwrap();
-            storage.slot() // this must be unique. Will be enforced in new_with_slots
+            storages.slot() // this must be unique. Will be enforced in new_with_slots
         });
         Self::new_with_slots(source.iter().zip(slots.into_iter()), None, None)
     }
@@ -109,7 +106,7 @@ impl<'a> SortedStorages<'a> {
         let source_ = source.clone();
         let mut storage_count = 0;
         source_.for_each(|(storages, slot)| {
-            storage_count += storages.len();
+            storage_count += 1;
             slot_count += 1;
             adjust_min_max(slot);
         });

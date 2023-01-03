@@ -177,16 +177,10 @@ impl HashStats {
         let mut sum = 0;
         let mut sizes = storages
             .iter()
-            .flat_map(|storages| {
-                let result = storages
-                    .iter()
-                    .map(|storage| {
-                        let cap = storage.accounts.capacity() as usize;
+            .map(|storages| {
+                        let cap = storages.accounts.capacity() as usize;
                         sum += cap;
                         cap
-                    })
-                    .collect::<Vec<_>>();
-                result
             })
             .collect::<Vec<_>>();
         sizes.sort_unstable();
