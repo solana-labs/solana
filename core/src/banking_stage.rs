@@ -873,12 +873,14 @@ impl BankingStage {
                 let bank = bank_start.working_bank;
                 match &metrics_action {
                    MetricsTrackerAction::NewTracker(_) => {
-                       let mut count = 0;
-                       // discard buffered
-                       while let Ok(aaa) = packet_deserializer.packet_batch_receiver.try_recv() {
-                           count += aaa.0.len();
+                       if std::env::var("DISCARD_BUFFERED").is_ok() {
+                           let mut count = 0;
+                           // discard buffered
+                           while let Ok(aaa) = packet_deserializer.packet_batch_receiver.try_recv() {
+                               count += aaa.0.len();
+                           }
+                           info!("discarded {count} transactions... slot: {}", bank.slot());
                        }
-                       info!("discarded {count} transactions... slot: {}", bank.slot());
                    },
                    _ => {},
                 }
@@ -1107,6 +1109,7 @@ impl BankingStage {
         let mut last_metrics_update = Instant::now();
 
         let my_pubkey = cluster_info.id();
+        let mut last_len = 0;
         loop {
             if true {
                 let (_, process_buffered_packets_time) = measure!(
@@ -1174,12 +1177,14 @@ impl BankingStage {
             }
             */
 
+            let len = packet_deserializer.packet_batch_receiver.len();
             banking_stage_stats.report(1000);
             if packet_deserializer.packet_batch_receiver.is_disconnected() {
                 break;
-            } else if packet_deserializer.packet_batch_receiver.is_empty() {
+            } else if len == last_len {
                 std::thread::sleep(SLOT_BOUNDARY_CHECK_PERIOD);
             }
+            last_len = len;
         }
     }
 

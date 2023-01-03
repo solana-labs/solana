@@ -1161,7 +1161,7 @@ impl Scheduler<ExecuteTimings> {
                 thread_priority::set_current_thread_priority(thread_priority::ThreadPriority::Max).unwrap();
             }
 
-            while let Ok(solana_scheduler::ExecutablePayload(mut ee)) = (if thx >= executing_thread_count { scheduled_high_ee_receiver.recv() } else { scheduled_ee_receiver.recv()}) {
+            'recv: while let Ok(solana_scheduler::ExecutablePayload(mut ee)) = (if thx >= executing_thread_count { scheduled_high_ee_receiver.recv() } else { scheduled_ee_receiver.recv()}) {
                 'retry: loop {
                 commit_status.check_and_wait();
                 let (mut wall_time, cpu_time) = (Measure::start("process_message_time"), cpu_time::ThreadTime::now());
@@ -1172,6 +1172,11 @@ impl Scheduler<ExecuteTimings> {
 
                 let ro_bank = bank.read().unwrap();
                 let weak_bank = ro_bank.as_ref().unwrap().upgrade();
+                let mut timings = Default::default();
+                if weak_bank.is_none() {
+                    processed_ee_sender.send(solana_scheduler::UnlockablePayload(ee, timings)).unwrap();
+                    continue 'recv;
+                }
                 let bank = weak_bank.as_ref().unwrap();
                 let slot = bank.slot();
 
@@ -1183,7 +1188,6 @@ impl Scheduler<ExecuteTimings> {
                     TransactionBatch::new(vec![lock_result], &bank, Cow::Owned(vec![ee.task.tx.0.clone()]));
                 batch.set_needs_unlock(false);
 
-                let mut timings = Default::default();
                 let LoadAndExecuteTransactionsOutput {
                     mut loaded_transactions,
                     mut execution_results,
@@ -1512,16 +1516,18 @@ impl<C> Scheduler<C> {
 
     fn pause_commit_into_bank(&self) {
         self.commit_status.notify_as_paused();
-        {
+        /*{
             *self.bank.write().unwrap() = None;
             self.slot.store(0, std::sync::atomic::Ordering::SeqCst);
-        }
+        }*/
     }
 
-    fn resume_commit_into_bank(&self, bank: &Arc<Bank>) {
-        {
-            *self.bank.write().unwrap() = Some(Arc::downgrade(bank));
-            self.slot.store(bank.slot(), std::sync::atomic::Ordering::SeqCst);
+    fn resume_commit_into_bank(&self, bank: Option<&Arc<Bank>>) {
+        if let Some(bank) = bank {
+            {
+                *self.bank.write().unwrap() = Some(Arc::downgrade(bank));
+                self.slot.store(bank.slot(), std::sync::atomic::Ordering::SeqCst);
+            }
         }
         self.commit_status.notify_as_resumed();
     }
@@ -6864,7 +6870,7 @@ impl Bank {
         assert_matches!(self.commit_mode(), CommitMode::Banking);
         let s = self.scheduler2.read().unwrap();
         let scheduler = s.as_ref().unwrap();
-        scheduler.resume_commit_into_bank(self);
+        scheduler.resume_commit_into_bank(Some(self));
     }
 
     pub fn commit_mode(&self) -> CommitMode {
@@ -8571,6 +8577,10 @@ impl Bank {
         if let Some(scheduler) = s.as_ref() {
             let commit_mode = self.commit_mode();
             if matches!(commit_mode, CommitMode::Replaying) || via_drop {
+                if matches!(commit_mode, CommitMode::Banking) {
+                    assert!(via_drop);
+                    scheduler.resume_commit_into_bank(None);
+                }
                 let _r = scheduler.gracefully_stop().unwrap();
                 let e = scheduler
                     .handle_aborted_executions()
