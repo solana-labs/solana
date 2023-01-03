@@ -1330,7 +1330,7 @@ fn main() {
     let accountsdb_verify_refcounts = Arg::with_name("accounts_db_verify_refcounts")
         .long("accounts-db-verify-refcounts")
         .help(
-            "Debug option to scan all append vecs and verify account index refcounts prior to clean",
+            "Debug option to scan all AppendVecs and verify account index refcounts prior to clean",
         )
         .hidden(true);
     let accounts_filler_count = Arg::with_name("accounts_filler_count")
