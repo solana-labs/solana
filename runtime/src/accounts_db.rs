@@ -8542,22 +8542,21 @@ impl AccountsDb {
                 .map(|slots_and_storages| {
                     slots_and_storages
                         .iter()
-                        .filter_map(|(slot, storages)| {
-                            (self.accounts_index.is_alive_root(*slot)
+                        .filter(|(slot, _)| {
+                            self.accounts_index.is_alive_root(*slot)
                                 || ancestors
                                     .map(|ancestors| ancestors.contains_key(slot))
-                                    .unwrap_or_default())
-                            .then(|| {
-                                let storages = storages
-                                    .read()
-                                    .unwrap()
-                                    .values()
-                                    .filter(|x| x.has_accounts())
-                                    .cloned()
-                                    .collect::<Vec<_>>();
-                                (!storages.is_empty()).then_some((storages, *slot))
-                            })
-                            .flatten()
+                                    .unwrap_or_default()
+                        })
+                        .filter_map(|(slot, storages)| {
+                            let storages = storages
+                                .read()
+                                .unwrap()
+                                .values()
+                                .filter(|x| x.has_accounts())
+                                .cloned()
+                                .collect::<Vec<_>>();
+                            (!storages.is_empty()).then_some((storages, *slot))
                         })
                         .collect::<Vec<(SnapshotStorage, Slot)>>()
                 })
