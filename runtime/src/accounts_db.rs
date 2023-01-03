@@ -8522,7 +8522,7 @@ impl AccountsDb {
         ancestors: Option<&Ancestors>,
     ) -> (SnapshotStorages, Vec<Slot>) {
         let mut m = Measure::start("get slots");
-        let slots = self
+        let slots_and_storages = self
             .storage
             .iter()
             .filter_map(|entry| {
@@ -8537,17 +8537,17 @@ impl AccountsDb {
 
         let chunk_size = 5_000;
         let wide = self.thread_pool_clean.install(|| {
-            slots
+            slots_and_storages
                 .par_chunks(chunk_size)
-                .map(|slots| {
-                    slots
+                .map(|slots_and_storages| {
+                    slots_and_storages
                         .iter()
                         .filter_map(|(slot, storages)| {
-                            if self.accounts_index.is_alive_root(*slot)
+                            (self.accounts_index.is_alive_root(*slot)
                                 || ancestors
                                     .map(|ancestors| ancestors.contains_key(slot))
-                                    .unwrap_or_default()
-                            {
+                                    .unwrap_or_default())
+                            .then(|| {
                                 let storages = storages
                                     .read()
                                     .unwrap()
@@ -8555,14 +8555,9 @@ impl AccountsDb {
                                     .filter(|x| x.has_accounts())
                                     .cloned()
                                     .collect::<Vec<_>>();
-                                if !storages.is_empty() {
-                                    Some((storages, *slot))
-                                } else {
-                                    None
-                                }
-                            } else {
-                                None
-                            }
+                                (!storages.is_empty()).then_some((storages, *slot))
+                            })
+                            .flatten()
                         })
                         .collect::<Vec<(SnapshotStorage, Slot)>>()
                 })
@@ -8572,7 +8567,7 @@ impl AccountsDb {
         let mut m3 = Measure::start("flatten");
         // some slots we found above may not have been a root or met the slot # constraint.
         // So the resulting 'slots' vector we return will be a subset of the raw keys we got initially.
-        let mut slots = Vec::with_capacity(slots.len());
+        let mut slots = Vec::with_capacity(slots_and_storages.len());
         let result = wide
             .into_iter()
             .flatten()
