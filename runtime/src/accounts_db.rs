@@ -3836,7 +3836,6 @@ impl AccountsDb {
         // Purge old, overwritten storage entries
         let (remaining_stores, dead_storages) = self.mark_dirty_dead_stores(
             slot,
-            |store| !shrink_collect.store_ids.contains(&store.append_vec_id()),
             // If all accounts are zero lamports, then we want to mark the entire OLD append vec as dirty.
             // otherwise, we'll call 'add_uncleaned_pubkeys_after_shrink' just on the unref'd keys below.
             shrink_collect.all_are_zero_lamports,
@@ -3992,15 +3991,13 @@ impl AccountsDb {
     }
 
     /// get stores for 'slot'
-    /// retain only the stores where 'should_retain(store)' == true
-    /// for stores not retained, insert in 'dead_storages' and optionally 'dirty_stores'
+    /// Drop 'shrink_in_progress', which will cause the old store to be removed from the storage map.
+    /// For 'shrink_in_progress'.'old_storage' which is not retained, insert in 'dead_storages' and optionally 'dirty_stores'
     /// This is the end of the life cycle of `shrink_in_progress`.
-    /// Dropping 'shrink_in_progress' here will cause the old store to be removed from the storage map.
     /// returns: (# of remaining stores for this slot, dead storages)
     pub(crate) fn mark_dirty_dead_stores(
         &self,
         slot: Slot,
-        should_retain: impl Fn(&AccountStorageEntry) -> bool,
         add_dirty_stores: bool,
         shrink_in_progress: Option<ShrinkInProgress>,
     ) -> (usize, SnapshotStorage) {
@@ -4023,17 +4020,12 @@ impl AccountsDb {
                 drop(shrink_in_progress);
                 slot_stores.read().unwrap().len()
             } else {
-                // no shrink_in_progress, so retain append vecs depending on 'should_retain'
+                // no shrink in progress, so all append vecs in this slot are dead
                 let mut list = slot_stores.write().unwrap();
-                list.retain(|_key, store| {
-                    if !should_retain(store) {
-                        not_retaining_store(store);
-                        false
-                    } else {
-                        true
-                    }
+                list.drain().for_each(|(_key, store)| {
+                    not_retaining_store(&store);
                 });
-                list.len()
+                0
             }
         } else {
             0
@@ -16498,7 +16490,7 @@ pub mod tests {
         let slot = 0;
         for add_dirty_stores in [false, true] {
             let (remaining_stores, dead_storages) =
-                db.mark_dirty_dead_stores(slot, |_| true, add_dirty_stores, None);
+                db.mark_dirty_dead_stores(slot, add_dirty_stores, None);
             assert_eq!(remaining_stores, 0);
             assert!(dead_storages.is_empty());
             assert!(db.dirty_stores.is_empty());
@@ -16518,7 +16510,7 @@ pub mod tests {
             let existing_store = db.create_and_insert_store(slot, size, "test");
             let old_id = existing_store.append_vec_id();
             let (remaining_stores, dead_storages) =
-                db.mark_dirty_dead_stores(slot, |_| false, add_dirty_stores, None);
+                db.mark_dirty_dead_stores(slot, add_dirty_stores, None);
             assert_eq!(0, remaining_stores);
             assert_eq!(dead_storages.len(), 1);
             assert_eq!(dead_storages.first().unwrap().append_vec_id(), old_id);
@@ -16535,55 +16527,34 @@ pub mod tests {
 
     #[test]
     fn test_mark_dirty_dead_stores() {
-        let db = AccountsDb::new_single_for_tests();
         let slot = 0;
-        let called = AtomicUsize::default();
-        let add_dirty_stores = false;
-        let (remaining_stores, _) = db.mark_dirty_dead_stores(
-            slot,
-            |_store| {
-                called.fetch_add(1, Ordering::Relaxed);
-                false
-            },
-            add_dirty_stores,
-            None,
-        );
-        assert_eq!(0, called.load(Ordering::Relaxed));
-        assert_eq!(0, remaining_stores);
 
-        let size = 1;
-        let inserted_store = db.create_and_insert_store(slot, size, "test");
-        let (remaining_stores, _) = db.mark_dirty_dead_stores(
-            slot,
-            |store| {
-                assert_eq!(store.append_vec_id(), inserted_store.append_vec_id());
-                called.fetch_add(1, Ordering::Relaxed);
-                true // retain
-            },
-            add_dirty_stores,
-            None,
-        );
-        assert_eq!(1, called.load(Ordering::Relaxed));
-        assert_eq!(1, remaining_stores);
-
-        let called = AtomicUsize::default();
-        let (remaining_stores, _) = db.mark_dirty_dead_stores(
-            slot,
-            |store| {
-                assert_eq!(store.append_vec_id(), inserted_store.append_vec_id());
-                called.fetch_add(1, Ordering::Relaxed);
-                false // don't retain
-            },
-            add_dirty_stores,
-            None,
-        );
-        assert_eq!(1, called.load(Ordering::Relaxed));
-        assert!(db
-            .get_storages_for_slot(slot)
-            .unwrap_or_default()
-            .is_empty());
-        assert_eq!(0, remaining_stores);
-        assert!(db.dirty_stores.is_empty());
+        // use shrink_in_progress to cause us to drop the initial store
+        for add_dirty_stores in [false, true] {
+            let db = AccountsDb::new_single_for_tests();
+            let size = 1;
+            let old_store = db.create_and_insert_store(slot, size, "test");
+            let old_id = old_store.append_vec_id();
+            let shrink_in_progress = db.get_store_for_shrink(slot, 100);
+            let (remaining_stores, dead_storages) =
+                db.mark_dirty_dead_stores(slot, add_dirty_stores, Some(shrink_in_progress));
+            assert_eq!(1, remaining_stores);
+            assert_eq!(dead_storages.len(), 1);
+            assert_eq!(dead_storages.first().unwrap().append_vec_id(), old_id);
+            if add_dirty_stores {
+                assert_eq!(1, db.dirty_stores.len());
+                let dirty_store = db.dirty_stores.get(&(slot, old_id)).unwrap();
+                assert_eq!(dirty_store.append_vec_id(), old_id);
+            } else {
+                assert!(db.dirty_stores.is_empty());
+            }
+            assert_eq!(
+                1,
+                db.get_storages_for_slot(slot)
+                    .map(|storages| storages.len())
+                    .unwrap_or_default()
+            );
+        }
     }
 
     #[test]
