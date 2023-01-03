@@ -4882,7 +4882,7 @@ impl AccountsDb {
             // If the slot is not in the cache, then all the account information must have
             // been flushed. This is guaranteed because we only remove the rooted slot from
             // the cache *after* we've finished flushing in `flush_slot_cache`.
-            let storage_maps: SnapshotStorage = self
+            let storage_maps = self
                 .storage
                 .get_slot_storage_entries(slot)
                 .unwrap_or_default();
@@ -8113,7 +8113,7 @@ impl AccountsDb {
         pubkeys_removed_from_accounts_index: &PubkeysRemovedFromAccountsIndex,
     ) {
         let mut measure = Measure::start("clean_stored_dead_slots-ms");
-        let mut stores: SnapshotStorage = vec![];
+        let mut stores = vec![];
         // get all stores in a vec so we can iterate in parallel
         for slot in dead_slots.iter() {
             if let Some(slot_storage) = self.storage.get_slot_stores(*slot) {
@@ -8861,7 +8861,7 @@ impl AccountsDb {
                 .take(per_pass)
                 .collect::<Vec<_>>();
             roots_in_this_pass.into_par_iter().for_each(|slot| {
-                let storage_maps: SnapshotStorage = self
+                let storage_maps = self
                     .storage
                     .get_slot_storage_entries(*slot)
                     .unwrap_or_default();
