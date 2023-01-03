@@ -16503,6 +16503,34 @@ pub mod tests {
     }
 
     #[test]
+    fn test_mark_dirty_dead_stores_no_shrink_in_progress() {
+        // None for shrink_in_progress, 1 existing store at the slot
+        // There should be no more append vecs at that slot after the call to mark_dirty_dead_stores.
+        // This tests the case where this slot was combined into an ancient append vec from an older slot and
+        // there is no longer an append vec at this slot.
+        for add_dirty_stores in [false, true] {
+            let slot = 0;
+            let db = AccountsDb::new_single_for_tests();
+            let size = 1;
+            let existing_store = db.create_and_insert_store(slot, size, "test");
+            let old_id = existing_store.append_vec_id();
+            let (remaining_stores, dead_storages) =
+                db.mark_dirty_dead_stores(slot, |_| false, add_dirty_stores, None);
+            assert_eq!(0, remaining_stores);
+            assert_eq!(dead_storages.len(), 1);
+            assert_eq!(dead_storages.first().unwrap().append_vec_id(), old_id);
+            if add_dirty_stores {
+                assert_eq!(1, db.dirty_stores.len());
+                let dirty_store = db.dirty_stores.get(&(slot, old_id)).unwrap();
+                assert_eq!(dirty_store.append_vec_id(), old_id);
+            } else {
+                assert!(db.dirty_stores.is_empty());
+            }
+            assert!(db.get_storages_for_slot(slot).unwrap().is_empty());
+        }
+    }
+
+    #[test]
     fn test_mark_dirty_dead_stores() {
         let db = AccountsDb::new_single_for_tests();
         let slot = 0;
