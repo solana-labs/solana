@@ -14596,6 +14596,18 @@ pub mod tests {
             .is_none());
     }
 
+    impl AccountsDb {
+        fn get_and_assert_single_storage(&self, slot: Slot) -> Arc<AccountStorageEntry> {
+            let mut storage_maps: SnapshotStorage = self
+                .storage
+                .get_slot_storage_entries(slot)
+                .unwrap_or_default();
+
+            assert_eq!(storage_maps.len(), 1);
+            storage_maps.pop().unwrap()
+        }
+    }
+
     #[test]
     fn test_alive_bytes() {
         let accounts_db = AccountsDb::new_with_config_for_tests(
@@ -14615,14 +14627,8 @@ pub mod tests {
         accounts_db.add_root(slot);
         accounts_db.flush_accounts_cache(true, None);
 
-        let mut storage_maps: SnapshotStorage = accounts_db
-            .storage
-            .get_slot_storage_entries(slot)
-            .unwrap_or_default();
-
         // Flushing cache should only create one storage entry
-        assert_eq!(storage_maps.len(), 1);
-        let storage0 = storage_maps.pop().unwrap();
+        let storage0 = accounts_db.get_and_assert_single_storage(slot);
         let accounts = storage0.all_accounts();
 
         for account in accounts {
@@ -15100,9 +15106,7 @@ pub mod tests {
         db.clean_accounts(Some(1), false, None);
 
         // Shrink Slot 0
-        let mut slot0_stores = db.storage.get_slot_storage_entries(0).unwrap();
-        assert_eq!(slot0_stores.len(), 1);
-        let slot0_store = slot0_stores.pop().unwrap();
+        let slot0_store = db.get_and_assert_single_storage(0);
         {
             let mut shrink_candidate_slots = db.shrink_candidate_slots.lock().unwrap();
             shrink_candidate_slots
@@ -15120,7 +15124,7 @@ pub mod tests {
         db.flush_accounts_cache(true, None);
 
         // Should be one store before clean for slot 0
-        assert_eq!(db.storage.get_slot_storage_entries(0).unwrap().len(), 1);
+        db.get_and_assert_single_storage(0);
         db.get_accounts_delta_hash(2);
         db.clean_accounts(Some(2), false, None);
 
@@ -15438,9 +15442,7 @@ pub mod tests {
                         return;
                     }
                     // Simulate adding shrink candidates from clean_accounts()
-                    let stores = db.storage.get_slot_storage_entries(slot).unwrap();
-                    assert_eq!(stores.len(), 1);
-                    let store = &stores[0];
+                    let store = db.get_and_assert_single_storage(slot);
                     let store_id = store.append_vec_id();
                     db.shrink_candidate_slots
                         .lock()
