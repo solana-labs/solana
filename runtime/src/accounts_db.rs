@@ -15129,7 +15129,7 @@ pub mod tests {
         db.clean_accounts(Some(2), false, None);
 
         // No stores should exist for slot 0 after clean
-        assert!(db.storage.get_slot_storage_entries(0).is_none());
+        assert_no_storages_at_slot(&db, 0);
 
         // Ref count for `account_key1` (account removed earlier by shrink)
         // should be 1, since it was only stored in slot 0 and 1, and slot 0
@@ -15651,7 +15651,7 @@ pub mod tests {
             // cache, storage, and index
 
             for (slot, _) in slots_to_dump {
-                assert!(db.storage.get_slot_storage_entries(*slot).is_none());
+                assert_no_storages_at_slot(&db, *slot);
                 assert!(db.accounts_cache.slot_cache(*slot).is_none());
                 let account_in_slot = slot_to_pubkey_map[slot];
                 let item = db.accounts_index.get_account_read_entry(&account_in_slot);
@@ -16033,7 +16033,12 @@ pub mod tests {
             .accounts_index
             .get_account_read_entry(&shared_key)
             .is_none());
-        assert!(accounts.storage.get_slot_storage_entries(slot0).is_none());
+        assert_no_storages_at_slot(&accounts, slot0);
+    }
+
+    /// asserts that not only are there 0 append vecs, but there is not even an entry in the storage map for 'slot'
+    fn assert_no_storages_at_slot(db: &AccountsDb, slot: Slot) {
+        assert!(db.storage.get_slot_storage_entries(slot).is_none());
     }
 
     /// Test to make sure `clean_accounts()` works properly with the `last_full_snapshot_slot`
