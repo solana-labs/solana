@@ -30,7 +30,7 @@ use {
         data_budget::DataBudget,
         packet::{Packet, PacketBatch, PacketBatchRecycler},
     },
-    solana_runtime::bank_forks::BankForks,
+    solana_runtime::{bank::Bank, bank_forks::BankForks},
     solana_sdk::{
         clock::Slot,
         genesis_config::ClusterType,
@@ -167,7 +167,6 @@ struct ServeRepairStats {
     total_response_bytes_unstaked: usize,
     handle_requests_staked: usize,
     handle_requests_unstaked: usize,
-    handle_my_slot: usize,
     processed: usize,
     self_repair: usize,
     window_index: usize,
@@ -276,23 +275,6 @@ impl RepairProtocol {
             | Self::HighestWindowIndex { .. }
             | Self::Orphan { .. }
             | Self::AncestorHashes { .. } => true,
-        }
-    }
-
-    fn slot(&self) -> Option<Slot> {
-        match self {
-            Self::LegacyWindowIndex(_, slot, _)
-            | Self::LegacyHighestWindowIndex(_, slot, _)
-            | Self::LegacyOrphan(_, slot)
-            | Self::LegacyWindowIndexWithNonce(_, slot, _, _)
-            | Self::LegacyHighestWindowIndexWithNonce(_, slot, _, _)
-            | Self::LegacyOrphanWithNonce(_, slot, _)
-            | Self::LegacyAncestorHashes(_, slot, _)
-            | Self::WindowIndex { slot, .. }
-            | Self::HighestWindowIndex { slot, .. }
-            | Self::Orphan { slot, .. }
-            | Self::AncestorHashes { slot, .. } => Some(*slot),
-            Self::Pong(_) => None,
         }
     }
 }
@@ -484,18 +466,12 @@ impl ServeRepair {
         let mut reqs_v = vec![requests_receiver.recv_timeout(timeout)?];
         const MAX_REQUESTS_PER_ITERATION: usize = 1024;
         let mut total_requests = reqs_v[0].len();
-        const MY_SLOT_PRIORITY_MULTIPLE: u64 = 2;
 
         let socket_addr_space = *self.cluster_info.socket_addr_space();
         let root_bank = self.bank_forks.read().unwrap().root_bank();
         let epoch_staked_nodes = root_bank.epoch_staked_nodes(root_bank.epoch());
         let identity_keypair = self.cluster_info.keypair().clone();
         let my_id = identity_keypair.pubkey();
-
-        let (working_bank, root_bank) = {
-            let bank_forks = self.bank_forks.read().unwrap();
-            (bank_forks.working_bank(), bank_forks.root_bank())
-        };
 
         let max_buffered_packets = if root_bank.cluster_type() != ClusterType::MainnetBeta {
             if self.repair_whitelist.read().unwrap().len() > 0 {
@@ -552,17 +528,7 @@ impl ServeRepair {
                     continue;
                 }
 
-                let my_slot = request
-                    .slot()
-                    .map(|slot| {
-                        self.leader_schedule_cache
-                            .slot_leader_at(slot, Some(&working_bank))
-                            .map(|pubkey| pubkey == my_id)
-                            .unwrap_or_default()
-                    })
-                    .unwrap_or_default();
-
-                let mut stake = *epoch_staked_nodes
+                let stake = *epoch_staked_nodes
                     .as_ref()
                     .and_then(|stakes| stakes.get(request.sender()))
                     .unwrap_or(&0);
@@ -570,15 +536,6 @@ impl ServeRepair {
                     stats.handle_requests_unstaked += 1;
                 } else {
                     stats.handle_requests_staked += 1;
-                }
-
-                if my_slot {
-                    stats.handle_my_slot += 1;
-                    // Increase priority for this validator's leader slots.
-                    // Add 1 to the increased stake value to ensure an increased priority for unstaked nodes.
-                    stake = stake
-                        .saturating_mul(MY_SLOT_PRIORITY_MULTIPLE)
-                        .saturating_add(1);
                 }
 
                 let whitelisted = whitelist.contains(request.sender());
@@ -657,7 +614,6 @@ impl ServeRepair {
                 stats.handle_requests_unstaked,
                 i64
             ),
-            ("handle_my_slot", stats.handle_my_slot, i64),
             ("processed", stats.processed, i64),
             ("total_response_packets", stats.total_response_packets, i64),
             (
@@ -950,6 +906,7 @@ impl ServeRepair {
         repair_validators: &Option<HashSet<Pubkey>>,
         outstanding_requests: &mut OutstandingShredRepairs,
         identity_keypair: &Keypair,
+        bank: &Bank,
     ) -> Result<(SocketAddr, Vec<u8>)> {
         // find a peer that appears to be accepting replication and has the desired slot, as indicated
         // by a valid tvu port location
@@ -958,8 +915,18 @@ impl ServeRepair {
             Some(entry) if entry.asof.elapsed() < REPAIR_PEERS_CACHE_TTL => entry,
             _ => {
                 peers_cache.pop(&slot);
-                let repair_peers = self.repair_peers(repair_validators, slot);
-                let weights = cluster_slots.compute_weights(slot, &repair_peers);
+                let leader_ci = self
+                    .leader_schedule_cache
+                    .slot_leader_at(slot, Some(bank))
+                    .and_then(|id| self.cluster_info.lookup_contact_info(&id, |ci| ci.clone()));
+                let (repair_peers, weights) = if let Some(leader_ci) = leader_ci {
+                    (vec![leader_ci], vec![1])
+                } else {
+                    error!(">>> could not find leader for slot={}", slot);
+                    let repair_peers = self.repair_peers(repair_validators, slot);
+                    let weights = cluster_slots.compute_weights(slot, &repair_peers);
+                    (repair_peers, weights)
+                };
                 let repair_peers = RepairPeers::new(Instant::now(), &repair_peers, &weights)?;
                 peers_cache.put(slot, repair_peers);
                 peers_cache.get(&slot).unwrap()

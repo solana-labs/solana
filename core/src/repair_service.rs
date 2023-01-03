@@ -1,6 +1,5 @@
 //! The `repair_service` module implements the tools necessary to generate a thread which
 //! regularly finds missing shreds in the ledger and sends repair requests for those shreds
-
 use {
     crate::{
         ancestor_hashes_service::{AncestorHashesReplayUpdateReceiver, AncestorHashesService},
@@ -383,6 +382,7 @@ impl RepairService {
                                 &repair_info.repair_validators,
                                 &mut outstanding_requests,
                                 identity_keypair,
+                                &root_bank,
                             )
                             .ok()?;
                         repair_peers.insert(to);
