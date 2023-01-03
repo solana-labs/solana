@@ -2258,7 +2258,7 @@ pub fn verify_snapshot_archive<P, Q, R>(
         )
         .unwrap();
 
-        // Remove the new accounts/, version, and state_complete file to be consistent with the
+        // Remove the new accounts/ to be consistent with the
         // old archive structure.
         let accounts_path = snapshot_slot_dir.join("accounts");
         if accounts_path.is_dir() {
