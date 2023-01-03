@@ -1738,6 +1738,7 @@ mod tests {
         let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(10_000);
         let bank = Bank::new_for_tests(&genesis_config);
         let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
+        let root_bank = bank_forks.read().unwrap().root_bank();
         let cluster_slots = ClusterSlots::default();
         let me = ContactInfo::new_localhost(&solana_sdk::pubkey::new_rand(), timestamp());
         let cluster_info = Arc::new(new_test_cluster_info(me));
@@ -1760,6 +1761,7 @@ mod tests {
             &None,
             &mut outstanding_requests,
             &identity_keypair,
+            &root_bank,
         );
         assert_matches!(rv, Err(Error::ClusterInfo(ClusterInfoError::NoPeers)));
 
@@ -1789,6 +1791,7 @@ mod tests {
                 &None,
                 &mut outstanding_requests,
                 &identity_keypair,
+                &root_bank,
             )
             .unwrap();
         assert_eq!(nxt.serve_repair, serve_repair_addr);
@@ -1824,6 +1827,7 @@ mod tests {
                     &None,
                     &mut outstanding_requests,
                     &identity_keypair,
+                    &root_bank,
                 )
                 .unwrap();
             if rv.0 == serve_repair_addr {
@@ -2068,6 +2072,7 @@ mod tests {
         let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(10_000);
         let bank = Bank::new_for_tests(&genesis_config);
         let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
+        let root_bank = bank_forks.read().unwrap().root_bank();
         let cluster_slots = ClusterSlots::default();
         let me = ContactInfo::new_localhost(&solana_sdk::pubkey::new_rand(), timestamp());
         let cluster_info = Arc::new(new_test_cluster_info(me.clone()));
@@ -2106,6 +2111,7 @@ mod tests {
                     &known_validators,
                     &mut OutstandingShredRepairs::default(),
                     &identity_keypair,
+                    &root_bank,
                 )
                 .is_err());
         }
@@ -2124,6 +2130,7 @@ mod tests {
                 &known_validators,
                 &mut OutstandingShredRepairs::default(),
                 &identity_keypair,
+                &root_bank,
             )
             .is_ok());
 
@@ -2146,6 +2153,7 @@ mod tests {
                 &None,
                 &mut OutstandingShredRepairs::default(),
                 &identity_keypair,
+                &root_bank,
             )
             .is_ok());
     }
