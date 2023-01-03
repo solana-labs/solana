@@ -1176,6 +1176,7 @@ impl BankingStage {
         gossip_vote_sender: &ReplayVoteSender,
         signature_count: u64,
         executed_transactions_count: usize,
+        executed_non_vote_transactions_count: usize,
         executed_with_successful_result_count: usize,
     ) -> (u64, Vec<CommitTransactionDetails>) {
         inc_new_counter_info!(
@@ -1195,6 +1196,8 @@ impl BankingStage {
                 lamports_per_signature,
                 CommitTransactionCounts {
                     committed_transactions_count: executed_transactions_count as u64,
+                    committed_non_vote_transactions_count: executed_non_vote_transactions_count
+                        as u64,
                     committed_with_failure_result_count: executed_transactions_count
                         .saturating_sub(executed_with_successful_result_count)
                         as u64,
@@ -1330,6 +1333,7 @@ impl BankingStage {
             execution_results,
             mut retryable_transaction_indexes,
             executed_transactions_count,
+            executed_non_vote_transactions_count,
             executed_with_successful_result_count,
             signature_count,
             error_counters,
@@ -1407,6 +1411,7 @@ impl BankingStage {
                 gossip_vote_sender,
                 signature_count,
                 executed_transactions_count,
+                executed_non_vote_transactions_count,
                 executed_with_successful_result_count,
             )
         } else {
