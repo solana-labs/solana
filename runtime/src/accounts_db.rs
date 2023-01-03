@@ -1196,9 +1196,9 @@ impl RecycleStores {
     }
 
     fn add_entries(&mut self, new_entries: SnapshotStorage) {
-        self.total_bytes += new_entries.iter().map(|e| e.total_bytes()).sum::<u64>();
         let now = Instant::now();
         for new_entry in new_entries {
+            self.total_bytes += new_entry.total_bytes();
             self.entries.push((now, new_entry));
         }
     }
