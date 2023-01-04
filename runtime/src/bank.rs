@@ -1171,12 +1171,12 @@ impl Scheduler<ExecuteTimings> {
                 trace!("execute_substage: transaction_index: {} execute_clock: {} at thread: {}", thx, transaction_index, current_execute_clock);
 
                 let ro_bank = bank.read().unwrap();
-                let weak_bank = ro_bank.as_ref().unwrap().upgrade();
                 let mut timings = Default::default();
-                if weak_bank.is_none() {
+                if ro_bank.is_none() {
                     processed_ee_sender.send(solana_scheduler::UnlockablePayload(ee, timings)).unwrap();
                     continue 'recv;
                 }
+                let weak_bank = ro_bank.as_ref().unwrap().upgrade();
                 let bank = weak_bank.as_ref().unwrap();
                 let slot = bank.slot();
 
@@ -1233,7 +1233,8 @@ impl Scheduler<ExecuteTimings> {
                             if let Err(e) = poh.as_ref().unwrap()(bank.as_ref(), executed_transactions, hash) {
                                 let current_thread_name = std::thread::current().name().unwrap().to_string();
 
-                                error!("{current_thread_name} pausing due to poh error...: {:?}", e);
+                                error!("{current_thread_name} pausing due to poh error until resumed...: {:?}", e);
+                                // this is needed so that we don't enter busy loop
                                 commit_status.notify_as_paused();
                                 continue 'retry;
                             }
@@ -1516,10 +1517,10 @@ impl<C> Scheduler<C> {
 
     fn pause_commit_into_bank(&self) {
         self.commit_status.notify_as_paused();
-        /*{
+        {
             *self.bank.write().unwrap() = None;
             self.slot.store(0, std::sync::atomic::Ordering::SeqCst);
-        }*/
+        }
     }
 
     fn resume_commit_into_bank(&self, bank: Option<&Arc<Bank>>) {
@@ -2182,22 +2183,28 @@ impl Bank {
             measure!(parent.feature_set.clone(), "feature_set_creation");
 
         let accounts_data_size_initial = parent.load_accounts_data_size();
-        let (scheduler, commit_mode) = if !banking {
-            (
-                RwLock::new(Some(SCHEDULER_POOL.lock().unwrap().take_from_pool())),
-                CommitMode::Replaying.into(),
-            )
+        let commit_mode = if !banking || std::env::var("ISOLATED_BANKING_LIKE_REPLAY").is_ok() {
+            CommitMode::Replaying
         } else {
-            let s: Option<Arc<Scheduler<ExecuteTimings>>> = parent.scheduler2.write().unwrap().take();
-            (if let Some(scheduler) = s {
-                use assert_matches::assert_matches;
-                assert_matches!(parent.commit_mode(), CommitMode::Banking);
-                info!("bank (slot: {}) inheriting {}'s scheduler..", slot, parent.slot());
-                RwLock::new(Some(scheduler))
-            } else {
-                info!("bank (slot: {}) NOT inheriting {}'s scheduler..", slot, parent.slot());
+            CommitMode::Banking
+        };
+
+        let scheduler = match commit_mode {
+            CommitMode::Replaying => {
                 RwLock::new(Some(SCHEDULER_POOL.lock().unwrap().take_from_pool()))
-            }, CommitMode::Banking.into())
+            },
+            CommitMode::Banking => {
+                let s: Option<Arc<Scheduler<ExecuteTimings>>> = parent.scheduler2.write().unwrap().take();
+                if let Some(scheduler) = s {
+                    use assert_matches::assert_matches;
+                    assert_matches!(parent.commit_mode(), CommitMode::Banking);
+                    info!("bank (slot: {}) inheriting {}'s scheduler..", slot, parent.slot());
+                    RwLock::new(Some(scheduler))
+                } else {
+                    info!("bank (slot: {}) NOT inheriting {}'s scheduler..", slot, parent.slot());
+                    RwLock::new(Some(SCHEDULER_POOL.lock().unwrap().take_from_pool()))
+                }
+            },
         };
 
         let mut new = Bank {
@@ -2279,7 +2286,7 @@ impl Bank {
             accounts_data_size_delta_off_chain: AtomicI64::new(0),
             fee_structure: parent.fee_structure.clone(),
             scheduler2: scheduler,
-            commit_mode,
+            commit_mode: commit_mode.into(),
             blockhash_override: RwLock::new(blockhash_override),
         };
 
@@ -8592,6 +8599,13 @@ impl Bank {
             } else {
                 info!("wait_for_scheduler(Banking): pausing commit into bank...");
                 scheduler.pause_commit_into_bank();
+                /* proper per-slot metrics reporting is needed...
+                scheduler
+                    .handle_aborted_executions()
+                    .into_iter()
+                    .next()
+                    .unwrap()
+                */
                 Ok(Default::default())
             }
         } else {
