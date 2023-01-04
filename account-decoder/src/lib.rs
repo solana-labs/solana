@@ -70,8 +70,9 @@ impl UiAccount {
         account: &T,
         data_slice_config: Option<UiDataSliceConfig>,
     ) -> String {
-        if account.data().len() <= MAX_BASE58_BYTES {
-            bs58::encode(slice_data(account.data(), data_slice_config)).into_string()
+        let data = slice_data(account.data(), data_slice_config);
+        if data.len() <= MAX_BASE58_BYTES {
+            bs58::encode(data).into_string()
         } else {
             "error: data too large for bs58 encoding".to_string()
         }
