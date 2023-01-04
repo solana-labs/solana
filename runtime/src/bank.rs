@@ -10655,12 +10655,57 @@ pub(crate) mod tests {
         );
         assert_eq!(bank.transaction_count(), 1);
         assert_eq!(bank.non_vote_transaction_count_since_restart(), 1);
-        assert_eq!(bank.executed_transaction_count(), 2);
-        assert_eq!(bank.transaction_error_count(), 1);
 
         let mint_pubkey = mint_keypair.pubkey();
         assert_eq!(bank.get_balance(&mint_pubkey), mint_amount - amount);
         assert_eq!(bank.get_balance(&pubkey), amount);
+    }
+
+    #[test]
+    fn test_executed_transaction_count_pre_bank_transaction_count_fix() {
+        let mint_amount = sol_to_lamports(1.);
+        let (genesis_config, mint_keypair) = create_genesis_config(mint_amount);
+        let mut bank = Bank::new_for_tests(&genesis_config);
+        bank.deactivate_feature(&feature_set::bank_transaction_count_fix::id());
+        let pubkey = solana_sdk::pubkey::new_rand();
+        let amount = genesis_config.rent.minimum_balance(0);
+        bank.transfer(amount, &mint_keypair, &pubkey).unwrap();
+        assert_eq!(
+            bank.transfer((mint_amount - amount) + 1, &mint_keypair, &pubkey),
+            Err(TransactionError::InstructionError(
+                0,
+                SystemError::ResultWithNegativeLamports.into(),
+            ))
+        );
+        // Without bank_transaction_count_fix, transaction_count should include only the successful
+        // transactions
+        assert_eq!(bank.transaction_count(), 1);
+        assert_eq!(bank.executed_transaction_count(), 2);
+        assert_eq!(bank.transaction_error_count(), 1);
+    }
+
+    #[test]
+    fn test_executed_transaction_count_post_bank_transaction_count_fix() {
+        let mint_amount = sol_to_lamports(1.);
+        let (genesis_config, mint_keypair) = create_genesis_config(mint_amount);
+        let mut bank = Bank::new_for_tests(&genesis_config);
+        bank.activate_feature(&feature_set::bank_transaction_count_fix::id());
+        let pubkey = solana_sdk::pubkey::new_rand();
+        let amount = genesis_config.rent.minimum_balance(0);
+        bank.transfer(amount, &mint_keypair, &pubkey).unwrap();
+        assert_eq!(
+            bank.transfer((mint_amount - amount) + 1, &mint_keypair, &pubkey),
+            Err(TransactionError::InstructionError(
+                0,
+                SystemError::ResultWithNegativeLamports.into(),
+            ))
+        );
+
+        // With bank_transaction_count_fix, transaction_count should include both the successful and
+        // failed transactions
+        assert_eq!(bank.transaction_count(), 2);
+        assert_eq!(bank.executed_transaction_count(), 2);
+        assert_eq!(bank.transaction_error_count(), 1);
     }
 
     #[test]
