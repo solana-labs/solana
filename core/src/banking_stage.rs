@@ -2038,7 +2038,7 @@ where
     }
 }
 
-pub(crate) fn initialize_poh_callback(poh_recorder: &Arc<RwLock<PohRecorder>>) {
+pub fn initialize_poh_callback(poh_recorder: &Arc<RwLock<PohRecorder>>) {
     use solana_runtime::bank::POH;
     *POH.write().unwrap() = Some({
         let poh_recorder_lock = poh_recorder.clone();

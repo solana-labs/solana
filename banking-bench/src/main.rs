@@ -416,6 +416,7 @@ fn main() {
         let leader_schedule_cache = Arc::new(LeaderScheduleCache::new_from_bank(&bank));
         let (exit, poh_recorder, poh_service, signal_receiver) =
             create_test_recorder(&bank, &blockstore, None, Some(leader_schedule_cache));
+        solana_core::banking_stage::initialize_poh_callback(&poh_recorder);
         let banking_tracer = BankingTracer::new(matches.is_present("trace_banking").then_some((
             blockstore.banking_trace_path(),
             exit.clone(),
@@ -512,6 +513,9 @@ fn main() {
                 );
                 tx_total_us += duration_as_us(&now.elapsed());
 
+                if let Err(e) = bank.wait_for_scheduler(false) {
+                    error!("wait_for_scheduler returned error...: {e:?}");
+                }
                 let mut poh_time = Measure::start("poh_time");
                 poh_recorder
                     .write()
@@ -520,7 +524,7 @@ fn main() {
                 poh_time.stop();
 
                 let mut new_bank_time = Measure::start("new_bank");
-                let new_bank = Bank::new_from_parent(&bank, &collector, bank.slot() + 1);
+                let new_bank = Bank::new_from_parent_with_options(&bank, &collector, bank.slot() + 1, solana_runtime::bank::NewBankOptions {banking: true, ..Default::default()});
                 new_bank_time.stop();
 
                 let mut insert_time = Measure::start("insert_time");
@@ -535,6 +539,7 @@ fn main() {
                     std::u64::MAX,
                 );
 
+                bank.resume_banking_commit();
                 poh_recorder.write().unwrap().set_bank(&bank, false);
                 assert!(poh_recorder.read().unwrap().bank().is_some());
                 debug!(

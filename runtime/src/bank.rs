@@ -6830,7 +6830,7 @@ impl Bank {
 
             if r.as_ref().is_none() {
                 let thread_name = std::thread::current().name().unwrap().to_string();
-                warn!("{thread_name} no scheduler...?!");
+                trace!("{thread_name} no scheduler...?!");
                 return;
             }
 
