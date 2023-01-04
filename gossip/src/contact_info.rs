@@ -112,7 +112,9 @@ impl ContactInfo {
         let delay = 10 * 60 * 1000; // 10 minutes
         let now = timestamp() - delay + rng.gen_range(0, 2 * delay);
         let pubkey = pubkey.unwrap_or_else(solana_sdk::pubkey::new_rand);
-        ContactInfo::new_localhost(&pubkey, now)
+        let mut node = ContactInfo::new_localhost(&pubkey, now);
+        node.gossip.set_port(rng.gen_range(1024, u16::MAX));
+        node
     }
 
     #[cfg(test)]

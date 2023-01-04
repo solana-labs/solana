@@ -16,7 +16,7 @@ use {
         cluster_info::{Ping, CRDS_UNIQUE_PUBKEY_CAPACITY},
         contact_info::ContactInfo,
         crds::{Crds, CrdsError, Cursor, GossipRoute},
-        crds_gossip::{get_stake, get_weight},
+        crds_gossip::{self, get_stake, get_weight},
         crds_value::CrdsValue,
         ping_pong::PingCache,
         received_cache::ReceivedCache,
@@ -299,22 +299,26 @@ impl CrdsGossipPush {
             socket_addr_space,
         );
         // Check for nodes which have responded to ping messages.
-        let (weights, peers): (Vec<_>, Vec<_>) = {
+        let peers: Vec<_> = {
             let mut ping_cache = ping_cache.lock().unwrap();
             let mut pingf = move || Ping::new_rand(&mut rng, self_keypair).ok();
             let now = Instant::now();
             peers
                 .into_iter()
-                .filter_map(|(weight, peer)| {
+                .filter(|(_weight, peer)| {
                     let node = (peer.id, peer.gossip);
                     let (check, ping) = ping_cache.check(now, node, &mut pingf);
                     if let Some(ping) = ping {
                         pings.push((peer.gossip, ping));
                     }
-                    check.then_some((weight, peer.id))
+                    check
                 })
-                .unzip()
+                .collect()
         };
+        let (weights, peers): (Vec<_>, Vec<_>) = crds_gossip::dedup_gossip_addresses(peers)
+            .into_values()
+            .map(|(weight, node)| (weight, node.id))
+            .unzip();
         if peers.is_empty() {
             return;
         }
@@ -572,7 +576,8 @@ mod tests {
 
         let active_set = push.active_set.read().unwrap();
         assert!(active_set.get(&value1.label().pubkey()).is_some());
-        let value2 = ContactInfo::new_localhost(&solana_sdk::pubkey::new_rand(), 0);
+        let mut value2 = ContactInfo::new_localhost(&solana_sdk::pubkey::new_rand(), 0);
+        value2.gossip.set_port(1245);
         ping_cache
             .lock()
             .unwrap()
@@ -608,8 +613,9 @@ mod tests {
             let active_set = push.active_set.read().unwrap();
             assert!(active_set.get(&value2.label().pubkey()).is_some());
         }
-        for _ in 0..push.num_active {
-            let value2 = ContactInfo::new_localhost(&solana_sdk::pubkey::new_rand(), 0);
+        for k in 0..push.num_active {
+            let mut value2 = ContactInfo::new_localhost(&solana_sdk::pubkey::new_rand(), 0);
+            value2.gossip.set_port(1246 + k as u16);
             ping_cache
                 .lock()
                 .unwrap()
