@@ -277,6 +277,91 @@ pub enum VerifySlotDeltasError {
     BadSlotHistory,
 }
 
+/// Delete the files and subdirectories in a directory.
+/// This is useful if the process does not have permission
+/// to delete the top level directory it might be able to
+/// delete the contents of that directory.
+fn delete_contents_of_path(path: impl AsRef<Path> + Copy) {
+    if let Ok(dir_entries) = std::fs::read_dir(path) {
+        for entry in dir_entries.flatten() {
+            let sub_path = entry.path();
+            let metadata = match entry.metadata() {
+                Ok(metadata) => metadata,
+                Err(err) => {
+                    warn!(
+                        "Failed to get metadata for {}. Error: {}",
+                        sub_path.display(),
+                        err.to_string()
+                    );
+                    break;
+                }
+            };
+            if metadata.is_dir() {
+                if let Err(err) = std::fs::remove_dir_all(&sub_path) {
+                    warn!(
+                        "Failed to remove sub directory {}.  Error: {}",
+                        sub_path.display(),
+                        err.to_string()
+                    );
+                }
+            } else if metadata.is_file() {
+                if let Err(err) = std::fs::remove_file(&sub_path) {
+                    warn!(
+                        "Failed to remove file {}.  Error: {}",
+                        sub_path.display(),
+                        err.to_string()
+                    );
+                }
+            }
+        }
+    } else {
+        warn!(
+            "Failed to read the sub paths of {}",
+            path.as_ref().display()
+        );
+    }
+}
+
+/// Delete directories/files asynchronously to avoid blocking on it.
+/// Fist, in sync context, rename the original path to *_deleted,
+/// then spawn a thread to delete the renamed path.
+/// If the process is killed and the deleting process is not done,
+/// the leftover path will be deleted in the next process life, so
+/// there is no file space leaking.
+pub fn move_and_async_delete_path(path: impl AsRef<Path> + Copy) {
+    let mut path_delete = PathBuf::new();
+    path_delete.push(path);
+    path_delete.set_file_name(format!(
+        "{}{}",
+        path_delete.file_name().unwrap().to_str().unwrap(),
+        "_to_be_deleted"
+    ));
+
+    if path_delete.exists() {
+        std::fs::remove_dir_all(&path_delete).unwrap();
+    }
+
+    if !path.as_ref().exists() {
+        return;
+    }
+
+    if let Err(err) = std::fs::rename(path, &path_delete) {
+        warn!(
+            "Path renaming failed: {}.  Falling back to rm_dir in sync mode",
+            err.to_string()
+        );
+        delete_contents_of_path(path);
+        return;
+    }
+
+    Builder::new()
+        .name("solDeletePath".to_string())
+        .spawn(move || {
+            std::fs::remove_dir_all(path_delete).unwrap();
+        })
+        .unwrap();
+}
+
 /// If the validator halts in the middle of `archive_snapshot_package()`, the temporary staging
 /// directory won't be cleaned up.  Call this function to clean them up.
 pub fn remove_tmp_snapshot_archives(snapshot_archives_dir: impl AsRef<Path>) {
