@@ -18,7 +18,7 @@ use {
 pub struct LegacyContactInfo {
     pub id: Pubkey,
     /// gossip address
-    pub gossip: SocketAddr,
+    gossip: SocketAddr,
     /// address to connect to for replication
     pub tvu: SocketAddr,
     /// address to forward shreds to
@@ -104,6 +104,16 @@ impl LegacyContactInfo {
             serve_repair: socketaddr!("127.0.0.1:1243"),
             wallclock: now,
             shred_version: 0,
+        }
+    }
+
+    // we reuse the old udp tpu port for quic gossip traffic
+    pub fn get_gossip(&self, use_quic: bool) -> SocketAddr {
+        if use_quic {
+            self.tpu
+        }
+        else {
+            self.gossip
         }
     }
 
