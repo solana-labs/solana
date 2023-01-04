@@ -3848,7 +3848,6 @@ impl AccountsDb {
         if Self::should_not_shrink(
             shrink_collect.aligned_total_bytes,
             shrink_collect.original_bytes,
-            1,
         ) {
             self.shrink_stats
                 .skipped_shrink
@@ -4070,7 +4069,7 @@ impl AccountsDb {
         debug!("shrink_slot_forced: slot: {}", slot);
 
         if let Some(store) = self.storage.get_slot_storage_entry(slot) {
-            if !Self::is_shrinking_productive(slot, std::iter::once(&store)) {
+            if !Self::is_shrinking_productive(slot, &store) {
                 return 0;
             }
             self.do_shrink_slot_stores(slot, std::iter::once(&store))
@@ -7761,34 +7760,21 @@ impl AccountsDb {
         }
     }
 
-    fn should_not_shrink(aligned_bytes: u64, total_bytes: u64, num_stores: usize) -> bool {
-        aligned_bytes + PAGE_SIZE > total_bytes && num_stores == 1
+    fn should_not_shrink(aligned_bytes: u64, total_bytes: u64) -> bool {
+        aligned_bytes + PAGE_SIZE > total_bytes
     }
 
-    fn is_shrinking_productive<'a, I>(slot: Slot, stores: I) -> bool
-    where
-        I: IntoIterator<Item = &'a Arc<AccountStorageEntry>>,
-    {
-        let mut alive_count = 0;
-        let mut stored_count = 0;
-        let mut alive_bytes = 0;
-        let mut total_bytes = 0;
-        let mut count = 0;
-
-        for store in stores {
-            count += 1;
-            alive_count += store.count();
-            stored_count += store.approx_stored_count();
-            alive_bytes += store.alive_bytes();
-            total_bytes += store.total_bytes();
-        }
+    fn is_shrinking_productive(slot: Slot, store: &Arc<AccountStorageEntry>) -> bool {
+        let alive_count = store.count();
+        let stored_count = store.approx_stored_count();
+        let alive_bytes = store.alive_bytes();
+        let total_bytes = store.total_bytes();
 
         let aligned_bytes = Self::page_align(alive_bytes as u64);
-        if Self::should_not_shrink(aligned_bytes, total_bytes, count) {
+        if Self::should_not_shrink(aligned_bytes, total_bytes) {
             trace!(
-                "shrink_slot_forced ({}, {}): not able to shrink at all: alive/stored: ({} / {}) ({}b / {}b) save: {}",
+                "shrink_slot_forced ({}): not able to shrink at all: alive/stored: ({} / {}) ({}b / {}b) save: {}",
                 slot,
-                count,
                 alive_count,
                 stored_count,
                 aligned_bytes,
@@ -7866,7 +7852,7 @@ impl AccountsDb {
                     self.dirty_stores
                         .insert((*slot, store.append_vec_id()), store.clone());
                     dead_slots.insert(*slot);
-                } else if Self::is_shrinking_productive(*slot, [&store].into_iter())
+                } else if Self::is_shrinking_productive(*slot, &store)
                     && self.is_candidate_for_shrink(&store, false)
                 {
                     // Checking that this single storage entry is ready for shrinking,
@@ -15767,25 +15753,18 @@ pub mod tests {
     fn test_shrink_productive() {
         solana_logger::setup();
         let s1 = AccountStorageEntry::new(Path::new("."), 0, 0, 1024);
-        let stores = vec![Arc::new(s1)];
-        assert!(!AccountsDb::is_shrinking_productive(0, &stores));
+        let store = Arc::new(s1);
+        assert!(!AccountsDb::is_shrinking_productive(0, &store));
 
         let s1 = AccountStorageEntry::new(Path::new("."), 0, 0, PAGE_SIZE * 4);
-        let stores = vec![Arc::new(s1)];
-        stores[0].add_account((3 * PAGE_SIZE as usize) - 1);
-        stores[0].add_account(10);
-        stores[0].remove_account(10, false);
-        assert!(AccountsDb::is_shrinking_productive(0, &stores));
+        let store = Arc::new(s1);
+        store.add_account((3 * PAGE_SIZE as usize) - 1);
+        store.add_account(10);
+        store.remove_account(10, false);
+        assert!(AccountsDb::is_shrinking_productive(0, &store));
 
-        stores[0].add_account(PAGE_SIZE as usize);
-        assert!(!AccountsDb::is_shrinking_productive(0, &stores));
-
-        let s1 = AccountStorageEntry::new(Path::new("."), 0, 0, PAGE_SIZE + 1);
-        s1.add_account(PAGE_SIZE as usize);
-        let s2 = AccountStorageEntry::new(Path::new("."), 0, 1, PAGE_SIZE + 1);
-        s2.add_account(PAGE_SIZE as usize);
-        let stores = vec![Arc::new(s1), Arc::new(s2)];
-        assert!(AccountsDb::is_shrinking_productive(0, &stores));
+        store.add_account(PAGE_SIZE as usize);
+        assert!(!AccountsDb::is_shrinking_productive(0, &store));
     }
 
     #[test]
