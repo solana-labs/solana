@@ -9,4 +9,4 @@ license = { workspace = true }
 edition = { workspace = true }
 
 [build-dependencies]
-regex = "1.6.0"
+regex = { workspace = true }

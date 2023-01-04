@@ -10,7 +10,7 @@ license = { workspace = true }
 edition = { workspace = true }
 
 [dependencies]
-cargo_metadata = "0.15.0"
+cargo_metadata = { workspace = true }
 clap = { version = "3.1.5", features = ["cargo"] }
 
 [[bin]]
