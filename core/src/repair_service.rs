@@ -262,6 +262,7 @@ impl RepairService {
         outstanding_requests: &RwLock<OutstandingShredRepairs>,
         dumped_slots_receiver: DumpedSlotsReceiver,
     ) {
+        const REPAIRS_CACHE_CAPACITY: usize = 2_000;
         let mut repair_weight = RepairWeight::new(repair_info.bank_forks.read().unwrap().root());
         let serve_repair = ServeRepair::new(
             repair_info.cluster_info.clone(),
@@ -277,7 +278,7 @@ impl RepairService {
         let duplicate_slot_repair_statuses: HashMap<Slot, DuplicateSlotRepairStatus> =
             HashMap::new();
         let mut peers_cache = LruCache::new(REPAIR_PEERS_CACHE_CAPACITY);
-        let mut repairs_cache = LruCache::new(2_000); // TODO
+        let mut repairs_cache = LruCache::new(REPAIRS_CACHE_CAPACITY);
         let mut repair_peers: HashSet<SocketAddr> = HashSet::default();
 
         loop {
@@ -356,14 +357,13 @@ impl RepairService {
                 repairs
             };
 
-            for r in &repairs {
+            repairs.iter().for_each(|r| {
                 if let Some(x) = repairs_cache.get_mut(r) {
                     *x += 1;
-                    //error!(">>> {:04} -- {:?}", x, r);
                 } else {
                     repairs_cache.put(*r, 1);
                 }
-            }
+            });
 
             let identity_keypair: &Keypair = &repair_info.cluster_info.keypair().clone();
 
@@ -452,6 +452,7 @@ impl RepairService {
                     ("repair_retry_10plusx", repair_retry_10_plusx, i64),
                     ("peers_count", repair_peers.len(), i64),
                 );
+                repair_peers.clear();
 
                 if repair_total > 0 {
                     datapoint_info!(
