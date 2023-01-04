@@ -3668,6 +3668,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "proto"
+version = "1.15.0"
+dependencies = [
+ "protobuf-src",
+ "tonic-build 0.8.0",
+]
+
+[[package]]
 name = "protobuf-src"
 version = "1.0.5+3.19.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
