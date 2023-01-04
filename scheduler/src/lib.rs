@@ -1739,14 +1739,17 @@ impl ScheduleStage {
         let mut channel_backed_runnable_queue = ChannelBackedTaskQueue::new(from_prev);
 
         loop {
-            let mut select_skipped = false;
+            // no execution at all => absolutely no active locks
+            let select_skipped = from_disconnected && executing_queue_count == 0;
+            let mut did_processed = false;
 
-            if !from_disconnected || executing_queue_count >= 1 {
+            if !select_skipped {
                 crossbeam_channel::select! {
                    recv(from_exec) -> maybe_from_exec => {
                        if let Ok(UnlockablePayload(mut processed_execution_environment, extra)) = maybe_from_exec {
                            executing_queue_count = executing_queue_count.checked_sub(1).unwrap();
                            processed_count = processed_count.checked_add(1).unwrap();
+                           did_processed = true;
                            Self::commit_processed_execution(ast, &mut processed_execution_environment, address_book, &mut commit_clock, &mut provisioning_tracker_count);
                            to_next_stage.send_buffered(ExaminablePayload(Flushable::Payload((processed_execution_environment, extra)))).unwrap();
                        } else {
@@ -1789,9 +1792,6 @@ impl ScheduleStage {
                        }
                    }
                 }
-            } else {
-                // no execution at all => absolutely no active locks
-                select_skipped = true;
             }
 
             no_more_work = from_disconnected
@@ -1944,6 +1944,7 @@ impl ScheduleStage {
                         empty_from_exec = from_exec_len == 0;
                         executing_queue_count = executing_queue_count.checked_sub(1).unwrap();
                         processed_count = processed_count.checked_add(1).unwrap();
+                        did_processed = true;
                         Self::commit_processed_execution(
                             ast,
                             &mut processed_execution_environment,
@@ -1986,7 +1987,9 @@ impl ScheduleStage {
                     }
                 }
             }
-            assert!(!select_skipped || executing_queue_count > 0);
+            if select_skipped {
+                assert!(executing_queue_count >= 1 || did_processed);
+            }
         }
         if let Some(checkpoint) = &maybe_checkpoint {
             // wake up the receiver thread immediately by not using .send_buffered!
