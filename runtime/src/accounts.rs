@@ -319,7 +319,13 @@ impl Accounts {
                                         (account, 0)
                                     }
                                 })
-                                .unwrap_or_default()
+                                .unwrap_or_else(|| {
+                                    let mut default_account = AccountSharedData::default();
+                                    if set_exempt_rent_epoch_max {
+                                        default_account.set_rent_epoch(u64::MAX);
+                                    }
+                                    (default_account, 0)
+                                })
                         };
 
                         if !validated_fee_payer {
