@@ -9678,7 +9678,9 @@ pub mod tests {
 
         // there has to be an existing append vec at this slot for a new current ancient at the slot to make sense
         let _existing_append_vec = db.create_and_insert_store(slot0, 1000, "test");
-        let _shrink_in_progress = current_ancient.create_ancient_append_vec(slot0, &db);
+        {
+            let _shrink_in_progress = current_ancient.create_ancient_append_vec(slot0, &db);
+        }
         let mut ancient_slot_pubkeys = AncientSlotPubkeys::default();
         assert!(ancient_slot_pubkeys.inner.is_none());
         // same slot as current_ancient, so no-op
@@ -16834,9 +16836,15 @@ pub mod tests {
             // there has to be an existing append vec at this slot for a new current ancient at the slot to make sense
             let _existing_append_vec = db.create_and_insert_store(slot1_ancient, 1000, "test");
 
-            let ancient = db.create_ancient_append_vec(slot1_ancient);
+            let ancient = db
+                .create_ancient_append_vec(slot1_ancient)
+                .new_storage()
+                .clone();
             let _existing_append_vec = db.create_and_insert_store(slot1_plus_ancient, 1000, "test");
-            let ancient_1_plus = db.create_ancient_append_vec(slot1_plus_ancient);
+            let ancient_1_plus = db
+                .create_ancient_append_vec(slot1_plus_ancient)
+                .new_storage()
+                .clone();
             let _existing_append_vec = db.create_and_insert_store(slot3_ancient, 1000, "test");
             let ancient3 = db.create_ancient_append_vec(slot3_ancient);
             let temp_dir = TempDir::new().unwrap();
@@ -16857,7 +16865,7 @@ pub mod tests {
             assert_eq!(Vec::<Slot>::default(), ancient_slots);
 
             // now test with an ancient append vec
-            let raw_storages = vec![vec![ancient.new_storage().clone()]];
+            let raw_storages = vec![vec![ancient.clone()]];
             let snapshot_storages = SortedStorages::new(&raw_storages);
             let one_epoch_old_slot = 0;
             let ancient_slots =
@@ -16869,10 +16877,7 @@ pub mod tests {
             assert_eq!(vec![slot1_ancient], ancient_slots);
 
             // now test with an ancient append vec and then a non-ancient append vec
-            let raw_storages = vec![
-                vec![ancient.new_storage().clone()],
-                vec![non_ancient_storage.clone()],
-            ];
+            let raw_storages = vec![vec![ancient.clone()], vec![non_ancient_storage.clone()]];
             let snapshot_storages = SortedStorages::new(&raw_storages);
             let one_epoch_old_slot = 0;
             let ancient_slots =
@@ -16885,7 +16890,7 @@ pub mod tests {
 
             // ancient, non-ancient, ancient
             let raw_storages = vec![
-                vec![ancient.new_storage().clone()],
+                vec![ancient.clone()],
                 vec![non_ancient_storage.clone()],
                 vec![ancient3.new_storage().clone()],
             ];
@@ -16902,8 +16907,8 @@ pub mod tests {
             if sparse {
                 // ancient, ancient, non-ancient, ancient
                 let raw_storages = vec![
-                    vec![Arc::clone(ancient.new_storage())],
-                    vec![Arc::clone(ancient_1_plus.new_storage())],
+                    vec![Arc::clone(&ancient)],
+                    vec![Arc::clone(&ancient_1_plus)],
                     vec![non_ancient_storage],
                     vec![Arc::clone(ancient3.new_storage())],
                 ];
@@ -17073,7 +17078,9 @@ pub mod tests {
             // there has to be an existing append vec at this slot for a new current ancient at the slot to make sense
             let _existing_append_vec = db.create_and_insert_store(slot2, 1000, "test");
 
-            let mut _shrink_in_progress = current_ancient.create_ancient_append_vec(slot2, &db);
+            {
+                let _shrink_in_progress = current_ancient.create_ancient_append_vec(slot2, &db);
+            }
             let id = current_ancient.append_vec_id();
             assert_eq!(current_ancient.slot(), slot2);
             assert!(is_ancient(&current_ancient.append_vec().accounts));
@@ -17847,40 +17854,39 @@ pub mod tests {
         let slot1_ancient = 1;
         // there has to be an existing append vec at this slot for a new current ancient at the slot to make sense
         let _existing_append_vec = db.create_and_insert_store(slot1_ancient, 1000, "test");
-        let ancient1 = db.create_ancient_append_vec(slot1_ancient);
+        let ancient1 = db
+            .create_ancient_append_vec(slot1_ancient)
+            .new_storage()
+            .clone();
         let should_move = db.should_move_to_ancient_append_vec(
-            &ancient1.new_storage().clone(),
+            &ancient1,
             &mut current_ancient,
             slot1_ancient,
             CAN_RANDOMLY_SHRINK_FALSE,
         );
         assert!(!should_move);
-        assert_eq!(
-            current_ancient.append_vec_id(),
-            ancient1.new_storage().append_vec_id()
-        );
+        assert_eq!(current_ancient.append_vec_id(), ancient1.append_vec_id());
         assert_eq!(current_ancient.slot(), slot1_ancient);
 
         // current is ancient1
         // try to move ancient2
         // current should become ancient2
         let slot2_ancient = 2;
-        let mut current_ancient =
-            CurrentAncientAppendVec::new(slot1_ancient, ancient1.new_storage().clone());
+        let mut current_ancient = CurrentAncientAppendVec::new(slot1_ancient, ancient1.clone());
         // there has to be an existing append vec at this slot for a new current ancient at the slot to make sense
         let _existing_append_vec = db.create_and_insert_store(slot2_ancient, 1000, "test");
-        let ancient2 = db.create_ancient_append_vec(slot2_ancient);
+        let ancient2 = db
+            .create_ancient_append_vec(slot2_ancient)
+            .new_storage()
+            .clone();
         let should_move = db.should_move_to_ancient_append_vec(
-            &ancient2.new_storage().clone(),
+            &ancient2,
             &mut current_ancient,
             slot2_ancient,
             CAN_RANDOMLY_SHRINK_FALSE,
         );
         assert!(!should_move);
-        assert_eq!(
-            current_ancient.append_vec_id(),
-            ancient2.new_storage().append_vec_id()
-        );
+        assert_eq!(current_ancient.append_vec_id(), ancient2.append_vec_id());
         assert_eq!(current_ancient.slot(), slot2_ancient);
 
         // now try a full ancient append vec
@@ -17904,8 +17910,7 @@ pub mod tests {
         assert_eq!(current_ancient.slot(), slot3_full_ancient);
 
         // now set current_ancient to something
-        let mut current_ancient =
-            CurrentAncientAppendVec::new(slot1_ancient, ancient1.new_storage().clone());
+        let mut current_ancient = CurrentAncientAppendVec::new(slot1_ancient, ancient1.clone());
         let should_move = db.should_move_to_ancient_append_vec(
             &full_ancient_3.new_storage().clone(),
             &mut current_ancient,
@@ -17935,8 +17940,7 @@ pub mod tests {
 
         // should return true here, returning current from prior
         // now set current_ancient to something and see if it still goes to None
-        let mut current_ancient =
-            CurrentAncientAppendVec::new(slot1_ancient, ancient1.new_storage().clone());
+        let mut current_ancient = CurrentAncientAppendVec::new(slot1_ancient, ancient1.clone());
         let should_move = db.should_move_to_ancient_append_vec(
             &Arc::clone(full_ancient_3.new_storage()),
             &mut current_ancient,
@@ -17944,10 +17948,7 @@ pub mod tests {
             CAN_RANDOMLY_SHRINK_FALSE,
         );
         assert!(should_move);
-        assert_eq!(
-            current_ancient.append_vec_id(),
-            ancient1.new_storage().append_vec_id()
-        );
+        assert_eq!(current_ancient.append_vec_id(), ancient1.append_vec_id());
         assert_eq!(current_ancient.slot(), slot1_ancient);
     }
 
