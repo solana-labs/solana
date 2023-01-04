@@ -23,8 +23,8 @@ function APIPage() {
                 the HTTP and Websocket methods.
               </p>
 
-              <Link to="/api/http">
-                <a className="button">Explore the API</a>
+              <Link to="/api/http" className="button">
+                Explore the API
               </Link>
             </div>
           </section>
