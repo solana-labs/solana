@@ -901,7 +901,7 @@ fn hard_link_appendvec_files_to_snapshot(
         for storage in slot_storages {
             storage.flush()?;
             let path = storage.accounts.get_path();
-            let hard_link_path = dir_accounts_hard_links.clone().join(AppendVec::file_name(
+            let hard_link_path = dir_accounts_hard_links.join(AppendVec::file_name(
                 storage.slot(),
                 storage.append_vec_id(),
             ));
@@ -937,7 +937,11 @@ pub fn add_bank_snapshot(
     // bank_snapshots_dir/slot
     let bank_snapshot_dir = get_bank_snapshots_dir(bank_snapshots_dir, slot);
     if fs::metadata(&bank_snapshot_dir).is_ok() {
-        // Could be left over by the previous process in an incomplete state.  If found, remove it.
+        // There is a time window from when a snapshot directory is created to when its content
+        // is fully filled to become a full state good to construct a bank from.  At the init time,
+        // the system may not be booted from the latest snapshot directory, but an older and complete
+        // directory.  Then, when adding new snapshots, the newer incomplete snapshot directory could
+        // be found.  If so, it should be removed.
         move_and_async_delete_path(&bank_snapshot_dir);
     }
     fs::create_dir_all(&bank_snapshot_dir)?;
@@ -952,6 +956,10 @@ pub fn add_bank_snapshot(
         bank_snapshot_path.display(),
     );
 
+    // We are contructing the snapshot directory to contain the full snapshot state information to allow
+    // constructing a bank from this directory.  It acts like an archive to include the full state.
+    // The set of the account appendvec files is the necessary part of this snapshot state.  Hard-link them
+    // from the operational accounts/ directory to here.
     hard_link_appendvec_files_to_snapshot(&bank_snapshot_dir, snapshot_storages)?;
 
     let mut bank_serialize = Measure::start("bank-serialize-ms");
@@ -2268,7 +2276,15 @@ pub fn verify_snapshot_archive<P, Q, R>(
             std::fs::remove_dir_all(accounts_path).unwrap();
         }
     }
-
+    // Remove the new accounts/ to be consistent with the
+    // old archive structure.
+    let accounts_path = snapshot_slot_dir.join("accounts");
+    if accounts_path.is_dir() {
+        // Do not use the async move_and_async_delete_path because the assert below
+        // requires the job to be done.
+        // This is for test only, so the performance is not an issue.
+        std::fs::remove_dir_all(accounts_path).unwrap();
+    }
     assert!(!dir_diff::is_different(&snapshots_to_verify, unpacked_snapshots).unwrap());
 
     // In the unarchiving case, there is an extra empty "accounts" directory. The account

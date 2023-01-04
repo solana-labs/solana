@@ -6388,17 +6388,6 @@ impl Bank {
         self.rc.accounts.clone()
     }
 
-    ///  Check builtins all exist.
-    pub fn check_builtins_exist(&self, builtins: &Builtins) -> bool {
-        builtins
-            .genesis_builtins
-            .iter()
-            .all(|b| self.get_account_with_fixed_root(&b.id).is_some())
-            && get_precompiles()
-                .iter()
-                .all(|p| self.get_account_with_fixed_root(&p.program_id).is_some())
-    }
-
     fn finish_init(
         &mut self,
         genesis_config: &GenesisConfig,
