@@ -73,7 +73,7 @@ pub fn poll_get_fee_for_message(client: &RpcClient, message: &mut Message) -> (O
                 response, num_retries
             );
 
-            let blockhash = poll_get_latest_blockhash(&client).expect("blockhash");
+            let blockhash = poll_get_latest_blockhash(client).expect("blockhash");
             message.recent_blockhash = blockhash;
         }
         if num_retries == 0 {
