@@ -10,29 +10,28 @@ documentation = "https://docs.rs/solana-tpu-client"
 edition = "2021"
 
 [dependencies]
-async-trait = "0.1.57"
-bincode = "1.3.3"
-futures-util = "0.3.26"
-indexmap = "1.9.1"
-indicatif = { version = "0.17.1", optional = true }
-log = "0.4.17"
-rand = "0.7.0"
-rayon = "1.5.3"
-
-solana-connection-cache = { path = "../connection-cache", version = "=1.16.0" }
-solana-measure = { path = "../measure", version = "=1.16.0" }
-solana-metrics = { path = "../metrics", version = "=1.16.0" }
-solana-net-utils = { path = "../net-utils", version = "=1.16.0" }
-solana-pubsub-client = { path = "../pubsub-client", version = "=1.16.0" }
-solana-rpc-client = { path = "../rpc-client", version = "=1.16.0", default-features = false }
-solana-rpc-client-api = { path = "../rpc-client-api", version = "=1.16.0" }
-solana-sdk = { path = "../sdk", version = "=1.16.0" }
-thiserror = "1.0"
-tokio = { version = "1", features = ["full"] }
+async-trait = { workspace = true }
+bincode = { workspace = true }
+futures-util = { workspace = true }
+indexmap = { workspace = true }
+indicatif = { workspace = true, optional = true }
+log = { workspace = true }
+rand = { workspace = true }
+rayon = { workspace = true }
+solana-connection-cache = { workspace = true }
+solana-measure = { workspace = true }
+solana-metrics = { workspace = true }
+solana-net-utils = { workspace = true }
+solana-pubsub-client = { workspace = true }
+solana-rpc-client = { workspace = true }
+solana-rpc-client-api = { workspace = true }
+solana-sdk = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true, features = ["full"] }
 
 [dev-dependencies]
-rand_chacha = "0.2.2"
-solana-logger = { path = "../logger", version = "=1.16.0" }
+rand_chacha = { workspace = true }
+solana-logger = { workspace = true }
 
 [features]
 default = ["spinner"]

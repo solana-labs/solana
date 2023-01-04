@@ -10,10 +10,10 @@ license = { workspace = true }
 edition = { workspace = true }
 
 [dependencies]
-cargo_metadata = "0.15.0"
+cargo_metadata = { workspace = true }
 clap = { version = "3.1.5", features = ["cargo"] }
-log = { version = "0.4.17", features = ["std"] }
-solana-logger = { path = "../../logger", version = "=1.15.0" }
+log = { workspace = true, features = ["std"] }
+solana-logger = { workspace = true }
 
 [[bin]]
 name = "cargo-test-sbf"

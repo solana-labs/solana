@@ -10,8 +10,8 @@ license = { workspace = true }
 edition = { workspace = true }
 
 [dependencies]
-serde_json = "1.0.83"
-solana-metrics = { path = "../metrics", version = "=1.15.0" }
+serde_json = { workspace = true }
+solana-metrics = { workspace = true }
 
 [[bin]]
 name = "solana-upload-perf"

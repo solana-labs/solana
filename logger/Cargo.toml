@@ -10,9 +10,9 @@ license = { workspace = true }
 edition = { workspace = true }
 
 [dependencies]
-env_logger = "0.9.3"
-lazy_static = "1.4.0"
-log = "0.4.17"
+env_logger = { workspace = true }
+lazy_static = { workspace = true }
+log = { workspace = true }
 
 [lib]
 name = "solana_logger"
