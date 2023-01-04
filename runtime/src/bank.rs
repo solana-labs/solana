@@ -6702,12 +6702,11 @@ impl Bank {
     }
 
     pub fn schedule_and_commit_transactions(
-        &self,
-        this_arced_bank: &Arc<Bank>,
+        self: &Arc<Bank>,
         transactions: &[SanitizedTransaction],
         transaction_indexes: impl Iterator<Item = usize>,
     ) {
-        assert_eq!(this_arced_bank.slot(), self.slot());
+        assert_eq!(self.slot(), self.slot());
         trace!(
             "schedule_and_commit_transactions(): {} txs",
             transactions.len()
@@ -6729,9 +6728,9 @@ impl Bank {
                 // safe.
                 let ss = self.scheduler2.write().unwrap();
                 let w = ss.as_ref().unwrap();
-                *w.bank.write().unwrap() = Some(Arc::downgrade(&this_arced_bank));
+                *w.bank.write().unwrap() = Some(Arc::downgrade(self));
                 w.slot
-                    .store(this_arced_bank.slot(), std::sync::atomic::Ordering::SeqCst);
+                    .store(self.slot(), std::sync::atomic::Ordering::SeqCst);
                 drop(w);
                 drop(ss);
 
@@ -6740,7 +6739,7 @@ impl Bank {
                 s
             } else {
                 assert_eq!(
-                    this_arced_bank.slot(),
+                    self.slot(),
                     r.as_ref()
                         .unwrap()
                         .slot

@@ -185,7 +185,7 @@ fn execute_batch(
     };
     */
 
-    bank.schedule_and_commit_transactions(bank, transactions, transaction_indexes);
+    bank.schedule_and_commit_transactions(transactions, transaction_indexes);
     /*
     if let Some(first_error_from_scheduler) = bank.handle_aborted_transactions().into_iter().next() {
         first_error_from_scheduler?
