@@ -3142,11 +3142,6 @@ impl Bank {
     }
 
     pub fn freeze(&self) {
-        let builtins = builtins::get();
-        if !self.check_builtins_exist(&builtins) {
-            warn!("builtins missing when freezing the bank");
-        }
-
         // This lock prevents any new commits from BankingStage
         // `process_and_record_transactions_locked()` from coming
         // in after the last tick is observed. This is because in
