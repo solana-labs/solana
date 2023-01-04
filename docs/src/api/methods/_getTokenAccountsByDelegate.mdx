@@ -88,6 +88,7 @@ The result will be an RpcResponse JSON object with `value` equal to an array of 
   - `data: <object>` - Token state data associated with the account, either as encoded binary data or in JSON format `{<program>: <state>}`
   - `executable: <bool>` - boolean indicating if the account contains a program (and is strictly read-only\)
   - `rentEpoch: <u64>` - the epoch at which this account will next owe rent, as u64
+  - `size: <u64>` - the data size of the account
 
 When the data is requested with the `jsonParsed` encoding a format similar to that of the
 [Token Balances Structure](#token-balances-structure) can be expected inside the structure,
@@ -159,7 +160,8 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
           "executable": false,
           "lamports": 1726080,
           "owner": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
-          "rentEpoch": 4
+          "rentEpoch": 4,
+          "space": 165
         },
         "pubkey": "28YTZEwqtMHWrhWcvv34se7pjS7wctgqzCPB3gReCFKp"
       }

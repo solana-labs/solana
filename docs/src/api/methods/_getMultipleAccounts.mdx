@@ -79,6 +79,7 @@ The result will be a JSON object with `value` equal to an array of:
   - `data: <[string, encoding]|object>` - data associated with the account, either as encoded binary data or JSON format `{<program>: <state>}` - depending on encoding parameter
   - `executable: <bool>` - boolean indicating if the account contains a program \(and is strictly read-only\)
   - `rentEpoch: <u64>` - the epoch at which this account will next owe rent, as u64
+  - `size: <u64>` - the data size of the account
 
 </CodeParams>
 
@@ -116,21 +117,20 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
     },
     "value": [
       {
-        "data": [
-          "11116bv5nS2h3y12kD1yUKeMZvGcKLSjQgX6BeV7u1FrjeJcKfsHRTPuR3oZ1EioKtYGiYxpxMG5vpbZLsbcBYBEmZZcMKaSoGx9JZeAuWf",
-          "base58"
-        ],
+        "data": ["", "base64"],
         "executable": false,
         "lamports": 1000000000,
         "owner": "11111111111111111111111111111111",
-        "rentEpoch": 2
+        "rentEpoch": 2,
+        "space": 16
       },
       {
-        "data": ["", "base58"],
+        "data": ["", "base64"],
         "executable": false,
         "lamports": 5000000000,
         "owner": "11111111111111111111111111111111",
-        "rentEpoch": 2
+        "rentEpoch": 2,
+        "space": 0
       }
     ]
   },

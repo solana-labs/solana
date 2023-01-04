@@ -107,6 +107,7 @@ The resultant response array will contain:
   - `data: <[string,encoding]|object>` - data associated with the account, either as encoded binary data or JSON format `{<program>: <state>}` - depending on encoding parameter
   - `executable: <bool>` - boolean indicating if the account contains a program \(and is strictly read-only\)
   - `rentEpoch: <u64>` - the epoch at which this account will next owe rent, as u64
+  - `size: <u64>` - the data size of the account
 
 </CodeParams>
 
@@ -152,7 +153,8 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
         "executable": false,
         "lamports": 15298080,
         "owner": "4Nd1mBQtrMJVYVfKf2PJy9NZUZdTAsp7D4xWLs4gDB4T",
-        "rentEpoch": 28
+        "rentEpoch": 28,
+        "space": 42
       },
       "pubkey": "CxELquR1gPP8wHe33gZ4QxqGB3sZ9RSwsJ2KshVewkFY"
     }
