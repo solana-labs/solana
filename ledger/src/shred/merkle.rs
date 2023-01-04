@@ -36,7 +36,7 @@ use {
 };
 
 const_assert_eq!(SIZE_OF_MERKLE_ROOT, 20);
-const SIZE_OF_MERKLE_ROOT: usize = std::mem::size_of::<MerkleRoot>();
+pub(crate) const SIZE_OF_MERKLE_ROOT: usize = std::mem::size_of::<MerkleRoot>();
 const_assert_eq!(SIZE_OF_MERKLE_PROOF_ENTRY, 20);
 const SIZE_OF_MERKLE_PROOF_ENTRY: usize = std::mem::size_of::<MerkleProofEntry>();
 const_assert_eq!(ShredData::SIZE_OF_PAYLOAD, 1203);
