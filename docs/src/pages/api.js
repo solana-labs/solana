@@ -60,7 +60,7 @@ function APIPage() {
               />
 
               <Card
-                to="https://github.com/solana-labs/solana-web3.js"
+                to="https://solana-labs.github.io/solana-web3.js/"
                 header={{
                   label: "Web3.js",
                   translateId: "api-web3.js",
