@@ -262,6 +262,7 @@ impl RepairService {
         outstanding_requests: &RwLock<OutstandingShredRepairs>,
         dumped_slots_receiver: DumpedSlotsReceiver,
     ) {
+        const REPAIRS_CACHE_CAPACITY: usize = 2_000;
         let mut repair_weight = RepairWeight::new(repair_info.bank_forks.read().unwrap().root());
         let mut serve_repair = ServeRepair::new(
             repair_info.cluster_info.clone(),
@@ -277,7 +278,7 @@ impl RepairService {
         let duplicate_slot_repair_statuses: HashMap<Slot, DuplicateSlotRepairStatus> =
             HashMap::new();
         let mut peers_cache = LruCache::new(REPAIR_PEERS_CACHE_CAPACITY);
-        let mut repairs_cache = LruCache::new(2_000); // TODO
+        let mut repairs_cache = LruCache::new(REPAIRS_CACHE_CAPACITY);
         let mut repair_peers: HashSet<SocketAddr> = HashSet::default();
 
         loop {
@@ -356,14 +357,13 @@ impl RepairService {
                 repairs
             };
 
-            for r in &repairs {
+            repairs.iter().for_each(|r| {
                 if let Some(x) = repairs_cache.get_mut(r) {
                     *x += 1;
-                    //error!(">>> {:04} -- {:?}", x, r);
                 } else {
                     repairs_cache.put(*r, 1);
                 }
-            }
+            });
 
             let identity_keypair: &Keypair = &repair_info.cluster_info.keypair().clone();
 
@@ -434,20 +434,21 @@ impl RepairService {
 
                 let mut repair_retry_1x = 0;
                 let mut repair_retry_2x = 0;
-                let mut repair_retry_3plus = 0;
-                repairs_cache.iter().for_each(|(_, count)| {
-                    match *count {
-                        1 => repair_retry_1x += 1,
-                        2 => repair_retry_2x += 1,
-                        _ => repair_retry_3plus += 1,
-                    }
+                let mut repair_retry_3_9x = 0;
+                let mut repair_retry_10_plusx = 0;
+                repairs_cache.iter().for_each(|(_, count)| match *count {
+                    1 => repair_retry_1x += 1,
+                    2 => repair_retry_2x += 1,
+                    3..=9 => repair_retry_3_9x += 1,
+                    _ => repair_retry_10_plusx += 1,
                 });
                 repairs_cache.clear();
                 datapoint_info!(
                     "repair_service-retry",
                     ("repair_retry_1x", repair_retry_1x, i64),
                     ("repair_retry_2x", repair_retry_2x, i64),
-                    ("repair_retry_3plus", repair_retry_3plus, i64),
+                    ("repair_retry_3-9x", repair_retry_3_9x, i64),
+                    ("repair_retry_10plusx", repair_retry_10_plusx, i64),
                     ("peers_count", repair_peers.len(), i64),
                 );
                 repair_peers.clear();
