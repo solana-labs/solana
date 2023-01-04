@@ -1177,6 +1177,10 @@ impl Scheduler<ExecuteTimings> {
                     continue 'recv;
                 }
                 let weak_bank = ro_bank.as_ref().unwrap().upgrade();
+                if weak_bank.is_none() {
+                    processed_ee_sender.send(solana_scheduler::UnlockablePayload(ee, timings)).unwrap();
+                    continue 'recv;
+                }
                 let bank = weak_bank.as_ref().unwrap();
                 let slot = bank.slot();
 
@@ -8593,6 +8597,7 @@ impl Bank {
                 if matches!(commit_mode, CommitMode::Banking) {
                     assert!(via_drop);
                 }
+                info!("wait_for_scheduler({commit_mode:?}/{via_drop}): gracefully stopping bank ({})...", self.slot());
                 scheduler.resume_commit_into_bank(None);
                 let _r = scheduler.gracefully_stop().unwrap();
                 let e = scheduler
@@ -8603,7 +8608,7 @@ impl Bank {
                 SCHEDULER_POOL.lock().unwrap().return_to_pool(s.take().unwrap());
                 e
             } else {
-                info!("wait_for_scheduler(Banking): pausing commit into bank...");
+                info!("wait_for_scheduler(Banking): pausing commit into bank ({})...", self.slot());
                 scheduler.pause_commit_into_bank();
                 /* proper per-slot metrics reporting is needed...
                 scheduler
