@@ -117,8 +117,8 @@ module.exports = {
     },
     algolia: {
       // This API key is "search-only" and safe to be published
-      apiKey: "d58e0d68c875346d52645d68b13f3ac0",
-      appId: "d58e0d68c875346d52645d68b13f3ac0",
+      apiKey: "011e01358301f5023b02da5db6af7f4d",
+      appId: "FQ12ISJR4B",
       indexName: "solana",
       contextualSearch: true,
     },
