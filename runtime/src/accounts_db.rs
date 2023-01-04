@@ -17198,7 +17198,7 @@ pub mod tests {
                                     );
                                 });
 
-                                let storages = db.get_storages_for_slot(slot5).unwrap().to_vec();
+                                let storages = db.get_storages_for_slot(slot5).unwrap();
                                 let mut stored_accounts = Vec::default();
                                 assert_eq!(storages.len(), 1);
                                 let shrink_collect = db.shrink_collect(
