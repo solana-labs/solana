@@ -134,7 +134,7 @@ impl From<RpcCustomError> for Error {
             },
             RpcCustomError::TransactionPrecompileVerificationFailure(e) => Self {
                 code: ErrorCode::ServerError(
-                    JSON_RPC_SERVER_ERROR_TRANSACTION_SIGNATURE_VERIFICATION_FAILURE,
+                    JSON_RPC_SERVER_ERROR_TRANSACTION_PRECOMPILE_VERIFICATION_FAILURE,
                 ),
                 message: format!("Transaction precompile verification failure {e:?}"),
                 data: None,
