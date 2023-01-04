@@ -4266,7 +4266,9 @@ impl AccountsDb {
 
     #[cfg(test)]
     fn get_storages_for_slot(&self, slot: Slot) -> Option<SnapshotStorage> {
-        self.storage.get_slot_storage_entries(slot)
+        self.storage
+            .get_slot_storage_entry(slot)
+            .map(|storage| vec![storage])
     }
 
     /// 'accounts' that exist in the current slot we are combining into a different ancient slot
@@ -14216,9 +14218,7 @@ pub mod tests {
     }
 
     fn slot_stores(db: &AccountsDb, slot: Slot) -> SnapshotStorage {
-        db.storage
-            .get_slot_storage_entries(slot)
-            .unwrap_or_default()
+        db.get_storages_for_slot(slot).unwrap_or_default()
     }
 
     #[test]
@@ -14573,10 +14573,8 @@ pub mod tests {
 
     impl AccountsDb {
         fn get_and_assert_single_storage(&self, slot: Slot) -> Arc<AccountStorageEntry> {
-            let mut storage_maps: SnapshotStorage = self
-                .storage
-                .get_slot_storage_entries(slot)
-                .unwrap_or_default();
+            let mut storage_maps: SnapshotStorage =
+                self.get_storages_for_slot(slot).unwrap_or_default();
 
             assert_eq!(storage_maps.len(), 1);
             storage_maps.pop().unwrap()
@@ -15856,10 +15854,7 @@ pub mod tests {
         accounts.store_for_tests(slot0, &[(&shared_key, &account)]);
         accounts.add_root_and_flush_write_cache(slot0);
 
-        let storage_maps = accounts
-            .storage
-            .get_slot_storage_entries(slot0)
-            .unwrap_or_default();
+        let storage_maps = accounts.get_storages_for_slot(slot0).unwrap_or_default();
         let storage_info = StorageSizeAndCountMap::default();
         let accounts_map = accounts.process_storage_slot(&storage_maps[..]);
         AccountsDb::update_storage_info(&storage_info, &accounts_map, &Mutex::default());
@@ -15908,10 +15903,7 @@ pub mod tests {
         accounts.store_for_tests(slot0, &[(&keys[1], &account_big)]);
         accounts.add_root_and_flush_write_cache(slot0);
 
-        let storage_maps = accounts
-            .storage
-            .get_slot_storage_entries(slot0)
-            .unwrap_or_default();
+        let storage_maps = accounts.get_storages_for_slot(slot0).unwrap_or_default();
         let storage_info = StorageSizeAndCountMap::default();
         let accounts_map = accounts.process_storage_slot(&storage_maps[..]);
         AccountsDb::update_storage_info(&storage_info, &accounts_map, &Mutex::default());
@@ -16013,7 +16005,7 @@ pub mod tests {
 
     /// asserts that not only are there 0 append vecs, but there is not even an entry in the storage map for 'slot'
     fn assert_no_storages_at_slot(db: &AccountsDb, slot: Slot) {
-        assert!(db.storage.get_slot_storage_entries(slot).is_none());
+        assert!(db.get_storages_for_slot(slot).is_none());
     }
 
     /// Test to make sure `clean_accounts()` works properly with the `last_full_snapshot_slot`
@@ -17401,12 +17393,7 @@ pub mod tests {
         let max_slot_inclusive = ancient_slot + (num_normal_slots as Slot);
         let initial_accounts = get_all_accounts(&db, ancient_slot..(max_slot_inclusive + 1));
 
-        let ancient = db
-            .get_storages_for_slot(ancient_slot)
-            .unwrap()
-            .first()
-            .unwrap()
-            .clone();
+        let ancient = db.storage.get_slot_storage_entry(ancient_slot).unwrap();
         let initial_len = ancient.alive_bytes();
         // set size of ancient to be 'full'
         adjust_append_vec_len_for_tests(&ancient, ancient.accounts.capacity() as usize);
