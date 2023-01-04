@@ -374,7 +374,7 @@ impl<'a> SnapshotMinimizer<'a> {
                 Some(hashes),
                 Some(new_storage),
                 Some(Box::new(write_versions.into_iter())),
-                StoreReclaims::Default,
+                StoreReclaims::Ignore,
             );
 
             new_storage.flush().unwrap();
