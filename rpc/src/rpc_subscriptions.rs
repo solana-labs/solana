@@ -2700,7 +2700,9 @@ pub(crate) mod tests {
         bank_forks.write().unwrap().insert(bank1);
         let bank2 = Bank::new_from_parent(&bank0, &Pubkey::default(), 2);
         bank_forks.write().unwrap().insert(bank2);
-        let alice = Keypair::new();
+
+        // we need a pubkey that will pass its rent collection slot so rent_epoch gets updated to max since this account is exempt
+        let alice = Keypair::from_base58_string("sfLnS4rZ5a8gXke3aGxCgM6usFAVPxLUaBSRdssGY9uS5eoiEWQ41CqDcpXbcekpKsie8Lyy3LNFdhEvjUE1wd9");
 
         let optimistically_confirmed_bank =
             OptimisticallyConfirmedBank::locked_from_bank_forks_root(&bank_forks);
@@ -2795,7 +2797,7 @@ pub(crate) mod tests {
                        "executable": false,
                        "lamports": 1,
                        "owner": "Stake11111111111111111111111111111111111111",
-                       "rentEpoch": 0,
+                       "rentEpoch": u64::MAX,
                        "space": 16,
                     },
                },
@@ -2845,7 +2847,7 @@ pub(crate) mod tests {
                        "executable": false,
                        "lamports": 1,
                        "owner": "Stake11111111111111111111111111111111111111",
-                       "rentEpoch": 0,
+                       "rentEpoch": u64::MAX,
                        "space": 16,
                     },
                },
