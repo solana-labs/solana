@@ -262,7 +262,7 @@ impl RepairService {
         outstanding_requests: &RwLock<OutstandingShredRepairs>,
         dumped_slots_receiver: DumpedSlotsReceiver,
     ) {
-        const REPAIRS_CACHE_CAPACITY: usize = 2_000;
+        const REPAIRS_CACHE_CAPACITY: usize = 10_000;
         let mut repair_weight = RepairWeight::new(repair_info.bank_forks.read().unwrap().root());
         let mut serve_repair = ServeRepair::new(
             repair_info.cluster_info.clone(),
