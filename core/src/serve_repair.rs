@@ -1741,7 +1741,7 @@ mod tests {
         );
         assert_matches!(rv, Err(Error::ClusterInfo(ClusterInfoError::NoPeers)));
 
-        let serve_repair_addr = socketaddr!([127, 0, 0, 1], 1243);
+        let serve_repair_addr = socketaddr!([127, 0, 0, 1], 1245);
         let nxt = ContactInfo {
             id: solana_sdk::pubkey::new_rand(),
             gossip: socketaddr!([127, 0, 0, 1], 1234),
@@ -1749,10 +1749,12 @@ mod tests {
             tvu_forwards: socketaddr!([127, 0, 0, 1], 1236),
             repair: socketaddr!([127, 0, 0, 1], 1237),
             tpu: socketaddr!([127, 0, 0, 1], 1238),
-            tpu_forwards: socketaddr!([127, 0, 0, 1], 1239),
-            tpu_vote: socketaddr!([127, 0, 0, 1], 1240),
-            rpc: socketaddr!([127, 0, 0, 1], 1241),
-            rpc_pubsub: socketaddr!([127, 0, 0, 1], 1242),
+            tpu_quic: socketaddr!([127, 0, 0, 1], 1239),
+            tpu_forwards: socketaddr!([127, 0, 0, 1], 1240),
+            tpu_forwards_quic: socketaddr!([127, 0, 0, 1], 1241),
+            tpu_vote: socketaddr!([127, 0, 0, 1], 1242),
+            rpc: socketaddr!([127, 0, 0, 1], 1243),
+            rpc_pubsub: socketaddr!([127, 0, 0, 1], 1244),
             serve_repair: serve_repair_addr,
             wallclock: 0,
             shred_version: 0,
@@ -1772,7 +1774,7 @@ mod tests {
         assert_eq!(nxt.serve_repair, serve_repair_addr);
         assert_eq!(rv.0, nxt.serve_repair);
 
-        let serve_repair_addr2 = socketaddr!([127, 0, 0, 2], 1243);
+        let serve_repair_addr2 = socketaddr!([127, 0, 0, 2], 1245);
         let nxt = ContactInfo {
             id: solana_sdk::pubkey::new_rand(),
             gossip: socketaddr!([127, 0, 0, 1], 1234),
@@ -1780,10 +1782,12 @@ mod tests {
             tvu_forwards: socketaddr!([127, 0, 0, 1], 1236),
             repair: socketaddr!([127, 0, 0, 1], 1237),
             tpu: socketaddr!([127, 0, 0, 1], 1238),
-            tpu_forwards: socketaddr!([127, 0, 0, 1], 1239),
-            tpu_vote: socketaddr!([127, 0, 0, 1], 1240),
-            rpc: socketaddr!([127, 0, 0, 1], 1241),
-            rpc_pubsub: socketaddr!([127, 0, 0, 1], 1242),
+            tpu_quic: socketaddr!([127, 0, 0, 1], 1239),
+            tpu_forwards: socketaddr!([127, 0, 0, 1], 1240),
+            tpu_forwards_quic: socketaddr!([127, 0, 0, 1], 1241),
+            tpu_vote: socketaddr!([127, 0, 0, 1], 1242),
+            rpc: socketaddr!([127, 0, 0, 1], 1243),
+            rpc_pubsub: socketaddr!([127, 0, 0, 1], 1244),
             serve_repair: serve_repair_addr2,
             wallclock: 0,
             shred_version: 0,

@@ -2843,7 +2843,9 @@ impl Node {
             tvu_forwards: tvu_forwards.local_addr().unwrap(),
             repair: repair.local_addr().unwrap(),
             tpu: tpu.local_addr().unwrap(),
+            tpu_quic: tpu_quic.local_addr().unwrap(),
             tpu_forwards: tpu_forwards.local_addr().unwrap(),
+            tpu_forwards_quic: tpu_forwards_quic.local_addr().unwrap(),
             tpu_vote: tpu_vote.local_addr().unwrap(),
             rpc: rpc_addr,
             rpc_pubsub: rpc_pubsub_addr,
@@ -2902,9 +2904,9 @@ impl Node {
             Self::get_gossip_port(gossip_addr, port_range, bind_ip_addr);
         let (tvu_port, tvu) = Self::bind(bind_ip_addr, port_range);
         let (tvu_forwards_port, tvu_forwards) = Self::bind(bind_ip_addr, port_range);
-        let ((tpu_port, tpu), (_tpu_quic_port, tpu_quic)) =
+        let ((tpu_port, tpu), (tpu_quic_port, tpu_quic)) =
             bind_two_in_range_with_offset(bind_ip_addr, port_range, QUIC_PORT_OFFSET).unwrap();
-        let ((tpu_forwards_port, tpu_forwards), (_tpu_forwards_quic_port, tpu_forwards_quic)) =
+        let ((tpu_forwards_port, tpu_forwards), (tpu_forwards_quic_port, tpu_forwards_quic)) =
             bind_two_in_range_with_offset(bind_ip_addr, port_range, QUIC_PORT_OFFSET).unwrap();
         let (tpu_vote_port, tpu_vote) = Self::bind(bind_ip_addr, port_range);
         let (_, retransmit_socket) = Self::bind(bind_ip_addr, port_range);
@@ -2923,7 +2925,9 @@ impl Node {
             tvu_forwards: SocketAddr::new(gossip_addr.ip(), tvu_forwards_port),
             repair: SocketAddr::new(gossip_addr.ip(), repair_port),
             tpu: SocketAddr::new(gossip_addr.ip(), tpu_port),
+            tpu_quic: SocketAddr::new(gossip_addr.ip(), tpu_quic_port),
             tpu_forwards: SocketAddr::new(gossip_addr.ip(), tpu_forwards_port),
+            tpu_forwards_quic: SocketAddr::new(gossip_addr.ip(), tpu_forwards_quic_port),
             tpu_vote: SocketAddr::new(gossip_addr.ip(), tpu_vote_port),
             rpc: SocketAddr::new(gossip_addr.ip(), rpc_port),
             rpc_pubsub: SocketAddr::new(gossip_addr.ip(), rpc_pubsub_port),
@@ -2973,7 +2977,7 @@ impl Node {
         let (tpu_port, tpu_sockets) =
             multi_bind_in_range(bind_ip_addr, port_range, 32).expect("tpu multi_bind");
 
-        let (_tpu_port_quic, tpu_quic) = Self::bind(
+        let (tpu_port_quic, tpu_quic) = Self::bind(
             bind_ip_addr,
             (tpu_port + QUIC_PORT_OFFSET, tpu_port + QUIC_PORT_OFFSET + 1),
         );
@@ -2981,7 +2985,7 @@ impl Node {
         let (tpu_forwards_port, tpu_forwards_sockets) =
             multi_bind_in_range(bind_ip_addr, port_range, 8).expect("tpu_forwards multi_bind");
 
-        let (_tpu_forwards_port_quic, tpu_forwards_quic) = Self::bind(
+        let (tpu_forwards_port_quic, tpu_forwards_quic) = Self::bind(
             bind_ip_addr,
             (
                 tpu_forwards_port + QUIC_PORT_OFFSET,
@@ -3003,18 +3007,21 @@ impl Node {
 
         let (_, ancestor_hashes_requests) = Self::bind(bind_ip_addr, port_range);
 
+        let gossip_ip_with_port = |port: u16| SocketAddr::new(gossip_addr.ip(), port);
         let info = ContactInfo {
             id: *pubkey,
-            gossip: SocketAddr::new(gossip_addr.ip(), gossip_port),
-            tvu: SocketAddr::new(gossip_addr.ip(), tvu_port),
-            tvu_forwards: SocketAddr::new(gossip_addr.ip(), tvu_forwards_port),
-            repair: SocketAddr::new(gossip_addr.ip(), repair_port),
-            tpu: overwrite_tpu_addr.unwrap_or_else(|| SocketAddr::new(gossip_addr.ip(), tpu_port)),
-            tpu_forwards: SocketAddr::new(gossip_addr.ip(), tpu_forwards_port),
-            tpu_vote: SocketAddr::new(gossip_addr.ip(), tpu_vote_port),
+            gossip: gossip_ip_with_port(gossip_port),
+            tvu: gossip_ip_with_port(tvu_port),
+            tvu_forwards: gossip_ip_with_port(tvu_forwards_port),
+            repair: gossip_ip_with_port(repair_port),
+            tpu: overwrite_tpu_addr.unwrap_or_else(|| gossip_ip_with_port(tpu_port)),
+            tpu_quic: gossip_ip_with_port(tpu_port_quic),
+            tpu_forwards: gossip_ip_with_port(tpu_forwards_port),
+            tpu_forwards_quic: gossip_ip_with_port(tpu_forwards_port_quic),
+            tpu_vote: gossip_ip_with_port(tpu_vote_port),
             rpc: socketaddr_any!(),
             rpc_pubsub: socketaddr_any!(),
-            serve_repair: SocketAddr::new(gossip_addr.ip(), serve_repair_port),
+            serve_repair: gossip_ip_with_port(serve_repair_port),
             wallclock: 0,
             shred_version: 0,
         };
@@ -3180,20 +3187,24 @@ mod tests {
         let keypair = Keypair::from_base58_string("3jATNWfbii1btv6nCpToAXAJz6a4km5HsLSWiwLfNvHNQAmvksLFVAKGUz286bXb9N4ivXx8nuwkn91PFDTyoFEp");
 
         let node = {
-            let tpu = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8900);
-            let _tpu_quic = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8901);
+            let localhost_with_port =
+                |port: u16| SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), port);
 
-            let gossip = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8888);
-            let tvu = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8902);
-            let tvu_forwards = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8903);
-            let tpu_forwards = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8904);
+            let tpu = localhost_with_port(8900);
+            let tpu_quic = localhost_with_port(8901);
 
-            let tpu_vote = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8906);
-            let repair = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8907);
-            let rpc = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8908);
-            let rpc_pubsub = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8909);
+            let gossip = localhost_with_port(8888);
+            let tvu = localhost_with_port(8902);
+            let tvu_forwards = localhost_with_port(8903);
+            let tpu_forwards = localhost_with_port(8904);
+            let tpu_forwards_quic = localhost_with_port(8905);
 
-            let serve_repair = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8910);
+            let tpu_vote = localhost_with_port(8906);
+            let repair = localhost_with_port(8907);
+            let rpc = localhost_with_port(8908);
+            let rpc_pubsub = localhost_with_port(8909);
+
+            let serve_repair = localhost_with_port(8910);
 
             let info = ContactInfo {
                 id: keypair.pubkey(),
@@ -3202,7 +3213,9 @@ mod tests {
                 tvu_forwards,
                 repair,
                 tpu,
+                tpu_quic,
                 tpu_forwards,
+                tpu_forwards_quic,
                 tpu_vote,
                 rpc,
                 rpc_pubsub,

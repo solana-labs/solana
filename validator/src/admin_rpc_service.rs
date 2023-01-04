@@ -74,7 +74,9 @@ pub struct AdminRpcContactInfo {
     pub tvu_forwards: SocketAddr,
     pub repair: SocketAddr,
     pub tpu: SocketAddr,
+    pub tpu_quic: SocketAddr,
     pub tpu_forwards: SocketAddr,
+    pub tpu_forwards_quic: SocketAddr,
     pub tpu_vote: SocketAddr,
     pub rpc: SocketAddr,
     pub rpc_pubsub: SocketAddr,
@@ -97,7 +99,9 @@ impl From<ContactInfo> for AdminRpcContactInfo {
             tvu_forwards,
             repair,
             tpu,
+            tpu_quic,
             tpu_forwards,
+            tpu_forwards_quic,
             tpu_vote,
             rpc,
             rpc_pubsub,
@@ -113,7 +117,9 @@ impl From<ContactInfo> for AdminRpcContactInfo {
             tvu_forwards,
             repair,
             tpu,
+            tpu_quic,
             tpu_forwards,
+            tpu_forwards_quic,
             tpu_vote,
             rpc,
             rpc_pubsub,
@@ -130,8 +136,10 @@ impl Display for AdminRpcContactInfo {
         writeln!(f, "TVU: {}", self.tvu)?;
         writeln!(f, "TVU Forwards: {}", self.tvu_forwards)?;
         writeln!(f, "Repair: {}", self.repair)?;
-        writeln!(f, "TPU: {}", self.tpu)?;
-        writeln!(f, "TPU Forwards: {}", self.tpu_forwards)?;
+        writeln!(f, "TPU UDP: {}", self.tpu)?;
+        writeln!(f, "TPU QUIC: {}", self.tpu_quic)?;
+        writeln!(f, "TPU Forwards UDP: {}", self.tpu_forwards)?;
+        writeln!(f, "TPU Forwards QUIC: {}", self.tpu_forwards_quic)?;
         writeln!(f, "TPU Votes: {}", self.tpu_vote)?;
         writeln!(f, "RPC: {}", self.rpc)?;
         writeln!(f, "RPC Pubsub: {}", self.rpc_pubsub)?;
