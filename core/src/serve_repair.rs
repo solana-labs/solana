@@ -21,6 +21,8 @@ use {
         cluster_info::{ClusterInfo, ClusterInfoError},
         contact_info::ContactInfo,
         ping_pong::{self, PingCache, Pong},
+        socketaddr,
+        socketaddr_any,
         weighted_shuffle::WeightedShuffle,
     },
     solana_ledger::{
@@ -985,7 +987,13 @@ impl ServeRepair {
             let x = cluster_nodes.get_broadcast_peer(&shred_id);
             if let Some(ci) = x {
                 //error!(">>> PEER for shred_id {:?}: {:?}", &shred_id, &ci.id);
-                (ci.id, ci.serve_repair)
+
+                if ci.serve_repair == socketaddr_any!() {
+                    error!(">>> socketaddr any for {:?}", &ci.id);
+                    (slot_leader, leader_repair_addr)
+                } else {
+                    (ci.id, ci.serve_repair)
+                }
             } else {
                 /*
                 error!(
