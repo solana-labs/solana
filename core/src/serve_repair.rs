@@ -989,8 +989,9 @@ impl ServeRepair {
                 //error!(">>> PEER for shred_id {:?}: {:?}", &shred_id, &ci.id);
 
                 if ci.serve_repair == socketaddr_any!() {
-                    error!(">>> socketaddr any for {:?}", &ci.id);
-                    (slot_leader, leader_repair_addr)
+                    error!(">>> no addr for {:?}", &ci.id);
+                    //(slot_leader, leader_repair_addr)
+                    return Err(Error::from(ClusterInfoError::NoPeers));
                 } else {
                     (ci.id, ci.serve_repair)
                 }
