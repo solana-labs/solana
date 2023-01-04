@@ -4249,17 +4249,14 @@ impl AccountsDb {
 
     #[cfg(test)]
     pub(crate) fn sizes_of_accounts_in_storage_for_tests(&self, slot: Slot) -> Vec<usize> {
-        self.get_storages_for_slot(slot)
-            .map(|storages| {
-                storages
-                    .iter()
-                    .flat_map(|storage| {
-                        storage
-                            .accounts
-                            .account_iter()
-                            .map(|account| account.stored_size)
-                    })
-                    .collect::<Vec<_>>()
+        self.storage
+            .get_slot_storage_entry(slot)
+            .map(|storage| {
+                storage
+                    .accounts
+                    .account_iter()
+                    .map(|account| account.stored_size)
+                    .collect()
             })
             .unwrap_or_default()
     }
