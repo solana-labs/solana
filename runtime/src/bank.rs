@@ -6874,10 +6874,16 @@ impl Bank {
 
     pub fn resume_banking_commit(self: &Arc<Self>) {
         use assert_matches::assert_matches;
-        assert_matches!(self.commit_mode(), CommitMode::Banking);
-        let s = self.scheduler2.read().unwrap();
-        let scheduler = s.as_ref().unwrap();
-        scheduler.resume_commit_into_bank(Some(self));
+        match self.commit_mode() {
+            CommitMode::Banking => {
+                let s = self.scheduler2.read().unwrap();
+                let scheduler = s.as_ref().unwrap();
+                scheduler.resume_commit_into_bank(Some(self));
+            },
+            CommitMode::Replaying => {
+                info!("maybe isolated banking?");
+            },
+        }
     }
 
     pub fn commit_mode(&self) -> CommitMode {
@@ -8586,8 +8592,8 @@ impl Bank {
             if matches!(commit_mode, CommitMode::Replaying) || via_drop {
                 if matches!(commit_mode, CommitMode::Banking) {
                     assert!(via_drop);
-                    scheduler.resume_commit_into_bank(None);
                 }
+                scheduler.resume_commit_into_bank(None);
                 let _r = scheduler.gracefully_stop().unwrap();
                 let e = scheduler
                     .handle_aborted_executions()
