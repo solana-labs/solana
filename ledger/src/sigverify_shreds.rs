@@ -1,7 +1,7 @@
 #![allow(clippy::implicit_hasher)]
 use {
-    crate::shred,
-    itertools::Itertools,
+    crate::shred::{self, MerkleRoot, SIZE_OF_MERKLE_ROOT},
+    itertools::{izip, Itertools},
     rayon::{prelude::*, ThreadPool},
     sha2::{Digest, Sha512},
     solana_metrics::inc_new_counter_debug,
@@ -123,13 +123,13 @@ where
     resize_buffer(&mut keyvec, keyvec_size);
 
     let key_offsets: HashMap<Slot, /*key offset:*/ usize> = {
-        let mut size = 0;
+        let mut next_offset = 0;
         keys_to_slots
             .into_iter()
             .flat_map(|(key, slots)| {
-                let offset = size;
-                size += std::mem::size_of::<T>();
-                keyvec[offset..size].copy_from_slice(key.as_ref());
+                let offset = next_offset;
+                next_offset += std::mem::size_of::<T>();
+                keyvec[offset..next_offset].copy_from_slice(key.as_ref());
                 slots.into_iter().zip(repeat(offset))
             })
             .collect()
@@ -145,6 +145,48 @@ where
     (keyvec, offsets)
 }
 
+// Recovers merkle roots from shreds binary.
+fn get_merkle_roots(
+    packets: &[PacketBatch],
+    recycler_cache: &RecyclerCache,
+) -> (
+    PinnedVec<u8>,      // Merkle roots
+    Vec<Option<usize>>, // Offsets
+) {
+    let merkle_roots: Vec<Option<MerkleRoot>> = SIGVERIFY_THREAD_POOL.install(|| {
+        packets
+            .par_iter()
+            .flat_map(|packets| {
+                packets.par_iter().map(|packet| {
+                    if packet.meta().discard() {
+                        return None;
+                    }
+                    let shred = shred::layout::get_shred(packet)?;
+                    shred::layout::get_merkle_root(shred)
+                })
+            })
+            .collect()
+    });
+    let num_merkle_roots = merkle_roots.iter().flatten().count();
+    let mut buffer = recycler_cache.buffer().allocate("shred_gpu_merkle_roots");
+    buffer.set_pinnable();
+    resize_buffer(&mut buffer, num_merkle_roots * SIZE_OF_MERKLE_ROOT);
+    let offsets = {
+        let mut next_offset = 0;
+        merkle_roots
+            .into_iter()
+            .map(|root| {
+                let root = root?;
+                let offset = next_offset;
+                next_offset += SIZE_OF_MERKLE_ROOT;
+                buffer[offset..next_offset].copy_from_slice(&root);
+                Some(offset)
+            })
+            .collect()
+    };
+    (buffer, offsets)
+}
+
 // Resizes the buffer to >= size and a multiple of
 // std::mem::size_of::<Packet>().
 fn resize_buffer(buffer: &mut PinnedVec<u8>, size: usize) {
@@ -156,9 +198,20 @@ fn resize_buffer(buffer: &mut PinnedVec<u8>, size: usize) {
     buffer.resize(size, 0u8);
 }
 
+fn elems_from_buffer(buffer: &PinnedVec<u8>) -> perf_libs::Elems {
+    // resize_buffer ensures that buffer size is a multiple of Packet size.
+    debug_assert_eq!(buffer.len() % std::mem::size_of::<Packet>(), 0);
+    let num_packets = buffer.len() / std::mem::size_of::<Packet>();
+    perf_libs::Elems {
+        elems: buffer.as_ptr().cast::<u8>(),
+        num: num_packets as u32,
+    }
+}
+
 fn shred_gpu_offsets(
     offset: usize,
     batches: &[PacketBatch],
+    merkle_roots_offsets: impl IntoIterator<Item = Option<usize>>,
     recycler_cache: &RecyclerCache,
 ) -> (TxOffset, TxOffset, TxOffset) {
     fn add_offset(range: Range<usize>, offset: usize) -> Range<usize> {
@@ -174,15 +227,22 @@ fn shred_gpu_offsets(
         offset.checked_add(std::mem::size_of::<Packet>())
     });
     let packets = batches.iter().flatten();
-    for (offset, packet) in offsets.zip(packets) {
+    for (offset, packet, merkle_root_offset) in izip!(offsets, packets, merkle_roots_offsets) {
         let sig = shred::layout::get_signature_range();
         let sig = add_offset(sig, offset);
         debug_assert_eq!(sig.end - sig.start, std::mem::size_of::<Signature>());
-        let shred = shred::layout::get_shred(packet);
         // Signature may verify for an empty message but the packet will be
         // discarded during deserialization.
-        let msg = shred.and_then(shred::layout::get_signed_data_offsets);
-        let msg = add_offset(msg.unwrap_or_default(), offset);
+        let msg: Range<usize> = match merkle_root_offset {
+            None => {
+                let shred = shred::layout::get_shred(packet);
+                let msg = shred.and_then(shred::layout::get_signed_data_offsets);
+                add_offset(msg.unwrap_or_default(), offset)
+            }
+            Some(merkle_root_offset) => {
+                merkle_root_offset..merkle_root_offset + SIZE_OF_MERKLE_ROOT
+            }
+        };
         signature_offsets.push(sig.start as u32);
         msg_start_offsets.push(msg.start as u32);
         let msg_size = msg.end.saturating_sub(msg.start);
@@ -203,18 +263,24 @@ pub fn verify_shreds_gpu(
     let (pubkeys, pubkey_offsets) = slot_key_data_for_gpu(batches, slot_leaders, recycler_cache);
     //HACK: Pubkeys vector is passed along as a `PacketBatch` buffer to the GPU
     //TODO: GPU needs a more opaque interface, which can handle variable sized structures for data
-    let offset = pubkeys.len();
+    let (merkle_roots, merkle_roots_offsets) = get_merkle_roots(batches, recycler_cache);
+    // Merkle roots are placed after pubkeys; adjust offsets accordingly.
+    let merkle_roots_offsets = {
+        let shift = pubkeys.len();
+        merkle_roots_offsets
+            .into_iter()
+            .map(move |offset| Some(offset? + shift))
+    };
+    let offset = pubkeys.len() + merkle_roots.len();
     let (signature_offsets, msg_start_offsets, msg_sizes) =
-        shred_gpu_offsets(offset, batches, recycler_cache);
+        shred_gpu_offsets(offset, batches, merkle_roots_offsets, recycler_cache);
     let mut out = recycler_cache.buffer().allocate("out_buffer");
     out.set_pinnable();
     out.resize(signature_offsets.len(), 0u8);
-    debug_assert_eq!(pubkeys.len() % std::mem::size_of::<Packet>(), 0);
-    let num_pubkey_packets = pubkeys.len() / std::mem::size_of::<Packet>();
-    let mut elems = vec![perf_libs::Elems {
-        elems: pubkeys.as_ptr().cast::<u8>(),
-        num: num_pubkey_packets as u32,
-    }];
+    let mut elems = vec![
+        elems_from_buffer(&pubkeys),
+        elems_from_buffer(&merkle_roots),
+    ];
     elems.extend(batches.iter().map(|batch| perf_libs::Elems {
         elems: batch.as_ptr().cast::<u8>(),
         num: batch.len() as u32,
@@ -326,21 +392,27 @@ pub fn sign_shreds_gpu(
     let mut secret_offsets = recycler_cache.offsets().allocate("secret_offsets");
     secret_offsets.resize(packet_count, pubkey_size as u32);
 
-    let offset: usize = pinned_keypair.len();
+    let (merkle_roots, merkle_roots_offsets) = get_merkle_roots(batches, recycler_cache);
+    // Merkle roots are placed after the keypair; adjust offsets accordingly.
+    let merkle_roots_offsets = {
+        let shift = pinned_keypair.len();
+        merkle_roots_offsets
+            .into_iter()
+            .map(move |offset| Some(offset? + shift))
+    };
+    let offset = pinned_keypair.len() + merkle_roots.len();
     trace!("offset: {}", offset);
     let (signature_offsets, msg_start_offsets, msg_sizes) =
-        shred_gpu_offsets(offset, batches, recycler_cache);
+        shred_gpu_offsets(offset, batches, merkle_roots_offsets, recycler_cache);
     let total_sigs = signature_offsets.len();
     let mut signatures_out = recycler_cache.buffer().allocate("ed25519 signatures");
     signatures_out.set_pinnable();
     signatures_out.resize(total_sigs * sig_size, 0);
 
-    debug_assert_eq!(pinned_keypair.len() % std::mem::size_of::<Packet>(), 0);
-    let num_keypair_packets = pinned_keypair.len() / std::mem::size_of::<Packet>();
-    let mut elems = vec![perf_libs::Elems {
-        elems: pinned_keypair.as_ptr().cast::<u8>(),
-        num: num_keypair_packets as u32,
-    }];
+    let mut elems = vec![
+        elems_from_buffer(pinned_keypair),
+        elems_from_buffer(&merkle_roots),
+    ];
     elems.extend(batches.iter().map(|batch| perf_libs::Elems {
         elems: batch.as_ptr().cast::<u8>(),
         num: batch.len() as u32,
