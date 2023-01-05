@@ -917,6 +917,18 @@ type TaskQueueEntry<'a> = std::collections::btree_map::Entry<'a, UniqueWeight, T
 type TaskQueueOccupiedEntry<'a> =
     std::collections::btree_map::OccupiedEntry<'a, UniqueWeight, TaskInQueue>;
 
+use enum_dispatch::enum_dispatch;
+
+#[enum_dispatch]
+trait TaskQueueReader {
+}
+
+#[enum_dispatch(TaskQueueReader)]
+enum ModeSpecificTaskQueue<'a, C> {
+    Replaying(TaskQueue),
+    Banking(ChannelBackedTaskQueue<'a, C>),
+}
+
 impl TaskQueue {
     #[inline(never)]
     fn add_to_schedule(&mut self, unique_weight: UniqueWeight, task: TaskInQueue) {
