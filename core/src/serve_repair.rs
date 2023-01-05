@@ -915,6 +915,8 @@ impl ServeRepair {
         identity_keypair: &Keypair,
         slot_to_vote_id_cache: &mut LruCache<Slot, HashSet<Pubkey>>,
         bank: &Bank,
+        request_voter_count: &mut usize,
+        request_fallthrough_count: &mut usize,
     ) -> Result<(SocketAddr, Vec<u8>)> {
         // find a peer that appears to be accepting replication and has the desired slot, as indicated
         // by a valid tvu port location
@@ -968,9 +970,13 @@ impl ServeRepair {
         };
 
         let (peer, addr) = if let Some(voter_peer) = voter_peer {
+            *request_voter_count += 1;
+
             error!(">>> VOTER PEER {:?} slot={}", &voter_peer.0, slot);
             voter_peer
         } else {
+            *request_fallthrough_count += 1;
+
             let repair_peers = match peers_cache.get(&slot) {
                 Some(entry) if entry.asof.elapsed() < REPAIR_PEERS_CACHE_TTL => entry,
                 _ => {

@@ -276,6 +276,8 @@ impl RepairService {
         let mut repairs_cache = LruCache::new(REPAIRS_CACHE_CAPACITY);
         let mut repair_peers: HashSet<SocketAddr> = HashSet::default();
         let mut slot_to_vote_id_cache: LruCache<Slot, HashSet<Pubkey>> = LruCache::new(2_000);
+        let mut request_voter_count: usize = 0;
+        let mut request_fallthrough_count: usize = 0;
 
         loop {
             if exit.load(Ordering::Relaxed) {
@@ -400,6 +402,8 @@ impl RepairService {
                                 identity_keypair,
                                 &mut slot_to_vote_id_cache,
                                 &working_bank,
+                                &mut request_voter_count,
+                                &mut request_fallthrough_count,
                             )
                             .ok()?;
                         repair_peers.insert(to);
@@ -468,8 +472,12 @@ impl RepairService {
                     ("repair_retry_3-9x", repair_retry_3_9x, i64),
                     ("repair_retry_10plusx", repair_retry_10_plusx, i64),
                     ("peers_count", repair_peers.len(), i64),
+                    ("request_voter_count", request_voter_count, i64),
+                    ("request_fallthrough_count", request_fallthrough_count, i64),
                 );
                 repair_peers.clear();
+                request_voter_count = 0;
+                request_fallthrough_count = 0;
 
                 if repair_total > 0 {
                     datapoint_info!(
