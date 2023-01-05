@@ -452,17 +452,8 @@ impl ServeRepair {
         let my_id = identity_keypair.pubkey();
         let cluster_type = root_bank.cluster_type();
 
-<<<<<<< HEAD
-        let max_buffered_packets = if root_bank.cluster_type() != ClusterType::MainnetBeta {
-            2 * MAX_REQUESTS_PER_ITERATION
-=======
         let max_buffered_packets = if cluster_type != ClusterType::MainnetBeta {
-            if self.repair_whitelist.read().unwrap().len() > 0 {
-                4 * MAX_REQUESTS_PER_ITERATION
-            } else {
-                2 * MAX_REQUESTS_PER_ITERATION
-            }
->>>>>>> 832302485 (require repair request signature, ping/pong for Testnet, Development clusters (#29351))
+            2 * MAX_REQUESTS_PER_ITERATION
         } else {
             MAX_REQUESTS_PER_ITERATION
         };
@@ -491,36 +482,22 @@ impl ServeRepair {
                 }
             };
 
-<<<<<<< HEAD
             let from_addr = packet.meta.socket_addr();
             if !ContactInfo::is_valid_address(&from_addr, &socket_addr_space) {
                 stats.err_malformed += 1;
                 continue;
             }
-=======
-                match cluster_type {
-                    ClusterType::Testnet | ClusterType::Development => {
-                        if !Self::verify_signed_packet(&my_id, packet, &request, stats) {
-                            continue;
-                        }
-                    }
-                    ClusterType::MainnetBeta | ClusterType::Devnet => {
-                        // collect stats for signature verification
-                        let _ = Self::verify_signed_packet(&my_id, packet, &request, stats);
+
+            match cluster_type {
+                ClusterType::Testnet | ClusterType::Development => {
+                    if !Self::verify_signed_packet(&my_id, packet, &request, stats) {
+                        continue;
                     }
                 }
-
-                if request.sender() == &my_id {
-                    stats.self_repair += 1;
-                    continue;
+                ClusterType::MainnetBeta | ClusterType::Devnet => {
+                    // collect stats for signature verification
+                    let _ = Self::verify_signed_packet(&my_id, packet, &request, stats);
                 }
->>>>>>> 832302485 (require repair request signature, ping/pong for Testnet, Development clusters (#29351))
-
-            if request.supports_signature() {
-                // collect stats for signature verification
-                Self::verify_signed_packet(&my_id, packet, &request, stats);
-            } else {
-                stats.unsigned_requests += 1;
             }
 
             if request.sender() == &my_id {
