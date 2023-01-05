@@ -1396,7 +1396,7 @@ impl Scheduler<ExecuteTimings> {
                 }
 
                 let max_executing_queue_count = std::env::var("MAX_EXECUTING_QUEUE_COUNT")
-                    .unwrap_or(format!("{}", 9))
+                    .unwrap_or(format!("{}", executing_thread_count + 1))
                     .parse::<usize>()
                     .unwrap();
 
