@@ -889,12 +889,11 @@ fn hard_link_appendvec_files_to_snapshot(
 ) -> Result<()> {
     let dir_accounts_hard_links = bank_snapshots_dir.as_ref().join("accounts");
     fs::create_dir(&dir_accounts_hard_links).map_err(|e| {
-        let err_msg = format!(
-            "Error: {}.  Failed to create the hard-link dir {}.",
+        SnapshotError::IoWithSourceAndFile(
             e,
-            dir_accounts_hard_links.display(),
-        );
-        SnapshotError::Io(IoError::new(ErrorKind::Other, err_msg))
+            "create hard-link dir",
+            dir_accounts_hard_links.clone(),
+        )
     })?;
 
     for slot_storages in snapshot_storages {
@@ -2265,8 +2264,9 @@ pub fn verify_snapshot_archive<P, Q, R>(
         )
         .unwrap();
 
-        // Remove the new accounts/ to be consistent with the
-        // old archive structure.
+        // Remove the new accounts/ hard-link directory to be consistent with the
+        // old archive structure, so that the directory comparison checking in the test
+        // passes.
         let accounts_path = snapshot_slot_dir.join("accounts");
         if accounts_path.is_dir() {
             // Do not use the async move_and_async_delete_path because the assert below
