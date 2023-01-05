@@ -1255,6 +1255,7 @@ fn load_bank_forks(
         snapshot_request_sender,
         snapshot_request_receiver,
         accounts_package_sender,
+        latest_slot_snapshot_storages: None,
     };
     let pruned_banks_receiver =
         AccountsBackgroundService::setup_bank_drop_callback(bank_forks.clone());

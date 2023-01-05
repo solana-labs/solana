@@ -2,8 +2,6 @@
 //!
 //! This can be expensive since we have to walk the append vecs being cleaned up.
 
-use std::collections::VecDeque;
-
 mod stats;
 use {
     crate::{
@@ -141,16 +139,16 @@ pub struct SnapshotRequestHandler {
     pub snapshot_request_sender: SnapshotRequestSender,
     pub snapshot_request_receiver: SnapshotRequestReceiver,
     pub accounts_package_sender: Sender<AccountsPackage>,
+    pub latest_slot_snapshot_storages: Option<SnapshotStorages>,
 }
 
 impl SnapshotRequestHandler {
     // Returns the latest requested snapshot slot, if one exists
     pub fn handle_snapshot_requests(
-        &self,
+        &mut self,
         test_hash_calculation: bool,
         non_snapshot_time_us: u128,
         last_full_snapshot_slot: &mut Option<Slot>,
-        snapshot_slot_storages: &mut VecDeque<SnapshotStorages>,
     ) -> Option<Result<u64, SnapshotError>> {
         let (
             snapshot_request,
@@ -184,7 +182,6 @@ impl SnapshotRequestHandler {
             last_full_snapshot_slot,
             snapshot_request,
             accounts_package_type,
-            snapshot_slot_storages,
         ))
     }
 
@@ -263,13 +260,12 @@ impl SnapshotRequestHandler {
     }
 
     fn handle_snapshot_request(
-        &self,
+        &mut self,
         test_hash_calculation: bool,
         non_snapshot_time_us: u128,
         last_full_snapshot_slot: &mut Option<Slot>,
         snapshot_request: SnapshotRequest,
         accounts_package_type: AccountsPackageType,
-        snapshot_slot_storages: &mut VecDeque<SnapshotStorages>,
     ) -> Result<u64, SnapshotError> {
         debug!(
             "handling snapshot request: {:?}, {:?}",
@@ -378,12 +374,10 @@ impl SnapshotRequestHandler {
                     accounts_hash_for_testing,
                 )
                 .expect("new accounts package for snapshot");
-                snapshot_slot_storages.push_back(snapshot_storages);
+                // Update the option, so the older one is released, causing the release of
+                // its reference counts of the appendvecs
+                let _ret = self.latest_slot_snapshot_storages.insert(snapshot_storages);
 
-                // Remove the older ones, causing them to release the reference counts of the appendvecs
-                while snapshot_slot_storages.len() > 1 {
-                    snapshot_slot_storages.pop_front();
-                }
                 accounts_package
             }
             SnapshotRequestType::EpochAccountsHash => {
@@ -514,17 +508,15 @@ pub struct AbsRequestHandlers {
 impl AbsRequestHandlers {
     // Returns the latest requested snapshot block height, if one exists
     pub fn handle_snapshot_requests(
-        &self,
+        &mut self,
         test_hash_calculation: bool,
         non_snapshot_time_us: u128,
         last_full_snapshot_slot: &mut Option<Slot>,
-        snapshot_slot_storages: &mut VecDeque<SnapshotStorages>,
     ) -> Option<Result<u64, SnapshotError>> {
         self.snapshot_request_handler.handle_snapshot_requests(
             test_hash_calculation,
             non_snapshot_time_us,
             last_full_snapshot_slot,
-            snapshot_slot_storages,
         )
     }
 }
@@ -537,7 +529,7 @@ impl AccountsBackgroundService {
     pub fn new(
         bank_forks: Arc<RwLock<BankForks>>,
         exit: &Arc<AtomicBool>,
-        request_handlers: AbsRequestHandlers,
+        mut request_handlers: AbsRequestHandlers,
         test_hash_calculation: bool,
         mut last_full_snapshot_slot: Option<Slot>,
     ) -> Self {
@@ -547,7 +539,6 @@ impl AccountsBackgroundService {
         let mut removed_slots_count = 0;
         let mut total_remove_slots_time = 0;
         let mut last_expiration_check_time = Instant::now();
-        let mut snapshot_slot_storages: VecDeque<SnapshotStorages> = VecDeque::new();
         let t_background = Builder::new()
             .name("solBgAccounts".to_string())
             .spawn(move || {
@@ -608,7 +599,6 @@ impl AccountsBackgroundService {
                                 test_hash_calculation,
                                 non_snapshot_time,
                                 &mut last_full_snapshot_slot,
-                                &mut snapshot_slot_storages,
                             )
                         })
                         .flatten();
@@ -816,6 +806,7 @@ mod test {
             snapshot_request_sender: snapshot_request_sender.clone(),
             snapshot_request_receiver,
             accounts_package_sender,
+            latest_slot_snapshot_storages: None,
         };
 
         let send_snapshot_request = |snapshot_root_bank, request_type| {

@@ -211,6 +211,7 @@ impl BackgroundServices {
             snapshot_request_sender,
             snapshot_request_receiver,
             accounts_package_sender,
+            latest_slot_snapshot_storages: None,
         };
         let pruned_banks_request_handler = PrunedBanksRequestHandler {
             pruned_banks_receiver,
