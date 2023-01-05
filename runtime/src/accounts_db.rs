@@ -4069,12 +4069,11 @@ impl AccountsDb {
     fn shrink_slot_forced(&self, slot: Slot) -> usize {
         debug!("shrink_slot_forced: slot: {}", slot);
 
-        if let Some(stores_lock) = self.storage.get_slot_stores(slot) {
-            let stores: SnapshotStorage = stores_lock.read().unwrap().values().cloned().collect();
-            if !Self::is_shrinking_productive(slot, stores.iter()) {
+        if let Some(store) = self.storage.get_slot_storage_entry(slot) {
+            if !Self::is_shrinking_productive(slot, std::iter::once(&store)) {
                 return 0;
             }
-            self.do_shrink_slot_stores(slot, stores.iter())
+            self.do_shrink_slot_stores(slot, std::iter::once(&store))
         } else {
             0
         }
