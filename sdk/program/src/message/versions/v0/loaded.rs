@@ -14,6 +14,9 @@ pub struct LoadedMessage<'a> {
     pub message: Cow<'a, v0::Message>,
     /// Addresses loaded with on-chain address lookup tables
     pub loaded_addresses: Cow<'a, LoadedAddresses>,
+    /// List of boolean with same length as account_keys(), each boolean value indicates if
+    /// corresponding account key is writable or not.
+    pub is_writable_account_cache: Vec<bool>,
 }
 
 /// Collection of addresses loaded from on-chain lookup tables, split
@@ -53,17 +56,36 @@ impl LoadedAddresses {
 
 impl<'a> LoadedMessage<'a> {
     pub fn new(message: v0::Message, loaded_addresses: LoadedAddresses) -> Self {
-        Self {
+        let mut loaded_message = Self {
             message: Cow::Owned(message),
             loaded_addresses: Cow::Owned(loaded_addresses),
-        }
+            is_writable_account_cache: Vec::default(),
+        };
+        loaded_message.set_is_writable_account_cache();
+        loaded_message
     }
 
     pub fn new_borrowed(message: &'a v0::Message, loaded_addresses: &'a LoadedAddresses) -> Self {
-        Self {
+        let mut loaded_message = Self {
             message: Cow::Borrowed(message),
             loaded_addresses: Cow::Borrowed(loaded_addresses),
-        }
+            is_writable_account_cache: Vec::default(),
+        };
+        loaded_message.set_is_writable_account_cache();
+        loaded_message
+    }
+
+    fn set_is_writable_account_cache(&mut self) {
+        let is_writable_account_cache = self
+            .account_keys()
+            .iter()
+            .enumerate()
+            .map(|(i, _key)| self.is_writable_internal(i))
+            .collect::<Vec<_>>();
+        let _ = std::mem::replace(
+            &mut self.is_writable_account_cache,
+            is_writable_account_cache,
+        );
     }
 
     /// Returns the full list of static and dynamic account keys that are loaded for this message.
@@ -105,13 +127,20 @@ impl<'a> LoadedMessage<'a> {
     }
 
     /// Returns true if the account at the specified index was loaded as writable
-    pub fn is_writable(&self, key_index: usize) -> bool {
+    fn is_writable_internal(&self, key_index: usize) -> bool {
         if self.is_writable_index(key_index) {
             if let Some(key) = self.account_keys().get(key_index) {
                 return !(is_builtin_key_or_sysvar(key) || self.demote_program_id(key_index));
             }
         }
         false
+    }
+
+    pub fn is_writable(&self, key_index: usize) -> bool {
+        *self
+            .is_writable_account_cache
+            .get(key_index)
+            .unwrap_or(&false)
     }
 
     pub fn is_signer(&self, i: usize) -> bool {
@@ -227,15 +256,45 @@ mod tests {
 
     #[test]
     fn test_is_writable() {
-        let mut message = check_test_loaded_message().0;
+        solana_logger::setup();
+        let create_message_with_keys = |keys: Vec<Pubkey>| {
+            LoadedMessage::new(
+                v0::Message {
+                    header: MessageHeader {
+                        num_required_signatures: 1,
+                        num_readonly_signed_accounts: 0,
+                        num_readonly_unsigned_accounts: 1,
+                    },
+                    account_keys: keys[..2].to_vec(),
+                    ..v0::Message::default()
+                },
+                LoadedAddresses {
+                    writable: keys[2..=2].to_vec(),
+                    readonly: keys[3..].to_vec(),
+                },
+            )
+        };
 
-        message.message.to_mut().account_keys[0] = sysvar::clock::id();
-        assert!(message.is_writable_index(0));
-        assert!(!message.is_writable(0));
+        let key0 = Pubkey::new_unique();
+        let key1 = Pubkey::new_unique();
+        let key2 = Pubkey::new_unique();
+        {
+            let message = create_message_with_keys(vec![sysvar::clock::id(), key0, key1, key2]);
+            assert!(message.is_writable_index(0));
+            assert!(!message.is_writable(0));
+        }
 
-        message.message.to_mut().account_keys[0] = system_program::id();
-        assert!(message.is_writable_index(0));
-        assert!(!message.is_writable(0));
+        {
+            let message = create_message_with_keys(vec![system_program::id(), key0, key1, key2]);
+            assert!(message.is_writable_index(0));
+            assert!(!message.is_writable(0));
+        }
+
+        {
+            let message = create_message_with_keys(vec![key0, key1, system_program::id(), key2]);
+            assert!(message.is_writable_index(2));
+            assert!(!message.is_writable(2));
+        }
     }
 
     #[test]
