@@ -3808,16 +3808,15 @@ impl AccountsDb {
 
     /// common code from shrink and combine_ancient_slots
     /// get rid of all original store_ids in the slot
-    /// returns remaining stores
     fn remove_old_stores_shrink(
         &self,
         shrink_collect: &ShrinkCollect,
         slot: Slot,
         stats: &ShrinkStats,
         shrink_in_progress: Option<ShrinkInProgress>,
-    ) -> usize {
+    ) {
         // Purge old, overwritten storage entries
-        let (remaining_stores, dead_storages) = self.mark_dirty_dead_stores(
+        let dead_storages = self.mark_dirty_dead_stores(
             slot,
             // If all accounts are zero lamports, then we want to mark the entire OLD append vec as dirty.
             // otherwise, we'll call 'add_uncleaned_pubkeys_after_shrink' just on the unref'd keys below.
@@ -3833,7 +3832,6 @@ impl AccountsDb {
         }
 
         self.drop_or_recycle_stores(dead_storages, stats);
-        remaining_stores
     }
 
     fn do_shrink_slot_stores<'a, I>(&'a self, slot: Slot, stores: I) -> usize
@@ -3904,21 +3902,13 @@ impl AccountsDb {
             // those here
             self.shrink_candidate_slots.lock().unwrap().remove(&slot);
 
-            let (remaining_stores, remove_old_stores_shrink) = measure!(self
-                .remove_old_stores_shrink(
-                    &shrink_collect,
-                    slot,
-                    &self.shrink_stats,
-                    Some(shrink_in_progress)
-                ));
+            let (_, remove_old_stores_shrink) = measure!(self.remove_old_stores_shrink(
+                &shrink_collect,
+                slot,
+                &self.shrink_stats,
+                Some(shrink_in_progress)
+            ));
             remove_old_stores_shrink_us = remove_old_stores_shrink.as_us();
-            if remaining_stores > 1 {
-                inc_new_counter_info!("accounts_db_shrink_extra_stores", 1);
-                info!(
-                    "after shrink, slot has extra stores: {}, {}",
-                    slot, remaining_stores
-                );
-            }
         }
 
         Self::update_shrink_stats(
@@ -3976,13 +3966,12 @@ impl AccountsDb {
     /// Drop 'shrink_in_progress', which will cause the old store to be removed from the storage map.
     /// For 'shrink_in_progress'.'old_storage' which is not retained, insert in 'dead_storages' and optionally 'dirty_stores'
     /// This is the end of the life cycle of `shrink_in_progress`.
-    /// returns: (# of remaining stores for this slot, dead storages)
     pub(crate) fn mark_dirty_dead_stores(
         &self,
         slot: Slot,
         add_dirty_stores: bool,
         shrink_in_progress: Option<ShrinkInProgress>,
-    ) -> (usize, SnapshotStorage) {
+    ) -> SnapshotStorage {
         let mut dead_storages = Vec::default();
 
         let mut not_retaining_store = |store: &Arc<AccountStorageEntry>| {
@@ -3993,26 +3982,20 @@ impl AccountsDb {
             dead_storages.push(store.clone());
         };
 
-        let remaining_stores = if let Some(slot_stores) = self.storage.get_slot_stores(slot) {
-            if let Some(shrink_in_progress) = shrink_in_progress {
-                // shrink is in progress, so 1 new append vec to keep, 1 old one to throw away
-                let store = shrink_in_progress.old_storage();
-                not_retaining_store(store);
-                // drop removes the old append vec that was being shrunk from db's storage
-                drop(shrink_in_progress);
-                slot_stores.read().unwrap().len()
-            } else {
-                // no shrink in progress, so all append vecs in this slot are dead
-                let mut list = slot_stores.write().unwrap();
-                list.drain().for_each(|(_key, store)| {
-                    not_retaining_store(&store);
-                });
-                0
-            }
-        } else {
-            0
-        };
-        (remaining_stores, dead_storages)
+        if let Some(shrink_in_progress) = shrink_in_progress {
+            // shrink is in progress, so 1 new append vec to keep, 1 old one to throw away
+            let store = shrink_in_progress.old_storage();
+            not_retaining_store(store);
+            // dropping 'shrink_in_progress' removes the old append vec that was being shrunk from db's storage
+        } else if let Some(slot_stores) = self.storage.get_slot_stores(slot) {
+            // no shrink in progress, so all append vecs in this slot are dead
+            let mut list = slot_stores.write().unwrap();
+            list.drain().for_each(|(_key, store)| {
+                not_retaining_store(&store);
+            });
+        }
+
+        dead_storages
     }
 
     pub(crate) fn drop_or_recycle_stores(
@@ -16422,9 +16405,7 @@ pub mod tests {
         let db = AccountsDb::new_single_for_tests();
         let slot = 0;
         for add_dirty_stores in [false, true] {
-            let (remaining_stores, dead_storages) =
-                db.mark_dirty_dead_stores(slot, add_dirty_stores, None);
-            assert_eq!(remaining_stores, 0);
+            let dead_storages = db.mark_dirty_dead_stores(slot, add_dirty_stores, None);
             assert!(dead_storages.is_empty());
             assert!(db.dirty_stores.is_empty());
         }
@@ -16442,9 +16423,8 @@ pub mod tests {
             let size = 1;
             let existing_store = db.create_and_insert_store(slot, size, "test");
             let old_id = existing_store.append_vec_id();
-            let (remaining_stores, dead_storages) =
-                db.mark_dirty_dead_stores(slot, add_dirty_stores, None);
-            assert_eq!(0, remaining_stores);
+            let dead_storages = db.mark_dirty_dead_stores(slot, add_dirty_stores, None);
+            assert!(db.storage.is_empty(slot));
             assert_eq!(dead_storages.len(), 1);
             assert_eq!(dead_storages.first().unwrap().append_vec_id(), old_id);
             if add_dirty_stores {
@@ -16469,9 +16449,9 @@ pub mod tests {
             let old_store = db.create_and_insert_store(slot, size, "test");
             let old_id = old_store.append_vec_id();
             let shrink_in_progress = db.get_store_for_shrink(slot, 100);
-            let (remaining_stores, dead_storages) =
+            let dead_storages =
                 db.mark_dirty_dead_stores(slot, add_dirty_stores, Some(shrink_in_progress));
-            assert_eq!(1, remaining_stores);
+            assert!(!db.storage.is_empty(slot));
             assert_eq!(dead_storages.len(), 1);
             assert_eq!(dead_storages.first().unwrap().append_vec_id(), old_id);
             if add_dirty_stores {
