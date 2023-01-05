@@ -79,6 +79,9 @@ dropspecial)
 check)
   badTomls=()
   for Cargo_toml in "${Cargo_tomls[@]}"; do
+    if grep "^version = { workspace = true }" "$Cargo_toml" &>/dev/null; then
+      continue
+    fi
     if ! grep "^version *= *\"$currentVersion\"$" "$Cargo_toml" &>/dev/null; then
       badTomls+=("$Cargo_toml")
     fi
