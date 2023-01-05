@@ -153,7 +153,11 @@ impl PrioritizationFee {
     }
 
     pub fn get_min_transaction_fee(&self) -> Option<u64> {
-        (self.min_transaction_fee != u64::MAX).then_some(self.min_transaction_fee)
+        if self.min_transaction_fee != u64::MAX {
+            Some(self.min_transaction_fee)
+        } else {
+            None
+        }
     }
 
     pub fn get_writable_account_fee(&self, key: &Pubkey) -> Option<u64> {
