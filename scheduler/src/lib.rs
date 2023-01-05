@@ -1744,6 +1744,22 @@ impl ScheduleStage {
             let mut did_processed = false;
 
             if !select_skipped {
+                if executing_queue_count > max_executing_queue_count * 100 {
+                   if let Ok(UnlockablePayload(mut processed_execution_environment, extra)) = from_exec.recv() {
+                       executing_queue_count = executing_queue_count.checked_sub(1).unwrap();
+                       processed_count = processed_count.checked_add(1).unwrap();
+                       did_processed = true;
+                       Self::commit_processed_execution(ast, &mut processed_execution_environment, address_book, &mut commit_clock, &mut provisioning_tracker_count);
+                       to_next_stage.send_buffered(ExaminablePayload(Flushable::Payload((processed_execution_environment, extra)))).unwrap();
+                   } else {
+                       assert_eq!(from_exec.len(), 0);
+                       from_exec_disconnected = true;
+                       info!("flushing1..: {:?} {} {} {} {}", (from_disconnected, from_exec_disconnected), channel_backed_runnable_queue.task_count_hint(), contended_count, executing_queue_count, provisioning_tracker_count);
+                       if from_disconnected {
+                           break;
+                       }
+                   }
+                } else {
                 crossbeam_channel::select! {
                    recv(from_exec) -> maybe_from_exec => {
                        if let Ok(UnlockablePayload(mut processed_execution_environment, extra)) = maybe_from_exec {
@@ -1792,6 +1808,7 @@ impl ScheduleStage {
                        }
                    }
                 }
+                }
             }
 
             no_more_work = from_disconnected
@@ -1818,6 +1835,11 @@ impl ScheduleStage {
                     usize::max_value() /*2*/
                 });
                 while !address_book.uncontended_task_ids.is_empty() && selection.should_proceed() {
+                    if executing_queue_count > max_executing_queue_count * 100 {
+                        trace!("abort aggressive contended queue processing due to non-empty from_exec");
+                        break;
+                    }
+
                     let prefer_immediate = true; //provisioning_tracker_count / 4 > executing_queue_count;
 
                     let maybe_ee = Self::schedule_next_execution(
@@ -1867,6 +1889,12 @@ impl ScheduleStage {
                         || executing_queue_count + provisioning_tracker_count
                             < max_executing_queue_count)
                 {
+                    if executing_queue_count > max_executing_queue_count * 100 {
+                        trace!(
+                            "abort aggressive runnable queue processing due to non-empty from_exec"
+                        );
+                        break;
+                    }
                     let prefer_immediate = true; //provisioning_tracker_count / 4 > executing_queue_count;
 
                     let maybe_ee = Self::schedule_next_execution(
@@ -1937,7 +1965,11 @@ impl ScheduleStage {
                 if empty_from && empty_from_exec {
                     break;
                 } else {
-                    if !empty_from_exec {
+                    loop {
+                        if empty_from_exec {
+                            break;
+                        }
+
                         let UnlockablePayload(mut processed_execution_environment, extra) =
                             from_exec.recv().unwrap();
                         from_exec_len = from_exec_len.checked_sub(1).unwrap();
@@ -1958,6 +1990,17 @@ impl ScheduleStage {
                                 extra,
                             ))))
                             .unwrap();
+
+                        if executing_queue_count > max_executing_queue_count {
+                            //info!("{executing_queue_count} > {max_executing_queue_count}");
+                            if empty_from_exec {
+                                from_exec_len = from_exec.len();
+                                empty_from_exec = from_exec_len == 0;
+                            }
+                            continue;
+                        } else {
+                            break;
+                        }
                     }
                     if !empty_from {
                         unreachable!();
