@@ -229,6 +229,9 @@ pub enum SnapshotError {
     #[error("source({1}) - I/O error: {0}")]
     IoWithSource(std::io::Error, &'static str),
 
+    #[error("source({1}) - I/O error: {0}, file: {2}")]
+    IoWithSourceAndFile(#[source] std::io::Error, &'static str, PathBuf),
+
     #[error("could not get file name from path: {}", .0.display())]
     PathToFileNameError(PathBuf),
 
@@ -413,8 +416,9 @@ pub fn archive_snapshot_package(
         .parent()
         .expect("Tar output path is invalid");
 
-    fs::create_dir_all(tar_dir)
-        .map_err(|e| SnapshotError::IoWithSource(e, "create archive path"))?;
+    fs::create_dir_all(tar_dir).map_err(|e| {
+        SnapshotError::IoWithSourceAndFile(e, "create archive path", tar_dir.into())
+    })?;
 
     // Create the staging directories
     let staging_dir_prefix = TMP_SNAPSHOT_ARCHIVE_PREFIX;
@@ -430,8 +434,9 @@ pub fn archive_snapshot_package(
     let staging_accounts_dir = staging_dir.path().join("accounts");
     let staging_snapshots_dir = staging_dir.path().join("snapshots");
     let staging_version_file = staging_dir.path().join("version");
-    fs::create_dir_all(&staging_accounts_dir)
-        .map_err(|e| SnapshotError::IoWithSource(e, "create staging path"))?;
+    fs::create_dir_all(&staging_accounts_dir).map_err(|e| {
+        SnapshotError::IoWithSourceAndFile(e, "create staging path", staging_accounts_dir.clone())
+    })?;
 
     // Add the snapshots to the staging directory
     symlink::symlink_dir(
@@ -462,8 +467,9 @@ pub fn archive_snapshot_package(
 
     // Write version file
     {
-        let mut f = fs::File::create(staging_version_file)
-            .map_err(|e| SnapshotError::IoWithSource(e, "create version file"))?;
+        let mut f = fs::File::create(&staging_version_file).map_err(|e| {
+            SnapshotError::IoWithSourceAndFile(e, "create version file", staging_version_file)
+        })?;
         f.write_all(snapshot_package.snapshot_version.as_str().as_bytes())
             .map_err(|e| SnapshotError::IoWithSource(e, "write version file"))?;
     }
@@ -522,8 +528,9 @@ pub fn archive_snapshot_package(
     }
 
     // Atomically move the archive into position for other validators to find
-    let metadata = fs::metadata(&archive_path)
-        .map_err(|e| SnapshotError::IoWithSource(e, "archive path stat"))?;
+    let metadata = fs::metadata(&archive_path).map_err(|e| {
+        SnapshotError::IoWithSourceAndFile(e, "archive path stat", archive_path.clone())
+    })?;
     fs::rename(&archive_path, snapshot_package.path())
         .map_err(|e| SnapshotError::IoWithSource(e, "archive path rename"))?;
 
