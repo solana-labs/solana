@@ -312,12 +312,9 @@ pub fn verify_shreds_gpu(
     trace!("out buf {:?}", out);
 
     // Each shred has exactly one signature.
-    let v_sig_lens: Vec<_> = batches
-        .iter()
-        .map(|batch| vec![1u32; batch.len()])
-        .collect();
+    let v_sig_lens = batches.iter().map(|batch| repeat(1u32).take(batch.len()));
     let mut rvs: Vec<_> = batches.iter().map(|batch| vec![0u8; batch.len()]).collect();
-    sigverify::copy_return_values(&v_sig_lens, &out, &mut rvs);
+    sigverify::copy_return_values(v_sig_lens, &out, &mut rvs);
 
     inc_new_counter_debug!("ed25519_shred_verify_gpu", out.len());
     rvs
