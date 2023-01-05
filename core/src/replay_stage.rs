@@ -398,12 +398,8 @@ impl ReplayStage {
         drop_bank_sender: Sender<Vec<Arc<Bank>>>,
         block_metadata_notifier: Option<BlockMetadataNotifierLock>,
         log_messages_bytes_limit: Option<usize>,
-<<<<<<< HEAD
-    ) -> Self {
-=======
         prioritization_fee_cache: Arc<PrioritizationFeeCache>,
-    ) -> Result<Self, String> {
->>>>>>> 8bb039d08 (collect min prioritization fees when replaying sanitized transactions (#26709))
+    ) -> Self {
         let mut tower = if let Some(process_blockstore) = maybe_process_blockstore {
             let tower = process_blockstore.process_to_create_tower();
             info!("Tower state: {:?}", tower);
@@ -536,6 +532,7 @@ impl ReplayStage {
                     block_metadata_notifier.clone(),
                     &mut replay_timing,
                     log_messages_bytes_limit,
+                    &prioritization_fee_cache,
                 );
                 replay_active_banks_time.stop();
 
@@ -605,14 +602,6 @@ impl ReplayStage {
                         &mut heaviest_subtree_fork_choice,
                         &mut duplicate_slots_to_repair,
                         &ancestor_hashes_replay_update_sender,
-<<<<<<< HEAD
-=======
-                        block_metadata_notifier.clone(),
-                        &mut replay_timing,
-                        log_messages_bytes_limit,
-                        replay_slots_concurrently,
-                        &prioritization_fee_cache,
->>>>>>> 8bb039d08 (collect min prioritization fees when replaying sanitized transactions (#26709))
                     );
                 }
                 process_duplicate_slots_time.stop();
@@ -2676,13 +2665,8 @@ impl ReplayStage {
         block_metadata_notifier: Option<BlockMetadataNotifierLock>,
         replay_timing: &mut ReplayTiming,
         log_messages_bytes_limit: Option<usize>,
-<<<<<<< HEAD
-    ) -> bool {
-=======
-        replay_slots_concurrently: bool,
         prioritization_fee_cache: &PrioritizationFeeCache,
-    ) -> bool /* completed a bank */ {
->>>>>>> 8bb039d08 (collect min prioritization fees when replaying sanitized transactions (#26709))
+    ) -> bool {
         let active_bank_slots = bank_forks.read().unwrap().active_bank_slots();
         let num_active_banks = active_bank_slots.len();
         trace!(
@@ -2711,6 +2695,7 @@ impl ReplayStage {
                         replay_timing,
                         log_messages_bytes_limit,
                         &active_bank_slots,
+                        prioritization_fee_cache,
                     )
                 } else {
                     active_bank_slots
@@ -2728,6 +2713,7 @@ impl ReplayStage {
                                 replay_timing,
                                 log_messages_bytes_limit,
                                 *bank_slot,
+                                prioritization_fee_cache,
                             )
                         })
                         .collect()
@@ -2744,34 +2730,9 @@ impl ReplayStage {
                     replay_vote_sender,
                     replay_timing,
                     log_messages_bytes_limit,
-<<<<<<< HEAD
                     active_bank_slots[0],
-                )]
-=======
-                    &active_bank_slots,
                     prioritization_fee_cache,
-                )
-            } else {
-                active_bank_slots
-                    .iter()
-                    .map(|bank_slot| {
-                        Self::replay_active_bank(
-                            blockstore,
-                            bank_forks,
-                            my_pubkey,
-                            vote_account,
-                            progress,
-                            transaction_status_sender,
-                            verify_recyclers,
-                            replay_vote_sender,
-                            replay_timing,
-                            log_messages_bytes_limit,
-                            *bank_slot,
-                            prioritization_fee_cache,
-                        )
-                    })
-                    .collect()
->>>>>>> 8bb039d08 (collect min prioritization fees when replaying sanitized transactions (#26709))
+                )]
             };
 
             Self::process_replay_results(

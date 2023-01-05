@@ -1,14 +1,9 @@
 use {
-<<<<<<< HEAD
-    crate::transaction_priority_details::{
-        GetTransactionPriorityDetails, TransactionPriorityDetails,
-    },
-=======
-    crate::immutable_deserialized_packet::{DeserializedPacketError, ImmutableDeserializedPacket},
->>>>>>> 8bb039d08 (collect min prioritization fees when replaying sanitized transactions (#26709))
     min_max_heap::MinMaxHeap,
     solana_perf::packet::{Packet, PacketBatch},
-    solana_runtime::transaction_priority_details::TransactionPriorityDetails,
+    solana_runtime::transaction_priority_details::{
+        GetTransactionPriorityDetails, TransactionPriorityDetails,
+    },
     solana_sdk::{
         feature_set,
         hash::Hash,

@@ -1020,12 +1020,8 @@ impl Validator {
             accounts_background_request_sender,
             config.runtime_config.log_messages_bytes_limit,
             &connection_cache,
-<<<<<<< HEAD
-        );
-=======
             &prioritization_fee_cache,
-        )?;
->>>>>>> 8bb039d08 (collect min prioritization fees when replaying sanitized transactions (#26709))
+        );
 
         let tpu = Tpu::new(
             &cluster_info,

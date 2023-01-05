@@ -129,12 +129,8 @@ impl Tvu {
         accounts_background_request_sender: AbsRequestSender,
         log_messages_bytes_limit: Option<usize>,
         connection_cache: &Arc<ConnectionCache>,
-<<<<<<< HEAD
-    ) -> Self {
-=======
         prioritization_fee_cache: &Arc<PrioritizationFeeCache>,
-    ) -> Result<Self, String> {
->>>>>>> 8bb039d08 (collect min prioritization fees when replaying sanitized transactions (#26709))
+    ) -> Self {
         let TvuSockets {
             repair: repair_socket,
             fetch: fetch_sockets,
@@ -293,12 +289,8 @@ impl Tvu {
             drop_bank_sender,
             block_metadata_notifier,
             log_messages_bytes_limit,
-<<<<<<< HEAD
-        );
-=======
             prioritization_fee_cache.clone(),
-        )?;
->>>>>>> 8bb039d08 (collect min prioritization fees when replaying sanitized transactions (#26709))
+        );
 
         let ledger_cleanup_service = tvu_config.max_ledger_shreds.map(|max_ledger_shreds| {
             LedgerCleanupService::new(
@@ -461,13 +453,8 @@ pub mod tests {
             AbsRequestSender::default(),
             None,
             &Arc::new(ConnectionCache::default()),
-<<<<<<< HEAD
-        );
-=======
             &_ignored_prioritization_fee_cache,
-        )
-        .expect("assume success");
->>>>>>> 8bb039d08 (collect min prioritization fees when replaying sanitized transactions (#26709))
+        );
         exit.store(true, Ordering::Relaxed);
         tvu.join().unwrap();
         poh_service.join().unwrap();
