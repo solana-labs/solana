@@ -327,9 +327,7 @@ mod tests {
             // are broken, so unset the requires() to recreate that condition
             .arg(sign_only_arg().requires(""));
 
-        let matches = test_commands
-            .clone()
-            .get_matches_from(vec!["blockhash_query_test", "--sign-only"]);
+        let matches = test_commands.get_matches_from(vec!["blockhash_query_test", "--sign-only"]);
         BlockhashQuery::new_from_matches(&matches);
     }
 
@@ -344,7 +342,7 @@ mod tests {
         let nonce_pubkey = Pubkey::new(&[1u8; 32]);
         let nonce_string = nonce_pubkey.to_string();
 
-        let matches = test_commands.clone().get_matches_from(vec![
+        let matches = test_commands.get_matches_from(vec![
             "blockhash_query_test",
             "--sign-only",
             "--nonce",

@@ -3475,7 +3475,7 @@ mod tests {
             Some((&nonce, true)),
             &DurableNonce::default(),
             1,
-            &post_fee_payer_account.clone(),
+            &post_fee_payer_account,
         ));
 
         assert!(run_prepare_if_nonce_account_test(
@@ -3486,7 +3486,7 @@ mod tests {
             Some((&nonce, true)),
             &DurableNonce::default(),
             1,
-            &post_fee_payer_account.clone(),
+            &post_fee_payer_account,
         ));
 
         assert!(run_prepare_if_nonce_account_test(
@@ -3500,7 +3500,7 @@ mod tests {
             None,
             &DurableNonce::default(),
             1,
-            &post_fee_payer_account.clone(),
+            &post_fee_payer_account,
         ));
 
         assert!(run_prepare_if_nonce_account_test(

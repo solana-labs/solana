@@ -87,8 +87,7 @@ mod test {
             meta: lookup_table_meta,
             addresses: Cow::Owned(addresses),
         };
-        let lookup_table_data =
-            AddressLookupTable::serialize_for_tests(lookup_table.clone()).unwrap();
+        let lookup_table_data = AddressLookupTable::serialize_for_tests(lookup_table).unwrap();
 
         let parsing_result = parse_address_lookup_table(&lookup_table_data).unwrap();
         if let LookupTableAccountType::LookupTable(ui_lookup_table) = parsing_result {
