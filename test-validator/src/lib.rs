@@ -838,9 +838,7 @@ impl TestValidator {
             true, // should_check_duplicate_instance
             config.start_progress.clone(),
             socket_addr_space,
-            DEFAULT_TPU_USE_QUIC,
             DEFAULT_TPU_CONNECTION_POOL_SIZE,
-            config.tpu_enable_udp,
         )?);
 
         // Needed to avoid panics in `solana-responder-gossip` in tests that create a number of
