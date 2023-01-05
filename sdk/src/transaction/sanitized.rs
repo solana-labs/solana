@@ -6,14 +6,9 @@ use {
     crate::{
         hash::Hash,
         message::{
-<<<<<<< HEAD
-            v0::{self, LoadedAddresses},
-            SanitizedMessage, VersionedMessage,
-=======
             legacy,
-            v0::{self, LoadedAddresses, MessageAddressTableLookup},
+            v0::{self, LoadedAddresses},
             LegacyMessage, SanitizedMessage, VersionedMessage,
->>>>>>> 5e71f339c (Add a SanitizedMessage type that caches writable accounts indexes (#27317))
         },
         precompiles::verify_if_precompile,
         pubkey::Pubkey,
