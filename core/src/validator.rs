@@ -1788,7 +1788,7 @@ fn initialize_rpc_transaction_history_services(
         transaction_status_receiver,
         max_complete_transaction_status_slot.clone(),
         enable_rpc_transaction_history,
-        transaction_notifier.clone(),
+        transaction_notifier,
         blockstore.clone(),
         enable_extended_tx_metadata_storage,
         exit,
