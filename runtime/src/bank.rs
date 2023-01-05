@@ -1237,7 +1237,7 @@ impl Scheduler<ExecuteTimings> {
                             if let Err(e) = poh.as_ref().unwrap()(bank.as_ref(), executed_transactions, hash) {
                                 let current_thread_name = std::thread::current().name().unwrap().to_string();
 
-                                error!("{current_thread_name} pausing due to poh error until resumed...: {:?}", e);
+                                trace!("{current_thread_name} pausing due to poh error until resumed...: {:?}", e);
                                 // this is needed so that we don't enter busy loop
                                 commit_status.notify_as_paused();
                                 continue 'retry;
