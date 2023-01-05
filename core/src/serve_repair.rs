@@ -21,8 +21,7 @@ use {
         cluster_info::{ClusterInfo, ClusterInfoError},
         contact_info::ContactInfo,
         ping_pong::{self, PingCache, Pong},
-        socketaddr,
-        socketaddr_any,
+        socketaddr, socketaddr_any,
         weighted_shuffle::WeightedShuffle,
     },
     solana_ledger::{
@@ -939,7 +938,7 @@ impl ServeRepair {
         };
 
         let leader_repair_addr = if slot_leader == self.my_id() {
-            error!("failed to get leader addr");
+            error!("attempted self repair slot={}", &slot);
             return Err(Error::from(ClusterInfoError::NoPeers));
         } else {
             //self.cluster_info.lookup_contact_info(&slot_leader, |ci| ci.repair.clone()).ok_or(ClusterInfoError::NoPeers)?
@@ -949,7 +948,10 @@ impl ServeRepair {
             match addr {
                 Some(addr) => addr,
                 None => {
-                    error!("failed to get repair addr");
+                    error!(
+                        "failed to get contact info for slot={} leader={:?}",
+                        &slot, &slot_leader
+                    );
                     return Err(Error::from(ClusterInfoError::NoPeers));
                 }
             }
@@ -971,11 +973,7 @@ impl ServeRepair {
             }
             ShredRepairType::Shred(slot, index) => {
                 // TODO use index to guess at peers for subsequent indices
-                Some(ShredId::new(
-                    slot,
-                    index as u32,
-                    ShredType::Data,
-                ))
+                Some(ShredId::new(slot, index as u32, ShredType::Data))
             }
             ShredRepairType::Orphan(_slot) => {
                 // TODO use slot?
@@ -991,9 +989,7 @@ impl ServeRepair {
                 if ci.serve_repair == socketaddr_any!() {
                     error!(
                         ">>> no serve_repair addr repair={:?} leader={:?} {:?}",
-                        &repair_request,
-                        &slot_leader,
-                        &ci,
+                        &repair_request, &slot_leader, &ci,
                     );
                     (slot_leader, leader_repair_addr)
                     //return Err(Error::from(ClusterInfoError::NoPeers));
