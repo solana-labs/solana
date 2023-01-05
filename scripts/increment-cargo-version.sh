@@ -122,6 +122,11 @@ newVersion="$MAJOR.$MINOR.$PATCH$SPECIAL"
 
 # Update all the Cargo.toml files
 for Cargo_toml in "${Cargo_tomls[@]}"; do
+  # ignore when version inheritant from workspace
+  if grep "^version = { workspace = true }" "$Cargo_toml" &>/dev/null; then
+    continue
+  fi
+
   # Set new crate version
   (
     set -x
