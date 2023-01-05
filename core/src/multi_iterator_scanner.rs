@@ -35,21 +35,28 @@ pub enum ProcessingDecision {
 /// Assume transactions with same letter conflict with each other. A typical priority ordered
 /// buffer might look like:
 ///
-///     // [A, A, B, A, C, D, B, C, D]
+/// ```text
+/// [A, A, B, A, C, D, B, C, D]
+/// ```
 ///
 /// If we want to have batches of size 4, the MultiIteratorScanner will proceed as follows:
 ///
-///     // [A, A, B, A, C, D, B, C, D]
-///     //  ^     ^     ^  ^
+/// ```text
+/// [A, A, B, A, C, D, B, C, D]
+///  ^     ^     ^  ^
 ///
-///     // [A, A, B, A, C, D, B, C, D]
-///     //     ^              ^  ^  ^
+/// [A, A, B, A, C, D, B, C, D]
+///     ^              ^  ^  ^
 ///
-///     // [A, A, B, A, C, D, B, C, D]
-///     //           ^
+/// [A, A, B, A, C, D, B, C, D]
+///           ^
+/// ```
+///
 /// The iterator will iterate with batches:
 ///
-///     // [[A, B, C, D], [A, B, C, D], [A]]
+/// ```text
+/// [[A, B, C, D], [A, B, C, D], [A]]
+/// ```
 ///
 pub struct MultiIteratorScanner<'a, T, U, F>
 where
