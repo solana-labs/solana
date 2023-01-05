@@ -438,6 +438,7 @@ impl RepairService {
                     3..=9 => repair_retry_3_9x += 1,
                     _ => repair_retry_10_plusx += 1,
                 });
+                let repairs_cache_size = repairs_cache.len();
                 repairs_cache.clear();
                 datapoint_info!(
                     "repair_service-retry",
@@ -446,6 +447,7 @@ impl RepairService {
                     ("repair_retry_3-9x", repair_retry_3_9x, i64),
                     ("repair_retry_10plusx", repair_retry_10_plusx, i64),
                     ("peers_count", repair_peers.len(), i64),
+                    ("repairs_cache_size", repairs_cache_size, i64),
                 );
                 repair_peers.clear();
 
