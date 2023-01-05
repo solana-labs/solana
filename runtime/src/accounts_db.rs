@@ -4306,7 +4306,7 @@ impl AccountsDb {
         slot: Slot,
         current_ancient: &mut CurrentAncientAppendVec,
         can_randomly_shrink: bool,
-    ) -> Option<SnapshotStorage> {
+    ) -> Option<Arc<AccountStorageEntry>> {
         self.storage
             .get_slot_storage_entry(slot)
             .and_then(|storage| {
@@ -4316,7 +4316,7 @@ impl AccountsDb {
                     slot,
                     can_randomly_shrink,
                 )
-                .then_some(vec![storage])
+                .then_some(storage)
             })
     }
 
@@ -4398,7 +4398,7 @@ impl AccountsDb {
 
         let len = sorted_slots.len();
         for slot in sorted_slots {
-            let old_storages = match self.get_storages_to_move_to_ancient_append_vec(
+            let old_storage = match self.get_storages_to_move_to_ancient_append_vec(
                 slot,
                 &mut current_ancient,
                 can_randomly_shrink,
@@ -4419,6 +4419,7 @@ impl AccountsDb {
                 );
             }
 
+            let old_storages = [old_storage];
             self.combine_one_store_into_ancient(
                 slot,
                 &old_storages,
