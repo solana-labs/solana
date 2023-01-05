@@ -3967,8 +3967,7 @@ impl AccountsDb {
 
         if let Some(shrink_in_progress) = shrink_in_progress {
             // shrink is in progress, so 1 new append vec to keep, 1 old one to throw away
-            let store = shrink_in_progress.old_storage();
-            not_retaining_store(store);
+            not_retaining_store(shrink_in_progress.old_storage());
             // dropping 'shrink_in_progress' removes the old append vec that was being shrunk from db's storage
         } else if let Some(slot_stores) = self.storage.get_slot_stores(slot) {
             // no shrink in progress, so all append vecs in this slot are dead
