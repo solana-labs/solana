@@ -10677,11 +10677,33 @@ pub(crate) mod tests {
                 SystemError::ResultWithNegativeLamports.into(),
             ))
         );
+
         // Without bank_transaction_count_fix, transaction_count should include only the successful
-        // transactions
+        // transactions, but executed_transaction_count include all always
         assert_eq!(bank.transaction_count(), 1);
         assert_eq!(bank.executed_transaction_count(), 2);
         assert_eq!(bank.transaction_error_count(), 1);
+
+        let bank = Arc::new(bank);
+        let bank2 = Bank::new_from_parent(
+            &bank,
+            &Pubkey::default(),
+            genesis_config.epoch_schedule.first_normal_slot,
+        );
+
+        assert_eq!(
+            bank2.transfer((mint_amount - amount) + 2, &mint_keypair, &pubkey),
+            Err(TransactionError::InstructionError(
+                0,
+                SystemError::ResultWithNegativeLamports.into(),
+            ))
+        );
+
+        // The transaction_count inherited from parent bank is still 1 as it does
+        // not include the failed ones!
+        assert_eq!(bank2.transaction_count(), 1);
+        assert_eq!(bank2.executed_transaction_count(), 1);
+        assert_eq!(bank2.transaction_error_count(), 1);
     }
 
     #[test]
@@ -10702,10 +10724,30 @@ pub(crate) mod tests {
         );
 
         // With bank_transaction_count_fix, transaction_count should include both the successful and
-        // failed transactions
+        // failed transactions.
         assert_eq!(bank.transaction_count(), 2);
         assert_eq!(bank.executed_transaction_count(), 2);
         assert_eq!(bank.transaction_error_count(), 1);
+
+        let bank = Arc::new(bank);
+        let bank2 = Bank::new_from_parent(
+            &bank,
+            &Pubkey::default(),
+            genesis_config.epoch_schedule.first_normal_slot,
+        );
+
+        assert_eq!(
+            bank2.transfer((mint_amount - amount) + 2, &mint_keypair, &pubkey),
+            Err(TransactionError::InstructionError(
+                0,
+                SystemError::ResultWithNegativeLamports.into(),
+            ))
+        );
+
+        // The transaction_count inherited from parent bank is 3: 2 from the parent bank and 1 at this bank2
+        assert_eq!(bank2.transaction_count(), 3);
+        assert_eq!(bank2.executed_transaction_count(), 1);
+        assert_eq!(bank2.transaction_error_count(), 1);
     }
 
     #[test]
