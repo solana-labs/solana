@@ -820,7 +820,10 @@ mod tests {
             signature::{Keypair, Signature, Signer},
             transaction::Transaction,
         },
-        std::sync::atomic::{AtomicU64, Ordering},
+        std::{
+            iter::repeat_with,
+            sync::atomic::{AtomicU64, Ordering},
+        },
     };
 
     const SIG_OFFSET: usize = 1;
@@ -829,6 +832,45 @@ mod tests {
         assert!(a.len() >= b.len());
         let end = a.len() - b.len() + 1;
         (0..end).find(|&i| a[i..i + b.len()] == b[..])
+    }
+
+    #[test]
+    fn test_copy_return_values() {
+        let mut rng = rand::thread_rng();
+        let sig_lens: Vec<Vec<u32>> = {
+            let size = rng.gen_range(0, 64);
+            repeat_with(|| {
+                let size = rng.gen_range(0, 16);
+                repeat_with(|| rng.gen_range(0, 5)).take(size).collect()
+            })
+            .take(size)
+            .collect()
+        };
+        let out: Vec<Vec<Vec<bool>>> = sig_lens
+            .iter()
+            .map(|sig_lens| {
+                sig_lens
+                    .iter()
+                    .map(|&size| repeat_with(|| rng.gen()).take(size as usize).collect())
+                    .collect()
+            })
+            .collect();
+        let expected: Vec<Vec<u8>> = out
+            .iter()
+            .map(|out| {
+                out.iter()
+                    .map(|out| u8::from(!out.is_empty() && out.iter().all(|&k| k)))
+                    .collect()
+            })
+            .collect();
+        let out =
+            PinnedVec::<u8>::from_vec(out.into_iter().flatten().flatten().map(u8::from).collect());
+        let mut rvs: Vec<Vec<u8>> = sig_lens
+            .iter()
+            .map(|sig_lens| vec![0u8; sig_lens.len()])
+            .collect();
+        copy_return_values(&sig_lens, &out, &mut rvs);
+        assert_eq!(rvs, expected);
     }
 
     #[test]
