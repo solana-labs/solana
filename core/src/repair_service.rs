@@ -258,6 +258,7 @@ impl RepairService {
         outstanding_requests: &RwLock<OutstandingShredRepairs>,
         dumped_slots_receiver: DumpedSlotsReceiver,
     ) {
+        const REPAIRS_CACHE_CAPACITY: usize = 100_000;
         let mut repair_weight = RepairWeight::new(repair_info.bank_forks.read().unwrap().root());
         let serve_repair = ServeRepair::new(
             repair_info.cluster_info.clone(),
@@ -272,6 +273,9 @@ impl RepairService {
         let duplicate_slot_repair_statuses: HashMap<Slot, DuplicateSlotRepairStatus> =
             HashMap::new();
         let mut peers_cache = LruCache::new(REPAIR_PEERS_CACHE_CAPACITY);
+        let mut repairs_cache = LruCache::new(REPAIRS_CACHE_CAPACITY);
+        let mut repair_peers: HashSet<SocketAddr> = HashSet::default();
+        let mut slot_to_vote_id_cache: LruCache<Slot, HashSet<Pubkey>> = LruCache::new(2_000);
 
         loop {
             if exit.load(Ordering::Relaxed) {
@@ -283,7 +287,11 @@ impl RepairService {
             let mut get_votes_elapsed;
             let mut add_votes_elapsed;
 
-            let root_bank = repair_info.bank_forks.read().unwrap().root_bank();
+            let (root_bank, working_bank) = {
+                let bank_forks = repair_info.bank_forks.read().unwrap();
+                (bank_forks.root_bank(), bank_forks.working_bank())
+            };
+
             let repairs = {
                 let new_root = root_bank.slot();
 
@@ -315,6 +323,7 @@ impl RepairService {
                 verified_vote_receiver
                     .try_iter()
                     .for_each(|(vote_pubkey, vote_slots)| {
+                        //error!(">>> VOTE FROM {:?}", &vote_pubkey);
                         for slot in vote_slots {
                             slot_to_vote_pubkeys
                                 .entry(slot)
@@ -325,6 +334,21 @@ impl RepairService {
                 get_votes_elapsed.stop();
 
                 add_votes_elapsed = Measure::start("add_votes");
+
+                slot_to_vote_pubkeys.iter().for_each(|(slot, voters)| {
+                    if let Some(x) = slot_to_vote_id_cache.get_mut(slot) {
+                        for voter in voters {
+                            x.insert(*voter);
+                        }
+                    } else {
+                        let x = HashSet::from_iter(voters.iter().copied());
+                        slot_to_vote_id_cache.push(*slot, x);
+                    }
+                });
+
+                // TODO get stake weights from voters?
+                // select from voters
+
                 repair_weight.add_votes(
                     blockstore,
                     slot_to_vote_pubkeys.into_iter(),
@@ -349,6 +373,14 @@ impl RepairService {
                 repairs
             };
 
+            repairs.iter().for_each(|r| {
+                if let Some(x) = repairs_cache.get_mut(r) {
+                    *x += 1;
+                } else {
+                    repairs_cache.put(*r, 1);
+                }
+            });
+
             let identity_keypair: &Keypair = &repair_info.cluster_info.keypair().clone();
 
             let mut build_repairs_batch_elapsed = Measure::start("build_repairs_batch_elapsed");
@@ -366,8 +398,11 @@ impl RepairService {
                                 &repair_info.repair_validators,
                                 &mut outstanding_requests,
                                 identity_keypair,
+                                &mut slot_to_vote_id_cache,
+                                &working_bank,
                             )
                             .ok()?;
+                        repair_peers.insert(to);
                         Some((req, to))
                     })
                     .collect()
@@ -414,6 +449,28 @@ impl RepairService {
                     })
                     .collect();
                 info!("repair_stats: {:?}", slot_to_count);
+
+                let mut repair_retry_1x = 0;
+                let mut repair_retry_2x = 0;
+                let mut repair_retry_3_9x = 0;
+                let mut repair_retry_10_plusx = 0;
+                repairs_cache.iter().for_each(|(_, count)| match *count {
+                    1 => repair_retry_1x += 1,
+                    2 => repair_retry_2x += 1,
+                    3..=9 => repair_retry_3_9x += 1,
+                    _ => repair_retry_10_plusx += 1,
+                });
+                repairs_cache.clear();
+                datapoint_info!(
+                    "repair_service-retry",
+                    ("repair_retry_1x", repair_retry_1x, i64),
+                    ("repair_retry_2x", repair_retry_2x, i64),
+                    ("repair_retry_3-9x", repair_retry_3_9x, i64),
+                    ("repair_retry_10plusx", repair_retry_10_plusx, i64),
+                    ("peers_count", repair_peers.len(), i64),
+                );
+                repair_peers.clear();
+
                 if repair_total > 0 {
                     datapoint_info!(
                         "repair_service-my_requests",
