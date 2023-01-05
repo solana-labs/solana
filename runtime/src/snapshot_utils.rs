@@ -592,6 +592,8 @@ pub fn get_bank_snapshots(bank_snapshots_dir: impl AsRef<Path>) -> Vec<BankSnaps
                 let bank_snapshot_outer_dir = get_bank_snapshots_dir(&bank_snapshots_dir, slot);
                 let bank_snapshot_post_path =
                     bank_snapshot_outer_dir.join(get_snapshot_file_name(slot));
+                let status_cache_path =
+                    bank_snapshot_outer_dir.join(SNAPSHOT_STATUS_CACHE_FILENAME);
                 let mut bank_snapshot_pre_path = bank_snapshot_post_path.clone();
                 bank_snapshot_pre_path.set_extension(BANK_SNAPSHOT_PRE_FILENAME_EXTENSION);
 
@@ -600,8 +602,7 @@ pub fn get_bank_snapshots(bank_snapshots_dir: impl AsRef<Path>) -> Vec<BankSnaps
                         slot,
                         snapshot_path: bank_snapshot_pre_path,
                         snapshot_type: BankSnapshotType::Pre,
-                        status_cache_path: bank_snapshot_outer_dir
-                            .join(SNAPSHOT_STATUS_CACHE_FILENAME),
+                        status_cache_path: status_cache_path.clone(),
                     });
                 }
 
@@ -610,8 +611,7 @@ pub fn get_bank_snapshots(bank_snapshots_dir: impl AsRef<Path>) -> Vec<BankSnaps
                         slot,
                         snapshot_path: bank_snapshot_post_path,
                         snapshot_type: BankSnapshotType::Post,
-                        status_cache_path: bank_snapshot_outer_dir
-                            .join(SNAPSHOT_STATUS_CACHE_FILENAME),
+                        status_cache_path,
                     });
                 }
             }),
