@@ -8565,37 +8565,32 @@ impl AccountsDb {
 
     fn process_storage_slot<'a>(
         &self,
-        storage_maps: &'a [Arc<AccountStorageEntry>],
+        storage: &'a Arc<AccountStorageEntry>,
     ) -> GenerateIndexAccountsMap<'a> {
-        let num_accounts = storage_maps
-            .iter()
-            .map(|storage| storage.approx_stored_count())
-            .sum();
+        let num_accounts = storage.approx_stored_count();
         let mut accounts_map = GenerateIndexAccountsMap::with_capacity(num_accounts);
-        storage_maps.iter().for_each(|storage| {
-            storage.accounts.account_iter().for_each(|stored_account| {
-                let this_version = stored_account.meta.write_version_obsolete;
-                let pubkey = stored_account.pubkey();
-                assert!(!self.is_filler_account(pubkey));
-                match accounts_map.entry(*pubkey) {
-                    Entry::Vacant(entry) => {
-                        entry.insert(IndexAccountMapEntry {
-                            write_version: this_version,
-                            store_id: storage.append_vec_id(),
-                            stored_account,
-                        });
-                    }
-                    Entry::Occupied(mut entry) => {
-                        let occupied_version = entry.get().write_version;
-                        assert!(occupied_version < this_version);
-                        entry.insert(IndexAccountMapEntry {
-                            write_version: this_version,
-                            store_id: storage.append_vec_id(),
-                            stored_account,
-                        });
-                    }
+        storage.accounts.account_iter().for_each(|stored_account| {
+            let this_version = stored_account.meta.write_version_obsolete;
+            let pubkey = stored_account.pubkey();
+            assert!(!self.is_filler_account(pubkey));
+            match accounts_map.entry(*pubkey) {
+                Entry::Vacant(entry) => {
+                    entry.insert(IndexAccountMapEntry {
+                        write_version: this_version,
+                        store_id: storage.append_vec_id(),
+                        stored_account,
+                    });
                 }
-            })
+                Entry::Occupied(mut entry) => {
+                    let occupied_version = entry.get().write_version;
+                    assert!(occupied_version < this_version);
+                    entry.insert(IndexAccountMapEntry {
+                        write_version: this_version,
+                        store_id: storage.append_vec_id(),
+                        stored_account,
+                    });
+                }
+            }
         });
         accounts_map
     }
@@ -8934,10 +8929,7 @@ impl AccountsDb {
                     for (index, slot) in slots.iter().enumerate() {
                         let mut scan_time = Measure::start("scan");
                         log_status.report(index as u64);
-                        let storage = self
-                            .storage
-                            .get_slot_storage_entry(*slot)
-                            .map(|storage| vec![storage]);
+                        let storage = self.storage.get_slot_storage_entry(*slot);
                         let accounts_map = storage
                             .as_ref()
                             .map(|storage| self.process_storage_slot(storage))
@@ -15849,9 +15841,9 @@ pub mod tests {
         accounts.store_for_tests(slot0, &[(&shared_key, &account)]);
         accounts.add_root_and_flush_write_cache(slot0);
 
-        let storage_maps = accounts.get_storages_for_slot(slot0).unwrap_or_default();
+        let storage = accounts.storage.get_slot_storage_entry(slot0).unwrap();
         let storage_info = StorageSizeAndCountMap::default();
-        let accounts_map = accounts.process_storage_slot(&storage_maps[..]);
+        let accounts_map = accounts.process_storage_slot(&storage);
         AccountsDb::update_storage_info(&storage_info, &accounts_map, &Mutex::default());
         assert_eq!(storage_info.len(), 1);
         for entry in storage_info.iter() {
@@ -15865,9 +15857,10 @@ pub mod tests {
     #[test]
     fn test_calculate_storage_count_and_alive_bytes_0_accounts() {
         let accounts = AccountsDb::new_single_for_tests();
-        let storage_maps = vec![];
+        // empty store
+        let storage = accounts.create_and_insert_store(0, 1, "test");
         let storage_info = StorageSizeAndCountMap::default();
-        let accounts_map = accounts.process_storage_slot(&storage_maps[..]);
+        let accounts_map = accounts.process_storage_slot(&storage);
         AccountsDb::update_storage_info(&storage_info, &accounts_map, &Mutex::default());
         assert!(storage_info.is_empty());
     }
@@ -15898,9 +15891,9 @@ pub mod tests {
         accounts.store_for_tests(slot0, &[(&keys[1], &account_big)]);
         accounts.add_root_and_flush_write_cache(slot0);
 
-        let storage_maps = accounts.get_storages_for_slot(slot0).unwrap_or_default();
+        let storage = accounts.storage.get_slot_storage_entry(slot0).unwrap();
         let storage_info = StorageSizeAndCountMap::default();
-        let accounts_map = accounts.process_storage_slot(&storage_maps[..]);
+        let accounts_map = accounts.process_storage_slot(&storage);
         AccountsDb::update_storage_info(&storage_info, &accounts_map, &Mutex::default());
         assert_eq!(storage_info.len(), 1);
         for entry in storage_info.iter() {
