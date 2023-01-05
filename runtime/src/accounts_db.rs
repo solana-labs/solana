@@ -17182,11 +17182,10 @@ pub mod tests {
                                     );
                                 });
 
-                                let storages = db.get_storages_for_slot(slot5).unwrap();
+                                let storage = db.get_storage_for_slot(slot5).unwrap();
                                 let mut stored_accounts = Vec::default();
-                                assert_eq!(storages.len(), 1);
                                 let shrink_collect = db.shrink_collect(
-                                    storages.iter(),
+                                    std::iter::once(&storage),
                                     &mut stored_accounts,
                                     &ShrinkStats::default(),
                                 );
@@ -17486,7 +17485,7 @@ pub mod tests {
         let mut dropped_roots = Vec::default();
         db.combine_one_store_into_ancient(
             next_slot,
-            &db.get_storages_for_slot(next_slot).unwrap(),
+            &[db.get_storage_for_slot(next_slot).unwrap()],
             &mut current_ancient,
             &mut AncientSlotPubkeys::default(),
             &mut dropped_roots,
@@ -17611,25 +17610,23 @@ pub mod tests {
 
     fn populate_index(db: &AccountsDb, slots: Range<Slot>) {
         slots.into_iter().for_each(|slot| {
-            if let Some(storages) = db.get_storages_for_slot(slot) {
-                storages.iter().for_each(|storage| {
-                    storage.accounts.account_iter().for_each(|account| {
-                        let info = AccountInfo::new(
-                            StorageLocation::AppendVec(storage.append_vec_id(), account.offset),
-                            account.stored_size as u32,
-                            account.lamports(),
-                        );
-                        db.accounts_index.upsert(
-                            slot,
-                            slot,
-                            account.pubkey(),
-                            &account,
-                            &AccountSecondaryIndexes::default(),
-                            info,
-                            &mut Vec::default(),
-                            UpsertReclaim::IgnoreReclaims,
-                        );
-                    })
+            if let Some(storage) = db.get_storage_for_slot(slot) {
+                storage.accounts.account_iter().for_each(|account| {
+                    let info = AccountInfo::new(
+                        StorageLocation::AppendVec(storage.append_vec_id(), account.offset),
+                        account.stored_size as u32,
+                        account.lamports(),
+                    );
+                    db.accounts_index.upsert(
+                        slot,
+                        slot,
+                        account.pubkey(),
+                        &account,
+                        &AccountSecondaryIndexes::default(),
+                        info,
+                        &mut Vec::default(),
+                        UpsertReclaim::IgnoreReclaims,
+                    );
                 })
             }
         })
@@ -17659,8 +17656,8 @@ pub mod tests {
             insert_store(db, Arc::clone(&storages[0]));
         }
 
-        let storages = db.get_storages_for_slot(starting_slot).unwrap();
-        let created_accounts = db.get_unique_accounts_from_storages(storages.iter());
+        let storage = db.get_storage_for_slot(starting_slot).unwrap();
+        let created_accounts = db.get_unique_accounts_from_storages(std::iter::once(&storage));
         assert_eq!(created_accounts.stored_accounts.len(), 1);
 
         if alive {
@@ -17693,18 +17690,18 @@ pub mod tests {
         num_normal_slots: usize,
     ) -> (AccountsDb, Slot) {
         let (db, slot1) = create_db_with_storages_and_index(alive, num_normal_slots + 1);
-        let storages = db.get_storages_for_slot(slot1).unwrap();
-        let created_accounts = db.get_unique_accounts_from_storages(storages.iter());
+        let storage = db.get_storage_for_slot(slot1).unwrap();
+        let created_accounts = db.get_unique_accounts_from_storages(std::iter::once(&storage));
 
         db.combine_ancient_slots(vec![slot1], CAN_RANDOMLY_SHRINK_FALSE);
         assert_eq!(1, db.get_storages_for_slot(slot1).unwrap().len());
         let ancient = db.get_storage_for_slot(slot1).unwrap();
         assert!(is_ancient(&ancient.accounts));
-        let after_stores = db.get_storages_for_slot(slot1).unwrap();
+        let after_store = db.get_storage_for_slot(slot1).unwrap();
         let GetUniqueAccountsResult {
             stored_accounts: after_stored_accounts,
             original_bytes: after_original_bytes,
-        } = db.get_unique_accounts_from_storages(after_stores.iter());
+        } = db.get_unique_accounts_from_storages(std::iter::once(&after_store));
         assert_ne!(created_accounts.original_bytes, after_original_bytes);
         assert_eq!(created_accounts.stored_accounts.len(), 1);
         assert_eq!(after_stored_accounts.len(), usize::from(alive));
