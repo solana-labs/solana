@@ -984,8 +984,6 @@ impl Validator {
             entry_receiver,
             retransmit_slots_receiver,
             TpuSockets {
-                transactions: node.sockets.tpu,
-                transaction_forwards: node.sockets.tpu_forwards,
                 vote: node.sockets.tpu_vote,
                 broadcast: node.sockets.broadcast,
                 transactions_quic: node.sockets.tpu_quic,
