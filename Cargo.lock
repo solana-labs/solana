@@ -6524,6 +6524,7 @@ dependencies = [
  "solana-runtime",
  "solana-sdk 1.15.0",
  "solana-stake-program",
+ "solana-version",
 ]
 
 [[package]]
