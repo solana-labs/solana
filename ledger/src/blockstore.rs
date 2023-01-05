@@ -3894,7 +3894,7 @@ pub fn create_new_ledger(
         blockstore_dir,
     ];
     let output = std::process::Command::new("tar")
-        .args(&args)
+        .args(args)
         .output()
         .unwrap();
     if !output.status.success() {
