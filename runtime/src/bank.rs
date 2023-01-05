@@ -6272,7 +6272,7 @@ impl Bank {
     ) {
         assert!(!self.freeze_started());
         let mut m = Measure::start("stakes_cache.check_and_store");
-        (0..accounts.len()).into_iter().for_each(|i| {
+        (0..accounts.len()).for_each(|i| {
             self.stakes_cache
                 .check_and_store(accounts.pubkey(i), accounts.account(i))
         });

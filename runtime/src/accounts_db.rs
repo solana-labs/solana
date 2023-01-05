@@ -3704,11 +3704,7 @@ impl AccountsDb {
         });
 
         // sort by pubkey to keep account index lookups close
-        let mut stored_accounts = stored_accounts
-            .drain()
-            .into_iter()
-            .map(|(_k, v)| v)
-            .collect::<Vec<_>>();
+        let mut stored_accounts = stored_accounts.drain().map(|(_k, v)| v).collect::<Vec<_>>();
         stored_accounts.sort_unstable_by(|a, b| a.pubkey().cmp(b.pubkey()));
 
         GetUniqueAccountsResult {
@@ -6594,7 +6590,7 @@ impl AccountsDb {
     ) -> Vec<AccountInfo> {
         let mut calc_stored_meta_time = Measure::start("calc_stored_meta");
         let slot = accounts.target_slot();
-        (0..accounts.len()).into_iter().for_each(|index| {
+        (0..accounts.len()).for_each(|index| {
             let pubkey = accounts.pubkey(index);
             self.read_only_accounts_cache.remove(*pubkey, slot);
         });
@@ -7731,7 +7727,7 @@ impl AccountsDb {
         let update = |start, end| {
             let mut reclaims = Vec::with_capacity((end - start) / 2);
 
-            (start..end).into_iter().for_each(|i| {
+            (start..end).for_each(|i| {
                 let info = infos[i];
                 let pubkey_account = (accounts.pubkey(i), accounts.account(i));
                 let pubkey = pubkey_account.0;
@@ -14627,7 +14623,7 @@ pub mod tests {
         accounts_db.write_cache_limit_bytes = write_cache_limit_bytes;
         let accounts_db = Arc::new(accounts_db);
 
-        let slots: Vec<_> = (0..num_slots as Slot).into_iter().collect();
+        let slots: Vec<_> = (0..num_slots as Slot).collect();
         let stall_slot = num_slots as Slot;
         let scan_stall_key = Pubkey::new_unique();
         let keys: Vec<Pubkey> = std::iter::repeat_with(Pubkey::new_unique)
@@ -14911,9 +14907,7 @@ pub mod tests {
                 } else {
                     // Slots less than `requested_flush_root` and `scan_root` were cleaned in the cache before being flushed
                     // to storage, should only contain one account
-                    std::iter::once(keys[*slot as usize])
-                        .into_iter()
-                        .collect::<HashSet<Pubkey>>()
+                    std::iter::once(keys[*slot as usize]).collect::<HashSet<Pubkey>>()
                 };
 
             assert_eq!(slot_accounts, expected_accounts);
@@ -15010,9 +15004,7 @@ pub mod tests {
             } else {
                 // If clean was specified, only the latest slot should have all the updates.
                 // All these other slots have been cleaned before flush
-                std::iter::once(keys[*slot as usize])
-                    .into_iter()
-                    .collect::<HashSet<Pubkey>>()
+                std::iter::once(keys[*slot as usize]).collect::<HashSet<Pubkey>>()
             };
             assert_eq!(slot_accounts, expected_accounts);
         }
@@ -17333,7 +17325,6 @@ pub mod tests {
     fn get_all_accounts(db: &AccountsDb, slots: Range<Slot>) -> Vec<(Pubkey, AccountSharedData)> {
         slots
             .clone()
-            .into_iter()
             .filter_map(|slot| {
                 let storages = db.get_storages_for_slot(slot);
                 storages.map(|storages| {

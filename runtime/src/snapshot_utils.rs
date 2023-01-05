@@ -1747,7 +1747,6 @@ fn unpack_snapshot_local(
 
     // allocate all readers before any readers start reading
     let readers = (0..parallel_divisions)
-        .into_iter()
         .map(|_| SharedBufferReader::new(&shared_buffer))
         .collect::<Vec<_>>();
 

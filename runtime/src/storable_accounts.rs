@@ -266,7 +266,7 @@ pub mod tests {
         assert_eq!(a.target_slot(), b.target_slot());
         assert_eq!(a.len(), b.len());
         assert_eq!(a.is_empty(), b.is_empty());
-        (0..a.len()).into_iter().for_each(|i| {
+        (0..a.len()).for_each(|i| {
             assert_eq!(a.pubkey(i), b.pubkey(i));
             assert!(accounts_equal(a.account(i), b.account(i)));
         })

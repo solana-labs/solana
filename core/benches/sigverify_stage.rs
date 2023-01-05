@@ -40,7 +40,6 @@ fn run_bench_packet_discard(num_ips: usize, bencher: &mut Bencher) {
     let mut total = 0;
 
     let ips: Vec<_> = (0..num_ips)
-        .into_iter()
         .map(|_| {
             let mut addr = [0u16; 8];
             thread_rng().fill(&mut addr);

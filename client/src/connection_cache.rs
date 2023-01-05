@@ -531,7 +531,6 @@ mod tests {
             0
         };
         let addrs = (0..MAX_CONNECTIONS)
-            .into_iter()
             .map(|_| {
                 let addr = get_addr(&mut rng);
                 connection_cache.get_connection(&addr);
