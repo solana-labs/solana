@@ -1,3 +1,5 @@
+//! The compute budget native program.
+
 #![cfg(feature = "full")]
 
 use {
@@ -62,5 +64,12 @@ impl ComputeBudgetInstruction {
     /// Create a `ComputeBudgetInstruction::SetAccountsDataSizeLimit` `Instruction`
     pub fn set_accounts_data_size_limit(bytes: u32) -> Instruction {
         Instruction::new_with_borsh(id(), &Self::SetAccountsDataSizeLimit(bytes), vec![])
+    }
+
+    /// Serialize Instruction using borsh, this is only used in runtime::cost_model::tests but compilation
+    /// can't be restricted as it's used across packages
+    // #[cfg(test)]
+    pub fn pack(self) -> Result<Vec<u8>, std::io::Error> {
+        self.try_to_vec()
     }
 }

@@ -31,6 +31,7 @@ use {
         block_cost_limits::*,
         commitment::VOTE_THRESHOLD_SIZE,
         cost_model::CostModel,
+        epoch_accounts_hash::EpochAccountsHash,
         prioritization_fee_cache::PrioritizationFeeCache,
         runtime_config::RuntimeConfig,
         transaction_batch::TransactionBatch,
@@ -109,7 +110,7 @@ struct ReplayEntry {
 lazy_static! {
     static ref PAR_THREAD_POOL: ThreadPool = rayon::ThreadPoolBuilder::new()
         .num_threads(get_max_thread_count())
-        .thread_name(|ix| format!("solBstoreProc{:02}", ix))
+        .thread_name(|ix| format!("solBstoreProc{ix:02}"))
         .build()
         .unwrap();
 }
@@ -145,7 +146,7 @@ fn get_first_error(
                 "validator_process_entry_error",
                 (
                     "error",
-                    format!("error: {:?}, transaction: {:?}", err, transaction),
+                    format!("error: {err:?}, transaction: {transaction:?}"),
                     String
                 )
             );
@@ -385,7 +386,6 @@ fn execute_batches(
     replay_vote_sender: Option<&ReplayVoteSender>,
     confirmation_timing: &mut ConfirmationTiming,
     cost_capacity_meter: Arc<RwLock<BlockCostCapacityMeter>>,
-    cost_model: &CostModel,
     log_messages_bytes_limit: Option<usize>,
 ) -> Result<()> {
     if batches.is_empty() {
@@ -415,7 +415,7 @@ fn execute_batches(
     let tx_costs = sanitized_txs
         .iter()
         .map(|tx| {
-            let tx_cost = cost_model.calculate_cost(tx);
+            let tx_cost = CostModel::calculate_cost(tx, &bank.feature_set);
             let cost = tx_cost.sum();
             let cost_without_bpf = tx_cost.sum_without_bpf();
             minimal_tx_cost = std::cmp::min(minimal_tx_cost, cost);
@@ -556,7 +556,6 @@ fn process_entries_with_callback(
     let mut batches = vec![];
     let mut tick_hashes = vec![];
     let mut rng = thread_rng();
-    let cost_model = CostModel::new();
 
     for ReplayEntry {
         entry,
@@ -578,7 +577,6 @@ fn process_entries_with_callback(
                         replay_vote_sender,
                         confirmation_timing,
                         cost_capacity_meter.clone(),
-                        &cost_model,
                         log_messages_bytes_limit,
                     )?;
                     batches.clear();
@@ -628,8 +626,7 @@ fn process_entries_with_callback(
                             (
                                 "error",
                                 format!(
-                                    "Lock accounts error, entry conflicts with itself, txs: {:?}",
-                                    transactions
+                                    "Lock accounts error, entry conflicts with itself, txs: {transactions:?}"
                                 ),
                                 String
                             )
@@ -647,7 +644,6 @@ fn process_entries_with_callback(
                             replay_vote_sender,
                             confirmation_timing,
                             cost_capacity_meter.clone(),
-                            &cost_model,
                             log_messages_bytes_limit,
                         )?;
                         batches.clear();
@@ -664,7 +660,6 @@ fn process_entries_with_callback(
         replay_vote_sender,
         confirmation_timing,
         cost_capacity_meter,
-        &cost_model,
         log_messages_bytes_limit,
     )?;
     for hash in tick_hashes {
@@ -709,7 +704,6 @@ pub struct ProcessOptions {
     pub new_hard_forks: Option<Vec<Slot>>,
     pub debug_keys: Option<Arc<HashSet<Pubkey>>>,
     pub account_indexes: AccountSecondaryIndexes,
-    pub accounts_db_caching_enabled: bool,
     pub limit_load_slot_count_from_snapshot: Option<usize>,
     pub allow_dead_slots: bool,
     pub accounts_db_test_hash_calculation: bool,
@@ -730,9 +724,9 @@ pub fn test_process_blockstore(
     opts: &ProcessOptions,
     exit: &Arc<AtomicBool>,
 ) -> (Arc<RwLock<BankForks>>, LeaderScheduleCache) {
-    // Spin up a thread to be a fake Accounts Background Service.  Need to intercept and handle
-    // (i.e. skip/make invalid) all EpochAccountsHash requests so future rooted banks do not hang
-    // in Bank::freeze() waiting for an in-flight EAH calculation to complete.
+    // Spin up a thread to be a fake Accounts Background Service.  Need to intercept and handle all
+    // EpochAccountsHash requests so future rooted banks do not hang in Bank::freeze() waiting for
+    // an in-flight EAH calculation to complete.
     let (snapshot_request_sender, snapshot_request_receiver) = crossbeam_channel::unbounded();
     let abs_request_sender = AbsRequestSender::new(snapshot_request_sender);
     let bg_exit = Arc::new(AtomicBool::new(false));
@@ -752,7 +746,10 @@ pub fn test_process_blockstore(
                             .accounts
                             .accounts_db
                             .epoch_accounts_hash_manager
-                            .set_invalid_for_tests();
+                            .set_valid(
+                                EpochAccountsHash::new(Hash::new_unique()),
+                                snapshot_request.snapshot_root_bank.slot(),
+                            )
                     });
                 std::thread::sleep(Duration::from_millis(100));
             }
@@ -805,7 +802,6 @@ pub(crate) fn process_blockstore_for_bank_0(
         opts.debug_keys.clone(),
         Some(&crate::builtins::get(opts.runtime_config.bpf_jit)),
         opts.account_indexes.clone(),
-        opts.accounts_db_caching_enabled,
         opts.shrink_ratio,
         false,
         opts.accounts_db_config.clone(),
@@ -870,7 +866,7 @@ pub fn process_blockstore_from_root(
     let mut num_slots_processed = 0;
     if let Some(start_slot_meta) = blockstore
         .meta(start_slot)
-        .unwrap_or_else(|_| panic!("Failed to get meta for slot {}", start_slot))
+        .unwrap_or_else(|_| panic!("Failed to get meta for slot {start_slot}"))
     {
         num_slots_processed = load_frozen_forks(
             bank_forks,
@@ -3717,7 +3713,6 @@ pub mod tests {
             Arc::<RuntimeConfig>::default(),
             account_paths,
             AccountSecondaryIndexes::default(),
-            false,
             AccountShrinkThreshold::default(),
         );
         *bank.epoch_schedule()
@@ -4553,10 +4548,7 @@ pub mod tests {
                     assert_eq!(err, expected_err);
                 }
                 (result, expected_result) => {
-                    panic!(
-                        "actual result {:?} != expected result {:?}",
-                        result, expected_result
-                    );
+                    panic!("actual result {result:?} != expected result {expected_result:?}");
                 }
             }
         }

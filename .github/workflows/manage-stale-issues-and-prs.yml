@@ -1,0 +1,39 @@
+name: "Manage stale issues and PRs"
+on:
+  # Chosen to be just before London wakes up and way past San Francisco's bedtime.
+  schedule:
+    - cron: "0 8 * * 1-5" # This is in UTC.
+  # Do a dry-run (debug-only: true) whenever this workflow itself is changed.
+  pull_request:
+    paths:
+      - .github/workflows/manage-stale-issues-and-prs.yml
+    types:
+      - opened
+      - synchronize
+
+permissions:
+  issues: write
+  pull-requests: write
+
+jobs:
+  stale:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/stale@v6
+        with:
+          ascending: true # Spend API operations budget on older, more-likely-to-get-closed issues first
+          close-issue-message: "" # Leave no comment when closing
+          close-pr-message: "" # Leave no comment when closing
+          days-before-issue-stale: 365
+          days-before-pr-stale: 14
+          days-before-close: 7
+          debug-only: ${{ github.event_name == 'pull_request' }} # Dry-run when true.
+          exempt-all-milestones: true # Milestones can sometimes last a month, so exempt issues attached to a milestone.
+          exempt-issue-labels: blocked,do-not-close,feature-gate,security
+          exempt-pr-labels: blocked,do-not-close,feature-gate,security
+          # No actual changes get made in debug-only mode, so we can raise the operations ceiling.
+          operations-per-run: ${{ github.event_name == 'pull_request' && 1000 || 900}}
+          stale-issue-label: stale
+          stale-issue-message: "" # Leave no comment when marking as stale
+          stale-pr-label: stale
+          stale-pr-message: "" # Leave no comment when marking as stale

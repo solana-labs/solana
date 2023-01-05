@@ -10,14 +10,16 @@ use {
         consensus::Tower, tower_storage::TowerStorage, validator::ValidatorStartProgress,
     },
     solana_gossip::{cluster_info::ClusterInfo, contact_info::ContactInfo},
-    solana_runtime::bank_forks::BankForks,
+    solana_rpc::rpc::verify_pubkey,
+    solana_rpc_client_api::{config::RpcAccountIndex, custom_error::RpcCustomError},
+    solana_runtime::{accounts_index::AccountIndex, bank_forks::BankForks},
     solana_sdk::{
         exit::Exit,
         pubkey::Pubkey,
         signature::{read_keypair_file, Keypair, Signer},
     },
     std::{
-        collections::HashMap,
+        collections::{HashMap, HashSet},
         error,
         fmt::{self, Display},
         net::SocketAddr,
@@ -33,6 +35,7 @@ pub struct AdminRpcRequestMetadataPostInit {
     pub cluster_info: Arc<ClusterInfo>,
     pub bank_forks: Arc<RwLock<BankForks>>,
     pub vote_account: Pubkey,
+    pub repair_whitelist: Arc<RwLock<HashSet<Pubkey>>>,
 }
 
 #[derive(Clone)]
@@ -78,6 +81,11 @@ pub struct AdminRpcContactInfo {
     pub serve_repair: SocketAddr,
     pub last_updated_timestamp: u64,
     pub shred_version: u16,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+pub struct AdminRpcRepairWhitelist {
+    pub whitelist: Vec<Pubkey>,
 }
 
 impl From<ContactInfo> for AdminRpcContactInfo {
@@ -133,6 +141,12 @@ impl Display for AdminRpcContactInfo {
     }
 }
 
+impl Display for AdminRpcRepairWhitelist {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        writeln!(f, "Repair whitelist: {:?}", &self.whitelist)
+    }
+}
+
 #[rpc]
 pub trait AdminRpc {
     type Metadata;
@@ -183,6 +197,19 @@ pub trait AdminRpc {
 
     #[rpc(meta, name = "contactInfo")]
     fn contact_info(&self, meta: Self::Metadata) -> Result<AdminRpcContactInfo>;
+
+    #[rpc(meta, name = "repairWhitelist")]
+    fn repair_whitelist(&self, meta: Self::Metadata) -> Result<AdminRpcRepairWhitelist>;
+
+    #[rpc(meta, name = "setRepairWhitelist")]
+    fn set_repair_whitelist(&self, meta: Self::Metadata, whitelist: Vec<Pubkey>) -> Result<()>;
+
+    #[rpc(meta, name = "getSecondaryIndexKeySize")]
+    fn get_secondary_index_key_size(
+        &self,
+        meta: Self::Metadata,
+        pubkey_str: String,
+    ) -> Result<HashMap<RpcAccountIndex, usize>>;
 }
 
 pub struct AdminRpcImpl;
@@ -239,7 +266,7 @@ impl AdminRpc for AdminRpcImpl {
         debug!("add_authorized_voter request received");
 
         let authorized_voter = read_keypair_file(keypair_file)
-            .map_err(|err| jsonrpc_core::error::Error::invalid_params(format!("{}", err)))?;
+            .map_err(|err| jsonrpc_core::error::Error::invalid_params(format!("{err}")))?;
 
         AdminRpcImpl::add_authorized_voter_keypair(meta, authorized_voter)
     }
@@ -253,8 +280,7 @@ impl AdminRpc for AdminRpcImpl {
 
         let authorized_voter = Keypair::from_bytes(&keypair).map_err(|err| {
             jsonrpc_core::error::Error::invalid_params(format!(
-                "Failed to read authorized voter keypair from provided byte array: {}",
-                err
+                "Failed to read authorized voter keypair from provided byte array: {err}"
             ))
         })?;
 
@@ -277,8 +303,7 @@ impl AdminRpc for AdminRpcImpl {
 
         let identity_keypair = read_keypair_file(&keypair_file).map_err(|err| {
             jsonrpc_core::error::Error::invalid_params(format!(
-                "Failed to read identity keypair from {}: {}",
-                keypair_file, err
+                "Failed to read identity keypair from {keypair_file}: {err}"
             ))
         })?;
 
@@ -295,8 +320,7 @@ impl AdminRpc for AdminRpcImpl {
 
         let identity_keypair = Keypair::from_bytes(&identity_keypair).map_err(|err| {
             jsonrpc_core::error::Error::invalid_params(format!(
-                "Failed to read identity keypair from provided byte array: {}",
-                err
+                "Failed to read identity keypair from provided byte array: {err}"
             ))
         })?;
 
@@ -323,6 +347,87 @@ impl AdminRpc for AdminRpcImpl {
 
     fn contact_info(&self, meta: Self::Metadata) -> Result<AdminRpcContactInfo> {
         meta.with_post_init(|post_init| Ok(post_init.cluster_info.my_contact_info().into()))
+    }
+
+    fn repair_whitelist(&self, meta: Self::Metadata) -> Result<AdminRpcRepairWhitelist> {
+        debug!("repair_whitelist request received");
+
+        meta.with_post_init(|post_init| {
+            let whitelist: Vec<_> = post_init
+                .repair_whitelist
+                .read()
+                .unwrap()
+                .iter()
+                .copied()
+                .collect();
+            Ok(AdminRpcRepairWhitelist { whitelist })
+        })
+    }
+
+    fn set_repair_whitelist(&self, meta: Self::Metadata, whitelist: Vec<Pubkey>) -> Result<()> {
+        debug!("set_repair_whitelist request received");
+
+        let whitelist: HashSet<Pubkey> = whitelist.into_iter().collect();
+        meta.with_post_init(|post_init| {
+            *post_init.repair_whitelist.write().unwrap() = whitelist;
+            warn!(
+                "Repair whitelist set to {:?}",
+                &post_init.repair_whitelist.read().unwrap()
+            );
+            Ok(())
+        })
+    }
+
+    fn get_secondary_index_key_size(
+        &self,
+        meta: Self::Metadata,
+        pubkey_str: String,
+    ) -> Result<HashMap<RpcAccountIndex, usize>> {
+        debug!(
+            "get_secondary_index_key_size rpc request received: {:?}",
+            pubkey_str
+        );
+        let index_key = verify_pubkey(&pubkey_str)?;
+        meta.with_post_init(|post_init| {
+            let bank = post_init.bank_forks.read().unwrap().root_bank();
+
+            // Take ref to enabled AccountSecondaryIndexes
+            let enabled_account_indexes = &bank.accounts().accounts_db.account_indexes;
+
+            // Exit if secondary indexes are not enabled
+            if enabled_account_indexes.is_empty() {
+                debug!("get_secondary_index_key_size: secondary index not enabled.");
+                return Ok(HashMap::new());
+            };
+
+            // Make sure the requested key is not explicitly excluded
+            if !enabled_account_indexes.include_key(&index_key) {
+                return Err(RpcCustomError::KeyExcludedFromSecondaryIndex {
+                    index_key: index_key.to_string(),
+                }
+                .into());
+            }
+
+            // Grab a ref to the AccountsDbfor this Bank
+            let accounts_index = &bank.accounts().accounts_db.accounts_index;
+
+            // Find the size of the key in every index where it exists
+            let found_sizes = enabled_account_indexes
+                .indexes
+                .iter()
+                .filter_map(|index| {
+                    accounts_index
+                        .get_index_key_size(index, &index_key)
+                        .map(|size| (rpc_account_index_from_account_index(index), size))
+                })
+                .collect::<HashMap<_, _>>();
+
+            // Note: Will return an empty HashMap if no keys are found.
+            if found_sizes.is_empty() {
+                debug!("get_secondary_index_key_size: key not found in the secondary index.");
+            }
+            Ok(found_sizes)
+        })
     }
 }
 
@@ -370,6 +475,14 @@ impl AdminRpcImpl {
             warn!("Identity set to {}", post_init.cluster_info.id());
             Ok(())
         })
+    }
+}
+
+fn rpc_account_index_from_account_index(account_index: &AccountIndex) -> RpcAccountIndex {
+    match account_index {
+        AccountIndex::ProgramId => RpcAccountIndex::ProgramId,
+        AccountIndex::SplTokenOwner => RpcAccountIndex::SplTokenOwner,
+        AccountIndex::SplTokenMint => RpcAccountIndex::SplTokenMint,
     }
 }
 
@@ -482,10 +595,419 @@ pub fn load_staked_nodes_overrides(
         let file = std::fs::File::open(path)?;
         Ok(serde_yaml::from_reader(file)?)
     } else {
-        Err(format!(
-            "Staked nodes overrides provided '{}' a non-existing file path.",
-            path
+        Err(format!("Staked nodes overrides provided '{path}' a non-existing file path.").into())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use {
+        super::*,
+        serde_json::Value,
+        solana_account_decoder::parse_token::spl_token_pubkey,
+        solana_core::tower_storage::NullTowerStorage,
+        solana_ledger::genesis_utils::{create_genesis_config, GenesisConfigInfo},
+        solana_rpc::rpc::create_validator_exit,
+        solana_runtime::{
+            accounts_index::AccountSecondaryIndexes,
+            bank::{Bank, BankTestConfig},
+            inline_spl_token,
+        },
+        solana_sdk::{
+            account::{Account, AccountSharedData},
+            system_program,
+        },
+        solana_streamer::socket::SocketAddrSpace,
+        spl_token_2022::{
+            solana_program::{program_option::COption, program_pack::Pack},
+            state::{Account as TokenAccount, AccountState as TokenAccountState, Mint},
+        },
+        std::{collections::HashSet, sync::atomic::AtomicBool},
+    };
+
+    #[derive(Default)]
+    struct TestConfig {
+        account_indexes: AccountSecondaryIndexes,
+    }
+
+    struct RpcHandler {
+        io: MetaIoHandler<AdminRpcRequestMetadata>,
+        meta: AdminRpcRequestMetadata,
+        bank_forks: Arc<RwLock<BankForks>>,
+    }
+
+    impl RpcHandler {
+        fn _start() -> Self {
+            Self::start_with_config(TestConfig::default())
+        }
+
+        fn start_with_config(config: TestConfig) -> Self {
+            let identity = Pubkey::new_unique();
+            let cluster_info = Arc::new(ClusterInfo::new(
+                ContactInfo {
+                    id: identity,
+                    ..ContactInfo::default()
+                },
+                Arc::new(Keypair::new()),
+                SocketAddrSpace::Unspecified,
+            ));
+            let exit = Arc::new(AtomicBool::new(false));
+            let validator_exit = create_validator_exit(&exit);
+            let (bank_forks, vote_keypair) = new_bank_forks_with_config(BankTestConfig {
+                secondary_indexes: config.account_indexes,
+            });
+            let vote_account = vote_keypair.pubkey();
+            let start_progress = Arc::new(RwLock::new(ValidatorStartProgress::default()));
+            let repair_whitelist = Arc::new(RwLock::new(HashSet::new()));
+            let meta = AdminRpcRequestMetadata {
+                rpc_addr: None,
+                start_time: SystemTime::now(),
+                start_progress,
+                validator_exit,
+                authorized_voter_keypairs: Arc::new(RwLock::new(vec![vote_keypair])),
+                tower_storage: Arc::new(NullTowerStorage {}),
+                post_init: Arc::new(RwLock::new(Some(AdminRpcRequestMetadataPostInit {
+                    cluster_info,
+                    bank_forks: bank_forks.clone(),
+                    vote_account,
+                    repair_whitelist,
+                }))),
+                staked_nodes_overrides: Arc::new(RwLock::new(HashMap::new())),
+            };
+            let mut io = MetaIoHandler::default();
+            io.extend_with(AdminRpcImpl.to_delegate());
+
+            Self {
+                io,
+                meta,
+                bank_forks,
+            }
+        }
+
+        fn root_bank(&self) -> Arc<Bank> {
+            self.bank_forks.read().unwrap().root_bank()
+        }
+    }
+
+    fn new_bank_forks_with_config(
+        config: BankTestConfig,
+    ) -> (Arc<RwLock<BankForks>>, Arc<Keypair>) {
+        let GenesisConfigInfo {
+            genesis_config,
+            voting_keypair,
+            ..
+        } = create_genesis_config(1_000_000_000);
+
+        let bank = Bank::new_for_tests_with_config(&genesis_config, config);
+        (
+            Arc::new(RwLock::new(BankForks::new(bank))),
+            Arc::new(voting_keypair),
         )
-        .into())
+    }
+
+    #[test]
+    fn test_secondary_index_key_sizes() {
+        for secondary_index_enabled in [true, false] {
+            let account_indexes = if secondary_index_enabled {
+                AccountSecondaryIndexes {
+                    keys: None,
+                    indexes: HashSet::from([
+                        AccountIndex::ProgramId,
+                        AccountIndex::SplTokenMint,
+                        AccountIndex::SplTokenOwner,
+                    ]),
+                }
+            } else {
+                AccountSecondaryIndexes::default()
+            };
+
+            // RPC & Bank Setup
+            let rpc = RpcHandler::start_with_config(TestConfig { account_indexes });
+
+            let bank = rpc.root_bank();
+            let RpcHandler { io, meta, .. } = rpc;
+
+            // Pubkeys
+            let token_account1_pubkey = Pubkey::new_unique();
+            let token_account2_pubkey = Pubkey::new_unique();
+            let token_account3_pubkey = Pubkey::new_unique();
+            let mint1_pubkey = Pubkey::new_unique();
+            let mint2_pubkey = Pubkey::new_unique();
+            let wallet1_pubkey = Pubkey::new_unique();
+            let wallet2_pubkey = Pubkey::new_unique();
+            let non_existent_pubkey = Pubkey::new_unique();
+            let delegate = spl_token_pubkey(&Pubkey::new_unique());
+
+            let mut num_default_spl_token_program_accounts = 0;
+            let mut num_default_system_program_accounts = 0;
+
+            if !secondary_index_enabled {
+                // Test first with no accounts added & no secondary indexes enabled:
+                let req = format!(
+                    r#"{{"jsonrpc":"2.0","id":1,"method":"getSecondaryIndexKeySize","params":["{token_account1_pubkey}"]}}"#,
+                );
+                let res = io.handle_request_sync(&req, meta.clone());
+                let result: Value = serde_json::from_str(&res.expect("actual response"))
+                    .expect("actual response deserialization");
+                let sizes: HashMap<RpcAccountIndex, usize> =
+                    serde_json::from_value(result["result"].clone()).unwrap();
+                assert!(sizes.is_empty());
+            } else {
+                // Count SPL Token Program Default Accounts
+                let req = format!(
+                    r#"{{"jsonrpc":"2.0","id":1,"method":"getSecondaryIndexKeySize","params":["{}"]}}"#,
+                    inline_spl_token::id(),
+                );
+                let res = io.handle_request_sync(&req, meta.clone());
+                let result: Value = serde_json::from_str(&res.expect("actual response"))
+                    .expect("actual response deserialization");
+                let sizes: HashMap<RpcAccountIndex, usize> =
+                    serde_json::from_value(result["result"].clone()).unwrap();
+                assert_eq!(sizes.len(), 1);
+                num_default_spl_token_program_accounts =
+                    *sizes.get(&RpcAccountIndex::ProgramId).unwrap();
+                // Count System Program Default Accounts
+                let req = format!(
+                    r#"{{"jsonrpc":"2.0","id":1,"method":"getSecondaryIndexKeySize","params":["{}"]}}"#,
+                    system_program::id(),
+                );
+                let res = io.handle_request_sync(&req, meta.clone());
+                let result: Value = serde_json::from_str(&res.expect("actual response"))
+                    .expect("actual response deserialization");
+                let sizes: HashMap<RpcAccountIndex, usize> =
+                    serde_json::from_value(result["result"].clone()).unwrap();
+                assert_eq!(sizes.len(), 1);
+                num_default_system_program_accounts =
+                    *sizes.get(&RpcAccountIndex::ProgramId).unwrap();
+            }
+
+            // Add 2 basic wallet accounts
+            let wallet1_account = AccountSharedData::from(Account {
+                lamports: 11111111,
+                owner: system_program::id(),
+                ..Account::default()
+            });
+            bank.store_account(&wallet1_pubkey, &wallet1_account);
+            let wallet2_account = AccountSharedData::from(Account {
+                lamports: 11111111,
+                owner: system_program::id(),
+                ..Account::default()
+            });
+            bank.store_account(&wallet2_pubkey, &wallet2_account);
+
+            // Add a token account
+            let mut account1_data = vec![0; TokenAccount::get_packed_len()];
+            let token_account1 = TokenAccount {
+                mint: spl_token_pubkey(&mint1_pubkey),
+                owner: spl_token_pubkey(&wallet1_pubkey),
+                delegate: COption::Some(delegate),
+                amount: 420,
+                state: TokenAccountState::Initialized,
+                is_native: COption::None,
+                delegated_amount: 30,
+                close_authority: COption::Some(spl_token_pubkey(&wallet1_pubkey)),
+            };
+            TokenAccount::pack(token_account1, &mut account1_data).unwrap();
+            let token_account1 = AccountSharedData::from(Account {
+                lamports: 111,
+                data: account1_data.to_vec(),
+                owner: inline_spl_token::id(),
+                ..Account::default()
+            });
+            bank.store_account(&token_account1_pubkey, &token_account1);
+
+            // Add the mint
+            let mut mint1_data = vec![0; Mint::get_packed_len()];
+            let mint1_state = Mint {
+                mint_authority: COption::Some(spl_token_pubkey(&wallet1_pubkey)),
+                supply: 500,
+                decimals: 2,
+                is_initialized: true,
+                freeze_authority: COption::Some(spl_token_pubkey(&wallet1_pubkey)),
+            };
+            Mint::pack(mint1_state, &mut mint1_data).unwrap();
+            let mint_account1 = AccountSharedData::from(Account {
+                lamports: 222,
+                data: mint1_data.to_vec(),
+                owner: inline_spl_token::id(),
+                ..Account::default()
+            });
+            bank.store_account(&mint1_pubkey, &mint_account1);
+
+            // Add another token account with the different owner, but same delegate, and mint
+            let mut account2_data = vec![0; TokenAccount::get_packed_len()];
+            let token_account2 = TokenAccount {
+                mint: spl_token_pubkey(&mint1_pubkey),
+                owner: spl_token_pubkey(&wallet2_pubkey),
+                delegate: COption::Some(delegate),
+                amount: 420,
+                state: TokenAccountState::Initialized,
+                is_native: COption::None,
+                delegated_amount: 30,
+                close_authority: COption::Some(spl_token_pubkey(&wallet2_pubkey)),
+            };
+            TokenAccount::pack(token_account2, &mut account2_data).unwrap();
+            let token_account2 = AccountSharedData::from(Account {
+                lamports: 333,
+                data: account2_data.to_vec(),
+                owner: inline_spl_token::id(),
+                ..Account::default()
+            });
+            bank.store_account(&token_account2_pubkey, &token_account2);
+
+            // Add another token account with the same owner and delegate but different mint
+            let mut account3_data = vec![0; TokenAccount::get_packed_len()];
+            let token_account3 = TokenAccount {
+                mint: spl_token_pubkey(&mint2_pubkey),
+                owner: spl_token_pubkey(&wallet2_pubkey),
+                delegate: COption::Some(delegate),
+                amount: 42,
+                state: TokenAccountState::Initialized,
+                is_native: COption::None,
+                delegated_amount: 30,
+                close_authority: COption::Some(spl_token_pubkey(&wallet2_pubkey)),
+            };
+            TokenAccount::pack(token_account3, &mut account3_data).unwrap();
+            let token_account3 = AccountSharedData::from(Account {
+                lamports: 444,
+                data: account3_data.to_vec(),
+                owner: inline_spl_token::id(),
+                ..Account::default()
+            });
+            bank.store_account(&token_account3_pubkey, &token_account3);
+
+            // Add the new mint
+            let mut mint2_data = vec![0; Mint::get_packed_len()];
+            let mint2_state = Mint {
+                mint_authority: COption::Some(spl_token_pubkey(&wallet2_pubkey)),
+                supply: 200,
+                decimals: 3,
+                is_initialized: true,
+                freeze_authority: COption::Some(spl_token_pubkey(&wallet2_pubkey)),
+            };
+            Mint::pack(mint2_state, &mut mint2_data).unwrap();
+            let mint_account2 = AccountSharedData::from(Account {
+                lamports: 555,
+                data: mint2_data.to_vec(),
+                owner: inline_spl_token::id(),
+                ..Account::default()
+            });
+            bank.store_account(&mint2_pubkey, &mint_account2);
+
+            // Accounts should now look like the following:
+            //
+            //                   -----system_program------
+            //                  /                         \
+            //                 /-(owns)                    \-(owns)
+            //                /                             \
+            //             wallet1                   ---wallet2---
+            //               /                      /             \
+            //              /-(SPL::owns)          /-(SPL::owns)   \-(SPL::owns)
+            //             /                      /                 \
+            //      token_account1         token_account2       token_account3
+            //            \                     /                   /
+            //             \-(SPL::mint)       /-(SPL::mint)       /-(SPL::mint)
+            //              \                 /                   /
+            //               --mint_account1--               mint_account2
+
+            if secondary_index_enabled {
+                // ----------- Test for a non-existant key -----------
+                let req = format!(
+                    r#"{{"jsonrpc":"2.0","id":1,"method":"getSecondaryIndexKeySize","params":["{non_existent_pubkey}"]}}"#,
+                );
+                let res = io.handle_request_sync(&req, meta.clone());
+                let result: Value = serde_json::from_str(&res.expect("actual response"))
+                    .expect("actual response deserialization");
+                let sizes: HashMap<RpcAccountIndex, usize> =
+                    serde_json::from_value(result["result"].clone()).unwrap();
+                assert!(sizes.is_empty());
+                // --------------- Test Queries ---------------
+                // 1) Wallet1 - Owns 1 SPL Token
+                let req = format!(
+                    r#"{{"jsonrpc":"2.0","id":1,"method":"getSecondaryIndexKeySize","params":["{wallet1_pubkey}"]}}"#,
+                );
+                let res = io.handle_request_sync(&req, meta.clone());
+                let result: Value = serde_json::from_str(&res.expect("actual response"))
+                    .expect("actual response deserialization");
+                let sizes: HashMap<RpcAccountIndex, usize> =
+                    serde_json::from_value(result["result"].clone()).unwrap();
+                assert_eq!(sizes.len(), 1);
+                assert_eq!(*sizes.get(&RpcAccountIndex::SplTokenOwner).unwrap(), 1);
+                // 2) Wallet2 - Owns 2 SPL Tokens
+                let req = format!(
+                    r#"{{"jsonrpc":"2.0","id":1,"method":"getSecondaryIndexKeySize","params":["{wallet2_pubkey}"]}}"#,
+                );
+                let res = io.handle_request_sync(&req, meta.clone());
+                let result: Value = serde_json::from_str(&res.expect("actual response"))
+                    .expect("actual response deserialization");
+                let sizes: HashMap<RpcAccountIndex, usize> =
+                    serde_json::from_value(result["result"].clone()).unwrap();
+                assert_eq!(sizes.len(), 1);
+                assert_eq!(*sizes.get(&RpcAccountIndex::SplTokenOwner).unwrap(), 2);
+                // 3) Mint1 - Is in 2 SPL Accounts
+                let req = format!(
+                    r#"{{"jsonrpc":"2.0","id":1,"method":"getSecondaryIndexKeySize","params":["{mint1_pubkey}"]}}"#,
+                );
+                let res = io.handle_request_sync(&req, meta.clone());
+                let result: Value = serde_json::from_str(&res.expect("actual response"))
+                    .expect("actual response deserialization");
+                let sizes: HashMap<RpcAccountIndex, usize> =
+                    serde_json::from_value(result["result"].clone()).unwrap();
+                assert_eq!(sizes.len(), 1);
+                assert_eq!(*sizes.get(&RpcAccountIndex::SplTokenMint).unwrap(), 2);
+                // 4) Mint2 - Is in 1 SPL Account
+                let req = format!(
+                    r#"{{"jsonrpc":"2.0","id":1,"method":"getSecondaryIndexKeySize","params":["{mint2_pubkey}"]}}"#,
+                );
+                let res = io.handle_request_sync(&req, meta.clone());
+                let result: Value = serde_json::from_str(&res.expect("actual response"))
+                    .expect("actual response deserialization");
+                let sizes: HashMap<RpcAccountIndex, usize> =
+                    serde_json::from_value(result["result"].clone()).unwrap();
+                assert_eq!(sizes.len(), 1);
+                assert_eq!(*sizes.get(&RpcAccountIndex::SplTokenMint).unwrap(), 1);
+                // 5) SPL Token Program Owns 6 Accounts - 1 Default, 5 created above.
+                let req = format!(
+                    r#"{{"jsonrpc":"2.0","id":1,"method":"getSecondaryIndexKeySize","params":["{}"]}}"#,
+                    inline_spl_token::id(),
+                );
+                let res = io.handle_request_sync(&req, meta.clone());
+                let result: Value = serde_json::from_str(&res.expect("actual response"))
+                    .expect("actual response deserialization");
+                let sizes: HashMap<RpcAccountIndex, usize> =
+                    serde_json::from_value(result["result"].clone()).unwrap();
+                assert_eq!(sizes.len(), 1);
+                assert_eq!(
+                    *sizes.get(&RpcAccountIndex::ProgramId).unwrap(),
+                    (num_default_spl_token_program_accounts + 5)
+                );
+                // 5) System Program Owns 4 Accounts + 2 Default, 2 created above.
+                let req = format!(
+                    r#"{{"jsonrpc":"2.0","id":1,"method":"getSecondaryIndexKeySize","params":["{}"]}}"#,
+                    system_program::id(),
+                );
+                let res = io.handle_request_sync(&req, meta.clone());
+                let result: Value = serde_json::from_str(&res.expect("actual response"))
+                    .expect("actual response deserialization");
+                let sizes: HashMap<RpcAccountIndex, usize> =
+                    serde_json::from_value(result["result"].clone()).unwrap();
+                assert_eq!(sizes.len(), 1);
+                assert_eq!(
+                    *sizes.get(&RpcAccountIndex::ProgramId).unwrap(),
+                    (num_default_system_program_accounts + 2)
+                );
+            } else {
+                // ------------ Secondary Indexes Disabled ------------
+                let req = format!(
+                    r#"{{"jsonrpc":"2.0","id":1,"method":"getSecondaryIndexKeySize","params":["{token_account2_pubkey}"]}}"#,
+                );
+                let res = io.handle_request_sync(&req, meta.clone());
+                let result: Value = serde_json::from_str(&res.expect("actual response"))
+                    .expect("actual response deserialization");
+                let sizes: HashMap<RpcAccountIndex, usize> =
+                    serde_json::from_value(result["result"].clone()).unwrap();
+                assert!(sizes.is_empty());
+            }
+        }
     }
 }

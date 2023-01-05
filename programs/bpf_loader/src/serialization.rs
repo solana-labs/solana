@@ -590,8 +590,7 @@ mod tests {
             assert_eq!(
                 serialization_result.as_ref().err(),
                 expected_err.as_ref(),
-                "{} test case failed",
-                name
+                "{name} test case failed"
             );
             if expected_err.is_some() {
                 continue;

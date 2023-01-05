@@ -97,7 +97,7 @@ impl BlockhashQuery {
                     .is_blockhash_valid(rpc_client, hash, commitment)
                     .await?
                 {
-                    return Err(format!("Hash has expired {:?}", hash).into());
+                    return Err(format!("Hash has expired {hash:?}").into());
                 }
                 Ok(*hash)
             }

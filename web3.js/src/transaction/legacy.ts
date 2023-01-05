@@ -22,6 +22,7 @@ export const enum TransactionStatus {
   BLOCKHEIGHT_EXCEEDED,
   PROCESSED,
   TIMED_OUT,
+  NONCE_INVALID,
 }
 
 /**
@@ -145,7 +146,9 @@ export type TransactionCtorFields_DEPRECATED = {
 export type TransactionCtorFields = TransactionCtorFields_DEPRECATED;
 
 /**
- * List of Transaction object fields that may be initialized at construction
+ * Blockhash-based transactions have a lifetime that are defined by
+ * the blockhash they include. Any transaction whose blockhash is
+ * too old will be rejected.
  */
 export type TransactionBlockhashCtor = {
   /** The transaction fee payer */
@@ -156,6 +159,18 @@ export type TransactionBlockhashCtor = {
   blockhash: Blockhash;
   /** the last block chain can advance to before tx is declared expired */
   lastValidBlockHeight: number;
+};
+
+/**
+ * Use these options to construct a durable nonce transaction.
+ */
+export type TransactionNonceCtor = {
+  /** The transaction fee payer */
+  feePayer?: PublicKey | null;
+  minContextSlot: number;
+  nonceInfo: NonceInformation;
+  /** One or more signatures */
+  signatures?: Array<SignaturePubkeyPair>;
 };
 
 /**
@@ -229,6 +244,15 @@ export class Transaction {
   nonceInfo?: NonceInformation;
 
   /**
+   * If this is a nonce transaction this represents the minimum slot from which
+   * to evaluate if the nonce has advanced when attempting to confirm the
+   * transaction. This protects against a case where the transaction confirmation
+   * logic loads the nonce account from an old slot and assumes the mismatch in
+   * nonce value implies that the nonce has been advanced.
+   */
+  minNonceContextSlot?: number;
+
+  /**
    * @internal
    */
   _message?: Message;
@@ -241,6 +265,9 @@ export class Transaction {
   // Construct a transaction with a blockhash and lastValidBlockHeight
   constructor(opts?: TransactionBlockhashCtor);
 
+  // Construct a transaction using a durable nonce
+  constructor(opts?: TransactionNonceCtor);
+
   /**
    * @deprecated `TransactionCtorFields` has been deprecated and will be removed in a future version.
    * Please supply a `TransactionBlockhashCtor` instead.
@@ -251,7 +278,10 @@ export class Transaction {
    * Construct an empty Transaction
    */
   constructor(
-    opts?: TransactionBlockhashCtor | TransactionCtorFields_DEPRECATED,
+    opts?:
+      | TransactionBlockhashCtor
+      | TransactionNonceCtor
+      | TransactionCtorFields_DEPRECATED,
   ) {
     if (!opts) {
       return;
@@ -262,7 +292,13 @@ export class Transaction {
     if (opts.signatures) {
       this.signatures = opts.signatures;
     }
-    if (Object.prototype.hasOwnProperty.call(opts, 'lastValidBlockHeight')) {
+    if (Object.prototype.hasOwnProperty.call(opts, 'nonceInfo')) {
+      const {minContextSlot, nonceInfo} = opts as TransactionNonceCtor;
+      this.minNonceContextSlot = minContextSlot;
+      this.nonceInfo = nonceInfo;
+    } else if (
+      Object.prototype.hasOwnProperty.call(opts, 'lastValidBlockHeight')
+    ) {
       const {blockhash, lastValidBlockHeight} =
         opts as TransactionBlockhashCtor;
       this.recentBlockhash = blockhash;
@@ -690,23 +726,31 @@ export class Transaction {
   }
 
   /**
-   * Verify signatures of a complete, signed Transaction
+   * Verify signatures of a Transaction
+   * Optional parameter specifies if we're expecting a fully signed Transaction or a partially signed one.
+   * If no boolean is provided, we expect a fully signed Transaction by default.
    */
-  verifySignatures(): boolean {
-    return this._verifySignatures(this.serializeMessage(), true);
+  verifySignatures(requireAllSignatures?: boolean): boolean {
+    return this._verifySignatures(
+      this.serializeMessage(),
+      requireAllSignatures === undefined ? true : requireAllSignatures,
+    );
   }
 
   /**
    * @internal
    */
-  _verifySignatures(signData: Buffer, requireAllSignatures: boolean): boolean {
+  _verifySignatures(
+    signData: Uint8Array,
+    requireAllSignatures: boolean,
+  ): boolean {
     for (const {signature, publicKey} of this.signatures) {
       if (signature === null) {
         if (requireAllSignatures) {
           return false;
         }
       } else {
-        if (!verify(signature, signData, publicKey.toBuffer())) {
+        if (!verify(signature, signData, publicKey.toBytes())) {
           return false;
         }
       }

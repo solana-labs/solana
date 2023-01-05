@@ -16,7 +16,9 @@ use {
     },
     std::{
         borrow::Borrow,
-        collections::{hash_map::Entry, BTreeMap, HashMap, HashSet, VecDeque},
+        collections::{
+            btree_set::Iter, hash_map::Entry, BTreeMap, BTreeSet, HashMap, HashSet, VecDeque,
+        },
         sync::{Arc, RwLock},
         time::Instant,
     },
@@ -85,6 +87,7 @@ impl UpdateOperation {
     }
 }
 
+#[derive(Clone)]
 struct ForkInfo {
     // Amount of stake that has voted for exactly this slot
     stake_voted_at: ForkWeight,
@@ -92,10 +95,11 @@ struct ForkInfo {
     // rooted at this slot
     stake_voted_subtree: ForkWeight,
     // Best slot in the subtree rooted at this slot, does not
-    // have to be a direct child in `children`
+    // have to be a direct child in `children`. This is the slot whose subtree
+    // is the heaviest.
     best_slot: SlotHashKey,
     parent: Option<SlotHashKey>,
-    children: Vec<SlotHashKey>,
+    children: BTreeSet<SlotHashKey>,
     // The latest ancestor of this node that has been marked invalid. If the slot
     // itself is a duplicate, this is set to the slot itself.
     latest_invalid_ancestor: Option<Slot>,
@@ -163,21 +167,21 @@ impl ForkInfo {
 pub struct HeaviestSubtreeForkChoice {
     fork_infos: HashMap<SlotHashKey, ForkInfo>,
     latest_votes: HashMap<Pubkey, SlotHashKey>,
-    root: SlotHashKey,
+    tree_root: SlotHashKey,
     last_root_time: Instant,
 }
 
 impl HeaviestSubtreeForkChoice {
-    pub fn new(root: SlotHashKey) -> Self {
+    pub fn new(tree_root: SlotHashKey) -> Self {
         let mut heaviest_subtree_fork_choice = Self {
-            root,
+            tree_root,
             // Doesn't implement default because `root` must
             // exist in all the fields
             fork_infos: HashMap::new(),
             latest_votes: HashMap::new(),
             last_root_time: Instant::now(),
         };
-        heaviest_subtree_fork_choice.add_new_leaf_slot(root, None);
+        heaviest_subtree_fork_choice.add_new_leaf_slot(tree_root, None);
         heaviest_subtree_fork_choice
     }
 
@@ -247,7 +251,7 @@ impl HeaviestSubtreeForkChoice {
     }
 
     pub fn best_overall_slot(&self) -> SlotHashKey {
-        self.best_slot(&self.root).unwrap()
+        self.best_slot(&self.tree_root).unwrap()
     }
 
     pub fn stake_voted_subtree(&self, key: &SlotHashKey) -> Option<u64> {
@@ -256,8 +260,8 @@ impl HeaviestSubtreeForkChoice {
             .map(|fork_info| fork_info.stake_voted_subtree)
     }
 
-    pub fn root(&self) -> SlotHashKey {
-        self.root
+    pub fn tree_root(&self) -> SlotHashKey {
+        self.tree_root
     }
 
     pub fn max_by_weight(&self, slot1: SlotHashKey, slot2: SlotHashKey) -> std::cmp::Ordering {
@@ -287,10 +291,10 @@ impl HeaviestSubtreeForkChoice {
         self.best_overall_slot()
     }
 
-    pub fn set_root(&mut self, new_root: SlotHashKey) {
-        // Remove everything reachable from `self.root` but not `new_root`,
+    pub fn set_tree_root(&mut self, new_root: SlotHashKey) {
+        // Remove everything reachable from `self.tree_root` but not `new_root`,
         // as those are now unrooted.
-        let remove_set = self.subtree_diff(self.root, new_root);
+        let remove_set = (&*self).subtree_diff(self.tree_root, new_root);
         for node_key in remove_set {
             self.fork_infos
                 .remove(&node_key)
@@ -299,32 +303,32 @@ impl HeaviestSubtreeForkChoice {
         let root_fork_info = self.fork_infos.get_mut(&new_root);
 
         root_fork_info
-            .unwrap_or_else(|| panic!("New root: {:?}, didn't exist in fork choice", new_root))
+            .unwrap_or_else(|| panic!("New root: {new_root:?}, didn't exist in fork choice"))
             .parent = None;
-        self.root = new_root;
+        self.tree_root = new_root;
         self.last_root_time = Instant::now();
     }
 
     pub fn add_root_parent(&mut self, root_parent: SlotHashKey) {
-        assert!(root_parent.0 < self.root.0);
+        assert!(root_parent.0 < self.tree_root.0);
         assert!(self.fork_infos.get(&root_parent).is_none());
         let root_info = self
             .fork_infos
-            .get_mut(&self.root)
+            .get_mut(&self.tree_root)
             .expect("entry for root must exist");
         root_info.parent = Some(root_parent);
         let root_parent_info = ForkInfo {
             stake_voted_at: 0,
             stake_voted_subtree: root_info.stake_voted_subtree,
-            // The `best_slot` of a leaf is itself
+            // The `best_slot` does not change
             best_slot: root_info.best_slot,
-            children: vec![self.root],
+            children: BTreeSet::from([self.tree_root]),
             parent: None,
             latest_invalid_ancestor: None,
             is_duplicate_confirmed: root_info.is_duplicate_confirmed,
         };
         self.fork_infos.insert(root_parent, root_parent_info);
-        self.root = root_parent;
+        self.tree_root = root_parent;
     }
 
     pub fn add_new_leaf_slot(&mut self, slot_hash_key: SlotHashKey, parent: Option<SlotHashKey>) {
@@ -349,7 +353,7 @@ impl HeaviestSubtreeForkChoice {
                 stake_voted_subtree: 0,
                 // The `best_slot` of a leaf is itself
                 best_slot: slot_hash_key,
-                children: vec![],
+                children: BTreeSet::new(),
                 parent,
                 latest_invalid_ancestor: parent_latest_invalid_ancestor,
                 // If the parent is none, then this is the root, which implies this must
@@ -368,15 +372,15 @@ impl HeaviestSubtreeForkChoice {
             .get_mut(&parent)
             .unwrap()
             .children
-            .push(slot_hash_key);
+            .insert(slot_hash_key);
 
         // Propagate leaf up the tree to any ancestors who considered the previous leaf
         // the `best_slot`
         self.propagate_new_leaf(&slot_hash_key, &parent)
     }
 
-    // Returns if the given `maybe_best_child` is the heaviest among the children
-    // it's parent
+    // Returns true if the given `maybe_best_child` is the heaviest among the children
+    // of the parent. Breaks ties by slot # (lower is heavier).
     fn is_best_child(&self, maybe_best_child: &SlotHashKey) -> bool {
         let maybe_best_child_weight = self.stake_voted_subtree(maybe_best_child).unwrap();
         let parent = self.parent(maybe_best_child);
@@ -408,6 +412,73 @@ impl HeaviestSubtreeForkChoice {
         self.fork_infos
             .iter()
             .map(|(slot_hash, fork_info)| (slot_hash, fork_info.stake_voted_subtree))
+    }
+
+    /// Split off the node at `slot_hash_key` and propagate the stake subtraction up to the root of the
+    /// tree.
+    ///
+    /// Assumes that `slot_hash_key` is not the `tree_root`
+    /// Returns the subtree originating from `slot_hash_key`
+    pub fn split_off(&mut self, slot_hash_key: &SlotHashKey) -> Self {
+        assert_ne!(self.tree_root, *slot_hash_key);
+        let split_tree_root = {
+            let mut node_to_split_at = self
+                .fork_infos
+                .get_mut(slot_hash_key)
+                .expect("Slot hash key must exist in tree");
+            let split_tree_fork_info = node_to_split_at.clone();
+            // Remove stake to be aggregated up the tree
+            node_to_split_at.stake_voted_subtree = 0;
+            node_to_split_at.stake_voted_at = 0;
+            // Mark this node as invalid so that it cannot be chosen as best child
+            node_to_split_at.latest_invalid_ancestor = Some(slot_hash_key.0);
+            split_tree_fork_info
+        };
+
+        let mut update_operations: UpdateOperations = BTreeMap::new();
+        // Aggregate up to the root
+        self.insert_aggregate_operations(&mut update_operations, *slot_hash_key);
+        self.process_update_operations(update_operations);
+
+        // Remove node + all children and add to new tree
+        let mut split_tree_fork_infos = HashMap::new();
+        let mut to_visit = vec![*slot_hash_key];
+
+        while !to_visit.is_empty() {
+            let current_node = to_visit.pop().unwrap();
+            let current_fork_info = self
+                .fork_infos
+                .remove(&current_node)
+                .expect("Node must exist in tree");
+
+            to_visit.extend(current_fork_info.children.iter());
+            split_tree_fork_infos.insert(current_node, current_fork_info);
+        }
+
+        // Remove link from parent
+        let parent_fork_info = self
+            .fork_infos
+            .get_mut(&split_tree_root.parent.expect("Cannot split off from root"))
+            .expect("Parent must exist in fork infos");
+        parent_fork_info.children.remove(slot_hash_key);
+
+        // Update the root of the new tree with the proper info, now that we have finished
+        // aggregating
+        split_tree_fork_infos.insert(*slot_hash_key, split_tree_root);
+
+        // Split off the relevant votes to the new tree
+        let mut split_tree_latest_votes = self.latest_votes.clone();
+        split_tree_latest_votes.retain(|_, node| split_tree_fork_infos.contains_key(node));
+        self.latest_votes
+            .retain(|_, node| self.fork_infos.contains_key(node));
+
+        // Create a new tree from the split
+        HeaviestSubtreeForkChoice {
+            tree_root: *slot_hash_key,
+            fork_infos: split_tree_fork_infos,
+            latest_votes: split_tree_latest_votes,
+            last_root_time: Instant::now(),
+        }
     }
 
     #[cfg(test)]
@@ -699,7 +770,7 @@ impl HeaviestSubtreeForkChoice {
         for pubkey_vote in pubkey_votes {
             let (pubkey, new_vote_slot_hash) = pubkey_vote.borrow();
             let (new_vote_slot, new_vote_hash) = *new_vote_slot_hash;
-            if new_vote_slot < self.root.0 {
+            if new_vote_slot < self.tree_root.0 {
                 // If the new vote is less than the root we can ignore it. This is because there
                 // are two cases. Either:
                 // 1) The validator's latest vote was bigger than the new vote, so we can ignore it
@@ -872,9 +943,8 @@ impl HeaviestSubtreeForkChoice {
                             // validator has been running, so we must be able to fetch best_slots for all of
                             // them.
                             panic!(
-                                "a bank at last_voted_slot({:?}) is a frozen bank so must have been \
+                                "a bank at last_voted_slot({last_voted_slot_hash:?}) is a frozen bank so must have been \
                                         added to heaviest_subtree_fork_choice at time of freezing",
-                                last_voted_slot_hash,
                             )
                         } else {
                             // fork_infos doesn't have corresponding data for the stale stray last vote,
@@ -905,16 +975,18 @@ impl HeaviestSubtreeForkChoice {
     }
 }
 
-impl TreeDiff for HeaviestSubtreeForkChoice {
+impl<'a> TreeDiff<'a> for &'a HeaviestSubtreeForkChoice {
     type TreeKey = SlotHashKey;
+    type ChildIter = Iter<'a, SlotHashKey>;
+
     fn contains_slot(&self, slot_hash_key: &SlotHashKey) -> bool {
         self.fork_infos.contains_key(slot_hash_key)
     }
 
-    fn children(&self, slot_hash_key: &SlotHashKey) -> Option<&[SlotHashKey]> {
+    fn children(&self, slot_hash_key: &SlotHashKey) -> Option<Self::ChildIter> {
         self.fork_infos
             .get(slot_hash_key)
-            .map(|fork_info| &fork_info.children[..])
+            .map(|fork_info| fork_info.children.iter())
     }
 }
 
@@ -928,7 +1000,7 @@ impl ForkChoice for HeaviestSubtreeForkChoice {
     ) {
         let mut start = Measure::start("compute_bank_stats_time");
         // Update `heaviest_subtree_fork_choice` to find the best fork to build on
-        let root = self.root.0;
+        let root = self.tree_root.0;
         let new_votes = latest_validator_votes_for_frozen_banks.take_votes_dirty_set(root);
         let (best_overall_slot, best_overall_hash) = self.add_votes(
             new_votes.into_iter(),
@@ -985,7 +1057,8 @@ impl ForkChoice for HeaviestSubtreeForkChoice {
             let mut update_operations = UpdateOperations::default();
 
             // Notify all the children of this node that a parent was marked as invalid
-            for child_hash_key in self.subtree_diff(*invalid_slot_hash_key, SlotHashKey::default())
+            for child_hash_key in
+                (&*self).subtree_diff(*invalid_slot_hash_key, SlotHashKey::default())
             {
                 self.do_insert_aggregate_operation(
                     &mut update_operations,
@@ -1017,7 +1090,7 @@ impl ForkChoice for HeaviestSubtreeForkChoice {
 
         let mut update_operations = UpdateOperations::default();
         // Notify all the children of this node that a parent was marked as valid
-        for child_hash_key in self.subtree_diff(*valid_slot_hash_key, SlotHashKey::default()) {
+        for child_hash_key in (&*self).subtree_diff(*valid_slot_hash_key, SlotHashKey::default()) {
             self.do_insert_aggregate_operation(
                 &mut update_operations,
                 &Some(UpdateOperation::MarkValid(valid_slot_hash_key.0)),
@@ -1072,6 +1145,7 @@ mod test {
     use {
         super::*,
         crate::vote_simulator::VoteSimulator,
+        itertools::Itertools,
         solana_runtime::{bank::Bank, bank_utils},
         solana_sdk::{hash::Hash, slot_history::SlotHistory},
         std::{collections::HashSet, ops::Range},
@@ -1148,11 +1222,11 @@ mod test {
             0
         );
         assert_eq!(
-            heaviest_subtree_fork_choice
+            (&heaviest_subtree_fork_choice)
                 .children(&(2, Hash::default()))
                 .unwrap()
-                .to_vec(),
-            vec![(3, Hash::default())]
+                .collect_vec(),
+            vec![&(3, Hash::default())]
         );
         assert_eq!(
             heaviest_subtree_fork_choice
@@ -1205,7 +1279,7 @@ mod test {
             .is_none());
 
         // Set a root, everything but slots 2, 4 should be removed
-        heaviest_subtree_fork_choice.set_root((2, Hash::default()));
+        heaviest_subtree_fork_choice.set_tree_root((2, Hash::default()));
         let parents: Vec<_> = heaviest_subtree_fork_choice
             .ancestor_iterator((4, Hash::default()))
             .collect();
@@ -1256,10 +1330,11 @@ mod test {
 
         let bank1_hash = bank_forks.read().unwrap().get(1).unwrap().hash();
         assert_eq!(
-            heaviest_subtree_fork_choice
+            (&heaviest_subtree_fork_choice)
                 .children(&(0, bank0_hash))
-                .unwrap(),
-            &[(1, bank1_hash)]
+                .unwrap()
+                .collect_vec(),
+            &[&(1, bank1_hash)]
         );
 
         assert_eq!(
@@ -1269,10 +1344,11 @@ mod test {
         let bank2_hash = bank_forks.read().unwrap().get(2).unwrap().hash();
         let bank3_hash = bank_forks.read().unwrap().get(3).unwrap().hash();
         assert_eq!(
-            heaviest_subtree_fork_choice
+            (&heaviest_subtree_fork_choice)
                 .children(&(1, bank1_hash))
-                .unwrap(),
-            &[(2, bank2_hash), (3, bank3_hash)]
+                .unwrap()
+                .collect_vec(),
+            &[&(2, bank2_hash), &(3, bank3_hash)]
         );
         assert_eq!(
             heaviest_subtree_fork_choice.parent(&(2, bank2_hash)),
@@ -1280,14 +1356,15 @@ mod test {
         );
         let bank4_hash = bank_forks.read().unwrap().get(4).unwrap().hash();
         assert_eq!(
-            heaviest_subtree_fork_choice
+            (&heaviest_subtree_fork_choice)
                 .children(&(2, bank2_hash))
-                .unwrap(),
-            &[(4, bank4_hash)]
+                .unwrap()
+                .collect_vec(),
+            &[&(4, bank4_hash)]
         );
         // Check parent and children of invalid hash don't exist
         let invalid_hash = Hash::new_unique();
-        assert!(heaviest_subtree_fork_choice
+        assert!((&heaviest_subtree_fork_choice)
             .children(&(2, invalid_hash))
             .is_none());
         assert!(heaviest_subtree_fork_choice
@@ -1298,17 +1375,19 @@ mod test {
             heaviest_subtree_fork_choice.parent(&(3, bank3_hash)),
             Some((1, bank1_hash))
         );
-        assert!(heaviest_subtree_fork_choice
+        assert!((&heaviest_subtree_fork_choice)
             .children(&(3, bank3_hash))
             .unwrap()
+            .collect_vec()
             .is_empty());
         assert_eq!(
             heaviest_subtree_fork_choice.parent(&(4, bank4_hash)),
             Some((2, bank2_hash))
         );
-        assert!(heaviest_subtree_fork_choice
+        assert!((&heaviest_subtree_fork_choice)
             .children(&(4, bank4_hash))
             .unwrap()
+            .collect_vec()
             .is_empty());
     }
 
@@ -1317,7 +1396,7 @@ mod test {
         let mut heaviest_subtree_fork_choice = setup_forks();
 
         // Set root to 1, should only purge 0
-        heaviest_subtree_fork_choice.set_root((1, Hash::default()));
+        heaviest_subtree_fork_choice.set_tree_root((1, Hash::default()));
         for i in 0..=6 {
             let exists = i != 0;
             assert_eq!(
@@ -1329,7 +1408,7 @@ mod test {
         }
 
         // Set root to 5, should purge everything except 5, 6
-        heaviest_subtree_fork_choice.set_root((5, Hash::default()));
+        heaviest_subtree_fork_choice.set_tree_root((5, Hash::default()));
         for i in 0..=6 {
             let exists = i == 5 || i == 6;
             assert_eq!(
@@ -1356,7 +1435,7 @@ mod test {
         assert_eq!(heaviest_subtree_fork_choice.best_overall_slot().0, 4);
 
         // Set a root
-        heaviest_subtree_fork_choice.set_root((1, Hash::default()));
+        heaviest_subtree_fork_choice.set_tree_root((1, Hash::default()));
 
         // Vote again for slot 3 on a different fork than the last vote,
         // verify this fork is now the best fork
@@ -1389,7 +1468,7 @@ mod test {
         }
 
         // Set a root at last vote
-        heaviest_subtree_fork_choice.set_root((3, Hash::default()));
+        heaviest_subtree_fork_choice.set_tree_root((3, Hash::default()));
         // Check new leaf 7 is still propagated properly
         heaviest_subtree_fork_choice
             .add_new_leaf_slot((7, Hash::default()), Some((6, Hash::default())));
@@ -1411,7 +1490,7 @@ mod test {
 
         // Set root to 1, should purge 0 from the tree, but
         // there's still an outstanding vote for slot 0 in `pubkey_votes`.
-        heaviest_subtree_fork_choice.set_root((1, Hash::default()));
+        heaviest_subtree_fork_choice.set_tree_root((1, Hash::default()));
 
         // Vote again for slot 3, verify everything is ok
         heaviest_subtree_fork_choice.add_votes(
@@ -1436,7 +1515,7 @@ mod test {
         assert_eq!(heaviest_subtree_fork_choice.best_overall_slot().0, 6);
 
         // Set root again on different fork than the last vote
-        heaviest_subtree_fork_choice.set_root((2, Hash::default()));
+        heaviest_subtree_fork_choice.set_tree_root((2, Hash::default()));
         // Smaller vote than last vote 3 should be ignored
         heaviest_subtree_fork_choice.add_votes(
             [(vote_pubkeys[0], (2, Hash::default()))].iter(),
@@ -1511,10 +1590,11 @@ mod test {
         let child = (11, Hash::new_unique());
         heaviest_subtree_fork_choice.add_new_leaf_slot(child, Some(duplicate_parent));
         assert_eq!(
-            heaviest_subtree_fork_choice
+            (&heaviest_subtree_fork_choice)
                 .children(&duplicate_parent)
-                .unwrap(),
-            &[child]
+                .unwrap()
+                .collect_vec(),
+            &[&child]
         );
         assert_eq!(heaviest_subtree_fork_choice.best_overall_slot(), child);
 
@@ -1523,9 +1603,10 @@ mod test {
             .iter()
             .chain(std::iter::once(&duplicate_leaves_descended_from_4[1]))
         {
-            assert!(heaviest_subtree_fork_choice
+            assert!((&heaviest_subtree_fork_choice)
                 .children(duplicate_leaf)
                 .unwrap()
+                .collect_vec()
                 .is_empty(),);
         }
 
@@ -1533,10 +1614,11 @@ mod test {
         heaviest_subtree_fork_choice
             .add_new_leaf_slot(duplicate_parent, Some((4, Hash::default())));
         assert_eq!(
-            heaviest_subtree_fork_choice
+            (&heaviest_subtree_fork_choice)
                 .children(&duplicate_parent)
-                .unwrap(),
-            &[child]
+                .unwrap()
+                .collect_vec(),
+            &[&child]
         );
         assert_eq!(heaviest_subtree_fork_choice.best_overall_slot(), child);
     }
@@ -2810,20 +2892,21 @@ mod test {
         let mut heaviest_subtree_fork_choice = setup_forks();
 
         // Diff of same root is empty, no matter root, intermediate node, or leaf
-        assert!(heaviest_subtree_fork_choice
+        assert!((&heaviest_subtree_fork_choice)
             .subtree_diff((0, Hash::default()), (0, Hash::default()))
             .is_empty());
-        assert!(heaviest_subtree_fork_choice
+        assert!((&heaviest_subtree_fork_choice)
             .subtree_diff((5, Hash::default()), (5, Hash::default()))
             .is_empty());
-        assert!(heaviest_subtree_fork_choice
+        assert!((&heaviest_subtree_fork_choice)
             .subtree_diff((6, Hash::default()), (6, Hash::default()))
             .is_empty());
 
         // The set reachable from slot 3, excluding subtree 1, is just everything
         // in slot 3 since subtree 1 is an ancestor
         assert_eq!(
-            heaviest_subtree_fork_choice.subtree_diff((3, Hash::default()), (1, Hash::default())),
+            (&heaviest_subtree_fork_choice)
+                .subtree_diff((3, Hash::default()), (1, Hash::default())),
             vec![3, 5, 6]
                 .into_iter()
                 .map(|s| (s, Hash::default()))
@@ -2833,7 +2916,8 @@ mod test {
         // The set reachable from slot 1, excluding subtree 3, is just 1 and
         // the subtree at 2
         assert_eq!(
-            heaviest_subtree_fork_choice.subtree_diff((1, Hash::default()), (3, Hash::default())),
+            (&heaviest_subtree_fork_choice)
+                .subtree_diff((1, Hash::default()), (3, Hash::default())),
             vec![1, 2, 4]
                 .into_iter()
                 .map(|s| (s, Hash::default()))
@@ -2843,7 +2927,8 @@ mod test {
         // The set reachable from slot 1, excluding leaf 6, is just everything
         // except leaf 6
         assert_eq!(
-            heaviest_subtree_fork_choice.subtree_diff((0, Hash::default()), (6, Hash::default())),
+            (&heaviest_subtree_fork_choice)
+                .subtree_diff((0, Hash::default()), (6, Hash::default())),
             vec![0, 1, 3, 5, 2, 4]
                 .into_iter()
                 .map(|s| (s, Hash::default()))
@@ -2851,10 +2936,10 @@ mod test {
         );
 
         // Set root at 1
-        heaviest_subtree_fork_choice.set_root((1, Hash::default()));
+        heaviest_subtree_fork_choice.set_tree_root((1, Hash::default()));
 
         // Zero no longer exists, set reachable from 0 is empty
-        assert!(heaviest_subtree_fork_choice
+        assert!((&heaviest_subtree_fork_choice)
             .subtree_diff((0, Hash::default()), (6, Hash::default()))
             .is_empty());
     }
@@ -3402,6 +3487,258 @@ mod test {
         }
     }
 
+    #[test]
+    fn test_split_off_simple() {
+        let mut heaviest_subtree_fork_choice = setup_forks();
+        let stake = 100;
+        let (bank, vote_pubkeys) = bank_utils::setup_bank_and_vote_pubkeys_for_tests(4, stake);
+
+        let pubkey_votes: Vec<(Pubkey, SlotHashKey)> = vec![
+            (vote_pubkeys[0], (3, Hash::default())),
+            (vote_pubkeys[1], (2, Hash::default())),
+            (vote_pubkeys[2], (6, Hash::default())),
+            (vote_pubkeys[3], (4, Hash::default())),
+        ];
+
+        heaviest_subtree_fork_choice.add_votes(
+            pubkey_votes.iter(),
+            bank.epoch_stakes_map(),
+            bank.epoch_schedule(),
+        );
+        let tree = heaviest_subtree_fork_choice.split_off(&(5, Hash::default()));
+
+        assert_eq!(
+            3 * stake,
+            heaviest_subtree_fork_choice
+                .stake_voted_subtree(&(0, Hash::default()))
+                .unwrap()
+        );
+        assert_eq!(
+            2 * stake,
+            heaviest_subtree_fork_choice
+                .stake_voted_subtree(&(2, Hash::default()))
+                .unwrap()
+        );
+        assert_eq!(
+            stake,
+            heaviest_subtree_fork_choice
+                .stake_voted_subtree(&(3, Hash::default()))
+                .unwrap()
+        );
+        assert_eq!(
+            None,
+            heaviest_subtree_fork_choice.stake_voted_subtree(&(5, Hash::default()))
+        );
+        assert_eq!(
+            None,
+            heaviest_subtree_fork_choice.stake_voted_subtree(&(6, Hash::default()))
+        );
+        assert_eq!(
+            stake,
+            tree.stake_voted_subtree(&(5, Hash::default())).unwrap()
+        );
+        assert_eq!(
+            stake,
+            tree.stake_voted_subtree(&(6, Hash::default())).unwrap()
+        );
+    }
+
+    #[test]
+    fn test_split_off_unvoted() {
+        let mut heaviest_subtree_fork_choice = setup_forks();
+        let stake = 100;
+        let (bank, vote_pubkeys) = bank_utils::setup_bank_and_vote_pubkeys_for_tests(4, stake);
+
+        let pubkey_votes: Vec<(Pubkey, SlotHashKey)> = vec![
+            (vote_pubkeys[0], (3, Hash::default())),
+            (vote_pubkeys[1], (5, Hash::default())),
+            (vote_pubkeys[2], (6, Hash::default())),
+            (vote_pubkeys[3], (1, Hash::default())),
+        ];
+
+        heaviest_subtree_fork_choice.add_votes(
+            pubkey_votes.iter(),
+            bank.epoch_stakes_map(),
+            bank.epoch_schedule(),
+        );
+        let tree = heaviest_subtree_fork_choice.split_off(&(2, Hash::default()));
+
+        assert_eq!(
+            4 * stake,
+            heaviest_subtree_fork_choice
+                .stake_voted_subtree(&(0, Hash::default()))
+                .unwrap()
+        );
+        assert_eq!(
+            3 * stake,
+            heaviest_subtree_fork_choice
+                .stake_voted_subtree(&(3, Hash::default()))
+                .unwrap()
+        );
+        assert_eq!(
+            None,
+            heaviest_subtree_fork_choice.stake_voted_subtree(&(2, Hash::default()))
+        );
+        assert_eq!(
+            None,
+            heaviest_subtree_fork_choice.stake_voted_subtree(&(4, Hash::default()))
+        );
+        assert_eq!(0, tree.stake_voted_subtree(&(2, Hash::default())).unwrap());
+        assert_eq!(0, tree.stake_voted_subtree(&(4, Hash::default())).unwrap());
+    }
+
+    #[test]
+    fn test_split_off_on_best_path() {
+        let mut heaviest_subtree_fork_choice = setup_forks();
+        let stake = 100;
+        let (bank, vote_pubkeys) = bank_utils::setup_bank_and_vote_pubkeys_for_tests(4, stake);
+
+        let pubkey_votes: Vec<(Pubkey, SlotHashKey)> = vec![
+            (vote_pubkeys[0], (2, Hash::default())),
+            (vote_pubkeys[1], (3, Hash::default())),
+            (vote_pubkeys[2], (5, Hash::default())),
+            (vote_pubkeys[3], (6, Hash::default())),
+        ];
+
+        heaviest_subtree_fork_choice.add_votes(
+            pubkey_votes.iter(),
+            bank.epoch_stakes_map(),
+            bank.epoch_schedule(),
+        );
+
+        assert_eq!(6, heaviest_subtree_fork_choice.best_overall_slot().0);
+
+        let tree = heaviest_subtree_fork_choice.split_off(&(6, Hash::default()));
+        assert_eq!(5, heaviest_subtree_fork_choice.best_overall_slot().0);
+        assert_eq!(6, tree.best_overall_slot().0);
+
+        let tree = heaviest_subtree_fork_choice.split_off(&(3, Hash::default()));
+        assert_eq!(4, heaviest_subtree_fork_choice.best_overall_slot().0);
+        assert_eq!(5, tree.best_overall_slot().0);
+
+        let tree = heaviest_subtree_fork_choice.split_off(&(1, Hash::default()));
+        assert_eq!(0, heaviest_subtree_fork_choice.best_overall_slot().0);
+        assert_eq!(4, tree.best_overall_slot().0);
+    }
+
+    #[test]
+    fn test_split_off_with_dups() {
+        let (
+            mut heaviest_subtree_fork_choice,
+            duplicate_leaves_descended_from_4,
+            duplicate_leaves_descended_from_5,
+        ) = setup_duplicate_forks();
+
+        let stake = 10;
+        let num_validators = 3;
+        let (bank, vote_pubkeys) =
+            bank_utils::setup_bank_and_vote_pubkeys_for_tests(num_validators, stake);
+
+        let pubkey_votes: Vec<(Pubkey, SlotHashKey)> = vec![
+            (vote_pubkeys[0], duplicate_leaves_descended_from_4[0]),
+            (vote_pubkeys[1], duplicate_leaves_descended_from_4[1]),
+            (vote_pubkeys[2], duplicate_leaves_descended_from_5[0]),
+        ];
+
+        // duplicate_leaves_descended_from_4 are sorted, and fork choice will pick the smaller
+        // one in the event of a tie
+        let expected_best_slot_hash = duplicate_leaves_descended_from_4[0];
+        assert_eq!(
+            heaviest_subtree_fork_choice.add_votes(
+                pubkey_votes.iter(),
+                bank.epoch_stakes_map(),
+                bank.epoch_schedule()
+            ),
+            expected_best_slot_hash
+        );
+
+        assert_eq!(
+            heaviest_subtree_fork_choice.best_overall_slot(),
+            expected_best_slot_hash
+        );
+        let tree = heaviest_subtree_fork_choice.split_off(&expected_best_slot_hash);
+
+        assert_eq!(
+            heaviest_subtree_fork_choice.best_overall_slot(),
+            duplicate_leaves_descended_from_4[1]
+        );
+        assert_eq!(tree.best_overall_slot(), expected_best_slot_hash);
+    }
+
+    #[test]
+    fn test_split_off_subtree_with_dups() {
+        let (
+            mut heaviest_subtree_fork_choice,
+            duplicate_leaves_descended_from_4,
+            duplicate_leaves_descended_from_5,
+        ) = setup_duplicate_forks();
+
+        let stake = 10;
+        let num_validators = 3;
+        let (bank, vote_pubkeys) =
+            bank_utils::setup_bank_and_vote_pubkeys_for_tests(num_validators, stake);
+
+        let pubkey_votes: Vec<(Pubkey, SlotHashKey)> = vec![
+            (vote_pubkeys[0], duplicate_leaves_descended_from_4[0]),
+            (vote_pubkeys[1], duplicate_leaves_descended_from_4[1]),
+            (vote_pubkeys[2], duplicate_leaves_descended_from_5[0]),
+        ];
+
+        // duplicate_leaves_descended_from_4 are sorted, and fork choice will pick the smaller
+        // one in the event of a tie
+        let expected_best_slot_hash = duplicate_leaves_descended_from_4[0];
+        assert_eq!(
+            heaviest_subtree_fork_choice.add_votes(
+                pubkey_votes.iter(),
+                bank.epoch_stakes_map(),
+                bank.epoch_schedule()
+            ),
+            expected_best_slot_hash
+        );
+
+        assert_eq!(
+            heaviest_subtree_fork_choice.best_overall_slot(),
+            expected_best_slot_hash
+        );
+        let tree = heaviest_subtree_fork_choice.split_off(&(2, Hash::default()));
+
+        assert_eq!(
+            heaviest_subtree_fork_choice.best_overall_slot(),
+            duplicate_leaves_descended_from_5[0]
+        );
+        assert_eq!(tree.best_overall_slot(), expected_best_slot_hash);
+    }
+
+    #[test]
+    fn test_split_off_complicated() {
+        let mut heaviest_subtree_fork_choice = setup_complicated_forks();
+
+        let split_and_check =
+            |tree: &mut HeaviestSubtreeForkChoice, node: Slot, nodes_to_check: Vec<Slot>| {
+                for &n in nodes_to_check.iter() {
+                    assert!(tree.contains_block(&(n, Hash::default())));
+                }
+                let split_tree = tree.split_off(&(node, Hash::default()));
+                for &n in nodes_to_check.iter() {
+                    assert!(!tree.contains_block(&(n, Hash::default())));
+                    assert!(split_tree.contains_block(&(n, Hash::default())));
+                }
+            };
+
+        split_and_check(
+            &mut heaviest_subtree_fork_choice,
+            14,
+            vec![14, 15, 16, 22, 23, 17, 21, 18, 19, 20, 24, 25],
+        );
+        split_and_check(&mut heaviest_subtree_fork_choice, 12, vec![12, 13]);
+        split_and_check(
+            &mut heaviest_subtree_fork_choice,
+            2,
+            vec![2, 7, 8, 9, 33, 34, 10, 31, 32],
+        );
+        split_and_check(&mut heaviest_subtree_fork_choice, 1, vec![1, 5, 6]);
+    }
+
     fn setup_forks() -> HeaviestSubtreeForkChoice {
         /*
             Build fork structure:
@@ -3417,6 +3754,58 @@ mod test {
                     slot 6
         */
         let forks = tr(0) / (tr(1) / (tr(2) / (tr(4))) / (tr(3) / (tr(5) / (tr(6)))));
+        HeaviestSubtreeForkChoice::new_from_tree(forks)
+    }
+
+    fn setup_complicated_forks() -> HeaviestSubtreeForkChoice {
+        /*
+            Build a complicated fork structure:
+
+                slot 0
+                ├── slot 1
+                │   ├── slot 5
+                │   └── slot 6
+                ├── slot 2
+                │   ├── slot 7
+                │   ├── slot 8
+                │   ├── slot 9
+                │   │   └── slot 33
+                │   │       └── slot 34
+                │   ├── slot 10
+                │   └── slot 31
+                │       └── slot 32
+                └── slot 3
+                    ├── slot 11
+                    ├── slot 12
+                    │   └── slot 13
+                    │       └── slot 14
+                    │           ├── slot 15
+                    │           │   ├── slot 16
+                    │           │   │   └── slot 22
+                    │           │   │       └── slot 23
+                    │           │   ├── slot 17
+                    │           │   │   └── slot 21
+                    │           │   ├── slot 18
+                    │           │   │   ├── slot 19
+                    │           │   │   └── slot 20
+                    │           │   └── slot 24
+                    │           └── slot 25
+                    └── slot 26
+
+        */
+        let tree_12 = tr(12)
+            / (tr(13)
+                / (tr(14)
+                    / (tr(15)
+                        / (tr(16) / (tr(22) / tr(23)))
+                        / (tr(17) / tr(21))
+                        / (tr(18) / tr(19) / tr(20))
+                        / tr(24))
+                    / tr(25)));
+        let forks = tr(0)
+            / (tr(1) / tr(5) / tr(6))
+            / (tr(2) / tr(7) / tr(8) / (tr(9) / (tr(33) / tr(34))) / tr(10) / (tr(31) / tr(32)))
+            / (tr(3) / tr(11) / tree_12 / tr(26));
         HeaviestSubtreeForkChoice::new_from_tree(forks)
     }
 
@@ -3463,16 +3852,16 @@ mod test {
                 .add_new_leaf_slot(*duplicate_leaf, Some((5, Hash::default())));
         }
 
-        let mut dup_children = heaviest_subtree_fork_choice
+        let mut dup_children = (&heaviest_subtree_fork_choice)
             .children(&(4, Hash::default()))
             .unwrap()
-            .to_vec();
+            .copied()
+            .collect_vec();
         dup_children.sort();
         assert_eq!(dup_children, duplicate_leaves_descended_from_4);
-        let mut dup_children: Vec<_> = heaviest_subtree_fork_choice
+        let mut dup_children: Vec<_> = (&heaviest_subtree_fork_choice)
             .children(&(5, Hash::default()))
             .unwrap()
-            .iter()
             .copied()
             .filter(|(slot, _)| *slot == duplicate_slot)
             .collect();

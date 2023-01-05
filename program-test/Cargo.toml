@@ -17,6 +17,7 @@ crossbeam-channel = "0.5"
 log = "0.4.17"
 serde = "1.0.144"
 solana-banks-client = { path = "../banks-client", version = "=1.15.0" }
+solana-banks-interface = { path = "../banks-interface", version = "=1.15.0" }
 solana-banks-server = { path = "../banks-server", version = "=1.15.0" }
 solana-bpf-loader-program = { path = "../programs/bpf_loader", version = "=1.15.0" }
 solana-logger = { path = "../logger", version = "=1.15.0" }

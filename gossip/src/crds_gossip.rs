@@ -17,6 +17,7 @@ use {
         duplicate_shred::{self, DuplicateShredIndex, LeaderScheduleFn, MAX_DUPLICATE_SHREDS},
         ping_pong::PingCache,
     },
+    itertools::Itertools,
     rayon::ThreadPool,
     solana_ledger::shred::Shred,
     solana_sdk::{
@@ -47,25 +48,10 @@ impl CrdsGossip {
     /// Returns unique origins' pubkeys of upserted values.
     pub fn process_push_message(
         &self,
-        from: &Pubkey,
-        values: Vec<CrdsValue>,
+        messages: Vec<(/*from:*/ Pubkey, Vec<CrdsValue>)>,
         now: u64,
-    ) -> (usize, HashSet<Pubkey>) {
-        let results = self
-            .push
-            .process_push_message(&self.crds, from, values, now);
-        let mut success_count = 0;
-        let successfully_inserted_origin_set: HashSet<Pubkey> = results
-            .into_iter()
-            .filter_map(|result| {
-                if result.is_ok() {
-                    success_count += 1;
-                }
-                Result::ok(result)
-            })
-            .collect();
-
-        (success_count, successfully_inserted_origin_set)
+    ) -> HashSet<Pubkey> {
+        self.push.process_push_message(&self.crds, messages, now)
     }
 
     /// Remove redundant paths in the network.
@@ -78,15 +64,18 @@ impl CrdsGossip {
     where
         I: IntoIterator<Item = Pubkey>,
     {
-        self.push
-            .prune_received_cache_many(self_pubkey, origins, stakes)
+        self.push.prune_received_cache(self_pubkey, origins, stakes)
     }
 
     pub fn new_push_messages(
         &self,
         pending_push_messages: Vec<CrdsValue>,
         now: u64,
-    ) -> HashMap<Pubkey, Vec<CrdsValue>> {
+    ) -> (
+        HashMap<Pubkey, Vec<CrdsValue>>,
+        usize, // number of values
+        usize, // number of push messages
+    ) {
         {
             let mut crds = self.crds.write().unwrap();
             for entry in pending_push_messages {
@@ -169,11 +158,9 @@ impl CrdsGossip {
         wallclock: u64,
         now: u64,
     ) -> Result<(), CrdsGossipError> {
-        let expired = now > wallclock + self.push.prune_timeout;
-        if expired {
-            return Err(CrdsGossipError::PruneMessageTimeout);
-        }
-        if self_pubkey == destination {
+        if now > wallclock.saturating_add(self.push.prune_timeout) {
+            Err(CrdsGossipError::PruneMessageTimeout)
+        } else if self_pubkey == destination {
             self.push.process_prune_msg(self_pubkey, peer, origin);
             Ok(())
         } else {
@@ -324,10 +311,6 @@ impl CrdsGossip {
         timeouts: &HashMap<Pubkey, u64>,
     ) -> usize {
         let mut rv = 0;
-        if now > 5 * self.push.msg_timeout {
-            let min = now - 5 * self.push.msg_timeout;
-            self.push.purge_old_received_cache(min);
-        }
         if now > self.pull.crds_timeout {
             //sanity check
             assert_eq!(timeouts[self_pubkey], std::u64::MAX);
@@ -369,6 +352,22 @@ pub fn get_weight(max_weight: f32, time_since_last_selected: u32, stake: f32) ->
         weight = max_weight;
     }
     1.0_f32.max(weight.min(max_weight))
+}
+
+// Dedups gossip addresses, keeping only the one with the highest weight.
+pub(crate) fn dedup_gossip_addresses<I, T: PartialOrd>(
+    nodes: I,
+) -> HashMap</*gossip:*/ SocketAddr, (/*weight:*/ T, ContactInfo)>
+where
+    I: IntoIterator<Item = (/*weight:*/ T, ContactInfo)>,
+{
+    nodes
+        .into_iter()
+        .into_grouping_map_by(|(_weight, node)| node.gossip)
+        .aggregate(|acc, _node_gossip, (weight, node)| match acc {
+            Some((ref w, _)) if w >= &weight => acc,
+            Some(_) | None => Some((weight, node)),
+        })
 }
 
 #[cfg(test)]

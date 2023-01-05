@@ -23,10 +23,10 @@ serde_json = "1.0.83"
 solana-account-decoder = { path = "../account-decoder", version = "=1.15.0" }
 solana-address-lookup-table-program = { path = "../programs/address-lookup-table", version = "=1.15.0" }
 solana-sdk = { path = "../sdk", version = "=1.15.0" }
-spl-associated-token-account = { version = "=1.1.1", features = ["no-entrypoint"] }
+spl-associated-token-account = { version = "=1.1.2", features = ["no-entrypoint"] }
 spl-memo = { version = "=3.0.1", features = ["no-entrypoint"] }
 spl-token = { version = "=3.5.0", features = ["no-entrypoint"] }
-spl-token-2022 = { version = "=0.4.3", features = ["no-entrypoint"] }
+spl-token-2022 = { version = "=0.5.0", features = ["no-entrypoint"] }
 thiserror = "1.0"
 
 [package.metadata.docs.rs]

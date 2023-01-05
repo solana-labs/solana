@@ -38,6 +38,7 @@ serde = "1.0.144"
 serde_derive = "1.0.103"
 solana-address-lookup-table-program = { path = "../programs/address-lookup-table", version = "=1.15.0" }
 solana-bloom = { path = "../bloom", version = "=1.15.0" }
+solana-client = { path = "../client", version = "=1.15.0" }
 solana-entry = { path = "../entry", version = "=1.15.0" }
 solana-frozen-abi = { path = "../frozen-abi", version = "=1.15.0" }
 solana-frozen-abi-macro = { path = "../frozen-abi/macro", version = "=1.15.0" }
@@ -77,7 +78,7 @@ solana-program-runtime = { path = "../program-runtime", version = "=1.15.0" }
 solana-stake-program = { path = "../programs/stake", version = "=1.15.0" }
 static_assertions = "1.1.0"
 systemstat = "0.2.0"
-test-case = "2.1.0"
+test-case = "2.2.2"
 
 [target."cfg(unix)".dependencies]
 sysctl = "0.4.4"

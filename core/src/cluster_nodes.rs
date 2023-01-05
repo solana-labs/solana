@@ -5,7 +5,7 @@ use {
     rand::{seq::SliceRandom, Rng, SeedableRng},
     rand_chacha::ChaChaRng,
     solana_gossip::{
-        cluster_info::{compute_retransmit_peers, ClusterInfo},
+        cluster_info::{compute_retransmit_peers, ClusterInfo, DATA_PLANE_FANOUT},
         contact_info::ContactInfo,
         crds::GossipRoute,
         crds_gossip_pull::CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS,
@@ -34,6 +34,8 @@ use {
         time::{Duration, Instant},
     },
 };
+
+pub(crate) const MAX_NUM_TURBINE_HOPS: usize = 4;
 
 #[allow(clippy::large_enum_variant)]
 enum NodeId {
@@ -66,6 +68,16 @@ pub struct ClusterNodesCache<T> {
     // one thread does the computations to update the entry for the epoch.
     cache: Mutex<LruCache<Epoch, Arc<Mutex<CacheEntry<T>>>>>,
     ttl: Duration, // Time to live.
+}
+
+pub struct RetransmitPeers<'a> {
+    root_distance: usize, // distance from the root node
+    neighbors: Vec<&'a Node>,
+    children: Vec<&'a Node>,
+    // Maps from tvu/tvu_forwards addresses to the first node
+    // in the shuffle with the same address.
+    addrs: HashMap<SocketAddr, Pubkey>, // tvu addresses
+    frwds: HashMap<SocketAddr, Pubkey>, // tvu_forwards addresses
 }
 
 impl Node {
@@ -139,33 +151,48 @@ impl ClusterNodes<RetransmitStage> {
         root_bank: &Bank,
         fanout: usize,
     ) -> (/*root_distance:*/ usize, Vec<SocketAddr>) {
-        let (root_distance, neighbors, children) =
-            self.get_retransmit_peers(slot_leader, shred, root_bank, fanout);
+        let RetransmitPeers {
+            root_distance,
+            neighbors,
+            children,
+            addrs,
+            frwds,
+        } = self.get_retransmit_peers(slot_leader, shred, root_bank, fanout);
         if neighbors.is_empty() {
-            let peers = children.into_iter().filter_map(Node::contact_info);
-            let addrs = peers.map(|peer| peer.tvu).collect();
-            return (root_distance, addrs);
+            let peers = children
+                .into_iter()
+                .filter_map(Node::contact_info)
+                .filter(|node| addrs.get(&node.tvu) == Some(&node.id))
+                .map(|node| node.tvu)
+                .collect();
+            return (root_distance, peers);
         }
         // If the node is on the critical path (i.e. the first node in each
         // neighborhood), it should send the packet to tvu socket of its
         // children and also tvu_forward socket of its neighbors. Otherwise it
         // should only forward to tvu_forwards socket of its children.
         if neighbors[0].pubkey() != self.pubkey {
-            let addrs = children
-                .iter()
-                .filter_map(|node| Some(node.contact_info()?.tvu_forwards));
-            return (root_distance, addrs.collect());
+            let peers = children
+                .into_iter()
+                .filter_map(Node::contact_info)
+                .filter(|node| frwds.get(&node.tvu_forwards) == Some(&node.id))
+                .map(|node| node.tvu_forwards);
+            return (root_distance, peers.collect());
         }
         // First neighbor is this node itself, so skip it.
-        let addrs = neighbors[1..]
+        let peers = neighbors[1..]
             .iter()
-            .filter_map(|node| Some(node.contact_info()?.tvu_forwards))
+            .filter_map(|node| node.contact_info())
+            .filter(|node| frwds.get(&node.tvu_forwards) == Some(&node.id))
+            .map(|node| node.tvu_forwards)
             .chain(
                 children
-                    .iter()
-                    .filter_map(|node| Some(node.contact_info()?.tvu)),
+                    .into_iter()
+                    .filter_map(Node::contact_info)
+                    .filter(|node| addrs.get(&node.tvu) == Some(&node.id))
+                    .map(|node| node.tvu),
             );
-        (root_distance, addrs.collect())
+        (root_distance, peers.collect())
     }
 
     pub fn get_retransmit_peers(
@@ -174,11 +201,7 @@ impl ClusterNodes<RetransmitStage> {
         shred: &ShredId,
         root_bank: &Bank,
         fanout: usize,
-    ) -> (
-        usize,      // distance from the root node
-        Vec<&Node>, // neighbors
-        Vec<&Node>, // children
-    ) {
+    ) -> RetransmitPeers {
         let shred_seed = shred.seed(slot_leader);
         let mut weighted_shuffle = self.weighted_shuffle.clone();
         // Exclude slot leader from list of nodes.
@@ -187,38 +210,65 @@ impl ClusterNodes<RetransmitStage> {
         } else if let Some(index) = self.index.get(slot_leader) {
             weighted_shuffle.remove_index(*index);
         };
+        let mut addrs = HashMap::<SocketAddr, Pubkey>::with_capacity(self.nodes.len());
+        let mut frwds = HashMap::<SocketAddr, Pubkey>::with_capacity(self.nodes.len());
         let mut rng = ChaChaRng::from_seed(shred_seed);
+        let drop_redundant_turbine_path = drop_redundant_turbine_path(shred.slot(), root_bank);
         let nodes: Vec<_> = weighted_shuffle
             .shuffle(&mut rng)
             .map(|index| &self.nodes[index])
+            .inspect(|node| {
+                if let Some(node) = node.contact_info() {
+                    addrs.entry(node.tvu).or_insert(node.id);
+                    if !drop_redundant_turbine_path {
+                        frwds.entry(node.tvu_forwards).or_insert(node.id);
+                    }
+                }
+            })
             .collect();
         let self_index = nodes
             .iter()
             .position(|node| node.pubkey() == self.pubkey)
             .unwrap();
-        if drop_redundant_turbine_path(shred.slot(), root_bank) {
+        if drop_redundant_turbine_path {
             let root_distance = if self_index == 0 {
                 0
             } else if self_index <= fanout {
                 1
-            } else {
+            } else if self_index <= fanout.saturating_add(1).saturating_mul(fanout) {
                 2
+            } else {
+                3 // If changed, update MAX_NUM_TURBINE_HOPS.
             };
             let peers = get_retransmit_peers(fanout, self_index, &nodes);
-            return (root_distance, Vec::default(), peers.collect());
+            return RetransmitPeers {
+                root_distance,
+                neighbors: Vec::default(),
+                children: peers.collect(),
+                addrs,
+                frwds,
+            };
         }
         let root_distance = if self_index == 0 {
             0
         } else if self_index < fanout {
             1
-        } else {
+        } else if self_index < fanout.saturating_add(1).saturating_mul(fanout) {
             2
+        } else {
+            3 // If changed, update MAX_NUM_TURBINE_HOPS.
         };
         let (neighbors, children) = compute_retransmit_peers(fanout, self_index, &nodes);
         // Assert that the node itself is included in the set of neighbors, at
         // the right offset.
         debug_assert_eq!(neighbors[self_index % fanout].pubkey(), self.pubkey);
-        (root_distance, neighbors, children)
+        RetransmitPeers {
+            root_distance,
+            neighbors,
+            children,
+            addrs,
+            frwds,
+        }
     }
 }
 
@@ -436,11 +486,47 @@ pub fn make_test_cluster<R: Rng>(
     (nodes, stakes, cluster_info)
 }
 
+pub(crate) fn get_data_plane_fanout(shred_slot: Slot, root_bank: &Bank) -> usize {
+    if enable_turbine_fanout_experiments(shred_slot, root_bank) {
+        // Allocate ~2% of slots to turbine fanout experiments.
+        match shred_slot % 359 {
+            11 => 64,
+            61 => 768,
+            111 => 128,
+            161 => 640,
+            211 => 256,
+            261 => 512,
+            311 => 384,
+            _ => DATA_PLANE_FANOUT,
+        }
+    } else {
+        DATA_PLANE_FANOUT
+    }
+}
+
 fn drop_redundant_turbine_path(shred_slot: Slot, root_bank: &Bank) -> bool {
-    let feature_slot = root_bank
-        .feature_set
-        .activated_slot(&feature_set::drop_redundant_turbine_path::id());
-    match feature_slot {
+    check_feature_activation(
+        &feature_set::drop_redundant_turbine_path::id(),
+        shred_slot,
+        root_bank,
+    )
+}
+
+fn enable_turbine_fanout_experiments(shred_slot: Slot, root_bank: &Bank) -> bool {
+    check_feature_activation(
+        &feature_set::enable_turbine_fanout_experiments::id(),
+        shred_slot,
+        root_bank,
+    ) && !check_feature_activation(
+        &feature_set::disable_turbine_fanout_experiments::id(),
+        shred_slot,
+        root_bank,
+    )
+}
+
+// Returns true if the feature is effective for the shred slot.
+fn check_feature_activation(feature: &Pubkey, shred_slot: Slot, root_bank: &Bank) -> bool {
+    match root_bank.feature_set.activated_slot(feature) {
         None => false,
         Some(feature_slot) => {
             let epoch_schedule = root_bank.epoch_schedule();

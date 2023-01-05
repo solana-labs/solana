@@ -627,7 +627,7 @@ mod tests {
         let keys: HashSet<Pubkey> = BUILTIN_PROGRAMS_KEYS.iter().copied().collect();
         assert_eq!(keys.len(), 10);
         for k in keys {
-            let k = format!("{}", k);
+            let k = format!("{k}");
             assert!(k.ends_with("11111111111111111111111"));
         }
     }

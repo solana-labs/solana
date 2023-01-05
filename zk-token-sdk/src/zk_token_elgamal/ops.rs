@@ -201,7 +201,7 @@ mod tests {
     fn test_transfer_arithmetic() {
         // transfer amount
         let transfer_amount: u64 = 55;
-        let (amount_lo, amount_hi) = split_u64(transfer_amount, 16, 32).unwrap();
+        let (amount_lo, amount_hi) = split_u64(transfer_amount, 16);
 
         // generate public keys
         let source_pk = ElGamalKeypair::new_rand().public;

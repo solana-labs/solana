@@ -1,7 +1,10 @@
 //! trait for abstracting underlying storage of pubkey and account pairs to be written
 use {
-    crate::{accounts_db::IncludeSlotInHash, append_vec::StoredAccountMeta},
-    solana_sdk::{account::ReadableAccount, clock::Slot, pubkey::Pubkey},
+    crate::{
+        accounts_db::{FoundStoredAccount, IncludeSlotInHash},
+        append_vec::StoredAccountMeta,
+    },
+    solana_sdk::{account::ReadableAccount, clock::Slot, hash::Hash, pubkey::Pubkey},
 };
 
 /// abstract access to pubkey, account, slot, target_slot of either:
@@ -14,6 +17,11 @@ pub trait StorableAccounts<'a, T: ReadableAccount + Sync>: Sync {
     fn pubkey(&self, index: usize) -> &Pubkey;
     /// account at 'index'
     fn account(&self, index: usize) -> &T;
+    /// None if account is zero lamports
+    fn account_default_if_zero_lamport(&self, index: usize) -> Option<&T> {
+        let account = self.account(index);
+        (account.lamports() != 0).then_some(account)
+    }
     // current slot for account at 'index'
     fn slot(&self, index: usize) -> Slot;
     /// slot that all accounts are to be written to
@@ -29,6 +37,26 @@ pub trait StorableAccounts<'a, T: ReadableAccount + Sync>: Sync {
     fn contains_multiple_slots(&self) -> bool;
     /// true iff hashing these accounts should include the slot
     fn include_slot_in_hash(&self) -> IncludeSlotInHash;
+
+    /// true iff the impl can provide hash and write_version
+    /// Otherwise, hash and write_version have to be provided separately to store functions.
+    fn has_hash_and_write_version(&self) -> bool {
+        false
+    }
+
+    /// return hash for account at 'index'
+    /// Should only be called if 'has_hash_and_write_version' = true
+    fn hash(&self, _index: usize) -> &Hash {
+        // this should never be called if has_hash_and_write_version returns false
+        unimplemented!();
+    }
+
+    /// return write_version for account at 'index'
+    /// Should only be called if 'has_hash_and_write_version' = true
+    fn write_version(&self, _index: usize) -> u64 {
+        // this should never be called if has_hash_and_write_version returns false
+        unimplemented!();
+    }
 }
 
 /// accounts that are moving from 'old_slot' to 'target_slot'
@@ -128,23 +156,25 @@ impl<'a> StorableAccounts<'a, StoredAccountMeta<'a>>
     }
 }
 
-/// this tuple contains slot info PER account
+/// this tuple contains a single different source slot that applies to all accounts
+/// accounts are StoredAccountMeta
 impl<'a> StorableAccounts<'a, StoredAccountMeta<'a>>
     for (
         Slot,
-        &'a [(&'a StoredAccountMeta<'a>, Slot)],
+        &'a [&'a StoredAccountMeta<'a>],
         IncludeSlotInHash,
+        Slot,
     )
 {
     fn pubkey(&self, index: usize) -> &Pubkey {
-        self.1[index].0.pubkey()
+        self.1[index].pubkey()
     }
     fn account(&self, index: usize) -> &StoredAccountMeta<'a> {
-        self.1[index].0
+        self.1[index]
     }
-    fn slot(&self, index: usize) -> Slot {
-        // note that this could be different than 'target_slot()' PER account
-        self.1[index].1
+    fn slot(&self, _index: usize) -> Slot {
+        // same other slot for all accounts
+        self.3
     }
     fn target_slot(&self) -> Slot {
         self.0
@@ -153,17 +183,62 @@ impl<'a> StorableAccounts<'a, StoredAccountMeta<'a>>
         self.1.len()
     }
     fn contains_multiple_slots(&self) -> bool {
-        let len = self.len();
-        if len > 0 {
-            let slot = self.slot(0);
-            // true if any item has a different slot than the first item
-            (1..len).any(|i| slot != self.slot(i))
-        } else {
-            false
-        }
+        false
     }
     fn include_slot_in_hash(&self) -> IncludeSlotInHash {
         self.2
+    }
+    fn has_hash_and_write_version(&self) -> bool {
+        true
+    }
+    fn hash(&self, index: usize) -> &Hash {
+        self.1[index].hash
+    }
+    fn write_version(&self, index: usize) -> u64 {
+        self.1[index].meta.write_version_obsolete
+    }
+}
+
+/// this tuple contains a single different source slot that applies to all accounts
+/// accounts are FoundStoredAccount
+impl<'a> StorableAccounts<'a, StoredAccountMeta<'a>>
+    for (
+        Slot,
+        &'a [&'a FoundStoredAccount<'a>],
+        IncludeSlotInHash,
+        Slot,
+    )
+{
+    fn pubkey(&self, index: usize) -> &Pubkey {
+        self.1[index].pubkey()
+    }
+    fn account(&self, index: usize) -> &StoredAccountMeta<'a> {
+        &self.1[index].account
+    }
+    fn slot(&self, _index: usize) -> Slot {
+        // same other slot for all accounts
+        self.3
+    }
+    fn target_slot(&self) -> Slot {
+        self.0
+    }
+    fn len(&self) -> usize {
+        self.1.len()
+    }
+    fn contains_multiple_slots(&self) -> bool {
+        false
+    }
+    fn include_slot_in_hash(&self) -> IncludeSlotInHash {
+        self.2
+    }
+    fn has_hash_and_write_version(&self) -> bool {
+        true
+    }
+    fn hash(&self, index: usize) -> &Hash {
+        self.1[index].account.hash
+    }
+    fn write_version(&self, index: usize) -> u64 {
+        self.1[index].account.meta.write_version_obsolete
     }
 }
 #[cfg(test)]
@@ -206,7 +281,7 @@ pub mod tests {
         let executable = false;
         let rent_epoch = 0;
         let meta = StoredMeta {
-            write_version: 5,
+            write_version_obsolete: 5,
             pubkey: pk,
             data_len: 7,
         };
@@ -231,16 +306,11 @@ pub mod tests {
 
         let test3 = (
             slot,
-            &vec![(&stored_account, slot), (&stored_account, slot)][..],
+            &vec![&stored_account, &stored_account][..],
             INCLUDE_SLOT_IN_HASH_TESTS,
+            slot,
         );
         assert!(!test3.contains_multiple_slots());
-        let test3 = (
-            slot,
-            &vec![(&stored_account, slot), (&stored_account, slot + 1)][..],
-            INCLUDE_SLOT_IN_HASH_TESTS,
-        );
-        assert!(test3.contains_multiple_slots());
     }
 
     #[test]
@@ -268,7 +338,7 @@ pub mod tests {
                             account.clone(),
                             starting_slot % max_slots,
                             StoredMeta {
-                                write_version: 0, // just something
+                                write_version_obsolete: 0, // just something
                                 pubkey: pk,
                                 data_len: u64::MAX, // just something
                             },
@@ -297,11 +367,17 @@ pub mod tests {
                     let mut three = Vec::new();
                     raw.iter().zip(raw2.iter()).for_each(|(raw, raw2)| {
                         two.push((&raw.0, &raw.1)); // 2 item tuple
-                        three.push((raw2, raw.2)); // 2 item tuple, including slot
+                        three.push(raw2);
                     });
                     let test2 = (target_slot, &two[..], INCLUDE_SLOT_IN_HASH_TESTS);
 
-                    let test3 = (target_slot, &three[..], INCLUDE_SLOT_IN_HASH_TESTS);
+                    let source_slot = starting_slot % max_slots;
+                    let test3 = (
+                        target_slot,
+                        &three[..],
+                        INCLUDE_SLOT_IN_HASH_TESTS,
+                        source_slot,
+                    );
                     let old_slot = starting_slot;
                     let test_moving_slots = StorableAccountsMovingSlots {
                         accounts: &two[..],

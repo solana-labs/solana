@@ -8,7 +8,9 @@ use {
         pubkey::Pubkey,
         signature::{read_keypair_file, Keypair},
     },
-    solana_tpu_client::connection_cache::{DEFAULT_TPU_CONNECTION_POOL_SIZE, DEFAULT_TPU_USE_QUIC},
+    solana_tpu_client::tpu_connection_cache::{
+        DEFAULT_TPU_CONNECTION_POOL_SIZE, DEFAULT_TPU_USE_QUIC,
+    },
     std::{net::SocketAddr, process::exit, time::Duration},
 };
 
@@ -98,7 +100,7 @@ impl Default for Config {
 }
 
 /// Defines and builds the CLI args for a run of the benchmark
-pub fn build_args<'a, 'b>(version: &'b str) -> App<'a, 'b> {
+pub fn build_args<'a>(version: &'_ str) -> App<'a, '_> {
     App::new(crate_name!()).about(crate_description!())
         .version(version)
         .arg({
@@ -398,7 +400,7 @@ pub fn extract_args(matches: &ArgMatches) -> Config {
 
     if let Some(addr) = matches.value_of("entrypoint") {
         args.entrypoint_addr = solana_net_utils::parse_host_port(addr).unwrap_or_else(|e| {
-            eprintln!("failed to parse entrypoint address: {}", e);
+            eprintln!("failed to parse entrypoint address: {e}");
             exit(1)
         });
     }

@@ -13,7 +13,7 @@ use {
         accounts_update_notifier_interface::AccountsUpdateNotifier,
         ancestors::Ancestors,
         bank::{
-            Bank, NonceFull, NonceInfo, RentDebits, Rewrites, TransactionCheckResult,
+            Bank, NonceFull, NonceInfo, RentDebits, TransactionCheckResult,
             TransactionExecutionResult,
         },
         blockhash_queue::BlockhashQueue,
@@ -27,7 +27,6 @@ use {
         DashMap,
     },
     log::*,
-    rand::{thread_rng, Rng},
     solana_address_lookup_table_program::{error::AddressLookupError, state::AddressLookupTable},
     solana_program_runtime::compute_budget::ComputeBudget,
     solana_sdk::{
@@ -41,7 +40,6 @@ use {
         },
         fee::FeeStructure,
         genesis_config::ClusterType,
-        hash::Hash,
         message::{
             v0::{LoadedAddresses, MessageAddressTableLookup},
             SanitizedMessage,
@@ -158,14 +156,12 @@ impl Accounts {
         paths: Vec<PathBuf>,
         cluster_type: &ClusterType,
         account_indexes: AccountSecondaryIndexes,
-        caching_enabled: bool,
         shrink_ratio: AccountShrinkThreshold,
     ) -> Self {
         Self::new_with_config(
             paths,
             cluster_type,
             account_indexes,
-            caching_enabled,
             shrink_ratio,
             Some(ACCOUNTS_DB_CONFIG_FOR_TESTING),
             None,
@@ -177,14 +173,12 @@ impl Accounts {
         paths: Vec<PathBuf>,
         cluster_type: &ClusterType,
         account_indexes: AccountSecondaryIndexes,
-        caching_enabled: bool,
         shrink_ratio: AccountShrinkThreshold,
     ) -> Self {
         Self::new_with_config(
             paths,
             cluster_type,
             account_indexes,
-            caching_enabled,
             shrink_ratio,
             Some(ACCOUNTS_DB_CONFIG_FOR_BENCHMARKS),
             None,
@@ -196,7 +190,6 @@ impl Accounts {
         paths: Vec<PathBuf>,
         cluster_type: &ClusterType,
         account_indexes: AccountSecondaryIndexes,
-        caching_enabled: bool,
         shrink_ratio: AccountShrinkThreshold,
         accounts_db_config: Option<AccountsDbConfig>,
         accounts_update_notifier: Option<AccountsUpdateNotifier>,
@@ -207,7 +200,6 @@ impl Accounts {
                 paths,
                 cluster_type,
                 account_indexes,
-                caching_enabled,
                 shrink_ratio,
                 accounts_db_config,
                 accounts_update_notifier,
@@ -219,7 +211,7 @@ impl Accounts {
 
     pub fn new_from_parent(parent: &Accounts, slot: Slot, parent_slot: Slot) -> Self {
         let accounts_db = parent.accounts_db.clone();
-        accounts_db.set_hash(slot, parent_slot);
+        accounts_db.insert_default_bank_hash(slot, parent_slot);
         Self {
             accounts_db,
             account_locks: Mutex::new(AccountLocks::default()),
@@ -250,7 +242,7 @@ impl Accounts {
         })
     }
 
-    fn load_transaction(
+    fn load_transaction_accounts(
         &self,
         ancestors: &Ancestors,
         tx: &SanitizedTransaction,
@@ -260,31 +252,35 @@ impl Accounts {
         feature_set: &FeatureSet,
         account_overrides: Option<&AccountOverrides>,
     ) -> Result<LoadedTransaction> {
-        // Copy all the accounts
-        let message = tx.message();
         // NOTE: this check will never fail because `tx` is sanitized
         if tx.signatures().is_empty() && fee != 0 {
-            Err(TransactionError::MissingSignatureForFee)
-        } else {
-            // There is no way to predict what program will execute without an error
-            // If a fee can pay for execution then the program will be scheduled
-            let mut validated_fee_payer = false;
-            let mut tx_rent: TransactionRent = 0;
-            let account_keys = message.account_keys();
-            let mut accounts = Vec::with_capacity(account_keys.len());
-            let mut account_deps = Vec::with_capacity(account_keys.len());
-            let mut rent_debits = RentDebits::default();
-            let requested_loaded_accounts_data_size_limit =
-                if feature_set.is_active(&feature_set::cap_transaction_accounts_data_size::id()) {
-                    let requested_loaded_accounts_data_size =
-                        Self::get_requested_loaded_accounts_data_size_limit(tx, feature_set)?;
-                    Some(requested_loaded_accounts_data_size)
-                } else {
-                    None
-                };
-            let mut accumulated_accounts_data_size: usize = 0;
+            return Err(TransactionError::MissingSignatureForFee);
+        }
 
-            for (i, key) in account_keys.iter().enumerate() {
+        // There is no way to predict what program will execute without an error
+        // If a fee can pay for execution then the program will be scheduled
+        let mut validated_fee_payer = false;
+        let mut tx_rent: TransactionRent = 0;
+        let message = tx.message();
+        let account_keys = message.account_keys();
+        let mut account_deps = Vec::with_capacity(account_keys.len());
+        let mut rent_debits = RentDebits::default();
+        let requested_loaded_accounts_data_size_limit =
+            if feature_set.is_active(&feature_set::cap_transaction_accounts_data_size::id()) {
+                let requested_loaded_accounts_data_size =
+                    Self::get_requested_loaded_accounts_data_size_limit(tx, feature_set)?;
+                Some(requested_loaded_accounts_data_size)
+            } else {
+                None
+            };
+        let mut accumulated_accounts_data_size: usize = 0;
+
+        let set_exempt_rent_epoch_max =
+            feature_set.is_active(&solana_sdk::feature_set::set_exempt_rent_epoch_max::id());
+        let mut accounts = account_keys
+            .iter()
+            .enumerate()
+            .map(|(i, key)| {
                 let (account, loaded_programdata_account_size) = if !message.is_non_loader_key(i) {
                     // Fill in an empty account for the program slots.
                     (AccountSharedData::default(), 0)
@@ -315,6 +311,7 @@ impl Accounts {
                                                 key,
                                                 &mut account,
                                                 self.accounts_db.filler_account_suffix.as_ref(),
+                                                set_exempt_rent_epoch_max,
                                             )
                                             .rent_amount;
                                         (account, rent_due)
@@ -394,42 +391,42 @@ impl Accounts {
                     error_counters,
                 )?;
 
-                accounts.push((*key, account));
-            }
-            debug_assert_eq!(accounts.len(), account_keys.len());
-            // Appends the account_deps at the end of the accounts,
-            // this way they can be accessed in a uniform way.
-            // At places where only the accounts are needed,
-            // the account_deps are truncated using e.g:
-            // accounts.iter().take(message.account_keys.len())
-            accounts.append(&mut account_deps);
+                Ok((*key, account))
+            })
+            .collect::<Result<Vec<_>>>()?;
 
-            if validated_fee_payer {
-                let program_indices = message
-                    .instructions()
-                    .iter()
-                    .map(|instruction| {
-                        self.load_executable_accounts(
-                            ancestors,
-                            &mut accounts,
-                            instruction.program_id_index as IndexOfAccount,
-                            error_counters,
-                            &mut accumulated_accounts_data_size,
-                            requested_loaded_accounts_data_size_limit,
-                        )
-                    })
-                    .collect::<Result<Vec<Vec<IndexOfAccount>>>>()?;
+        // Appends the account_deps at the end of the accounts,
+        // this way they can be accessed in a uniform way.
+        // At places where only the accounts are needed,
+        // the account_deps are truncated using e.g:
+        // accounts.iter().take(message.account_keys.len())
+        accounts.append(&mut account_deps);
 
-                Ok(LoadedTransaction {
-                    accounts,
-                    program_indices,
-                    rent: tx_rent,
-                    rent_debits,
+        if validated_fee_payer {
+            let program_indices = message
+                .instructions()
+                .iter()
+                .map(|instruction| {
+                    self.load_executable_accounts(
+                        ancestors,
+                        &mut accounts,
+                        instruction.program_id_index as IndexOfAccount,
+                        error_counters,
+                        &mut accumulated_accounts_data_size,
+                        requested_loaded_accounts_data_size_limit,
+                    )
                 })
-            } else {
-                error_counters.account_not_found += 1;
-                Err(TransactionError::AccountNotFound)
-            }
+                .collect::<Result<Vec<Vec<IndexOfAccount>>>>()?;
+
+            Ok(LoadedTransaction {
+                accounts,
+                program_indices,
+                rent: tx_rent,
+                rent_debits,
+            })
+        } else {
+            error_counters.account_not_found += 1;
+            Err(TransactionError::AccountNotFound)
         }
     }
 
@@ -661,7 +658,7 @@ impl Accounts {
                         return (Err(TransactionError::BlockhashNotFound), None);
                     };
 
-                    let loaded_transaction = match self.load_transaction(
+                    let loaded_transaction = match self.load_transaction_accounts(
                         ancestors,
                         tx,
                         fee,
@@ -883,6 +880,7 @@ impl Accounts {
         debug_verify: bool,
         epoch_schedule: &EpochSchedule,
         rent_collector: &RentCollector,
+        data_source: CalcAccountsHashDataSource,
     ) -> u64 {
         let is_startup = true;
         self.accounts_db
@@ -890,7 +888,7 @@ impl Accounts {
             .wait_for_complete();
         self.accounts_db
             .update_accounts_hash(
-                CalcAccountsHashDataSource::Storages,
+                data_source,
                 debug_verify,
                 slot,
                 ancestors,
@@ -935,7 +933,7 @@ impl Accounts {
         }
     }
 
-    fn is_loadable(lamports: u64) -> bool {
+    pub fn is_loadable(lamports: u64) -> bool {
         // Don't ever load zero lamport accounts into runtime because
         // the existence of zero-lamport accounts are never deterministic!!
         lamports > 0
@@ -1113,6 +1111,19 @@ impl Accounts {
             .map(|_| collector)
     }
 
+    pub fn scan_all<F>(
+        &self,
+        ancestors: &Ancestors,
+        bank_id: BankId,
+        scan_func: F,
+    ) -> ScanResult<()>
+    where
+        F: FnMut(Option<(&Pubkey, AccountSharedData, Slot)>),
+    {
+        self.accounts_db
+            .scan_accounts(ancestors, bank_id, scan_func, &ScanConfig::default())
+    }
+
     pub fn hold_range_in_memory<R>(
         &self,
         range: &R,
@@ -1195,21 +1206,15 @@ impl Accounts {
         }
     }
 
-    pub fn bank_hash_at(&self, slot: Slot, rewrites: &Rewrites) -> Hash {
-        self.bank_hash_info_at(slot, rewrites).hash
-    }
-
-    pub fn bank_hash_info_at(&self, slot: Slot, rewrites: &Rewrites) -> BankHashInfo {
-        let delta_hash = self
-            .accounts_db
-            .get_accounts_delta_hash_with_rewrites(slot, rewrites);
+    pub fn bank_hash_info_at(&self, slot: Slot) -> BankHashInfo {
+        let accounts_delta_hash = self.accounts_db.get_accounts_delta_hash(slot);
         let bank_hashes = self.accounts_db.bank_hashes.read().unwrap();
-        let mut hash_info = bank_hashes
+        let mut bank_hash_info = bank_hashes
             .get(&slot)
             .expect("No bank hash was found for this bank, that should not be possible")
             .clone();
-        hash_info.hash = delta_hash;
-        hash_info
+        bank_hash_info.accounts_delta_hash = accounts_delta_hash;
+        bank_hash_info
     }
 
     /// This function will prevent multiple threads from modifying the same account state at the
@@ -1321,7 +1326,7 @@ impl Accounts {
         );
     }
 
-    pub fn store_accounts_cached<'a, T: ReadableAccount + Sync + ZeroLamport>(
+    pub fn store_accounts_cached<'a, T: ReadableAccount + Sync + ZeroLamport + 'a>(
         &self,
         accounts: impl StorableAccounts<'a, T>,
     ) {
@@ -1406,12 +1411,12 @@ impl Accounts {
     }
 }
 
-fn prepare_if_nonce_account<'a>(
+fn prepare_if_nonce_account(
     address: &Pubkey,
     account: &mut AccountSharedData,
     execution_result: &Result<()>,
     is_fee_payer: bool,
-    maybe_nonce: Option<(&'a NonceFull, bool)>,
+    maybe_nonce: Option<(&NonceFull, bool)>,
     &durable_nonce: &DurableNonce,
     lamports_per_signature: u64,
 ) -> bool {
@@ -1456,36 +1461,6 @@ fn prepare_if_nonce_account<'a>(
         }
     } else {
         false
-    }
-}
-
-/// A set of utility functions used for testing and benchmarking
-pub mod test_utils {
-    use super::*;
-
-    pub fn create_test_accounts(
-        accounts: &Accounts,
-        pubkeys: &mut Vec<Pubkey>,
-        num: usize,
-        slot: Slot,
-    ) {
-        for t in 0..num {
-            let pubkey = solana_sdk::pubkey::new_rand();
-            let account =
-                AccountSharedData::new((t + 1) as u64, 0, AccountSharedData::default().owner());
-            accounts.store_slow_uncached(slot, &pubkey, &account);
-            pubkeys.push(pubkey);
-        }
-    }
-
-    // Only used by bench, not safe to call otherwise accounts can conflict with the
-    // accounts cache!
-    pub fn update_accounts_bench(accounts: &Accounts, pubkeys: &[Pubkey], slot: u64) {
-        for pubkey in pubkeys {
-            let amount = thread_rng().gen_range(0, 10);
-            let account = AccountSharedData::new(amount, 0, AccountSharedData::default().owner());
-            accounts.store_slow_uncached(slot, pubkey, &account);
-        }
     }
 }
 
@@ -1568,7 +1543,6 @@ mod tests {
             Vec::new(),
             &ClusterType::Development,
             AccountSecondaryIndexes::default(),
-            false,
             AccountShrinkThreshold::default(),
         );
         for ka in ka.iter() {
@@ -1590,11 +1564,22 @@ mod tests {
         )
     }
 
+    /// get a feature set with all features activated
+    /// with the optional except of 'exclude'
+    fn all_features_except(exclude: Option<&[Pubkey]>) -> FeatureSet {
+        let mut features = FeatureSet::all_enabled();
+        if let Some(exclude) = exclude {
+            features.active.retain(|k, _v| !exclude.contains(k));
+        }
+        features
+    }
+
     fn load_accounts_with_fee(
         tx: Transaction,
         ka: &[TransactionAccount],
         lamports_per_signature: u64,
         error_counters: &mut TransactionErrorMetrics,
+        exclude_features: Option<&[Pubkey]>,
     ) -> Vec<TransactionLoadResult> {
         load_accounts_with_fee_and_rent(
             tx,
@@ -1602,7 +1587,7 @@ mod tests {
             lamports_per_signature,
             &RentCollector::default(),
             error_counters,
-            &FeatureSet::all_enabled(),
+            &all_features_except(exclude_features),
             &FeeStructure::default(),
         )
     }
@@ -1612,7 +1597,16 @@ mod tests {
         ka: &[TransactionAccount],
         error_counters: &mut TransactionErrorMetrics,
     ) -> Vec<TransactionLoadResult> {
-        load_accounts_with_fee(tx, ka, 0, error_counters)
+        load_accounts_with_fee(tx, ka, 0, error_counters, None)
+    }
+
+    fn load_accounts_with_excluded_features(
+        tx: Transaction,
+        ka: &[TransactionAccount],
+        error_counters: &mut TransactionErrorMetrics,
+        exclude_features: Option<&[Pubkey]>,
+    ) -> Vec<TransactionLoadResult> {
+        load_accounts_with_fee(tx, ka, 0, error_counters, exclude_features)
     }
 
     #[test]
@@ -1658,8 +1652,7 @@ mod tests {
             assert_eq!(
                 map.cache_ranges_held.read().unwrap().to_vec(),
                 expected,
-                "bin: {}",
-                bin
+                "bin: {bin}"
             );
         });
         accts.hold_range_in_memory(&range, false, &test_thread_pool());
@@ -1762,8 +1755,13 @@ mod tests {
         );
         assert_eq!(fee, lamports_per_signature);
 
-        let loaded_accounts =
-            load_accounts_with_fee(tx, &accounts, lamports_per_signature, &mut error_counters);
+        let loaded_accounts = load_accounts_with_fee(
+            tx,
+            &accounts,
+            lamports_per_signature,
+            &mut error_counters,
+            None,
+        );
 
         assert_eq!(error_counters.insufficient_funds, 1);
         assert_eq!(loaded_accounts.len(), 1);
@@ -1843,7 +1841,7 @@ mod tests {
             lamports_per_signature,
             &rent_collector,
             &mut error_counters,
-            &FeatureSet::all_enabled(),
+            &all_features_except(None),
             &FeeStructure::default(),
         );
         assert_eq!(loaded_accounts.len(), 1);
@@ -1910,7 +1908,8 @@ mod tests {
             instructions,
         );
 
-        let loaded_accounts = load_accounts(tx, &accounts, &mut error_counters);
+        let loaded_accounts =
+            load_accounts_with_excluded_features(tx, &accounts, &mut error_counters, None);
 
         assert_eq!(error_counters.account_not_found, 0);
         assert_eq!(loaded_accounts.len(), 1);
@@ -2098,7 +2097,8 @@ mod tests {
             instructions,
         );
 
-        let loaded_accounts = load_accounts(tx, &accounts, &mut error_counters);
+        let loaded_accounts =
+            load_accounts_with_excluded_features(tx, &accounts, &mut error_counters, None);
 
         assert_eq!(error_counters.account_not_found, 0);
         assert_eq!(loaded_accounts.len(), 1);
@@ -2134,7 +2134,6 @@ mod tests {
             Vec::new(),
             &ClusterType::Development,
             AccountSecondaryIndexes::default(),
-            false,
             AccountShrinkThreshold::default(),
         );
 
@@ -2162,7 +2161,6 @@ mod tests {
             Vec::new(),
             &ClusterType::Development,
             AccountSecondaryIndexes::default(),
-            false,
             AccountShrinkThreshold::default(),
         );
 
@@ -2194,7 +2192,6 @@ mod tests {
             Vec::new(),
             &ClusterType::Development,
             AccountSecondaryIndexes::default(),
-            false,
             AccountShrinkThreshold::default(),
         );
 
@@ -2226,7 +2223,6 @@ mod tests {
             Vec::new(),
             &ClusterType::Development,
             AccountSecondaryIndexes::default(),
-            false,
             AccountShrinkThreshold::default(),
         );
 
@@ -2272,7 +2268,6 @@ mod tests {
             Vec::new(),
             &ClusterType::Development,
             AccountSecondaryIndexes::default(),
-            false,
             AccountShrinkThreshold::default(),
         );
 
@@ -2329,7 +2324,8 @@ mod tests {
             instructions,
         );
         let tx = Transaction::new(&[&keypair], message.clone(), Hash::default());
-        let loaded_accounts = load_accounts(tx, &accounts, &mut error_counters);
+        let loaded_accounts =
+            load_accounts_with_excluded_features(tx, &accounts, &mut error_counters, None);
 
         assert_eq!(error_counters.invalid_writable_account, 1);
         assert_eq!(loaded_accounts.len(), 1);
@@ -2342,7 +2338,8 @@ mod tests {
         message.account_keys = vec![key0, key1, key2]; // revert key change
         message.header.num_readonly_unsigned_accounts = 2; // mark both executables as readonly
         let tx = Transaction::new(&[&keypair], message, Hash::default());
-        let loaded_accounts = load_accounts(tx, &accounts, &mut error_counters);
+        let loaded_accounts =
+            load_accounts_with_excluded_features(tx, &accounts, &mut error_counters, None);
 
         assert_eq!(error_counters.invalid_writable_account, 1);
         assert_eq!(loaded_accounts.len(), 1);
@@ -2416,7 +2413,8 @@ mod tests {
             instructions,
         );
         let tx = Transaction::new(&[&keypair], message.clone(), Hash::default());
-        let loaded_accounts = load_accounts(tx, &accounts, &mut error_counters);
+        let loaded_accounts =
+            load_accounts_with_excluded_features(tx, &accounts, &mut error_counters, None);
 
         assert_eq!(error_counters.invalid_writable_account, 1);
         assert_eq!(loaded_accounts.len(), 1);
@@ -2428,7 +2426,8 @@ mod tests {
         // Solution 1: include bpf_loader_upgradeable account
         message.account_keys = vec![key0, key1, bpf_loader_upgradeable::id()];
         let tx = Transaction::new(&[&keypair], message.clone(), Hash::default());
-        let loaded_accounts = load_accounts(tx, &accounts, &mut error_counters);
+        let loaded_accounts =
+            load_accounts_with_excluded_features(tx, &accounts, &mut error_counters, None);
 
         assert_eq!(error_counters.invalid_writable_account, 1);
         assert_eq!(loaded_accounts.len(), 1);
@@ -2443,7 +2442,8 @@ mod tests {
         message.account_keys = vec![key0, key1, key2]; // revert key change
         message.header.num_readonly_unsigned_accounts = 2; // mark both executables as readonly
         let tx = Transaction::new(&[&keypair], message, Hash::default());
-        let loaded_accounts = load_accounts(tx, &accounts, &mut error_counters);
+        let loaded_accounts =
+            load_accounts_with_excluded_features(tx, &accounts, &mut error_counters, None);
 
         assert_eq!(error_counters.invalid_writable_account, 1);
         assert_eq!(loaded_accounts.len(), 1);
@@ -2501,7 +2501,8 @@ mod tests {
             instructions,
         );
         let tx = Transaction::new(&[&keypair], message.clone(), Hash::default());
-        let loaded_accounts = load_accounts(tx, &accounts, &mut error_counters);
+        let loaded_accounts =
+            load_accounts_with_excluded_features(tx, &accounts, &mut error_counters, None);
 
         assert_eq!(error_counters.invalid_writable_account, 1);
         assert_eq!(loaded_accounts.len(), 1);
@@ -2521,8 +2522,12 @@ mod tests {
         ];
         message.account_keys = vec![key0, key1, bpf_loader_upgradeable::id()];
         let tx = Transaction::new(&[&keypair], message.clone(), Hash::default());
-        let loaded_accounts =
-            load_accounts(tx, &accounts_with_upgradeable_loader, &mut error_counters);
+        let loaded_accounts = load_accounts_with_excluded_features(
+            tx,
+            &accounts_with_upgradeable_loader,
+            &mut error_counters,
+            None,
+        );
 
         assert_eq!(error_counters.invalid_writable_account, 1);
         assert_eq!(loaded_accounts.len(), 1);
@@ -2537,7 +2542,8 @@ mod tests {
         message.account_keys = vec![key0, key1, key2]; // revert key change
         message.header.num_readonly_unsigned_accounts = 2; // extend readonly set to include programdata
         let tx = Transaction::new(&[&keypair], message, Hash::default());
-        let loaded_accounts = load_accounts(tx, &accounts, &mut error_counters);
+        let loaded_accounts =
+            load_accounts_with_excluded_features(tx, &accounts, &mut error_counters, None);
 
         assert_eq!(error_counters.invalid_writable_account, 1);
         assert_eq!(loaded_accounts.len(), 1);
@@ -2555,7 +2561,6 @@ mod tests {
             Vec::new(),
             &ClusterType::Development,
             AccountSecondaryIndexes::default(),
-            false,
             AccountShrinkThreshold::default(),
         );
         let mut error_counters = TransactionErrorMetrics::default();
@@ -2587,10 +2592,9 @@ mod tests {
             Vec::new(),
             &ClusterType::Development,
             AccountSecondaryIndexes::default(),
-            false,
             AccountShrinkThreshold::default(),
         );
-        accounts.bank_hash_at(1, &Rewrites::default());
+        accounts.bank_hash_info_at(1);
     }
 
     #[test]
@@ -2599,7 +2603,6 @@ mod tests {
             Vec::new(),
             &ClusterType::Development,
             AccountSecondaryIndexes::default(),
-            false,
             AccountShrinkThreshold::default(),
         );
 
@@ -2624,7 +2627,6 @@ mod tests {
             Vec::new(),
             &ClusterType::Development,
             AccountSecondaryIndexes::default(),
-            false,
             AccountShrinkThreshold::default(),
         );
 
@@ -2690,7 +2692,6 @@ mod tests {
             Vec::new(),
             &ClusterType::Development,
             AccountSecondaryIndexes::default(),
-            false,
             AccountShrinkThreshold::default(),
         );
         accounts.store_slow_uncached(0, &keypair0.pubkey(), &account0);
@@ -2800,7 +2801,6 @@ mod tests {
             Vec::new(),
             &ClusterType::Development,
             AccountSecondaryIndexes::default(),
-            false,
             AccountShrinkThreshold::default(),
         );
         accounts.store_slow_uncached(0, &keypair0.pubkey(), &account0);
@@ -2886,7 +2886,6 @@ mod tests {
             Vec::new(),
             &ClusterType::Development,
             AccountSecondaryIndexes::default(),
-            false,
             AccountShrinkThreshold::default(),
         );
         accounts.store_slow_uncached(0, &keypair0.pubkey(), &account0);
@@ -2949,7 +2948,6 @@ mod tests {
             Vec::new(),
             &ClusterType::Development,
             AccountSecondaryIndexes::default(),
-            false,
             AccountShrinkThreshold::default(),
         );
         accounts.store_slow_uncached(0, &keypair0.pubkey(), &account0);
@@ -3111,7 +3109,6 @@ mod tests {
             Vec::new(),
             &ClusterType::Development,
             AccountSecondaryIndexes::default(),
-            false,
             AccountShrinkThreshold::default(),
         );
         {
@@ -3167,7 +3164,6 @@ mod tests {
             Vec::new(),
             &ClusterType::Development,
             AccountSecondaryIndexes::default(),
-            false,
             AccountShrinkThreshold::default(),
         );
         let mut old_pubkey = Pubkey::default();
@@ -3220,7 +3216,6 @@ mod tests {
             Vec::new(),
             &ClusterType::Development,
             AccountSecondaryIndexes::default(),
-            false,
             AccountShrinkThreshold::default(),
         );
 
@@ -3247,7 +3242,6 @@ mod tests {
             Vec::new(),
             &ClusterType::Development,
             AccountSecondaryIndexes::default(),
-            false,
             AccountShrinkThreshold::default(),
         );
         let mut account_overrides = AccountOverrides::default();
@@ -3594,7 +3588,6 @@ mod tests {
             Vec::new(),
             &ClusterType::Development,
             AccountSecondaryIndexes::default(),
-            false,
             AccountShrinkThreshold::default(),
         );
         let txs = vec![tx];
@@ -3708,7 +3701,6 @@ mod tests {
             Vec::new(),
             &ClusterType::Development,
             AccountSecondaryIndexes::default(),
-            false,
             AccountShrinkThreshold::default(),
         );
         let txs = vec![tx];
@@ -3750,7 +3742,6 @@ mod tests {
             Vec::new(),
             &ClusterType::Development,
             AccountSecondaryIndexes::default(),
-            false,
             AccountShrinkThreshold::default(),
         );
 
@@ -4059,7 +4050,6 @@ mod tests {
             Vec::new(),
             &ClusterType::Development,
             AccountSecondaryIndexes::default(),
-            false,
             AccountShrinkThreshold::default(),
         );
         let mut error_counters = TransactionErrorMetrics::default();
@@ -4142,7 +4132,6 @@ mod tests {
             Vec::new(),
             &ClusterType::Development,
             AccountSecondaryIndexes::default(),
-            false,
             AccountShrinkThreshold::default(),
         );
         let mut error_counters = TransactionErrorMetrics::default();

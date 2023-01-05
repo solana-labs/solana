@@ -30,9 +30,9 @@ fn rerun_if_changed(files: &[&str], directories: &[&str], excludes: &[&str]) {
 
     for file in all_files {
         if !Path::new(&file).is_file() {
-            panic!("{} is not a file", file);
+            panic!("{file} is not a file");
         }
-        println!("cargo:rerun-if-changed={}", file);
+        println!("cargo:rerun-if-changed={file}");
     }
 }
 
@@ -60,6 +60,7 @@ fn main() {
         let rust_programs = [
             "128bit",
             "alloc",
+            "alt_bn128",
             "call_depth",
             "caller_access",
             "curve25519",
@@ -103,14 +104,11 @@ fn main() {
             "upgraded",
         ];
         for program in rust_programs.iter() {
-            println!(
-                "cargo:warning=(not a warning) Building Rust-based SBF programs: solana_sbf_rust_{}",
-                program
-            );
+            println!("cargo:warning=(not a warning) Building Rust-based SBF programs: solana_sbf_rust_{program}");
             assert!(Command::new("../../cargo-build-sbf")
                 .args([
                     "--manifest-path",
-                    &format!("rust/{}/Cargo.toml", program),
+                    &format!("rust/{program}/Cargo.toml"),
                     "--sbf-out-dir",
                     &install_dir
                 ])

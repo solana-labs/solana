@@ -1,6 +1,4 @@
 use {
-    crate::{quic_client::QuicTpuConnection, udp_client::UdpTpuConnection},
-    enum_dispatch::enum_dispatch,
     rayon::iter::{IntoParallelIterator, ParallelIterator},
     solana_metrics::MovingStat,
     solana_sdk::{transaction::VersionedTransaction, transport::Result as TransportResult},
@@ -24,13 +22,6 @@ pub struct ClientStats {
     pub send_timeout: AtomicU64,
 }
 
-#[enum_dispatch]
-pub enum BlockingConnection {
-    UdpTpuConnection,
-    QuicTpuConnection,
-}
-
-#[enum_dispatch(BlockingConnection)]
 pub trait TpuConnection {
     fn tpu_addr(&self) -> &SocketAddr;
 

@@ -50,7 +50,7 @@ pub fn test_recv_mmsg_batch_size() {
             }
             packets
                 .iter_mut()
-                .for_each(|pkt| pkt.meta = Meta::default());
+                .for_each(|pkt| *pkt.meta_mut() = Meta::default());
         }
         elapsed_in_small_batch += now.elapsed().as_nanos();
         assert_eq!(TEST_BATCH_SIZE, recv);

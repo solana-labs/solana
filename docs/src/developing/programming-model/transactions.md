@@ -1,11 +1,25 @@
 ---
 title: "Transactions"
+description: "A Solana transaction consists of one or more instructions, an array of accounts to read and write data from, and one or more signatures."
 ---
 
-Program execution begins with a [transaction](terminology.md#transaction) being
-submitted to the cluster. The Solana runtime will execute a program to process
-each of the [instructions](terminology.md#instruction) contained in the
-transaction, in order, and atomically.
+On the Solana blockchain, program execution begins with a [transaction](./../../terminology.md#transaction) being submitted to the cluster. With each transaction consisting of one or many [instructions](./../../terminology.md#instruction), the runtime will process each of the instructions contained within the transaction, in order, and atomically. If any part of an instruction fails, then the entire transaction will fail.
+
+## Overview of a Transaction
+
+On Solana, clients update the runtime (for example, debiting an account) by submitting a transaction to the cluster.
+
+This transaction consists of three parts:
+
+- one or more instructions
+- an array of accounts to read or write from
+- one or more signatures
+
+An [instruction](./../../terminology.md#instruction) is the smallest execution logic on Solana. Instructions are basically a call to update the global Solana state. Instructions invoke programs that make calls to the Solana runtime to update the state (for example, calling the token program to transfer tokens from your account to another account).
+
+[Programs](./../intro/programs.md) on Solana don’t store data/state; rather, data/state is stored in accounts.
+
+[Signatures](./../../terminology.md#signature) verify that we have the authority to read or write data to the accounts that we list.
 
 ## Anatomy of a Transaction
 
@@ -128,25 +142,25 @@ https://github.com/solana-labs/solana/blob/6606590b8132e56dab9e60b3f7d20ba7412a7
 
 ### Program Id
 
-The instruction's [program id](terminology.md#program-id) specifies which
+The instruction's [program id](./../../terminology.md#program-id) specifies which
 program will process this instruction. The program's account's owner specifies
 which loader should be used to load and execute the program, and the data
 contains information about how the runtime should execute the program.
 
-In the case of [on-chain SBF programs](developing/on-chain-programs/overview.md),
+In the case of [on-chain SBF programs](./../on-chain-programs/overview.md),
 the owner is the SBF Loader and the account data holds the BPF bytecode. Program
 accounts are permanently marked as executable by the loader once they are
 successfully deployed. The runtime will reject transactions that specify programs
 that are not executable.
 
-Unlike on-chain programs, [Native Programs](developing/runtime-facilities/programs.md)
+Unlike on-chain programs, [Native Programs](../runtime-facilities/programs.md)
 are handled differently in that they are built directly into the Solana runtime.
 
 ### Accounts
 
 The accounts referenced by an instruction represent on-chain state and serve as
 both the inputs and outputs of a program. More information about accounts can be
-found in the [Accounts](accounts.md) section.
+found in the [Accounts](./accounts.md) section.
 
 ### Instruction data
 
@@ -198,7 +212,7 @@ by a transaction signature. Those signatures signal on-chain programs that the
 account holder has authorized the transaction. Typically, the program uses the
 authorization to permit debiting the account or modifying its data. More
 information about how the authorization is communicated to a program can be
-found in [Accounts](accounts.md#signers)
+found in [Accounts](./accounts.md#signers)
 
 ## Recent Blockhash
 

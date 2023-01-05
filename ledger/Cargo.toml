@@ -53,7 +53,7 @@ solana-storage-proto = { path = "../storage-proto", version = "=1.15.0" }
 solana-transaction-status = { path = "../transaction-status", version = "=1.15.0" }
 solana-vote-program = { path = "../programs/vote", version = "=1.15.0" }
 spl-token = { version = "=3.5.0", features = ["no-entrypoint"] }
-spl-token-2022 = { version = "=0.4.3", features = ["no-entrypoint"] }
+spl-token-2022 = { version = "=0.5.0", features = ["no-entrypoint"] }
 static_assertions = "1.1.0"
 tempfile = "3.3.0"
 thiserror = "1.0"
@@ -73,7 +73,7 @@ bs58 = "0.4.0"
 matches = "0.1.9"
 solana-account-decoder = { path = "../account-decoder", version = "=1.15.0" }
 solana-logger = { path = "../logger", version = "=1.15.0" }
-test-case = "2.1.0"
+test-case = "2.2.2"
 
 [build-dependencies]
 rustc_version = "0.4"

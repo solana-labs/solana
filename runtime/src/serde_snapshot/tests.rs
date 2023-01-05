@@ -3,12 +3,16 @@
 use {
     super::*,
     crate::{
-        accounts::{test_utils::create_test_accounts, Accounts},
-        accounts_db::{get_temp_accounts_paths, AccountShrinkThreshold, AccountStorageMap},
+        account_storage::AccountStorageMap,
+        accounts::Accounts,
+        accounts_db::{
+            get_temp_accounts_paths, test_utils::create_test_accounts, AccountShrinkThreshold,
+        },
+        accounts_hash::AccountsHash,
         append_vec::AppendVec,
-        bank::{Bank, Rewrites},
+        bank::{Bank, BankTestConfig},
         epoch_accounts_hash,
-        genesis_utils::{activate_all_features, activate_feature},
+        genesis_utils::{self, activate_all_features, activate_feature},
         snapshot_utils::ArchiveFormat,
         status_cache::StatusCache,
     },
@@ -17,13 +21,14 @@ use {
     solana_sdk::{
         account::{AccountSharedData, ReadableAccount},
         clock::Slot,
-        feature_set::disable_fee_calculator,
+        feature_set::{self, disable_fee_calculator},
         genesis_config::{create_genesis_config, ClusterType},
         pubkey::Pubkey,
         signature::{Keypair, Signer},
     },
     std::{
         io::{BufReader, Cursor},
+        ops::RangeFull,
         path::Path,
         sync::{Arc, RwLock},
     },
@@ -35,9 +40,7 @@ fn copy_append_vecs<P: AsRef<Path>>(
     accounts_db: &AccountsDb,
     output_dir: P,
 ) -> std::io::Result<StorageAndNextAppendVecId> {
-    let storage_entries = accounts_db
-        .get_snapshot_storages(Slot::max_value(), None, None)
-        .0;
+    let storage_entries = accounts_db.get_snapshot_storages(RangeFull, None).0;
     let storage: AccountStorageMap = AccountStorageMap::with_capacity(storage_entries.len());
     let mut next_append_vec_id = 0;
     for storage_entry in storage_entries.into_iter().flatten() {
@@ -111,7 +114,6 @@ where
             ..GenesisConfig::default()
         },
         AccountSecondaryIndexes::default(),
-        false,
         None,
         AccountShrinkThreshold::default(),
         false,
@@ -171,7 +173,6 @@ fn test_accounts_serialize_style(serde_style: SerdeStyle) {
         paths,
         &ClusterType::Development,
         AccountSecondaryIndexes::default(),
-        false,
         AccountShrinkThreshold::default(),
     );
 
@@ -186,7 +187,7 @@ fn test_accounts_serialize_style(serde_style: SerdeStyle) {
         &mut writer,
         &accounts.accounts_db,
         0,
-        &accounts.accounts_db.get_snapshot_storages(0, None, None).0,
+        &accounts.accounts_db.get_snapshot_storages(..=0, None).0,
     )
     .unwrap();
 
@@ -210,8 +211,8 @@ fn test_accounts_serialize_style(serde_style: SerdeStyle) {
     );
     check_accounts(&daccounts, &pubkeys, 100);
     assert_eq!(
-        accounts.bank_hash_at(0, &Rewrites::default()),
-        daccounts.bank_hash_at(0, &Rewrites::default())
+        accounts.bank_hash_info_at(0).accounts_delta_hash,
+        daccounts.bank_hash_info_at(0).accounts_delta_hash
     );
 }
 
@@ -224,6 +225,7 @@ fn test_bank_serialize_style(
 ) {
     solana_logger::setup();
     let (mut genesis_config, _) = create_genesis_config(500);
+    genesis_utils::activate_feature(&mut genesis_config, feature_set::epoch_accounts_hash::id());
     genesis_config.epoch_schedule = EpochSchedule::custom(400, 400, false);
     let bank0 = Arc::new(Bank::new_for_tests(&genesis_config));
     let eah_start_slot = epoch_accounts_hash::calculation_start(&bank0);
@@ -284,12 +286,12 @@ fn test_bank_serialize_style(
     .unwrap();
 
     let accounts_hash = if update_accounts_hash {
-        let hash = Hash::new(&[1; 32]);
+        let accounts_hash = AccountsHash(Hash::new(&[1; 32]));
         bank2
             .accounts()
             .accounts_db
-            .set_accounts_hash(bank2.slot(), hash);
-        hash
+            .set_accounts_hash(bank2.slot(), accounts_hash);
+        accounts_hash
     } else {
         bank2.get_accounts_hash()
     };
@@ -392,7 +394,6 @@ fn test_bank_serialize_style(
         None,
         None,
         AccountSecondaryIndexes::default(),
-        false,
         None,
         AccountShrinkThreshold::default(),
         false,
@@ -424,7 +425,7 @@ pub(crate) fn reconstruct_accounts_db_via_serialization(
     slot: Slot,
 ) -> AccountsDb {
     let mut writer = Cursor::new(vec![]);
-    let snapshot_storages = accounts.get_snapshot_storages(slot, None, None).0;
+    let snapshot_storages = accounts.get_snapshot_storages(..=slot, None).0;
     accountsdb_to_stream(
         SerdeStyle::Newer,
         &mut writer,
@@ -489,16 +490,25 @@ fn test_bank_serialize_newer() {
     }
 }
 
+fn add_root_and_flush_write_cache(bank: &Bank) {
+    bank.rc.accounts.add_root(bank.slot());
+    bank.flush_accounts_cache_slot_for_tests()
+}
+
 #[test]
 fn test_extra_fields_eof() {
     solana_logger::setup();
     let (mut genesis_config, _) = create_genesis_config(500);
     activate_feature(&mut genesis_config, disable_fee_calculator::id());
 
-    let bank0 = Arc::new(Bank::new_for_tests(&genesis_config));
+    let bank0 = Arc::new(Bank::new_for_tests_with_config(
+        &genesis_config,
+        BankTestConfig::default(),
+    ));
     bank0.squash();
     let mut bank = Bank::new_from_parent(&bank0, &Pubkey::default(), 1);
 
+    add_root_and_flush_write_cache(&bank0);
     // Set extra fields
     bank.fee_rate_governor.lamports_per_signature = 7000;
 
@@ -535,7 +545,6 @@ fn test_extra_fields_eof() {
         None,
         None,
         AccountSecondaryIndexes::default(),
-        false,
         None,
         AccountShrinkThreshold::default(),
         false,
@@ -596,7 +605,6 @@ fn test_extra_fields_full_snapshot_archive() {
         None,
         None,
         AccountSecondaryIndexes::default(),
-        false,
         None,
         AccountShrinkThreshold::default(),
         false,
@@ -620,9 +628,13 @@ fn test_blank_extra_fields() {
     let (mut genesis_config, _) = create_genesis_config(500);
     activate_feature(&mut genesis_config, disable_fee_calculator::id());
 
-    let bank0 = Arc::new(Bank::new_for_tests(&genesis_config));
+    let bank0 = Arc::new(Bank::new_for_tests_with_config(
+        &genesis_config,
+        BankTestConfig::default(),
+    ));
     bank0.squash();
     let mut bank = Bank::new_from_parent(&bank0, &Pubkey::default(), 1);
+    add_root_and_flush_write_cache(&bank0);
 
     // Set extra fields
     bank.fee_rate_governor.lamports_per_signature = 7000;
@@ -660,7 +672,6 @@ fn test_blank_extra_fields() {
         None,
         None,
         AccountSecondaryIndexes::default(),
-        false,
         None,
         AccountShrinkThreshold::default(),
         false,
@@ -680,7 +691,7 @@ mod test_bank_serialize {
 
     // This some what long test harness is required to freeze the ABI of
     // Bank's serialization due to versioned nature
-    #[frozen_abi(digest = "C4asU4c7Qbd31QQDScqRPnT3iLCYc4qaGqeUQEGP7cTw")]
+    #[frozen_abi(digest = "464v92sAyLDZWCXjH6cuQfgrSNuB3PY8cmoVu2dciXvV")]
     #[derive(Serialize, AbiExample)]
     pub struct BankAbiTestWrapperNewer {
         #[serde(serialize_with = "wrapper_newer")]
@@ -695,7 +706,7 @@ mod test_bank_serialize {
             .rc
             .accounts
             .accounts_db
-            .get_snapshot_storages(0, None, None)
+            .get_snapshot_storages(..=0, None)
             .0;
         // ensure there is a single snapshot storage example for ABI digesting
         assert_eq!(snapshot_storages.len(), 1);

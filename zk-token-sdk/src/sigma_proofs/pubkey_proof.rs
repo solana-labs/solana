@@ -17,7 +17,10 @@ use {
     zeroize::Zeroize,
 };
 use {
-    crate::{sigma_proofs::errors::PubkeySigmaProofError, transcript::TranscriptProtocol},
+    crate::{
+        errors::ProofVerificationError, sigma_proofs::errors::PubkeyValidityProofError,
+        transcript::TranscriptProtocol,
+    },
     arrayref::{array_ref, array_refs},
     curve25519_dalek::{
         ristretto::{CompressedRistretto, RistrettoPoint},
@@ -87,7 +90,7 @@ impl PubkeySigmaProof {
         self,
         elgamal_pubkey: &ElGamalPubkey,
         transcript: &mut Transcript,
-    ) -> Result<(), PubkeySigmaProofError> {
+    ) -> Result<(), PubkeyValidityProofError> {
         transcript.pubkey_proof_domain_sep();
 
         // extract the relvant scalar and Ristretto points from the input
@@ -98,7 +101,10 @@ impl PubkeySigmaProof {
         let c = transcript.challenge_scalar(b"c");
 
         // check that the required algebraic condition holds
-        let Y = self.Y.decompress().ok_or(PubkeySigmaProofError::Format)?;
+        let Y = self
+            .Y
+            .decompress()
+            .ok_or(ProofVerificationError::Deserialization)?;
 
         let check = RistrettoPoint::vartime_multiscalar_mul(
             vec![&self.z, &(-&c), &(-&Scalar::one())],
@@ -108,7 +114,7 @@ impl PubkeySigmaProof {
         if check.is_identity() {
             Ok(())
         } else {
-            Err(PubkeySigmaProofError::AlgebraicRelation)
+            Err(ProofVerificationError::AlgebraicRelation.into())
         }
     }
 
@@ -119,16 +125,16 @@ impl PubkeySigmaProof {
         buf
     }
 
-    pub fn from_bytes(bytes: &[u8]) -> Result<Self, PubkeySigmaProofError> {
+    pub fn from_bytes(bytes: &[u8]) -> Result<Self, PubkeyValidityProofError> {
         if bytes.len() != 64 {
-            return Err(PubkeySigmaProofError::Format);
+            return Err(ProofVerificationError::Deserialization.into());
         }
 
         let bytes = array_ref![bytes, 0, 64];
         let (Y, z) = array_refs![bytes, 32, 32];
 
         let Y = CompressedRistretto::from_slice(Y);
-        let z = Scalar::from_canonical_bytes(*z).ok_or(PubkeySigmaProofError::Format)?;
+        let z = Scalar::from_canonical_bytes(*z).ok_or(ProofVerificationError::Deserialization)?;
 
         Ok(PubkeySigmaProof { Y, z })
     }

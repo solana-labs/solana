@@ -1,4 +1,4 @@
-//! The `genesis_config` module is a library for generating the chain's genesis config.
+//! The chain's genesis config.
 
 #![cfg(feature = "full")]
 
@@ -62,7 +62,7 @@ impl FromStr for ClusterType {
             "devnet" => Ok(ClusterType::Devnet),
             "testnet" => Ok(ClusterType::Testnet),
             "mainnet-beta" => Ok(ClusterType::MainnetBeta),
-            _ => Err(format!("{} is unrecognized for cluster type", s)),
+            _ => Err(format!("{s} is unrecognized for cluster type")),
         }
     }
 }
@@ -168,7 +168,7 @@ impl GenesisConfig {
             .map_err(|err| {
                 std::io::Error::new(
                     std::io::ErrorKind::Other,
-                    format!("Unable to open {:?}: {:?}", filename, err),
+                    format!("Unable to open {filename:?}: {err:?}"),
                 )
             })?;
 
@@ -176,14 +176,14 @@ impl GenesisConfig {
         let mem = unsafe { Mmap::map(&file) }.map_err(|err| {
             std::io::Error::new(
                 std::io::ErrorKind::Other,
-                format!("Unable to map {:?}: {:?}", filename, err),
+                format!("Unable to map {filename:?}: {err:?}"),
             )
         })?;
 
         let genesis_config = deserialize(&mem).map_err(|err| {
             std::io::Error::new(
                 std::io::ErrorKind::Other,
-                format!("Unable to deserialize {:?}: {:?}", filename, err),
+                format!("Unable to deserialize {filename:?}: {err:?}"),
             )
         })?;
         Ok(genesis_config)
@@ -193,7 +193,7 @@ impl GenesisConfig {
         let serialized = serialize(&self).map_err(|err| {
             std::io::Error::new(
                 std::io::ErrorKind::Other,
-                format!("Unable to serialize: {:?}", err),
+                format!("Unable to serialize: {err:?}"),
             )
         })?;
 

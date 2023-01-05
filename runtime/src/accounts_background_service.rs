@@ -17,10 +17,7 @@ use {
     log::*,
     rand::{thread_rng, Rng},
     solana_measure::measure::Measure,
-    solana_sdk::{
-        clock::{BankId, Slot},
-        hash::Hash,
-    },
+    solana_sdk::clock::{BankId, Slot},
     stats::StatsManager,
     std::{
         boxed::Box,
@@ -35,9 +32,6 @@ use {
 };
 
 const INTERVAL_MS: u64 = 100;
-const SHRUNKEN_ACCOUNT_PER_SEC: usize = 250;
-const SHRUNKEN_ACCOUNT_PER_INTERVAL: usize =
-    SHRUNKEN_ACCOUNT_PER_SEC / (1000 / INTERVAL_MS as usize);
 const CLEAN_INTERVAL_BLOCKS: u64 = 100;
 
 // This value is chosen to spread the dropping cost over 3 expiration checks
@@ -100,7 +94,7 @@ impl DropCallback for SendDroppedBankCallback {
 
 impl Debug for SendDroppedBankCallback {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
-        write!(f, "SendDroppedBankCallback({:p})", self)
+        write!(f, "SendDroppedBankCallback({self:p})")
     }
 }
 
@@ -151,7 +145,6 @@ impl SnapshotRequestHandler {
     // Returns the latest requested snapshot slot, if one exists
     pub fn handle_snapshot_requests(
         &self,
-        accounts_db_caching_enabled: bool,
         test_hash_calculation: bool,
         non_snapshot_time_us: u128,
         last_full_snapshot_slot: &mut Option<Slot>,
@@ -183,7 +176,6 @@ impl SnapshotRequestHandler {
         );
 
         Some(self.handle_snapshot_request(
-            accounts_db_caching_enabled,
             test_hash_calculation,
             non_snapshot_time_us,
             last_full_snapshot_slot,
@@ -268,7 +260,6 @@ impl SnapshotRequestHandler {
 
     fn handle_snapshot_request(
         &self,
-        accounts_db_caching_enabled: bool,
         test_hash_calculation: bool,
         non_snapshot_time_us: u128,
         last_full_snapshot_slot: &mut Option<Slot>,
@@ -294,51 +285,40 @@ impl SnapshotRequestHandler {
             *last_full_snapshot_slot = Some(snapshot_root_bank.slot());
         }
 
-        let previous_hash = if test_hash_calculation {
+        let previous_accounts_hash = test_hash_calculation.then(|| {
             // We have to use the index version here.
             // We cannot calculate the non-index way because cache has not been flushed and stores don't match reality.
-            // This comment is out of date and can be re-evaluated.
             snapshot_root_bank.update_accounts_hash(
                 CalcAccountsHashDataSource::IndexForTests,
                 false,
                 false,
             )
-        } else {
-            Hash::default()
-        };
-
-        let mut shrink_time = Measure::start("shrink_time");
-        if !accounts_db_caching_enabled {
-            snapshot_root_bank.process_stale_slot_with_budget(0, SHRUNKEN_ACCOUNT_PER_INTERVAL);
-        }
-        shrink_time.stop();
+        });
 
         let mut flush_accounts_cache_time = Measure::start("flush_accounts_cache_time");
-        if accounts_db_caching_enabled {
-            // Forced cache flushing MUST flush all roots <= snapshot_root_bank.slot().
-            // That's because `snapshot_root_bank.slot()` must be root at this point,
-            // and contains relevant updates because each bank has at least 1 account update due
-            // to sysvar maintenance. Otherwise, this would cause missing storages in the snapshot
-            snapshot_root_bank.force_flush_accounts_cache();
-            // Ensure all roots <= `self.slot()` have been flushed.
-            // Note `max_flush_root` could be larger than self.slot() if there are
-            // `> MAX_CACHE_SLOT` cached and rooted slots which triggered earlier flushes.
-            assert!(
-                snapshot_root_bank.slot()
-                    <= snapshot_root_bank
-                        .rc
-                        .accounts
-                        .accounts_db
-                        .accounts_cache
-                        .fetch_max_flush_root()
-            );
-        }
+        // Forced cache flushing MUST flush all roots <= snapshot_root_bank.slot().
+        // That's because `snapshot_root_bank.slot()` must be root at this point,
+        // and contains relevant updates because each bank has at least 1 account update due
+        // to sysvar maintenance. Otherwise, this would cause missing storages in the snapshot
+        snapshot_root_bank.force_flush_accounts_cache();
+        // Ensure all roots <= `self.slot()` have been flushed.
+        // Note `max_flush_root` could be larger than self.slot() if there are
+        // `> MAX_CACHE_SLOT` cached and rooted slots which triggered earlier flushes.
+        assert!(
+            snapshot_root_bank.slot()
+                <= snapshot_root_bank
+                    .rc
+                    .accounts
+                    .accounts_db
+                    .accounts_cache
+                    .fetch_max_flush_root()
+        );
         flush_accounts_cache_time.stop();
 
-        let hash_for_testing = if test_hash_calculation {
+        let accounts_hash_for_testing = previous_accounts_hash.map(|previous_accounts_hash| {
             let check_hash = false;
 
-            let (this_hash, capitalization) = snapshot_root_bank
+            let (this_accounts_hash, capitalization) = snapshot_root_bank
                 .accounts()
                 .accounts_db
                 .calculate_accounts_hash(
@@ -355,22 +335,18 @@ impl SnapshotRequestHandler {
                     },
                 )
                 .unwrap();
-            assert_eq!(previous_hash, this_hash);
+            assert_eq!(previous_accounts_hash, this_accounts_hash);
             assert_eq!(capitalization, snapshot_root_bank.capitalization());
-            Some(this_hash)
-        } else {
-            None
-        };
+            this_accounts_hash
+        });
 
         let mut clean_time = Measure::start("clean_time");
         snapshot_root_bank.clean_accounts(*last_full_snapshot_slot);
         clean_time.stop();
 
-        if accounts_db_caching_enabled {
-            shrink_time = Measure::start("shrink_time");
-            snapshot_root_bank.shrink_candidate_slots();
-            shrink_time.stop();
-        }
+        let mut shrink_time = Measure::start("shrink_time");
+        snapshot_root_bank.shrink_candidate_slots();
+        shrink_time.stop();
 
         // Snapshot the bank and send over an accounts package
         let mut snapshot_time = Measure::start("snapshot_time");
@@ -395,7 +371,7 @@ impl SnapshotRequestHandler {
                     snapshot_storages,
                     self.snapshot_config.archive_format,
                     self.snapshot_config.snapshot_version,
-                    hash_for_testing,
+                    accounts_hash_for_testing,
                 )
                 .expect("new accounts package for snapshot")
             }
@@ -405,7 +381,7 @@ impl SnapshotRequestHandler {
                     accounts_package_type,
                     &snapshot_root_bank,
                     snapshot_storages,
-                    hash_for_testing,
+                    accounts_hash_for_testing,
                 )
             }
         };
@@ -414,12 +390,11 @@ impl SnapshotRequestHandler {
             .expect("send accounts package");
         snapshot_time.stop();
         info!(
-            "Took bank snapshot. accounts package type: {:?}, slot: {}, accounts hash: {}, bank hash: {}",
+            "Took bank snapshot. accounts package type: {:?}, slot: {}, bank hash: {}",
             accounts_package_type,
             snapshot_root_bank.slot(),
-            snapshot_root_bank.get_accounts_hash(),
             snapshot_root_bank.hash(),
-          );
+        );
 
         // Cleanup outdated snapshots
         let mut purge_old_snapshots_time = Measure::start("purge_old_snapshots_time");
@@ -529,13 +504,11 @@ impl AbsRequestHandlers {
     // Returns the latest requested snapshot block height, if one exists
     pub fn handle_snapshot_requests(
         &self,
-        accounts_db_caching_enabled: bool,
         test_hash_calculation: bool,
         non_snapshot_time_us: u128,
         last_full_snapshot_slot: &mut Option<Slot>,
     ) -> Option<Result<u64, SnapshotError>> {
         self.snapshot_request_handler.handle_snapshot_requests(
-            accounts_db_caching_enabled,
             test_hash_calculation,
             non_snapshot_time_us,
             last_full_snapshot_slot,
@@ -552,13 +525,11 @@ impl AccountsBackgroundService {
         bank_forks: Arc<RwLock<BankForks>>,
         exit: &Arc<AtomicBool>,
         request_handlers: AbsRequestHandlers,
-        accounts_db_caching_enabled: bool,
         test_hash_calculation: bool,
         mut last_full_snapshot_slot: Option<Slot>,
     ) -> Self {
         info!("AccountsBackgroundService active");
         let exit = exit.clone();
-        let mut consumed_budget = 0;
         let mut last_cleaned_block_height = 0;
         let mut removed_slots_count = 0;
         let mut total_remove_slots_time = 0;
@@ -620,7 +591,6 @@ impl AccountsBackgroundService {
                         .is_startup_verification_complete()
                         .then(|| {
                             request_handlers.handle_snapshot_requests(
-                                accounts_db_caching_enabled,
                                 test_hash_calculation,
                                 non_snapshot_time,
                                 &mut last_full_snapshot_slot,
@@ -631,13 +601,11 @@ impl AccountsBackgroundService {
                         last_snapshot_end_time = Some(Instant::now());
                     }
 
-                    if accounts_db_caching_enabled {
-                        // Note that the flush will do an internal clean of the
-                        // cache up to bank.slot(), so should be safe as long
-                        // as any later snapshots that are taken are of
-                        // slots >= bank.slot()
-                        bank.flush_accounts_cache_if_needed();
-                    }
+                    // Note that the flush will do an internal clean of the
+                    // cache up to bank.slot(), so should be safe as long
+                    // as any later snapshots that are taken are of
+                    // slots >= bank.slot()
+                    bank.flush_accounts_cache_if_needed();
 
                     if let Some(snapshot_block_height_result) = snapshot_block_height_option_result
                     {
@@ -650,29 +618,15 @@ impl AccountsBackgroundService {
                             return;
                         }
                     } else {
-                        if accounts_db_caching_enabled {
-                            bank.shrink_candidate_slots();
-                        } else {
-                            // under sustained writes, shrink can lag behind so cap to
-                            // SHRUNKEN_ACCOUNT_PER_INTERVAL (which is based on INTERVAL_MS,
-                            // which in turn roughly associated block time)
-                            consumed_budget = bank
-                                .process_stale_slot_with_budget(
-                                    consumed_budget,
-                                    SHRUNKEN_ACCOUNT_PER_INTERVAL,
-                                )
-                                .min(SHRUNKEN_ACCOUNT_PER_INTERVAL);
-                        }
+                        bank.shrink_candidate_slots();
                         if bank.block_height() - last_cleaned_block_height
                             > (CLEAN_INTERVAL_BLOCKS + thread_rng().gen_range(0, 10))
                         {
-                            if accounts_db_caching_enabled {
-                                // Note that the flush will do an internal clean of the
-                                // cache up to bank.slot(), so should be safe as long
-                                // as any later snapshots that are taken are of
-                                // slots >= bank.slot()
-                                bank.force_flush_accounts_cache();
-                            }
+                            // Note that the flush will do an internal clean of the
+                            // cache up to bank.slot(), so should be safe as long
+                            // as any later snapshots that are taken are of
+                            // slots >= bank.slot()
+                            bank.force_flush_accounts_cache();
                             bank.clean_accounts(last_full_snapshot_slot);
                             last_cleaned_block_height = bank.block_height();
                         }
@@ -781,9 +735,14 @@ fn cmp_requests_by_priority(
 mod test {
     use {
         super::*,
-        crate::{epoch_accounts_hash, genesis_utils::create_genesis_config},
+        crate::{
+            epoch_accounts_hash::{self, EpochAccountsHash},
+            genesis_utils::create_genesis_config,
+        },
         crossbeam_channel::unbounded,
-        solana_sdk::{account::AccountSharedData, epoch_schedule::EpochSchedule, pubkey::Pubkey},
+        solana_sdk::{
+            account::AccountSharedData, epoch_schedule::EpochSchedule, hash::Hash, pubkey::Pubkey,
+        },
     };
 
     #[test]
@@ -859,6 +818,13 @@ mod test {
             EpochSchedule::custom(SLOTS_PER_EPOCH, SLOTS_PER_EPOCH, false);
         let bank = Arc::new(Bank::new_for_tests(&genesis_config_info.genesis_config));
         bank.set_startup_verification_complete();
+        // Need to set the EAH to Valid so that `Bank::new_from_parent()` doesn't panic during
+        // freeze when parent is in the EAH calculation window.
+        bank.rc
+            .accounts
+            .accounts_db
+            .epoch_accounts_hash_manager
+            .set_valid(EpochAccountsHash::new(Hash::new_unique()), 0);
 
         // Create new banks and send snapshot requests so that the following requests will be in
         // the channel before handling the requests:

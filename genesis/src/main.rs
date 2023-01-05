@@ -64,13 +64,13 @@ pub fn load_genesis_accounts(file: &str, genesis_config: &mut GenesisConfig) -> 
 
     let genesis_accounts: HashMap<String, Base64Account> =
         serde_yaml::from_reader(accounts_file)
-            .map_err(|err| io::Error::new(io::ErrorKind::Other, format!("{:?}", err)))?;
+            .map_err(|err| io::Error::new(io::ErrorKind::Other, format!("{err:?}")))?;
 
     for (key, account_details) in genesis_accounts {
         let pubkey = pubkey_from_str(key.as_str()).map_err(|err| {
             io::Error::new(
                 io::ErrorKind::Other,
-                format!("Invalid pubkey/keypair {}: {:?}", key, err),
+                format!("Invalid pubkey/keypair {key}: {err:?}"),
             )
         })?;
 
@@ -401,8 +401,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
             Err(io::Error::new(
                 io::ErrorKind::Other,
                 format!(
-                    "error: insufficient {}: {} for rent exemption, requires {}",
-                    name, lamports, exempt
+                    "error: insufficient {name}: {lamports} for rent exemption, requires {exempt}"
                 ),
             ))
         } else {
@@ -592,12 +591,12 @@ fn main() -> Result<(), Box<dyn error::Error>> {
             match address_loader_program {
                 [address, loader, program] => {
                     let address = address.parse::<Pubkey>().unwrap_or_else(|err| {
-                        eprintln!("Error: invalid address {}: {}", address, err);
+                        eprintln!("Error: invalid address {address}: {err}");
                         process::exit(1);
                     });
 
                     let loader = loader.parse::<Pubkey>().unwrap_or_else(|err| {
-                        eprintln!("Error: invalid loader {}: {}", loader, err);
+                        eprintln!("Error: invalid loader {loader}: {err}");
                         process::exit(1);
                     });
 
@@ -605,7 +604,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                     File::open(program)
                         .and_then(|mut file| file.read_to_end(&mut program_data))
                         .unwrap_or_else(|err| {
-                            eprintln!("Error: failed to read {}: {}", program, err);
+                            eprintln!("Error: failed to read {program}: {err}");
                             process::exit(1);
                         });
                     genesis_config.add_account(
@@ -632,7 +631,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         LedgerColumnOptions::default(),
     )?;
 
-    println!("{}", genesis_config);
+    println!("{genesis_config}");
     Ok(())
 }
 

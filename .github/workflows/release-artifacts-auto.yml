@@ -18,16 +18,10 @@ jobs:
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       AWS_S3_BUCKET: ${{ secrets.AWS_S3_BUCKET }}
 
-  send-slack-notification:
-    runs-on: ubuntu-20.04
+  error_reporting:
     needs:
       - release-artifacts
-    if: failure()
-    steps:
-      - env:
-          SLACK_BOT_TOKEN: ${{ secrets.SLACK_NOTIFICATIONS_BOT_TOKEN }}
-        uses: voxmedia/github-action-slack-notify-build@v1
-        with:
-          channel: ${{ secrets.SLACK_CHANNEL }}
-          status: FAILED
-          color: danger
+    if: failure() && github.event_name == 'push'
+    uses: ./.github/workflows/error-reporting.yml
+    secrets:
+      WEBHOOK: ${{ secrets.SLACK_ERROR_REPORTING_WEBHOOK }}

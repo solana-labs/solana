@@ -69,14 +69,14 @@ export class PublicKey extends Struct {
         this._bn = new BN(value);
       }
 
-      if (this._bn.byteLength() > 32) {
+      if (this._bn.byteLength() > PUBLIC_KEY_LENGTH) {
         throw new Error(`Invalid public key input`);
       }
     }
   }
 
   /**
-   * Returns a unique PublicKey for tests and benchmarks using acounter
+   * Returns a unique PublicKey for tests and benchmarks using a counter
    */
   static unique(): PublicKey {
     const key = new PublicKey(uniquePublicKeyCounter);
@@ -109,14 +109,15 @@ export class PublicKey extends Struct {
   }
 
   /**
-   * Return the byte array representation of the public key
+   * Return the byte array representation of the public key in big endian
    */
   toBytes(): Uint8Array {
-    return this.toBuffer();
+    const buf = this.toBuffer();
+    return new Uint8Array(buf.buffer, buf.byteOffset, buf.byteLength);
   }
 
   /**
-   * Return the Buffer representation of the public key
+   * Return the Buffer representation of the public key in big endian
    */
   toBuffer(): Buffer {
     const b = this._bn.toArrayLike(Buffer);
@@ -127,6 +128,10 @@ export class PublicKey extends Struct {
     const zeroPad = Buffer.alloc(32);
     b.copy(zeroPad, 32 - b.length);
     return zeroPad;
+  }
+
+  get [Symbol.toStringTag](): string {
+    return `PublicKey(${this.toString()})`;
   }
 
   /**
@@ -186,6 +191,8 @@ export class PublicKey extends Struct {
   /**
    * Async version of createProgramAddressSync
    * For backwards compatibility
+   *
+   * @deprecated Use {@link createProgramAddressSync} instead
    */
   /* eslint-disable require-await */
   static async createProgramAddress(
@@ -227,6 +234,8 @@ export class PublicKey extends Struct {
   /**
    * Async version of findProgramAddressSync
    * For backwards compatibility
+   *
+   * @deprecated Use {@link findProgramAddressSync} instead
    */
   static async findProgramAddress(
     seeds: Array<Buffer | Uint8Array>,

@@ -1,5 +1,6 @@
 use {
     crate::bench_tps_client::{BenchTpsClient, BenchTpsError, Result},
+    solana_client::thin_client::ThinClient,
     solana_sdk::{
         account::Account,
         client::{AsyncClient, Client, SyncClient},
@@ -11,7 +12,6 @@ use {
         signature::Signature,
         transaction::Transaction,
     },
-    solana_thin_client::thin_client::ThinClient,
 };
 
 impl BenchTpsClient for ThinClient {
@@ -100,7 +100,7 @@ impl BenchTpsClient for ThinClient {
             .map_err(|err| err.into())
             .and_then(|account| {
                 account.ok_or_else(|| {
-                    BenchTpsError::Custom(format!("AccountNotFound: pubkey={}", pubkey))
+                    BenchTpsError::Custom(format!("AccountNotFound: pubkey={pubkey}"))
                 })
             })
     }

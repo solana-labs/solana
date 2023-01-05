@@ -1794,7 +1794,7 @@ mod test {
                     let transaction_error: TransactionError = tx_by_addr_error
                         .clone()
                         .try_into()
-                        .unwrap_or_else(|_| panic!("{:?} conversion implemented?", error));
+                        .unwrap_or_else(|_| panic!("{error:?} conversion implemented?"));
                     assert_eq!(tx_by_addr_error, transaction_error.into());
                 }
                 tx_by_addr::TransactionErrorType::InstructionError => {
@@ -1809,10 +1809,10 @@ mod test {
                                 }),
                                 transaction_details: None,
                             };
-                            let transaction_error: TransactionError =
-                                tx_by_addr_error.clone().try_into().unwrap_or_else(|_| {
-                                    panic!("{:?} conversion implemented?", ix_error)
-                                });
+                            let transaction_error: TransactionError = tx_by_addr_error
+                                .clone()
+                                .try_into()
+                                .unwrap_or_else(|_| panic!("{ix_error:?} conversion implemented?"));
                             assert_eq!(tx_by_addr_error, transaction_error.into());
                         } else {
                             let tx_by_addr_error = tx_by_addr::TransactionError {
@@ -1841,7 +1841,7 @@ mod test {
                     let transaction_error: TransactionError = tx_by_addr_error
                         .clone()
                         .try_into()
-                        .unwrap_or_else(|_| panic!("{:?} conversion implemented?", error));
+                        .unwrap_or_else(|_| panic!("{error:?} conversion implemented?"));
                     assert_eq!(tx_by_addr_error, transaction_error.into());
                 }
             }

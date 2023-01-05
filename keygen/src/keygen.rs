@@ -127,7 +127,7 @@ impl KeyGenerationCommonArgs for Command<'_> {
 fn check_for_overwrite(outfile: &str, matches: &ArgMatches) {
     let force = matches.is_present("force");
     if !force && Path::new(outfile).exists() {
-        eprintln!("Refusing to overwrite {} without --force flag", outfile);
+        eprintln!("Refusing to overwrite {outfile} without --force flag");
         exit(1);
     }
 }
@@ -159,7 +159,7 @@ fn output_keypair(
         write_keypair(keypair, &mut stdout)?;
     } else {
         write_keypair_file(keypair, outfile)?;
-        println!("Wrote {} keypair to {}", source, outfile);
+        println!("Wrote {source} keypair to {outfile}");
     }
     Ok(())
 }
@@ -254,7 +254,7 @@ fn acquire_passphrase_and_message(
 }
 
 fn grind_print_info(grind_matches: &[GrindMatch], num_threads: usize) {
-    println!("Searching with {} threads for:", num_threads);
+    println!("Searching with {num_threads} threads for:");
     for gm in grind_matches {
         let mut msg = Vec::<String>::new();
         if gm.count.load(Ordering::Relaxed) > 1 {
@@ -587,7 +587,7 @@ fn do_main(matches: &ArgMatches) -> Result<(), Box<dyn error::Error>> {
                 check_for_overwrite(outfile, matches);
                 write_pubkey_file(outfile, pubkey)?;
             } else {
-                println!("{}", pubkey);
+                println!("{pubkey}");
             }
         }
         ("new", matches) => {
@@ -629,7 +629,7 @@ fn do_main(matches: &ArgMatches) -> Result<(), Box<dyn error::Error>> {
 
             if let Some(outfile) = outfile {
                 output_keypair(&keypair, outfile, "new")
-                    .map_err(|err| format!("Unable to write {}: {}", outfile, err))?;
+                    .map_err(|err| format!("Unable to write {outfile}: {err}"))?;
             }
 
             if !silent {
@@ -840,9 +840,9 @@ fn do_main(matches: &ArgMatches) -> Result<(), Box<dyn error::Error>> {
             let pubkey_bs58 = matches.value_of("pubkey").unwrap();
             let pubkey = bs58::decode(pubkey_bs58).into_vec().unwrap();
             if signature.verify(&pubkey, &simple_message) {
-                println!("Verification for public key: {}: Success", pubkey_bs58);
+                println!("Verification for public key: {pubkey_bs58}: Success");
             } else {
-                println!("Verification for public key: {}: Failed", pubkey_bs58);
+                println!("Verification for public key: {pubkey_bs58}: Failed");
                 exit(1);
             }
         }

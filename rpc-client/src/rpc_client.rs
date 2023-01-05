@@ -1194,7 +1194,7 @@ impl RpcClient {
     ///
     /// If the transaction has been processed with the default commitment level,
     /// and the transaction succeeded, this method returns `Ok(Some(Ok(())))`.
-    /// If the transaction has peen processed with the default commitment level,
+    /// If the transaction has been processed with the default commitment level,
     /// and the transaction failed, this method returns `Ok(Some(Err(_)))`,
     /// where the interior error is type [`TransactionError`].
     ///
@@ -1395,7 +1395,7 @@ impl RpcClient {
     ///
     /// If the transaction has been processed with the given commitment level,
     /// and the transaction succeeded, this method returns `Ok(Some(Ok(())))`.
-    /// If the transaction has peen processed with the given commitment level,
+    /// If the transaction has been processed with the given commitment level,
     /// and the transaction failed, this method returns `Ok(Some(Err(_)))`,
     /// where the interior error is type [`TransactionError`].
     ///
@@ -1462,7 +1462,7 @@ impl RpcClient {
     ///
     /// If the transaction has been processed with the given commitment level,
     /// and the transaction succeeded, this method returns `Ok(Some(Ok(())))`.
-    /// If the transaction has peen processed with the given commitment level,
+    /// If the transaction has been processed with the given commitment level,
     /// and the transaction failed, this method returns `Ok(Some(Err(_)))`,
     /// where the interior error is type [`TransactionError`].
     ///
@@ -4290,6 +4290,85 @@ mod tests {
                 .get_stake_minimum_delegation_with_commitment(CommitmentConfig::confirmed())
                 .unwrap();
             assert_eq!(expected_minimum_delegation, actual_minimum_delegation);
+        }
+    }
+
+    #[test]
+    fn test_get_program_accounts_with_config() {
+        let program_id = Pubkey::new_unique();
+        let pubkey = Pubkey::new_unique();
+        let account = Account {
+            lamports: 1_000_000,
+            data: vec![],
+            owner: program_id,
+            executable: false,
+            rent_epoch: 0,
+        };
+        let keyed_account = RpcKeyedAccount {
+            pubkey: pubkey.to_string(),
+            account: UiAccount::encode(&pubkey, &account, UiAccountEncoding::Base64, None, None),
+        };
+        let expected_result = vec![(pubkey, account)];
+        // Test: without context
+        {
+            let mocks: Mocks = [(
+                RpcRequest::GetProgramAccounts,
+                serde_json::to_value(OptionalContext::NoContext(vec![keyed_account.clone()]))
+                    .unwrap(),
+            )]
+            .into_iter()
+            .collect();
+            let rpc_client = RpcClient::new_mock_with_mocks("mock_client".to_string(), mocks);
+            let result = rpc_client
+                .get_program_accounts_with_config(
+                    &program_id,
+                    RpcProgramAccountsConfig {
+                        filters: None,
+                        account_config: RpcAccountInfoConfig {
+                            encoding: Some(UiAccountEncoding::Base64),
+                            data_slice: None,
+                            commitment: None,
+                            min_context_slot: None,
+                        },
+                        with_context: None,
+                    },
+                )
+                .unwrap();
+            assert_eq!(expected_result, result);
+        }
+
+        // Test: with context
+        {
+            let mocks: Mocks = [(
+                RpcRequest::GetProgramAccounts,
+                serde_json::to_value(OptionalContext::Context(Response {
+                    context: RpcResponseContext {
+                        slot: 1,
+                        api_version: None,
+                    },
+                    value: vec![keyed_account],
+                }))
+                .unwrap(),
+            )]
+            .into_iter()
+            .collect();
+            let rpc_client = RpcClient::new_mock_with_mocks("mock_client".to_string(), mocks);
+            let result = rpc_client
+                .get_program_accounts_with_config(
+                    &program_id,
+                    RpcProgramAccountsConfig {
+                        filters: None,
+                        account_config: RpcAccountInfoConfig {
+                            encoding: Some(UiAccountEncoding::Base64),
+                            data_slice: None,
+                            commitment: None,
+                            min_context_slot: None,
+                        },
+                        with_context: Some(true),
+                    },
+                )
+                .unwrap();
+            assert_eq!(expected_result, result);
         }
     }
 }

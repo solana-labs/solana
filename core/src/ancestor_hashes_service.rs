@@ -22,7 +22,7 @@ use {
     },
     solana_runtime::bank::Bank,
     solana_sdk::{
-        clock::{Slot, SLOT_MS},
+        clock::{Slot, DEFAULT_MS_PER_SLOT},
         pubkey::Pubkey,
         signature::Signable,
         signer::keypair::Keypair,
@@ -343,7 +343,7 @@ impl AncestorHashesService {
         keypair: &Keypair,
         ancestor_socket: &UdpSocket,
     ) -> Option<(Slot, DuplicateAncestorDecision)> {
-        let from_addr = packet.meta.socket_addr();
+        let from_addr = packet.meta().socket_addr();
         let packet_data = match packet.data(..) {
             Some(data) => data,
             None => {
@@ -523,6 +523,7 @@ impl AncestorHashesService {
         let serve_repair = ServeRepair::new(
             repair_info.cluster_info.clone(),
             repair_info.bank_forks.clone(),
+            repair_info.repair_whitelist.clone(),
         );
         let mut repair_stats = AncestorRepairRequestsStats::default();
 
@@ -553,7 +554,7 @@ impl AncestorHashesService {
                     &mut request_throttle,
                 );
 
-                sleep(Duration::from_millis(SLOT_MS));
+                sleep(Duration::from_millis(DEFAULT_MS_PER_SLOT));
             })
             .unwrap()
     }
@@ -969,8 +970,11 @@ mod test {
                 Arc::new(keypair),
                 SocketAddrSpace::Unspecified,
             );
-            let responder_serve_repair =
-                ServeRepair::new(Arc::new(cluster_info), vote_simulator.bank_forks);
+            let responder_serve_repair = ServeRepair::new(
+                Arc::new(cluster_info),
+                vote_simulator.bank_forks,
+                Arc::<RwLock<HashSet<_>>>::default(), // repair whitelist
+            );
 
             // Set up thread to give us responses
             let ledger_path = get_tmp_ledger_path!();
@@ -1054,8 +1058,12 @@ mod test {
                 Arc::new(keypair),
                 SocketAddrSpace::Unspecified,
             ));
-            let requester_serve_repair =
-                ServeRepair::new(requester_cluster_info.clone(), bank_forks.clone());
+            let repair_whitelist = Arc::new(RwLock::new(HashSet::default()));
+            let requester_serve_repair = ServeRepair::new(
+                requester_cluster_info.clone(),
+                bank_forks.clone(),
+                repair_whitelist.clone(),
+            );
             let (duplicate_slots_reset_sender, _duplicate_slots_reset_receiver) = unbounded();
             let repair_info = RepairInfo {
                 bank_forks,
@@ -1064,6 +1072,7 @@ mod test {
                 epoch_schedule,
                 duplicate_slots_reset_sender,
                 repair_validators: None,
+                repair_whitelist,
             };
 
             let (ancestor_hashes_replay_update_sender, ancestor_hashes_replay_update_receiver) =
@@ -1205,7 +1214,9 @@ mod test {
             .recv_timeout(Duration::from_millis(10_000))
             .unwrap();
         let packet = &mut response_packet[0];
-        packet.meta.set_socket_addr(&responder_info.serve_repair);
+        packet
+            .meta_mut()
+            .set_socket_addr(&responder_info.serve_repair);
         let decision = AncestorHashesService::verify_and_process_ancestor_response(
             packet,
             &ancestor_hashes_request_statuses,
@@ -1465,7 +1476,7 @@ mod test {
 
         // Create invalid packet with fewer bytes than the size of the nonce
         let mut packet = Packet::default();
-        packet.meta.size = 0;
+        packet.meta_mut().size = 0;
 
         assert!(AncestorHashesService::verify_and_process_ancestor_response(
             &packet,
@@ -1523,6 +1534,7 @@ mod test {
             ref cluster_slots,
             ..
         } = repair_info;
+        let (dumped_slots_sender, _dumped_slots_receiver) = unbounded();
 
         // Add the responder to the eligible list for requests
         let responder_id = responder_info.id;
@@ -1548,6 +1560,7 @@ mod test {
             &requester_blockstore,
             None,
             &mut PurgeRepairSlotCounter::default(),
+            &dumped_slots_sender,
         );
 
         // Simulate making a request
@@ -1573,7 +1586,9 @@ mod test {
             .recv_timeout(Duration::from_millis(10_000))
             .unwrap();
         let packet = &mut response_packet[0];
-        packet.meta.set_socket_addr(&responder_info.serve_repair);
+        packet
+            .meta_mut()
+            .set_socket_addr(&responder_info.serve_repair);
         let decision = AncestorHashesService::verify_and_process_ancestor_response(
             packet,
             &ancestor_hashes_request_statuses,

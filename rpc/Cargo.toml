@@ -30,6 +30,7 @@ serde_derive = "1.0.103"
 serde_json = "1.0.83"
 soketto = "0.7"
 solana-account-decoder = { path = "../account-decoder", version = "=1.15.0" }
+solana-client = { path = "../client", version = "=1.15.0" }
 solana-entry = { path = "../entry", version = "=1.15.0" }
 solana-faucet = { path = "../faucet", version = "=1.15.0" }
 solana-gossip = { path = "../gossip", version = "=1.15.0" }
@@ -51,7 +52,7 @@ solana-transaction-status = { path = "../transaction-status", version = "=1.15.0
 solana-version = { path = "../version", version = "=1.15.0" }
 solana-vote-program = { path = "../programs/vote", version = "=1.15.0" }
 spl-token = { version = "=3.5.0", features = ["no-entrypoint"] }
-spl-token-2022 = { version = "=0.4.3", features = ["no-entrypoint"] }
+spl-token-2022 = { version = "=0.5.0", features = ["no-entrypoint"] }
 stream-cancel = "0.8.1"
 thiserror = "1.0"
 tokio = { version = "~1.14.1", features = ["full"] }

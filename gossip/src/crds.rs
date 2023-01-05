@@ -66,6 +66,8 @@ pub struct Crds {
     votes: BTreeMap<u64 /*insert order*/, usize /*index*/>,
     // Indices of EpochSlots keyed by insert order.
     epoch_slots: BTreeMap<u64 /*insert order*/, usize /*index*/>,
+    // Indices of DuplicateShred keyed by insert order.
+    duplicate_shreds: BTreeMap<u64 /*insert order*/, usize /*index*/>,
     // Indices of all crds values associated with a node.
     records: HashMap<Pubkey, IndexSet<usize>>,
     // Indices of all entries keyed by insert order.
@@ -79,6 +81,7 @@ pub struct Crds {
 
 #[derive(PartialEq, Eq, Debug)]
 pub enum CrdsError {
+    DuplicatePush(/*num dups:*/ u8),
     InsertFailed,
     UnknownStakes,
 }
@@ -115,6 +118,8 @@ pub struct VersionedCrdsValue {
     pub(crate) local_timestamp: u64,
     /// value hash
     pub(crate) value_hash: Hash,
+    /// Number of times duplicates of this value are recevied from gossip push.
+    num_push_dups: u8,
 }
 
 #[derive(Clone, Copy, Default)]
@@ -140,6 +145,7 @@ impl VersionedCrdsValue {
             value,
             local_timestamp,
             value_hash,
+            num_push_dups: 0u8,
         }
     }
 }
@@ -153,6 +159,7 @@ impl Default for Crds {
             nodes: IndexSet::default(),
             votes: BTreeMap::default(),
             epoch_slots: BTreeMap::default(),
+            duplicate_shreds: BTreeMap::default(),
             records: HashMap::default(),
             entries: BTreeMap::default(),
             purged: VecDeque::default(),
@@ -223,6 +230,9 @@ impl Crds {
                     CrdsData::EpochSlots(_, _) => {
                         self.epoch_slots.insert(value.ordinal, entry_index);
                     }
+                    CrdsData::DuplicateShred(_, _) => {
+                        self.duplicate_shreds.insert(value.ordinal, entry_index);
+                    }
                     _ => (),
                 };
                 self.entries.insert(value.ordinal, entry_index);
@@ -251,6 +261,10 @@ impl Crds {
                         self.epoch_slots.remove(&entry.get().ordinal);
                         self.epoch_slots.insert(value.ordinal, entry_index);
                     }
+                    CrdsData::DuplicateShred(_, _) => {
+                        self.duplicate_shreds.remove(&entry.get().ordinal);
+                        self.duplicate_shreds.insert(value.ordinal, entry_index);
+                    }
                     _ => (),
                 }
                 self.entries.remove(&entry.get().ordinal);
@@ -263,17 +277,25 @@ impl Crds {
                 entry.insert(value);
                 Ok(())
             }
-            Entry::Occupied(entry) => {
+            Entry::Occupied(mut entry) => {
                 self.stats.lock().unwrap().record_fail(&value, route);
                 trace!(
                     "INSERT FAILED data: {} new.wallclock: {}",
                     value.value.label(),
                     value.value.wallclock(),
                 );
+                // Identify if the message is outdated (as opposed to
+                // duplicate) by comparing value hashes.
                 if entry.get().value_hash != value.value_hash {
                     self.purged.push_back((value.value_hash, now));
+                    Err(CrdsError::InsertFailed)
+                } else if matches!(route, GossipRoute::PushMessage) {
+                    let entry = entry.get_mut();
+                    entry.num_push_dups = entry.num_push_dups.saturating_add(1);
+                    Err(CrdsError::DuplicatePush(entry.num_push_dups))
+                } else {
+                    Err(CrdsError::InsertFailed)
                 }
-                Err(CrdsError::InsertFailed)
             }
         }
     }
@@ -326,6 +348,21 @@ impl Crds {
             cursor.consume(*ordinal);
             self.table.index(*index)
         })
+    }
+
+    /// Returns duplicate-shreds inserted since the given cursor.
+    /// Updates the cursor as the values are consumed.
+    pub(crate) fn get_duplicate_shreds<'a>(
+        &'a self,
+        cursor: &'a mut Cursor,
+    ) -> impl Iterator<Item = &'a VersionedCrdsValue> {
+        let range = (Bound::Included(cursor.ordinal()), Bound::Unbounded);
+        self.duplicate_shreds
+            .range(range)
+            .map(move |(ordinal, index)| {
+                cursor.consume(*ordinal);
+                self.table.index(*index)
+            })
     }
 
     /// Returns all entries inserted since the given cursor.
@@ -487,6 +524,9 @@ impl Crds {
             CrdsData::EpochSlots(_, _) => {
                 self.epoch_slots.remove(&value.ordinal);
             }
+            CrdsData::DuplicateShred(_, _) => {
+                self.duplicate_shreds.remove(&value.ordinal);
+            }
             _ => (),
         }
         self.entries.remove(&value.ordinal);
@@ -521,6 +561,9 @@ impl Crds {
                 }
                 CrdsData::EpochSlots(_, _) => {
                     self.epoch_slots.insert(value.ordinal, index);
+                }
+                CrdsData::DuplicateShred(_, _) => {
+                    self.duplicate_shreds.insert(value.ordinal, index);
                 }
                 _ => (),
             };
@@ -606,6 +649,7 @@ impl Crds {
             nodes: self.nodes.clone(),
             votes: self.votes.clone(),
             epoch_slots: self.epoch_slots.clone(),
+            duplicate_shreds: self.duplicate_shreds.clone(),
             records: self.records.clone(),
             entries: self.entries.clone(),
             purged: self.purged.clone(),
@@ -1129,13 +1173,9 @@ mod tests {
         assert!(num_inserts > crds.table.len());
         let (num_nodes, num_votes, num_epoch_slots) = check_crds_value_indices(&mut rng, &crds);
         assert!(num_nodes * 3 < crds.table.len());
-        assert!(num_nodes > 100, "num nodes: {}", num_nodes);
-        assert!(num_votes > 100, "num votes: {}", num_votes);
-        assert!(
-            num_epoch_slots > 100,
-            "num epoch slots: {}",
-            num_epoch_slots
-        );
+        assert!(num_nodes > 100, "num nodes: {num_nodes}");
+        assert!(num_votes > 100, "num votes: {num_votes}");
+        assert!(num_epoch_slots > 100, "num epoch slots: {num_epoch_slots}");
         // Remove values one by one and assert that nodes indices stay valid.
         while !crds.table.is_empty() {
             let index = rng.gen_range(0, crds.table.len());

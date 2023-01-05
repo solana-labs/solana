@@ -45,6 +45,7 @@ use {
     log::*,
     rand::{thread_rng, Rng},
     solana_bench_tps::{bench::generate_and_fund_keypairs, bench_tps_client::BenchTpsClient},
+    solana_client::{connection_cache::ConnectionCache, tpu_connection::TpuConnection},
     solana_core::serve_repair::{RepairProtocol, RepairRequestHeader, ServeRepair},
     solana_dos::cli::*,
     solana_gossip::{
@@ -66,10 +67,7 @@ use {
         transaction::Transaction,
     },
     solana_streamer::socket::SocketAddrSpace,
-    solana_tpu_client::{
-        connection_cache::{ConnectionCache, DEFAULT_TPU_CONNECTION_POOL_SIZE},
-        tpu_connection::TpuConnection,
-    },
+    solana_tpu_client::tpu_connection_cache::DEFAULT_TPU_CONNECTION_POOL_SIZE,
     std::{
         net::{SocketAddr, UdpSocket},
         process::exit,
@@ -106,7 +104,9 @@ impl TransactionGenerator {
     fn new(transaction_params: TransactionParams) -> Self {
         TransactionGenerator {
             blockhash: Hash::default(),
-            last_generated: (Instant::now() - Duration::from_secs(100)), //to force generation when generate is called
+            last_generated: Instant::now()
+                .checked_sub(Duration::from_secs(100))
+                .unwrap(), //to force generation when generate is called
             transaction_params,
         }
     }
@@ -538,7 +538,7 @@ fn create_payers<T: 'static + BenchTpsClient + Send + Sync>(
         let res =
             generate_and_fund_keypairs(client.unwrap().clone(), &funding_key, size, 1_000_000)
                 .unwrap_or_else(|e| {
-                    eprintln!("Error could not fund keys: {:?}", e);
+                    eprintln!("Error could not fund keys: {e:?}");
                     exit(1);
                 });
         res.into_iter().map(Some).collect()
@@ -591,11 +591,11 @@ fn run_dos_transactions<T: 'static + BenchTpsClient + Send + Sync>(
         })
         .collect();
     if let Err(err) = sender_thread.join() {
-        println!("join() failed with: {:?}", err);
+        println!("join() failed with: {err:?}");
     }
     for t_generator in tx_generator_threads {
         if let Err(err) = t_generator.join() {
-            println!("join() failed with: {:?}", err);
+            println!("join() failed with: {err:?}");
         }
     }
 }
@@ -786,6 +786,7 @@ fn main() {
 pub mod test {
     use {
         super::*,
+        solana_client::thin_client::ThinClient,
         solana_core::validator::ValidatorConfig,
         solana_faucet::faucet::run_local_faucet,
         solana_local_cluster::{
@@ -795,7 +796,6 @@ pub mod test {
         },
         solana_rpc::rpc::JsonRpcConfig,
         solana_sdk::timing::timestamp,
-        solana_thin_client::thin_client::ThinClient,
     };
 
     const TEST_SEND_BATCH_SIZE: usize = 1;

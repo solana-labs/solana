@@ -3,6 +3,8 @@ import type {Buffer} from 'buffer';
 import {
   BlockheightBasedTransactionConfirmationStrategy,
   Connection,
+  DurableNonceTransactionConfirmationStrategy,
+  TransactionConfirmationStrategy,
 } from '../connection';
 import type {TransactionSignature} from '../transaction';
 import type {ConfirmOptions} from '../connection';
@@ -14,14 +16,14 @@ import type {ConfirmOptions} from '../connection';
  *
  * @param {Connection} connection
  * @param {Buffer} rawTransaction
- * @param {BlockheightBasedTransactionConfirmationStrategy} confirmationStrategy
+ * @param {TransactionConfirmationStrategy} confirmationStrategy
  * @param {ConfirmOptions} [options]
  * @returns {Promise<TransactionSignature>}
  */
 export async function sendAndConfirmRawTransaction(
   connection: Connection,
   rawTransaction: Buffer,
-  confirmationStrategy: BlockheightBasedTransactionConfirmationStrategy,
+  confirmationStrategy: TransactionConfirmationStrategy,
   options?: ConfirmOptions,
 ): Promise<TransactionSignature>;
 
@@ -41,14 +43,12 @@ export async function sendAndConfirmRawTransaction(
   connection: Connection,
   rawTransaction: Buffer,
   confirmationStrategyOrConfirmOptions:
-    | BlockheightBasedTransactionConfirmationStrategy
+    | TransactionConfirmationStrategy
     | ConfirmOptions
     | undefined,
   maybeConfirmOptions?: ConfirmOptions,
 ): Promise<TransactionSignature> {
-  let confirmationStrategy:
-    | BlockheightBasedTransactionConfirmationStrategy
-    | undefined;
+  let confirmationStrategy: TransactionConfirmationStrategy | undefined;
   let options: ConfirmOptions | undefined;
   if (
     confirmationStrategyOrConfirmOptions &&
@@ -59,6 +59,16 @@ export async function sendAndConfirmRawTransaction(
   ) {
     confirmationStrategy =
       confirmationStrategyOrConfirmOptions as BlockheightBasedTransactionConfirmationStrategy;
+    options = maybeConfirmOptions;
+  } else if (
+    confirmationStrategyOrConfirmOptions &&
+    Object.prototype.hasOwnProperty.call(
+      confirmationStrategyOrConfirmOptions,
+      'nonceValue',
+    )
+  ) {
+    confirmationStrategy =
+      confirmationStrategyOrConfirmOptions as DurableNonceTransactionConfirmationStrategy;
     options = maybeConfirmOptions;
   } else {
     options = confirmationStrategyOrConfirmOptions as

@@ -102,19 +102,6 @@ This library requires a JavaScript runtime that supports [`BigInt`](https://deve
 - React Native:
   - \>=0.7.0 using the [Hermes](https://reactnative.dev/blog/2022/07/08/hermes-as-the-default) engine ([integration guide](https://solanacookbook.com/integrations/react-native.html#how-to-use-solana-web3-js-in-a-react-native-app)):
 
-## Flow Support (Discontinued)
-
-Flow types are no longer supported in new releases. The last release with Flow support is v1.37.2 and its
-[Flow library definition](https://flow.org/en/docs/libdefs/) is provided at
-https://unpkg.com/@solana/web3.js@v1.37.2/module.flow.js.
-Download the file and add the following line under the [libs] section of your project's `.flowconfig` to
-activate it:
-
-```ini
-[libs]
-node_modules/@solana/web3.js/module.flow.js
-```
-
 ## Releases
 
 Releases are available on [Github](https://github.com/solana-labs/solana-web3.js/releases)

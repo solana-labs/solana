@@ -2,6 +2,7 @@ use {
     crate::tpu_info::TpuInfo,
     crossbeam_channel::{Receiver, RecvTimeoutError},
     log::*,
+    solana_client::{connection_cache::ConnectionCache, tpu_connection::TpuConnection},
     solana_measure::measure::Measure,
     solana_metrics::datapoint_warn,
     solana_runtime::{bank::Bank, bank_forks::BankForks},
@@ -9,7 +10,6 @@ use {
         hash::Hash, nonce_account, pubkey::Pubkey, saturating_add_assign, signature::Signature,
         timing::AtomicInterval, transport::TransportError,
     },
-    solana_tpu_client::{connection_cache::ConnectionCache, tpu_connection::TpuConnection},
     std::{
         collections::{
             hash_map::{Entry, HashMap},
@@ -796,7 +796,7 @@ mod test {
         let (sender, receiver) = unbounded();
 
         let connection_cache = Arc::new(ConnectionCache::default());
-        let send_tranaction_service = SendTransactionService::new::<NullTpuInfo>(
+        let send_transaction_service = SendTransactionService::new::<NullTpuInfo>(
             tpu_address,
             &bank_forks,
             None,
@@ -807,7 +807,7 @@ mod test {
         );
 
         drop(sender);
-        send_tranaction_service.join().unwrap();
+        send_transaction_service.join().unwrap();
     }
 
     #[test]

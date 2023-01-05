@@ -5,6 +5,7 @@ use {
         *,
     },
     crate::{
+        accounts_hash::AccountsHash,
         ancestors::AncestorsForSerialization,
         stakes::{serde_stakes_enum_compat, StakesEnum},
     },
@@ -269,7 +270,7 @@ impl<'a> TypeContext<'a> for Context {
                 )
             }));
         let slot = serializable_db.slot;
-        let hash: BankHashInfo = serializable_db
+        let bank_hash_info: BankHashInfo = serializable_db
             .accounts_db
             .bank_hashes
             .read()
@@ -293,7 +294,7 @@ impl<'a> TypeContext<'a> for Context {
             entries,
             version,
             slot,
-            hash,
+            bank_hash_info,
             historical_roots,
             historical_roots_with_hash,
         )
@@ -346,7 +347,7 @@ impl<'a> TypeContext<'a> for Context {
     fn reserialize_bank_fields_with_hash<R, W>(
         stream_reader: &mut BufReader<R>,
         stream_writer: &mut BufWriter<W>,
-        accounts_hash: &Hash,
+        accounts_hash: &AccountsHash,
         incremental_snapshot_persistence: Option<&BankIncrementalSnapshotPersistence>,
     ) -> std::result::Result<(), Box<bincode::ErrorKind>>
     where

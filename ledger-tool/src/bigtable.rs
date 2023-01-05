@@ -38,20 +38,29 @@ use {
 
 async fn upload(
     blockstore: Blockstore,
-    mut starting_slot: Slot,
+    starting_slot: Option<Slot>,
     ending_slot: Option<Slot>,
     force_reupload: bool,
     config: solana_storage_bigtable::LedgerStorageConfig,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let bigtable = solana_storage_bigtable::LedgerStorage::new_with_config(config)
         .await
-        .map_err(|err| format!("Failed to connect to storage: {:?}", err))?;
+        .map_err(|err| format!("Failed to connect to storage: {err:?}"))?;
 
     let config = ConfirmedBlockUploadConfig {
         force_reupload,
         ..ConfirmedBlockUploadConfig::default()
     };
     let blockstore = Arc::new(blockstore);
+
+    let mut starting_slot = match starting_slot {
+        Some(slot) => slot,
+        // It is possible that the slot returned below could get purged by
+        // LedgerCleanupService before upload_confirmed_blocks() receives the
+        // value. This is ok because upload_confirmed_blocks() doesn't need
+        // the exact slot to be in ledger, the slot is only used as a bound.
+        None => blockstore.get_first_available_block()?,
+    };
 
     let ending_slot = ending_slot.unwrap_or_else(|| blockstore.last_root());
 
@@ -60,7 +69,7 @@ async fn upload(
             ending_slot,
             starting_slot.saturating_add(config.max_num_slots_to_check as u64 * 2),
         );
-        let last_slot_uploaded = solana_ledger::bigtable_upload::upload_confirmed_blocks(
+        let last_slot_checked = solana_ledger::bigtable_upload::upload_confirmed_blocks(
             blockstore.clone(),
             bigtable.clone(),
             starting_slot,
@@ -69,8 +78,8 @@ async fn upload(
             Arc::new(AtomicBool::new(false)),
         )
         .await?;
-        info!("last slot uploaded: {}", last_slot_uploaded);
-        starting_slot = last_slot_uploaded.saturating_add(1);
+        info!("last slot checked: {}", last_slot_checked);
+        starting_slot = last_slot_checked.saturating_add(1);
     }
     info!("No more blocks to upload.");
     Ok(())
@@ -83,7 +92,7 @@ async fn delete_slots(
     let dry_run = config.read_only;
     let bigtable = solana_storage_bigtable::LedgerStorage::new_with_config(config)
         .await
-        .map_err(|err| format!("Failed to connect to storage: {:?}", err))?;
+        .map_err(|err| format!("Failed to connect to storage: {err:?}"))?;
 
     solana_ledger::bigtable_delete::delete_confirmed_blocks(bigtable, slots, dry_run).await
 }
@@ -93,7 +102,7 @@ async fn first_available_block(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let bigtable = solana_storage_bigtable::LedgerStorage::new_with_config(config).await?;
     match bigtable.get_first_available_block().await? {
-        Some(block) => println!("{}", block),
+        Some(block) => println!("{block}"),
         None => println!("No blocks available"),
     }
 
@@ -107,7 +116,7 @@ async fn block(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let bigtable = solana_storage_bigtable::LedgerStorage::new_with_config(config)
         .await
-        .map_err(|err| format!("Failed to connect to storage: {:?}", err))?;
+        .map_err(|err| format!("Failed to connect to storage: {err:?}"))?;
 
     let confirmed_block = bigtable.get_confirmed_block(slot).await?;
     let encoded_block = confirmed_block
@@ -121,10 +130,7 @@ async fn block(
         )
         .map_err(|err| match err {
             EncodeError::UnsupportedTransactionVersion(version) => {
-                format!(
-                    "Failed to process unsupported transaction version ({}) in block",
-                    version
-                )
+                format!("Failed to process unsupported transaction version ({version}) in block")
             }
         })?;
 
@@ -143,10 +149,10 @@ async fn blocks(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let bigtable = solana_storage_bigtable::LedgerStorage::new_with_config(config)
         .await
-        .map_err(|err| format!("Failed to connect to storage: {:?}", err))?;
+        .map_err(|err| format!("Failed to connect to storage: {err:?}"))?;
 
     let slots = bigtable.get_confirmed_blocks(starting_slot, limit).await?;
-    println!("{:?}", slots);
+    println!("{slots:?}");
     println!("{} blocks found", slots.len());
 
     Ok(())
@@ -160,7 +166,7 @@ async fn compare_blocks(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let owned_bigtable = solana_storage_bigtable::LedgerStorage::new_with_config(config)
         .await
-        .map_err(|err| format!("failed to connect to owned bigtable: {:?}", err))?;
+        .map_err(|err| format!("failed to connect to owned bigtable: {err:?}"))?;
     let owned_bigtable_slots = owned_bigtable
         .get_confirmed_blocks(starting_slot, limit)
         .await?;
@@ -170,7 +176,7 @@ async fn compare_blocks(
     );
     let reference_bigtable = solana_storage_bigtable::LedgerStorage::new_with_config(ref_config)
         .await
-        .map_err(|err| format!("failed to connect to reference bigtable: {:?}", err))?;
+        .map_err(|err| format!("failed to connect to reference bigtable: {err:?}"))?;
 
     let reference_bigtable_slots = reference_bigtable
         .get_confirmed_blocks(starting_slot, limit)
@@ -201,7 +207,7 @@ async fn confirm(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let bigtable = solana_storage_bigtable::LedgerStorage::new_with_config(config)
         .await
-        .map_err(|err| format!("Failed to connect to storage: {:?}", err))?;
+        .map_err(|err| format!("Failed to connect to storage: {err:?}"))?;
 
     let transaction_status = bigtable.get_signature_status(signature).await?;
 
@@ -227,7 +233,7 @@ async fn confirm(
             }
             Ok(None) => {}
             Err(err) => {
-                get_transaction_error = Some(format!("{:?}", err));
+                get_transaction_error = Some(format!("{err:?}"));
             }
         }
     }
@@ -280,7 +286,7 @@ pub async fn transaction_history(
                     result.memo.unwrap_or_default(),
                     match result.err {
                         None => "Confirmed".to_string(),
-                        Some(err) => format!("Failed: {:?}", err),
+                        Some(err) => format!("Failed: {err:?}"),
                     }
                 );
             } else {
@@ -321,7 +327,7 @@ pub async fn transaction_history(
                     }
                     match bigtable.get_confirmed_block(result.slot).await {
                         Err(err) => {
-                            println!("  Unable to get confirmed transaction details: {}", err);
+                            println!("  Unable to get confirmed transaction details: {err}");
                             break;
                         }
                         Ok(confirmed_block) => {
@@ -643,7 +649,7 @@ pub fn bigtable_process_command(
 
     let future = match (subcommand, sub_matches) {
         ("upload", Some(arg_matches)) => {
-            let starting_slot = value_t!(arg_matches, "starting_slot", Slot).unwrap_or(0);
+            let starting_slot = value_t!(arg_matches, "starting_slot", Slot).ok();
             let ending_slot = value_t!(arg_matches, "ending_slot", Slot).ok();
             let force_reupload = arg_matches.is_present("force_reupload");
             let blockstore = crate::open_blockstore(
@@ -786,7 +792,7 @@ pub fn bigtable_process_command(
     };
 
     future.unwrap_or_else(|err| {
-        eprintln!("{:?}", err);
+        eprintln!("{err:?}");
         exit(1);
     });
 }

@@ -20,6 +20,7 @@ use {
         bank_forks::BankForks,
         builtins::Builtin,
         commitment::BlockCommitmentCache,
+        epoch_accounts_hash::EpochAccountsHash,
         genesis_utils::{create_genesis_config_with_leader_ex, GenesisConfigInfo},
         runtime_config::RuntimeConfig,
     },
@@ -62,6 +63,7 @@ use {
 // Export types so test clients can limit their solana crate dependencies
 pub use {
     solana_banks_client::{BanksClient, BanksClientError},
+    solana_banks_interface::BanksTransactionResultWithMetadata,
     solana_program_runtime::invoke_context::InvokeContext,
     solana_sdk::transaction_context::IndexOfAccount,
 };
@@ -287,7 +289,7 @@ impl solana_sdk::program_stubs::SyscallStubs for SyscallStubs {
                     .set_data_from_slice(&account_info_data)
                     .unwrap(),
                 Err(err) if borrowed_account.get_data() != *account_info_data => {
-                    panic!("{:?}", err);
+                    panic!("{err:?}");
                 }
                 _ => {}
             }
@@ -543,7 +545,7 @@ impl ProgramTest {
             Account {
                 lamports,
                 data: read_file(find_file(filename).unwrap_or_else(|| {
-                    panic!("Unable to locate {}", filename);
+                    panic!("Unable to locate {filename}");
                 })),
                 owner,
                 executable: false,
@@ -566,7 +568,7 @@ impl ProgramTest {
             Account {
                 lamports,
                 data: base64::decode(data_base64)
-                    .unwrap_or_else(|err| panic!("Failed to base64 decode: {}", err)),
+                    .unwrap_or_else(|err| panic!("Failed to base64 decode: {err}")),
                 owner,
                 executable: false,
                 rent_epoch: 0,
@@ -664,7 +666,7 @@ impl ProgramTest {
             }
         };
 
-        let program_file = find_file(&format!("{}.so", program_name));
+        let program_file = find_file(&format!("{program_name}.so"));
         match (self.prefer_bpf, program_file, process_instruction) {
             // If SBF is preferred (i.e., `test-sbf` is invoked) and a BPF shared object exists,
             // use that as the program data.
@@ -679,18 +681,12 @@ impl ProgramTest {
             // Invalid: `test-sbf` invocation with no matching SBF shared object.
             (true, None, _) => {
                 warn_invalid_program_name();
-                panic!(
-                    "Program file data not available for {} ({})",
-                    program_name, program_id
-                );
+                panic!("Program file data not available for {program_name} ({program_id})");
             }
 
             // Invalid: regular `test` invocation without a processor.
             (false, _, None) => {
-                panic!(
-                    "Program processor not available for {} ({})",
-                    program_name, program_id
-                );
+                panic!("Program processor not available for {program_name} ({program_id})");
             }
         }
     }
@@ -872,7 +868,7 @@ impl ProgramTest {
         .await;
         let banks_client = start_client(transport)
             .await
-            .unwrap_or_else(|err| panic!("Failed to start banks client: {}", err));
+            .unwrap_or_else(|err| panic!("Failed to start banks client: {err}"));
 
         // Run a simulated PohService to provide the client with new blockhashes.  New blockhashes
         // are required when sending multiple otherwise identical transactions in series from a
@@ -906,7 +902,7 @@ impl ProgramTest {
         .await;
         let banks_client = start_client(transport)
             .await
-            .unwrap_or_else(|err| panic!("Failed to start banks client: {}", err));
+            .unwrap_or_else(|err| panic!("Failed to start banks client: {err}"));
 
         ProgramTestContext::new(
             bank_forks,
@@ -1129,6 +1125,8 @@ impl ProgramTestContext {
                 &bank,
                 &Pubkey::default(),
                 pre_warp_slot,
+                // some warping tests cannot use the append vecs because of the sequence of adding roots and flushing
+                solana_runtime::accounts_db::CalcAccountsHashDataSource::IndexForTests,
             ))
         };
 
@@ -1138,8 +1136,8 @@ impl ProgramTestContext {
         bank_forks.set_root(pre_warp_slot, &abs_request_sender, Some(pre_warp_slot));
 
         // The call to `set_root()` above will send an EAH request.  Need to intercept and handle
-        // (i.e. skip/make invalid) all EpochAccountsHash requests so future rooted banks do not
-        // hang in Bank::freeze() waiting for an in-flight EAH calculation to complete.
+        // all EpochAccountsHash requests so future rooted banks do not hang in Bank::freeze()
+        // waiting for an in-flight EAH calculation to complete.
         snapshot_request_receiver
             .try_iter()
             .filter(|snapshot_request| {
@@ -1152,7 +1150,10 @@ impl ProgramTestContext {
                     .accounts
                     .accounts_db
                     .epoch_accounts_hash_manager
-                    .set_invalid_for_tests();
+                    .set_valid(
+                        EpochAccountsHash::new(Hash::new_unique()),
+                        snapshot_request.snapshot_root_bank.slot(),
+                    )
             });
 
         // warp_bank is frozen so go forward to get unfrozen bank at warp_slot
@@ -1174,5 +1175,15 @@ impl ProgramTestContext {
         let bank = bank_forks.working_bank();
         self.last_blockhash = bank.last_blockhash();
         Ok(())
+    }
+
+    /// Get a new latest blockhash, similar in spirit to RpcClient::get_latest_blockhash()
+    pub async fn get_new_latest_blockhash(&mut self) -> io::Result<Hash> {
+        let blockhash = self
+            .banks_client
+            .get_new_latest_blockhash(&self.last_blockhash)
+            .await?;
+        self.last_blockhash = blockhash;
+        Ok(blockhash)
     }
 }

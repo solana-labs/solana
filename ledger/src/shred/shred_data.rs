@@ -4,7 +4,7 @@ use {
         common::dispatch,
         legacy, merkle,
         traits::{Shred as _, ShredData as ShredDataTrait},
-        DataShredHeader, Error, ShredCommonHeader, ShredFlags, ShredType, ShredVariant,
+        DataShredHeader, Error, ShredCommonHeader, ShredFlags, ShredType, ShredVariant, SignedData,
         MAX_DATA_SHREDS_PER_SLOT,
     },
     solana_sdk::{clock::Slot, signature::Signature},
@@ -29,11 +29,17 @@ impl ShredData {
     dispatch!(pub(super) fn payload(&self) -> &Vec<u8>);
     dispatch!(pub(super) fn sanitize(&self) -> Result<(), Error>);
     dispatch!(pub(super) fn set_signature(&mut self, signature: Signature));
-    dispatch!(pub(super) fn signed_message(&self) -> &[u8]);
 
     // Only for tests.
     dispatch!(pub(super) fn set_index(&mut self, index: u32));
     dispatch!(pub(super) fn set_slot(&mut self, slot: Slot));
+
+    pub(super) fn signed_data(&self) -> Result<SignedData, Error> {
+        match self {
+            Self::Legacy(shred) => Ok(SignedData::Chunk(shred.signed_data()?)),
+            Self::Merkle(shred) => Ok(SignedData::MerkleRoot(shred.signed_data()?)),
+        }
+    }
 
     pub(super) fn new_from_data(
         slot: Slot,

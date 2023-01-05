@@ -93,7 +93,7 @@ impl OptimisticConfirmationVerifier {
     }
 
     pub fn format_optimistic_confirmed_slot_violation_log(slot: Slot) -> String {
-        format!("Optimistically confirmed slot {} was not rooted", slot)
+        format!("Optimistically confirmed slot {slot} was not rooted")
     }
 
     pub fn log_unrooted_optimistic_slots(

@@ -25,7 +25,7 @@ pub enum LoadedAccountsDataLimitType {
 
 /// Get default value of `ComputeBudget::accounts_data_size_limit` if not set specifically. It
 /// sets to 10MB initially, may be changed with feature gate.
-const DEFAULT_LOADED_ACCOUNTS_DATA_LIMIT: u32 = 10_000_000;
+const DEFAULT_LOADED_ACCOUNTS_DATA_LIMIT: u32 = 10 * 1024 * 1024;
 pub fn get_default_loaded_accounts_data_limit(limit_type: &LoadedAccountsDataLimitType) -> u32 {
     match limit_type {
         LoadedAccountsDataLimitType::V0 => DEFAULT_LOADED_ACCOUNTS_DATA_LIMIT,
@@ -34,7 +34,7 @@ pub fn get_default_loaded_accounts_data_limit(limit_type: &LoadedAccountsDataLim
 /// Get max value of `ComputeBudget::accounts_data_size_limit`, it caps value user
 /// sets via `ComputeBudgetInstruction::set_compute_unit_limit`. It is set to 100MB
 /// initially, can be changed with feature gate.
-const MAX_LOADED_ACCOUNTS_DATA_LIMIT: u32 = 100_000_000;
+const MAX_LOADED_ACCOUNTS_DATA_LIMIT: u32 = 100 * 1024 * 1024;
 pub fn get_max_loaded_accounts_data_limit(limit_type: &LoadedAccountsDataLimitType) -> u32 {
     match limit_type {
         LoadedAccountsDataLimitType::V0 => MAX_LOADED_ACCOUNTS_DATA_LIMIT,
@@ -128,6 +128,14 @@ pub struct ComputeBudget {
     pub heap_cost: u64,
     /// Memory operation syscall base cost
     pub mem_op_base_cost: u64,
+    /// Number of compute units consumed to call alt_bn128_addition
+    pub alt_bn128_addition_cost: u64,
+    /// Number of compute units consumed to call alt_bn128_multiplication.
+    pub alt_bn128_multiplication_cost: u64,
+    /// Total cost will be alt_bn128_pairing_one_pair_cost_first
+    /// + alt_bn128_pairing_one_pair_cost_other * (num_elems - 1)
+    pub alt_bn128_pairing_one_pair_cost_first: u64,
+    pub alt_bn128_pairing_one_pair_cost_other: u64,
 }
 
 impl Default for ComputeBudget {
@@ -172,6 +180,10 @@ impl ComputeBudget {
             heap_size: None,
             heap_cost: 8,
             mem_op_base_cost: 10,
+            alt_bn128_addition_cost: 334,
+            alt_bn128_multiplication_cost: 3_840,
+            alt_bn128_pairing_one_pair_cost_first: 36_364,
+            alt_bn128_pairing_one_pair_cost_other: 12_121,
         }
     }
 

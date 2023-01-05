@@ -20,6 +20,7 @@ import {
   decodePrune,
   decodeSettleFunds,
   decodeSweepFees,
+  OPEN_BOOK_PROGRAM_ID,
   parseSerumInstructionKey,
   parseSerumInstructionTitle,
 } from "./serum/types";
@@ -40,7 +41,7 @@ import { InitOpenOrdersDetailsCard } from "./serum/InitOpenOrdersDetails";
 import { PruneDetailsCard } from "./serum/PruneDetails";
 import { ConsumeEventsPermissionedDetailsCard } from "./serum/ConsumeEventsPermissionedDetails";
 
-export function SerumDetailsCard(props: {
+export function SerumDetailsCard(initialProps: {
   ix: TransactionInstruction;
   index: number;
   result: SignatureResult;
@@ -48,7 +49,15 @@ export function SerumDetailsCard(props: {
   innerCards?: JSX.Element[];
   childIndex?: number;
 }) {
-  const { ix, index, result, signature, innerCards, childIndex } = props;
+  const { ix, index, result, signature, innerCards, childIndex } = initialProps;
+
+  const props = React.useMemo(() => {
+    const programName =
+      initialProps.ix.programId.toBase58() === OPEN_BOOK_PROGRAM_ID
+        ? "OpenBook"
+        : "Serum";
+    return { ...initialProps, programName };
+  }, [initialProps]);
 
   const { url } = useCluster();
 
@@ -143,7 +152,7 @@ export function SerumDetailsCard(props: {
       ix={ix}
       index={index}
       result={result}
-      title={`Serum Program: ${title || "Unknown"}`}
+      title={`${props.programName} Program: ${title || "Unknown"}`}
       innerCards={innerCards}
       childIndex={childIndex}
       defaultRaw

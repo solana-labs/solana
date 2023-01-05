@@ -36,7 +36,7 @@ pub fn decompress(data: &[u8]) -> Result<Vec<u8>, io::Error> {
     let method = bincode::deserialize(&data[..method_size as usize]).map_err(|err| {
         io::Error::new(
             io::ErrorKind::Other,
-            format!("method deserialize failed: {}", err),
+            format!("method deserialize failed: {err}"),
         )
     })?;
 

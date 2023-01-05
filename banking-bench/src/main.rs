@@ -5,6 +5,7 @@ use {
     log::*,
     rand::{thread_rng, Rng},
     rayon::prelude::*,
+    solana_client::connection_cache::ConnectionCache,
     solana_core::banking_stage::BankingStage,
     solana_gossip::cluster_info::{ClusterInfo, Node},
     solana_ledger::{
@@ -16,7 +17,7 @@ use {
     solana_measure::measure::Measure,
     solana_perf::packet::{to_packet_batches, PacketBatch},
     solana_poh::poh_recorder::{create_test_recorder, PohRecorder, WorkingBankEntry},
-    solana_runtime::{bank::Bank, bank_forks::BankForks, cost_model::CostModel},
+    solana_runtime::{bank::Bank, bank_forks::BankForks},
     solana_sdk::{
         compute_budget::ComputeBudgetInstruction,
         hash::Hash,
@@ -28,7 +29,7 @@ use {
         transaction::Transaction,
     },
     solana_streamer::socket::SocketAddrSpace,
-    solana_tpu_client::connection_cache::{ConnectionCache, DEFAULT_TPU_CONNECTION_POOL_SIZE},
+    solana_tpu_client::tpu_connection_cache::DEFAULT_TPU_CONNECTION_POOL_SIZE,
     std::{
         sync::{atomic::Ordering, Arc, RwLock},
         thread::sleep,
@@ -346,7 +347,6 @@ fn main() {
     .take(num_chunks)
     .collect();
 
-    // fund all the accounts
     let total_num_transactions: u64 = all_packets
         .iter()
         .map(|packets_for_single_iteration| packets_for_single_iteration.transactions.len() as u64)
@@ -356,6 +356,7 @@ fn main() {
         num_banking_threads, total_num_transactions
     );
 
+    // fund all the accounts
     all_packets.iter().for_each(|packets_for_single_iteration| {
         packets_for_single_iteration
             .transactions
@@ -383,7 +384,7 @@ fn main() {
                 .iter()
                 .for_each(|tx| {
                     let res = bank.process_transaction(tx);
-                    assert!(res.is_ok(), "sanity test transactions error: {:?}", res);
+                    assert!(res.is_ok(), "sanity test transactions error: {res:?}");
                 });
         });
         bank.clear_signatures();
@@ -394,7 +395,7 @@ fn main() {
                 let res =
                     bank.process_transactions(packets_for_single_iteration.transactions.iter());
                 for r in res {
-                    assert!(r.is_ok(), "sanity parallel execution error: {:?}", r);
+                    assert!(r.is_ok(), "sanity parallel execution error: {r:?}");
                 }
                 bank.clear_signatures();
             });
@@ -429,7 +430,6 @@ fn main() {
             num_banking_threads,
             None,
             replay_vote_sender,
-            Arc::new(RwLock::new(CostModel::default())),
             None,
             Arc::new(connection_cache),
             bank_forks.clone(),
