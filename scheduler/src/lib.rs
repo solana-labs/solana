@@ -920,16 +920,21 @@ type TaskQueueOccupiedEntry<'a> =
 use enum_dispatch::enum_dispatch;
 
 #[enum_dispatch]
-trait TaskQueueReader {
+enum ModeSpecificTaskQueue<C> {
+    Banking(TaskQueue),
+    Replaying(ChannelBackedTaskQueue<C>),
 }
 
-#[enum_dispatch(TaskQueueReader)]
-enum ModeSpecificTaskQueue<'a, C> {
-    Replaying(TaskQueue),
-    Banking(ChannelBackedTaskQueue<'a, C>),
+#[enum_dispatch(ModeSpecificTaskQueue<C>)]
+trait TaskQueueReader<C> {
+    fn add_to_schedule(&mut self, unique_weight: UniqueWeight, task: TaskInQueue);
+    fn heaviest_entry_to_execute(&mut self) -> Option<TaskInQueue>;
+    fn task_count_hint(&self) -> usize;
+    fn has_no_task_hint(&self) -> bool;
+    fn take_buffered_flush(&mut self) -> Option<std::sync::Arc<Checkpoint<C>>>;
 }
 
-impl TaskQueue {
+impl<C> TaskQueueReader<C> for TaskQueue {
     #[inline(never)]
     fn add_to_schedule(&mut self, unique_weight: UniqueWeight, task: TaskInQueue) {
         //trace!("TaskQueue::add(): {:?}", unique_weight);
@@ -938,8 +943,8 @@ impl TaskQueue {
     }
 
     #[inline(never)]
-    fn heaviest_entry_to_execute(&mut self) -> Option<TaskQueueOccupiedEntry<'_>> {
-        self.tasks.last_entry()
+    fn heaviest_entry_to_execute(&mut self) -> Option<TaskInQueue> {
+        self.tasks.pop_last().map(|(_k, v)| v)
     }
 
     fn task_count_hint(&self) -> usize {
@@ -949,18 +954,22 @@ impl TaskQueue {
     fn has_no_task_hint(&self) -> bool {
         self.tasks.is_empty()
     }
+
+    fn take_buffered_flush(&mut self) -> Option<std::sync::Arc<Checkpoint<C>>> {
+        None
+    }
 }
 
-struct ChannelBackedTaskQueue<'a, C> {
-    channel: &'a crossbeam_channel::Receiver<SchedulablePayload<C>>,
+struct ChannelBackedTaskQueue<C> {
+    channel: crossbeam_channel::Receiver<SchedulablePayload<C>>,
     buffered_task: Option<TaskInQueue>,
     buffered_flush: Option<std::sync::Arc<Checkpoint<C>>>,
 }
 
-impl<'a, C> ChannelBackedTaskQueue<'a, C> {
-    fn new(channel: &'a crossbeam_channel::Receiver<SchedulablePayload<C>>) -> Self {
+impl<C> ChannelBackedTaskQueue<C> {
+    fn new(channel: &crossbeam_channel::Receiver<SchedulablePayload<C>>) -> Self {
         Self {
-            channel,
+            channel: channel.clone(),
             buffered_task: None,
             buffered_flush: None,
         }
@@ -969,6 +978,13 @@ impl<'a, C> ChannelBackedTaskQueue<'a, C> {
     fn buffer(&mut self, task: TaskInQueue) {
         assert!(self.buffered_task.is_none());
         self.buffered_task = Some(task);
+    }
+}
+
+impl<C> TaskQueueReader<C> for ChannelBackedTaskQueue<C> {
+    #[inline(never)]
+    fn add_to_schedule(&mut self, unique_weight: UniqueWeight, task: TaskInQueue) {
+        self.buffer(task)
     }
 
     fn task_count_hint(&self) -> usize {
@@ -988,15 +1004,15 @@ impl<'a, C> ChannelBackedTaskQueue<'a, C> {
     }
 
     #[inline(never)]
-    fn heaviest_entry_to_execute(&mut self) -> Option<ChannelBackedTaskQueueEntry> {
+    fn heaviest_entry_to_execute(&mut self) -> Option<TaskInQueue> {
         match self.buffered_task.take() {
-            Some(task) => Some(ChannelBackedTaskQueueEntry(task)),
+            Some(task) => Some(task),
             None => {
                 // unblocking recv must have been gurantted to succeed at the time of this method
                 // invocation
                 match self.channel.try_recv().unwrap() {
                     SchedulablePayload(Flushable::Payload(task)) => {
-                        Some(ChannelBackedTaskQueueEntry(task))
+                        Some(task)
                     }
                     SchedulablePayload(Flushable::Flush(f)) => {
                         assert!(self.buffered_flush.is_none());
@@ -1006,18 +1022,6 @@ impl<'a, C> ChannelBackedTaskQueue<'a, C> {
                 }
             }
         }
-    }
-}
-
-struct ChannelBackedTaskQueueEntry(TaskInQueue);
-
-impl ChannelBackedTaskQueueEntry {
-    fn remove(self) -> TaskInQueue {
-        self.0
-    }
-
-    fn key(&self) -> &UniqueWeight {
-        &self.0.unique_weight
     }
 }
 
@@ -1111,10 +1115,6 @@ impl TaskSelection {
 }
 
 impl ScheduleStage {
-    fn push_to_runnable_queue(task: TaskInQueue, runnable_queue: &mut TaskQueue) {
-        runnable_queue.add_to_schedule(task.unique_weight, task);
-    }
-
     #[inline(never)]
     fn get_heaviest_from_contended<'a>(
         address_book: &'a mut AddressBook,
@@ -1125,7 +1125,7 @@ impl ScheduleStage {
     #[inline(never)]
     fn select_next_task<'a, C>(
         //runnable_queue: &'a mut TaskQueue,
-        runnable_queue: &'a mut ChannelBackedTaskQueue<C>,
+        runnable_queue: &'a mut ModeSpecificTaskQueue<C>,
         address_book: &mut AddressBook,
         contended_count: &usize,
         task_selection: &mut TaskSelection,
@@ -1141,7 +1141,7 @@ impl ScheduleStage {
             (Some(heaviest_runnable_entry), None) => {
                 trace!("select: runnable only");
                 if task_selection.runnable_exclusive() {
-                    let t = heaviest_runnable_entry.remove();
+                    let t = heaviest_runnable_entry; // .remove();
                     trace!("new task: {:032x}", t.unique_weight);
                     Some((TaskSource::Runnable, t))
                 } else {
@@ -1160,6 +1160,7 @@ impl ScheduleStage {
             (Some(heaviest_runnable_entry), Some(weight_from_contended)) => {
                 unreachable!("heaviest_entry_to_execute isn't idempotent....");
 
+                /*
                 let weight_from_runnable = heaviest_runnable_entry.key();
                 let uw = weight_from_contended.key();
 
@@ -1189,6 +1190,7 @@ impl ScheduleStage {
                         "identical unique weights shouldn't exist in both runnable and contended"
                     )
                 }
+                */
             }
             (None, None) => {
                 trace!("select: none");
@@ -1219,7 +1221,7 @@ impl ScheduleStage {
         ast: AST,
         task_sender: &crossbeam_channel::Sender<(TaskInQueue, Vec<LockAttempt>)>,
         //runnable_queue: &mut TaskQueue,
-        runnable_queue: &mut ChannelBackedTaskQueue<C>,
+        runnable_queue: &mut ModeSpecificTaskQueue<C>,
         address_book: &mut AddressBook,
         contended_count: &mut usize,
         prefer_immediate: bool,
@@ -1618,7 +1620,7 @@ impl ScheduleStage {
         ast: AST,
         task_sender: &crossbeam_channel::Sender<(TaskInQueue, Vec<LockAttempt>)>,
         //runnable_queue: &mut TaskQueue,
-        runnable_queue: &mut ChannelBackedTaskQueue<C>,
+        runnable_queue: &mut ModeSpecificTaskQueue<C>,
         address_book: &mut AddressBook,
         contended_count: &mut usize,
         prefer_immediate: bool,
@@ -1646,21 +1648,6 @@ impl ScheduleStage {
             Self::prepare_scheduled_execution(address_book, uw, t, ll, queue_clock, execute_clock)
         });
         maybe_ee
-    }
-
-    #[inline(never)]
-    fn _register_runnable_task(
-        weighted_tx: TaskInQueue,
-        runnable_queue: &mut TaskQueue,
-        sequence_time: &mut usize,
-    ) {
-        weighted_tx.record_sequence_time(*sequence_time);
-        assert_eq!(
-            *sequence_time,
-            weighted_tx.transaction_index_in_entries_for_replay() as usize
-        );
-        *sequence_time = sequence_time.checked_add(1).unwrap();
-        Self::push_to_runnable_queue(weighted_tx, runnable_queue)
     }
 
     #[must_use]
@@ -1768,7 +1755,7 @@ impl ScheduleStage {
         ) = Default::default();
 
         let mut maybe_checkpoint = None;
-        let mut channel_backed_runnable_queue = ChannelBackedTaskQueue::new(from_prev);
+        let mut runnable_queue = ModeSpecificTaskQueue::Replaying(ChannelBackedTaskQueue::new(from_prev));
 
         loop {
             // no execution at all => absolutely no active locks
@@ -1786,7 +1773,7 @@ impl ScheduleStage {
                    } else {
                        assert_eq!(from_exec.len(), 0);
                        from_exec_disconnected = true;
-                       info!("flushing1..: {:?} {} {} {} {}", (from_disconnected, from_exec_disconnected), channel_backed_runnable_queue.task_count_hint(), contended_count, executing_queue_count, provisioning_tracker_count);
+                       info!("flushing1..: {:?} {} {} {} {}", (from_disconnected, from_exec_disconnected), runnable_queue.task_count_hint(), contended_count, executing_queue_count, provisioning_tracker_count);
                        if from_disconnected {
                            break;
                        }
@@ -1803,7 +1790,7 @@ impl ScheduleStage {
                        } else {
                            assert_eq!(from_exec.len(), 0);
                            from_exec_disconnected = true;
-                           info!("flushing1..: {:?} {} {} {} {}", (from_disconnected, from_exec_disconnected), channel_backed_runnable_queue.task_count_hint(), contended_count, executing_queue_count, provisioning_tracker_count);
+                           info!("flushing1..: {:?} {} {} {} {}", (from_disconnected, from_exec_disconnected), runnable_queue.task_count_hint(), contended_count, executing_queue_count, provisioning_tracker_count);
                            if from_disconnected {
                                break;
                            }
@@ -1823,6 +1810,10 @@ impl ScheduleStage {
                                        format!("")
                                    };
                                    let mode_label = if old_mode != Some(task.mode) {
+                                       runnable_queue = match task.mode {
+                                           Mode::Replaying => ModeSpecificTaskQueue::Replaying(ChannelBackedTaskQueue::new(from_prev)),
+                                           Mode::Banking => ModeSpecificTaskQueue::Banking(TaskQueue::default()),
+                                       };
                                        mode = Some(task.mode);
                                        format!(" mode: {old_mode:?} => {mode:?}")
                                    } else {
@@ -1830,15 +1821,14 @@ impl ScheduleStage {
                                    };
                                    info!("schedule_once:initial id_{:016x}{slot_label}{mode_label}", random_id);
                                }
-                               //Self::register_runnable_task(task, runnable_queue, &mut sequence_time);
-                               channel_backed_runnable_queue.buffer(task);
+                               runnable_queue.add_to_schedule(task.unique_weight, task)
                            },
                            Ok(SchedulablePayload(Flushable::Flush(checkpoint))) => {
                                assert_eq!(from_prev.len(), 0);
                                assert!(!from_disconnected);
                                from_disconnected = true;
                                from_prev = never;
-                               trace!("flushing2..: {:?} {} {} {} {}", (from_disconnected, from_exec_disconnected), channel_backed_runnable_queue.task_count_hint(), contended_count, executing_queue_count, provisioning_tracker_count);
+                               trace!("flushing2..: {:?} {} {} {} {}", (from_disconnected, from_exec_disconnected), runnable_queue.task_count_hint(), contended_count, executing_queue_count, provisioning_tracker_count);
                                assert!(maybe_checkpoint.is_none());
                                maybe_checkpoint = Some(checkpoint);
                            },
@@ -1848,7 +1838,7 @@ impl ScheduleStage {
                                assert!(maybe_checkpoint.is_none());
                                from_disconnected = true;
                                from_prev = never;
-                               trace!("flushing2..: {:?} {} {} {} {}", (from_disconnected, from_exec_disconnected), channel_backed_runnable_queue.task_count_hint(), contended_count, executing_queue_count, provisioning_tracker_count);
+                               trace!("flushing2..: {:?} {} {} {} {}", (from_disconnected, from_exec_disconnected), runnable_queue.task_count_hint(), contended_count, executing_queue_count, provisioning_tracker_count);
                            },
                        }
                    }
@@ -1857,7 +1847,7 @@ impl ScheduleStage {
             }
 
             no_more_work = from_disconnected
-                && channel_backed_runnable_queue.task_count_hint()
+                && runnable_queue.task_count_hint()
                     + contended_count
                     + executing_queue_count
                     + provisioning_tracker_count
@@ -1872,7 +1862,7 @@ impl ScheduleStage {
 
             loop {
                 let runnable_finished =
-                    from_disconnected && channel_backed_runnable_queue.has_no_task_hint();
+                    from_disconnected && runnable_queue.has_no_task_hint();
 
                 let mut selection = TaskSelection::OnlyFromContended(if runnable_finished {
                     usize::max_value()
@@ -1890,7 +1880,7 @@ impl ScheduleStage {
                     let maybe_ee = Self::schedule_next_execution(
                         ast,
                         &task_sender,
-                        &mut channel_backed_runnable_queue,
+                        &mut runnable_queue,
                         address_book,
                         &mut contended_count,
                         prefer_immediate,
@@ -1908,7 +1898,7 @@ impl ScheduleStage {
                             .send(ExecutablePayload(ee))
                             .unwrap();
                     }
-                    debug!("schedule_once id_{:016x} [C] ch(prev: {}, exec: {}+{}|{}), r: {}, u/c: {}/{}, (imm+provi)/max: ({}+{})/{} s: {} l(s+f): {}+{}", random_id, (if from_disconnected { "-".to_string() } else { format!("{}", from_prev.len()) }), to_high_execute_substage.map(|t| format!("{}", t.len())).unwrap_or("-".into()), to_execute_substage.len(), from_exec.len(), channel_backed_runnable_queue.task_count_hint(), address_book.uncontended_task_ids.len(), contended_count, executing_queue_count, provisioning_tracker_count, max_executing_queue_count, address_book.stuck_tasks.len(), processed_count, failed_lock_count);
+                    debug!("schedule_once id_{:016x} [C] ch(prev: {}, exec: {}+{}|{}), r: {}, u/c: {}/{}, (imm+provi)/max: ({}+{})/{} s: {} l(s+f): {}+{}", random_id, (if from_disconnected { "-".to_string() } else { format!("{}", from_prev.len()) }), to_high_execute_substage.map(|t| format!("{}", t.len())).unwrap_or("-".into()), to_execute_substage.len(), from_exec.len(), runnable_queue.task_count_hint(), address_book.uncontended_task_ids.len(), contended_count, executing_queue_count, provisioning_tracker_count, max_executing_queue_count, address_book.stuck_tasks.len(), processed_count, failed_lock_count);
 
                     interval_count += 1;
                     if interval_count % 100 == 0 {
@@ -1916,7 +1906,7 @@ impl ScheduleStage {
                         if elapsed > std::time::Duration::from_millis(150) {
                             let delta = (processed_count - last_processed_count) as u128;
                             let elapsed2 = elapsed.as_micros();
-                            info!("schedule_once:interval id_{:016x} {slot:?} {mode:?} ch(prev: {}, exec: {}+{}|{}), r: {}, u/c: {}/{}, (imm+provi)/max: ({}+{})/{} s: {} l(s+f): {}+{} ({}txs/{}us={}tps)", random_id, (if from_disconnected { "-".to_string() } else { format!("{}", from_prev.len()) }), to_high_execute_substage.map(|t| format!("{}", t.len())).unwrap_or("-".into()), to_execute_substage.len(), from_exec.len(), channel_backed_runnable_queue.task_count_hint(), address_book.uncontended_task_ids.len(), contended_count, executing_queue_count, provisioning_tracker_count, max_executing_queue_count, address_book.stuck_tasks.len(), processed_count, failed_lock_count, delta, elapsed.as_micros(), 1_000_000_u128*delta/elapsed2);
+                            info!("schedule_once:interval id_{:016x} {slot:?} {mode:?} ch(prev: {}, exec: {}+{}|{}), r: {}, u/c: {}/{}, (imm+provi)/max: ({}+{})/{} s: {} l(s+f): {}+{} ({}txs/{}us={}tps)", random_id, (if from_disconnected { "-".to_string() } else { format!("{}", from_prev.len()) }), to_high_execute_substage.map(|t| format!("{}", t.len())).unwrap_or("-".into()), to_execute_substage.len(), from_exec.len(), runnable_queue.task_count_hint(), address_book.uncontended_task_ids.len(), contended_count, executing_queue_count, provisioning_tracker_count, max_executing_queue_count, address_book.stuck_tasks.len(), processed_count, failed_lock_count, delta, elapsed.as_micros(), 1_000_000_u128*delta/elapsed2);
                             (last_time, last_processed_count) =
                                 (Some(std::time::Instant::now()), processed_count);
                         }
@@ -1928,7 +1918,7 @@ impl ScheduleStage {
                     }
                 }
                 let mut selection = TaskSelection::OnlyFromRunnable;
-                while !channel_backed_runnable_queue.has_no_task_hint()
+                while !runnable_queue.has_no_task_hint()
                     && selection.should_proceed()
                     && (to_high_execute_substage.is_some()
                         || executing_queue_count + provisioning_tracker_count
@@ -1945,7 +1935,7 @@ impl ScheduleStage {
                     let maybe_ee = Self::schedule_next_execution(
                         ast,
                         &task_sender,
-                        &mut channel_backed_runnable_queue,
+                        &mut runnable_queue,
                         address_book,
                         &mut contended_count,
                         prefer_immediate,
@@ -1960,7 +1950,7 @@ impl ScheduleStage {
                         executing_queue_count = executing_queue_count.checked_add(1).unwrap();
                         to_execute_substage.send(ExecutablePayload(ee)).unwrap();
                     }
-                    debug!("schedule_once id_{:016x} [R] ch(prev: {}, exec: {}+{}|{}), r: {}, u/c: {}/{}, (imm+provi)/max: ({}+{})/{} s: {} l(s+f): {}+{}", random_id, (if from_disconnected { "-".to_string() } else { format!("{}", from_prev.len()) }), to_high_execute_substage.map(|t| format!("{}", t.len())).unwrap_or("-".into()), to_execute_substage.len(), from_exec.len(), channel_backed_runnable_queue.task_count_hint(), address_book.uncontended_task_ids.len(), contended_count, executing_queue_count, provisioning_tracker_count, max_executing_queue_count, address_book.stuck_tasks.len(), processed_count, failed_lock_count);
+                    debug!("schedule_once id_{:016x} [R] ch(prev: {}, exec: {}+{}|{}), r: {}, u/c: {}/{}, (imm+provi)/max: ({}+{})/{} s: {} l(s+f): {}+{}", random_id, (if from_disconnected { "-".to_string() } else { format!("{}", from_prev.len()) }), to_high_execute_substage.map(|t| format!("{}", t.len())).unwrap_or("-".into()), to_execute_substage.len(), from_exec.len(), runnable_queue.task_count_hint(), address_book.uncontended_task_ids.len(), contended_count, executing_queue_count, provisioning_tracker_count, max_executing_queue_count, address_book.stuck_tasks.len(), processed_count, failed_lock_count);
 
                     interval_count += 1;
                     if interval_count % 100 == 0 {
@@ -1968,13 +1958,13 @@ impl ScheduleStage {
                         if elapsed > std::time::Duration::from_millis(150) {
                             let delta = (processed_count - last_processed_count) as u128;
                             let elapsed2 = elapsed.as_micros();
-                            info!("schedule_once:interval id_{:016x} {slot:?} {mode:?} ch(prev: {}, exec: {}+{}|{}), r: {}, u/c: {}/{}, (imm+provi)/max: ({}+{})/{} s: {} l(s+f): {}+{} ({}txs/{}us={}tps)", random_id, (if from_disconnected { "-".to_string() } else { format!("{}", from_prev.len()) }), to_high_execute_substage.map(|t| format!("{}", t.len())).unwrap_or("-".into()), to_execute_substage.len(), from_exec.len(), channel_backed_runnable_queue.task_count_hint(), address_book.uncontended_task_ids.len(), contended_count, executing_queue_count, provisioning_tracker_count, max_executing_queue_count, address_book.stuck_tasks.len(), processed_count, failed_lock_count, delta, elapsed.as_micros(), 1_000_000_u128*delta/elapsed2);
+                            info!("schedule_once:interval id_{:016x} {slot:?} {mode:?} ch(prev: {}, exec: {}+{}|{}), r: {}, u/c: {}/{}, (imm+provi)/max: ({}+{})/{} s: {} l(s+f): {}+{} ({}txs/{}us={}tps)", random_id, (if from_disconnected { "-".to_string() } else { format!("{}", from_prev.len()) }), to_high_execute_substage.map(|t| format!("{}", t.len())).unwrap_or("-".into()), to_execute_substage.len(), from_exec.len(), runnable_queue.task_count_hint(), address_book.uncontended_task_ids.len(), contended_count, executing_queue_count, provisioning_tracker_count, max_executing_queue_count, address_book.stuck_tasks.len(), processed_count, failed_lock_count, delta, elapsed.as_micros(), 1_000_000_u128*delta/elapsed2);
                             (last_time, last_processed_count) =
                                 (Some(std::time::Instant::now()), processed_count);
                         }
                     }
 
-                    if let Some(checkpoint) = channel_backed_runnable_queue.take_buffered_flush() {
+                    if let Some(checkpoint) = runnable_queue.take_buffered_flush() {
                         assert_eq!(from_prev.len(), 0);
                         assert!(!from_disconnected);
                         from_disconnected = true;
@@ -2064,19 +2054,14 @@ impl ScheduleStage {
                                 maybe_checkpoint = Some(checkpoint);
                             }
                             Flushable::Payload(task) => {
-                                /*Self::register_runnable_task(
-                                    task,
-                                    runnable_queue,
-                                    &mut sequence_time,
-                                );*/
-                                channel_backed_runnable_queue.buffer(task);
+                                runnable_queue.add_to_schedule(task.unique_weight, task)
                             }
                         }
                     }
                 }
             }
             if select_skipped {
-                let task_count = channel_backed_runnable_queue.task_count_hint();
+                let task_count = runnable_queue.task_count_hint();
                 assert!(executing_queue_count >= 1 || did_processed, "id_{random_id:016x} {slot:?} {mode:?} {executing_queue_count} => 1 || {did_processed}, {task_count} {contended_count} {provisioning_tracker_count}");
             }
         }
@@ -2109,7 +2094,7 @@ impl ScheduleStage {
             } else {
                 "-".into()
             };
-            info!("schedule_once:final   id_{:016x} {slot:?} {mode:?} (no_more_work: {}) ch(prev: {}, exec: {}|{}), runnnable: {}, contended: {}, (immediate+provisional)/max: ({}+{})/{} uncontended: {} stuck: {} miss: {}, overall: {}txs/{}us={}tps! (cpu time: {cpu_time2}us)", random_id, no_more_work, (if from_disconnected { "-".to_string() } else { format!("{}", from_prev.len()) }), to_execute_substage.len(), (if from_exec_disconnected { "-".to_string() } else { format!("{}", from_exec.len())}), channel_backed_runnable_queue.task_count_hint(), contended_count, executing_queue_count, provisioning_tracker_count, max_executing_queue_count, address_book.uncontended_task_ids.len(), address_book.stuck_tasks.len(), failed_lock_count, processed_count, elapsed.as_micros(), tps_label);
+            info!("schedule_once:final   id_{:016x} {slot:?} {mode:?} (no_more_work: {}) ch(prev: {}, exec: {}|{}), runnnable: {}, contended: {}, (immediate+provisional)/max: ({}+{})/{} uncontended: {} stuck: {} miss: {}, overall: {}txs/{}us={}tps! (cpu time: {cpu_time2}us)", random_id, no_more_work, (if from_disconnected { "-".to_string() } else { format!("{}", from_prev.len()) }), to_execute_substage.len(), (if from_exec_disconnected { "-".to_string() } else { format!("{}", from_exec.len())}), runnable_queue.task_count_hint(), contended_count, executing_queue_count, provisioning_tracker_count, max_executing_queue_count, address_book.uncontended_task_ids.len(), address_book.stuck_tasks.len(), failed_lock_count, processed_count, elapsed.as_micros(), tps_label);
         }
 
         maybe_checkpoint
