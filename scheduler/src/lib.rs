@@ -628,8 +628,8 @@ pub struct UniqueWeight {
     // fee?
 }
 */
-pub type Weight = u64;
-pub type UniqueWeight = u64;
+pub type Weight = u128;
+pub type UniqueWeight = u128;
 
 struct Bundle {
     // what about bundle1{tx1a, tx2} and bundle2{tx1b, tx2}?
@@ -705,7 +705,7 @@ impl Task {
     }
 
     pub fn transaction_index_in_entries_for_replay(&self) -> u64 {
-        u64::max_value() - self.unique_weight
+        (UniqueWeight::max_value() - self.unique_weight).try_into().unwrap()
     }
 
     #[inline(never)]

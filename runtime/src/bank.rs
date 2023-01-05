@@ -1066,9 +1066,9 @@ impl<C> Scheduler<C> {
             .collect::<Vec<_>>();
 
         //assert_eq!(index, self.transaction_index.fetch_add(1, std::sync::atomic::Ordering::SeqCst));
-        let uw = usize::max_value() - index;
+        let uw = solana_scheduler::UniqueWeight::max_value() - index as solana_scheduler::UniqueWeight;
         let t =
-            solana_scheduler::Task::new_for_queue(nast, uw as u64, (sanitized_tx.clone(), locks), slot, mode);
+            solana_scheduler::Task::new_for_queue(nast, uw, (sanitized_tx.clone(), locks), slot, mode);
         self.transaction_sender
             .as_ref()
             .unwrap()
