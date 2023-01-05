@@ -717,7 +717,6 @@ mod tests {
                     slot,
                     confirmation_count,
                 })
-                .into_iter()
                 .collect::<VecDeque<Lockout>>();
             let vote = VoteTransaction::from(VoteStateUpdate::new(
                 slots,

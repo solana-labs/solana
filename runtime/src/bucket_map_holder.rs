@@ -404,7 +404,6 @@ pub mod tests {
         let bins = 4;
         let test = BucketMapHolder::<u64>::new(bins, &Some(AccountsIndexConfig::default()), 1);
         let visited = (0..bins)
-            .into_iter()
             .map(|_| AtomicUsize::default())
             .collect::<Vec<_>>();
         let iterations = bins * 30;
@@ -412,7 +411,7 @@ pub mod tests {
         let expected = threads * iterations / bins;
 
         (0..threads).into_par_iter().for_each(|_| {
-            (0..iterations).into_iter().for_each(|_| {
+            (0..iterations).for_each(|_| {
                 let bin = test.next_bucket_to_flush();
                 visited[bin].fetch_add(1, Ordering::Relaxed);
             });

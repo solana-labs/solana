@@ -120,7 +120,6 @@ fn main() -> Result<()> {
     }
 
     let producer_threads: Vec<_> = (0..num_producers)
-        .into_iter()
         .map(|_| producer(&addr, exit.clone()))
         .collect();
 

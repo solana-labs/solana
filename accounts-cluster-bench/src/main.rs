@@ -155,7 +155,6 @@ fn make_create_message(
     let space = maybe_space.unwrap_or_else(|| thread_rng().gen_range(0, 1000));
 
     let instructions: Vec<_> = (0..num_instructions)
-        .into_iter()
         .flat_map(|_| {
             let program_id = if mint.is_some() {
                 inline_spl_token::id()
@@ -203,7 +202,6 @@ fn make_close_message(
     spl_token: bool,
 ) -> Message {
     let instructions: Vec<_> = (0..num_instructions)
-        .into_iter()
         .filter_map(|_| {
             let program_id = if spl_token {
                 inline_spl_token::id()

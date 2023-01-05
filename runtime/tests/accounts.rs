@@ -112,7 +112,7 @@ fn test_bad_bank_hash() {
             last_print = Instant::now();
         }
         let num_accounts = thread_rng().gen_range(0, 100);
-        (0..num_accounts).into_iter().for_each(|_| {
+        (0..num_accounts).for_each(|_| {
             let mut idx;
             loop {
                 idx = thread_rng().gen_range(0, max_accounts);
