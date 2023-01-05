@@ -435,14 +435,17 @@ impl AppendVec {
     }
 
     pub fn new_from_file<P: AsRef<Path>>(path: P, current_len: usize) -> io::Result<(Self, usize)> {
-        let new = Self::new_from_file_unchecked(path, current_len)?;
+        let new = Self::new_from_file_unchecked(&path, current_len)?;
 
         let (sanitized, num_accounts) = new.sanitize_layout_and_length();
         if !sanitized {
-            return Err(std::io::Error::new(
-                std::io::ErrorKind::Other,
-                "incorrect layout/length/data",
-            ));
+            // This info show the failing accountvec file path.  It helps debugging
+            // the appendvec data corrupution issues related to recycling.
+            let err_msg = format!(
+                "incorrect layout/length/data in the appendvec at path {}",
+                path.as_ref().display()
+            );
+            return Err(std::io::Error::new(std::io::ErrorKind::Other, err_msg));
         }
 
         Ok((new, num_accounts))
@@ -1153,7 +1156,7 @@ pub mod tests {
         }
 
         let result = AppendVec::new_from_file(path, accounts_len);
-        assert_matches!(result, Err(ref message) if message.to_string() == *"incorrect layout/length/data");
+        assert_matches!(result, Err(ref message) if message.to_string().starts_with("incorrect layout/length/data"));
     }
 
     #[test]
@@ -1181,7 +1184,7 @@ pub mod tests {
         let accounts_len = av.len();
         drop(av);
         let result = AppendVec::new_from_file(path, accounts_len);
-        assert_matches!(result, Err(ref message) if message.to_string() == *"incorrect layout/length/data");
+        assert_matches!(result, Err(ref message) if message.to_string().starts_with("incorrect layout/length/data"));
     }
 
     #[test]
@@ -1207,7 +1210,7 @@ pub mod tests {
         let accounts_len = av.len();
         drop(av);
         let result = AppendVec::new_from_file(path, accounts_len);
-        assert_matches!(result, Err(ref message) if message.to_string() == *"incorrect layout/length/data");
+        assert_matches!(result, Err(ref message) if message.to_string().starts_with("incorrect layout/length/data"));
     }
 
     #[test]
@@ -1269,6 +1272,6 @@ pub mod tests {
         let accounts_len = av.len();
         drop(av);
         let result = AppendVec::new_from_file(path, accounts_len);
-        assert_matches!(result, Err(ref message) if message.to_string() == *"incorrect layout/length/data");
+        assert_matches!(result, Err(ref message) if message.to_string().starts_with("incorrect layout/length/data"));
     }
 }
