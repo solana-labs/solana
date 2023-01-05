@@ -10055,28 +10055,48 @@ pub(crate) mod tests {
     fn test_collect_rent_from_accounts() {
         solana_logger::setup();
 
-        let zero_lamport_pubkey = Pubkey::new(&[0; 32]);
+        for skip_rewrites in [false, true] {
+            let zero_lamport_pubkey = Pubkey::new(&[0; 32]);
 
-        let genesis_bank = create_simple_test_arc_bank(100000);
-        let first_bank = Arc::new(new_from_parent(&genesis_bank));
-        let first_slot = 1;
-        assert_eq!(first_slot, first_bank.slot());
-        let epoch_delta = 4;
-        let later_bank = Arc::new(new_from_parent_next_epoch(&first_bank, epoch_delta)); // a bank a few epochs in the future
-        let later_slot = later_bank.slot();
-        assert!(later_bank.epoch() == genesis_bank.epoch() + epoch_delta);
+            let genesis_bank = create_simple_test_arc_bank(100000);
+            let mut first_bank = new_from_parent(&genesis_bank);
+            if skip_rewrites {
+                first_bank.activate_feature(&feature_set::skip_rent_rewrites::id());
+            }
+            let first_bank = Arc::new(first_bank);
 
-        let data_size = 0; // make sure we're rent exempt
-        let lamports = later_bank.get_minimum_balance_for_rent_exemption(data_size); // cannot be 0 or we zero out rent_epoch in rent collection and we need to be rent exempt
-        let mut account = AccountSharedData::new(lamports, data_size, &Pubkey::default());
-        account.set_rent_epoch(later_bank.epoch() - 1); // non-zero, but less than later_bank's epoch
+            let first_slot = 1;
+            assert_eq!(first_slot, first_bank.slot());
+            let epoch_delta = 4;
+            let later_bank = Arc::new(new_from_parent_next_epoch(&first_bank, epoch_delta)); // a bank a few epochs in the future
+            let later_slot = later_bank.slot();
+            assert!(later_bank.epoch() == genesis_bank.epoch() + epoch_delta);
 
-        // loaded from previous slot, so we skip rent collection on it
-        let _result = later_bank.collect_rent_from_accounts(
-            vec![(zero_lamport_pubkey, account, later_slot - 1)],
-            None,
-            PartitionIndex::default(),
-        );
+            let data_size = 0; // make sure we're rent exempt
+            let lamports = later_bank.get_minimum_balance_for_rent_exemption(data_size); // cannot be 0 or we zero out rent_epoch in rent collection and we need to be rent exempt
+            let mut account = AccountSharedData::new(lamports, data_size, &Pubkey::default());
+            account.set_rent_epoch(later_bank.epoch() - 1); // non-zero, but less than later_bank's epoch
+
+            // loaded from previous slot, so we skip rent collection on it
+            let _result = later_bank.collect_rent_from_accounts(
+                vec![(zero_lamport_pubkey, account, later_slot - 1)],
+                None,
+                PartitionIndex::default(),
+            );
+
+            let deltas = later_bank
+                .rc
+                .accounts
+                .accounts_db
+                .get_pubkey_hash_for_slot(later_slot)
+                .0;
+            assert_eq!(
+                !deltas
+                    .iter()
+                    .any(|(pubkey, _)| pubkey == &zero_lamport_pubkey),
+                skip_rewrites
+            );
+        }
     }
 
     #[test]
