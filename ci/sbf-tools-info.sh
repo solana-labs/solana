@@ -11,7 +11,7 @@ SBF_TOOLS_VERSION=unknown
 
 cargo_build_sbf_main="${here}/../sdk/cargo-build-sbf/src/main.rs"
 if [[ -f "${cargo_build_sbf_main}" ]]; then
-    version=$(sed -e 's/^.*sbf_tools_version\s*=\s*"\(v[0-9.]\+\)".*/\1/;t;d' "${cargo_build_sbf_main}")
+    version=$(sed -e 's/^.*sbf_tools_version\s*=\s*String::from("\(v[0-9.]\+\)").*/\1/;t;d' "${cargo_build_sbf_main}")
     if [[ ${version} != '' ]]; then
         SBF_TOOLS_VERSION="${version}"
     else

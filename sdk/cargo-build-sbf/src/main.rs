@@ -124,6 +124,106 @@ where
         .collect::<String>()
 }
 
+pub fn is_version_string(arg: &str) -> Result<(), String> {
+    let semver_re = Regex::new(r"^v[0-9]+\.[0-9]+(\.[0-9]+)?").unwrap();
+    if semver_re.is_match(arg) {
+        return Ok(());
+    }
+    Err("a version string starts with 'v' and contains major and minor version numbers separated by a dot, e.g. v1.32".to_string())
+}
+
+fn find_installed_sbf_tools(arch: &str) -> Vec<String> {
+    let home_dir = PathBuf::from(env::var("HOME").unwrap_or_else(|err| {
+        error!("Can't get home directory path: {}", err);
+        exit(1);
+    }));
+    let solana = home_dir.join(".cache").join("solana");
+    let package = if arch == "bpf" {
+        "bpf-tools"
+    } else {
+        "sbf-tools"
+    };
+    std::fs::read_dir(solana)
+        .unwrap()
+        .filter_map(|e| match e {
+            Err(_) => None,
+            Ok(e) => {
+                if e.path().join(package).is_dir() {
+                    Some(e.path().file_name().unwrap().to_string_lossy().to_string())
+                } else {
+                    None
+                }
+            }
+        })
+        .collect::<Vec<_>>()
+}
+
+fn get_latest_sbf_tools_version() -> Result<String, String> {
+    let url = "https://github.com/solana-labs/sbf-tools/releases/latest";
+    let resp =
+        reqwest::blocking::get(url).map_err(|err| format!("Failed to GET {}: {}", url, err))?;
+    let path = std::path::Path::new(resp.url().path());
+    let version = path.file_name().unwrap().to_string_lossy().to_string();
+    Ok(version)
+}
+
+fn normalize_version(version: String) -> String {
+    let dots = version.as_bytes().iter().fold(
+        0,
+        |n: u32, c| if *c == b'.' { n.saturating_add(1) } else { n },
+    );
+    if dots == 1 {
+        format!("{}.0", version)
+    } else {
+        version
+    }
+}
+
+fn validate_sbf_tools_version(
+    arch: &str,
+    requested_version: &str,
+    builtin_version: String,
+) -> String {
+    let normalized_requested = normalize_version(requested_version.to_string());
+    let requested_semver = semver::Version::parse(&normalized_requested[1..]).unwrap();
+    let installed_versions = find_installed_sbf_tools(arch);
+    for v in installed_versions {
+        if requested_semver <= semver::Version::parse(&normalize_version(v)[1..]).unwrap() {
+            return requested_version.to_string();
+        }
+    }
+    let latest_version = get_latest_sbf_tools_version().unwrap_or_else(|err| {
+        debug!(
+            "Can't get the latest version of sbf-tools: {}. Using built-in version {}.",
+            err, &builtin_version,
+        );
+        builtin_version.clone()
+    });
+    let normalized_latest = normalize_version(latest_version.clone());
+    let latest_semver = semver::Version::parse(&normalized_latest[1..]).unwrap();
+    if requested_semver <= latest_semver {
+        requested_version.to_string()
+    } else {
+        warn!(
+            "Version {} is not valid, latest version is {}. Using the built-in version {}",
+            requested_version, latest_version, &builtin_version,
+        );
+        builtin_version
+    }
+}
+
+fn make_sbf_tools_path_for_version(package: &str, version: &str) -> PathBuf {
+    let home_dir = PathBuf::from(env::var("HOME").unwrap_or_else(|err| {
+        error!("Can't get home directory path: {}", err);
+        exit(1);
+    }));
+    home_dir
+        .join(".cache")
+        .join("solana")
+        .join(version)
+        .join(package)
+}
+
 // Check whether a package is installed and install it if missing.
 fn install_if_missing(
     config: &Config,
@@ -524,21 +624,12 @@ fn build_sbf_package(config: &Config, target_directory: &Path, package: &cargo_m
     } else {
         "solana-sbf-tools-linux.tar.bz2"
     };
-
-    let home_dir = PathBuf::from(env::var("HOME").unwrap_or_else(|err| {
-        error!("Can't get home directory path: {}", err);
-        exit(1);
-    }));
     let package = if config.arch == "bpf" {
         "bpf-tools"
     } else {
         "sbf-tools"
     };
-    let target_path = home_dir
-        .join(".cache")
-        .join("solana")
-        .join(config.sbf_tools_version)
-        .join(package);
+    let target_path = make_sbf_tools_path_for_version(package, config.sbf_tools_version);
     install_if_missing(
         config,
         package,
@@ -846,7 +937,7 @@ fn main() {
 
     // The following line is scanned by CI configuration script to
     // separate cargo caches according to the version of sbf-tools.
-    let sbf_tools_version = "v1.32";
+    let sbf_tools_version = String::from("v1.32");
     let version = format!("{}\nsbf-tools {}", crate_version!(), sbf_tools_version);
     let matches = clap::Command::new(crate_name!())
         .about(crate_description!())
@@ -934,6 +1025,14 @@ fn main() {
                 .help("Run without accessing the network"),
         )
         .arg(
+            Arg::new("tools_version")
+                .long("tools-version")
+                .value_name("STRING")
+                .takes_value(true)
+                .validator(is_version_string)
+                .help("sbf-tools version to use or to install, a version string, e.g. \"v1.32\""),
+        )
+        .arg(
             Arg::new("verbose")
                 .short('v')
                 .long("verbose")
@@ -968,6 +1067,15 @@ fn main() {
     let sbf_sdk: PathBuf = matches.value_of_t_or_exit("sbf_sdk");
     let sbf_out_dir: Option<PathBuf> = matches.value_of_t("sbf_out_dir").ok();
 
+    let sbf_tools_version = if let Some(tools_version) = matches.value_of("tools_version") {
+        validate_sbf_tools_version(
+            matches.value_of("arch").unwrap(),
+            tools_version,
+            sbf_tools_version,
+        )
+    } else {
+        sbf_tools_version
+    };
     let config = Config {
         cargo_args: matches
             .values_of("cargo_args")
@@ -989,7 +1097,7 @@ fn main() {
                     .join(sbf_out_dir)
             }
         }),
-        sbf_tools_version,
+        sbf_tools_version: sbf_tools_version.as_str(),
         dump: matches.is_present("dump"),
         features: matches.values_of_t("features").ok().unwrap_or_default(),
         force_tools_install: matches.is_present("force_tools_install"),
