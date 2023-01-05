@@ -2723,7 +2723,7 @@ mod tests {
         let program_pubkey = Pubkey::new_unique();
         let new_authority_pubkey = Keypair::new();
         let new_authority_pubkey_file = make_tmp_path("authority_keypair_file");
-        write_keypair_file(&new_authority_pubkey, &new_authority_pubkey_file).unwrap();
+        write_keypair_file(&new_authority_pubkey, new_authority_pubkey_file).unwrap();
         let test_command = test_commands.clone().get_matches_from(vec![
             "test",
             "program",
@@ -3109,7 +3109,7 @@ mod tests {
         let program_keypair_location = program_location.with_file_name("noop-keypair.json");
         std::fs::create_dir_all(deploy_path).unwrap();
         std::fs::copy(pathbuf, program_location.as_os_str()).unwrap();
-        write_keypair_file(&program_pubkey, &program_keypair_location).unwrap();
+        write_keypair_file(&program_pubkey, program_keypair_location).unwrap();
 
         let config = CliConfig {
             rpc_client: Some(Arc::new(RpcClient::new_mock("".to_string()))),
