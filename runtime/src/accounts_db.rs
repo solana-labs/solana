@@ -331,8 +331,6 @@ impl AncientSlotPubkeys {
 
 struct ShrinkCollect<'a> {
     original_bytes: u64,
-    /// ids of stores that were scanned during account collection
-    store_ids: Vec<AppendVecId>,
     aligned_total_bytes: u64,
     unrefed_pubkeys: Vec<&'a Pubkey>,
     alive_accounts: Vec<&'a FoundStoredAccount<'a>>,
@@ -383,7 +381,6 @@ struct LoadAccountsIndexForShrink<'a> {
 pub struct GetUniqueAccountsResult<'a> {
     pub stored_accounts: Vec<FoundStoredAccount<'a>>,
     pub original_bytes: u64,
-    store_ids: Vec<AppendVecId>,
 }
 
 pub struct AccountsAddRootTiming {
@@ -3683,29 +3680,28 @@ impl AccountsDb {
     {
         let mut stored_accounts: HashMap<Pubkey, FoundStoredAccount> = HashMap::new();
         let mut original_bytes = 0;
-        let store_ids = stores
-            .into_iter()
-            .map(|store| {
-                original_bytes += store.total_bytes();
-                let store_id = store.append_vec_id();
-                store.accounts.account_iter().for_each(|account| {
-                    let new_entry = FoundStoredAccount { account, store_id };
-                    match stored_accounts.entry(*new_entry.account.pubkey()) {
-                        Entry::Occupied(mut occupied_entry) => {
-                            assert!(
-                                new_entry.account.meta.write_version_obsolete
-                                    > occupied_entry.get().account.meta.write_version_obsolete
-                            );
-                            occupied_entry.insert(new_entry);
-                        }
-                        Entry::Vacant(vacant_entry) => {
-                            vacant_entry.insert(new_entry);
-                        }
+        let mut count = 0;
+        stores.into_iter().for_each(|store| {
+            count += 1;
+            assert!(count < 2, "there should be a max of 1 append vec per slot");
+            original_bytes += store.total_bytes();
+            let store_id = store.append_vec_id();
+            store.accounts.account_iter().for_each(|account| {
+                let new_entry = FoundStoredAccount { account, store_id };
+                match stored_accounts.entry(*new_entry.account.pubkey()) {
+                    Entry::Occupied(mut occupied_entry) => {
+                        assert!(
+                            new_entry.account.meta.write_version_obsolete
+                                > occupied_entry.get().account.meta.write_version_obsolete
+                        );
+                        occupied_entry.insert(new_entry);
                     }
-                });
-                store.append_vec_id()
-            })
-            .collect();
+                    Entry::Vacant(vacant_entry) => {
+                        vacant_entry.insert(new_entry);
+                    }
+                }
+            });
+        });
 
         // sort by pubkey to keep account index lookups close
         let mut stored_accounts = stored_accounts
@@ -3718,7 +3714,6 @@ impl AccountsDb {
         GetUniqueAccountsResult {
             stored_accounts,
             original_bytes,
-            store_ids,
         }
     }
 
@@ -3737,7 +3732,6 @@ impl AccountsDb {
             GetUniqueAccountsResult {
                 stored_accounts: stored_accounts_temp,
                 original_bytes,
-                store_ids,
             },
             storage_read_elapsed,
         ) = measure!(self.get_unique_accounts_from_storages(stores));
@@ -3805,10 +3799,7 @@ impl AccountsDb {
             .bytes_written
             .fetch_add(aligned_total_bytes, Ordering::Relaxed);
 
-        assert_eq!(store_ids.len(), 1);
-
         ShrinkCollect {
-            store_ids,
             original_bytes,
             aligned_total_bytes,
             unrefed_pubkeys,
@@ -3861,7 +3852,7 @@ impl AccountsDb {
         if Self::should_not_shrink(
             shrink_collect.aligned_total_bytes,
             shrink_collect.original_bytes,
-            shrink_collect.store_ids.len(),
+            1,
         ) {
             self.shrink_stats
                 .skipped_shrink
@@ -17303,10 +17294,6 @@ pub mod tests {
                                     4096
                                 };
                                 assert_eq!(shrink_collect.original_bytes, expected_original_bytes);
-                                assert_eq!(
-                                    shrink_collect.store_ids,
-                                    vec![storages[0].append_vec_id()]
-                                );
                                 assert_eq!(shrink_collect.total_starting_accounts, account_count);
                                 let mut expected_all_are_zero_lamports = lamports == 0;
                                 if !append_opposite_alive_account {
@@ -17702,7 +17689,7 @@ pub mod tests {
 
         let storages = db.get_storages_for_slot(starting_slot).unwrap();
         let created_accounts = db.get_unique_accounts_from_storages(storages.iter());
-        assert_eq!(created_accounts.store_ids[0], starting_id);
+        assert_eq!(created_accounts.stored_accounts.len(), 1);
 
         if alive {
             populate_index(db, starting_slot..(starting_slot + (num_slots as Slot) + 1));
@@ -17745,12 +17732,10 @@ pub mod tests {
         let GetUniqueAccountsResult {
             stored_accounts: after_stored_accounts,
             original_bytes: after_original_bytes,
-            store_ids: after_store_ids,
         } = db.get_unique_accounts_from_storages(after_stores.iter());
         assert_ne!(created_accounts.original_bytes, after_original_bytes);
         assert_eq!(created_accounts.stored_accounts.len(), 1);
         assert_eq!(after_stored_accounts.len(), usize::from(alive));
-        assert_eq!(after_store_ids, vec![ancient.append_vec_id()]);
         (db, slot1)
     }
 
