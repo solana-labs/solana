@@ -357,9 +357,7 @@ mod tests {
             let result = rent_collector.calculate_rent_result(&Pubkey::default(), &account, None);
             assert!(
                 matches!(result, RentResult::Exempt),
-                "{:?}, set_exempt_rent_epoch_max: {}",
-                result,
-                set_exempt_rent_epoch_max,
+                "{result:?}, set_exempt_rent_epoch_max: {set_exempt_rent_epoch_max}",
             );
             {
                 let mut account_clone = account.clone();
