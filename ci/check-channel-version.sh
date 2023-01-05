@@ -8,7 +8,7 @@ if [[ -z $CI_TAG ]]; then
     if [[ -n $CHANNEL_LATEST_TAG ]]; then
       source scripts/read-cargo-variable.sh
 
-      version=$(readCargoVariable version "version/Cargo.toml")
+      version=$(readCargoVariable version Cargo.toml)
       echo "latest channel tag: $CHANNEL_LATEST_TAG"
       echo "current version: v$version"
 
