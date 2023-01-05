@@ -705,7 +705,10 @@ impl Task {
     }
 
     pub fn transaction_index_in_entries_for_replay(&self) -> u64 {
-        (UniqueWeight::max_value() - self.unique_weight).try_into().unwrap()
+        match self.mode {
+            Mode::Replaying => (UniqueWeight::max_value() - self.unique_weight).try_into().unwrap(),
+            Mode::Banking => (u64::max_value() as u128 & self.unique_weight).try_into().unwrap(),
+        }
     }
 
     #[inline(never)]
@@ -1127,6 +1130,7 @@ impl ScheduleStage {
                 trace!("select: runnable only");
                 if task_selection.runnable_exclusive() {
                     let t = heaviest_runnable_entry.remove();
+                    trace!("new task: {:032x}", t.unique_weight);
                     Some((TaskSource::Runnable, t))
                 } else {
                     None

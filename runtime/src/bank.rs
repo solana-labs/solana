@@ -1066,7 +1066,12 @@ impl<C> Scheduler<C> {
             .collect::<Vec<_>>();
 
         //assert_eq!(index, self.transaction_index.fetch_add(1, std::sync::atomic::Ordering::SeqCst));
-        let uw = solana_scheduler::UniqueWeight::max_value() - index as solana_scheduler::UniqueWeight;
+        use solana_scheduler::{Mode, UniqueWeight};
+        use crate::transaction_priority_details::GetTransactionPriorityDetails;
+        let uw = match mode {
+            Mode::Banking => ((sanitized_tx.get_transaction_priority_details().map(|d| d.priority).unwrap_or_default() as UniqueWeight) << 64) | ((usize::max_value() - index) as UniqueWeight),
+            Mode::Replaying => solana_scheduler::UniqueWeight::max_value() - index as solana_scheduler::UniqueWeight,
+        };
         let t =
             solana_scheduler::Task::new_for_queue(nast, uw, (sanitized_tx.clone(), locks), slot, mode);
         self.transaction_sender
