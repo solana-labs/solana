@@ -6615,12 +6615,27 @@ impl Bank {
         )
     }
 
+    /// Return the accumulated executed transaction count
     pub fn transaction_count(&self) -> u64 {
         self.transaction_count.load(Relaxed)
     }
 
     pub fn non_vote_transaction_count_since_restart(&self) -> u64 {
         self.non_vote_transaction_count_since_restart.load(Relaxed)
+    }
+
+    /// Return the transaction count executed only in this bank
+    pub fn executed_transaction_count(&self) -> u64 {
+        let mut executed_transaction_count = self
+            .transaction_count()
+            .saturating_sub(self.parent().map_or(0, |parent| parent.transaction_count()));
+        if !self.bank_transaction_count_fix_enabled() {
+            // When the feature bank_tranaction_count_fix is enabled, transaction_count() excludes
+            // the transactions which were executed but landed in error, we add it here.
+            executed_transaction_count =
+                executed_transaction_count.saturating_add(self.transaction_error_count());
+        }
+        executed_transaction_count
     }
 
     pub fn transaction_error_count(&self) -> u64 {
@@ -10644,6 +10659,95 @@ pub(crate) mod tests {
         let mint_pubkey = mint_keypair.pubkey();
         assert_eq!(bank.get_balance(&mint_pubkey), mint_amount - amount);
         assert_eq!(bank.get_balance(&pubkey), amount);
+    }
+
+    #[test]
+    fn test_executed_transaction_count_pre_bank_transaction_count_fix() {
+        let mint_amount = sol_to_lamports(1.);
+        let (genesis_config, mint_keypair) = create_genesis_config(mint_amount);
+        let mut bank = Bank::new_for_tests(&genesis_config);
+        bank.deactivate_feature(&feature_set::bank_transaction_count_fix::id());
+        let pubkey = solana_sdk::pubkey::new_rand();
+        let amount = genesis_config.rent.minimum_balance(0);
+        bank.transfer(amount, &mint_keypair, &pubkey).unwrap();
+        assert_eq!(
+            bank.transfer((mint_amount - amount) + 1, &mint_keypair, &pubkey),
+            Err(TransactionError::InstructionError(
+                0,
+                SystemError::ResultWithNegativeLamports.into(),
+            ))
+        );
+
+        // Without bank_transaction_count_fix, transaction_count should include only the successful
+        // transactions, but executed_transaction_count include all always
+        assert_eq!(bank.transaction_count(), 1);
+        assert_eq!(bank.executed_transaction_count(), 2);
+        assert_eq!(bank.transaction_error_count(), 1);
+
+        let bank = Arc::new(bank);
+        let bank2 = Bank::new_from_parent(
+            &bank,
+            &Pubkey::default(),
+            genesis_config.epoch_schedule.first_normal_slot,
+        );
+
+        assert_eq!(
+            bank2.transfer((mint_amount - amount) + 2, &mint_keypair, &pubkey),
+            Err(TransactionError::InstructionError(
+                0,
+                SystemError::ResultWithNegativeLamports.into(),
+            ))
+        );
+
+        // The transaction_count inherited from parent bank is still 1 as it does
+        // not include the failed ones!
+        assert_eq!(bank2.transaction_count(), 1);
+        assert_eq!(bank2.executed_transaction_count(), 1);
+        assert_eq!(bank2.transaction_error_count(), 1);
+    }
+
+    #[test]
+    fn test_executed_transaction_count_post_bank_transaction_count_fix() {
+        let mint_amount = sol_to_lamports(1.);
+        let (genesis_config, mint_keypair) = create_genesis_config(mint_amount);
+        let mut bank = Bank::new_for_tests(&genesis_config);
+        bank.activate_feature(&feature_set::bank_transaction_count_fix::id());
+        let pubkey = solana_sdk::pubkey::new_rand();
+        let amount = genesis_config.rent.minimum_balance(0);
+        bank.transfer(amount, &mint_keypair, &pubkey).unwrap();
+        assert_eq!(
+            bank.transfer((mint_amount - amount) + 1, &mint_keypair, &pubkey),
+            Err(TransactionError::InstructionError(
+                0,
+                SystemError::ResultWithNegativeLamports.into(),
+            ))
+        );
+
+        // With bank_transaction_count_fix, transaction_count should include both the successful and
+        // failed transactions.
+        assert_eq!(bank.transaction_count(), 2);
+        assert_eq!(bank.executed_transaction_count(), 2);
+        assert_eq!(bank.transaction_error_count(), 1);
+
+        let bank = Arc::new(bank);
+        let bank2 = Bank::new_from_parent(
+            &bank,
+            &Pubkey::default(),
+            genesis_config.epoch_schedule.first_normal_slot,
+        );
+
+        assert_eq!(
+            bank2.transfer((mint_amount - amount) + 2, &mint_keypair, &pubkey),
+            Err(TransactionError::InstructionError(
+                0,
+                SystemError::ResultWithNegativeLamports.into(),
+            ))
+        );
+
+        // The transaction_count inherited from parent bank is 3: 2 from the parent bank and 1 at this bank2
+        assert_eq!(bank2.transaction_count(), 3);
+        assert_eq!(bank2.executed_transaction_count(), 1);
+        assert_eq!(bank2.transaction_error_count(), 1);
     }
 
     #[test]

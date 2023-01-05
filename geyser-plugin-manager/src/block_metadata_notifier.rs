@@ -5,7 +5,7 @@ use {
     },
     log::*,
     solana_geyser_plugin_interface::geyser_plugin_interface::{
-        ReplicaBlockInfo, ReplicaBlockInfoVersions,
+        ReplicaBlockInfoV2, ReplicaBlockInfoVersions,
     },
     solana_measure::measure::Measure,
     solana_metrics::*,
@@ -28,6 +28,7 @@ impl BlockMetadataNotifier for BlockMetadataNotifierImpl {
         rewards: &RwLock<Vec<(Pubkey, RewardInfo)>>,
         block_time: Option<UnixTimestamp>,
         block_height: Option<u64>,
+        executed_transaction_count: u64,
     ) {
         let mut plugin_manager = self.plugin_manager.write().unwrap();
         if plugin_manager.plugins.is_empty() {
@@ -37,9 +38,15 @@ impl BlockMetadataNotifier for BlockMetadataNotifierImpl {
 
         for plugin in plugin_manager.plugins.iter_mut() {
             let mut measure = Measure::start("geyser-plugin-update-slot");
-            let block_info =
-                Self::build_replica_block_info(slot, blockhash, &rewards, block_time, block_height);
-            let block_info = ReplicaBlockInfoVersions::V0_0_1(&block_info);
+            let block_info = Self::build_replica_block_info(
+                slot,
+                blockhash,
+                &rewards,
+                block_time,
+                block_height,
+                executed_transaction_count,
+            );
+            let block_info = ReplicaBlockInfoVersions::V0_0_2(&block_info);
             match plugin.notify_block_metadata(block_info) {
                 Err(err) => {
                     error!(
@@ -89,13 +96,15 @@ impl BlockMetadataNotifierImpl {
         rewards: &'a [Reward],
         block_time: Option<UnixTimestamp>,
         block_height: Option<u64>,
-    ) -> ReplicaBlockInfo<'a> {
-        ReplicaBlockInfo {
+        executed_transaction_count: u64,
+    ) -> ReplicaBlockInfoV2<'a> {
+        ReplicaBlockInfoV2 {
             slot,
             blockhash,
             rewards,
             block_time,
             block_height,
+            executed_transaction_count,
         }
     }
 
