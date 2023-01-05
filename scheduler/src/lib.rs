@@ -635,6 +635,12 @@ struct Bundle {
     // what about bundle1{tx1a, tx2} and bundle2{tx1b, tx2}?
 }
 
+#[derive(Debug, PartialEq, Clone, Copy)]
+pub enum Mode {
+    Banking,
+    Replaying,
+}
+
 #[derive(Debug)]
 pub struct Task {
     unique_weight: UniqueWeight,
@@ -649,6 +655,8 @@ pub struct Task {
     pub execute_time: std::sync::atomic::AtomicUsize,
     pub commit_time: std::sync::atomic::AtomicUsize,
     pub for_indexer: LockAttemptsInCell,
+    pub slot: solana_sdk::clock::Slot,
+    pub mode: Mode,
 }
 
 #[derive(Debug)]
@@ -673,6 +681,8 @@ impl Task {
         nast: NAST,
         unique_weight: UniqueWeight,
         tx: (SanitizedTransaction, Vec<LockAttempt>),
+        slot: solana_sdk::clock::Slot,
+        mode: Mode,
     ) -> TaskInQueue {
         TaskInQueue::new(Self {
             for_indexer: LockAttemptsInCell::new(std::cell::RefCell::new(
@@ -689,6 +699,8 @@ impl Task {
             queue_end_time: std::sync::atomic::AtomicUsize::new(usize::max_value()),
             execute_time: std::sync::atomic::AtomicUsize::new(usize::max_value()),
             commit_time: std::sync::atomic::AtomicUsize::new(usize::max_value()),
+            slot,
+            mode,
         })
     }
 
@@ -812,6 +824,8 @@ impl Task {
             queue_end_time: std::sync::atomic::AtomicUsize::new(usize::max_value()),
             execute_time: std::sync::atomic::AtomicUsize::new(usize::max_value()),
             commit_time: std::sync::atomic::AtomicUsize::new(usize::max_value()),
+            slot: self.slot,
+            mode: self.mode,
         }
     }
 
@@ -1648,6 +1662,8 @@ impl ScheduleStage {
         never: &'a crossbeam_channel::Receiver<SchedulablePayload<C>>,
     ) -> Option<std::sync::Arc<Checkpoint<C>>> {
         let mut maybe_start_time = None;
+        let mut slot = None;
+        let mut mode = None;
         let (mut last_time, mut last_processed_count) = (maybe_start_time.map(|(a, b)| b).clone(), 0_usize);
         info!("schedule_once:standby id_{:016x}", random_id);
 
@@ -1781,9 +1797,22 @@ impl ScheduleStage {
                        match maybe_from {
                            Ok(SchedulablePayload(Flushable::Payload(task))) => {
                                if maybe_start_time.is_none() {
-                                    info!("schedule_once:initial id_{:016x}", random_id);
                                    maybe_start_time = Some((cpu_time::ThreadTime::now(), std::time::Instant::now()));
                                    last_time = maybe_start_time.map(|(a, b)| b).clone();
+                                   let (old_slot, old_mode) = (slot, mode);
+                                   let slot_label = if old_slot != Some(task.slot) {
+                                       slot = Some(task.slot);
+                                       format!(" slot: {old_slot:?} => {slot:?}")
+                                   } else {
+                                       format!("")
+                                   };
+                                   let mode_label = if old_mode != Some(task.mode) {
+                                       mode = Some(task.mode);
+                                       format!(" mode: {old_mode:?} => {mode:?}")
+                                   } else {
+                                       format!("")
+                                   };
+                                   info!("schedule_once:initial id_{:016x}{slot_label}{mode_label}", random_id);
                                }
                                //Self::register_runnable_task(task, runnable_queue, &mut sequence_time);
                                channel_backed_runnable_queue.buffer(task);
@@ -1871,7 +1900,7 @@ impl ScheduleStage {
                         if elapsed > std::time::Duration::from_millis(150) {
                             let delta = (processed_count - last_processed_count) as u128;
                             let elapsed2 = elapsed.as_micros();
-                            info!("schedule_once:interval id_{:016x} ch(prev: {}, exec: {}+{}|{}), r: {}, u/c: {}/{}, (imm+provi)/max: ({}+{})/{} s: {} l(s+f): {}+{} ({}txs/{}us={}tps)", random_id, (if from_disconnected { "-".to_string() } else { format!("{}", from_prev.len()) }), to_high_execute_substage.map(|t| format!("{}", t.len())).unwrap_or("-".into()), to_execute_substage.len(), from_exec.len(), channel_backed_runnable_queue.task_count_hint(), address_book.uncontended_task_ids.len(), contended_count, executing_queue_count, provisioning_tracker_count, max_executing_queue_count, address_book.stuck_tasks.len(), processed_count, failed_lock_count, delta, elapsed.as_micros(), 1_000_000_u128*delta/elapsed2);
+                            info!("schedule_once:interval id_{:016x} {slot:?} {mode:?} ch(prev: {}, exec: {}+{}|{}), r: {}, u/c: {}/{}, (imm+provi)/max: ({}+{})/{} s: {} l(s+f): {}+{} ({}txs/{}us={}tps)", random_id, (if from_disconnected { "-".to_string() } else { format!("{}", from_prev.len()) }), to_high_execute_substage.map(|t| format!("{}", t.len())).unwrap_or("-".into()), to_execute_substage.len(), from_exec.len(), channel_backed_runnable_queue.task_count_hint(), address_book.uncontended_task_ids.len(), contended_count, executing_queue_count, provisioning_tracker_count, max_executing_queue_count, address_book.stuck_tasks.len(), processed_count, failed_lock_count, delta, elapsed.as_micros(), 1_000_000_u128*delta/elapsed2);
                             (last_time, last_processed_count) =
                                 (Some(std::time::Instant::now()), processed_count);
                         }
@@ -1923,7 +1952,7 @@ impl ScheduleStage {
                         if elapsed > std::time::Duration::from_millis(150) {
                             let delta = (processed_count - last_processed_count) as u128;
                             let elapsed2 = elapsed.as_micros();
-                            info!("schedule_once:interval id_{:016x} ch(prev: {}, exec: {}+{}|{}), r: {}, u/c: {}/{}, (imm+provi)/max: ({}+{})/{} s: {} l(s+f): {}+{} ({}txs/{}us={}tps)", random_id, (if from_disconnected { "-".to_string() } else { format!("{}", from_prev.len()) }), to_high_execute_substage.map(|t| format!("{}", t.len())).unwrap_or("-".into()), to_execute_substage.len(), from_exec.len(), channel_backed_runnable_queue.task_count_hint(), address_book.uncontended_task_ids.len(), contended_count, executing_queue_count, provisioning_tracker_count, max_executing_queue_count, address_book.stuck_tasks.len(), processed_count, failed_lock_count, delta, elapsed.as_micros(), 1_000_000_u128*delta/elapsed2);
+                            info!("schedule_once:interval id_{:016x} {slot:?} {mode:?} ch(prev: {}, exec: {}+{}|{}), r: {}, u/c: {}/{}, (imm+provi)/max: ({}+{})/{} s: {} l(s+f): {}+{} ({}txs/{}us={}tps)", random_id, (if from_disconnected { "-".to_string() } else { format!("{}", from_prev.len()) }), to_high_execute_substage.map(|t| format!("{}", t.len())).unwrap_or("-".into()), to_execute_substage.len(), from_exec.len(), channel_backed_runnable_queue.task_count_hint(), address_book.uncontended_task_ids.len(), contended_count, executing_queue_count, provisioning_tracker_count, max_executing_queue_count, address_book.stuck_tasks.len(), processed_count, failed_lock_count, delta, elapsed.as_micros(), 1_000_000_u128*delta/elapsed2);
                             (last_time, last_processed_count) =
                                 (Some(std::time::Instant::now()), processed_count);
                         }
@@ -2031,7 +2060,8 @@ impl ScheduleStage {
                 }
             }
             if select_skipped {
-                assert!(executing_queue_count >= 1 || did_processed);
+                let task_count = channel_backed_runnable_queue.task_count_hint();
+                assert!(executing_queue_count >= 1 || did_processed, "id_{random_id:016x} {slot:?} {mode:?} {executing_queue_count} => 1 || {did_processed}, {task_count} {contended_count} {provisioning_tracker_count}");
             }
         }
         if let Some(checkpoint) = &maybe_checkpoint {
@@ -2063,7 +2093,7 @@ impl ScheduleStage {
             } else {
                 "-".into()
             };
-            info!("schedule_once:final id_{:016x} (no_more_work: {}) ch(prev: {}, exec: {}|{}), runnnable: {}, contended: {}, (immediate+provisional)/max: ({}+{})/{} uncontended: {} stuck: {} miss: {}, overall: {}txs/{}us={}tps! (cpu time: {cpu_time2}us)", random_id, no_more_work, (if from_disconnected { "-".to_string() } else { format!("{}", from_prev.len()) }), to_execute_substage.len(), (if from_exec_disconnected { "-".to_string() } else { format!("{}", from_exec.len())}), channel_backed_runnable_queue.task_count_hint(), contended_count, executing_queue_count, provisioning_tracker_count, max_executing_queue_count, address_book.uncontended_task_ids.len(), address_book.stuck_tasks.len(), failed_lock_count, processed_count, elapsed.as_micros(), tps_label);
+            info!("schedule_once:final   id_{:016x} {slot:?} {mode:?} (no_more_work: {}) ch(prev: {}, exec: {}|{}), runnnable: {}, contended: {}, (immediate+provisional)/max: ({}+{})/{} uncontended: {} stuck: {} miss: {}, overall: {}txs/{}us={}tps! (cpu time: {cpu_time2}us)", random_id, no_more_work, (if from_disconnected { "-".to_string() } else { format!("{}", from_prev.len()) }), to_execute_substage.len(), (if from_exec_disconnected { "-".to_string() } else { format!("{}", from_exec.len())}), channel_backed_runnable_queue.task_count_hint(), contended_count, executing_queue_count, provisioning_tracker_count, max_executing_queue_count, address_book.uncontended_task_ids.len(), address_book.stuck_tasks.len(), failed_lock_count, processed_count, elapsed.as_micros(), tps_label);
         }
 
         maybe_checkpoint

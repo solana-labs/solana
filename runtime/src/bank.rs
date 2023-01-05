@@ -1041,7 +1041,7 @@ struct Scheduler<C> {
 }
 
 impl<C> Scheduler<C> {
-    fn schedule(&self, sanitized_tx: &SanitizedTransaction, index: usize) {
+    fn schedule(&self, sanitized_tx: &SanitizedTransaction, index: usize, slot: Slot, mode: solana_scheduler::Mode) {
         trace!("Scheduler::schedule()");
         #[derive(Clone, Copy, Debug)]
         struct NotAtTopOfScheduleThread;
@@ -1068,7 +1068,7 @@ impl<C> Scheduler<C> {
         //assert_eq!(index, self.transaction_index.fetch_add(1, std::sync::atomic::Ordering::SeqCst));
         let uw = usize::max_value() - index;
         let t =
-            solana_scheduler::Task::new_for_queue(nast, uw as u64, (sanitized_tx.clone(), locks));
+            solana_scheduler::Task::new_for_queue(nast, uw as u64, (sanitized_tx.clone(), locks), slot, mode);
         self.transaction_sender
             .as_ref()
             .unwrap()
@@ -6814,10 +6814,11 @@ impl Bank {
         self.cluster_type.unwrap()
     }
 
-    pub fn schedule_and_commit_transactions(
+    fn schedule_and_commit_transactions(
         self: &Arc<Bank>,
         transactions: &[SanitizedTransaction],
         transaction_indexes: impl Iterator<Item = usize>,
+        mode: solana_scheduler::Mode,
     ) {
         assert_eq!(self.slot(), self.slot());
         trace!(
@@ -6864,8 +6865,24 @@ impl Bank {
         let scheduler = s.as_ref().unwrap();
 
         for (st, i) in transactions.iter().zip(transaction_indexes) {
-            scheduler.schedule(st, i);
+            scheduler.schedule(st, i, self.slot(), mode);
         }
+    }
+
+    pub fn schedule_and_commit_transactions_as_replaying(
+        self: &Arc<Bank>,
+        transactions: &[SanitizedTransaction],
+        transaction_indexes: impl Iterator<Item = usize>,
+    ) {
+        self.schedule_and_commit_transactions(transactions, transaction_indexes, solana_scheduler::Mode::Replaying)
+    }
+
+    pub fn schedule_and_commit_transactions_as_banking(
+        self: &Arc<Bank>,
+        transactions: &[SanitizedTransaction],
+        transaction_indexes: impl Iterator<Item = usize>,
+    ) {
+        self.schedule_and_commit_transactions(transactions, transaction_indexes, solana_scheduler::Mode::Banking)
     }
 
     /*

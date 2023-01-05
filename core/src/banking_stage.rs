@@ -922,7 +922,7 @@ impl BankingStage {
                         let indexes = PacketDeserializer::generate_packet_indexes(&pp);
                         for p in PacketDeserializer::deserialize_packets(&pp, &indexes) {
                             if let Some(t) = p.build_sanitized_transaction(&bank.feature_set, bank.vote_only_bank(), bank.as_ref()) {
-                                bank.schedule_and_commit_transactions(&[t], vec![task_id].into_iter());
+                                bank.schedule_and_commit_transactions_as_banking(&[t], vec![task_id].into_iter());
                                 task_id += 1;
                             }
                         }

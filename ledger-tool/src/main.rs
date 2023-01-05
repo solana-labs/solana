@@ -465,6 +465,8 @@ fn output_slot(
                                     std::thread::sleep(std::time::Duration::from_micros(10));
                                 }
 
+                                todo!();
+                                /*
                                 let t = solana_scheduler::Task::new_for_queue(nast, weight, tx);
                                 //for lock_attempt in t.tx.1.iter() {
                                 //    lock_attempt.contended_unique_weights().insert_task(weight, solana_scheduler::TaskInQueue::clone(&t));
@@ -473,6 +475,7 @@ fn output_slot(
                                 muxed_sender.send(solana_scheduler::SchedulablePayload(solana_scheduler::Flushable::Payload(t))).unwrap();
                                 depth.fetch_add(1, Ordering::Relaxed);
                                 weight -= 1;
+                                */
                             }
                         }
                     }).unwrap();
