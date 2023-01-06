@@ -416,6 +416,7 @@ impl AddressBook {
         prefer_immediate: bool,
         unique_weight: &UniqueWeight,
         attempt: &mut LockAttempt,
+        mode: Mode,
     ) -> CU {
         let tcuw = attempt
             //.target_contended_unique_weights()
@@ -423,7 +424,9 @@ impl AddressBook {
             .task_ids
             .heaviest_task_id();
 
-        let strictly_lockable_for_replay = if tcuw.is_none() {
+        let strictly_lockable = if mode == Mode::Banking {
+            true
+        } else if tcuw.is_none() {
             true
         } else if tcuw.unwrap() == *unique_weight {
             true
@@ -441,7 +444,7 @@ impl AddressBook {
             false
         };
 
-        if !strictly_lockable_for_replay {
+        if !strictly_lockable {
             attempt.status = LockStatus::Failed;
             let page = attempt.target_page_mut(ast);
             return page.cu;
@@ -1034,6 +1037,7 @@ fn attempt_lock_for_execution<'a, AST: AtScheduleThread>(
     unique_weight: &UniqueWeight,
     message_hash: &'a Hash,
     lock_attempts: &mut [LockAttempt],
+    mode: Mode,
 ) -> (usize, usize, CU) {
     // no short-cuircuit; we at least all need to add to the contended queue
     let mut unlockable_count = 0;
@@ -1047,6 +1051,7 @@ fn attempt_lock_for_execution<'a, AST: AtScheduleThread>(
             prefer_immediate,
             unique_weight,
             attempt,
+            mode,
         );
         busiest_page_cu = busiest_page_cu.max(cu);
 
@@ -1269,6 +1274,7 @@ impl ScheduleStage {
                         &unique_weight,
                         &message_hash,
                         &mut next_task.lock_attempts_mut(ast),
+                        next_task.mode,
                     );
 
                 if unlockable_count > 0 {
