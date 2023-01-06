@@ -380,7 +380,7 @@ impl<'a> SnapshotMinimizer<'a> {
             new_storage.flush().unwrap();
         }
 
-        let (_, mut dead_storages_this_time) = self.accounts_db().mark_dirty_dead_stores(
+        let mut dead_storages_this_time = self.accounts_db().mark_dirty_dead_stores(
             slot,
             true, // add_dirty_stores
             shrink_in_progress,
