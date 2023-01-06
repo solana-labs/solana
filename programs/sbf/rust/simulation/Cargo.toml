@@ -1,25 +1,25 @@
 [package]
 name = "solana-sbf-rust-simulation"
-version = "1.15.0"
 description = "Solana SBF Program Simulation Differences"
-authors = ["Solana Maintainers <maintainers@solana.foundation>"]
-repository = "https://github.com/solana-labs/solana"
-license = "Apache-2.0"
-homepage = "https://solana.com/"
 documentation = "https://docs.rs/solana-sbf-rust-simulation"
-edition = "2021"
+version = { workspace = true }
+authors = { workspace = true }
+repository = { workspace = true }
+homepage = { workspace = true }
+license = { workspace = true }
+edition = { workspace = true }
 
 [features]
 test-bpf = []
 
 [dependencies]
-solana-program = { path = "../../../../sdk/program", version = "=1.15.0" }
+solana-program = { workspace = true }
 
 [dev-dependencies]
-solana-logger = { path = "../../../../logger", version = "=1.15.0" }
-solana-program-test = { path = "../../../../program-test", version = "=1.15.0" }
-solana-sdk = { path = "../../../../sdk", version = "=1.15.0" }
-solana-validator = { path = "../../../../validator", version = "=1.15.0" }
+solana-logger = { workspace = true }
+solana-program-test = { workspace = true }
+solana-sdk = { workspace = true }
+solana-validator = { workspace = true }
 
 [lib]
 crate-type = ["cdylib", "lib"]
