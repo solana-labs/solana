@@ -5841,7 +5841,7 @@ pub mod tests {
                             "executable": false,
                             "owner": "11111111111111111111111111111111",
                             "lamports": rent_exempt_amount,
-                            "rentEpoch": 0,
+                            "rentEpoch": u64::MAX,
                             "space": 0,
                         }
                     ],
