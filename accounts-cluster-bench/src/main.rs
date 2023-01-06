@@ -6,7 +6,7 @@ use {
     rayon::prelude::*,
     solana_account_decoder::parse_token::spl_token_pubkey,
     solana_clap_utils::input_parsers::pubkey_of,
-    solana_client::{rpc_client::SerializableMessage, transaction_executor::TransactionExecutor},
+    solana_client::transaction_executor::TransactionExecutor,
     solana_faucet::faucet::{request_airdrop_transaction, FAUCET_PORT},
     solana_gossip::gossip_service::discover,
     solana_rpc_client::rpc_client::RpcClient,
@@ -42,10 +42,15 @@ pub const MAX_RPC_CALL_RETRIES: usize = 5;
 pub fn poll_get_latest_blockhash(client: &RpcClient) -> Option<Hash> {
     let mut num_retries = MAX_RPC_CALL_RETRIES;
     loop {
-        if let Ok(blockhash) = client.get_latest_blockhash() {
+        let response = client.get_latest_blockhash();
+        if let Ok(blockhash) = response {
             return Some(blockhash);
         } else {
             num_retries -= 1;
+            warn!(
+                "get_latest_blockhash failure: {:?}. remaining retries {}",
+                response, num_retries
+            );
         }
         if num_retries == 0 {
             panic!("failed to get_latest_blockhash(), rpc node down?")
@@ -54,16 +59,22 @@ pub fn poll_get_latest_blockhash(client: &RpcClient) -> Option<Hash> {
     }
 }
 
-pub fn poll_get_fee_for_message(
-    client: &RpcClient,
-    message: &impl SerializableMessage,
-) -> Option<u64> {
+pub fn poll_get_fee_for_message(client: &RpcClient, message: &mut Message) -> (Option<u64>, Hash) {
     let mut num_retries = MAX_RPC_CALL_RETRIES;
     loop {
-        if let Ok(fee) = client.get_fee_for_message(message) {
-            return Some(fee);
+        let response = client.get_fee_for_message(message);
+
+        if let Ok(fee) = response {
+            return (Some(fee), message.recent_blockhash);
         } else {
             num_retries -= 1;
+            warn!(
+                "get_fee_for_message failure: {:?}. remaining retries {}",
+                response, num_retries
+            );
+
+            let blockhash = poll_get_latest_blockhash(client).expect("blockhash");
+            message.recent_blockhash = blockhash;
         }
         if num_retries == 0 {
             panic!("failed to get_fee_for_message(), rpc node down?")
@@ -318,7 +329,8 @@ fn run_accounts_bench(
         }
 
         message.recent_blockhash = blockhash;
-        let fee = poll_get_fee_for_message(&client, &message).expect("get_fee_for_message");
+        let (fee, blockhash) = poll_get_fee_for_message(&client, &mut message);
+        let fee = fee.expect("get_fee_for_message");
         let lamports = min_balance + fee;
 
         for (i, balance) in balances.iter_mut().enumerate() {
@@ -443,7 +455,8 @@ fn run_accounts_bench(
                 latest_blockhash = Instant::now();
             }
             message.recent_blockhash = blockhash;
-            let fee = poll_get_fee_for_message(&client, &message).expect("get_fee_for_message");
+            let (fee, blockhash) = poll_get_fee_for_message(&client, &mut message);
+            let fee = fee.expect("get_fee_for_message");
 
             let sigs_len = executor.num_outstanding();
             if sigs_len < batch_size && max_closed_seed < max_created_seed {
