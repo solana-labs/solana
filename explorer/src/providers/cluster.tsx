@@ -7,8 +7,8 @@ import {
 } from "@solana/web3.js";
 import { useQuery } from "../utils/url";
 import { useHistory, useLocation } from "react-router-dom";
-import { reportError } from "utils/sentry";
-import { localStorageIsAvailable } from "utils";
+import { reportError } from "../utils/sentry";
+import { localStorageIsAvailable } from "../utils";
 
 export enum ClusterStatus {
   Connected,
@@ -71,7 +71,9 @@ export function clusterUrl(
         "Custom clusters can not be used with `cached: true`. Responses will not be cached."
       );
     } else {
-      return `/api/rpc/${cluster}`;
+      return `${window.location.protocol}//${
+        window.location.host
+      }/api/rpc/${clusterSlug(cluster)}`;
     }
   }
   const modifyUrl = (url: string): string => {
