@@ -632,7 +632,7 @@ pub fn get_ledger_from_info(
 
     let wallet_host_device_path = if host_device_paths.len() > 1 {
         let selection = Select::with_theme(&ColorfulTheme::default())
-            .with_prompt(&format!(
+            .with_prompt(format!(
                 "Multiple hardware wallets found. Please select a device for {keypair_name:?}"
             ))
             .default(0)

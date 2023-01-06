@@ -1,7 +1,7 @@
 //! Manage the map of slot -> append vecs
 
 use {
-    crate::accounts_db::{AccountStorageEntry, AppendVecId, SlotStores, SnapshotStorage},
+    crate::accounts_db::{AccountStorageEntry, AppendVecId, SlotStores},
     dashmap::DashMap,
     solana_sdk::clock::Slot,
     std::{
@@ -40,12 +40,6 @@ impl AccountStorage {
             assert!(read.len() <= 1);
             read.values().next().cloned()
         })
-    }
-
-    /// return all append vecs for 'slot' if any exist
-    pub(crate) fn get_slot_storage_entries(&self, slot: Slot) -> Option<SnapshotStorage> {
-        self.get_slot_stores(slot)
-            .map(|res| res.read().unwrap().values().cloned().collect())
     }
 
     pub(crate) fn all_slots(&self) -> Vec<Slot> {

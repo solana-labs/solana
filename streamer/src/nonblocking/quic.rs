@@ -1398,7 +1398,6 @@ pub mod test {
         let mut num_entries = 5;
         let max_connections_per_peer = 10;
         let sockets: Vec<_> = (0..num_entries)
-            .into_iter()
             .map(|i| SocketAddr::new(IpAddr::V4(Ipv4Addr::new(i, 0, 0, 0)), 0))
             .collect();
         for (i, socket) in sockets.iter().enumerate() {
@@ -1451,10 +1450,7 @@ pub mod test {
         let num_entries = 15;
         let max_connections_per_peer = 10;
 
-        let pubkeys: Vec<_> = (0..num_entries)
-            .into_iter()
-            .map(|_| Pubkey::new_unique())
-            .collect();
+        let pubkeys: Vec<_> = (0..num_entries).map(|_| Pubkey::new_unique()).collect();
         for (i, pubkey) in pubkeys.iter().enumerate() {
             table
                 .try_add_connection(
@@ -1546,7 +1542,6 @@ pub mod test {
         let num_entries = 5;
         let max_connections_per_peer = 10;
         let sockets: Vec<_> = (0..num_entries)
-            .into_iter()
             .map(|i| SocketAddr::new(IpAddr::V4(Ipv4Addr::new(i, 0, 0, 0)), 0))
             .collect();
         for (i, socket) in sockets.iter().enumerate() {
@@ -1581,7 +1576,6 @@ pub mod test {
         let num_ips = 5;
         let max_connections_per_peer = 10;
         let mut sockets: Vec<_> = (0..num_ips)
-            .into_iter()
             .map(|i| SocketAddr::new(IpAddr::V4(Ipv4Addr::new(i, 0, 0, 0)), 0))
             .collect();
         for (i, socket) in sockets.iter().enumerate() {

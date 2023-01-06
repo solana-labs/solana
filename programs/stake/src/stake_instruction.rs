@@ -7339,7 +7339,7 @@ mod tests {
             &stake_account,
             &authorized_staker,
             &new_vote_address,
-            &uninitialized_stake_account.clone(), // <-- Invalid vote account
+            &uninitialized_stake_account, // <-- Invalid vote account
             &uninitialized_stake_address,
             &uninitialized_stake_account,
             Err(InstructionError::IncorrectProgramId),
@@ -7350,7 +7350,7 @@ mod tests {
         //
         let _ = process_instruction_redelegate(
             &stake_address,
-            &uninitialized_stake_account.clone(), // <-- Uninitialized stake account
+            &uninitialized_stake_account, // <-- Uninitialized stake account
             &authorized_staker,
             &new_vote_address,
             &new_vote_account,

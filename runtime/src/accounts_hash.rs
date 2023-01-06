@@ -1341,7 +1341,7 @@ pub mod tests {
         let key_b = Pubkey::new(&[2u8; 32]);
         let key_c = Pubkey::new(&[3u8; 32]);
         const COUNT: usize = 6;
-        let hashes = (0..COUNT).into_iter().map(|i| Hash::new(&[i as u8; 32]));
+        let hashes = (0..COUNT).map(|i| Hash::new(&[i as u8; 32]));
         // create this vector
         // abbbcc
         let keys = [key_a, key_b, key_b, key_b, key_c, key_c];
@@ -1670,13 +1670,7 @@ pub mod tests {
         let input: Vec<Vec<Vec<u64>>> = vec![vec![vec![0, 1], vec![], vec![2, 3, 4], vec![]]];
         let cumulative = CumulativeOffsets::from_raw_2d(&input);
 
-        let src: Vec<_> = input
-            .clone()
-            .into_iter()
-            .flatten()
-            .into_iter()
-            .flatten()
-            .collect();
+        let src: Vec<_> = input.clone().into_iter().flatten().flatten().collect();
         let len = src.len();
         assert_eq!(cumulative.total_count, len);
         assert_eq!(cumulative.cumulative_offsets.len(), 2); // 2 non-empty vectors
@@ -1701,13 +1695,7 @@ pub mod tests {
         let input = vec![vec![vec![], vec![0, 1], vec![], vec![2, 3, 4], vec![]]];
         let cumulative = CumulativeOffsets::from_raw_2d(&input);
 
-        let src: Vec<_> = input
-            .clone()
-            .into_iter()
-            .flatten()
-            .into_iter()
-            .flatten()
-            .collect();
+        let src: Vec<_> = input.clone().into_iter().flatten().flatten().collect();
         let len = src.len();
         assert_eq!(cumulative.total_count, len);
         assert_eq!(cumulative.cumulative_offsets.len(), 2); // 2 non-empty vectors
@@ -1741,13 +1729,7 @@ pub mod tests {
         ];
         let cumulative = CumulativeOffsets::from_raw_2d(&input);
 
-        let src: Vec<_> = input
-            .clone()
-            .into_iter()
-            .flatten()
-            .into_iter()
-            .flatten()
-            .collect();
+        let src: Vec<_> = input.clone().into_iter().flatten().flatten().collect();
         let len = src.len();
         assert_eq!(cumulative.total_count, len);
         assert_eq!(cumulative.cumulative_offsets.len(), 2); // 2 non-empty vectors
@@ -1841,10 +1823,7 @@ pub mod tests {
         hash_counts.extend(threshold - 1..=threshold + target);
 
         for hash_count in hash_counts {
-            let hashes: Vec<_> = (0..hash_count)
-                .into_iter()
-                .map(|_| Hash::new_unique())
-                .collect();
+            let hashes: Vec<_> = (0..hash_count).map(|_| Hash::new_unique()).collect();
 
             test_hashing(hashes, FANOUT);
         }

@@ -324,7 +324,7 @@ impl BucketStorage {
 
         let increment = self.capacity_pow2 - old_bucket.capacity_pow2;
         let index_grow = 1 << increment;
-        (0..old_cap as usize).into_iter().for_each(|i| {
+        (0..old_cap as usize).for_each(|i| {
             let old_ix = i * old_bucket.cell_size as usize;
             let new_ix = old_ix * index_grow;
             let dst_slice: &[u8] = &self.mmap[new_ix..new_ix + old_bucket.cell_size as usize];

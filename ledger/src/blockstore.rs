@@ -3894,7 +3894,7 @@ pub fn create_new_ledger(
         blockstore_dir,
     ];
     let output = std::process::Command::new("tar")
-        .args(&args)
+        .args(args)
         .output()
         .unwrap();
     if !output.status.success() {
@@ -9141,7 +9141,6 @@ pub mod tests {
 
     fn make_large_tx_entry(num_txs: usize) -> Entry {
         let txs: Vec<_> = (0..num_txs)
-            .into_iter()
             .map(|_| {
                 let keypair0 = Keypair::new();
                 let to = solana_sdk::pubkey::new_rand();

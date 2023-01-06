@@ -403,7 +403,7 @@ pub mod tests {
                                 .collect::<Vec<_>>(),
                             vec![&file_name],
                         );
-                        let mut accum = (0..bins_per_pass).into_iter().map(|_| vec![]).collect();
+                        let mut accum = (0..bins_per_pass).map(|_| vec![]).collect();
                         cache
                             .load(&file_name, &mut accum, start_bin_this_pass, &bin_calculator)
                             .unwrap();
@@ -431,9 +431,9 @@ pub mod tests {
         bins: usize,
         start_bin: usize,
     ) {
-        let mut accum: SavedType = (0..bins).into_iter().map(|_| vec![]).collect();
-        data.drain(..).into_iter().for_each(|mut x| {
-            x.drain(..).into_iter().for_each(|item| {
+        let mut accum: SavedType = (0..bins).map(|_| vec![]).collect();
+        data.drain(..).for_each(|mut x| {
+            x.drain(..).for_each(|item| {
                 let bin = bin_calculator.bin_from_pubkey(&item.pubkey);
                 accum[bin - start_bin].push(item);
             })
@@ -450,12 +450,10 @@ pub mod tests {
         let mut ct = 0;
         (
             (0..bins)
-                .into_iter()
                 .map(|bin| {
                     let rnd = rng.gen::<u64>() % (bins as u64);
                     if rnd < count as u64 {
                         (0..std::cmp::max(1, count / bins))
-                            .into_iter()
                             .map(|_| {
                                 ct += 1;
                                 let mut pk;

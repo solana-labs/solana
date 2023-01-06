@@ -5,37 +5,46 @@
 2. [Incident Response Process](#process)
 
 <a name="reporting"></a>
-## Reporting security problems to Solana
+## Reporting security problems in the Solana Labs Validator Client
 
-**DO NOT CREATE AN ISSUE** to report a security problem. Instead, please send an
-email to security@solana.com and provide your github username so we can add you
-to a new draft security advisory for further discussion.
+**DO NOT CREATE A GITHUB ISSUE** to report a security problem.
 
-For security reasons, DO NOT include attachments or provide detail sufficient for exploitation regarding the security issue in this email. Instead, wait for the advisory to be created, and **provide any sensitive details in the private GitHub advisory**.
+Instead please use this [Report a Vulnerability](https://github.com/solana-labs/solana/security/advisories/new) link.
+Provide a helpful title and detailed description of the problem.
 
 If you haven't done so already, please **enable two-factor auth** in your GitHub account.
 
-DO send the email from an email domain that is less likely to get flagged for spam by gmail. 
+Expect a response as fast as possible in the advisory, typically within 72 hours.
 
-Expect a response as fast as possible, typically within 72 hours.
+--
 
-If you do not receive a response within that time frame, please do followup with the team directly. You can do this through discord (#core-technology) by pinging the admins of the channel and referencing the fact that you submitted a security bounty.
+If you do not receive a response in the advisory, send an email to
+security@solana.com with the full URL of the advisory you have created.  DO NOT
+include attachments or provide detail sufficient for exploitation regarding the
+security issue in this email. **Only provide such details in the advisory**.
 
-As above, please DO NOT include attachments or provide detail regarding the security issue in this email. 
+If you do not receive a response from security@solana.com please followup with
+the team directly. You can do this in the `#core-technology` channel of the
+[Solana Tech discord server](https://solana.com/discord), by pinging the admins
+in the channel and referencing the fact that you submitted a security problem.
 
 <a name="process"></a>
 ## Incident Response Process
 
-In case an incident is discovered or reported, the following process will be followed to contain, respond and remediate:
+In case an incident is discovered or reported, the following process will be
+followed to contain, respond and remediate:
 
-### 1. Establish a new draft security advisory
-In response to an email to security@solana.com, a member of the solana-labs/admins group will
-Create a new draft security advisory for the incident at https://github.com/solana-labs/solana/security/advisories
-Add the reporter's github user and the solana-labs/security-incident-response group to the draft security advisory
-Create a private fork of the repository (grey button towards the bottom of the page)
-Respond to the reporter by email, sharing a link to the draft security advisory.
+### 1. Accept the new report
+In response a newly reported security problem, a member of the
+`solana-labs/admins` group will accept the report to turn it into a draft
+advisory.  The `solana-labs/security-incident-response` group should be added to
+the draft security advisory, and create a private fork of the repository (grey
+button towards the bottom of the page) if necessary.
 
 If the advisory is the result of an audit finding, follow the same process as above but add the auditor's github user(s) and begin the title with "[Audit]".
+
+If the report is out of scope, a member of the `solana-labs/admins` group will
+comment as such and then close the report.
 
 ### 2. Triage
 Within the draft security advisory, discuss and determine the severity of the issue. If necessary, members of the solana-labs/security-incident-response group may add other github users to the advisory to assist.
@@ -78,7 +87,10 @@ We currently do not use the Github workflow to publish security advisories. Once
 
 <a name="bounty"></a>
 ## Security Bug Bounties
-We offer bounties for critical security issues. Please see below for more details. Either a demonstration or a valid bug report is all that's necessary to submit a bug bounty. A patch to fix the issue isn't required.
+The Solana Foundation offer bounties for critical Solana security issues. Please
+see below for more details. Either a demonstration or a valid bug report is all
+that's necessary to submit a bug bounty. A patch to fix the issue isn't
+required.
 
 #### Loss of Funds:
 $2,000,000 USD in locked SOL tokens (locked for 12 months)
@@ -91,7 +103,7 @@ $1,000,000 USD in locked SOL tokens (locked for 12 months)
 * Consensus safety violation
 * Tricking a validator to accept an optimistic confirmation or rooted slot without a double vote, etc.
 
-#### Liveness / Loss of Availability: 
+#### Liveness / Loss of Availability:
 $400,000 USD in locked SOL tokens (locked for 12 months)
 * Whereby consensus halts and requires human intervention
 * Eclipse attacks,
@@ -101,7 +113,7 @@ $400,000 USD in locked SOL tokens (locked for 12 months)
 $100,000 USD in locked SOL tokens (locked for 12 months)
 * Remote resource exaustion via Non-RPC protocols
 
-#### Supply Chain Attacks: 
+#### Supply Chain Attacks:
 $100,000 USD in locked SOL tokens (locked for 12 months)
 * Non-social attacks against source code change management, automated testing, release build, release publication and release hosting infrastructure of the monorepo.
 

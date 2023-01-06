@@ -131,7 +131,6 @@ impl DiscreteLog {
     pub fn decode_u32(self) -> Option<u64> {
         let mut starting_point = self.target;
         let handles = (0..self.num_threads)
-            .into_iter()
             .map(|i| {
                 let ristretto_iterator = RistrettoIterator::new(
                     (starting_point, i as u64),
