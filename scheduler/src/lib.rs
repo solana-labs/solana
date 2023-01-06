@@ -1762,6 +1762,7 @@ impl ScheduleStage {
             .collect::<Vec<_>>();
 
         let no_aggresive_contended = std::env::var("NO_AGGRESSIVE_CONTENDED").is_ok();
+        let force_channel_backed = std::env::var("FORCE_CHANNEL_BACKED").is_ok();
 
         let (mut from_disconnected, mut from_exec_disconnected, mut no_more_work): (
             bool,
@@ -1825,7 +1826,7 @@ impl ScheduleStage {
                                        format!("")
                                    };
                                    let mode_label = if old_mode != Some(task.mode) {
-                                       if !std::env::var("FORCE_CHANNEL_BACKED").is_ok() {
+                                       if !force_channel_backed {
                                            runnable_queue = match task.mode {
                                                Mode::Replaying => ModeSpecificTaskQueue::Replaying(ChannelBackedTaskQueue::new(from_prev)),
                                                Mode::Banking => ModeSpecificTaskQueue::Banking(TaskQueue::default()),
