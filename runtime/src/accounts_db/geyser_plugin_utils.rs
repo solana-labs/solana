@@ -84,34 +84,31 @@ impl AccountsDb {
         notified_accounts: &mut HashSet<Pubkey>,
         notify_stats: &mut GeyserPluginNotifyAtSnapshotRestoreStats,
     ) {
-        let slot_stores = self.storage.get_slot_stores(slot).unwrap();
+        let storage_entry = self.storage.get_slot_storage_entry(slot).unwrap();
 
-        let slot_stores = slot_stores.read().unwrap();
         let mut accounts_to_stream: HashMap<Pubkey, StoredAccountMeta> = HashMap::default();
         let mut measure_filter = Measure::start("accountsdb-plugin-filtering-accounts");
-        for (_, storage_entry) in slot_stores.iter() {
-            let accounts = storage_entry.accounts.account_iter();
-            let mut account_len = 0;
-            accounts.for_each(|account| {
-                account_len += 1;
-                if notified_accounts.contains(&account.meta.pubkey) {
-                    notify_stats.skipped_accounts += 1;
-                    return;
+        let accounts = storage_entry.accounts.account_iter();
+        let mut account_len = 0;
+        accounts.for_each(|account| {
+            account_len += 1;
+            if notified_accounts.contains(&account.meta.pubkey) {
+                notify_stats.skipped_accounts += 1;
+                return;
+            }
+            match accounts_to_stream.entry(account.meta.pubkey) {
+                Entry::Occupied(mut entry) => {
+                    // later entries in the same slot are more recent and override earlier accounts for the same pubkey
+                    // We can pass an incrementing number here for write_version in the future, if the storage does not have a write_version.
+                    // As long as all accounts for this slot are in 1 append vec that can be itereated olest to newest.
+                    entry.insert(account);
                 }
-                match accounts_to_stream.entry(account.meta.pubkey) {
-                    Entry::Occupied(mut entry) => {
-                        // later entries in the same slot are more recent and override earlier accounts for the same pubkey
-                        // We can pass an incrementing number here for write_version in the future, if the storage does not have a write_version.
-                        // As long as all accounts for this slot are in 1 append vec that can be itereated olest to newest.
-                        entry.insert(account);
-                    }
-                    Entry::Vacant(entry) => {
-                        entry.insert(account);
-                    }
+                Entry::Vacant(entry) => {
+                    entry.insert(account);
                 }
-            });
+            }
             notify_stats.total_accounts += account_len;
-        }
+        });
         measure_filter.stop();
         notify_stats.elapsed_filtering_us += measure_filter.as_us() as usize;
 
