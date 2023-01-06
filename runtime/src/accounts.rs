@@ -2694,10 +2694,10 @@ mod tests {
             AccountSecondaryIndexes::default(),
             AccountShrinkThreshold::default(),
         );
-        accounts.store_slow_uncached(0, &keypair0.pubkey(), &account0);
-        accounts.store_slow_uncached(0, &keypair1.pubkey(), &account1);
-        accounts.store_slow_uncached(0, &keypair2.pubkey(), &account2);
-        accounts.store_slow_uncached(0, &keypair3.pubkey(), &account3);
+        accounts.store_for_tests(0, &keypair0.pubkey(), &account0);
+        accounts.store_for_tests(0, &keypair1.pubkey(), &account1);
+        accounts.store_for_tests(0, &keypair2.pubkey(), &account2);
+        accounts.store_for_tests(0, &keypair3.pubkey(), &account3);
 
         let instructions = vec![CompiledInstruction::new(2, &(), vec![0, 1])];
         let message = Message::new_with_compiled_instructions(
@@ -2803,9 +2803,9 @@ mod tests {
             AccountSecondaryIndexes::default(),
             AccountShrinkThreshold::default(),
         );
-        accounts.store_slow_uncached(0, &keypair0.pubkey(), &account0);
-        accounts.store_slow_uncached(0, &keypair1.pubkey(), &account1);
-        accounts.store_slow_uncached(0, &keypair2.pubkey(), &account2);
+        accounts.store_for_tests(0, &keypair0.pubkey(), &account0);
+        accounts.store_for_tests(0, &keypair1.pubkey(), &account1);
+        accounts.store_for_tests(0, &keypair2.pubkey(), &account2);
 
         let accounts_arc = Arc::new(accounts);
 
@@ -2932,6 +2932,13 @@ mod tests {
             .contains(&keypair1.pubkey()));
     }
 
+    impl Accounts {
+        /// callers use to call store_uncached. But, this is not allowed anymore.
+        pub fn store_for_tests(&self, slot: Slot, pubkey: &Pubkey, account: &AccountSharedData) {
+            self.accounts_db.store_for_tests(slot, &[(pubkey, account)])
+        }
+    }
+
     #[test]
     fn test_accounts_locks_with_results() {
         let keypair0 = Keypair::new();
@@ -2950,10 +2957,10 @@ mod tests {
             AccountSecondaryIndexes::default(),
             AccountShrinkThreshold::default(),
         );
-        accounts.store_slow_uncached(0, &keypair0.pubkey(), &account0);
-        accounts.store_slow_uncached(0, &keypair1.pubkey(), &account1);
-        accounts.store_slow_uncached(0, &keypair2.pubkey(), &account2);
-        accounts.store_slow_uncached(0, &keypair3.pubkey(), &account3);
+        accounts.store_for_tests(0, &keypair0.pubkey(), &account0);
+        accounts.store_for_tests(0, &keypair1.pubkey(), &account1);
+        accounts.store_for_tests(0, &keypair2.pubkey(), &account2);
+        accounts.store_for_tests(0, &keypair3.pubkey(), &account3);
 
         let instructions = vec![CompiledInstruction::new(2, &(), vec![0, 1])];
         let message = Message::new_with_compiled_instructions(
@@ -3763,11 +3770,11 @@ mod tests {
         let pubkey1 = keys.pop().unwrap();
         let pubkey0 = keys.pop().unwrap();
         let account0 = AccountSharedData::new(42, 0, &Pubkey::default());
-        accounts.store_slow_uncached(0, &pubkey0, &account0);
+        accounts.store_for_tests(0, &pubkey0, &account0);
         let account1 = AccountSharedData::new(42, 0, &Pubkey::default());
-        accounts.store_slow_uncached(0, &pubkey1, &account1);
+        accounts.store_for_tests(0, &pubkey1, &account1);
         let account2 = AccountSharedData::new(41, 0, &Pubkey::default());
-        accounts.store_slow_uncached(0, &pubkey2, &account2);
+        accounts.store_for_tests(0, &pubkey2, &account2);
 
         let ancestors = vec![(0, 0)].into_iter().collect();
         let all_pubkeys: HashSet<_> = vec![pubkey0, pubkey1, pubkey2].into_iter().collect();
@@ -4059,7 +4066,7 @@ mod tests {
         let keypair = Keypair::new();
         let mut account = AccountSharedData::new(1, space, &native_loader::id());
         account.set_executable(true);
-        accounts.store_slow_uncached(0, &keypair.pubkey(), &account);
+        accounts.store_for_tests(0, &keypair.pubkey(), &account);
 
         let mut accumulated_accounts_data_size: usize = 0;
         let mut expect_accumulated_accounts_data_size: usize;
@@ -4148,7 +4155,7 @@ mod tests {
         let program_data_account_size = program_data_account.data().len();
         program_data_account.set_executable(true);
         program_data_account.set_rent_epoch(0);
-        accounts.store_slow_uncached(0, &programdata_key, &program_data_account);
+        accounts.store_for_tests(0, &programdata_key, &program_data_account);
 
         let program_key = Pubkey::new(&[2u8; 32]);
         let program = UpgradeableLoaderState::Program {
@@ -4159,17 +4166,17 @@ mod tests {
         let program_account_size = program_account.data().len();
         program_account.set_executable(true);
         program_account.set_rent_epoch(0);
-        accounts.store_slow_uncached(0, &program_key, &program_account);
+        accounts.store_for_tests(0, &program_key, &program_account);
 
         let key0 = Pubkey::new(&[1u8; 32]);
         let mut bpf_loader_account = AccountSharedData::new(1, 0, &key0);
         bpf_loader_account.set_executable(true);
-        accounts.store_slow_uncached(0, &bpf_loader_upgradeable::id(), &bpf_loader_account);
+        accounts.store_for_tests(0, &bpf_loader_upgradeable::id(), &bpf_loader_account);
 
         let space: usize = 9;
         let mut account = AccountSharedData::new(1, space, &native_loader::id());
         account.set_executable(true);
-        accounts.store_slow_uncached(0, &key0, &account);
+        accounts.store_for_tests(0, &key0, &account);
 
         // test:  program_key account has been loaded as non-loader, load_executable_accounts
         //       will not double count its data size, but still accumulate data size from
