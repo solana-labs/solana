@@ -10,7 +10,7 @@ use {
         snapshot_hash::SnapshotHash,
         snapshot_utils::{
             self, ArchiveFormat, BankSnapshotInfo, Result, SnapshotVersion,
-            TMP_BANK_SNAPSHOT_PREFIX,
+            SNAPSHOT_STATUS_CACHE_FILENAME, TMP_BANK_SNAPSHOT_PREFIX,
         },
     },
     log::*,
@@ -97,10 +97,12 @@ impl AccountsPackage {
                 &bank_snapshot_info.snapshot_path,
                 snapshot_hardlink_dir.join(file_name),
             )?;
-            let status_cache_file_name =
-                snapshot_utils::path_to_file_name_str(&bank_snapshot_info.status_cache_path)?;
+            let status_cache_path = bank_snapshot_info
+                .bank_snapshot_dir
+                .join(SNAPSHOT_STATUS_CACHE_FILENAME);
+            let status_cache_file_name = snapshot_utils::path_to_file_name_str(&status_cache_path)?;
             fs::hard_link(
-                &bank_snapshot_info.status_cache_path,
+                &status_cache_path,
                 snapshot_links.path().join(status_cache_file_name),
             )?;
         }
