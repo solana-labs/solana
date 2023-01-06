@@ -28,9 +28,12 @@ impl AccountStorage {
     /// This fn looks in 'map' first, then in 'shrink_in_progress_map' because
     /// 'shrink_in_progress_map' first inserts the old append vec into 'shrink_in_progress_map'
     /// and then removes the old append vec from 'map'
-    /// Then, the index is updated for all entries to refer to the new id. Callers to this function
-    /// have to expect to be ready to start over and read the index again if this function returns None
-    /// because shrinking may have updated the index between when the caller read the index and found the append vec.
+    /// Then, the index is updated for all entries to refer to the new id.
+    /// Callers to this function have 2 choices:
+    /// 1. hold the account index read lock for the pubkey so that the account index entry cannot be changed prior to or during this call. (scans do this)
+    /// 2. expect to be ready to start over and read the index again if this function returns None
+    /// Operations like shrinking or write cache flushing may have updated the index between when the caller read the index and called this function to
+    /// load from the append vec specified in the index.
     pub(crate) fn get_account_storage_entry(
         &self,
         slot: Slot,
