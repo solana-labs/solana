@@ -4600,9 +4600,9 @@ impl AccountsDb {
         self.thread_pool_clean.install(|| {
             shrink_slots
                 .into_par_iter()
-                .for_each(|(slot, slot_shrink_candidates)| {
+                .for_each(|(slot, slot_shrink_candidate)| {
                     let mut measure = Measure::start("shrink_candidate_slots-ms");
-                    self.do_shrink_slot_stores(slot, std::iter::once(&slot_shrink_candidates));
+                    self.do_shrink_slot_stores(slot, std::iter::once(&slot_shrink_candidate));
                     measure.stop();
                     inc_new_counter_info!("shrink_candidate_slots-ms", measure.as_ms() as usize);
                 });
