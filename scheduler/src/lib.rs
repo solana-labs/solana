@@ -1769,7 +1769,7 @@ impl ScheduleStage {
             let mut did_processed = false;
 
             if !select_skipped {
-                if executing_queue_count > max_executing_queue_count * 100 {
+                if executing_queue_count > max_executing_queue_count * 100 && mode == Some(Mode::Banking) {
                    if let Ok(UnlockablePayload(mut processed_execution_environment, extra)) = from_exec.recv() {
                        executing_queue_count = executing_queue_count.checked_sub(1).unwrap();
                        processed_count = processed_count.checked_add(1).unwrap();
@@ -1876,11 +1876,6 @@ impl ScheduleStage {
                     usize::max_value() /*2*/
                 });
                 while !address_book.uncontended_task_ids.is_empty() && selection.should_proceed() {
-                    if executing_queue_count > max_executing_queue_count * 100 {
-                        trace!("abort aggressive contended queue processing due to non-empty from_exec");
-                        break;
-                    }
-
                     let prefer_immediate = true; //provisioning_tracker_count / 4 > executing_queue_count;
 
                     let maybe_ee = Self::schedule_next_execution(
@@ -1930,7 +1925,7 @@ impl ScheduleStage {
                         || executing_queue_count + provisioning_tracker_count
                             < max_executing_queue_count)
                 {
-                    if executing_queue_count > max_executing_queue_count * 100 {
+                    if executing_queue_count > max_executing_queue_count * 100 && mode == Some(Mode::Banking) {
                         trace!(
                             "abort aggressive runnable queue processing due to non-empty from_exec"
                         );
@@ -2069,6 +2064,8 @@ impl ScheduleStage {
             if select_skipped {
                 let task_count = runnable_queue.task_count_hint();
                 let uncontended_count = address_book.uncontended_task_ids.len();
+                // let select_skipped = from_disconnected && executing_queue_count == 0;
+                // panicked at 'id_417b0397a9fb26e6 Some(171759336) Some(Banking) 0 => 1 || false, extra: (0 4499 0 0)
                 assert!(executing_queue_count >= 1 || did_processed, "id_{random_id:016x} {slot:?} {mode:?} {executing_queue_count} >= 1 || {did_processed}, extra: ({task_count} {contended_count} {provisioning_tracker_count} {uncontended_count})");
             }
         }
