@@ -729,7 +729,7 @@ mod test {
                 pubkey::Pubkey as SplTokenPubkey,
             },
         },
-        std::str::FromStr,
+        std::{iter::repeat_with, str::FromStr},
     };
 
     pub(super) fn convert_pubkey(pubkey: Pubkey) -> SplTokenPubkey {
@@ -1711,13 +1711,11 @@ mod test {
     }
 
     #[test]
-    #[allow(clippy::same_item_push)]
     fn test_parse_token_v3() {
         test_parse_token(&spl_token::id());
     }
 
     #[test]
-    #[allow(clippy::same_item_push)]
     fn test_parse_token_2022() {
         test_parse_token(&spl_token_2022::id());
     }
@@ -1747,10 +1745,7 @@ mod test {
     }
 
     fn test_token_ix_not_enough_keys(program_id: &SplTokenPubkey) {
-        let mut keys: Vec<Pubkey> = vec![];
-        for _ in 0..10 {
-            keys.push(solana_sdk::pubkey::new_rand());
-        }
+        let keys: Vec<Pubkey> = repeat_with(solana_sdk::pubkey::new_rand).take(10).collect();
 
         // Test InitializeMint variations
         let initialize_mint_ix = initialize_mint(
@@ -2225,13 +2220,11 @@ mod test {
     }
 
     #[test]
-    #[allow(clippy::same_item_push)]
     fn test_not_enough_keys_token_v3() {
         test_token_ix_not_enough_keys(&spl_token::id());
     }
 
     #[test]
-    #[allow(clippy::same_item_push)]
     fn test_not_enough_keys_token_2022() {
         test_token_ix_not_enough_keys(&spl_token_2022::id());
     }
