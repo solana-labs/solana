@@ -55,7 +55,10 @@ impl AccountStorage {
     }
 
     /// safe to call while shrinking is in progress
-    fn get_slot_stores_shrinking_in_progress_ok(&self, slot: Slot) -> Option<SlotStores> {
+    pub(crate) fn get_slot_stores_shrinking_in_progress_ok(
+        &self,
+        slot: Slot,
+    ) -> Option<SlotStores> {
         self.map.get(&slot).map(|result| result.value().clone())
     }
 
@@ -63,11 +66,20 @@ impl AccountStorage {
     /// This is only ever called when shrink is not possibly running and there is a max of 1 append vec per slot.
     pub(crate) fn get_slot_storage_entry(&self, slot: Slot) -> Option<Arc<AccountStorageEntry>> {
         assert!(self.shrink_in_progress_map.is_empty());
-        self.get_slot_stores(slot).and_then(|res| {
-            let read = res.read().unwrap();
-            assert!(read.len() <= 1);
-            read.values().next().cloned()
-        })
+        self.get_slot_storage_entry_shrinking_in_progress_ok(slot)
+    }
+
+    /// return the append vec for 'slot' if it exists
+    pub(crate) fn get_slot_storage_entry_shrinking_in_progress_ok(
+        &self,
+        slot: Slot,
+    ) -> Option<Arc<AccountStorageEntry>> {
+        self.get_slot_stores_shrinking_in_progress_ok(slot)
+            .and_then(|res| {
+                let read = res.read().unwrap();
+                assert!(read.len() <= 1);
+                read.values().next().cloned()
+            })
     }
 
     pub(crate) fn all_slots(&self) -> Vec<Slot> {
@@ -139,22 +151,38 @@ impl AccountStorage {
         slot: Slot,
         new_store: Arc<AccountStorageEntry>,
     ) -> ShrinkInProgress<'_> {
-        let slot_storages = self.get_slot_stores_shrinking_in_progress_ok(slot).unwrap();
-        let shrinking_store = Arc::clone(slot_storages.read().unwrap().iter().next().unwrap().1);
+        let slot_storages = self
+            .get_slot_stores_shrinking_in_progress_ok(slot)
+            .expect("no pre-existing storages for shrinking slot");
+        let shrinking_store = Arc::clone(
+            slot_storages
+                .read()
+                .unwrap()
+                .iter()
+                .next()
+                .expect("no pre-existing storages for shrinking slot")
+                .1,
+        );
 
         let previous_id = shrinking_store.append_vec_id();
         let new_id = new_store.append_vec_id();
         // 1. insert 'shrinking_store' into 'shrink_in_progress_map'
-        assert!(self
-            .shrink_in_progress_map
-            .insert(slot, Arc::clone(&shrinking_store))
-            .is_none());
+        assert!(
+            self.shrink_in_progress_map
+                .insert(slot, Arc::clone(&shrinking_store))
+                .is_none(),
+            "duplicate call"
+        );
 
-        let mut storages = slot_storages.write().unwrap();
-        // 2. remove 'shrinking_store' from 'map'
-        assert!(storages.remove(&previous_id).is_some());
-        // 3. insert 'new_store' into 'map' (atomic with #2)
-        assert!(storages.insert(new_id, Arc::clone(&new_store)).is_none());
+        {
+            // write lock held for this atomic operation
+            let mut storages = slot_storages.write().unwrap();
+            // 2. remove 'shrinking_store' from 'map'
+            assert!(storages.remove(&previous_id).is_some());
+            // 3. insert 'new_store' into 'map' (atomic with #2)
+            // should be empty prior to this call
+            assert!(storages.insert(new_id, Arc::clone(&new_store)).is_none());
+        }
 
         ShrinkInProgress {
             storage: self,
@@ -221,5 +249,240 @@ pub enum AccountStorageStatus {
 impl Default for AccountStorageStatus {
     fn default() -> Self {
         Self::Available
+    }
+}
+
+#[cfg(test)]
+pub(crate) mod tests {
+    use {super::*, std::path::Path};
+
+    #[test]
+    fn test_shrink_in_progress() {
+        // test that we check in order map then shrink_in_progress_map
+        let storage = AccountStorage::default();
+        let slot = 0;
+        let id = 0;
+        // empty everything
+        assert!(storage.get_account_storage_entry(slot, id).is_none());
+
+        // add a map store
+        let common_store_path = Path::new("");
+        let store_file_size = 4000;
+        let store_file_size2 = store_file_size * 2;
+        // 2 append vecs with same id, but different sizes
+        let entry = Arc::new(AccountStorageEntry::new(
+            common_store_path,
+            slot,
+            id,
+            store_file_size,
+        ));
+        let entry2 = Arc::new(AccountStorageEntry::new(
+            common_store_path,
+            slot,
+            id,
+            store_file_size2,
+        ));
+        let slot_stores = SlotStores::default();
+        slot_stores.write().unwrap().insert(id, entry);
+        storage.map.insert(slot, slot_stores);
+        // look in map
+        assert_eq!(
+            store_file_size,
+            storage
+                .get_account_storage_entry(slot, id)
+                .map(|entry| entry.accounts.capacity())
+                .unwrap_or_default()
+        );
+
+        // look in shrink_in_progress_map
+        storage.shrink_in_progress_map.insert(slot, entry2);
+
+        // look in map
+        assert_eq!(
+            store_file_size,
+            storage
+                .get_account_storage_entry(slot, id)
+                .map(|entry| entry.accounts.capacity())
+                .unwrap_or_default()
+        );
+
+        // remove from map
+        storage.map.remove(&slot).unwrap();
+
+        // look in shrink_in_progress_map
+        assert_eq!(
+            store_file_size2,
+            storage
+                .get_account_storage_entry(slot, id)
+                .map(|entry| entry.accounts.capacity())
+                .unwrap_or_default()
+        );
+    }
+
+    impl AccountStorage {
+        fn get_test_storage_with_id(&self, id: AppendVecId) -> Arc<AccountStorageEntry> {
+            let slot = 0;
+            // add a map store
+            let common_store_path = Path::new("");
+            let store_file_size = 4000;
+            Arc::new(AccountStorageEntry::new(
+                common_store_path,
+                slot,
+                id,
+                store_file_size,
+            ))
+        }
+        fn get_test_storage(&self) -> Arc<AccountStorageEntry> {
+            self.get_test_storage_with_id(0)
+        }
+    }
+
+    #[test]
+    #[should_panic(expected = "self.shrink_in_progress_map.is_empty()")]
+    fn test_get_slot_stores_fail() {
+        let storage = AccountStorage::default();
+        storage
+            .shrink_in_progress_map
+            .insert(0, storage.get_test_storage());
+        storage.get_slot_stores(0);
+    }
+
+    #[test]
+    #[should_panic(expected = "self.shrink_in_progress_map.is_empty()")]
+    fn test_get_slot_storage_entry_fail() {
+        let storage = AccountStorage::default();
+        storage
+            .shrink_in_progress_map
+            .insert(0, storage.get_test_storage());
+        storage.get_slot_storage_entry(0);
+    }
+
+    #[test]
+    #[should_panic(expected = "self.shrink_in_progress_map.is_empty()")]
+    fn test_all_slots_fail() {
+        let storage = AccountStorage::default();
+        storage
+            .shrink_in_progress_map
+            .insert(0, storage.get_test_storage());
+        storage.all_slots();
+    }
+
+    #[test]
+    #[should_panic(expected = "self.shrink_in_progress_map.is_empty()")]
+    fn test_initialize_fail() {
+        let mut storage = AccountStorage::default();
+        storage
+            .shrink_in_progress_map
+            .insert(0, storage.get_test_storage());
+        storage.initialize(AccountStorageMap::default());
+    }
+
+    #[test]
+    #[should_panic(expected = "self.shrink_in_progress_map.is_empty()")]
+    fn test_remove_fail() {
+        let storage = AccountStorage::default();
+        storage
+            .shrink_in_progress_map
+            .insert(0, storage.get_test_storage());
+        storage.remove(&0);
+    }
+
+    #[test]
+    #[should_panic(expected = "self.shrink_in_progress_map.is_empty()")]
+    fn test_iter_fail() {
+        let storage = AccountStorage::default();
+        storage
+            .shrink_in_progress_map
+            .insert(0, storage.get_test_storage());
+        storage.iter();
+    }
+
+    #[test]
+    #[should_panic(expected = "self.shrink_in_progress_map.is_empty()")]
+    fn test_insert_fail() {
+        let storage = AccountStorage::default();
+        let sample = storage.get_test_storage();
+        storage.shrink_in_progress_map.insert(0, sample.clone());
+        storage.insert(0, sample);
+    }
+
+    #[test]
+    #[should_panic(expected = "duplicate call")]
+    fn test_shrinking_in_progress_fail3() {
+        // already entry in shrink_in_progress_map
+        let storage = AccountStorage::default();
+        let sample = storage.get_test_storage();
+        let slot_stores = SlotStores::default();
+        slot_stores.write().unwrap().insert(0, sample.clone());
+        storage.map.insert(0, slot_stores);
+        storage.shrink_in_progress_map.insert(0, sample.clone());
+        storage.shrinking_in_progress(0, sample);
+    }
+
+    #[test]
+    #[should_panic(expected = "duplicate call")]
+    fn test_shrinking_in_progress_fail4() {
+        // already called 'shrink_in_progress' on this slot and it is still active
+        let storage = AccountStorage::default();
+        let sample_to_shrink = storage.get_test_storage();
+        let sample = storage.get_test_storage();
+        let slot_stores = SlotStores::default();
+        slot_stores.write().unwrap().insert(0, sample_to_shrink);
+        storage.map.insert(0, slot_stores);
+        let _shrinking_in_progress = storage.shrinking_in_progress(0, sample.clone());
+        storage.shrinking_in_progress(0, sample);
+    }
+
+    #[test]
+    fn test_shrinking_in_progress_second_call() {
+        // already called 'shrink_in_progress' on this slot, but it finished, so we succeed
+        // verify data structures during and after shrink and then with subsequent shrink call
+        let storage = AccountStorage::default();
+        let id_to_shrink = 1;
+        let id_shrunk = 0;
+        let sample_to_shrink = storage.get_test_storage_with_id(id_to_shrink);
+        let sample = storage.get_test_storage();
+        let slot_stores = SlotStores::default();
+        slot_stores
+            .write()
+            .unwrap()
+            .insert(id_to_shrink, sample_to_shrink);
+        storage.map.insert(0, slot_stores.clone());
+        let shrinking_in_progress = storage.shrinking_in_progress(0, sample.clone());
+        assert_eq!(slot_stores.read().unwrap().len(), 1);
+        assert_eq!(id_shrunk, slot_stores.read().unwrap()[&0].append_vec_id());
+        assert_eq!(
+            (0, id_to_shrink),
+            storage
+                .shrink_in_progress_map
+                .iter()
+                .next()
+                .map(|r| (*r.key(), r.value().append_vec_id()))
+                .unwrap()
+        );
+        drop(shrinking_in_progress);
+        assert_eq!(slot_stores.read().unwrap().len(), 1);
+        assert_eq!(id_shrunk, slot_stores.read().unwrap()[&0].append_vec_id());
+        assert!(storage.shrink_in_progress_map.is_empty());
+        storage.shrinking_in_progress(0, sample);
+    }
+
+    #[test]
+    #[should_panic(expected = "no pre-existing storages for shrinking slot")]
+    fn test_shrinking_in_progress_fail1() {
+        // nothing in slot currently
+        let storage = AccountStorage::default();
+        let sample = storage.get_test_storage();
+        storage.shrinking_in_progress(0, sample);
+    }
+
+    #[test]
+    #[should_panic(expected = "no pre-existing storages for shrinking slot")]
+    fn test_shrinking_in_progress_fail2() {
+        // nothing in slot currently, but there is an empty map entry
+        let storage = AccountStorage::default();
+        storage.map.insert(0, Arc::default());
+        let sample = storage.get_test_storage();
+        storage.shrinking_in_progress(0, sample);
     }
 }
