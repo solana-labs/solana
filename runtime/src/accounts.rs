@@ -1555,7 +1555,7 @@ mod tests {
             AccountShrinkThreshold::default(),
         );
         for ka in ka.iter() {
-            accounts.store_slow_uncached(0, &ka.0, &ka.1);
+            accounts.store_for_tests(0, &ka.0, &ka.1);
         }
 
         let ancestors = vec![(0, 0)].into_iter().collect();
@@ -2578,7 +2578,7 @@ mod tests {
         let keypair = Keypair::new();
         let mut account = AccountSharedData::new(1, 0, &Pubkey::default());
         account.set_executable(true);
-        accounts.store_slow_uncached(0, &keypair.pubkey(), &account);
+        accounts.store_for_tests(0, &keypair.pubkey(), &account);
 
         assert_eq!(
             accounts.load_executable_accounts(
@@ -2897,10 +2897,10 @@ mod tests {
             AccountSecondaryIndexes::default(),
             AccountShrinkThreshold::default(),
         );
-        accounts.store_slow_uncached(0, &keypair0.pubkey(), &account0);
-        accounts.store_slow_uncached(0, &keypair1.pubkey(), &account1);
-        accounts.store_slow_uncached(0, &keypair2.pubkey(), &account2);
-        accounts.store_slow_uncached(0, &keypair3.pubkey(), &account3);
+        accounts.store_for_tests(0, &keypair0.pubkey(), &account0);
+        accounts.store_for_tests(0, &keypair1.pubkey(), &account1);
+        accounts.store_for_tests(0, &keypair2.pubkey(), &account2);
+        accounts.store_for_tests(0, &keypair3.pubkey(), &account3);
 
         let instructions = vec![CompiledInstruction::new(2, &(), vec![0, 1])];
         let message = Message::new_with_compiled_instructions(
@@ -2942,9 +2942,16 @@ mod tests {
     }
 
     impl Accounts {
-        /// callers use to call store_uncached. But, this is not allowed anymore.
+        /// callers used to call store_uncached. But, this is not allowed anymore.
         pub fn store_for_tests(&self, slot: Slot, pubkey: &Pubkey, account: &AccountSharedData) {
             self.accounts_db.store_for_tests(slot, &[(pubkey, account)])
+        }
+
+        /// useful to adapt tests written prior to introduction of the write cache
+        /// to use the write cache
+        pub fn add_root_and_flush_write_cache(&self, slot: Slot) {
+            self.add_root(slot);
+            self.accounts_db.flush_accounts_cache_slot_for_tests(slot);
         }
     }
 
@@ -3188,10 +3195,11 @@ mod tests {
         for i in 0..2_000 {
             let pubkey = solana_sdk::pubkey::new_rand();
             let account = AccountSharedData::new(i + 1, 0, AccountSharedData::default().owner());
-            accounts.store_slow_uncached(i, &pubkey, &account);
-            accounts.store_slow_uncached(i, &old_pubkey, &zero_account);
+            accounts.store_for_tests(i, &pubkey, &account);
+            accounts.store_for_tests(i, &old_pubkey, &zero_account);
             old_pubkey = pubkey;
-            accounts.add_root(i);
+            accounts.add_root_and_flush_write_cache(i);
+
             if i % 1_000 == 0 {
                 info!("  store {}", i);
             }

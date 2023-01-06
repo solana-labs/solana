@@ -16039,7 +16039,7 @@ pub mod tests {
             self.flush_accounts_cache(true, Some(root));
         }
 
-        /// callers use to call store_uncached. But, this is not allowed anymore.
+        /// callers used to call store_uncached. But, this is not allowed anymore.
         pub fn store_for_tests(&self, slot: Slot, accounts: &[(&Pubkey, &AccountSharedData)]) {
             self.store(
                 (slot, accounts, INCLUDE_SLOT_IN_HASH_TESTS),
