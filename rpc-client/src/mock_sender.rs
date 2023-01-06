@@ -13,8 +13,8 @@ use {
             Response, RpcAccountBalance, RpcBlockProduction, RpcBlockProductionRange, RpcBlockhash,
             RpcConfirmedTransactionStatusWithSignature, RpcContactInfo, RpcFees, RpcIdentity,
             RpcInflationGovernor, RpcInflationRate, RpcInflationReward, RpcKeyedAccount,
-            RpcPerfSample, RpcResponseContext, RpcSimulateTransactionResult, RpcSnapshotSlotInfo,
-            RpcStakeActivation, RpcSupply, RpcVersionInfo, RpcVoteAccountInfo,
+            RpcPerfSample, RpcPrioritizationFee, RpcResponseContext, RpcSimulateTransactionResult,
+            RpcSnapshotSlotInfo, RpcStakeActivation, RpcSupply, RpcVersionInfo, RpcVoteAccountInfo,
             RpcVoteAccountStatus, StakeActivationState,
         },
     },
@@ -418,6 +418,10 @@ impl RpcSender for MockSender {
                 num_transactions: 125,
                 num_slots: 123,
                 sample_period_secs: 60,
+            }])?,
+            "getRecentPrioritizationFees" => serde_json::to_value(vec![RpcPrioritizationFee {
+                slot: 123_456_789,
+                prioritization_fee: 10_000,
             }])?,
             "getIdentity" => serde_json::to_value(RpcIdentity {
                 identity: PUBKEY.to_string(),
