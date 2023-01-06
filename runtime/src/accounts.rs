@@ -322,6 +322,9 @@ impl Accounts {
                                 .unwrap_or_else(|| {
                                     let mut default_account = AccountSharedData::default();
                                     if set_exempt_rent_epoch_max {
+                                        // All new accounts must be rent-exempt (enforced in Bank::execute_loaded_transaction).
+                                        // Currently, rent collection sets rent_epoch to u64::MAX, but initializing the account
+                                        // with this field already set would allow us to skip rent collection for these accounts.
                                         default_account.set_rent_epoch(u64::MAX);
                                     }
                                     (default_account, 0)
