@@ -3834,13 +3834,14 @@ impl AccountsDb {
         self.drop_or_recycle_stores(dead_storages, stats);
     }
 
-    fn do_shrink_slot_stores<'a, I>(&'a self, slot: Slot, stores: I) -> usize
-    where
-        I: Iterator<Item = &'a Arc<AccountStorageEntry>>,
-    {
+    fn do_shrink_slot_store(&self, slot: Slot, store: &Arc<AccountStorageEntry>) -> usize {
         let mut stored_accounts = Vec::default();
-        debug!("do_shrink_slot_stores: slot: {}", slot);
-        let shrink_collect = self.shrink_collect(stores, &mut stored_accounts, &self.shrink_stats);
+        debug!("do_shrink_slot_store: slot: {}", slot);
+        let shrink_collect = self.shrink_collect(
+            std::iter::once(store),
+            &mut stored_accounts,
+            &self.shrink_stats,
+        );
 
         // This shouldn't happen if alive_bytes/approx_stored_count are accurate
         if Self::should_not_shrink(
@@ -4055,7 +4056,7 @@ impl AccountsDb {
             if !Self::is_shrinking_productive(slot, &store) {
                 return 0;
             }
-            self.do_shrink_slot_stores(slot, std::iter::once(&store))
+            self.do_shrink_slot_store(slot, &store)
         } else {
             0
         }
@@ -4602,7 +4603,7 @@ impl AccountsDb {
                 .into_par_iter()
                 .for_each(|(slot, slot_shrink_candidate)| {
                     let mut measure = Measure::start("shrink_candidate_slots-ms");
-                    self.do_shrink_slot_stores(slot, std::iter::once(&slot_shrink_candidate));
+                    self.do_shrink_slot_store(slot, &slot_shrink_candidate);
                     measure.stop();
                     inc_new_counter_info!("shrink_candidate_slots-ms", measure.as_ms() as usize);
                 });
@@ -4978,7 +4979,7 @@ impl AccountsDb {
         //
         // Shrinker                             | Accessed data source for stored
         // -------------------------------------+----------------------------------
-        // S1 do_shrink_slot_stores()           | N/A
+        // S1 do_shrink_slot_store()            | N/A
         //          |                           |
         //          V                           |
         // S2 store_accounts_frozen()/          | map of stores (creates new entry)
@@ -4989,7 +4990,7 @@ impl AccountsDb {
         //        update_index()                | (replaces existing store_id, offset in stores)
         //          |                           |
         //          V                           |
-        // S4 do_shrink_slot_stores()/          | map of stores (removes old entry)
+        // S4 do_shrink_slot_store()/           | map of stores (removes old entry)
         //        dead_storages
         //
         // Remarks for shrinker: So, for any reading operations, it's a race condition
