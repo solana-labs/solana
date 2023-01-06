@@ -13381,6 +13381,150 @@ pub mod tests {
     }
 
     #[test]
+    fn test_select_candidates_by_total_usage_3_way_split_condition() {
+        // three candidates, one selected for shrink, one is put back to the candidate list and one is ignored
+        solana_logger::setup();
+        let mut candidates: ShrinkCandidates = HashMap::new();
+
+        let common_store_path = Path::new("");
+        let slot_id_1 = 12;
+        let store_file_size = 2 * PAGE_SIZE;
+
+        let store1_id = 22;
+        let store1 = Arc::new(AccountStorageEntry::new(
+            common_store_path,
+            slot_id_1,
+            store1_id,
+            store_file_size,
+        ));
+        store1.alive_bytes.store(0, Ordering::Release);
+
+        candidates.insert(slot_id_1, store1.clone());
+
+        let slot_id_2 = 13;
+
+        let store2_id = 44;
+        let store2 = Arc::new(AccountStorageEntry::new(
+            common_store_path,
+            slot_id_2,
+            store2_id,
+            store_file_size,
+        ));
+
+        // The store2's alive_ratio is 0.5: as its page aligned alive size is 1 page.
+        let store2_alive_bytes = (PAGE_SIZE - 1) as usize;
+        store2
+            .alive_bytes
+            .store(store2_alive_bytes, Ordering::Release);
+        candidates.insert(slot_id_2, store2.clone());
+
+        let slot_id_3 = 14;
+        let store3_id = 55;
+        let entry3 = Arc::new(AccountStorageEntry::new(
+            common_store_path,
+            slot_id_3,
+            store3_id,
+            store_file_size,
+        ));
+
+        // The store3's alive ratio is 1.0 as its page-aligned alive size is 2 pages
+        let store3_alive_bytes = (PAGE_SIZE + 1) as usize;
+        entry3
+            .alive_bytes
+            .store(store3_alive_bytes, Ordering::Release);
+
+        candidates.insert(slot_id_3, entry3);
+
+        // Set the target alive ratio to 0.6 so that we can just get rid of store1, the remaining two stores
+        // alive ratio can be > the target ratio: the actual ratio is 0.75 because of 3 alive pages / 4 total pages.
+        // The target ratio is also set to larger than store2's alive ratio: 0.5 so that it would be added
+        // to the candidates list for next round.
+        let target_alive_ratio = 0.6;
+        let (selected_candidates, next_candidates) =
+            AccountsDb::select_candidates_by_total_usage(&candidates, target_alive_ratio);
+        assert_eq!(1, selected_candidates.len());
+        assert_eq!(
+            selected_candidates[&slot_id_1].append_vec_id(),
+            store1.append_vec_id()
+        );
+        assert_eq!(1, next_candidates.len());
+        assert_eq!(
+            next_candidates[&slot_id_2].append_vec_id(),
+            store2.append_vec_id()
+        );
+    }
+
+    #[test]
+    fn test_select_candidates_by_total_usage_2_way_split_condition() {
+        // three candidates, 2 are selected for shrink, one is ignored
+        solana_logger::setup();
+        let mut candidates: ShrinkCandidates = HashMap::new();
+
+        let common_store_path = Path::new("");
+        let slot_id_1 = 12;
+        let store_file_size = 2 * PAGE_SIZE;
+
+        let store1_id = 22;
+        let store1 = Arc::new(AccountStorageEntry::new(
+            common_store_path,
+            slot_id_1,
+            store1_id,
+            store_file_size,
+        ));
+        store1.alive_bytes.store(0, Ordering::Release);
+
+        candidates.insert(slot_id_1, store1.clone());
+
+        let slot_id_2 = 13;
+        let store2_id = 44;
+        let store2 = Arc::new(AccountStorageEntry::new(
+            common_store_path,
+            slot_id_2,
+            store2_id,
+            store_file_size,
+        ));
+
+        // The store2's alive_ratio is 0.5: as its page aligned alive size is 1 page.
+        let store2_alive_bytes = (PAGE_SIZE - 1) as usize;
+        store2
+            .alive_bytes
+            .store(store2_alive_bytes, Ordering::Release);
+        candidates.insert(slot_id_2, store2.clone());
+
+        let slot_id_3 = 14;
+        let store3_id = 55;
+        let entry3 = Arc::new(AccountStorageEntry::new(
+            common_store_path,
+            slot_id_3,
+            store3_id,
+            store_file_size,
+        ));
+
+        // The store3's alive ratio is 1.0 as its page-aligned alive size is 2 pages
+        let store3_alive_bytes = (PAGE_SIZE + 1) as usize;
+        entry3
+            .alive_bytes
+            .store(store3_alive_bytes, Ordering::Release);
+
+        candidates.insert(slot_id_3, entry3);
+
+        // Set the target ratio to default (0.8), both store1 and store2 must be selected and store3 is ignored.
+        let target_alive_ratio = DEFAULT_ACCOUNTS_SHRINK_RATIO;
+        let (selected_candidates, next_candidates) =
+            AccountsDb::select_candidates_by_total_usage(&candidates, target_alive_ratio);
+        assert_eq!(2, selected_candidates.len());
+        assert_eq!(
+            selected_candidates[&slot_id_1].append_vec_id(),
+            store1.append_vec_id()
+        );
+        assert_eq!(
+            selected_candidates[&slot_id_2].append_vec_id(),
+            store2.append_vec_id()
+        );
+        assert_eq!(0, next_candidates.len());
+    }
+
+    #[test]
     fn test_select_candidates_by_total_usage_all_clean() {
         // 2 candidates, they must be selected to achieve the target alive ratio
         solana_logger::setup();
