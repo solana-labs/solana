@@ -4384,10 +4384,9 @@ impl AccountsDb {
                 );
             }
 
-            let old_storages = [old_storage];
             self.combine_one_store_into_ancient(
                 slot,
-                &old_storages,
+                &old_storage,
                 &mut current_ancient,
                 &mut ancient_slot_pubkeys,
                 &mut dropped_roots,
@@ -4408,18 +4407,18 @@ impl AccountsDb {
         }
     }
 
-    /// put entire alive contents of 'old_storages' into the current ancient append vec or a newly created ancient append vec
+    /// put entire alive contents of 'old_storage' into the current ancient append vec or a newly created ancient append vec
     fn combine_one_store_into_ancient(
         &self,
         slot: Slot,
-        old_storages: &[Arc<AccountStorageEntry>],
+        old_storage: &Arc<AccountStorageEntry>,
         current_ancient: &mut CurrentAncientAppendVec,
         ancient_slot_pubkeys: &mut AncientSlotPubkeys,
         dropped_roots: &mut Vec<Slot>,
     ) {
         let mut stored_accounts = Vec::default();
         let shrink_collect = self.shrink_collect(
-            old_storages.iter(),
+            std::iter::once(old_storage),
             &mut stored_accounts,
             &self.shrink_ancient_stats.shrink_stats,
         );
@@ -17312,7 +17311,7 @@ pub mod tests {
         let mut dropped_roots = Vec::default();
         db.combine_one_store_into_ancient(
             next_slot,
-            &[db.get_storage_for_slot(next_slot).unwrap()],
+            &db.get_storage_for_slot(next_slot).unwrap(),
             &mut current_ancient,
             &mut AncientSlotPubkeys::default(),
             &mut dropped_roots,
