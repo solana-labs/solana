@@ -152,7 +152,6 @@ impl RequestResponse for AncestorHashesRepairType {
 #[derive(Default)]
 struct ServeRepairStats {
     total_requests: usize,
-    unsigned_requests: usize,
     dropped_requests_outbound_bandwidth: usize,
     dropped_requests_load_shed: usize,
     dropped_requests_low_stake: usize,
@@ -451,8 +450,9 @@ impl ServeRepair {
         let epoch_staked_nodes = root_bank.epoch_staked_nodes(root_bank.epoch());
         let identity_keypair = self.cluster_info.keypair().clone();
         let my_id = identity_keypair.pubkey();
+        let cluster_type = root_bank.cluster_type();
 
-        let max_buffered_packets = if root_bank.cluster_type() != ClusterType::MainnetBeta {
+        let max_buffered_packets = if cluster_type != ClusterType::MainnetBeta {
             2 * MAX_REQUESTS_PER_ITERATION
         } else {
             MAX_REQUESTS_PER_ITERATION
@@ -488,11 +488,16 @@ impl ServeRepair {
                 continue;
             }
 
-            if request.supports_signature() {
-                // collect stats for signature verification
-                Self::verify_signed_packet(&my_id, packet, &request, stats);
-            } else {
-                stats.unsigned_requests += 1;
+            match cluster_type {
+                ClusterType::Testnet | ClusterType::Development => {
+                    if !Self::verify_signed_packet(&my_id, packet, &request, stats) {
+                        continue;
+                    }
+                }
+                ClusterType::MainnetBeta | ClusterType::Devnet => {
+                    // collect stats for signature verification
+                    let _ = Self::verify_signed_packet(&my_id, packet, &request, stats);
+                }
             }
 
             if request.sender() == &my_id {
@@ -527,6 +532,7 @@ impl ServeRepair {
             response_sender,
             stats,
             data_budget,
+            cluster_type,
         );
 
         Ok(())
@@ -545,7 +551,6 @@ impl ServeRepair {
         datapoint_info!(
             "serve_repair-requests_received",
             ("total_requests", stats.total_requests, i64),
-            ("unsigned_requests", stats.unsigned_requests, i64),
             (
                 "dropped_requests_outbound_bandwidth",
                 stats.dropped_requests_outbound_bandwidth,
@@ -669,6 +674,7 @@ impl ServeRepair {
             .unwrap()
     }
 
+    #[must_use]
     fn verify_signed_packet(
         my_id: &Pubkey,
         packet: &Packet,
@@ -683,7 +689,6 @@ impl ServeRepair {
             | RepairProtocol::LegacyHighestWindowIndexWithNonce(_, _, _, _)
             | RepairProtocol::LegacyOrphanWithNonce(_, _, _)
             | RepairProtocol::LegacyAncestorHashes(_, _, _) => {
-                debug_assert!(false); // expecting only signed request types
                 stats.err_unsigned += 1;
                 return false;
             }
@@ -779,6 +784,7 @@ impl ServeRepair {
         response_sender: &PacketBatchSender,
         stats: &mut ServeRepairStats,
         data_budget: &DataBudget,
+        cluster_type: ClusterType,
     ) {
         let identity_keypair = self.cluster_info.keypair().clone();
         let mut pending_pings = Vec::default();
@@ -792,8 +798,11 @@ impl ServeRepair {
                     pending_pings.push(ping_pkt);
                 }
                 if !check {
-                    // collect stats for ping/pong verification
                     stats.ping_cache_check_failed += 1;
+                    match cluster_type {
+                        ClusterType::Testnet | ClusterType::Development => continue,
+                        ClusterType::MainnetBeta | ClusterType::Devnet => (),
+                    }
                 }
             }
             stats.processed += 1;
