@@ -4647,12 +4647,8 @@ pub mod tests {
         solana_sdk::{
             account::{Account, WritableAccount},
             clock::MAX_RECENT_BLOCKHASHES,
-<<<<<<< HEAD
-            fee_calculator::{FeeRateGovernor, DEFAULT_BURN_PERCENT},
-=======
             compute_budget::ComputeBudgetInstruction,
-            fee_calculator::DEFAULT_BURN_PERCENT,
->>>>>>> 9b8bed86f9 (Add getRecentPrioritizationFees RPC endpoint (#27278))
+            fee_calculator::{FeeRateGovernor, DEFAULT_BURN_PERCENT},
             hash::{hash, Hash},
             instruction::InstructionError,
             message::{
@@ -8494,53 +8490,6 @@ pub mod tests {
     }
 
     #[test]
-<<<<<<< HEAD
-    fn test_get_fee_for_message() {
-        let rpc = RpcHandler::start();
-        let bank = rpc.working_bank();
-        // Slot hashes is necessary for processing versioned txs.
-        bank.set_sysvar_for_tests(&SlotHashes::default());
-        // Correct blockhash is needed because fees are specific to blockhashes
-        let recent_blockhash = bank.last_blockhash();
-
-        {
-            let legacy_msg = VersionedMessage::Legacy(Message {
-                header: MessageHeader {
-                    num_required_signatures: 1,
-                    ..MessageHeader::default()
-                },
-                recent_blockhash,
-                account_keys: vec![Pubkey::new_unique()],
-                ..Message::default()
-            });
-
-            let request = create_test_request(
-                "getFeeForMessage",
-                Some(json!([base64::encode(&serialize(&legacy_msg).unwrap())])),
-            );
-            let response: RpcResponse<u64> = parse_success_result(rpc.handle_request_sync(request));
-            assert_eq!(response.value, TEST_SIGNATURE_FEE);
-        }
-
-        {
-            let v0_msg = VersionedMessage::V0(v0::Message {
-                header: MessageHeader {
-                    num_required_signatures: 1,
-                    ..MessageHeader::default()
-                },
-                recent_blockhash,
-                account_keys: vec![Pubkey::new_unique()],
-                ..v0::Message::default()
-            });
-
-            let request = create_test_request(
-                "getFeeForMessage",
-                Some(json!([base64::encode(&serialize(&v0_msg).unwrap())])),
-            );
-            let response: RpcResponse<u64> = parse_success_result(rpc.handle_request_sync(request));
-            assert_eq!(response.value, TEST_SIGNATURE_FEE);
-        }
-=======
     fn test_rpc_get_recent_prioritization_fees() {
         fn wait_for_cache_blocks(cache: &PrioritizationFeeCache, num_blocks: usize) {
             while cache.available_block_count() < num_blocks {
@@ -8701,6 +8650,5 @@ pub mod tests {
                 },
             ],
         );
->>>>>>> 9b8bed86f9 (Add getRecentPrioritizationFees RPC endpoint (#27278))
     }
 }

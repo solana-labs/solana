@@ -356,12 +356,8 @@ impl JsonRpcService {
         leader_schedule_cache: Arc<LeaderScheduleCache>,
         connection_cache: Arc<ConnectionCache>,
         current_transaction_status_slot: Arc<AtomicU64>,
-<<<<<<< HEAD
-    ) -> Self {
-=======
         prioritization_fee_cache: Arc<PrioritizationFeeCache>,
-    ) -> Result<Self, String> {
->>>>>>> 9b8bed86f9 (Add getRecentPrioritizationFees RPC endpoint (#27278))
+    ) -> Self {
         info!("rpc bound to {:?}", rpc_addr);
         info!("rpc configuration: {:?}", config);
         let rpc_threads = 1.max(config.rpc_threads);
@@ -648,13 +644,8 @@ mod tests {
             Arc::new(LeaderScheduleCache::default()),
             connection_cache,
             Arc::new(AtomicU64::default()),
-<<<<<<< HEAD
-        );
-=======
             Arc::new(PrioritizationFeeCache::default()),
-        )
-        .expect("assume successful JsonRpcService start");
->>>>>>> 9b8bed86f9 (Add getRecentPrioritizationFees RPC endpoint (#27278))
+        );
         let thread = rpc_service.thread_hdl.thread();
         assert_eq!(thread.name().unwrap(), "solJsonRpcSvc");
 
