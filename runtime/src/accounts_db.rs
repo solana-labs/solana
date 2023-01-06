@@ -5822,7 +5822,7 @@ impl AccountsDb {
         // After handling the reclaimed entries, this slot's
         // storage entries should be purged from self.storage
         assert!(
-            self.storage.get_slot_stores(remove_slot).is_none(),
+            self.storage.get_slot_storage_entry(remove_slot).is_none(),
             "slot {remove_slot} is not none"
         );
     }
