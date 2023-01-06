@@ -8783,7 +8783,7 @@ impl AccountsDb {
                 .take(per_pass)
                 .collect::<Vec<_>>();
             roots_in_this_pass.into_par_iter().for_each(|slot| {
-                if self.storage.is_empty(*slot) {
+                if self.storage.get_slot_storage_entry(*slot).is_none() {
                     return;
                 }
 
@@ -14297,7 +14297,7 @@ pub mod tests {
         db.store_cached((0, &[(&other_account_key, &slot0_account)][..]), None);
         db.add_root(0);
         db.flush_accounts_cache(true, None);
-        assert!(!db.storage.is_empty(0));
+        assert!(db.storage.get_slot_storage_entry(0).is_some());
 
         // Store into slot 1, a dummy slot that will be dead and purged before flush
         db.store_cached(
@@ -16424,7 +16424,7 @@ pub mod tests {
             let existing_store = db.create_and_insert_store(slot, size, "test");
             let old_id = existing_store.append_vec_id();
             let dead_storages = db.mark_dirty_dead_stores(slot, add_dirty_stores, None);
-            assert!(db.storage.is_empty(slot));
+            assert!(db.storage.get_slot_storage_entry(slot).is_none());
             assert_eq!(dead_storages.len(), 1);
             assert_eq!(dead_storages.first().unwrap().append_vec_id(), old_id);
             if add_dirty_stores {
@@ -16451,7 +16451,7 @@ pub mod tests {
             let shrink_in_progress = db.get_store_for_shrink(slot, 100);
             let dead_storages =
                 db.mark_dirty_dead_stores(slot, add_dirty_stores, Some(shrink_in_progress));
-            assert!(!db.storage.is_empty(slot));
+            assert!(db.storage.get_slot_storage_entry(slot).is_some());
             assert_eq!(dead_storages.len(), 1);
             assert_eq!(dead_storages.first().unwrap().append_vec_id(), old_id);
             if add_dirty_stores {
