@@ -164,13 +164,6 @@ impl AccountStorage {
         }
     }
 
-    /// 'id' can now be forgotten from the storage map
-    /// It will have been in 'shrink_in_progress_map'.
-    /// 'id' will have been removed from 'map' in a prior call to 'shrinking_in_progress'
-    fn remove_shrunk_storage(&self, slot: Slot) {
-        assert!(self.shrink_in_progress_map.remove(&slot).is_some());
-    }
-
     #[cfg(test)]
     pub(crate) fn insert_empty_at_slot(&self, slot: Slot) {
         assert!(self.shrink_in_progress_map.is_empty());
@@ -189,17 +182,23 @@ impl AccountStorage {
 /// keeps track of the 'new_store' being created and the 'old_store' being replaced.
 pub(crate) struct ShrinkInProgress<'a> {
     storage: &'a AccountStorage,
-    /// newly shrunk store with a subset of contents from 'old_store'
-    new_store: Arc<AccountStorageEntry>,
     /// old store which will be shrunk and replaced
     old_store: Arc<AccountStorageEntry>,
+    /// newly shrunk store with a subset of contents from 'old_store'
+    new_store: Arc<AccountStorageEntry>,
     slot: Slot,
 }
 
 /// called when the shrink is no longer in progress. This means we can release the old append vec and update the map of slot -> append vec
 impl<'a> Drop for ShrinkInProgress<'a> {
     fn drop(&mut self) {
-        self.storage.remove_shrunk_storage(self.slot);
+        // The old append vec referenced in 'self' for `slot`
+        // can be removed from 'shrink_in_progress_map'
+        assert!(self
+            .storage
+            .shrink_in_progress_map
+            .remove(&self.slot)
+            .is_some());
     }
 }
 
