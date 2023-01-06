@@ -32,7 +32,9 @@ const DispatchContext = React.createContext<Dispatch | undefined>(undefined);
 type BlockProviderProps = { children: React.ReactNode };
 
 export function BlockProvider({ children }: BlockProviderProps) {
-  const { url } = useCluster();
+  // Caching has to be explicitly set here in order to match
+  // cache entries by URL
+  const { url } = useCluster({ cached: true });
   const [state, dispatch] = Cache.useReducer<Block>(url);
 
   React.useEffect(() => {
@@ -135,6 +137,8 @@ export function useFetchBlock() {
     throw new Error(`useFetchBlock must be used within a BlockProvider`);
   }
 
+  // Caching also has to be explicitly set in the BlockProvider
+  // to match the cache entries by URL
   const { cluster, url } = useCluster({ cached: true });
   return React.useCallback(
     (key: number) => fetchBlock(dispatch, url, cluster, key),
