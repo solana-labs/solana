@@ -121,8 +121,8 @@ newVersion="$MAJOR.$MINOR.$PATCH$SPECIAL"
 
 # Update all the Cargo.toml files
 for Cargo_toml in "${Cargo_tomls[@]}"; do
-  # ignore when version inheritant from workspace
-  if grep "^version = { workspace = true }" "$Cargo_toml" &>/dev/null; then
+  # ignore when version inheritant from workspace (exclude programs/sbf/Cargo.toml)
+  if grep "^version = { workspace = true }" "$Cargo_toml" &>/dev/null && Cargo_toml && ! [[ $Cargo_toml =~ programs/sbf/Cargo.toml ]]; then
     continue
   fi
 
