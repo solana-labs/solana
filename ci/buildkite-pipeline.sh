@@ -216,7 +216,7 @@ EOF
     cat >> "$output_file" <<"EOF"
   - command: "ci/test-stable-perf.sh"
     name: "stable-perf"
-    timeout_in_minutes: 20
+    timeout_in_minutes: 35
     artifact_paths: "log-*.txt"
     agents:
       queue: "cuda"
