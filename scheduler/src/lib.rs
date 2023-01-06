@@ -1996,7 +1996,7 @@ impl ScheduleStage {
                         from_exec_len = from_exec.len();
                     }
                 }
-                (empty_from, empty_from_exec) = (true || from_len == 0, from_exec_len == 0);
+                (empty_from, empty_from_exec) = (mode == Some(Mode::Replaying) || from_len == 0, from_exec_len == 0);
 
                 if empty_from && empty_from_exec {
                     break;
@@ -2039,16 +2039,12 @@ impl ScheduleStage {
                         }
                     }
                     if !empty_from {
-                        unreachable!();
-
                         let SchedulablePayload(schedulable) = from_prev.recv().unwrap();
                         from_len = from_len.checked_sub(1).unwrap();
                         empty_from = from_len == 0;
                         match schedulable {
                             Flushable::Flush(checkpoint) => {
-                                assert!(empty_from);
-                                assert_eq!(from_prev.len(), 0);
-                                assert!(!from_disconnected);
+                                assert_eq!((from_len, empty_from, from_prev.len()), (0, true, 0));
                                 from_disconnected = true;
                                 from_prev = never;
                                 assert!(maybe_checkpoint.is_none());
