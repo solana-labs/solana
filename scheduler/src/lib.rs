@@ -935,6 +935,7 @@ trait TaskQueueReader<C> {
     fn task_count_hint(&self) -> usize;
     fn has_no_task_hint(&self) -> bool;
     fn take_buffered_flush(&mut self) -> Option<std::sync::Arc<Checkpoint<C>>>;
+    fn is_backed_by_channel(&self) -> bool;
 }
 
 impl<C> TaskQueueReader<C> for TaskQueue {
@@ -960,6 +961,10 @@ impl<C> TaskQueueReader<C> for TaskQueue {
 
     fn take_buffered_flush(&mut self) -> Option<std::sync::Arc<Checkpoint<C>>> {
         None
+    }
+
+    fn is_backed_by_channel(&self) -> bool {
+        false
     }
 }
 
@@ -1025,6 +1030,10 @@ impl<C> TaskQueueReader<C> for ChannelBackedTaskQueue<C> {
                 }
             }
         }
+    }
+
+    fn is_backed_by_channel(&self) -> bool {
+        true
     }
 }
 
@@ -1816,10 +1825,12 @@ impl ScheduleStage {
                                        format!("")
                                    };
                                    let mode_label = if old_mode != Some(task.mode) {
-                                       runnable_queue = match task.mode {
-                                           Mode::Replaying => ModeSpecificTaskQueue::Replaying(ChannelBackedTaskQueue::new(from_prev)),
-                                           Mode::Banking => ModeSpecificTaskQueue::Banking(TaskQueue::default()),
-                                       };
+                                       if !std::env::var("FORCE_CHANNEL_BACKED").is_ok() {
+                                           runnable_queue = match task.mode {
+                                               Mode::Replaying => ModeSpecificTaskQueue::Replaying(ChannelBackedTaskQueue::new(from_prev)),
+                                               Mode::Banking => ModeSpecificTaskQueue::Banking(TaskQueue::default()),
+                                           };
+                                       }
                                        mode = Some(task.mode);
                                        format!(" mode: {old_mode:?} => {mode:?}")
                                    } else {
@@ -1923,6 +1934,9 @@ impl ScheduleStage {
                         break;
                     }
                 }
+                if executing_queue_count == 0 && address_book.uncontended_task_ids.is_empty() {
+                    assert_eq!(contended_count, 0);
+                }
                 let mut selection = TaskSelection::OnlyFromRunnable;
                 while !runnable_queue.has_no_task_hint()
                     && selection.should_proceed()
@@ -2001,7 +2015,7 @@ impl ScheduleStage {
                         from_exec_len = from_exec.len();
                     }
                 }
-                (empty_from, empty_from_exec) = (mode == Some(Mode::Replaying) || from_len == 0, from_exec_len == 0);
+                (empty_from, empty_from_exec) = (runnable_queue.is_backed_by_channel() || from_len == 0, from_exec_len == 0);
 
                 if empty_from && empty_from_exec {
                     break;
