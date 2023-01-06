@@ -3832,6 +3832,14 @@ fn main() {
                                         }
 
                                         for point_detail in point_details {
+                                            let (cluster_rewards, cluster_points) =
+                                                last_point_value
+                                                    .read()
+                                                    .unwrap()
+                                                    .clone()
+                                                    .map_or((None, None), |pv| {
+                                                        (Some(pv.rewards), Some(pv.points))
+                                                    });
                                             let record = InflationRecord {
                                                 cluster_type: format!(
                                                     "{:?}",
@@ -3898,20 +3906,8 @@ fn main() {
                                                 commission: format_or_na(
                                                     detail.map(|d| d.commission),
                                                 ),
-                                                cluster_rewards: format_or_na(
-                                                    last_point_value
-                                                        .read()
-                                                        .unwrap()
-                                                        .clone()
-                                                        .map(|pv| pv.rewards),
-                                                ),
-                                                cluster_points: format_or_na(
-                                                    last_point_value
-                                                        .read()
-                                                        .unwrap()
-                                                        .clone()
-                                                        .map(|pv| pv.points),
-                                                ),
+                                                cluster_rewards: format_or_na(cluster_rewards),
+                                                cluster_points: format_or_na(cluster_points),
                                                 old_capitalization: base_bank.capitalization(),
                                                 new_capitalization: warped_bank.capitalization(),
                                             };
