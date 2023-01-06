@@ -71,7 +71,7 @@ use {
     solana_rayon_threadlimit::get_thread_count,
     solana_sdk::{
         account::{Account, AccountSharedData, ReadableAccount, WritableAccount},
-        clock::{BankId, Epoch, Slot, SlotCount},
+        clock::{BankId, Epoch, Slot},
         epoch_schedule::EpochSchedule,
         genesis_config::{ClusterType, GenesisConfig},
         hash::Hash,
@@ -340,11 +340,6 @@ struct ShrinkCollect<'a> {
     /// true if all alive accounts are zero lamports
     all_are_zero_lamports: bool,
 }
-
-// the current best way to add filler accounts is gradually.
-// In other scenarios, such as monitoring catchup with large # of accounts, it may be useful to be able to
-// add filler accounts at the beginning, so that code path remains but won't execute at the moment.
-const ADD_FILLER_ACCOUNTS_GRADUALLY: bool = true;
 
 pub const ACCOUNTS_DB_CONFIG_FOR_TESTING: AccountsDbConfig = AccountsDbConfig {
     index: Some(ACCOUNTS_INDEX_CONFIG_FOR_TESTING),
@@ -8669,14 +8664,6 @@ impl AccountsDb {
         self.filler_account_suffix.is_some()
     }
 
-    /// retain slots in 'roots' that are > (max(roots) - slots_per_epoch)
-    fn retain_roots_within_one_epoch_range(roots: &mut Vec<Slot>, slots_per_epoch: SlotCount) {
-        if let Some(max) = roots.iter().max() {
-            let min = max - slots_per_epoch;
-            roots.retain(|slot| slot > &min);
-        }
-    }
-
     /// return 'AccountSharedData' and a hash for a filler account
     fn get_filler_account(&self, rent: &Rent) -> (AccountSharedData, Hash) {
         let string = "FiLLERACCoUNTooooooooooooooooooooooooooooooo";
@@ -8717,96 +8704,14 @@ impl AccountsDb {
     /// The filler accounts are added to each slot in the snapshot after index generation.
     /// The accounts added in a slot are setup to have pubkeys such that rent will be collected from them before (or when?) their slot becomes an epoch old.
     /// Thus, the filler accounts are rewritten by rent and the old slot can be thrown away successfully.
-    pub fn maybe_add_filler_accounts(
-        &self,
-        epoch_schedule: &EpochSchedule,
-        rent: &Rent,
-        slot: Slot,
-    ) {
+    pub fn maybe_add_filler_accounts(&self, epoch_schedule: &EpochSchedule, slot: Slot) {
         if self.filler_accounts_config.count == 0 {
             return;
         }
 
-        if ADD_FILLER_ACCOUNTS_GRADUALLY {
-            self.init_gradual_filler_accounts(
-                epoch_schedule.get_slots_in_epoch(epoch_schedule.get_epoch(slot)),
-            );
-            return;
-        }
-
-        let max_root_inclusive = self.accounts_index.max_root_inclusive();
-        let epoch = epoch_schedule.get_epoch(max_root_inclusive);
-
-        info!(
-            "adding {} filler accounts with size {}",
-            self.filler_accounts_config.count, self.filler_accounts_config.size,
+        self.init_gradual_filler_accounts(
+            epoch_schedule.get_slots_in_epoch(epoch_schedule.get_epoch(slot)),
         );
-        // break this up to force the accounts out of memory after each pass
-        let passes = 100;
-        let mut roots = self.storage.all_slots();
-        Self::retain_roots_within_one_epoch_range(
-            &mut roots,
-            epoch_schedule.get_slots_in_epoch(epoch),
-        );
-        let root_count = roots.len();
-        let per_pass = std::cmp::max(1, root_count / passes);
-        let overall_index = AtomicUsize::new(0);
-        let (account, hash) = self.get_filler_account(rent);
-        let added = AtomicU32::default();
-        let rent_prefix_bytes = Self::filler_rent_partition_prefix_bytes();
-        for pass in 0..=passes {
-            self.accounts_index
-                .set_startup(Startup::StartupWithExtraThreads);
-            let roots_in_this_pass = roots
-                .iter()
-                .skip(pass * per_pass)
-                .take(per_pass)
-                .collect::<Vec<_>>();
-            roots_in_this_pass.into_par_iter().for_each(|slot| {
-                if self.storage.get_slot_storage_entry(*slot).is_none() {
-                    return;
-                }
-
-                let partition = crate::bank::Bank::variable_cycle_partition_from_previous_slot(
-                    epoch_schedule,
-                    *slot,
-                );
-                let subrange = crate::bank::Bank::pubkey_range_from_partition(partition);
-
-                let idx = overall_index.fetch_add(1, Ordering::Relaxed);
-                let filler_entries = (idx + 1) * self.filler_accounts_config.count / root_count
-                    - idx * self.filler_accounts_config.count / root_count;
-                let accounts = (0..filler_entries)
-                    .map(|_| {
-                        let my_id = added.fetch_add(1, Ordering::Relaxed);
-                        let mut key = self.get_filler_account_pubkey(subrange.start());
-                        // next bytes are replaced with my_id: filler_unique_id_bytes
-                        let my_id_bytes = u32::to_be_bytes(my_id);
-                        key.as_mut()[rent_prefix_bytes
-                            ..(rent_prefix_bytes + Self::filler_unique_id_bytes())]
-                            .copy_from_slice(&my_id_bytes);
-                        key
-                    })
-                    .collect::<Vec<_>>();
-                let add = accounts
-                    .iter()
-                    .map(|key| (key, &account))
-                    .collect::<Vec<_>>();
-                let hashes = (0..filler_entries).map(|_| hash).collect::<Vec<_>>();
-                self.maybe_throttle_index_generation();
-                // filler accounts are debug only and their hash is irrelevant anyway, so any value is ok here.
-                let include_slot_in_hash = INCLUDE_SLOT_IN_HASH_TESTS;
-                self.store_accounts_frozen(
-                    (*slot, &add[..], include_slot_in_hash),
-                    Some(hashes),
-                    None,
-                    None,
-                    StoreReclaims::Ignore,
-                );
-            });
-            self.accounts_index.set_startup(Startup::Normal);
-        }
-        info!("added {} filler accounts", added.load(Ordering::Relaxed));
     }
 
     #[allow(clippy::needless_collect)]
@@ -9806,14 +9711,6 @@ pub mod tests {
                 .sorted()
                 .collect::<Vec<_>>()
         );
-    }
-
-    #[test]
-    fn test_retain_roots_within_one_epoch_range() {
-        let mut roots = vec![0, 1, 2];
-        let slots_per_epoch = 2;
-        AccountsDb::retain_roots_within_one_epoch_range(&mut roots, slots_per_epoch);
-        assert_eq!(&vec![1, 2], &roots);
     }
 
     #[test]
