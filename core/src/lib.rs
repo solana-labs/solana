@@ -69,7 +69,6 @@ mod tower1_7_14;
 pub mod tower_storage;
 pub mod tpu;
 pub mod tracer_packet_stats;
-pub mod transaction_priority_details;
 pub mod tree_diff;
 pub mod tvu;
 pub mod unfrozen_gossip_verified_vote_hashes;
