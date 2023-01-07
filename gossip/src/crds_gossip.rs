@@ -8,13 +8,13 @@ use {
     crate::{
         cluster_info::Ping,
         cluster_info_metrics::GossipStats,
-        contact_info::ContactInfo,
         crds::{Crds, GossipRoute},
         crds_gossip_error::CrdsGossipError,
         crds_gossip_pull::{CrdsFilter, CrdsGossipPull, ProcessPullStats},
         crds_gossip_push::{CrdsGossipPush, CRDS_GOSSIP_NUM_ACTIVE},
         crds_value::{CrdsData, CrdsValue},
         duplicate_shred::{self, DuplicateShredIndex, LeaderScheduleFn, MAX_DUPLICATE_SHREDS},
+        legacy_contact_info::LegacyContactInfo as ContactInfo,
         ping_pong::PingCache,
     },
     itertools::Itertools,
@@ -374,7 +374,7 @@ where
 mod test {
     use {
         super::*,
-        crate::{contact_info::ContactInfo, crds_value::CrdsData},
+        crate::crds_value::CrdsData,
         solana_sdk::{hash::hash, timing::timestamp},
     };
 
@@ -390,7 +390,7 @@ mod test {
             .write()
             .unwrap()
             .insert(
-                CrdsValue::new_unsigned(CrdsData::ContactInfo(ci.clone())),
+                CrdsValue::new_unsigned(CrdsData::LegacyContactInfo(ci.clone())),
                 0,
                 GossipRoute::LocalMessage,
             )
