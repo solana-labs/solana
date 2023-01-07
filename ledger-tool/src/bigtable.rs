@@ -453,7 +453,7 @@ async fn copy(args: CopyArgs) -> Result<(), Box<dyn std::error::Error>> {
                                 }
                             }
                             Err(err) => {
-                                error!("failed to get a confirmed block from the destination Bigtable, slot: {}, err: {}", slot, err);
+                                error!("confirmed_block_exists() failed from the destination Bigtable, slot: {}, err: {}", slot, err);
                                 failed_slots_clone.lock().unwrap().push(slot);
                                 continue;
                             }
