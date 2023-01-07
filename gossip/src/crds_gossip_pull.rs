@@ -17,7 +17,7 @@ use {
         cluster_info_metrics::GossipStats,
         contact_info::ContactInfo,
         crds::{Crds, GossipRoute, VersionedCrdsValue},
-        crds_gossip::{get_stake, get_weight},
+        crds_gossip::{self, get_stake, get_weight},
         crds_gossip_error::CrdsGossipError,
         crds_value::CrdsValue,
         ping_pong::PingCache,
@@ -244,22 +244,25 @@ impl CrdsGossipPull {
         );
         // Check for nodes which have responded to ping messages.
         let mut rng = rand::thread_rng();
-        let (weights, peers): (Vec<_>, Vec<_>) = {
+        let peers: Vec<_> = {
             let mut ping_cache = ping_cache.lock().unwrap();
             let mut pingf = move || Ping::new_rand(&mut rng, self_keypair).ok();
             let now = Instant::now();
             peers
                 .into_iter()
-                .filter_map(|(weight, peer)| {
+                .filter(|(_weight, peer)| {
                     let node = (peer.id, peer.gossip);
                     let (check, ping) = ping_cache.check(now, node, &mut pingf);
                     if let Some(ping) = ping {
                         pings.push((peer.gossip, ping));
                     }
-                    check.then_some((weight, peer))
+                    check
                 })
-                .unzip()
+                .collect()
         };
+        let (weights, peers): (Vec<_>, Vec<_>) = crds_gossip::dedup_gossip_addresses(peers)
+            .into_values()
+            .unzip();
         if peers.is_empty() {
             return Err(CrdsGossipError::NoPeers);
         }
@@ -968,7 +971,7 @@ pub(crate) mod tests {
             }
         }
         let crds = RwLock::new(crds);
-        assert!(num_inserts > 30_000, "num inserts: {}", num_inserts);
+        assert!(num_inserts > 30_000, "num inserts: {num_inserts}");
         let filters = crds_gossip_pull.build_crds_filters(&thread_pool, &crds, MAX_BLOOM_SIZE);
         assert_eq!(filters.len(), MIN_NUM_BLOOM_FILTERS.max(32));
         let crds = crds.read().unwrap();
@@ -995,7 +998,7 @@ pub(crate) mod tests {
             }
             assert_eq!(num_hits, 1);
         }
-        assert!(false_positives < 150_000, "fp: {}", false_positives);
+        assert!(false_positives < 150_000, "fp: {false_positives}");
     }
 
     #[test]
@@ -1164,7 +1167,7 @@ pub(crate) mod tests {
         .take(100)
         .filter(|peer| peer != old)
         .count();
-        assert!(count < 2, "count of peer != old: {}", count);
+        assert!(count < 2, "count of peer != old: {count}");
     }
 
     #[test]

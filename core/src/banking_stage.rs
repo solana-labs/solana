@@ -490,7 +490,7 @@ impl BankingStage {
                 let connection_cache = connection_cache.clone();
                 let bank_forks = bank_forks.clone();
                 Builder::new()
-                    .name(format!("solBanknStgTx{:02}", i))
+                    .name(format!("solBanknStgTx{i:02}"))
                     .spawn(move || {
                         Self::process_loop(
                             &mut packet_deserializer,
@@ -1151,7 +1151,7 @@ impl BankingStage {
                         starting_transaction_index: None,
                     };
                 }
-                Err(e) => panic!("Poh recorder returned unexpected error: {:?}", e),
+                Err(e) => panic!("Poh recorder returned unexpected error: {e:?}"),
             }
         }
 
@@ -1176,6 +1176,7 @@ impl BankingStage {
         gossip_vote_sender: &ReplayVoteSender,
         signature_count: u64,
         executed_transactions_count: usize,
+        executed_non_vote_transactions_count: usize,
         executed_with_successful_result_count: usize,
     ) -> (u64, Vec<CommitTransactionDetails>) {
         inc_new_counter_info!(
@@ -1195,6 +1196,8 @@ impl BankingStage {
                 lamports_per_signature,
                 CommitTransactionCounts {
                     committed_transactions_count: executed_transactions_count as u64,
+                    committed_non_vote_transactions_count: executed_non_vote_transactions_count
+                        as u64,
                     committed_with_failure_result_count: executed_transactions_count
                         .saturating_sub(executed_with_successful_result_count)
                         as u64,
@@ -1330,6 +1333,7 @@ impl BankingStage {
             execution_results,
             mut retryable_transaction_indexes,
             executed_transactions_count,
+            executed_non_vote_transactions_count,
             executed_with_successful_result_count,
             signature_count,
             error_counters,
@@ -1407,6 +1411,7 @@ impl BankingStage {
                 gossip_vote_sender,
                 signature_count,
                 executed_transactions_count,
+                executed_non_vote_transactions_count,
                 executed_with_successful_result_count,
             )
         } else {
@@ -2392,7 +2397,7 @@ mod tests {
                 &Pubkey::default(),
                 &Arc::new(blockstore),
                 &Arc::new(LeaderScheduleCache::new_from_bank(&bank)),
-                &Arc::new(PohConfig::default()),
+                &PohConfig::default(),
                 Arc::new(AtomicBool::default()),
             );
             let recorder = poh_recorder.recorder();
@@ -2618,7 +2623,7 @@ mod tests {
                 &pubkey,
                 &Arc::new(blockstore),
                 &Arc::new(LeaderScheduleCache::new_from_bank(&bank)),
-                &Arc::new(PohConfig::default()),
+                &PohConfig::default(),
                 Arc::new(AtomicBool::default()),
             );
             let recorder = poh_recorder.recorder();
@@ -2755,7 +2760,7 @@ mod tests {
                 &pubkey,
                 &Arc::new(blockstore),
                 &Arc::new(LeaderScheduleCache::new_from_bank(&bank)),
-                &Arc::new(PohConfig::default()),
+                &PohConfig::default(),
                 Arc::new(AtomicBool::default()),
             );
             let recorder = poh_recorder.recorder();
@@ -2829,7 +2834,7 @@ mod tests {
                 &pubkey,
                 &Arc::new(blockstore),
                 &Arc::new(LeaderScheduleCache::new_from_bank(&bank)),
-                &Arc::new(PohConfig::default()),
+                &PohConfig::default(),
                 Arc::new(AtomicBool::default()),
             );
             let recorder = poh_recorder.recorder();
@@ -2983,7 +2988,7 @@ mod tests {
                 &pubkey,
                 &Arc::new(blockstore),
                 &Arc::new(LeaderScheduleCache::new_from_bank(&bank)),
-                &Arc::new(PohConfig::default()),
+                &PohConfig::default(),
                 Arc::new(AtomicBool::default()),
             );
             let recorder = poh_recorder.recorder();
@@ -3061,7 +3066,7 @@ mod tests {
                 &solana_sdk::pubkey::new_rand(),
                 &Arc::new(blockstore),
                 &Arc::new(LeaderScheduleCache::new_from_bank(&bank)),
-                &Arc::new(PohConfig::default()),
+                &PohConfig::default(),
                 Arc::new(AtomicBool::default()),
             );
 
@@ -3128,7 +3133,7 @@ mod tests {
             &Pubkey::new_unique(),
             &Arc::new(blockstore),
             &Arc::new(LeaderScheduleCache::new_from_bank(&bank)),
-            &Arc::new(PohConfig::default()),
+            &PohConfig::default(),
             Arc::new(AtomicBool::default()),
         );
         let recorder = poh_recorder.recorder();
@@ -3334,7 +3339,7 @@ mod tests {
                 &pubkey,
                 &blockstore,
                 &Arc::new(LeaderScheduleCache::new_from_bank(&bank)),
-                &Arc::new(PohConfig::default()),
+                &PohConfig::default(),
                 Arc::new(AtomicBool::default()),
             );
             let recorder = poh_recorder.recorder();
@@ -3503,7 +3508,7 @@ mod tests {
                 &Pubkey::new_unique(),
                 &blockstore,
                 &Arc::new(LeaderScheduleCache::new_from_bank(&bank)),
-                &Arc::new(PohConfig::default()),
+                &PohConfig::default(),
                 Arc::new(AtomicBool::default()),
             );
             let recorder = poh_recorder.recorder();
@@ -3610,7 +3615,7 @@ mod tests {
             &solana_sdk::pubkey::new_rand(),
             &Arc::new(blockstore),
             &Arc::new(LeaderScheduleCache::new_from_bank(&bank)),
-            &Arc::new(PohConfig::default()),
+            &PohConfig::default(),
             exit,
         );
         let poh_recorder = Arc::new(RwLock::new(poh_recorder));
@@ -3903,7 +3908,7 @@ mod tests {
 
                 let mut packets = vec![Packet::default(); 2];
                 let num_received = recv_mmsg(recv_socket, &mut packets[..]).unwrap_or_default();
-                assert_eq!(num_received, expected_num_forwarded, "{}", name);
+                assert_eq!(num_received, expected_num_forwarded, "{name}");
             }
 
             exit.store(true, Ordering::Relaxed);
@@ -4003,7 +4008,7 @@ mod tests {
 
                 let mut packets = vec![Packet::default(); 2];
                 let num_received = recv_mmsg(recv_socket, &mut packets[..]).unwrap_or_default();
-                assert_eq!(num_received, expected_ids.len(), "{}", name);
+                assert_eq!(num_received, expected_ids.len(), "{name}");
                 for (i, expected_id) in expected_ids.iter().enumerate() {
                     assert_eq!(packets[i].meta().size, 215);
                     let recv_transaction: VersionedTransaction =
@@ -4011,17 +4016,12 @@ mod tests {
                     assert_eq!(
                         recv_transaction.message.recent_blockhash(),
                         expected_id,
-                        "{}",
-                        name
+                        "{name}"
                     );
                 }
 
                 let num_unprocessed_packets: usize = unprocessed_packet_batches.len();
-                assert_eq!(
-                    num_unprocessed_packets, expected_num_unprocessed,
-                    "{}",
-                    name
-                );
+                assert_eq!(num_unprocessed_packets, expected_num_unprocessed, "{name}");
             }
 
             exit.store(true, Ordering::Relaxed);

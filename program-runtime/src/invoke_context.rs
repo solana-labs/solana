@@ -1053,7 +1053,7 @@ mod tests {
                 process_instruction: mock_ix_processor,
             },
         ];
-        assert!(!format!("{:?}", builtin_programs).is_empty());
+        assert!(!format!("{builtin_programs:?}").is_empty());
     }
 
     #[allow(clippy::integer_arithmetic)]

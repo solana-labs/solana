@@ -411,7 +411,7 @@ mod tests {
         };
         assert_eq!(
             remote_wallet_info.get_pretty_path(),
-            format!("usb://ledger/{}", pubkey_str)
+            format!("usb://ledger/{pubkey_str}")
         );
     }
 }

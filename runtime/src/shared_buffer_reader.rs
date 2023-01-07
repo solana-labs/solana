@@ -700,8 +700,8 @@ pub mod tests {
         let expected_len = 1;
         for i in 0..sent.len() {
             let len = reader2.read(&mut data[i..=i]);
-            assert!(len.is_ok(), "{:?}, progress: {}", len, i);
-            assert_eq!(len.unwrap(), expected_len, "progress: {}", i);
+            assert!(len.is_ok(), "{len:?}, progress: {i}");
+            assert_eq!(len.unwrap(), expected_len, "progress: {i}");
         }
         assert_eq!(sent, data);
         assert_eq!(
@@ -755,7 +755,6 @@ pub mod tests {
         let reader2 = SharedBufferReader::new(&shared_buffer);
 
         let sent = (0..size)
-            .into_iter()
             .map(|i| ((i + size) % 256) as u8)
             .collect::<Vec<_>>();
 
@@ -835,7 +834,6 @@ pub mod tests {
                                 None
                             };
                             let sent = (0..data_size)
-                                .into_iter()
                                 .map(|i| ((i + data_size) % 256) as u8)
                                 .collect::<Vec<_>>();
 
@@ -846,7 +844,6 @@ pub mod tests {
                                 let threads = std::cmp::min(8, rayon::current_num_threads());
                                 Some({
                                     let parallel = (0..threads)
-                                        .into_iter()
                                         .map(|_| {
                                             // create before any reading starts
                                             let reader_ = SharedBufferReader::new(&shared_buffer);

@@ -101,8 +101,7 @@ impl<T: Serialize + Clone> StatusCache<T> {
                             }
                         } else {
                             panic!(
-                                "Map for key must exist if key exists in self.slot_deltas, slot: {}",
-                                slot
+                                "Map for key must exist if key exists in self.slot_deltas, slot: {slot}"
                             )
                         }
                     }
@@ -111,10 +110,7 @@ impl<T: Serialize + Clone> StatusCache<T> {
                         o_blockhash_entries.remove_entry();
                     }
                 } else {
-                    panic!(
-                        "Blockhash must exist if it exists in self.slot_deltas, slot: {}",
-                        slot
-                    )
+                    panic!("Blockhash must exist if it exists in self.slot_deltas, slot: {slot}")
                 }
             }
         }

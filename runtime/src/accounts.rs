@@ -13,7 +13,7 @@ use {
         accounts_update_notifier_interface::AccountsUpdateNotifier,
         ancestors::Ancestors,
         bank::{
-            Bank, NonceFull, NonceInfo, RentDebits, Rewrites, TransactionCheckResult,
+            Bank, NonceFull, NonceInfo, RentDebits, TransactionCheckResult,
             TransactionExecutionResult,
         },
         blockhash_queue::BlockhashQueue,
@@ -27,7 +27,6 @@ use {
         DashMap,
     },
     log::*,
-    rand::{thread_rng, Rng},
     solana_address_lookup_table_program::{error::AddressLookupError, state::AddressLookupTable},
     solana_program_runtime::compute_budget::ComputeBudget,
     solana_sdk::{
@@ -157,14 +156,12 @@ impl Accounts {
         paths: Vec<PathBuf>,
         cluster_type: &ClusterType,
         account_indexes: AccountSecondaryIndexes,
-        caching_enabled: bool,
         shrink_ratio: AccountShrinkThreshold,
     ) -> Self {
         Self::new_with_config(
             paths,
             cluster_type,
             account_indexes,
-            caching_enabled,
             shrink_ratio,
             Some(ACCOUNTS_DB_CONFIG_FOR_TESTING),
             None,
@@ -176,14 +173,12 @@ impl Accounts {
         paths: Vec<PathBuf>,
         cluster_type: &ClusterType,
         account_indexes: AccountSecondaryIndexes,
-        caching_enabled: bool,
         shrink_ratio: AccountShrinkThreshold,
     ) -> Self {
         Self::new_with_config(
             paths,
             cluster_type,
             account_indexes,
-            caching_enabled,
             shrink_ratio,
             Some(ACCOUNTS_DB_CONFIG_FOR_BENCHMARKS),
             None,
@@ -195,7 +190,6 @@ impl Accounts {
         paths: Vec<PathBuf>,
         cluster_type: &ClusterType,
         account_indexes: AccountSecondaryIndexes,
-        caching_enabled: bool,
         shrink_ratio: AccountShrinkThreshold,
         accounts_db_config: Option<AccountsDbConfig>,
         accounts_update_notifier: Option<AccountsUpdateNotifier>,
@@ -206,7 +200,6 @@ impl Accounts {
                 paths,
                 cluster_type,
                 account_indexes,
-                caching_enabled,
                 shrink_ratio,
                 accounts_db_config,
                 accounts_update_notifier,
@@ -282,6 +275,8 @@ impl Accounts {
             };
         let mut accumulated_accounts_data_size: usize = 0;
 
+        let set_exempt_rent_epoch_max =
+            feature_set.is_active(&solana_sdk::feature_set::set_exempt_rent_epoch_max::id());
         let mut accounts = account_keys
             .iter()
             .enumerate()
@@ -316,6 +311,7 @@ impl Accounts {
                                                 key,
                                                 &mut account,
                                                 self.accounts_db.filler_account_suffix.as_ref(),
+                                                set_exempt_rent_epoch_max,
                                             )
                                             .rent_amount;
                                         (account, rent_due)
@@ -323,7 +319,16 @@ impl Accounts {
                                         (account, 0)
                                     }
                                 })
-                                .unwrap_or_default()
+                                .unwrap_or_else(|| {
+                                    let mut default_account = AccountSharedData::default();
+                                    if set_exempt_rent_epoch_max {
+                                        // All new accounts must be rent-exempt (enforced in Bank::execute_loaded_transaction).
+                                        // Currently, rent collection sets rent_epoch to u64::MAX, but initializing the account
+                                        // with this field already set would allow us to skip rent collection for these accounts.
+                                        default_account.set_rent_epoch(u64::MAX);
+                                    }
+                                    (default_account, 0)
+                                })
                         };
 
                         if !validated_fee_payer {
@@ -884,6 +889,7 @@ impl Accounts {
         debug_verify: bool,
         epoch_schedule: &EpochSchedule,
         rent_collector: &RentCollector,
+        data_source: CalcAccountsHashDataSource,
     ) -> u64 {
         let is_startup = true;
         self.accounts_db
@@ -891,7 +897,7 @@ impl Accounts {
             .wait_for_complete();
         self.accounts_db
             .update_accounts_hash(
-                CalcAccountsHashDataSource::Storages,
+                data_source,
                 debug_verify,
                 slot,
                 ancestors,
@@ -1209,10 +1215,8 @@ impl Accounts {
         }
     }
 
-    pub fn bank_hash_info_at(&self, slot: Slot, rewrites: &Rewrites) -> BankHashInfo {
-        let accounts_delta_hash = self
-            .accounts_db
-            .get_accounts_delta_hash_with_rewrites(slot, rewrites);
+    pub fn bank_hash_info_at(&self, slot: Slot) -> BankHashInfo {
+        let accounts_delta_hash = self.accounts_db.get_accounts_delta_hash(slot);
         let bank_hashes = self.accounts_db.bank_hashes.read().unwrap();
         let mut bank_hash_info = bank_hashes
             .get(&slot)
@@ -1416,12 +1420,12 @@ impl Accounts {
     }
 }
 
-fn prepare_if_nonce_account<'a>(
+fn prepare_if_nonce_account(
     address: &Pubkey,
     account: &mut AccountSharedData,
     execution_result: &Result<()>,
     is_fee_payer: bool,
-    maybe_nonce: Option<(&'a NonceFull, bool)>,
+    maybe_nonce: Option<(&NonceFull, bool)>,
     &durable_nonce: &DurableNonce,
     lamports_per_signature: u64,
 ) -> bool {
@@ -1466,36 +1470,6 @@ fn prepare_if_nonce_account<'a>(
         }
     } else {
         false
-    }
-}
-
-/// A set of utility functions used for testing and benchmarking
-pub mod test_utils {
-    use super::*;
-
-    pub fn create_test_accounts(
-        accounts: &Accounts,
-        pubkeys: &mut Vec<Pubkey>,
-        num: usize,
-        slot: Slot,
-    ) {
-        for t in 0..num {
-            let pubkey = solana_sdk::pubkey::new_rand();
-            let account =
-                AccountSharedData::new((t + 1) as u64, 0, AccountSharedData::default().owner());
-            accounts.store_slow_uncached(slot, &pubkey, &account);
-            pubkeys.push(pubkey);
-        }
-    }
-
-    // Only used by bench, not safe to call otherwise accounts can conflict with the
-    // accounts cache!
-    pub fn update_accounts_bench(accounts: &Accounts, pubkeys: &[Pubkey], slot: u64) {
-        for pubkey in pubkeys {
-            let amount = thread_rng().gen_range(0, 10);
-            let account = AccountSharedData::new(amount, 0, AccountSharedData::default().owner());
-            accounts.store_slow_uncached(slot, pubkey, &account);
-        }
     }
 }
 
@@ -1578,11 +1552,10 @@ mod tests {
             Vec::new(),
             &ClusterType::Development,
             AccountSecondaryIndexes::default(),
-            false,
             AccountShrinkThreshold::default(),
         );
         for ka in ka.iter() {
-            accounts.store_slow_uncached(0, &ka.0, &ka.1);
+            accounts.store_for_tests(0, &ka.0, &ka.1);
         }
 
         let ancestors = vec![(0, 0)].into_iter().collect();
@@ -1600,11 +1573,22 @@ mod tests {
         )
     }
 
+    /// get a feature set with all features activated
+    /// with the optional except of 'exclude'
+    fn all_features_except(exclude: Option<&[Pubkey]>) -> FeatureSet {
+        let mut features = FeatureSet::all_enabled();
+        if let Some(exclude) = exclude {
+            features.active.retain(|k, _v| !exclude.contains(k));
+        }
+        features
+    }
+
     fn load_accounts_with_fee(
         tx: Transaction,
         ka: &[TransactionAccount],
         lamports_per_signature: u64,
         error_counters: &mut TransactionErrorMetrics,
+        exclude_features: Option<&[Pubkey]>,
     ) -> Vec<TransactionLoadResult> {
         load_accounts_with_fee_and_rent(
             tx,
@@ -1612,7 +1596,7 @@ mod tests {
             lamports_per_signature,
             &RentCollector::default(),
             error_counters,
-            &FeatureSet::all_enabled(),
+            &all_features_except(exclude_features),
             &FeeStructure::default(),
         )
     }
@@ -1622,7 +1606,16 @@ mod tests {
         ka: &[TransactionAccount],
         error_counters: &mut TransactionErrorMetrics,
     ) -> Vec<TransactionLoadResult> {
-        load_accounts_with_fee(tx, ka, 0, error_counters)
+        load_accounts_with_fee(tx, ka, 0, error_counters, None)
+    }
+
+    fn load_accounts_with_excluded_features(
+        tx: Transaction,
+        ka: &[TransactionAccount],
+        error_counters: &mut TransactionErrorMetrics,
+        exclude_features: Option<&[Pubkey]>,
+    ) -> Vec<TransactionLoadResult> {
+        load_accounts_with_fee(tx, ka, 0, error_counters, exclude_features)
     }
 
     #[test]
@@ -1668,8 +1661,7 @@ mod tests {
             assert_eq!(
                 map.cache_ranges_held.read().unwrap().to_vec(),
                 expected,
-                "bin: {}",
-                bin
+                "bin: {bin}"
             );
         });
         accts.hold_range_in_memory(&range, false, &test_thread_pool());
@@ -1772,8 +1764,13 @@ mod tests {
         );
         assert_eq!(fee, lamports_per_signature);
 
-        let loaded_accounts =
-            load_accounts_with_fee(tx, &accounts, lamports_per_signature, &mut error_counters);
+        let loaded_accounts = load_accounts_with_fee(
+            tx,
+            &accounts,
+            lamports_per_signature,
+            &mut error_counters,
+            None,
+        );
 
         assert_eq!(error_counters.insufficient_funds, 1);
         assert_eq!(loaded_accounts.len(), 1);
@@ -1853,7 +1850,7 @@ mod tests {
             lamports_per_signature,
             &rent_collector,
             &mut error_counters,
-            &FeatureSet::all_enabled(),
+            &all_features_except(None),
             &FeeStructure::default(),
         );
         assert_eq!(loaded_accounts.len(), 1);
@@ -1920,7 +1917,8 @@ mod tests {
             instructions,
         );
 
-        let loaded_accounts = load_accounts(tx, &accounts, &mut error_counters);
+        let loaded_accounts =
+            load_accounts_with_excluded_features(tx, &accounts, &mut error_counters, None);
 
         assert_eq!(error_counters.account_not_found, 0);
         assert_eq!(loaded_accounts.len(), 1);
@@ -2108,7 +2106,8 @@ mod tests {
             instructions,
         );
 
-        let loaded_accounts = load_accounts(tx, &accounts, &mut error_counters);
+        let loaded_accounts =
+            load_accounts_with_excluded_features(tx, &accounts, &mut error_counters, None);
 
         assert_eq!(error_counters.account_not_found, 0);
         assert_eq!(loaded_accounts.len(), 1);
@@ -2144,7 +2143,6 @@ mod tests {
             Vec::new(),
             &ClusterType::Development,
             AccountSecondaryIndexes::default(),
-            false,
             AccountShrinkThreshold::default(),
         );
 
@@ -2172,7 +2170,6 @@ mod tests {
             Vec::new(),
             &ClusterType::Development,
             AccountSecondaryIndexes::default(),
-            false,
             AccountShrinkThreshold::default(),
         );
 
@@ -2204,7 +2201,6 @@ mod tests {
             Vec::new(),
             &ClusterType::Development,
             AccountSecondaryIndexes::default(),
-            false,
             AccountShrinkThreshold::default(),
         );
 
@@ -2236,7 +2232,6 @@ mod tests {
             Vec::new(),
             &ClusterType::Development,
             AccountSecondaryIndexes::default(),
-            false,
             AccountShrinkThreshold::default(),
         );
 
@@ -2282,7 +2277,6 @@ mod tests {
             Vec::new(),
             &ClusterType::Development,
             AccountSecondaryIndexes::default(),
-            false,
             AccountShrinkThreshold::default(),
         );
 
@@ -2339,7 +2333,8 @@ mod tests {
             instructions,
         );
         let tx = Transaction::new(&[&keypair], message.clone(), Hash::default());
-        let loaded_accounts = load_accounts(tx, &accounts, &mut error_counters);
+        let loaded_accounts =
+            load_accounts_with_excluded_features(tx, &accounts, &mut error_counters, None);
 
         assert_eq!(error_counters.invalid_writable_account, 1);
         assert_eq!(loaded_accounts.len(), 1);
@@ -2352,7 +2347,8 @@ mod tests {
         message.account_keys = vec![key0, key1, key2]; // revert key change
         message.header.num_readonly_unsigned_accounts = 2; // mark both executables as readonly
         let tx = Transaction::new(&[&keypair], message, Hash::default());
-        let loaded_accounts = load_accounts(tx, &accounts, &mut error_counters);
+        let loaded_accounts =
+            load_accounts_with_excluded_features(tx, &accounts, &mut error_counters, None);
 
         assert_eq!(error_counters.invalid_writable_account, 1);
         assert_eq!(loaded_accounts.len(), 1);
@@ -2426,7 +2422,8 @@ mod tests {
             instructions,
         );
         let tx = Transaction::new(&[&keypair], message.clone(), Hash::default());
-        let loaded_accounts = load_accounts(tx, &accounts, &mut error_counters);
+        let loaded_accounts =
+            load_accounts_with_excluded_features(tx, &accounts, &mut error_counters, None);
 
         assert_eq!(error_counters.invalid_writable_account, 1);
         assert_eq!(loaded_accounts.len(), 1);
@@ -2438,7 +2435,8 @@ mod tests {
         // Solution 1: include bpf_loader_upgradeable account
         message.account_keys = vec![key0, key1, bpf_loader_upgradeable::id()];
         let tx = Transaction::new(&[&keypair], message.clone(), Hash::default());
-        let loaded_accounts = load_accounts(tx, &accounts, &mut error_counters);
+        let loaded_accounts =
+            load_accounts_with_excluded_features(tx, &accounts, &mut error_counters, None);
 
         assert_eq!(error_counters.invalid_writable_account, 1);
         assert_eq!(loaded_accounts.len(), 1);
@@ -2453,7 +2451,8 @@ mod tests {
         message.account_keys = vec![key0, key1, key2]; // revert key change
         message.header.num_readonly_unsigned_accounts = 2; // mark both executables as readonly
         let tx = Transaction::new(&[&keypair], message, Hash::default());
-        let loaded_accounts = load_accounts(tx, &accounts, &mut error_counters);
+        let loaded_accounts =
+            load_accounts_with_excluded_features(tx, &accounts, &mut error_counters, None);
 
         assert_eq!(error_counters.invalid_writable_account, 1);
         assert_eq!(loaded_accounts.len(), 1);
@@ -2511,7 +2510,8 @@ mod tests {
             instructions,
         );
         let tx = Transaction::new(&[&keypair], message.clone(), Hash::default());
-        let loaded_accounts = load_accounts(tx, &accounts, &mut error_counters);
+        let loaded_accounts =
+            load_accounts_with_excluded_features(tx, &accounts, &mut error_counters, None);
 
         assert_eq!(error_counters.invalid_writable_account, 1);
         assert_eq!(loaded_accounts.len(), 1);
@@ -2531,8 +2531,12 @@ mod tests {
         ];
         message.account_keys = vec![key0, key1, bpf_loader_upgradeable::id()];
         let tx = Transaction::new(&[&keypair], message.clone(), Hash::default());
-        let loaded_accounts =
-            load_accounts(tx, &accounts_with_upgradeable_loader, &mut error_counters);
+        let loaded_accounts = load_accounts_with_excluded_features(
+            tx,
+            &accounts_with_upgradeable_loader,
+            &mut error_counters,
+            None,
+        );
 
         assert_eq!(error_counters.invalid_writable_account, 1);
         assert_eq!(loaded_accounts.len(), 1);
@@ -2547,7 +2551,8 @@ mod tests {
         message.account_keys = vec![key0, key1, key2]; // revert key change
         message.header.num_readonly_unsigned_accounts = 2; // extend readonly set to include programdata
         let tx = Transaction::new(&[&keypair], message, Hash::default());
-        let loaded_accounts = load_accounts(tx, &accounts, &mut error_counters);
+        let loaded_accounts =
+            load_accounts_with_excluded_features(tx, &accounts, &mut error_counters, None);
 
         assert_eq!(error_counters.invalid_writable_account, 1);
         assert_eq!(loaded_accounts.len(), 1);
@@ -2565,7 +2570,6 @@ mod tests {
             Vec::new(),
             &ClusterType::Development,
             AccountSecondaryIndexes::default(),
-            false,
             AccountShrinkThreshold::default(),
         );
         let mut error_counters = TransactionErrorMetrics::default();
@@ -2574,7 +2578,7 @@ mod tests {
         let keypair = Keypair::new();
         let mut account = AccountSharedData::new(1, 0, &Pubkey::default());
         account.set_executable(true);
-        accounts.store_slow_uncached(0, &keypair.pubkey(), &account);
+        accounts.store_for_tests(0, &keypair.pubkey(), &account);
 
         assert_eq!(
             accounts.load_executable_accounts(
@@ -2597,10 +2601,9 @@ mod tests {
             Vec::new(),
             &ClusterType::Development,
             AccountSecondaryIndexes::default(),
-            false,
             AccountShrinkThreshold::default(),
         );
-        accounts.bank_hash_info_at(1, &Rewrites::default());
+        accounts.bank_hash_info_at(1);
     }
 
     #[test]
@@ -2609,7 +2612,6 @@ mod tests {
             Vec::new(),
             &ClusterType::Development,
             AccountSecondaryIndexes::default(),
-            false,
             AccountShrinkThreshold::default(),
         );
 
@@ -2634,7 +2636,6 @@ mod tests {
             Vec::new(),
             &ClusterType::Development,
             AccountSecondaryIndexes::default(),
-            false,
             AccountShrinkThreshold::default(),
         );
 
@@ -2700,13 +2701,12 @@ mod tests {
             Vec::new(),
             &ClusterType::Development,
             AccountSecondaryIndexes::default(),
-            false,
             AccountShrinkThreshold::default(),
         );
-        accounts.store_slow_uncached(0, &keypair0.pubkey(), &account0);
-        accounts.store_slow_uncached(0, &keypair1.pubkey(), &account1);
-        accounts.store_slow_uncached(0, &keypair2.pubkey(), &account2);
-        accounts.store_slow_uncached(0, &keypair3.pubkey(), &account3);
+        accounts.store_for_tests(0, &keypair0.pubkey(), &account0);
+        accounts.store_for_tests(0, &keypair1.pubkey(), &account1);
+        accounts.store_for_tests(0, &keypair2.pubkey(), &account2);
+        accounts.store_for_tests(0, &keypair3.pubkey(), &account3);
 
         let instructions = vec![CompiledInstruction::new(2, &(), vec![0, 1])];
         let message = Message::new_with_compiled_instructions(
@@ -2810,12 +2810,11 @@ mod tests {
             Vec::new(),
             &ClusterType::Development,
             AccountSecondaryIndexes::default(),
-            false,
             AccountShrinkThreshold::default(),
         );
-        accounts.store_slow_uncached(0, &keypair0.pubkey(), &account0);
-        accounts.store_slow_uncached(0, &keypair1.pubkey(), &account1);
-        accounts.store_slow_uncached(0, &keypair2.pubkey(), &account2);
+        accounts.store_for_tests(0, &keypair0.pubkey(), &account0);
+        accounts.store_for_tests(0, &keypair1.pubkey(), &account1);
+        accounts.store_for_tests(0, &keypair2.pubkey(), &account2);
 
         let accounts_arc = Arc::new(accounts);
 
@@ -2896,13 +2895,12 @@ mod tests {
             Vec::new(),
             &ClusterType::Development,
             AccountSecondaryIndexes::default(),
-            false,
             AccountShrinkThreshold::default(),
         );
-        accounts.store_slow_uncached(0, &keypair0.pubkey(), &account0);
-        accounts.store_slow_uncached(0, &keypair1.pubkey(), &account1);
-        accounts.store_slow_uncached(0, &keypair2.pubkey(), &account2);
-        accounts.store_slow_uncached(0, &keypair3.pubkey(), &account3);
+        accounts.store_for_tests(0, &keypair0.pubkey(), &account0);
+        accounts.store_for_tests(0, &keypair1.pubkey(), &account1);
+        accounts.store_for_tests(0, &keypair2.pubkey(), &account2);
+        accounts.store_for_tests(0, &keypair3.pubkey(), &account3);
 
         let instructions = vec![CompiledInstruction::new(2, &(), vec![0, 1])];
         let message = Message::new_with_compiled_instructions(
@@ -2943,6 +2941,20 @@ mod tests {
             .contains(&keypair1.pubkey()));
     }
 
+    impl Accounts {
+        /// callers used to call store_uncached. But, this is not allowed anymore.
+        pub fn store_for_tests(&self, slot: Slot, pubkey: &Pubkey, account: &AccountSharedData) {
+            self.accounts_db.store_for_tests(slot, &[(pubkey, account)])
+        }
+
+        /// useful to adapt tests written prior to introduction of the write cache
+        /// to use the write cache
+        pub fn add_root_and_flush_write_cache(&self, slot: Slot) {
+            self.add_root(slot);
+            self.accounts_db.flush_accounts_cache_slot_for_tests(slot);
+        }
+    }
+
     #[test]
     fn test_accounts_locks_with_results() {
         let keypair0 = Keypair::new();
@@ -2959,13 +2971,12 @@ mod tests {
             Vec::new(),
             &ClusterType::Development,
             AccountSecondaryIndexes::default(),
-            false,
             AccountShrinkThreshold::default(),
         );
-        accounts.store_slow_uncached(0, &keypair0.pubkey(), &account0);
-        accounts.store_slow_uncached(0, &keypair1.pubkey(), &account1);
-        accounts.store_slow_uncached(0, &keypair2.pubkey(), &account2);
-        accounts.store_slow_uncached(0, &keypair3.pubkey(), &account3);
+        accounts.store_for_tests(0, &keypair0.pubkey(), &account0);
+        accounts.store_for_tests(0, &keypair1.pubkey(), &account1);
+        accounts.store_for_tests(0, &keypair2.pubkey(), &account2);
+        accounts.store_for_tests(0, &keypair3.pubkey(), &account3);
 
         let instructions = vec![CompiledInstruction::new(2, &(), vec![0, 1])];
         let message = Message::new_with_compiled_instructions(
@@ -3121,7 +3132,6 @@ mod tests {
             Vec::new(),
             &ClusterType::Development,
             AccountSecondaryIndexes::default(),
-            false,
             AccountShrinkThreshold::default(),
         );
         {
@@ -3177,7 +3187,6 @@ mod tests {
             Vec::new(),
             &ClusterType::Development,
             AccountSecondaryIndexes::default(),
-            false,
             AccountShrinkThreshold::default(),
         );
         let mut old_pubkey = Pubkey::default();
@@ -3186,10 +3195,11 @@ mod tests {
         for i in 0..2_000 {
             let pubkey = solana_sdk::pubkey::new_rand();
             let account = AccountSharedData::new(i + 1, 0, AccountSharedData::default().owner());
-            accounts.store_slow_uncached(i, &pubkey, &account);
-            accounts.store_slow_uncached(i, &old_pubkey, &zero_account);
+            accounts.store_for_tests(i, &pubkey, &account);
+            accounts.store_for_tests(i, &old_pubkey, &zero_account);
             old_pubkey = pubkey;
-            accounts.add_root(i);
+            accounts.add_root_and_flush_write_cache(i);
+
             if i % 1_000 == 0 {
                 info!("  store {}", i);
             }
@@ -3230,7 +3240,6 @@ mod tests {
             Vec::new(),
             &ClusterType::Development,
             AccountSecondaryIndexes::default(),
-            false,
             AccountShrinkThreshold::default(),
         );
 
@@ -3257,7 +3266,6 @@ mod tests {
             Vec::new(),
             &ClusterType::Development,
             AccountSecondaryIndexes::default(),
-            false,
             AccountShrinkThreshold::default(),
         );
         let mut account_overrides = AccountOverrides::default();
@@ -3491,7 +3499,7 @@ mod tests {
             Some((&nonce, true)),
             &DurableNonce::default(),
             1,
-            &post_fee_payer_account.clone(),
+            &post_fee_payer_account,
         ));
 
         assert!(run_prepare_if_nonce_account_test(
@@ -3502,7 +3510,7 @@ mod tests {
             Some((&nonce, true)),
             &DurableNonce::default(),
             1,
-            &post_fee_payer_account.clone(),
+            &post_fee_payer_account,
         ));
 
         assert!(run_prepare_if_nonce_account_test(
@@ -3516,7 +3524,7 @@ mod tests {
             None,
             &DurableNonce::default(),
             1,
-            &post_fee_payer_account.clone(),
+            &post_fee_payer_account,
         ));
 
         assert!(run_prepare_if_nonce_account_test(
@@ -3604,7 +3612,6 @@ mod tests {
             Vec::new(),
             &ClusterType::Development,
             AccountSecondaryIndexes::default(),
-            false,
             AccountShrinkThreshold::default(),
         );
         let txs = vec![tx];
@@ -3718,7 +3725,6 @@ mod tests {
             Vec::new(),
             &ClusterType::Development,
             AccountSecondaryIndexes::default(),
-            false,
             AccountShrinkThreshold::default(),
         );
         let txs = vec![tx];
@@ -3760,7 +3766,6 @@ mod tests {
             Vec::new(),
             &ClusterType::Development,
             AccountSecondaryIndexes::default(),
-            false,
             AccountShrinkThreshold::default(),
         );
 
@@ -3782,11 +3787,11 @@ mod tests {
         let pubkey1 = keys.pop().unwrap();
         let pubkey0 = keys.pop().unwrap();
         let account0 = AccountSharedData::new(42, 0, &Pubkey::default());
-        accounts.store_slow_uncached(0, &pubkey0, &account0);
+        accounts.store_for_tests(0, &pubkey0, &account0);
         let account1 = AccountSharedData::new(42, 0, &Pubkey::default());
-        accounts.store_slow_uncached(0, &pubkey1, &account1);
+        accounts.store_for_tests(0, &pubkey1, &account1);
         let account2 = AccountSharedData::new(41, 0, &Pubkey::default());
-        accounts.store_slow_uncached(0, &pubkey2, &account2);
+        accounts.store_for_tests(0, &pubkey2, &account2);
 
         let ancestors = vec![(0, 0)].into_iter().collect();
         let all_pubkeys: HashSet<_> = vec![pubkey0, pubkey1, pubkey2].into_iter().collect();
@@ -4069,7 +4074,6 @@ mod tests {
             Vec::new(),
             &ClusterType::Development,
             AccountSecondaryIndexes::default(),
-            false,
             AccountShrinkThreshold::default(),
         );
         let mut error_counters = TransactionErrorMetrics::default();
@@ -4079,7 +4083,7 @@ mod tests {
         let keypair = Keypair::new();
         let mut account = AccountSharedData::new(1, space, &native_loader::id());
         account.set_executable(true);
-        accounts.store_slow_uncached(0, &keypair.pubkey(), &account);
+        accounts.store_for_tests(0, &keypair.pubkey(), &account);
 
         let mut accumulated_accounts_data_size: usize = 0;
         let mut expect_accumulated_accounts_data_size: usize;
@@ -4152,7 +4156,6 @@ mod tests {
             Vec::new(),
             &ClusterType::Development,
             AccountSecondaryIndexes::default(),
-            false,
             AccountShrinkThreshold::default(),
         );
         let mut error_counters = TransactionErrorMetrics::default();
@@ -4169,7 +4172,7 @@ mod tests {
         let program_data_account_size = program_data_account.data().len();
         program_data_account.set_executable(true);
         program_data_account.set_rent_epoch(0);
-        accounts.store_slow_uncached(0, &programdata_key, &program_data_account);
+        accounts.store_for_tests(0, &programdata_key, &program_data_account);
 
         let program_key = Pubkey::new(&[2u8; 32]);
         let program = UpgradeableLoaderState::Program {
@@ -4180,17 +4183,17 @@ mod tests {
         let program_account_size = program_account.data().len();
         program_account.set_executable(true);
         program_account.set_rent_epoch(0);
-        accounts.store_slow_uncached(0, &program_key, &program_account);
+        accounts.store_for_tests(0, &program_key, &program_account);
 
         let key0 = Pubkey::new(&[1u8; 32]);
         let mut bpf_loader_account = AccountSharedData::new(1, 0, &key0);
         bpf_loader_account.set_executable(true);
-        accounts.store_slow_uncached(0, &bpf_loader_upgradeable::id(), &bpf_loader_account);
+        accounts.store_for_tests(0, &bpf_loader_upgradeable::id(), &bpf_loader_account);
 
         let space: usize = 9;
         let mut account = AccountSharedData::new(1, space, &native_loader::id());
         account.set_executable(true);
-        accounts.store_slow_uncached(0, &key0, &account);
+        accounts.store_for_tests(0, &key0, &account);
 
         // test:  program_key account has been loaded as non-loader, load_executable_accounts
         //       will not double count its data size, but still accumulate data size from

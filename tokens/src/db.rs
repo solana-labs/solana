@@ -142,8 +142,7 @@ pub fn update_finalized_transaction(
     if opt_transaction_status.is_none() {
         if finalized_block_height > last_valid_block_height {
             eprintln!(
-                "Signature not found {} and blockhash expired. Transaction either dropped or the validator purged the transaction status.",
-                signature
+                "Signature not found {signature} and blockhash expired. Transaction either dropped or the validator purged the transaction status."
             );
             eprintln!();
 
@@ -165,7 +164,7 @@ pub fn update_finalized_transaction(
 
     if let Some(e) = &transaction_status.err {
         // The transaction was finalized, but execution failed. Drop it.
-        eprintln!("Error in transaction with signature {}: {}", signature, e);
+        eprintln!("Error in transaction with signature {signature}: {e}");
         eprintln!("Discarding transaction record");
         eprintln!();
         db.rem(&signature.to_string())?;

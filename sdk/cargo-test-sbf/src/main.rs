@@ -86,7 +86,7 @@ where
         let file = File::create(&script_name).unwrap();
         let mut out = BufWriter::new(file);
         for (key, value) in env::vars() {
-            writeln!(out, "{}=\"{}\" \\", key, value).unwrap();
+            writeln!(out, "{key}=\"{value}\" \\").unwrap();
         }
         write!(out, "{}", program.display()).unwrap();
         for arg in args.iter() {

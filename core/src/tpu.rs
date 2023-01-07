@@ -157,7 +157,7 @@ impl Tpu {
         let (verified_sender, verified_receiver) = unbounded();
 
         let stats = Arc::new(StreamStats::default());
-        let tpu_quic_t = spawn_server(
+        let (_, tpu_quic_t) = spawn_server(
             transactions_quic_sockets,
             keypair,
             cluster_info.my_contact_info().tpu.ip(),
@@ -172,7 +172,7 @@ impl Tpu {
         )
         .unwrap();
 
-        let tpu_forwards_quic_t = spawn_server(
+        let (_, tpu_forwards_quic_t) = spawn_server(
             transactions_forwards_quic_sockets,
             keypair,
             cluster_info.my_contact_info().tpu_forwards.ip(),

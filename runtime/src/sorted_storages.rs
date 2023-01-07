@@ -245,19 +245,19 @@ pub mod tests {
             slot
         };
         assert_eq!(
-            (0..5).into_iter().collect::<Vec<_>>(),
+            (0..5).collect::<Vec<_>>(),
             storages.iter_range(&(..5)).map(check).collect::<Vec<_>>()
         );
         assert_eq!(
-            (1..5).into_iter().collect::<Vec<_>>(),
+            (1..5).collect::<Vec<_>>(),
             storages.iter_range(&(1..5)).map(check).collect::<Vec<_>>()
         );
         assert_eq!(
-            (0..0).into_iter().collect::<Vec<_>>(),
+            (0..0).collect::<Vec<_>>(),
             storages.iter_range(&(..)).map(check).collect::<Vec<_>>()
         );
         assert_eq!(
-            (0..0).into_iter().collect::<Vec<_>>(),
+            (0..0).collect::<Vec<_>>(),
             storages.iter_range(&(1..)).map(check).collect::<Vec<_>>()
         );
 
@@ -267,16 +267,14 @@ pub mod tests {
         let check = |(slot, storages): (Slot, Option<&SnapshotStorage>)| {
             assert!(
                 (slot != 3) ^ storages.is_some(),
-                "slot: {}, storages: {:?}",
-                slot,
-                storages
+                "slot: {slot}, storages: {storages:?}"
             );
             slot
         };
         for start in 0..5 {
             for end in 0..5 {
                 assert_eq!(
-                    (start..end).into_iter().collect::<Vec<_>>(),
+                    (start..end).collect::<Vec<_>>(),
                     storages
                         .iter_range(&(start..end))
                         .map(check)
@@ -285,15 +283,15 @@ pub mod tests {
             }
         }
         assert_eq!(
-            (3..5).into_iter().collect::<Vec<_>>(),
+            (3..5).collect::<Vec<_>>(),
             storages.iter_range(&(..5)).map(check).collect::<Vec<_>>()
         );
         assert_eq!(
-            (1..=3).into_iter().collect::<Vec<_>>(),
+            (1..=3).collect::<Vec<_>>(),
             storages.iter_range(&(1..)).map(check).collect::<Vec<_>>()
         );
         assert_eq!(
-            (3..=3).into_iter().collect::<Vec<_>>(),
+            (3..=3).collect::<Vec<_>>(),
             storages.iter_range(&(..)).map(check).collect::<Vec<_>>()
         );
 
@@ -307,16 +305,14 @@ pub mod tests {
                     ^ storages
                         .map(|storages| storages.capacity() == (slot as usize))
                         .unwrap_or(false),
-                "slot: {}, storages: {:?}",
-                slot,
-                storages
+                "slot: {slot}, storages: {storages:?}"
             );
             slot
         };
         for start in 0..5 {
             for end in 0..5 {
                 assert_eq!(
-                    (start..end).into_iter().collect::<Vec<_>>(),
+                    (start..end).collect::<Vec<_>>(),
                     storages
                         .iter_range(&(start..end))
                         .map(check)
@@ -325,15 +321,15 @@ pub mod tests {
             }
         }
         assert_eq!(
-            (2..5).into_iter().collect::<Vec<_>>(),
+            (2..5).collect::<Vec<_>>(),
             storages.iter_range(&(..5)).map(check).collect::<Vec<_>>()
         );
         assert_eq!(
-            (1..=4).into_iter().collect::<Vec<_>>(),
+            (1..=4).collect::<Vec<_>>(),
             storages.iter_range(&(1..)).map(check).collect::<Vec<_>>()
         );
         assert_eq!(
-            (2..=4).into_iter().collect::<Vec<_>>(),
+            (2..=4).collect::<Vec<_>>(),
             storages.iter_range(&(..)).map(check).collect::<Vec<_>>()
         );
     }

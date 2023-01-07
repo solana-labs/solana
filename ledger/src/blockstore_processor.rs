@@ -110,7 +110,7 @@ struct ReplayEntry {
 lazy_static! {
     static ref PAR_THREAD_POOL: ThreadPool = rayon::ThreadPoolBuilder::new()
         .num_threads(get_max_thread_count())
-        .thread_name(|ix| format!("solBstoreProc{:02}", ix))
+        .thread_name(|ix| format!("solBstoreProc{ix:02}"))
         .build()
         .unwrap();
 }
@@ -146,7 +146,7 @@ fn get_first_error(
                 "validator_process_entry_error",
                 (
                     "error",
-                    format!("error: {:?}, transaction: {:?}", err, transaction),
+                    format!("error: {err:?}, transaction: {transaction:?}"),
                     String
                 )
             );
@@ -626,8 +626,7 @@ fn process_entries_with_callback(
                             (
                                 "error",
                                 format!(
-                                    "Lock accounts error, entry conflicts with itself, txs: {:?}",
-                                    transactions
+                                    "Lock accounts error, entry conflicts with itself, txs: {transactions:?}"
                                 ),
                                 String
                             )
@@ -705,7 +704,6 @@ pub struct ProcessOptions {
     pub new_hard_forks: Option<Vec<Slot>>,
     pub debug_keys: Option<Arc<HashSet<Pubkey>>>,
     pub account_indexes: AccountSecondaryIndexes,
-    pub accounts_db_caching_enabled: bool,
     pub limit_load_slot_count_from_snapshot: Option<usize>,
     pub allow_dead_slots: bool,
     pub accounts_db_test_hash_calculation: bool,
@@ -804,7 +802,6 @@ pub(crate) fn process_blockstore_for_bank_0(
         opts.debug_keys.clone(),
         Some(&crate::builtins::get(opts.runtime_config.bpf_jit)),
         opts.account_indexes.clone(),
-        opts.accounts_db_caching_enabled,
         opts.shrink_ratio,
         false,
         opts.accounts_db_config.clone(),
@@ -869,7 +866,7 @@ pub fn process_blockstore_from_root(
     let mut num_slots_processed = 0;
     if let Some(start_slot_meta) = blockstore
         .meta(start_slot)
-        .unwrap_or_else(|_| panic!("Failed to get meta for slot {}", start_slot))
+        .unwrap_or_else(|_| panic!("Failed to get meta for slot {start_slot}"))
     {
         num_slots_processed = load_frozen_forks(
             bank_forks,
@@ -3716,7 +3713,6 @@ pub mod tests {
             Arc::<RuntimeConfig>::default(),
             account_paths,
             AccountSecondaryIndexes::default(),
-            false,
             AccountShrinkThreshold::default(),
         );
         *bank.epoch_schedule()
@@ -4552,10 +4548,7 @@ pub mod tests {
                     assert_eq!(err, expected_err);
                 }
                 (result, expected_result) => {
-                    panic!(
-                        "actual result {:?} != expected result {:?}",
-                        result, expected_result
-                    );
+                    panic!("actual result {result:?} != expected result {expected_result:?}");
                 }
             }
         }

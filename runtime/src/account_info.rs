@@ -16,7 +16,7 @@ pub type Offset = usize;
 pub type StoredSize = u32;
 
 /// specify where account data is located
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum StorageLocation {
     AppendVec(AppendVecId, Offset),
     Cached,

@@ -45,7 +45,7 @@ fn main() {
         .collect();
 
     for result in &elapsed {
-        println!("compute_merkle_root(us),{}", result);
+        println!("compute_merkle_root(us),{result}");
     }
     println!(
         "compute_merkle_root(us) avg: {}",

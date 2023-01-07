@@ -17,8 +17,7 @@ fn check_genesis_hash(
     if let Some(expected_genesis_hash) = expected_genesis_hash {
         if expected_genesis_hash != genesis_hash {
             return Err(format!(
-                "Genesis hash mismatch: expected {} but downloaded genesis hash is {}",
-                expected_genesis_hash, genesis_hash,
+                "Genesis hash mismatch: expected {expected_genesis_hash} but downloaded genesis hash is {genesis_hash}",
             ));
         }
     }
@@ -31,7 +30,7 @@ fn load_local_genesis(
     expected_genesis_hash: Option<Hash>,
 ) -> Result<GenesisConfig, String> {
     let existing_genesis = GenesisConfig::load(ledger_path)
-        .map_err(|err| format!("Failed to load genesis config: {}", err))?;
+        .map_err(|err| format!("Failed to load genesis config: {err}"))?;
     check_genesis_hash(&existing_genesis, expected_genesis_hash)?;
 
     Ok(existing_genesis)
@@ -59,14 +58,14 @@ pub fn download_then_check_genesis_hash(
             ledger_path,
             max_genesis_archive_unpacked_size,
         )
-        .map_err(|err| format!("Failed to unpack downloaded genesis config: {}", err))?;
+        .map_err(|err| format!("Failed to unpack downloaded genesis config: {err}"))?;
 
         let downloaded_genesis = GenesisConfig::load(ledger_path)
-            .map_err(|err| format!("Failed to load downloaded genesis config: {}", err))?;
+            .map_err(|err| format!("Failed to load downloaded genesis config: {err}"))?;
 
         check_genesis_hash(&downloaded_genesis, expected_genesis_hash)?;
         std::fs::rename(tmp_genesis_package, genesis_package)
-            .map_err(|err| format!("Unable to rename: {:?}", err))?;
+            .map_err(|err| format!("Unable to rename: {err:?}"))?;
 
         downloaded_genesis
     } else {

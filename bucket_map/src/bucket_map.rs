@@ -81,7 +81,6 @@ impl<T: Clone + Copy + Debug> BucketMap<T> {
 
         let stats = Arc::default();
         let buckets = (0..config.max_buckets)
-            .into_iter()
             .map(|_| {
                 Arc::new(BucketApi::new(
                     Arc::clone(&drives),
@@ -320,7 +319,7 @@ mod tests {
     fn bucket_map_test_grow_read() {
         let config = BucketMapConfig::new(1 << 2);
         let index = BucketMap::new(config);
-        let keys: Vec<Pubkey> = (0..100).into_iter().map(|_| Pubkey::new_unique()).collect();
+        let keys: Vec<Pubkey> = (0..100).map(|_| Pubkey::new_unique()).collect();
         for k in 0..keys.len() {
             let key = &keys[k];
             let i = read_be_u64(key.as_ref());
@@ -339,7 +338,7 @@ mod tests {
     fn bucket_map_test_n_delete() {
         let config = BucketMapConfig::new(1 << 2);
         let index = BucketMap::new(config);
-        let keys: Vec<Pubkey> = (0..20).into_iter().map(|_| Pubkey::new_unique()).collect();
+        let keys: Vec<Pubkey> = (0..20).map(|_| Pubkey::new_unique()).collect();
         for key in keys.iter() {
             let i = read_be_u64(key.as_ref());
             index.update(key, |_| Some((vec![i], 0)));
@@ -366,7 +365,6 @@ mod tests {
         use std::sync::Mutex;
         solana_logger::setup();
         let maps = (0..2)
-            .into_iter()
             .map(|max_buckets_pow2| {
                 let config = BucketMapConfig::new(1 << max_buckets_pow2);
                 BucketMap::new(config)
@@ -379,7 +377,6 @@ mod tests {
         let gen_rand_value = || {
             let count = thread_rng().gen_range(0, max_slot_list_len);
             let v = (0..count)
-                .into_iter()
                 .map(|x| (x as usize, x as usize /*thread_rng().gen::<usize>()*/))
                 .collect::<Vec<_>>();
             let rc = thread_rng().gen::<RefCount>();
@@ -468,7 +465,7 @@ mod tests {
                             map.insert(&k, (&v, rc))
                         } else {
                             map.update(&k, |current| {
-                                assert_eq!(current, v_old.map(|(v, rc)| (&v[..], *rc)), "{}", k);
+                                assert_eq!(current, v_old.map(|(v, rc)| (&v[..], *rc)), "{k}");
                                 Some((v.clone(), rc))
                             })
                         }

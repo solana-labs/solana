@@ -39,21 +39,17 @@ fn test_optimistic_confirmation_violation_without_tower() {
 }
 
 // A bit convoluted test case; but this roughly follows this test theoretical scenario:
+// Validator A, B, C have 31, 36, 33 % of stake respectively. Leader schedule is split, first half
+// of the test B is always leader, second half C is. Additionally we have a non voting validator D with 0
+// stake to propagate gossip info.
 //
-// Step 1: You have validator A + B with 31% and 36% of the stake. Run only validator B:
-//
-//  S0 -> S1 -> S2 -> S3 (B vote)
-//
-// Step 2: Turn off B, and truncate the ledger after slot `S3` (simulate votes not
-// landing in next slot).
-// Copy ledger fully to validator A and validator C
-//
-// Step 3: Turn on A, and have it vote up to S3. Truncate anything past slot `S3`.
+// Step 1: Kill C, only A, B and D should be running
 //
 //  S0 -> S1 -> S2 -> S3 (A & B vote, optimistically confirmed)
 //
-// Step 4:
-// Start validator C with 33% of the stake with same ledger, but only up to slot S2.
+// Step 2:
+// Kill A and B once we verify that they have voted on S3 or beyond. Copy B's ledger to C but only
+// up to slot S2
 // Have `C` generate some blocks like:
 //
 // S0 -> S1 -> S2 -> S4
@@ -79,7 +75,7 @@ fn test_optimistic_confirmation_violation_without_tower() {
 //    `A` should not be able to generate a switching proof.
 //
 fn do_test_optimistic_confirmation_violation_with_or_without_tower(with_tower: bool) {
-    solana_logger::setup_with_default(RUST_LOG_FILTER);
+    solana_logger::setup_with("debug");
 
     // First set up the cluster with 4 nodes
     let slots_per_epoch = 2048;
@@ -127,7 +123,7 @@ fn do_test_optimistic_confirmation_violation_with_or_without_tower(with_tower: b
     // 2. Validator A doesn't vote past `next_slot_on_a` before we can kill it. This is essential
     // because if validator A votes past `next_slot_on_a`, and then we copy over validator B's ledger
     // below only for slots <= `next_slot_on_a`, validator A will not know how it's last vote chains
-    // to the otehr forks, and may violate switching proofs on restart.
+    // to the other forks, and may violate switching proofs on restart.
     let mut default_config = ValidatorConfig::default_for_test();
     // Split leader schedule 50-50 between validators B and C, don't give validator A any slots because
     // it's going to be deleting its ledger, so may create versions of slots it's already created, but
@@ -149,8 +145,9 @@ fn do_test_optimistic_confirmation_violation_with_or_without_tower(with_tower: b
     let mut validator_configs =
         make_identical_validator_configs(&default_config, node_stakes.len());
 
-    // Disable voting on validator C
+    // Disable voting on validators C, and D
     validator_configs[2].voting_disabled = true;
+    validator_configs[3].voting_disabled = true;
 
     let mut config = ClusterConfig {
         cluster_lamports: DEFAULT_CLUSTER_LAMPORTS + node_stakes.iter().sum::<u64>(),
@@ -231,7 +228,7 @@ fn do_test_optimistic_confirmation_violation_with_or_without_tower(with_tower: b
     let validator_a_info = cluster.exit_node(&validator_a_pubkey);
 
     // Step 2:
-    // Stop validator and truncate ledger, copy over B's ledger to C
+    // Truncate ledger, copy over B's ledger to C
     info!("Create validator C's ledger");
     {
         // first copy from validator B's ledger
@@ -267,10 +264,10 @@ fn do_test_optimistic_confirmation_violation_with_or_without_tower(with_tower: b
         .unwrap()
         .0;
     assert!(last_vote_slot >= next_slot_on_a);
+    info!("Success, A voted on slot {}", last_vote_slot);
 
     {
         let blockstore = open_blockstore(&val_a_ledger_path);
-        purge_slots_with_count(&blockstore, next_slot_on_a + 1, truncated_slots);
         if !with_tower {
             info!("Removing tower!");
             remove_tower(&val_a_ledger_path, &validator_a_pubkey);

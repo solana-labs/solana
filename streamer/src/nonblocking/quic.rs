@@ -71,10 +71,11 @@ pub fn spawn_server(
     max_unstaked_connections: usize,
     stats: Arc<StreamStats>,
     wait_for_chunk_timeout_ms: u64,
-) -> Result<JoinHandle<()>, QuicServerError> {
+) -> Result<(Endpoint, JoinHandle<()>), QuicServerError> {
+    info!("Start quic server on {:?}", sock);
     let (config, _cert) = configure_server(keypair, gossip_host)?;
 
-    let (_, incoming) = {
+    let (endpoint, incoming) = {
         Endpoint::new(EndpointConfig::default(), Some(config), sock)
             .map_err(|_e| QuicServerError::EndpointFailed)?
     };
@@ -90,7 +91,7 @@ pub fn spawn_server(
         stats,
         wait_for_chunk_timeout_ms,
     ));
-    Ok(handle)
+    Ok((endpoint, handle))
 }
 
 pub async fn run_server(
@@ -126,6 +127,7 @@ pub async fn run_server(
         }
 
         if let Ok(Some(connection)) = timeout_connection {
+            info!("Got a connection {:?}", connection.remote_address());
             tokio::spawn(setup_connection(
                 connection,
                 unstaked_connection_table.clone(),
@@ -139,6 +141,8 @@ pub async fn run_server(
                 wait_for_chunk_timeout_ms,
             ));
             sleep(Duration::from_micros(WAIT_BETWEEN_NEW_CONNECTIONS_US)).await;
+        } else {
+            info!("Timed out waiting for connection");
         }
     }
 }
@@ -562,9 +566,17 @@ async fn handle_connection(
                         let last_update = last_update.clone();
                         tokio::spawn(async move {
                             let mut maybe_batch = None;
+                            // The min is to guard against a value too small which can wake up unnecessarily
+                            // frequently and wasting CPU cycles. The max guard against waiting for too long
+                            // which delay exit and cause some test failures when the timeout value is large.
+                            // Within this value, the heuristic is to wake up 10 times to check for exit
+                            // for the set timeout if there are no data.
+                            let exit_check_interval =
+                                (wait_for_chunk_timeout_ms / 10).clamp(10, 1000);
+                            let mut start = Instant::now();
                             while !stream_exit.load(Ordering::Relaxed) {
                                 if let Ok(chunk) = tokio::time::timeout(
-                                    Duration::from_millis(wait_for_chunk_timeout_ms),
+                                    Duration::from_millis(exit_check_interval),
                                     stream.read_chunk(PACKET_DATA_SIZE, false),
                                 )
                                 .await
@@ -581,12 +593,16 @@ async fn handle_connection(
                                         last_update.store(timing::timestamp(), Ordering::Relaxed);
                                         break;
                                     }
+                                    start = Instant::now();
                                 } else {
-                                    debug!("Timeout in receiving on stream");
-                                    stats
-                                        .total_stream_read_timeouts
-                                        .fetch_add(1, Ordering::Relaxed);
-                                    break;
+                                    let elapse = Instant::now() - start;
+                                    if elapse.as_millis() as u64 > wait_for_chunk_timeout_ms {
+                                        debug!("Timeout in receiving on stream");
+                                        stats
+                                            .total_stream_read_timeouts
+                                            .fetch_add(1, Ordering::Relaxed);
+                                        break;
+                                    }
                                 }
                             }
                             stats.total_streams.fetch_sub(1, Ordering::Relaxed);
@@ -1005,7 +1021,7 @@ pub mod test {
         let server_address = s.local_addr().unwrap();
         let staked_nodes = Arc::new(RwLock::new(option_staked_nodes.unwrap_or_default()));
         let stats = Arc::new(StreamStats::default());
-        let t = spawn_server(
+        let (_, t) = spawn_server(
             s,
             &keypair,
             ip,
@@ -1016,7 +1032,7 @@ pub mod test {
             MAX_STAKED_CONNECTIONS,
             MAX_UNSTAKED_CONNECTIONS,
             stats.clone(),
-            1000,
+            2000,
         )
         .unwrap();
         (t, exit, receiver, server_address, stats)
@@ -1317,7 +1333,7 @@ pub mod test {
         let server_address = s.local_addr().unwrap();
         let staked_nodes = Arc::new(RwLock::new(StakedNodes::default()));
         let stats = Arc::new(StreamStats::default());
-        let t = spawn_server(
+        let (_, t) = spawn_server(
             s,
             &keypair,
             ip,
@@ -1348,7 +1364,7 @@ pub mod test {
         let server_address = s.local_addr().unwrap();
         let staked_nodes = Arc::new(RwLock::new(StakedNodes::default()));
         let stats = Arc::new(StreamStats::default());
-        let t = spawn_server(
+        let (_, t) = spawn_server(
             s,
             &keypair,
             ip,
@@ -1382,7 +1398,6 @@ pub mod test {
         let mut num_entries = 5;
         let max_connections_per_peer = 10;
         let sockets: Vec<_> = (0..num_entries)
-            .into_iter()
             .map(|i| SocketAddr::new(IpAddr::V4(Ipv4Addr::new(i, 0, 0, 0)), 0))
             .collect();
         for (i, socket) in sockets.iter().enumerate() {
@@ -1435,10 +1450,7 @@ pub mod test {
         let num_entries = 15;
         let max_connections_per_peer = 10;
 
-        let pubkeys: Vec<_> = (0..num_entries)
-            .into_iter()
-            .map(|_| Pubkey::new_unique())
-            .collect();
+        let pubkeys: Vec<_> = (0..num_entries).map(|_| Pubkey::new_unique()).collect();
         for (i, pubkey) in pubkeys.iter().enumerate() {
             table
                 .try_add_connection(
@@ -1530,7 +1542,6 @@ pub mod test {
         let num_entries = 5;
         let max_connections_per_peer = 10;
         let sockets: Vec<_> = (0..num_entries)
-            .into_iter()
             .map(|i| SocketAddr::new(IpAddr::V4(Ipv4Addr::new(i, 0, 0, 0)), 0))
             .collect();
         for (i, socket) in sockets.iter().enumerate() {
@@ -1565,7 +1576,6 @@ pub mod test {
         let num_ips = 5;
         let max_connections_per_peer = 10;
         let mut sockets: Vec<_> = (0..num_ips)
-            .into_iter()
             .map(|i| SocketAddr::new(IpAddr::V4(Ipv4Addr::new(i, 0, 0, 0)), 0))
             .collect();
         for (i, socket) in sockets.iter().enumerate() {

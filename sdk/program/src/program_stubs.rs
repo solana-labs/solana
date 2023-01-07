@@ -24,7 +24,7 @@ pub fn set_syscall_stubs(syscall_stubs: Box<dyn SyscallStubs>) -> Box<dyn Syscal
 #[allow(clippy::integer_arithmetic)]
 pub trait SyscallStubs: Sync + Send {
     fn sol_log(&self, message: &str) {
-        println!("{}", message);
+        println!("{message}");
     }
     fn sol_log_compute_units(&self) {
         sol_log("SyscallStubs: sol_log_compute_units() not available");
@@ -108,8 +108,7 @@ pub(crate) fn sol_log(message: &str) {
 
 pub(crate) fn sol_log_64(arg1: u64, arg2: u64, arg3: u64, arg4: u64, arg5: u64) {
     sol_log(&format!(
-        "{:#x}, {:#x}, {:#x}, {:#x}, {:#x}",
-        arg1, arg2, arg3, arg4, arg5
+        "{arg1:#x}, {arg2:#x}, {arg3:#x}, {arg4:#x}, {arg5:#x}"
     ));
 }
 

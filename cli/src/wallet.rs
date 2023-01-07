@@ -579,7 +579,7 @@ pub fn process_show_account(
                 let mut f = File::create(output_file)?;
                 f.write_all(account_string.as_bytes())?;
                 writeln!(&mut account_string)?;
-                writeln!(&mut account_string, "Wrote account to {}", output_file)?;
+                writeln!(&mut account_string, "Wrote account to {output_file}")?;
             }
         }
         OutputFormat::Display | OutputFormat::DisplayVerbose => {
@@ -587,7 +587,7 @@ pub fn process_show_account(
                 let mut f = File::create(output_file)?;
                 f.write_all(&data)?;
                 writeln!(&mut account_string)?;
-                writeln!(&mut account_string, "Wrote account data to {}", output_file)?;
+                writeln!(&mut account_string, "Wrote account data to {output_file}")?;
             } else if !data.is_empty() {
                 use pretty_hex::*;
                 writeln!(&mut account_string, "{:?}", data.hex_dump())?;
@@ -620,13 +620,13 @@ pub fn process_airdrop(
     let result = request_and_confirm_airdrop(rpc_client, config, &pubkey, lamports);
     if let Ok(signature) = result {
         let signature_cli_message = log_instruction_custom_error::<SystemError>(result, config)?;
-        println!("{}", signature_cli_message);
+        println!("{signature_cli_message}");
 
         let current_balance = rpc_client.get_balance(&pubkey)?;
 
         if current_balance < pre_balance.saturating_add(lamports) {
             println!("Balance unchanged");
-            println!("Run `solana confirm -v {:?}` for more info", signature);
+            println!("Run `solana confirm -v {signature:?}` for more info");
             Ok("".to_string())
         } else {
             Ok(build_balance_message(current_balance, false, true))
@@ -701,7 +701,7 @@ pub fn process_confirm(
                             });
                         }
                         Err(err) => {
-                            get_transaction_error = Some(format!("{:?}", err));
+                            get_transaction_error = Some(format!("{err:?}"));
                         }
                     }
                 }
@@ -721,7 +721,7 @@ pub fn process_confirm(
             };
             Ok(config.output_format.formatted_string(&cli_transaction))
         }
-        Err(err) => Err(CliError::RpcRequestError(format!("Unable to confirm: {}", err)).into()),
+        Err(err) => Err(CliError::RpcRequestError(format!("Unable to confirm: {err}")).into()),
     }
 }
 
@@ -789,10 +789,9 @@ pub fn process_transfer(
             .value;
         if recipient_balance == 0 {
             return Err(format!(
-                "The recipient address ({}) is not funded. \
+                "The recipient address ({to}) is not funded. \
                                 Add `--allow-unfunded-recipient` to complete the transfer \
-                               ",
-                to
+                               "
             )
             .into());
         }

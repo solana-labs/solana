@@ -73,7 +73,7 @@ bs58 = "0.4.0"
 matches = "0.1.9"
 solana-account-decoder = { path = "../account-decoder", version = "=1.15.0" }
 solana-logger = { path = "../logger", version = "=1.15.0" }
-test-case = "2.1.0"
+test-case = "2.2.2"
 
 [build-dependencies]
 rustc_version = "0.4"

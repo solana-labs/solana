@@ -296,7 +296,7 @@ impl BucketStorage {
         data.seek(SeekFrom::Start(capacity * cell_size as u64 - 1))
             .unwrap();
         data.write_all(&[0]).unwrap();
-        data.seek(SeekFrom::Start(0)).unwrap();
+        data.rewind().unwrap();
         measure_new_file.stop();
         let mut measure_flush = Measure::start("measure_flush");
         data.flush().unwrap(); // can we skip this?
@@ -324,7 +324,7 @@ impl BucketStorage {
 
         let increment = self.capacity_pow2 - old_bucket.capacity_pow2;
         let index_grow = 1 << increment;
-        (0..old_cap as usize).into_iter().for_each(|i| {
+        (0..old_cap as usize).for_each(|i| {
             let old_ix = i * old_bucket.cell_size as usize;
             let new_ix = old_ix * index_grow;
             let dst_slice: &[u8] = &self.mmap[new_ix..new_ix + old_bucket.cell_size as usize];
