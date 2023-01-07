@@ -3055,7 +3055,7 @@ impl RpcClient {
         &self,
         addresses: &[Pubkey],
     ) -> ClientResult<Vec<RpcPrioritizationFee>> {
-        self.invoke((self.rpc_client.as_ref()).get_recent_prioritization_fees(addresses))
+        self.invoke(self.rpc_client.get_recent_prioritization_fees(addresses))
     }
 
     /// Returns the identity pubkey for the current node.
