@@ -1383,7 +1383,7 @@ fn main() {
     let ancient_append_vecs = Arg::with_name("accounts_db_ancient_append_vecs")
         .long("accounts-db-ancient-append-vecs")
         .value_name("SLOT-OFFSET")
-        .validator(is_parsable::<u64>)
+        .validator(is_parsable::<i64>)
         .takes_value(true)
         .help(
             "AppendVecs that are older than (slots_per_epoch - SLOT-OFFSET) are squashed together.",
@@ -2724,7 +2724,7 @@ fn main() {
                     ancient_append_vec_offset: value_t!(
                         matches,
                         "accounts_db_ancient_append_vecs",
-                        u64
+                        i64
                     )
                     .ok(),
                     exhaustively_verify_refcounts: arg_matches
@@ -2992,7 +2992,7 @@ fn main() {
                     ancient_append_vec_offset: value_t!(
                         matches,
                         "accounts_db_ancient_append_vecs",
-                        u64
+                        i64
                     )
                     .ok(),
                     skip_initial_hash_calc: arg_matches
