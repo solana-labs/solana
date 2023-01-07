@@ -3619,8 +3619,10 @@ impl RpcClient {
     /// # Examples
     ///
     /// ```
-    /// # use solana_rpc_client_api::client_error::Error;
-    /// # use solana_rpc_client::nonblocking::rpc_client::RpcClient;
+    /// # use solana_client::{
+    /// #     client_error::ClientError,
+    /// #     nonblocking::rpc_client::RpcClient,
+    /// # };
     /// # use solana_sdk::signature::{Keypair, Signer};
     /// # futures::executor::block_on(async {
     /// #     let rpc_client = RpcClient::new_mock("succeeds".to_string());
@@ -3630,9 +3632,9 @@ impl RpcClient {
     /// let prioritization_fees = rpc_client.get_recent_prioritization_fees(
     ///     &addresses,
     /// ).await?;
-    /// #     Ok::<(), Error>(())
+    /// #     Ok::<(), ClientError>(())
     /// # })?;
-    /// # Ok::<(), Error>(())
+    /// # Ok::<(), ClientError>(())
     /// ```
     pub async fn get_recent_prioritization_fees(
         &self,
