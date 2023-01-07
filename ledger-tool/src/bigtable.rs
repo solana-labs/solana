@@ -924,7 +924,7 @@ impl BigTableSubCommand for App<'_, '_> {
                                 .validator(is_slot)
                                 .value_name("END_SLOT")
                                 .takes_value(true)
-                                .help("Stop copying at this slot (including, START_SLOT ..= END_SLOT)"),
+                                .help("Stop copying at this slot (inclusive, START_SLOT ..= END_SLOT)"),
                         )
                         .arg(
                             Arg::with_name("force")
