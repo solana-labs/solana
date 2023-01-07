@@ -1,7 +1,15 @@
 ---
 title: Transaction Fees
 description: "Transaction fees are the small fees paid to process instructions on the network. These fees are based on computation and an optional prioritization fee."
-keywords: "instruction fee, processing fee, storage fee, low fee blockchain, gas, gwei, cheap network, affordable blockchain"
+keywords:
+  - instruction fee
+  - processing fee
+  - storage fee
+  - low fee blockchain
+  - gas
+  - gwei
+  - cheap network
+  - affordable blockchain
 ---
 
 The small fees paid to process [instructions](./terminology.md#instruction) on the Solana blockchain are known as "_transaction fees_".
