@@ -3535,6 +3535,49 @@ impl RpcClient {
             .await
     }
 
+    /// Returns a list of minimum prioritization fees from recent blocks.
+    /// Takes an optional vector of addresses; if any addresses are provided, the response will
+    /// reflect the minimum prioritization fee to land a transaction locking all of the provided
+    /// accounts as writable.
+    ///
+    /// Currently, a node's prioritization-fee cache stores data from up to 150 blocks.
+    ///
+    /// # RPC Reference
+    ///
+    /// This method corresponds directly to the [`getRecentPrioritizationFees`] RPC method.
+    ///
+    /// [`getRecentPrioritizationFees`]: https://docs.solana.com/developing/clients/jsonrpc-api#getrecentprioritizationfees
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use solana_rpc_client_api::client_error::Error;
+    /// # use solana_rpc_client::nonblocking::rpc_client::RpcClient;
+    /// # use solana_sdk::signature::{Keypair, Signer};
+    /// # futures::executor::block_on(async {
+    /// #     let rpc_client = RpcClient::new_mock("succeeds".to_string());
+    /// #     let alice = Keypair::new();
+    /// #     let bob = Keypair::new();
+    /// let addresses = vec![alice.pubkey(), bob.pubkey()];
+    /// let prioritization_fees = rpc_client.get_recent_prioritization_fees(
+    ///     &addresses,
+    /// ).await?;
+    /// #     Ok::<(), Error>(())
+    /// # })?;
+    /// # Ok::<(), Error>(())
+    /// ```
+    pub async fn get_recent_prioritization_fees(
+        &self,
+        addresses: &[Pubkey],
+    ) -> ClientResult<Vec<RpcPrioritizationFee>> {
+        let addresses: Vec<_> = addresses
+            .iter()
+            .map(|address| address.to_string())
+            .collect();
+        self.send(RpcRequest::GetRecentPrioritizationFees, json!([addresses]))
+            .await
+    }
+
     /// Returns the identity pubkey for the current node.
     ///
     /// # RPC Reference
