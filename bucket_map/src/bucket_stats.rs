@@ -11,6 +11,13 @@ pub struct BucketStats {
     pub find_entry_mut_us: AtomicU64,
 }
 
+impl BucketStats {
+    pub fn update_max_size(&self, size: u64) {
+        let mut max = self.max_size.lock().unwrap();
+        *max = std::cmp::max(*max, size);
+    }
+}
+
 #[derive(Debug, Default)]
 pub struct BucketMapStats {
     pub index: Arc<BucketStats>,
