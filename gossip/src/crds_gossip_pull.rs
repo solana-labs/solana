@@ -18,7 +18,7 @@ use {
         crds::{Crds, GossipRoute, VersionedCrdsValue},
         crds_gossip,
         crds_gossip_error::CrdsGossipError,
-        crds_value::CrdsValue,
+        crds_value::{CrdsData, CrdsValue},
         legacy_contact_info::LegacyContactInfo as ContactInfo,
         ping_pong::PingCache,
     },
@@ -482,6 +482,11 @@ impl CrdsGossipPull {
             let out: Vec<_> = crds
                 .filter_bitmask(filter.mask, filter.mask_bits)
                 .filter(pred)
+                .filter(|entry| {
+                    // Exclude the new ContactInfo from the pull responses
+                    // until the cluster has upgraded.
+                    !matches!(&entry.value.data, CrdsData::ContactInfo(_))
+                })
                 .map(|entry| entry.value.clone())
                 .take(output_size_limit.load(Ordering::Relaxed).max(0) as usize)
                 .collect();
