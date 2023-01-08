@@ -139,17 +139,16 @@ pub struct SnapshotRequestHandler {
     pub snapshot_request_sender: SnapshotRequestSender,
     pub snapshot_request_receiver: SnapshotRequestReceiver,
     pub accounts_package_sender: Sender<AccountsPackage>,
-    pub latest_slot_snapshot_storages: Option<SnapshotStorages>,
 }
 
 impl SnapshotRequestHandler {
     // Returns the latest requested snapshot slot, if one exists
     pub fn handle_snapshot_requests(
-        &mut self,
+        &self,
         test_hash_calculation: bool,
         non_snapshot_time_us: u128,
         last_full_snapshot_slot: &mut Option<Slot>,
-    ) -> Option<Result<u64, SnapshotError>> {
+    ) -> Option<Result<(u64, SnapshotStorages), SnapshotError>> {
         let (
             snapshot_request,
             accounts_package_type,
@@ -260,13 +259,13 @@ impl SnapshotRequestHandler {
     }
 
     fn handle_snapshot_request(
-        &mut self,
+        &self,
         test_hash_calculation: bool,
         non_snapshot_time_us: u128,
         last_full_snapshot_slot: &mut Option<Slot>,
         snapshot_request: SnapshotRequest,
         accounts_package_type: AccountsPackageType,
-    ) -> Result<u64, SnapshotError> {
+    ) -> Result<(u64, SnapshotStorages), SnapshotError> {
         debug!(
             "handling snapshot request: {:?}, {:?}",
             snapshot_request, accounts_package_type
@@ -361,7 +360,7 @@ impl SnapshotRequestHandler {
                     status_cache_slot_deltas,
                 )
                 .expect("snapshot bank");
-                let accounts_package = AccountsPackage::new_for_snapshot(
+                AccountsPackage::new_for_snapshot(
                     accounts_package_type,
                     &snapshot_root_bank,
                     &bank_snapshot_info,
@@ -373,19 +372,14 @@ impl SnapshotRequestHandler {
                     self.snapshot_config.snapshot_version,
                     accounts_hash_for_testing,
                 )
-                .expect("new accounts package for snapshot");
-                // Update the option, so the older one is released, causing the release of
-                // its reference counts of the appendvecs
-                let _ret = self.latest_slot_snapshot_storages.insert(snapshot_storages);
-
-                accounts_package
+                .expect("new accounts package for snapshot")
             }
             SnapshotRequestType::EpochAccountsHash => {
                 // skip the bank snapshot, just make an accounts package to send to AHV
                 AccountsPackage::new_for_epoch_accounts_hash(
                     accounts_package_type,
                     &snapshot_root_bank,
-                    snapshot_storages,
+                    snapshot_storages.clone(),
                     accounts_hash_for_testing,
                 )
             }
@@ -425,7 +419,7 @@ impl SnapshotRequestHandler {
             ("total_us", total_time.as_us(), i64),
             ("non_snapshot_time_us", non_snapshot_time_us, i64),
         );
-        Ok(snapshot_root_bank.block_height())
+        Ok((snapshot_root_bank.block_height(), snapshot_storages))
     }
 }
 
@@ -508,11 +502,11 @@ pub struct AbsRequestHandlers {
 impl AbsRequestHandlers {
     // Returns the latest requested snapshot block height, if one exists
     pub fn handle_snapshot_requests(
-        &mut self,
+        &self,
         test_hash_calculation: bool,
         non_snapshot_time_us: u128,
         last_full_snapshot_slot: &mut Option<Slot>,
-    ) -> Option<Result<u64, SnapshotError>> {
+    ) -> Option<Result<(u64, SnapshotStorages), SnapshotError>> {
         self.snapshot_request_handler.handle_snapshot_requests(
             test_hash_calculation,
             non_snapshot_time_us,
@@ -523,13 +517,14 @@ impl AbsRequestHandlers {
 
 pub struct AccountsBackgroundService {
     t_background: JoinHandle<()>,
+    //last_slot_snapshot_storages: Option<SnapshotStorages>,
 }
 
 impl AccountsBackgroundService {
     pub fn new(
         bank_forks: Arc<RwLock<BankForks>>,
         exit: &Arc<AtomicBool>,
-        mut request_handlers: AbsRequestHandlers,
+        request_handlers: AbsRequestHandlers,
         test_hash_calculation: bool,
         mut last_full_snapshot_slot: Option<Slot>,
     ) -> Self {
@@ -544,6 +539,7 @@ impl AccountsBackgroundService {
             .spawn(move || {
                 let mut stats = StatsManager::new();
                 let mut last_snapshot_end_time = None;
+                let mut last_slot_snapshot_storages: Option<SnapshotStorages> = None;
                 loop {
                     if exit.load(Ordering::Relaxed) {
                         break;
@@ -592,7 +588,7 @@ impl AccountsBackgroundService {
                     // snapshot requests.  This is because startup verification and snapshot
                     // request handling can both kick off accounts hash calculations in background
                     // threads, and these must not happen concurrently.
-                    let snapshot_block_height_option_result = bank
+                    let snapshot_handle_result = bank
                         .is_startup_verification_complete()
                         .then(|| {
                             request_handlers.handle_snapshot_requests(
@@ -602,7 +598,7 @@ impl AccountsBackgroundService {
                             )
                         })
                         .flatten();
-                    if snapshot_block_height_option_result.is_some() {
+                    if snapshot_handle_result.is_some() {
                         last_snapshot_end_time = Some(Instant::now());
                     }
 
@@ -612,12 +608,16 @@ impl AccountsBackgroundService {
                     // slots >= bank.slot()
                     bank.flush_accounts_cache_if_needed();
 
-                    if let Some(snapshot_block_height_result) = snapshot_block_height_option_result
-                    {
+                    if let Some(snapshot_handle_result) = snapshot_handle_result {
                         // Safe, see proof above
-                        if let Ok(snapshot_block_height) = snapshot_block_height_result {
+                        if let Ok((snapshot_block_height, snapshot_storages)) =
+                            snapshot_handle_result
+                        {
                             assert!(last_cleaned_block_height <= snapshot_block_height);
                             last_cleaned_block_height = snapshot_block_height;
+                            // Update the option, so the older one is released, causing the release of
+                            // its reference counts of the appendvecs
+                            let _ret = last_slot_snapshot_storages.insert(snapshot_storages);
                         } else {
                             exit.store(true, Ordering::Relaxed);
                             return;
@@ -641,7 +641,10 @@ impl AccountsBackgroundService {
                 }
             })
             .unwrap();
-        Self { t_background }
+        Self {
+            t_background,
+            //last_slot_snapshot_storages,
+        }
     }
 
     /// Should be called immediately after bank_fork_utils::load_bank_forks(), and as such, there
@@ -806,7 +809,6 @@ mod test {
             snapshot_request_sender: snapshot_request_sender.clone(),
             snapshot_request_receiver,
             accounts_package_sender,
-            latest_slot_snapshot_storages: None,
         };
 
         let send_snapshot_request = |snapshot_root_bank, request_type| {

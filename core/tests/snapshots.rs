@@ -236,12 +236,11 @@ fn run_bank_forks_snapshot_n<F>(
 
     let (snapshot_request_sender, snapshot_request_receiver) = unbounded();
     let request_sender = AbsRequestSender::new(snapshot_request_sender.clone());
-    let mut snapshot_request_handler = SnapshotRequestHandler {
+    let snapshot_request_handler = SnapshotRequestHandler {
         snapshot_config: snapshot_test_config.snapshot_config.clone(),
         snapshot_request_sender,
         snapshot_request_receiver,
         accounts_package_sender,
-        latest_slot_snapshot_storages: None,
     };
     for slot in 1..=last_slot {
         let mut bank = Bank::new_from_parent(&bank_forks[slot - 1], &Pubkey::default(), slot);
@@ -747,12 +746,11 @@ fn test_bank_forks_incremental_snapshot(
 
     let (snapshot_request_sender, snapshot_request_receiver) = unbounded();
     let request_sender = AbsRequestSender::new(snapshot_request_sender.clone());
-    let mut snapshot_request_handler = SnapshotRequestHandler {
+    let snapshot_request_handler = SnapshotRequestHandler {
         snapshot_config: snapshot_test_config.snapshot_config.clone(),
         snapshot_request_sender,
         snapshot_request_receiver,
         accounts_package_sender,
-        latest_slot_snapshot_storages: None,
     };
 
     let mut last_full_snapshot_slot = None;
@@ -1008,7 +1006,6 @@ fn test_snapshots_with_background_services(
         snapshot_request_sender,
         snapshot_request_receiver,
         accounts_package_sender: accounts_package_sender.clone(),
-        latest_slot_snapshot_storages: None,
     };
     let pruned_banks_request_handler = PrunedBanksRequestHandler {
         pruned_banks_receiver,
