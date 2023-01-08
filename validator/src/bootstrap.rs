@@ -7,9 +7,9 @@ use {
     solana_genesis_utils::download_then_check_genesis_hash,
     solana_gossip::{
         cluster_info::{ClusterInfo, Node},
-        contact_info::ContactInfo,
         crds_value,
         gossip_service::GossipService,
+        legacy_contact_info::LegacyContactInfo as ContactInfo,
     },
     solana_runtime::{
         snapshot_archive_info::SnapshotArchiveInfoGetter,

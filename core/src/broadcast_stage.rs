@@ -16,7 +16,7 @@ use {
     itertools::Itertools,
     solana_gossip::{
         cluster_info::{ClusterInfo, ClusterInfoError},
-        contact_info::ContactInfo,
+        legacy_contact_info::LegacyContactInfo as ContactInfo,
     },
     solana_ledger::{blockstore::Blockstore, shred::Shred},
     solana_measure::measure::Measure,
