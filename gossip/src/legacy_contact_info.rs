@@ -199,16 +199,9 @@ impl LegacyContactInfo {
     /// port must not be 0
     /// ip must be specified and not multicast
     /// loopback ip is only allowed in tests
-    // Keeping this for now not to break tvu-peers and turbine shuffle order of
-    // nodes when arranging nodes on retransmit tree. Private IP addresses in
-    // turbine are filtered out just before sending packets.
-    pub(crate) fn is_valid_tvu_address(addr: &SocketAddr) -> bool {
-        (addr.port() != 0) && Self::is_valid_ip(addr.ip())
-    }
-
     // TODO: Replace this entirely with streamer SocketAddrSpace.
     pub fn is_valid_address(addr: &SocketAddr, socket_addr_space: &SocketAddrSpace) -> bool {
-        Self::is_valid_tvu_address(addr) && socket_addr_space.check(addr)
+        addr.port() != 0u16 && Self::is_valid_ip(addr.ip()) && socket_addr_space.check(addr)
     }
 
     pub fn client_facing_addr(&self) -> (SocketAddr, SocketAddr) {
