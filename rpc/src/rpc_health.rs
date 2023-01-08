@@ -129,8 +129,8 @@ impl RpcHealth {
     #[cfg(test)]
     pub(crate) fn stub() -> Arc<Self> {
         use {
-            solana_gossip::contact_info::ContactInfo, solana_sdk::signer::keypair::Keypair,
-            solana_streamer::socket::SocketAddrSpace,
+            solana_gossip::legacy_contact_info::LegacyContactInfo as ContactInfo,
+            solana_sdk::signer::keypair::Keypair, solana_streamer::socket::SocketAddrSpace,
         };
         Arc::new(Self::new(
             Arc::new(ClusterInfo::new(

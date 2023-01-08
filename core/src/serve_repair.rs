@@ -15,7 +15,7 @@ use {
     },
     solana_gossip::{
         cluster_info::{ClusterInfo, ClusterInfoError},
-        contact_info::ContactInfo,
+        legacy_contact_info::{LegacyContactInfo as ContactInfo, LegacyContactInfo},
         ping_pong::{self, PingCache, Pong},
         weighted_shuffle::WeightedShuffle,
     },
@@ -208,13 +208,13 @@ pub(crate) type Ping = ping_pong::Ping<[u8; REPAIR_PING_TOKEN_SIZE]>;
 /// Window protocol messages
 #[derive(Serialize, Deserialize, Debug)]
 pub enum RepairProtocol {
-    LegacyWindowIndex(ContactInfo, Slot, u64),
-    LegacyHighestWindowIndex(ContactInfo, Slot, u64),
-    LegacyOrphan(ContactInfo, Slot),
-    LegacyWindowIndexWithNonce(ContactInfo, Slot, u64, Nonce),
-    LegacyHighestWindowIndexWithNonce(ContactInfo, Slot, u64, Nonce),
-    LegacyOrphanWithNonce(ContactInfo, Slot, Nonce),
-    LegacyAncestorHashes(ContactInfo, Slot, Nonce),
+    LegacyWindowIndex(LegacyContactInfo, Slot, u64),
+    LegacyHighestWindowIndex(LegacyContactInfo, Slot, u64),
+    LegacyOrphan(LegacyContactInfo, Slot),
+    LegacyWindowIndexWithNonce(LegacyContactInfo, Slot, u64, Nonce),
+    LegacyHighestWindowIndexWithNonce(LegacyContactInfo, Slot, u64, Nonce),
+    LegacyOrphanWithNonce(LegacyContactInfo, Slot, Nonce),
+    LegacyAncestorHashes(LegacyContactInfo, Slot, Nonce),
     Pong(ping_pong::Pong),
     WindowIndex {
         header: RepairRequestHeader,
