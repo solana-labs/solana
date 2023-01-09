@@ -7,6 +7,7 @@ use {
     bytemuck::{Pod, Zeroable},
     num_derive::{FromPrimitive, ToPrimitive},
     std::{
+        borrow,
         convert::{Infallible, TryFrom},
         fmt, mem,
         str::FromStr,
@@ -634,6 +635,12 @@ impl AsRef<[u8]> for Pubkey {
 impl AsMut<[u8]> for Pubkey {
     fn as_mut(&mut self) -> &mut [u8] {
         &mut self.0[..]
+    }
+}
+
+impl borrow::Borrow<[u8; 32]> for Pubkey {
+    fn borrow(&self) -> &[u8; 32] {
+        &self.0
     }
 }
 
