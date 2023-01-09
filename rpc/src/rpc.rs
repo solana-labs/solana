@@ -3478,6 +3478,7 @@ pub mod rpc_full {
                             gossip: Some(contact_info.gossip),
                             tpu: valid_address_or_none(&contact_info.tpu),
                             rpc: valid_address_or_none(&contact_info.rpc),
+                            pubsub: valid_address_or_none(&contact_info.rpc_pubsub),
                             version,
                             feature_set,
                             shred_version: Some(my_shred_version),
@@ -5105,6 +5106,7 @@ pub mod tests {
             "shredVersion": 0u16,
             "tpu": "127.0.0.1:1234",
             "rpc": format!("127.0.0.1:{}", rpc_port::DEFAULT_RPC_PORT),
+            "pubsub": format!("127.0.0.1:{}", rpc_port::DEFAULT_RPC_PUBSUB_PORT),
             "version": null,
             "featureSet": null,
         }]);

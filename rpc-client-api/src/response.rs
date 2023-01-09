@@ -298,6 +298,8 @@ pub struct RpcContactInfo {
     pub tpu: Option<SocketAddr>,
     /// JSON RPC port
     pub rpc: Option<SocketAddr>,
+    /// WebSocket PubSub port
+    pub pubsub: Option<SocketAddr>,
     /// Software version
     pub version: Option<String>,
     /// First 4 bytes of the FeatureSet identifier
