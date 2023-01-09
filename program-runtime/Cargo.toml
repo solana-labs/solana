@@ -17,7 +17,7 @@ enum-iterator = "1.2.0"
 itertools =  "0.10.1"
 libc = "0.2.101"
 libloading = "0.7.0"
-log = "0.4.14"
+log = "0.4.17"
 num-derive = { version = "0.3" }
 num-traits = { version = "0.2" }
 rand = "0.7.0"

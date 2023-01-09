@@ -13,7 +13,7 @@ publish = false
 bzip2 = "0.4.3"
 cargo_metadata = "0.15.0"
 clap = { version = "3.1.5", features = ["cargo", "env"] }
-log = { version = "0.4.14", features = ["std"] }
+log = { version = "0.4.17", features = ["std"] }
 regex = "1.6.0"
 solana-download-utils = { path = "../../download-utils", version = "=1.15.0" }
 solana-logger = { path = "../../logger", version = "=1.15.0" }
