@@ -570,6 +570,14 @@ pub mod disable_turbine_fanout_experiments {
     solana_sdk::declare_id!("Gz1aLrbeQ4Q6PTSafCZcGWZXz91yVRi7ASFzFEr1U4sa");
 }
 
+pub mod enable_repair_peer_selection_experiments {
+    solana_sdk::declare_id!("24MCz1eioJq1cDRTNtrEDnVtA9ZJkYX3BG1Apc3fkzze");
+}
+
+pub mod disable_repair_peer_selection_experiments {
+    solana_sdk::declare_id!("FiawZN6swobGq9EMozks57FhwBN8s24pQQQv9rdC3FyX");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -707,6 +715,8 @@ lazy_static! {
         (commission_updates_only_allowed_in_first_half_of_epoch::id(), "validator commission updates are only allowed in the first half of an epoch #29362"),
         (enable_turbine_fanout_experiments::id(), "enable turbine fanout experiments #29393"),
         (disable_turbine_fanout_experiments::id(), "disable turbine fanout experiments #29393"),
+        (enable_repair_peer_selection_experiments::id(), "enable repair peer selection experiments #TODO"),
+        (disable_repair_peer_selection_experiments::id(), "disable repair peer selection experiments #TODO"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()

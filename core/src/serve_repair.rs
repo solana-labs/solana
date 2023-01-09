@@ -29,9 +29,10 @@ use {
         data_budget::DataBudget,
         packet::{Packet, PacketBatch, PacketBatchRecycler},
     },
-    solana_runtime::bank_forks::BankForks,
+    solana_runtime::{bank::Bank, bank_forks::BankForks},
     solana_sdk::{
         clock::Slot,
+        feature_set,
         genesis_config::ClusterType,
         hash::{Hash, HASH_BYTES},
         packet::PACKET_DATA_SIZE,
@@ -83,6 +84,14 @@ const SIGNED_REPAIR_TIME_WINDOW: Duration = Duration::from_secs(60 * 10); // 10 
 
 #[cfg(test)]
 static_assertions::const_assert_eq!(MAX_ANCESTOR_RESPONSES, 30);
+
+fn enable_repair_peer_selection_experiments(bank: &Bank) -> bool {
+    bank.feature_set
+        .is_active(&feature_set::enable_repair_peer_selection_experiments::id())
+        && !bank
+            .feature_set
+            .is_active(&feature_set::disable_repair_peer_selection_experiments::id())
+}
 
 #[derive(Serialize, Deserialize, Debug, Clone, Copy, Hash, PartialEq, Eq)]
 pub enum ShredRepairType {
@@ -911,6 +920,7 @@ impl ServeRepair {
         repair_validators: &Option<HashSet<Pubkey>>,
         outstanding_requests: &mut OutstandingShredRepairs,
         identity_keypair: &Keypair,
+        root_bank: &Bank,
     ) -> Result<(SocketAddr, Vec<u8>)> {
         // find a peer that appears to be accepting replication and has the desired slot, as indicated
         // by a valid tvu port location
@@ -920,7 +930,24 @@ impl ServeRepair {
             _ => {
                 peers_cache.pop(&slot);
                 let repair_peers = self.repair_peers(repair_validators, slot);
-                let weights = cluster_slots.compute_weights(slot, &repair_peers);
+                let weights = if enable_repair_peer_selection_experiments(root_bank) {
+                    match slot % 113 {
+                        11 => cluster_slots
+                            .compute_weights_target_distance(&repair_peers, &self.my_id()),
+                        111 => {
+                            let mut rng = rand::thread_rng();
+                            if rng.gen_range(0, 4) == 0 {
+                                cluster_slots.compute_weights(slot, &repair_peers)
+                            } else {
+                                cluster_slots
+                                    .compute_weights_target_distance(&repair_peers, &self.my_id())
+                            }
+                        }
+                        _ => cluster_slots.compute_weights(slot, &repair_peers),
+                    }
+                } else {
+                    cluster_slots.compute_weights(slot, &repair_peers)
+                };
                 let repair_peers = RepairPeers::new(Instant::now(), &repair_peers, &weights)?;
                 peers_cache.put(slot, repair_peers);
                 peers_cache.get(&slot).unwrap()
@@ -1720,6 +1747,7 @@ mod tests {
         let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(10_000);
         let bank = Bank::new_for_tests(&genesis_config);
         let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
+        let root_bank = bank_forks.read().unwrap().root_bank();
         let cluster_slots = ClusterSlots::default();
         let me = ContactInfo::new_localhost(&solana_sdk::pubkey::new_rand(), timestamp());
         let cluster_info = Arc::new(new_test_cluster_info(me));
@@ -1738,6 +1766,7 @@ mod tests {
             &None,
             &mut outstanding_requests,
             &identity_keypair,
+            &root_bank,
         );
         assert_matches!(rv, Err(Error::ClusterInfo(ClusterInfoError::NoPeers)));
 
@@ -1767,6 +1796,7 @@ mod tests {
                 &None,
                 &mut outstanding_requests,
                 &identity_keypair,
+                &root_bank,
             )
             .unwrap();
         assert_eq!(nxt.serve_repair, serve_repair_addr);
@@ -1802,6 +1832,7 @@ mod tests {
                     &None,
                     &mut outstanding_requests,
                     &identity_keypair,
+                    &root_bank,
                 )
                 .unwrap();
             if rv.0 == serve_repair_addr {
@@ -2046,6 +2077,7 @@ mod tests {
         let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(10_000);
         let bank = Bank::new_for_tests(&genesis_config);
         let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
+        let root_bank = bank_forks.read().unwrap().root_bank();
         let cluster_slots = ClusterSlots::default();
         let me = ContactInfo::new_localhost(&solana_sdk::pubkey::new_rand(), timestamp());
         let cluster_info = Arc::new(new_test_cluster_info(me.clone()));
@@ -2080,6 +2112,7 @@ mod tests {
                     &known_validators,
                     &mut OutstandingShredRepairs::default(),
                     &identity_keypair,
+                    &root_bank,
                 )
                 .is_err());
         }
@@ -2098,6 +2131,7 @@ mod tests {
                 &known_validators,
                 &mut OutstandingShredRepairs::default(),
                 &identity_keypair,
+                &root_bank,
             )
             .is_ok());
 
@@ -2120,6 +2154,7 @@ mod tests {
                 &None,
                 &mut OutstandingShredRepairs::default(),
                 &identity_keypair,
+                &root_bank,
             )
             .is_ok());
     }
