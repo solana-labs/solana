@@ -1152,7 +1152,13 @@ pub mod test {
         for _ in 0..num_bytes {
             s1.write_all(&[0u8]).await.unwrap();
         }
-        s1.finish().await.unwrap();
+        let result = s1.finish().await;
+        match result {
+            Err(quinn::WriteError::UnknownStream) => {
+                assert!(false, "expect a valid stream");
+            }
+            _ => {}
+        };
 
         let mut all_packets = vec![];
         let now = Instant::now();
