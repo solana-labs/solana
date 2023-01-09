@@ -326,7 +326,7 @@ where
                 fun(
                     src_host_addr as *const u8,
                     dst_host_addr as *const u8,
-                    chunk_len as usize,
+                    chunk_len,
                 )?;
                 src_len = src_len.saturating_sub(chunk_len);
                 if reverse {
