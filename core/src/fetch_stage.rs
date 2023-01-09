@@ -56,7 +56,6 @@ impl FetchStage {
 
     #[allow(clippy::too_many_arguments)]
     pub fn new_with_sender(
-
         tpu_vote_sockets: Vec<UdpSocket>,
         exit: &Arc<AtomicBool>,
         sender: &PacketBatchSender,
@@ -183,13 +182,10 @@ impl FetchStage {
             .unwrap();
 
         Self {
-            thread_hdls: [
-                tpu_vote_threads,
-                vec![fwd_thread_hdl, metrics_thread_hdl],
-            ]
-            .into_iter()
-            .flatten()
-            .collect(),
+            thread_hdls: [tpu_vote_threads, vec![fwd_thread_hdl, metrics_thread_hdl]]
+                .into_iter()
+                .flatten()
+                .collect(),
         }
     }
 
