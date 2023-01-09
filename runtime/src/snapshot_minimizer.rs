@@ -305,7 +305,7 @@ impl<'a> SnapshotMinimizer<'a> {
             stored_accounts, ..
         } = self
             .accounts_db()
-            .get_unique_accounts_from_storages(storages.iter());
+            .get_unique_accounts_from_storages(storages.first().unwrap());
 
         let keep_accounts_collect = Mutex::new(Vec::with_capacity(stored_accounts.len()));
         let purge_pubkeys_collect = Mutex::new(Vec::with_capacity(stored_accounts.len()));

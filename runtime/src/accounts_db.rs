@@ -3666,36 +3666,27 @@ impl AccountsDb {
 
     /// get all accounts in all the storages passed in
     /// for duplicate pubkeys, the account with the highest write_value is returned
-    pub(crate) fn get_unique_accounts_from_storages<'a, I>(
-        &'a self,
-        stores: I,
-    ) -> GetUniqueAccountsResult<'a>
-    where
-        I: Iterator<Item = &'a Arc<AccountStorageEntry>>,
-    {
+    pub(crate) fn get_unique_accounts_from_storages<'a>(
+        &self,
+        store: &'a Arc<AccountStorageEntry>,
+    ) -> GetUniqueAccountsResult<'a> {
         let mut stored_accounts: HashMap<Pubkey, FoundStoredAccount> = HashMap::new();
-        let mut original_bytes = 0;
-        let mut count = 0;
-        stores.into_iter().for_each(|store| {
-            count += 1;
-            assert!(count < 2, "there should be a max of 1 append vec per slot");
-            original_bytes += store.total_bytes();
-            let store_id = store.append_vec_id();
-            store.accounts.account_iter().for_each(|account| {
-                let new_entry = FoundStoredAccount { account, store_id };
-                match stored_accounts.entry(*new_entry.account.pubkey()) {
-                    Entry::Occupied(mut occupied_entry) => {
-                        assert!(
-                            new_entry.account.meta.write_version_obsolete
-                                > occupied_entry.get().account.meta.write_version_obsolete
-                        );
-                        occupied_entry.insert(new_entry);
-                    }
-                    Entry::Vacant(vacant_entry) => {
-                        vacant_entry.insert(new_entry);
-                    }
+        let original_bytes = store.total_bytes();
+        let store_id = store.append_vec_id();
+        store.accounts.account_iter().for_each(|account| {
+            let new_entry = FoundStoredAccount { account, store_id };
+            match stored_accounts.entry(*new_entry.account.pubkey()) {
+                Entry::Occupied(mut occupied_entry) => {
+                    assert!(
+                        new_entry.account.meta.write_version_obsolete
+                            > occupied_entry.get().account.meta.write_version_obsolete
+                    );
+                    occupied_entry.insert(new_entry);
                 }
-            });
+                Entry::Vacant(vacant_entry) => {
+                    vacant_entry.insert(new_entry);
+                }
+            }
         });
 
         // sort by pubkey to keep account index lookups close
@@ -3722,7 +3713,7 @@ impl AccountsDb {
                 original_bytes,
             },
             storage_read_elapsed,
-        ) = measure!(self.get_unique_accounts_from_storages(std::iter::once(store)));
+        ) = measure!(self.get_unique_accounts_from_storages(store));
         stats
             .storage_read_elapsed
             .fetch_add(storage_read_elapsed.as_us(), Ordering::Relaxed);
@@ -17399,7 +17390,7 @@ pub mod tests {
                 let GetUniqueAccountsResult {
                     stored_accounts: mut after_stored_accounts,
                     ..
-                } = db.get_unique_accounts_from_storages(std::iter::once(&ancient));
+                } = db.get_unique_accounts_from_storages(&ancient);
                 assert_eq!(
                     after_stored_accounts.len(),
                     num_normal_slots + 1 - dead_accounts,
@@ -17479,7 +17470,7 @@ pub mod tests {
         }
 
         let storage = db.get_storage_for_slot(starting_slot).unwrap();
-        let created_accounts = db.get_unique_accounts_from_storages(std::iter::once(&storage));
+        let created_accounts = db.get_unique_accounts_from_storages(&storage);
         assert_eq!(created_accounts.stored_accounts.len(), 1);
 
         if alive {
@@ -17513,7 +17504,7 @@ pub mod tests {
     ) -> (AccountsDb, Slot) {
         let (db, slot1) = create_db_with_storages_and_index(alive, num_normal_slots + 1);
         let storage = db.get_storage_for_slot(slot1).unwrap();
-        let created_accounts = db.get_unique_accounts_from_storages(std::iter::once(&storage));
+        let created_accounts = db.get_unique_accounts_from_storages(&storage);
 
         db.combine_ancient_slots(vec![slot1], CAN_RANDOMLY_SHRINK_FALSE);
         assert_eq!(1, db.get_storages_for_slot(slot1).unwrap().len());
@@ -17523,7 +17514,7 @@ pub mod tests {
         let GetUniqueAccountsResult {
             stored_accounts: after_stored_accounts,
             original_bytes: after_original_bytes,
-        } = db.get_unique_accounts_from_storages(std::iter::once(&after_store));
+        } = db.get_unique_accounts_from_storages(&after_store);
         assert_ne!(created_accounts.original_bytes, after_original_bytes);
         assert_eq!(created_accounts.stored_accounts.len(), 1);
         assert_eq!(after_stored_accounts.len(), usize::from(alive));
