@@ -1153,12 +1153,15 @@ pub mod test {
             s1.write_all(&[0u8]).await.unwrap();
         }
         let result = s1.finish().await;
-        match result {
-            Err(quinn::WriteError::UnknownStream) => {
-                assert!(false, "expect a valid stream");
-            }
-            _ => {}
-        };
+
+        // The call to finish, after sending multiple writes on quic in the
+        // test, is to make sure that we Stop writing any bytes on the connect.
+        // So when the test call finishes after sending multiple writes on quic,
+        // a Stopped from peer should be fine. We expect a result of Ok or
+        // Stopped from peer.
+        if !result.is_ok() && !matches!(result, quinn::WriteError::Stopped(_)) {
+            panic!("Failed to finish writes on quic connection");
+        }
 
         let mut all_packets = vec![];
         let now = Instant::now();
