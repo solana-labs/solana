@@ -3710,22 +3710,19 @@ impl AccountsDb {
 
     /// shared code for shrinking normal slots and combining into ancient append vecs
     /// note 'stored_accounts' is passed by ref so we can return references to data within it, avoiding self-references
-    fn shrink_collect<'a: 'b, 'b, I>(
+    fn shrink_collect<'a: 'b, 'b>(
         &'a self,
-        stores: I,
+        store: &'a Arc<AccountStorageEntry>,
         stored_accounts: &'b mut Vec<FoundStoredAccount<'b>>,
         stats: &ShrinkStats,
-    ) -> ShrinkCollect<'b>
-    where
-        I: Iterator<Item = &'a Arc<AccountStorageEntry>>,
-    {
+    ) -> ShrinkCollect<'b> {
         let (
             GetUniqueAccountsResult {
                 stored_accounts: stored_accounts_temp,
                 original_bytes,
             },
             storage_read_elapsed,
-        ) = measure!(self.get_unique_accounts_from_storages(stores));
+        ) = measure!(self.get_unique_accounts_from_storages(std::iter::once(store)));
         stats
             .storage_read_elapsed
             .fetch_add(storage_read_elapsed.as_us(), Ordering::Relaxed);
@@ -3832,11 +3829,7 @@ impl AccountsDb {
     fn do_shrink_slot_store(&self, slot: Slot, store: &Arc<AccountStorageEntry>) -> usize {
         let mut stored_accounts = Vec::default();
         debug!("do_shrink_slot_store: slot: {}", slot);
-        let shrink_collect = self.shrink_collect(
-            std::iter::once(store),
-            &mut stored_accounts,
-            &self.shrink_stats,
-        );
+        let shrink_collect = self.shrink_collect(store, &mut stored_accounts, &self.shrink_stats);
 
         // This shouldn't happen if alive_bytes/approx_stored_count are accurate
         if Self::should_not_shrink(
@@ -4418,7 +4411,7 @@ impl AccountsDb {
     ) {
         let mut stored_accounts = Vec::default();
         let shrink_collect = self.shrink_collect(
-            std::iter::once(old_storage),
+            old_storage,
             &mut stored_accounts,
             &self.shrink_ancient_stats.shrink_stats,
         );
@@ -17014,7 +17007,7 @@ pub mod tests {
                                 let storage = db.get_storage_for_slot(slot5).unwrap();
                                 let mut stored_accounts = Vec::default();
                                 let shrink_collect = db.shrink_collect(
-                                    std::iter::once(&storage),
+                                    &storage,
                                     &mut stored_accounts,
                                     &ShrinkStats::default(),
                                 );
