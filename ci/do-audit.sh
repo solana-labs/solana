@@ -12,7 +12,7 @@ cargo_audit_ignores=(
   #
   # Blocked on chrono updating `time` to >= 0.2.23
   --ignore RUSTSEC-2020-0071
-  
+
   # tokio: vulnerability affecting named pipes on Windows
   #
   # Exception is a stopgap to unblock CI
