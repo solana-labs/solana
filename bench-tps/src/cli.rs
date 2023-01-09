@@ -100,7 +100,7 @@ impl Default for Config {
 }
 
 /// Defines and builds the CLI args for a run of the benchmark
-pub fn build_args<'a, 'b>(version: &'b str) -> App<'a, 'b> {
+pub fn build_args<'a>(version: &'_ str) -> App<'a, '_> {
     App::new(crate_name!()).about(crate_description!())
         .version(version)
         .arg({

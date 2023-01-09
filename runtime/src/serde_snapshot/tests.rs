@@ -4,8 +4,10 @@ use {
     super::*,
     crate::{
         account_storage::AccountStorageMap,
-        accounts::{test_utils::create_test_accounts, Accounts},
-        accounts_db::{get_temp_accounts_paths, AccountShrinkThreshold},
+        accounts::Accounts,
+        accounts_db::{
+            get_temp_accounts_paths, test_utils::create_test_accounts, AccountShrinkThreshold,
+        },
         accounts_hash::AccountsHash,
         append_vec::AppendVec,
         bank::{Bank, BankTestConfig},

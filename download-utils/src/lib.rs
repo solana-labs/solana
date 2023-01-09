@@ -257,7 +257,7 @@ pub fn download_genesis_if_missing(
 
 /// Download a snapshot archive from `rpc_addr`.  Use `snapshot_type` to specify downloading either
 /// a full snapshot or an incremental snapshot.
-pub fn download_snapshot_archive<'a, 'b>(
+pub fn download_snapshot_archive(
     rpc_addr: &SocketAddr,
     full_snapshot_archives_dir: &Path,
     incremental_snapshot_archives_dir: &Path,
@@ -266,7 +266,7 @@ pub fn download_snapshot_archive<'a, 'b>(
     maximum_full_snapshot_archives_to_retain: usize,
     maximum_incremental_snapshot_archives_to_retain: usize,
     use_progress_bar: bool,
-    progress_notify_callback: &'a mut DownloadProgressCallbackOption<'b>,
+    progress_notify_callback: &mut DownloadProgressCallbackOption<'_>,
 ) -> Result<(), String> {
     snapshot_utils::purge_old_snapshot_archives(
         full_snapshot_archives_dir,

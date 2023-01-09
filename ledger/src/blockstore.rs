@@ -3894,7 +3894,7 @@ pub fn create_new_ledger(
         blockstore_dir,
     ];
     let output = std::process::Command::new("tar")
-        .args(&args)
+        .args(args)
         .output()
         .unwrap();
     if !output.status.success() {
@@ -8421,18 +8421,17 @@ pub mod tests {
     }
 
     #[test]
-    #[allow(clippy::same_item_push)]
     fn test_get_last_hash() {
-        let mut entries: Vec<Entry> = vec![];
+        let entries: Vec<Entry> = vec![];
         let empty_entries_iterator = entries.iter();
         assert!(get_last_hash(empty_entries_iterator).is_none());
 
-        let mut prev_hash = hash::hash(&[42u8]);
-        for _ in 0..10 {
-            let entry = next_entry(&prev_hash, 1, vec![]);
-            prev_hash = entry.hash;
-            entries.push(entry);
-        }
+        let entry = next_entry(&hash::hash(&[42u8]), 1, vec![]);
+        let entries: Vec<Entry> = std::iter::successors(Some(entry), |entry| {
+            Some(next_entry(&entry.hash, 1, vec![]))
+        })
+        .take(10)
+        .collect();
         let entries_iterator = entries.iter();
         assert_eq!(get_last_hash(entries_iterator).unwrap(), entries[9].hash);
     }
@@ -9141,7 +9140,6 @@ pub mod tests {
 
     fn make_large_tx_entry(num_txs: usize) -> Entry {
         let txs: Vec<_> = (0..num_txs)
-            .into_iter()
             .map(|_| {
                 let keypair0 = Keypair::new();
                 let to = solana_sdk::pubkey::new_rand();

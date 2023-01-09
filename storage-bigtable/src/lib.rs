@@ -24,6 +24,7 @@ use {
     std::{
         collections::{HashMap, HashSet},
         convert::TryInto,
+        time::Duration,
     },
     thiserror::Error,
     tokio::task::JoinError,
@@ -416,6 +417,22 @@ impl LedgerStorage {
             ..LedgerStorageConfig::default()
         })
         .await
+    }
+
+    pub fn new_for_emulator(
+        instance_name: &str,
+        app_profile_id: &str,
+        endpoint: &str,
+        timeout: Option<Duration>,
+    ) -> Result<Self> {
+        Ok(Self {
+            connection: bigtable::BigTableConnection::new_for_emulator(
+                instance_name,
+                app_profile_id,
+                endpoint,
+                timeout,
+            )?,
+        })
     }
 
     pub async fn new_with_config(config: LedgerStorageConfig) -> Result<Self> {

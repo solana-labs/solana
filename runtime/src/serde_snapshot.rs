@@ -738,7 +738,7 @@ where
         .write()
         .unwrap()
         .insert(snapshot_slot, snapshot_bank_hash_info);
-    accounts_db.storage.extend(storage);
+    accounts_db.storage.initialize(storage);
     accounts_db
         .next_id
         .store(next_append_vec_id, Ordering::Release);
@@ -771,11 +771,7 @@ where
         .set(rent_paying_accounts_by_partition)
         .unwrap();
 
-    accounts_db.maybe_add_filler_accounts(
-        &genesis_config.epoch_schedule,
-        &genesis_config.rent,
-        snapshot_slot,
-    );
+    accounts_db.maybe_add_filler_accounts(&genesis_config.epoch_schedule, snapshot_slot);
 
     handle.join().unwrap();
     measure_notify.stop();

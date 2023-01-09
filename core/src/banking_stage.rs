@@ -30,7 +30,9 @@ use {
     itertools::Itertools,
     solana_client::{connection_cache::ConnectionCache, tpu_connection::TpuConnection},
     solana_entry::entry::hash_transactions,
-    solana_gossip::{cluster_info::ClusterInfo, contact_info::ContactInfo},
+    solana_gossip::{
+        cluster_info::ClusterInfo, legacy_contact_info::LegacyContactInfo as ContactInfo,
+    },
     solana_ledger::{
         blockstore_processor::TransactionStatusSender, token_balances::collect_token_balances,
     },
@@ -1176,6 +1178,7 @@ impl BankingStage {
         gossip_vote_sender: &ReplayVoteSender,
         signature_count: u64,
         executed_transactions_count: usize,
+        executed_non_vote_transactions_count: usize,
         executed_with_successful_result_count: usize,
     ) -> (u64, Vec<CommitTransactionDetails>) {
         inc_new_counter_info!(
@@ -1195,6 +1198,8 @@ impl BankingStage {
                 lamports_per_signature,
                 CommitTransactionCounts {
                     committed_transactions_count: executed_transactions_count as u64,
+                    committed_non_vote_transactions_count: executed_non_vote_transactions_count
+                        as u64,
                     committed_with_failure_result_count: executed_transactions_count
                         .saturating_sub(executed_with_successful_result_count)
                         as u64,
@@ -1330,6 +1335,7 @@ impl BankingStage {
             execution_results,
             mut retryable_transaction_indexes,
             executed_transactions_count,
+            executed_non_vote_transactions_count,
             executed_with_successful_result_count,
             signature_count,
             error_counters,
@@ -1407,6 +1413,7 @@ impl BankingStage {
                 gossip_vote_sender,
                 signature_count,
                 executed_transactions_count,
+                executed_non_vote_transactions_count,
                 executed_with_successful_result_count,
             )
         } else {
@@ -1959,7 +1966,7 @@ mod tests {
         crossbeam_channel::{unbounded, Receiver},
         solana_address_lookup_table_program::state::{AddressLookupTable, LookupTableMeta},
         solana_entry::entry::{next_entry, next_versioned_entry, Entry, EntrySlice},
-        solana_gossip::{cluster_info::Node, contact_info::ContactInfo},
+        solana_gossip::cluster_info::Node,
         solana_ledger::{
             blockstore::{entries_to_test_shreds, Blockstore},
             genesis_utils::{create_genesis_config, GenesisConfigInfo},

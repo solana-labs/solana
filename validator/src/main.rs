@@ -14,7 +14,7 @@ use {
         tpu::DEFAULT_TPU_COALESCE_MS,
         validator::{is_snapshot_config_valid, Validator, ValidatorConfig, ValidatorStartProgress},
     },
-    solana_gossip::{cluster_info::Node, contact_info::ContactInfo},
+    solana_gossip::{cluster_info::Node, legacy_contact_info::LegacyContactInfo as ContactInfo},
     solana_ledger::blockstore_options::{
         BlockstoreCompressionType, BlockstoreRecoveryMode, LedgerColumnOptions, ShredStorageType,
     },
@@ -354,7 +354,7 @@ fn set_repair_whitelist(
         .map_err(|err| {
             std::io::Error::new(
                 std::io::ErrorKind::Other,
-                format!("setRepairWhitelist request failed: {}", err),
+                format!("setRepairWhitelist request failed: {err}"),
             )
         })?;
     Ok(())
@@ -691,7 +691,7 @@ pub fn main() {
                     let repair_whitelist = admin_rpc_service::runtime()
                         .block_on(async move { admin_client.await?.repair_whitelist().await })
                         .unwrap_or_else(|err| {
-                            eprintln!("Repair whitelist query failed: {}", err);
+                            eprintln!("Repair whitelist query failed: {err}");
                             exit(1);
                         });
                     if let Some(mode) = output_mode {
@@ -706,7 +706,7 @@ pub fn main() {
                             _ => unreachable!(),
                         }
                     } else {
-                        print!("{}", repair_whitelist);
+                        print!("{repair_whitelist}");
                     }
                     return;
                 }
@@ -1026,7 +1026,6 @@ pub fn main() {
         write_cache_limit_bytes: value_t!(matches, "accounts_db_cache_limit_mb", u64)
             .ok()
             .map(|mb| mb * MB as u64),
-        skip_rewrites: matches.is_present("accounts_db_skip_rewrites"),
         ancient_append_vec_offset: value_t!(matches, "accounts_db_ancient_append_vecs", u64).ok(),
         exhaustively_verify_refcounts: matches.is_present("accounts_db_verify_refcounts"),
         ..AccountsDbConfig::default()

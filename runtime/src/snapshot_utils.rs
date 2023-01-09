@@ -230,6 +230,9 @@ pub enum SnapshotError {
     #[error("source({1}) - I/O error: {0}")]
     IoWithSource(std::io::Error, &'static str),
 
+    #[error("source({1}) - I/O error: {0}, file: {2}")]
+    IoWithSourceAndFile(#[source] std::io::Error, &'static str, PathBuf),
+
     #[error("could not get file name from path: {}", .0.display())]
     PathToFileNameError(PathBuf),
 
@@ -276,6 +279,91 @@ pub enum VerifySlotDeltasError {
 
     #[error("slot history is bad and cannot be used to verify slot deltas")]
     BadSlotHistory,
+}
+
+/// Delete the files and subdirectories in a directory.
+/// This is useful if the process does not have permission
+/// to delete the top level directory it might be able to
+/// delete the contents of that directory.
+fn delete_contents_of_path(path: impl AsRef<Path> + Copy) {
+    if let Ok(dir_entries) = std::fs::read_dir(path) {
+        for entry in dir_entries.flatten() {
+            let sub_path = entry.path();
+            let metadata = match entry.metadata() {
+                Ok(metadata) => metadata,
+                Err(err) => {
+                    warn!(
+                        "Failed to get metadata for {}. Error: {}",
+                        sub_path.display(),
+                        err.to_string()
+                    );
+                    break;
+                }
+            };
+            if metadata.is_dir() {
+                if let Err(err) = std::fs::remove_dir_all(&sub_path) {
+                    warn!(
+                        "Failed to remove sub directory {}.  Error: {}",
+                        sub_path.display(),
+                        err.to_string()
+                    );
+                }
+            } else if metadata.is_file() {
+                if let Err(err) = std::fs::remove_file(&sub_path) {
+                    warn!(
+                        "Failed to remove file {}.  Error: {}",
+                        sub_path.display(),
+                        err.to_string()
+                    );
+                }
+            }
+        }
+    } else {
+        warn!(
+            "Failed to read the sub paths of {}",
+            path.as_ref().display()
+        );
+    }
+}
+
+/// Delete directories/files asynchronously to avoid blocking on it.
+/// Fist, in sync context, rename the original path to *_deleted,
+/// then spawn a thread to delete the renamed path.
+/// If the process is killed and the deleting process is not done,
+/// the leftover path will be deleted in the next process life, so
+/// there is no file space leaking.
+pub fn move_and_async_delete_path(path: impl AsRef<Path> + Copy) {
+    let mut path_delete = PathBuf::new();
+    path_delete.push(path);
+    path_delete.set_file_name(format!(
+        "{}{}",
+        path_delete.file_name().unwrap().to_str().unwrap(),
+        "_to_be_deleted"
+    ));
+
+    if path_delete.exists() {
+        std::fs::remove_dir_all(&path_delete).unwrap();
+    }
+
+    if !path.as_ref().exists() {
+        return;
+    }
+
+    if let Err(err) = std::fs::rename(path, &path_delete) {
+        warn!(
+            "Path renaming failed: {}.  Falling back to rm_dir in sync mode",
+            err.to_string()
+        );
+        delete_contents_of_path(path);
+        return;
+    }
+
+    Builder::new()
+        .name("solDeletePath".to_string())
+        .spawn(move || {
+            std::fs::remove_dir_all(path_delete).unwrap();
+        })
+        .unwrap();
 }
 
 /// If the validator halts in the middle of `archive_snapshot_package()`, the temporary staging
@@ -329,8 +417,9 @@ pub fn archive_snapshot_package(
         .parent()
         .expect("Tar output path is invalid");
 
-    fs::create_dir_all(tar_dir)
-        .map_err(|e| SnapshotError::IoWithSource(e, "create archive path"))?;
+    fs::create_dir_all(tar_dir).map_err(|e| {
+        SnapshotError::IoWithSourceAndFile(e, "create archive path", tar_dir.into())
+    })?;
 
     // Create the staging directories
     let staging_dir_prefix = TMP_SNAPSHOT_ARCHIVE_PREFIX;
@@ -346,8 +435,9 @@ pub fn archive_snapshot_package(
     let staging_accounts_dir = staging_dir.path().join("accounts");
     let staging_snapshots_dir = staging_dir.path().join("snapshots");
     let staging_version_file = staging_dir.path().join("version");
-    fs::create_dir_all(&staging_accounts_dir)
-        .map_err(|e| SnapshotError::IoWithSource(e, "create staging path"))?;
+    fs::create_dir_all(&staging_accounts_dir).map_err(|e| {
+        SnapshotError::IoWithSourceAndFile(e, "create staging path", staging_accounts_dir.clone())
+    })?;
 
     // Add the snapshots to the staging directory
     symlink::symlink_dir(
@@ -378,8 +468,9 @@ pub fn archive_snapshot_package(
 
     // Write version file
     {
-        let mut f = fs::File::create(staging_version_file)
-            .map_err(|e| SnapshotError::IoWithSource(e, "create version file"))?;
+        let mut f = fs::File::create(&staging_version_file).map_err(|e| {
+            SnapshotError::IoWithSourceAndFile(e, "create version file", staging_version_file)
+        })?;
         f.write_all(snapshot_package.snapshot_version.as_str().as_bytes())
             .map_err(|e| SnapshotError::IoWithSource(e, "write version file"))?;
     }
@@ -438,8 +529,9 @@ pub fn archive_snapshot_package(
     }
 
     // Atomically move the archive into position for other validators to find
-    let metadata = fs::metadata(&archive_path)
-        .map_err(|e| SnapshotError::IoWithSource(e, "archive path stat"))?;
+    let metadata = fs::metadata(&archive_path).map_err(|e| {
+        SnapshotError::IoWithSourceAndFile(e, "archive path stat", archive_path.clone())
+    })?;
     fs::rename(&archive_path, snapshot_package.path())
         .map_err(|e| SnapshotError::IoWithSource(e, "archive path rename"))?;
 
@@ -1660,7 +1752,6 @@ fn unpack_snapshot_local(
 
     // allocate all readers before any readers start reading
     let readers = (0..parallel_divisions)
-        .into_iter()
         .map(|_| SharedBufferReader::new(&shared_buffer))
         .collect::<Vec<_>>();
 

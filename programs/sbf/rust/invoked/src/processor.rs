@@ -48,7 +48,7 @@ fn process_instruction(
             assert_eq!(accounts[ARGUMENT_INDEX].data_len(), 100);
             assert!(accounts[ARGUMENT_INDEX].is_signer);
             assert!(accounts[ARGUMENT_INDEX].is_writable);
-            assert_eq!(accounts[ARGUMENT_INDEX].rent_epoch, 0);
+            assert_eq!(accounts[ARGUMENT_INDEX].rent_epoch, u64::MAX);
             assert!(!accounts[ARGUMENT_INDEX].executable);
             {
                 let data = accounts[ARGUMENT_INDEX].try_borrow_data()?;
@@ -65,14 +65,14 @@ fn process_instruction(
             assert_eq!(accounts[INVOKED_ARGUMENT_INDEX].data_len(), 10);
             assert!(accounts[INVOKED_ARGUMENT_INDEX].is_signer);
             assert!(accounts[INVOKED_ARGUMENT_INDEX].is_writable);
-            assert_eq!(accounts[INVOKED_ARGUMENT_INDEX].rent_epoch, 0);
+            assert_eq!(accounts[INVOKED_ARGUMENT_INDEX].rent_epoch, u64::MAX);
             assert!(!accounts[INVOKED_ARGUMENT_INDEX].executable);
 
             assert_eq!(accounts[INVOKED_PROGRAM_INDEX].key, program_id);
             assert_eq!(accounts[INVOKED_PROGRAM_INDEX].owner, &bpf_loader::id());
             assert!(!accounts[INVOKED_PROGRAM_INDEX].is_signer);
             assert!(!accounts[INVOKED_PROGRAM_INDEX].is_writable);
-            assert_eq!(accounts[INVOKED_PROGRAM_INDEX].rent_epoch, 0);
+            assert_eq!(accounts[INVOKED_PROGRAM_INDEX].rent_epoch, u64::MAX);
             assert!(accounts[INVOKED_PROGRAM_INDEX].executable);
 
             assert_eq!(

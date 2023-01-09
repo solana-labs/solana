@@ -1,7 +1,8 @@
 use {
     itertools::Itertools,
     solana_gossip::{
-        cluster_info::ClusterInfo, contact_info::ContactInfo, crds::Cursor, epoch_slots::EpochSlots,
+        cluster_info::ClusterInfo, crds::Cursor, epoch_slots::EpochSlots,
+        legacy_contact_info::LegacyContactInfo as ContactInfo,
     },
     solana_runtime::{bank::Bank, epoch_stakes::NodeIdToVoteAccounts},
     solana_sdk::{

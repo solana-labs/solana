@@ -324,7 +324,7 @@ impl BucketStorage {
 
         let increment = self.capacity_pow2 - old_bucket.capacity_pow2;
         let index_grow = 1 << increment;
-        (0..old_cap as usize).into_iter().for_each(|i| {
+        (0..old_cap as usize).for_each(|i| {
             let old_ix = i * old_bucket.cell_size as usize;
             let new_ix = old_ix * index_grow;
             let dst_slice: &[u8] = &self.mmap[new_ix..new_ix + old_bucket.cell_size as usize];
@@ -339,6 +339,10 @@ impl BucketStorage {
         m.stop();
         self.stats.resizes.fetch_add(1, Ordering::Relaxed);
         self.stats.resize_us.fetch_add(m.as_us(), Ordering::Relaxed);
+    }
+
+    pub fn update_max_size(&self) {
+        self.stats.update_max_size(self.capacity());
     }
 
     /// allocate a new bucket, copying data from 'bucket'
@@ -365,11 +369,7 @@ impl BucketStorage {
         if let Some(bucket) = bucket {
             new_bucket.copy_contents(bucket);
         }
-        let sz = new_bucket.capacity();
-        {
-            let mut max = new_bucket.stats.max_size.lock().unwrap();
-            *max = std::cmp::max(*max, sz);
-        }
+        new_bucket.update_max_size();
         new_bucket
     }
 
