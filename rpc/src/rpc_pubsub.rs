@@ -404,7 +404,7 @@ impl RpcSolPubSubImpl {
 
     #[cfg(test)]
     pub fn block_until_processed(&self, rpc_subscriptions: &Arc<RpcSubscriptions>) {
-        let (rpc, mut receiver) = rpc_pubsub_service::test_connection(&rpc_subscriptions);
+        let (rpc, mut receiver) = rpc_pubsub_service::test_connection(rpc_subscriptions);
         rpc.slot_subscribe().unwrap();
         rpc_subscriptions.notify_slot(1, 0, 0);
         receiver.recv();
