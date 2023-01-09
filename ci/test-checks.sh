@@ -69,7 +69,7 @@ fi
 
  _ ci/order-crates-for-publishing.py
 
-nightly_clippy_allows=()
+nightly_clippy_allows=("--allow=clippy::uninlined-format-args")
 
 # -Z... is needed because of clippy bug: https://github.com/rust-lang/rust-clippy/issues/4612
 # run nightly clippy for `sdk/` as there's a moderate amount of nightly-only code there
