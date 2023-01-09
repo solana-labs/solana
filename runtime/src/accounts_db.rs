@@ -7612,7 +7612,10 @@ impl AccountsDb {
     /// 1. pubkey, hash pairs for the slot
     /// 2. us spent scanning
     /// 3. Measure started when we began accumulating
-    fn get_pubkey_hash_for_slot(&self, slot: Slot) -> (Vec<(Pubkey, Hash)>, u64, Measure) {
+    pub(crate) fn get_pubkey_hash_for_slot(
+        &self,
+        slot: Slot,
+    ) -> (Vec<(Pubkey, Hash)>, u64, Measure) {
         let mut scan = Measure::start("scan");
 
         let scan_result: ScanStorageResult<(Pubkey, Hash), DashMapVersionHash> = self
