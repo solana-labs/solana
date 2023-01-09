@@ -35,11 +35,18 @@ cargo_audit_ignores=(
   # https://github.com/chronotope/chrono/issues/499
   --ignore RUSTSEC-2020-0159
 
+<<<<<<< HEAD
   # rocksdb: Out-of-bounds read when opening multiple column families with TTL
   #
   # blocked on rust update to 1.60
   # https://rustsec.org/advisories/RUSTSEC-2022-0046
   --ignore RUSTSEC-2022-0046
 
+=======
+  # tokio: vulnerability affecting named pipes on Windows
+  #
+  # Not worth upgrading tokio version on a stable branch
+  --ignore RUSTSEC-2023-0001
+>>>>>>> 207f62445 (Add exception for RUSTSEC-2023-0001 (#29587))
 )
 scripts/cargo-for-all-lock-files.sh stable audit "${cargo_audit_ignores[@]}"
