@@ -4227,6 +4227,8 @@ impl Bank {
         {
             transaction_context.enable_cap_accounts_data_allocations_per_transaction();
         }
+        #[cfg(debug_assertions)]
+        transaction_context.set_signature(tx.signature());
 
         let pre_account_state_info =
             self.get_transaction_account_state_info(&transaction_context, tx.message());
