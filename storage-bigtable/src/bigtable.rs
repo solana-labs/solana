@@ -136,16 +136,7 @@ impl BigTableConnection {
         match std::env::var("BIGTABLE_EMULATOR_HOST") {
             Ok(endpoint) => {
                 info!("Connecting to bigtable emulator at {}", endpoint);
-
-                Ok(Self {
-                    access_token: None,
-                    channel: tonic::transport::Channel::from_shared(format!("http://{endpoint}"))
-                        .map_err(|err| Error::InvalidUri(endpoint, err.to_string()))?
-                        .connect_lazy(),
-                    table_prefix: format!("projects/emulator/instances/{instance_name}/tables/"),
-                    app_profile_id: app_profile_id.to_string(),
-                    timeout,
-                })
+                Self::new_for_emulator(instance_name, app_profile_id, &endpoint, timeout)
             }
 
             Err(_) => {
@@ -213,6 +204,23 @@ impl BigTableConnection {
                 })
             }
         }
+    }
+
+    pub fn new_for_emulator(
+        instance_name: &str,
+        app_profile_id: &str,
+        endpoint: &str,
+        timeout: Option<Duration>,
+    ) -> Result<Self> {
+        Ok(Self {
+            access_token: None,
+            channel: tonic::transport::Channel::from_shared(format!("http://{endpoint}"))
+                .map_err(|err| Error::InvalidUri(String::from(endpoint), err.to_string()))?
+                .connect_lazy(),
+            table_prefix: format!("projects/emulator/instances/{instance_name}/tables/"),
+            app_profile_id: app_profile_id.to_string(),
+            timeout,
+        })
     }
 
     /// Create a new BigTable client.
