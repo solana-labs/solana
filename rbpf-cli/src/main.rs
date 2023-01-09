@@ -22,7 +22,6 @@ use {
         fs::File,
         io::{Read, Seek},
         path::Path,
-        sync::Arc,
         time::{Duration, Instant},
     },
 };
@@ -269,15 +268,13 @@ before execting it in the virtual machine.",
 
     #[allow(unused_mut)]
     let mut verified_executable =
-        VerifiedExecutable::<RequisiteVerifier, InvokeContext>::from_executable(Arc::new(
-            executable,
-        ))
-        .map_err(|err| format!("Executable verifier failed: {err:?}"))
-        .unwrap();
+        VerifiedExecutable::<RequisiteVerifier, InvokeContext>::from_executable(executable)
+            .map_err(|err| format!("Executable verifier failed: {err:?}"))
+            .unwrap();
 
     #[cfg(all(not(target_os = "windows"), target_arch = "x86_64"))]
     verified_executable.jit_compile().unwrap();
-    let mut analysis = LazyAnalysis::new(Arc::clone(verified_executable.get_executable()));
+    let mut analysis = LazyAnalysis::new(verified_executable.get_executable());
 
     match matches.value_of("use") {
         Some("cfg") => {
@@ -381,13 +378,13 @@ impl Debug for Output {
 
 // Replace with std::lazy::Lazy when stabilized.
 // https://github.com/rust-lang/rust/issues/74465
-struct LazyAnalysis<'a> {
-    analysis: Option<Analysis>,
-    executable: Arc<Executable<InvokeContext<'a>>>,
+struct LazyAnalysis<'a, 'b> {
+    analysis: Option<Analysis<'a>>,
+    executable: &'a Executable<InvokeContext<'b>>,
 }
 
-impl<'a> LazyAnalysis<'a> {
-    fn new(executable: Arc<Executable<InvokeContext<'a>>>) -> Self {
+impl<'a, 'b> LazyAnalysis<'a, 'b> {
+    fn new(executable: &'a Executable<InvokeContext<'b>>) -> Self {
         Self {
             analysis: None,
             executable,
@@ -399,6 +396,6 @@ impl<'a> LazyAnalysis<'a> {
             return analysis;
         }
         self.analysis
-            .insert(Analysis::from_executable(Arc::clone(&self.executable)).unwrap())
+            .insert(Analysis::from_executable(self.executable).unwrap())
     }
 }

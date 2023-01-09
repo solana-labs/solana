@@ -16,7 +16,7 @@ use {
         syscalls::SyscallError,
     },
     log::error,
-    solana_bpf_tracer_plugin_interface::BpfTracerPluginManager,
+    solana_bpf_tracer_plugin_interface::{bpf_tracer_plugin_interface, BpfTracerPluginManager},
     solana_measure::measure::Measure,
     solana_program_runtime::{
         compute_budget::ComputeBudget,
@@ -34,9 +34,9 @@ use {
         elf::Executable,
         error::{EbpfError, UserDefinedError},
         memory_region::MemoryRegion,
-        static_analysis::{Analysis, TraceLogEntry},
+        static_analysis::TraceLogEntry,
         verifier::{RequisiteVerifier, VerifierError},
-        vm::{ContextObject, EbpfVm, ProgramResult, VerifiedExecutable},
+        vm::{ContextObject, EbpfVm, ProgramResult, TestContextObject, VerifiedExecutable},
     },
     solana_sdk::{
         bpf_loader, bpf_loader_deprecated,
@@ -158,14 +158,13 @@ fn create_executor_from_bytes(
     create_executor_metrics.load_elf_us = load_elf_time.as_us();
     let executable = executable?;
     let mut verify_code_time = Measure::start("verify_code_time");
-    let verified_executable =
-        VerifiedExecutable::<RequisiteVerifier, InvokeContext>::from_executable(Arc::new(
-            executable,
-        ))
-        .map_err(|err| {
-            ic_logger_msg!(log_collector, "{}", err);
-            InstructionError::InvalidAccountData
-        })?;
+    #[allow(unused_mut)]
+    let mut verified_executable =
+        VerifiedExecutable::<RequisiteVerifier, InvokeContext>::from_executable(executable)
+            .map_err(|err| {
+                ic_logger_msg!(log_collector, "{}", err);
+                InstructionError::InvalidAccountData
+            })?;
     verify_code_time.stop();
     create_executor_metrics.verify_code_us = verify_code_time.as_us();
     #[cfg(all(not(target_os = "windows"), target_arch = "x86_64"))]
@@ -1400,13 +1399,12 @@ fn trace_bpf(
     }
 
     for plugin in bpf_tracing_plugins.into_iter() {
-        let executable = Arc::clone(bpf_executor.verified_executable.get_executable());
         if let Err(err) = plugin.trace_bpf(
             program_id,
             block_hash,
             transaction_id,
             trace_log,
-            Box::new(move || Analysis::from_executable(Arc::clone(&executable)).unwrap()),
+            Arc::clone(&bpf_executor) as Arc<dyn bpf_tracer_plugin_interface::ExecutableGetter>,
         ) {
             error!(
                 "Error running BPF tracing plugin: {} for program ID: {}. Error: {:?}",
@@ -1478,9 +1476,7 @@ impl Executor for BpfExecutor {
             execute_time = Measure::start("execute");
             stable_log::program_invoke(&log_collector, &program_id, stack_height);
             let (compute_units_consumed, result) = vm.execute_program(!self.use_jit);
-
             drop(vm);
-
             ic_logger_msg!(
                 log_collector,
                 "Program {} consumed {} of {} compute units",
@@ -1589,6 +1585,14 @@ impl Executor for BpfExecutor {
     }
 }
 
+impl bpf_tracer_plugin_interface::ExecutableGetter for BpfExecutor {
+    fn get_executable(&self) -> &Executable<TestContextObject> {
+        // SAFETY: Until we are not going to execute this executable,
+        //         it is safe to get rid of `InvokeContext`
+        unsafe { std::mem::transmute(self.verified_executable.get_executable()) }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use {
@@ -1690,10 +1694,8 @@ mod tests {
         )
         .unwrap();
         let verified_executable =
-            VerifiedExecutable::<TautologyVerifier, TestContextObject>::from_executable(Arc::new(
-                executable,
-            ))
-            .unwrap();
+            VerifiedExecutable::<TautologyVerifier, TestContextObject>::from_executable(executable)
+                .unwrap();
         let input_region = MemoryRegion::new_writable(&mut input_mem, MM_INPUT_START);
         let mut context_object = TestContextObject { remaining: 10 };
         let mut vm = EbpfVm::new(

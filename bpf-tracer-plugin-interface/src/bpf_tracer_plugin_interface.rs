@@ -1,8 +1,9 @@
 use {
-    solana_rbpf::static_analysis::Analysis,
+    solana_rbpf::{elf::Executable, vm::TestContextObject},
     solana_sdk::{hash::Hash, pubkey::Pubkey},
     std::{
         any::Any,
+        sync::Arc,
         {error, io},
     },
     thiserror::Error,
@@ -24,6 +25,10 @@ pub enum BpfTracerPluginError {
     /// Any custom error defined by the plugin.
     #[error("Plugin-defined custom error. Error message: ({0})")]
     Custom(Box<dyn error::Error + Send + Sync>),
+}
+
+pub trait ExecutableGetter: Send + Sync {
+    fn get_executable(&self) -> &Executable<TestContextObject>;
 }
 
 pub type Result<T> = std::result::Result<T, BpfTracerPluginError>;
@@ -63,6 +68,6 @@ pub trait BpfTracerPlugin: Any + Send + Sync + std::fmt::Debug {
         block_hash: &Hash,
         transaction_id: &[u8],
         trace: &[[u64; 12]],
-        make_analysis: Box<dyn Fn() -> Analysis + Send + Sync>,
+        executable_getter: Arc<dyn ExecutableGetter>,
     ) -> Result<()>;
 }
