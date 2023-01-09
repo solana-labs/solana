@@ -29,5 +29,9 @@ cargo_audit_ignores=(
   # https://github.com/chronotope/chrono/issues/499
   --ignore RUSTSEC-2020-0159
 
+  # tokio: vulnerability affecting named pipes on Windows
+  #
+  # Not worth upgrading tokio version on a stable branch
+  --ignore RUSTSEC-2023-0001
 )
 scripts/cargo-for-all-lock-files.sh stable audit "${cargo_audit_ignores[@]}"
