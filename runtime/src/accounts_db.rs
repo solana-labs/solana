@@ -3669,7 +3669,7 @@ impl AccountsDb {
 
     /// get all accounts in all the storages passed in
     /// for duplicate pubkeys, the account with the highest write_value is returned
-    pub(crate) fn get_unique_accounts_from_storages<'a>(
+    pub(crate) fn get_unique_accounts_from_storage<'a>(
         &self,
         store: &'a Arc<AccountStorageEntry>,
     ) -> GetUniqueAccountsResult<'a> {
@@ -3715,7 +3715,7 @@ impl AccountsDb {
                 original_bytes,
             },
             storage_read_elapsed,
-        ) = measure!(self.get_unique_accounts_from_storages(store));
+        ) = measure!(self.get_unique_accounts_from_storage(store));
         let slot = store.slot();
         stats
             .storage_read_elapsed
@@ -17380,7 +17380,7 @@ pub mod tests {
                 let GetUniqueAccountsResult {
                     stored_accounts: mut after_stored_accounts,
                     ..
-                } = db.get_unique_accounts_from_storages(&ancient);
+                } = db.get_unique_accounts_from_storage(&ancient);
                 assert_eq!(
                     after_stored_accounts.len(),
                     num_normal_slots + 1 - dead_accounts,
@@ -17460,7 +17460,7 @@ pub mod tests {
         }
 
         let storage = db.get_storage_for_slot(starting_slot).unwrap();
-        let created_accounts = db.get_unique_accounts_from_storages(&storage);
+        let created_accounts = db.get_unique_accounts_from_storage(&storage);
         assert_eq!(created_accounts.stored_accounts.len(), 1);
 
         if alive {
@@ -17494,7 +17494,7 @@ pub mod tests {
     ) -> (AccountsDb, Slot) {
         let (db, slot1) = create_db_with_storages_and_index(alive, num_normal_slots + 1);
         let storage = db.get_storage_for_slot(slot1).unwrap();
-        let created_accounts = db.get_unique_accounts_from_storages(&storage);
+        let created_accounts = db.get_unique_accounts_from_storage(&storage);
 
         db.combine_ancient_slots(vec![slot1], CAN_RANDOMLY_SHRINK_FALSE);
         assert_eq!(1, db.get_storages_for_slot(slot1).unwrap().len());
@@ -17504,7 +17504,7 @@ pub mod tests {
         let GetUniqueAccountsResult {
             stored_accounts: after_stored_accounts,
             original_bytes: after_original_bytes,
-        } = db.get_unique_accounts_from_storages(&after_store);
+        } = db.get_unique_accounts_from_storage(&after_store);
         assert_ne!(created_accounts.original_bytes, after_original_bytes);
         assert_eq!(created_accounts.stored_accounts.len(), 1);
         assert_eq!(after_stored_accounts.len(), usize::from(alive));
