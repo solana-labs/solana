@@ -1159,7 +1159,7 @@ pub mod test {
         // So when the test call finishes after sending multiple writes on quic,
         // a Stopped from peer should be fine. We expect a result of Ok or
         // Stopped from peer.
-        if !result.is_ok() && !matches!(result, quinn::WriteError::Stopped(_)) {
+        if result.is_err() && !matches!(result, Err(quinn::WriteError::Stopped(_))) {
             panic!("Failed to finish writes on quic connection");
         }
 
