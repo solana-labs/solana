@@ -4179,7 +4179,7 @@ fn main() {
                     Ok(metas) => {
                         let output_format =
                             OutputFormat::from_matches(arg_matches, "output_format", false);
-                        let all = matches.is_present("all");
+                        let all = arg_matches.is_present("all");
 
                         let slots: Vec<_> = metas.map(|(slot, _)| slot).collect();
 
@@ -4192,9 +4192,9 @@ fn main() {
                                     total: slots.len(),
                                     first: Some(*slots.first().unwrap()),
                                     last: Some(*slots.last().unwrap()),
-                                    ..Default::default()
+                                    ..SlotInfo::default()
                                 },
-                                ..Default::default()
+                                ..SlotBounds::default()
                             };
                             if all {
                                 bounds.all_slots = Some(&slots);
