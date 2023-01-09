@@ -419,7 +419,6 @@ pub struct AccountsDbConfig {
 
 pub struct FoundStoredAccount<'a> {
     pub account: StoredAccountMeta<'a>,
-    pub store_id: AppendVecId,
 }
 
 impl<'a> FoundStoredAccount<'a> {
@@ -3609,6 +3608,7 @@ impl AccountsDb {
         &'a self,
         accounts: &'a [FoundStoredAccount<'a>],
         stats: &ShrinkStats,
+        slot_to_shrink: Slot,
     ) -> LoadAccountsIndexForShrink<'a> {
         let count = accounts.len();
         let mut alive_accounts = Vec::with_capacity(count);
@@ -3626,11 +3626,12 @@ impl AccountsDb {
                 let mut result = AccountsIndexScanResult::None;
                 if let Some((slot_list, _ref_count)) = slots_refs {
                     let stored_account = &accounts[index];
-                    let is_alive = slot_list.iter().any(|(_slot, acct_info)| {
-                        acct_info.matches_storage_location(
-                            stored_account.store_id,
-                            stored_account.account.offset,
-                        )
+                    let is_alive = slot_list.iter().any(|(slot, acct_info)| {
+                        *slot == slot_to_shrink
+                            && acct_info.matches_storage_location(
+                                acct_info.store_id(),
+                                stored_account.account.offset,
+                            )
                     });
                     if !is_alive {
                         // This pubkey was found in the storage, but no longer exists in the index.
@@ -3672,9 +3673,8 @@ impl AccountsDb {
     ) -> GetUniqueAccountsResult<'a> {
         let mut stored_accounts: HashMap<Pubkey, FoundStoredAccount> = HashMap::new();
         let original_bytes = store.total_bytes();
-        let store_id = store.append_vec_id();
         store.accounts.account_iter().for_each(|account| {
-            let new_entry = FoundStoredAccount { account, store_id };
+            let new_entry = FoundStoredAccount { account };
             match stored_accounts.entry(*new_entry.account.pubkey()) {
                 Entry::Occupied(mut occupied_entry) => {
                     assert!(
@@ -3714,6 +3714,7 @@ impl AccountsDb {
             },
             storage_read_elapsed,
         ) = measure!(self.get_unique_accounts_from_storages(store));
+        let slot = store.slot();
         stats
             .storage_read_elapsed
             .fetch_add(storage_read_elapsed.as_us(), Ordering::Relaxed);
@@ -3738,7 +3739,7 @@ impl AccountsDb {
                         mut alive_accounts,
                         mut unrefed_pubkeys,
                         all_are_zero_lamports,
-                    } = self.load_accounts_index_for_shrink(stored_accounts, stats);
+                    } = self.load_accounts_index_for_shrink(stored_accounts, stats, slot);
 
                     // collect
                     alive_accounts_collect
@@ -9461,7 +9462,6 @@ pub mod tests {
 
         // setup 'to_store'
         let pubkey = Pubkey::new(&[1; 32]);
-        let store_id = AppendVecId::default();
         let account_size = 3;
 
         let account = AccountSharedData::default();
@@ -9490,7 +9490,7 @@ pub mod tests {
             stored_size: account_size,
             hash: &hash,
         };
-        let found = FoundStoredAccount { account, store_id };
+        let found = FoundStoredAccount { account };
         let map = vec![&found];
         let alive_total_bytes = found.account.stored_size;
         let to_store = AccountsToStore::new(available_bytes, &map, alive_total_bytes, slot0);
@@ -9610,22 +9610,17 @@ pub mod tests {
             stored_size,
             hash: &hash,
         };
-        let store_id = 0;
         let found_account = FoundStoredAccount {
             account: stored_account,
-            store_id,
         };
         let found_account2 = FoundStoredAccount {
             account: stored_account2,
-            store_id,
         };
         let found_account3 = FoundStoredAccount {
             account: stored_account3,
-            store_id,
         };
         let found_account4 = FoundStoredAccount {
             account: stored_account4,
-            store_id,
         };
         let mut existing_ancient_pubkeys = HashSet::default();
         let accounts = [&found_account];
