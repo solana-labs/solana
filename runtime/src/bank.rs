@@ -1362,15 +1362,36 @@ impl Scheduler<ExecuteTimings> {
                                 info!("execute_substage: slot: {} transaction_index: {} timings: {:?}", ee.slot, ee.transaction_index, timings);
                             }
 
-                            if let Some(Err(e)) = ee.execution_result.take() {
-                                trace!(
-                                    "scheduler: Unexpected validator error: {:?}, transaction: {:?}",
-                                    e, ee.task.tx.0
-                                );
-                                collected_results_in_collector_thread
-                                    .lock()
-                                    .unwrap()
-                                    .push(Err(e));
+                            if let Some(result) = ee.execution_result.take() {
+                                match result {
+                                    Ok(_) => {
+                                        inc_new_counter_info!(
+                                            "bank-process_transactions-txs",
+                                            1 as usize
+                                        );
+                                        inc_new_counter_info!("bank-process_transactions-sigs", ee.task.tx.0.signatures().len() as usize);
+                                    },
+                                    Err(e) => {
+                                        match ee.task.mode {
+                                            solana_scheduler::Mode::Replaying => {
+                                                trace!(
+                                                    "scheduler: Unexpected validator error: {:?}, transaction: {:?}",
+                                                    e, ee.task.tx.0
+                                                );
+                                            }
+                                            solana_scheduler::Mode::Banking => {
+                                                error!(
+                                                    "scheduler: Unexpected validator error: {:?}, transaction: {:?}",
+                                                    e, ee.task.tx.0
+                                                );
+                                            }
+                                        };
+                                        collected_results_in_collector_thread
+                                            .lock()
+                                            .unwrap()
+                                            .push(Err(e));
+                                    }
+                                }
                             }
                             drop(ee);
                         },
