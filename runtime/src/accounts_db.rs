@@ -7351,15 +7351,15 @@ impl AccountsDb {
     /// normal code path returns the common cache path
     /// when called after a failure has been detected, redirect the cache storage to a separate folder for debugging later
     fn _get_cache_hash_data(
-        accounts_cache_hash_path: PathBuf,
+        accounts_hash_cache_path: PathBuf,
         config: &CalcAccountsHashConfig<'_>,
         slot: Slot,
     ) -> CacheHashData {
         if !config.store_detailed_debug_info_on_failure {
-            CacheHashData::new(accounts_cache_hash_path)
+            CacheHashData::new(accounts_hash_cache_path)
         } else {
             // this path executes when we are failing with a hash mismatch
-            let failed_dir = accounts_cache_hash_path
+            let failed_dir = accounts_hash_cache_path
                 .join("failed_calculate_accounts_hash_cache")
                 .join(slot.to_string());
             let _ = std::fs::remove_dir_all(&failed_dir);
