@@ -333,7 +333,7 @@ struct ShrinkCollect<'a> {
     original_bytes: u64,
     aligned_total_bytes: u64,
     unrefed_pubkeys: Vec<&'a Pubkey>,
-    alive_accounts: Vec<&'a FoundStoredAccount<'a>>,
+    alive_accounts: Vec<&'a StoredAccountMeta<'a>>,
     /// total size in storage of all alive accounts
     alive_total_bytes: usize,
     total_starting_accounts: usize,
@@ -366,7 +366,7 @@ struct LoadAccountsIndexForShrink<'a> {
     /// total stored bytes for all alive accounts
     alive_total_bytes: usize,
     /// the specific alive accounts
-    alive_accounts: Vec<&'a FoundStoredAccount<'a>>,
+    alive_accounts: Vec<&'a StoredAccountMeta<'a>>,
     /// pubkeys that were unref'd in the accounts index because they were dead
     unrefed_pubkeys: Vec<&'a Pubkey>,
     /// true if all alive accounts are zero lamport accounts
@@ -374,7 +374,7 @@ struct LoadAccountsIndexForShrink<'a> {
 }
 
 pub struct GetUniqueAccountsResult<'a> {
-    pub stored_accounts: Vec<FoundStoredAccount<'a>>,
+    pub stored_accounts: Vec<StoredAccountMeta<'a>>,
     pub original_bytes: u64,
 }
 
@@ -417,54 +417,6 @@ pub struct AccountsDbConfig {
     pub ancient_append_vec_offset: Option<i64>,
     pub skip_initial_hash_calc: bool,
     pub exhaustively_verify_refcounts: bool,
-}
-
-pub struct FoundStoredAccount<'a> {
-    pub account: StoredAccountMeta<'a>,
-}
-
-impl<'a> FoundStoredAccount<'a> {
-    pub fn pubkey(&self) -> &Pubkey {
-        self.account.pubkey()
-    }
-}
-
-/// this tuple assumes storing from a slot to the same slot
-/// accounts are `StoredAccountMeta` inside `FoundStoredAccount`
-impl<'a> StorableAccounts<'a, StoredAccountMeta<'a>>
-    for (Slot, &'a [&FoundStoredAccount<'a>], IncludeSlotInHash)
-{
-    fn pubkey(&self, index: usize) -> &Pubkey {
-        self.1[index].pubkey()
-    }
-    fn account(&self, index: usize) -> &StoredAccountMeta<'a> {
-        &self.1[index].account
-    }
-    fn slot(&self, _index: usize) -> Slot {
-        // same other slot for all accounts
-        self.0
-    }
-    fn target_slot(&self) -> Slot {
-        self.0
-    }
-    fn len(&self) -> usize {
-        self.1.len()
-    }
-    fn contains_multiple_slots(&self) -> bool {
-        false
-    }
-    fn include_slot_in_hash(&self) -> IncludeSlotInHash {
-        self.2
-    }
-    fn has_hash_and_write_version(&self) -> bool {
-        true
-    }
-    fn hash(&self, index: usize) -> &Hash {
-        self.1[index].account.hash
-    }
-    fn write_version(&self, index: usize) -> u64 {
-        self.1[index].account.meta.write_version_obsolete
-    }
 }
 
 #[cfg(not(test))]
@@ -3608,7 +3560,7 @@ impl AccountsDb {
     /// return sum of account size for all alive accounts
     fn load_accounts_index_for_shrink<'a>(
         &'a self,
-        accounts: &'a [FoundStoredAccount<'a>],
+        accounts: &'a [StoredAccountMeta<'a>],
         stats: &ShrinkStats,
         slot_to_shrink: Slot,
     ) -> LoadAccountsIndexForShrink<'a> {
@@ -3641,9 +3593,9 @@ impl AccountsDb {
                         result = AccountsIndexScanResult::Unref;
                         dead += 1;
                     } else {
-                        all_are_zero_lamports &= stored_account.account.lamports() == 0;
+                        all_are_zero_lamports &= stored_account.lamports() == 0;
                         alive_accounts.push(stored_account);
-                        alive_total_bytes += stored_account.account.stored_size;
+                        alive_total_bytes += stored_account.stored_size;
                         alive += 1;
                     }
                 }
@@ -3670,20 +3622,19 @@ impl AccountsDb {
         &self,
         store: &'a Arc<AccountStorageEntry>,
     ) -> GetUniqueAccountsResult<'a> {
-        let mut stored_accounts: HashMap<Pubkey, FoundStoredAccount> = HashMap::new();
+        let mut stored_accounts: HashMap<Pubkey, StoredAccountMeta> = HashMap::new();
         let original_bytes = store.total_bytes();
         store.accounts.account_iter().for_each(|account| {
-            let new_entry = FoundStoredAccount { account };
-            match stored_accounts.entry(*new_entry.account.pubkey()) {
+            match stored_accounts.entry(*account.pubkey()) {
                 Entry::Occupied(mut occupied_entry) => {
                     assert!(
-                        new_entry.account.meta.write_version_obsolete
-                            > occupied_entry.get().account.meta.write_version_obsolete
+                        account.meta.write_version_obsolete
+                            > occupied_entry.get().meta.write_version_obsolete
                     );
-                    occupied_entry.insert(new_entry);
+                    occupied_entry.insert(account);
                 }
                 Entry::Vacant(vacant_entry) => {
-                    vacant_entry.insert(new_entry);
+                    vacant_entry.insert(account);
                 }
             }
         });
@@ -3703,7 +3654,7 @@ impl AccountsDb {
     fn shrink_collect<'a: 'b, 'b>(
         &'a self,
         store: &'a Arc<AccountStorageEntry>,
-        stored_accounts: &'b mut Vec<FoundStoredAccount<'b>>,
+        stored_accounts: &'b mut Vec<StoredAccountMeta<'b>>,
         stats: &ShrinkStats,
     ) -> ShrinkCollect<'b> {
         let (
@@ -4225,7 +4176,7 @@ impl AccountsDb {
     /// returns the pubkeys that are in 'accounts' that are already in 'existing_ancient_pubkeys'
     /// Also updated 'existing_ancient_pubkeys' to include all pubkeys in 'accounts' since they will soon be written into the ancient slot.
     fn get_keys_to_unref_ancient<'a>(
-        accounts: &'a [&FoundStoredAccount<'_>],
+        accounts: &'a [&StoredAccountMeta<'_>],
         existing_ancient_pubkeys: &mut HashSet<Pubkey>,
     ) -> HashSet<&'a Pubkey> {
         let mut unref = HashSet::<&Pubkey>::default();
@@ -4247,7 +4198,7 @@ impl AccountsDb {
     /// As a side effect, on exit, 'existing_ancient_pubkeys' will now contain all pubkeys in 'accounts'.
     fn unref_accounts_already_in_storage(
         &self,
-        accounts: &[&FoundStoredAccount<'_>],
+        accounts: &[&StoredAccountMeta<'_>],
         existing_ancient_pubkeys: &mut HashSet<Pubkey>,
     ) {
         let unref = Self::get_keys_to_unref_ancient(accounts, existing_ancient_pubkeys);
@@ -9506,9 +9457,8 @@ pub mod tests {
             stored_size: account_size,
             hash: &hash,
         };
-        let found = FoundStoredAccount { account };
-        let map = vec![&found];
-        let alive_total_bytes = found.account.stored_size;
+        let map = vec![&account];
+        let alive_total_bytes = account.stored_size;
         let to_store = AccountsToStore::new(available_bytes, &map, alive_total_bytes, slot0);
         // Done: setup 'to_store'
 
@@ -9626,20 +9576,8 @@ pub mod tests {
             stored_size,
             hash: &hash,
         };
-        let found_account = FoundStoredAccount {
-            account: stored_account,
-        };
-        let found_account2 = FoundStoredAccount {
-            account: stored_account2,
-        };
-        let found_account3 = FoundStoredAccount {
-            account: stored_account3,
-        };
-        let found_account4 = FoundStoredAccount {
-            account: stored_account4,
-        };
         let mut existing_ancient_pubkeys = HashSet::default();
-        let accounts = [&found_account];
+        let accounts = [&stored_account];
         // pubkey NOT in existing_ancient_pubkeys, so do NOT unref, but add to existing_ancient_pubkeys
         let unrefs =
             AccountsDb::get_keys_to_unref_ancient(&accounts, &mut existing_ancient_pubkeys);
@@ -9657,7 +9595,7 @@ pub mod tests {
         );
         assert_eq!(unrefs.iter().cloned().collect::<Vec<_>>(), vec![&pubkey]);
         // pubkey2 NOT in existing_ancient_pubkeys, so do NOT unref, but add to existing_ancient_pubkeys
-        let accounts = [&found_account2];
+        let accounts = [&stored_account2];
         let unrefs =
             AccountsDb::get_keys_to_unref_ancient(&accounts, &mut existing_ancient_pubkeys);
         assert!(unrefs.is_empty());
@@ -9680,7 +9618,7 @@ pub mod tests {
         );
         assert_eq!(unrefs.iter().cloned().collect::<Vec<_>>(), vec![&pubkey2]);
         // pubkey3/4 NOT in existing_ancient_pubkeys, so do NOT unref, but add to existing_ancient_pubkeys
-        let accounts = [&found_account3, &found_account4];
+        let accounts = [&stored_account3, &stored_account4];
         let unrefs =
             AccountsDb::get_keys_to_unref_ancient(&accounts, &mut existing_ancient_pubkeys);
         assert!(unrefs.is_empty());
@@ -17415,7 +17353,7 @@ pub mod tests {
                         .enumerate()
                         .find_map(|(i, stored_ancient)| {
                             (stored_ancient.pubkey() == original.pubkey()).then_some({
-                                assert!(accounts_equal(&stored_ancient.account, &original));
+                                assert!(accounts_equal(stored_ancient, &original));
                                 i
                             })
                         })
