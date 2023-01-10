@@ -3818,6 +3818,20 @@ impl AccountsDb {
     }
 
     fn do_shrink_slot_store(&self, slot: Slot, store: &Arc<AccountStorageEntry>) {
+        if self.accounts_cache.contains(slot) {
+            // It is not correct to shrink a slot while it it is in the write cache until flush is complete and the slot is removed from the write cache.
+            // There can exist a window after a slot is made a root and before the write cache flushing for that slot begins and then completes.
+            // There can also exist a window after a slot is being flushed from the write cache until the index is updated and the slot is removed from the write cache.
+            // During the second window, once an append vec has been created for the slot, it could be possible to try to shrink that slot.
+            // Shrink no-ops before this function if there is no store for the slot (notice this function requires 'store' to be passed).
+            // So, if we enter this function but the slot is still in the write cache, reasonable behavior is to skip shrinking this slot.
+            // Flush will ONLY write alive accounts to the append vec, which is what shrink does anyway.
+            // Flush then adds the slot to 'uncleaned_roots', which causes clean to take a look at the slot.
+            // Clean causes us to mark accounts as dead, which causes shrink to later take a look at the slot.
+            // This could be an assert, but it could lead to intermittency in tests.
+            // It is 'correct' to ignore calls to shrink when a slot is still in the write cache.
+            return;
+        }
         let mut stored_accounts = Vec::default();
         debug!("do_shrink_slot_store: slot: {}", slot);
         let shrink_collect = self.shrink_collect(store, &mut stored_accounts, &self.shrink_stats);
