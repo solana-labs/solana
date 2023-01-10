@@ -11,17 +11,17 @@ extern crate solana_frozen_abi_macro;
 
 // Older version structure used earlier 1.3.x releases
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, AbiExample)]
-pub struct LegacyVersion {
+pub struct LegacyVersion1 {
     major: u16,
     minor: u16,
     patch: u16,
     commit: Option<u32>, // first 4 bytes of the sha1 commit hash
 }
 
-impl Sanitize for LegacyVersion {}
+impl Sanitize for LegacyVersion1 {}
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, Eq, AbiExample)]
-pub struct Version {
+pub struct LegacyVersion2 {
     pub major: u16,
     pub minor: u16,
     pub patch: u16,
@@ -29,14 +29,16 @@ pub struct Version {
     pub feature_set: u32,    // first 4 bytes of the FeatureSet identifier
 }
 
+pub type Version = LegacyVersion2;
+
 impl Version {
     pub fn as_semver_version(&self) -> semver::Version {
         semver::Version::new(self.major as u64, self.minor as u64, self.patch as u64)
     }
 }
 
-impl From<LegacyVersion> for Version {
-    fn from(legacy_version: LegacyVersion) -> Self {
+impl From<LegacyVersion1> for Version {
+    fn from(legacy_version: LegacyVersion1) -> Self {
         Self {
             major: legacy_version.major,
             minor: legacy_version.minor,
