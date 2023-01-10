@@ -20,7 +20,7 @@ pub struct SlotBounds<'a> {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub all_slots: Option<&'a Vec<u64>>,
     pub slots: SlotInfo,
-    pub roots: Option<SlotInfo>,
+    pub roots: SlotInfo,
 }
 
 impl VerboseDisplay for SlotBounds<'_> {}
@@ -36,30 +36,31 @@ impl Display for SlotBounds<'_> {
                 writeln!(
                     f,
                     "Ledger has data for {:?} slots {:?} to {:?}",
-                    &self.slots.total, &self.slots.first, &self.slots.last
+                    self.slots.total, first, last
                 )?;
 
                 if let Some(all_slots) = self.all_slots {
                     writeln!(f, "Non-empty slots: {:?}", all_slots)?;
                 }
             } else {
-                writeln!(f, "Ledger has data for slot {:?}", &self.slots.first)?;
+                writeln!(f, "Ledger has data for slot {:?}", first)?;
             }
 
-            if let Some(rooted) = &self.roots {
+            if self.roots.total > 0 {
+                let first_rooted = self.roots.first.unwrap_or_default();
+                let last_rooted = self.roots.last.unwrap_or_default();
+                let num_after_last_root = self.roots.num_after_last_root.unwrap_or_default();
                 writeln!(
                     f,
                     "  with {:?} rooted slots from {:?} to {:?}",
-                    rooted.total, rooted.first, rooted.last
+                    self.roots.total, first_rooted, last_rooted
                 )?;
 
-                if let Some(num_after_last_root) = rooted.num_after_last_root {
-                    writeln!(
-                        f,
-                        "  and {:?} slots past the last root",
-                        num_after_last_root
-                    )?;
-                }
+                writeln!(
+                    f,
+                    "  and {:?} slots past the last root",
+                    num_after_last_root
+                )?;
             } else {
                 writeln!(f, "  with no rooted slots")?;
             }

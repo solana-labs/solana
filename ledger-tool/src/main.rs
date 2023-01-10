@@ -4219,12 +4219,12 @@ fn main() {
                                     .take_while(|slot| *slot > &last_rooted)
                                     .count();
 
-                                bounds.roots = Some(SlotInfo {
+                                bounds.roots = SlotInfo {
                                     total: total_rooted,
                                     first: Some(first_rooted),
                                     last: Some(last_rooted),
                                     num_after_last_root: Some(count_past_root),
-                                });
+                                };
                             }
                             bounds
                         };
