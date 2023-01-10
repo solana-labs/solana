@@ -3820,7 +3820,7 @@ impl AccountsDb {
         self.drop_or_recycle_stores(dead_storages, stats);
     }
 
-    fn do_shrink_slot_store(&self, slot: Slot, store: &Arc<AccountStorageEntry>) -> usize {
+    fn do_shrink_slot_store(&self, slot: Slot, store: &Arc<AccountStorageEntry>) {
         let mut stored_accounts = Vec::default();
         debug!("do_shrink_slot_store: slot: {}", slot);
         let shrink_collect = self.shrink_collect(store, &mut stored_accounts, &self.shrink_stats);
@@ -3838,7 +3838,7 @@ impl AccountsDb {
                     locked_entry.addref();
                 }
             }
-            return 0;
+            return;
         }
 
         let total_accounts_after_shrink = shrink_collect.alive_accounts.len();
@@ -3903,8 +3903,6 @@ impl AccountsDb {
             remove_old_stores_shrink_us,
         );
         self.shrink_stats.report();
-
-        total_accounts_after_shrink
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -4031,16 +4029,14 @@ impl AccountsDb {
 
     // Reads all accounts in given slot's AppendVecs and filter only to alive,
     // then create a minimum AppendVec filled with the alive.
-    fn shrink_slot_forced(&self, slot: Slot) -> usize {
+    fn shrink_slot_forced(&self, slot: Slot) {
         debug!("shrink_slot_forced: slot: {}", slot);
 
         if let Some(store) = self.storage.get_slot_storage_entry(slot) {
             if !Self::is_shrinking_productive(slot, &store) {
-                return 0;
+                return;
             }
             self.do_shrink_slot_store(slot, &store)
-        } else {
-            0
         }
     }
 
