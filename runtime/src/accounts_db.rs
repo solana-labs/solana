@@ -3962,8 +3962,7 @@ impl AccountsDb {
 
         if let Some(shrink_in_progress) = shrink_in_progress {
             // shrink is in progress, so 1 new append vec to keep, 1 old one to throw away
-            let store = shrink_in_progress.old_storage();
-            not_retaining_store(store);
+            not_retaining_store(shrink_in_progress.old_storage());
             // dropping 'shrink_in_progress' removes the old append vec that was being shrunk from db's storage
         } else if let Some(slot_stores) = self.storage.get_slot_stores(slot) {
             // no shrink in progress, so all append vecs in this slot are dead
@@ -4029,7 +4028,10 @@ impl AccountsDb {
     fn shrink_slot_forced(&self, slot: Slot) {
         debug!("shrink_slot_forced: slot: {}", slot);
 
-        if let Some(store) = self.storage.get_slot_storage_entry(slot) {
+        if let Some(store) = self
+            .storage
+            .get_slot_storage_entry_shrinking_in_progress_ok(slot)
+        {
             if !Self::is_shrinking_productive(slot, &store) {
                 return;
             }
@@ -8392,7 +8394,10 @@ impl AccountsDb {
         self.accounts_cache.add_root(slot);
         cache_time.stop();
         let mut store_time = Measure::start("store_add_root");
-        if let Some(slot_stores) = self.storage.get_slot_stores(slot) {
+        // We would not expect this slot to be shrinking right now.
+        // But, even if it was, we would just mark a store id as dirty unnecessarily and that is ok.
+        // So, allow shrinking to be in progress.
+        if let Some(slot_stores) = self.storage.get_slot_stores_shrinking_in_progress_ok(slot) {
             for (store_id, store) in slot_stores.read().unwrap().iter() {
                 self.dirty_stores.insert((slot, *store_id), store.clone());
             }
