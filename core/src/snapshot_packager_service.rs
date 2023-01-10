@@ -328,7 +328,7 @@ mod tests {
             block_height: slot,
             slot_deltas: vec![],
             snapshot_links: link_snapshots_dir,
-            snapshot_storages: vec![storage_entries],
+            snapshot_storages: storage_entries,
             snapshot_version: SnapshotVersion::default(),
             snapshot_type: SnapshotType::FullSnapshot,
         };

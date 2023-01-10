@@ -3,7 +3,7 @@ use {
         account_storage::AccountStorageMap,
         accounts_db::{
             AccountShrinkThreshold, AccountsDbConfig, AtomicAppendVecId,
-            CalcAccountsHashDataSource, SnapshotStorage, SnapshotStorages,
+            CalcAccountsHashDataSource, SnapshotStorageOne, SnapshotStorages, SnapshotStoragesOne,
         },
         accounts_index::AccountSecondaryIndexes,
         accounts_update_notifier_interface::AccountsUpdateNotifier,
@@ -446,7 +446,7 @@ pub fn archive_snapshot_package(
     .map_err(|e| SnapshotError::IoWithSource(e, "create staging symlinks"))?;
 
     // Add the AppendVecs into the compressible list
-    for storage in snapshot_package.snapshot_storages.iter().flatten() {
+    for storage in snapshot_package.snapshot_storages.iter() {
         storage.flush()?;
         let storage_path = storage.get_path();
         let output_path = staging_accounts_dir.join(crate::append_vec::AppendVec::file_name(
@@ -847,7 +847,7 @@ where
 pub fn add_bank_snapshot(
     bank_snapshots_dir: impl AsRef<Path>,
     bank: &Bank,
-    snapshot_storages: &[SnapshotStorage],
+    snapshot_storages: &[SnapshotStorageOne],
     snapshot_version: SnapshotVersion,
 ) -> Result<BankSnapshotInfo> {
     let mut add_snapshot_time = Measure::start("add-snapshot-ms");
@@ -871,7 +871,8 @@ pub fn add_bank_snapshot(
         let serde_style = match snapshot_version {
             SnapshotVersion::V1_2_0 => SerdeStyle::Newer,
         };
-        bank_to_stream(serde_style, stream.by_ref(), bank, snapshot_storages)?;
+        let serialize = get_storages_to_serialize(snapshot_storages);
+        bank_to_stream(serde_style, stream.by_ref(), bank, &serialize)?;
         Ok(())
     };
     let consumed_size =
@@ -901,6 +902,17 @@ pub fn add_bank_snapshot(
         snapshot_path: bank_snapshot_path,
         snapshot_type: BankSnapshotType::Pre,
     })
+}
+
+/// serializing needs Vec<Vec<...>>, but data structure at runtime is Vec<...>
+/// translates to what we need
+pub(crate) fn get_storages_to_serialize(
+    snapshot_storages: &[SnapshotStorageOne],
+) -> SnapshotStorages {
+    snapshot_storages
+        .iter()
+        .map(|storage| vec![Arc::clone(storage)])
+        .collect::<Vec<_>>()
 }
 
 fn serialize_status_cache(
@@ -2165,14 +2177,12 @@ pub fn purge_old_bank_snapshots(bank_snapshots_dir: impl AsRef<Path>) {
 }
 
 /// Get the snapshot storages for this bank
-pub fn get_snapshot_storages(bank: &Bank) -> SnapshotStorages {
+pub fn get_snapshot_storages(bank: &Bank) -> SnapshotStoragesOne {
     let mut measure_snapshot_storages = Measure::start("snapshot-storages");
     let snapshot_storages = bank.get_snapshot_storages(None);
     measure_snapshot_storages.stop();
-    let snapshot_storages_count = snapshot_storages.iter().map(Vec::len).sum::<usize>();
     datapoint_info!(
         "get_snapshot_storages",
-        ("snapshot-storages-count", snapshot_storages_count, i64),
         (
             "snapshot-storages-time-ms",
             measure_snapshot_storages.as_ms(),
@@ -2283,7 +2293,7 @@ pub fn package_and_archive_full_snapshot(
     bank_snapshots_dir: impl AsRef<Path>,
     full_snapshot_archives_dir: impl AsRef<Path>,
     incremental_snapshot_archives_dir: impl AsRef<Path>,
-    snapshot_storages: SnapshotStorages,
+    snapshot_storages: SnapshotStoragesOne,
     archive_format: ArchiveFormat,
     snapshot_version: SnapshotVersion,
     maximum_full_snapshot_archives_to_retain: usize,
@@ -2335,7 +2345,7 @@ pub fn package_and_archive_incremental_snapshot(
     bank_snapshots_dir: impl AsRef<Path>,
     full_snapshot_archives_dir: impl AsRef<Path>,
     incremental_snapshot_archives_dir: impl AsRef<Path>,
-    snapshot_storages: SnapshotStorages,
+    snapshot_storages: SnapshotStoragesOne,
     archive_format: ArchiveFormat,
     snapshot_version: SnapshotVersion,
     maximum_full_snapshot_archives_to_retain: usize,

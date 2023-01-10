@@ -1,5 +1,5 @@
 use {
-    crate::accounts_db::SnapshotStorage,
+    crate::accounts_db::SnapshotStorageOne,
     log::*,
     solana_measure::measure::Measure,
     solana_sdk::clock::Slot,
@@ -11,7 +11,7 @@ pub struct SortedStorages<'a> {
     /// range of slots where storages exist (likely sparse)
     range: Range<Slot>,
     /// the actual storages. index is (slot - range.start)
-    storages: Vec<Option<&'a SnapshotStorage>>,
+    storages: Vec<Option<&'a SnapshotStorageOne>>,
     slot_count: usize,
     storage_count: usize,
 }
@@ -35,7 +35,7 @@ impl<'a> SortedStorages<'a> {
         SortedStoragesIter::new(self, range)
     }
 
-    fn get(&self, slot: Slot) -> Option<&SnapshotStorage> {
+    fn get(&self, slot: Slot) -> Option<&SnapshotStorageOne> {
         if !self.range.contains(&slot) {
             None
         } else {
@@ -67,11 +67,8 @@ impl<'a> SortedStorages<'a> {
     // assumptions:
     // 1. each SnapshotStorage.!is_empty()
     // 2. SnapshotStorage.first().unwrap().get_slot() is unique from all other SnapshotStorage items.
-    pub fn new(source: &'a [SnapshotStorage]) -> Self {
-        let slots = source.iter().map(|storages| {
-            let first = storages.first();
-            assert!(first.is_some(), "SnapshotStorage.is_empty()");
-            let storage = first.unwrap();
+    pub fn new(source: &'a [SnapshotStorageOne]) -> Self {
+        let slots = source.iter().map(|storage| {
             storage.slot() // this must be unique. Will be enforced in new_with_slots
         });
         Self::new_with_slots(source.iter().zip(slots.into_iter()), None, None)
@@ -81,7 +78,7 @@ impl<'a> SortedStorages<'a> {
     /// 'source' contains a SnapshotStorage and its associated slot
     /// 'source' does not have to be sorted in any way, but is assumed to not have duplicate slot #s
     pub fn new_with_slots(
-        source: impl Iterator<Item = (&'a SnapshotStorage, Slot)> + Clone,
+        source: impl Iterator<Item = (&'a SnapshotStorageOne, Slot)> + Clone,
         // A slot used as a lower bound, but potentially smaller than the smallest slot in the given 'source' iterator
         min_slot: Option<Slot>,
         // highest valid slot. Only matters if source array does not contain a slot >= max_slot_inclusive.
@@ -108,8 +105,8 @@ impl<'a> SortedStorages<'a> {
         let mut time = Measure::start("get slot");
         let source_ = source.clone();
         let mut storage_count = 0;
-        source_.for_each(|(storages, slot)| {
-            storage_count += storages.len();
+        source_.for_each(|(_, slot)| {
+            storage_count += 1;
             slot_count += 1;
             adjust_min_max(slot);
         });
@@ -157,7 +154,7 @@ pub struct SortedStoragesIter<'a> {
 }
 
 impl<'a> Iterator for SortedStoragesIter<'a> {
-    type Item = (Slot, Option<&'a SnapshotStorage>);
+    type Item = (Slot, Option<&'a SnapshotStorageOne>);
 
     fn next(&mut self) -> Option<Self::Item> {
         let slot = self.next_slot;
@@ -206,9 +203,16 @@ impl<'a> SortedStoragesIter<'a> {
 
 #[cfg(test)]
 pub mod tests {
-    use super::*;
+    use {
+        super::*,
+        crate::{
+            accounts_db::{AccountStorageEntry, AppendVecId, SnapshotStorageOne},
+            append_vec::AppendVec,
+        },
+        std::sync::Arc,
+    };
     impl<'a> SortedStorages<'a> {
-        pub fn new_debug(source: &[(&'a SnapshotStorage, Slot)], min: Slot, len: usize) -> Self {
+        pub fn new_debug(source: &[(&'a SnapshotStorageOne, Slot)], min: Slot, len: usize) -> Self {
             let mut storages = vec![None; len];
             let range = Range {
                 start: min,
@@ -227,7 +231,7 @@ pub mod tests {
             }
         }
 
-        pub fn new_for_tests(storages: &[&'a SnapshotStorage], slots: &[Slot]) -> Self {
+        pub fn new_for_tests(storages: &[&'a SnapshotStorageOne], slots: &[Slot]) -> Self {
             assert_eq!(storages.len(), slots.len());
             SortedStorages::new_with_slots(
                 storages.iter().cloned().zip(slots.iter().cloned()),
@@ -240,7 +244,7 @@ pub mod tests {
     #[test]
     fn test_sorted_storages_range_iter() {
         let storages = SortedStorages::empty();
-        let check = |(slot, storages): (Slot, Option<&SnapshotStorage>)| {
+        let check = |(slot, storages): (Slot, Option<&SnapshotStorageOne>)| {
             assert!(storages.is_none());
             slot
         };
@@ -262,9 +266,9 @@ pub mod tests {
         );
 
         // only item is slot 3
-        let s1 = Vec::new();
+        let s1 = create_sample_store(1);
         let storages = SortedStorages::new_for_tests(&[&s1], &[3]);
-        let check = |(slot, storages): (Slot, Option<&SnapshotStorage>)| {
+        let check = |(slot, storages): (Slot, Option<&SnapshotStorageOne>)| {
             assert!(
                 (slot != 3) ^ storages.is_some(),
                 "slot: {slot}, storages: {storages:?}"
@@ -296,16 +300,17 @@ pub mod tests {
         );
 
         // items in slots 2 and 4
-        let s2 = Vec::with_capacity(2);
-        let s4 = Vec::with_capacity(4);
-        let storages = SortedStorages::new_for_tests(&[&s2, &s4], &[2, 4]);
-        let check = |(slot, storages): (Slot, Option<&SnapshotStorage>)| {
+        let store2 = create_sample_store(2);
+        let store4 = create_sample_store(4);
+
+        let storages = SortedStorages::new_for_tests(&[&store2, &store4], &[2, 4]);
+        let check = |(slot, storage): (Slot, Option<&SnapshotStorageOne>)| {
             assert!(
                 (slot != 2 && slot != 4)
-                    ^ storages
-                        .map(|storages| storages.capacity() == (slot as usize))
+                    ^ storage
+                        .map(|storage| storage.append_vec_id() == (slot as AppendVecId))
                         .unwrap_or(false),
-                "slot: {slot}, storages: {storages:?}"
+                "slot: {slot}, storage: {storage:?}"
             );
             slot
         };
@@ -335,15 +340,10 @@ pub mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "SnapshotStorage.is_empty()")]
-    fn test_sorted_storages_empty() {
-        SortedStorages::new(&[Vec::new()]);
-    }
-
-    #[test]
     #[should_panic(expected = "slots are not unique")]
     fn test_sorted_storages_duplicate_slots() {
-        SortedStorages::new_for_tests(&[&Vec::new(), &Vec::new()], &[0, 0]);
+        let store = create_sample_store(1);
+        SortedStorages::new_for_tests(&[&store, &store], &[0, 0]);
     }
 
     #[test]
@@ -357,10 +357,9 @@ pub mod tests {
 
     #[test]
     fn test_sorted_storages_1() {
-        let vec = vec![];
-        let vec_check = vec.clone();
+        let store = create_sample_store(1);
         let slot = 4;
-        let vecs = [&vec];
+        let vecs = [&store];
         let result = SortedStorages::new_for_tests(&vecs, &[slot]);
         assert_eq!(
             result.range,
@@ -371,15 +370,30 @@ pub mod tests {
         );
         assert_eq!(result.slot_count, 1);
         assert_eq!(result.storages.len(), 1);
-        assert_eq!(result.get(slot).unwrap().len(), vec_check.len());
+        assert_eq!(
+            result.get(slot).unwrap().append_vec_id(),
+            store.append_vec_id()
+        );
+    }
+
+    fn create_sample_store(id: AppendVecId) -> SnapshotStorageOne {
+        let tf = crate::append_vec::test_utils::get_append_vec_path("create_sample_store");
+        let (_temp_dirs, paths) = crate::accounts_db::get_temp_accounts_paths(1).unwrap();
+        let size: usize = 123;
+        let slot = 0;
+        let mut data = AccountStorageEntry::new(&paths[0], slot, id, size as u64);
+        let av = AppendVec::new(&tf.path, true, 1024 * 1024);
+        data.accounts = av;
+
+        Arc::new(data)
     }
 
     #[test]
     fn test_sorted_storages_2() {
-        let vec = vec![];
-        let vec_check = vec.clone();
+        let store = create_sample_store(1);
+        let store2 = create_sample_store(2);
         let slots = [4, 7];
-        let vecs = [&vec, &vec];
+        let vecs = [&store, &store2];
         let result = SortedStorages::new_for_tests(&vecs, &slots);
         assert_eq!(
             result.range,
@@ -395,7 +409,13 @@ pub mod tests {
         assert!(result.get(5).is_none());
         assert!(result.get(6).is_none());
         assert!(result.get(8).is_none());
-        assert_eq!(result.get(slots[0]).unwrap().len(), vec_check.len());
-        assert_eq!(result.get(slots[1]).unwrap().len(), vec_check.len());
+        assert_eq!(
+            result.get(slots[0]).unwrap().append_vec_id(),
+            store.append_vec_id()
+        );
+        assert_eq!(
+            result.get(slots[1]).unwrap().append_vec_id(),
+            store2.append_vec_id()
+        );
     }
 }

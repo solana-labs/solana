@@ -610,7 +610,10 @@ impl<'a> MultiThreadProgress<'a> {
 pub type AtomicAppendVecId = AtomicU32;
 pub type AppendVecId = u32;
 pub type SnapshotStorage = Vec<Arc<AccountStorageEntry>>;
+pub type SnapshotStorageOne = Arc<AccountStorageEntry>;
 pub type SnapshotStorages = Vec<SnapshotStorage>;
+/// exactly 1 append vec per slot
+pub type SnapshotStoragesOne = SnapshotStorage;
 
 // Each slot has a set of storage entries.
 pub(crate) type SlotStores = Arc<RwLock<HashMap<AppendVecId, Arc<AccountStorageEntry>>>>;
@@ -1515,9 +1518,9 @@ impl SplitAncientStorages {
     ) -> Vec<Slot> {
         let range = snapshot_storages.range();
         let mut ancient_slots = Vec::default();
-        for (slot, storages) in snapshot_storages.iter_range(&(range.start..one_epoch_old_slot)) {
-            if let Some(storages) = storages {
-                if storages.len() == 1 && is_ancient(&storages.first().unwrap().accounts) {
+        for (slot, storage) in snapshot_storages.iter_range(&(range.start..one_epoch_old_slot)) {
+            if let Some(storage) = storage {
+                if is_ancient(&storage.accounts) {
                     ancient_slots.push(slot);
                     continue; // was ancient, keep looking
                 }
@@ -6819,7 +6822,7 @@ impl AccountsDb {
     }
 
     /// iterate over a single storage, calling scanner on each item
-    fn scan_single_account_storage<S>(storage: &Arc<AccountStorageEntry>, scanner: &mut S)
+    fn scan_single_account_storage<S>(storage: &SnapshotStorageOne, scanner: &mut S)
     where
         S: AppendVecScan,
     {
@@ -6830,10 +6833,8 @@ impl AccountsDb {
         });
     }
 
-    fn scan_multiple_account_storages_one_slot<S>(
-        storages: &[Arc<AccountStorageEntry>],
-        scanner: &mut S,
-    ) where
+    fn scan_multiple_account_storages_one_slot<S>(storages: &[SnapshotStorageOne], scanner: &mut S)
+    where
         S: AppendVecScan,
     {
         let mut len = storages.len();
@@ -6897,23 +6898,15 @@ impl AccountsDb {
         }
     }
 
-    fn update_old_slot_stats(&self, stats: &HashStats, sub_storages: Option<&SnapshotStorage>) {
-        if let Some(sub_storages) = sub_storages {
+    fn update_old_slot_stats(&self, stats: &HashStats, storage: Option<&Arc<AccountStorageEntry>>) {
+        if let Some(storage) = storage {
             stats.roots_older_than_epoch.fetch_add(1, Ordering::Relaxed);
             let mut ancients = 0;
-            let num_accounts = sub_storages
-                .iter()
-                .map(|storage| {
-                    if is_ancient(&storage.accounts) {
-                        ancients += 1;
-                    }
-                    storage.count()
-                })
-                .sum();
-            let sizes = sub_storages
-                .iter()
-                .map(|storage| storage.total_bytes())
-                .sum::<u64>();
+            let num_accounts = storage.count();
+            if is_ancient(&storage.accounts) {
+                ancients += 1;
+            }
+            let sizes = storage.total_bytes();
             stats
                 .append_vec_sizes_older_than_epoch
                 .fetch_add(sizes as usize, Ordering::Relaxed);
@@ -6961,16 +6954,12 @@ impl AccountsDb {
     /// return true iff storages are valid for loading from cache
     fn hash_storage_info(
         hasher: &mut impl StdHasher,
-        storages: Option<&SnapshotStorage>,
+        storage: Option<&SnapshotStorageOne>,
         slot: Slot,
     ) -> bool {
-        if let Some(sub_storages) = storages {
-            if sub_storages.len() > 1 {
-                // Having > 1 appendvecs per slot is not expected. If we have that, we just fail to load from the cache for this slot.
-                return false;
-            }
+        if let Some(sub_storage) = storage {
             // hash info about this storage
-            let append_vec = sub_storages.first().unwrap();
+            let append_vec = sub_storage;
             append_vec.written_bytes().hash(hasher);
             let storage_file = append_vec.accounts.get_path();
             slot.hash(hasher);
@@ -7074,12 +7063,10 @@ impl AccountsDb {
 
                 let mut init_accum = true;
                 // load from cache failed, so create the cache file for this chunk
-                for (slot, sub_storages) in snapshot_storages.iter_range(&range_this_chunk) {
+                for (slot, storage) in snapshot_storages.iter_range(&range_this_chunk) {
                     let mut ancient = false;
-                    let (_, scan) = measure!(if let Some(sub_storages) = sub_storages {
-                        if let Some(storage) = sub_storages.first() {
-                            ancient = is_ancient(&storage.accounts);
-                        }
+                    let (_, scan) = measure!(if let Some(storage) = storage {
+                        ancient = is_ancient(&storage.accounts);
                         if init_accum {
                             let range = bin_range.end - bin_range.start;
                             scanner.init_accum(range);
@@ -7087,7 +7074,10 @@ impl AccountsDb {
                         }
                         scanner.set_slot(slot);
 
-                        Self::scan_multiple_account_storages_one_slot(sub_storages, &mut scanner);
+                        Self::scan_multiple_account_storages_one_slot(
+                            &[Arc::clone(storage)],
+                            &mut scanner,
+                        );
                     });
                     if ancient {
                         stats
@@ -7129,18 +7119,16 @@ impl AccountsDb {
         let acceptable_straggler_slot_count = 100; // do nothing special for these old stores which will likely get cleaned up shortly
         let sub = slots_per_epoch + acceptable_straggler_slot_count;
         let in_epoch_range_start = max.saturating_sub(sub);
-        for (slot, storages) in storages.iter_range(&(..in_epoch_range_start)) {
-            if let Some(storages) = storages {
-                storages.iter().for_each(|store| {
-                    if !is_ancient(&store.accounts) {
-                        // ancient stores are managed separately - we expect them to be old and keeping accounts
-                        // We can expect the normal processes will keep them cleaned.
-                        // If we included them here then ALL accounts in ALL ancient append vecs will be visited by clean each time.
-                        self.dirty_stores
-                            .insert((slot, store.append_vec_id()), store.clone());
-                        num_dirty_slots += 1;
-                    }
-                });
+        for (slot, store) in storages.iter_range(&(..in_epoch_range_start)) {
+            if let Some(store) = store {
+                if !is_ancient(&store.accounts) {
+                    // ancient stores are managed separately - we expect them to be old and keeping accounts
+                    // We can expect the normal processes will keep them cleaned.
+                    // If we included them here then ALL accounts in ALL ancient append vecs will be visited by clean each time.
+                    self.dirty_stores
+                        .insert((slot, store.append_vec_id()), store.clone());
+                    num_dirty_slots += 1;
+                }
             }
         }
         mark_time.stop();
@@ -8398,7 +8386,7 @@ impl AccountsDb {
         &self,
         requested_slots: impl RangeBounds<Slot> + Sync,
         ancestors: Option<&Ancestors>,
-    ) -> (SnapshotStorages, Vec<Slot>) {
+    ) -> (SnapshotStoragesOne, Vec<Slot>) {
         let mut m = Measure::start("get slots");
         let slots_and_storages = self
             .storage
@@ -8427,16 +8415,15 @@ impl AccountsDb {
                                     .unwrap_or_default()
                         })
                         .filter_map(|(slot, storages)| {
-                            let storages = storages
+                            storages
                                 .read()
                                 .unwrap()
                                 .values()
+                                .next()
                                 .filter(|x| x.has_accounts())
-                                .cloned()
-                                .collect::<Vec<_>>();
-                            (!storages.is_empty()).then_some((storages, *slot))
+                                .map(|storage| (Arc::clone(storage), *slot))
                         })
-                        .collect::<Vec<(SnapshotStorage, Slot)>>()
+                        .collect::<Vec<(SnapshotStorageOne, Slot)>>()
                 })
                 .collect::<Vec<_>>()
         });
@@ -9700,7 +9687,7 @@ pub mod tests {
     fn sample_storages_and_account_in_slot(
         slot: Slot,
         accounts: &AccountsDb,
-    ) -> (SnapshotStorages, Vec<CalculateHashIntermediate>) {
+    ) -> (SnapshotStoragesOne, Vec<CalculateHashIntermediate>) {
         let pubkey0 = Pubkey::new(&[0u8; 32]);
         let pubkey127 = Pubkey::new(&[0x7fu8; 32]);
         let pubkey128 = Pubkey::new(&[0x80u8; 32]);
@@ -9754,21 +9741,19 @@ pub mod tests {
         storages
             .iter()
             .zip(slots.iter())
-            .for_each(|(storages, slot)| {
-                for storage in storages {
-                    assert_eq!(&storage.slot(), slot);
-                }
+            .for_each(|(storage, slot)| {
+                assert_eq!(&storage.slot(), slot);
             });
         (storages, raw_expected)
     }
 
     fn sample_storages_and_accounts(
         accounts: &AccountsDb,
-    ) -> (SnapshotStorages, Vec<CalculateHashIntermediate>) {
+    ) -> (SnapshotStoragesOne, Vec<CalculateHashIntermediate>) {
         sample_storages_and_account_in_slot(1, accounts)
     }
 
-    fn get_storage_refs(input: &[SnapshotStorage]) -> SortedStorages {
+    fn get_storage_refs(input: &[SnapshotStorageOne]) -> SortedStorages {
         SortedStorages::new(input)
     }
 
@@ -10109,14 +10094,14 @@ pub mod tests {
         assert_eq!(result, (expected_accounts_hash, sum));
     }
 
-    fn sample_storage() -> (SnapshotStorages, usize, Slot) {
+    fn sample_storage() -> (SnapshotStoragesOne, usize, Slot) {
         let (_temp_dirs, paths) = get_temp_accounts_paths(1).unwrap();
         let slot_expected: Slot = 0;
         let size: usize = 123;
         let data = AccountStorageEntry::new(&paths[0], slot_expected, 0, size as u64);
 
         let arc = Arc::new(data);
-        let storages = vec![vec![arc]];
+        let storages = vec![arc];
         (storages, size, slot_expected)
     }
 
@@ -10175,10 +10160,10 @@ pub mod tests {
         data.accounts = av;
 
         let arc = Arc::new(data);
-        let storages = vec![vec![arc]];
+        let storages = vec![arc];
         let pubkey = solana_sdk::pubkey::new_rand();
         let acc = AccountSharedData::new(1, 48, AccountSharedData::default().owner());
-        append_single_account_with_default_hash(&storages[0][0].accounts, &pubkey, &acc, 1);
+        append_single_account_with_default_hash(&storages[0].accounts, &pubkey, &acc, 1);
 
         let calls = Arc::new(AtomicU64::new(0));
         let temp_dir = TempDir::new().unwrap();
@@ -10261,10 +10246,10 @@ pub mod tests {
         data.accounts = av;
 
         let arc = Arc::new(data);
-        let storages = vec![vec![arc]];
+        let storages = vec![arc];
         let pubkey = solana_sdk::pubkey::new_rand();
         let acc = AccountSharedData::new(1, 48, AccountSharedData::default().owner());
-        append_single_account_with_default_hash(&storages[0][0].accounts, &pubkey, &acc, 1);
+        append_single_account_with_default_hash(&storages[0].accounts, &pubkey, &acc, 1);
 
         let calls = Arc::new(AtomicU64::new(0));
 
@@ -10277,29 +10262,7 @@ pub mod tests {
             value_to_use_for_lamports: expected,
         };
 
-        AccountsDb::scan_multiple_account_storages_one_slot(&storages[0], &mut test_scan);
-        let accum = test_scan.scanning_complete();
-        assert_eq!(calls.load(Ordering::Relaxed), 1);
-        assert_eq!(
-            accum
-                .iter()
-                .flatten()
-                .map(|a| a.lamports)
-                .collect::<Vec<_>>(),
-            vec![expected]
-        );
-
-        let calls = Arc::new(AtomicU64::new(0));
-        let mut test_scan = TestScan {
-            calls: calls.clone(),
-            pubkey,
-            slot_expected,
-            accum: Vec::default(),
-            current_slot: 0,
-            value_to_use_for_lamports: expected,
-        };
-
-        AccountsDb::scan_single_account_storage(&storages[0][0], &mut test_scan);
+        AccountsDb::scan_multiple_account_storages_one_slot(&storages, &mut test_scan);
         let accum = test_scan.scanning_complete();
         assert_eq!(calls.load(Ordering::Relaxed), 1);
         assert_eq!(
@@ -10313,17 +10276,12 @@ pub mod tests {
     }
 
     fn append_sample_data_to_storage(
-        storages: &SnapshotStorages,
+        storages: &SnapshotStoragesOne,
         pubkey: &Pubkey,
         write_version: StoredMetaWriteVersion,
     ) {
         let acc = AccountSharedData::new(1, 48, AccountSharedData::default().owner());
-        append_single_account_with_default_hash(
-            &storages[0][0].accounts,
-            pubkey,
-            &acc,
-            write_version,
-        );
+        append_single_account_with_default_hash(&storages[0].accounts, pubkey, &acc, write_version);
     }
 
     fn sample_storage_with_entries(
@@ -10331,7 +10289,7 @@ pub mod tests {
         write_version: StoredMetaWriteVersion,
         slot: Slot,
         pubkey: &Pubkey,
-    ) -> SnapshotStorages {
+    ) -> SnapshotStoragesOne {
         sample_storage_with_entries_id(tf, write_version, slot, pubkey, 0)
     }
 
@@ -10341,7 +10299,7 @@ pub mod tests {
         slot: Slot,
         pubkey: &Pubkey,
         id: AppendVecId,
-    ) -> SnapshotStorages {
+    ) -> SnapshotStoragesOne {
         let (_temp_dirs, paths) = get_temp_accounts_paths(1).unwrap();
         let size: usize = 123;
         let mut data = AccountStorageEntry::new(&paths[0], slot, id, size as u64);
@@ -10349,7 +10307,7 @@ pub mod tests {
         data.accounts = av;
 
         let arc = Arc::new(data);
-        let storages = vec![vec![arc]];
+        let storages = vec![arc];
         append_sample_data_to_storage(&storages, pubkey, write_version);
         storages
     }
@@ -10368,12 +10326,8 @@ pub mod tests {
         let pubkey2 = solana_sdk::pubkey::new_rand();
         for swap in [false, true].iter() {
             let mut storages = [
-                sample_storage_with_entries(&tf, write_version1, slot_expected, &pubkey1)
-                    .remove(0)
-                    .remove(0),
-                sample_storage_with_entries(&tf, write_version2, slot_expected, &pubkey2)
-                    .remove(0)
-                    .remove(0),
+                sample_storage_with_entries(&tf, write_version1, slot_expected, &pubkey1).remove(0),
+                sample_storage_with_entries(&tf, write_version2, slot_expected, &pubkey2).remove(0),
             ];
             if *swap {
                 storages[..].swap(0, 1);
@@ -12907,11 +12861,7 @@ pub mod tests {
         accounts.store_for_tests(current_slot, &[(&pubkey3, &zero_lamport_account)]);
 
         let snapshot_stores = accounts.get_snapshot_storages(..=current_slot, None).0;
-        let total_accounts: usize = snapshot_stores
-            .iter()
-            .flatten()
-            .map(|s| s.all_accounts().len())
-            .sum();
+        let total_accounts: usize = snapshot_stores.iter().map(|s| s.all_accounts().len()).sum();
         assert!(!snapshot_stores.is_empty());
         assert!(total_accounts > 0);
 
@@ -12924,11 +12874,8 @@ pub mod tests {
 
         accounts.print_accounts_stats("Post-D clean");
 
-        let total_accounts_post_clean: usize = snapshot_stores
-            .iter()
-            .flatten()
-            .map(|s| s.all_accounts().len())
-            .sum();
+        let total_accounts_post_clean: usize =
+            snapshot_stores.iter().map(|s| s.all_accounts().len()).sum();
         assert_eq!(total_accounts, total_accounts_post_clean);
 
         // should clean all 3 pubkeys
@@ -16645,7 +16592,7 @@ pub mod tests {
             let id = 1;
             let size = 1;
             let non_ancient_storage = Arc::new(AccountStorageEntry::new(path, slot2, id, size));
-            let raw_storages = vec![vec![non_ancient_storage.clone()]];
+            let raw_storages = vec![non_ancient_storage.clone()];
             let snapshot_storages = SortedStorages::new(&raw_storages);
             // test without an ancient append vec
             let one_epoch_old_slot = 0;
@@ -16658,7 +16605,7 @@ pub mod tests {
             assert_eq!(Vec::<Slot>::default(), ancient_slots);
 
             // now test with an ancient append vec
-            let raw_storages = vec![vec![ancient.clone()]];
+            let raw_storages = vec![ancient.clone()];
             let snapshot_storages = SortedStorages::new(&raw_storages);
             let one_epoch_old_slot = 0;
             let ancient_slots =
@@ -16670,7 +16617,7 @@ pub mod tests {
             assert_eq!(vec![slot1_ancient], ancient_slots);
 
             // now test with an ancient append vec and then a non-ancient append vec
-            let raw_storages = vec![vec![ancient.clone()], vec![non_ancient_storage.clone()]];
+            let raw_storages = vec![ancient.clone(), non_ancient_storage.clone()];
             let snapshot_storages = SortedStorages::new(&raw_storages);
             let one_epoch_old_slot = 0;
             let ancient_slots =
@@ -16683,9 +16630,9 @@ pub mod tests {
 
             // ancient, non-ancient, ancient
             let raw_storages = vec![
-                vec![ancient.clone()],
-                vec![non_ancient_storage.clone()],
-                vec![ancient3.new_storage().clone()],
+                ancient.clone(),
+                non_ancient_storage.clone(),
+                ancient3.new_storage().clone(),
             ];
             let snapshot_storages = SortedStorages::new(&raw_storages);
             let one_epoch_old_slot = 0;
@@ -16700,10 +16647,10 @@ pub mod tests {
             if sparse {
                 // ancient, ancient, non-ancient, ancient
                 let raw_storages = vec![
-                    vec![Arc::clone(&ancient)],
-                    vec![Arc::clone(&ancient_1_plus)],
-                    vec![non_ancient_storage],
-                    vec![Arc::clone(ancient3.new_storage())],
+                    Arc::clone(&ancient),
+                    Arc::clone(&ancient_1_plus),
+                    non_ancient_storage,
+                    Arc::clone(ancient3.new_storage()),
                 ];
                 let snapshot_storages = SortedStorages::new(&raw_storages[..]);
                 let one_epoch_old_slot = 0;
@@ -16767,24 +16714,6 @@ pub mod tests {
             assert_eq!(hash4, hash3); // same
                                       // can't assert hash here - it is a function of mod date
             assert!(load);
-        }
-        {
-            let mut hasher = std::collections::hash_map::DefaultHasher::new();
-            let slot: Slot = 0;
-            let slot1 = 1;
-            let tf = crate::append_vec::test_utils::get_append_vec_path(
-                "test_accountsdb_scan_account_storage_no_bank",
-            );
-            let write_version1 = 0;
-            let pubkey1 = solana_sdk::pubkey::new_rand();
-            let mut storages = sample_storage_with_entries(&tf, write_version1, slot, &pubkey1);
-            let mut storages2 = sample_storage_with_entries(&tf, write_version1, slot1, &pubkey1);
-            storages[0].push(storages2[0].remove(0));
-
-            let load = AccountsDb::hash_storage_info(&mut hasher, Some(&storages[0]), slot);
-            let _ = hasher.finish();
-            // cannot load because we have 2 storages
-            assert!(!load);
         }
     }
 
@@ -17460,7 +17389,7 @@ pub mod tests {
         for i in 0..num_slots {
             let id = starting_id + (i as AppendVecId);
             let pubkey1 = solana_sdk::pubkey::new_rand();
-            let storages = sample_storage_with_entries_id(
+            let storage = sample_storage_with_entries_id(
                 tf,
                 write_version1,
                 starting_slot + (i as Slot),
@@ -17469,7 +17398,7 @@ pub mod tests {
             )
             .pop()
             .unwrap();
-            insert_store(db, Arc::clone(&storages[0]));
+            insert_store(db, Arc::clone(&storage));
         }
 
         let storage = db.get_storage_for_slot(starting_slot).unwrap();
@@ -17586,13 +17515,13 @@ pub mod tests {
         );
         let write_version1 = 0;
         let pubkey1 = solana_sdk::pubkey::new_rand();
-        let storages = sample_storage_with_entries(&tf, write_version1, slot5, &pubkey1)
+        let storage = sample_storage_with_entries(&tf, write_version1, slot5, &pubkey1)
             .pop()
             .unwrap();
         let mut current_ancient = CurrentAncientAppendVec::default();
 
         let should_move = db.should_move_to_ancient_append_vec(
-            &storages[0],
+            &storage,
             &mut current_ancient,
             slot5,
             CAN_RANDOMLY_SHRINK_FALSE,
@@ -17601,9 +17530,9 @@ pub mod tests {
         // slot is not ancient, so it is good to move
         assert!(should_move);
 
-        current_ancient = CurrentAncientAppendVec::new(slot5, Arc::clone(&storages[0])); // just 'some', contents don't matter
+        current_ancient = CurrentAncientAppendVec::new(slot5, Arc::clone(&storage)); // just 'some', contents don't matter
         let should_move = db.should_move_to_ancient_append_vec(
-            &storages[0],
+            &storage,
             &mut current_ancient,
             slot5,
             CAN_RANDOMLY_SHRINK_FALSE,
@@ -17611,7 +17540,7 @@ pub mod tests {
         // should have kept the same 'current_ancient'
         assert_eq!(current_ancient.slot(), slot5);
         assert_eq!(current_ancient.append_vec().slot(), slot5);
-        assert_eq!(current_ancient.append_vec_id(), storages[0].append_vec_id());
+        assert_eq!(current_ancient.append_vec_id(), storage.append_vec_id());
 
         // slot is not ancient, so it is good to move
         assert!(should_move);
@@ -17731,7 +17660,7 @@ pub mod tests {
     }
 
     fn make_ancient_append_vec_full(ancient: &Arc<AccountStorageEntry>) {
-        let vecs = vec![vec![ancient.clone()]];
+        let vecs = vec![ancient.clone()];
         for _ in 0..100 {
             append_sample_data_to_storage(&vecs, &Pubkey::default(), 0);
         }

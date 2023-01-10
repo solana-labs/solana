@@ -3,7 +3,8 @@
 use {
     crate::{
         accounts_db::{
-            AccountsDb, GetUniqueAccountsResult, PurgeStats, SnapshotStorage, StoreReclaims,
+            AccountsDb, GetUniqueAccountsResult, PurgeStats, SnapshotStorage, SnapshotStorageOne,
+            StoreReclaims,
         },
         bank::Bank,
         builtins, static_ids,
@@ -282,11 +283,11 @@ impl<'a> SnapshotMinimizer<'a> {
         let dead_slots = Mutex::new(Vec::new());
         let dead_storages = Mutex::new(Vec::new());
 
-        snapshot_storages.into_par_iter().for_each(|storages| {
-            let slot = storages.first().unwrap().slot();
+        snapshot_storages.into_par_iter().for_each(|storage| {
+            let slot = storage.slot();
             if slot != self.starting_slot {
                 if minimized_slot_set.contains(&slot) {
-                    self.filter_storages(storages, &dead_storages);
+                    self.filter_storage(&storage, &dead_storages);
                 } else {
                     dead_slots.lock().unwrap().push(slot);
                 }
@@ -299,13 +300,11 @@ impl<'a> SnapshotMinimizer<'a> {
     }
 
     /// Creates new storage replacing `storages` that contains only accounts in `minimized_account_set`.
-    fn filter_storages(&self, storages: SnapshotStorage, dead_storages: &Mutex<SnapshotStorage>) {
-        let slot = storages.first().unwrap().slot();
+    fn filter_storage(&self, storage: &SnapshotStorageOne, dead_storages: &Mutex<SnapshotStorage>) {
+        let slot = storage.slot();
         let GetUniqueAccountsResult {
             stored_accounts, ..
-        } = self
-            .accounts_db()
-            .get_unique_accounts_from_storage(storages.first().unwrap());
+        } = self.accounts_db().get_unique_accounts_from_storage(storage);
 
         let keep_accounts_collect = Mutex::new(Vec::with_capacity(stored_accounts.len()));
         let purge_pubkeys_collect = Mutex::new(Vec::with_capacity(stored_accounts.len()));
@@ -678,10 +677,8 @@ mod tests {
         assert_eq!(snapshot_storages.len(), 3);
 
         let mut account_count = 0;
-        snapshot_storages.into_iter().for_each(|storages| {
-            storages.into_iter().for_each(|storage| {
-                account_count += storage.accounts.account_iter().count();
-            });
+        snapshot_storages.into_iter().for_each(|storage| {
+            account_count += storage.accounts.account_iter().count();
         });
 
         assert_eq!(
