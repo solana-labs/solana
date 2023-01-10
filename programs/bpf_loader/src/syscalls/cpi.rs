@@ -13,6 +13,7 @@ struct CallerAccount<'a> {
     data: &'a mut [u8],
     vm_data_addr: u64,
     ref_to_len_in_vm: &'a mut u64,
+    serialized_len_ptr: *mut u64,
     executable: bool,
     rent_epoch: u64,
 }
@@ -173,7 +174,7 @@ impl<'a, 'b> SyscallInvokeSigned<'a, 'b> for SyscallInvokeSignedRust<'a, 'b> {
                 invoke_context.get_check_aligned(),
             )?;
 
-            let (data, vm_data_addr, ref_to_len_in_vm) = {
+            let (data, vm_data_addr, ref_to_len_in_vm, serialized_len_ptr) = {
                 // Double translate data out of RefCell
                 let data = *translate_type::<&[u8]>(
                     memory_mapping,
@@ -194,6 +195,20 @@ impl<'a, 'b> SyscallInvokeSigned<'a, 'b> for SyscallInvokeSignedRust<'a, 'b> {
                     8,
                 )? as *mut u64;
                 let ref_to_len_in_vm = unsafe { &mut *translated };
+                let serialized_len_ptr = if invoke_context
+                    .feature_set
+                    .is_active(&feature_set::move_serialized_len_ptr_in_cpi::id())
+                {
+                    std::ptr::null_mut()
+                } else {
+                    let ref_of_len_in_input_buffer =
+                        (data.as_ptr() as *const _ as u64).saturating_sub(8);
+                    translate_type_mut::<u64>(
+                        memory_mapping,
+                        ref_of_len_in_input_buffer,
+                        invoke_context.get_check_aligned(),
+                    )?
+                };
                 let vm_data_addr = data.as_ptr() as u64;
                 (
                     translate_slice_mut::<u8>(
@@ -205,6 +220,7 @@ impl<'a, 'b> SyscallInvokeSigned<'a, 'b> for SyscallInvokeSignedRust<'a, 'b> {
                     )?,
                     vm_data_addr,
                     ref_to_len_in_vm,
+                    serialized_len_ptr,
                 )
             };
 
@@ -215,6 +231,7 @@ impl<'a, 'b> SyscallInvokeSigned<'a, 'b> for SyscallInvokeSignedRust<'a, 'b> {
                 data,
                 vm_data_addr,
                 ref_to_len_in_vm,
+                serialized_len_ptr,
                 executable: account_info.executable,
                 rent_epoch: account_info.rent_epoch,
             })
@@ -524,6 +541,21 @@ impl<'a, 'b> SyscallInvokeSigned<'a, 'b> for SyscallInvokeSignedC<'a, 'b> {
             )?;
             let ref_to_len_in_vm = unsafe { &mut *(addr as *mut u64) };
 
+            let ref_of_len_in_input_buffer =
+                (account_info.data_addr as *mut u8 as u64).saturating_sub(8);
+            let serialized_len_ptr = if invoke_context
+                .feature_set
+                .is_active(&feature_set::move_serialized_len_ptr_in_cpi::id())
+            {
+                std::ptr::null_mut()
+            } else {
+                translate_type_mut::<u64>(
+                    memory_mapping,
+                    ref_of_len_in_input_buffer,
+                    invoke_context.get_check_aligned(),
+                )?
+            };
+
             Ok(CallerAccount {
                 lamports,
                 owner,
@@ -531,6 +563,7 @@ impl<'a, 'b> SyscallInvokeSigned<'a, 'b> for SyscallInvokeSignedC<'a, 'b> {
                 data,
                 vm_data_addr,
                 ref_to_len_in_vm,
+                serialized_len_ptr,
                 executable: account_info.executable,
                 rent_epoch: account_info.rent_epoch,
             })
@@ -967,14 +1000,23 @@ fn call<'a, 'b: 'a>(
                     invoke_context.get_check_size(),
                 )?;
                 *caller_account.ref_to_len_in_vm = new_len as u64;
-                let serialized_len_ptr = translate_type_mut::<u64>(
-                    memory_mapping,
-                    caller_account
-                        .vm_data_addr
-                        .saturating_sub(std::mem::size_of::<u64>() as u64),
-                    invoke_context.get_check_aligned(),
-                )?;
-                *serialized_len_ptr = new_len as u64;
+                if invoke_context
+                    .feature_set
+                    .is_active(&feature_set::move_serialized_len_ptr_in_cpi::id())
+                {
+                    let serialized_len_ptr = translate_type_mut::<u64>(
+                        memory_mapping,
+                        caller_account
+                            .vm_data_addr
+                            .saturating_sub(std::mem::size_of::<u64>() as u64),
+                        invoke_context.get_check_aligned(),
+                    )?;
+                    *serialized_len_ptr = new_len as u64;
+                } else {
+                    unsafe {
+                        *caller_account.serialized_len_ptr = new_len as u64;
+                    }
+                }
             }
             let to_slice = &mut caller_account.data;
             let from_slice = callee_account
