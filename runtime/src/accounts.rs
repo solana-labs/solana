@@ -790,9 +790,9 @@ impl Accounts {
                         match accum.entry(loaded_account_pubkey) {
                             // Double check in case another thread interleaved a write between the read + write.
                             Occupied(mut occupied_entry) => {
-                                if loaded_write_version > occupied_entry.get().0 {
-                                    occupied_entry.insert((loaded_write_version, val));
-                                }
+                                assert!(loaded_write_version > occupied_entry.get().0);
+                                // overwrite
+                                occupied_entry.insert((loaded_write_version, val));
                             }
 
                             Vacant(vacant_entry) => {
