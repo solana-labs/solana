@@ -7807,6 +7807,15 @@ impl AccountsDb {
                     "AccountsDB::accounts_index corrupted. Storage pointed to: {}, expected: {}, should only point to one slot",
                     store.slot(), *slot
                 );
+                let account = store.accounts.get_account(account_info.offset()).unwrap();
+                if account.1
+                    != account_info
+                        .offset()
+                        .saturating_add(account_info.stored_size() as usize)
+                {
+                    // this should never happen. This is a metrics based assert at the moment.
+                    inc_new_counter_info!("remove_dead_accounts-stored_size_mismatch", 1);
+                }
                 let count =
                     store.remove_account(account_info.stored_size() as usize, reset_accounts);
                 if count == 0 {
