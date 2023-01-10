@@ -7620,9 +7620,9 @@ impl AccountsDb {
                     // keep the latest write version for each pubkey
                     match accum.entry(*loaded_account.pubkey()) {
                         Occupied(mut occupied_entry) => {
-                            if loaded_write_version > occupied_entry.get().version() {
-                                occupied_entry.insert((loaded_write_version, loaded_hash));
-                            }
+                            assert!(loaded_write_version > occupied_entry.get().version());
+                            // overwrite
+                            occupied_entry.insert((loaded_write_version, loaded_hash));
                         }
 
                         Vacant(vacant_entry) => {
