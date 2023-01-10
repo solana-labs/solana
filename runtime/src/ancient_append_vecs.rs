@@ -95,7 +95,7 @@ pub mod tests {
     use {
         super::*,
         crate::{
-            accounts_db::{get_temp_accounts_paths, AppendVecId},
+            accounts_db::get_temp_accounts_paths,
             append_vec::{AccountMeta, StoredAccountMeta, StoredMeta},
         },
         solana_sdk::{
@@ -120,7 +120,6 @@ pub mod tests {
     #[test]
     fn test_accounts_to_store_more() {
         let pubkey = Pubkey::new(&[1; 32]);
-        let store_id = AppendVecId::default();
         let account_size = 3;
 
         let account = AccountSharedData::default();
@@ -149,7 +148,7 @@ pub mod tests {
             stored_size: account_size,
             hash: &hash,
         };
-        let found = FoundStoredAccount { account, store_id };
+        let found = FoundStoredAccount { account };
         let map = vec![&found];
         for (selector, available_bytes) in [
             (StorageSelector::Primary, account_size),
