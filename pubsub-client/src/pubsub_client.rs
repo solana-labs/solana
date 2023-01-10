@@ -247,7 +247,7 @@ where
     ) -> Result<Option<T>, PubsubClientError> {
         let message = writable_socket.write().unwrap().read_message()?;
         if message.is_ping() {
-            return Ok(None)
+            return Ok(None);
         }
         let message_text = &message.into_text().unwrap();
         let json_msg: Map<String, Value> = serde_json::from_str(message_text)?;
@@ -848,7 +848,7 @@ impl PubsubClient {
                 Ok(Some(message)) => handler(message),
                 Ok(None) => {
                     // Nothing useful, means we received a ping message
-                },
+                }
                 Err(err) => {
                     info!("receive error: {:?}", err);
                     break;
