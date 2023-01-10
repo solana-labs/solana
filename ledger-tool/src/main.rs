@@ -2719,7 +2719,9 @@ fn main() {
 
                 let accounts_db_config = Some(AccountsDbConfig {
                     index: Some(accounts_index_config),
-                    accounts_hash_cache_path: Some(ledger_path.clone()),
+                    accounts_hash_cache_path: Some(
+                        ledger_path.join(AccountsDb::ACCOUNTS_HASH_CACHE_DIR),
+                    ),
                     filler_accounts_config,
                     ancient_append_vec_offset: value_t!(
                         matches,

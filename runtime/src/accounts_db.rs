@@ -1239,7 +1239,8 @@ pub struct AccountsDb {
     /// Set of storage paths to pick from
     pub(crate) paths: Vec<PathBuf>,
 
-    accounts_hash_cache_path: PathBuf,
+    full_accounts_hash_cache_path: PathBuf,
+    incremental_accounts_hash_cache_path: PathBuf,
 
     // used by tests
     // holds this until we are dropped
@@ -2203,6 +2204,8 @@ impl<'a> AppendVecScan for ScanState<'a> {
 }
 
 impl AccountsDb {
+    pub const ACCOUNTS_HASH_CACHE_DIR: &str = "accounts_hash_cache";
+
     pub fn default_for_tests() -> Self {
         Self::default_with_accounts_index(AccountInfoAccountsIndex::default_for_tests(), None)
     }
@@ -2251,7 +2254,8 @@ impl AccountsDb {
             write_cache_limit_bytes: None,
             write_version: AtomicU64::new(0),
             paths: vec![],
-            accounts_hash_cache_path,
+            full_accounts_hash_cache_path: accounts_hash_cache_path.join("full"),
+            incremental_accounts_hash_cache_path: accounts_hash_cache_path.join("incremental"),
             temp_accounts_hash_cache_path,
             shrink_paths: RwLock::new(None),
             temp_paths: None,
@@ -7338,22 +7342,42 @@ impl AccountsDb {
         );
     }
 
-    /// normal code path returns the common cache path
-    /// when called after a failure has been detected, redirect the cache storage to a separate folder for debugging later
-    fn get_cache_hash_data(
+    fn get_full_cache_hash_data(
         &self,
         config: &CalcAccountsHashConfig<'_>,
         slot: Slot,
     ) -> CacheHashData {
+        Self::_get_cache_hash_data(self.full_accounts_hash_cache_path.clone(), config, slot)
+    }
+
+    fn get_incremental_cache_hash_data(
+        &self,
+        config: &CalcAccountsHashConfig<'_>,
+        slot: Slot,
+    ) -> CacheHashData {
+        Self::_get_cache_hash_data(
+            self.incremental_accounts_hash_cache_path.clone(),
+            config,
+            slot,
+        )
+    }
+
+    /// normal code path returns the common cache path
+    /// when called after a failure has been detected, redirect the cache storage to a separate folder for debugging later
+    fn _get_cache_hash_data(
+        accounts_cache_hash_path: PathBuf,
+        config: &CalcAccountsHashConfig<'_>,
+        slot: Slot,
+    ) -> CacheHashData {
         if !config.store_detailed_debug_info_on_failure {
-            CacheHashData::new(&self.accounts_hash_cache_path)
+            CacheHashData::new(accounts_cache_hash_path)
         } else {
             // this path executes when we are failing with a hash mismatch
-            let mut new = self.accounts_hash_cache_path.clone();
-            new.push("failed_calculate_accounts_hash_cache");
-            new.push(slot.to_string());
-            let _ = std::fs::remove_dir_all(&new);
-            CacheHashData::new(&new)
+            let failed_dir = accounts_cache_hash_path
+                .join("failed_calculate_accounts_hash_cache")
+                .join(slot.to_string());
+            let _ = std::fs::remove_dir_all(&failed_dir);
+            CacheHashData::new(failed_dir)
         }
     }
 
@@ -7372,7 +7396,8 @@ impl AccountsDb {
 
         let use_bg_thread_pool = config.use_bg_thread_pool;
         let mut scan_and_hash = || {
-            let cache_hash_data = self.get_cache_hash_data(config, storages.max_slot_inclusive());
+            let cache_hash_data =
+                self.get_full_cache_hash_data(config, storages.max_slot_inclusive());
 
             let bounds = Range {
                 start: 0,
@@ -9313,7 +9338,7 @@ pub mod tests {
             check_hash: bool,
         ) -> Result<Vec<CacheHashDataFile>, BankHashVerificationError> {
             let temp_dir = TempDir::new().unwrap();
-            let accounts_hash_cache_path = temp_dir.path();
+            let accounts_hash_cache_path = temp_dir.path().to_path_buf();
             self.scan_snapshot_stores_with_cache(
                 &CacheHashData::new(accounts_hash_cache_path),
                 storage,
@@ -10174,7 +10199,7 @@ pub mod tests {
 
         let calls = Arc::new(AtomicU64::new(0));
         let temp_dir = TempDir::new().unwrap();
-        let accounts_hash_cache_path = temp_dir.path();
+        let accounts_hash_cache_path = temp_dir.path().to_path_buf();
         let accounts_db = AccountsDb::new_single_for_tests();
 
         let test_scan = TestScan {

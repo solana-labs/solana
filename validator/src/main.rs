@@ -1021,7 +1021,7 @@ pub fn main() {
 
     let accounts_db_config = AccountsDbConfig {
         index: Some(accounts_index_config),
-        accounts_hash_cache_path: Some(ledger_path.clone()),
+        accounts_hash_cache_path: Some(ledger_path.join(AccountsDb::ACCOUNTS_HASH_CACHE_DIR)),
         filler_accounts_config,
         write_cache_limit_bytes: value_t!(matches, "accounts_db_cache_limit_mb", u64)
             .ok()
