@@ -1,5 +1,6 @@
 //! The `pubsub` module implements a threaded subscription service on client RPC request
-
+#[cfg(test)]
+use crate::{rpc_pubsub_service, rpc_subscriptions::RpcSubscriptions};
 use {
     crate::{
         rpc::check_is_at_least_confirmed,
@@ -399,6 +400,14 @@ impl RpcSolPubSubImpl {
                 data: None,
             })
         }
+    }
+
+    #[cfg(test)]
+    pub fn block_until_processed(&self, rpc_subscriptions: &Arc<RpcSubscriptions>) {
+        let (rpc, mut receiver) = rpc_pubsub_service::test_connection(rpc_subscriptions);
+        rpc.slot_subscribe().unwrap();
+        rpc_subscriptions.notify_slot(1, 0, 0);
+        receiver.recv();
     }
 }
 
@@ -886,12 +895,7 @@ mod tests {
             }),
         )
         .unwrap();
-
-        // Make sure the subscription is processed before continuing.
-        let (rpc2, mut receiver2) = rpc_pubsub_service::test_connection(&rpc_subscriptions);
-        rpc2.slot_subscribe().unwrap();
-        rpc_subscriptions.notify_slot(1, 0, 0);
-        receiver2.recv();
+        rpc.block_until_processed(&rpc_subscriptions);
 
         let balance = {
             let bank = bank_forks.read().unwrap().working_bank();
@@ -1015,12 +1019,7 @@ mod tests {
             }),
         )
         .unwrap();
-
-        // Make sure the subscription is processed before continuing.
-        let (rpc2, mut receiver2) = rpc_pubsub_service::test_connection(&rpc_subscriptions);
-        rpc2.slot_subscribe().unwrap();
-        rpc_subscriptions.notify_slot(1, 0, 0);
-        receiver2.recv();
+        rpc.block_until_processed(&rpc_subscriptions);
 
         let ixs = system_instruction::create_nonce_account(
             &alice.pubkey(),
