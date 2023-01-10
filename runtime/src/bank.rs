@@ -2192,7 +2192,7 @@ impl Bank {
             measure!(parent.feature_set.clone(), "feature_set_creation");
 
         let accounts_data_size_initial = parent.load_accounts_data_size();
-        let commit_mode = if !banking || true {
+        let commit_mode = if !banking || std::env::var("ISOLATED_BANKING_LIKE_REPLAY").is_ok() {
             CommitMode::Replaying
         } else {
             CommitMode::Banking
