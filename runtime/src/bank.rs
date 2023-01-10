@@ -1374,13 +1374,13 @@ impl Scheduler<ExecuteTimings> {
                                     Err(e) => {
                                         match ee.task.mode {
                                             solana_scheduler::Mode::Replaying => {
-                                                trace!(
+                                                error!(
                                                     "scheduler: Unexpected validator error: {:?}, transaction: {:?}",
                                                     e, ee.task.tx.0
                                                 );
                                             }
                                             solana_scheduler::Mode::Banking => {
-                                                error!(
+                                                trace!(
                                                     "scheduler: Unexpected validator error: {:?}, transaction: {:?}",
                                                     e, ee.task.tx.0
                                                 );
