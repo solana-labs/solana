@@ -1365,6 +1365,7 @@ impl Scheduler<ExecuteTimings> {
                             if let Some(result) = ee.execution_result.take() {
                                 match result {
                                     Ok(_) => {
+                                        inc_new_counter_info!("bank-process_transactions", 1);
                                         inc_new_counter_info!(
                                             "bank-process_transactions-txs",
                                             1 as usize
