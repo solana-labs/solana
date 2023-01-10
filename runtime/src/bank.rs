@@ -7831,6 +7831,53 @@ impl Bank {
         compute_budget::LoadedAccountsDataLimitType::V0
         // In the future, use feature_set to determine correct LoadedAccountsDataLimitType here.
     }
+
+    /// Write details about this Bank's stored accounts to a file. Useful to
+    pub fn write_stored_accounts_to_file_for_debugging(&self) {
+        // We're not equipped to compare results on a non-frozen bank
+        if !self.is_frozen() {
+            return;
+        }
+        let slot = self.slot();
+        let hash = self.hash();
+
+        let file_name = format!("{slot}.{hash}");
+        let parent_dir = self
+            .rc
+            .accounts
+            .accounts_db
+            .get_accounts_hash_cache_path()
+            .join("debug_bank_hash");
+        let path = parent_dir.join(file_name);
+        // We only need to write the file once, if it already there, do nothing
+        if path.exists() {
+            return;
+        }
+
+        let mut accounts = self
+            .rc
+            .accounts
+            .accounts_db
+            .get_stored_accounts_for_slot(slot);
+        // Account pubkeys are the first item in the summary, so we can
+        // just sort based on the entire string for easy diffing
+        accounts.sort();
+
+        // Log the last blockhash incase we have a bad version of the block
+        let last_blockhash = format!("last_blockhash: {}\n", self.last_blockhash());
+        info!(
+            "writing contents of bank {} to {}, {} updated accounts",
+            slot,
+            path.display(),
+            accounts.len(),
+        );
+
+        // std::fs::write may fail (depending on platform) if the full directory
+        // path does not exist. So, call std::fs_create_dir_all first.
+        // https://doc.rust-lang.org/std/fs/fn.write.html
+        _ = std::fs::create_dir_all(parent_dir);
+        _ = std::fs::write(path, last_blockhash + &accounts.join("\n") + "\n");
+    }
 }
 
 /// Compute how much an account has changed size.  This function is useful when the data size delta
