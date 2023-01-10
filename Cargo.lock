@@ -4939,6 +4939,8 @@ dependencies = [
  "log",
  "predicates",
  "regex",
+ "reqwest",
+ "semver 1.0.14",
  "serial_test",
  "solana-download-utils",
  "solana-logger 1.15.0",
