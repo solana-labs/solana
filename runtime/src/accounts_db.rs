@@ -404,15 +404,17 @@ impl Default for FillerAccountsConfig {
     }
 }
 
+const ANCIENT_APPEND_VEC_DEFAULT_OFFSET: Option<i64> = Some(-10_000);
+
 #[derive(Debug, Default, Clone)]
 pub struct AccountsDbConfig {
     pub index: Option<AccountsIndexConfig>,
     pub accounts_hash_cache_path: Option<PathBuf>,
     pub filler_accounts_config: FillerAccountsConfig,
     pub write_cache_limit_bytes: Option<u64>,
-    /// if None, ancient append vecs are disabled
+    /// if None, ancient append vecs are set to ANCIENT_APPEND_VEC_DEFAULT_OFFSET
     /// Some(offset) means include slots up to (max_slot - (slots_per_epoch - 'offset'))
-    pub ancient_append_vec_offset: Option<Slot>,
+    pub ancient_append_vec_offset: Option<i64>,
     pub skip_initial_hash_calc: bool,
     pub exhaustively_verify_refcounts: bool,
 }
@@ -1258,7 +1260,7 @@ pub struct AccountsDb {
 
     /// Some(offset) iff we want to squash old append vecs together into 'ancient append vecs'
     /// Some(offset) means for slots up to (max_slot - (slots_per_epoch - 'offset')), put them in ancient append vecs
-    pub ancient_append_vec_offset: Option<Slot>,
+    pub ancient_append_vec_offset: Option<i64>,
 
     /// true iff we want to skip the initial hash calculation on startup
     pub skip_initial_hash_calc: bool,
@@ -2388,7 +2390,7 @@ impl AccountsDb {
         let ancient_append_vec_offset = accounts_db_config
             .as_ref()
             .map(|config| config.ancient_append_vec_offset)
-            .unwrap_or_default();
+            .unwrap_or(ANCIENT_APPEND_VEC_DEFAULT_OFFSET);
 
         let exhaustively_verify_refcounts = accounts_db_config
             .as_ref()
@@ -4155,7 +4157,7 @@ impl AccountsDb {
     fn get_sorted_potential_ancient_slots(&self) -> Vec<Slot> {
         let mut reference_slot = self.get_accounts_hash_complete_one_epoch_old();
         if let Some(offset) = self.ancient_append_vec_offset {
-            reference_slot = reference_slot.saturating_add(offset);
+            reference_slot = Self::apply_offset_to_slot(reference_slot, offset);
         }
         let mut old_slots = self.get_roots_less_than(reference_slot);
         old_slots.sort_unstable();
@@ -6971,6 +6973,15 @@ impl AccountsDb {
         }
     }
 
+    /// return slot + offset, where offset can be +/-
+    fn apply_offset_to_slot(slot: Slot, offset: i64) -> Slot {
+        if offset > 0 {
+            slot.saturating_add(offset as u64)
+        } else {
+            slot.saturating_sub(offset.unsigned_abs())
+        }
+    }
+
     /// if ancient append vecs are enabled, return a slot 'max_slot_inclusive' - (slots_per_epoch - `self.ancient_append_vec_offset`)
     /// otherwise, return 0
     fn get_one_epoch_old_slot_for_hash_calc_scan(
@@ -6983,9 +6994,8 @@ impl AccountsDb {
             // We are mainly interested in the network at steady state.
             let slots_in_epoch = config.epoch_schedule.slots_per_epoch;
             // For performance, this is required when ancient appendvecs are enabled
-            max_slot_inclusive
-                .saturating_sub(slots_in_epoch)
-                .saturating_add(offset)
+            let slot = max_slot_inclusive.saturating_sub(slots_in_epoch);
+            Self::apply_offset_to_slot(slot, offset)
         } else {
             // This causes the entire range to be chunked together, treating older append vecs just like new ones.
             // This performs well if there are many old append vecs that haven't been cleaned yet.
