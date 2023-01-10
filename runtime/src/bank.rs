@@ -438,6 +438,8 @@ pub struct LoadAndExecuteTransactionsOutput {
     pub retryable_transaction_indexes: Vec<usize>,
     // Total number of transactions that were executed
     pub executed_transactions_count: usize,
+    // Number of non-vote transactions that were executed
+    pub executed_non_vote_transactions_count: usize,
     // Total number of the executed transactions that returned success/not
     // an error.
     pub executed_with_successful_result_count: usize,
@@ -816,6 +818,7 @@ impl PartialEq for Bank {
             parent_slot,
             hard_forks,
             transaction_count,
+            non_vote_transaction_count_since_restart: _,
             transaction_error_count: _,
             transaction_entries_count: _,
             transactions_per_entry_max: _,
@@ -978,6 +981,11 @@ pub struct Bank {
 
     /// The number of transactions processed without error
     transaction_count: AtomicU64,
+
+    /// The number of non-vote transactions processed without error since the most recent boot from
+    /// snapshot or genesis. This value is not shared though the network, nor retained within
+    /// snapshots, but is preserved in `Bank::new_from_parent`.
+    non_vote_transaction_count_since_restart: AtomicU64,
 
     /// The number of transaction errors in this slot
     transaction_error_count: AtomicU64,
@@ -1157,6 +1165,7 @@ struct PrevEpochInflationRewards {
 
 pub struct CommitTransactionCounts {
     pub committed_transactions_count: u64,
+    pub committed_non_vote_transactions_count: u64,
     pub committed_with_failure_result_count: u64,
     pub signature_count: u64,
 }
@@ -1269,6 +1278,7 @@ impl Bank {
             parent_slot: Slot::default(),
             hard_forks: Arc::<RwLock<HardForks>>::default(),
             transaction_count: AtomicU64::default(),
+            non_vote_transaction_count_since_restart: AtomicU64::default(),
             transaction_error_count: AtomicU64::default(),
             transaction_entries_count: AtomicU64::default(),
             transactions_per_entry_max: AtomicU64::default(),
@@ -1582,6 +1592,9 @@ impl Bank {
             vote_only_bank,
             inflation: parent.inflation.clone(),
             transaction_count: AtomicU64::new(parent.transaction_count()),
+            non_vote_transaction_count_since_restart: AtomicU64::new(
+                parent.non_vote_transaction_count_since_restart(),
+            ),
             transaction_error_count: AtomicU64::new(0),
             transaction_entries_count: AtomicU64::new(0),
             transactions_per_entry_max: AtomicU64::new(0),
@@ -1950,6 +1963,7 @@ impl Bank {
             parent_slot: fields.parent_slot,
             hard_forks: Arc::new(RwLock::new(fields.hard_forks)),
             transaction_count: AtomicU64::new(fields.transaction_count),
+            non_vote_transaction_count_since_restart: new(),
             transaction_error_count: new(),
             transaction_entries_count: new(),
             transactions_per_entry_max: new(),
@@ -4213,6 +4227,8 @@ impl Bank {
         {
             transaction_context.enable_cap_accounts_data_allocations_per_transaction();
         }
+        #[cfg(debug_assertions)]
+        transaction_context.set_signature(tx.signature());
 
         let pre_account_state_info =
             self.get_transaction_account_state_info(&transaction_context, tx.message());
@@ -4504,6 +4520,7 @@ impl Bank {
         timings.saturating_add_in_place(ExecuteTimingType::ExecuteUs, execution_time.as_us());
 
         let mut executed_transactions_count: usize = 0;
+        let mut executed_non_vote_transactions_count: usize = 0;
         let mut executed_with_successful_result_count: usize = 0;
         let err_count = &mut error_counters.total;
         let transaction_log_collector_config =
@@ -4520,6 +4537,8 @@ impl Bank {
                     }
                 }
             }
+
+            let is_vote = vote_parser::is_simple_vote_transaction(tx);
 
             if execution_result.was_executed() // Skip log collection for unprocessed transactions
                 && transaction_log_collector_config.filter != TransactionLogCollectorFilter::None
@@ -4539,7 +4558,6 @@ impl Bank {
                     }
                 }
 
-                let is_vote = vote_parser::is_simple_vote_transaction(tx);
                 let store = match transaction_log_collector_config.filter {
                     TransactionLogCollectorFilter::All => {
                         !is_vote || !filtered_mentioned_addresses.is_empty()
@@ -4589,6 +4607,9 @@ impl Bank {
 
             match execution_result.flattened_result() {
                 Ok(()) => {
+                    if !is_vote {
+                        executed_non_vote_transactions_count += 1;
+                    }
                     executed_with_successful_result_count += 1;
                 }
                 Err(err) => {
@@ -4615,6 +4636,7 @@ impl Bank {
             execution_results,
             retryable_transaction_indexes,
             executed_transactions_count,
+            executed_non_vote_transactions_count,
             executed_with_successful_result_count,
             signature_count,
             error_counters,
@@ -4879,6 +4901,7 @@ impl Bank {
 
         let CommitTransactionCounts {
             committed_transactions_count,
+            committed_non_vote_transactions_count,
             committed_with_failure_result_count,
             signature_count,
         } = counts;
@@ -4890,11 +4913,18 @@ impl Bank {
         };
 
         self.increment_transaction_count(tx_count);
+        self.increment_non_vote_transaction_count_since_restart(
+            committed_non_vote_transactions_count,
+        );
         self.increment_signature_count(signature_count);
 
         inc_new_counter_info!(
             "bank-process_transactions-txs",
             committed_transactions_count as usize
+        );
+        inc_new_counter_info!(
+            "bank-process_non_vote_transactions-txs",
+            committed_non_vote_transactions_count as usize
         );
         inc_new_counter_info!("bank-process_transactions-sigs", signature_count as usize);
 
@@ -5314,6 +5344,15 @@ impl Bank {
         }
     }
 
+    /// true if rent collection does NOT rewrite accounts whose pubkey indicates
+    ///  it is time for rent collection, but the account is rent exempt.
+    /// false if rent collection DOES rewrite accounts if the account is rent exempt
+    /// This is the default behavior historically.
+    fn bank_hash_skips_rent_rewrites(&self) -> bool {
+        self.feature_set
+            .is_active(&feature_set::skip_rent_rewrites::id())
+    }
+
     /// Collect rent from `accounts`
     ///
     /// This fn is called inside a parallel loop from `collect_rent_in_partition()`.  Avoid adding
@@ -5331,19 +5370,21 @@ impl Bank {
     ) -> CollectRentFromAccountsInfo {
         let mut rent_debits = RentDebits::default();
         let mut total_rent_collected_info = CollectedInfo::default();
-        let mut rewrites_skipped = Vec::with_capacity(accounts.len());
         let mut accounts_to_store =
             Vec::<(&Pubkey, &AccountSharedData)>::with_capacity(accounts.len());
         let mut time_collecting_rent_us = 0;
-        let mut time_hashing_skipped_rewrites_us = 0;
         let mut time_storing_accounts_us = 0;
-        let can_skip_rewrites = self.rc.accounts.accounts_db.skip_rewrites;
+        let can_skip_rewrites = self.bank_hash_skips_rent_rewrites();
+        let set_exempt_rent_epoch_max: bool = self
+            .feature_set
+            .is_active(&solana_sdk::feature_set::set_exempt_rent_epoch_max::id());
         for (pubkey, account, _loaded_slot) in accounts.iter_mut() {
             let (rent_collected_info, measure) =
                 measure!(self.rent_collector.collect_from_existing_account(
                     pubkey,
                     account,
                     self.rc.accounts.accounts_db.filler_account_suffix.as_ref(),
+                    set_exempt_rent_epoch_max,
                 ));
             time_collecting_rent_us += measure.as_us();
 
@@ -5352,20 +5393,7 @@ impl Bank {
             // Also, there's another subtle side-effect from rewrites: this
             // ensures we verify the whole on-chain state (= all accounts)
             // via the bank delta hash slowly once per an epoch.
-            if can_skip_rewrites && Self::skip_rewrite(rent_collected_info.rent_amount, account) {
-                // this would have been rewritten previously. Now we skip it.
-                // calculate the hash that we would have gotten if we did the rewrite.
-                // This will be needed to calculate the bank's hash.
-                let (hash, measure) = measure!(crate::accounts_db::AccountsDb::hash_account(
-                    self.slot(),
-                    account,
-                    pubkey,
-                    self.include_slot_in_hash(),
-                ));
-                time_hashing_skipped_rewrites_us += measure.as_us();
-                rewrites_skipped.push((*pubkey, hash));
-                assert_eq!(rent_collected_info, CollectedInfo::default());
-            } else {
+            if !can_skip_rewrites || !Self::skip_rewrite(rent_collected_info.rent_amount, account) {
                 if rent_collected_info.rent_amount > 0 {
                     if let Some(rent_paying_pubkeys) = rent_paying_pubkeys {
                         if !rent_paying_pubkeys.contains(pubkey) {
@@ -5403,7 +5431,6 @@ impl Bank {
             rent_collected_info: total_rent_collected_info,
             rent_rewards: rent_debits.into_unordered_rewards_iter().collect(),
             time_collecting_rent_us,
-            time_hashing_skipped_rewrites_us,
             time_storing_accounts_us,
             num_accounts: accounts.len(),
         }
@@ -5538,9 +5565,6 @@ impl Bank {
             metrics
                 .collect_us
                 .fetch_add(results.time_collecting_rent_us, Relaxed);
-            metrics
-                .hash_us
-                .fetch_add(results.time_hashing_skipped_rewrites_us, Relaxed);
             metrics
                 .store_us
                 .fetch_add(results.time_storing_accounts_us, Relaxed);
@@ -6056,6 +6080,7 @@ impl Bank {
             mut loaded_transactions,
             execution_results,
             executed_transactions_count,
+            executed_non_vote_transactions_count,
             executed_with_successful_result_count,
             signature_count,
             ..
@@ -6080,6 +6105,7 @@ impl Bank {
             lamports_per_signature,
             CommitTransactionCounts {
                 committed_transactions_count: executed_transactions_count as u64,
+                committed_non_vote_transactions_count: executed_non_vote_transactions_count as u64,
                 committed_with_failure_result_count: executed_transactions_count
                     .saturating_sub(executed_with_successful_result_count)
                     as u64,
@@ -6257,7 +6283,7 @@ impl Bank {
     ) {
         assert!(!self.freeze_started());
         let mut m = Measure::start("stakes_cache.check_and_store");
-        (0..accounts.len()).into_iter().for_each(|i| {
+        (0..accounts.len()).for_each(|i| {
             self.stakes_cache
                 .check_and_store(accounts.pubkey(i), accounts.account(i))
         });
@@ -6600,8 +6626,27 @@ impl Bank {
         )
     }
 
+    /// Return the accumulated executed transaction count
     pub fn transaction_count(&self) -> u64 {
         self.transaction_count.load(Relaxed)
+    }
+
+    pub fn non_vote_transaction_count_since_restart(&self) -> u64 {
+        self.non_vote_transaction_count_since_restart.load(Relaxed)
+    }
+
+    /// Return the transaction count executed only in this bank
+    pub fn executed_transaction_count(&self) -> u64 {
+        let mut executed_transaction_count = self
+            .transaction_count()
+            .saturating_sub(self.parent().map_or(0, |parent| parent.transaction_count()));
+        if !self.bank_transaction_count_fix_enabled() {
+            // When the feature bank_tranaction_count_fix is enabled, transaction_count() excludes
+            // the transactions which were executed but landed in error, we add it here.
+            executed_transaction_count =
+                executed_transaction_count.saturating_add(self.transaction_error_count());
+        }
+        executed_transaction_count
     }
 
     pub fn transaction_error_count(&self) -> u64 {
@@ -6618,6 +6663,11 @@ impl Bank {
 
     fn increment_transaction_count(&self, tx_count: u64) {
         self.transaction_count.fetch_add(tx_count, Relaxed);
+    }
+
+    fn increment_non_vote_transaction_count_since_restart(&self, tx_count: u64) {
+        self.non_vote_transaction_count_since_restart
+            .fetch_add(tx_count, Relaxed);
     }
 
     pub fn signature_count(&self) -> u64 {
@@ -7813,7 +7863,6 @@ struct CollectRentFromAccountsInfo {
     rent_collected_info: CollectedInfo,
     rent_rewards: Vec<(Pubkey, RewardInfo)>,
     time_collecting_rent_us: u64,
-    time_hashing_skipped_rewrites_us: u64,
     time_storing_accounts_us: u64,
     num_accounts: usize,
 }
@@ -7827,7 +7876,6 @@ struct CollectRentInPartitionInfo {
     rent_rewards: Vec<(Pubkey, RewardInfo)>,
     time_loading_accounts_us: u64,
     time_collecting_rent_us: u64,
-    time_hashing_skipped_rewrites_us: u64,
     time_storing_accounts_us: u64,
     num_accounts: usize,
 }
@@ -7843,7 +7891,6 @@ impl CollectRentInPartitionInfo {
             rent_rewards: info.rent_rewards,
             time_loading_accounts_us: time_loading_accounts.as_micros() as u64,
             time_collecting_rent_us: info.time_collecting_rent_us,
-            time_hashing_skipped_rewrites_us: info.time_hashing_skipped_rewrites_us,
             time_storing_accounts_us: info.time_storing_accounts_us,
             num_accounts: info.num_accounts,
         }
@@ -7867,9 +7914,6 @@ impl CollectRentInPartitionInfo {
             time_collecting_rent_us: lhs
                 .time_collecting_rent_us
                 .saturating_add(rhs.time_collecting_rent_us),
-            time_hashing_skipped_rewrites_us: lhs
-                .time_hashing_skipped_rewrites_us
-                .saturating_add(rhs.time_hashing_skipped_rewrites_us),
             time_storing_accounts_us: lhs
                 .time_storing_accounts_us
                 .saturating_add(rhs.time_storing_accounts_us),
@@ -7974,7 +8018,7 @@ pub(crate) mod tests {
             ancestors::Ancestors,
             bank_client::BankClient,
             genesis_utils::{
-                self, activate_all_features, bootstrap_validator_stake_lamports,
+                self, activate_all_features, activate_feature, bootstrap_validator_stake_lamports,
                 create_genesis_config_with_leader, create_genesis_config_with_vote_accounts,
                 genesis_sysvar_and_builtin_program_lamports, GenesisConfigInfo,
                 ValidatorVoteKeypairs,
@@ -8396,112 +8440,116 @@ pub(crate) mod tests {
     /// one thing being tested here is that a failed tx (due to rent collection using up all lamports) followed by rent collection
     /// results in the same state as if just rent collection ran (and emptied the accounts that have too few lamports)
     fn test_credit_debit_rent_no_side_effect_on_hash() {
-        solana_logger::setup();
+        for set_exempt_rent_epoch_max in [false, true] {
+            solana_logger::setup();
 
-        let (mut genesis_config, _mint_keypair) = create_genesis_config(10);
+            let (mut genesis_config, _mint_keypair) = create_genesis_config(10);
 
-        genesis_config.rent = rent_with_exemption_threshold(21.0);
+            genesis_config.rent = rent_with_exemption_threshold(21.0);
 
-        let slot = years_as_slots(
-            2.0,
-            &genesis_config.poh_config.target_tick_duration,
-            genesis_config.ticks_per_slot,
-        ) as u64;
-        let root_bank = Arc::new(Bank::new_for_tests(&genesis_config));
-        let bank = Bank::new_from_parent(&root_bank, &Pubkey::default(), slot);
+            let slot = years_as_slots(
+                2.0,
+                &genesis_config.poh_config.target_tick_duration,
+                genesis_config.ticks_per_slot,
+            ) as u64;
+            let root_bank = Arc::new(Bank::new_for_tests(&genesis_config));
+            let bank = Bank::new_from_parent(&root_bank, &Pubkey::default(), slot);
 
-        let root_bank_2 = Arc::new(Bank::new_for_tests(&genesis_config));
-        let bank_with_success_txs = Bank::new_from_parent(&root_bank_2, &Pubkey::default(), slot);
+            let root_bank_2 = Arc::new(Bank::new_for_tests(&genesis_config));
+            let bank_with_success_txs =
+                Bank::new_from_parent(&root_bank_2, &Pubkey::default(), slot);
 
-        assert_eq!(bank.last_blockhash(), genesis_config.hash());
+            assert_eq!(bank.last_blockhash(), genesis_config.hash());
 
-        let plenty_of_lamports = 264;
-        let too_few_lamports = 10;
-        // Initialize credit-debit and credit only accounts
-        let accounts = [
-            AccountSharedData::new(plenty_of_lamports, 0, &Pubkey::default()),
-            AccountSharedData::new(plenty_of_lamports, 1, &Pubkey::default()),
-            AccountSharedData::new(plenty_of_lamports, 0, &Pubkey::default()),
-            AccountSharedData::new(plenty_of_lamports, 1, &Pubkey::default()),
-            // Transaction between these two accounts will fail
-            AccountSharedData::new(too_few_lamports, 0, &Pubkey::default()),
-            AccountSharedData::new(too_few_lamports, 1, &Pubkey::default()),
-        ];
+            let plenty_of_lamports = 264;
+            let too_few_lamports = 10;
+            // Initialize credit-debit and credit only accounts
+            let accounts = [
+                AccountSharedData::new(plenty_of_lamports, 0, &Pubkey::default()),
+                AccountSharedData::new(plenty_of_lamports, 1, &Pubkey::default()),
+                AccountSharedData::new(plenty_of_lamports, 0, &Pubkey::default()),
+                AccountSharedData::new(plenty_of_lamports, 1, &Pubkey::default()),
+                // Transaction between these two accounts will fail
+                AccountSharedData::new(too_few_lamports, 0, &Pubkey::default()),
+                AccountSharedData::new(too_few_lamports, 1, &Pubkey::default()),
+            ];
 
-        let keypairs = accounts.iter().map(|_| Keypair::new()).collect::<Vec<_>>();
-        {
-            // make sure rent and epoch change are such that we collect all lamports in accounts 4 & 5
-            let mut account_copy = accounts[4].clone();
-            let expected_rent = bank.rent_collector().collect_from_existing_account(
-                &keypairs[4].pubkey(),
-                &mut account_copy,
-                None,
+            let keypairs = accounts.iter().map(|_| Keypair::new()).collect::<Vec<_>>();
+            {
+                // make sure rent and epoch change are such that we collect all lamports in accounts 4 & 5
+                let mut account_copy = accounts[4].clone();
+                let expected_rent = bank.rent_collector().collect_from_existing_account(
+                    &keypairs[4].pubkey(),
+                    &mut account_copy,
+                    None,
+                    set_exempt_rent_epoch_max,
+                );
+                assert_eq!(expected_rent.rent_amount, too_few_lamports);
+                assert_eq!(account_copy.lamports(), 0);
+            }
+
+            for i in 0..accounts.len() {
+                let account = &accounts[i];
+                bank.store_account(&keypairs[i].pubkey(), account);
+                bank_with_success_txs.store_account(&keypairs[i].pubkey(), account);
+            }
+
+            // Make builtin instruction loader rent exempt
+            let system_program_id = system_program::id();
+            let mut system_program_account = bank.get_account(&system_program_id).unwrap();
+            system_program_account.set_lamports(
+                bank.get_minimum_balance_for_rent_exemption(system_program_account.data().len()),
             );
-            assert_eq!(expected_rent.rent_amount, too_few_lamports);
-            assert_eq!(account_copy.lamports(), 0);
+            bank.store_account(&system_program_id, &system_program_account);
+            bank_with_success_txs.store_account(&system_program_id, &system_program_account);
+
+            let t1 = system_transaction::transfer(
+                &keypairs[0],
+                &keypairs[1].pubkey(),
+                1,
+                genesis_config.hash(),
+            );
+            let t2 = system_transaction::transfer(
+                &keypairs[2],
+                &keypairs[3].pubkey(),
+                1,
+                genesis_config.hash(),
+            );
+            // the idea is this transaction will result in both accounts being drained of all lamports due to rent collection
+            let t3 = system_transaction::transfer(
+                &keypairs[4],
+                &keypairs[5].pubkey(),
+                1,
+                genesis_config.hash(),
+            );
+
+            let txs = vec![t1.clone(), t2.clone(), t3];
+            let res = bank.process_transactions(txs.iter());
+
+            assert_eq!(res.len(), 3);
+            assert_eq!(res[0], Ok(()));
+            assert_eq!(res[1], Ok(()));
+            assert_eq!(res[2], Err(TransactionError::AccountNotFound));
+
+            bank.freeze();
+
+            let rwlockguard_bank_hash = bank.hash.read().unwrap();
+            let bank_hash = rwlockguard_bank_hash.as_ref();
+
+            let txs = vec![t2, t1];
+            let res = bank_with_success_txs.process_transactions(txs.iter());
+
+            assert_eq!(res.len(), 2);
+            assert_eq!(res[0], Ok(()));
+            assert_eq!(res[1], Ok(()));
+
+            bank_with_success_txs.freeze();
+
+            let rwlockguard_bank_with_success_txs_hash = bank_with_success_txs.hash.read().unwrap();
+            let bank_with_success_txs_hash = rwlockguard_bank_with_success_txs_hash.as_ref();
+
+            assert_eq!(bank_with_success_txs_hash, bank_hash);
         }
-
-        for i in 0..accounts.len() {
-            let account = &accounts[i];
-            bank.store_account(&keypairs[i].pubkey(), account);
-            bank_with_success_txs.store_account(&keypairs[i].pubkey(), account);
-        }
-
-        // Make builtin instruction loader rent exempt
-        let system_program_id = system_program::id();
-        let mut system_program_account = bank.get_account(&system_program_id).unwrap();
-        system_program_account.set_lamports(
-            bank.get_minimum_balance_for_rent_exemption(system_program_account.data().len()),
-        );
-        bank.store_account(&system_program_id, &system_program_account);
-        bank_with_success_txs.store_account(&system_program_id, &system_program_account);
-
-        let t1 = system_transaction::transfer(
-            &keypairs[0],
-            &keypairs[1].pubkey(),
-            1,
-            genesis_config.hash(),
-        );
-        let t2 = system_transaction::transfer(
-            &keypairs[2],
-            &keypairs[3].pubkey(),
-            1,
-            genesis_config.hash(),
-        );
-        // the idea is this transaction will result in both accounts being drained of all lamports due to rent collection
-        let t3 = system_transaction::transfer(
-            &keypairs[4],
-            &keypairs[5].pubkey(),
-            1,
-            genesis_config.hash(),
-        );
-
-        let txs = vec![t1.clone(), t2.clone(), t3];
-        let res = bank.process_transactions(txs.iter());
-
-        assert_eq!(res.len(), 3);
-        assert_eq!(res[0], Ok(()));
-        assert_eq!(res[1], Ok(()));
-        assert_eq!(res[2], Err(TransactionError::AccountNotFound));
-
-        bank.freeze();
-
-        let rwlockguard_bank_hash = bank.hash.read().unwrap();
-        let bank_hash = rwlockguard_bank_hash.as_ref();
-
-        let txs = vec![t2, t1];
-        let res = bank_with_success_txs.process_transactions(txs.iter());
-
-        assert_eq!(res.len(), 2);
-        assert_eq!(res[0], Ok(()));
-        assert_eq!(res[1], Ok(()));
-
-        bank_with_success_txs.freeze();
-
-        let rwlockguard_bank_with_success_txs_hash = bank_with_success_txs.hash.read().unwrap();
-        let bank_with_success_txs_hash = rwlockguard_bank_with_success_txs_hash.as_ref();
-
-        assert_eq!(bank_with_success_txs_hash, bank_hash);
     }
 
     fn store_accounts_for_rent_test(
@@ -9900,12 +9948,15 @@ pub(crate) mod tests {
         solana_logger::setup();
 
         let (mut genesis_config, _mint_keypair) = create_genesis_config(1_000_000);
-        activate_all_features(&mut genesis_config);
+        for feature_id in FeatureSet::default().inactive {
+            if feature_id != solana_sdk::feature_set::set_exempt_rent_epoch_max::id() {
+                activate_feature(&mut genesis_config, feature_id);
+            }
+        }
 
         let zero_lamport_pubkey = solana_sdk::pubkey::new_rand();
         let rent_due_pubkey = solana_sdk::pubkey::new_rand();
         let rent_exempt_pubkey = solana_sdk::pubkey::new_rand();
-
         let mut bank = Arc::new(Bank::new_for_tests(&genesis_config));
         let zero_lamports = 0;
         let little_lamports = 1234;
@@ -10006,28 +10057,48 @@ pub(crate) mod tests {
     fn test_collect_rent_from_accounts() {
         solana_logger::setup();
 
-        let zero_lamport_pubkey = Pubkey::new(&[0; 32]);
+        for skip_rewrites in [false, true] {
+            let zero_lamport_pubkey = Pubkey::new(&[0; 32]);
 
-        let genesis_bank = create_simple_test_arc_bank(100000);
-        let first_bank = Arc::new(new_from_parent(&genesis_bank));
-        let first_slot = 1;
-        assert_eq!(first_slot, first_bank.slot());
-        let epoch_delta = 4;
-        let later_bank = Arc::new(new_from_parent_next_epoch(&first_bank, epoch_delta)); // a bank a few epochs in the future
-        let later_slot = later_bank.slot();
-        assert!(later_bank.epoch() == genesis_bank.epoch() + epoch_delta);
+            let genesis_bank = create_simple_test_arc_bank(100000);
+            let mut first_bank = new_from_parent(&genesis_bank);
+            if skip_rewrites {
+                first_bank.activate_feature(&feature_set::skip_rent_rewrites::id());
+            }
+            let first_bank = Arc::new(first_bank);
 
-        let data_size = 0; // make sure we're rent exempt
-        let lamports = later_bank.get_minimum_balance_for_rent_exemption(data_size); // cannot be 0 or we zero out rent_epoch in rent collection and we need to be rent exempt
-        let mut account = AccountSharedData::new(lamports, data_size, &Pubkey::default());
-        account.set_rent_epoch(later_bank.epoch() - 1); // non-zero, but less than later_bank's epoch
+            let first_slot = 1;
+            assert_eq!(first_slot, first_bank.slot());
+            let epoch_delta = 4;
+            let later_bank = Arc::new(new_from_parent_next_epoch(&first_bank, epoch_delta)); // a bank a few epochs in the future
+            let later_slot = later_bank.slot();
+            assert!(later_bank.epoch() == genesis_bank.epoch() + epoch_delta);
 
-        // loaded from previous slot, so we skip rent collection on it
-        let _result = later_bank.collect_rent_from_accounts(
-            vec![(zero_lamport_pubkey, account, later_slot - 1)],
-            None,
-            PartitionIndex::default(),
-        );
+            let data_size = 0; // make sure we're rent exempt
+            let lamports = later_bank.get_minimum_balance_for_rent_exemption(data_size); // cannot be 0 or we zero out rent_epoch in rent collection and we need to be rent exempt
+            let mut account = AccountSharedData::new(lamports, data_size, &Pubkey::default());
+            account.set_rent_epoch(later_bank.epoch() - 1); // non-zero, but less than later_bank's epoch
+
+            // loaded from previous slot, so we skip rent collection on it
+            let _result = later_bank.collect_rent_from_accounts(
+                vec![(zero_lamport_pubkey, account, later_slot - 1)],
+                None,
+                PartitionIndex::default(),
+            );
+
+            let deltas = later_bank
+                .rc
+                .accounts
+                .accounts_db
+                .get_pubkey_hash_for_slot(later_slot)
+                .0;
+            assert_eq!(
+                !deltas
+                    .iter()
+                    .any(|(pubkey, _)| pubkey == &zero_lamport_pubkey),
+                skip_rewrites
+            );
+        }
     }
 
     #[test]
@@ -10467,6 +10538,7 @@ pub(crate) mod tests {
         bank.transfer(amount * 2, &mint_keypair, &pubkey).unwrap();
         assert_eq!(bank.get_balance(&pubkey), amount * 3);
         assert_eq!(bank.transaction_count(), 2);
+        assert_eq!(bank.non_vote_transaction_count_since_restart(), 2);
     }
 
     #[test]
@@ -10591,6 +10663,7 @@ pub(crate) mod tests {
             Err(TransactionError::AccountNotFound)
         );
         assert_eq!(bank.transaction_count(), 0);
+        assert_eq!(bank.non_vote_transaction_count_since_restart(), 0);
     }
 
     #[test]
@@ -10602,6 +10675,7 @@ pub(crate) mod tests {
         let amount = genesis_config.rent.minimum_balance(0);
         bank.transfer(amount, &mint_keypair, &pubkey).unwrap();
         assert_eq!(bank.transaction_count(), 1);
+        assert_eq!(bank.non_vote_transaction_count_since_restart(), 1);
         assert_eq!(bank.get_balance(&pubkey), amount);
         assert_eq!(
             bank.transfer((mint_amount - amount) + 1, &mint_keypair, &pubkey),
@@ -10611,10 +10685,100 @@ pub(crate) mod tests {
             ))
         );
         assert_eq!(bank.transaction_count(), 1);
+        assert_eq!(bank.non_vote_transaction_count_since_restart(), 1);
 
         let mint_pubkey = mint_keypair.pubkey();
         assert_eq!(bank.get_balance(&mint_pubkey), mint_amount - amount);
         assert_eq!(bank.get_balance(&pubkey), amount);
+    }
+
+    #[test]
+    fn test_executed_transaction_count_pre_bank_transaction_count_fix() {
+        let mint_amount = sol_to_lamports(1.);
+        let (genesis_config, mint_keypair) = create_genesis_config(mint_amount);
+        let mut bank = Bank::new_for_tests(&genesis_config);
+        bank.deactivate_feature(&feature_set::bank_transaction_count_fix::id());
+        let pubkey = solana_sdk::pubkey::new_rand();
+        let amount = genesis_config.rent.minimum_balance(0);
+        bank.transfer(amount, &mint_keypair, &pubkey).unwrap();
+        assert_eq!(
+            bank.transfer((mint_amount - amount) + 1, &mint_keypair, &pubkey),
+            Err(TransactionError::InstructionError(
+                0,
+                SystemError::ResultWithNegativeLamports.into(),
+            ))
+        );
+
+        // Without bank_transaction_count_fix, transaction_count should include only the successful
+        // transactions, but executed_transaction_count include all always
+        assert_eq!(bank.transaction_count(), 1);
+        assert_eq!(bank.executed_transaction_count(), 2);
+        assert_eq!(bank.transaction_error_count(), 1);
+
+        let bank = Arc::new(bank);
+        let bank2 = Bank::new_from_parent(
+            &bank,
+            &Pubkey::default(),
+            genesis_config.epoch_schedule.first_normal_slot,
+        );
+
+        assert_eq!(
+            bank2.transfer((mint_amount - amount) + 2, &mint_keypair, &pubkey),
+            Err(TransactionError::InstructionError(
+                0,
+                SystemError::ResultWithNegativeLamports.into(),
+            ))
+        );
+
+        // The transaction_count inherited from parent bank is still 1 as it does
+        // not include the failed ones!
+        assert_eq!(bank2.transaction_count(), 1);
+        assert_eq!(bank2.executed_transaction_count(), 1);
+        assert_eq!(bank2.transaction_error_count(), 1);
+    }
+
+    #[test]
+    fn test_executed_transaction_count_post_bank_transaction_count_fix() {
+        let mint_amount = sol_to_lamports(1.);
+        let (genesis_config, mint_keypair) = create_genesis_config(mint_amount);
+        let mut bank = Bank::new_for_tests(&genesis_config);
+        bank.activate_feature(&feature_set::bank_transaction_count_fix::id());
+        let pubkey = solana_sdk::pubkey::new_rand();
+        let amount = genesis_config.rent.minimum_balance(0);
+        bank.transfer(amount, &mint_keypair, &pubkey).unwrap();
+        assert_eq!(
+            bank.transfer((mint_amount - amount) + 1, &mint_keypair, &pubkey),
+            Err(TransactionError::InstructionError(
+                0,
+                SystemError::ResultWithNegativeLamports.into(),
+            ))
+        );
+
+        // With bank_transaction_count_fix, transaction_count should include both the successful and
+        // failed transactions.
+        assert_eq!(bank.transaction_count(), 2);
+        assert_eq!(bank.executed_transaction_count(), 2);
+        assert_eq!(bank.transaction_error_count(), 1);
+
+        let bank = Arc::new(bank);
+        let bank2 = Bank::new_from_parent(
+            &bank,
+            &Pubkey::default(),
+            genesis_config.epoch_schedule.first_normal_slot,
+        );
+
+        assert_eq!(
+            bank2.transfer((mint_amount - amount) + 2, &mint_keypair, &pubkey),
+            Err(TransactionError::InstructionError(
+                0,
+                SystemError::ResultWithNegativeLamports.into(),
+            ))
+        );
+
+        // The transaction_count inherited from parent bank is 3: 2 from the parent bank and 1 at this bank2
+        assert_eq!(bank2.transaction_count(), 3);
+        assert_eq!(bank2.executed_transaction_count(), 1);
+        assert_eq!(bank2.transaction_error_count(), 1);
     }
 
     #[test]
@@ -11211,6 +11375,7 @@ pub(crate) mod tests {
 
         // Assert bad transactions aren't counted.
         assert_eq!(bank.transaction_count(), 1);
+        assert_eq!(bank.non_vote_transaction_count_since_restart(), 1);
     }
 
     #[test]
@@ -11768,6 +11933,7 @@ pub(crate) mod tests {
         assert_eq!(parent.process_transaction(&tx_transfer_mint_to_1), Ok(()));
         trace!("done parent process tx ");
         assert_eq!(parent.transaction_count(), 1);
+        assert_eq!(parent.non_vote_transaction_count_since_restart(), 1);
         assert_eq!(
             parent.get_signature_status(&tx_transfer_mint_to_1.signatures[0]),
             Some(Ok(()))
@@ -11782,11 +11948,17 @@ pub(crate) mod tests {
         );
 
         assert_eq!(bank.transaction_count(), parent.transaction_count());
+        assert_eq!(
+            bank.non_vote_transaction_count_since_restart(),
+            parent.non_vote_transaction_count_since_restart()
+        );
         let tx_transfer_1_to_2 =
             system_transaction::transfer(&key1, &key2.pubkey(), amount, genesis_config.hash());
         assert_eq!(bank.process_transaction(&tx_transfer_1_to_2), Ok(()));
         assert_eq!(bank.transaction_count(), 2);
+        assert_eq!(bank.non_vote_transaction_count_since_restart(), 2);
         assert_eq!(parent.transaction_count(), 1);
+        assert_eq!(parent.non_vote_transaction_count_since_restart(), 1);
         assert_eq!(
             parent.get_signature_status(&tx_transfer_1_to_2.signatures[0]),
             None
@@ -11812,7 +11984,9 @@ pub(crate) mod tests {
             bank.squash();
 
             assert_eq!(parent.transaction_count(), 1);
+            assert_eq!(parent.non_vote_transaction_count_since_restart(), 1);
             assert_eq!(bank.transaction_count(), 2);
+            assert_eq!(bank.non_vote_transaction_count_since_restart(), 2);
         }
     }
 
@@ -11942,7 +12116,9 @@ pub(crate) mod tests {
             let mut expected_next_slot = expected_previous_slot + 1;
 
             // First, initialize the clock sysvar
-            activate_all_features(&mut genesis_config);
+            for feature_id in FeatureSet::default().inactive {
+                activate_feature(&mut genesis_config, feature_id);
+            }
             let bank1 = Arc::new(Bank::new_for_tests_with_config(
                 &genesis_config,
                 BankTestConfig::default(),
@@ -12293,21 +12469,30 @@ pub(crate) mod tests {
         );
 
         assert_eq!(bank0.transaction_count(), 0);
+        assert_eq!(bank0.non_vote_transaction_count_since_restart(), 0);
         assert_eq!(bank2.transaction_count(), 0);
+        assert_eq!(bank2.non_vote_transaction_count_since_restart(), 0);
         assert_eq!(bank1.transaction_count(), 1);
+        assert_eq!(bank1.non_vote_transaction_count_since_restart(), 1);
 
         bank1.squash();
 
         assert_eq!(bank0.transaction_count(), 0);
+        assert_eq!(bank0.non_vote_transaction_count_since_restart(), 0);
         assert_eq!(bank2.transaction_count(), 0);
+        assert_eq!(bank2.non_vote_transaction_count_since_restart(), 0);
         assert_eq!(bank1.transaction_count(), 1);
+        assert_eq!(bank1.non_vote_transaction_count_since_restart(), 1);
 
         let bank6 = Bank::new_from_parent(&bank1, &solana_sdk::pubkey::new_rand(), 3);
         assert_eq!(bank1.transaction_count(), 1);
+        assert_eq!(bank1.non_vote_transaction_count_since_restart(), 1);
         assert_eq!(bank6.transaction_count(), 1);
+        assert_eq!(bank6.non_vote_transaction_count_since_restart(), 1);
 
         bank6.squash();
         assert_eq!(bank6.transaction_count(), 1);
+        assert_eq!(bank6.non_vote_transaction_count_since_restart(), 1);
     }
 
     #[test]
@@ -20001,54 +20186,59 @@ pub(crate) mod tests {
     /// Ensure that accounts data size is updated correctly by rent collection
     #[test]
     fn test_accounts_data_size_and_rent_collection() {
-        let GenesisConfigInfo {
-            mut genesis_config, ..
-        } = genesis_utils::create_genesis_config(100 * LAMPORTS_PER_SOL);
-        genesis_config.rent = Rent::default();
-        activate_all_features(&mut genesis_config);
-        let bank = Arc::new(Bank::new_for_tests(&genesis_config));
-        let bank = Arc::new(Bank::new_from_parent(
-            &bank,
-            &Pubkey::default(),
-            bank.slot() + bank.slot_count_per_normal_epoch(),
-        ));
+        for set_exempt_rent_epoch_max in [false, true] {
+            let GenesisConfigInfo {
+                mut genesis_config, ..
+            } = genesis_utils::create_genesis_config(100 * LAMPORTS_PER_SOL);
+            genesis_config.rent = Rent::default();
+            activate_all_features(&mut genesis_config);
+            let bank = Arc::new(Bank::new_for_tests(&genesis_config));
+            let bank = Arc::new(Bank::new_from_parent(
+                &bank,
+                &Pubkey::default(),
+                bank.slot() + bank.slot_count_per_normal_epoch(),
+            ));
 
-        // make another bank so that any reclaimed accounts from the previous bank do not impact
-        // this test
-        let bank = Arc::new(Bank::new_from_parent(
-            &bank,
-            &Pubkey::default(),
-            bank.slot() + bank.slot_count_per_normal_epoch(),
-        ));
+            // make another bank so that any reclaimed accounts from the previous bank do not impact
+            // this test
+            let bank = Arc::new(Bank::new_from_parent(
+                &bank,
+                &Pubkey::default(),
+                bank.slot() + bank.slot_count_per_normal_epoch(),
+            ));
 
-        // Store an account into the bank that is rent-paying and has data
-        let data_size = 123;
-        let mut account = AccountSharedData::new(1, data_size, &Pubkey::default());
-        let keypair = Keypair::new();
-        bank.store_account(&keypair.pubkey(), &account);
+            // Store an account into the bank that is rent-paying and has data
+            let data_size = 123;
+            let mut account = AccountSharedData::new(1, data_size, &Pubkey::default());
+            let keypair = Keypair::new();
+            bank.store_account(&keypair.pubkey(), &account);
 
-        // Ensure if we collect rent from the account that it will be reclaimed
-        {
-            let info = bank.rent_collector.collect_from_existing_account(
-                &keypair.pubkey(),
-                &mut account,
-                None,
-            );
-            assert_eq!(info.account_data_len_reclaimed, data_size as u64);
+            // Ensure if we collect rent from the account that it will be reclaimed
+            {
+                let info = bank.rent_collector.collect_from_existing_account(
+                    &keypair.pubkey(),
+                    &mut account,
+                    None,
+                    set_exempt_rent_epoch_max,
+                );
+                assert_eq!(info.account_data_len_reclaimed, data_size as u64);
+            }
+
+            // Collect rent for real
+            let accounts_data_size_delta_before_collecting_rent =
+                bank.load_accounts_data_size_delta();
+            bank.collect_rent_eagerly();
+            let accounts_data_size_delta_after_collecting_rent =
+                bank.load_accounts_data_size_delta();
+
+            let accounts_data_size_delta_delta = accounts_data_size_delta_after_collecting_rent
+                - accounts_data_size_delta_before_collecting_rent;
+            assert!(accounts_data_size_delta_delta < 0);
+            let reclaimed_data_size = accounts_data_size_delta_delta.saturating_neg() as usize;
+
+            // Ensure the account is reclaimed by rent collection
+            assert_eq!(reclaimed_data_size, data_size,);
         }
-
-        // Collect rent for real
-        let accounts_data_size_delta_before_collecting_rent = bank.load_accounts_data_size_delta();
-        bank.collect_rent_eagerly();
-        let accounts_data_size_delta_after_collecting_rent = bank.load_accounts_data_size_delta();
-
-        let accounts_data_size_delta_delta = accounts_data_size_delta_after_collecting_rent
-            - accounts_data_size_delta_before_collecting_rent;
-        assert!(accounts_data_size_delta_delta < 0);
-        let reclaimed_data_size = accounts_data_size_delta_delta.saturating_neg() as usize;
-
-        // Ensure the account is reclaimed by rent collection
-        assert_eq!(reclaimed_data_size, data_size,);
     }
 
     #[test]

@@ -778,7 +778,7 @@ fn test_cli_program_write_buffer() {
         program_location: noop_path.to_str().unwrap().to_string(),
         buffer_signer_index: None,
         buffer_pubkey: None,
-        buffer_authority_signer_index: None,
+        buffer_authority_signer_index: 0,
         max_len: None,
         skip_fee_check: false,
     });
@@ -813,7 +813,7 @@ fn test_cli_program_write_buffer() {
         program_location: noop_path.to_str().unwrap().to_string(),
         buffer_signer_index: Some(1),
         buffer_pubkey: Some(buffer_keypair.pubkey()),
-        buffer_authority_signer_index: None,
+        buffer_authority_signer_index: 0,
         max_len: Some(max_len),
         skip_fee_check: false,
     });
@@ -875,7 +875,7 @@ fn test_cli_program_write_buffer() {
         program_location: noop_path.to_str().unwrap().to_string(),
         buffer_signer_index: Some(1),
         buffer_pubkey: Some(buffer_keypair.pubkey()),
-        buffer_authority_signer_index: Some(2),
+        buffer_authority_signer_index: 2,
         max_len: None,
         skip_fee_check: false,
     });
@@ -913,7 +913,7 @@ fn test_cli_program_write_buffer() {
         program_location: noop_path.to_str().unwrap().to_string(),
         buffer_signer_index: None,
         buffer_pubkey: None,
-        buffer_authority_signer_index: Some(2),
+        buffer_authority_signer_index: 2,
         max_len: None,
         skip_fee_check: false,
     });
@@ -987,7 +987,7 @@ fn test_cli_program_write_buffer() {
         program_location: noop_path.to_str().unwrap().to_string(),
         buffer_signer_index: None,
         buffer_pubkey: None,
-        buffer_authority_signer_index: None,
+        buffer_authority_signer_index: 0,
         max_len: None,
         skip_fee_check: false,
     });
@@ -1028,7 +1028,7 @@ fn test_cli_program_write_buffer() {
         program_location: noop_path.to_str().unwrap().to_string(),
         buffer_signer_index: Some(1),
         buffer_pubkey: Some(buffer_keypair.pubkey()),
-        buffer_authority_signer_index: None,
+        buffer_authority_signer_index: 0,
         max_len: None, //Some(max_len),
         skip_fee_check: false,
     });
@@ -1100,7 +1100,7 @@ fn test_cli_program_set_buffer_authority() {
         program_location: noop_path.to_str().unwrap().to_string(),
         buffer_signer_index: Some(1),
         buffer_pubkey: Some(buffer_keypair.pubkey()),
-        buffer_authority_signer_index: None,
+        buffer_authority_signer_index: 0,
         max_len: None,
         skip_fee_check: false,
     });
@@ -1216,7 +1216,7 @@ fn test_cli_program_mismatch_buffer_authority() {
         program_location: noop_path.to_str().unwrap().to_string(),
         buffer_signer_index: Some(1),
         buffer_pubkey: Some(buffer_keypair.pubkey()),
-        buffer_authority_signer_index: Some(2),
+        buffer_authority_signer_index: 2,
         max_len: None,
         skip_fee_check: false,
     });
@@ -1312,7 +1312,7 @@ fn test_cli_program_show() {
         program_location: noop_path.to_str().unwrap().to_string(),
         buffer_signer_index: Some(1),
         buffer_pubkey: Some(buffer_keypair.pubkey()),
-        buffer_authority_signer_index: Some(2),
+        buffer_authority_signer_index: 2,
         max_len: None,
         skip_fee_check: false,
     });
@@ -1499,7 +1499,7 @@ fn test_cli_program_dump() {
         program_location: noop_path.to_str().unwrap().to_string(),
         buffer_signer_index: Some(1),
         buffer_pubkey: Some(buffer_keypair.pubkey()),
-        buffer_authority_signer_index: Some(2),
+        buffer_authority_signer_index: 2,
         max_len: None,
         skip_fee_check: false,
     });

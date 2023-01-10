@@ -2644,6 +2644,7 @@ impl ReplayStage {
                         &bank.rewards,
                         Some(bank.clock().unix_timestamp),
                         Some(bank.block_height()),
+                        bank.executed_transaction_count(),
                     )
                 }
                 bank_complete_time.stop();

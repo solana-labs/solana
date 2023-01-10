@@ -847,6 +847,11 @@ pub struct GithubRelease {
 }
 
 #[derive(Debug, Deserialize, Serialize)]
+pub struct GithubError {
+    pub message: String,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
 pub struct GithubReleases(Vec<GithubRelease>);
 
 fn semver_of(string: &str) -> Result<semver::Version, String> {
@@ -859,14 +864,41 @@ fn semver_of(string: &str) -> Result<semver::Version, String> {
 }
 
 fn check_for_newer_github_release(
-    version_filter: Option<semver::VersionReq>,
+    current_release_semver: &str,
+    semver_update_type: SemverUpdateType,
     prerelease_allowed: bool,
-) -> reqwest::Result<Option<String>> {
-    let mut page = 1;
-    const PER_PAGE: usize = 100;
+) -> Result<Option<String>, String> {
     let client = reqwest::blocking::Client::builder()
         .user_agent("solana-install")
-        .build()?;
+        .build()
+        .map_err(|err| err.to_string())?;
+
+    // If we want a fixed version, we don't need to stress the API to check whether it exists
+    if semver_update_type == SemverUpdateType::Fixed {
+        let download_url = github_release_download_url(current_release_semver);
+        let response = client
+            .head(download_url.as_str())
+            .send()
+            .map_err(|err| err.to_string())?;
+
+        if response.status() == reqwest::StatusCode::OK {
+            return Ok(Some(current_release_semver.to_string()));
+        }
+    }
+
+    let version_filter = semver::VersionReq::parse(&format!(
+        "{}{}",
+        match semver_update_type {
+            SemverUpdateType::Fixed => "=",
+            SemverUpdateType::Patch => "~",
+            SemverUpdateType::_Minor => "^",
+        },
+        current_release_semver
+    ))
+    .ok();
+
+    let mut page = 1;
+    const PER_PAGE: usize = 100;
     let mut all_releases = vec![];
     let mut releases = vec![];
 
@@ -879,39 +911,48 @@ fn check_for_newer_github_release(
             ],
         )
         .unwrap();
-        let request = client.get(url).build()?;
-        let response = client.execute(request)?;
+        let request = client.get(url).build().map_err(|err| err.to_string())?;
+        let response = client.execute(request).map_err(|err| err.to_string())?;
 
-        releases = response
-            .json::<GithubReleases>()?
-            .0
-            .into_iter()
-            .filter_map(
-                |GithubRelease {
-                     tag_name,
-                     prerelease,
-                 }| {
-                    if let Ok(version) = semver_of(&tag_name) {
-                        if (prerelease_allowed || !prerelease)
-                            && version_filter
-                                .as_ref()
-                                .map_or(true, |version_filter| version_filter.matches(&version))
-                        {
-                            return Some(version);
+        if response.status() == reqwest::StatusCode::OK {
+            releases = response
+                .json::<GithubReleases>()
+                .map_err(|err| err.to_string())?
+                .0
+                .into_iter()
+                .filter_map(
+                    |GithubRelease {
+                         tag_name,
+                         prerelease,
+                     }| {
+                        if let Ok(version) = semver_of(&tag_name) {
+                            if (prerelease_allowed || !prerelease)
+                                && version_filter
+                                    .as_ref()
+                                    .map_or(true, |version_filter| version_filter.matches(&version))
+                            {
+                                return Some(version);
+                            }
                         }
-                    }
-                    None
-                },
-            )
-            .collect::<Vec<_>>();
-        all_releases.extend_from_slice(&releases);
-        page += 1;
+                        None
+                    },
+                )
+                .collect::<Vec<_>>();
+            all_releases.extend_from_slice(&releases);
+            page += 1;
+        } else {
+            return Err(response
+                .json::<GithubError>()
+                .map_err(|err| err.to_string())?
+                .message);
+        }
     }
 
     all_releases.sort();
     Ok(all_releases.pop().map(|r| r.to_string()))
 }
 
+#[derive(Debug, PartialEq, Eq)]
 pub enum SemverUpdateType {
     Fixed,
     Patch,
@@ -940,19 +981,11 @@ pub fn init_or_update(config_file: &str, is_init: bool, check_only: bool) -> Res
                 progress_bar.set_message(format!("{LOOKING_GLASS}Checking for updates..."));
 
                 let github_release = check_for_newer_github_release(
-                    semver::VersionReq::parse(&format!(
-                        "{}{}",
-                        match semver_update_type {
-                            SemverUpdateType::Fixed => "=",
-                            SemverUpdateType::Patch => "~",
-                            SemverUpdateType::_Minor => "^",
-                        },
-                        current_release_semver
-                    ))
-                    .ok(),
+                    current_release_semver,
+                    semver_update_type,
                     is_init,
-                )
-                .map_err(|err| err.to_string())?;
+                )?;
+
                 progress_bar.finish_and_clear();
 
                 match github_release {

@@ -1,6 +1,7 @@
 import fs from 'mz/fs';
 import {expect, use} from 'chai';
 import chaiAsPromised from 'chai-as-promised';
+import {fail} from 'assert';
 
 import {
   Connection,
@@ -160,10 +161,15 @@ if (process.env.TEST_LIVE) {
           ])
         ).value;
         const expectedReturnData = new Uint8Array([1, 2, 3]);
-        var decodedData = Buffer.from(returnData.data[0], returnData.data[1]);
-        expect(err).to.be.null;
-        expect(returnData.programId).to.eql(program.publicKey.toString());
-        expect(decodedData).to.eql(expectedReturnData);
+
+        if (returnData) {
+          var decodedData = Buffer.from(returnData.data[0], returnData.data[1]);
+          expect(err).to.be.null;
+          expect(returnData.programId).to.eql(program.publicKey.toString());
+          expect(decodedData).to.eql(expectedReturnData);
+        } else {
+          fail('return data must be defined!');
+        }
       });
 
       it('deprecated - simulate transaction without signature verification', async () => {

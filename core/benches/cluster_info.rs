@@ -12,7 +12,7 @@ use {
     },
     solana_gossip::{
         cluster_info::{ClusterInfo, Node},
-        contact_info::ContactInfo,
+        legacy_contact_info::LegacyContactInfo as ContactInfo,
     },
     solana_ledger::{
         genesis_utils::{create_genesis_config, GenesisConfigInfo},

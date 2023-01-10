@@ -9,7 +9,9 @@ use {
     solana_core::{
         consensus::Tower, tower_storage::TowerStorage, validator::ValidatorStartProgress,
     },
-    solana_gossip::{cluster_info::ClusterInfo, contact_info::ContactInfo},
+    solana_gossip::{
+        cluster_info::ClusterInfo, legacy_contact_info::LegacyContactInfo as ContactInfo,
+    },
     solana_rpc::rpc::verify_pubkey,
     solana_rpc_client_api::{config::RpcAccountIndex, custom_error::RpcCustomError},
     solana_runtime::{accounts_index::AccountIndex, bank_forks::BankForks},

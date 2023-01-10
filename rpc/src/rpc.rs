@@ -16,7 +16,9 @@ use {
     solana_client::connection_cache::ConnectionCache,
     solana_entry::entry::Entry,
     solana_faucet::faucet::request_airdrop_transaction,
-    solana_gossip::{cluster_info::ClusterInfo, contact_info::ContactInfo},
+    solana_gossip::{
+        cluster_info::ClusterInfo, legacy_contact_info::LegacyContactInfo as ContactInfo,
+    },
     solana_ledger::{
         blockstore::{Blockstore, SignatureInfosForAddress},
         blockstore_db::BlockstoreError,
@@ -3476,6 +3478,7 @@ pub mod rpc_full {
                             gossip: Some(contact_info.gossip),
                             tpu: valid_address_or_none(&contact_info.tpu),
                             rpc: valid_address_or_none(&contact_info.rpc),
+                            pubsub: valid_address_or_none(&contact_info.rpc_pubsub),
                             version,
                             feature_set,
                             shred_version: Some(my_shred_version),
@@ -4597,7 +4600,7 @@ pub mod tests {
         serde::de::DeserializeOwned,
         solana_address_lookup_table_program::state::{AddressLookupTable, LookupTableMeta},
         solana_entry::entry::next_versioned_entry,
-        solana_gossip::{contact_info::ContactInfo, socketaddr},
+        solana_gossip::socketaddr,
         solana_ledger::{
             blockstore_meta::PerfSample,
             blockstore_processor::fill_blockstore_slot_with_ticks,
@@ -5103,6 +5106,7 @@ pub mod tests {
             "shredVersion": 0u16,
             "tpu": "127.0.0.1:1234",
             "rpc": format!("127.0.0.1:{}", rpc_port::DEFAULT_RPC_PORT),
+            "pubsub": format!("127.0.0.1:{}", rpc_port::DEFAULT_RPC_PUBSUB_PORT),
             "version": null,
             "featureSet": null,
         }]);
@@ -5841,7 +5845,7 @@ pub mod tests {
                             "executable": false,
                             "owner": "11111111111111111111111111111111",
                             "lamports": rent_exempt_amount,
-                            "rentEpoch": 0,
+                            "rentEpoch": u64::MAX,
                             "space": 0,
                         }
                     ],

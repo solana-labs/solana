@@ -305,7 +305,7 @@ impl<'a> SnapshotMinimizer<'a> {
             stored_accounts, ..
         } = self
             .accounts_db()
-            .get_unique_accounts_from_storages(storages.iter());
+            .get_unique_accounts_from_storages(storages.first().unwrap());
 
         let keep_accounts_collect = Mutex::new(Vec::with_capacity(stored_accounts.len()));
         let purge_pubkeys_collect = Mutex::new(Vec::with_capacity(stored_accounts.len()));
@@ -374,16 +374,15 @@ impl<'a> SnapshotMinimizer<'a> {
                 Some(hashes),
                 Some(new_storage),
                 Some(Box::new(write_versions.into_iter())),
-                StoreReclaims::Default,
+                StoreReclaims::Ignore,
             );
 
             new_storage.flush().unwrap();
         }
 
-        let (_, mut dead_storages_this_time) = self.accounts_db().mark_dirty_dead_stores(
+        let mut dead_storages_this_time = self.accounts_db().mark_dirty_dead_stores(
             slot,
-            |_store| true, /* ignored if shrink_in_progress is passed, otherwise retain all */
-            true,          // add_dirty_stores
+            true, // add_dirty_stores
             shrink_in_progress,
         );
         dead_storages

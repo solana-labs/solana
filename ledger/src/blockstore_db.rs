@@ -641,7 +641,7 @@ pub trait ProtobufColumn: Column {
 /// essentially Slot (or more generally speaking, has a 1:1 mapping to Slot).
 ///
 /// The clean-up of any LedgerColumn that implements SlotColumn is managed by
-/// [`LedgerCleanupService`], which will periodically deprecate and purge
+/// `LedgerCleanupService`, which will periodically deprecate and purge
 /// oldest entries that are older than the latest root in order to maintain the
 /// configured --limit-ledger-size under the validator argument.
 pub trait SlotColumn<Index = u64> {}
@@ -1574,12 +1574,12 @@ where
 impl<'a> WriteBatch<'a> {
     pub fn put_bytes<C: Column + ColumnName>(&mut self, key: C::Index, bytes: &[u8]) -> Result<()> {
         self.write_batch
-            .put_cf(self.get_cf::<C>(), &C::key(key), bytes);
+            .put_cf(self.get_cf::<C>(), C::key(key), bytes);
         Ok(())
     }
 
     pub fn delete<C: Column + ColumnName>(&mut self, key: C::Index) -> Result<()> {
-        self.write_batch.delete_cf(self.get_cf::<C>(), &C::key(key));
+        self.write_batch.delete_cf(self.get_cf::<C>(), C::key(key));
         Ok(())
     }
 
@@ -1590,7 +1590,7 @@ impl<'a> WriteBatch<'a> {
     ) -> Result<()> {
         let serialized_value = serialize(&value)?;
         self.write_batch
-            .put_cf(self.get_cf::<C>(), &C::key(key), &serialized_value);
+            .put_cf(self.get_cf::<C>(), C::key(key), serialized_value);
         Ok(())
     }
 

@@ -194,7 +194,7 @@ fn test_account_subscription() {
             "lamports": 100,
             "data": "",
             "executable": false,
-            "rentEpoch": 0,
+            "rentEpoch": u64::MAX,
             "space": 0,
         },
     });

@@ -59,10 +59,7 @@ impl BucketMapHolderStats {
     pub fn new(bins: usize) -> BucketMapHolderStats {
         BucketMapHolderStats {
             bins: bins as u64,
-            per_bucket_count: (0..bins)
-                .into_iter()
-                .map(|_| AtomicUsize::default())
-                .collect(),
+            per_bucket_count: (0..bins).map(|_| AtomicUsize::default()).collect(),
             ..BucketMapHolderStats::default()
         }
     }
@@ -195,7 +192,6 @@ impl BucketMapHolderStats {
         let disk_per_bucket_counts = disk
             .map(|disk| {
                 (0..self.bins)
-                    .into_iter()
                     .map(|i| disk.get_bucket_from_index(i as usize).bucket_len() as usize)
                     .collect::<Vec<_>>()
             })

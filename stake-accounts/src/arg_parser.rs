@@ -3,7 +3,9 @@ use {
         Args, AuthorizeArgs, Command, CountArgs, MoveArgs, NewArgs, QueryArgs, RebaseArgs,
         SetLockupArgs,
     },
-    clap::{value_t, value_t_or_exit, App, Arg, ArgMatches, SubCommand},
+    clap::{
+        crate_description, crate_name, value_t, value_t_or_exit, App, Arg, ArgMatches, SubCommand,
+    },
     solana_clap_utils::{
         input_parsers::unix_timestamp_from_rfc3339_datetime,
         input_validators::{is_amount, is_rfc3339_datetime, is_valid_pubkey, is_valid_signer},
@@ -133,9 +135,9 @@ where
     T: Into<OsString> + Clone,
 {
     let default_config_file = CONFIG_FILE.as_ref().unwrap();
-    App::new("solana-stake-accounts")
-        .about("about")
-        .version("version")
+    App::new(crate_name!())
+        .about(crate_description!())
+        .version(solana_version::version!())
         .arg(
             Arg::with_name("config_file")
                 .long("config")

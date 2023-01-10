@@ -3,7 +3,7 @@ use {
     crate::cluster_nodes::ClusterNodesCache,
     itertools::Itertools,
     solana_entry::entry::Entry,
-    solana_gossip::contact_info::ContactInfo,
+    solana_gossip::legacy_contact_info::LegacyContactInfo as ContactInfo,
     solana_ledger::shred::{ProcessShredsStats, ReedSolomonCache, Shredder},
     solana_sdk::{
         hash::Hash,
@@ -312,7 +312,7 @@ impl BroadcastRun for BroadcastDuplicatesRun {
                     .original_last_data_shreds
                     .lock()
                     .unwrap()
-                    .remove(&shred.signature())
+                    .remove(shred.signature())
                 {
                     if cluster_partition.contains(&node.id) {
                         info!(
@@ -327,7 +327,7 @@ impl BroadcastRun for BroadcastDuplicatesRun {
                     .partition_last_data_shreds
                     .lock()
                     .unwrap()
-                    .remove(&shred.signature())
+                    .remove(shred.signature())
                 {
                     // If the shred is part of the partition, broadcast it directly to the
                     // partition node. This is to account for cases when the partition stake

@@ -125,7 +125,6 @@ fn make_dos_message(
     account_metas: &[AccountMeta],
 ) -> Message {
     let instructions: Vec<_> = (0..num_instructions)
-        .into_iter()
         .map(|_| {
             let data = [num_program_iterations, thread_rng().gen_range(0, 255)];
             Instruction::new_with_bytes(program_id, &data, account_metas.to_vec())
@@ -654,7 +653,6 @@ pub mod test {
         let num_accounts = 17;
 
         let account_metas: Vec<_> = (0..num_accounts)
-            .into_iter()
             .map(|_| AccountMeta::new(Pubkey::new_unique(), false))
             .collect();
         let num_program_iterations = 10;
@@ -705,10 +703,7 @@ pub mod test {
         let num_instructions = 70;
         let num_program_iterations = 10;
         let num_accounts = 7;
-        let account_keypairs: Vec<_> = (0..num_accounts)
-            .into_iter()
-            .map(|_| Keypair::new())
-            .collect();
+        let account_keypairs: Vec<_> = (0..num_accounts).map(|_| Keypair::new()).collect();
         let account_keypair_refs: Vec<_> = account_keypairs.iter().collect();
         let mut start = Measure::start("total accounts run");
         run_transactions_dos(
