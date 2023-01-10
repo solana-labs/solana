@@ -772,7 +772,7 @@ impl BankingStage {
         } else if would_be_leader {
             // Node will be leader within ~20 slots, hold the transactions in
             // case it is the only node which produces an accepted slot.
-            BufferedPacketsDecision::ForwardAndHold
+            BufferedPacketsDecision::Forward
         } else if let Some(x) = leader_pubkey {
             if x != *my_pubkey {
                 // If the current node is not the leader, forward the buffered packets
@@ -927,6 +927,18 @@ impl BankingStage {
                 }
             }
             BufferedPacketsDecision::Forward => {
+                let recv_timeout = Duration::from_millis(10);
+                let start = Instant::now();
+                let forward_option = unprocessed_transaction_storage.forward_option();
+                while let Ok(aaa) = packet_deserializer.packet_batch_receiver.recv_timeout(recv_timeout) {
+                    for pp in &aaa.0 {
+                       Self::forward_buffered_packets(connection_cache, &forward_option, cluster_info, poh_recorder, socket, pp.iter(), data_budget, banking_stage_stats);
+                    }
+
+                    if start.elapsed() >= recv_timeout {
+                        break;
+                    }
+                }
                 /*
                 let (_, forward_time) = measure!(
                     Self::handle_forwarding(
