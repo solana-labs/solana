@@ -929,7 +929,7 @@ pub mod test {
             tls_certificates::new_self_signed_tls_certificate_chain,
         },
         crossbeam_channel::{unbounded, Receiver},
-        quinn::{ClientConfig, IdleTimeout, VarInt},
+        quinn::{ClientConfig, IdleTimeout, TransportConfig, VarInt},
         solana_sdk::{
             quic::{QUIC_KEEP_ALIVE_MS, QUIC_MAX_TIMEOUT_MS},
             signature::Keypair,
@@ -977,10 +977,11 @@ pub mod test {
 
         let mut config = ClientConfig::new(Arc::new(crypto));
 
-        let transport_config = Arc::get_mut(&mut config.transport).unwrap();
+        let mut transport_config = TransportConfig::default();
         let timeout = IdleTimeout::from(VarInt::from_u32(QUIC_MAX_TIMEOUT_MS));
         transport_config.max_idle_timeout(Some(timeout));
         transport_config.keep_alive_interval(Some(Duration::from_millis(QUIC_KEEP_ALIVE_MS)));
+        config.transport_config(Arc::new(transport_config));
 
         config
     }
@@ -1022,11 +1023,11 @@ pub mod test {
     pub async fn make_client_endpoint(
         addr: &SocketAddr,
         client_keypair: Option<&Keypair>,
-    ) -> NewConnection {
+    ) -> Connection {
         let client_socket = UdpSocket::bind("127.0.0.1:0").unwrap();
-        let mut endpoint = quinn::Endpoint::new(EndpointConfig::default(), None, client_socket)
-            .unwrap()
-            .0;
+        let mut endpoint =
+            quinn::Endpoint::new(EndpointConfig::default(), None, client_socket, TokioRuntime)
+                .unwrap();
         let default_keypair = Keypair::new();
         endpoint.set_default_client_config(get_client_config(
             client_keypair.unwrap_or(&default_keypair),
@@ -1042,7 +1043,7 @@ pub mod test {
         let conn1 = make_client_endpoint(&server_address, None).await;
         let total = 30;
         for i in 0..total {
-            let mut s1 = conn1.connection.open_uni().await.unwrap();
+            let mut s1 = conn1.open_uni().await.unwrap();
             s1.write_all(&[0u8]).await.unwrap();
             s1.finish().await.unwrap();
             info!("done {}", i);
@@ -1063,8 +1064,8 @@ pub mod test {
     pub async fn check_block_multiple_connections(server_address: SocketAddr) {
         let conn1 = make_client_endpoint(&server_address, None).await;
         let conn2 = make_client_endpoint(&server_address, None).await;
-        let mut s1 = conn1.connection.open_uni().await.unwrap();
-        let mut s2 = conn2.connection.open_uni().await.unwrap();
+        let mut s1 = conn1.open_uni().await.unwrap();
+        let mut s2 = conn2.open_uni().await.unwrap();
         s1.write_all(&[0u8]).await.unwrap();
         s1.finish().await.unwrap();
         // Send enough data to create more than 1 chunks.
@@ -1090,8 +1091,8 @@ pub mod test {
             info!("sending: {}", i);
             let c1 = conn1.clone();
             let c2 = conn2.clone();
-            let mut s1 = c1.connection.open_uni().await.unwrap();
-            let mut s2 = c2.connection.open_uni().await.unwrap();
+            let mut s1 = c1.open_uni().await.unwrap();
+            let mut s2 = c2.open_uni().await.unwrap();
             s1.write_all(&[0u8]).await.unwrap();
             s1.finish().await.unwrap();
             s2.write_all(&[0u8]).await.unwrap();
@@ -1129,7 +1130,7 @@ pub mod test {
         // Send a full size packet with single byte writes.
         let num_bytes = PACKET_DATA_SIZE;
         let num_expected_packets = 1;
-        let mut s1 = conn1.connection.open_uni().await.unwrap();
+        let mut s1 = conn1.open_uni().await.unwrap();
         for _ in 0..num_bytes {
             s1.write_all(&[0u8]).await.unwrap();
         }
@@ -1159,7 +1160,7 @@ pub mod test {
         let conn1 = Arc::new(make_client_endpoint(&server_address, None).await);
 
         // Send a full size packet with single byte writes.
-        if let Ok(mut s1) = conn1.connection.open_uni().await {
+        if let Ok(mut s1) = conn1.open_uni().await {
             for _ in 0..PACKET_DATA_SIZE {
                 // Ignoring any errors here. s1.finish() will test the error condition
                 s1.write_all(&[0u8]).await.unwrap_or_default();
@@ -1194,7 +1195,7 @@ pub mod test {
         assert_eq!(stats.total_stream_read_timeouts.load(Ordering::Relaxed), 0);
 
         // Send one byte to start the stream
-        let mut s1 = conn1.connection.open_uni().await.unwrap();
+        let mut s1 = conn1.open_uni().await.unwrap();
         s1.write_all(&[0u8]).await.unwrap_or_default();
 
         // Wait long enough for the stream to timeout in receiving chunks
