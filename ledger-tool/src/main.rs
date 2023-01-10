@@ -4202,27 +4202,27 @@ fn main() {
 
                             // Consider also rooted slots, if present
                             if let Ok(rooted) = blockstore.rooted_slot_iterator(0) {
-                                let mut first_rooted = 0;
-                                let mut last_rooted = 0;
+                                let mut first_rooted = None;
+                                let mut last_rooted = None;
                                 let mut total_rooted = 0;
                                 for (i, slot) in rooted.into_iter().enumerate() {
                                     if i == 0 {
-                                        first_rooted = slot;
+                                        first_rooted = Some(slot);
                                     }
-                                    last_rooted = slot;
+                                    last_rooted = Some(slot);
                                     total_rooted += 1;
                                 }
-
+                                let last_root_for_comparison = last_rooted.unwrap_or_default();
                                 let count_past_root = slots
                                     .iter()
                                     .rev()
-                                    .take_while(|slot| *slot > &last_rooted)
+                                    .take_while(|slot| *slot > &last_root_for_comparison)
                                     .count();
 
                                 bounds.roots = SlotInfo {
                                     total: total_rooted,
-                                    first: Some(first_rooted),
-                                    last: Some(last_rooted),
+                                    first: first_rooted,
+                                    last: last_rooted,
                                     num_after_last_root: Some(count_past_root),
                                 };
                             }
@@ -4233,7 +4233,7 @@ fn main() {
                         println!("{}", output_format.formatted_string(&slot_bounds));
                     }
                     Err(err) => {
-                        eprintln!("Unable to read the Ledger: {:?}", err);
+                        eprintln!("Unable to read the Ledger: {err:?}");
                         exit(1);
                     }
                 };
