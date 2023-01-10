@@ -1239,8 +1239,7 @@ pub struct AccountsDb {
     /// Set of storage paths to pick from
     pub(crate) paths: Vec<PathBuf>,
 
-    full_accounts_hash_cache_path: PathBuf,
-    incremental_accounts_hash_cache_path: PathBuf,
+    accounts_hash_cache_path: PathBuf,
 
     // used by tests
     // holds this until we are dropped
@@ -2204,7 +2203,7 @@ impl<'a> AppendVecScan for ScanState<'a> {
 }
 
 impl AccountsDb {
-    pub const ACCOUNTS_HASH_CACHE_DIR: &str = "accounts_hash_cache";
+    pub const ACCOUNTS_HASH_CACHE_DIR: &str = "calculate_accounts_hash_cache";
 
     pub fn default_for_tests() -> Self {
         Self::default_with_accounts_index(AccountInfoAccountsIndex::default_for_tests(), None)
@@ -2254,8 +2253,7 @@ impl AccountsDb {
             write_cache_limit_bytes: None,
             write_version: AtomicU64::new(0),
             paths: vec![],
-            full_accounts_hash_cache_path: accounts_hash_cache_path.join("full"),
-            incremental_accounts_hash_cache_path: accounts_hash_cache_path.join("incremental"),
+            accounts_hash_cache_path,
             temp_accounts_hash_cache_path,
             shrink_paths: RwLock::new(None),
             temp_paths: None,
@@ -7342,24 +7340,12 @@ impl AccountsDb {
         );
     }
 
-    fn get_full_cache_hash_data(
+    fn get_cache_hash_data(
         &self,
         config: &CalcAccountsHashConfig<'_>,
         slot: Slot,
     ) -> CacheHashData {
-        Self::_get_cache_hash_data(self.full_accounts_hash_cache_path.clone(), config, slot)
-    }
-
-    fn get_incremental_cache_hash_data(
-        &self,
-        config: &CalcAccountsHashConfig<'_>,
-        slot: Slot,
-    ) -> CacheHashData {
-        Self::_get_cache_hash_data(
-            self.incremental_accounts_hash_cache_path.clone(),
-            config,
-            slot,
-        )
+        Self::_get_cache_hash_data(self.accounts_hash_cache_path.clone(), config, slot)
     }
 
     /// normal code path returns the common cache path
@@ -7396,8 +7382,7 @@ impl AccountsDb {
 
         let use_bg_thread_pool = config.use_bg_thread_pool;
         let mut scan_and_hash = || {
-            let cache_hash_data =
-                self.get_full_cache_hash_data(config, storages.max_slot_inclusive());
+            let cache_hash_data = self.get_cache_hash_data(config, storages.max_slot_inclusive());
 
             let bounds = Range {
                 start: 0,
