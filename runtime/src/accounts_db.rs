@@ -5389,33 +5389,21 @@ impl AccountsDb {
 
     fn find_storage_candidate(&self, slot: Slot, size: usize) -> Arc<AccountStorageEntry> {
         let mut get_slot_stores = Measure::start("get_slot_stores");
-        let slot_stores_lock = self.storage.get_slot_stores(slot);
+        let store = self.storage.get_slot_storage_entry(slot);
         get_slot_stores.stop();
         self.stats
             .store_get_slot_store
             .fetch_add(get_slot_stores.as_us(), Ordering::Relaxed);
         let mut find_existing = Measure::start("find_existing");
-        if let Some(slot_stores_lock) = slot_stores_lock {
-            let slot_stores = slot_stores_lock.read().unwrap();
-            if !slot_stores.is_empty() {
-                // pick an available store at random by iterating from a random point
-                let to_skip = thread_rng().gen_range(0, slot_stores.len());
-
-                for (i, store) in slot_stores.values().cycle().skip(to_skip).enumerate() {
-                    if store.try_available() {
-                        let ret = store.clone();
-                        drop(slot_stores);
-                        find_existing.stop();
-                        self.stats
-                            .store_find_existing
-                            .fetch_add(find_existing.as_us(), Ordering::Relaxed);
-                        return ret;
-                    }
-                    // looked at every store, bail...
-                    if i == slot_stores.len() {
-                        break;
-                    }
-                }
+        if let Some(store) = store {
+            if store.try_available() {
+                let ret = store.clone();
+                drop(store);
+                find_existing.stop();
+                self.stats
+                    .store_find_existing
+                    .fetch_add(find_existing.as_us(), Ordering::Relaxed);
+                return ret;
             }
         }
         find_existing.stop();
@@ -5443,14 +5431,11 @@ impl AccountsDb {
     }
 
     fn has_space_available(&self, slot: Slot, size: u64) -> bool {
-        let slot_storage = self.storage.get_slot_stores(slot).unwrap();
-        let slot_storage_r = slot_storage.read().unwrap();
-        for (_id, store) in slot_storage_r.iter() {
-            if store.status() == AccountStorageStatus::Available
-                && (store.accounts.capacity() - store.accounts.len() as u64) > size
-            {
-                return true;
-            }
+        let store = self.storage.get_slot_storage_entry(slot).unwrap();
+        if store.status() == AccountStorageStatus::Available
+            && (store.accounts.capacity() - store.accounts.len() as u64) > size
+        {
+            return true;
         }
         false
     }
