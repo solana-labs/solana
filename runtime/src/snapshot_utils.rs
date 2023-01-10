@@ -879,8 +879,8 @@ pub fn create_accounts_run_and_snapshot_dirs(
 
 }
 
-/// Hard-link the file from accounts/ to snapshot/<slot>/accounts/
-/// This keep-alives the appendvec files to stay with the bank snapshot files.  The slot and id
+/// Hard-link the files from accounts/ to snapshot/<slot>/accounts/
+/// This keeps the appendvec files alive and with the bank snapshot.  The slot and id
 /// in the file names are also updated in case its file is a recycled one with inconsistent slot
 /// and id.
 fn hard_link_appendvec_files_to_snapshot(
@@ -2264,9 +2264,10 @@ pub fn verify_snapshot_archive<P, Q, R>(
         )
         .unwrap();
 
-        // Remove the new accounts/ hard-link directory to be consistent with the
-        // old archive structure, so that the directory comparison checking in the test
-        // passes.
+        // Bank snapshots may contain an accounts directory of hard linked append vecs,
+        // which must be removed in order for the directory comparison with the snapshot
+        // archive (below) to succeed.
+
         let accounts_path = snapshot_slot_dir.join("accounts");
         if accounts_path.is_dir() {
             // Do not use the async move_and_async_delete_path because the assert below

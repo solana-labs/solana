@@ -517,7 +517,6 @@ impl AbsRequestHandlers {
 
 pub struct AccountsBackgroundService {
     t_background: JoinHandle<()>,
-    //last_slot_snapshot_storages: Option<SnapshotStorages>,
 }
 
 impl AccountsBackgroundService {
@@ -617,7 +616,7 @@ impl AccountsBackgroundService {
                             last_cleaned_block_height = snapshot_block_height;
                             // Update the option, so the older one is released, causing the release of
                             // its reference counts of the appendvecs
-                            let _ret = last_slot_snapshot_storages.insert(snapshot_storages);
+                            let _ret = last_slot_snapshot_storages.replace(snapshot_storages);
                         } else {
                             exit.store(true, Ordering::Relaxed);
                             return;
@@ -641,10 +640,7 @@ impl AccountsBackgroundService {
                 }
             })
             .unwrap();
-        Self {
-            t_background,
-            //last_slot_snapshot_storages,
-        }
+        Self { t_background }
     }
 
     /// Should be called immediately after bank_fork_utils::load_bank_forks(), and as such, there

@@ -3318,10 +3318,7 @@ impl Bank {
                     if native_loader::check_id(account.owner()) {
                         Some(account)
                     } else {
-                        info!(
-                            "malicious account {:?} is pre-occupying at program_id {}",
-                            account, program_id
-                        );
+                        // malicious account is pre-occupying at program_id
                         self.burn_and_purge_account(program_id, account);
                         None
                     }
