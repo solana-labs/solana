@@ -887,12 +887,12 @@ fn hard_link_appendvec_files_to_snapshot(
     bank_snapshots_dir: impl AsRef<Path>,
     snapshot_storages: &[SnapshotStorage],
 ) -> Result<()> {
-    let dir_accounts_hard_links = bank_snapshots_dir.as_ref().join("accounts");
-    fs::create_dir(&dir_accounts_hard_links).map_err(|e| {
+    let accounts_hard_link_dir = bank_snapshots_dir.as_ref().join("accounts");
+    fs::create_dir(&accounts_hard_link_dir).map_err(|e| {
         SnapshotError::IoWithSourceAndFile(
             e,
             "create hard-link dir",
-            dir_accounts_hard_links.clone(),
+            accounts_hard_link_dir.clone(),
         )
     })?;
 
@@ -900,7 +900,7 @@ fn hard_link_appendvec_files_to_snapshot(
         for storage in slot_storages {
             storage.flush()?;
             let path = storage.accounts.get_path();
-            let hard_link_path = dir_accounts_hard_links.join(AppendVec::file_name(
+            let hard_link_path = accounts_hard_link_dir.join(AppendVec::file_name(
                 storage.slot(),
                 storage.append_vec_id(),
             ));
