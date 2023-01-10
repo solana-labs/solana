@@ -58,13 +58,6 @@ pub struct DosClientParameters {
     #[clap(flatten)]
     pub transaction_params: TransactionParams,
 
-    #[clap(
-        long,
-        conflicts_with("skip-gossip"),
-        help = "Submit transactions via QUIC"
-    )]
-    pub tpu_use_quic: bool,
-
     #[clap(long, default_value = "16384", help = "Size of the transactions batch")]
     pub send_batch_size: usize,
 }
@@ -228,7 +221,6 @@ mod tests {
                 skip_gossip: false,
                 allow_private_addr: false,
                 transaction_params: TransactionParams::default(),
-                tpu_use_quic: false,
                 num_gen_threads: 1,
                 send_batch_size: 16384,
             },
@@ -272,7 +264,6 @@ mod tests {
                     transaction_type: None,
                     num_instructions: None,
                 },
-                tpu_use_quic: true,
                 send_batch_size: 1,
             },
         );
@@ -316,7 +307,6 @@ mod tests {
                     transaction_type: Some(TransactionType::Transfer),
                     num_instructions: Some(1),
                 },
-                tpu_use_quic: false,
                 send_batch_size: 1,
             },
         );
@@ -375,7 +365,6 @@ mod tests {
                     transaction_type: Some(TransactionType::Transfer),
                     num_instructions: Some(8),
                 },
-                tpu_use_quic: false,
                 send_batch_size: 1,
             },
         );
@@ -417,7 +406,6 @@ mod tests {
                     transaction_type: Some(TransactionType::AccountCreation),
                     num_instructions: None,
                 },
-                tpu_use_quic: false,
                 send_batch_size: 1,
             },
         );

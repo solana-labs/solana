@@ -8,9 +8,7 @@ use {
         pubkey::Pubkey,
         signature::{read_keypair_file, Keypair},
     },
-    solana_tpu_client::tpu_connection_cache::{
-        DEFAULT_TPU_CONNECTION_POOL_SIZE, DEFAULT_TPU_USE_QUIC,
-    },
+    solana_tpu_client::tpu_connection_cache::DEFAULT_TPU_CONNECTION_POOL_SIZE,
     std::{net::SocketAddr, process::exit, time::Duration},
 };
 
@@ -60,7 +58,6 @@ pub struct Config {
     pub target_slots_per_epoch: u64,
     pub target_node: Option<Pubkey>,
     pub external_client_type: ExternalClientType,
-    pub use_quic: bool,
     pub tpu_connection_pool_size: usize,
     pub use_randomized_compute_unit_price: bool,
     pub use_durable_nonce: bool,
@@ -90,7 +87,6 @@ impl Default for Config {
             target_slots_per_epoch: 0,
             target_node: None,
             external_client_type: ExternalClientType::default(),
-            use_quic: DEFAULT_TPU_USE_QUIC,
             tpu_connection_pool_size: DEFAULT_TPU_CONNECTION_POOL_SIZE,
             use_randomized_compute_unit_price: false,
             use_durable_nonce: false,
@@ -385,10 +381,6 @@ pub fn extract_args(matches: &ArgMatches) -> Config {
         args.external_client_type = ExternalClientType::TpuClient;
     } else if matches.is_present("rpc_client") {
         args.external_client_type = ExternalClientType::RpcClient;
-    }
-
-    if matches.is_present("tpu_disable_quic") {
-        args.use_quic = false;
     }
 
     if let Some(v) = matches.value_of("tpu_connection_pool_size") {

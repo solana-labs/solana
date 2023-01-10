@@ -450,7 +450,7 @@ fn test_rpc_subscriptions() {
     }
 }
 
-fn run_tpu_send_transaction(tpu_use_quic: bool) {
+fn run_tpu_send_transaction() {
     let mint_keypair = Keypair::new();
     let mint_pubkey = mint_keypair.pubkey();
     let test_validator =
@@ -459,10 +459,7 @@ fn run_tpu_send_transaction(tpu_use_quic: bool) {
         test_validator.rpc_url(),
         CommitmentConfig::processed(),
     ));
-    let connection_cache = match tpu_use_quic {
-        true => Arc::new(ConnectionCache::new(DEFAULT_TPU_CONNECTION_POOL_SIZE)),
-        false => Arc::new(ConnectionCache::with_udp(DEFAULT_TPU_CONNECTION_POOL_SIZE)),
-    };
+    let connection_cache = Arc::new(ConnectionCache::new(DEFAULT_TPU_CONNECTION_POOL_SIZE));
     let tpu_client = TpuClient::new_with_connection_cache(
         rpc_client.clone(),
         &test_validator.rpc_pubsub_url(),
@@ -490,12 +487,7 @@ fn run_tpu_send_transaction(tpu_use_quic: bool) {
 
 #[test]
 fn test_tpu_send_transaction() {
-    run_tpu_send_transaction(/*tpu_use_quic*/ false)
-}
-
-#[test]
-fn test_tpu_send_transaction_with_quic() {
-    run_tpu_send_transaction(/*tpu_use_quic*/ true)
+    run_tpu_send_transaction()
 }
 
 #[test]

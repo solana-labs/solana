@@ -251,13 +251,9 @@ fn create_sender_thread(
     tx_receiver: Receiver<TransactionBatchMsg>,
     iterations: usize,
     target: &SocketAddr,
-    tpu_use_quic: bool,
 ) -> thread::JoinHandle<()> {
     // ConnectionCache is used instead of client because it gives ~6% higher pps
-    let connection_cache = match tpu_use_quic {
-        true => ConnectionCache::new(DEFAULT_TPU_CONNECTION_POOL_SIZE),
-        false => ConnectionCache::with_udp(DEFAULT_TPU_CONNECTION_POOL_SIZE),
-    };
+    let connection_cache = ConnectionCache::new(DEFAULT_TPU_CONNECTION_POOL_SIZE);
     let connection = connection_cache.get_connection(target);
 
     let stats_timer_receiver = tick(Duration::from_millis(SAMPLE_PERIOD_MS));
@@ -562,7 +558,6 @@ fn run_dos_transactions<T: 'static + BenchTpsClient + Send + Sync>(
     iterations: usize,
     client: Option<Arc<T>>,
     transaction_params: TransactionParams,
-    tpu_use_quic: bool,
     num_gen_threads: usize,
     send_batch_size: usize,
 ) {
@@ -577,7 +572,7 @@ fn run_dos_transactions<T: 'static + BenchTpsClient + Send + Sync>(
     let mut transaction_generator = TransactionGenerator::new(transaction_params);
     let (tx_sender, tx_receiver) = unbounded();
 
-    let sender_thread = create_sender_thread(tx_receiver, iterations, &target, tpu_use_quic);
+    let sender_thread = create_sender_thread(tx_receiver, iterations, &target);
     let tx_generator_threads: Vec<_> = payers
         .into_iter()
         .map(|payer| {
@@ -629,7 +624,6 @@ fn run_dos<T: 'static + BenchTpsClient + Send + Sync>(
             iterations,
             client,
             params.transaction_params,
-            params.tpu_use_quic,
             params.num_gen_threads,
             params.send_batch_size,
         );
@@ -756,10 +750,7 @@ fn main() {
             exit(1);
         });
 
-        let connection_cache = match cmd_params.tpu_use_quic {
-            true => ConnectionCache::new(DEFAULT_TPU_CONNECTION_POOL_SIZE),
-            false => ConnectionCache::with_udp(DEFAULT_TPU_CONNECTION_POOL_SIZE),
-        };
+        let connection_cache = ConnectionCache::new(DEFAULT_TPU_CONNECTION_POOL_SIZE);
         let (client, num_clients) = get_multi_client(
             &validators,
             &SocketAddrSpace::Unspecified,
@@ -827,7 +818,6 @@ pub mod test {
                 allow_private_addr: false,
                 num_gen_threads: 1,
                 transaction_params: TransactionParams::default(),
-                tpu_use_quic: false,
                 send_batch_size: TEST_SEND_BATCH_SIZE,
             },
         );
@@ -845,7 +835,6 @@ pub mod test {
                 allow_private_addr: false,
                 num_gen_threads: 1,
                 transaction_params: TransactionParams::default(),
-                tpu_use_quic: false,
                 send_batch_size: TEST_SEND_BATCH_SIZE,
             },
         );
@@ -863,7 +852,6 @@ pub mod test {
                 allow_private_addr: false,
                 num_gen_threads: 1,
                 transaction_params: TransactionParams::default(),
-                tpu_use_quic: false,
                 send_batch_size: TEST_SEND_BATCH_SIZE,
             },
         );
@@ -881,7 +869,6 @@ pub mod test {
                 allow_private_addr: false,
                 num_gen_threads: 1,
                 transaction_params: TransactionParams::default(),
-                tpu_use_quic: false,
                 send_batch_size: TEST_SEND_BATCH_SIZE,
             },
         );
@@ -914,7 +901,6 @@ pub mod test {
                 allow_private_addr: false,
                 num_gen_threads: 1,
                 transaction_params: TransactionParams::default(),
-                tpu_use_quic: false,
                 send_batch_size: TEST_SEND_BATCH_SIZE,
             },
         );
@@ -960,7 +946,6 @@ pub mod test {
                     transaction_type: None,
                     num_instructions: None,
                 },
-                tpu_use_quic: false,
                 send_batch_size: TEST_SEND_BATCH_SIZE,
             },
         );
@@ -987,7 +972,6 @@ pub mod test {
                     transaction_type: None,
                     num_instructions: None,
                 },
-                tpu_use_quic: false,
                 send_batch_size: TEST_SEND_BATCH_SIZE,
             },
         );
@@ -1014,13 +998,12 @@ pub mod test {
                     transaction_type: None,
                     num_instructions: None,
                 },
-                tpu_use_quic: false,
                 send_batch_size: TEST_SEND_BATCH_SIZE,
             },
         );
     }
 
-    fn run_dos_with_blockhash_and_payer(tpu_use_quic: bool) {
+    fn run_dos_with_blockhash_and_payer() {
         solana_logger::setup();
 
         // 1. Create faucet thread
@@ -1093,7 +1076,6 @@ pub mod test {
                     transaction_type: Some(TransactionType::Transfer),
                     num_instructions: Some(1),
                 },
-                tpu_use_quic,
                 send_batch_size: TEST_SEND_BATCH_SIZE,
             },
         );
@@ -1122,7 +1104,6 @@ pub mod test {
                     transaction_type: Some(TransactionType::Transfer),
                     num_instructions: Some(1),
                 },
-                tpu_use_quic,
                 send_batch_size: TEST_SEND_BATCH_SIZE,
             },
         );
@@ -1150,7 +1131,6 @@ pub mod test {
                     transaction_type: Some(TransactionType::Transfer),
                     num_instructions: Some(8),
                 },
-                tpu_use_quic,
                 send_batch_size: TEST_SEND_BATCH_SIZE,
             },
         );
@@ -1178,7 +1158,6 @@ pub mod test {
                     transaction_type: Some(TransactionType::AccountCreation),
                     num_instructions: None,
                 },
-                tpu_use_quic,
                 send_batch_size: TEST_SEND_BATCH_SIZE,
             },
         );
@@ -1186,11 +1165,6 @@ pub mod test {
 
     #[test]
     fn test_dos_with_blockhash_and_payer() {
-        run_dos_with_blockhash_and_payer(/*tpu_use_quic*/ false)
-    }
-
-    #[test]
-    fn test_dos_with_blockhash_and_payer_and_quic() {
-        run_dos_with_blockhash_and_payer(/*tpu_use_quic*/ true)
+        run_dos_with_blockhash_and_payer()
     }
 }

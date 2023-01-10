@@ -39,7 +39,6 @@ fn create_client(
     json_rpc_url: &str,
     websocket_url: &str,
     multi_client: bool,
-    use_quic: bool,
     tpu_connection_pool_size: usize,
     rpc_tpu_sockets: Option<(SocketAddr, SocketAddr)>,
     num_nodes: usize,
@@ -51,10 +50,7 @@ fn create_client(
             CommitmentConfig::confirmed(),
         )),
         ExternalClientType::ThinClient => {
-            let connection_cache = match use_quic {
-                true => Arc::new(ConnectionCache::new(tpu_connection_pool_size)),
-                false => Arc::new(ConnectionCache::with_udp(tpu_connection_pool_size)),
-            };
+            let connection_cache = Arc::new(ConnectionCache::new(tpu_connection_pool_size));
 
             if let Some((rpc, tpu)) = rpc_tpu_sockets {
                 Arc::new(ThinClient::new(rpc, tpu, connection_cache))
@@ -106,10 +102,7 @@ fn create_client(
                 json_rpc_url.to_string(),
                 CommitmentConfig::confirmed(),
             ));
-            let connection_cache = match use_quic {
-                true => ConnectionCache::new(tpu_connection_pool_size),
-                false => ConnectionCache::with_udp(tpu_connection_pool_size),
-            };
+            let connection_cache = ConnectionCache::new(tpu_connection_pool_size);
 
             Arc::new(
                 TpuClient::new_with_connection_cache(
@@ -150,7 +143,6 @@ fn main() {
         num_lamports_per_account,
         target_node,
         external_client_type,
-        use_quic,
         tpu_connection_pool_size,
         use_randomized_compute_unit_price,
         use_durable_nonce,
@@ -218,7 +210,6 @@ fn main() {
         json_rpc_url,
         websocket_url,
         *multi_client,
-        *use_quic,
         *tpu_connection_pool_size,
         rpc_tpu_sockets,
         *num_nodes,
