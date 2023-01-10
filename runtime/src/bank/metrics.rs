@@ -24,6 +24,26 @@ pub(crate) struct RewardsMetrics {
     pub(crate) vote_accounts_cache_miss_count: usize,
 }
 
+pub(crate) struct NewBankTimings {
+    pub(crate) bank_rc_creation_time_us: u64,
+    pub(crate) total_elapsed_time_us: u64,
+    pub(crate) status_cache_time_us: u64,
+    pub(crate) fee_components_time_us: u64,
+    pub(crate) blockhash_queue_time_us: u64,
+    pub(crate) stakes_cache_time_us: u64,
+    pub(crate) epoch_stakes_time_us: u64,
+    pub(crate) builtin_programs_time_us: u64,
+    pub(crate) rewards_pool_pubkeys_time_us: u64,
+    pub(crate) executor_cache_time_us: u64,
+    pub(crate) transaction_debug_keys_time_us: u64,
+    pub(crate) transaction_log_collector_config_time_us: u64,
+    pub(crate) feature_set_time_us: u64,
+    pub(crate) ancestors_time_us: u64,
+    pub(crate) update_epoch_time_us: u64,
+    pub(crate) update_sysvars_time_us: u64,
+    pub(crate) fill_sysvar_cache_time_us: u64,
+}
+
 pub(crate) fn report_new_epoch_metrics(
     epoch: Epoch,
     slot: Slot,
@@ -92,6 +112,53 @@ pub(crate) fn report_new_epoch_metrics(
         (
             "vote_accounts_cache_miss_count",
             metrics.vote_accounts_cache_miss_count,
+            i64
+        ),
+    );
+}
+
+pub(crate) fn report_new_bank_metrics(
+    slot: Slot,
+    parent_slot: Slot,
+    block_height: u64,
+    timings: NewBankTimings,
+) {
+    datapoint_info!(
+        "bank-new_from_parent-heights",
+        ("slot", slot, i64),
+        ("block_height", block_height, i64),
+        ("parent_slot", parent_slot, i64),
+        ("bank_rc_creation_us", timings.bank_rc_creation_time_us, i64),
+        ("total_elapsed_us", timings.total_elapsed_time_us, i64),
+        ("status_cache_us", timings.status_cache_time_us, i64),
+        ("fee_components_us", timings.fee_components_time_us, i64),
+        ("blockhash_queue_us", timings.blockhash_queue_time_us, i64),
+        ("stakes_cache_us", timings.stakes_cache_time_us, i64),
+        ("epoch_stakes_time_us", timings.epoch_stakes_time_us, i64),
+        ("builtin_programs_us", timings.builtin_programs_time_us, i64),
+        (
+            "rewards_pool_pubkeys_us",
+            timings.rewards_pool_pubkeys_time_us,
+            i64
+        ),
+        ("executor_cache_us", timings.executor_cache_time_us, i64),
+        (
+            "transaction_debug_keys_us",
+            timings.transaction_debug_keys_time_us,
+            i64
+        ),
+        (
+            "transaction_log_collector_config_us",
+            timings.transaction_log_collector_config_time_us,
+            i64
+        ),
+        ("feature_set_us", timings.feature_set_time_us, i64),
+        ("ancestors_us", timings.ancestors_time_us, i64),
+        ("update_epoch_us", timings.update_epoch_time_us, i64),
+        ("update_sysvars_us", timings.update_sysvars_time_us, i64),
+        (
+            "fill_sysvar_cache_us",
+            timings.fill_sysvar_cache_time_us,
             i64
         ),
     );

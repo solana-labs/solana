@@ -85,7 +85,7 @@ use {
         iter::{IntoParallelIterator, IntoParallelRefIterator, ParallelIterator},
         ThreadPool, ThreadPoolBuilder,
     },
-    solana_measure::{measure, measure::Measure},
+    solana_measure::{measure, measure::Measure, measure_us},
     solana_metrics::{inc_new_counter_debug, inc_new_counter_info},
     solana_perf::perf_libs,
     solana_program_runtime::{
@@ -1473,86 +1473,61 @@ impl Bank {
         let epoch_schedule = parent.epoch_schedule;
         let epoch = epoch_schedule.get_epoch(slot);
 
-        let (rc, bank_rc_time) = measure!(
-            BankRc {
-                accounts: Arc::new(Accounts::new_from_parent(
-                    &parent.rc.accounts,
-                    slot,
-                    parent.slot(),
-                )),
-                parent: RwLock::new(Some(parent.clone())),
+        let (rc, bank_rc_creation_time_us) = measure_us!(BankRc {
+            accounts: Arc::new(Accounts::new_from_parent(
+                &parent.rc.accounts,
                 slot,
-                bank_id_generator: parent.rc.bank_id_generator.clone(),
-            },
-            "bank_rc_creation",
-        );
+                parent.slot(),
+            )),
+            parent: RwLock::new(Some(parent.clone())),
+            slot,
+            bank_id_generator: parent.rc.bank_id_generator.clone(),
+        });
 
-        let (status_cache, status_cache_time) =
-            measure!(Arc::clone(&parent.status_cache), "status_cache_creation",);
+        let (status_cache, status_cache_time_us) = measure_us!(Arc::clone(&parent.status_cache));
 
-        let ((fee_rate_governor, fee_calculator), fee_components_time) = measure!(
-            {
-                let fee_rate_governor = FeeRateGovernor::new_derived(
-                    &parent.fee_rate_governor,
-                    parent.signature_count(),
-                );
+        let ((fee_rate_governor, fee_calculator), fee_components_time_us) = measure_us!({
+            let fee_rate_governor =
+                FeeRateGovernor::new_derived(&parent.fee_rate_governor, parent.signature_count());
 
-                let fee_calculator = if parent.feature_set.is_active(&disable_fee_calculator::id())
-                {
-                    FeeCalculator::default()
-                } else {
-                    fee_rate_governor.create_fee_calculator()
-                };
-                (fee_rate_governor, fee_calculator)
-            },
-            "fee_components_creation",
-        );
+            let fee_calculator = if parent.feature_set.is_active(&disable_fee_calculator::id()) {
+                FeeCalculator::default()
+            } else {
+                fee_rate_governor.create_fee_calculator()
+            };
+            (fee_rate_governor, fee_calculator)
+        });
 
         let bank_id = rc.bank_id_generator.fetch_add(1, Relaxed) + 1;
-        let (blockhash_queue, blockhash_queue_time) = measure!(
-            RwLock::new(parent.blockhash_queue.read().unwrap().clone()),
-            "blockhash_queue_creation",
-        );
+        let (blockhash_queue, blockhash_queue_time_us) =
+            measure_us!(RwLock::new(parent.blockhash_queue.read().unwrap().clone()));
 
-        let (stakes_cache, stakes_cache_time) = measure!(
-            StakesCache::new(parent.stakes_cache.stakes().clone()),
-            "stakes_cache_creation",
-        );
+        let (stakes_cache, stakes_cache_time_us) =
+            measure_us!(StakesCache::new(parent.stakes_cache.stakes().clone()));
 
-        let (epoch_stakes, epoch_stakes_time) =
-            measure!(parent.epoch_stakes.clone(), "epoch_stakes_creation");
+        let (epoch_stakes, epoch_stakes_time_us) = measure_us!(parent.epoch_stakes.clone());
 
-        let (builtin_programs, builtin_programs_time) =
-            measure!(parent.builtin_programs.clone(), "builtin_programs_creation");
+        let (builtin_programs, builtin_programs_time_us) =
+            measure_us!(parent.builtin_programs.clone());
 
-        let (rewards_pool_pubkeys, rewards_pool_pubkeys_time) = measure!(
-            parent.rewards_pool_pubkeys.clone(),
-            "rewards_pool_pubkeys_creation",
-        );
+        let (rewards_pool_pubkeys, rewards_pool_pubkeys_time_us) =
+            measure_us!(parent.rewards_pool_pubkeys.clone());
 
-        let (executor_cache, executor_cache_time) = measure!(
-            {
-                let parent_bank_executors = parent.executor_cache.read().unwrap();
-                RwLock::new(BankExecutorCache::new_from_parent_bank_executors(
-                    &parent_bank_executors,
-                    epoch,
-                ))
-            },
-            "executor_cache_creation",
-        );
+        let (executor_cache, executor_cache_time_us) = measure_us!({
+            let parent_bank_executors = parent.executor_cache.read().unwrap();
+            RwLock::new(BankExecutorCache::new_from_parent_bank_executors(
+                &parent_bank_executors,
+                epoch,
+            ))
+        });
 
-        let (transaction_debug_keys, transaction_debug_keys_time) = measure!(
-            parent.transaction_debug_keys.clone(),
-            "transaction_debug_keys_creation",
-        );
+        let (transaction_debug_keys, transaction_debug_keys_time_us) =
+            measure_us!(parent.transaction_debug_keys.clone());
 
-        let (transaction_log_collector_config, transaction_log_collector_config_time) = measure!(
-            parent.transaction_log_collector_config.clone(),
-            "transaction_log_collector_config_creation",
-        );
+        let (transaction_log_collector_config, transaction_log_collector_config_time_us) =
+            measure_us!(parent.transaction_log_collector_config.clone());
 
-        let (feature_set, feature_set_time) =
-            measure!(parent.feature_set.clone(), "feature_set_creation");
+        let (feature_set, feature_set_time_us) = measure_us!(parent.feature_set.clone());
 
         let accounts_data_size_initial = parent.load_accounts_data_size();
         let mut new = Bank {
@@ -1638,139 +1613,116 @@ impl Bank {
             fee_structure: parent.fee_structure.clone(),
         };
 
-        let (_, ancestors_time) = measure!(
-            {
-                let mut ancestors = Vec::with_capacity(1 + new.parents().len());
-                ancestors.push(new.slot());
-                new.parents().iter().for_each(|p| {
-                    ancestors.push(p.slot());
-                });
-                new.ancestors = Ancestors::from(ancestors);
-            },
-            "ancestors_creation",
-        );
+        let (_, ancestors_time_us) = measure_us!({
+            let mut ancestors = Vec::with_capacity(1 + new.parents().len());
+            ancestors.push(new.slot());
+            new.parents().iter().for_each(|p| {
+                ancestors.push(p.slot());
+            });
+            new.ancestors = Ancestors::from(ancestors);
+        });
 
         // Following code may touch AccountsDb, requiring proper ancestors
         let parent_epoch = parent.epoch();
-        let (_, update_epoch_time) = measure!(
-            {
-                if parent_epoch < new.epoch() {
-                    let (thread_pool, thread_pool_time) = measure!(
-                        ThreadPoolBuilder::new().build().unwrap(),
-                        "thread_pool_creation",
-                    );
+        let (_, update_epoch_time_us) = measure_us!({
+            if parent_epoch < new.epoch() {
+                let (thread_pool, thread_pool_time) = measure!(
+                    ThreadPoolBuilder::new().build().unwrap(),
+                    "thread_pool_creation",
+                );
 
-                    let (_, apply_feature_activations_time) = measure!(
-                        new.apply_feature_activations(
-                            ApplyFeatureActivationsCaller::NewFromParent,
-                            false
-                        ),
-                        "apply_feature_activation",
-                    );
+                let (_, apply_feature_activations_time) = measure!(
+                    new.apply_feature_activations(
+                        ApplyFeatureActivationsCaller::NewFromParent,
+                        false
+                    ),
+                    "apply_feature_activation",
+                );
 
-                    // Add new entry to stakes.stake_history, set appropriate epoch and
-                    // update vote accounts with warmed up stakes before saving a
-                    // snapshot of stakes in epoch stakes
-                    let (_, activate_epoch_time) = measure!(
-                        new.stakes_cache.activate_epoch(epoch, &thread_pool),
-                        "activate_epoch",
-                    );
+                // Add new entry to stakes.stake_history, set appropriate epoch and
+                // update vote accounts with warmed up stakes before saving a
+                // snapshot of stakes in epoch stakes
+                let (_, activate_epoch_time) = measure!(
+                    new.stakes_cache.activate_epoch(epoch, &thread_pool),
+                    "activate_epoch",
+                );
 
-                    // Save a snapshot of stakes for use in consensus and stake weighted networking
-                    let leader_schedule_epoch = epoch_schedule.get_leader_schedule_epoch(slot);
-                    let (_, update_epoch_stakes_time) = measure!(
-                        new.update_epoch_stakes(leader_schedule_epoch),
-                        "update_epoch_stakes",
-                    );
+                // Save a snapshot of stakes for use in consensus and stake weighted networking
+                let leader_schedule_epoch = epoch_schedule.get_leader_schedule_epoch(slot);
+                let (_, update_epoch_stakes_time) = measure!(
+                    new.update_epoch_stakes(leader_schedule_epoch),
+                    "update_epoch_stakes",
+                );
 
-                    let mut rewards_metrics = RewardsMetrics::default();
-                    // After saving a snapshot of stakes, apply stake rewards and commission
-                    let (_, update_rewards_with_thread_pool_time) = measure!(
-                        {
-                            new.update_rewards_with_thread_pool(
-                                parent_epoch,
-                                reward_calc_tracer,
-                                &thread_pool,
-                                &mut rewards_metrics,
-                            )
-                        },
-                        "update_rewards_with_thread_pool",
-                    );
+                let mut rewards_metrics = RewardsMetrics::default();
+                // After saving a snapshot of stakes, apply stake rewards and commission
+                let (_, update_rewards_with_thread_pool_time) = measure!(
+                    {
+                        new.update_rewards_with_thread_pool(
+                            parent_epoch,
+                            reward_calc_tracer,
+                            &thread_pool,
+                            &mut rewards_metrics,
+                        )
+                    },
+                    "update_rewards_with_thread_pool",
+                );
 
-                    report_new_epoch_metrics(
-                        new.epoch(),
-                        slot,
-                        parent.slot(),
-                        NewEpochTimings {
-                            thread_pool_time_us: thread_pool_time.as_us(),
-                            apply_feature_activations_time_us: apply_feature_activations_time
-                                .as_us(),
-                            activate_epoch_time_us: activate_epoch_time.as_us(),
-                            update_epoch_stakes_time_us: update_epoch_stakes_time.as_us(),
-                            update_rewards_with_thread_pool_time_us:
-                                update_rewards_with_thread_pool_time.as_us(),
-                        },
-                        rewards_metrics,
-                    );
-                } else {
-                    // Save a snapshot of stakes for use in consensus and stake weighted networking
-                    let leader_schedule_epoch = epoch_schedule.get_leader_schedule_epoch(slot);
-                    new.update_epoch_stakes(leader_schedule_epoch);
-                }
-            },
-            "update_epoch",
-        );
+                report_new_epoch_metrics(
+                    new.epoch(),
+                    slot,
+                    parent.slot(),
+                    NewEpochTimings {
+                        thread_pool_time_us: thread_pool_time.as_us(),
+                        apply_feature_activations_time_us: apply_feature_activations_time.as_us(),
+                        activate_epoch_time_us: activate_epoch_time.as_us(),
+                        update_epoch_stakes_time_us: update_epoch_stakes_time.as_us(),
+                        update_rewards_with_thread_pool_time_us:
+                            update_rewards_with_thread_pool_time.as_us(),
+                    },
+                    rewards_metrics,
+                );
+            } else {
+                // Save a snapshot of stakes for use in consensus and stake weighted networking
+                let leader_schedule_epoch = epoch_schedule.get_leader_schedule_epoch(slot);
+                new.update_epoch_stakes(leader_schedule_epoch);
+            }
+        });
 
         // Update sysvars before processing transactions
-        let (_, update_sysvars_time) = measure!(
-            {
-                new.update_slot_hashes();
-                new.update_stake_history(Some(parent_epoch));
-                new.update_clock(Some(parent_epoch));
-                new.update_fees();
-            },
-            "update_sysvars",
-        );
+        let (_, update_sysvars_time_us) = measure_us!({
+            new.update_slot_hashes();
+            new.update_stake_history(Some(parent_epoch));
+            new.update_clock(Some(parent_epoch));
+            new.update_fees();
+        });
 
-        let (_, fill_sysvar_cache_time) =
-            measure!(new.fill_missing_sysvar_cache_entries(), "fill_sysvar_cache");
-
+        let (_, fill_sysvar_cache_time_us) = measure_us!(new.fill_missing_sysvar_cache_entries());
         time.stop();
 
-        datapoint_info!(
-            "bank-new_from_parent-heights",
-            ("slot", slot, i64),
-            ("block_height", new.block_height, i64),
-            ("parent_slot", parent.slot(), i64),
-            ("bank_rc_creation_us", bank_rc_time.as_us(), i64),
-            ("total_elapsed_us", time.as_us(), i64),
-            ("status_cache_us", status_cache_time.as_us(), i64),
-            ("fee_components_us", fee_components_time.as_us(), i64),
-            ("blockhash_queue_us", blockhash_queue_time.as_us(), i64),
-            ("stakes_cache_us", stakes_cache_time.as_us(), i64),
-            ("epoch_stakes_time_us", epoch_stakes_time.as_us(), i64),
-            ("builtin_programs_us", builtin_programs_time.as_us(), i64),
-            (
-                "rewards_pool_pubkeys_us",
-                rewards_pool_pubkeys_time.as_us(),
-                i64
-            ),
-            ("executor_cache_us", executor_cache_time.as_us(), i64),
-            (
-                "transaction_debug_keys_us",
-                transaction_debug_keys_time.as_us(),
-                i64
-            ),
-            (
-                "transaction_log_collector_config_us",
-                transaction_log_collector_config_time.as_us(),
-                i64
-            ),
-            ("feature_set_us", feature_set_time.as_us(), i64),
-            ("ancestors_us", ancestors_time.as_us(), i64),
-            ("update_epoch_us", update_epoch_time.as_us(), i64),
-            ("update_sysvars_us", update_sysvars_time.as_us(), i64),
-            ("fill_sysvar_cache_us", fill_sysvar_cache_time.as_us(), i64),
+        report_new_bank_metrics(
+            slot,
+            new.block_height,
+            parent.slot(),
+            NewBankTimings {
+                bank_rc_creation_time_us,
+                total_elapsed_time_us: time.as_us(),
+                status_cache_time_us,
+                fee_components_time_us,
+                blockhash_queue_time_us,
+                stakes_cache_time_us,
+                epoch_stakes_time_us,
+                builtin_programs_time_us,
+                rewards_pool_pubkeys_time_us,
+                executor_cache_time_us,
+                transaction_debug_keys_time_us,
+                transaction_log_collector_config_time_us,
+                feature_set_time_us,
+                ancestors_time_us,
+                update_epoch_time_us,
+                update_sysvars_time_us,
+                fill_sysvar_cache_time_us,
+            },
         );
 
         parent
