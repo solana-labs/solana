@@ -3628,12 +3628,9 @@ impl AccountsDb {
                 let mut result = AccountsIndexScanResult::None;
                 if let Some((slot_list, _ref_count)) = slots_refs {
                     let stored_account = &accounts[index];
-                    let is_alive = slot_list.iter().any(|(slot, acct_info)| {
+                    let is_alive = slot_list.iter().any(|(slot, _acct_info)| {
+                        // if the accounts index contains an entry at this slot, then the append vec we're asking about contains this item and thus, it is alive at this slot
                         *slot == slot_to_shrink
-                            && acct_info.matches_storage_location(
-                                acct_info.store_id(),
-                                stored_account.account.offset,
-                            )
                     });
                     if !is_alive {
                         // This pubkey was found in the storage, but no longer exists in the index.
