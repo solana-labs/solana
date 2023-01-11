@@ -28,7 +28,6 @@ use {
         },
         bank_forks::BankForks,
         bank_utils,
-        block_cost_limits::*,
         commitment::VOTE_THRESHOLD_SIZE,
         cost_model::CostModel,
         prioritization_fee_cache::PrioritizationFeeCache,
@@ -39,7 +38,6 @@ use {
     },
     solana_sdk::{
         clock::{Slot, MAX_PROCESSING_AGE},
-        feature_set,
         genesis_config::GenesisConfig,
         hash::Hash,
         instruction::InstructionError,
@@ -62,35 +60,6 @@ use {
     },
     thiserror::Error,
 };
-
-// it tracks the block cost available capacity - number of compute-units allowed
-// by max block cost limit.
-#[derive(Debug)]
-pub struct BlockCostCapacityMeter {
-    pub capacity: u64,
-    pub accumulated_cost: u64,
-}
-
-impl Default for BlockCostCapacityMeter {
-    fn default() -> Self {
-        BlockCostCapacityMeter::new(MAX_BLOCK_UNITS)
-    }
-}
-
-impl BlockCostCapacityMeter {
-    pub fn new(capacity_limit: u64) -> Self {
-        Self {
-            capacity: capacity_limit,
-            accumulated_cost: 0_u64,
-        }
-    }
-
-    // return the remaining capacity
-    pub fn accumulate(&mut self, cost: u64) -> u64 {
-        self.accumulated_cost += cost;
-        self.capacity.saturating_sub(self.accumulated_cost)
-    }
-}
 
 struct TransactionBatchWithIndexes<'a, 'b> {
     pub batch: TransactionBatch<'a, 'b>,
@@ -152,27 +121,12 @@ fn get_first_error(
     first_err
 }
 
-fn aggregate_total_execution_units(execute_timings: &ExecuteTimings) -> u64 {
-    let mut execute_cost_units: u64 = 0;
-    for (program_id, timing) in &execute_timings.details.per_program_timings {
-        if timing.count < 1 {
-            continue;
-        }
-        execute_cost_units =
-            execute_cost_units.saturating_add(timing.accumulated_units / timing.count as u64);
-        trace!("aggregated execution cost of {:?} {:?}", program_id, timing);
-    }
-    execute_cost_units
-}
-
 fn execute_batch(
     batch: &TransactionBatchWithIndexes,
     bank: &Arc<Bank>,
     transaction_status_sender: Option<&TransactionStatusSender>,
     replay_vote_sender: Option<&ReplayVoteSender>,
     timings: &mut ExecuteTimings,
-    cost_capacity_meter: Arc<RwLock<BlockCostCapacityMeter>>,
-    tx_cost: u64,
     log_messages_bytes_limit: Option<usize>,
 ) -> Result<()> {
     let TransactionBatchWithIndexes {
@@ -189,8 +143,6 @@ fn execute_batch(
         vec![]
     };
 
-    let pre_process_units: u64 = aggregate_total_execution_units(timings);
-
     let (tx_results, balances) = batch.bank().load_execute_and_commit_transactions(
         batch,
         MAX_PROCESSING_AGE,
@@ -201,30 +153,6 @@ fn execute_batch(
         timings,
         log_messages_bytes_limit,
     );
-
-    if bank
-        .feature_set
-        .is_active(&feature_set::gate_large_block::id())
-    {
-        let execution_cost_units = aggregate_total_execution_units(timings) - pre_process_units;
-        let remaining_block_cost_cap = cost_capacity_meter
-            .write()
-            .unwrap()
-            .accumulate(execution_cost_units + tx_cost);
-
-        debug!(
-            "bank {} executed a batch, number of transactions {}, total execute cu {}, total additional cu {}, remaining block cost cap {}",
-            bank.slot(),
-            batch.sanitized_transactions().len(),
-            execution_cost_units,
-            tx_cost,
-            remaining_block_cost_cap,
-        );
-
-        if remaining_block_cost_cap == 0_u64 {
-            return Err(TransactionError::WouldExceedMaxBlockCostLimit);
-        }
-    }
 
     bank_utils::find_and_send_votes(
         batch.sanitized_transactions(),
@@ -280,8 +208,6 @@ fn execute_batches_internal(
     entry_callback: Option<&ProcessCallback>,
     transaction_status_sender: Option<&TransactionStatusSender>,
     replay_vote_sender: Option<&ReplayVoteSender>,
-    cost_capacity_meter: Arc<RwLock<BlockCostCapacityMeter>>,
-    tx_costs: &[u64],
     log_messages_bytes_limit: Option<usize>,
 ) -> Result<ExecuteBatchesInternalMetrics> {
     inc_new_counter_debug!("bank-par_execute_entries-count", batches.len());
@@ -292,23 +218,18 @@ fn execute_batches_internal(
     let results: Vec<Result<()>> = PAR_THREAD_POOL.install(|| {
         batches
             .into_par_iter()
-            .enumerate()
-            .map(|(index, transaction_batch_with_indexes)| {
-                let transaction_count = transaction_batch_with_indexes
-                    .batch
-                    .sanitized_transactions()
-                    .len() as u64;
+            .map(|transaction_batch| {
+                let transaction_count =
+                    transaction_batch.batch.sanitized_transactions().len() as u64;
                 let mut timings = ExecuteTimings::default();
                 let (result, execute_batches_time): (Result<()>, Measure) = measure!(
                     {
                         let result = execute_batch(
-                            transaction_batch_with_indexes,
+                            transaction_batch,
                             bank,
                             transaction_status_sender,
                             replay_vote_sender,
                             &mut timings,
-                            cost_capacity_meter.clone(),
-                            tx_costs[index],
                             log_messages_bytes_limit,
                         );
                         if let Some(entry_callback) = entry_callback {
@@ -383,8 +304,11 @@ fn execute_batches(
     transaction_status_sender: Option<&TransactionStatusSender>,
     replay_vote_sender: Option<&ReplayVoteSender>,
     confirmation_timing: &mut ConfirmationTiming,
+<<<<<<< HEAD
     cost_capacity_meter: Arc<RwLock<BlockCostCapacityMeter>>,
     cost_model: &CostModel,
+=======
+>>>>>>> 3d63f93bb (remove dated cost checking feature (#29598))
     log_messages_bytes_limit: Option<usize>,
 ) -> Result<()> {
     let ((lock_results, sanitized_txs), transaction_indexes): ((Vec<_>, Vec<_>), Vec<_>) = batches
@@ -423,7 +347,6 @@ fn execute_batches(
     let target_batch_count = get_thread_count() as u64;
 
     let mut tx_batches: Vec<TransactionBatchWithIndexes> = vec![];
-    let mut tx_batch_costs: Vec<u64> = vec![];
     let rebatched_txs = if total_cost > target_batch_count.saturating_mul(minimal_tx_cost) {
         let target_batch_cost = total_cost / target_batch_count;
         let mut batch_cost: u64 = 0;
@@ -447,18 +370,20 @@ fn execute_batches(
                     );
                     slice_start = next_index;
                     tx_batches.push(tx_batch);
-                    tx_batch_costs.push(batch_cost_without_bpf);
                     batch_cost = 0;
                     batch_cost_without_bpf = 0;
                 }
             });
         &tx_batches[..]
     } else {
+<<<<<<< HEAD
         match batches.len() {
             // Ensure that the total cost attributed to this batch is essentially correct
             0 => tx_batch_costs = Vec::new(),
             n => tx_batch_costs = vec![total_cost_without_bpf / (n as u64); n],
         }
+=======
+>>>>>>> 3d63f93bb (remove dated cost checking feature (#29598))
         batches
     };
 
@@ -468,8 +393,6 @@ fn execute_batches(
         entry_callback,
         transaction_status_sender,
         replay_vote_sender,
-        cost_capacity_meter,
-        &tx_batch_costs,
         log_messages_bytes_limit,
     )?;
 
@@ -525,7 +448,6 @@ pub fn process_entries_for_tests(
         transaction_status_sender,
         replay_vote_sender,
         &mut confirmation_timing,
-        Arc::new(RwLock::new(BlockCostCapacityMeter::default())),
         None,
         &_ignored_prioritization_fee_cache,
     );
@@ -544,7 +466,6 @@ fn process_entries_with_callback(
     transaction_status_sender: Option<&TransactionStatusSender>,
     replay_vote_sender: Option<&ReplayVoteSender>,
     confirmation_timing: &mut ConfirmationTiming,
-    cost_capacity_meter: Arc<RwLock<BlockCostCapacityMeter>>,
     log_messages_bytes_limit: Option<usize>,
     prioritization_fee_cache: &PrioritizationFeeCache,
 ) -> Result<()> {
@@ -573,8 +494,11 @@ fn process_entries_with_callback(
                         transaction_status_sender,
                         replay_vote_sender,
                         confirmation_timing,
+<<<<<<< HEAD
                         cost_capacity_meter.clone(),
                         &cost_model,
+=======
+>>>>>>> 3d63f93bb (remove dated cost checking feature (#29598))
                         log_messages_bytes_limit,
                     )?;
                     batches.clear();
@@ -642,8 +566,11 @@ fn process_entries_with_callback(
                             transaction_status_sender,
                             replay_vote_sender,
                             confirmation_timing,
+<<<<<<< HEAD
                             cost_capacity_meter.clone(),
                             &cost_model,
+=======
+>>>>>>> 3d63f93bb (remove dated cost checking feature (#29598))
                             log_messages_bytes_limit,
                         )?;
                         batches.clear();
@@ -659,8 +586,11 @@ fn process_entries_with_callback(
         transaction_status_sender,
         replay_vote_sender,
         confirmation_timing,
+<<<<<<< HEAD
         cost_capacity_meter,
         &cost_model,
+=======
+>>>>>>> 3d63f93bb (remove dated cost checking feature (#29598))
         log_messages_bytes_limit,
     )?;
     for hash in tick_hashes {
@@ -1214,7 +1144,6 @@ fn confirm_slot_entries(
             assert!(entries.is_some());
 
             let mut replay_elapsed = Measure::start("replay_elapsed");
-            let cost_capacity_meter = Arc::new(RwLock::new(BlockCostCapacityMeter::default()));
             let mut replay_entries: Vec<_> = entries
                 .unwrap()
                 .into_iter()
@@ -1233,7 +1162,6 @@ fn confirm_slot_entries(
                 transaction_status_sender,
                 replay_vote_sender,
                 timing,
-                cost_capacity_meter,
                 log_messages_bytes_limit,
                 prioritization_fee_cache,
             )
@@ -1875,6 +1803,7 @@ pub mod tests {
         solana_sdk::{
             account::{AccountSharedData, WritableAccount},
             epoch_schedule::EpochSchedule,
+            feature_set,
             hash::Hash,
             instruction::InstructionError,
             native_token::LAMPORTS_PER_SOL,
