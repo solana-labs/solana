@@ -6898,7 +6898,7 @@ impl AccountsDb {
         }
     }
 
-    fn update_old_slot_stats(&self, stats: &HashStats, storage: Option<&Arc<AccountStorageEntry>>) {
+    fn update_old_slot_stats(&self, stats: &HashStats, storage: Option<&SnapshotStorageOne>) {
         if let Some(storage) = storage {
             stats.roots_older_than_epoch.fetch_add(1, Ordering::Relaxed);
             let mut ancients = 0;
@@ -6957,9 +6957,8 @@ impl AccountsDb {
         storage: Option<&SnapshotStorageOne>,
         slot: Slot,
     ) -> bool {
-        if let Some(sub_storage) = storage {
+        if let Some(append_vec) = storage {
             // hash info about this storage
-            let append_vec = sub_storage;
             append_vec.written_bytes().hash(hasher);
             let storage_file = append_vec.accounts.get_path();
             slot.hash(hasher);
@@ -7119,14 +7118,14 @@ impl AccountsDb {
         let acceptable_straggler_slot_count = 100; // do nothing special for these old stores which will likely get cleaned up shortly
         let sub = slots_per_epoch + acceptable_straggler_slot_count;
         let in_epoch_range_start = max.saturating_sub(sub);
-        for (slot, store) in storages.iter_range(&(..in_epoch_range_start)) {
-            if let Some(store) = store {
-                if !is_ancient(&store.accounts) {
+        for (slot, storage) in storages.iter_range(&(..in_epoch_range_start)) {
+            if let Some(storage) = storage {
+                if !is_ancient(&storage.accounts) {
                     // ancient stores are managed separately - we expect them to be old and keeping accounts
                     // We can expect the normal processes will keep them cleaned.
                     // If we included them here then ALL accounts in ALL ancient append vecs will be visited by clean each time.
                     self.dirty_stores
-                        .insert((slot, store.append_vec_id()), store.clone());
+                        .insert((slot, storage.append_vec_id()), storage.clone());
                     num_dirty_slots += 1;
                 }
             }

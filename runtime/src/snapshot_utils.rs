@@ -871,8 +871,12 @@ pub fn add_bank_snapshot(
         let serde_style = match snapshot_version {
             SnapshotVersion::V1_2_0 => SerdeStyle::Newer,
         };
-        let serialize = get_storages_to_serialize(snapshot_storages);
-        bank_to_stream(serde_style, stream.by_ref(), bank, &serialize)?;
+        bank_to_stream(
+            serde_style,
+            stream.by_ref(),
+            bank,
+            &get_storages_to_serialize(snapshot_storages),
+        )?;
         Ok(())
     };
     let consumed_size =
