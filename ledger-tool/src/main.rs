@@ -2765,7 +2765,7 @@ fn main() {
                     ..ProcessOptions::default()
                 };
                 let print_accounts_stats = arg_matches.is_present("print_accounts_stats");
-                println!(
+                info!(
                     "genesis hash: {}",
                     open_genesis_config_by(&ledger_path, arg_matches).hash()
                 );
@@ -2795,7 +2795,6 @@ fn main() {
                 }
                 exit_signal.store(true, Ordering::Relaxed);
                 system_monitor_service.join().unwrap();
-                println!("Ok");
             }
             ("graph", Some(arg_matches)) => {
                 let output_file = value_t_or_exit!(arg_matches, "graph_filename", String);
@@ -4235,7 +4234,6 @@ fn main() {
                     )
                     .db(),
                 );
-                println!("Ok.");
             }
             ("compute-slot-cost", Some(arg_matches)) => {
                 let blockstore = open_blockstore(
