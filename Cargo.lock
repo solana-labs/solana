@@ -4769,6 +4769,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "solana-accounts-tool"
+version = "1.15.0"
+
+[[package]]
 name = "solana-address-lookup-table-program"
 version = "1.15.0"
 dependencies = [
