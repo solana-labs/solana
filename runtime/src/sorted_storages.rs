@@ -28,7 +28,7 @@ impl<'a> SortedStorages<'a> {
         }
     }
 
-    /// primary method of retrieving (Slot, SnapshotStorage)
+    /// primary method of retrieving (Slot, SnapshotStorageOne)
     pub fn iter_range<R>(&'a self, range: &R) -> SortedStoragesIter<'a>
     where
         R: RangeBounds<Slot>,
@@ -60,9 +60,8 @@ impl<'a> SortedStorages<'a> {
         self.storages.len()
     }
 
-    // assumptions:
-    // 1. each SnapshotStorage.!is_empty()
-    // 2. SnapshotStorage.first().unwrap().get_slot() is unique from all other SnapshotStorage items.
+    // assumption:
+    // source.slot() is unique from all other items in 'source'
     pub fn new(source: &'a [SnapshotStorageOne]) -> Self {
         let slots = source.iter().map(|storage| {
             storage.slot() // this must be unique. Will be enforced in new_with_slots
@@ -71,7 +70,7 @@ impl<'a> SortedStorages<'a> {
     }
 
     /// create `SortedStorages` from 'source' iterator.
-    /// 'source' contains a SnapshotStorage and its associated slot
+    /// 'source' contains a SnapshotStorageOne and its associated slot
     /// 'source' does not have to be sorted in any way, but is assumed to not have duplicate slot #s
     pub fn new_with_slots(
         source: impl Iterator<Item = (&'a SnapshotStorageOne, Slot)> + Clone,
