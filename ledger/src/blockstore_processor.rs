@@ -28,7 +28,6 @@ use {
         },
         bank_forks::BankForks,
         bank_utils,
-        block_cost_limits::*,
         commitment::VOTE_THRESHOLD_SIZE,
         cost_model::CostModel,
         snapshot_config::SnapshotConfig,
@@ -41,7 +40,6 @@ use {
     },
     solana_sdk::{
         clock::{Slot, MAX_PROCESSING_AGE},
-        feature_set,
         genesis_config::GenesisConfig,
         hash::Hash,
         instruction::InstructionError,
@@ -66,6 +64,7 @@ use {
     thiserror::Error,
 };
 
+<<<<<<< HEAD
 // it tracks the block cost available capacity - number of compute-units allowed
 // by max block cost limit
 #[derive(Debug)]
@@ -101,6 +100,27 @@ thread_local!(static PAR_THREAD_POOL: RefCell<ThreadPool> = RefCell::new(rayon::
                     .build()
                     .unwrap())
 );
+=======
+struct TransactionBatchWithIndexes<'a, 'b> {
+    pub batch: TransactionBatch<'a, 'b>,
+    pub transaction_indexes: Vec<usize>,
+}
+
+struct ReplayEntry {
+    entry: EntryType,
+    starting_index: usize,
+}
+
+// get_max_thread_count to match number of threads in the old code.
+// see: https://github.com/solana-labs/solana/pull/24853
+lazy_static! {
+    static ref PAR_THREAD_POOL: ThreadPool = rayon::ThreadPoolBuilder::new()
+        .num_threads(get_max_thread_count())
+        .thread_name(|ix| format!("solBstoreProc{ix:02}"))
+        .build()
+        .unwrap();
+}
+>>>>>>> 3d63f93bb (remove dated cost checking feature (#29598))
 
 fn first_err(results: &[Result<()>]) -> Result<()> {
     for r in results {
@@ -142,26 +162,17 @@ fn get_first_error(
     first_err
 }
 
-fn aggregate_total_execution_units(execute_timings: &ExecuteTimings) -> u64 {
-    let mut execute_cost_units: u64 = 0;
-    for (program_id, timing) in &execute_timings.details.per_program_timings {
-        if timing.count < 1 {
-            continue;
-        }
-        execute_cost_units =
-            execute_cost_units.saturating_add(timing.accumulated_units / timing.count as u64);
-        trace!("aggregated execution cost of {:?} {:?}", program_id, timing);
-    }
-    execute_cost_units
-}
-
 fn execute_batch(
     batch: &TransactionBatch,
     bank: &Arc<Bank>,
     transaction_status_sender: Option<&TransactionStatusSender>,
     replay_vote_sender: Option<&ReplayVoteSender>,
     timings: &mut ExecuteTimings,
+<<<<<<< HEAD
     cost_capacity_meter: Arc<RwLock<BlockCostCapacityMeter>>,
+=======
+    log_messages_bytes_limit: Option<usize>,
+>>>>>>> 3d63f93bb (remove dated cost checking feature (#29598))
 ) -> Result<()> {
     let record_token_balances = transaction_status_sender.is_some();
 
@@ -173,8 +184,6 @@ fn execute_batch(
         vec![]
     };
 
-    let pre_process_units: u64 = aggregate_total_execution_units(timings);
-
     let (tx_results, balances) = batch.bank().load_execute_and_commit_transactions(
         batch,
         MAX_PROCESSING_AGE,
@@ -184,6 +193,7 @@ fn execute_batch(
         timings,
     );
 
+<<<<<<< HEAD
     if bank
         .feature_set
         .is_active(&feature_set::gate_large_block::id())
@@ -207,6 +217,8 @@ fn execute_batch(
         }
     }
 
+=======
+>>>>>>> 3d63f93bb (remove dated cost checking feature (#29598))
     bank_utils::find_and_send_votes(
         batch.sanitized_transactions(),
         &tx_results,
@@ -253,6 +265,7 @@ fn execute_batches_internal(
     entry_callback: Option<&ProcessCallback>,
     transaction_status_sender: Option<&TransactionStatusSender>,
     replay_vote_sender: Option<&ReplayVoteSender>,
+<<<<<<< HEAD
     timings: &mut ExecuteTimings,
     cost_capacity_meter: Arc<RwLock<BlockCostCapacityMeter>>,
 ) -> Result<()> {
@@ -266,11 +279,36 @@ fn execute_batches_internal(
                         let mut timings = ExecuteTimings::default();
                         let result = execute_batch(
                             batch,
+=======
+    log_messages_bytes_limit: Option<usize>,
+) -> Result<ExecuteBatchesInternalMetrics> {
+    assert!(!batches.is_empty());
+    inc_new_counter_debug!("bank-par_execute_entries-count", batches.len());
+    let execution_timings_per_thread: Mutex<HashMap<usize, ThreadExecuteTimings>> =
+        Mutex::new(HashMap::new());
+
+    let mut execute_batches_elapsed = Measure::start("execute_batches_elapsed");
+    let results: Vec<Result<()>> = PAR_THREAD_POOL.install(|| {
+        batches
+            .into_par_iter()
+            .map(|transaction_batch| {
+                let transaction_count =
+                    transaction_batch.batch.sanitized_transactions().len() as u64;
+                let mut timings = ExecuteTimings::default();
+                let (result, execute_batches_time): (Result<()>, Measure) = measure!(
+                    {
+                        let result = execute_batch(
+                            transaction_batch,
+>>>>>>> 3d63f93bb (remove dated cost checking feature (#29598))
                             bank,
                             transaction_status_sender,
                             replay_vote_sender,
                             &mut timings,
+<<<<<<< HEAD
                             cost_capacity_meter.clone(),
+=======
+                            log_messages_bytes_limit,
+>>>>>>> 3d63f93bb (remove dated cost checking feature (#29598))
                         );
                         if let Some(entry_callback) = entry_callback {
                             entry_callback(bank);
@@ -311,8 +349,13 @@ fn execute_batches(
     entry_callback: Option<&ProcessCallback>,
     transaction_status_sender: Option<&TransactionStatusSender>,
     replay_vote_sender: Option<&ReplayVoteSender>,
+<<<<<<< HEAD
     timings: &mut ExecuteTimings,
     cost_capacity_meter: Arc<RwLock<BlockCostCapacityMeter>>,
+=======
+    confirmation_timing: &mut ConfirmationTiming,
+    log_messages_bytes_limit: Option<usize>,
+>>>>>>> 3d63f93bb (remove dated cost checking feature (#29598))
 ) -> Result<()> {
     let (lock_results, sanitized_txs): (Vec<_>, Vec<_>) = batches
         .iter()
@@ -343,11 +386,16 @@ fn execute_batches(
 
     let target_batch_count = get_thread_count() as u64;
 
+<<<<<<< HEAD
     let mut tx_batches: Vec<TransactionBatch> = vec![];
+=======
+    let mut tx_batches: Vec<TransactionBatchWithIndexes> = vec![];
+>>>>>>> 3d63f93bb (remove dated cost checking feature (#29598))
     let rebatched_txs = if total_cost > target_batch_count.saturating_mul(minimal_tx_cost) {
         let target_batch_cost = total_cost / target_batch_count;
         let mut batch_cost: u64 = 0;
         let mut slice_start = 0;
+<<<<<<< HEAD
         tx_costs.into_iter().enumerate().for_each(|(index, cost)| {
             let next_index = index + 1;
             batch_cost = batch_cost.saturating_add(cost);
@@ -359,6 +407,30 @@ fn execute_batches(
                 batch_cost = 0;
             }
         });
+=======
+        tx_costs
+            .into_iter()
+            .enumerate()
+            .for_each(|(index, cost_pair)| {
+                let next_index = index + 1;
+                batch_cost = batch_cost.saturating_add(cost_pair.0);
+                batch_cost_without_bpf = batch_cost_without_bpf.saturating_add(cost_pair.1);
+                if batch_cost >= target_batch_cost || next_index == sanitized_txs.len() {
+                    let tx_batch = rebatch_transactions(
+                        &lock_results,
+                        bank,
+                        &sanitized_txs,
+                        slice_start,
+                        index,
+                        &transaction_indexes,
+                    );
+                    slice_start = next_index;
+                    tx_batches.push(tx_batch);
+                    batch_cost = 0;
+                    batch_cost_without_bpf = 0;
+                }
+            });
+>>>>>>> 3d63f93bb (remove dated cost checking feature (#29598))
         &tx_batches[..]
     } else {
         batches
@@ -370,9 +442,17 @@ fn execute_batches(
         entry_callback,
         transaction_status_sender,
         replay_vote_sender,
+<<<<<<< HEAD
         timings,
         cost_capacity_meter,
     )
+=======
+        log_messages_bytes_limit,
+    )?;
+
+    confirmation_timing.process_execute_batches_internal_metrics(execute_batches_internal_metrics);
+    Ok(())
+>>>>>>> 3d63f93bb (remove dated cost checking feature (#29598))
 }
 
 /// Process an ordered list of entries in parallel
@@ -403,6 +483,10 @@ pub fn process_entries_for_tests(
         None,
         transaction_status_sender,
         replay_vote_sender,
+<<<<<<< HEAD
+=======
+        &mut confirmation_timing,
+>>>>>>> 3d63f93bb (remove dated cost checking feature (#29598))
         None,
         &mut timings,
         Arc::new(RwLock::new(BlockCostCapacityMeter::default())),
@@ -420,9 +504,15 @@ fn process_entries_with_callback(
     entry_callback: Option<&ProcessCallback>,
     transaction_status_sender: Option<&TransactionStatusSender>,
     replay_vote_sender: Option<&ReplayVoteSender>,
+<<<<<<< HEAD
     transaction_cost_metrics_sender: Option<&TransactionCostMetricsSender>,
     timings: &mut ExecuteTimings,
     cost_capacity_meter: Arc<RwLock<BlockCostCapacityMeter>>,
+=======
+    confirmation_timing: &mut ConfirmationTiming,
+    log_messages_bytes_limit: Option<usize>,
+    prioritization_fee_cache: &PrioritizationFeeCache,
+>>>>>>> 3d63f93bb (remove dated cost checking feature (#29598))
 ) -> Result<()> {
     // accumulator for entries that can be processed in parallel
     let mut batches = vec![];
@@ -443,8 +533,13 @@ fn process_entries_with_callback(
                         entry_callback,
                         transaction_status_sender,
                         replay_vote_sender,
+<<<<<<< HEAD
                         timings,
                         cost_capacity_meter.clone(),
+=======
+                        confirmation_timing,
+                        log_messages_bytes_limit,
+>>>>>>> 3d63f93bb (remove dated cost checking feature (#29598))
                     )?;
                     batches.clear();
                     for hash in &tick_hashes {
@@ -500,8 +595,13 @@ fn process_entries_with_callback(
                             entry_callback,
                             transaction_status_sender,
                             replay_vote_sender,
+<<<<<<< HEAD
                             timings,
                             cost_capacity_meter.clone(),
+=======
+                            confirmation_timing,
+                            log_messages_bytes_limit,
+>>>>>>> 3d63f93bb (remove dated cost checking feature (#29598))
                         )?;
                         batches.clear();
                     }
@@ -515,8 +615,13 @@ fn process_entries_with_callback(
         entry_callback,
         transaction_status_sender,
         replay_vote_sender,
+<<<<<<< HEAD
         timings,
         cost_capacity_meter,
+=======
+        confirmation_timing,
+        log_messages_bytes_limit,
+>>>>>>> 3d63f93bb (remove dated cost checking feature (#29598))
     )?;
     for hash in tick_hashes {
         bank.register_tick(hash);
@@ -981,8 +1086,20 @@ pub fn confirm_slot(
             assert!(entries.is_some());
 
             let mut replay_elapsed = Measure::start("replay_elapsed");
+<<<<<<< HEAD
             let mut execute_timings = ExecuteTimings::default();
             let cost_capacity_meter = Arc::new(RwLock::new(BlockCostCapacityMeter::default()));
+=======
+            let mut replay_entries: Vec<_> = entries
+                .unwrap()
+                .into_iter()
+                .zip(entry_starting_indexes)
+                .map(|(entry, starting_index)| ReplayEntry {
+                    entry,
+                    starting_index,
+                })
+                .collect();
+>>>>>>> 3d63f93bb (remove dated cost checking feature (#29598))
             // Note: This will shuffle entries' transactions in-place.
             let process_result = process_entries_with_callback(
                 bank,
@@ -991,9 +1108,15 @@ pub fn confirm_slot(
                 entry_callback,
                 transaction_status_sender,
                 replay_vote_sender,
+<<<<<<< HEAD
                 transaction_cost_metrics_sender,
                 &mut execute_timings,
                 cost_capacity_meter,
+=======
+                timing,
+                log_messages_bytes_limit,
+                prioritization_fee_cache,
+>>>>>>> 3d63f93bb (remove dated cost checking feature (#29598))
             )
             .map_err(BlockstoreProcessorError::from);
             replay_elapsed.stop();
@@ -1633,6 +1756,7 @@ pub mod tests {
         solana_sdk::{
             account::{AccountSharedData, WritableAccount},
             epoch_schedule::EpochSchedule,
+            feature_set,
             hash::Hash,
             instruction::InstructionError,
             native_token::LAMPORTS_PER_SOL,
