@@ -133,7 +133,7 @@ use {
         lamports::LamportsError,
         message::{AccountKeys, SanitizedMessage},
         native_loader,
-        native_token::sol_to_lamports,
+        native_token::{sol_to_lamports, LAMPORTS_PER_SOL},
         nonce::{self, state::DurableNonce, NONCED_TX_MARKER_IX_INDEX},
         nonce_account,
         packet::PACKET_DATA_SIZE,
@@ -2526,7 +2526,7 @@ impl Bank {
         let invalid_cached_vote_accounts = AtomicUsize::default();
         let invalid_cached_stake_accounts_rent_epoch = AtomicUsize::default();
 
-        let stake_delegations: Vec<_> = stakes.stake_delegations().iter().collect();
+        let stake_delegations = self.filter_stake_delegations(&stakes);
         thread_pool.install(|| {
             stake_delegations
                 .into_par_iter()
@@ -2666,6 +2666,39 @@ impl Bank {
         }
     }
 
+    fn filter_stake_delegations<'a>(
+        &self,
+        stakes: &'a Stakes<StakeAccount<Delegation>>,
+    ) -> Vec<(&'a Pubkey, &'a StakeAccount<Delegation>)> {
+        if self
+            .feature_set
+            .is_active(&feature_set::stake_minimum_delegation_for_rewards::id())
+        {
+            let num_stake_delegations = stakes.stake_delegations().len();
+            let min_stake_delegation =
+                solana_stake_program::get_minimum_delegation(&self.feature_set)
+                    .max(LAMPORTS_PER_SOL);
+
+            let (stake_delegations, filter_timer) = measure!(stakes
+                .stake_delegations()
+                .iter()
+                .filter(|(_stake_pubkey, cached_stake_account)| {
+                    cached_stake_account.delegation().stake >= min_stake_delegation
+                })
+                .collect::<Vec<_>>());
+
+            datapoint_info!(
+                "stake_account_filter_time",
+                ("filter_time_us", filter_timer.as_us(), i64),
+                ("num_stake_delegations_before", num_stake_delegations, i64),
+                ("num_stake_delegations_after", stake_delegations.len(), i64)
+            );
+            stake_delegations
+        } else {
+            stakes.stake_delegations().iter().collect()
+        }
+    }
+
     fn load_vote_and_stake_accounts<F>(
         &self,
         thread_pool: &ThreadPool,
@@ -2675,7 +2708,8 @@ impl Bank {
         F: Fn(&RewardCalculationEvent) + Send + Sync,
     {
         let stakes = self.stakes_cache.stakes();
-        let stake_delegations: Vec<_> = stakes.stake_delegations().iter().collect();
+        let stake_delegations = self.filter_stake_delegations(&stakes);
+
         // Obtain all unique voter pubkeys from stake delegations.
         fn merge(mut acc: HashSet<Pubkey>, other: HashSet<Pubkey>) -> HashSet<Pubkey> {
             if acc.len() < other.len() {
@@ -7988,7 +8022,6 @@ pub(crate) mod tests {
             instruction::{AccountMeta, CompiledInstruction, Instruction, InstructionError},
             loader_upgradeable_instruction::UpgradeableLoaderInstruction,
             message::{Message, MessageHeader},
-            native_token::LAMPORTS_PER_SOL,
             nonce,
             poh_config::PohConfig,
             program::MAX_RETURN_DATA,
@@ -17520,7 +17553,7 @@ pub(crate) mod tests {
         let GenesisConfigInfo { genesis_config, .. } = create_genesis_config_with_vote_accounts(
             1_000_000_000,
             &validator_keypairs,
-            vec![10_000; 2],
+            vec![LAMPORTS_PER_SOL; 2],
         );
         let bank = Arc::new(Bank::new_for_tests(&genesis_config));
         let vote_and_stake_accounts =

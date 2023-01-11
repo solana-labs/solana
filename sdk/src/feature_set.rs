@@ -398,6 +398,10 @@ pub mod stake_raise_minimum_delegation_to_1_sol {
     solana_sdk::declare_id!("4xmyBuR2VCXzy9H6qYpH9ckfgnTuMDQFPFBfTs4eBCY1");
 }
 
+pub mod stake_minimum_delegation_for_rewards {
+    solana_sdk::declare_id!("ELjxSXwNsyXGfAh8TqX8ih22xeT8huF6UngQirbLKYKH");
+}
+
 pub mod add_set_compute_unit_price_ix {
     solana_sdk::declare_id!("98std1NSHqXi9WYvFShfVepRdCoq1qvsp8fsR2XZtG8g");
 }
@@ -671,6 +675,7 @@ lazy_static! {
         (stake_allow_zero_undelegated_amount::id(), "Allow zero-lamport undelegated amount for initialized stakes #24670"),
         (require_static_program_ids_in_transaction::id(), "require static program ids in versioned transactions"),
         (stake_raise_minimum_delegation_to_1_sol::id(), "Raise minimum stake delegation to 1.0 SOL #24357"),
+        (stake_minimum_delegation_for_rewards::id(), "stakes must be at least the minimum delegation to earn rewards"),
         (add_set_compute_unit_price_ix::id(), "add compute budget ix for setting a compute unit price"),
         (disable_deploy_of_alloc_free_syscall::id(), "disable new deployments of deprecated sol_alloc_free_ syscall"),
         (include_account_index_in_rent_error::id(), "include account index in rent tx error #25190"),
