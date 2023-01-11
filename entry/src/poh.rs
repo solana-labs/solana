@@ -45,6 +45,10 @@ impl Poh {
         *self = Poh::new_with_slot_info(hash, hashes_per_tick, tick_number);
     }
 
+    pub fn hashes_per_tick(&self) -> u64 {
+        self.hashes_per_tick
+    }
+
     pub fn target_poh_time(&self, target_ns_per_tick: u64) -> Instant {
         assert!(self.hashes_per_tick > 0);
         let offset_tick_ns = target_ns_per_tick * self.tick_number;

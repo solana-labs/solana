@@ -109,9 +109,10 @@ use {
         account_utils::StateMut,
         bpf_loader_upgradeable::{self, UpgradeableLoaderState},
         clock::{
-            BankId, Epoch, Slot, SlotCount, SlotIndex, UnixTimestamp, DEFAULT_TICKS_PER_SECOND,
-            INITIAL_RENT_EPOCH, MAX_PROCESSING_AGE, MAX_TRANSACTION_FORWARDING_DELAY,
-            MAX_TRANSACTION_FORWARDING_DELAY_GPU, SECONDS_PER_DAY,
+            BankId, Epoch, Slot, SlotCount, SlotIndex, UnixTimestamp, DEFAULT_HASHES_PER_TICK,
+            DEFAULT_TICKS_PER_SECOND, INITIAL_RENT_EPOCH, MAX_PROCESSING_AGE,
+            MAX_TRANSACTION_FORWARDING_DELAY, MAX_TRANSACTION_FORWARDING_DELAY_GPU,
+            SECONDS_PER_DAY,
         },
         ed25519_program,
         epoch_info::EpochInfo,
@@ -1920,10 +1921,6 @@ impl Bank {
             bank.genesis_creation_time, genesis_config.creation_time,
             "Bank snapshot genesis creation time does not match genesis.bin creation time.\
              The snapshot and genesis.bin might pertain to different clusters"
-        );
-        assert_eq!(
-            bank.hashes_per_tick,
-            genesis_config.poh_config.hashes_per_tick
         );
         assert_eq!(bank.ticks_per_slot, genesis_config.ticks_per_slot);
         assert_eq!(
@@ -7483,6 +7480,19 @@ impl Bank {
             const ACCOUNTS_DATA_LEN: u64 = 50_000_000_000;
             self.accounts_data_size_initial = ACCOUNTS_DATA_LEN;
         }
+
+        if new_feature_activations.contains(&feature_set::update_hashes_per_tick::id()) {
+            self.apply_updated_hashes_per_tick(DEFAULT_HASHES_PER_TICK);
+        }
+    }
+
+    fn apply_updated_hashes_per_tick(&mut self, hashes_per_tick: u64) {
+        info!(
+            "Activating update_hashes_per_tick {} at slot {}",
+            hashes_per_tick,
+            self.slot(),
+        );
+        self.hashes_per_tick = Some(hashes_per_tick);
     }
 
     fn adjust_sysvar_balance_for_rent(&self, account: &mut AccountSharedData) {
@@ -20271,5 +20281,33 @@ pub(crate) mod tests {
                 solana_sdk::instruction::InstructionError::MaxAccountsDataAllocationsExceeded,
             )),
         );
+    }
+
+    #[test]
+    fn test_feature_activation_idempotent() {
+        let mut genesis_config = GenesisConfig::default();
+        const HASHES_PER_TICK_START: u64 = 3;
+        genesis_config.poh_config.hashes_per_tick = Some(HASHES_PER_TICK_START);
+
+        let mut bank = Bank::new_for_tests(&genesis_config);
+        assert_eq!(bank.hashes_per_tick, Some(HASHES_PER_TICK_START));
+
+        // Don't activate feature
+        bank.apply_feature_activations(ApplyFeatureActivationsCaller::NewFromParent, false);
+        assert_eq!(bank.hashes_per_tick, Some(HASHES_PER_TICK_START));
+
+        // Activate feature
+        let feature_account_balance =
+            std::cmp::max(genesis_config.rent.minimum_balance(Feature::size_of()), 1);
+        bank.store_account(
+            &feature_set::update_hashes_per_tick::id(),
+            &feature::create_account(&Feature { activated_at: None }, feature_account_balance),
+        );
+        bank.apply_feature_activations(ApplyFeatureActivationsCaller::NewFromParent, false);
+        assert_eq!(bank.hashes_per_tick, Some(DEFAULT_HASHES_PER_TICK));
+
+        // Activate feature "again"
+        bank.apply_feature_activations(ApplyFeatureActivationsCaller::NewFromParent, false);
+        assert_eq!(bank.hashes_per_tick, Some(DEFAULT_HASHES_PER_TICK));
     }
 }
