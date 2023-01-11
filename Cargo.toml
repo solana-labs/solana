@@ -3,6 +3,7 @@ members = [
     "account-decoder",
     "accounts-bench",
     "accounts-cluster-bench",
+    "accounts-tool",
     "banking-bench",
     "banks-client",
     "banks-interface",
