@@ -435,7 +435,7 @@ startClient() {
 
 startClients() {
   set -x
-  for ((i=0; i < "$numClients" && i < "$numClientsRequested"; i++)) do
+  for ((i=0; i < "$numClients"; i++)) do
     if [[ $i -lt "$numBenchTpsClients" ]]; then
       (
         set +x
