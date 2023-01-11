@@ -472,7 +472,10 @@ mod tests {
             },
             signature::Keypair,
         },
-        solana_streamer::{quic::StreamStats, streamer::StakedNodes},
+        solana_streamer::{
+            nonblocking::quic::DEFAULT_WAIT_FOR_CHUNK_TIMEOUT_MS, quic::StreamStats,
+            streamer::StakedNodes,
+        },
         std::{
             net::{IpAddr, Ipv4Addr, SocketAddr, UdpSocket},
             sync::{
@@ -665,7 +668,7 @@ mod tests {
             10,
             10,
             response_recv_stats,
-            1000,
+            DEFAULT_WAIT_FOR_CHUNK_TIMEOUT_MS,
         )
         .unwrap();
 

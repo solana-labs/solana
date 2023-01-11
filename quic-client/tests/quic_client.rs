@@ -9,8 +9,8 @@ mod tests {
         },
         solana_sdk::{packet::PACKET_DATA_SIZE, signature::Keypair},
         solana_streamer::{
-            quic::StreamStats, streamer::StakedNodes,
-            tls_certificates::new_self_signed_tls_certificate_chain,
+            nonblocking::quic::DEFAULT_WAIT_FOR_CHUNK_TIMEOUT_MS, quic::StreamStats,
+            streamer::StakedNodes, tls_certificates::new_self_signed_tls_certificate_chain,
         },
         solana_tpu_client::connection_cache_stats::ConnectionCacheStats,
         std::{
@@ -85,7 +85,7 @@ mod tests {
             10,
             10,
             stats,
-            1000,
+            DEFAULT_WAIT_FOR_CHUNK_TIMEOUT_MS,
         )
         .unwrap();
 
@@ -189,7 +189,7 @@ mod tests {
             10,
             10,
             request_recv_stats,
-            1000,
+            DEFAULT_WAIT_FOR_CHUNK_TIMEOUT_MS,
         )
         .unwrap();
 
@@ -218,7 +218,7 @@ mod tests {
             10,
             10,
             response_recv_stats,
-            1000,
+            DEFAULT_WAIT_FOR_CHUNK_TIMEOUT_MS,
         )
         .unwrap();
 
