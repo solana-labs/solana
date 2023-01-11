@@ -421,7 +421,7 @@ startClient() {
   echo "--- Starting client: $ipAddress - $clientToRun"
   echo "start log: $logFile"
   (
-    set -x
+    #set -x
     startCommon "$ipAddress"
     ssh "${sshOptions[@]}" -f "$ipAddress" \
       "./solana/net/remote/remote-client.sh $deployMethod $entrypointIp \
@@ -434,11 +434,18 @@ startClient() {
 }
 
 startClients() {
-  for ((i=0; i < "$numClients" && i < "$numClientsRequested"; i++)) do
-    if [[ $i -lt "$numBenchTpsClients" ]]; then
-      startClient "${clientIpList[$i]}" "solana-bench-tps" "$i"
+  set -x
+  for ((i=0; i < "$numClients"; i++)) do
+    if [[ "$numBenchTpsClients" -eq 1 ]]; then
+      (
+        set +x
+        startClient "${clientIpList[$i]}" "solana-bench-tps" "$i"
+      )
     else
-      startClient "${clientIpList[$i]}" "idle"
+      (
+        set +x
+        startClient "${clientIpList[$i]}" "idle"
+      )
     fi
   done
 }
@@ -1062,6 +1069,7 @@ if [[ -n $numValidatorsRequested ]]; then
   validatorIpList=( "${truncatedNodeList[@]}" )
 fi
 
+set -x
 numClients=${#clientIpList[@]}
 numClientsRequested=$((numBenchTpsClients + numIdleClients))
 if [[ "$numClientsRequested" -eq 0 ]]; then
@@ -1073,6 +1081,7 @@ else
     exit 1
   fi
 fi
+set +x
 
 if [[ -n "$maybeWaitForSupermajority" && -n "$maybeWarpSlot" ]]; then
   read -r _ waitSlot <<<"$maybeWaitForSupermajority"
