@@ -404,7 +404,7 @@ startNode() {
          \"$disableQuic\" \
          \"$enableUdp\" \
       "
-  ) >> "$logFile" 2>&1 &
+  ) &
   declare pid=$!
   ln -sf "validator-$ipAddress.log" "$netLogDir/validator-$pid.log"
   pids+=("$pid")
