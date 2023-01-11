@@ -240,7 +240,6 @@ mod tests {
             "--valid-signatures",
             "--num-signatures",
             "8",
-            "--tpu-use-quic",
             "--send-batch-size",
             "1",
         ])
