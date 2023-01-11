@@ -5861,7 +5861,12 @@ dependencies = [
  "solana-logger 1.14.13",
  "solana-program-runtime",
  "solana-runtime",
+<<<<<<< HEAD
  "solana-sdk 1.14.13",
+=======
+ "solana-sdk 1.15.0",
+ "solana-stake-program",
+>>>>>>> d693167df (Feature: filter stake by min delegation for rewards (#29618))
  "solana-vote-program",
  "thiserror",
  "tokio",
