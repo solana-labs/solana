@@ -24,7 +24,7 @@ lazy_static = "1.4.0"
 nix = "0.25.0"
 reqwest = { version = "0.11.12", default-features = false, features = ["blocking", "brotli", "deflate", "gzip", "rustls-tls", "json"] }
 scopeguard = "1.1.0"
-semver = "1.0.14"
+semver = "1.0.16"
 serde = { version = "1.0.144", features = ["derive"] }
 serde_yaml = "0.9.13"
 solana-clap-utils = { path = "../clap-utils", version = "=1.15.0" }
