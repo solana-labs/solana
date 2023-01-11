@@ -1,6 +1,6 @@
 use {
     crate::{
-        accounts_db::{SnapshotStorages, PUBKEY_BINS_FOR_CALCULATING_HASHES},
+        accounts_db::{SnapshotStoragesOne, PUBKEY_BINS_FOR_CALCULATING_HASHES},
         ancestors::Ancestors,
         rent_collector::RentCollector,
     },
@@ -173,20 +173,14 @@ pub struct HashStats {
     pub count_ancient_scans: AtomicU64,
 }
 impl HashStats {
-    pub fn calc_storage_size_quartiles(&mut self, storages: &SnapshotStorages) {
+    pub fn calc_storage_size_quartiles(&mut self, storages: &SnapshotStoragesOne) {
         let mut sum = 0;
         let mut sizes = storages
             .iter()
-            .flat_map(|storages| {
-                let result = storages
-                    .iter()
-                    .map(|storage| {
-                        let cap = storage.accounts.capacity() as usize;
-                        sum += cap;
-                        cap
-                    })
-                    .collect::<Vec<_>>();
-                result
+            .map(|storage| {
+                let cap = storage.accounts.capacity() as usize;
+                sum += cap;
+                cap
             })
             .collect::<Vec<_>>();
         sizes.sort_unstable();
