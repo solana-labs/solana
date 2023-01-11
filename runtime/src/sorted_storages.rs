@@ -3,17 +3,20 @@ use {
     log::*,
     solana_measure::measure::Measure,
     solana_sdk::clock::Slot,
-    std::ops::{Bound, Range, RangeBounds},
+    std::{
+        collections::HashMap,
+        ops::{Bound, Range, RangeBounds},
+    },
 };
 
-/// Provide access to SnapshotStorages sorted by slot
+/// Provide access to SnapshotStorageOnes sorted by slot
 pub struct SortedStorages<'a> {
     /// range of slots where storages exist (likely sparse)
     range: Range<Slot>,
-    /// the actual storages. index is (slot - range.start)
-    storages: Vec<Option<&'a SnapshotStorageOne>>,
-    slot_count: usize,
-    storage_count: usize,
+    /// the actual storages
+    /// A HashMap allows sparse storage and fast lookup of Slot -> Storage.
+    /// We expect ~432k slots.
+    storages: HashMap<Slot, &'a SnapshotStorageOne>,
 }
 
 impl<'a> SortedStorages<'a> {
@@ -21,9 +24,7 @@ impl<'a> SortedStorages<'a> {
     pub fn empty() -> Self {
         SortedStorages {
             range: Range::default(),
-            storages: Vec::default(),
-            slot_count: 0,
-            storage_count: 0,
+            storages: HashMap::default(),
         }
     }
 
@@ -36,12 +37,7 @@ impl<'a> SortedStorages<'a> {
     }
 
     fn get(&self, slot: Slot) -> Option<&SnapshotStorageOne> {
-        if !self.range.contains(&slot) {
-            None
-        } else {
-            let index = (slot - self.range.start) as usize;
-            self.storages[index]
-        }
+        self.storages.get(&slot).copied()
     }
 
     pub fn range_width(&self) -> Slot {
@@ -57,11 +53,11 @@ impl<'a> SortedStorages<'a> {
     }
 
     pub fn slot_count(&self) -> usize {
-        self.slot_count
+        self.storages.len()
     }
 
     pub fn storage_count(&self) -> usize {
-        self.storage_count
+        self.storages.len()
     }
 
     // assumptions:
@@ -113,31 +109,24 @@ impl<'a> SortedStorages<'a> {
         time.stop();
         let mut time2 = Measure::start("sort");
         let range;
-        let mut storages;
+        let mut storages = HashMap::default();
         if min > max {
             range = Range::default();
-            storages = vec![];
         } else {
             range = Range {
                 start: min,
                 end: max,
             };
-            let len = max - min;
-            storages = vec![None; len as usize];
             source.for_each(|(original_storages, slot)| {
-                let index = (slot - min) as usize;
-                assert!(storages[index].is_none(), "slots are not unique"); // we should not encounter the same slot twice
-                storages[index] = Some(original_storages);
+                assert!(
+                    storages.insert(slot, original_storages).is_none(),
+                    "slots are not unique"
+                ); // we should not encounter the same slot twice
             });
         }
         time2.stop();
         debug!("SortedStorages, times: {}, {}", time.as_us(), time2.as_us());
-        Self {
-            range,
-            storages,
-            slot_count,
-            storage_count,
-        }
+        Self { range, storages }
     }
 }
 
@@ -213,22 +202,16 @@ pub mod tests {
     };
     impl<'a> SortedStorages<'a> {
         pub fn new_debug(source: &[(&'a SnapshotStorageOne, Slot)], min: Slot, len: usize) -> Self {
-            let mut storages = vec![None; len];
+            let mut storages = HashMap::default();
             let range = Range {
                 start: min,
                 end: min + len as Slot,
             };
-            let slot_count = source.len();
             for (storage, slot) in source {
-                storages[*slot as usize] = Some(*storage);
+                storages.insert(*slot, *storage);
             }
 
-            Self {
-                range,
-                storages,
-                slot_count,
-                storage_count: 0,
-            }
+            Self { range, storages }
         }
 
         pub fn new_for_tests(storages: &[&'a SnapshotStorageOne], slots: &[Slot]) -> Self {
@@ -350,7 +333,7 @@ pub mod tests {
     fn test_sorted_storages_none() {
         let result = SortedStorages::empty();
         assert_eq!(result.range, Range::default());
-        assert_eq!(result.slot_count, 0);
+        assert_eq!(result.slot_count(), 0);
         assert_eq!(result.storages.len(), 0);
         assert!(result.get(0).is_none());
     }
@@ -368,7 +351,7 @@ pub mod tests {
                 end: slot + 1
             }
         );
-        assert_eq!(result.slot_count, 1);
+        assert_eq!(result.slot_count(), 1);
         assert_eq!(result.storages.len(), 1);
         assert_eq!(
             result.get(slot).unwrap().append_vec_id(),
@@ -402,8 +385,8 @@ pub mod tests {
                 end: slots[1] + 1,
             }
         );
-        assert_eq!(result.slot_count, 2);
-        assert_eq!(result.storages.len() as Slot, slots[1] - slots[0] + 1);
+        assert_eq!(result.slot_count(), 2);
+        assert_eq!(result.storages.len(), 2);
         assert!(result.get(0).is_none());
         assert!(result.get(3).is_none());
         assert!(result.get(5).is_none());
