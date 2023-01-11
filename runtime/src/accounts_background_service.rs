@@ -358,6 +358,7 @@ impl SnapshotRequestHandler {
                     &snapshot_storages,
                     self.snapshot_config.snapshot_version,
                     status_cache_slot_deltas,
+                    false,
                 )
                 .expect("snapshot bank");
                 AccountsPackage::new_for_snapshot(

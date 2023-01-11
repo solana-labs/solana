@@ -930,6 +930,7 @@ pub fn add_bank_snapshot(
     snapshot_storages: &[Arc<AccountStorageEntry>],
     snapshot_version: SnapshotVersion,
     slot_deltas: Vec<BankSlotDelta>,
+    dir_full_state: bool,
 ) -> Result<BankSnapshotInfo> {
     let mut add_snapshot_time = Measure::start("add-snapshot-ms");
     let slot = bank.slot();
@@ -955,11 +956,13 @@ pub fn add_bank_snapshot(
         bank_snapshot_path.display(),
     );
 
-    // We are contructing the snapshot directory to contain the full snapshot state information to allow
-    // constructing a bank from this directory.  It acts like an archive to include the full state.
-    // The set of the account appendvec files is the necessary part of this snapshot state.  Hard-link them
-    // from the operational accounts/ directory to here.
-    hard_link_appendvec_files_to_snapshot(&bank_snapshot_dir, snapshot_storages)?;
+    if dir_full_state {
+        // We are contructing the snapshot directory to contain the full snapshot state information to allow
+        // constructing a bank from this directory.  It acts like an archive to include the full state.
+        // The set of the account appendvec files is the necessary part of this snapshot state.  Hard-link them
+        // from the operational accounts/ directory to here.
+        hard_link_appendvec_files_to_snapshot(&bank_snapshot_dir, snapshot_storages)?;
+    }
 
     let mut bank_serialize = Measure::start("bank-serialize-ms");
     let bank_snapshot_serializer = move |stream: &mut BufWriter<File>| -> Result<()> {
@@ -2371,6 +2374,7 @@ pub fn bank_to_full_snapshot_archive(
         &snapshot_storages,
         snapshot_version,
         slot_deltas,
+        false,
     )?;
 
     package_and_archive_full_snapshot(
@@ -2424,6 +2428,7 @@ pub fn bank_to_incremental_snapshot_archive(
         &snapshot_storages,
         snapshot_version,
         slot_deltas,
+        false,
     )?;
 
     package_and_archive_incremental_snapshot(
@@ -4323,5 +4328,36 @@ mod tests {
             result,
             Err(VerifySlotDeltasError::SlotNotFoundInDeltas(333)),
         );
+    }
+
+    #[test]
+    fn test_verify_snapshot_dir_full_state() {
+        solana_logger::setup();
+        let genesis_config = GenesisConfig::default();
+        let bank = Bank::new_for_tests(&genesis_config);
+
+        while !bank.is_complete() {
+            bank.register_tick(&Hash::new_unique());
+        }
+
+        let bank_snapshots_dir = tempfile::TempDir::new().unwrap();
+
+        assert!(bank.is_complete());
+        bank.squash(); // Bank may not be a root
+        bank.force_flush_accounts_cache();
+        bank.clean_accounts(Some(bank.slot()));
+        bank.update_accounts_hash(CalcAccountsHashDataSource::Storages, false, false);
+        bank.rehash(); // Bank accounts may have been manually modified by the caller
+
+        let snapshot_version = SnapshotVersion::default();
+
+        let temp_dir = tempfile::tempdir_in(bank_snapshots_dir).unwrap();
+        let snapshot_storages = bank.get_snapshot_storages(None);
+
+        add_bank_snapshot(&temp_dir, &bank, &snapshot_storages, snapshot_version, true).unwrap();
+
+        let accounts_hardlink_path =
+            get_bank_snapshots_dir(temp_dir.path(), bank.slot()).join("accounts");
+        assert!(fs::metadata(accounts_hardlink_path).is_ok());
     }
 }
