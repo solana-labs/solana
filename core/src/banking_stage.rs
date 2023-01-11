@@ -430,14 +430,9 @@ impl BankingStage {
             TOTAL_BUFFERED_PACKETS / ((num_threads - NUM_VOTE_PROCESSING_THREADS) as usize);
         // Keeps track of extraneous vote transactions for the vote threads
         let latest_unprocessed_votes = Arc::new(LatestUnprocessedVotes::new());
-        let should_split_voting_threads = bank_forks
-            .read()
-            .map(|bank_forks| {
-                let bank = bank_forks.root_bank();
-                bank.feature_set
-                    .is_active(&allow_votes_to_directly_update_vote_state::id())
-            })
-            .unwrap_or(false);
+        let mut should_split_voting_threads = false;
+        info!("should_split_voting_threads: {}", should_split_voting_threads);
+        //should_split_voting_threads = false;
         // Many banks that process transactions in parallel.
         let bank_thread_hdls: Vec<JoinHandle<()>> = (0..num_threads)
             .map(|i| {
