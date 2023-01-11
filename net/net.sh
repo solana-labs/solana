@@ -436,7 +436,7 @@ startClient() {
 startClients() {
   set -x
   for ((i=0; i < "$numClients"; i++)) do
-    if [[ $i -lt "$numBenchTpsClients" ]]; then
+    if [[ "$numBenchTpsClients" -eq 1 ]]; then
       (
         set +x
         startClient "${clientIpList[$i]}" "solana-bench-tps" "$i"
@@ -1069,6 +1069,7 @@ if [[ -n $numValidatorsRequested ]]; then
   validatorIpList=( "${truncatedNodeList[@]}" )
 fi
 
+set -x
 numClients=${#clientIpList[@]}
 numClientsRequested=$((numBenchTpsClients + numIdleClients))
 if [[ "$numClientsRequested" -eq 0 ]]; then
@@ -1080,6 +1081,7 @@ else
     exit 1
   fi
 fi
+set +x
 
 if [[ -n "$maybeWaitForSupermajority" && -n "$maybeWarpSlot" ]]; then
   read -r _ waitSlot <<<"$maybeWaitForSupermajority"
