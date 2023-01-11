@@ -304,11 +304,7 @@ fn execute_batches(
     transaction_status_sender: Option<&TransactionStatusSender>,
     replay_vote_sender: Option<&ReplayVoteSender>,
     confirmation_timing: &mut ConfirmationTiming,
-<<<<<<< HEAD
-    cost_capacity_meter: Arc<RwLock<BlockCostCapacityMeter>>,
     cost_model: &CostModel,
-=======
->>>>>>> 3d63f93bb (remove dated cost checking feature (#29598))
     log_messages_bytes_limit: Option<usize>,
 ) -> Result<()> {
     let ((lock_results, sanitized_txs), transaction_indexes): ((Vec<_>, Vec<_>), Vec<_>) = batches
@@ -376,14 +372,6 @@ fn execute_batches(
             });
         &tx_batches[..]
     } else {
-<<<<<<< HEAD
-        match batches.len() {
-            // Ensure that the total cost attributed to this batch is essentially correct
-            0 => tx_batch_costs = Vec::new(),
-            n => tx_batch_costs = vec![total_cost_without_bpf / (n as u64); n],
-        }
-=======
->>>>>>> 3d63f93bb (remove dated cost checking feature (#29598))
         batches
     };
 
@@ -494,11 +482,7 @@ fn process_entries_with_callback(
                         transaction_status_sender,
                         replay_vote_sender,
                         confirmation_timing,
-<<<<<<< HEAD
-                        cost_capacity_meter.clone(),
                         &cost_model,
-=======
->>>>>>> 3d63f93bb (remove dated cost checking feature (#29598))
                         log_messages_bytes_limit,
                     )?;
                     batches.clear();
@@ -566,11 +550,7 @@ fn process_entries_with_callback(
                             transaction_status_sender,
                             replay_vote_sender,
                             confirmation_timing,
-<<<<<<< HEAD
-                            cost_capacity_meter.clone(),
                             &cost_model,
-=======
->>>>>>> 3d63f93bb (remove dated cost checking feature (#29598))
                             log_messages_bytes_limit,
                         )?;
                         batches.clear();
@@ -586,11 +566,7 @@ fn process_entries_with_callback(
         transaction_status_sender,
         replay_vote_sender,
         confirmation_timing,
-<<<<<<< HEAD
-        cost_capacity_meter,
         &cost_model,
-=======
->>>>>>> 3d63f93bb (remove dated cost checking feature (#29598))
         log_messages_bytes_limit,
     )?;
     for hash in tick_hashes {
