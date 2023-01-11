@@ -228,8 +228,13 @@ pub fn create_executor_from_account(
     };
 
     if let Some(ref tx_executor_cache) = tx_executor_cache {
-        if let Some(executor) = tx_executor_cache.get(program.get_key()) {
-            return Ok((executor, None));
+        match tx_executor_cache.get(program.get_key()) {
+            // Executor exists and is cached, use it
+            Some(Some(executor)) => return Ok((executor, None)),
+            // We cached that the Executor does not exist, abort
+            Some(None) => return Err(InstructionError::InvalidAccountData),
+            // Nothing cached, try to load from account instead
+            None => {}
         }
     }
 
