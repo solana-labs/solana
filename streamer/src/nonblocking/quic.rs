@@ -5,13 +5,9 @@ use {
         tls_certificates::get_pubkey_from_tls_certificate,
     },
     crossbeam_channel::Sender,
-    futures_util::stream::StreamExt,
     indexmap::map::{Entry, IndexMap},
     percentage::Percentage,
-    quinn::{
-        Connecting, Connection, Endpoint, EndpointConfig, Incoming, IncomingUniStreams,
-        NewConnection, VarInt,
-    },
+    quinn::{Connecting, Connection, Endpoint, EndpointConfig, TokioRuntime, VarInt},
     quinn_proto::VarIntBoundsExceeded,
     rand::{thread_rng, Rng},
     solana_perf::packet::PacketBatch,
@@ -75,13 +71,13 @@ pub fn spawn_server(
     info!("Start quic server on {:?}", sock);
     let (config, _cert) = configure_server(keypair, gossip_host)?;
 
-    let (endpoint, incoming) = {
-        Endpoint::new(EndpointConfig::default(), Some(config), sock)
+    let endpoint = {
+        Endpoint::new(EndpointConfig::default(), Some(config), sock, TokioRuntime)
             .map_err(|_e| QuicServerError::EndpointFailed)?
     };
 
     let handle = tokio::spawn(run_server(
-        incoming,
+        endpoint.clone(),
         packet_sender,
         exit,
         max_connections_per_peer,
@@ -95,7 +91,7 @@ pub fn spawn_server(
 }
 
 pub async fn run_server(
-    mut incoming: Incoming,
+    incoming: Endpoint,
     packet_sender: Sender<PacketBatch>,
     exit: Arc<AtomicBool>,
     max_connections_per_peer: usize,
@@ -117,7 +113,7 @@ pub async fn run_server(
         const WAIT_BETWEEN_NEW_CONNECTIONS_US: u64 = 1000;
         let timeout_connection = timeout(
             Duration::from_millis(WAIT_FOR_CONNECTION_TIMEOUT_MS),
-            incoming.next(),
+            incoming.accept(),
         )
         .await;
 
@@ -258,18 +254,12 @@ impl NewConnectionHandlerParams {
 }
 
 fn handle_and_cache_new_connection(
-    new_connection: NewConnection,
+    connection: Connection,
     mut connection_table_l: MutexGuard<ConnectionTable>,
     connection_table: Arc<Mutex<ConnectionTable>>,
     params: &NewConnectionHandlerParams,
     wait_for_chunk_timeout_ms: u64,
 ) -> Result<(), ConnectionHandlerError> {
-    let NewConnection {
-        connection,
-        uni_streams,
-        ..
-    } = new_connection;
-
     if let Ok(max_uni_streams) = VarInt::from_u64(compute_max_allowed_uni_streams(
         connection_table_l.peer_type,
         params.stake,
@@ -303,7 +293,7 @@ fn handle_and_cache_new_connection(
         if let Some((last_update, stream_exit)) = connection_table_l.try_add_connection(
             ConnectionTableKey::new(remote_addr.ip(), params.remote_pubkey),
             remote_addr.port(),
-            Some(connection),
+            Some(connection.clone()),
             params.stake,
             timing::timestamp(),
             params.max_connections_per_peer,
@@ -311,7 +301,7 @@ fn handle_and_cache_new_connection(
             let peer_type = connection_table_l.peer_type;
             drop(connection_table_l);
             tokio::spawn(handle_connection(
-                uni_streams,
+                connection,
                 params.packet_sender.clone(),
                 remote_addr,
                 params.remote_pubkey,
@@ -345,7 +335,7 @@ fn handle_and_cache_new_connection(
 }
 
 fn prune_unstaked_connections_and_add_new_connection(
-    new_connection: NewConnection,
+    connection: Connection,
     mut connection_table_l: MutexGuard<ConnectionTable>,
     connection_table: Arc<Mutex<ConnectionTable>>,
     max_connections: usize,
@@ -356,14 +346,14 @@ fn prune_unstaked_connections_and_add_new_connection(
     if max_connections > 0 {
         prune_unstaked_connection_table(&mut connection_table_l, max_connections, stats);
         handle_and_cache_new_connection(
-            new_connection,
+            connection,
             connection_table_l,
             connection_table,
             params,
             wait_for_chunk_timeout_ms,
         )
     } else {
-        new_connection.connection.close(
+        connection.close(
             CONNECTION_CLOSE_CODE_DISALLOWED.into(),
             CONNECTION_CLOSE_REASON_DISALLOWED,
         );
@@ -437,26 +427,23 @@ async fn setup_connection(
         if let Ok(new_connection) = connecting_result {
             stats.total_new_connections.fetch_add(1, Ordering::Relaxed);
 
-            let params = get_connection_stake(&new_connection.connection, staked_nodes.clone())
-                .map_or(
-                    NewConnectionHandlerParams::new_unstaked(
-                        packet_sender.clone(),
-                        max_connections_per_peer,
-                        stats.clone(),
-                    ),
-                    |(pubkey, stake, total_stake, max_stake, min_stake)| {
-                        NewConnectionHandlerParams {
-                            packet_sender,
-                            remote_pubkey: Some(pubkey),
-                            stake,
-                            total_stake,
-                            max_connections_per_peer,
-                            stats: stats.clone(),
-                            max_stake,
-                            min_stake,
-                        }
-                    },
-                );
+            let params = get_connection_stake(&new_connection, staked_nodes.clone()).map_or(
+                NewConnectionHandlerParams::new_unstaked(
+                    packet_sender.clone(),
+                    max_connections_per_peer,
+                    stats.clone(),
+                ),
+                |(pubkey, stake, total_stake, max_stake, min_stake)| NewConnectionHandlerParams {
+                    packet_sender,
+                    remote_pubkey: Some(pubkey),
+                    stake,
+                    total_stake,
+                    max_connections_per_peer,
+                    stats: stats.clone(),
+                    max_stake,
+                    min_stake,
+                },
+            );
 
             if params.stake > 0 {
                 let mut connection_table_l = staked_connection_table.lock().unwrap();
@@ -529,7 +516,7 @@ async fn setup_connection(
 
 #[allow(clippy::too_many_arguments)]
 async fn handle_connection(
-    mut uni_streams: IncomingUniStreams,
+    connection: Connection,
     packet_sender: Sender<PacketBatch>,
     remote_addr: SocketAddr,
     remote_pubkey: Option<Pubkey>,
@@ -551,69 +538,63 @@ async fn handle_connection(
     while !stream_exit.load(Ordering::Relaxed) {
         if let Ok(stream) = tokio::time::timeout(
             Duration::from_millis(WAIT_FOR_STREAM_TIMEOUT_MS),
-            uni_streams.next(),
+            connection.accept_uni(),
         )
         .await
         {
             match stream {
-                Some(stream_result) => match stream_result {
-                    Ok(mut stream) => {
-                        stats.total_streams.fetch_add(1, Ordering::Relaxed);
-                        stats.total_new_streams.fetch_add(1, Ordering::Relaxed);
-                        let stream_exit = stream_exit.clone();
-                        let stats = stats.clone();
-                        let packet_sender = packet_sender.clone();
-                        let last_update = last_update.clone();
-                        tokio::spawn(async move {
-                            let mut maybe_batch = None;
-                            // The min is to guard against a value too small which can wake up unnecessarily
-                            // frequently and wasting CPU cycles. The max guard against waiting for too long
-                            // which delay exit and cause some test failures when the timeout value is large.
-                            // Within this value, the heuristic is to wake up 10 times to check for exit
-                            // for the set timeout if there are no data.
-                            let exit_check_interval =
-                                (wait_for_chunk_timeout_ms / 10).clamp(10, 1000);
-                            let mut start = Instant::now();
-                            while !stream_exit.load(Ordering::Relaxed) {
-                                if let Ok(chunk) = tokio::time::timeout(
-                                    Duration::from_millis(exit_check_interval),
-                                    stream.read_chunk(PACKET_DATA_SIZE, false),
-                                )
-                                .await
-                                {
-                                    if handle_chunk(
-                                        &chunk,
-                                        &mut maybe_batch,
-                                        &remote_addr,
-                                        &packet_sender,
-                                        stats.clone(),
-                                        stake,
-                                        peer_type,
-                                    ) {
-                                        last_update.store(timing::timestamp(), Ordering::Relaxed);
-                                        break;
-                                    }
-                                    start = Instant::now();
-                                } else {
-                                    let elapse = Instant::now() - start;
-                                    if elapse.as_millis() as u64 > wait_for_chunk_timeout_ms {
-                                        debug!("Timeout in receiving on stream");
-                                        stats
-                                            .total_stream_read_timeouts
-                                            .fetch_add(1, Ordering::Relaxed);
-                                        break;
-                                    }
+                Ok(mut stream) => {
+                    stats.total_streams.fetch_add(1, Ordering::Relaxed);
+                    stats.total_new_streams.fetch_add(1, Ordering::Relaxed);
+                    let stream_exit = stream_exit.clone();
+                    let stats = stats.clone();
+                    let packet_sender = packet_sender.clone();
+                    let last_update = last_update.clone();
+                    tokio::spawn(async move {
+                        let mut maybe_batch = None;
+                        // The min is to guard against a value too small which can wake up unnecessarily
+                        // frequently and wasting CPU cycles. The max guard against waiting for too long
+                        // which delay exit and cause some test failures when the timeout value is large.
+                        // Within this value, the heuristic is to wake up 10 times to check for exit
+                        // for the set timeout if there are no data.
+                        let exit_check_interval = (wait_for_chunk_timeout_ms / 10).clamp(10, 1000);
+                        let mut start = Instant::now();
+                        while !stream_exit.load(Ordering::Relaxed) {
+                            if let Ok(chunk) = tokio::time::timeout(
+                                Duration::from_millis(exit_check_interval),
+                                stream.read_chunk(PACKET_DATA_SIZE, false),
+                            )
+                            .await
+                            {
+                                if handle_chunk(
+                                    &chunk,
+                                    &mut maybe_batch,
+                                    &remote_addr,
+                                    &packet_sender,
+                                    stats.clone(),
+                                    stake,
+                                    peer_type,
+                                ) {
+                                    last_update.store(timing::timestamp(), Ordering::Relaxed);
+                                    break;
+                                }
+                                start = Instant::now();
+                            } else {
+                                let elapse = Instant::now() - start;
+                                if elapse.as_millis() as u64 > wait_for_chunk_timeout_ms {
+                                    debug!("Timeout in receiving on stream");
+                                    stats
+                                        .total_stream_read_timeouts
+                                        .fetch_add(1, Ordering::Relaxed);
+                                    break;
                                 }
                             }
-                            stats.total_streams.fetch_sub(1, Ordering::Relaxed);
-                        });
-                    }
-                    Err(e) => {
-                        debug!("stream error: {:?}", e);
-                        break;
-                    }
-                },
-                None => {
+                        }
+                        stats.total_streams.fetch_sub(1, Ordering::Relaxed);
+                    });
+                }
+                Err(e) => {
+                    debug!("stream error: {:?}", e);
                     break;
                 }
             }
@@ -948,7 +929,7 @@ pub mod test {
             tls_certificates::new_self_signed_tls_certificate_chain,
         },
         crossbeam_channel::{unbounded, Receiver},
-        quinn::{ClientConfig, IdleTimeout, VarInt},
+        quinn::{ClientConfig, IdleTimeout, TransportConfig, VarInt},
         solana_sdk::{
             quic::{QUIC_KEEP_ALIVE_MS, QUIC_MAX_TIMEOUT_MS},
             signature::Keypair,
@@ -996,10 +977,11 @@ pub mod test {
 
         let mut config = ClientConfig::new(Arc::new(crypto));
 
-        let transport_config = Arc::get_mut(&mut config.transport).unwrap();
+        let mut transport_config = TransportConfig::default();
         let timeout = IdleTimeout::from(VarInt::from_u32(QUIC_MAX_TIMEOUT_MS));
         transport_config.max_idle_timeout(Some(timeout));
         transport_config.keep_alive_interval(Some(Duration::from_millis(QUIC_KEEP_ALIVE_MS)));
+        config.transport_config(Arc::new(transport_config));
 
         config
     }
@@ -1041,11 +1023,11 @@ pub mod test {
     pub async fn make_client_endpoint(
         addr: &SocketAddr,
         client_keypair: Option<&Keypair>,
-    ) -> NewConnection {
+    ) -> Connection {
         let client_socket = UdpSocket::bind("127.0.0.1:0").unwrap();
-        let mut endpoint = quinn::Endpoint::new(EndpointConfig::default(), None, client_socket)
-            .unwrap()
-            .0;
+        let mut endpoint =
+            quinn::Endpoint::new(EndpointConfig::default(), None, client_socket, TokioRuntime)
+                .unwrap();
         let default_keypair = Keypair::new();
         endpoint.set_default_client_config(get_client_config(
             client_keypair.unwrap_or(&default_keypair),
@@ -1061,7 +1043,7 @@ pub mod test {
         let conn1 = make_client_endpoint(&server_address, None).await;
         let total = 30;
         for i in 0..total {
-            let mut s1 = conn1.connection.open_uni().await.unwrap();
+            let mut s1 = conn1.open_uni().await.unwrap();
             s1.write_all(&[0u8]).await.unwrap();
             s1.finish().await.unwrap();
             info!("done {}", i);
@@ -1082,8 +1064,8 @@ pub mod test {
     pub async fn check_block_multiple_connections(server_address: SocketAddr) {
         let conn1 = make_client_endpoint(&server_address, None).await;
         let conn2 = make_client_endpoint(&server_address, None).await;
-        let mut s1 = conn1.connection.open_uni().await.unwrap();
-        let mut s2 = conn2.connection.open_uni().await.unwrap();
+        let mut s1 = conn1.open_uni().await.unwrap();
+        let mut s2 = conn2.open_uni().await.unwrap();
         s1.write_all(&[0u8]).await.unwrap();
         s1.finish().await.unwrap();
         // Send enough data to create more than 1 chunks.
@@ -1109,8 +1091,8 @@ pub mod test {
             info!("sending: {}", i);
             let c1 = conn1.clone();
             let c2 = conn2.clone();
-            let mut s1 = c1.connection.open_uni().await.unwrap();
-            let mut s2 = c2.connection.open_uni().await.unwrap();
+            let mut s1 = c1.open_uni().await.unwrap();
+            let mut s2 = c2.open_uni().await.unwrap();
             s1.write_all(&[0u8]).await.unwrap();
             s1.finish().await.unwrap();
             s2.write_all(&[0u8]).await.unwrap();
@@ -1148,7 +1130,7 @@ pub mod test {
         // Send a full size packet with single byte writes.
         let num_bytes = PACKET_DATA_SIZE;
         let num_expected_packets = 1;
-        let mut s1 = conn1.connection.open_uni().await.unwrap();
+        let mut s1 = conn1.open_uni().await.unwrap();
         for _ in 0..num_bytes {
             s1.write_all(&[0u8]).await.unwrap();
         }
@@ -1178,7 +1160,7 @@ pub mod test {
         let conn1 = Arc::new(make_client_endpoint(&server_address, None).await);
 
         // Send a full size packet with single byte writes.
-        if let Ok(mut s1) = conn1.connection.open_uni().await {
+        if let Ok(mut s1) = conn1.open_uni().await {
             for _ in 0..PACKET_DATA_SIZE {
                 // Ignoring any errors here. s1.finish() will test the error condition
                 s1.write_all(&[0u8]).await.unwrap_or_default();
@@ -1213,7 +1195,7 @@ pub mod test {
         assert_eq!(stats.total_stream_read_timeouts.load(Ordering::Relaxed), 0);
 
         // Send one byte to start the stream
-        let mut s1 = conn1.connection.open_uni().await.unwrap();
+        let mut s1 = conn1.open_uni().await.unwrap();
         s1.write_all(&[0u8]).await.unwrap_or_default();
 
         // Wait long enough for the stream to timeout in receiving chunks
