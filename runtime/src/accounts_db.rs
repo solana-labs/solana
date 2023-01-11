@@ -6818,6 +6818,18 @@ impl AccountsDb {
         )
     }
 
+    /// iterate over a single storage, calling scanner on each item
+    fn scan_single_account_storage<S>(storage: &Arc<AccountStorageEntry>, scanner: &mut S)
+    where
+        S: AppendVecScan,
+    {
+        storage.accounts.account_iter().for_each(|account| {
+            if scanner.filter(account.pubkey()) {
+                scanner.found_account(&LoadedAccount::Stored(account))
+            }
+        });
+    }
+
     fn scan_multiple_account_storages_one_slot<S>(
         storages: &[Arc<AccountStorageEntry>],
         scanner: &mut S,
@@ -6827,11 +6839,7 @@ impl AccountsDb {
         let mut len = storages.len();
         if len == 1 {
             // only 1 storage, so no need to interleave between multiple storages based on write_version
-            storages[0].accounts.account_iter().for_each(|account| {
-                if scanner.filter(account.pubkey()) {
-                    scanner.found_account(&LoadedAccount::Stored(account))
-                }
-            });
+            Self::scan_single_account_storage(&storages[0], scanner);
         } else {
             // we have to call the scan_func in order of write_version within a slot if there are multiple storages per slot
             let mut progress = Vec::with_capacity(len);
@@ -10280,6 +10288,28 @@ pub mod tests {
                 .collect::<Vec<_>>(),
             vec![expected]
         );
+
+        let calls = Arc::new(AtomicU64::new(0));
+        let mut test_scan = TestScan {
+            calls: calls.clone(),
+            pubkey,
+            slot_expected,
+            accum: Vec::default(),
+            current_slot: 0,
+            value_to_use_for_lamports: expected,
+        };
+
+        AccountsDb::scan_single_account_storage(&storages[0][0], &mut test_scan);
+        let accum = test_scan.scanning_complete();
+        assert_eq!(calls.load(Ordering::Relaxed), 1);
+        assert_eq!(
+            accum
+                .iter()
+                .flatten()
+                .map(|a| a.lamports)
+                .collect::<Vec<_>>(),
+            vec![expected]
+        );
     }
 
     fn append_sample_data_to_storage(
@@ -10370,6 +10400,30 @@ pub mod tests {
                     .collect::<Vec<_>>(),
                 vec![write_version1, write_version2]
             );
+            if !swap {
+                let calls = Arc::new(AtomicU64::new(0));
+                let mut scanner = TestScanSimple {
+                    current_slot: 0,
+                    slot_expected,
+                    pubkey1,
+                    pubkey2,
+                    accum: Vec::default(),
+                    calls: calls.clone(),
+                    write_version1,
+                    write_version2,
+                };
+                AccountsDb::scan_single_account_storage(&storages[0], &mut scanner);
+                let accum = scanner.scanning_complete();
+                assert_eq!(calls.load(Ordering::Relaxed), 1);
+                assert_eq!(
+                    accum
+                        .iter()
+                        .flatten()
+                        .map(|a| a.lamports)
+                        .collect::<Vec<_>>(),
+                    vec![write_version1]
+                );
+            }
         }
     }
 
@@ -10407,7 +10461,7 @@ pub mod tests {
             if first {
                 assert!(self.accum.is_empty());
             } else {
-                assert!(self.accum.len() == 1);
+                assert_eq!(self.accum.len(), 1);
             }
             self.accum.push(vec![CalculateHashIntermediate {
                 hash: Hash::default(),
