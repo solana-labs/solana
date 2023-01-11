@@ -10,7 +10,7 @@ edition = "2021"
 publish = false
 
 [dependencies]
-bzip2 = "0.4.3"
+bzip2 = "0.4.4"
 cargo_metadata = "0.15.0"
 clap = { version = "3.1.5", features = ["cargo", "env"] }
 log = { version = "0.4.17", features = ["std"] }
