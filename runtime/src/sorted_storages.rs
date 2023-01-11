@@ -14,6 +14,8 @@ pub struct SortedStorages<'a> {
     /// range of slots where storages exist (likely sparse)
     range: Range<Slot>,
     /// the actual storages
+    /// A HashMap allows sparse storage and fast lookup of Slot -> Storage.
+    /// We expect ~432k slots.
     storages: HashMap<Slot, &'a SnapshotStorageOne>,
 }
 
