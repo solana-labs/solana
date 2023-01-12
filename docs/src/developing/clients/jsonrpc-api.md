@@ -2125,7 +2125,6 @@ Result:
 
 ### getRecentPrioritizationFees
 
-**UNSTABLE**
 Returns a list of minimum prioritization fees from recent blocks. Currently, a
 node's prioritization-fee cache stores data from up to 150 blocks.
 
@@ -2139,7 +2138,7 @@ An array of:
 
 - `RpcPrioritizationFee<object>`
   - `slot: <u64>` - Slot in which minimum fee was observed
-  - `prioritizationFee: <u64>` - Minimum fee paid for a successfully landed transaction, specified in increments of 0.000001 lamports
+  - `prioritizationFee: <u64>` - a fee paid by at least one successfully landed transaction, specified in increments of 0.000001 lamports
 
 #### Example:
 
