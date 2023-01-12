@@ -10,7 +10,7 @@ mod tests {
         solana_sdk::{packet::PACKET_DATA_SIZE, signature::Keypair},
         solana_streamer::{
             nonblocking::quic::DEFAULT_WAIT_FOR_CHUNK_TIMEOUT_MS, quic::StreamStats,
-            streamer::StakedNodes, tls_certificates::new_self_signed_tls_certificate_chain,
+            streamer::StakedNodes, tls_certificates::new_self_signed_tls_certificate,
         },
         solana_tpu_client::connection_cache_stats::ConnectionCacheStats,
         std::{
@@ -228,13 +228,11 @@ mod tests {
         let tpu_addr = SocketAddr::new(addr, port);
         let connection_cache_stats = Arc::new(ConnectionCacheStats::default());
 
-        let (certs, priv_key) = new_self_signed_tls_certificate_chain(
-            &Keypair::new(),
-            IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)),
-        )
-        .expect("Failed to initialize QUIC client certificates");
+        let (cert, priv_key) =
+            new_self_signed_tls_certificate(&Keypair::new(), IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)))
+                .expect("Failed to initialize QUIC client certificates");
         let client_certificate = Arc::new(QuicClientCertificate {
-            certificates: certs,
+            certificate: cert,
             key: priv_key,
         });
 
@@ -254,14 +252,14 @@ mod tests {
         info!("Received requests!");
 
         // Response sender
-        let (certs, priv_key) = new_self_signed_tls_certificate_chain(
+        let (cert, priv_key) = new_self_signed_tls_certificate(
             &Keypair::new(),
             IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)),
         )
         .expect("Failed to initialize QUIC client certificates");
 
         let client_certificate2 = Arc::new(QuicClientCertificate {
-            certificates: certs,
+            certificate: cert,
             key: priv_key,
         });
 

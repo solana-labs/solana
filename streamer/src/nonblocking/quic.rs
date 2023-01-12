@@ -166,18 +166,23 @@ fn get_connection_stake(
         .peer_identity()
         .and_then(|der_cert_any| der_cert_any.downcast::<Vec<rustls::Certificate>>().ok())
         .and_then(|der_certs| {
-            get_pubkey_from_tls_certificate(&der_certs).and_then(|pubkey| {
-                debug!("Peer public key is {:?}", pubkey);
+            if der_certs.len() == 1 {
+                // Use the client cert only if it is self signed and the chain length is 1
+                get_pubkey_from_tls_certificate(&der_certs[0]).and_then(|pubkey| {
+                    debug!("Peer public key is {:?}", pubkey);
 
-                let staked_nodes = staked_nodes.read().unwrap();
-                let total_stake = staked_nodes.total_stake;
-                let max_stake = staked_nodes.max_stake;
-                let min_stake = staked_nodes.min_stake;
-                staked_nodes
-                    .pubkey_stake_map
-                    .get(&pubkey)
-                    .map(|stake| (pubkey, *stake, total_stake, max_stake, min_stake))
-            })
+                    let staked_nodes = staked_nodes.read().unwrap();
+                    let total_stake = staked_nodes.total_stake;
+                    let max_stake = staked_nodes.max_stake;
+                    let min_stake = staked_nodes.min_stake;
+                    staked_nodes
+                        .pubkey_stake_map
+                        .get(&pubkey)
+                        .map(|stake| (pubkey, *stake, total_stake, max_stake, min_stake))
+                })
+            } else {
+                None
+            }
         })
 }
 
@@ -926,7 +931,7 @@ pub mod test {
         crate::{
             nonblocking::quic::compute_max_allowed_uni_streams,
             quic::{MAX_STAKED_CONNECTIONS, MAX_UNSTAKED_CONNECTIONS},
-            tls_certificates::new_self_signed_tls_certificate_chain,
+            tls_certificates::new_self_signed_tls_certificate,
         },
         crossbeam_channel::{unbounded, Receiver},
         quinn::{ClientConfig, IdleTimeout, TransportConfig, VarInt},
@@ -963,13 +968,13 @@ pub mod test {
 
     pub fn get_client_config(keypair: &Keypair) -> ClientConfig {
         let ipaddr = IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1));
-        let (certs, key) = new_self_signed_tls_certificate_chain(keypair, ipaddr)
+        let (cert, key) = new_self_signed_tls_certificate(keypair, ipaddr)
             .expect("Failed to generate client certificate");
 
         let mut crypto = rustls::ClientConfig::builder()
             .with_safe_defaults()
             .with_custom_certificate_verifier(SkipServerVerification::new())
-            .with_single_cert(certs, key)
+            .with_single_cert(vec![cert], key)
             .expect("Failed to use client certificate");
 
         crypto.enable_early_data = true;
