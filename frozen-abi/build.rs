@@ -1,5 +1,8 @@
 extern crate rustc_version;
-use rustc_version::{version_meta, Channel};
+use {
+    rustc_version::{version_meta, Channel},
+    std::{process::Command},
+};
 
 fn main() {
     // Copied and adapted from
@@ -22,6 +25,19 @@ fn main() {
             // which currently needs `#![feature(proc_macro_hygiene)]` to
             // be applied.
             println!("cargo:rustc-cfg=RUSTC_NEEDS_PROC_MACRO_HYGIENE");
+        }
+    }
+
+    if let Ok(output) = Command::new("git")
+        .arg("rev-parse")
+        .arg("HEAD")
+        .output()
+    {
+        let maybe_commit = output.stdout.as_slice();
+        if !output.stdout.is_empty() {
+            if let Ok(commit) = std::str::from_utf8(maybe_commit) {
+                println!("cargo:rustc-env=DEV_COMMIT={commit}");
+            }
         }
     }
 }

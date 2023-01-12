@@ -47,12 +47,12 @@ impl From<LegacyVersion> for Version {
     }
 }
 
-fn compute_commit(sha1: Option<&'static str>) -> Option<u32> {
-    let sha1 = sha1?;
-    if sha1.len() < 8 {
+fn compute_commit(ci_sha: Option<&'static str>, dev_sha: Option<&'static str>) -> Option<u32> {
+    let sha = ci_sha.or(dev_sha.or(None))?;
+    if sha.len() < 8 {
         None
     } else {
-        u32::from_str_radix(&sha1[..8], 16).ok()
+        u32::from_str_radix(&sha[..8], 16).ok()
     }
 }
 
@@ -67,7 +67,7 @@ impl Default for Version {
             major: env!("CARGO_PKG_VERSION_MAJOR").parse().unwrap(),
             minor: env!("CARGO_PKG_VERSION_MINOR").parse().unwrap(),
             patch: env!("CARGO_PKG_VERSION_PATCH").parse().unwrap(),
-            commit: compute_commit(option_env!("CI_COMMIT")),
+            commit: compute_commit(option_env!("CI_COMMIT"), option_env!("DEV_COMMIT")),
             feature_set,
         }
     }
