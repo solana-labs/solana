@@ -1071,10 +1071,16 @@ fn load_bank_forks(
     }
 
     let account_paths = if let Some(account_paths) = arg_matches.value_of("account_paths") {
-        if !blockstore.is_primary_access() {
-            // Be defensive, when default account dir is explicitly specified, it's still possible
-            // to wipe the dir possibly shared by the running validator!
-            eprintln!("Error: custom accounts path is not supported under secondary access");
+        let allow_custom_accounts_path = arg_matches.is_present("allow_custom_accounts_path");
+        if !blockstore.is_primary_access() && !allow_custom_accounts_path {
+            // Be defensive, if we don't have primary access, the validator
+            // could be running and we don't want to disrupt that. Only allow
+            // custom path(s) if the flag specified to allow it.
+            eprintln!(
+                "Error: custom accounts path is not allowed under secondary access. \
+                       Use --allow-custom-accounts-path to override, but make sure that\
+                       another process is not currently utilizing the same path."
+            );
             exit(1);
         }
         account_paths.split(',').map(PathBuf::from).collect()
@@ -1353,6 +1359,14 @@ fn main() {
         .value_name("PATHS")
         .takes_value(true)
         .help("Comma separated persistent accounts location");
+    let force_allow_custom_account_path = Arg::with_name("allow_custom_accounts_path")
+        .long("allow-custom-accounts-path")
+        .takes_value(false)
+        .requires("account_paths")
+        .help(
+            "Allow the use of custom accounts path(s). This option should be\
+             used with caution to avoid clobbering another process.",
+        );
     let accounts_index_path_arg = Arg::with_name("accounts_index_path")
         .long("accounts-index-path")
         .value_name("PATH")
@@ -1756,6 +1770,7 @@ fn main() {
             .about("Verify the ledger")
             .arg(&no_snapshot_arg)
             .arg(&account_paths_arg)
+            .arg(&force_allow_custom_account_path)
             .arg(&accounts_index_path_arg)
             .arg(&halt_at_slot_arg)
             .arg(&limit_load_slot_count_from_snapshot_arg)
@@ -1795,6 +1810,7 @@ fn main() {
             .about("Create a Graphviz rendering of the ledger")
             .arg(&no_snapshot_arg)
             .arg(&account_paths_arg)
+            .arg(&force_allow_custom_account_path)
             .arg(&halt_at_slot_arg)
             .arg(&hard_forks_arg)
             .arg(&max_genesis_archive_unpacked_size_arg)
@@ -1824,6 +1840,7 @@ fn main() {
             .about("Create a new ledger snapshot")
             .arg(&no_snapshot_arg)
             .arg(&account_paths_arg)
+            .arg(&force_allow_custom_account_path)
             .arg(&accounts_db_skip_initial_hash_calc_arg)
             .arg(&ancient_append_vecs)
             .arg(&hard_forks_arg)
@@ -2001,6 +2018,7 @@ fn main() {
             .about("Print account stats and contents after processing the ledger")
             .arg(&no_snapshot_arg)
             .arg(&account_paths_arg)
+            .arg(&force_allow_custom_account_path)
             .arg(&halt_at_slot_arg)
             .arg(&hard_forks_arg)
             .arg(&geyser_plugin_args)
@@ -2028,6 +2046,7 @@ fn main() {
             .about("Print capitalization (aka, total supply) while checksumming it")
             .arg(&no_snapshot_arg)
             .arg(&account_paths_arg)
+            .arg(&force_allow_custom_account_path)
             .arg(&halt_at_slot_arg)
             .arg(&hard_forks_arg)
             .arg(&max_genesis_archive_unpacked_size_arg)
