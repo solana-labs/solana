@@ -4,7 +4,8 @@ use {
     rayon::iter::{IntoParallelIterator, ParallelIterator},
     solana_metrics::MovingStat,
     solana_sdk::{transaction::VersionedTransaction, transport::Result as TransportResult},
-    std::{net::SocketAddr, sync::atomic::AtomicU64},
+    std::{net::SocketAddr, sync::atomic::AtomicU64, sync::Arc},
+    tokio::sync::RwLock,
 };
 
 #[derive(Default)]
@@ -22,6 +23,9 @@ pub struct ClientStats {
     pub tx_acks: MovingStat,
     pub make_connection_ms: AtomicU64,
     pub send_timeout: AtomicU64,
+
+    pub get_tpu_errors: bool,
+    pub server_errors: Arc<RwLock<Vec<String>>>,
 }
 
 #[enum_dispatch]

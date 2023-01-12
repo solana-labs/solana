@@ -21,7 +21,7 @@ use {
         error::Error,
         net::{IpAddr, Ipv4Addr, SocketAddr, UdpSocket},
         sync::{
-            atomic::{AtomicU64, Ordering},
+            atomic::{AtomicU64, AtomicBool, Ordering},
             Arc, RwLock,
         },
     },
@@ -57,6 +57,10 @@ pub struct ConnectionCacheStats {
     // Need to track these separately per-connection
     // because we need to track the base stat value from quinn
     pub total_client_stats: ClientStats,
+
+    // getting quic errors from leader
+    pub get_tpu_errors: AtomicBool,
+    pub server_errors: Arc<tokio::sync::RwLock<Vec<String>>>,
 }
 
 const CONNECTION_STAT_SUBMISSION_INTERVAL: u64 = 2000;
@@ -283,6 +287,19 @@ impl ConnectionCache {
         Self {
             use_quic: true,
             connection_pool_size,
+            ..Self::default()
+        }
+    }
+
+    pub fn new_with_errors_from_tpu(connection_pool_size: usize) -> Self {
+        let connection_pool_size = 1.max(connection_pool_size);
+        Self {
+            use_quic: true,
+            connection_pool_size,
+            stats: Arc::new(ConnectionCacheStats {
+                get_tpu_errors : AtomicBool::new(true),
+                ..Default::default()
+            }),
             ..Self::default()
         }
     }
