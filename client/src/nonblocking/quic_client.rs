@@ -1,6 +1,8 @@
 //! Simple nonblocking client that connects to a given UDP port with the QUIC protocol
 //! and provides an interface for sending transactions which is restricted by the
 //! server's flow control.
+
+use std::time::Instant;
 use {
     crate::{
         client_error::ClientErrorKind, connection_cache::ConnectionCacheStats,
@@ -282,13 +284,71 @@ impl QuicClient {
     }
 
     async fn _send_buffer_using_conn(
+        tpu_address : SocketAddr,
         data: &[u8],
         connection: &NewConnection,
+        listen_to_server_errors: bool,
+        server_errors: Arc<RwLock<Vec<String>>>,
     ) -> Result<(), QuicError> {
-        let mut send_stream = connection.connection.open_uni().await?;
+        if listen_to_server_errors {
+            let (mut send_stream, mut recv_stream) = connection.connection.open_bi().await?;
+
+            send_stream.write_all(data).await?;
+            send_stream.finish().await?;
+
+            // create task to fetch errors from the leader
+            let server_errors = server_errors.clone();
+            tokio::spawn(async move {
+                // wait for 500 ms max
+                let mut timeout: u64 = 500;
+                let mut start = Instant::now();
+                let mut buf: [u8; 256] = [0; 256];
+                let buf: &mut [u8] = &mut buf;
+                loop {
+                    if timeout == 0 {
+                        break;
+                    } else if let Ok(buf_size) =
+                        tokio::time::timeout(Duration::from_millis(timeout), recv_stream.read(buf))
+                            .await
+                    {
+                        match buf_size {
+                            Ok(buf_size) => {
+                                if let Some(buf_size) = buf_size {
+                                    let mut lock = server_errors.write().await;
+                                    buf[buf_size] = 0; // end the string
+                                    let string = String::from_utf8(buf.to_vec());
+                                    match string {
+                                        Ok(string) => {
+                                            lock.push(format!("got error from tpu {} {}", tpu_address.to_string(), string));
+                                        }
+                                        Err(e) => {
+                                            lock.push(format!("utf8 format error {}", e.to_string()));
+                                        }
+                                    }
+                                }
+                            }
+                            Err(e) => {
+                                let mut lock = server_errors.write().await;
+                                lock.push(format!("connection read error for {} error : {}", tpu_address.to_string(), e));
+                            }
+                        }
+                        timeout =
+                            timeout.saturating_sub((Instant::now() - start).as_millis() as u64);
+                        start = Instant::now();
+                    } else {
+                        break;
+                    }
+                }
+            });
+        } else {
+            let mut send_stream = connection.connection.open_uni().await?;
+
 
         send_stream.write_all(data).await?;
+            send_stream.write_all(data).await?;
         send_stream.finish().await?;
+            send_stream.finish().await?;
+        }
         Ok(())
     }
 
@@ -397,7 +457,7 @@ impl QuicClient {
                 .update_stat(&self.stats.tx_acks, new_stats.frame_tx.acks);
 
             last_connection_id = connection.connection.stable_id();
-            match Self::_send_buffer_using_conn(data, &connection).await {
+            match Self::_send_buffer_using_conn(*self.tpu_addr(), data, &connection, stats.get_tpu_errors, stats.server_errors.clone()).await {
                 Ok(()) => {
                     return Ok(connection);
                 }
@@ -482,7 +542,7 @@ impl QuicClient {
                 join_all(
                     buffs
                         .into_iter()
-                        .map(|buf| Self::_send_buffer_using_conn(buf.as_ref(), connection_ref)),
+                        .map(|buf| Self::_send_buffer_using_conn(*self.tpu_addr(), buf.as_ref(), connection_ref, stats.get_tpu_errors, stats.server_errors.clone())),
                 )
             })
             .collect();
@@ -550,7 +610,10 @@ impl TpuConnection for QuicTpuConnection {
     where
         T: AsRef<[u8]> + Send + Sync,
     {
-        let stats = ClientStats::default();
+        let stats = ClientStats {
+            get_tpu_errors : self.connection_stats.get_tpu_errors.load(Ordering::Relaxed),
+            ..Default::default()
+        };
         let len = buffers.len();
         let res = self
             .client
@@ -566,7 +629,10 @@ impl TpuConnection for QuicTpuConnection {
     where
         T: AsRef<[u8]> + Send + Sync,
     {
-        let stats = Arc::new(ClientStats::default());
+        let stats = ClientStats {
+            get_tpu_errors : self.connection_stats.get_tpu_errors.load(Ordering::Relaxed),
+            ..Default::default()
+        };
         let send_buffer =
             self.client
                 .send_buffer(wire_transaction, &stats, self.connection_stats.clone());
