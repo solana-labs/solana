@@ -260,6 +260,29 @@ pub fn create_executor_from_account(
     Ok((executor, Some(create_executor_metrics)))
 }
 
+macro_rules! deploy_program {
+    ($invoke_context:expr, $use_jit:expr, $program_id:expr,
+     $drop:expr, $new_programdata:expr $(,)?) => {{
+        let mut create_executor_metrics = CreateMetrics::default();
+        let executor = create_executor_from_bytes(
+            &$invoke_context.feature_set,
+            $invoke_context.get_compute_budget(),
+            $invoke_context.get_log_collector(),
+            &mut create_executor_metrics,
+            $new_programdata,
+            $use_jit,
+            true,
+        )?;
+        $drop
+        create_executor_metrics.program_id = $program_id.to_string();
+        create_executor_metrics.submit_datapoint(&mut $invoke_context.timings);
+        $invoke_context
+            .tx_executor_cache
+            .borrow_mut()
+            .set($program_id, executor, true);
+    }};
+}
+
 fn write_program_data(
     program_account_index: IndexOfAccount,
     program_data_offset: usize,
@@ -647,26 +670,18 @@ fn process_loader_upgradeable_instruction(
             let instruction_context = transaction_context.get_current_instruction_context()?;
             let buffer =
                 instruction_context.try_borrow_instruction_account(transaction_context, 3)?;
-            let mut create_executor_metrics = CreateMetrics::default();
-            let executor = create_executor_from_bytes(
-                &invoke_context.feature_set,
-                invoke_context.get_compute_budget(),
-                invoke_context.get_log_collector(),
-                &mut create_executor_metrics,
+            deploy_program!(
+                invoke_context,
+                use_jit,
+                new_program_id,
+                {
+                    drop(buffer);
+                },
                 buffer
                     .get_data()
                     .get(buffer_data_offset..)
                     .ok_or(InstructionError::AccountDataTooSmall)?,
-                use_jit,
-                true,
-            )?;
-            drop(buffer);
-            create_executor_metrics.program_id = new_program_id.to_string();
-            create_executor_metrics.submit_datapoint(&mut invoke_context.timings);
-            invoke_context
-                .tx_executor_cache
-                .borrow_mut()
-                .set(new_program_id, executor, true);
+            );
 
             let transaction_context = &invoke_context.transaction_context;
             let instruction_context = transaction_context.get_current_instruction_context()?;
@@ -840,26 +855,18 @@ fn process_loader_upgradeable_instruction(
             // Load and verify the program bits
             let buffer =
                 instruction_context.try_borrow_instruction_account(transaction_context, 2)?;
-            let mut create_executor_metrics = CreateMetrics::default();
-            let executor = create_executor_from_bytes(
-                &invoke_context.feature_set,
-                invoke_context.get_compute_budget(),
-                invoke_context.get_log_collector(),
-                &mut create_executor_metrics,
+            deploy_program!(
+                invoke_context,
+                use_jit,
+                new_program_id,
+                {
+                    drop(buffer);
+                },
                 buffer
                     .get_data()
                     .get(buffer_data_offset..)
                     .ok_or(InstructionError::AccountDataTooSmall)?,
-                use_jit,
-                true,
-            )?;
-            drop(buffer);
-            create_executor_metrics.program_id = new_program_id.to_string();
-            create_executor_metrics.submit_datapoint(&mut invoke_context.timings);
-            invoke_context
-                .tx_executor_cache
-                .borrow_mut()
-                .set(new_program_id, executor, true);
+            );
 
             let transaction_context = &invoke_context.transaction_context;
             let instruction_context = transaction_context.get_current_instruction_context()?;
@@ -1363,22 +1370,13 @@ fn process_loader_instruction(
                 ic_msg!(invoke_context, "key[0] did not sign the transaction");
                 return Err(InstructionError::MissingRequiredSignature);
             }
-            let mut create_executor_metrics = CreateMetrics::default();
-            let executor = create_executor_from_bytes(
-                &invoke_context.feature_set,
-                invoke_context.get_compute_budget(),
-                invoke_context.get_log_collector(),
-                &mut create_executor_metrics,
-                program.get_data(),
+            deploy_program!(
+                invoke_context,
                 use_jit,
-                true,
-            )?;
-            create_executor_metrics.program_id = program.get_key().to_string();
-            create_executor_metrics.submit_datapoint(&mut invoke_context.timings);
-            invoke_context
-                .tx_executor_cache
-                .borrow_mut()
-                .set(*program.get_key(), executor, true);
+                *program.get_key(),
+                {},
+                program.get_data(),
+            );
             program.set_executable(true)?;
             ic_msg!(invoke_context, "Finalized account {:?}", program.get_key());
         }
