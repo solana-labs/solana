@@ -18,7 +18,7 @@ use {
 pub struct LegacyContactInfo {
     pub id: Pubkey,
     /// gossip address
-    gossip: SocketAddr,
+    pub gossip: SocketAddr,
     /// address to connect to for replication
     pub tvu: SocketAddr,
     /// address to forward shreds to

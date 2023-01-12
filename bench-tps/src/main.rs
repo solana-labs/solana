@@ -52,7 +52,7 @@ fn create_client(
         )),
         ExternalClientType::ThinClient => {
             let connection_cache = match use_quic {
-                true => Arc::new(ConnectionCache::new(tpu_connection_pool_size, None)),
+                true => Arc::new(ConnectionCache::new(tpu_connection_pool_size)),
                 false => Arc::new(ConnectionCache::with_udp(tpu_connection_pool_size)),
             };
 
@@ -108,7 +108,7 @@ fn create_client(
                 CommitmentConfig::confirmed(),
             ));
             let connection_cache = match use_quic {
-                true => ConnectionCache::new(tpu_connection_pool_size, None),
+                true => ConnectionCache::new(tpu_connection_pool_size),
                 false => ConnectionCache::with_udp(tpu_connection_pool_size),
             };
 

@@ -5,7 +5,6 @@ use {
     crossbeam_channel::{unbounded, Sender},
     rand::{thread_rng, Rng},
     solana_client::{connection_cache::ConnectionCache, thin_client::ThinClient, tpu_connection::TpuConnection},
-    solana_quic_client::nonblocking::quic_client::{QuicLazyInitializedEndpoint, QuicClientCertificate},
     solana_perf::recycler::Recycler,
     solana_runtime::bank_forks::BankForks,
     crossbeam_channel::RecvTimeoutError,
@@ -22,12 +21,11 @@ use {
         quic::{spawn_server, MAX_STAKED_CONNECTIONS,
             MAX_UNSTAKED_CONNECTIONS, StreamStats},
         nonblocking::quic::{DEFAULT_WAIT_FOR_CHUNK_TIMEOUT_MS},
-        tls_certificates::new_self_signed_tls_certificate_chain,
     },
     
     std::{
         collections::HashSet,
-        net::{SocketAddr, TcpListener, UdpSocket, IpAddr, Ipv4Addr},
+        net::{SocketAddr, TcpListener, UdpSocket},
         sync::{
             atomic::{AtomicBool, Ordering},
             Arc, RwLock,
@@ -184,17 +182,7 @@ impl GossipService {
             exit.clone(),
         );
         let t_responder = if use_quic {
-            let (certs, priv_key) = new_self_signed_tls_certificate_chain(
-                keypair.as_ref(),
-                IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)),
-            )
-            .expect("Failed to create QUIC client certificate");
-            let endpoint = QuicLazyInitializedEndpoint::new(Arc::new(QuicClientCertificate {
-                certificates: certs,
-                key: priv_key,
-            }),
-            Some(maybe_endpoint.unwrap()));
-            let connection_cache = ConnectionCache::new_with_endpoint(1, Arc::new(endpoint), Some(0));
+            let connection_cache = ConnectionCache::new_with_maybe_endpoint_and_offset(1, Some(maybe_endpoint.unwrap()), Some(0));
             quic_responder(            
             "Gossip",
             connection_cache,

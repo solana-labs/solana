@@ -75,7 +75,7 @@ impl ConnectionPool {
 
 impl ConnectionCache {
     pub fn new(connection_pool_size: usize) -> Self {
-        Self::_new_with_endpoint(connection_pool_size, None)
+        Self::_new_with_endpoint(connection_pool_size, None, None)
     }
 
     /// Create a connection cache with a specific quic client endpoint.
@@ -93,18 +93,6 @@ impl ConnectionCache {
             maybe_offset,
             ..Self::default()
         }
-    }
-
-    pub fn new_with_endpoint(connection_pool_size: usize, endpoint: Arc<QuicLazyInitializedEndpoint>, maybe_offset: Option<u16>) -> Self {
-                // The minimum pool size is 1.
-                let connection_pool_size = 1.max(connection_pool_size);
-                Self {
-                    use_quic: true,
-                    connection_pool_size,
-                    maybe_endpoint: Some(endpoint),
-                    maybe_offset,
-                    ..Self::default()
-                }
     }
 
     pub fn update_client_certificate(
@@ -190,10 +178,7 @@ impl ConnectionCache {
 
         let (to_create_connection, endpoint) =
             map.get(addr)
-                .map_or((true, match &self.maybe_endpoint
-                    { Some (endpoint) => Some(endpoint.clone()),
-                      None => self.create_endpoint(force_use_udp)
-                    }), |pool| {
+            .map_or((true, self.create_endpoint(force_use_udp)), |pool| {
                     (
                         pool.need_new_connection(self.connection_pool_size),
                         pool.endpoint.clone(),
@@ -653,7 +638,7 @@ mod tests {
         let port = u16::MAX - QUIC_PORT_OFFSET + 1;
         assert!(port.checked_add(QUIC_PORT_OFFSET).is_none());
         let addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), port);
-        let connection_cache = ConnectionCache::new(1, None);
+        let connection_cache = ConnectionCache::new(1);
 
         let conn = connection_cache.get_connection(&addr);
         // We (intentionally) don't have an interface that allows us to distinguish between
@@ -695,7 +680,7 @@ mod tests {
         )
         .unwrap();
 
-        let connection_cache = ConnectionCache::new_with_endpoint(1, response_recv_endpoint);
+        let connection_cache = ConnectionCache::new_with_maybe_endpoint_and_offset(1, Some(response_recv_endpoint), None);
 
         // server port 1:
         let port1 = 9001;
