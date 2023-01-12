@@ -91,7 +91,7 @@ pub fn spawn_server<const N: usize>(
 }
 
 pub async fn run_server<const N: usize>(
-    incoming: Incoming,
+    incoming: Endpoint,
     packet_sender: Sender<PacketBatch<N>>,
     exit: Arc<AtomicBool>,
     max_connections_per_peer: usize,

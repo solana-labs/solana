@@ -465,6 +465,7 @@ mod tests {
         rand::{Rng, SeedableRng},
         rand_chacha::ChaChaRng,
         solana_sdk::{
+            packet::TransactionPacket,
             pubkey::Pubkey,
             quic::{
                 QUIC_MAX_UNSTAKED_CONCURRENT_STREAMS, QUIC_MIN_STAKED_CONCURRENT_STREAMS,
@@ -657,20 +658,21 @@ mod tests {
 
         let staked_nodes = Arc::new(RwLock::new(StakedNodes::default()));
 
-        let (response_recv_endpoint, response_recv_thread) = solana_streamer::quic::spawn_server(
-            response_recv_socket,
-            &keypair2,
-            response_recv_ip,
-            sender2,
-            response_recv_exit.clone(),
-            1,
-            staked_nodes,
-            10,
-            10,
-            response_recv_stats,
-            DEFAULT_WAIT_FOR_CHUNK_TIMEOUT_MS,
-        )
-        .unwrap();
+        let (response_recv_endpoint, response_recv_thread) =
+            solana_streamer::quic::spawn_server::<{ TransactionPacket::DATA_SIZE }>(
+                response_recv_socket,
+                &keypair2,
+                response_recv_ip,
+                sender2,
+                response_recv_exit.clone(),
+                1,
+                staked_nodes,
+                10,
+                10,
+                response_recv_stats,
+                DEFAULT_WAIT_FOR_CHUNK_TIMEOUT_MS,
+            )
+            .unwrap();
 
         let connection_cache = ConnectionCache::new_with_endpoint(1, response_recv_endpoint);
 

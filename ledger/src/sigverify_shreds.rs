@@ -148,7 +148,7 @@ where
 
 // Recovers merkle roots from shreds binary.
 fn get_merkle_roots(
-    packets: &[PacketBatch],
+    packets: &[PacketBatch<{ Packet::DATA_SIZE }>],
     recycler_cache: &RecyclerCache,
 ) -> (
     PinnedVec<u8>,      // Merkle roots
@@ -159,7 +159,7 @@ fn get_merkle_roots(
             .par_iter()
             .flat_map(|packets| {
                 packets.par_iter().map(|packet| {
-                    if packet.meta().discard() {
+                    if packet.meta.discard() {
                         return None;
                     }
                     let shred = shred::layout::get_shred(packet)?;
@@ -814,7 +814,10 @@ mod tests {
         shreds
     }
 
-    fn make_packets<R: Rng>(rng: &mut R, shreds: &[Shred]) -> Vec<PacketBatch> {
+    fn make_packets<R: Rng>(
+        rng: &mut R,
+        shreds: &[Shred],
+    ) -> Vec<PacketBatch<{ Packet::DATA_SIZE }>> {
         let mut packets = shreds.iter().map(|shred| {
             let mut packet = Packet::default();
             shred.copy_to_packet(&mut packet);
