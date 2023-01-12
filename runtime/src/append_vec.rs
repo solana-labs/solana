@@ -5,7 +5,7 @@
 //! <https://docs.solana.com/implemented-proposals/persistent-account-storage>
 
 use {
-    crate::storable_accounts::StorableAccounts,
+    crate::{account_storage::{AccountStorageFile, AccountStorageFileReader}, storable_accounts::StorableAccounts},
     log::*,
     memmap2::MmapMut,
     serde::{Deserialize, Serialize},
@@ -247,14 +247,14 @@ impl<'a> StoredAccountMeta<'a> {
 }
 
 pub struct AppendVecAccountsIter<'a> {
-    append_vec: &'a AppendVec,
+    backend: &'a dyn AccountStorageFileReader,
     offset: usize,
 }
 
 impl<'a> AppendVecAccountsIter<'a> {
-    pub fn new(append_vec: &'a AppendVec) -> Self {
+    pub fn new<T: AccountStorageFileReader>(backend: &'a T) -> Self {
         Self {
-            append_vec,
+            backend,
             offset: 0,
         }
     }
@@ -264,7 +264,7 @@ impl<'a> Iterator for AppendVecAccountsIter<'a> {
     type Item = StoredAccountMeta<'a>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        if let Some((account, next_offset)) = self.append_vec.get_account(self.offset) {
+        if let Some((account, next_offset)) = self.backend.get_account(self.offset) {
             self.offset = next_offset;
             Some(account)
         } else {
@@ -374,10 +374,6 @@ impl AppendVec {
         }
     }
 
-    pub fn set_no_remove_on_drop(&mut self) {
-        self.remove_on_drop = false;
-    }
-
     fn sanitize_len_and_size(current_len: usize, file_size: usize) -> io::Result<()> {
         if file_size == 0 {
             Err(std::io::Error::new(
@@ -400,55 +396,6 @@ impl AppendVec {
         } else {
             Ok(())
         }
-    }
-
-    pub fn flush(&self) -> io::Result<()> {
-        self.map.flush()
-    }
-
-    pub fn reset(&self) {
-        // This mutex forces append to be single threaded, but concurrent with reads
-        // See UNSAFE usage in `append_ptr`
-        let _lock = self.append_lock.lock().unwrap();
-        self.current_len.store(0, Ordering::Release);
-    }
-
-    /// how many more bytes can be stored in this append vec
-    pub fn remaining_bytes(&self) -> u64 {
-        (self.capacity()).saturating_sub(self.len() as u64)
-    }
-
-    pub fn len(&self) -> usize {
-        self.current_len.load(Ordering::Acquire)
-    }
-
-    pub fn is_empty(&self) -> bool {
-        self.len() == 0
-    }
-
-    pub fn capacity(&self) -> u64 {
-        self.file_size
-    }
-
-    pub fn file_name(slot: Slot, id: impl std::fmt::Display) -> String {
-        format!("{slot}.{id}")
-    }
-
-    pub fn new_from_file<P: AsRef<Path>>(path: P, current_len: usize) -> io::Result<(Self, usize)> {
-        let new = Self::new_from_file_unchecked(&path, current_len)?;
-
-        let (sanitized, num_accounts) = new.sanitize_layout_and_length();
-        if !sanitized {
-            // This info show the failing accountvec file path.  It helps debugging
-            // the appendvec data corrupution issues related to recycling.
-            let err_msg = format!(
-                "incorrect layout/length/data in the appendvec at path {}",
-                path.as_ref().display()
-            );
-            return Err(std::io::Error::new(std::io::ErrorKind::Other, err_msg));
-        }
-
-        Ok((new, num_accounts))
     }
 
     /// Creates an appendvec from file without performing sanitize checks or counting the number of accounts
@@ -575,10 +522,35 @@ impl AppendVec {
         Some((unsafe { &*ptr }, next))
     }
 
+    #[cfg(test)]
+    pub fn get_account_test(&self, offset: usize) -> Option<(StoredMeta, AccountSharedData)> {
+        let (stored_account, _) = self.get_account(offset)?;
+        let meta = stored_account.meta.clone();
+        Some((meta, stored_account.clone_account()))
+    }
+}
+
+impl AccountStorageFileReader for AppendVec {
+    fn len(&self) -> usize {
+        self.current_len.load(Ordering::Acquire)
+    }
+
+    fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+
+    fn capacity(&self) -> u64 {
+        self.file_size
+    }
+
+    fn file_name(slot: Slot, id: impl std::fmt::Display) -> String {
+        format!("{slot}.{id}")
+    }
+
     /// Return account metadata for the account at `offset` if its data doesn't overrun
     /// the internal buffer. Otherwise return None. Also return the offset of the first byte
     /// after the requested data that falls on a 64-byte boundary.
-    pub fn get_account<'a>(&'a self, offset: usize) -> Option<(StoredAccountMeta<'a>, usize)> {
+    fn get_account<'a>(&'a self, offset: usize) -> Option<(StoredAccountMeta<'a>, usize)> {
         let (meta, next): (&'a StoredMeta, _) = self.get_type(offset)?;
         let (account_meta, next): (&'a AccountMeta, _) = self.get_type(next)?;
         let (hash, next): (&'a Hash, _) = self.get_type(next)?;
@@ -597,30 +569,63 @@ impl AppendVec {
         ))
     }
 
-    #[cfg(test)]
-    pub fn get_account_test(&self, offset: usize) -> Option<(StoredMeta, AccountSharedData)> {
-        let (stored_account, _) = self.get_account(offset)?;
-        let meta = stored_account.meta.clone();
-        Some((meta, stored_account.clone_account()))
+    fn new_from_file<P: AsRef<Path>>(path: P, current_len: usize) -> io::Result<(Self, usize)> {
+        let new = Self::new_from_file_unchecked(&path, current_len)?;
+
+        let (sanitized, num_accounts) = new.sanitize_layout_and_length();
+        if !sanitized {
+            // This info show the failing accountvec file path.  It helps debugging
+            // the appendvec data corrupution issues related to recycling.
+            let err_msg = format!(
+                "incorrect layout/length/data in the appendvec at path {}",
+                path.as_ref().display()
+            );
+            return Err(std::io::Error::new(std::io::ErrorKind::Other, err_msg));
+        }
+
+        Ok((new, num_accounts))
     }
 
-    pub fn get_path(&self) -> PathBuf {
+    fn get_path(&self) -> PathBuf {
         self.path.clone()
     }
 
     /// Return iterator for account metadata
-    pub fn account_iter(&self) -> AppendVecAccountsIter {
+    fn account_iter(&self) -> AppendVecAccountsIter {
         AppendVecAccountsIter::new(self)
     }
 
     /// Return a vector of account metadata for each account, starting from `offset`.
-    pub fn accounts(&self, mut offset: usize) -> Vec<StoredAccountMeta> {
+    fn accounts(&self, mut offset: usize) -> Vec<StoredAccountMeta> {
         let mut accounts = vec![];
         while let Some((account, next)) = self.get_account(offset) {
             accounts.push(account);
             offset = next;
         }
         accounts
+    }
+
+}
+
+impl AccountStorageFile for AppendVec {
+    fn set_no_remove_on_drop(&mut self) {
+        self.remove_on_drop = false;
+    }
+
+    fn flush(&self) -> io::Result<()> {
+        self.map.flush()
+    }
+
+    fn reset(&self) {
+        // This mutex forces append to be single threaded, but concurrent with reads
+        // See UNSAFE usage in `append_ptr`
+        let _lock = self.append_lock.lock().unwrap();
+        self.current_len.store(0, Ordering::Release);
+    }
+
+    /// how many more bytes can be stored in this append vec
+    fn remaining_bytes(&self) -> u64 {
+        (self.capacity()).saturating_sub(self.len() as u64)
     }
 
     /// Copy each account metadata, account and hash to the internal buffer.
@@ -630,7 +635,7 @@ impl AppendVec {
     /// So, return.len() is 1 + (number of accounts written)
     /// After each account is appended, the internal `current_len` is updated
     /// and will be available to other threads.
-    pub fn append_accounts<
+    fn append_accounts<
         'a,
         'b,
         T: ReadableAccount + Sync,

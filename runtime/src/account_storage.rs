@@ -1,16 +1,75 @@
 //! Manage the map of slot -> append vecs
 
 use {
-    crate::accounts_db::{AccountStorageEntry, AppendVecId, SlotStores},
+    crate::{
+        accounts_db::{AccountStorageEntry, AppendVecId, SlotStores},
+        // TODO(yhchiang): consider moving it to this file.
+        append_vec::{
+            AppendVecAccountsIter, StorableAccountsWithHashesAndWriteVersions, StoredAccountMeta,
+        },
+        storable_accounts::StorableAccounts,
+    },
     dashmap::DashMap,
-    solana_sdk::clock::Slot,
+    solana_sdk::{account::ReadableAccount, clock::Slot, hash::Hash},
     std::{
+        borrow::Borrow,
         collections::HashMap,
+        io::{self},
+        path::{Path, PathBuf},
         sync::{Arc, RwLock},
     },
 };
 
 pub type AccountStorageMap = DashMap<Slot, SlotStores>;
+
+pub trait AccountStorageFileReader {
+    fn len(&self) -> usize;
+
+    fn is_empty(&self) -> bool;
+
+    fn capacity(&self) -> u64;
+
+    fn file_name(slot: Slot, id: impl std::fmt::Display) -> String where Self: Sized {
+        format!("{slot}.{id}")
+    }
+
+    fn get_account<'a>(&'a self, offset: usize) -> Option<(StoredAccountMeta<'a>, usize)>;
+
+    fn account_iter(&self) -> AppendVecAccountsIter;
+
+    /// Return a vector of account metadata for each account, starting from `offset`.
+    fn accounts(&self, offset: usize) -> Vec<StoredAccountMeta>;
+
+    fn get_path(&self) -> PathBuf;
+
+    fn new_from_file<P: AsRef<Path>>(path: P, current_len: usize) -> io::Result<(Self, usize)>
+    where
+        Self: Sized;
+}
+
+pub trait AccountStorageFile: AccountStorageFileReader {
+    fn set_no_remove_on_drop(&mut self);
+
+    fn flush(&self) -> io::Result<()>;
+
+    fn reset(&self);
+
+    /// how many more bytes can be stored in this AccountStorageFile
+    fn remaining_bytes(&self) -> u64;
+
+    fn append_accounts<
+        'a,
+        'b,
+        T: ReadableAccount + Sync,
+        U: StorableAccounts<'a, T>,
+        V: Borrow<Hash>,
+    >(
+        &self,
+        accounts: &StorableAccountsWithHashesAndWriteVersions<'a, 'b, T, U, V>,
+        skip: usize,
+    ) -> Option<Vec<usize>>;
+}
+
 
 #[derive(Clone, Default, Debug)]
 pub struct AccountStorage {

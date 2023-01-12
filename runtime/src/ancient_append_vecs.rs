@@ -4,7 +4,10 @@
 //! 2. multiple 'slots' squashed into a single older (ie. ancient) slot for convenience and performance
 //! Otherwise, an ancient append vec is the same as any other append vec
 use {
-    crate::append_vec::{AppendVec, StoredAccountMeta},
+    crate::{
+        account_storage::AccountStorageFileReader,
+        append_vec::{AppendVec, StoredAccountMeta},
+    },
     solana_sdk::clock::Slot,
 };
 

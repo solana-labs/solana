@@ -1,5 +1,5 @@
 use {
-    crate::accounts_db::AccountStorageEntry,
+    crate::{account_storage::AccountStorageFileReader, accounts_db::AccountStorageEntry},
     serde::{Deserialize, Serialize},
 };
 

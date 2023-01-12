@@ -21,7 +21,9 @@
 use {
     crate::{
         account_info::{AccountInfo, Offset, StorageLocation, StoredSize},
-        account_storage::{AccountStorage, AccountStorageStatus, ShrinkInProgress},
+        account_storage::{
+            AccountStorage, AccountStorageFile, AccountStorageFileReader, AccountStorageStatus, ShrinkInProgress,
+        },
         accounts_background_service::{DroppedSlotsSender, SendDroppedBankCallback},
         accounts_cache::{AccountsCache, CachedAccount, SlotCache},
         accounts_hash::{

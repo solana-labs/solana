@@ -1,5 +1,6 @@
 use {
     crate::{
+        account_storage::AccountStorageFileReader,
         accounts_db::AccountsDb,
         append_vec::{StoredAccountMeta, StoredMeta},
     },

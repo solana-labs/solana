@@ -1,5 +1,6 @@
 use {
     crate::{
+        account_storage::AccountStorageFileReader,
         accounts_db::{SnapshotStoragesOne, PUBKEY_BINS_FOR_CALCULATING_HASHES},
         ancestors::Ancestors,
         rent_collector::RentCollector,

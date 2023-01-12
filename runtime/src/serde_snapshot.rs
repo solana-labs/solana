@@ -1,5 +1,6 @@
 use {
     crate::{
+        account_storage::AccountStorageFileReader,
         accounts::Accounts,
         accounts_db::{
             AccountShrinkThreshold, AccountStorageEntry, AccountsDb, AccountsDbConfig, AppendVecId,

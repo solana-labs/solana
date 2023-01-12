@@ -1,6 +1,6 @@
 use {
     crate::{
-        account_storage::AccountStorageMap,
+        account_storage::{AccountStorageFileReader, AccountStorageMap},
         accounts_db::{
             AccountShrinkThreshold, AccountsDbConfig, AtomicAppendVecId,
             CalcAccountsHashDataSource, SnapshotStorageOne, SnapshotStorages, SnapshotStoragesOne,

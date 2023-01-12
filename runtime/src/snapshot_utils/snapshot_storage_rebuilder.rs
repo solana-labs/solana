@@ -402,7 +402,10 @@ pub(crate) fn get_slot_and_append_vec_id(filename: &str) -> (Slot, usize) {
 
 #[cfg(test)]
 mod tests {
-    use {super::*, crate::append_vec::AppendVec};
+    use {
+        super::*,
+        crate::{account_storage::AccountStorageFileReader, append_vec::AppendVec},
+    };
 
     #[test]
     fn test_get_snapshot_file_kind() {

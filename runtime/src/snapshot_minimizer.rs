@@ -407,7 +407,8 @@ impl<'a> SnapshotMinimizer<'a> {
 mod tests {
     use {
         crate::{
-            bank::Bank, genesis_utils::create_genesis_config_with_leader,
+            account_storage::AccountStorageFileReader, bank::Bank,
+            genesis_utils::create_genesis_config_with_leader,
             snapshot_minimizer::SnapshotMinimizer,
         },
         dashmap::DashSet,
