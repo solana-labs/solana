@@ -3564,9 +3564,9 @@ dependencies = [
 
 [[package]]
 name = "prost"
-version = "0.11.0"
+version = "0.11.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "399c3c31cdec40583bb68f0b18403400d01ec4289c383aa047560439952c4dd7"
+checksum = "c0b18e655c21ff5ac2084a5ad0611e827b3f92badf79f4910b5a5c58f4d87ff0"
 dependencies = [
  "bytes",
  "prost-derive 0.11.0",
@@ -3605,7 +3605,7 @@ dependencies = [
  "log",
  "multimap",
  "petgraph",
- "prost 0.11.0",
+ "prost 0.11.3",
  "prost-types 0.11.1",
  "regex",
  "tempfile",
@@ -3655,7 +3655,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4dfaa718ad76a44b3415e6c4d53b17c8f99160dcb3a99b10470fce8ad43f6e3e"
 dependencies = [
  "bytes",
- "prost 0.11.0",
+ "prost 0.11.3",
 ]
 
 [[package]]
@@ -5604,7 +5604,7 @@ dependencies = [
  "matches",
  "num_cpus",
  "num_enum",
- "prost 0.11.0",
+ "prost 0.11.3",
  "rand 0.7.3",
  "rand_chacha 0.2.2",
  "rayon",
@@ -6554,7 +6554,7 @@ dependencies = [
  "hyper-proxy",
  "log",
  "openssl",
- "prost 0.11.0",
+ "prost 0.11.3",
  "prost-types 0.11.1",
  "serde",
  "serde_derive",
@@ -6576,7 +6576,7 @@ dependencies = [
  "bincode",
  "bs58",
  "enum-iterator",
- "prost 0.11.0",
+ "prost 0.11.3",
  "protobuf-src",
  "serde",
  "solana-account-decoder",
@@ -7700,7 +7700,7 @@ dependencies = [
  "hyper-timeout",
  "percent-encoding 2.1.0",
  "pin-project",
- "prost 0.11.0",
+ "prost 0.11.3",
  "prost-derive 0.11.0",
  "rustls-pemfile 1.0.0",
  "tokio",
