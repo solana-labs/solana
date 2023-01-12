@@ -3931,12 +3931,9 @@ impl AccountsDb {
             // shrink is in progress, so 1 new append vec to keep, 1 old one to throw away
             not_retaining_store(shrink_in_progress.old_storage());
             // dropping 'shrink_in_progress' removes the old append vec that was being shrunk from db's storage
-        } else if let Some(slot_stores) = self.storage.get_slot_stores(slot) {
+        } else if let Some(store) = self.storage.remove(&slot) {
             // no shrink in progress, so all append vecs in this slot are dead
-            let mut list = slot_stores.write().unwrap();
-            list.drain().for_each(|(_key, store)| {
-                not_retaining_store(&store);
-            });
+            not_retaining_store(&store);
         }
 
         dead_storages
@@ -4463,14 +4460,7 @@ impl AccountsDb {
                     .clean_dead_slot(*slot, &mut AccountsIndexRootsStats::default());
                 self.bank_hashes.write().unwrap().remove(slot);
                 // all storages have been removed from this slot and recycled or dropped
-                assert!(self
-                    .storage
-                    .remove(slot)
-                    .unwrap()
-                    .1
-                    .read()
-                    .unwrap()
-                    .is_empty());
+                assert!(self.storage.remove(slot).is_none());
             });
         }
     }
@@ -5502,7 +5492,7 @@ impl AccountsDb {
     fn recycle_slot_stores(
         &self,
         total_removed_storage_entries: usize,
-        slot_stores: &[SlotStores],
+        slot_stores: &[SnapshotStorageOne],
     ) -> u64 {
         let mut recycled_count = 0;
 
@@ -5510,19 +5500,16 @@ impl AccountsDb {
         let mut recycle_stores = self.recycle_stores.write().unwrap();
         recycle_stores_write_elapsed.stop();
 
-        for slot_entries in slot_stores {
-            let entry = slot_entries.read().unwrap();
-            for (_store_id, stores) in entry.iter() {
-                if recycle_stores.entry_count() > MAX_RECYCLE_STORES {
-                    let dropped_count = total_removed_storage_entries - recycled_count;
-                    self.stats
-                        .dropped_stores
-                        .fetch_add(dropped_count as u64, Ordering::Relaxed);
-                    return recycle_stores_write_elapsed.as_us();
-                }
-                recycle_stores.add_entry(stores.clone());
-                recycled_count += 1;
+        for store in slot_stores {
+            if recycle_stores.entry_count() > MAX_RECYCLE_STORES {
+                let dropped_count = total_removed_storage_entries - recycled_count;
+                self.stats
+                    .dropped_stores
+                    .fetch_add(dropped_count as u64, Ordering::Relaxed);
+                return recycle_stores_write_elapsed.as_us();
             }
+            recycle_stores.add_entry(Arc::clone(store));
+            recycled_count += 1;
         }
         recycle_stores_write_elapsed.as_us()
     }
@@ -5613,16 +5600,12 @@ impl AccountsDb {
         let mut remove_storage_entries_elapsed = Measure::start("remove_storage_entries_elapsed");
         for remove_slot in removed_slots {
             // Remove the storage entries and collect some metrics
-            if let Some((_, slot_storages_to_be_removed)) = self.storage.remove(remove_slot) {
+            if let Some(store) = self.storage.remove(remove_slot) {
                 {
-                    let r_slot_removed_storages = slot_storages_to_be_removed.read().unwrap();
-                    total_removed_storage_entries += r_slot_removed_storages.len();
-                    total_removed_stored_bytes += r_slot_removed_storages
-                        .values()
-                        .map(|i| i.accounts.capacity())
-                        .sum::<u64>();
+                    total_removed_storage_entries += 1;
+                    total_removed_stored_bytes += store.accounts.capacity();
                 }
-                all_removed_slot_storages.push(slot_storages_to_be_removed.clone());
+                all_removed_slot_storages.push(store);
             }
         }
         remove_storage_entries_elapsed.stop();
@@ -17306,9 +17289,7 @@ pub mod tests {
     }
 
     #[test]
-    #[should_panic(
-        expected = "assertion failed: self.storage.remove(slot).unwrap().1.read().unwrap().is_empty()"
-    )]
+    #[should_panic(expected = "assertion failed: self.storage.remove(slot).is_none()")]
     fn test_handle_dropped_roots_for_ancient_assert() {
         solana_logger::setup();
         let common_store_path = Path::new("");

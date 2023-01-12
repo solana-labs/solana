@@ -93,7 +93,7 @@ impl AccountStorage {
         assert!(self.shrink_in_progress_map.is_empty());
         self.get_slot_stores(slot)
             .map(|storages| storages.read().unwrap().is_empty())
-            .unwrap_or(false)
+            .unwrap_or(true)
     }
 
     /// initialize the storage map to 'all_storages'
@@ -105,9 +105,14 @@ impl AccountStorage {
 
     /// remove all append vecs at 'slot'
     /// returns the current contents
-    pub(crate) fn remove(&self, slot: &Slot) -> Option<(Slot, SlotStores)> {
+    pub(crate) fn remove(&self, slot: &Slot) -> Option<Arc<AccountStorageEntry>> {
         assert!(self.shrink_in_progress_map.is_empty());
-        self.map.remove(slot)
+        self.map.remove(slot).and_then(|(_slot, slot_stores)| {
+            let mut write = slot_stores.write().unwrap();
+            assert_eq!(write.len(), 1);
+            let mut drain = write.drain();
+            Some(drain.next().unwrap().1)
+        })
     }
 
     /// iterate through all (slot, append-vecs)
