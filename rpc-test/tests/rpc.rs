@@ -9,6 +9,7 @@ use {
     solana_client::{
         connection_cache::{ConnectionCache, DEFAULT_TPU_CONNECTION_POOL_SIZE},
         tpu_client::{TpuClient, TpuClientConfig},
+        tpu_connection::TpuConnection,
     },
     solana_pubsub_client::nonblocking::pubsub_client::PubsubClient,
     solana_rpc_client::rpc_client::RpcClient,
@@ -32,7 +33,6 @@ use {
     solana_transaction_status::TransactionStatus,
     std::{
         collections::HashSet,
-        net::UdpSocket,
         sync::{
             atomic::{AtomicUsize, Ordering},
             Arc,
@@ -247,8 +247,7 @@ fn test_rpc_subscriptions() {
     let test_validator =
         TestValidator::with_no_fees_udp(alice.pubkey(), None, SocketAddrSpace::Unspecified);
 
-    let transactions_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
-    transactions_socket.connect(test_validator.tpu()).unwrap();
+    let connection_cache = ConnectionCache::new(DEFAULT_TPU_CONNECTION_POOL_SIZE);
 
     let rpc_client = RpcClient::new(test_validator.rpc_url());
     let recent_blockhash = rpc_client.get_latest_blockhash().unwrap();
@@ -381,12 +380,14 @@ fn test_rpc_subscriptions() {
         .value;
     assert!(mint_balance >= transactions.len() as u64);
 
+    let conn = connection_cache.get_connection(test_validator.tpu());
+
+    let wire_txs = transactions
+        .iter()
+        .map(|tx| bincode::serialize(&tx).unwrap())
+        .collect::<Vec<_>>();
     // Send all transactions to tpu socket for processing
-    transactions.iter().for_each(|tx| {
-        transactions_socket
-            .send(&bincode::serialize(&tx).unwrap())
-            .unwrap();
-    });
+    conn.send_wire_transaction_batch(&wire_txs).unwrap();
 
     // Track mint balance to know when transactions have completed
     let now = Instant::now();
