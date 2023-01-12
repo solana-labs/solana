@@ -791,41 +791,38 @@ mod tests {
     #[test]
     fn test_update_timestamp() {
         let mut crds = Crds::default();
-        let val = CrdsValue::new_unsigned(CrdsData::LegacyContactInfo(ContactInfo::new_localhost(
-            &Pubkey::default(),
-            0,
-        )));
+        let val1 = CrdsValue::new_unsigned(CrdsData::LegacyContactInfo(
+            ContactInfo::new_localhost(&Pubkey::default(), 0),
+        ));
+        let val1_hash = hash(&serialize(&val1).unwrap());
         assert_eq!(
-            crds.insert(val.clone(), 0, GossipRoute::LocalMessage),
+            crds.insert(val1.clone(), 0, GossipRoute::LocalMessage),
             Ok(())
         );
-        assert_eq!(crds.table[&val.label()].ordinal, 0);
+        assert_eq!(crds.table[&val1.label()].local_timestamp, 0);
+        assert_eq!(crds.table[&val1.label()].ordinal, 0);
 
-        let val2 = CrdsValue::new_unsigned(CrdsData::LegacyContactInfo(ContactInfo::default()));
-        let value_hash = hash(&serialize(&val2).unwrap());
-        assert_eq!(val2.label().pubkey(), val.label().pubkey());
+        // `val2` is expected to overwrite `val1` based on the `wallclock` value.
+        let val2 = CrdsValue::new_unsigned(CrdsData::LegacyContactInfo(
+            ContactInfo::new_localhost(&Pubkey::default(), 1),
+        ));
+        assert_eq!(val2.label().pubkey(), val1.label().pubkey());
         assert_eq!(
-            crds.insert(val2.clone(), 0, GossipRoute::LocalMessage),
+            crds.insert(val2.clone(), 1, GossipRoute::LocalMessage),
             Ok(())
         );
+        assert_eq!(*crds.purged.back().unwrap(), (val1_hash, 1));
 
-        crds.update_record_timestamp(&val.label().pubkey(), 2);
-        assert_eq!(crds.table[&val.label()].local_timestamp, 2);
-        assert_eq!(crds.table[&val.label()].ordinal, 1);
+        assert_eq!(crds.table[&val2.label()].local_timestamp, 1);
+        assert_eq!(crds.table[&val2.label()].ordinal, 1);
+
+        crds.update_record_timestamp(&val2.label().pubkey(), 2);
         assert_eq!(crds.table[&val2.label()].local_timestamp, 2);
         assert_eq!(crds.table[&val2.label()].ordinal, 1);
 
-        crds.update_record_timestamp(&val.label().pubkey(), 1);
-        assert_eq!(crds.table[&val.label()].local_timestamp, 2);
-        assert_eq!(crds.table[&val.label()].ordinal, 1);
-
-        let mut ci = ContactInfo::default();
-        ci.wallclock += 1;
-        let val3 = CrdsValue::new_unsigned(CrdsData::LegacyContactInfo(ci));
-        assert_eq!(crds.insert(val3, 3, GossipRoute::LocalMessage), Ok(()));
-        assert_eq!(*crds.purged.back().unwrap(), (value_hash, 3));
-        assert_eq!(crds.table[&val2.label()].local_timestamp, 3);
-        assert_eq!(crds.table[&val2.label()].ordinal, 2);
+        crds.update_record_timestamp(&val2.label().pubkey(), 1);
+        assert_eq!(crds.table[&val2.label()].local_timestamp, 2);
+        assert_eq!(crds.table[&val2.label()].ordinal, 1);
     }
 
     #[test]
