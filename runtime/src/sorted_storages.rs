@@ -9,7 +9,7 @@ use {
     },
 };
 
-/// Provide access to SnapshotStorageOnes sorted by slot
+/// Provide access to SnapshotStorageOnes by slot
 pub struct SortedStorages<'a> {
     /// range of slots where storages exist (likely sparse)
     range: Range<Slot>,

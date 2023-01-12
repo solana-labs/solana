@@ -3,7 +3,7 @@ use {
         account_storage::AccountStorageMap,
         accounts_db::{
             AccountShrinkThreshold, AccountsDbConfig, AtomicAppendVecId,
-            CalcAccountsHashDataSource, SnapshotStorageOne, SnapshotStorages, SnapshotStoragesOne,
+            CalcAccountsHashDataSource, SnapshotStorageOne, SnapshotStoragesOne,
         },
         accounts_index::AccountSecondaryIndexes,
         accounts_update_notifier_interface::AccountsUpdateNotifier,
@@ -908,11 +908,11 @@ pub fn add_bank_snapshot(
     })
 }
 
-/// serializing needs Vec<Vec<...>>, but data structure at runtime is Vec<...>
+/// serializing needs Vec<Vec<SnapshotStorageOne>>, but data structure at runtime is Vec<SnapshotStorageOne>
 /// translates to what we need
 pub(crate) fn get_storages_to_serialize(
     snapshot_storages: &[SnapshotStorageOne],
-) -> SnapshotStorages {
+) -> Vec<Vec<SnapshotStorageOne>> {
     snapshot_storages
         .iter()
         .map(|storage| vec![Arc::clone(storage)])
