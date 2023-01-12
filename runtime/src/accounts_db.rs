@@ -6338,15 +6338,7 @@ impl AccountsDb {
 
             // If the above sizing function is correct, just one AppendVec is enough to hold
             // all the data for the slot
-            assert_eq!(
-                self.storage
-                    .get_slot_stores(slot)
-                    .unwrap()
-                    .read()
-                    .unwrap()
-                    .len(),
-                1
-            );
+            assert!(self.storage.get_slot_storage_entry(slot).is_some());
         }
 
         // Remove this slot from the cache, which will to AccountsDb's new readers should look like an
@@ -7738,11 +7730,9 @@ impl AccountsDb {
         }
 
         dead_slots.retain(|slot| {
-            if let Some(slot_stores) = self.storage.get_slot_stores(*slot) {
-                for x in slot_stores.read().unwrap().values() {
-                    if x.count() != 0 {
-                        return false;
-                    }
+            if let Some(slot_store) = self.storage.get_slot_storage_entry(*slot) {
+                if slot_store.count() != 0 {
+                    return false;
                 }
             }
             true
@@ -7902,10 +7892,8 @@ impl AccountsDb {
         let mut stores = vec![];
         // get all stores in a vec so we can iterate in parallel
         for slot in dead_slots.iter() {
-            if let Some(slot_storage) = self.storage.get_slot_stores(*slot) {
-                for store in slot_storage.read().unwrap().values() {
-                    stores.push(store.clone());
-                }
+            if let Some(slot_storage) = self.storage.get_slot_storage_entry(*slot) {
+                stores.push(slot_storage);
             }
         }
         // get all pubkeys in all dead slots
@@ -9043,23 +9031,16 @@ impl AccountsDb {
         slots.sort();
         info!("{}: count_and status for {} slots:", label, slots.len());
         for slot in &slots {
-            let slot_stores = self.storage.get_slot_stores(*slot).unwrap();
-            let r_slot_stores = slot_stores.read().unwrap();
-            let mut ids: Vec<_> = r_slot_stores.keys().cloned().collect();
-            #[allow(clippy::stable_sort_primitive)]
-            ids.sort();
-            for id in &ids {
-                let entry = r_slot_stores.get(id).unwrap();
-                info!(
-                    "  slot: {} id: {} count_and_status: {:?} approx_store_count: {} len: {} capacity: {}",
-                    slot,
-                    id,
-                    *entry.count_and_status.read().unwrap(),
-                    entry.approx_store_count.load(Ordering::Relaxed),
-                    entry.accounts.len(),
-                    entry.accounts.capacity(),
-                );
-            }
+            let entry = self.storage.get_slot_storage_entry(*slot).unwrap();
+            info!(
+                "  slot: {} id: {} count_and_status: {:?} approx_store_count: {} len: {} capacity: {}",
+                slot,
+                entry.append_vec_id(),
+                *entry.count_and_status.read().unwrap(),
+                entry.approx_store_count.load(Ordering::Relaxed),
+                entry.accounts.len(),
+                entry.accounts.capacity(),
+            );
         }
     }
 }
@@ -9126,8 +9107,8 @@ impl AccountsDb {
 
     pub fn alive_account_count_in_slot(&self, slot: Slot) -> usize {
         self.storage
-            .get_slot_stores(slot)
-            .map(|storages| storages.read().unwrap().values().map(|s| s.count()).sum())
+            .get_slot_storage_entry(slot)
+            .map(|storage| storage.count())
             .unwrap_or(0)
             .saturating_add(
                 self.accounts_cache
@@ -10528,16 +10509,12 @@ pub mod tests {
         db.get_accounts_delta_hash(1);
         db.add_root_and_flush_write_cache(1);
         {
-            let slot_0_stores = &db.storage.get_slot_stores(0).unwrap();
-            let slot_1_stores = &db.storage.get_slot_stores(1).unwrap();
-            let r_slot_0_stores = slot_0_stores.read().unwrap();
-            let r_slot_1_stores = slot_1_stores.read().unwrap();
-            assert_eq!(r_slot_0_stores.len(), 1);
-            assert_eq!(r_slot_1_stores.len(), 1);
-            assert_eq!(r_slot_0_stores.get(&0).unwrap().count(), 2);
-            assert_eq!(r_slot_1_stores[&1].count(), 2);
-            assert_eq!(r_slot_0_stores.get(&0).unwrap().approx_stored_count(), 2);
-            assert_eq!(r_slot_1_stores[&1].approx_stored_count(), 2);
+            let slot_0_store = &db.storage.get_slot_storage_entry(0).unwrap();
+            let slot_1_store = &db.storage.get_slot_storage_entry(1).unwrap();
+            assert_eq!(slot_0_store.count(), 2);
+            assert_eq!(slot_1_store.count(), 2);
+            assert_eq!(slot_0_store.approx_stored_count(), 2);
+            assert_eq!(slot_1_store.approx_stored_count(), 2);
         }
 
         // overwrite old rooted account version; only the r_slot_0_stores.count() should be
@@ -10546,16 +10523,12 @@ pub mod tests {
         db.store_for_tests(2, &[(&pubkeys[0], &account)]);
         db.clean_accounts_for_tests();
         {
-            let slot_0_stores = &db.storage.get_slot_stores(0).unwrap();
-            let slot_1_stores = &db.storage.get_slot_stores(1).unwrap();
-            let r_slot_0_stores = slot_0_stores.read().unwrap();
-            let r_slot_1_stores = slot_1_stores.read().unwrap();
-            assert_eq!(r_slot_0_stores.len(), 1);
-            assert_eq!(r_slot_1_stores.len(), 1);
-            assert_eq!(r_slot_0_stores.get(&0).unwrap().count(), 1);
-            assert_eq!(r_slot_1_stores[&1].count(), 2);
-            assert_eq!(r_slot_0_stores.get(&0).unwrap().approx_stored_count(), 2);
-            assert_eq!(r_slot_1_stores[&1].approx_stored_count(), 2);
+            let slot_0_store = &db.storage.get_slot_storage_entry(0).unwrap();
+            let slot_1_store = &db.storage.get_slot_storage_entry(1).unwrap();
+            assert_eq!(slot_0_store.count(), 1);
+            assert_eq!(slot_1_store.count(), 2);
+            assert_eq!(slot_0_store.approx_stored_count(), 2);
+            assert_eq!(slot_1_store.approx_stored_count(), 2);
         }
     }
 
@@ -10613,7 +10586,7 @@ pub mod tests {
         assert!(db.load_without_fixed_root(&ancestors, &key).is_none());
         assert!(db.bank_hashes.read().unwrap().get(&unrooted_slot).is_none());
         assert!(db.accounts_cache.slot_cache(unrooted_slot).is_none());
-        assert!(db.storage.get_slot_stores(unrooted_slot).is_none());
+        assert!(db.storage.get_slot_storage_entry(unrooted_slot).is_none());
         assert!(db.accounts_index.get_account_read_entry(&key).is_none());
         assert!(db
             .accounts_index
@@ -10726,16 +10699,7 @@ pub mod tests {
     }
 
     fn check_storage(accounts: &AccountsDb, slot: Slot, count: usize) -> bool {
-        assert_eq!(
-            accounts
-                .storage
-                .get_slot_stores(slot)
-                .unwrap()
-                .read()
-                .unwrap()
-                .len(),
-            1
-        );
+        assert!(accounts.storage.get_slot_storage_entry(slot).is_some());
         let slot_storages = accounts.storage.get_slot_stores(slot).unwrap();
         let mut total_count: usize = 0;
         let r_slot_storages = slot_storages.read().unwrap();
@@ -10881,11 +10845,9 @@ pub mod tests {
             accounts.store_for_tests(0, &[(&pubkey1, &account1)]);
             if pass == 0 {
                 accounts.add_root_and_flush_write_cache(0);
-                let stores = &accounts.storage.get_slot_stores(0).unwrap();
-                let r_stores = stores.read().unwrap();
-                assert_eq!(r_stores.len(), 1);
-                assert_eq!(r_stores[&0].count(), 1);
-                assert_eq!(r_stores[&0].status(), AccountStorageStatus::Available);
+                let store = &accounts.storage.get_slot_storage_entry(0).unwrap();
+                assert_eq!(store.count(), 1);
+                assert_eq!(store.status(), AccountStorageStatus::Available);
                 continue;
             }
 
@@ -10896,11 +10858,9 @@ pub mod tests {
             if pass == 1 {
                 accounts.add_root_and_flush_write_cache(0);
                 assert_eq!(accounts.storage.len(), 1);
-                let stores = &accounts.storage.get_slot_stores(0).unwrap();
-                let r_stores = stores.read().unwrap();
-                assert_eq!(r_stores.len(), 1);
-                assert_eq!(r_stores[&0].count(), 2);
-                assert_eq!(r_stores[&0].status(), AccountStorageStatus::Available);
+                let store = &accounts.storage.get_slot_storage_entry(0).unwrap();
+                assert_eq!(store.count(), 2);
+                assert_eq!(store.status(), AccountStorageStatus::Available);
                 continue;
             }
             let ancestors = vec![(0, 0)].into_iter().collect();
@@ -10926,10 +10886,8 @@ pub mod tests {
                 if flush {
                     accounts.add_root_and_flush_write_cache(0);
                     assert_eq!(accounts.storage.len(), 1);
-                    let stores = &accounts.storage.get_slot_stores(0).unwrap();
-                    let r_stores = stores.read().unwrap();
-                    assert_eq!(r_stores.len(), 1);
-                    assert_eq!(r_stores[&0].status(), status[0]);
+                    let store = &accounts.storage.get_slot_storage_entry(0).unwrap();
+                    assert_eq!(store.status(), status[0]);
                 }
                 let ancestors = vec![(0, 0)].into_iter().collect();
                 assert_eq!(
@@ -10977,14 +10935,14 @@ pub mod tests {
         accounts.get_accounts_delta_hash(0);
 
         //slot is still there, since gc is lazy
-        assert!(accounts
-            .storage
-            .get_slot_stores(0)
-            .unwrap()
-            .read()
-            .unwrap()
-            .get(&id)
-            .is_some());
+        assert_eq!(
+            accounts
+                .storage
+                .get_slot_storage_entry(0)
+                .unwrap()
+                .append_vec_id(),
+            id
+        );
 
         //store causes clean
         accounts.store_for_tests(1, &[(&pubkey, &account)]);
@@ -11009,17 +10967,10 @@ pub mod tests {
 
     impl AccountsDb {
         fn all_account_count_in_append_vec(&self, slot: Slot) -> usize {
-            let slot_storage = self.storage.get_slot_stores(slot);
-            if let Some(slot_storage) = slot_storage {
-                let r_slot_storage = slot_storage.read().unwrap();
-                let count = r_slot_storage
-                    .values()
-                    .map(|store| store.all_accounts().len())
-                    .sum();
-                let stored_count: usize = r_slot_storage
-                    .values()
-                    .map(|store| store.approx_stored_count())
-                    .sum();
+            let store = self.storage.get_slot_storage_entry(slot);
+            if let Some(store) = store {
+                let count = store.all_accounts().len();
+                let stored_count = store.approx_stored_count();
                 assert_eq!(stored_count, count);
                 count
             } else {
@@ -12521,12 +12472,7 @@ pub mod tests {
             db.store_for_tests(base_slot, &[(&key, &account)]);
             if pass == 0 {
                 db.add_root_and_flush_write_cache(base_slot);
-                db.storage
-                    .get_slot_stores(base_slot)
-                    .unwrap()
-                    .write()
-                    .unwrap()
-                    .clear();
+                db.storage.remove(&base_slot);
                 assert!(db.get_snapshot_storages(..=after_slot, None).0.is_empty());
                 continue;
             }
