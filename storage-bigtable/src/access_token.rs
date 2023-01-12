@@ -110,12 +110,11 @@ impl AccessToken {
             {
                 // Refresh already pending
                 let token_refresh_time = self.token_refresh_start_time.load(Ordering::SeqCst);
-                if token_refresh_time + (self.get_token_timeout_seconds * 2) < token_r.1.elapsed().as_secs() {
+                if token_refresh_time != 0 && token_refresh_time + (self.get_token_timeout_seconds * 2) < token_r.1.elapsed().as_secs() {
                     warn!("Token refresh timeout failed to timeout!");
                     self.refresh_active.store(false, Ordering::Relaxed);
-                } else {
-                    return;
                 }
+                return;
             }
 
             info!("Refreshing token");
@@ -123,7 +122,7 @@ impl AccessToken {
         }
 
         match time::timeout(
-            time::Duration::from_secs(self.get_token_timeout_seconds,
+            time::Duration::from_secs(self.get_token_timeout_seconds),
             Self::get_token(&self.credentials, &self.scope),
         )
         .await
