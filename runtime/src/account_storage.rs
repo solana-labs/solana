@@ -105,9 +105,14 @@ impl AccountStorage {
 
     /// remove all append vecs at 'slot'
     /// returns the current contents
-    pub(crate) fn remove(&self, slot: &Slot) -> Option<(Slot, SlotStores)> {
+    pub(crate) fn remove(&self, slot: &Slot) -> Option<Arc<AccountStorageEntry>> {
         assert!(self.shrink_in_progress_map.is_empty());
-        self.map.remove(slot)
+        self.map.remove(slot).and_then(|(_slot, slot_stores)| {
+            let mut write = slot_stores.write().unwrap();
+            assert!(write.len() <= 1, "{}", write.len());
+            let mut drain = write.drain();
+            drain.next().map(|(_, store)| store)
+        })
     }
 
     /// iterate through all (slot, append-vecs)
