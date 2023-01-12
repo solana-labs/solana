@@ -14894,7 +14894,7 @@ pub(crate) mod tests {
             .accounts
             .accounts_db
             .storage
-            .get_slot_stores(1)
+            .get_slot_storage_entry(1)
             .is_none());
 
         bank3.print_accounts_stats();

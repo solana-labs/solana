@@ -5683,7 +5683,7 @@ impl AccountsDb {
         pubkeys_removed_from_accounts_index: &PubkeysRemovedFromAccountsIndex,
     ) {
         // Slot purged from cache should not exist in the backing store
-        assert!(self.storage.get_slot_stores(purged_slot).is_none());
+        assert!(self.storage.get_slot_storage_entry(purged_slot).is_none());
         let num_purged_keys = pubkey_to_slot_set.len();
         let (reclaims, _) = self.purge_keys_exact(pubkey_to_slot_set.iter());
         assert_eq!(reclaims.len(), num_purged_keys);
@@ -9152,7 +9152,12 @@ pub mod test_utils {
         slot: Slot,
     ) {
         let data_size = 0;
-        if accounts.accounts_db.storage.get_slot_stores(slot).is_none() {
+        if accounts
+            .accounts_db
+            .storage
+            .get_slot_storage_entry(slot)
+            .is_none()
+        {
             let bytes_required = num * aligned_stored_size(data_size);
             // allocate an append vec for this slot that can hold all the test accounts. This prevents us from creating more than 1 append vec for this slot.
             _ = accounts.accounts_db.create_and_insert_store(
@@ -10990,9 +10995,9 @@ pub mod tests {
         //slot is gone
         accounts.print_accounts_stats("pre-clean");
         accounts.add_root_and_flush_write_cache(1);
-        assert!(accounts.storage.get_slot_stores(0).is_some());
+        assert!(accounts.storage.get_slot_storage_entry(0).is_some());
         accounts.clean_accounts_for_tests();
-        assert!(accounts.storage.get_slot_stores(0).is_none());
+        assert!(accounts.storage.get_slot_storage_entry(0).is_none());
 
         //new value is there
         let ancestors = vec![(1, 1)].into_iter().collect();
@@ -11082,8 +11087,8 @@ pub mod tests {
         // Slot 1 should be removed, slot 0 cannot be removed because it still has
         // the latest update for pubkey 2
         accounts.clean_accounts_for_tests();
-        assert!(accounts.storage.get_slot_stores(0).is_some());
-        assert!(accounts.storage.get_slot_stores(1).is_none());
+        assert!(accounts.storage.get_slot_storage_entry(0).is_some());
+        assert!(accounts.storage.get_slot_storage_entry(1).is_none());
 
         // Slot 1 should be cleaned because all it's accounts are
         // zero lamports, and are not present in any other slot's
@@ -11122,11 +11127,11 @@ pub mod tests {
         accounts.clean_accounts_for_tests();
         // Slots 0 and 1 should each have been cleaned because all of their
         // accounts are zero lamports
-        assert!(accounts.storage.get_slot_stores(0).is_none());
-        assert!(accounts.storage.get_slot_stores(1).is_none());
+        assert!(accounts.storage.get_slot_storage_entry(0).is_none());
+        assert!(accounts.storage.get_slot_storage_entry(1).is_none());
         // Slot 2 only has a zero lamport account as well. But, calc_delete_dependencies()
         // should exclude slot 2 from the clean due to changes in other slots
-        assert!(accounts.storage.get_slot_stores(2).is_some());
+        assert!(accounts.storage.get_slot_storage_entry(2).is_some());
         // Index ref counts should be consistent with the slot stores. Account 1 ref count
         // should be 1 since slot 2 is the only alive slot; account 2 should have a ref
         // count of 0 due to slot 0 being dead
@@ -11135,7 +11140,7 @@ pub mod tests {
 
         accounts.clean_accounts_for_tests();
         // Slot 2 will now be cleaned, which will leave account 1 with a ref count of 0
-        assert!(accounts.storage.get_slot_stores(2).is_none());
+        assert!(accounts.storage.get_slot_storage_entry(2).is_none());
         assert_eq!(accounts.accounts_index.ref_count_from_storage(&pubkey1), 0);
     }
 
@@ -11164,8 +11169,8 @@ pub mod tests {
         // zero-lamport account should be cleaned
         accounts.clean_accounts_for_tests();
 
-        assert!(accounts.storage.get_slot_stores(0).is_none());
-        assert!(accounts.storage.get_slot_stores(1).is_none());
+        assert!(accounts.storage.get_slot_storage_entry(0).is_none());
+        assert!(accounts.storage.get_slot_storage_entry(1).is_none());
 
         // Slot 0 should be cleaned because all it's accounts have been
         // updated in the rooted slot 1
@@ -11605,13 +11610,8 @@ pub mod tests {
     }
 
     fn assert_no_stores(accounts: &AccountsDb, slot: Slot) {
-        let slot_stores = accounts.storage.get_slot_stores(slot);
-        let r_slot_stores = slot_stores.as_ref().map(|slot_stores| {
-            let r_slot_stores = slot_stores.read().unwrap();
-            info!("{:?}", *r_slot_stores);
-            r_slot_stores
-        });
-        assert!(r_slot_stores.is_none() || r_slot_stores.unwrap().is_empty());
+        let store = accounts.storage.get_slot_storage_entry(slot);
+        assert!(store.is_none());
     }
 
     #[test]
@@ -12567,12 +12567,7 @@ pub mod tests {
         assert_eq!(1, db.get_snapshot_storages(..=after_slot, None).0.len());
 
         db.storage
-            .get_slot_stores(0)
-            .unwrap()
-            .read()
-            .unwrap()
-            .values()
-            .next()
+            .get_slot_storage_entry(0)
             .unwrap()
             .remove_account(0, true);
         assert!(db.get_snapshot_storages(..=after_slot, None).0.is_empty());
@@ -12603,16 +12598,7 @@ pub mod tests {
         let account = AccountSharedData::new(1, 0, AccountSharedData::default().owner());
         accounts.store_for_tests(0, &[(&pubkey, &account)]);
         accounts.add_root_and_flush_write_cache(0);
-        let storage_entry = accounts
-            .storage
-            .get_slot_stores(0)
-            .unwrap()
-            .read()
-            .unwrap()
-            .values()
-            .next()
-            .unwrap()
-            .clone();
+        let storage_entry = accounts.storage.get_slot_storage_entry(0).unwrap();
         storage_entry.remove_account(0, true);
         storage_entry.remove_account(0, true);
     }
@@ -13495,11 +13481,8 @@ pub mod tests {
         let pubkey = solana_sdk::pubkey::new_rand();
         accounts.store_for_tests(0, &[(&pubkey, &account)]);
         accounts.add_root_and_flush_write_cache(0);
-        let slot_stores = accounts.storage.get_slot_stores(0).unwrap();
-        let mut total_len = 0;
-        for (_id, store) in slot_stores.read().unwrap().iter() {
-            total_len += store.accounts.len();
-        }
+        let store = accounts.storage.get_slot_storage_entry(0).unwrap();
+        let total_len = store.accounts.len();
         info!("total: {}", total_len);
         assert_eq!(total_len, STORE_META_OVERHEAD);
     }
@@ -14232,10 +14215,7 @@ pub mod tests {
 
     impl AccountsDb {
         fn get_and_assert_single_storage(&self, slot: Slot) -> Arc<AccountStorageEntry> {
-            let mut storage_maps = self.get_storages_for_slot(slot).unwrap_or_default();
-
-            assert_eq!(storage_maps.len(), 1);
-            storage_maps.pop().unwrap()
+            self.storage.get_slot_storage_entry(slot).unwrap()
         }
     }
 
@@ -15292,7 +15272,7 @@ pub mod tests {
                         LoadHint::FixedMaxRoot
                     )
                     .is_some());
-                // Clear for next iteration so that `assert!(self.storage.get_slot_stores(purged_slot).is_none());`
+                // Clear for next iteration so that `assert!(self.storage.get_slot_storage_entry(purged_slot).is_none());`
                 // in `purge_slot_pubkeys()` doesn't trigger
                 db.remove_unrooted_slots(&[(*slot, *bank_id)]);
             }
