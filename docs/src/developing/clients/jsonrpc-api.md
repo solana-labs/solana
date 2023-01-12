@@ -2125,12 +2125,13 @@ Result:
 
 ### getRecentPrioritizationFees
 
+**UNSTABLE**
 Returns a list of minimum prioritization fees from recent blocks. Currently, a
 node's prioritization-fee cache stores data from up to 150 blocks.
 
 #### Parameters:
 
-- `<array>` - (optional) An array of account address strings. If this parameter is provided, the response will reflect the minimum prioritization fee to land a transaction locking all of the provided accounts as writable.
+- `<array>` - (optional) An array of account address strings (up to a maximum of 128 addresses). If this parameter is provided, the response will reflect the minimum prioritization fee to land a transaction locking all of the provided accounts as writable.
 
 #### Results:
 
@@ -2138,7 +2139,7 @@ An array of:
 
 - `RpcPrioritizationFee<object>`
   - `slot: <u64>` - Slot in which minimum fee was observed
-  - `prioritizationFee: <u64>` - Minimum fee paid for a successfully landed transaction
+  - `prioritizationFee: <u64>` - Minimum fee paid for a successfully landed transaction, specified in increments of 0.000001 lamports
 
 #### Example:
 
