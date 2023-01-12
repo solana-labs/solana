@@ -23,8 +23,7 @@ use {
         transport::Result as TransportResult,
     },
     solana_streamer::{
-        nonblocking::quic::ALPN_TPU_PROTOCOL_ID,
-        tls_certificates::new_self_signed_tls_certificate_chain,
+        nonblocking::quic::ALPN_TPU_PROTOCOL_ID, tls_certificates::new_self_signed_tls_certificate,
     },
     solana_tpu_client::{
         connection_cache_stats::ConnectionCacheStats, nonblocking::tpu_connection::TpuConnection,
@@ -63,7 +62,7 @@ impl rustls::client::ServerCertVerifier for SkipServerVerification {
 }
 
 pub struct QuicClientCertificate {
-    pub certificates: Vec<rustls::Certificate>,
+    pub certificate: rustls::Certificate,
     pub key: rustls::PrivateKey,
 }
 
@@ -120,7 +119,7 @@ impl QuicLazyInitializedEndpoint {
             .with_safe_defaults()
             .with_custom_certificate_verifier(SkipServerVerification::new())
             .with_single_cert(
-                self.client_certificate.certificates.clone(),
+                vec![self.client_certificate.certificate.clone()],
                 self.client_certificate.key.clone(),
             )
             .expect("Failed to set QUIC client certificates");
@@ -166,14 +165,12 @@ impl QuicLazyInitializedEndpoint {
 
 impl Default for QuicLazyInitializedEndpoint {
     fn default() -> Self {
-        let (certs, priv_key) = new_self_signed_tls_certificate_chain(
-            &Keypair::new(),
-            IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)),
-        )
-        .expect("Failed to create QUIC client certificate");
+        let (cert, priv_key) =
+            new_self_signed_tls_certificate(&Keypair::new(), IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)))
+                .expect("Failed to create QUIC client certificate");
         Self::new(
             Arc::new(QuicClientCertificate {
-                certificates: certs,
+                certificate: cert,
                 key: priv_key,
             }),
             None,

@@ -18,7 +18,7 @@ use {
     solana_streamer::{
         nonblocking::quic::{compute_max_allowed_uni_streams, ConnectionPeerType},
         streamer::StakedNodes,
-        tls_certificates::new_self_signed_tls_certificate_chain,
+        tls_certificates::new_self_signed_tls_certificate,
     },
     solana_tpu_client::{
         connection_cache_stats::ConnectionCacheStats,
@@ -97,14 +97,12 @@ impl NewTpuConfig for QuicConfig {
     type ClientError = QuicClientError;
 
     fn new() -> Result<Self, QuicClientError> {
-        let (certs, priv_key) = new_self_signed_tls_certificate_chain(
-            &Keypair::new(),
-            IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)),
-        )
-        .map_err(|err| QuicClientError::CertificateError(err.to_string()))?;
+        let (cert, priv_key) =
+            new_self_signed_tls_certificate(&Keypair::new(), IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)))
+                .map_err(|err| QuicClientError::CertificateError(err.to_string()))?;
         Ok(Self {
             client_certificate: Arc::new(QuicClientCertificate {
-                certificates: certs,
+                certificate: cert,
                 key: priv_key,
             }),
             maybe_staked_nodes: None,
@@ -144,9 +142,9 @@ impl QuicConfig {
         keypair: &Keypair,
         ipaddr: IpAddr,
     ) -> Result<(), Box<dyn Error>> {
-        let (certs, priv_key) = new_self_signed_tls_certificate_chain(keypair, ipaddr)?;
+        let (cert, priv_key) = new_self_signed_tls_certificate(keypair, ipaddr)?;
         self.client_certificate = Arc::new(QuicClientCertificate {
-            certificates: certs,
+            certificate: cert,
             key: priv_key,
         });
         Ok(())
