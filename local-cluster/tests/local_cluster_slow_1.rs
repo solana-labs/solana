@@ -387,7 +387,7 @@ fn test_kill_partition_switch_threshold_progress() {
 fn wait_for_duplicate_proof(ledger_path: &Path) -> (Slot, DuplicateSlotProof) {
     let mut duplicate_proof;
     loop {
-        let duplicate_fork_validator_blockstore = open_blockstore(&ledger_path);
+        let duplicate_fork_validator_blockstore = open_blockstore(ledger_path);
         duplicate_proof = duplicate_fork_validator_blockstore.get_first_duplicate_proof();
         if duplicate_proof.is_some() {
             break;
@@ -416,8 +416,8 @@ fn wait_for_duplicate_fork(ledger_path: &Path, dup_slot: Slot) {
 }
 
 fn clear_ledger_and_tower(ledger_path: &Path, pubkey: &Pubkey, start_slot: Slot) {
-    remove_tower(&ledger_path, pubkey);
-    let blockstore = open_blockstore(&ledger_path);
+    remove_tower(ledger_path, pubkey);
+    let blockstore = open_blockstore(ledger_path);
     purge_slots_with_count(&blockstore, start_slot, 1000);
     {
         // Remove all duplicate proofs so that this dup_slot will vote on the `dup_slot`.
@@ -466,10 +466,10 @@ fn restart_dup_validator(
     let send_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
     let duplicate_fork_validator_tvu = cluster.get_contact_info(pubkey).unwrap().tvu;
     send_socket
-        .send_to(dup_shred1.payload().as_ref(), &duplicate_fork_validator_tvu)
+        .send_to(dup_shred1.payload().as_ref(), duplicate_fork_validator_tvu)
         .unwrap();
     send_socket
-        .send_to(dup_shred2.payload().as_ref(), &duplicate_fork_validator_tvu)
+        .send_to(dup_shred2.payload().as_ref(), duplicate_fork_validator_tvu)
         .unwrap();
 
     // Check the validator detected a duplicate proof
@@ -632,7 +632,7 @@ fn test_duplicate_shreds_switch_failure() {
     cluster.exit_node(&duplicate_leader_validator_pubkey);
 
     let dup_shred1 = Shred::new_from_serialized_shred(duplicate_proof.shred1.clone()).unwrap();
-    let dup_shred2 = Shred::new_from_serialized_shred(duplicate_proof.shred2.clone()).unwrap();
+    let dup_shred2 = Shred::new_from_serialized_shred(duplicate_proof.shred2).unwrap();
     assert_eq!(dup_shred1.slot(), dup_shred2.slot());
     assert_eq!(dup_shred1.slot(), dup_slot);
 
