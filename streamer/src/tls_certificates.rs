@@ -57,7 +57,8 @@ pub fn new_self_signed_tls_certificate_chain(
 }
 
 pub fn get_pubkey_from_tls_certificate(certificates: &[rustls::Certificate]) -> Option<Pubkey> {
-    certificates.first().and_then(|der_cert| {
+    if certificates.len() == 1 {
+        let der_cert = &certificates[0];
         X509Certificate::from_der(der_cert.as_ref())
             .ok()
             .and_then(|(_, cert)| {
@@ -66,7 +67,9 @@ pub fn get_pubkey_from_tls_certificate(certificates: &[rustls::Certificate]) -> 
                     _ => None,
                 })
             })
-    })
+    } else {
+        None
+    }
 }
 
 #[cfg(test)]
