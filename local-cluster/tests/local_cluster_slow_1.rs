@@ -525,22 +525,22 @@ fn test_duplicate_shreds_switch_failure() {
     // 3) One bad leader to make duplicate slots
     let total_stake = 100 * DEFAULT_NODE_STAKE;
     let target_switch_fork_stake = (total_stake as f64 * SWITCH_FORK_THRESHOLD) as u64;
-    let duplicate_leader_stake = 1;
     // duplicate_fork_node1_stake + duplicate_fork_node2_stake > DUPLICATE_THRESHOLD. Don't want
     // one node with > DUPLICATE_THRESHOLD, otherwise they will automatically duplicate confirm a
     // slot when they vote, which will prevent them from resetting to an earlier ancestor when they
     // later discover that slot as duplicate.
     let duplicate_fork_node1_stake = (total_stake as f64 * DUPLICATE_THRESHOLD) as u64;
-    let duplicate_fork_node2_stake = total_stake
+    let duplicate_fork_node2_stake = 1;
+    let duplicate_leader_stake = total_stake
         - target_switch_fork_stake
-        - duplicate_leader_stake
-        - duplicate_fork_node1_stake;
+        - duplicate_fork_node1_stake
+        - duplicate_fork_node2_stake;
     assert!(
         duplicate_fork_node1_stake + duplicate_fork_node2_stake
             >= (total_stake as f64 * DUPLICATE_THRESHOLD) as u64
     );
-    assert!(duplicate_fork_node1_stake < (total_stake as f64 * DUPLICATE_THRESHOLD) as u64);
-    assert!(duplicate_fork_node2_stake < (total_stake as f64 * DUPLICATE_THRESHOLD) as u64);
+    assert!(duplicate_fork_node1_stake <= (total_stake as f64 * DUPLICATE_THRESHOLD) as u64);
+    assert!(duplicate_fork_node2_stake <= (total_stake as f64 * DUPLICATE_THRESHOLD) as u64);
 
     let node_stakes = vec![
         duplicate_leader_stake,
