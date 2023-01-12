@@ -1331,6 +1331,7 @@ impl Scheduler<ExecuteTimings> {
                 let mut cumulative_timings = ExecuteTimings::default();
                 use variant_counter::VariantCount;
                 let mut transaction_error_counts = TransactionError::counter();
+                let mut last_slot = None;
 
                 loop {
                 while let Ok(r) = retired_ee_receiver.recv_timeout(std::time::Duration::from_millis(20))
@@ -1340,6 +1341,8 @@ impl Scheduler<ExecuteTimings> {
                     match r {
                         solana_scheduler::ExaminablePayload(solana_scheduler::Flushable::Payload((mut ee, timings))) => {
                             cumulative_timings.accumulate(&timings);
+                            last_slot = Some(ee.slot);
+
                             if send_metrics {
                                 let sig = ee.task.tx.0.signature().to_string();
 
@@ -1400,8 +1403,9 @@ impl Scheduler<ExecuteTimings> {
                             drop(ee);
                         },
                         solana_scheduler::ExaminablePayload(solana_scheduler::Flushable::Flush(checkpoint)) => {
-                            info!("post_execution_handler: {:?}", transaction_error_counts.aggregate().into_iter().filter(|&(k, v)| v > 0).collect::<std::collections::BTreeMap<_, _>>());
+                            info!("post_execution_handler: slot: {last_slot:?} {:?}", transaction_error_counts.aggregate().into_iter().filter(|&(k, v)| v > 0).collect::<std::collections::BTreeMap<_, _>>());
                             transaction_error_counts.reset();
+                            last_slot = None;
                             checkpoint.wait_for_restart(Some(std::mem::take(&mut cumulative_timings)));
                         },
                     }
