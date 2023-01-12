@@ -10511,7 +10511,7 @@ pub mod tests {
         let mut pubkeys: Vec<Pubkey> = vec![];
         create_account(&db, &mut pubkeys, 0, 2, DEFAULT_FILE_SIZE as usize / 3, 0);
         db.add_root_and_flush_write_cache(0);
-        assert!(check_storage(&db, 0, 2));
+        check_storage(&db, 0, 2);
 
         let pubkey = solana_sdk::pubkey::new_rand();
         let account = AccountSharedData::new(1, DEFAULT_FILE_SIZE as usize / 3, &pubkey);
@@ -10710,28 +10710,15 @@ pub mod tests {
         }
     }
 
-    fn check_storage(accounts: &AccountsDb, slot: Slot, count: usize) -> bool {
+    fn check_storage(accounts: &AccountsDb, slot: Slot, count: usize) {
         assert!(accounts.storage.get_slot_storage_entry(slot).is_some());
-        let slot_storages = accounts.storage.get_slot_stores(slot).unwrap();
-        let mut total_count: usize = 0;
-        let r_slot_storages = slot_storages.read().unwrap();
-        for store in r_slot_storages.values() {
-            assert_eq!(store.status(), AccountStorageStatus::Available);
-            total_count += store.count();
-        }
+        let store = accounts.storage.get_slot_storage_entry(slot).unwrap();
+        let total_count = store.count();
+        assert_eq!(store.status(), AccountStorageStatus::Available);
         assert_eq!(total_count, count);
-        let (expected_store_count, actual_store_count): (usize, usize) = (
-            r_slot_storages
-                .values()
-                .map(|s| s.approx_stored_count())
-                .sum(),
-            r_slot_storages
-                .values()
-                .map(|s| s.all_accounts().len())
-                .sum(),
-        );
+        let (expected_store_count, actual_store_count): (usize, usize) =
+            (store.approx_stored_count(), store.all_accounts().len());
         assert_eq!(expected_store_count, actual_store_count);
-        total_count == count
     }
 
     fn check_accounts(
@@ -10806,7 +10793,7 @@ pub mod tests {
         create_account(&accounts, &mut pubkeys, 0, 100, 0, 0);
         update_accounts(&accounts, &pubkeys, 0, 99);
         accounts.add_root_and_flush_write_cache(0);
-        assert!(check_storage(&accounts, 0, 100));
+        check_storage(&accounts, 0, 100);
     }
 
     #[test]
@@ -11450,7 +11437,7 @@ pub mod tests {
             create_account(&accounts, &mut pubkeys, 0, 100, 0, 0);
             if pass == 0 {
                 accounts.add_root_and_flush_write_cache(0);
-                assert!(check_storage(&accounts, 0, 100));
+                check_storage(&accounts, 0, 100);
                 accounts.clean_accounts_for_tests();
                 check_accounts(&accounts, &pubkeys, 0, 100, 1);
                 // clean should have done nothing
@@ -11460,7 +11447,7 @@ pub mod tests {
             // do some updates to those accounts and re-check
             modify_accounts(&accounts, &pubkeys, 0, 100, 2);
             accounts.add_root_and_flush_write_cache(0);
-            assert!(check_storage(&accounts, 0, 100));
+            check_storage(&accounts, 0, 100);
             check_accounts(&accounts, &pubkeys, 0, 100, 2);
             accounts.get_accounts_delta_hash(0);
 
@@ -11482,7 +11469,7 @@ pub mod tests {
 
             accounts.get_accounts_delta_hash(latest_slot);
             accounts.add_root_and_flush_write_cache(latest_slot);
-            assert!(check_storage(&accounts, 1, 21));
+            check_storage(&accounts, 1, 21);
 
             // CREATE SLOT 2
             let latest_slot = 2;
@@ -11502,17 +11489,17 @@ pub mod tests {
 
             accounts.get_accounts_delta_hash(latest_slot);
             accounts.add_root_and_flush_write_cache(latest_slot);
-            assert!(check_storage(&accounts, 2, 31));
+            check_storage(&accounts, 2, 31);
 
             accounts.clean_accounts_for_tests();
             // The first 20 accounts of slot 0 have been updated in slot 2, as well as
             // accounts 30 and  31 (overwritten with zero-lamport accounts in slot 1 and
             // slot 2 respectively), so only 78 accounts are left in slot 0's storage entries.
-            assert!(check_storage(&accounts, 0, 78));
+            check_storage(&accounts, 0, 78);
             // 10 of the 21 accounts have been modified in slot 2, so only 11
             // accounts left in slot 1.
-            assert!(check_storage(&accounts, 1, 11));
-            assert!(check_storage(&accounts, 2, 31));
+            check_storage(&accounts, 1, 11);
+            check_storage(&accounts, 2, 31);
 
             let daccounts = reconstruct_accounts_db_via_serialization(&accounts, latest_slot);
 
@@ -11534,9 +11521,9 @@ pub mod tests {
             // Don't check the first 35 accounts which have not been modified on slot 0
             check_accounts(&daccounts, &pubkeys[35..], 0, 65, 37);
             check_accounts(&daccounts, &pubkeys1, 1, 10, 1);
-            assert!(check_storage(&daccounts, 0, 100));
-            assert!(check_storage(&daccounts, 1, 21));
-            assert!(check_storage(&daccounts, 2, 31));
+            check_storage(&daccounts, 0, 100);
+            check_storage(&daccounts, 1, 21);
+            check_storage(&daccounts, 2, 31);
 
             let ancestors = linear_ancestors(latest_slot);
             assert_eq!(
