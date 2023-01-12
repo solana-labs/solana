@@ -46,7 +46,9 @@ use {
             AbsRequestHandlers, AbsRequestSender, AccountsBackgroundService,
             PrunedBanksRequestHandler, SnapshotRequestHandler,
         },
-        accounts_db::{AccountsDbConfig, CalcAccountsHashDataSource, FillerAccountsConfig},
+        accounts_db::{
+            AccountsDb, AccountsDbConfig, CalcAccountsHashDataSource, FillerAccountsConfig,
+        },
         accounts_index::{AccountsIndexConfig, IndexLimitMb, ScanConfig},
         accounts_update_notifier_interface::AccountsUpdateNotifier,
         bank::{Bank, RewardCalculationEvent, TotalAccountsStats},
@@ -2719,7 +2721,9 @@ fn main() {
 
                 let accounts_db_config = Some(AccountsDbConfig {
                     index: Some(accounts_index_config),
-                    accounts_hash_cache_path: Some(ledger_path.clone()),
+                    accounts_hash_cache_path: Some(
+                        ledger_path.join(AccountsDb::ACCOUNTS_HASH_CACHE_DIR),
+                    ),
                     filler_accounts_config,
                     ancient_append_vec_offset: value_t!(
                         matches,
