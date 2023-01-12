@@ -8282,13 +8282,15 @@ impl AccountsDb {
         self.accounts_cache.add_root(slot);
         cache_time.stop();
         let mut store_time = Measure::start("store_add_root");
-        // We would not expect this slot to be shrinking right now.
+        // We would not expect this slot to be shrinking right now, but other slots may be.
         // But, even if it was, we would just mark a store id as dirty unnecessarily and that is ok.
         // So, allow shrinking to be in progress.
-        if let Some(slot_stores) = self.storage.get_slot_stores_shrinking_in_progress_ok(slot) {
-            for (store_id, store) in slot_stores.read().unwrap().iter() {
-                self.dirty_stores.insert((slot, *store_id), store.clone());
-            }
+        if let Some(store) = self
+            .storage
+            .get_slot_storage_entry_shrinking_in_progress_ok(slot)
+        {
+            self.dirty_stores
+                .insert((slot, store.append_vec_id()), store);
         }
         store_time.stop();
 
