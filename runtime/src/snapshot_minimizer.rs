@@ -3,8 +3,7 @@
 use {
     crate::{
         accounts_db::{
-            AccountsDb, GetUniqueAccountsResult, PurgeStats, SnapshotStorage, SnapshotStorageOne,
-            StoreReclaims,
+            AccountsDb, GetUniqueAccountsResult, PurgeStats, SnapshotStorageOne, StoreReclaims,
         },
         bank::Bank,
         builtins, static_ids,
@@ -274,7 +273,7 @@ impl<'a> SnapshotMinimizer<'a> {
     fn process_snapshot_storages(
         &self,
         minimized_slot_set: DashSet<Slot>,
-    ) -> (Vec<Slot>, SnapshotStorage) {
+    ) -> (Vec<Slot>, Vec<SnapshotStorageOne>) {
         let snapshot_storages = self
             .accounts_db()
             .get_snapshot_storages(..=self.starting_slot, None)
@@ -300,7 +299,11 @@ impl<'a> SnapshotMinimizer<'a> {
     }
 
     /// Creates new storage replacing `storages` that contains only accounts in `minimized_account_set`.
-    fn filter_storage(&self, storage: &SnapshotStorageOne, dead_storages: &Mutex<SnapshotStorage>) {
+    fn filter_storage(
+        &self,
+        storage: &SnapshotStorageOne,
+        dead_storages: &Mutex<Vec<SnapshotStorageOne>>,
+    ) {
         let slot = storage.slot();
         let GetUniqueAccountsResult {
             stored_accounts, ..

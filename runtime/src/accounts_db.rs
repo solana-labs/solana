@@ -609,11 +609,10 @@ impl<'a> MultiThreadProgress<'a> {
 /// An offset into the AccountsDb::storage vector
 pub type AtomicAppendVecId = AtomicU32;
 pub type AppendVecId = u32;
-pub type SnapshotStorage = Vec<Arc<AccountStorageEntry>>;
 pub type SnapshotStorageOne = Arc<AccountStorageEntry>;
-pub type SnapshotStorages = Vec<SnapshotStorage>;
+pub type SnapshotStorages = Vec<Vec<SnapshotStorageOne>>;
 /// exactly 1 append vec per slot
-pub type SnapshotStoragesOne = SnapshotStorage;
+pub type SnapshotStoragesOne = Vec<SnapshotStorageOne>;
 
 // Each slot has a set of storage entries.
 pub(crate) type SlotStores = Arc<RwLock<HashMap<AppendVecId, Arc<AccountStorageEntry>>>>;
@@ -1143,7 +1142,7 @@ impl RecycleStores {
         self.entries.iter()
     }
 
-    fn add_entries(&mut self, new_entries: SnapshotStorage) {
+    fn add_entries(&mut self, new_entries: Vec<SnapshotStorageOne>) {
         let now = Instant::now();
         for new_entry in new_entries {
             self.total_bytes += new_entry.total_bytes();
@@ -1151,7 +1150,7 @@ impl RecycleStores {
         }
     }
 
-    fn expire_old_entries(&mut self) -> SnapshotStorage {
+    fn expire_old_entries(&mut self) -> Vec<SnapshotStorageOne> {
         let mut expired = vec![];
         let now = Instant::now();
         let mut expired_bytes = 0;
@@ -3917,7 +3916,7 @@ impl AccountsDb {
         slot: Slot,
         add_dirty_stores: bool,
         shrink_in_progress: Option<ShrinkInProgress>,
-    ) -> SnapshotStorage {
+    ) -> Vec<SnapshotStorageOne> {
         let mut dead_storages = Vec::default();
 
         let mut not_retaining_store = |store: &Arc<AccountStorageEntry>| {
@@ -3945,7 +3944,7 @@ impl AccountsDb {
 
     pub(crate) fn drop_or_recycle_stores(
         &self,
-        dead_storages: SnapshotStorage,
+        dead_storages: Vec<SnapshotStorageOne>,
         stats: &ShrinkStats,
     ) {
         let mut recycle_stores_write_elapsed = Measure::start("recycle_stores_write_time");
@@ -4168,7 +4167,7 @@ impl AccountsDb {
     }
 
     #[cfg(test)]
-    fn get_storages_for_slot(&self, slot: Slot) -> Option<SnapshotStorage> {
+    fn get_storages_for_slot(&self, slot: Slot) -> Option<Vec<SnapshotStorageOne>> {
         self.storage
             .get_slot_storage_entry(slot)
             .map(|storage| vec![storage])
@@ -13877,7 +13876,7 @@ pub mod tests {
         }
     }
 
-    fn slot_stores(db: &AccountsDb, slot: Slot) -> SnapshotStorage {
+    fn slot_stores(db: &AccountsDb, slot: Slot) -> Vec<SnapshotStorageOne> {
         db.get_storages_for_slot(slot).unwrap_or_default()
     }
 
@@ -14233,8 +14232,7 @@ pub mod tests {
 
     impl AccountsDb {
         fn get_and_assert_single_storage(&self, slot: Slot) -> Arc<AccountStorageEntry> {
-            let mut storage_maps: SnapshotStorage =
-                self.get_storages_for_slot(slot).unwrap_or_default();
+            let mut storage_maps = self.get_storages_for_slot(slot).unwrap_or_default();
 
             assert_eq!(storage_maps.len(), 1);
             storage_maps.pop().unwrap()
