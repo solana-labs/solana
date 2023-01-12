@@ -6564,6 +6564,7 @@ dependencies = [
  "test-case",
  "thiserror",
  "thread-priority",
+ "variant_counter",
  "zstd",
 ]
 
@@ -6691,6 +6692,7 @@ dependencies = [
  "thiserror",
  "tiny-bip39",
  "uriparse",
+ "variant_counter",
  "wasm-bindgen",
 ]
 
@@ -8328,6 +8330,26 @@ name = "utf8-width"
 version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7cf7d77f457ef8dfa11e4cd5933c5ddb5dc52a94664071951219a97710f0a32b"
+
+[[package]]
+name = "variant_counter"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fe25b47ca71aa0a5276396746e13907ac3d9fad6692ccc799c6e1fec4f449d55"
+dependencies = [
+ "variant_counter_derived",
+]
+
+[[package]]
+name = "variant_counter_derived"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e9a652535ecacd16bdd246845cb3b5cb689f3d663b60d7c80dfa4957b8b4cf0c"
+dependencies = [
+ "proc-macro2 1.0.41",
+ "quote 1.0.23",
+ "syn 1.0.98",
+]
 
 [[package]]
 name = "vcpkg"

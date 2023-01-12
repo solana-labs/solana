@@ -1329,6 +1329,8 @@ impl Scheduler<ExecuteTimings> {
                 }
 
                 let mut cumulative_timings = ExecuteTimings::default();
+                use variant_counter::VariantCount;
+                let mut transaction_error_counts = TransactionError::counter();
 
                 loop {
                 while let Ok(r) = retired_ee_receiver.recv_timeout(std::time::Duration::from_millis(20))
@@ -1373,6 +1375,7 @@ impl Scheduler<ExecuteTimings> {
                                         inc_new_counter_info!("bank-process_transactions-sigs", ee.task.tx.0.signatures().len() as usize);
                                     },
                                     Err(e) => {
+                                        transaction_error_counts.record(&e);
                                         match ee.task.mode {
                                             solana_scheduler::Mode::Replaying => {
                                                 error!(
@@ -1397,6 +1400,8 @@ impl Scheduler<ExecuteTimings> {
                             drop(ee);
                         },
                         solana_scheduler::ExaminablePayload(solana_scheduler::Flushable::Flush(checkpoint)) => {
+                            info!("post_execution_handler: {:?}", transaction_error_counts.aggregate().into_iter().filter(|&(k, v)| v > 0).collect::<std::collections::BTreeMap<_, _>>());
+                            transaction_error_counts.reset();
                             checkpoint.wait_for_restart(Some(std::mem::take(&mut cumulative_timings)));
                         },
                     }
