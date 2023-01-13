@@ -33,53 +33,61 @@ pub fn load_program_from_file(name: &str) -> Vec<u8> {
     program
 }
 
-pub fn load_deprecated_program<T: Client>(
+pub fn load_and_finalize_deprecated_program<T: Client>(
     bank_client: &T,
     loader_id: &Pubkey,
+    program_keypair: Option<Keypair>,
     payer_keypair: &Keypair,
     name: &str,
-) -> Pubkey {
+) -> (Keypair, Instruction) {
     let program = load_program_from_file(name);
-    let program_keypair = Keypair::new();
-    let program_pubkey = program_keypair.pubkey();
-
-    let instruction = system_instruction::create_account(
-        &payer_keypair.pubkey(),
-        &program_pubkey,
-        1.max(
-            bank_client
-                .get_minimum_balance_for_rent_exemption(program.len())
-                .unwrap(),
-        ),
-        program.len() as u64,
-        loader_id,
-    );
-    bank_client
-        .send_and_confirm_message(
-            &[payer_keypair, &program_keypair],
-            Message::new(&[instruction], Some(&payer_keypair.pubkey())),
-        )
-        .unwrap();
-
+    let program_keypair = program_keypair.unwrap_or_else(|| {
+        let program_keypair = Keypair::new();
+        let instruction = system_instruction::create_account(
+            &payer_keypair.pubkey(),
+            &program_keypair.pubkey(),
+            1.max(
+                bank_client
+                    .get_minimum_balance_for_rent_exemption(program.len())
+                    .unwrap(),
+            ),
+            program.len() as u64,
+            loader_id,
+        );
+        let message = Message::new(&[instruction], Some(&payer_keypair.pubkey()));
+        bank_client
+            .send_and_confirm_message(&[payer_keypair, &program_keypair], message)
+            .unwrap();
+        program_keypair
+    });
     let chunk_size = CHUNK_SIZE;
     let mut offset = 0;
     for chunk in program.chunks(chunk_size) {
         let instruction =
-            loader_instruction::write(&program_pubkey, loader_id, offset, chunk.to_vec());
+            loader_instruction::write(&program_keypair.pubkey(), loader_id, offset, chunk.to_vec());
         let message = Message::new(&[instruction], Some(&payer_keypair.pubkey()));
         bank_client
             .send_and_confirm_message(&[payer_keypair, &program_keypair], message)
             .unwrap();
         offset += chunk_size as u32;
     }
+    let instruction = loader_instruction::finalize(&program_keypair.pubkey(), loader_id);
+    (program_keypair, instruction)
+}
 
-    let instruction = loader_instruction::finalize(&program_pubkey, loader_id);
+pub fn create_deprecated_program<T: Client>(
+    bank_client: &T,
+    loader_id: &Pubkey,
+    payer_keypair: &Keypair,
+    name: &str,
+) -> Pubkey {
+    let (program_keypair, instruction) =
+        load_and_finalize_deprecated_program(bank_client, loader_id, None, payer_keypair, name);
     let message = Message::new(&[instruction], Some(&payer_keypair.pubkey()));
     bank_client
         .send_and_confirm_message(&[payer_keypair, &program_keypair], message)
         .unwrap();
-
-    program_pubkey
+    program_keypair.pubkey()
 }
 
 pub fn load_upgradeable_buffer<T: Client>(
