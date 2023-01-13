@@ -111,7 +111,7 @@ const MAX_GOSSIP_TRAFFIC: usize = 128_000_000 / PACKET_DATA_SIZE;
 /// is equal to PACKET_DATA_SIZE minus serialized size of an empty push
 /// message: Protocol::PushMessage(Pubkey::default(), Vec::default())
 const PUSH_MESSAGE_MAX_PAYLOAD_SIZE: usize = PACKET_DATA_SIZE - 44;
-pub const DUPLICATE_SHRED_MAX_PAYLOAD_SIZE: usize = PACKET_DATA_SIZE - 115;
+pub(crate) const DUPLICATE_SHRED_MAX_PAYLOAD_SIZE: usize = PACKET_DATA_SIZE - 115;
 /// Maximum number of hashes in SnapshotHashes/AccountsHashes a node publishes
 /// such that the serialized size of the push/pull message stays below
 /// PACKET_DATA_SIZE.
@@ -4756,7 +4756,7 @@ RPC Enabled Nodes: 1"#;
         for (i, shred_data) in entries.iter().enumerate() {
             assert_eq!(shred_data.from, host1_key.pubkey());
             assert_eq!(shred_data.slot, 53084024);
-            assert_eq!(shred_data.chunk_index as usize, i);
+            assert_eq!(shred_data.chunk_index() as usize, i);
         }
 
         let slot = 53084025;
@@ -4774,7 +4774,7 @@ RPC Enabled Nodes: 1"#;
         for (i, shred_data) in entries1.iter().enumerate() {
             assert_eq!(shred_data.from, host1_key.pubkey());
             assert_eq!(shred_data.slot, 53084025);
-            assert_eq!(shred_data.chunk_index as usize, i);
+            assert_eq!(shred_data.chunk_index() as usize, i);
         }
     }
 }

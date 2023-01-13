@@ -19,7 +19,7 @@ pub trait DuplicateShredHandlerTrait: Send {
 }
 
 pub struct DuplicateShredListener {
-    thread_hdls: Vec<JoinHandle<()>>,
+    thread_hdl: JoinHandle<()>,
 }
 
 // Right now we only need to process duplicate proof, in the future the receiver
@@ -30,22 +30,20 @@ impl DuplicateShredListener {
         cluster_info: Arc<ClusterInfo>,
         handler: impl DuplicateShredHandlerTrait + 'static,
     ) -> Self {
-        let listen_thread = {
-            Builder::new()
-                .name("solCiEntryLstnr".to_string())
-                .spawn(move || {
-                    Self::recv_loop(exit, &cluster_info, handler);
-                })
-                .unwrap()
-        };
+        let listen_thread = Builder::new()
+            .name("solCiEntryLstnr".to_string())
+            .spawn(move || {
+                Self::recv_loop(exit, &cluster_info, handler);
+            })
+            .unwrap();
 
         Self {
-            thread_hdls: vec![listen_thread],
+            thread_hdl: listen_thread,
         }
     }
 
     pub fn join(self) -> thread::Result<()> {
-        self.thread_hdls.into_iter().try_for_each(JoinHandle::join)
+        self.thread_hdl.join()
     }
 
     // Here we are sending data one by one rather than in a batch because in the future
@@ -94,7 +92,7 @@ mod tests {
 
     impl DuplicateShredHandlerTrait for FakeHandler {
         fn handle(&mut self, data: DuplicateShred) {
-            assert!(data.num_chunks > 0);
+            assert!(data.num_chunks() > 0);
             self.count.fetch_add(1, Ordering::Relaxed);
         }
     }

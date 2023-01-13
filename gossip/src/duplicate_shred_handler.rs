@@ -23,9 +23,18 @@ const ALLOWED_SLOTS_PER_PUBKEY: usize = 5;
 
 struct ProofChunkMap {
     num_chunks: u8,
-    missing_chunks: u8,
     wallclock: u64,
     chunks: HashMap<u8, DuplicateShred>,
+}
+
+impl ProofChunkMap {
+    fn new(num_chunks: u8, wallclock: u64) -> Self {
+        Self {
+            num_chunks,
+            chunks: HashMap::new(),
+            wallclock,
+        }
+    }
 }
 
 // Group received chunks by peer pubkey, when we receive an invalid proof,
@@ -33,6 +42,8 @@ struct ProofChunkMap {
 type SlotChunkMap = HashMap<Pubkey, ProofChunkMap>;
 
 enum SlotStatus {
+    // When a valid proof has been inserted, we change the entry for that slot to Frozen
+    // to indicate we no longer accept proofs for this slot.
     Frozen,
     UnfinishedProof(SlotChunkMap),
 }
@@ -42,9 +53,6 @@ pub struct DuplicateShredHandler {
     // each shred is normally 1 packet(1500 bytes), so the whole proof is larger than
     // 1 packet and it needs to be cut down as chunks for transfer. So we need to piece
     // together the chunks into the original proof before anything useful is done.
-    //
-    // When a valid proof has been inserted, we change the entry for that slot to Frozen
-    // to indicate we no longer accept proofs for this slot.
     chunk_map: HashMap<Slot, SlotStatus>,
     // We don't want bad guys to inflate the chunk map, so we limit the number of
     // pending proofs from each pubkey to ALLOWED_SLOTS_PER_PUBKEY.
@@ -111,7 +119,7 @@ impl DuplicateShredHandler {
             return false;
         }
         // Discard all proofs with abnormal num_chunks.
-        if data.num_chunks == 0 || data.num_chunks > MAX_NUM_CHUNKS {
+        if data.num_chunks() == 0 || data.num_chunks() > MAX_NUM_CHUNKS {
             return false;
         }
         // Only allow limited unfinished proofs per pubkey to reject attackers.
@@ -139,15 +147,6 @@ impl DuplicateShredHandler {
         true
     }
 
-    fn new_proof_chunk_map(num_chunks: u8, wallclock: u64) -> ProofChunkMap {
-        ProofChunkMap {
-            num_chunks,
-            missing_chunks: num_chunks,
-            chunks: HashMap::new(),
-            wallclock,
-        }
-    }
-
     fn mark_slot_proof_received(&mut self, slot: u64) {
         self.chunk_map.insert(slot, SlotStatus::Frozen);
         for (_, current_slots_set) in self.validator_pending_proof_map.iter_mut() {
@@ -163,24 +162,22 @@ impl DuplicateShredHandler {
         {
             let proof_chunk_map = slot_chunk_map
                 .entry(data.from)
-                .or_insert_with(|| Self::new_proof_chunk_map(data.num_chunks, data.wallclock));
+                .or_insert_with(|| ProofChunkMap::new(data.num_chunks(), data.wallclock));
             if proof_chunk_map.wallclock < data.wallclock {
-                proof_chunk_map.num_chunks = data.num_chunks;
-                proof_chunk_map.missing_chunks = data.num_chunks;
+                proof_chunk_map.num_chunks = data.num_chunks();
                 proof_chunk_map.wallclock = data.wallclock;
                 proof_chunk_map.chunks.clear();
             }
-            let num_chunks = data.num_chunks;
-            let chunk_index = data.chunk_index;
+            let num_chunks = data.num_chunks();
+            let chunk_index = data.chunk_index();
             let slot = data.slot;
             let from = data.from;
             if num_chunks == proof_chunk_map.num_chunks
                 && chunk_index < num_chunks
                 && !proof_chunk_map.chunks.contains_key(&chunk_index)
             {
-                proof_chunk_map.missing_chunks = proof_chunk_map.missing_chunks.saturating_sub(1);
                 proof_chunk_map.chunks.insert(chunk_index, data);
-                if proof_chunk_map.missing_chunks == 0 {
+                if proof_chunk_map.chunks.len() >= proof_chunk_map.num_chunks.into() {
                     let mut result: Vec<DuplicateShred> = Vec::new();
                     for i in 0..num_chunks {
                         result.push(proof_chunk_map.chunks.remove(&i).unwrap())
@@ -190,7 +187,7 @@ impl DuplicateShredHandler {
             }
             self.validator_pending_proof_map
                 .entry(from)
-                .or_insert_with(HashSet::new)
+                .or_default()
                 .insert(slot);
         }
         Ok(None)

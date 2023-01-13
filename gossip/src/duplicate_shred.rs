@@ -36,10 +36,19 @@ pub struct DuplicateShred {
     shred_index: u32,
     shred_type: ShredType,
     // Serialized DuplicateSlotProof split into chunks.
-    pub(crate) num_chunks: u8,
-    pub(crate) chunk_index: u8,
+    num_chunks: u8,
+    chunk_index: u8,
     #[serde(with = "serde_bytes")]
     chunk: Vec<u8>,
+}
+
+impl DuplicateShred {
+    pub(crate) fn num_chunks(&self) -> u8 {
+        self.num_chunks
+    }
+    pub(crate) fn chunk_index(&self) -> u8 {
+        self.chunk_index
+    }
 }
 
 #[derive(Debug, Error)]
