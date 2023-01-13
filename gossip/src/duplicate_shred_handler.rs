@@ -20,6 +20,9 @@ const MAX_NUM_CHUNKS: u8 = 3;
 // is only 1 person sending out duplicate proofs, 1 person is leader for 4 slots,
 // so we allow 5 here to limit the chunk map size.
 const ALLOWED_SLOTS_PER_PUBKEY: usize = 5;
+// To prevent an attacker inflating this map, we discard any proof which is too
+// far away in the future compared to root.
+const MAX_SLOT_DISTANCE_TO_ROOT: Slot = 100;
 
 struct ProofChunkMap {
     num_chunks: u8,
@@ -113,8 +116,11 @@ impl DuplicateShredHandler {
 
     fn should_insert_chunk(&self, data: &DuplicateShred) -> bool {
         let slot = data.slot;
-        // Do not insert if this slot is rooted or has a proof already.
-        if slot <= self.blockstore.last_root() || self.blockstore.has_duplicate_shreds_in_slot(slot)
+        // Do not insert if this slot is rooted or too far away in the future or has a proof already.
+        let last_root = self.blockstore.last_root();
+        if slot <= last_root
+            || slot > last_root + MAX_SLOT_DISTANCE_TO_ROOT
+            || self.blockstore.has_duplicate_shreds_in_slot(slot)
         {
             return false;
         }
@@ -369,6 +375,20 @@ mod tests {
             duplicate_shred_handler.handle(chunk);
         }
         assert!(!blockstore.has_duplicate_shreds_in_slot(1));
+
+        // This proof will be rejected because the slot is too far away in the future.
+        let future_slot = blockstore.last_root() + MAX_SLOT_DISTANCE_TO_ROOT + 1;
+        let chunks = create_duplicate_proof(
+            my_keypair.clone(),
+            future_slot,
+            None,
+            DUPLICATE_SHRED_MAX_PAYLOAD_SIZE / 10,
+        )
+        .unwrap();
+        for chunk in chunks {
+            duplicate_shred_handler.handle(chunk);
+        }
+        assert!(!blockstore.has_duplicate_shreds_in_slot(future_slot));
 
         // Send in two proofs, only the proof with later wallclock will be accepted.
         let chunks = create_duplicate_proof(
