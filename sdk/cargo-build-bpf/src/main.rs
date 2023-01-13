@@ -1,5 +1,5 @@
 use {
-    log::*,
+    log::{error, info, warn},
     std::{
         env,
         path::PathBuf,

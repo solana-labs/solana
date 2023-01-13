@@ -42,12 +42,15 @@
 use {
     crossbeam_channel::{select, tick, unbounded, Receiver, Sender},
     itertools::Itertools,
-    log::*,
+    log::info,
     rand::{thread_rng, Rng},
     solana_bench_tps::{bench::generate_and_fund_keypairs, bench_tps_client::BenchTpsClient},
     solana_client::{connection_cache::ConnectionCache, tpu_connection::TpuConnection},
     solana_core::serve_repair::{RepairProtocol, RepairRequestHeader, ServeRepair},
-    solana_dos::cli::*,
+    solana_dos::cli::{
+        build_cli_parameters, DataType, DosClientParameters, Mode, TransactionParams,
+        TransactionType,
+    },
     solana_gossip::{
         gossip_service::{discover, get_multi_client},
         legacy_contact_info::LegacyContactInfo as ContactInfo,

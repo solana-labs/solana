@@ -2,7 +2,7 @@
 
 use {
     clap::{crate_description, crate_name, value_t, values_t_or_exit, App, Arg},
-    log::*,
+    log::{info, warn},
     rand::{thread_rng, Rng},
     rayon::prelude::*,
     solana_clap_utils::input_parsers::pubkey_of,

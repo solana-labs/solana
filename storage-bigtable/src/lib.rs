@@ -2,7 +2,7 @@
 
 use {
     crate::bigtable::RowKey,
-    log::*,
+    log::{debug, error, info, log_enabled, warn},
     serde::{Deserialize, Serialize},
     solana_metrics::{datapoint_info, inc_new_counter_debug},
     solana_sdk::{

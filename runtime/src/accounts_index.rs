@@ -10,9 +10,12 @@ use {
         pubkey_bins::PubkeyBinCalculator24,
         rent_paying_accounts_by_partition::RentPayingAccountsByPartition,
         rolling_bit_field::RollingBitField,
-        secondary_index::*,
+        secondary_index::{
+            DashMapSecondaryIndexEntry, RwLockSecondaryIndexEntry, SecondaryIndex,
+            SecondaryIndexEntry,
+        },
     },
-    log::*,
+    log::{error, info, log_enabled},
     once_cell::sync::OnceCell,
     ouroboros::self_referencing,
     rand::{thread_rng, Rng},
@@ -2009,7 +2012,7 @@ impl<T: IndexValue> AccountsIndex<T> {
 pub mod tests {
     use {
         super::*,
-        crate::inline_spl_token::*,
+        crate::inline_spl_token::SPL_TOKEN_ACCOUNT_OWNER_OFFSET,
         solana_sdk::{
             account::{AccountSharedData, WritableAccount},
             pubkey::PUBKEY_BYTES,

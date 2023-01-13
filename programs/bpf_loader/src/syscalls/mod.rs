@@ -931,7 +931,10 @@ declare_syscall!(
         _arg5: u64,
         memory_mapping: &mut MemoryMapping,
     ) -> Result<u64, EbpfError> {
-        use solana_zk_token_sdk::curve25519::{curve_syscall_traits::*, edwards, ristretto};
+        use solana_zk_token_sdk::curve25519::{
+            curve_syscall_traits::{CURVE25519_EDWARDS, CURVE25519_RISTRETTO},
+            edwards, ristretto,
+        };
         match curve_id {
             CURVE25519_EDWARDS => {
                 let cost = invoke_context
@@ -989,7 +992,8 @@ declare_syscall!(
         memory_mapping: &mut MemoryMapping,
     ) -> Result<u64, EbpfError> {
         use solana_zk_token_sdk::curve25519::{
-            curve_syscall_traits::*, edwards, ristretto, scalar,
+            curve_syscall_traits::{ADD, CURVE25519_EDWARDS, CURVE25519_RISTRETTO, MUL, SUB},
+            edwards, ristretto, scalar,
         };
         match curve_id {
             CURVE25519_EDWARDS => match group_op {
@@ -1190,7 +1194,8 @@ declare_syscall!(
         memory_mapping: &mut MemoryMapping,
     ) -> Result<u64, EbpfError> {
         use solana_zk_token_sdk::curve25519::{
-            curve_syscall_traits::*, edwards, ristretto, scalar,
+            curve_syscall_traits::{CURVE25519_EDWARDS, CURVE25519_RISTRETTO},
+            edwards, ristretto, scalar,
         };
         match curve_id {
             CURVE25519_EDWARDS => {

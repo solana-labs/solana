@@ -1,6 +1,6 @@
 use {
     crate::executor::Executor,
-    log::*,
+    log::{debug, log_enabled, trace},
     rand::Rng,
     solana_sdk::{pubkey::Pubkey, saturating_add_assign, slot_history::Slot, stake_history::Epoch},
     std::{

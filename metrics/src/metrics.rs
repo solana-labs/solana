@@ -5,7 +5,7 @@ use {
     crossbeam_channel::{unbounded, Receiver, RecvTimeoutError, Sender},
     gethostname::gethostname,
     lazy_static::lazy_static,
-    log::*,
+    log::{debug, info, log, trace, warn, Level},
     solana_sdk::hash::hash,
     std::{
         cmp,

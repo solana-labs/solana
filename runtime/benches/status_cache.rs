@@ -3,7 +3,7 @@ extern crate test;
 
 use {
     bincode::serialize,
-    solana_runtime::{bank::BankStatusCache, status_cache::*},
+    solana_runtime::{bank::BankStatusCache, status_cache::MAX_CACHE_ENTRIES},
     solana_sdk::{
         hash::{hash, Hash},
         signature::Signature,

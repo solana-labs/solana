@@ -2,7 +2,7 @@
 //! Receive and processes votes from validators
 pub use solana_program::vote::state::{vote_state_versions::*, *};
 use {
-    log::*,
+    log::{debug, info, log_enabled, warn},
     serde_derive::{Deserialize, Serialize},
     solana_metrics::datapoint_debug,
     solana_program::vote::{error::VoteError, program::id, state::serde_compact_vote_state_update},

@@ -1,7 +1,7 @@
 //! A nonblocking [`RpcSender`] used for unit testing [`RpcClient`](crate::rpc_client::RpcClient).
 
 use {
-    crate::rpc_sender::*,
+    crate::rpc_sender::{RpcSender, RpcTransportStats},
     async_trait::async_trait,
     serde_json::{json, Number, Value},
     solana_account_decoder::{UiAccount, UiAccountEncoding},

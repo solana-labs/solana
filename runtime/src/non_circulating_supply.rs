@@ -3,7 +3,7 @@ use {
         accounts_index::{AccountIndex, IndexKey, ScanConfig, ScanResult},
         bank::Bank,
     },
-    log::*,
+    log::debug,
     solana_sdk::{
         account::ReadableAccount,
         pubkey::Pubkey,

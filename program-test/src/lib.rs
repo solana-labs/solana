@@ -6,7 +6,7 @@ pub use tokio;
 use {
     async_trait::async_trait,
     chrono_humanize::{Accuracy, HumanTime, Tense},
-    log::*,
+    log::{debug, error, info, trace, warn},
     solana_banks_client::start_client,
     solana_banks_server::banks_server::start_local_server,
     solana_bpf_loader_program::serialization::serialize_parameters,

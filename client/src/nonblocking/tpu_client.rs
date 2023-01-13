@@ -16,7 +16,7 @@ use {
         transport::{Result as TransportResult, TransportError},
     },
     solana_tpu_client::{
-        nonblocking::tpu_client::temporary_pub::*,
+        nonblocking::tpu_client::temporary_pub::{set_message_for_confirmed_transactions, Result},
         tpu_client::temporary_pub::{SEND_TRANSACTION_INTERVAL, TRANSACTION_RESEND_INTERVAL},
     },
     std::{

@@ -8,7 +8,7 @@ pub struct PodEdwardsPoint(pub [u8; 32]);
 #[cfg(not(target_os = "solana"))]
 mod target_arch {
     use {
-        super::*,
+        super::PodEdwardsPoint,
         crate::curve25519::{
             curve_syscall_traits::{GroupOperations, MultiScalarMultiplication, PointValidation},
             errors::Curve25519Error,

@@ -12,7 +12,7 @@ use {
     },
     crossbeam_channel::{select, unbounded, Receiver, Sender},
     dashmap::DashMap,
-    log::*,
+    log::info,
     rayon::{
         iter::{IntoParallelIterator, ParallelIterator},
         ThreadPool, ThreadPoolBuilder,

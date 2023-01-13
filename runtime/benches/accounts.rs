@@ -12,7 +12,7 @@ use {
         accounts_db::{test_utils::create_test_accounts, AccountShrinkThreshold},
         accounts_index::{AccountSecondaryIndexes, ScanConfig},
         ancestors::Ancestors,
-        bank::*,
+        bank::Bank,
         rent_collector::RentCollector,
     },
     solana_sdk::{

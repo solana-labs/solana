@@ -1,4 +1,4 @@
-use super::*;
+use super::{HashMap, Instant, Slot};
 
 pub(crate) trait BroadcastStats {
     fn update(&mut self, new_stats: &Self);
@@ -176,7 +176,10 @@ impl<T: BroadcastStats + Default> SlotBroadcastStats<T> {
 
 #[cfg(test)]
 mod test {
-    use super::*;
+    use {
+        super::*,
+        crate::broadcast_stage::{unbounded, Arc, Builder, Mutex, Sender},
+    };
 
     #[derive(Default)]
     struct TestStats {

@@ -1,6 +1,6 @@
 use {
     crate::{
-        checks::*,
+        checks::check_account_for_spend_and_fee_with_commitment,
         cli::{
             log_instruction_custom_error, CliCommand, CliCommandInfo, CliConfig, CliError,
             ProcessResult,
@@ -8,10 +8,15 @@ use {
     },
     bip39::{Language, Mnemonic, MnemonicType, Seed},
     clap::{App, AppSettings, Arg, ArgMatches, SubCommand},
-    log::*,
+    log::{error, trace},
     solana_account_decoder::{UiAccountEncoding, UiDataSliceConfig},
     solana_bpf_loader_program::syscalls::create_loader,
-    solana_clap_utils::{self, input_parsers::*, input_validators::*, keypair::*},
+    solana_clap_utils::{
+        self,
+        input_parsers::{pubkey_of, pubkey_of_signer, signer_of, value_of},
+        input_validators::{is_valid_pubkey, is_valid_signer},
+        keypair::{DefaultSigner, SignerIndex},
+    },
     solana_cli_output::{
         CliProgram, CliProgramAccountType, CliProgramAuthority, CliProgramBuffer, CliProgramId,
         CliUpgradeableBuffer, CliUpgradeableBuffers, CliUpgradeableProgram,

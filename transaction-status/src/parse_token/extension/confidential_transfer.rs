@@ -1,8 +1,19 @@
 use {
-    super::*,
+    super::{
+        check_num_token_accounts, json, parse_signers, AccountKeys, ParsableProgram,
+        ParseInstructionError, ParsedInstructionEnum,
+    },
     solana_account_decoder::parse_token_extension::UiConfidentialTransferMint,
     spl_token_2022::{
-        extension::confidential_transfer::{instruction::*, ConfidentialTransferMint},
+        extension::confidential_transfer::{
+            instruction::{
+                ApplyPendingBalanceData, ConfidentialTransferInstruction,
+                ConfigureAccountInstructionData, DepositInstructionData,
+                EmptyAccountInstructionData, TransferInstructionData, WithdrawInstructionData,
+                WithdrawWithheldTokensFromAccountsData, WithdrawWithheldTokensFromMintData,
+            },
+            ConfidentialTransferMint,
+        },
         instruction::{decode_instruction_data, decode_instruction_type},
     },
 };

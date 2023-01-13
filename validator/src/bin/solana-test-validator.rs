@@ -1,7 +1,7 @@
 use {
     clap::{crate_name, value_t, value_t_or_exit, values_t_or_exit},
     crossbeam_channel::unbounded,
-    log::*,
+    log::info,
     solana_clap_utils::{
         input_parsers::{pubkey_of, pubkeys_of, value_of},
         input_validators::normalize_to_url_if_moniker,
@@ -25,7 +25,7 @@ use {
         system_program,
     },
     solana_streamer::socket::SocketAddrSpace,
-    solana_test_validator::*,
+    solana_test_validator::{AccountInfo, ProgramInfo, TestValidatorGenesis},
     solana_validator::{
         admin_rpc_service, cli, dashboard::Dashboard, ledger_lockfile, lock_ledger,
         println_name_value, redirect_stderr_to_file,

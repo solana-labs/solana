@@ -63,7 +63,7 @@ use {
         mapref::entry::Entry::{Occupied, Vacant},
         DashMap, DashSet,
     },
-    log::*,
+    log::{debug, error, info, log_enabled, trace, warn},
     rand::{thread_rng, Rng},
     rayon::{prelude::*, ThreadPool},
     serde::{Deserialize, Serialize},
@@ -9190,7 +9190,8 @@ pub mod tests {
         crate::{
             accounts_hash::MERKLE_FANOUT,
             accounts_index::{
-                tests::*, AccountSecondaryIndexesIncludeExclude, ReadAccountMapEntry, RefCount,
+                tests::spl_token_mint_index_enabled, AccountSecondaryIndexesIncludeExclude,
+                ReadAccountMapEntry, RefCount,
             },
             append_vec::{test_utils::TempFile, AccountMeta, StoredMeta},
             cache_hash_data_stats::CacheHashDataStats,

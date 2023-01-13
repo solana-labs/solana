@@ -11,7 +11,7 @@ use {
 #[cfg(feature = "hidapi")]
 use {
     crate::{ledger_error::LedgerError, locator::Manufacturer},
-    log::*,
+    log::trace,
     num_traits::FromPrimitive,
     solana_sdk::{pubkey::Pubkey, signature::Signature},
     std::{cmp::min, convert::TryFrom},

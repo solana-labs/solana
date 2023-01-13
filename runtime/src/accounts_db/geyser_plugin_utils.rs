@@ -4,7 +4,7 @@ use {
         append_vec::{StoredAccountMeta, StoredMeta},
     },
     solana_measure::measure::Measure,
-    solana_metrics::*,
+    solana_metrics::datapoint_info,
     solana_sdk::{account::AccountSharedData, clock::Slot, pubkey::Pubkey, signature::Signature},
     std::collections::{hash_map::Entry, HashMap, HashSet},
 };

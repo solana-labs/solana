@@ -6,7 +6,7 @@ use {
         auth::{JwtClaims, Token},
         credentials::Credentials,
     },
-    log::*,
+    log::{info, warn},
     smpl_jwt::Jwt,
     std::{
         str::FromStr,

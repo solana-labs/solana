@@ -1,4 +1,10 @@
-use {super::*, spl_token_2022::extension::transfer_fee::instruction::TransferFeeInstruction};
+use {
+    super::{
+        check_num_token_accounts, json, parse_signers, token_amount_to_ui_amount, AccountKeys,
+        COption, ParseInstructionError, ParsedInstructionEnum,
+    },
+    spl_token_2022::extension::transfer_fee::instruction::TransferFeeInstruction,
+};
 
 pub(in crate::parse_token) fn parse_transfer_fee_instruction(
     transfer_fee_instruction: TransferFeeInstruction,
@@ -158,10 +164,18 @@ pub(in crate::parse_token) fn parse_transfer_fee_instruction(
 mod test {
     use {
         super::*,
-        crate::parse_token::test::*,
+        crate::parse_token::{
+            parse_token,
+            test::{convert_account_keys, convert_compiled_instruction, convert_pubkey},
+        },
         solana_sdk::pubkey::Pubkey,
         spl_token_2022::{
-            extension::transfer_fee::instruction::*, solana_program::message::Message,
+            extension::transfer_fee::instruction::{
+                harvest_withheld_tokens_to_mint, initialize_transfer_fee_config, set_transfer_fee,
+                transfer_checked_with_fee, withdraw_withheld_tokens_from_accounts,
+                withdraw_withheld_tokens_from_mint,
+            },
+            solana_program::message::Message,
         },
     };
 

@@ -11,7 +11,7 @@ use {
         vote_stake_tracker::VoteStakeTracker,
     },
     crossbeam_channel::{unbounded, Receiver, RecvTimeoutError, Select, Sender},
-    log::*,
+    log::{error, log_enabled, warn},
     solana_gossip::{
         cluster_info::{ClusterInfo, GOSSIP_SLEEP_MILLIS},
         crds::Cursor,

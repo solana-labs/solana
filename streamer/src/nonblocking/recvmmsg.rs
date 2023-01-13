@@ -56,7 +56,10 @@ pub async fn recv_mmsg_exact(
 #[cfg(test)]
 mod tests {
     use {
-        crate::{nonblocking::recvmmsg::*, packet::PACKET_DATA_SIZE},
+        crate::{
+            nonblocking::recvmmsg::{io, recv_mmsg, recv_mmsg_exact, Meta, Packet},
+            packet::PACKET_DATA_SIZE,
+        },
         std::{net::SocketAddr, time::Instant},
         tokio::net::UdpSocket,
     };

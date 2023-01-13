@@ -1,5 +1,5 @@
 use {
-    log::*,
+    log::{debug, error, info, trace, warn},
     rand::{seq::SliceRandom, thread_rng, Rng},
     rayon::prelude::*,
     solana_core::validator::{ValidatorConfig, ValidatorStartProgress},

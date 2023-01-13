@@ -1,5 +1,5 @@
 use {
-    log::*,
+    log::{debug, log_enabled},
     solana_sdk::{
         account::{AccountSharedData, ReadableAccount},
         pubkey::Pubkey,

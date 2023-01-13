@@ -6,7 +6,7 @@ use {
         QuicClient, QuicLazyInitializedEndpoint, QuicTpuConnection as NonblockingQuicTpuConnection,
     },
     lazy_static::lazy_static,
-    log::*,
+    log::info,
     solana_sdk::transport::{Result as TransportResult, TransportError},
     solana_tpu_client::{
         connection_cache_stats::ConnectionCacheStats,
@@ -22,7 +22,11 @@ use {
 };
 
 pub mod temporary_pub {
-    use super::*;
+    use super::{
+        info, lazy_static, timeout, Arc, ClientStats, Condvar, Duration, Mutex, MutexGuard,
+        NonblockingQuicTpuConnection, NonblockingTpuConnection, Ordering, Runtime, TransportError,
+        TransportResult,
+    };
 
     pub const MAX_OUTSTANDING_TASK: u64 = 2000;
     pub const SEND_TRANSACTION_TIMEOUT_MS: u64 = 10000;
@@ -126,7 +130,9 @@ pub mod temporary_pub {
         }
     }
 }
-use temporary_pub::*;
+use temporary_pub::{
+    send_wire_transaction_async, send_wire_transaction_batch_async, ASYNC_TASK_SEMAPHORE, RUNTIME,
+};
 
 pub struct QuicTpuConnection {
     pub inner: Arc<NonblockingQuicTpuConnection>,

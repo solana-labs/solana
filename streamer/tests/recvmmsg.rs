@@ -3,7 +3,7 @@
 use {
     solana_streamer::{
         packet::{Meta, Packet, PACKET_DATA_SIZE},
-        recvmmsg::*,
+        recvmmsg::recv_mmsg,
     },
     std::{net::UdpSocket, time::Instant},
 };

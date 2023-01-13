@@ -5,7 +5,7 @@
 
 use {
     crate::{connection_cache::ConnectionCache, tpu_connection::TpuConnection},
-    log::*,
+    log::info,
     solana_rpc_client::rpc_client::RpcClient,
     solana_rpc_client_api::{config::RpcProgramAccountsConfig, response::Response},
     solana_sdk::{
@@ -26,7 +26,7 @@ use {
         transaction::{self, Transaction, VersionedTransaction},
         transport::Result as TransportResult,
     },
-    solana_thin_client::thin_client::temporary_pub::*,
+    solana_thin_client::thin_client::temporary_pub::ClientOptimizer,
     std::{
         io,
         net::SocketAddr,

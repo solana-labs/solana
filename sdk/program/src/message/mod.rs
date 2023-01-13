@@ -51,7 +51,7 @@ mod non_bpf_modules {
     pub use {account_keys::*, address_loader::*, sanitized::*, versions::*};
 }
 
-use compiled_keys::*;
+use compiled_keys::CompiledKeys;
 pub use legacy::Message;
 #[cfg(not(target_os = "solana"))]
 pub use non_bpf_modules::*;

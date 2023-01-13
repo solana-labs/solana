@@ -1,6 +1,10 @@
 use {
-    crate::{blockstore::*, blockstore_db::Result, blockstore_meta::SlotMeta},
-    log::*,
+    crate::{
+        blockstore::{Blockstore, BlockstoreError},
+        blockstore_db::Result,
+        blockstore_meta::SlotMeta,
+    },
+    log::warn,
     solana_sdk::clock::Slot,
 };
 

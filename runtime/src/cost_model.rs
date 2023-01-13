@@ -6,8 +6,14 @@
 //!
 
 use {
-    crate::{bank::Bank, block_cost_limits::*},
-    log::*,
+    crate::{
+        bank::Bank,
+        block_cost_limits::{
+            BUILT_IN_INSTRUCTION_COSTS, INSTRUCTION_DATA_BYTES_COST, SIGNATURE_COST,
+            WRITE_LOCK_UNITS,
+        },
+    },
+    log::debug,
     solana_program_runtime::compute_budget::{
         ComputeBudget, DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT,
     },

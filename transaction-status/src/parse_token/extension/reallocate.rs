@@ -1,4 +1,10 @@
-use {super::*, spl_token_2022::extension::ExtensionType};
+use {
+    super::{
+        check_num_token_accounts, json, parse_signers, AccountKeys, ParseInstructionError,
+        ParsedInstructionEnum, UiExtensionType,
+    },
+    spl_token_2022::extension::ExtensionType,
+};
 
 pub(in crate::parse_token) fn parse_reallocate_instruction(
     extension_types: Vec<ExtensionType>,
@@ -31,7 +37,10 @@ pub(in crate::parse_token) fn parse_reallocate_instruction(
 mod test {
     use {
         super::*,
-        crate::parse_token::test::*,
+        crate::parse_token::{
+            parse_token,
+            test::{convert_account_keys, convert_compiled_instruction, convert_pubkey},
+        },
         solana_sdk::pubkey::Pubkey,
         spl_token_2022::{instruction::reallocate, solana_program::message::Message},
     };

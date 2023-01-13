@@ -172,7 +172,7 @@ use {
         sink::SinkExt,
         stream::{BoxStream, StreamExt},
     },
-    log::*,
+    log::{error, trace},
     serde::de::DeserializeOwned,
     serde_json::{json, Map, Value},
     solana_account_decoder::UiAccount,

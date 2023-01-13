@@ -21,7 +21,7 @@ use {
         stakes::Stakes,
     },
     bincode::{self, config::Options, Error},
-    log::*,
+    log::info,
     serde::{de::DeserializeOwned, Deserialize, Serialize},
     solana_measure::measure::Measure,
     solana_sdk::{

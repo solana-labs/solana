@@ -4,7 +4,7 @@
 //! unstable and may change in future releases.
 
 use {
-    log::*,
+    log::{info, trace},
     solana_rpc_client::rpc_client::RpcClient,
     solana_rpc_client_api::{config::RpcProgramAccountsConfig, response::Response},
     solana_sdk::{
@@ -41,7 +41,7 @@ use {
 };
 
 pub mod temporary_pub {
-    use super::*;
+    use super::{min_index, trace, AtomicBool, AtomicUsize, Ordering, RwLock};
 
     pub struct ClientOptimizer {
         cur_index: AtomicUsize,
@@ -110,7 +110,7 @@ pub mod temporary_pub {
         }
     }
 }
-use temporary_pub::*;
+use temporary_pub::ClientOptimizer;
 
 /// An object for querying and sending transactions to the network.
 pub struct ThinClient<P: ConnectionPool> {

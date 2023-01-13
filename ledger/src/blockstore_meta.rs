@@ -84,7 +84,7 @@ pub struct SlotMeta {
 // Serde implementation of serialize and deserialize for Option<u64>
 // where None is represented as u64::MAX; for backward compatibility.
 mod serde_compat {
-    use super::*;
+    use super::{Deserialize, Deserializer, Serialize, Serializer};
 
     pub(super) fn serialize<S>(val: &Option<u64>, serializer: S) -> Result<S::Ok, S::Error>
     where

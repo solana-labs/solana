@@ -13,16 +13,18 @@ use {
     clap::{App, Arg, ArgMatches, SubCommand},
     solana_clap_utils::{
         compute_unit_price::{compute_unit_price_arg, COMPUTE_UNIT_PRICE_ARG},
-        input_parsers::*,
-        input_validators::*,
+        input_parsers::{lamports_of_sol, pubkey_of, pubkey_of_signer, signer_of, value_of},
+        input_validators::{is_amount, is_amount_or_all, is_valid_pubkey, is_valid_signer},
         keypair::{CliSigners, DefaultSigner, SignerIndex},
         memo::{memo_arg, MEMO_ARG},
-        nonce::*,
+        nonce::{nonce_authority_arg, NONCE_AUTHORITY_ARG},
     },
     solana_cli_output::CliNonceAccount,
     solana_remote_wallet::remote_wallet::RemoteWalletManager,
     solana_rpc_client::rpc_client::RpcClient,
-    solana_rpc_client_nonce_utils::*,
+    solana_rpc_client_nonce_utils::{
+        get_account, get_account_with_commitment, state_from_account, Error,
+    },
     solana_sdk::{
         account::Account,
         feature_set::merge_nonce_error_into_system_error,
@@ -746,6 +748,7 @@ mod tests {
     use {
         super::*,
         crate::{clap_app::get_clap_app, cli::parse_command},
+        solana_client::nonce_utils::{account_identity_ok, data_from_account, data_from_state},
         solana_sdk::{
             account::Account,
             account_utils::StateMut,

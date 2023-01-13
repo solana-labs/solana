@@ -1,5 +1,8 @@
 use {
-    super::*,
+    super::{
+        check_num_token_accounts, json, map_coption_pubkey, AccountKeys, ParseInstructionError,
+        ParsedInstructionEnum,
+    },
     spl_token_2022::solana_program::{program_option::COption, pubkey::Pubkey},
 };
 
@@ -22,10 +25,15 @@ pub(in crate::parse_token) fn parse_initialize_mint_close_authority_instruction(
 mod test {
     use {
         super::*,
-        crate::parse_token::test::*,
+        crate::parse_token::{
+            parse_token,
+            test::{convert_account_keys, convert_compiled_instruction, convert_pubkey},
+        },
         serde_json::Value,
         solana_sdk::pubkey::Pubkey,
-        spl_token_2022::{instruction::*, solana_program::message::Message},
+        spl_token_2022::{
+            instruction::initialize_mint_close_authority, solana_program::message::Message,
+        },
     };
 
     #[test]

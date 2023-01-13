@@ -1,9 +1,15 @@
 //! The `rpc` module implements the Solana RPC interface.
 
+#[allow(deprecated)]
 use {
     crate::{
-        max_slots::MaxSlots, optimistically_confirmed_bank_tracker::OptimisticallyConfirmedBank,
-        parsed_token_accounts::*, rpc_cache::LargestAccountsCache, rpc_health::*,
+        max_slots::MaxSlots,
+        optimistically_confirmed_bank_tracker::OptimisticallyConfirmedBank,
+        parsed_token_accounts::{
+            get_mint_owner_and_decimals, get_parsed_token_account, get_parsed_token_accounts,
+        },
+        rpc_cache::LargestAccountsCache,
+        rpc_health::{RpcHealth, RpcHealthStatus},
     },
     bincode::{config::Options, serialize},
     crossbeam_channel::{unbounded, Receiver, Sender},
@@ -29,9 +35,20 @@ use {
     solana_metrics::inc_new_counter_info,
     solana_perf::packet::PACKET_DATA_SIZE,
     solana_rpc_client_api::{
-        config::*,
+        config::{
+            RpcAccountInfoConfig, RpcBlockConfig, RpcBlockProductionConfig, RpcBlocksConfigWrapper,
+            RpcContextConfig, RpcEncodingConfigWrapper, RpcEpochConfig, RpcGetVoteAccountsConfig,
+            RpcLargestAccountsConfig, RpcLargestAccountsFilter, RpcLeaderScheduleConfig,
+            RpcLeaderScheduleConfigWrapper, RpcProgramAccountsConfig, RpcRequestAirdropConfig,
+            RpcSendTransactionConfig, RpcSignatureStatusConfig, RpcSignaturesForAddressConfig,
+            RpcSimulateTransactionConfig, RpcSupplyConfig, RpcTokenAccountsFilter,
+            RpcTransactionConfig,
+        },
         custom_error::RpcCustomError,
-        deprecated_config::*,
+        deprecated_config::{
+            RpcConfirmedBlockConfig, RpcConfirmedBlocksConfigWrapper,
+            RpcConfirmedTransactionConfig, RpcGetConfirmedSignaturesForAddress2Config,
+        },
         filter::{Memcmp, MemcmpEncodedBytes, RpcFilterType},
         request::{
             TokenAccountsFilter, DELINQUENT_VALIDATOR_SLOT_DISTANCE,
@@ -40,7 +57,17 @@ use {
             MAX_GET_SIGNATURE_STATUSES_QUERY_ITEMS, MAX_GET_SLOT_LEADERS, MAX_MULTIPLE_ACCOUNTS,
             MAX_RPC_VOTE_ACCOUNT_INFO_EPOCH_CREDITS_HISTORY, NUM_LARGEST_ACCOUNTS,
         },
-        response::{Response as RpcResponse, *},
+        response::{
+            OptionalContext, Response as RpcResponse, RpcAccountBalance, RpcBlockCommitment,
+            RpcBlockProduction, RpcBlockProductionRange, RpcBlockhash, RpcBlockhashFeeCalculator,
+            RpcConfirmedTransactionStatusWithSignature, RpcContactInfo, RpcFeeCalculator,
+            RpcFeeRateGovernor, RpcFees, RpcIdentity, RpcInflationGovernor, RpcInflationRate,
+            RpcInflationReward, RpcKeyedAccount, RpcLeaderSchedule, RpcPerfSample,
+            RpcPrioritizationFee, RpcResponseContext, RpcSignatureConfirmation,
+            RpcSimulateTransactionResult, RpcSnapshotSlotInfo, RpcStakeActivation, RpcSupply,
+            RpcTokenAccountBalance, RpcVersionInfo, RpcVoteAccountInfo, RpcVoteAccountStatus,
+            StakeActivationState,
+        },
     },
     solana_runtime::{
         accounts::AccountAddressFilter,
@@ -2485,7 +2512,12 @@ fn _send_transaction(
 
 // Minimal RPC interface that known validators are expected to provide
 pub mod rpc_minimal {
-    use super::*;
+    use super::{
+        rpc, snapshot_utils, verify_pubkey, EpochInfo, JsonRpcRequestProcessor, Result,
+        RpcContextConfig, RpcCustomError, RpcGetVoteAccountsConfig, RpcHealthStatus, RpcIdentity,
+        RpcLeaderSchedule, RpcLeaderScheduleConfig, RpcLeaderScheduleConfigWrapper, RpcResponse,
+        RpcSnapshotSlotInfo, RpcVersionInfo, RpcVoteAccountStatus, Slot,
+    };
     #[rpc]
     pub trait Minimal {
         type Metadata;
@@ -2724,7 +2756,12 @@ pub mod rpc_minimal {
 // RPC interface that only depends on immediate Bank data
 // Expected to be provided by API nodes
 pub mod rpc_bank {
-    use super::*;
+    use super::{
+        new_response, rpc, system_instruction, verify_pubkey, CommitmentConfig, EpochSchedule,
+        Error, HashMap, JsonRpcRequestProcessor, Result, RpcBlockProduction,
+        RpcBlockProductionConfig, RpcBlockProductionRange, RpcContextConfig, RpcInflationGovernor,
+        RpcInflationRate, RpcResponse, Slot, MAX_GET_SLOT_LEADERS,
+    };
     #[rpc]
     pub trait BankData {
         type Metadata;
@@ -2939,7 +2976,11 @@ pub mod rpc_bank {
 // RPC interface that depends on AccountsDB
 // Expected to be provided by API nodes
 pub mod rpc_accounts {
-    use super::*;
+    use super::{
+        rpc, verify_pubkey, BlockCommitmentArray, CommitmentConfig, Error, JsonRpcRequestProcessor,
+        Result, RpcAccountInfoConfig, RpcBlockCommitment, RpcEpochConfig, RpcResponse,
+        RpcStakeActivation, Slot, UiAccount, UiTokenAmount, MAX_MULTIPLE_ACCOUNTS,
+    };
     #[rpc]
     pub trait AccountsData {
         type Metadata;
@@ -3092,7 +3133,13 @@ pub mod rpc_accounts {
 // Expected to be provided by API nodes for now, but collected for easy separation and removal in
 // the future.
 pub mod rpc_accounts_scan {
-    use super::*;
+    use super::{
+        rpc, verify_filter, verify_pubkey, verify_token_account_filter, CommitmentConfig, Error,
+        JsonRpcRequestProcessor, OptionalContext, Result, RpcAccountBalance, RpcAccountInfoConfig,
+        RpcKeyedAccount, RpcLargestAccountsConfig, RpcProgramAccountsConfig, RpcResponse,
+        RpcSupply, RpcSupplyConfig, RpcTokenAccountBalance, RpcTokenAccountsFilter,
+        MAX_GET_PROGRAM_ACCOUNT_FILTERS,
+    };
     #[rpc]
     pub trait AccountsScan {
         type Metadata;
@@ -3255,7 +3302,25 @@ pub mod rpc_accounts_scan {
 // (rpc_minimal should also be provided by an API node)
 pub mod rpc_full {
     use {
-        super::*,
+        super::{
+            BoxFuture, CommitmentConfig, ContactInfo, EncodedConfirmedTransactionWithStatusMeta,
+            Error, FromStr, Hash, JsonRpcRequestProcessor, Pubkey, Result, RpcBlockConfig,
+            RpcBlockhash, RpcBlocksConfigWrapper, RpcConfirmedTransactionStatusWithSignature,
+            RpcContactInfo, RpcContextConfig, RpcCustomError, RpcEncodingConfigWrapper,
+            RpcEpochConfig, RpcHealthStatus, RpcInflationReward, RpcPerfSample,
+            RpcPrioritizationFee, RpcRequestAirdropConfig, RpcResponse, RpcSendTransactionConfig,
+            RpcSignatureStatusConfig, RpcSignaturesForAddressConfig, RpcSimulateTransactionConfig,
+            RpcSimulateTransactionResult, RpcTransactionConfig, SanitizedMessage, Signature, Slot,
+            SocketAddr, TransactionBinaryEncoding, TransactionError, TransactionSimulationResult,
+            TransactionStatus, TryFrom, UiAccountEncoding, UiConfirmedBlock, UiTransactionEncoding,
+            UnixTimestamp, VersionedTransaction, _send_transaction, decode_and_deserialize,
+            encode_account, future, inc_new_counter_info, new_response,
+            request_airdrop_transaction, rpc, sanitize_transaction, serialize,
+            verify_and_parse_signatures_for_address_params, verify_hash, verify_pubkey,
+            verify_signature, verify_transaction, MAX_GET_SIGNATURE_STATUSES_QUERY_ITEMS,
+            MAX_RECENT_BLOCKHASHES, MAX_TX_ACCOUNT_LOCKS, PERFORMANCE_SAMPLES_LIMIT,
+        },
+        crate::rpc::rpc_perf_sample_from_perf_sample,
         solana_sdk::message::{SanitizedVersionedMessage, VersionedMessage},
     };
     #[rpc]
@@ -4040,7 +4105,11 @@ fn rpc_perf_sample_from_perf_sample(slot: u64, sample: PerfSample) -> RpcPerfSam
 // RPC methods deprecated in v1.8
 pub mod rpc_deprecated_v1_9 {
     #![allow(deprecated)]
-    use super::*;
+    use super::{
+        rpc, snapshot_utils, CommitmentConfig, Error, FromStr, Hash, JsonRpcRequestProcessor,
+        Result, RpcBlockhashFeeCalculator, RpcCustomError, RpcFeeCalculator, RpcFeeRateGovernor,
+        RpcFees, RpcResponse, Slot,
+    };
     #[rpc]
     pub trait DeprecatedV1_9 {
         type Metadata;
@@ -4136,7 +4205,14 @@ pub mod rpc_deprecated_v1_9 {
 // RPC methods deprecated in v1.7
 pub mod rpc_deprecated_v1_7 {
     #![allow(deprecated)]
-    use super::*;
+    use super::{
+        future, rpc, verify_and_parse_signatures_for_address_params, verify_signature, BoxFuture,
+        CommitmentConfig, EncodedConfirmedTransactionWithStatusMeta, JsonRpcRequestProcessor,
+        Result, RpcConfirmedBlockConfig, RpcConfirmedBlocksConfigWrapper,
+        RpcConfirmedTransactionConfig, RpcConfirmedTransactionStatusWithSignature,
+        RpcContextConfig, RpcEncodingConfigWrapper, RpcGetConfirmedSignaturesForAddress2Config,
+        Slot, UiConfirmedBlock,
+    };
     #[rpc]
     pub trait DeprecatedV1_7 {
         type Metadata;
@@ -4299,7 +4375,11 @@ pub mod rpc_deprecated_v1_7 {
 
 // Obsolete RPC methods, collected for easy deactivation and removal
 pub mod rpc_obsolete_v1_7 {
-    use super::*;
+    use super::{
+        rpc, transaction, verify_pubkey, verify_signature, CommitmentConfig, Error,
+        JsonRpcRequestProcessor, Result, RpcResponse, RpcSignatureConfirmation, Slot,
+        MAX_GET_CONFIRMED_SIGNATURES_FOR_ADDRESS_SLOT_RANGE,
+    };
     #[rpc]
     pub trait ObsoleteV1_7 {
         type Metadata;
@@ -4607,8 +4687,8 @@ pub fn populate_blockstore_for_tests(
 pub mod tests {
     use {
         super::{
-            rpc_accounts::*, rpc_accounts_scan::*, rpc_bank::*, rpc_deprecated_v1_9::*,
-            rpc_full::*, rpc_minimal::*, *,
+            rpc_accounts::AccountsData, rpc_accounts_scan::AccountsScan, rpc_bank::BankData,
+            rpc_deprecated_v1_9::DeprecatedV1_9, rpc_full::Full, rpc_minimal::Minimal, *,
         },
         crate::{
             optimistically_confirmed_bank_tracker::{
@@ -4621,6 +4701,7 @@ pub mod tests {
         jsonrpc_core_client::transports::local,
         serde::de::DeserializeOwned,
         solana_address_lookup_table_program::state::{AddressLookupTable, LookupTableMeta},
+        solana_client::rpc_response::RpcApiVersion,
         solana_entry::entry::next_versioned_entry,
         solana_gossip::socketaddr,
         solana_ledger::{

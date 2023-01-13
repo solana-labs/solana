@@ -5,7 +5,7 @@ use {
         rent_collector::RentCollector,
     },
     core::ops::Range,
-    log::*,
+    log::debug,
     memmap2::MmapMut,
     rayon::prelude::*,
     solana_measure::measure::Measure,

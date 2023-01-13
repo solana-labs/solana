@@ -556,10 +556,19 @@ impl Shred {
 // Helper methods to extract pieces of the shred from the payload
 // without deserializing the entire payload.
 pub mod layout {
-    use {super::*, std::ops::Range};
+    use {
+        super::{
+            legacy, merkle, Error, MerkleRoot, Packet, ShredFlags, ShredId, ShredType,
+            ShredVariant, Signature, SignedData, Slot, OFFSET_OF_SHRED_INDEX, OFFSET_OF_SHRED_SLOT,
+            OFFSET_OF_SHRED_VARIANT, SIZE_OF_NONCE, SIZE_OF_SIGNATURE,
+        },
+        std::ops::Range,
+    };
     #[cfg(test)]
     use {
+        crate::shred::{Keypair, SIGNATURE_BYTES},
         rand::{seq::SliceRandom, Rng},
+        solana_sdk::signature::Signer,
         std::collections::HashMap,
     };
 

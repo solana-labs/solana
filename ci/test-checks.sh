@@ -76,6 +76,7 @@ nightly_clippy_allows=()
  _ scripts/cargo-for-all-lock-files.sh -- nightly clippy -Zunstable-options --all-targets -- \
    --deny=warnings \
    --deny=clippy::integer_arithmetic \
+   --deny=clippy::wildcard_imports \
    "${nightly_clippy_allows[@]}"
 
 _ scripts/cargo-for-all-lock-files.sh -- nightly sort --workspace --check

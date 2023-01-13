@@ -8,7 +8,12 @@ use {
         },
         state::AddressLookupTable,
     },
-    solana_clap_utils::{self, input_parsers::*, input_validators::*, keypair::*},
+    solana_clap_utils::{
+        self,
+        input_parsers::{pubkey_of, signer_of, values_of},
+        input_validators::{is_pubkey, is_valid_signer},
+        keypair::{DefaultSigner, SignerIndex},
+    },
     solana_cli_output::{CliAddressLookupTable, CliAddressLookupTableCreated, CliSignature},
     solana_remote_wallet::remote_wallet::RemoteWalletManager,
     solana_rpc_client::rpc_client::RpcClient,

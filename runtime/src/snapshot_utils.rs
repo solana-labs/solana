@@ -33,7 +33,7 @@ use {
     crossbeam_channel::Sender,
     flate2::read::GzDecoder,
     lazy_static::lazy_static,
-    log::*,
+    log::{error, info, log_enabled, trace, warn},
     rayon::prelude::*,
     regex::Regex,
     solana_measure::{measure, measure::Measure},

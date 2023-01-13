@@ -19,7 +19,7 @@ use {
         http_sender::HttpSender,
         mock_sender::MockSender,
         nonblocking::{self, rpc_client::get_rpc_request_str},
-        rpc_sender::*,
+        rpc_sender::{RpcSender, RpcTransportStats},
     },
     serde::Serialize,
     serde_json::Value,
@@ -29,9 +29,21 @@ use {
     },
     solana_rpc_client_api::{
         client_error::Result as ClientResult,
-        config::{RpcAccountInfoConfig, *},
+        config::{
+            RpcAccountInfoConfig, RpcBlockConfig, RpcBlockProductionConfig,
+            RpcGetVoteAccountsConfig, RpcLargestAccountsConfig, RpcLeaderScheduleConfig,
+            RpcProgramAccountsConfig, RpcRequestAirdropConfig, RpcSendTransactionConfig,
+            RpcSimulateTransactionConfig, RpcTransactionConfig,
+        },
         request::{RpcRequest, TokenAccountsFilter},
-        response::*,
+        response::{
+            Fees, Response, RpcAccountBalance, RpcBlockProduction,
+            RpcConfirmedTransactionStatusWithSignature, RpcContactInfo, RpcInflationGovernor,
+            RpcInflationRate, RpcInflationReward, RpcKeyedAccount, RpcLeaderSchedule,
+            RpcPerfSample, RpcPrioritizationFee, RpcResponseContext, RpcResult,
+            RpcSimulateTransactionResult, RpcSnapshotSlotInfo, RpcStakeActivation, RpcSupply,
+            RpcTokenAccountBalance, RpcVersionInfo, RpcVoteAccountStatus,
+        },
     },
     solana_sdk::{
         account::Account,
@@ -4084,7 +4096,7 @@ mod tests {
         jsonrpc_core::{futures::prelude::*, Error, IoHandler, Params},
         jsonrpc_http_server::{AccessControlAllowOrigin, DomainsValidation, ServerBuilder},
         serde_json::{json, Number},
-        solana_rpc_client_api::client_error::ErrorKind,
+        solana_rpc_client_api::{client_error::ErrorKind, response::OptionalContext},
         solana_sdk::{
             instruction::InstructionError,
             signature::{Keypair, Signer},

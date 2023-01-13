@@ -6,7 +6,7 @@ extern crate test;
 
 use {
     crossbeam_channel::unbounded,
-    log::*,
+    log::{error, info, trace},
     rand::{
         distributions::{Distribution, Uniform},
         thread_rng, Rng,

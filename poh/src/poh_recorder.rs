@@ -14,7 +14,7 @@ pub use solana_sdk::clock::Slot;
 use {
     crate::poh_service::PohService,
     crossbeam_channel::{unbounded, Receiver, RecvTimeoutError, SendError, Sender, TrySendError},
-    log::*,
+    log::{error, info, trace},
     solana_entry::{entry::Entry, poh::Poh},
     solana_ledger::{
         blockstore::Blockstore,

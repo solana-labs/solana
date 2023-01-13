@@ -4,7 +4,7 @@ use jemallocator::Jemalloc;
 use {
     clap::{crate_name, value_t, value_t_or_exit, values_t, values_t_or_exit, ArgMatches},
     console::style,
-    log::*,
+    log::{error, info, warn},
     rand::{seq::SliceRandom, thread_rng},
     solana_clap_utils::input_parsers::{keypair_of, keypairs_of, pubkey_of, value_of},
     solana_core::{

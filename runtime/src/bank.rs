@@ -52,7 +52,10 @@ use {
         accounts_index::{AccountSecondaryIndexes, IndexKey, ScanConfig, ScanResult, ZeroLamport},
         accounts_update_notifier_interface::AccountsUpdateNotifier,
         ancestors::{Ancestors, AncestorsForSerialization},
-        bank::metrics::*,
+        bank::metrics::{
+            report_new_bank_metrics, report_new_epoch_metrics, NewBankTimings, NewEpochTimings,
+            RewardsMetrics,
+        },
         blockhash_queue::BlockhashQueue,
         builtins::{self, BuiltinAction, BuiltinFeatureTransition, Builtins},
         cost_tracker::CostTracker,
@@ -80,7 +83,7 @@ use {
     byteorder::{ByteOrder, LittleEndian},
     dashmap::{DashMap, DashSet},
     itertools::Itertools,
-    log::*,
+    log::{debug, error, info, log_enabled, trace, warn},
     rayon::{
         iter::{IntoParallelIterator, IntoParallelRefIterator, ParallelIterator},
         ThreadPool, ThreadPoolBuilder,

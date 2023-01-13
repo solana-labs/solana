@@ -2,7 +2,7 @@
 ///
 /// All tests must start from an entry point and a funding keypair and
 /// discover the rest of the network.
-use log::*;
+use log::{info, warn};
 use {
     rand::{thread_rng, Rng},
     rayon::prelude::*,

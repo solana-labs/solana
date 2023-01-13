@@ -3,7 +3,7 @@
 use {
     crate::poh_recorder::{PohRecorder, Record},
     crossbeam_channel::Receiver,
-    log::*,
+    log::warn,
     solana_entry::poh::Poh,
     solana_measure::{measure, measure::Measure},
     solana_sdk::poh_config::PohConfig,
@@ -383,6 +383,7 @@ impl PohService {
 mod tests {
     use {
         super::*,
+        log::info,
         rand::{thread_rng, Rng},
         solana_ledger::{
             blockstore::Blockstore,

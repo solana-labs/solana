@@ -60,7 +60,10 @@ impl Sysvar for StakeHistory {
 
 #[cfg(test)]
 mod tests {
-    use {super::*, crate::stake_history::*};
+    use {
+        super::*,
+        crate::stake_history::{StakeHistory, StakeHistoryEntry, MAX_ENTRIES},
+    };
 
     #[test]
     fn test_size_of() {

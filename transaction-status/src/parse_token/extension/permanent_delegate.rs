@@ -1,4 +1,9 @@
-use {super::*, spl_token_2022::solana_program::pubkey::Pubkey};
+use {
+    super::{
+        check_num_token_accounts, json, AccountKeys, ParseInstructionError, ParsedInstructionEnum,
+    },
+    spl_token_2022::solana_program::pubkey::Pubkey,
+};
 
 pub(in crate::parse_token) fn parse_initialize_permanent_delegate_instruction(
     delegate: Pubkey,
@@ -19,9 +24,14 @@ pub(in crate::parse_token) fn parse_initialize_permanent_delegate_instruction(
 mod test {
     use {
         super::*,
-        crate::parse_token::test::*,
+        crate::parse_token::{
+            parse_token,
+            test::{convert_account_keys, convert_compiled_instruction, convert_pubkey},
+        },
         solana_sdk::pubkey::Pubkey,
-        spl_token_2022::{instruction::*, solana_program::message::Message},
+        spl_token_2022::{
+            instruction::initialize_permanent_delegate, solana_program::message::Message,
+        },
     };
 
     #[test]

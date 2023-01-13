@@ -3,9 +3,12 @@ use {
         abi_example::{normalize_type_name, AbiEnumVisitor},
         hash::{Hash, Hasher},
     },
-    log::*,
+    log::{error, info},
     serde::{
-        ser::{Error as SerdeError, *},
+        ser::{
+            Error as SerdeError, SerializeMap, SerializeSeq, SerializeStruct,
+            SerializeStructVariant, SerializeTuple, SerializeTupleStruct, SerializeTupleVariant,
+        },
         Serialize, Serializer,
     },
     std::{any::type_name, io::Write},

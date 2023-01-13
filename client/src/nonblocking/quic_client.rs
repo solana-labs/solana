@@ -7,7 +7,7 @@ pub use solana_quic_client::nonblocking::quic_client::{
 use {
     crate::nonblocking::tpu_connection::TpuConnection,
     async_trait::async_trait,
-    log::*,
+    log::warn,
     solana_sdk::transport::Result as TransportResult,
     solana_tpu_client::tpu_connection::ClientStats,
     std::{net::SocketAddr, sync::Arc},

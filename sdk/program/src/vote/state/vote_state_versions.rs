@@ -1,4 +1,7 @@
-use super::{vote_state_0_23_5::VoteState0_23_5, *};
+use super::{
+    vote_state_0_23_5::VoteState0_23_5, AuthorizedVoters, CircBuf, Debug, Deserialize, Pubkey,
+    Serialize, VoteState,
+};
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
 pub enum VoteStateVersions {

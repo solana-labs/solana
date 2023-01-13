@@ -1,7 +1,7 @@
 use {
     crate::abi_digester::{AbiDigester, DigestError, DigestResult},
     lazy_static::lazy_static,
-    log::*,
+    log::info,
     serde::Serialize,
     std::any::type_name,
 };
@@ -191,7 +191,10 @@ example_impls! { String, String::new() }
 example_impls! { std::time::Duration, std::time::Duration::from_secs(0) }
 example_impls! { std::sync::Once, std::sync::Once::new() }
 
-use std::sync::atomic::*;
+use std::sync::atomic::{
+    AtomicBool, AtomicI16, AtomicI32, AtomicI64, AtomicI8, AtomicIsize, AtomicU16, AtomicU32,
+    AtomicU64, AtomicU8, AtomicUsize,
+};
 
 // Source: https://github.com/rust-lang/rust/blob/ba18875557aabffe386a2534a1aa6118efb6ab88/src/libcore/sync/atomic.rs#L1199
 macro_rules! atomic_example_impls {

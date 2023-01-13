@@ -7,7 +7,7 @@ use {
         bank::Bank,
         bank_forks::BankForks,
         genesis_utils::{create_genesis_config, GenesisConfigInfo},
-        prioritization_fee_cache::*,
+        prioritization_fee_cache::PrioritizationFeeCache,
     },
     solana_sdk::{
         compute_budget::ComputeBudgetInstruction,

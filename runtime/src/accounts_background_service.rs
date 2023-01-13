@@ -14,7 +14,7 @@ use {
         snapshot_utils::{self, SnapshotError},
     },
     crossbeam_channel::{Receiver, SendError, Sender},
-    log::*,
+    log::{debug, info},
     rand::{thread_rng, Rng},
     solana_measure::measure::Measure,
     solana_sdk::clock::{BankId, Slot},

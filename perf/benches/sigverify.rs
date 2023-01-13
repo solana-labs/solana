@@ -3,7 +3,7 @@
 extern crate test;
 
 use {
-    log::*,
+    log::info,
     rand::{thread_rng, Rng},
     solana_perf::{
         packet::{to_packet_batches, Packet, PacketBatch},

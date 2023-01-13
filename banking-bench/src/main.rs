@@ -2,7 +2,7 @@
 use {
     clap::{crate_description, crate_name, Arg, ArgEnum, Command},
     crossbeam_channel::{unbounded, Receiver},
-    log::*,
+    log::{debug, info, trace},
     rand::{thread_rng, Rng},
     rayon::prelude::*,
     solana_client::connection_cache::ConnectionCache,

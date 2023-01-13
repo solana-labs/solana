@@ -3,8 +3,8 @@ use {
     clap::ArgMatches,
     solana_clap_utils::{
         input_parsers::{pubkey_of, value_of},
-        nonce::*,
-        offline::*,
+        nonce::NONCE_ARG,
+        offline::{BLOCKHASH_ARG, SIGN_ONLY_ARG},
     },
     solana_rpc_client::nonblocking::rpc_client::RpcClient,
     solana_sdk::{commitment_config::CommitmentConfig, hash::Hash, pubkey::Pubkey},
@@ -120,6 +120,10 @@ mod tests {
         clap::App,
         serde_json::{self, json},
         solana_account_decoder::{UiAccount, UiAccountEncoding},
+        solana_clap_utils::{
+            nonce::NonceArgs,
+            offline::{blockhash_arg, sign_only_arg, OfflineArgs},
+        },
         solana_rpc_client_api::{
             request::RpcRequest,
             response::{Response, RpcBlockhash, RpcResponseContext},

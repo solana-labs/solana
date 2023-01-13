@@ -7,7 +7,7 @@ use {
         epoch_accounts_hash,
         snapshot_config::SnapshotConfig,
     },
-    log::*,
+    log::{debug, info, warn},
     solana_measure::measure::Measure,
     solana_sdk::{clock::Slot, feature_set, hash::Hash, timing},
     std::{

@@ -7,7 +7,10 @@ use {
         instruction::{InstructionError, TRANSACTION_LEVEL_STACK_HEIGHT},
         transaction_context::IndexOfAccount,
     },
-    solana_zk_token_sdk::zk_token_proof_instruction::*,
+    solana_zk_token_sdk::zk_token_proof_instruction::{
+        CloseAccountData, ProofInstruction, PubkeyValidityData, TransferData, TransferWithFeeData,
+        Verifiable, WithdrawData, WithdrawWithheldTokensData,
+    },
     std::result::Result,
 };
 

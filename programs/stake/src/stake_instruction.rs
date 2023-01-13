@@ -6,7 +6,7 @@ use {
             initialize, merge, redelegate, set_lockup, split, withdraw,
         },
     },
-    log::*,
+    log::trace,
     solana_program_runtime::{
         invoke_context::InvokeContext, sysvar_cache::get_sysvar_with_account_check,
     },

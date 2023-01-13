@@ -6,7 +6,7 @@ use {
         ledger_error::LedgerError,
         locator::{Locator, LocatorError, Manufacturer},
     },
-    log::*,
+    log::{error, trace},
     parking_lot::RwLock,
     solana_sdk::{
         derivation_path::{DerivationPath, DerivationPathError},

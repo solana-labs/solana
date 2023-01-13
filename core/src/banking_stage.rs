@@ -17,7 +17,7 @@ use {
         qos_service::QosService,
         sigverify::SigverifyTracerPacketStats,
         tracer_packet_stats::TracerPacketStats,
-        unprocessed_packet_batches::*,
+        unprocessed_packet_batches::UnprocessedPacketBatches,
         unprocessed_transaction_storage::{
             ConsumeScannerPayload, ThreadType, UnprocessedTransactionStorage,
         },
@@ -1962,7 +1962,9 @@ where
 mod tests {
     use {
         super::*,
-        crate::unprocessed_packet_batches,
+        crate::unprocessed_packet_batches::{
+            transactions_to_deserialized_packets, DeserializedPacket,
+        },
         crossbeam_channel::{unbounded, Receiver},
         solana_address_lookup_table_program::state::{AddressLookupTable, LookupTableMeta},
         solana_entry::entry::{next_entry, next_versioned_entry, Entry, EntrySlice},
@@ -3650,9 +3652,7 @@ mod tests {
                 setup_conflicting_transactions(ledger_path.path());
             let recorder = poh_recorder.read().unwrap().recorder();
             let num_conflicting_transactions = transactions.len();
-            let deserialized_packets =
-                unprocessed_packet_batches::transactions_to_deserialized_packets(&transactions)
-                    .unwrap();
+            let deserialized_packets = transactions_to_deserialized_packets(&transactions).unwrap();
             assert_eq!(deserialized_packets.len(), num_conflicting_transactions);
             let mut buffered_packet_batches =
                 UnprocessedTransactionStorage::new_transaction_storage(
@@ -3708,9 +3708,7 @@ mod tests {
                 .push(duplicate_account_key); // corrupt transaction
             let recorder = poh_recorder.read().unwrap().recorder();
             let num_conflicting_transactions = transactions.len();
-            let deserialized_packets =
-                unprocessed_packet_batches::transactions_to_deserialized_packets(&transactions)
-                    .unwrap();
+            let deserialized_packets = transactions_to_deserialized_packets(&transactions).unwrap();
             assert_eq!(deserialized_packets.len(), num_conflicting_transactions);
             let mut buffered_packet_batches =
                 UnprocessedTransactionStorage::new_transaction_storage(
@@ -3779,10 +3777,7 @@ mod tests {
                 .spawn(move || {
                     let num_conflicting_transactions = transactions.len();
                     let deserialized_packets =
-                        unprocessed_packet_batches::transactions_to_deserialized_packets(
-                            &transactions,
-                        )
-                        .unwrap();
+                        transactions_to_deserialized_packets(&transactions).unwrap();
                     assert_eq!(deserialized_packets.len(), num_conflicting_transactions);
                     let mut buffered_packet_batches =
                         UnprocessedTransactionStorage::new_transaction_storage(

@@ -8,7 +8,7 @@ use {
     bincode::{deserialize, serialize, serialized_size},
     byteorder::{ByteOrder, LittleEndian},
     crossbeam_channel::{unbounded, Sender},
-    log::*,
+    log::{debug, error, info, trace, warn},
     serde_derive::{Deserialize, Serialize},
     solana_metrics::datapoint_info,
     solana_sdk::{

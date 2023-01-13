@@ -20,7 +20,7 @@ use {
 };
 
 pub mod temporary_pub {
-    use super::*;
+    use super::{Duration, TpuSenderError};
 
     pub type Result<T> = std::result::Result<T, TpuSenderError>;
 
@@ -31,7 +31,7 @@ pub mod temporary_pub {
     #[cfg(feature = "spinner")]
     pub const TRANSACTION_RESEND_INTERVAL: Duration = Duration::from_secs(4);
 }
-use temporary_pub::*;
+use temporary_pub::Result;
 
 /// Default number of slots used to build TPU socket fanout set
 pub const DEFAULT_FANOUT_SLOTS: u64 = 12;

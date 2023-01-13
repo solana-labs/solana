@@ -1,7 +1,7 @@
 #![allow(clippy::integer_arithmetic)]
 
 use {
-    log::*,
+    log::{debug, info, warn},
     solana_cli_output::CliAccount,
     solana_client::rpc_request::MAX_MULTIPLE_ACCOUNTS,
     solana_core::{

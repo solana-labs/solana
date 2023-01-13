@@ -2,7 +2,7 @@
 
 use {
     solana_bpf_loader_program::{process_instruction, upgradeable::id},
-    solana_program_test::*,
+    solana_program_test::{ProgramTest, ProgramTestContext},
     solana_sdk::{
         account::AccountSharedData,
         account_utils::StateMut,

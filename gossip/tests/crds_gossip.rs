@@ -1,14 +1,14 @@
 #![allow(clippy::integer_arithmetic)]
 use {
     bincode::serialized_size,
-    log::*,
+    log::trace,
     rayon::{prelude::*, ThreadPool, ThreadPoolBuilder},
     serial_test::serial,
     solana_gossip::{
         cluster_info,
         cluster_info_metrics::GossipStats,
         crds::GossipRoute,
-        crds_gossip::*,
+        crds_gossip::CrdsGossip,
         crds_gossip_error::CrdsGossipError,
         crds_gossip_pull::{ProcessPullStats, CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS},
         crds_gossip_push::CRDS_GOSSIP_PUSH_MSG_TIMEOUT_MS,

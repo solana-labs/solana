@@ -89,7 +89,7 @@
 pub use crate::nonblocking::pubsub_client::PubsubClientError;
 use {
     crossbeam_channel::{unbounded, Receiver, Sender},
-    log::*,
+    log::{debug, info, warn},
     serde::de::DeserializeOwned,
     serde_json::{
         json,

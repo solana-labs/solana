@@ -1,4 +1,4 @@
-use log::*;
+use log::{info, warn};
 
 pub const SOLANA_SYS_TUNER_PATH: &str = "/tmp/solana-sys-tuner";
 

@@ -1,5 +1,5 @@
 use {
-    log::*,
+    log::info,
     rand::{thread_rng, Rng},
     rayon::prelude::*,
     solana_runtime::{

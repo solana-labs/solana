@@ -2,7 +2,7 @@
 
 use {
     clap::value_t,
-    log::*,
+    log::info,
     solana_bench_tps::{
         bench::{do_bench_tps, max_lamports_for_prioritization},
         bench_tps_client::BenchTpsClient,

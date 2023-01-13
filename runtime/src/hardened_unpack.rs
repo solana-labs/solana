@@ -1,6 +1,6 @@
 use {
     bzip2::bufread::BzDecoder,
-    log::*,
+    log::{error, info, trace, warn},
     rand::{thread_rng, Rng},
     solana_sdk::genesis_config::{GenesisConfig, DEFAULT_GENESIS_ARCHIVE, DEFAULT_GENESIS_FILE},
     std::{

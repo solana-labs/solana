@@ -2,7 +2,7 @@
 use {
     console::Emoji,
     indicatif::{ProgressBar, ProgressStyle},
-    log::*,
+    log::info,
     solana_runtime::{
         snapshot_hash::SnapshotHash,
         snapshot_package::SnapshotType,

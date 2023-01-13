@@ -2,7 +2,7 @@
 
 use {
     crate::{vote_error::VoteError, vote_state},
-    log::*,
+    log::trace,
     solana_program::vote::{instruction::VoteInstruction, program::id, state::VoteAuthorize},
     solana_program_runtime::{
         invoke_context::InvokeContext, sysvar_cache::get_sysvar_with_account_check,

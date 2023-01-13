@@ -1,10 +1,10 @@
 use {
     crate::{
-        bank::Bank, prioritization_fee::*,
+        bank::Bank, prioritization_fee::PrioritizationFee,
         transaction_priority_details::GetTransactionPriorityDetails,
     },
     crossbeam_channel::{unbounded, Receiver, Sender},
-    log::*,
+    log::warn,
     lru::LruCache,
     solana_measure::measure,
     solana_sdk::{

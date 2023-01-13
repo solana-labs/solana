@@ -4,7 +4,14 @@
 
 extern crate solana_program;
 use {
-    crate::instructions::*,
+    crate::instructions::{
+        INVOKE_ASSIGN_TO_SELF_VIA_SYSTEM_PROGRAM_AND_REALLOC, INVOKE_CREATE_ACCOUNT_REALLOC_CHECK,
+        INVOKE_DEALLOC_AND_ASSIGN, INVOKE_INVOKE_MAX_TWICE, INVOKE_REALLOC_AND_ASSIGN,
+        INVOKE_REALLOC_AND_ASSIGN_TO_SELF_VIA_SYSTEM_PROGRAM, INVOKE_REALLOC_EXTEND_MAX,
+        INVOKE_REALLOC_INVOKE_CHECK, INVOKE_REALLOC_MAX_INVOKE_MAX, INVOKE_REALLOC_MAX_PLUS_ONE,
+        INVOKE_REALLOC_MAX_TWICE, INVOKE_REALLOC_RECURSIVE, INVOKE_REALLOC_TO,
+        INVOKE_REALLOC_TO_THEN_LOCAL_REALLOC_EXTEND, INVOKE_REALLOC_ZERO, INVOKE_REALLOC_ZERO_RO,
+    },
     solana_program::{
         account_info::AccountInfo,
         entrypoint::{ProgramResult, MAX_PERMITTED_DATA_INCREASE},
@@ -14,7 +21,11 @@ use {
         pubkey::Pubkey,
         system_instruction, system_program,
     },
-    solana_sbf_rust_realloc::instructions::*,
+    solana_sbf_rust_realloc::instructions::{
+        realloc, realloc_extend, ASSIGN_TO_SELF_VIA_SYSTEM_PROGRAM_AND_REALLOC, CHECK,
+        DEALLOC_AND_ASSIGN_TO_CALLER, REALLOC_AND_ASSIGN,
+        REALLOC_AND_ASSIGN_TO_SELF_VIA_SYSTEM_PROGRAM,
+    },
     std::convert::TryInto,
 };
 

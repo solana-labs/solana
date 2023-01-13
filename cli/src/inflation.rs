@@ -4,7 +4,7 @@ use {
     solana_clap_utils::{
         input_parsers::{pubkeys_of, value_of},
         input_validators::is_valid_pubkey,
-        keypair::*,
+        keypair::DefaultSigner,
     },
     solana_cli_output::{
         CliEpochRewardshMetadata, CliInflation, CliKeyedEpochReward, CliKeyedEpochRewards,

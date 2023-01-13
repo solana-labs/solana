@@ -91,7 +91,7 @@ impl SlotHistory {
 
 #[cfg(test)]
 mod tests {
-    use {super::*, log::*};
+    use {super::*, log::info};
 
     #[test]
     fn slot_history_test1() {

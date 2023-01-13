@@ -1,4 +1,10 @@
-use {super::*, crate::declare_syscall};
+use {
+    super::{
+        consume_compute_meter, is_nonoverlapping, translate_slice, translate_slice_mut,
+        translate_type_mut, EbpfError, InvokeContext, MemoryMapping, ProgramResult, SyscallError,
+    },
+    crate::declare_syscall,
+};
 
 fn mem_op_consume(invoke_context: &mut InvokeContext, n: u64) -> Result<(), EbpfError> {
     let compute_budget = invoke_context.get_compute_budget();

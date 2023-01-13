@@ -7,7 +7,7 @@ use {
         slot_status_observer::SlotStatusObserver, transaction_notifier::TransactionNotifierImpl,
     },
     crossbeam_channel::Receiver,
-    log::*,
+    log::{error, info},
     solana_rpc::{
         optimistically_confirmed_bank_tracker::BankNotification,
         transaction_notifier_interface::TransactionNotifierLock,

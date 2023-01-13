@@ -290,7 +290,7 @@ impl RollingBitField {
 
 #[cfg(test)]
 pub mod tests {
-    use {super::*, log::*, solana_measure::measure::Measure};
+    use {super::*, log::info, solana_measure::measure::Measure};
 
     impl RollingBitField {
         pub fn clear(&mut self) {

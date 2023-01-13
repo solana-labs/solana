@@ -5,7 +5,7 @@ extern crate test;
 
 use {
     crossbeam_channel::{unbounded, Receiver},
-    log::*,
+    log::{debug, trace},
     rand::{thread_rng, Rng},
     rayon::prelude::*,
     solana_client::connection_cache::ConnectionCache,
@@ -13,7 +13,9 @@ use {
         banking_stage::{BankingStage, BankingStageStats},
         leader_slot_banking_stage_metrics::LeaderSlotMetricsTracker,
         qos_service::QosService,
-        unprocessed_packet_batches::*,
+        unprocessed_packet_batches::{
+            transactions_to_deserialized_packets, UnprocessedPacketBatches,
+        },
         unprocessed_transaction_storage::{ThreadType, UnprocessedTransactionStorage},
     },
     solana_entry::entry::{next_hash, Entry},

@@ -7,7 +7,7 @@ use {
         instruction::extend_lookup_table,
         state::{AddressLookupTable, LookupTableMeta},
     },
-    solana_program_test::*,
+    solana_program_test::{tokio, ProgramTestContext},
     solana_sdk::{
         account::{ReadableAccount, WritableAccount},
         clock::Clock,

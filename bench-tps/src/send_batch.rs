@@ -1,6 +1,6 @@
 use {
-    crate::bench_tps_client::*,
-    log::*,
+    crate::bench_tps_client::BenchTpsClient,
+    log::{debug, error, info, warn},
     rayon::prelude::*,
     solana_core::gen_keys::GenKeys,
     solana_measure::measure::Measure,

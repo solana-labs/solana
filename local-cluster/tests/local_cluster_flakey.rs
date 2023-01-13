@@ -2,15 +2,19 @@
 //! because these tests are run separately from the rest of local cluster tests.
 #![allow(clippy::integer_arithmetic)]
 use {
-    common::*,
-    log::*,
+    common::{
+        copy_blocks, create_custom_leader_schedule, last_vote_in_tower, open_blockstore,
+        purge_slots_with_count, remove_tower, wait_for_last_vote_in_tower_to_land_in_ledger,
+        DEFAULT_CLUSTER_LAMPORTS, DEFAULT_NODE_STAKE,
+    },
+    log::info,
     serial_test::serial,
     solana_core::validator::ValidatorConfig,
     solana_ledger::{ancestor_iterator::AncestorIterator, leader_schedule::FixedSchedule},
     solana_local_cluster::{
         cluster::Cluster,
         local_cluster::{ClusterConfig, LocalCluster},
-        validator_configs::*,
+        validator_configs::make_identical_validator_configs,
     },
     solana_sdk::{
         clock::Slot,

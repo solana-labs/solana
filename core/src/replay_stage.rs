@@ -8,7 +8,12 @@ use {
         cluster_info_vote_listener::{
             GossipDuplicateConfirmedSlotsReceiver, GossipVerifiedVoteHashReceiver, VoteTracker,
         },
-        cluster_slot_state_verifier::*,
+        cluster_slot_state_verifier::{
+            check_slot_agrees_with_cluster, BankFrozenState, DeadState, DuplicateConfirmedState,
+            DuplicateSlotsToRepair, DuplicateSlotsTracker, DuplicateState, EpochSlotsFrozenSlots,
+            EpochSlotsFrozenState, GossipDuplicateConfirmedSlots, PurgeRepairSlotCounter,
+            SlotStateUpdate,
+        },
         cluster_slots::ClusterSlots,
         cluster_slots_service::ClusterSlotsUpdateSender,
         commitment_service::{AggregateCommitmentService, CommitmentAggregationData},

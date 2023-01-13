@@ -342,7 +342,13 @@ pub fn spawn_server(
 mod test {
     use {
         super::*,
-        crate::nonblocking::quic::{test::*, DEFAULT_WAIT_FOR_CHUNK_TIMEOUT_MS},
+        crate::nonblocking::quic::{
+            test::{
+                check_block_multiple_connections, check_multiple_streams, check_multiple_writes,
+                check_timeout, check_unstaked_node_connect_failure,
+            },
+            DEFAULT_WAIT_FOR_CHUNK_TIMEOUT_MS,
+        },
         crossbeam_channel::unbounded,
         std::net::SocketAddr,
     };

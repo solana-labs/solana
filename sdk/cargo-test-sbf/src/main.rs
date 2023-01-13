@@ -1,6 +1,6 @@
 use {
     clap::{crate_description, crate_name, crate_version, Arg},
-    log::*,
+    log::{debug, error, info},
     std::{
         env,
         ffi::OsStr,

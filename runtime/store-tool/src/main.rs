@@ -1,6 +1,6 @@
 use {
     clap::{crate_description, crate_name, value_t, value_t_or_exit, App, Arg},
-    log::*,
+    log::info,
     solana_runtime::append_vec::{AppendVec, StoredAccountMeta},
     solana_sdk::{account::AccountSharedData, hash::Hash, pubkey::Pubkey},
 };

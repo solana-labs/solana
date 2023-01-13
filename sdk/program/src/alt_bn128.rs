@@ -4,7 +4,10 @@ pub mod prelude {
 
 use {
     bytemuck::{Pod, Zeroable},
-    consts::*,
+    consts::{
+        ALT_BN128_ADDITION_INPUT_LEN, ALT_BN128_ADDITION_OUTPUT_LEN,
+        ALT_BN128_MULTIPLICATION_INPUT_LEN, ALT_BN128_POINT_SIZE,
+    },
     thiserror::Error,
 };
 
@@ -89,7 +92,14 @@ pub struct PodG2(pub [u8; 128]);
 #[cfg(not(target_os = "solana"))]
 mod target_arch {
     use {
-        super::*,
+        super::{
+            consts, AltBn128Error, PodG1, PodG2, ALT_BN128_ADDITION_INPUT_LEN,
+            ALT_BN128_ADDITION_OUTPUT_LEN, ALT_BN128_MULTIPLICATION_INPUT_LEN,
+            ALT_BN128_POINT_SIZE,
+        },
+        crate::alt_bn128::consts::{
+            ALT_BN128_MULTIPLICATION_OUTPUT_LEN, ALT_BN128_PAIRING_ELEMENT_LEN,
+        },
         ark_bn254::{self, Parameters},
         ark_ec::{
             self,
@@ -277,7 +287,10 @@ mod target_arch {
 
 #[cfg(target_os = "solana")]
 mod target_arch {
-    use super::*;
+    use {
+        super::*,
+        crate::alt_bn128::consts::{ALT_BN128_ADD, ALT_BN128_MUL, ALT_BN128_PAIRING},
+    };
     pub fn alt_bn128_addition(input: &[u8]) -> Result<Vec<u8>, AltBn128Error> {
         if input.len() > ALT_BN128_ADDITION_INPUT_LEN {
             return Err(AltBn128Error::InvalidInputData);

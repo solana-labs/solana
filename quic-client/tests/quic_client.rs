@@ -2,7 +2,7 @@
 mod tests {
     use {
         crossbeam_channel::{unbounded, Receiver},
-        log::*,
+        log::info,
         solana_perf::packet::PacketBatch,
         solana_quic_client::nonblocking::quic_client::{
             QuicClientCertificate, QuicLazyInitializedEndpoint,

@@ -5,7 +5,7 @@ use {
         leader_schedule_utils,
     },
     itertools::Itertools,
-    log::*,
+    log::debug,
     solana_runtime::bank::Bank,
     solana_sdk::{
         clock::{Epoch, Slot},

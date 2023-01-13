@@ -2,7 +2,7 @@ use {
     bincode::serialize,
     crossbeam_channel::unbounded,
     futures_util::StreamExt,
-    log::*,
+    log::{error, info},
     reqwest::{self, header::CONTENT_TYPE},
     serde_json::{json, Value},
     solana_account_decoder::UiAccount,

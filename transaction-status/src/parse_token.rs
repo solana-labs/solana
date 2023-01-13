@@ -3,9 +3,14 @@ use {
         check_num_accounts, ParsableProgram, ParseInstructionError, ParsedInstructionEnum,
     },
     extension::{
-        confidential_transfer::*, cpi_guard::*, default_account_state::*, interest_bearing_mint::*,
-        memo_transfer::*, mint_close_authority::*, permanent_delegate::*, reallocate::*,
-        transfer_fee::*,
+        confidential_transfer::parse_confidential_transfer_instruction,
+        cpi_guard::parse_cpi_guard_instruction,
+        default_account_state::parse_default_account_state_instruction,
+        interest_bearing_mint::parse_interest_bearing_mint_instruction,
+        memo_transfer::parse_memo_transfer_instruction,
+        mint_close_authority::parse_initialize_mint_close_authority_instruction,
+        permanent_delegate::parse_initialize_permanent_delegate_instruction,
+        reallocate::parse_reallocate_instruction, transfer_fee::parse_transfer_fee_instruction,
     },
     serde_json::{json, Map, Value},
     solana_account_decoder::parse_token::{
@@ -719,11 +724,19 @@ fn map_coption_pubkey(pubkey: COption<Pubkey>) -> Option<String> {
 
 #[cfg(test)]
 mod test {
+    #[allow(deprecated)]
     use {
         super::*,
         solana_sdk::{instruction::CompiledInstruction, pubkey::Pubkey},
         spl_token_2022::{
-            instruction::*,
+            instruction::{
+                amount_to_ui_amount, approve, approve_checked, burn, burn_checked, close_account,
+                create_native_mint, freeze_account, get_account_data_size, initialize_account,
+                initialize_account2, initialize_account3, initialize_immutable_owner,
+                initialize_mint, initialize_mint2, initialize_multisig, initialize_multisig2,
+                mint_to, mint_to_checked, revoke, set_authority, sync_native, thaw_account,
+                transfer, transfer_checked, ui_amount_to_amount,
+            },
             solana_program::{
                 instruction::CompiledInstruction as SplTokenCompiledInstruction, message::Message,
                 pubkey::Pubkey as SplTokenPubkey,

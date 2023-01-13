@@ -1,5 +1,8 @@
 use {
-    super::*,
+    super::{
+        check_num_token_accounts, json, parse_signers, AccountKeys, ParsableProgram,
+        ParseInstructionError, ParsedInstructionEnum, UiAccountState,
+    },
     spl_token_2022::extension::default_account_state::instruction::{
         decode_instruction, DefaultAccountStateInstruction,
     },
@@ -53,7 +56,10 @@ pub(in crate::parse_token) fn parse_default_account_state_instruction(
 mod test {
     use {
         super::*,
-        crate::parse_token::test::*,
+        crate::parse_token::{
+            parse_token,
+            test::{convert_account_keys, convert_compiled_instruction, convert_pubkey},
+        },
         solana_sdk::pubkey::Pubkey,
         spl_token_2022::{
             extension::default_account_state::instruction::{

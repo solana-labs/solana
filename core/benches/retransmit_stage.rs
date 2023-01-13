@@ -5,7 +5,7 @@ extern crate test;
 
 use {
     crossbeam_channel::unbounded,
-    log::*,
+    log::info,
     solana_core::retransmit_stage::retransmitter,
     solana_entry::entry::Entry,
     solana_gossip::{

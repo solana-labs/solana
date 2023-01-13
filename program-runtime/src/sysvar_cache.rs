@@ -178,7 +178,11 @@ impl SysvarCache {
 /// as `solana_sdk::keyed_account::from_keyed_account` despite dynamically
 /// loading them instead of deserializing from account data.
 pub mod get_sysvar_with_account_check {
-    use super::*;
+    #[allow(deprecated)]
+    use super::{
+        Arc, Clock, IndexOfAccount, InstructionContext, InstructionError, InvokeContext,
+        RecentBlockhashes, Rent, SlotHashes, StakeHistory, Sysvar, TransactionContext,
+    };
 
     fn check_sysvar_account<S: Sysvar>(
         transaction_context: &TransactionContext,

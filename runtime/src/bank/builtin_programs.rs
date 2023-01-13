@@ -1,7 +1,7 @@
 #[cfg(test)]
 mod tests {
     use {
-        crate::bank::*,
+        crate::bank::{ed25519_program, get_precompiles, AccountSharedData, Arc, Bank, HashSet},
         solana_sdk::{feature_set::FeatureSet, genesis_config::create_genesis_config},
     };
 

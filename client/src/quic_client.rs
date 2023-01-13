@@ -7,7 +7,10 @@ use {
         nonblocking::tpu_connection::TpuConnection as NonblockingTpuConnection,
         tpu_connection::TpuConnection,
     },
-    solana_quic_client::quic_client::temporary_pub::*,
+    solana_quic_client::quic_client::temporary_pub::{
+        send_wire_transaction_async, send_wire_transaction_batch_async, ASYNC_TASK_SEMAPHORE,
+        RUNTIME,
+    },
     solana_sdk::transport::Result as TransportResult,
     std::net::SocketAddr,
 };

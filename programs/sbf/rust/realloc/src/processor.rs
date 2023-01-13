@@ -4,7 +4,11 @@
 
 extern crate solana_program;
 use {
-    crate::instructions::*,
+    crate::instructions::{
+        ASSIGN_TO_SELF_VIA_SYSTEM_PROGRAM_AND_REALLOC, CHECK, DEALLOC_AND_ASSIGN_TO_CALLER,
+        REALLOC, REALLOC_AND_ASSIGN, REALLOC_AND_ASSIGN_TO_SELF_VIA_SYSTEM_PROGRAM, REALLOC_EXTEND,
+        REALLOC_EXTEND_AND_FILL, REALLOC_EXTEND_AND_UNDO, ZERO_INIT,
+    },
     solana_program::{
         account_info::AccountInfo,
         entrypoint::{ProgramResult, MAX_PERMITTED_DATA_INCREASE},

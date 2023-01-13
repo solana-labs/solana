@@ -486,7 +486,7 @@ impl PartialEq<StakesEnum> for StakesEnum {
 // and SerializableVersionedBank should be serialized as Stakes<Delegation>.
 pub(crate) mod serde_stakes_enum_compat {
     use {
-        super::*,
+        super::{Arc, Delegation, Stakes, StakesEnum},
         serde::{Deserialize, Deserializer, Serialize, Serializer},
     };
 

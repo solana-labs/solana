@@ -65,7 +65,10 @@ mod target_arch {
             range_proof::{errors::RangeProofError, RangeProof},
             sigma_proofs::{
                 equality_proof::{CtxtCommEqualityProof, CtxtCtxtEqualityProof},
-                errors::*,
+                errors::{
+                    EqualityProofError, FeeSigmaProofError, PubkeyValidityProofError,
+                    ValidityProofError, ZeroBalanceProofError,
+                },
                 fee_proof::FeeSigmaProof,
                 pubkey_proof::PubkeySigmaProof,
                 validity_proof::{AggregatedValidityProof, ValidityProof},

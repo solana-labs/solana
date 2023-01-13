@@ -1,6 +1,12 @@
 //! Errors related to proving and verifying proofs.
 use {
-    crate::{range_proof::errors::RangeProofError, sigma_proofs::errors::*},
+    crate::{
+        range_proof::errors::RangeProofError,
+        sigma_proofs::errors::{
+            EqualityProofError, FeeSigmaProofError, PubkeyValidityProofError, ValidityProofError,
+            ZeroBalanceProofError,
+        },
+    },
     thiserror::Error,
 };
 

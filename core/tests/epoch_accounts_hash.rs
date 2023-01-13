@@ -1,6 +1,6 @@
 #![allow(clippy::integer_arithmetic)]
 use {
-    log::*,
+    log::{debug, info, trace},
     solana_core::{
         accounts_hash_verifier::AccountsHashVerifier,
         snapshot_packager_service::SnapshotPackagerService,

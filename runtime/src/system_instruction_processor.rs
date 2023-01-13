@@ -3,7 +3,7 @@ use {
         advance_nonce_account, authorize_nonce_account, initialize_nonce_account,
         withdraw_nonce_account,
     },
-    log::*,
+    log::trace,
     solana_program_runtime::{
         ic_msg, invoke_context::InvokeContext, sysvar_cache::get_sysvar_with_account_check,
     },

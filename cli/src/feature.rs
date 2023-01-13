@@ -6,7 +6,12 @@ use {
     clap::{App, AppSettings, Arg, ArgMatches, SubCommand},
     console::style,
     serde::{Deserialize, Serialize},
-    solana_clap_utils::{fee_payer::*, input_parsers::*, input_validators::*, keypair::*},
+    solana_clap_utils::{
+        fee_payer::{fee_payer_arg, FEE_PAYER_ARG},
+        input_parsers::{pubkeys_of, signer_of},
+        input_validators::{is_valid_pubkey, is_valid_signer},
+        keypair::{DefaultSigner, SignerIndex},
+    },
     solana_cli_output::{cli_version::CliVersion, QuietDisplay, VerboseDisplay},
     solana_remote_wallet::remote_wallet::RemoteWalletManager,
     solana_rpc_client::rpc_client::RpcClient,

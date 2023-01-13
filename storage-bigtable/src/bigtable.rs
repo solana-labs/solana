@@ -7,7 +7,7 @@ use {
         root_ca_certificate, CredentialType,
     },
     backoff::{future::retry, ExponentialBackoff},
-    log::*,
+    log::{error, info, trace, warn},
     std::{
         str::FromStr,
         time::{Duration, Instant},
@@ -33,7 +33,10 @@ mod google {
         }
     }
 }
-use google::bigtable::v2::*;
+use google::bigtable::v2::{
+    bigtable_client, mutate_rows_request, mutation, read_rows_response, row_filter, row_range,
+    MutateRowsRequest, Mutation, ReadRowsRequest, ReadRowsResponse, RowFilter, RowRange, RowSet,
+};
 
 pub type RowKey = String;
 pub type RowData = Vec<(CellName, CellValue)>;

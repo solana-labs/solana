@@ -2,7 +2,7 @@
 #![allow(clippy::integer_arithmetic)]
 use {
     crossbeam_channel::unbounded,
-    log::*,
+    log::{debug, error, info, warn},
     rand::{thread_rng, Rng},
     socket2::{Domain, SockAddr, Socket, Type},
     std::{

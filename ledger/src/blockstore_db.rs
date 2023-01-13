@@ -14,7 +14,7 @@ use {
     },
     bincode::{deserialize, serialize},
     byteorder::{BigEndian, ByteOrder},
-    log::*,
+    log::{error, info},
     prost::Message,
     rocksdb::{
         self,
@@ -410,7 +410,12 @@ impl Rocks {
         options: &BlockstoreOptions,
         oldest_slot: &OldestSlot,
     ) -> Vec<ColumnFamilyDescriptor> {
-        use columns::*;
+        use columns::{
+            AddressSignatures, BankHash, BlockHeight, Blocktime, DeadSlots, DuplicateSlots,
+            ErasureMeta, Index, OptimisticSlots, Orphans, PerfSamples, ProgramCosts, Rewards, Root,
+            ShredCode, ShredData, SlotMeta, TransactionMemos, TransactionStatus,
+            TransactionStatusIndex,
+        };
 
         let (cf_descriptor_shred_data, cf_descriptor_shred_code) =
             new_cf_descriptor_pair_shreds::<ShredData, ShredCode>(options, oldest_slot);
@@ -439,7 +444,12 @@ impl Rocks {
     }
 
     fn columns() -> Vec<&'static str> {
-        use columns::*;
+        use columns::{
+            AddressSignatures, BankHash, BlockHeight, Blocktime, DeadSlots, DuplicateSlots,
+            ErasureMeta, Index, OptimisticSlots, Orphans, PerfSamples, ProgramCosts, Rewards, Root,
+            ShredCode, ShredData, SlotMeta, TransactionMemos, TransactionStatus,
+            TransactionStatusIndex,
+        };
 
         vec![
             ErasureMeta::NAME,

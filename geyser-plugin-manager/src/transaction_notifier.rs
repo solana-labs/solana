@@ -1,12 +1,12 @@
 /// Module responsible for notifying plugins of transactions
 use {
     crate::geyser_plugin_manager::GeyserPluginManager,
-    log::*,
+    log::{error, log_enabled, trace},
     solana_geyser_plugin_interface::geyser_plugin_interface::{
         ReplicaTransactionInfoV2, ReplicaTransactionInfoVersions,
     },
     solana_measure::measure::Measure,
-    solana_metrics::*,
+    solana_metrics::{create_counter, inc_counter, inc_new_counter, inc_new_counter_debug},
     solana_rpc::transaction_notifier_interface::TransactionNotifier,
     solana_sdk::{clock::Slot, signature::Signature, transaction::SanitizedTransaction},
     solana_transaction_status::TransactionStatusMeta,

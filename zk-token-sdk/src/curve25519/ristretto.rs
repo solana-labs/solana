@@ -8,7 +8,7 @@ pub struct PodRistrettoPoint(pub [u8; 32]);
 #[cfg(not(target_os = "solana"))]
 mod target_arch {
     use {
-        super::*,
+        super::PodRistrettoPoint,
         crate::curve25519::{
             curve_syscall_traits::{GroupOperations, MultiScalarMultiplication, PointValidation},
             errors::Curve25519Error,

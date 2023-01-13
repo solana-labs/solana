@@ -2,8 +2,9 @@
 
 use {
     crate::{
-        clock::Epoch, debug_account_data::*, entrypoint::MAX_PERMITTED_DATA_INCREASE,
-        program_error::ProgramError, program_memory::sol_memset, pubkey::Pubkey,
+        clock::Epoch, debug_account_data::debug_account_data,
+        entrypoint::MAX_PERMITTED_DATA_INCREASE, program_error::ProgramError,
+        program_memory::sol_memset, pubkey::Pubkey,
     },
     std::{
         cell::{Ref, RefCell, RefMut},
@@ -394,7 +395,10 @@ impl<'a> AsRef<AccountInfo<'a>> for AccountInfo<'a> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use {
+        super::*,
+        crate::debug_account_data::{Hex, MAX_DEBUG_ACCOUNT_DATA},
+    };
 
     #[test]
     fn test_next_account_infos() {

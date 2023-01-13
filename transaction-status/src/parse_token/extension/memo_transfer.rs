@@ -1,5 +1,8 @@
 use {
-    super::*,
+    super::{
+        check_num_token_accounts, json, parse_signers, AccountKeys, ParsableProgram,
+        ParseInstructionError, ParsedInstructionEnum,
+    },
     spl_token_2022::{
         extension::memo_transfer::instruction::RequiredMemoTransfersInstruction,
         instruction::decode_instruction_type,
@@ -40,7 +43,10 @@ pub(in crate::parse_token) fn parse_memo_transfer_instruction(
 mod test {
     use {
         super::*,
-        crate::parse_token::test::*,
+        crate::parse_token::{
+            parse_token,
+            test::{convert_account_keys, convert_compiled_instruction, convert_pubkey},
+        },
         solana_sdk::pubkey::Pubkey,
         spl_token_2022::{
             extension::memo_transfer::instruction::{

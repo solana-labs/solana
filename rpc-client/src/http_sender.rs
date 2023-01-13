@@ -1,9 +1,9 @@
 //! Nonblocking [`RpcSender`] over HTTP.
 
 use {
-    crate::rpc_sender::*,
+    crate::rpc_sender::{RpcSender, RpcTransportStats},
     async_trait::async_trait,
-    log::*,
+    log::debug,
     reqwest::{
         self,
         header::{self, CONTENT_TYPE, RETRY_AFTER},

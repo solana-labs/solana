@@ -7,7 +7,7 @@ use {
     chrono_humanize::{Accuracy, HumanTime, Tense},
     crossbeam_channel::Sender,
     itertools::Itertools,
-    log::*,
+    log::{debug, error, info, log_enabled, trace, warn},
     rand::{seq::SliceRandom, thread_rng},
     rayon::{prelude::*, ThreadPool},
     solana_entry::entry::{

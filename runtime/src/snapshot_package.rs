@@ -13,7 +13,7 @@ use {
             TMP_BANK_SNAPSHOT_PREFIX,
         },
     },
-    log::*,
+    log::info,
     solana_sdk::{clock::Slot, sysvar::epoch_schedule::EpochSchedule},
     std::{
         fs,

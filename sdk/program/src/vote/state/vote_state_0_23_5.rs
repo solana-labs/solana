@@ -1,5 +1,7 @@
 #![allow(clippy::integer_arithmetic)]
-use super::*;
+use super::{
+    BlockTimestamp, Debug, Deserialize, Epoch, Lockout, Pubkey, Serialize, Slot, VecDeque,
+};
 
 const MAX_ITEMS: usize = 32;
 

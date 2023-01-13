@@ -16,7 +16,7 @@ use {
     },
     bincode::serialize,
     futures_util::{future::join_all, stream::StreamExt},
-    log::*,
+    log::{error, trace, warn},
     solana_pubsub_client::nonblocking::pubsub_client::{PubsubClient, PubsubClientError},
     solana_rpc_client::nonblocking::rpc_client::RpcClient,
     solana_rpc_client_api::{
@@ -49,7 +49,7 @@ use {
 };
 
 pub mod temporary_pub {
-    use super::*;
+    use super::{ProgressBar, TpuSenderError};
 
     pub type Result<T> = std::result::Result<T, TpuSenderError>;
 
@@ -77,7 +77,7 @@ pub mod temporary_pub {
         ));
     }
 }
-use temporary_pub::*;
+use temporary_pub::{set_message_for_confirmed_transactions, Result};
 
 #[derive(Error, Debug)]
 pub enum TpuSenderError {

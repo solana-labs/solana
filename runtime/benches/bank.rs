@@ -4,10 +4,10 @@
 extern crate test;
 
 use {
-    log::*,
+    log::{error, info},
     solana_program_runtime::invoke_context::InvokeContext,
     solana_runtime::{
-        bank::{test_utils::goto_end_of_slot, *},
+        bank::{test_utils::goto_end_of_slot, Bank},
         bank_client::BankClient,
         loader_utils::create_invoke_instruction,
     },

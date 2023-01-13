@@ -1,6 +1,6 @@
 use {
     crate::ancestors::Ancestors,
-    log::*,
+    log::trace,
     rand::{thread_rng, Rng},
     serde::Serialize,
     solana_sdk::{

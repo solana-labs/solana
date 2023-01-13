@@ -118,7 +118,10 @@ pub fn recv_mmsg(sock: &UdpSocket, packets: &mut [Packet]) -> io::Result</*num p
 #[cfg(test)]
 mod tests {
     use {
-        crate::{packet::PACKET_DATA_SIZE, recvmmsg::*},
+        crate::{
+            packet::PACKET_DATA_SIZE,
+            recvmmsg::{io, recv_mmsg, Meta, Packet},
+        },
         std::{
             net::{SocketAddr, UdpSocket},
             time::{Duration, Instant},

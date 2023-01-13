@@ -11,7 +11,7 @@ use {
         },
         system_instruction, sysvar,
     },
-    log::*,
+    log::error,
     num_derive::{FromPrimitive, ToPrimitive},
     serde_derive::{Deserialize, Serialize},
     thiserror::Error,

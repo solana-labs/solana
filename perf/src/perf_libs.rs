@@ -2,7 +2,7 @@ use {
     core::ffi::c_void,
     dlopen::symbor::{Container, SymBorApi, Symbol},
     dlopen_derive::SymBorApi,
-    log::*,
+    log::{error, info, warn},
     std::{
         env,
         ffi::OsStr,

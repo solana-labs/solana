@@ -1,5 +1,5 @@
 use {
-    crate::blockstore::*,
+    crate::blockstore::Blockstore,
     solana_sdk::{clock::Slot, hash::Hash},
 };
 
@@ -76,6 +76,7 @@ impl<'a> Iterator for AncestorIteratorWithHash<'a> {
 mod tests {
     use {
         super::*,
+        crate::blockstore::make_slot_entries,
         solana_sdk::hash::Hash,
         std::{collections::HashMap, path::Path},
         trees::tr,

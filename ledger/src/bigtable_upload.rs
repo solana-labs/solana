@@ -1,7 +1,7 @@
 use {
     crate::blockstore::Blockstore,
     crossbeam_channel::{bounded, unbounded},
-    log::*,
+    log::{error, info, warn},
     solana_measure::measure::Measure,
     solana_sdk::clock::Slot,
     std::{

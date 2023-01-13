@@ -1,7 +1,7 @@
 use {
     crate::tpu_info::TpuInfo,
     crossbeam_channel::{Receiver, RecvTimeoutError},
-    log::*,
+    log::{info, warn},
     solana_client::{connection_cache::ConnectionCache, tpu_connection::TpuConnection},
     solana_measure::measure::Measure,
     solana_metrics::datapoint_warn,

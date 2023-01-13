@@ -1,6 +1,6 @@
 #![allow(clippy::integer_arithmetic)]
 use {
-    log::*,
+    log::{debug, info},
     solana_measure::measure::Measure,
     solana_rpc_client::rpc_client::RpcClient,
     solana_sdk::{

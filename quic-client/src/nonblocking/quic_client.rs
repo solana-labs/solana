@@ -6,7 +6,7 @@ use {
     async_trait::async_trait,
     futures::future::join_all,
     itertools::Itertools,
-    log::*,
+    log::{error, info, warn},
     quinn::{
         ClientConfig, ConnectError, Connection, ConnectionError, Endpoint, EndpointConfig,
         IdleTimeout, TokioRuntime, TransportConfig, VarInt, WriteError,

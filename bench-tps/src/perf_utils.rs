@@ -1,6 +1,6 @@
 use {
     crate::bench_tps_client::BenchTpsClient,
-    log::*,
+    log::info,
     solana_sdk::{commitment_config::CommitmentConfig, timing::duration_as_s},
     std::{
         sync::{

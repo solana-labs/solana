@@ -6,7 +6,7 @@
 
 use {
     crate::storable_accounts::StorableAccounts,
-    log::*,
+    log::{error, info, log_enabled},
     memmap2::MmapMut,
     serde::{Deserialize, Serialize},
     solana_sdk::{
@@ -700,9 +700,13 @@ impl AppendVec {
 #[cfg(test)]
 pub mod tests {
     use {
-        super::{test_utils::*, *},
+        super::{
+            test_utils::{create_test_account, get_append_vec_path},
+            *,
+        },
         crate::accounts_db::INCLUDE_SLOT_IN_HASH_TESTS,
         assert_matches::assert_matches,
+        log::trace,
         rand::{thread_rng, Rng},
         solana_sdk::{
             account::{accounts_equal, WritableAccount},

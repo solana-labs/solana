@@ -1,6 +1,6 @@
 #![allow(clippy::integer_arithmetic, dead_code)]
 use {
-    log::*,
+    log::info,
     solana_core::{
         broadcast_stage::BroadcastStageType,
         consensus::{Tower, SWITCH_FORK_THRESHOLD},
@@ -18,7 +18,7 @@ use {
         cluster::{Cluster, ClusterValidatorInfo},
         cluster_tests,
         local_cluster::{ClusterConfig, LocalCluster},
-        validator_configs::*,
+        validator_configs::make_identical_validator_configs,
     },
     solana_rpc_client::rpc_client::RpcClient,
     solana_runtime::snapshot_config::SnapshotConfig,

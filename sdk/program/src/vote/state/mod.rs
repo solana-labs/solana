@@ -577,7 +577,7 @@ impl VoteState {
 
 pub mod serde_compact_vote_state_update {
     use {
-        super::*,
+        super::{Hash, VoteStateUpdate},
         crate::{
             clock::{Slot, UnixTimestamp},
             serde_varint, short_vec,

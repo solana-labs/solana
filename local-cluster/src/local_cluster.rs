@@ -2,10 +2,10 @@ use {
     crate::{
         cluster::{Cluster, ClusterValidatorInfo, ValidatorInfo},
         cluster_tests,
-        validator_configs::*,
+        validator_configs::{make_identical_validator_configs, safe_clone_config},
     },
     itertools::izip,
-    log::*,
+    log::{info, trace, warn},
     solana_client::{connection_cache::ConnectionCache, thin_client::ThinClient},
     solana_core::{
         tower_storage::FileTowerStorage,

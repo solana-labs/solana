@@ -1,6 +1,6 @@
 use {
     crate::accounts_db::SnapshotStorageOne,
-    log::*,
+    log::debug,
     solana_measure::measure::Measure,
     solana_sdk::clock::Slot,
     std::{

@@ -1,6 +1,6 @@
 //! The `Poh` module provides an object for generating a Proof of History.
 use {
-    log::*,
+    log::info,
     solana_sdk::hash::{hash, hashv, Hash},
     std::time::{Duration, Instant},
 };

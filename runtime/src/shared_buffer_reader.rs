@@ -7,10 +7,10 @@
 //! The clients of SharedBufferReaders could be parallel instances which need access to the decompressed data.
 use {
     crate::waitable_condvar::WaitableCondvar,
-    log::*,
+    log::info,
     solana_measure::measure::Measure,
     std::{
-        io::*,
+        io::Read,
         sync::{
             atomic::{AtomicBool, Ordering},
             Arc, Mutex, RwLock,

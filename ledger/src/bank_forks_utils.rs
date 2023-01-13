@@ -7,7 +7,7 @@ use {
         },
         leader_schedule_cache::LeaderScheduleCache,
     },
-    log::*,
+    log::{error, info, warn},
     solana_runtime::{
         accounts_background_service::AbsRequestSender,
         accounts_update_notifier_interface::AccountsUpdateNotifier,

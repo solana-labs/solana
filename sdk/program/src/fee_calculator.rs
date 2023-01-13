@@ -3,7 +3,7 @@
 #![allow(clippy::integer_arithmetic)]
 use {
     crate::{clock::DEFAULT_MS_PER_SLOT, ed25519_program, message::Message, secp256k1_program},
-    log::*,
+    log::{debug, trace},
 };
 
 #[derive(Serialize, Deserialize, Default, PartialEq, Eq, Clone, Copy, Debug, AbiExample)]
@@ -188,6 +188,7 @@ mod tests {
     use {
         super::*,
         crate::{pubkey::Pubkey, system_instruction},
+        log::info,
     };
 
     #[test]

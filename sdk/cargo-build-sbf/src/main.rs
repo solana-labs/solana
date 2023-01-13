@@ -1,7 +1,7 @@
 use {
     bzip2::bufread::BzDecoder,
     clap::{crate_description, crate_name, crate_version, Arg},
-    log::*,
+    log::{debug, error, info, warn},
     regex::Regex,
     solana_download_utils::download_file,
     solana_sdk::signature::{write_keypair_file, Keypair},

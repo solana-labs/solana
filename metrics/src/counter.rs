@@ -1,6 +1,6 @@
 use {
     crate::metrics::submit_counter,
-    log::*,
+    log::{log, log_enabled},
     solana_sdk::timing,
     std::{
         env,
@@ -208,7 +208,7 @@ impl Counter {
 mod tests {
     use {
         crate::counter::{Counter, DEFAULT_LOG_RATE, DEFAULT_METRICS_RATE},
-        log::{Level, *},
+        log::{log_enabled, Level},
         serial_test::serial,
         std::{
             env,

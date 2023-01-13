@@ -1,6 +1,10 @@
 #![allow(clippy::integer_arithmetic)]
 use {
-    crate::{bigtable::*, ledger_path::*, output::*},
+    crate::{
+        bigtable::{bigtable_process_command, BigTableSubCommand},
+        ledger_path::{canonicalize_ledger_path, parse_ledger_path},
+        output::{SlotBounds, SlotInfo},
+    },
     chrono::{DateTime, Utc},
     clap::{
         crate_description, crate_name, value_t, value_t_or_exit, values_t_or_exit, App,
@@ -9,7 +13,7 @@ use {
     crossbeam_channel::unbounded,
     dashmap::DashMap,
     itertools::Itertools,
-    log::*,
+    log::{error, info, warn},
     regex::Regex,
     serde::{
         ser::{SerializeSeq, Serializer},
@@ -813,7 +817,12 @@ fn analyze_column<
 }
 
 fn analyze_storage(database: &Database) {
-    use blockstore_db::columns::*;
+    use blockstore_db::columns::{
+        AddressSignatures, BankHash, BlockHeight, Blocktime, DeadSlots, DuplicateSlots,
+        ErasureMeta, Index, OptimisticSlots, Orphans, PerfSamples, ProgramCosts, Rewards, Root,
+        ShredCode, ShredData, SlotMeta, TransactionMemos, TransactionStatus,
+        TransactionStatusIndex,
+    };
     analyze_column::<SlotMeta>(database, "SlotMeta");
     analyze_column::<Orphans>(database, "Orphans");
     analyze_column::<DeadSlots>(database, "DeadSlots");

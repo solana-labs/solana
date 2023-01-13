@@ -7,7 +7,7 @@ use {
     rand::distributions::{Distribution, Uniform},
     solana_core::{
         forward_packet_batches_by_accounts::ForwardPacketBatchesByAccounts,
-        unprocessed_packet_batches::*,
+        unprocessed_packet_batches::{deserialize_packets, UnprocessedPacketBatches},
         unprocessed_transaction_storage::{
             ThreadType, UnprocessedTransactionStorage, UNPROCESSED_BUFFER_STEP_SIZE,
         },

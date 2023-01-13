@@ -23,7 +23,7 @@
 /// ```bash
 /// export TWILIO_CONFIG='ACCOUNT=<account>,TOKEN=<securityToken>,TO=<receivingNumber>,FROM=<sendingNumber>'
 /// ```
-use log::*;
+use log::{info, log, warn, Level};
 use {
     reqwest::{blocking::Client, StatusCode},
     serde_json::json,

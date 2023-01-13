@@ -1,6 +1,6 @@
 use {
     dashmap::{mapref::entry::Entry::Occupied, DashMap},
-    log::*,
+    log::info,
     solana_sdk::{pubkey::Pubkey, timing::AtomicInterval},
     std::{
         collections::HashSet,

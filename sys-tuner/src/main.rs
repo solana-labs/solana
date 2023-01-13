@@ -1,6 +1,8 @@
 #[cfg(not(target_family = "windows"))]
 use clap::{crate_description, crate_name, value_t_or_exit, App, Arg};
-use log::*;
+#[cfg(target_os = "linux")]
+use log::error;
+use log::info;
 
 #[cfg(target_os = "linux")]
 #[allow(dead_code)]

@@ -3,7 +3,7 @@ use {
         bench::{fund_keypairs, generate_and_fund_keypairs},
         bench_tps_client::BenchTpsClient,
     },
-    log::*,
+    log::info,
     solana_genesis::Base64Account,
     solana_sdk::signature::{Keypair, Signer},
     std::{collections::HashMap, fs::File, path::Path, process::exit, sync::Arc},

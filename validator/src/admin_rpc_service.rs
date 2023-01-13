@@ -4,7 +4,7 @@ use {
     jsonrpc_derive::rpc,
     jsonrpc_ipc_server::{RequestContext, ServerBuilder},
     jsonrpc_server_utils::tokio,
-    log::*,
+    log::{debug, error, info, warn},
     serde::{de::Deserializer, Deserialize, Serialize},
     solana_core::{
         consensus::Tower, tower_storage::TowerStorage, validator::ValidatorStartProgress,

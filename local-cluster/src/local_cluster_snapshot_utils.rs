@@ -1,6 +1,6 @@
 use {
     crate::{cluster::Cluster, local_cluster::LocalCluster},
-    log::*,
+    log::trace,
     solana_runtime::{
         snapshot_archive_info::{
             FullSnapshotArchiveInfo, IncrementalSnapshotArchiveInfo, SnapshotArchiveInfoGetter,

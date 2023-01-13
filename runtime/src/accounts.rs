@@ -26,7 +26,7 @@ use {
         mapref::entry::Entry::{Occupied, Vacant},
         DashMap,
     },
-    log::*,
+    log::{debug, warn},
     solana_address_lookup_table_program::{error::AddressLookupError, state::AddressLookupTable},
     solana_program_runtime::compute_budget::ComputeBudget,
     solana_sdk::{
@@ -1482,6 +1482,7 @@ mod tests {
             rent_collector::RentCollector,
         },
         assert_matches::assert_matches,
+        log::info,
         solana_address_lookup_table_program::state::LookupTableMeta,
         solana_program_runtime::{compute_budget, executor_cache::TransactionExecutorCache},
         solana_sdk::{

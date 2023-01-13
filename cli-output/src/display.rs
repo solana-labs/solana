@@ -610,7 +610,7 @@ fn write_return_data<W: io::Write>(
             })?,
         };
         if !raw_return_data.is_empty() {
-            use pretty_hex::*;
+            use pretty_hex::PrettyHex;
             writeln!(
                 w,
                 "{}Return Data from Program {}:",

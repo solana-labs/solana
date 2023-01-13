@@ -1,5 +1,14 @@
 use {
-    super::*,
+    super::{
+        bpf_loader, bpf_loader_deprecated, bpf_loader_upgradeable, consume_compute_meter,
+        disable_cpi_setting_executable_and_rent_epoch,
+        enable_early_verification_of_account_modifications, feature_set, ic_msg, is_precompile,
+        native_loader, size_of, translate, translate_slice, translate_slice_mut, translate_type,
+        translate_type_mut, AccessType, AccountInfo, AccountMeta, BpfError, EbpfError,
+        ExecuteTimings, IndexOfAccount, Instruction, InstructionAccount, InstructionError,
+        InvokeContext, MemoryMapping, ProgramResult, Pubkey, ReadableAccount, SyscallError,
+        WritableAccount, MAX_PERMITTED_DATA_INCREASE, MAX_SEEDS, MAX_SIGNERS, SUCCESS,
+    },
     crate::declare_syscall,
     solana_sdk::{
         feature_set::enable_bpf_loader_set_authority_checked_ix,

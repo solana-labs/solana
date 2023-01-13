@@ -3,7 +3,7 @@
 extern crate log;
 
 use {
-    rayon::iter::*,
+    rayon::iter::{IntoParallelIterator, ParallelIterator},
     solana_gossip::{
         cluster_info::{ClusterInfo, Node},
         crds::Cursor,

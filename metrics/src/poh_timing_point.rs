@@ -2,7 +2,7 @@
 
 use {
     crossbeam_channel::{Receiver, Sender},
-    log::*,
+    log::{info, trace},
     solana_sdk::clock::Slot,
     std::fmt,
 };

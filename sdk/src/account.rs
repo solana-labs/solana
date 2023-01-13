@@ -10,7 +10,9 @@ use {
         ser::{Serialize, Serializer},
         Deserialize,
     },
-    solana_program::{account_info::AccountInfo, debug_account_data::*, sysvar::Sysvar},
+    solana_program::{
+        account_info::AccountInfo, debug_account_data::debug_account_data, sysvar::Sysvar,
+    },
     std::{
         cell::{Ref, RefCell},
         fmt, ptr,
