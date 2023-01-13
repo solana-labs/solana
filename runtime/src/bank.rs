@@ -45,13 +45,14 @@ use {
         },
         accounts_db::{
             AccountShrinkThreshold, AccountsDbConfig, CalcAccountsHashDataSource,
-            IncludeSlotInHash, SnapshotStorages, ACCOUNTS_DB_CONFIG_FOR_BENCHMARKS,
+            IncludeSlotInHash, SnapshotStoragesOne, ACCOUNTS_DB_CONFIG_FOR_BENCHMARKS,
             ACCOUNTS_DB_CONFIG_FOR_TESTING,
         },
         accounts_hash::AccountsHash,
         accounts_index::{AccountSecondaryIndexes, IndexKey, ScanConfig, ScanResult, ZeroLamport},
         accounts_update_notifier_interface::AccountsUpdateNotifier,
         ancestors::{Ancestors, AncestorsForSerialization},
+        bank::metrics::*,
         blockhash_queue::BlockhashQueue,
         builtins::{self, BuiltinAction, BuiltinFeatureTransition, Builtins},
         cost_tracker::CostTracker,
@@ -84,7 +85,7 @@ use {
         iter::{IntoParallelIterator, IntoParallelRefIterator, ParallelIterator},
         ThreadPool, ThreadPoolBuilder,
     },
-    solana_measure::{measure, measure::Measure},
+    solana_measure::{measure, measure::Measure, measure_us},
     solana_metrics::{inc_new_counter_debug, inc_new_counter_info},
     solana_perf::perf_libs,
     solana_program_runtime::{
@@ -108,9 +109,10 @@ use {
         account_utils::StateMut,
         bpf_loader_upgradeable::{self, UpgradeableLoaderState},
         clock::{
-            BankId, Epoch, Slot, SlotCount, SlotIndex, UnixTimestamp, DEFAULT_TICKS_PER_SECOND,
-            INITIAL_RENT_EPOCH, MAX_PROCESSING_AGE, MAX_TRANSACTION_FORWARDING_DELAY,
-            MAX_TRANSACTION_FORWARDING_DELAY_GPU, SECONDS_PER_DAY,
+            BankId, Epoch, Slot, SlotCount, SlotIndex, UnixTimestamp, DEFAULT_HASHES_PER_TICK,
+            DEFAULT_TICKS_PER_SECOND, INITIAL_RENT_EPOCH, MAX_PROCESSING_AGE,
+            MAX_TRANSACTION_FORWARDING_DELAY, MAX_TRANSACTION_FORWARDING_DELAY_GPU,
+            SECONDS_PER_DAY,
         },
         ed25519_program,
         epoch_info::EpochInfo,
@@ -132,7 +134,7 @@ use {
         lamports::LamportsError,
         message::{AccountKeys, SanitizedMessage},
         native_loader,
-        native_token::sol_to_lamports,
+        native_token::{sol_to_lamports, LAMPORTS_PER_SOL},
         nonce::{self, state::DurableNonce, NONCED_TX_MARKER_IX_INDEX},
         nonce_account,
         packet::PACKET_DATA_SIZE,
@@ -188,21 +190,9 @@ pub struct VerifyBankHash {
     pub store_hash_raw_data_for_debug: bool,
 }
 
-#[derive(Debug, Default)]
-struct RewardsMetrics {
-    load_vote_and_stake_accounts_us: AtomicU64,
-    calculate_points_us: AtomicU64,
-    redeem_rewards_us: u64,
-    store_stake_accounts_us: AtomicU64,
-    store_vote_accounts_us: AtomicU64,
-    invalid_cached_vote_accounts: usize,
-    invalid_cached_stake_accounts: usize,
-    invalid_cached_stake_accounts_rent_epoch: usize,
-    vote_accounts_cache_miss_count: usize,
-}
-
 mod address_lookup_table;
 mod builtin_programs;
+mod metrics;
 mod sysvar_cache;
 mod transaction_account_state_info;
 
@@ -1484,86 +1474,61 @@ impl Bank {
         let epoch_schedule = parent.epoch_schedule;
         let epoch = epoch_schedule.get_epoch(slot);
 
-        let (rc, bank_rc_time) = measure!(
-            BankRc {
-                accounts: Arc::new(Accounts::new_from_parent(
-                    &parent.rc.accounts,
-                    slot,
-                    parent.slot(),
-                )),
-                parent: RwLock::new(Some(parent.clone())),
+        let (rc, bank_rc_creation_time_us) = measure_us!(BankRc {
+            accounts: Arc::new(Accounts::new_from_parent(
+                &parent.rc.accounts,
                 slot,
-                bank_id_generator: parent.rc.bank_id_generator.clone(),
-            },
-            "bank_rc_creation",
-        );
+                parent.slot(),
+            )),
+            parent: RwLock::new(Some(parent.clone())),
+            slot,
+            bank_id_generator: parent.rc.bank_id_generator.clone(),
+        });
 
-        let (status_cache, status_cache_time) =
-            measure!(Arc::clone(&parent.status_cache), "status_cache_creation",);
+        let (status_cache, status_cache_time_us) = measure_us!(Arc::clone(&parent.status_cache));
 
-        let ((fee_rate_governor, fee_calculator), fee_components_time) = measure!(
-            {
-                let fee_rate_governor = FeeRateGovernor::new_derived(
-                    &parent.fee_rate_governor,
-                    parent.signature_count(),
-                );
+        let ((fee_rate_governor, fee_calculator), fee_components_time_us) = measure_us!({
+            let fee_rate_governor =
+                FeeRateGovernor::new_derived(&parent.fee_rate_governor, parent.signature_count());
 
-                let fee_calculator = if parent.feature_set.is_active(&disable_fee_calculator::id())
-                {
-                    FeeCalculator::default()
-                } else {
-                    fee_rate_governor.create_fee_calculator()
-                };
-                (fee_rate_governor, fee_calculator)
-            },
-            "fee_components_creation",
-        );
+            let fee_calculator = if parent.feature_set.is_active(&disable_fee_calculator::id()) {
+                FeeCalculator::default()
+            } else {
+                fee_rate_governor.create_fee_calculator()
+            };
+            (fee_rate_governor, fee_calculator)
+        });
 
         let bank_id = rc.bank_id_generator.fetch_add(1, Relaxed) + 1;
-        let (blockhash_queue, blockhash_queue_time) = measure!(
-            RwLock::new(parent.blockhash_queue.read().unwrap().clone()),
-            "blockhash_queue_creation",
-        );
+        let (blockhash_queue, blockhash_queue_time_us) =
+            measure_us!(RwLock::new(parent.blockhash_queue.read().unwrap().clone()));
 
-        let (stakes_cache, stakes_cache_time) = measure!(
-            StakesCache::new(parent.stakes_cache.stakes().clone()),
-            "stakes_cache_creation",
-        );
+        let (stakes_cache, stakes_cache_time_us) =
+            measure_us!(StakesCache::new(parent.stakes_cache.stakes().clone()));
 
-        let (epoch_stakes, epoch_stakes_time) =
-            measure!(parent.epoch_stakes.clone(), "epoch_stakes_creation");
+        let (epoch_stakes, epoch_stakes_time_us) = measure_us!(parent.epoch_stakes.clone());
 
-        let (builtin_programs, builtin_programs_time) =
-            measure!(parent.builtin_programs.clone(), "builtin_programs_creation");
+        let (builtin_programs, builtin_programs_time_us) =
+            measure_us!(parent.builtin_programs.clone());
 
-        let (rewards_pool_pubkeys, rewards_pool_pubkeys_time) = measure!(
-            parent.rewards_pool_pubkeys.clone(),
-            "rewards_pool_pubkeys_creation",
-        );
+        let (rewards_pool_pubkeys, rewards_pool_pubkeys_time_us) =
+            measure_us!(parent.rewards_pool_pubkeys.clone());
 
-        let (executor_cache, executor_cache_time) = measure!(
-            {
-                let parent_bank_executors = parent.executor_cache.read().unwrap();
-                RwLock::new(BankExecutorCache::new_from_parent_bank_executors(
-                    &parent_bank_executors,
-                    epoch,
-                ))
-            },
-            "executor_cache_creation",
-        );
+        let (executor_cache, executor_cache_time_us) = measure_us!({
+            let parent_bank_executors = parent.executor_cache.read().unwrap();
+            RwLock::new(BankExecutorCache::new_from_parent_bank_executors(
+                &parent_bank_executors,
+                epoch,
+            ))
+        });
 
-        let (transaction_debug_keys, transaction_debug_keys_time) = measure!(
-            parent.transaction_debug_keys.clone(),
-            "transaction_debug_keys_creation",
-        );
+        let (transaction_debug_keys, transaction_debug_keys_time_us) =
+            measure_us!(parent.transaction_debug_keys.clone());
 
-        let (transaction_log_collector_config, transaction_log_collector_config_time) = measure!(
-            parent.transaction_log_collector_config.clone(),
-            "transaction_log_collector_config_creation",
-        );
+        let (transaction_log_collector_config, transaction_log_collector_config_time_us) =
+            measure_us!(parent.transaction_log_collector_config.clone());
 
-        let (feature_set, feature_set_time) =
-            measure!(parent.feature_set.clone(), "feature_set_creation");
+        let (feature_set, feature_set_time_us) = measure_us!(parent.feature_set.clone());
 
         let accounts_data_size_initial = parent.load_accounts_data_size();
         let mut new = Bank {
@@ -1649,188 +1614,116 @@ impl Bank {
             fee_structure: parent.fee_structure.clone(),
         };
 
-        let (_, ancestors_time) = measure!(
-            {
-                let mut ancestors = Vec::with_capacity(1 + new.parents().len());
-                ancestors.push(new.slot());
-                new.parents().iter().for_each(|p| {
-                    ancestors.push(p.slot());
-                });
-                new.ancestors = Ancestors::from(ancestors);
-            },
-            "ancestors_creation",
-        );
+        let (_, ancestors_time_us) = measure_us!({
+            let mut ancestors = Vec::with_capacity(1 + new.parents().len());
+            ancestors.push(new.slot());
+            new.parents().iter().for_each(|p| {
+                ancestors.push(p.slot());
+            });
+            new.ancestors = Ancestors::from(ancestors);
+        });
 
         // Following code may touch AccountsDb, requiring proper ancestors
         let parent_epoch = parent.epoch();
-        let (_, update_epoch_time) = measure!(
-            {
-                if parent_epoch < new.epoch() {
-                    let (thread_pool, thread_pool_time) = measure!(
-                        ThreadPoolBuilder::new().build().unwrap(),
-                        "thread_pool_creation",
-                    );
+        let (_, update_epoch_time_us) = measure_us!({
+            if parent_epoch < new.epoch() {
+                let (thread_pool, thread_pool_time) = measure!(
+                    ThreadPoolBuilder::new().build().unwrap(),
+                    "thread_pool_creation",
+                );
 
-                    let (_, apply_feature_activations_time) = measure!(
-                        new.apply_feature_activations(
-                            ApplyFeatureActivationsCaller::NewFromParent,
-                            false
-                        ),
-                        "apply_feature_activation",
-                    );
+                let (_, apply_feature_activations_time) = measure!(
+                    new.apply_feature_activations(
+                        ApplyFeatureActivationsCaller::NewFromParent,
+                        false
+                    ),
+                    "apply_feature_activation",
+                );
 
-                    // Add new entry to stakes.stake_history, set appropriate epoch and
-                    // update vote accounts with warmed up stakes before saving a
-                    // snapshot of stakes in epoch stakes
-                    let (_, activate_epoch_time) = measure!(
-                        new.stakes_cache.activate_epoch(epoch, &thread_pool),
-                        "activate_epoch",
-                    );
+                // Add new entry to stakes.stake_history, set appropriate epoch and
+                // update vote accounts with warmed up stakes before saving a
+                // snapshot of stakes in epoch stakes
+                let (_, activate_epoch_time) = measure!(
+                    new.stakes_cache.activate_epoch(epoch, &thread_pool),
+                    "activate_epoch",
+                );
 
-                    // Save a snapshot of stakes for use in consensus and stake weighted networking
-                    let leader_schedule_epoch = epoch_schedule.get_leader_schedule_epoch(slot);
-                    let (_, update_epoch_stakes_time) = measure!(
-                        new.update_epoch_stakes(leader_schedule_epoch),
-                        "update_epoch_stakes",
-                    );
+                // Save a snapshot of stakes for use in consensus and stake weighted networking
+                let leader_schedule_epoch = epoch_schedule.get_leader_schedule_epoch(slot);
+                let (_, update_epoch_stakes_time) = measure!(
+                    new.update_epoch_stakes(leader_schedule_epoch),
+                    "update_epoch_stakes",
+                );
 
-                    let mut metrics = RewardsMetrics::default();
-                    // After saving a snapshot of stakes, apply stake rewards and commission
-                    let (_, update_rewards_with_thread_pool_time) = measure!(
-                        {
-                            new.update_rewards_with_thread_pool(
-                                parent_epoch,
-                                reward_calc_tracer,
-                                &thread_pool,
-                                &mut metrics,
-                            )
-                        },
-                        "update_rewards_with_thread_pool",
-                    );
+                let mut rewards_metrics = RewardsMetrics::default();
+                // After saving a snapshot of stakes, apply stake rewards and commission
+                let (_, update_rewards_with_thread_pool_time) = measure!(
+                    {
+                        new.update_rewards_with_thread_pool(
+                            parent_epoch,
+                            reward_calc_tracer,
+                            &thread_pool,
+                            &mut rewards_metrics,
+                        )
+                    },
+                    "update_rewards_with_thread_pool",
+                );
 
-                    datapoint_info!(
-                        "bank-new_from_parent-new_epoch_timings",
-                        ("epoch", new.epoch(), i64),
-                        ("slot", slot, i64),
-                        ("parent_slot", parent.slot(), i64),
-                        ("thread_pool_creation_us", thread_pool_time.as_us(), i64),
-                        (
-                            "apply_feature_activations",
-                            apply_feature_activations_time.as_us(),
-                            i64
-                        ),
-                        ("activate_epoch_Us", activate_epoch_time.as_us(), i64),
-                        (
-                            "update_epoch_stakes_us",
-                            update_epoch_stakes_time.as_us(),
-                            i64
-                        ),
-                        (
-                            "update_rewards_with_thread_pool_us",
+                report_new_epoch_metrics(
+                    new.epoch(),
+                    slot,
+                    parent.slot(),
+                    NewEpochTimings {
+                        thread_pool_time_us: thread_pool_time.as_us(),
+                        apply_feature_activations_time_us: apply_feature_activations_time.as_us(),
+                        activate_epoch_time_us: activate_epoch_time.as_us(),
+                        update_epoch_stakes_time_us: update_epoch_stakes_time.as_us(),
+                        update_rewards_with_thread_pool_time_us:
                             update_rewards_with_thread_pool_time.as_us(),
-                            i64
-                        ),
-                        (
-                            "load_vote_and_stake_accounts_us",
-                            metrics.load_vote_and_stake_accounts_us.load(Relaxed),
-                            i64
-                        ),
-                        (
-                            "calculate_points_us",
-                            metrics.calculate_points_us.load(Relaxed),
-                            i64
-                        ),
-                        ("redeem_rewards_us", metrics.redeem_rewards_us, i64),
-                        (
-                            "store_stake_accounts_us",
-                            metrics.store_stake_accounts_us.load(Relaxed),
-                            i64
-                        ),
-                        (
-                            "store_vote_accounts_us",
-                            metrics.store_vote_accounts_us.load(Relaxed),
-                            i64
-                        ),
-                        (
-                            "invalid_cached_vote_accounts",
-                            metrics.invalid_cached_vote_accounts,
-                            i64
-                        ),
-                        (
-                            "invalid_cached_stake_accounts",
-                            metrics.invalid_cached_stake_accounts,
-                            i64
-                        ),
-                        (
-                            "invalid_cached_stake_accounts_rent_epoch",
-                            metrics.invalid_cached_stake_accounts_rent_epoch,
-                            i64
-                        ),
-                        (
-                            "vote_accounts_cache_miss_count",
-                            metrics.vote_accounts_cache_miss_count,
-                            i64
-                        ),
-                    );
-                } else {
-                    // Save a snapshot of stakes for use in consensus and stake weighted networking
-                    let leader_schedule_epoch = epoch_schedule.get_leader_schedule_epoch(slot);
-                    new.update_epoch_stakes(leader_schedule_epoch);
-                }
-            },
-            "update_epoch",
-        );
+                    },
+                    rewards_metrics,
+                );
+            } else {
+                // Save a snapshot of stakes for use in consensus and stake weighted networking
+                let leader_schedule_epoch = epoch_schedule.get_leader_schedule_epoch(slot);
+                new.update_epoch_stakes(leader_schedule_epoch);
+            }
+        });
 
         // Update sysvars before processing transactions
-        let (_, update_sysvars_time) = measure!(
-            {
-                new.update_slot_hashes();
-                new.update_stake_history(Some(parent_epoch));
-                new.update_clock(Some(parent_epoch));
-                new.update_fees();
-            },
-            "update_sysvars",
-        );
+        let (_, update_sysvars_time_us) = measure_us!({
+            new.update_slot_hashes();
+            new.update_stake_history(Some(parent_epoch));
+            new.update_clock(Some(parent_epoch));
+            new.update_fees();
+        });
 
-        let (_, fill_sysvar_cache_time) =
-            measure!(new.fill_missing_sysvar_cache_entries(), "fill_sysvar_cache");
-
+        let (_, fill_sysvar_cache_time_us) = measure_us!(new.fill_missing_sysvar_cache_entries());
         time.stop();
 
-        datapoint_info!(
-            "bank-new_from_parent-heights",
-            ("slot", slot, i64),
-            ("block_height", new.block_height, i64),
-            ("parent_slot", parent.slot(), i64),
-            ("bank_rc_creation_us", bank_rc_time.as_us(), i64),
-            ("total_elapsed_us", time.as_us(), i64),
-            ("status_cache_us", status_cache_time.as_us(), i64),
-            ("fee_components_us", fee_components_time.as_us(), i64),
-            ("blockhash_queue_us", blockhash_queue_time.as_us(), i64),
-            ("stakes_cache_us", stakes_cache_time.as_us(), i64),
-            ("epoch_stakes_time_us", epoch_stakes_time.as_us(), i64),
-            ("builtin_programs_us", builtin_programs_time.as_us(), i64),
-            (
-                "rewards_pool_pubkeys_us",
-                rewards_pool_pubkeys_time.as_us(),
-                i64
-            ),
-            ("executor_cache_us", executor_cache_time.as_us(), i64),
-            (
-                "transaction_debug_keys_us",
-                transaction_debug_keys_time.as_us(),
-                i64
-            ),
-            (
-                "transaction_log_collector_config_us",
-                transaction_log_collector_config_time.as_us(),
-                i64
-            ),
-            ("feature_set_us", feature_set_time.as_us(), i64),
-            ("ancestors_us", ancestors_time.as_us(), i64),
-            ("update_epoch_us", update_epoch_time.as_us(), i64),
-            ("update_sysvars_us", update_sysvars_time.as_us(), i64),
-            ("fill_sysvar_cache_us", fill_sysvar_cache_time.as_us(), i64),
+        report_new_bank_metrics(
+            slot,
+            new.block_height,
+            parent.slot(),
+            NewBankTimings {
+                bank_rc_creation_time_us,
+                total_elapsed_time_us: time.as_us(),
+                status_cache_time_us,
+                fee_components_time_us,
+                blockhash_queue_time_us,
+                stakes_cache_time_us,
+                epoch_stakes_time_us,
+                builtin_programs_time_us,
+                rewards_pool_pubkeys_time_us,
+                executor_cache_time_us,
+                transaction_debug_keys_time_us,
+                transaction_log_collector_config_time_us,
+                feature_set_time_us,
+                ancestors_time_us,
+                update_epoch_time_us,
+                update_sysvars_time_us,
+                fill_sysvar_cache_time_us,
+            },
         );
 
         parent
@@ -2028,10 +1921,6 @@ impl Bank {
             bank.genesis_creation_time, genesis_config.creation_time,
             "Bank snapshot genesis creation time does not match genesis.bin creation time.\
              The snapshot and genesis.bin might pertain to different clusters"
-        );
-        assert_eq!(
-            bank.hashes_per_tick,
-            genesis_config.poh_config.hashes_per_tick
         );
         assert_eq!(bank.ticks_per_slot, genesis_config.ticks_per_slot);
         assert_eq!(
@@ -2586,7 +2475,7 @@ impl Bank {
         let invalid_cached_vote_accounts = AtomicUsize::default();
         let invalid_cached_stake_accounts_rent_epoch = AtomicUsize::default();
 
-        let stake_delegations: Vec<_> = stakes.stake_delegations().iter().collect();
+        let stake_delegations = self.filter_stake_delegations(&stakes);
         thread_pool.install(|| {
             stake_delegations
                 .into_par_iter()
@@ -2726,6 +2615,39 @@ impl Bank {
         }
     }
 
+    fn filter_stake_delegations<'a>(
+        &self,
+        stakes: &'a Stakes<StakeAccount<Delegation>>,
+    ) -> Vec<(&'a Pubkey, &'a StakeAccount<Delegation>)> {
+        if self
+            .feature_set
+            .is_active(&feature_set::stake_minimum_delegation_for_rewards::id())
+        {
+            let num_stake_delegations = stakes.stake_delegations().len();
+            let min_stake_delegation =
+                solana_stake_program::get_minimum_delegation(&self.feature_set)
+                    .max(LAMPORTS_PER_SOL);
+
+            let (stake_delegations, filter_timer) = measure!(stakes
+                .stake_delegations()
+                .iter()
+                .filter(|(_stake_pubkey, cached_stake_account)| {
+                    cached_stake_account.delegation().stake >= min_stake_delegation
+                })
+                .collect::<Vec<_>>());
+
+            datapoint_info!(
+                "stake_account_filter_time",
+                ("filter_time_us", filter_timer.as_us(), i64),
+                ("num_stake_delegations_before", num_stake_delegations, i64),
+                ("num_stake_delegations_after", stake_delegations.len(), i64)
+            );
+            stake_delegations
+        } else {
+            stakes.stake_delegations().iter().collect()
+        }
+    }
+
     fn load_vote_and_stake_accounts<F>(
         &self,
         thread_pool: &ThreadPool,
@@ -2735,7 +2657,8 @@ impl Bank {
         F: Fn(&RewardCalculationEvent) + Send + Sync,
     {
         let stakes = self.stakes_cache.stakes();
-        let stake_delegations: Vec<_> = stakes.stake_delegations().iter().collect();
+        let stake_delegations = self.filter_stake_delegations(&stakes);
+
         // Obtain all unique voter pubkeys from stake delegations.
         fn merge(mut acc: HashSet<Pubkey>, other: HashSet<Pubkey>) -> HashSet<Pubkey> {
             if acc.len() < other.len() {
@@ -6922,7 +6845,7 @@ impl Bank {
     /// Get this bank's storages to use for snapshots.
     ///
     /// If a base slot is provided, return only the storages that are *higher* than this slot.
-    pub fn get_snapshot_storages(&self, base_slot: Option<Slot>) -> SnapshotStorages {
+    pub fn get_snapshot_storages(&self, base_slot: Option<Slot>) -> SnapshotStoragesOne {
         // if a base slot is provided, request storages starting at the slot *after*
         let start_slot = base_slot.map_or(0, |slot| slot.saturating_add(1));
         // we want to *include* the storage at our slot
@@ -7557,6 +7480,19 @@ impl Bank {
             const ACCOUNTS_DATA_LEN: u64 = 50_000_000_000;
             self.accounts_data_size_initial = ACCOUNTS_DATA_LEN;
         }
+
+        if new_feature_activations.contains(&feature_set::update_hashes_per_tick::id()) {
+            self.apply_updated_hashes_per_tick(DEFAULT_HASHES_PER_TICK);
+        }
+    }
+
+    fn apply_updated_hashes_per_tick(&mut self, hashes_per_tick: u64) {
+        info!(
+            "Activating update_hashes_per_tick {} at slot {}",
+            hashes_per_tick,
+            self.slot(),
+        );
+        self.hashes_per_tick = Some(hashes_per_tick);
     }
 
     fn adjust_sysvar_balance_for_rent(&self, account: &mut AccountSharedData) {
@@ -8048,7 +7984,6 @@ pub(crate) mod tests {
             instruction::{AccountMeta, CompiledInstruction, Instruction, InstructionError},
             loader_upgradeable_instruction::UpgradeableLoaderInstruction,
             message::{Message, MessageHeader},
-            native_token::LAMPORTS_PER_SOL,
             nonce,
             poh_config::PohConfig,
             program::MAX_RETURN_DATA,
@@ -14959,7 +14894,7 @@ pub(crate) mod tests {
             .accounts
             .accounts_db
             .storage
-            .get_slot_stores(1)
+            .get_slot_storage_entry(1)
             .is_none());
 
         bank3.print_accounts_stats();
@@ -17580,7 +17515,7 @@ pub(crate) mod tests {
         let GenesisConfigInfo { genesis_config, .. } = create_genesis_config_with_vote_accounts(
             1_000_000_000,
             &validator_keypairs,
-            vec![10_000; 2],
+            vec![LAMPORTS_PER_SOL; 2],
         );
         let bank = Arc::new(Bank::new_for_tests(&genesis_config));
         let vote_and_stake_accounts =
@@ -20346,5 +20281,33 @@ pub(crate) mod tests {
                 solana_sdk::instruction::InstructionError::MaxAccountsDataAllocationsExceeded,
             )),
         );
+    }
+
+    #[test]
+    fn test_feature_activation_idempotent() {
+        let mut genesis_config = GenesisConfig::default();
+        const HASHES_PER_TICK_START: u64 = 3;
+        genesis_config.poh_config.hashes_per_tick = Some(HASHES_PER_TICK_START);
+
+        let mut bank = Bank::new_for_tests(&genesis_config);
+        assert_eq!(bank.hashes_per_tick, Some(HASHES_PER_TICK_START));
+
+        // Don't activate feature
+        bank.apply_feature_activations(ApplyFeatureActivationsCaller::NewFromParent, false);
+        assert_eq!(bank.hashes_per_tick, Some(HASHES_PER_TICK_START));
+
+        // Activate feature
+        let feature_account_balance =
+            std::cmp::max(genesis_config.rent.minimum_balance(Feature::size_of()), 1);
+        bank.store_account(
+            &feature_set::update_hashes_per_tick::id(),
+            &feature::create_account(&Feature { activated_at: None }, feature_account_balance),
+        );
+        bank.apply_feature_activations(ApplyFeatureActivationsCaller::NewFromParent, false);
+        assert_eq!(bank.hashes_per_tick, Some(DEFAULT_HASHES_PER_TICK));
+
+        // Activate feature "again"
+        bank.apply_feature_activations(ApplyFeatureActivationsCaller::NewFromParent, false);
+        assert_eq!(bank.hashes_per_tick, Some(DEFAULT_HASHES_PER_TICK));
     }
 }

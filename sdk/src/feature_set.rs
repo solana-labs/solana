@@ -137,10 +137,6 @@ pub mod stake_merge_with_unmatched_credits_observed {
     solana_sdk::declare_id!("meRgp4ArRPhD3KtCY9c5yAf2med7mBLsjKTPeVUHqBL");
 }
 
-pub mod gate_large_block {
-    solana_sdk::declare_id!("2ry7ygxiYURULZCrypHhveanvP5tzZ4toRwVp89oCNSj");
-}
-
 pub mod zk_token_sdk_enabled {
     solana_sdk::declare_id!("zk1snxsc6Fh3wsGNbbHAJNHiJoYgF29mMnTSusGx5EJ");
 }
@@ -398,6 +394,10 @@ pub mod stake_raise_minimum_delegation_to_1_sol {
     solana_sdk::declare_id!("4xmyBuR2VCXzy9H6qYpH9ckfgnTuMDQFPFBfTs4eBCY1");
 }
 
+pub mod stake_minimum_delegation_for_rewards {
+    solana_sdk::declare_id!("ELjxSXwNsyXGfAh8TqX8ih22xeT8huF6UngQirbLKYKH");
+}
+
 pub mod add_set_compute_unit_price_ix {
     solana_sdk::declare_id!("98std1NSHqXi9WYvFShfVepRdCoq1qvsp8fsR2XZtG8g");
 }
@@ -574,6 +574,14 @@ pub mod disable_turbine_fanout_experiments {
     solana_sdk::declare_id!("Gz1aLrbeQ4Q6PTSafCZcGWZXz91yVRi7ASFzFEr1U4sa");
 }
 
+pub mod move_serialized_len_ptr_in_cpi {
+    solana_sdk::declare_id!("74CoWuBmt3rUVUrCb2JiSTvh6nXyBWUsK4SaMj3CtE3T");
+}
+
+pub mod update_hashes_per_tick {
+    solana_sdk::declare_id!("3uFHb9oKdGfgZGJK9EHaAXN4USvnQtAFC13Fh5gGFS5B");
+}
+
 pub mod enable_big_mod_exp_syscall {
     solana_sdk::declare_id!("XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXBGMDEXP");
 }
@@ -607,7 +615,6 @@ lazy_static! {
         (merge_nonce_error_into_system_error::id(), "merge NonceError into SystemError"),
         (disable_fees_sysvar::id(), "disable fees sysvar"),
         (stake_merge_with_unmatched_credits_observed::id(), "allow merging active stakes with unmatched credits_observed #18985"),
-        (gate_large_block::id(), "validator checks block cost against max limit in realtime, reject if exceeds."),
         (zk_token_sdk_enabled::id(), "enable Zk Token proof program and syscalls"),
         (curve25519_syscall_enabled::id(), "enable curve25519 syscalls"),
         (versioned_tx_message_enabled::id(), "enable versioned transaction message processing"),
@@ -671,6 +678,7 @@ lazy_static! {
         (stake_allow_zero_undelegated_amount::id(), "Allow zero-lamport undelegated amount for initialized stakes #24670"),
         (require_static_program_ids_in_transaction::id(), "require static program ids in versioned transactions"),
         (stake_raise_minimum_delegation_to_1_sol::id(), "Raise minimum stake delegation to 1.0 SOL #24357"),
+        (stake_minimum_delegation_for_rewards::id(), "stakes must be at least the minimum delegation to earn rewards"),
         (add_set_compute_unit_price_ix::id(), "add compute budget ix for setting a compute unit price"),
         (disable_deploy_of_alloc_free_syscall::id(), "disable new deployments of deprecated sol_alloc_free_ syscall"),
         (include_account_index_in_rent_error::id(), "include account index in rent tx error #25190"),
@@ -716,7 +724,9 @@ lazy_static! {
         (commission_updates_only_allowed_in_first_half_of_epoch::id(), "validator commission updates are only allowed in the first half of an epoch #29362"),
         (enable_turbine_fanout_experiments::id(), "enable turbine fanout experiments #29393"),
         (disable_turbine_fanout_experiments::id(), "disable turbine fanout experiments #29393"),
-        (enable_big_mod_exp_syscall::id(), "add big_mod_exp syscall #28503"),
+        (move_serialized_len_ptr_in_cpi::id(), "cpi ignore serialized_len_ptr #29592"),
+        (update_hashes_per_tick::id(), "Update desired hashes per tick on epoch boundary"),
+        (enable_big_mod_exp_syscall::id(), "add big_mod_exp syscall #28503"),	
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()

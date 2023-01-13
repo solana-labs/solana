@@ -23,7 +23,7 @@ use {
         slot_stats::{ShredSource, SlotsStats},
     },
     assert_matches::debug_assert_matches,
-    bincode::deserialize,
+    bincode::{deserialize, serialize},
     crossbeam_channel::{bounded, Receiver, Sender, TrySendError},
     dashmap::DashSet,
     log::*,
@@ -2712,19 +2712,40 @@ impl Blockstore {
     }
 
     pub fn get_recent_perf_samples(&self, num: usize) -> Result<Vec<(Slot, PerfSample)>> {
-        Ok(self
+        // When reading `PerfSamples`, the database may contain samples with either `PerfSampleV1`
+        // or `PerfSampleV2` encoding.  We expect `PerfSampleV1` to be a prefix of the
+        // `PerfSampleV2` encoding (see [`perf_sample_v1_is_prefix_of_perf_sample_v2`]), so we try
+        // them in order.
+        let samples = self
             .db
             .iter::<cf::PerfSamples>(IteratorMode::End)?
             .take(num)
             .map(|(slot, data)| {
-                let perf_sample = deserialize(&data).unwrap();
-                (slot, perf_sample)
-            })
-            .collect())
+                deserialize::<PerfSampleV2>(&data)
+                    .map(|sample| (slot, sample.into()))
+                    .or_else(|err| {
+                        match &*err {
+                            bincode::ErrorKind::Io(io_err)
+                                if matches!(io_err.kind(), ErrorKind::UnexpectedEof) =>
+                            {
+                                // Not enough bytes to deserialize as `PerfSampleV2`.
+                            }
+                            _ => return Err(err),
+                        }
+
+                        deserialize::<PerfSampleV1>(&data).map(|sample| (slot, sample.into()))
+                    })
+                    .map_err(Into::into)
+            });
+
+        samples.collect()
     }
 
-    pub fn write_perf_sample(&self, index: Slot, perf_sample: &PerfSample) -> Result<()> {
-        self.perf_samples_cf.put(index, perf_sample)
+    pub fn write_perf_sample(&self, index: Slot, perf_sample: &PerfSampleV2) -> Result<()> {
+        // Always write as the current version.
+        let bytes =
+            serialize(&perf_sample).expect("`PerfSampleV2` can be serialized with `bincode`");
+        self.perf_samples_cf.put_bytes(index, &bytes)
     }
 
     pub fn read_program_costs(&self) -> Result<Vec<(Pubkey, u64)>> {
@@ -8503,25 +8524,139 @@ pub mod tests {
     }
 
     #[test]
-    fn test_write_get_perf_samples() {
+    fn test_get_recent_perf_samples_v1_only() {
+        let ledger_path = get_tmp_ledger_path_auto_delete!();
+        let blockstore = Blockstore::open(ledger_path.path()).unwrap();
+
+        let num_entries: usize = 10;
+
+        let slot_sample = |i: u64| PerfSampleV1 {
+            num_transactions: 1406 + i,
+            num_slots: 34 + i / 2,
+            sample_period_secs: (40 + i / 5) as u16,
+        };
+
+        let mut perf_samples: Vec<(Slot, PerfSample)> = vec![];
+        for i in 0..num_entries {
+            let slot = (i + 1) as u64 * 50;
+            let sample = slot_sample(i as u64);
+
+            let bytes = serialize(&sample).unwrap();
+            blockstore.perf_samples_cf.put_bytes(slot, &bytes).unwrap();
+            perf_samples.push((slot, sample.into()));
+        }
+
+        for i in 0..num_entries {
+            let mut expected_samples = perf_samples[num_entries - 1 - i..].to_vec();
+            expected_samples.sort_by(|a, b| b.0.cmp(&a.0));
+            assert_eq!(
+                blockstore.get_recent_perf_samples(i + 1).unwrap(),
+                expected_samples
+            );
+        }
+    }
+
+    #[test]
+    fn test_get_recent_perf_samples_v2_only() {
+        let ledger_path = get_tmp_ledger_path_auto_delete!();
+        let blockstore = Blockstore::open(ledger_path.path()).unwrap();
+
+        let num_entries: usize = 10;
+
+        let slot_sample = |i: u64| PerfSampleV2 {
+            num_transactions: 2495 + i,
+            num_slots: 167 + i / 2,
+            sample_period_secs: (37 + i / 5) as u16,
+            num_non_vote_transactions: 1672 + i,
+        };
+
+        let mut perf_samples: Vec<(Slot, PerfSample)> = vec![];
+        for i in 0..num_entries {
+            let slot = (i + 1) as u64 * 50;
+            let sample = slot_sample(i as u64);
+
+            let bytes = serialize(&sample).unwrap();
+            blockstore.perf_samples_cf.put_bytes(slot, &bytes).unwrap();
+            perf_samples.push((slot, sample.into()));
+        }
+
+        for i in 0..num_entries {
+            let mut expected_samples = perf_samples[num_entries - 1 - i..].to_vec();
+            expected_samples.sort_by(|a, b| b.0.cmp(&a.0));
+            assert_eq!(
+                blockstore.get_recent_perf_samples(i + 1).unwrap(),
+                expected_samples
+            );
+        }
+    }
+
+    #[test]
+    fn test_get_recent_perf_samples_v1_and_v2() {
+        let ledger_path = get_tmp_ledger_path_auto_delete!();
+        let blockstore = Blockstore::open(ledger_path.path()).unwrap();
+
+        let num_entries: usize = 10;
+
+        let slot_sample_v1 = |i: u64| PerfSampleV1 {
+            num_transactions: 1599 + i,
+            num_slots: 123 + i / 2,
+            sample_period_secs: (42 + i / 5) as u16,
+        };
+
+        let slot_sample_v2 = |i: u64| PerfSampleV2 {
+            num_transactions: 5809 + i,
+            num_slots: 81 + i / 2,
+            sample_period_secs: (35 + i / 5) as u16,
+            num_non_vote_transactions: 2209 + i,
+        };
+
+        let mut perf_samples: Vec<(Slot, PerfSample)> = vec![];
+        for i in 0..num_entries {
+            let slot = (i + 1) as u64 * 50;
+
+            if i % 3 == 0 {
+                let sample = slot_sample_v1(i as u64);
+                let bytes = serialize(&sample).unwrap();
+                blockstore.perf_samples_cf.put_bytes(slot, &bytes).unwrap();
+                perf_samples.push((slot, sample.into()));
+            } else {
+                let sample = slot_sample_v2(i as u64);
+                let bytes = serialize(&sample).unwrap();
+                blockstore.perf_samples_cf.put_bytes(slot, &bytes).unwrap();
+                perf_samples.push((slot, sample.into()));
+            }
+        }
+
+        for i in 0..num_entries {
+            let mut expected_samples = perf_samples[num_entries - 1 - i..].to_vec();
+            expected_samples.sort_by(|a, b| b.0.cmp(&a.0));
+            assert_eq!(
+                blockstore.get_recent_perf_samples(i + 1).unwrap(),
+                expected_samples
+            );
+        }
+    }
+
+    #[test]
+    fn test_write_perf_samples() {
         let ledger_path = get_tmp_ledger_path_auto_delete!();
         let blockstore = Blockstore::open(ledger_path.path()).unwrap();
 
         let num_entries: usize = 10;
         let mut perf_samples: Vec<(Slot, PerfSample)> = vec![];
         for x in 1..num_entries + 1 {
-            perf_samples.push((
-                x as u64 * 50,
-                PerfSample {
-                    num_transactions: 1000 + x as u64,
-                    num_slots: 50,
-                    sample_period_secs: 20,
-                },
-            ));
+            let slot = x as u64 * 50;
+            let sample = PerfSampleV2 {
+                num_transactions: 1000 + x as u64,
+                num_slots: 50,
+                sample_period_secs: 20,
+                num_non_vote_transactions: 300 + x as u64,
+            };
+
+            blockstore.write_perf_sample(slot, &sample).unwrap();
+            perf_samples.push((slot, PerfSample::V2(sample)));
         }
-        for (slot, sample) in perf_samples.iter() {
-            blockstore.write_perf_sample(*slot, sample).unwrap();
-        }
+
         for x in 0..num_entries {
             let mut expected_samples = perf_samples[num_entries - 1 - x..].to_vec();
             expected_samples.sort_by(|a, b| b.0.cmp(&a.0));

@@ -442,7 +442,6 @@ fn test_concurrent_snapshot_packaging(
             let snapshot_storage_files: HashSet<_> = bank_forks[slot]
                 .get_snapshot_storages(None)
                 .into_iter()
-                .flatten()
                 .map(|s| s.get_path())
                 .collect();
 

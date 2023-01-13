@@ -1,7 +1,7 @@
 use {
     crate::{
         nonblocking::quic::ALPN_TPU_PROTOCOL_ID, streamer::StakedNodes,
-        tls_certificates::new_self_signed_tls_certificate_chain,
+        tls_certificates::new_self_signed_tls_certificate,
     },
     crossbeam_channel::Sender,
     pem::Pem,
@@ -58,22 +58,18 @@ pub(crate) fn configure_server(
     identity_keypair: &Keypair,
     gossip_host: IpAddr,
 ) -> Result<(ServerConfig, String), QuicServerError> {
-    let (cert_chain, priv_key) =
-        new_self_signed_tls_certificate_chain(identity_keypair, gossip_host)
-            .map_err(|_e| QuicServerError::ConfigureFailed)?;
-    let cert_chain_pem_parts: Vec<Pem> = cert_chain
-        .iter()
-        .map(|cert| Pem {
-            tag: "CERTIFICATE".to_string(),
-            contents: cert.0.clone(),
-        })
-        .collect();
+    let (cert, priv_key) = new_self_signed_tls_certificate(identity_keypair, gossip_host)
+        .map_err(|_e| QuicServerError::ConfigureFailed)?;
+    let cert_chain_pem_parts = vec![Pem {
+        tag: "CERTIFICATE".to_string(),
+        contents: cert.0.clone(),
+    }];
     let cert_chain_pem = pem::encode_many(&cert_chain_pem_parts);
 
     let mut server_tls_config = rustls::ServerConfig::builder()
         .with_safe_defaults()
         .with_client_cert_verifier(SkipClientVerification::new())
-        .with_single_cert(cert_chain, priv_key)
+        .with_single_cert(vec![cert], priv_key)
         .map_err(|_e| QuicServerError::ConfigureFailed)?;
     server_tls_config.alpn_protocols = vec![ALPN_TPU_PROTOCOL_ID.to_vec()];
 
@@ -345,7 +341,9 @@ pub fn spawn_server(
 #[cfg(test)]
 mod test {
     use {
-        super::*, crate::nonblocking::quic::test::*, crossbeam_channel::unbounded,
+        super::*,
+        crate::nonblocking::quic::{test::*, DEFAULT_WAIT_FOR_CHUNK_TIMEOUT_MS},
+        crossbeam_channel::unbounded,
         std::net::SocketAddr,
     };
 
@@ -374,7 +372,7 @@ mod test {
             MAX_STAKED_CONNECTIONS,
             MAX_UNSTAKED_CONNECTIONS,
             stats,
-            100,
+            DEFAULT_WAIT_FOR_CHUNK_TIMEOUT_MS,
         )
         .unwrap();
         (t, exit, receiver, server_address)
@@ -430,7 +428,7 @@ mod test {
             MAX_STAKED_CONNECTIONS,
             MAX_UNSTAKED_CONNECTIONS,
             stats,
-            100,
+            DEFAULT_WAIT_FOR_CHUNK_TIMEOUT_MS,
         )
         .unwrap();
 
@@ -473,7 +471,7 @@ mod test {
             MAX_STAKED_CONNECTIONS,
             0, // Do not allow any connection from unstaked clients/nodes
             stats,
-            100,
+            DEFAULT_WAIT_FOR_CHUNK_TIMEOUT_MS,
         )
         .unwrap();
 

@@ -1,7 +1,7 @@
 use {
     crate::{
         accounts::Accounts,
-        accounts_db::SnapshotStorages,
+        accounts_db::SnapshotStoragesOne,
         accounts_hash::AccountsHash,
         bank::{Bank, BankSlotDelta},
         epoch_accounts_hash::EpochAccountsHash,
@@ -36,7 +36,7 @@ pub struct AccountsPackage {
     pub package_type: AccountsPackageType,
     pub slot: Slot,
     pub block_height: Slot,
-    pub snapshot_storages: SnapshotStorages,
+    pub snapshot_storages: SnapshotStoragesOne,
     pub expected_capitalization: u64,
     pub accounts_hash_for_testing: Option<AccountsHash>,
     pub accounts: Arc<Accounts>,
@@ -62,7 +62,7 @@ impl AccountsPackage {
         slot_deltas: Vec<BankSlotDelta>,
         full_snapshot_archives_dir: impl AsRef<Path>,
         incremental_snapshot_archives_dir: impl AsRef<Path>,
-        snapshot_storages: SnapshotStorages,
+        snapshot_storages: SnapshotStoragesOne,
         archive_format: ArchiveFormat,
         snapshot_version: SnapshotVersion,
         accounts_hash_for_testing: Option<AccountsHash>,
@@ -125,7 +125,7 @@ impl AccountsPackage {
     pub fn new_for_epoch_accounts_hash(
         package_type: AccountsPackageType,
         bank: &Bank,
-        snapshot_storages: SnapshotStorages,
+        snapshot_storages: SnapshotStoragesOne,
         accounts_hash_for_testing: Option<AccountsHash>,
     ) -> Self {
         assert_eq!(package_type, AccountsPackageType::EpochAccountsHash);
@@ -141,7 +141,7 @@ impl AccountsPackage {
     fn _new(
         package_type: AccountsPackageType,
         bank: &Bank,
-        snapshot_storages: SnapshotStorages,
+        snapshot_storages: SnapshotStoragesOne,
         accounts_hash_for_testing: Option<AccountsHash>,
         snapshot_info: Option<SupplementalSnapshotInfo>,
     ) -> Self {
@@ -167,7 +167,7 @@ impl AccountsPackage {
             package_type: AccountsPackageType::AccountsHashVerifier,
             slot: Slot::default(),
             block_height: Slot::default(),
-            snapshot_storages: SnapshotStorages::default(),
+            snapshot_storages: SnapshotStoragesOne::default(),
             expected_capitalization: u64::default(),
             accounts_hash_for_testing: Option::default(),
             accounts: Arc::new(Accounts::default_for_tests()),
@@ -239,7 +239,7 @@ pub struct SnapshotPackage {
     pub block_height: Slot,
     pub slot_deltas: Vec<BankSlotDelta>,
     pub snapshot_links: TempDir,
-    pub snapshot_storages: SnapshotStorages,
+    pub snapshot_storages: SnapshotStoragesOne,
     pub snapshot_version: SnapshotVersion,
     pub snapshot_type: SnapshotType,
 }
@@ -263,16 +263,9 @@ impl SnapshotPackage {
                 snapshot_info.archive_format,
             ),
             SnapshotType::IncrementalSnapshot(incremental_snapshot_base_slot) => {
-                snapshot_storages.retain(|storages| {
-                    storages
-                        .first() // storages are grouped by slot in the outer Vec, so all storages will have the same slot as the first
-                        .map(|storage| storage.slot() > incremental_snapshot_base_slot)
-                        .unwrap_or_default()
-                });
+                snapshot_storages.retain(|storage| storage.slot() > incremental_snapshot_base_slot);
                 assert!(
-                    snapshot_storages.iter().all(|storage| storage
-                        .iter()
-                        .all(|entry| entry.slot() > incremental_snapshot_base_slot)),
+                    snapshot_storages.iter().all(|storage| storage.slot() > incremental_snapshot_base_slot),
                     "Incremental snapshot package must only contain storage entries where slot > incremental snapshot base slot (i.e. full snapshot slot)!"
                 );
                 snapshot_utils::build_incremental_snapshot_archive_path(

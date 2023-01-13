@@ -349,7 +349,12 @@ fn network_run_push(
                     Duration::from_millis(node.gossip.pull.crds_timeout),
                 );
                 node.gossip.purge(&node_pubkey, thread_pool, now, &timeouts);
-                (node_pubkey, node.gossip.new_push_messages(vec![], now).0)
+                (
+                    node_pubkey,
+                    node.gossip
+                        .new_push_messages(&node_pubkey, vec![], now, &stakes)
+                        .0,
+                )
             })
             .collect();
         let transfered: Vec<_> = requests
@@ -401,6 +406,7 @@ fn network_run_push(
                                         &prune_keys,
                                         now,
                                         now,
+                                        &stakes,
                                     )
                                     .unwrap()
                             })
@@ -750,6 +756,7 @@ fn test_prune_errors() {
         &SocketAddrSpace::Unspecified,
     );
     let now = timestamp();
+    let stakes = HashMap::<Pubkey, u64>::default();
     //incorrect dest
     let mut res = crds_gossip.process_prune_msg(
         &id,                                   // self_pubkey
@@ -758,6 +765,7 @@ fn test_prune_errors() {
         &[prune_pubkey],                       // origins
         now,
         now,
+        &stakes,
     );
     assert_eq!(res.err(), Some(CrdsGossipError::BadPruneDestination));
     //correct dest
@@ -768,6 +776,7 @@ fn test_prune_errors() {
         &[prune_pubkey], // origins
         now,
         now,
+        &stakes,
     );
     res.unwrap();
     //test timeout
@@ -779,6 +788,7 @@ fn test_prune_errors() {
         &[prune_pubkey], // origins
         now,
         timeout,
+        &stakes,
     );
     assert_eq!(res.err(), Some(CrdsGossipError::PruneMessageTimeout));
 }

@@ -1,6 +1,6 @@
 #![allow(clippy::integer_arithmetic)]
 use {
-    crate::{bigtable::*, ledger_path::*},
+    crate::{bigtable::*, ledger_path::*, output::*},
     chrono::{DateTime, Utc},
     clap::{
         crate_description, crate_name, value_t, value_t_or_exit, values_t_or_exit, App,
@@ -46,7 +46,9 @@ use {
             AbsRequestHandlers, AbsRequestSender, AccountsBackgroundService,
             PrunedBanksRequestHandler, SnapshotRequestHandler,
         },
-        accounts_db::{AccountsDbConfig, CalcAccountsHashDataSource, FillerAccountsConfig},
+        accounts_db::{
+            AccountsDb, AccountsDbConfig, CalcAccountsHashDataSource, FillerAccountsConfig,
+        },
         accounts_index::{AccountsIndexConfig, IndexLimitMb, ScanConfig},
         accounts_update_notifier_interface::AccountsUpdateNotifier,
         bank::{Bank, RewardCalculationEvent, TotalAccountsStats},
@@ -104,6 +106,7 @@ use {
 
 mod bigtable;
 mod ledger_path;
+mod output;
 
 #[derive(PartialEq, Eq)]
 enum LedgerOutputMethod {
@@ -1383,7 +1386,7 @@ fn main() {
     let ancient_append_vecs = Arg::with_name("accounts_db_ancient_append_vecs")
         .long("accounts-db-ancient-append-vecs")
         .value_name("SLOT-OFFSET")
-        .validator(is_parsable::<u64>)
+        .validator(is_parsable::<i64>)
         .takes_value(true)
         .help(
             "AppendVecs that are older than (slots_per_epoch - SLOT-OFFSET) are squashed together.",
@@ -1736,8 +1739,10 @@ fn main() {
         )
         .subcommand(
             SubCommand::with_name("bounds")
-            .about("Print lowest and highest non-empty slots. \
-                    Note that there may be empty slots within the bounds")
+            .about(
+                "Print lowest and highest non-empty slots. \
+                Note that there may be empty slots within the bounds",
+            )
             .arg(
                 Arg::with_name("all")
                     .long("all")
@@ -1745,7 +1750,8 @@ fn main() {
                     .required(false)
                     .help("Additionally print all the non-empty slots within the bounds"),
             )
-        ).subcommand(
+        )
+        .subcommand(
             SubCommand::with_name("json")
             .about("Print the ledger in JSON format")
             .arg(&starting_slot_arg)
@@ -2719,12 +2725,14 @@ fn main() {
 
                 let accounts_db_config = Some(AccountsDbConfig {
                     index: Some(accounts_index_config),
-                    accounts_hash_cache_path: Some(ledger_path.clone()),
+                    accounts_hash_cache_path: Some(
+                        ledger_path.join(AccountsDb::ACCOUNTS_HASH_CACHE_DIR),
+                    ),
                     filler_accounts_config,
                     ancient_append_vec_offset: value_t!(
                         matches,
                         "accounts_db_ancient_append_vecs",
-                        u64
+                        i64
                     )
                     .ok(),
                     exhaustively_verify_refcounts: arg_matches
@@ -2765,7 +2773,7 @@ fn main() {
                     ..ProcessOptions::default()
                 };
                 let print_accounts_stats = arg_matches.is_present("print_accounts_stats");
-                println!(
+                info!(
                     "genesis hash: {}",
                     open_genesis_config_by(&ledger_path, arg_matches).hash()
                 );
@@ -2795,7 +2803,6 @@ fn main() {
                 }
                 exit_signal.store(true, Ordering::Relaxed);
                 system_monitor_service.join().unwrap();
-                println!("Ok");
             }
             ("graph", Some(arg_matches)) => {
                 let output_file = value_t_or_exit!(arg_matches, "graph_filename", String);
@@ -2992,7 +2999,7 @@ fn main() {
                     ancient_append_vec_offset: value_t!(
                         matches,
                         "accounts_db_ancient_append_vecs",
-                        u64
+                        i64
                     )
                     .ok(),
                     skip_initial_hash_calc: arg_matches
@@ -4167,56 +4174,63 @@ fn main() {
                     &shred_storage_type,
                     force_update_to_open,
                 );
+
                 match blockstore.slot_meta_iterator(0) {
                     Ok(metas) => {
+                        let output_format =
+                            OutputFormat::from_matches(arg_matches, "output_format", false);
                         let all = arg_matches.is_present("all");
 
                         let slots: Vec<_> = metas.map(|(slot, _)| slot).collect();
-                        if slots.is_empty() {
-                            println!("Ledger is empty");
+
+                        let slot_bounds = if slots.is_empty() {
+                            SlotBounds::default()
                         } else {
-                            let first = slots.first().unwrap();
-                            let last = slots.last().unwrap_or(first);
-                            if first != last {
-                                println!(
-                                    "Ledger has data for {} slots {:?} to {:?}",
-                                    slots.len(),
-                                    first,
-                                    last
-                                );
-                                if all {
-                                    println!("Non-empty slots: {slots:?}");
-                                }
-                            } else {
-                                println!("Ledger has data for slot {first:?}");
+                            // Collect info about slot bounds
+                            let mut bounds = SlotBounds {
+                                slots: SlotInfo {
+                                    total: slots.len(),
+                                    first: Some(*slots.first().unwrap()),
+                                    last: Some(*slots.last().unwrap()),
+                                    ..SlotInfo::default()
+                                },
+                                ..SlotBounds::default()
+                            };
+                            if all {
+                                bounds.all_slots = Some(&slots);
                             }
-                        }
-                        if let Ok(rooted) = blockstore.rooted_slot_iterator(0) {
-                            let mut first_rooted = 0;
-                            let mut last_rooted = 0;
-                            let mut total_rooted = 0;
-                            for (i, slot) in rooted.into_iter().enumerate() {
-                                if i == 0 {
-                                    first_rooted = slot;
+
+                            // Consider also rooted slots, if present
+                            if let Ok(rooted) = blockstore.rooted_slot_iterator(0) {
+                                let mut first_rooted = None;
+                                let mut last_rooted = None;
+                                let mut total_rooted = 0;
+                                for (i, slot) in rooted.into_iter().enumerate() {
+                                    if i == 0 {
+                                        first_rooted = Some(slot);
+                                    }
+                                    last_rooted = Some(slot);
+                                    total_rooted += 1;
                                 }
-                                last_rooted = slot;
-                                total_rooted += 1;
+                                let last_root_for_comparison = last_rooted.unwrap_or_default();
+                                let count_past_root = slots
+                                    .iter()
+                                    .rev()
+                                    .take_while(|slot| *slot > &last_root_for_comparison)
+                                    .count();
+
+                                bounds.roots = SlotInfo {
+                                    total: total_rooted,
+                                    first: first_rooted,
+                                    last: last_rooted,
+                                    num_after_last_root: Some(count_past_root),
+                                };
                             }
-                            let mut count_past_root = 0;
-                            for slot in slots.iter().rev() {
-                                if *slot > last_rooted {
-                                    count_past_root += 1;
-                                } else {
-                                    break;
-                                }
-                            }
-                            println!(
-                                "  with {total_rooted} rooted slots from {first_rooted:?} to {last_rooted:?}"
-                            );
-                            println!("  and {count_past_root} slots past the last root");
-                        } else {
-                            println!("  with no rooted slots");
-                        }
+                            bounds
+                        };
+
+                        // Print collected data
+                        println!("{}", output_format.formatted_string(&slot_bounds));
                     }
                     Err(err) => {
                         eprintln!("Unable to read the Ledger: {err:?}");
@@ -4235,7 +4249,6 @@ fn main() {
                     )
                     .db(),
                 );
-                println!("Ok.");
             }
             ("compute-slot-cost", Some(arg_matches)) => {
                 let blockstore = open_blockstore(

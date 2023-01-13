@@ -832,9 +832,6 @@ impl SlotColumn for columns::PerfSamples {}
 impl ColumnName for columns::PerfSamples {
     const NAME: &'static str = PERF_SAMPLES_CF;
 }
-impl TypedColumn for columns::PerfSamples {
-    type Type = blockstore_meta::PerfSample;
-}
 
 impl SlotColumn for columns::BlockHeight {}
 impl ColumnName for columns::BlockHeight {
