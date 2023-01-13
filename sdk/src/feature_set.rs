@@ -726,7 +726,7 @@ lazy_static! {
         (disable_turbine_fanout_experiments::id(), "disable turbine fanout experiments #29393"),
         (move_serialized_len_ptr_in_cpi::id(), "cpi ignore serialized_len_ptr #29592"),
         (update_hashes_per_tick::id(), "Update desired hashes per tick on epoch boundary"),
-        (enable_big_mod_exp_syscall::id(), "add big_mod_exp syscall #28503"),	
+        (enable_big_mod_exp_syscall::id(), "add big_mod_exp syscall #28503"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()
