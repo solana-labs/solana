@@ -1143,22 +1143,6 @@ impl ClusterInfo {
         txs
     }
 
-    /// Returns DuplicateShred entries inserted since the given cursor.
-    pub fn get_duplicate_shreds(&self, cursor: &mut Cursor) -> Vec<DuplicateShred> {
-        let entries: Vec<DuplicateShred> = self
-            .time_gossip_read_lock("get_duplicate_shreds", &self.stats.get_duplicate_shreds)
-            .get_duplicate_shreds(cursor)
-            .map(|entry| match &entry.value.data {
-                CrdsData::DuplicateShred(_, shred) => shred.clone(),
-                _ => panic!("this should not happen!"),
-            })
-            .collect();
-        self.stats
-            .get_duplicate_shreds_count
-            .add_relaxed(entries.len() as u64);
-        entries
-    }
-
     /// Returns votes and the associated labels inserted since the given cursor.
     pub fn get_votes_with_labels(
         &self,
