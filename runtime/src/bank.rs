@@ -10600,7 +10600,9 @@ pub(crate) mod tests {
                 SystemError::ResultWithNegativeLamports.into(),
             ))
         );
-        assert_eq!(bank.transaction_count(), 1);
+        // transaction_count returns the count of all committed transactions since
+        // bank_transaction_count_fix was activated, regardless of success
+        assert_eq!(bank.transaction_count(), 2);
         assert_eq!(bank.non_vote_transaction_count_since_restart(), 1);
 
         let mint_pubkey = mint_keypair.pubkey();
