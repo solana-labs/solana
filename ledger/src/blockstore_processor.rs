@@ -184,11 +184,6 @@ fn execute_batch(
         timings,
     );
 
-    info!(
-        " ==TAOTAOTAO== bank {} executed a batch, {:?}",
-        bank.slot(), timings
-    );
-
     if bank
         .feature_set
         .is_active(&feature_set::gate_large_block::id())
@@ -342,6 +337,15 @@ fn execute_batches(
             let cost = cost_model.calculate_cost(tx).sum();
             minimal_tx_cost = std::cmp::min(minimal_tx_cost, cost);
             total_cost = total_cost.saturating_add(cost);
+            // TAO TODO - can format print {bank.slot()} {tx.sig} {cost.formatted-with-account-types-and-counts}
+            //            but for now, just collect number of w/r accounts to print at top level
+            let message = &tx.message();
+            let account_keys = message.account_keys();
+            let num_readonly_accounts = message.num_readonly_accounts();
+            let num_writable_accounts = account_keys.len().saturating_sub(num_readonly_accounts);
+            timings.execute_accessories.writable_accounts_count = timings.execute_accessories.writable_accounts_count.saturating_add(num_writable_accounts as u64);
+            timings.execute_accessories.readonly_accounts_count = timings.execute_accessories.readonly_accounts_count.saturating_add(num_readonly_accounts as u64);
+
             cost
         })
         .collect::<Vec<_>>();
@@ -922,8 +926,8 @@ pub fn confirm_slot(
 
     let num_entries = entries.len();
     let num_txs = entries.iter().map(|e| e.transactions.len()).sum::<usize>();
-    trace!(
-        "Fetched entries for slot {}, num_entries: {}, num_shreds: {}, num_txs: {}, slot_full: {}",
+
+    trace!("Fetched entries for slot {}, num_entries: {}, num_shreds: {}, num_txs: {}, slot_full: {}",
         slot,
         num_entries,
         num_shreds,
@@ -988,6 +992,15 @@ pub fn confirm_slot(
             let mut replay_elapsed = Measure::start("replay_elapsed");
             let mut execute_timings = ExecuteTimings::default();
             let cost_capacity_meter = Arc::new(RwLock::new(BlockCostCapacityMeter::default()));
+
+            // TAO TODO - replay_elapsed is overall replay_time of all entries; and ExecuteTiming captures aggregated timing details for all entries. 
+            // in the middle, execute_batches, tx_costs are calculated, can print per tx accounts
+            // stats
+            // al the way down at execute_batch it does tx by tx execution. 
+            // Perhaps can collect: per slot replay_us, load_us, #txs, #accounts, see if there is
+            // coorelation. 
+            // Then can further dig into account type (read, write, execute, lokkup)
+            // bank <- execute_batch <- execute_batches_internal <- execute_batches <- process_entries_with_callback <- confirm_slot (new Timing)
             // Note: This will shuffle entries' transactions in-place.
             let process_result = process_entries_with_callback(
                 bank,
@@ -1002,6 +1015,11 @@ pub fn confirm_slot(
             )
             .map_err(BlockstoreProcessorError::from);
             replay_elapsed.stop();
+
+    info!(
+        " ==TAOTAOTAO== slot: {} executed {} entries; num_shreds: {}, num_txs: {}, slot_full: {} replay_us: {} {:?}",
+        slot, num_entries, num_shreds, num_txs, slot_full, replay_elapsed.as_us(), execute_timings
+    );
             timing.replay_elapsed += replay_elapsed.as_us();
 
             timing.execute_timings.accumulate(&execute_timings);

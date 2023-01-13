@@ -136,6 +136,9 @@ pub struct ExecuteAccessoryTimings {
     pub process_message_us: u64,
     pub update_executors_us: u64,
     pub process_instructions: ExecuteProcessInstructionTimings,
+    // accumulate total number of accounts specified in TXs
+    pub writable_accounts_count: u64,
+    pub readonly_accounts_count: u64,
 }
 
 impl ExecuteAccessoryTimings {
@@ -153,6 +156,8 @@ impl ExecuteAccessoryTimings {
         saturating_add_assign!(self.update_executors_us, other.update_executors_us);
         self.process_instructions
             .accumulate(&other.process_instructions);
+        saturating_add_assign!(self.writable_accounts_count, other.writable_accounts_count);
+        saturating_add_assign!(self.readonly_accounts_count, other.readonly_accounts_count);
     }
 }
 
