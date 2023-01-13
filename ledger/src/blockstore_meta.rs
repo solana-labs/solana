@@ -374,11 +374,46 @@ pub struct AddressSignatureMeta {
     pub writeable: bool,
 }
 
-#[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq, Eq)]
-pub struct PerfSample {
+/// Performance information about validator execution during a time slice.
+///
+/// Older versions should only arise as a result of deserialization of entries stored by a previous
+/// version of the validator.  Current version should only produce [`PerfSampleV2`].
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum PerfSample {
+    V1(PerfSampleV1),
+    V2(PerfSampleV2),
+}
+
+impl From<PerfSampleV1> for PerfSample {
+    fn from(value: PerfSampleV1) -> PerfSample {
+        PerfSample::V1(value)
+    }
+}
+
+impl From<PerfSampleV2> for PerfSample {
+    fn from(value: PerfSampleV2) -> PerfSample {
+        PerfSample::V2(value)
+    }
+}
+
+/// Version of [`PerfSample`] used before 1.15.x.
+#[derive(Clone, Debug, PartialEq, Eq, Deserialize, Serialize)]
+pub struct PerfSampleV1 {
     pub num_transactions: u64,
     pub num_slots: u64,
     pub sample_period_secs: u16,
+}
+
+/// Version of the [`PerfSample`] introduced in 1.15.x.
+#[derive(Clone, Debug, PartialEq, Eq, Deserialize, Serialize)]
+pub struct PerfSampleV2 {
+    // `PerfSampleV1` part
+    pub num_transactions: u64,
+    pub num_slots: u64,
+    pub sample_period_secs: u16,
+
+    // New fields.
+    pub num_non_vote_transactions: u64,
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq, Eq)]
@@ -568,5 +603,29 @@ mod test {
         let mut expected = SlotMeta::new_orphan(5);
         expected.next_slots = vec![6, 7];
         assert_eq!(slot_meta, expected);
+    }
+
+    // `PerfSampleV2` should contain `PerfSampleV1` as a prefix, in order for the column to be
+    // backward and forward compatible.
+    #[test]
+    fn perf_sample_v1_is_prefix_of_perf_sample_v2() {
+        let v2 = PerfSampleV2 {
+            num_transactions: 4190143848,
+            num_slots: 3607325588,
+            sample_period_secs: 31263,
+            num_non_vote_transactions: 4056116066,
+        };
+
+        let v2_bytes = bincode::serialize(&v2).expect("`PerfSampleV2` can be serialized");
+
+        let actual: PerfSampleV1 = bincode::deserialize(&v2_bytes)
+            .expect("Bytes encoded as `PerfSampleV2` can be decoded as `PerfSampleV1`");
+        let expected = PerfSampleV1 {
+            num_transactions: v2.num_transactions,
+            num_slots: v2.num_slots,
+            sample_period_secs: v2.sample_period_secs,
+        };
+
+        assert_eq!(actual, expected);
     }
 }
