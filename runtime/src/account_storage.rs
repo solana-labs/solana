@@ -1,18 +1,21 @@
 //! Manage the map of slot -> append vecs
 
 use {
-    crate::accounts_db::{AccountStorageEntry, AppendVecId, SlotStores, SnapshotStorageOne},
+    crate::accounts_db::{AccountStorageEntry, AppendVecId, SnapshotStorageOne},
     dashmap::DashMap,
     solana_sdk::clock::Slot,
-    std::{
-        collections::HashMap,
-        sync::{Arc, RwLock},
-    },
+    std::sync::Arc,
 };
 
-pub type AccountStorageMap = DashMap<Slot, SlotStores>;
+#[derive(Clone, Debug)]
+pub struct AccountStorageReference {
+    pub(crate) storage: SnapshotStorageOne,
+    pub(crate) id: AppendVecId,
+}
 
-#[derive(Clone, Default, Debug)]
+pub type AccountStorageMap = DashMap<Slot, AccountStorageReference>;
+
+#[derive(Default, Debug)]
 pub struct AccountStorage {
     map: AccountStorageMap,
     /// while shrink is operating on a slot, there can be 2 append vecs active for that slot
@@ -40,7 +43,7 @@ impl AccountStorage {
         store_id: AppendVecId,
     ) -> Option<Arc<AccountStorageEntry>> {
         self.get_slot_stores_shrinking_in_progress_ok(slot)
-            .and_then(|storage_map| storage_map.read().unwrap().get(&store_id).cloned())
+            .and_then(|AccountStorageReference { id, storage }| (id == store_id).then_some(storage))
             .or_else(|| {
                 self.shrink_in_progress_map.get(&slot).and_then(|entry| {
                     (entry.value().append_vec_id() == store_id).then(|| Arc::clone(entry.value()))
@@ -49,7 +52,7 @@ impl AccountStorage {
     }
 
     /// public api, should only be called when shrinking is not in progress
-    pub fn get_slot_stores(&self, slot: Slot) -> Option<SlotStores> {
+    pub fn get_slot_stores(&self, slot: Slot) -> Option<AccountStorageReference> {
         assert!(self.shrink_in_progress_map.is_empty());
         self.get_slot_stores_shrinking_in_progress_ok(slot)
     }
@@ -58,7 +61,7 @@ impl AccountStorage {
     pub(crate) fn get_slot_stores_shrinking_in_progress_ok(
         &self,
         slot: Slot,
-    ) -> Option<SlotStores> {
+    ) -> Option<AccountStorageReference> {
         self.map.get(&slot).map(|result| result.value().clone())
     }
 
@@ -75,11 +78,7 @@ impl AccountStorage {
         slot: Slot,
     ) -> Option<Arc<AccountStorageEntry>> {
         self.get_slot_stores_shrinking_in_progress_ok(slot)
-            .and_then(|res| {
-                let read = res.read().unwrap();
-                assert!(read.len() <= 1);
-                read.values().next().cloned()
-            })
+            .map(|entry| Arc::clone(&&entry.storage))
     }
 
     pub(crate) fn all_slots(&self) -> Vec<Slot> {
@@ -105,14 +104,9 @@ impl AccountStorage {
 
     /// remove all append vecs at 'slot'
     /// returns the current contents
-    pub(crate) fn remove(&self, slot: &Slot) -> Option<Arc<AccountStorageEntry>> {
+    pub(crate) fn remove(&self, slot: &Slot) -> Option<SnapshotStorageOne> {
         assert!(self.shrink_in_progress_map.is_empty());
-        self.map.remove(slot).and_then(|(_slot, slot_stores)| {
-            let mut write = slot_stores.write().unwrap();
-            assert!(write.len() <= 1, "{}", write.len());
-            let mut drain = write.drain();
-            drain.next().map(|(_, store)| store)
-        })
+        self.map.remove(slot).map(|(_, entry)| entry.storage)
     }
 
     /// iterate through all (slot, append-vec)
@@ -123,19 +117,16 @@ impl AccountStorage {
 
     pub(crate) fn insert(&self, slot: Slot, store: Arc<AccountStorageEntry>) {
         assert!(self.shrink_in_progress_map.is_empty());
-        let slot_storages: SlotStores = self.get_slot_stores(slot).unwrap_or_else(||
-            // DashMap entry.or_insert() returns a RefMut, essentially a write lock,
-            // which is dropped after this block ends, minimizing time held by the lock.
-            // However, we still want to persist the reference to the `SlotStores` behind
-            // the lock, hence we clone it out, (`SlotStores` is an Arc so is cheap to clone).
-            self
-                .map
-                .entry(slot)
-                .or_insert(Arc::new(RwLock::new(HashMap::new())))
-                .clone());
-
-        let mut write = slot_storages.write().unwrap();
-        assert!(write.insert(store.append_vec_id(), store).is_none());
+        assert!(self
+            .map
+            .insert(
+                slot,
+                AccountStorageReference {
+                    id: store.append_vec_id(),
+                    storage: store,
+                }
+            )
+            .is_none());
     }
 
     /// called when shrinking begins on a slot and append vec.
@@ -159,17 +150,8 @@ impl AccountStorage {
         let slot_storages = self
             .get_slot_stores_shrinking_in_progress_ok(slot)
             .expect("no pre-existing storages for shrinking slot");
-        let shrinking_store = Arc::clone(
-            slot_storages
-                .read()
-                .unwrap()
-                .iter()
-                .next()
-                .expect("no pre-existing storages for shrinking slot")
-                .1,
-        );
+        let shrinking_store = Arc::clone(&slot_storages.storage);
 
-        let previous_id = shrinking_store.append_vec_id();
         let new_id = new_store.append_vec_id();
         // 1. insert 'shrinking_store' into 'shrink_in_progress_map'
         assert!(
@@ -179,15 +161,16 @@ impl AccountStorage {
             "duplicate call"
         );
 
-        {
-            // write lock held for this atomic operation
-            let mut storages = slot_storages.write().unwrap();
-            // 2. remove 'shrinking_store' from 'map'
-            assert!(storages.remove(&previous_id).is_some());
-            // 3. insert 'new_store' into 'map' (atomic with #2)
-            // should be empty prior to this call
-            assert!(storages.insert(new_id, Arc::clone(&new_store)).is_none());
-        }
+        assert!(self
+            .map
+            .insert(
+                slot,
+                AccountStorageReference {
+                    storage: Arc::clone(&new_store),
+                    id: new_id
+                }
+            )
+            .is_some());
 
         ShrinkInProgress {
             storage: self,
@@ -213,7 +196,7 @@ impl AccountStorage {
 
 /// iterate contents of AccountStorage without exposing internals
 pub struct AccountStorageIter<'a> {
-    iter: dashmap::iter::Iter<'a, Slot, SlotStores>,
+    iter: dashmap::iter::Iter<'a, Slot, AccountStorageReference>,
 }
 
 impl<'a> AccountStorageIter<'a> {
@@ -228,13 +211,10 @@ impl<'a> Iterator for AccountStorageIter<'a> {
     type Item = (Slot, SnapshotStorageOne);
 
     fn next(&mut self) -> Option<Self::Item> {
-        for entry in self.iter.by_ref() {
-            // if no stores for a slot, then don't return the item at all, loops to try next slot
+        if let Some(entry) = self.iter.next() {
             let slot = entry.key();
-            let stores = entry.value();
-            if let Some((_, store)) = stores.read().unwrap().iter().next() {
-                return Some((*slot, Arc::clone(store)));
-            }
+            let store = entry.value();
+            return Some((*slot, Arc::clone(&store.storage)));
         }
         None
     }

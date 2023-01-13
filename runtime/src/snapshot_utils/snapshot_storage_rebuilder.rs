@@ -1,5 +1,7 @@
 //! Provides interfaces for rebuilding snapshot storages
 
+use crate::account_storage::AccountStorageReference;
+
 use {
     super::{get_io_error, snapshot_version_from_file, SnapshotError, SnapshotVersion},
     crate::{
@@ -292,7 +294,7 @@ impl SnapshotStorageRebuilder {
         let slot_storage_paths = self.storage_paths.get(&slot).unwrap();
         let lock = slot_storage_paths.lock().unwrap();
 
-        let slot_stores = lock
+        let mut slot_stores = lock
             .iter()
             .map(|path| {
                 let filename = path.file_name().unwrap().to_str().unwrap();
@@ -317,9 +319,9 @@ impl SnapshotStorageRebuilder {
             })
             .collect::<Result<HashMap<AppendVecId, Arc<AccountStorageEntry>>, std::io::Error>>()?;
 
-        let slot_entry = self.storage.entry(slot).or_default();
-        let mut storage_lock = slot_entry.write().unwrap();
-        *storage_lock = slot_stores;
+        let (id, storage) = slot_stores.drain().next().unwrap();
+        self.storage
+            .insert(slot, AccountStorageReference { id, storage });
         Ok(())
     }
 
