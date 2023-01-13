@@ -17,12 +17,13 @@ export type TransactionVersion = 'legacy' | 0;
 export class VersionedTransaction {
   signatures: Array<Uint8Array>;
   message: VersionedMessage;
+  lastValidBlockHeight?: number;
 
   get version(): TransactionVersion {
     return this.message.version;
   }
 
-  constructor(message: VersionedMessage, signatures?: Array<Uint8Array>) {
+  constructor(message: VersionedMessage, signatures?: Array<Uint8Array>, lastValidBlockHeight?: number) {
     if (signatures !== undefined) {
       assert(
         signatures.length === message.header.numRequiredSignatures,
@@ -37,6 +38,7 @@ export class VersionedTransaction {
       this.signatures = defaultSignatures;
     }
     this.message = message;
+    this.lastValidBlockHeight = lastValidBlockHeight;
   }
 
   serialize(): Uint8Array {
