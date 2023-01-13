@@ -125,12 +125,6 @@ pub const PUBKEY_BINS_FOR_CALCULATING_HASHES: usize = 65536;
 // Metrics indicate a sweet spot in the 2.5k-5k range for mnb.
 const MAX_ITEMS_PER_CHUNK: Slot = 2_500;
 
-// A specially reserved write version (identifier for ordering writes in an AppendVec)
-// for entries in the cache, so that  operations that take a storage entry can maintain
-// a common interface when interacting with cached accounts. This version is "virtual" in
-// that it doesn't actually map to an entry in an AppendVec.
-const CACHE_VIRTUAL_WRITE_VERSION: StoredMetaWriteVersion = 0;
-
 // A specially reserved offset (represents an offset into an AppendVec)
 // for entries in the cache, so that  operations that take a storage entry can maintain
 // a common interface when interacting with cached accounts. This version is "virtual" in
@@ -421,8 +415,6 @@ pub struct AccountsDbConfig {
 
 #[cfg(not(test))]
 const ABSURD_CONSECUTIVE_FAILED_ITERATIONS: usize = 100;
-
-type DashMapVersionHash = DashMap<Pubkey, (u64, Hash)>;
 
 #[derive(Debug, Clone, Copy)]
 pub enum AccountShrinkThreshold {
@@ -737,15 +729,6 @@ impl<'a> LoadedAccount<'a> {
         match self {
             LoadedAccount::Stored(stored_account_meta) => stored_account_meta.pubkey(),
             LoadedAccount::Cached(cached_account) => cached_account.pubkey(),
-        }
-    }
-
-    pub fn write_version(&self) -> StoredMetaWriteVersion {
-        match self {
-            LoadedAccount::Stored(stored_account_meta) => {
-                stored_account_meta.meta.write_version_obsolete
-            }
-            LoadedAccount::Cached(_) => CACHE_VIRTUAL_WRITE_VERSION,
         }
     }
 
@@ -7486,28 +7469,16 @@ impl AccountsDb {
     ) -> (Vec<(Pubkey, Hash)>, u64, Measure) {
         let mut scan = Measure::start("scan");
 
-        let scan_result: ScanStorageResult<(Pubkey, Hash), DashMapVersionHash> = self
+        let scan_result: ScanStorageResult<(Pubkey, Hash), DashMap<Pubkey, Hash>> = self
             .scan_account_storage(
                 slot,
                 |loaded_account: LoadedAccount| {
                     // Cache only has one version per key, don't need to worry about versioning
                     Some((*loaded_account.pubkey(), loaded_account.loaded_hash()))
                 },
-                |accum: &DashMap<Pubkey, (u64, Hash)>, loaded_account: LoadedAccount| {
-                    let loaded_write_version = loaded_account.write_version();
+                |accum: &DashMap<Pubkey, Hash>, loaded_account: LoadedAccount| {
                     let loaded_hash = loaded_account.loaded_hash();
-                    // keep the latest write version for each pubkey
-                    match accum.entry(*loaded_account.pubkey()) {
-                        Occupied(mut occupied_entry) => {
-                            assert!(loaded_write_version > occupied_entry.get().version());
-                            // overwrite
-                            occupied_entry.insert((loaded_write_version, loaded_hash));
-                        }
-
-                        Vacant(vacant_entry) => {
-                            vacant_entry.insert((loaded_write_version, loaded_hash));
-                        }
-                    }
+                    accum.insert(*loaded_account.pubkey(), loaded_hash);
                 },
             );
         scan.stop();
@@ -7515,10 +7486,7 @@ impl AccountsDb {
         let accumulate = Measure::start("accumulate");
         let hashes: Vec<_> = match scan_result {
             ScanStorageResult::Cached(cached_result) => cached_result,
-            ScanStorageResult::Stored(stored_result) => stored_result
-                .into_iter()
-                .map(|(pubkey, (_latest_write_version, hash))| (pubkey, hash))
-                .collect(),
+            ScanStorageResult::Stored(stored_result) => stored_result.into_iter().collect(),
         };
         (hashes, scan.as_us(), accumulate)
     }
@@ -10248,11 +10216,11 @@ pub mod tests {
             "test_accountsdb_scan_account_storage_no_bank",
         );
         let write_version1 = 0;
-        let write_version2 = 1;
         let pubkey1 = solana_sdk::pubkey::new_rand();
         let pubkey2 = solana_sdk::pubkey::new_rand();
         let storage =
             sample_storage_with_entries(&tf, write_version1, slot_expected, &pubkey1).remove(0);
+        let lamports = storage.accounts.account_iter().next().unwrap().lamports();
         let calls = Arc::new(AtomicU64::new(0));
         let mut scanner = TestScanSimple {
             current_slot: 0,
@@ -10261,8 +10229,6 @@ pub mod tests {
             pubkey2,
             accum: Vec::default(),
             calls: calls.clone(),
-            write_version1,
-            write_version2,
         };
         AccountsDb::scan_single_account_storage(&storage, &mut scanner);
         let accum = scanner.scanning_complete();
@@ -10273,7 +10239,7 @@ pub mod tests {
                 .flatten()
                 .map(|a| a.lamports)
                 .collect::<Vec<_>>(),
-            vec![write_version1]
+            vec![lamports]
         );
     }
 
@@ -10285,8 +10251,6 @@ pub mod tests {
         accum: BinnedHashData,
         pubkey1: Pubkey,
         pubkey2: Pubkey,
-        write_version1: u64,
-        write_version2: u64,
     }
 
     impl AppendVecScan for TestScanSimple {
@@ -10299,14 +10263,8 @@ pub mod tests {
         fn init_accum(&mut self, _count: usize) {}
         fn found_account(&mut self, loaded_account: &LoadedAccount) {
             self.calls.fetch_add(1, Ordering::Relaxed);
-            let write_version = loaded_account.write_version();
-            let first =
-                loaded_account.pubkey() == &self.pubkey1 && write_version == self.write_version1;
-            assert!(
-                first
-                    || loaded_account.pubkey() == &self.pubkey2
-                        && write_version == self.write_version2
-            );
+            let first = loaded_account.pubkey() == &self.pubkey1;
+            assert!(first || loaded_account.pubkey() == &self.pubkey2);
             assert_eq!(self.slot_expected, self.current_slot);
             if first {
                 assert!(self.accum.is_empty());
@@ -10315,7 +10273,7 @@ pub mod tests {
             }
             self.accum.push(vec![CalculateHashIntermediate {
                 hash: Hash::default(),
-                lamports: write_version,
+                lamports: loaded_account.lamports(),
                 pubkey: Pubkey::default(),
             }]);
         }

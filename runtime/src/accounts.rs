@@ -22,10 +22,7 @@ use {
         system_instruction_processor::{get_system_account_kind, SystemAccountKind},
         transaction_error_metrics::TransactionErrorMetrics,
     },
-    dashmap::{
-        mapref::entry::Entry::{Occupied, Vacant},
-        DashMap,
-    },
+    dashmap::DashMap,
     log::*,
     solana_address_lookup_table_program::{error::AddressLookupError, state::AddressLookupTable},
     solana_program_runtime::compute_budget::ComputeBudget,
@@ -777,29 +774,10 @@ impl Accounts {
                 // Cache only has one version per key, don't need to worry about versioning
                 func(loaded_account)
             },
-            |accum: &DashMap<Pubkey, (u64, B)>, loaded_account: LoadedAccount| {
+            |accum: &DashMap<Pubkey, B>, loaded_account: LoadedAccount| {
                 let loaded_account_pubkey = *loaded_account.pubkey();
-                let loaded_write_version = loaded_account.write_version();
-                let should_insert = accum
-                    .get(&loaded_account_pubkey)
-                    .map(|existing_entry| loaded_write_version > existing_entry.value().0)
-                    .unwrap_or(true);
-                if should_insert {
-                    if let Some(val) = func(loaded_account) {
-                        // Detected insertion is necessary, grabs the write lock to commit the write,
-                        match accum.entry(loaded_account_pubkey) {
-                            // Double check in case another thread interleaved a write between the read + write.
-                            Occupied(mut occupied_entry) => {
-                                assert!(loaded_write_version > occupied_entry.get().0);
-                                // overwrite
-                                occupied_entry.insert((loaded_write_version, val));
-                            }
-
-                            Vacant(vacant_entry) => {
-                                vacant_entry.insert((loaded_write_version, val));
-                            }
-                        }
-                    }
+                if let Some(val) = func(loaded_account) {
+                    accum.insert(loaded_account_pubkey, val);
                 }
             },
         );
@@ -808,7 +786,7 @@ impl Accounts {
             ScanStorageResult::Cached(cached_result) => cached_result,
             ScanStorageResult::Stored(stored_result) => stored_result
                 .into_iter()
-                .map(|(_pubkey, (_latest_write_version, val))| val)
+                .map(|(_pubkey, val)| val)
                 .collect(),
         }
     }
