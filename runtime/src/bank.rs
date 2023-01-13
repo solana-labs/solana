@@ -1172,7 +1172,7 @@ impl Scheduler<ExecuteTimings> {
                 let (mut wall_time, cpu_time) = (Measure::start("process_message_time"), cpu_time::ThreadTime::now());
 
                 let current_execute_clock = ee.task.execute_time();
-                let transaction_index = ee.task.transaction_index_in_entries_for_replay();
+                let transaction_index = ee.task.transaction_index();
                 trace!("execute_substage: transaction_index: {} execute_clock: {} at thread: {}", thx, transaction_index, current_execute_clock);
 
                 let ro_bank = bank.read().unwrap();
@@ -1297,8 +1297,6 @@ impl Scheduler<ExecuteTimings> {
                 ee.execution_result = Some(tx_result);
                 ee.finish_time = Some(std::time::SystemTime::now());
                 ee.thx = thx;
-                ee.transaction_index = transaction_index;
-                ee.slot = slot;
                 ee.execution_cpu_us = cpu_time.elapsed().as_micros();
                 // make wall time is longer than cpu time, always
                 wall_time.stop();
@@ -1331,6 +1329,7 @@ impl Scheduler<ExecuteTimings> {
                 let mut cumulative_timings = ExecuteTimings::default();
                 use variant_counter::VariantCount;
                 let mut transaction_error_counts = TransactionError::counter();
+                let (mut skipped, mut succeeded) = (0, 0);
                 let mut last_slot = None;
 
                 loop {
@@ -1341,7 +1340,7 @@ impl Scheduler<ExecuteTimings> {
                     match r {
                         solana_scheduler::ExaminablePayload(solana_scheduler::Flushable::Payload((mut ee, timings))) => {
                             cumulative_timings.accumulate(&timings);
-                            last_slot = Some(ee.slot);
+                            last_slot = Some(ee.task.slot);
 
                             if send_metrics {
                                 let sig = ee.task.tx.0.signature().to_string();
@@ -1349,8 +1348,8 @@ impl Scheduler<ExecuteTimings> {
                                 datapoint_info_at!(
                                     ee.finish_time.unwrap(),
                                     "transaction_timings",
-                                    ("slot", ee.slot, i64),
-                                    ("index", ee.transaction_index, i64),
+                                    ("slot", ee.task.slot, i64),
+                                    ("index", ee.task.transaction_index(), i64),
                                     ("thread", format!("solScExLane{:02}", ee.thx), String),
                                     ("signature", &sig, String),
                                     ("account_locks_in_json", serde_json::to_string(&ee.task.tx.0.get_account_locks_unchecked()).unwrap(), String),
@@ -1364,12 +1363,13 @@ impl Scheduler<ExecuteTimings> {
                                     ("compute_units", ee.cu, i64),
                                     ("priority", ee.task.tx.0.get_transaction_priority_details().map(|d| d.priority).unwrap_or_default(), i64),
                                 );
-                                info!("execute_substage: slot: {} transaction_index: {} timings: {:?}", ee.slot, ee.transaction_index, timings);
+                                info!("execute_substage: slot: {} transaction_index: {} timings: {:?}", ee.task.slot, ee.task.transaction_index(), timings);
                             }
 
                             if let Some(result) = ee.execution_result.take() {
                                 match result {
                                     Ok(_) => {
+                                        succeeded += 1;
                                         inc_new_counter_info!("bank-process_transactions", 1);
                                         inc_new_counter_info!(
                                             "bank-process_transactions-txs",
@@ -1399,12 +1399,15 @@ impl Scheduler<ExecuteTimings> {
                                             .push(Err(e));
                                     }
                                 }
+                            } else {
+                                skipped += 1;
                             }
                             drop(ee);
                         },
                         solana_scheduler::ExaminablePayload(solana_scheduler::Flushable::Flush(checkpoint)) => {
-                            info!("post_execution_handler: slot: {last_slot:?} {:?}", transaction_error_counts.aggregate().into_iter().filter(|&(k, v)| v > 0).collect::<std::collections::BTreeMap<_, _>>());
+                            info!("post_execution_handler: slot: {last_slot:?} {:?}", transaction_error_counts.aggregate().into_iter().chain([("succeeded", succeeded), ("skipped", skipped)].into_iter()).filter(|&(k, v)| v > 0).collect::<std::collections::BTreeMap<_, _>>());
                             transaction_error_counts.reset();
+                            (succeeded, skipped) = (0, 0);
                             last_slot = None;
                             checkpoint.wait_for_restart(Some(std::mem::take(&mut cumulative_timings)));
                         },
@@ -6856,7 +6859,6 @@ impl Bank {
         transaction_indexes: impl Iterator<Item = usize>,
         mode: solana_scheduler::Mode,
     ) {
-        assert_eq!(self.slot(), self.slot());
         trace!(
             "schedule_and_commit_transactions(): {} txs",
             transactions.len()

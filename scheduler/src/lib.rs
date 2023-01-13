@@ -41,8 +41,6 @@ pub struct ExecutionEnvironment {
     pub execution_result: Option<Result<(), solana_sdk::transaction::TransactionError>>,
     pub finish_time: Option<std::time::SystemTime>,
     pub thx: usize,
-    pub transaction_index: u64,
-    pub slot: solana_sdk::clock::Slot,
     pub execution_us: u64,
     pub execution_cpu_us: u128,
 }
@@ -705,7 +703,7 @@ impl Task {
         })
     }
 
-    pub fn transaction_index_in_entries_for_replay(&self) -> u64 {
+    pub fn transaction_index(&self) -> u64 {
         match self.mode {
             Mode::Replaying => (UniqueWeight::max_value() - self.unique_weight).try_into().unwrap(),
             Mode::Banking => (u64::max_value() as u128 & self.unique_weight).try_into().unwrap(),
@@ -1581,11 +1579,9 @@ impl ScheduleStage {
             is_reindexed: Default::default(),
             execution_result: Default::default(),
             thx: Default::default(),
-            transaction_index: Default::default(),
             execution_us: Default::default(),
             execution_cpu_us: Default::default(),
             finish_time: Default::default(),
-            slot: 0,
         })
     }
 
@@ -1840,18 +1836,14 @@ impl ScheduleStage {
                                runnable_queue.add_to_schedule(task.unique_weight, task)
                            },
                            Ok(SchedulablePayload(Flushable::Flush(checkpoint))) => {
-                               assert_eq!(from_prev.len(), 0);
-                               assert!(!from_disconnected);
+                               assert_eq!((from_prev.len(), from_disconnected, maybe_checkpoint.is_none()), (0, false, true));
                                from_disconnected = true;
                                from_prev = never;
                                trace!("flushing2..: {:?} {} {} {} {}", (from_disconnected, from_exec_disconnected), runnable_queue.task_count_hint(), contended_count, executing_queue_count, provisioning_tracker_count);
-                               assert!(maybe_checkpoint.is_none());
                                maybe_checkpoint = Some(checkpoint);
                            },
                            Err(_) => {
-                               assert_eq!(from_prev.len(), 0);
-                               assert!(!from_disconnected);
-                               assert!(maybe_checkpoint.is_none());
+                               assert_eq!((from_prev.len(), from_disconnected, maybe_checkpoint.is_none()), (0, false, true));
                                from_disconnected = true;
                                from_prev = never;
                                trace!("flushing2..: {:?} {} {} {} {}", (from_disconnected, from_exec_disconnected), runnable_queue.task_count_hint(), contended_count, executing_queue_count, provisioning_tracker_count);
@@ -1984,11 +1976,9 @@ impl ScheduleStage {
                     }
 
                     if let Some(checkpoint) = runnable_queue.take_buffered_flush() {
-                        assert_eq!(from_prev.len(), 0);
-                        assert!(!from_disconnected);
+                        assert_eq!((from_len, empty_from, from_prev.len(), from_disconnected, maybe_checkpoint.is_none()), (0, true, 0, false, true));
                         from_disconnected = true;
                         from_prev = never;
-                        assert!(maybe_checkpoint.is_none());
                         maybe_checkpoint = Some(checkpoint);
                         break;
                     }
@@ -2062,10 +2052,9 @@ impl ScheduleStage {
                         empty_from = from_len == 0;
                         match schedulable {
                             Flushable::Flush(checkpoint) => {
-                                assert_eq!((from_len, empty_from, from_prev.len()), (0, true, 0));
+                                assert_eq!((from_len, empty_from, from_prev.len(), from_disconnected, maybe_checkpoint.is_none()), (0, true, 0, false, true));
                                 from_disconnected = true;
                                 from_prev = never;
-                                assert!(maybe_checkpoint.is_none());
                                 maybe_checkpoint = Some(checkpoint);
                             }
                             Flushable::Payload(task) => {
