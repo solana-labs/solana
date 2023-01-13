@@ -26,6 +26,7 @@ use {
     log::*,
     rand::{thread_rng, Rng},
     solana_address_lookup_table_program::{error::AddressLookupError, state::AddressLookupTable},
+    solana_measure::measure::Measure,
     solana_sdk::{
         account::{Account, AccountSharedData, ReadableAccount, WritableAccount},
         account_utils::StateMut,
@@ -296,7 +297,9 @@ impl Accounts {
                         {
                             (account_override.clone(), 0)
                         } else {
-                            self.accounts_db
+                            let mut load_time = Measure::start("accounts_load");
+
+                            let act = self.accounts_db
                                 .load_with_fixed_root(ancestors, key, load_zero_lamports)
                                 .map(|(mut account, _)| {
                                     if message.is_writable(i) {
@@ -313,7 +316,14 @@ impl Accounts {
                                         (account, 0)
                                     }
                                 })
-                                .unwrap_or_default()
+                                .unwrap_or_default();
+
+                            load_time.stop();
+        // only print for selected slot
+        if ancestors.max_slot() == 170618236 {
+            info!(" ==TAOTAOTAO== load_account slot {} tx {:?} account {:?} load_us {}", ancestors.max_slot(), tx.signatures(), key, load_time.as_us());
+        }
+                            act
                         };
 
                         if !validated_fee_payer {
@@ -346,6 +356,8 @@ impl Accounts {
                                     programdata_address,
                                 }) = account.state()
                                 {
+                                    let mut load_time = Measure::start("accounts_load");
+
                                     if let Some((programdata_account, _)) =
                                         self.accounts_db.load_with_fixed_root(
                                             ancestors,
@@ -354,6 +366,7 @@ impl Accounts {
                                         )
                                     {
                                         Self::accumulate_loaded_account_data_size(&mut accumulated_accounts_data_size, programdata_account.data().len());
+            info!(" ==TAOTAO== transaction {:?}, account {:?}, type account_programdata, size {:?}", tx.signatures(), programdata_address, programdata_account.data().len()); 
 
                                         account_deps
                                             .push((programdata_address, programdata_account));
@@ -361,6 +374,12 @@ impl Accounts {
                                         error_counters.account_not_found += 1;
                                         return Err(TransactionError::ProgramAccountNotFound);
                                     }
+
+                                    load_time.stop();
+        // only print for selected slot
+        if ancestors.max_slot() == 170618236 {
+            info!(" ==TAOTAOTAO== load_programdata_account slot {} tx {:?} proogramdata_account {:?} load_us {}", ancestors.max_slot(), tx.signatures(), programdata_address, load_time.as_us());
+        }
                                 } else {
                                     error_counters.invalid_program_for_execution += 1;
                                     return Err(TransactionError::InvalidProgramForExecution);
@@ -378,6 +397,7 @@ impl Accounts {
                     }
                 };
                 Self::accumulate_loaded_account_data_size(&mut accumulated_accounts_data_size, account.data().len());
+            info!(" ==TAOTAO== transaction {:?}, account {:?}, type account, size {:?}", tx.signatures(), key, account.data().len()); 
 
                 accounts.push((*key, account));
             }
@@ -405,6 +425,7 @@ impl Accounts {
                             load_zero_lamports,
                             &mut accumulated_accounts_data_size,
                             is_non_loader_account[program_id_index],
+                            tx,
                         )
                     })
                     .collect::<Result<Vec<Vec<usize>>>>()?;
@@ -490,6 +511,7 @@ impl Accounts {
         load_zero_lamports: LoadZeroLamports,
         accumulated_accounts_data_size: &mut usize,
         root_program_account_loaded: bool,
+        tx: &SanitizedTransaction,
     ) -> Result<Vec<usize>> {
         let mut account_indices = Vec::new();
         let mut program_id = accounts[program_account_index].0;
@@ -508,6 +530,8 @@ impl Accounts {
 
             depth += 1;
 
+            let mut load_time = Measure::start("accounts_load");
+
             program_account_index = match self.accounts_db.load_with_fixed_root(
                 ancestors,
                 &program_id,
@@ -518,6 +542,7 @@ impl Accounts {
                     if should_accumulate_program_account_size {
                         loaded_account_total_size =
                             loaded_account_total_size.saturating_add(program_account.data().len());
+            info!(" ==TAOTAO== transaction {:?}, account {:?}, type program, size {:?}", tx.signatures(), program_id, program_account.data().len()); 
                     }
 
                     accounts.push((program_id, program_account));
@@ -528,6 +553,14 @@ impl Accounts {
                     return Err(TransactionError::ProgramAccountNotFound);
                 }
             };
+
+            load_time.stop();
+        // only print for selected slot
+        if ancestors.max_slot() == 170618236 {
+            info!(" ==TAOTAOTAO== load_program_account slot {} tx {:?} account {:?} load_us {}", ancestors.max_slot(), tx.signatures(), program_id, load_time.as_us());
+        }
+
+
             let program = &accounts[program_account_index].1;
             if !program.executable() {
                 error_counters.invalid_program_for_execution += 1;
@@ -543,6 +576,8 @@ impl Accounts {
                     programdata_address,
                 }) = program.state()
                 {
+                    let mut load_time = Measure::start("accounts_load");
+
                     let programdata_account_index = match self.accounts_db.load_with_fixed_root(
                         ancestors,
                         &programdata_address,
@@ -553,6 +588,7 @@ impl Accounts {
                             if should_accumulate_program_account_size {
                                 loaded_account_total_size = loaded_account_total_size
                                     .saturating_add(programdata_account.data().len());
+            info!(" ==TAOTAO== transaction {:?}, account {:?}, type program_programdata, size {:?}", tx.signatures(), programdata_address, programdata_account.data().len()); 
                             }
                             accounts.push((programdata_address, programdata_account));
                             account_index
@@ -563,6 +599,12 @@ impl Accounts {
                         }
                     };
                     account_indices.insert(0, programdata_account_index);
+
+                    load_time.stop();
+        // only print for selected slot
+        if ancestors.max_slot() == 170618236 {
+            info!(" ==TAOTAOTAO== load_program_programdata_ccount slot {} tx {:?} account {:?} load_us {}", ancestors.max_slot(), tx.signatures(), programdata_address, load_time.as_us());
+        }
                 } else {
                     error_counters.invalid_program_for_execution += 1;
                     return Err(TransactionError::InvalidProgramForExecution);
@@ -662,6 +704,8 @@ impl Accounts {
         slot_hashes: &SlotHashes,
         load_zero_lamports: LoadZeroLamports,
     ) -> std::result::Result<LoadedAddresses, AddressLookupError> {
+        let mut load_time = Measure::start("accounts_load");
+
         let table_account = self
             .accounts_db
             .load_with_fixed_root(
@@ -672,6 +716,7 @@ impl Accounts {
             .map(|(account, _rent)| account)
             .ok_or(AddressLookupError::LookupTableAccountNotFound)?;
 
+        let res = 
         if table_account.owner() == &solana_address_lookup_table_program::id() {
             let current_slot = ancestors.max_slot();
             let lookup_table = AddressLookupTable::deserialize(table_account.data())
@@ -691,7 +736,15 @@ impl Accounts {
             })
         } else {
             Err(AddressLookupError::InvalidAccountOwner)
+        };
+
+        load_time.stop();
+        // only print for selected slot
+        if ancestors.max_slot() == 170618236 {
+            info!(" ==TAOTAOTAO== load_lookup_table_addresses slot {} load_us {}", ancestors.max_slot(), load_time.as_us());
         }
+
+        res
     }
 
     fn filter_zero_lamport_account(
