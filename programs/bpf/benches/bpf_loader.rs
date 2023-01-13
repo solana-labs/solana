@@ -22,7 +22,7 @@ use {
         bank::Bank,
         bank_client::BankClient,
         genesis_utils::{create_genesis_config, GenesisConfigInfo},
-        loader_utils::load_program,
+        loader_utils::{create_deprecated_program, load_program_from_file},
     },
     solana_sdk::{
         bpf_loader,
@@ -30,54 +30,18 @@ use {
         entrypoint::SUCCESS,
         instruction::{AccountMeta, Instruction},
         message::Message,
-        pubkey::Pubkey,
-        signature::{Keypair, Signer},
+        signature::Signer,
     },
-    std::{env, fs::File, io::Read, mem, path::PathBuf, sync::Arc},
+    std::{mem, sync::Arc},
     test::Bencher,
 };
-
-/// BPF program file extension
-const PLATFORM_FILE_EXTENSION_BPF: &str = "so";
-/// Create a BPF program file name
-fn create_bpf_path(name: &str) -> PathBuf {
-    let mut pathbuf = {
-        let current_exe = env::current_exe().unwrap();
-        PathBuf::from(current_exe.parent().unwrap().parent().unwrap())
-    };
-    pathbuf.push("bpf/");
-    pathbuf.push(name);
-    pathbuf.set_extension(PLATFORM_FILE_EXTENSION_BPF);
-    pathbuf
-}
-
-fn load_elf(name: &str) -> Result<Vec<u8>, std::io::Error> {
-    let path = create_bpf_path(name);
-    let mut file = File::open(&path).expect(&format!("Unable to open {:?}", path));
-    let mut elf = Vec::new();
-    file.read_to_end(&mut elf).unwrap();
-    Ok(elf)
-}
-
-fn load_bpf_program(
-    bank_client: &BankClient,
-    loader_id: &Pubkey,
-    payer_keypair: &Keypair,
-    name: &str,
-) -> Pubkey {
-    let path = create_bpf_path(name);
-    let mut file = File::open(path).unwrap();
-    let mut elf = Vec::new();
-    file.read_to_end(&mut elf).unwrap();
-    load_program(bank_client, payer_keypair, loader_id, elf)
-}
 
 const ARMSTRONG_LIMIT: u64 = 500;
 const ARMSTRONG_EXPECTED: u64 = 5;
 
 #[bench]
 fn bench_program_create_executable(bencher: &mut Bencher) {
-    let elf = load_elf("bench_alu").unwrap();
+    let elf = load_program_from_file("bench_alu");
 
     bencher.iter(|| {
         let _ = Executable::<BpfError, ThisInstructionMeter>::from_elf(
@@ -98,7 +62,7 @@ fn bench_program_alu(bencher: &mut Bencher) {
         .write_u64::<LittleEndian>(ARMSTRONG_LIMIT)
         .unwrap();
     inner_iter.write_u64::<LittleEndian>(0).unwrap();
-    let elf = load_elf("bench_alu").unwrap();
+    let elf = load_program_from_file("bench_alu");
     let loader_id = bpf_loader::id();
     with_mock_invoke_context(loader_id, 10000001, |invoke_context| {
         invoke_context
@@ -191,7 +155,7 @@ fn bench_program_execute_noop(bencher: &mut Bencher) {
     let bank_client = BankClient::new_shared(&bank);
 
     let invoke_program_id =
-        load_bpf_program(&bank_client, &bpf_loader::id(), &mint_keypair, "noop");
+        create_deprecated_program(&bank_client, &bpf_loader::id(), &mint_keypair, "noop");
 
     let mint_pubkey = mint_keypair.pubkey();
     let account_metas = vec![AccountMeta::new(mint_pubkey, true)];
@@ -214,7 +178,7 @@ fn bench_program_execute_noop(bencher: &mut Bencher) {
 
 #[bench]
 fn bench_create_vm(bencher: &mut Bencher) {
-    let elf = load_elf("noop").unwrap();
+    let elf = load_program_from_file("noop");
     let loader_id = bpf_loader::id();
     with_mock_invoke_context(loader_id, 10000001, |invoke_context| {
         const BUDGET: u64 = 200_000;
@@ -262,7 +226,7 @@ fn bench_create_vm(bencher: &mut Bencher) {
 
 #[bench]
 fn bench_instruction_count_tuner(_bencher: &mut Bencher) {
-    let elf = load_elf("tuner").unwrap();
+    let elf = load_program_from_file("tuner");
     let loader_id = bpf_loader::id();
     with_mock_invoke_context(loader_id, 10000001, |invoke_context| {
         const BUDGET: u64 = 200_000;
