@@ -321,7 +321,7 @@ impl Accounts {
                             load_time.stop();
         // only print for selected slot
         if ancestors.max_slot() == 170618236 {
-            info!(" ==TAOTAOTAO== load_account slot {} tx {:?} account {:?} load_us {}", ancestors.max_slot(), tx.signatures(), key, load_time.as_us());
+            info!(" ==TAOTAOTAO== load_account slot {} tx {:?} account {:?} load_us {}", ancestors.max_slot(), tx.signature(), key, load_time.as_us());
         }
                             act
                         };
@@ -366,7 +366,7 @@ impl Accounts {
                                         )
                                     {
                                         Self::accumulate_loaded_account_data_size(&mut accumulated_accounts_data_size, programdata_account.data().len());
-            info!(" ==TAOTAO== transaction {:?}, account {:?}, type account_programdata, size {:?}", tx.signatures(), programdata_address, programdata_account.data().len()); 
+            info!(" ==TAOTAO== transaction {:?}, account {:?}, type account_programdata, size {:?}", tx.signature(), programdata_address, programdata_account.data().len()); 
 
                                         account_deps
                                             .push((programdata_address, programdata_account));
@@ -378,7 +378,7 @@ impl Accounts {
                                     load_time.stop();
         // only print for selected slot
         if ancestors.max_slot() == 170618236 {
-            info!(" ==TAOTAOTAO== load_programdata_account slot {} tx {:?} proogramdata_account {:?} load_us {}", ancestors.max_slot(), tx.signatures(), programdata_address, load_time.as_us());
+            info!(" ==TAOTAOTAO== load_programdata_account slot {} tx {:?} proogramdata_account {:?} load_us {}", ancestors.max_slot(), tx.signature(), programdata_address, load_time.as_us());
         }
                                 } else {
                                     error_counters.invalid_program_for_execution += 1;
@@ -397,7 +397,7 @@ impl Accounts {
                     }
                 };
                 Self::accumulate_loaded_account_data_size(&mut accumulated_accounts_data_size, account.data().len());
-            info!(" ==TAOTAO== transaction {:?}, account {:?}, type account, size {:?}", tx.signatures(), key, account.data().len()); 
+            info!(" ==TAOTAO== transaction {:?}, account {:?}, type account, size {:?}", tx.signature(), key, account.data().len()); 
 
                 accounts.push((*key, account));
             }
@@ -441,7 +441,7 @@ impl Accounts {
                 Err(TransactionError::AccountNotFound)
             };
 
-            info!(" ==TAO== transaction {:?}, loaded account size {:?}", tx.signatures(), accumulated_accounts_data_size); 
+            info!(" ==TAO== transaction {:?}, loaded account size {:?}", tx.signature(), accumulated_accounts_data_size); 
             res
         }
     }
@@ -542,7 +542,7 @@ impl Accounts {
                     if should_accumulate_program_account_size {
                         loaded_account_total_size =
                             loaded_account_total_size.saturating_add(program_account.data().len());
-            info!(" ==TAOTAO== transaction {:?}, account {:?}, type program, size {:?}", tx.signatures(), program_id, program_account.data().len()); 
+            info!(" ==TAOTAO== transaction {:?}, account {:?}, type program, size {:?}", tx.signature(), program_id, program_account.data().len()); 
                     }
 
                     accounts.push((program_id, program_account));
@@ -557,7 +557,7 @@ impl Accounts {
             load_time.stop();
         // only print for selected slot
         if ancestors.max_slot() == 170618236 {
-            info!(" ==TAOTAOTAO== load_program_account slot {} tx {:?} account {:?} load_us {}", ancestors.max_slot(), tx.signatures(), program_id, load_time.as_us());
+            info!(" ==TAOTAOTAO== load_program_account slot {} tx {:?} account {:?} load_us {}", ancestors.max_slot(), tx.signature(), program_id, load_time.as_us());
         }
 
 
@@ -588,7 +588,7 @@ impl Accounts {
                             if should_accumulate_program_account_size {
                                 loaded_account_total_size = loaded_account_total_size
                                     .saturating_add(programdata_account.data().len());
-            info!(" ==TAOTAO== transaction {:?}, account {:?}, type program_programdata, size {:?}", tx.signatures(), programdata_address, programdata_account.data().len()); 
+            info!(" ==TAOTAO== transaction {:?}, account {:?}, type program_programdata, size {:?}", tx.signature(), programdata_address, programdata_account.data().len()); 
                             }
                             accounts.push((programdata_address, programdata_account));
                             account_index
@@ -603,7 +603,7 @@ impl Accounts {
                     load_time.stop();
         // only print for selected slot
         if ancestors.max_slot() == 170618236 {
-            info!(" ==TAOTAOTAO== load_program_programdata_ccount slot {} tx {:?} account {:?} load_us {}", ancestors.max_slot(), tx.signatures(), programdata_address, load_time.as_us());
+            info!(" ==TAOTAOTAO== load_program_programdata_ccount slot {} tx {:?} account {:?} load_us {}", ancestors.max_slot(), tx.signature(), programdata_address, load_time.as_us());
         }
                 } else {
                     error_counters.invalid_program_for_execution += 1;
