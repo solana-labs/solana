@@ -537,7 +537,7 @@ fn test_duplicate_shreds_switch_failure() {
         - duplicate_fork_node2_stake;
     assert!(
         duplicate_fork_node1_stake + duplicate_fork_node2_stake
-            >= (total_stake as f64 * DUPLICATE_THRESHOLD) as u64
+            > (total_stake as f64 * DUPLICATE_THRESHOLD) as u64
     );
     assert!(duplicate_fork_node1_stake <= (total_stake as f64 * DUPLICATE_THRESHOLD) as u64);
     assert!(duplicate_fork_node2_stake <= (total_stake as f64 * DUPLICATE_THRESHOLD) as u64);
@@ -659,7 +659,7 @@ fn test_duplicate_shreds_switch_failure() {
     cluster.set_entry_point(target_switch_fork_validator_info.info.contact_info.clone());
 
     // 4) Restart `target_switch_fork_validator_pubkey`, and ensure they vote on their own leader slot
-    // not descended from the duplicate slot
+    // that's not descended from the duplicate slot
     info!("Restarting switch fork node");
     cluster.restart_node(
         &target_switch_fork_validator_pubkey,
