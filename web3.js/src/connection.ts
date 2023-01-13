@@ -1,7 +1,12 @@
+import HttpKeepAliveAgent, {
+  HttpsAgent as HttpsKeepAliveAgent,
+} from 'agentkeepalive';
 import bs58 from 'bs58';
 import {Buffer} from 'buffer';
 // @ts-ignore
 import fastStableStringify from 'fast-stable-stringify';
+import type {Agent as NodeHttpAgent} from 'http';
+import {Agent as NodeHttpsAgent} from 'https';
 import {
   type as pick,
   number,
@@ -23,8 +28,8 @@ import {
 import type {Struct} from 'superstruct';
 import {Client as RpcWebSocketClient} from 'rpc-websockets';
 import RpcClient from 'jayson/lib/client/browser';
+import {JSONRPCError} from 'jayson';
 
-import {AgentManager} from './agent-manager';
 import {EpochSchedule} from './epoch-schedule';
 import {SendTransactionError, SolanaJSONRPCError} from './errors';
 import fetchImpl, {Response} from './fetch-impl';
@@ -310,9 +315,46 @@ export type BlockhashWithExpiryBlockHeight = Readonly<{
  * A strategy for confirming transactions that uses the last valid
  * block height for a given blockhash to check for transaction expiration.
  */
-export type BlockheightBasedTransactionConfirmationStrategy = {
+export type BlockheightBasedTransactionConfirmationStrategy =
+  BaseTransactionConfirmationStrategy & BlockhashWithExpiryBlockHeight;
+
+/**
+ * A strategy for confirming durable nonce transactions.
+ */
+export type DurableNonceTransactionConfirmationStrategy =
+  BaseTransactionConfirmationStrategy & {
+    /**
+     * The lowest slot at which to fetch the nonce value from the
+     * nonce account. This should be no lower than the slot at
+     * which the last-known value of the nonce was fetched.
+     */
+    minContextSlot: number;
+    /**
+     * The account where the current value of the nonce is stored.
+     */
+    nonceAccountPubkey: PublicKey;
+    /**
+     * The nonce value that was used to sign the transaction
+     * for which confirmation is being sought.
+     */
+    nonceValue: DurableNonce;
+  };
+
+/**
+ * Properties shared by all transaction confirmation strategies
+ */
+export type BaseTransactionConfirmationStrategy = Readonly<{
+  /** A signal that, when aborted, cancels any outstanding transaction confirmation operations */
+  abortSignal?: AbortSignal;
   signature: TransactionSignature;
-} & BlockhashWithExpiryBlockHeight;
+}>;
+
+/**
+ * This type represents all transaction confirmation strategies
+ */
+export type TransactionConfirmationStrategy =
+  | BlockheightBasedTransactionConfirmationStrategy
+  | DurableNonceTransactionConfirmationStrategy;
 
 /* @internal */
 function assertEndpointUrl(putativeUrl: string) {
@@ -338,28 +380,6 @@ function extractCommitmentFromConfig<TConfig>(
   }
   return {commitment, config};
 }
-
-/**
- * A strategy for confirming durable nonce transactions.
- */
-export type DurableNonceTransactionConfirmationStrategy = {
-  /**
-   * The lowest slot at which to fetch the nonce value from the
-   * nonce account. This should be no lower than the slot at
-   * which the last-known value of the nonce was fetched.
-   */
-  minContextSlot: number;
-  /**
-   * The account where the current value of the nonce is stored.
-   */
-  nonceAccountPubkey: PublicKey;
-  /**
-   * The nonce value that was used to sign the transaction
-   * for which confirmation is being sought.
-   */
-  nonceValue: DurableNonce;
-  signature: TransactionSignature;
-};
 
 /**
  * @internal
@@ -517,6 +537,18 @@ export type GetBalanceConfig = {
 export type GetBlockConfig = {
   /** The level of finality desired */
   commitment?: Finality;
+  /**
+   * Whether to populate the rewards array. If parameter not provided, the default includes rewards.
+   */
+  rewards?: boolean;
+  /**
+   * Level of transaction detail to return, either "full", "accounts", "signatures", or "none". If
+   * parameter not provided, the default detail level is "full". If "accounts" are requested,
+   * transaction details only include signatures and an annotated list of accounts in each
+   * transaction. Transaction metadata is limited to only: fee, err, pre_balances, post_balances,
+   * pre_token_balances, and post_token_balances.
+   */
+  transactionDetails?: 'accounts' | 'full' | 'none' | 'signatures';
 };
 
 /**
@@ -527,6 +559,18 @@ export type GetVersionedBlockConfig = {
   commitment?: Finality;
   /** The max transaction version to return in responses. If the requested transaction is a higher version, an error will be returned */
   maxSupportedTransactionVersion?: number;
+  /**
+   * Whether to populate the rewards array. If parameter not provided, the default includes rewards.
+   */
+  rewards?: boolean;
+  /**
+   * Level of transaction detail to return, either "full", "accounts", "signatures", or "none". If
+   * parameter not provided, the default detail level is "full". If "accounts" are requested,
+   * transaction details only include signatures and an annotated list of accounts in each
+   * transaction. Transaction metadata is limited to only: fee, err, pre_balances, post_balances,
+   * pre_token_balances, and post_token_balances.
+   */
+  transactionDetails?: 'accounts' | 'full' | 'none' | 'signatures';
 };
 
 /**
@@ -723,6 +767,8 @@ export type InflationReward = {
   amount: number;
   /** post balance of the account in lamports */
   postBalance: number;
+  /** vote account commission when the reward was credited */
+  commission?: number | null;
 };
 
 /**
@@ -736,10 +782,32 @@ const GetInflationRewardResult = jsonRpcResult(
         effectiveSlot: number(),
         amount: number(),
         postBalance: number(),
+        commission: optional(nullable(number())),
       }),
     ),
   ),
 );
+
+export type InflationRate = {
+  /** total inflation */
+  total: number;
+  /** inflation allocated to validators */
+  validator: number;
+  /** inflation allocated to the foundation */
+  foundation: number;
+  /** epoch for which these values are valid */
+  epoch: number;
+};
+
+/**
+ * Expected JSON RPC response for the "getInflationRate" message
+ */
+const GetInflationRateResult = pick({
+  total: number(),
+  validator: number(),
+  foundation: number(),
+  epoch: number(),
+});
 
 /**
  * Information about the current epoch
@@ -1167,10 +1235,22 @@ export type BlockResponse = {
     postBalance: number | null;
     /** Type of reward received */
     rewardType: string | null;
+    /** Vote account commission when the reward was credited, only present for voting and staking rewards */
+    commission?: number | null;
   }>;
   /** The unix timestamp of when the block was processed */
   blockTime: number | null;
 };
+
+/**
+ * A processed block fetched from the RPC API where the `transactionDetails` mode is `accounts`
+ */
+export type AccountsModeBlockResponse = VersionedAccountsModeBlockResponse;
+
+/**
+ * A processed block fetched from the RPC API where the `transactionDetails` mode is `none`
+ */
+export type NoneModeBlockResponse = VersionedNoneModeBlockResponse;
 
 /**
  * A block with parsed transactions
@@ -1201,12 +1281,41 @@ export type ParsedBlockResponse = {
     postBalance: number | null;
     /** Type of reward received */
     rewardType: string | null;
+    /** Vote account commission when the reward was credited, only present for voting and staking rewards */
+    commission?: number | null;
   }>;
   /** The unix timestamp of when the block was processed */
   blockTime: number | null;
   /** The number of blocks beneath this block */
   blockHeight: number | null;
 };
+
+/**
+ * A block with parsed transactions where the `transactionDetails` mode is `accounts`
+ */
+export type ParsedAccountsModeBlockResponse = Omit<
+  ParsedBlockResponse,
+  'transactions'
+> & {
+  transactions: Array<
+    Omit<ParsedBlockResponse['transactions'][number], 'transaction'> & {
+      transaction: Pick<
+        ParsedBlockResponse['transactions'][number]['transaction'],
+        'signatures'
+      > & {
+        accountKeys: ParsedMessageAccount[];
+      };
+    }
+  >;
+};
+
+/**
+ * A block with parsed transactions where the `transactionDetails` mode is `none`
+ */
+export type ParsedNoneModeBlockResponse = Omit<
+  ParsedBlockResponse,
+  'transactions'
+>;
 
 /**
  * A processed block fetched from the RPC API
@@ -1242,10 +1351,39 @@ export type VersionedBlockResponse = {
     postBalance: number | null;
     /** Type of reward received */
     rewardType: string | null;
+    /** Vote account commission when the reward was credited, only present for voting and staking rewards */
+    commission?: number | null;
   }>;
   /** The unix timestamp of when the block was processed */
   blockTime: number | null;
 };
+
+/**
+ * A processed block fetched from the RPC API where the `transactionDetails` mode is `accounts`
+ */
+export type VersionedAccountsModeBlockResponse = Omit<
+  VersionedBlockResponse,
+  'transactions'
+> & {
+  transactions: Array<
+    Omit<VersionedBlockResponse['transactions'][number], 'transaction'> & {
+      transaction: Pick<
+        VersionedBlockResponse['transactions'][number]['transaction'],
+        'signatures'
+      > & {
+        accountKeys: ParsedMessageAccount[];
+      };
+    }
+  >;
+};
+
+/**
+ * A processed block fetched from the RPC API where the `transactionDetails` mode is `none`
+ */
+export type VersionedNoneModeBlockResponse = Omit<
+  VersionedBlockResponse,
+  'transactions'
+>;
 
 /**
  * A confirmed block on the ledger
@@ -1270,6 +1408,7 @@ export type ConfirmedBlock = {
     lamports: number;
     postBalance: number | null;
     rewardType: string | null;
+    commission?: number | null;
   }>;
   /** The unix timestamp of when the block was processed */
   blockTime: number | null;
@@ -1353,11 +1492,54 @@ function createRpcClient(
   customFetch?: FetchFn,
   fetchMiddleware?: FetchMiddleware,
   disableRetryOnRateLimit?: boolean,
+  httpAgent?: NodeHttpAgent | NodeHttpsAgent | false,
 ): RpcClient {
   const fetch = customFetch ? customFetch : fetchImpl;
-  let agentManager: AgentManager | undefined;
-  if (!process.env.BROWSER) {
-    agentManager = new AgentManager(url.startsWith('https:') /* useHttps */);
+  let agent: NodeHttpAgent | NodeHttpsAgent | undefined;
+  if (process.env.BROWSER) {
+    if (httpAgent != null) {
+      console.warn(
+        'You have supplied an `httpAgent` when creating a `Connection` in a browser environment.' +
+          'It has been ignored; `httpAgent` is only used in Node environments.',
+      );
+    }
+  } else {
+    if (httpAgent == null) {
+      if (process.env.NODE_ENV !== 'test') {
+        const agentOptions = {
+          // One second fewer than the Solana RPC's keepalive timeout.
+          // Read more: https://github.com/solana-labs/solana/issues/27859#issuecomment-1340097889
+          freeSocketTimeout: 19000,
+          keepAlive: true,
+          maxSockets: 25,
+        };
+        if (url.startsWith('https:')) {
+          agent = new HttpsKeepAliveAgent(agentOptions);
+        } else {
+          agent = new HttpKeepAliveAgent(agentOptions);
+        }
+      }
+    } else {
+      if (httpAgent !== false) {
+        const isHttps = url.startsWith('https:');
+        if (isHttps && !(httpAgent instanceof NodeHttpsAgent)) {
+          throw new Error(
+            'The endpoint `' +
+              url +
+              '` can only be paired with an `https.Agent`. You have, instead, supplied an ' +
+              '`http.Agent` through `httpAgent`.',
+          );
+        } else if (!isHttps && httpAgent instanceof NodeHttpsAgent) {
+          throw new Error(
+            'The endpoint `' +
+              url +
+              '` can only be paired with an `http.Agent`. You have, instead, supplied an ' +
+              '`https.Agent` through `httpAgent`.',
+          );
+        }
+        agent = httpAgent;
+      }
+    }
   }
 
   let fetchWithMiddleware: FetchFn | undefined;
@@ -1380,7 +1562,6 @@ function createRpcClient(
   }
 
   const clientBrowser = new RpcClient(async (request, callback) => {
-    const agent = agentManager ? agentManager.requestStart() : undefined;
     const options = {
       method: 'POST',
       body: request,
@@ -1430,8 +1611,6 @@ function createRpcClient(
       }
     } catch (err) {
       if (err instanceof Error) callback(err);
-    } finally {
-      agentManager && agentManager.requestEnd();
     }
   }, {});
 
@@ -1477,6 +1656,11 @@ function createRpcBatchRequest(client: RpcClient): RpcBatchRequest {
  * Expected JSON RPC response for the "getInflationGovernor" message
  */
 const GetInflationGovernorRpcResult = jsonRpcResult(GetInflationGovernorResult);
+
+/**
+ * Expected JSON RPC response for the "getInflationRate" message
+ */
+const GetInflationRateRpcResult = jsonRpcResult(GetInflationRateResult);
 
 /**
  * Expected JSON RPC response for the "getEpochInfo" message
@@ -1980,6 +2164,18 @@ const ConfirmedTransactionResult = pick({
   }),
 });
 
+const AnnotatedAccountKey = pick({
+  pubkey: PublicKeyFromString,
+  signer: boolean(),
+  writable: boolean(),
+  source: optional(union([literal('transaction'), literal('lookupTable')])),
+});
+
+const ConfirmedTransactionAccountsModeResult = pick({
+  accountKeys: array(AnnotatedAccountKey),
+  signatures: array(string()),
+});
+
 const ParsedInstructionResult = pick({
   parsed: unknown(),
   program: string(),
@@ -2028,16 +2224,7 @@ const ParsedOrRawInstruction = coerce(
 const ParsedConfirmedTransactionResult = pick({
   signatures: array(string()),
   message: pick({
-    accountKeys: array(
-      pick({
-        pubkey: PublicKeyFromString,
-        signer: boolean(),
-        writable: boolean(),
-        source: optional(
-          union([literal('transaction'), literal('lookupTable')]),
-        ),
-      }),
-    ),
+    accountKeys: array(AnnotatedAccountKey),
     instructions: array(ParsedOrRawInstruction),
     recentBlockhash: string(),
     addressTableLookups: optional(nullable(array(AddressTableLookupStruct))),
@@ -2114,6 +2301,15 @@ const ParsedConfirmedTransactionMetaResult = pick({
 
 const TransactionVersionStruct = union([literal(0), literal('legacy')]);
 
+/** @internal */
+const RewardsResult = pick({
+  pubkey: string(),
+  lamports: number(),
+  postBalance: nullable(number()),
+  rewardType: nullable(string()),
+  commission: optional(nullable(number())),
+});
+
 /**
  * Expected JSON RPC response for the "getBlock" message
  */
@@ -2130,16 +2326,46 @@ const GetBlockRpcResult = jsonRpcResult(
           version: optional(TransactionVersionStruct),
         }),
       ),
-      rewards: optional(
-        array(
-          pick({
-            pubkey: string(),
-            lamports: number(),
-            postBalance: nullable(number()),
-            rewardType: nullable(string()),
-          }),
-        ),
+      rewards: optional(array(RewardsResult)),
+      blockTime: nullable(number()),
+      blockHeight: nullable(number()),
+    }),
+  ),
+);
+
+/**
+ * Expected JSON RPC response for the "getBlock" message when `transactionDetails` is `none`
+ */
+const GetNoneModeBlockRpcResult = jsonRpcResult(
+  nullable(
+    pick({
+      blockhash: string(),
+      previousBlockhash: string(),
+      parentSlot: number(),
+      rewards: optional(array(RewardsResult)),
+      blockTime: nullable(number()),
+      blockHeight: nullable(number()),
+    }),
+  ),
+);
+
+/**
+ * Expected JSON RPC response for the "getBlock" message when `transactionDetails` is `accounts`
+ */
+const GetAccountsModeBlockRpcResult = jsonRpcResult(
+  nullable(
+    pick({
+      blockhash: string(),
+      previousBlockhash: string(),
+      parentSlot: number(),
+      transactions: array(
+        pick({
+          transaction: ConfirmedTransactionAccountsModeResult,
+          meta: nullable(ConfirmedTransactionMetaResult),
+          version: optional(TransactionVersionStruct),
+        }),
       ),
+      rewards: optional(array(RewardsResult)),
       blockTime: nullable(number()),
       blockHeight: nullable(number()),
     }),
@@ -2162,16 +2388,46 @@ const GetParsedBlockRpcResult = jsonRpcResult(
           version: optional(TransactionVersionStruct),
         }),
       ),
-      rewards: optional(
-        array(
-          pick({
-            pubkey: string(),
-            lamports: number(),
-            postBalance: nullable(number()),
-            rewardType: nullable(string()),
-          }),
-        ),
+      rewards: optional(array(RewardsResult)),
+      blockTime: nullable(number()),
+      blockHeight: nullable(number()),
+    }),
+  ),
+);
+
+/**
+ * Expected parsed JSON RPC response for the "getBlock" message  when `transactionDetails` is `accounts`
+ */
+const GetParsedAccountsModeBlockRpcResult = jsonRpcResult(
+  nullable(
+    pick({
+      blockhash: string(),
+      previousBlockhash: string(),
+      parentSlot: number(),
+      transactions: array(
+        pick({
+          transaction: ConfirmedTransactionAccountsModeResult,
+          meta: nullable(ParsedConfirmedTransactionMetaResult),
+          version: optional(TransactionVersionStruct),
+        }),
       ),
+      rewards: optional(array(RewardsResult)),
+      blockTime: nullable(number()),
+      blockHeight: nullable(number()),
+    }),
+  ),
+);
+
+/**
+ * Expected parsed JSON RPC response for the "getBlock" message  when `transactionDetails` is `none`
+ */
+const GetParsedNoneModeBlockRpcResult = jsonRpcResult(
+  nullable(
+    pick({
+      blockhash: string(),
+      previousBlockhash: string(),
+      parentSlot: number(),
+      rewards: optional(array(RewardsResult)),
       blockTime: nullable(number()),
       blockHeight: nullable(number()),
     }),
@@ -2195,16 +2451,7 @@ const GetConfirmedBlockRpcResult = jsonRpcResult(
           meta: nullable(ConfirmedTransactionMetaResult),
         }),
       ),
-      rewards: optional(
-        array(
-          pick({
-            pubkey: string(),
-            lamports: number(),
-            postBalance: nullable(number()),
-            rewardType: nullable(string()),
-          }),
-        ),
-      ),
+      rewards: optional(array(RewardsResult)),
       blockTime: nullable(number()),
     }),
   ),
@@ -2696,6 +2943,12 @@ export type FetchMiddleware = (
  * Configuration for instantiating a Connection
  */
 export type ConnectionConfig = {
+  /**
+   * An `http.Agent` that will be used to manage socket connections (eg. to implement connection
+   * persistence). Set this to `false` to create a connection that uses no agent. This applies to
+   * Node environments only.
+   */
+  httpAgent?: NodeHttpAgent | NodeHttpsAgent | false;
   /** Optional commitment level */
   commitment?: Commitment;
   /** Optional endpoint URL to the fullnode JSON RPC PubSub WebSocket Endpoint */
@@ -2813,6 +3066,7 @@ export class Connection {
     let fetch;
     let fetchMiddleware;
     let disableRetryOnRateLimit;
+    let httpAgent;
     if (commitmentOrConfig && typeof commitmentOrConfig === 'string') {
       this._commitment = commitmentOrConfig;
     } else if (commitmentOrConfig) {
@@ -2824,6 +3078,7 @@ export class Connection {
       fetch = commitmentOrConfig.fetch;
       fetchMiddleware = commitmentOrConfig.fetchMiddleware;
       disableRetryOnRateLimit = commitmentOrConfig.disableRetryOnRateLimit;
+      httpAgent = commitmentOrConfig.httpAgent;
     }
 
     this._rpcEndpoint = assertEndpointUrl(endpoint);
@@ -2835,6 +3090,7 @@ export class Connection {
       fetch,
       fetchMiddleware,
       disableRetryOnRateLimit,
+      httpAgent,
     );
     this._rpcRequest = createRpcRequest(this._rpcClient);
     this._rpcBatchRequest = createRpcBatchRequest(this._rpcClient);
@@ -3391,13 +3647,11 @@ export class Connection {
   }
 
   confirmTransaction(
-    strategy:
-      | BlockheightBasedTransactionConfirmationStrategy
-      | DurableNonceTransactionConfirmationStrategy,
+    strategy: TransactionConfirmationStrategy,
     commitment?: Commitment,
   ): Promise<RpcResponseAndContext<SignatureResult>>;
 
-  /** @deprecated Instead, call `confirmTransaction` using a `TransactionConfirmationConfig` */
+  /** @deprecated Instead, call `confirmTransaction` and pass in {@link TransactionConfirmationStrategy} */
   // eslint-disable-next-line no-dupe-class-members
   confirmTransaction(
     strategy: TransactionSignature,
@@ -3406,10 +3660,7 @@ export class Connection {
 
   // eslint-disable-next-line no-dupe-class-members
   async confirmTransaction(
-    strategy:
-      | BlockheightBasedTransactionConfirmationStrategy
-      | DurableNonceTransactionConfirmationStrategy
-      | TransactionSignature,
+    strategy: TransactionConfirmationStrategy | TransactionSignature,
     commitment?: Commitment,
   ): Promise<RpcResponseAndContext<SignatureResult>> {
     let rawSignature: string;
@@ -3417,9 +3668,11 @@ export class Connection {
     if (typeof strategy == 'string') {
       rawSignature = strategy;
     } else {
-      const config = strategy as
-        | BlockheightBasedTransactionConfirmationStrategy
-        | DurableNonceTransactionConfirmationStrategy;
+      const config = strategy as TransactionConfirmationStrategy;
+
+      if (config.abortSignal?.aborted) {
+        return Promise.reject(config.abortSignal.reason);
+      }
       rawSignature = config.signature;
     }
 
@@ -3449,6 +3702,21 @@ export class Connection {
         strategy,
       });
     }
+  }
+
+  private getCancellationPromise(signal?: AbortSignal): Promise<never> {
+    return new Promise<never>((_, reject) => {
+      if (signal == null) {
+        return;
+      }
+      if (signal.aborted) {
+        reject(signal.reason);
+      } else {
+        signal.addEventListener('abort', () => {
+          reject(signal.reason);
+        });
+      }
+    });
   }
 
   private getTransactionConfirmationPromise({
@@ -3561,7 +3829,7 @@ export class Connection {
         disposeSignatureSubscriptionStateChangeObserver();
         disposeSignatureSubscriptionStateChangeObserver = undefined;
       }
-      if (signatureSubscriptionId) {
+      if (signatureSubscriptionId != null) {
         this.removeSignatureListener(signatureSubscriptionId);
         signatureSubscriptionId = undefined;
       }
@@ -3571,7 +3839,7 @@ export class Connection {
 
   private async confirmTransactionUsingBlockHeightExceedanceStrategy({
     commitment,
-    strategy: {lastValidBlockHeight, signature},
+    strategy: {abortSignal, lastValidBlockHeight, signature},
   }: {
     commitment?: Commitment;
     strategy: BlockheightBasedTransactionConfirmationStrategy;
@@ -3602,9 +3870,14 @@ export class Connection {
     });
     const {abortConfirmation, confirmationPromise} =
       this.getTransactionConfirmationPromise({commitment, signature});
+    const cancellationPromise = this.getCancellationPromise(abortSignal);
     let result: RpcResponseAndContext<SignatureResult>;
     try {
-      const outcome = await Promise.race([confirmationPromise, expiryPromise]);
+      const outcome = await Promise.race([
+        cancellationPromise,
+        confirmationPromise,
+        expiryPromise,
+      ]);
       if (outcome.__type === TransactionStatus.PROCESSED) {
         result = outcome.response;
       } else {
@@ -3619,7 +3892,13 @@ export class Connection {
 
   private async confirmTransactionUsingDurableNonceStrategy({
     commitment,
-    strategy: {minContextSlot, nonceAccountPubkey, nonceValue, signature},
+    strategy: {
+      abortSignal,
+      minContextSlot,
+      nonceAccountPubkey,
+      nonceValue,
+      signature,
+    },
   }: {
     commitment?: Commitment;
     strategy: DurableNonceTransactionConfirmationStrategy;
@@ -3670,9 +3949,14 @@ export class Connection {
     });
     const {abortConfirmation, confirmationPromise} =
       this.getTransactionConfirmationPromise({commitment, signature});
+    const cancellationPromise = this.getCancellationPromise(abortSignal);
     let result: RpcResponseAndContext<SignatureResult>;
     try {
-      const outcome = await Promise.race([confirmationPromise, expiryPromise]);
+      const outcome = await Promise.race([
+        cancellationPromise,
+        confirmationPromise,
+        expiryPromise,
+      ]);
       if (outcome.__type === TransactionStatus.PROCESSED) {
         result = outcome.response;
       } else {
@@ -4008,6 +4292,18 @@ export class Connection {
   }
 
   /**
+   * Fetch the specific inflation values for the current epoch
+   */
+  async getInflationRate(): Promise<InflationRate> {
+    const unsafeRes = await this._rpcRequest('getInflationRate', []);
+    const res = create(unsafeRes, GetInflationRateRpcResult);
+    if ('error' in res) {
+      throw new SolanaJSONRPCError(res.error, 'failed to get inflation rate');
+    }
+    return res.result;
+  }
+
+  /**
    * Fetch the Epoch Info parameters
    */
   async getEpochInfo(
@@ -4262,6 +4558,26 @@ export class Connection {
   ): Promise<BlockResponse | null>;
 
   /**
+   * @deprecated Instead, call `getBlock` using a `GetVersionedBlockConfig` by
+   * setting the `maxSupportedTransactionVersion` property.
+   */
+  // eslint-disable-next-line no-dupe-class-members
+  async getBlock(
+    slot: number,
+    rawConfig: GetBlockConfig & {transactionDetails: 'accounts'},
+  ): Promise<AccountsModeBlockResponse | null>;
+
+  /**
+   * @deprecated Instead, call `getBlock` using a `GetVersionedBlockConfig` by
+   * setting the `maxSupportedTransactionVersion` property.
+   */
+  // eslint-disable-next-line no-dupe-class-members
+  async getBlock(
+    slot: number,
+    rawConfig: GetBlockConfig & {transactionDetails: 'none'},
+  ): Promise<NoneModeBlockResponse | null>;
+
+  /**
    * Fetch a processed block from the cluster.
    */
   // eslint-disable-next-line no-dupe-class-members
@@ -4270,6 +4586,18 @@ export class Connection {
     rawConfig?: GetVersionedBlockConfig,
   ): Promise<VersionedBlockResponse | null>;
 
+  // eslint-disable-next-line no-dupe-class-members
+  async getBlock(
+    slot: number,
+    rawConfig: GetVersionedBlockConfig & {transactionDetails: 'accounts'},
+  ): Promise<VersionedAccountsModeBlockResponse | null>;
+
+  // eslint-disable-next-line no-dupe-class-members
+  async getBlock(
+    slot: number,
+    rawConfig: GetVersionedBlockConfig & {transactionDetails: 'none'},
+  ): Promise<VersionedNoneModeBlockResponse | null>;
+
   /**
    * Fetch a processed block from the cluster.
    */
@@ -4277,7 +4605,12 @@ export class Connection {
   async getBlock(
     slot: number,
     rawConfig?: GetVersionedBlockConfig,
-  ): Promise<VersionedBlockResponse | null> {
+  ): Promise<
+    | VersionedBlockResponse
+    | VersionedAccountsModeBlockResponse
+    | VersionedNoneModeBlockResponse
+    | null
+  > {
     const {commitment, config} = extractCommitmentFromConfig(rawConfig);
     const args = this._buildArgsAtLeastConfirmed(
       [slot],
@@ -4286,26 +4619,54 @@ export class Connection {
       config,
     );
     const unsafeRes = await this._rpcRequest('getBlock', args);
-    const res = create(unsafeRes, GetBlockRpcResult);
-
-    if ('error' in res) {
-      throw new SolanaJSONRPCError(res.error, 'failed to get confirmed block');
+    try {
+      switch (config?.transactionDetails) {
+        case 'accounts': {
+          const res = create(unsafeRes, GetAccountsModeBlockRpcResult);
+          if ('error' in res) {
+            throw res.error;
+          }
+          return res.result;
+        }
+        case 'none': {
+          const res = create(unsafeRes, GetNoneModeBlockRpcResult);
+          if ('error' in res) {
+            throw res.error;
+          }
+          return res.result;
+        }
+        default: {
+          const res = create(unsafeRes, GetBlockRpcResult);
+          if ('error' in res) {
+            throw res.error;
+          }
+          const {result} = res;
+          return result
+            ? {
+                ...result,
+                transactions: result.transactions.map(
+                  ({transaction, meta, version}) => ({
+                    meta,
+                    transaction: {
+                      ...transaction,
+                      message: versionedMessageFromResponse(
+                        version,
+                        transaction.message,
+                      ),
+                    },
+                    version,
+                  }),
+                ),
+              }
+            : null;
+        }
+      }
+    } catch (e) {
+      throw new SolanaJSONRPCError(
+        e as JSONRPCError,
+        'failed to get confirmed block',
+      );
     }
-
-    const result = res.result;
-    if (!result) return result;
-
-    return {
-      ...result,
-      transactions: result.transactions.map(({transaction, meta, version}) => ({
-        meta,
-        transaction: {
-          ...transaction,
-          message: versionedMessageFromResponse(version, transaction.message),
-        },
-        version,
-      })),
-    };
   }
 
   /**
@@ -4314,7 +4675,29 @@ export class Connection {
   async getParsedBlock(
     slot: number,
     rawConfig?: GetVersionedBlockConfig,
-  ): Promise<ParsedBlockResponse | null> {
+  ): Promise<ParsedAccountsModeBlockResponse>;
+
+  // eslint-disable-next-line no-dupe-class-members
+  async getParsedBlock(
+    slot: number,
+    rawConfig: GetVersionedBlockConfig & {transactionDetails: 'accounts'},
+  ): Promise<ParsedAccountsModeBlockResponse>;
+
+  // eslint-disable-next-line no-dupe-class-members
+  async getParsedBlock(
+    slot: number,
+    rawConfig: GetVersionedBlockConfig & {transactionDetails: 'none'},
+  ): Promise<ParsedNoneModeBlockResponse>;
+  // eslint-disable-next-line no-dupe-class-members
+  async getParsedBlock(
+    slot: number,
+    rawConfig?: GetVersionedBlockConfig,
+  ): Promise<
+    | ParsedBlockResponse
+    | ParsedAccountsModeBlockResponse
+    | ParsedNoneModeBlockResponse
+    | null
+  > {
     const {commitment, config} = extractCommitmentFromConfig(rawConfig);
     const args = this._buildArgsAtLeastConfirmed(
       [slot],
@@ -4323,11 +4706,33 @@ export class Connection {
       config,
     );
     const unsafeRes = await this._rpcRequest('getBlock', args);
-    const res = create(unsafeRes, GetParsedBlockRpcResult);
-    if ('error' in res) {
-      throw new SolanaJSONRPCError(res.error, 'failed to get block');
+    try {
+      switch (config?.transactionDetails) {
+        case 'accounts': {
+          const res = create(unsafeRes, GetParsedAccountsModeBlockRpcResult);
+          if ('error' in res) {
+            throw res.error;
+          }
+          return res.result;
+        }
+        case 'none': {
+          const res = create(unsafeRes, GetParsedNoneModeBlockRpcResult);
+          if ('error' in res) {
+            throw res.error;
+          }
+          return res.result;
+        }
+        default: {
+          const res = create(unsafeRes, GetParsedBlockRpcResult);
+          if ('error' in res) {
+            throw res.error;
+          }
+          return res.result;
+        }
+      }
+    } catch (e) {
+      throw new SolanaJSONRPCError(e as JSONRPCError, 'failed to get block');
     }
-    return res.result;
   }
 
   /*

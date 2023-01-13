@@ -8,7 +8,7 @@ use {
     solana_bucket_map::bucket_map::{BucketMap, BucketMapConfig},
     solana_measure::measure::Measure,
     solana_sdk::{
-        clock::{Slot, SLOT_MS},
+        clock::{Slot, DEFAULT_MS_PER_SLOT},
         timing::AtomicInterval,
     },
     std::{
@@ -22,7 +22,7 @@ use {
 };
 pub type Age = u8;
 
-const AGE_MS: u64 = SLOT_MS; // match one age per slot time
+const AGE_MS: u64 = DEFAULT_MS_PER_SLOT; // match one age per slot time
 
 // 10 GB limit for in-mem idx. In practice, we don't get this high. This tunes how aggressively to save items we expect to use soon.
 pub const DEFAULT_DISK_INDEX: Option<usize> = Some(10_000);
@@ -404,7 +404,6 @@ pub mod tests {
         let bins = 4;
         let test = BucketMapHolder::<u64>::new(bins, &Some(AccountsIndexConfig::default()), 1);
         let visited = (0..bins)
-            .into_iter()
             .map(|_| AtomicUsize::default())
             .collect::<Vec<_>>();
         let iterations = bins * 30;
@@ -412,13 +411,13 @@ pub mod tests {
         let expected = threads * iterations / bins;
 
         (0..threads).into_par_iter().for_each(|_| {
-            (0..iterations).into_iter().for_each(|_| {
+            (0..iterations).for_each(|_| {
                 let bin = test.next_bucket_to_flush();
                 visited[bin].fetch_add(1, Ordering::Relaxed);
             });
         });
         visited.iter().enumerate().for_each(|(bin, visited)| {
-            assert_eq!(visited.load(Ordering::Relaxed), expected, "bin: {}", bin)
+            assert_eq!(visited.load(Ordering::Relaxed), expected, "bin: {bin}")
         });
     }
 

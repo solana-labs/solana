@@ -42,6 +42,7 @@ use {
         vote_state::VoteStateUpdate, vote_transaction::new_vote_state_update_transaction,
     },
     std::{
+        iter::repeat_with,
         sync::{atomic::Ordering, Arc, RwLock},
         time::{Duration, Instant},
     },
@@ -78,6 +79,7 @@ fn bench_consume_buffered(bencher: &mut Bencher) {
             create_test_recorder(&bank, &blockstore, None, None);
 
         let recorder = poh_recorder.read().unwrap().recorder();
+        let bank_start = poh_recorder.read().unwrap().bank_start().unwrap();
 
         let tx = test_tx();
         let transactions = vec![tx; 4194304];
@@ -92,8 +94,7 @@ fn bench_consume_buffered(bencher: &mut Bencher) {
         // If the packet buffers are copied, performance will be poor.
         bencher.iter(move || {
             BankingStage::consume_buffered_packets(
-                std::u128::MAX,
-                &poh_recorder,
+                &bank_start,
                 &mut transaction_buffer,
                 &None,
                 &s,
@@ -128,17 +129,17 @@ fn make_accounts_txs(txes: usize, mint_keypair: &Keypair, hash: Hash) -> Vec<Tra
         .collect()
 }
 
-#[allow(clippy::same_item_push)]
 fn make_programs_txs(txes: usize, hash: Hash) -> Vec<Transaction> {
     let progs = 4;
     (0..txes)
         .map(|_| {
-            let mut instructions = vec![];
             let from_key = Keypair::new();
-            for _ in 1..progs {
+            let instructions: Vec<_> = repeat_with(|| {
                 let to_key = pubkey::new_rand();
-                instructions.push(system_instruction::transfer(&from_key.pubkey(), &to_key, 1));
-            }
+                system_instruction::transfer(&from_key.pubkey(), &to_key, 1)
+            })
+            .take(progs)
+            .collect();
             let message = Message::new(&instructions, Some(&from_key.pubkey()));
             Transaction::new(&[&from_key], message, hash)
         })
@@ -255,7 +256,7 @@ fn bench_banking(bencher: &mut Bencher, tx_type: TransactionType) {
         let mut packet_batches = to_packet_batches(&vote_txs, PACKETS_PER_BATCH);
         for batch in packet_batches.iter_mut() {
             for packet in batch.iter_mut() {
-                packet.meta.set_simple_vote(true);
+                packet.meta_mut().set_simple_vote(true);
             }
         }
         packet_batches
@@ -400,7 +401,6 @@ fn simulate_process_entries(
     process_entries_for_tests(&bank, vec![entry], randomize_txs, None, None).unwrap();
 }
 
-#[allow(clippy::same_item_push)]
 fn bench_process_entries(randomize_txs: bool, bencher: &mut Bencher) {
     // entropy multiplier should be big enough to provide sufficient entropy
     // but small enough to not take too much time while executing the test.
@@ -416,13 +416,8 @@ fn bench_process_entries(randomize_txs: bool, bencher: &mut Bencher) {
         ..
     } = create_genesis_config((num_accounts + 1) as u64 * initial_lamports);
 
-    let mut keypairs: Vec<Keypair> = vec![];
+    let keypairs: Vec<Keypair> = repeat_with(Keypair::new).take(num_accounts).collect();
     let tx_vector: Vec<VersionedTransaction> = Vec::with_capacity(num_accounts / 2);
-
-    for _ in 0..num_accounts {
-        let keypair = Keypair::new();
-        keypairs.push(keypair);
-    }
 
     bencher.iter(|| {
         simulate_process_entries(

@@ -33,7 +33,7 @@ use {
         error::{EbpfError, UserDefinedError},
         memory_region::MemoryRegion,
         verifier::{RequisiteVerifier, VerifierError},
-        vm::{Config, ContextObject, EbpfVm, ProgramResult, VerifiedExecutable},
+        vm::{ContextObject, EbpfVm, ProgramResult, VerifiedExecutable},
     },
     solana_sdk::{
         bpf_loader, bpf_loader_deprecated,
@@ -43,9 +43,8 @@ use {
             cap_accounts_data_allocations_per_transaction, cap_bpf_program_instruction_accounts,
             check_slice_translation_size, disable_deploy_of_alloc_free_syscall,
             disable_deprecated_loader, enable_bpf_loader_extend_program_ix,
-            enable_bpf_loader_set_authority_checked_ix,
-            error_on_syscall_bpf_function_hash_collisions, limit_max_instruction_trace_length,
-            reject_callx_r10, FeatureSet,
+            enable_bpf_loader_set_authority_checked_ix, enable_program_redeployment_cooldown,
+            limit_max_instruction_trace_length, FeatureSet,
         },
         instruction::{AccountMeta, InstructionError},
         loader_instruction::LoaderInstruction,
@@ -132,49 +131,29 @@ fn create_executor_from_bytes(
     let mut register_syscalls_time = Measure::start("register_syscalls_time");
     let disable_deploy_of_alloc_free_syscall = reject_deployment_of_broken_elfs
         && feature_set.is_active(&disable_deploy_of_alloc_free_syscall::id());
-    let register_syscall_result =
-        syscalls::register_syscalls(feature_set, disable_deploy_of_alloc_free_syscall);
-    register_syscalls_time.stop();
-    create_executor_metrics.register_syscalls_us = register_syscalls_time.as_us();
-    let syscall_registry = register_syscall_result.map_err(|e| {
+    let loader = syscalls::create_loader(
+        feature_set,
+        compute_budget,
+        reject_deployment_of_broken_elfs,
+        disable_deploy_of_alloc_free_syscall,
+        false,
+    )
+    .map_err(|e| {
         ic_logger_msg!(log_collector, "Failed to register syscalls: {}", e);
         InstructionError::ProgramEnvironmentSetupFailure
     })?;
-    let config = Config {
-        max_call_depth: compute_budget.max_call_depth,
-        stack_frame_size: compute_budget.stack_frame_size,
-        enable_stack_frame_gaps: true,
-        instruction_meter_checkpoint_distance: 10000,
-        enable_instruction_meter: true,
-        enable_instruction_tracing: false,
-        enable_symbol_and_section_labels: false,
-        reject_broken_elfs: reject_deployment_of_broken_elfs,
-        noop_instruction_rate: 256,
-        sanitize_user_provided_values: true,
-        encrypt_environment_registers: true,
-        syscall_bpf_function_hash_collision: feature_set
-            .is_active(&error_on_syscall_bpf_function_hash_collisions::id()),
-        reject_callx_r10: feature_set.is_active(&reject_callx_r10::id()),
-        dynamic_stack_frames: false,
-        enable_sdiv: false,
-        optimize_rodata: false,
-        static_syscalls: false,
-        enable_elf_vaddr: false,
-        reject_rodata_stack_overlap: false,
-        new_elf_parser: false,
-        aligned_memory_mapping: true,
-        // Warning, do not use `Config::default()` so that configuration here is explicit.
-    };
+    register_syscalls_time.stop();
+    create_executor_metrics.register_syscalls_us = register_syscalls_time.as_us();
     let mut load_elf_time = Measure::start("load_elf_time");
-    let executable = Executable::<InvokeContext>::from_elf(programdata, config, syscall_registry)
-        .map_err(|err| {
-            ic_logger_msg!(log_collector, "{}", err);
-            InstructionError::InvalidAccountData
-        });
+    let executable = Executable::<InvokeContext>::from_elf(programdata, loader).map_err(|err| {
+        ic_logger_msg!(log_collector, "{}", err);
+        InstructionError::InvalidAccountData
+    });
     load_elf_time.stop();
     create_executor_metrics.load_elf_us = load_elf_time.as_us();
     let executable = executable?;
     let mut verify_code_time = Measure::start("verify_code_time");
+    #[allow(unused_mut)]
     let mut verified_executable =
         VerifiedExecutable::<RequisiteVerifier, InvokeContext>::from_executable(executable)
             .map_err(|err| {
@@ -183,6 +162,7 @@ fn create_executor_from_bytes(
             })?;
     verify_code_time.stop();
     create_executor_metrics.verify_code_us = verify_code_time.as_us();
+    #[cfg(all(not(target_os = "windows"), target_arch = "x86_64"))]
     if use_jit {
         let mut jit_compile_time = Measure::start("jit_compile_time");
         let jit_compile_result = verified_executable.jit_compile();
@@ -622,7 +602,6 @@ fn process_loader_upgradeable_instruction(
             }
 
             // Create ProgramData account
-
             let (derived_address, bump_seed) =
                 Pubkey::find_program_address(&[new_program_id.as_ref()], program_id);
             if derived_address != programdata_key {
@@ -822,10 +801,18 @@ fn process_loader_upgradeable_instruction(
                 return Err(InstructionError::InsufficientFunds);
             }
             if let UpgradeableLoaderState::ProgramData {
-                slot: _,
+                slot,
                 upgrade_authority_address,
             } = programdata.get_state()?
             {
+                if invoke_context
+                    .feature_set
+                    .is_active(&enable_program_redeployment_cooldown::id())
+                    && clock.slot == slot
+                {
+                    ic_logger_msg!(log_collector, "Program was deployed in this block already");
+                    return Err(InstructionError::InvalidArgument);
+                }
                 if upgrade_authority_address.is_none() {
                     ic_logger_msg!(log_collector, "Program not upgradeable");
                     return Err(InstructionError::Immutable);
@@ -1069,7 +1056,14 @@ fn process_loader_upgradeable_instruction(
             let mut close_account =
                 instruction_context.try_borrow_instruction_account(transaction_context, 0)?;
             let close_key = *close_account.get_key();
-            match close_account.get_state()? {
+            let close_account_state = close_account.get_state()?;
+            if invoke_context
+                .feature_set
+                .is_active(&enable_program_redeployment_cooldown::id())
+            {
+                close_account.set_data_length(UpgradeableLoaderState::size_of_uninitialized())?;
+            }
+            match close_account_state {
                 UpgradeableLoaderState::Uninitialized => {
                     let mut recipient_account = instruction_context
                         .try_borrow_instruction_account(transaction_context, 1)?;
@@ -1377,7 +1371,7 @@ pub struct BpfExecutor {
 // Well, implement Debug for solana_rbpf::vm::Executable in solana-rbpf...
 impl Debug for BpfExecutor {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(f, "BpfExecutor({:p})", self)
+        write!(f, "BpfExecutor({self:p})")
     }
 }
 
@@ -1527,7 +1521,7 @@ mod tests {
         solana_rbpf::{
             ebpf::MM_INPUT_START,
             verifier::Verifier,
-            vm::{ContextObject, FunctionRegistry, SyscallRegistry},
+            vm::{BuiltInProgram, Config, ContextObject, FunctionRegistry},
         },
         solana_sdk::{
             account::{
@@ -1539,7 +1533,7 @@ mod tests {
             instruction::{AccountMeta, InstructionError},
             pubkey::Pubkey,
             rent::Rent,
-            sysvar,
+            system_program, sysvar,
         },
         std::{fs::File, io::Read, ops::Range},
     };
@@ -1611,13 +1605,10 @@ mod tests {
             0x95, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // exit
         ];
         let mut input_mem = [0x00];
-        let config = Config::default();
-        let syscall_registry = SyscallRegistry::default();
         let bpf_functions = std::collections::BTreeMap::<u32, (usize, String)>::new();
         let executable = Executable::<TestContextObject>::from_text_bytes(
             program,
-            config,
-            syscall_registry,
+            Arc::new(BuiltInProgram::new_loader(Config::default())),
             bpf_functions,
         )
         .unwrap();
@@ -2323,7 +2314,7 @@ mod tests {
             let spill_account = AccountSharedData::new(0, 0, &Pubkey::new_unique());
             let rent_account = create_account_for_test(&rent);
             let clock_account = create_account_for_test(&Clock {
-                slot: SLOT,
+                slot: SLOT.saturating_add(1),
                 ..Clock::default()
             });
             let upgrade_authority_account = AccountSharedData::new(1, 0, &Pubkey::new_unique());
@@ -2418,7 +2409,7 @@ mod tests {
         assert_eq!(
             state,
             UpgradeableLoaderState::ProgramData {
-                slot: SLOT,
+                slot: SLOT.saturating_add(1),
                 upgrade_authority_address: Some(upgrade_authority_address)
             }
         );
@@ -3553,7 +3544,7 @@ mod tests {
         let recipient_account = AccountSharedData::new(1, 0, &Pubkey::new_unique());
         let buffer_address = Pubkey::new_unique();
         let mut buffer_account =
-            AccountSharedData::new(1, UpgradeableLoaderState::size_of_buffer(0), &loader_id);
+            AccountSharedData::new(1, UpgradeableLoaderState::size_of_buffer(128), &loader_id);
         buffer_account
             .set_state(&UpgradeableLoaderState::Buffer {
                 authority_address: Some(authority_address),
@@ -3571,7 +3562,7 @@ mod tests {
         let programdata_address = Pubkey::new_unique();
         let mut programdata_account = AccountSharedData::new(
             1,
-            UpgradeableLoaderState::size_of_programdata(0),
+            UpgradeableLoaderState::size_of_programdata(128),
             &loader_id,
         );
         programdata_account
@@ -3627,6 +3618,10 @@ mod tests {
         assert_eq!(2, accounts.get(1).unwrap().lamports());
         let state: UpgradeableLoaderState = accounts.first().unwrap().state().unwrap();
         assert_eq!(state, UpgradeableLoaderState::Uninitialized);
+        assert_eq!(
+            UpgradeableLoaderState::size_of_uninitialized(),
+            accounts.first().unwrap().data().len()
+        );
 
         // Case: close with wrong authority
         process_instruction(
@@ -3675,6 +3670,10 @@ mod tests {
         assert_eq!(2, accounts.get(1).unwrap().lamports());
         let state: UpgradeableLoaderState = accounts.first().unwrap().state().unwrap();
         assert_eq!(state, UpgradeableLoaderState::Uninitialized);
+        assert_eq!(
+            UpgradeableLoaderState::size_of_uninitialized(),
+            accounts.first().unwrap().data().len()
+        );
 
         // Case: close a program account
         let accounts = process_instruction(
@@ -3683,8 +3682,8 @@ mod tests {
             &instruction,
             vec![
                 (programdata_address, programdata_account.clone()),
-                (recipient_address, recipient_account),
-                (authority_address, authority_account),
+                (recipient_address, recipient_account.clone()),
+                (authority_address, authority_account.clone()),
                 (program_address, program_account.clone()),
             ],
             vec![
@@ -3707,8 +3706,14 @@ mod tests {
         assert_eq!(2, accounts.get(1).unwrap().lamports());
         let state: UpgradeableLoaderState = accounts.first().unwrap().state().unwrap();
         assert_eq!(state, UpgradeableLoaderState::Uninitialized);
+        assert_eq!(
+            UpgradeableLoaderState::size_of_uninitialized(),
+            accounts.first().unwrap().data().len()
+        );
 
         // Try to invoke closed account
+        programdata_account = accounts.first().unwrap().clone();
+        program_account = accounts.get(3).unwrap().clone();
         process_instruction(
             &program_address,
             &[0, 1],
@@ -3719,6 +3724,78 @@ mod tests {
             ],
             Vec::new(),
             Err(InstructionError::InvalidAccountData),
+        );
+
+        // Case: Reopen should fail
+        process_instruction(
+            &loader_id,
+            &[],
+            &bincode::serialize(&UpgradeableLoaderInstruction::DeployWithMaxDataLen {
+                max_data_len: 0,
+            })
+            .unwrap(),
+            vec![
+                (recipient_address, recipient_account),
+                (programdata_address, programdata_account),
+                (program_address, program_account),
+                (buffer_address, buffer_account),
+                (
+                    sysvar::rent::id(),
+                    create_account_for_test(&Rent::default()),
+                ),
+                (
+                    sysvar::clock::id(),
+                    create_account_for_test(&Clock::default()),
+                ),
+                (
+                    system_program::id(),
+                    AccountSharedData::new(0, 0, &system_program::id()),
+                ),
+                (authority_address, authority_account),
+            ],
+            vec![
+                AccountMeta {
+                    pubkey: recipient_address,
+                    is_signer: true,
+                    is_writable: true,
+                },
+                AccountMeta {
+                    pubkey: programdata_address,
+                    is_signer: false,
+                    is_writable: true,
+                },
+                AccountMeta {
+                    pubkey: program_address,
+                    is_signer: false,
+                    is_writable: true,
+                },
+                AccountMeta {
+                    pubkey: buffer_address,
+                    is_signer: false,
+                    is_writable: false,
+                },
+                AccountMeta {
+                    pubkey: sysvar::rent::id(),
+                    is_signer: false,
+                    is_writable: false,
+                },
+                AccountMeta {
+                    pubkey: sysvar::clock::id(),
+                    is_signer: false,
+                    is_writable: false,
+                },
+                AccountMeta {
+                    pubkey: system_program::id(),
+                    is_signer: false,
+                    is_writable: false,
+                },
+                AccountMeta {
+                    pubkey: authority_address,
+                    is_signer: false,
+                    is_writable: false,
+                },
+            ],
+            Err(InstructionError::AccountAlreadyInitialized),
         );
     }
 

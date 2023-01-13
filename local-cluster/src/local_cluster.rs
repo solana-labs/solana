@@ -12,7 +12,8 @@ use {
         validator::{Validator, ValidatorConfig, ValidatorStartProgress},
     },
     solana_gossip::{
-        cluster_info::Node, contact_info::ContactInfo, gossip_service::discover_cluster,
+        cluster_info::Node, gossip_service::discover_cluster,
+        legacy_contact_info::LegacyContactInfo as ContactInfo,
     },
     solana_ledger::create_new_tmp_ledger,
     solana_runtime::{
@@ -148,14 +149,14 @@ impl LocalCluster {
     ) {
         config.account_paths = vec![ledger_path.join("accounts")];
         config.tower_storage = Arc::new(FileTowerStorage::new(ledger_path.to_path_buf()));
-        if let Some(snapshot_config) = &mut config.snapshot_config {
-            let dummy: PathBuf = DUMMY_SNAPSHOT_CONFIG_PATH_MARKER.into();
-            if snapshot_config.full_snapshot_archives_dir == dummy {
-                snapshot_config.full_snapshot_archives_dir = ledger_path.to_path_buf();
-            }
-            if snapshot_config.bank_snapshots_dir == dummy {
-                snapshot_config.bank_snapshots_dir = ledger_path.join("snapshot");
-            }
+
+        let snapshot_config = &mut config.snapshot_config;
+        let dummy: PathBuf = DUMMY_SNAPSHOT_CONFIG_PATH_MARKER.into();
+        if snapshot_config.full_snapshot_archives_dir == dummy {
+            snapshot_config.full_snapshot_archives_dir = ledger_path.to_path_buf();
+        }
+        if snapshot_config.bank_snapshots_dir == dummy {
+            snapshot_config.bank_snapshots_dir = ledger_path.join("snapshot");
         }
     }
 

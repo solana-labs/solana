@@ -158,7 +158,7 @@ fn main() {
     let slots_per_epoch = value_t!(matches, "slots_per_epoch", Slot).ok();
     let gossip_host = matches.value_of("gossip_host").map(|gossip_host| {
         solana_net_utils::parse_host(gossip_host).unwrap_or_else(|err| {
-            eprintln!("Failed to parse --gossip-host: {}", err);
+            eprintln!("Failed to parse --gossip-host: {err}");
             exit(1);
         })
     });
@@ -171,7 +171,7 @@ fn main() {
     });
     let bind_address = matches.value_of("bind_address").map(|bind_address| {
         solana_net_utils::parse_host(bind_address).unwrap_or_else(|err| {
-            eprintln!("Failed to parse --bind-address: {}", err);
+            eprintln!("Failed to parse --bind-address: {err}");
             exit(1);
         })
     });
@@ -192,7 +192,7 @@ fn main() {
                         .parse::<Pubkey>()
                         .or_else(|_| read_keypair_file(address).map(|keypair| keypair.pubkey()))
                         .unwrap_or_else(|err| {
-                            println!("Error: invalid address {}: {}", address, err);
+                            println!("Error: invalid address {address}: {err}");
                             exit(1);
                         });
 
@@ -207,7 +207,7 @@ fn main() {
 
                     programs_to_load.push(ProgramInfo {
                         program_id: address,
-                        loader: solana_sdk::bpf_loader::id(),
+                        loader: solana_sdk::bpf_loader_upgradeable::id(),
                         program_path,
                     });
                 }
@@ -226,7 +226,7 @@ fn main() {
                         None
                     } else {
                         Some(address.parse::<Pubkey>().unwrap_or_else(|err| {
-                            println!("Error: invalid address {}: {}", address, err);
+                            println!("Error: invalid address {address}: {err}");
                             exit(1);
                         }))
                     };
@@ -261,7 +261,7 @@ fn main() {
 
                 }).get_slot()
                     .unwrap_or_else(|err| {
-                        println!("Unable to get current cluster slot: {}", err);
+                        println!("Unable to get current cluster slot: {err}");
                         exit(1);
                     })
             }
@@ -300,7 +300,7 @@ fn main() {
         let (sender, receiver) = unbounded();
         run_local_faucet_with_port(faucet_keypair, sender, None, faucet_addr.port());
         let _ = receiver.recv().expect("run faucet").unwrap_or_else(|err| {
-            println!("Error: failed to start faucet: {}", err);
+            println!("Error: failed to start faucet: {err}");
             exit(1);
         });
     }
@@ -319,7 +319,7 @@ fn main() {
             ("deactivate_feature", "--deactivate-feature"),
         ] {
             if matches.is_present(name) {
-                println!("{} argument ignored, ledger already exists", long);
+                println!("{long} argument ignored, ledger already exists");
             }
         }
     } else if random_mint {
@@ -332,7 +332,6 @@ fn main() {
     let mut genesis = TestValidatorGenesis::default();
     genesis.max_ledger_shreds = value_of(&matches, "limit_ledger_size");
     genesis.max_genesis_archive_unpacked_size = Some(u64::MAX);
-    genesis.accounts_db_caching_enabled = true;
     genesis.log_messages_bytes_limit = value_t!(matches, "log_messages_bytes_limit", usize).ok();
     genesis.transaction_account_lock_limit =
         value_t!(matches, "transaction_account_lock_limit", usize).ok();
@@ -400,12 +399,12 @@ fn main() {
         .add_programs_with_path(&programs_to_load)
         .add_accounts_from_json_files(&accounts_to_load)
         .unwrap_or_else(|e| {
-            println!("Error: add_accounts_from_json_files failed: {}", e);
+            println!("Error: add_accounts_from_json_files failed: {e}");
             exit(1);
         })
         .add_accounts_from_directories(&accounts_from_dirs)
         .unwrap_or_else(|e| {
-            println!("Error: add_accounts_from_directories failed: {}", e);
+            println!("Error: add_accounts_from_directories failed: {e}");
             exit(1);
         })
         .deactivate_features(&features_to_deactivate);
@@ -427,7 +426,7 @@ fn main() {
                 .expect("bug: --url argument missing?"),
             false,
         ) {
-            println!("Error: clone_accounts failed: {}", e);
+            println!("Error: clone_accounts failed: {e}");
             exit(1);
         }
     }
@@ -440,7 +439,7 @@ fn main() {
                 .expect("bug: --url argument missing?"),
             true,
         ) {
-            println!("Error: clone_accounts failed: {}", e);
+            println!("Error: clone_accounts failed: {e}");
             exit(1);
         }
     }
@@ -499,6 +498,7 @@ fn main() {
                     bank_forks: test_validator.bank_forks(),
                     cluster_info: test_validator.cluster_info(),
                     vote_account: test_validator.vote_account_address(),
+                    repair_whitelist: test_validator.repair_whitelist(),
                 });
             if let Some(dashboard) = dashboard {
                 dashboard.run(Duration::from_millis(250));
@@ -507,7 +507,7 @@ fn main() {
         }
         Err(err) => {
             drop(dashboard);
-            println!("Error: failed to start validator: {}", err);
+            println!("Error: failed to start validator: {err}");
             exit(1);
         }
     }

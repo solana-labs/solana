@@ -11,7 +11,7 @@ As each transaction (which contains one or more instructions) is sent through th
 > **NOTE:** Transaction fees are different from [account rent](./terminology.md#rent)!
 > While transaction fees are paid to process instructions on the Solana network, rent is paid to store data on the blockchain.
 
-<!-- > You can learn more about rent here: [What is rent?](./developing/intro/rent.md) -->
+> You can learn more about rent here: [What is rent?](./developing/intro/rent.md)
 
 ## Why pay transaction fees?
 
@@ -66,3 +66,13 @@ Recently, Solana has introduced an optional fee called the "_[prioritization fee
 The prioritization fee is calculated by multiplying the requested maximum _compute units_ by the compute-unit price (specified in increments of 0.000001 lamports per compute unit) rounded up to the nearest lamport.
 
 You can read more about the [compute budget instruction](./developing/programming-model/runtime.md#compute-budget) here.
+
+## Fee Collection
+
+Transactions are required to have at least one account which has signed the transaction and is writable. Writable signer accounts are serialized first in the list of transaction accounts and the first of these accounts is always used as the "fee payer".
+
+Before any transaction instructions are processed, the fee payer account balance will be deducted to pay for transaction fees. If the fee payer balance is not sufficient to cover transaction fees, the transaction will be dropped by the cluster. If the balance was sufficient, the fees will be deducted whether the transaction is processed successfully or not. In fact, if any of the transaction instructions return an error or violate runtime restrictions, all account changes _except_ the transaction fee deduction will be rolled back.
+
+## Fee Distribution
+
+Transaction fees are partially burned and the remaining fees are collected by the validator that produced the block that the corresponding transactions were included in. The transaction fee burn rate was initialized as 50% when inflation rewards were enabled at the beginning of 2021 and has not changed so far. These fees incentivize a validator to process as many transactions as possible during its slots in the leader schedule. Collected fees are deposited in the validator's account (listed in the leader schedule for the current slot) after processing all of the transactions included in a block.

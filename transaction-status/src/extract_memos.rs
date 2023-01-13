@@ -36,7 +36,7 @@ pub fn extract_and_fmt_memos<T: ExtractMemos>(message: &T) -> Option<String> {
 fn extract_and_fmt_memo_data(data: &[u8]) -> String {
     let memo_len = data.len();
     let parsed_memo = parse_memo_data(data).unwrap_or_else(|_| "(unparseable)".to_string());
-    format!("[{}] {}", memo_len, parsed_memo)
+    format!("[{memo_len}] {parsed_memo}")
 }
 
 pub trait ExtractMemos {

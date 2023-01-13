@@ -122,7 +122,7 @@ impl PacketDeserializer {
         packet_batch
             .iter()
             .enumerate()
-            .filter(|(_, pkt)| !pkt.meta.discard())
+            .filter(|(_, pkt)| !pkt.meta().discard())
             .map(|(index, _)| index)
             .collect()
     }
@@ -179,7 +179,7 @@ mod tests {
         let transactions = vec![random_transfer(), random_transfer()];
         let mut packet_batches = to_packet_batches(&transactions, 1);
         assert_eq!(packet_batches.len(), 2);
-        packet_batches[0][0].meta.set_discard(true);
+        packet_batches[0][0].meta_mut().set_discard(true);
 
         let results = PacketDeserializer::deserialize_and_collect_packets(&packet_batches, None);
         assert_eq!(results.deserialized_packets.len(), 1);

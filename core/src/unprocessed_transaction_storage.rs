@@ -19,8 +19,8 @@ use {
     solana_measure::measure,
     solana_runtime::bank::Bank,
     solana_sdk::{
-        clock::FORWARD_TRANSACTIONS_TO_LEADER_AT_SLOT_OFFSET, hash::Hash, saturating_add_assign,
-        transaction::SanitizedTransaction,
+        clock::FORWARD_TRANSACTIONS_TO_LEADER_AT_SLOT_OFFSET, feature_set::FeatureSet, hash::Hash,
+        saturating_add_assign, transaction::SanitizedTransaction,
     },
     std::{
         collections::HashMap,
@@ -339,11 +339,11 @@ impl UnprocessedTransactionStorage {
     /// of the unprocessed packets that are eligible for retry. A return value of None means that
     /// all packets are unprocessed and eligible for retry.
     #[must_use]
-    pub fn process_packets<'a, F>(
+    pub fn process_packets<F>(
         &mut self,
         bank: Arc<Bank>,
         banking_stage_stats: &BankingStageStats,
-        slot_metrics_tracker: &'a mut LeaderSlotMetricsTracker,
+        slot_metrics_tracker: &mut LeaderSlotMetricsTracker,
         processing_function: F,
     ) -> bool
     where
@@ -430,11 +430,11 @@ impl VoteStorage {
     }
 
     // returns `true` if the end of slot is reached
-    fn process_packets<'a, F>(
+    fn process_packets<F>(
         &mut self,
         bank: Arc<Bank>,
         banking_stage_stats: &BankingStageStats,
-        slot_metrics_tracker: &'a mut LeaderSlotMetricsTracker,
+        slot_metrics_tracker: &mut LeaderSlotMetricsTracker,
         mut processing_function: F,
     ) -> bool
     where
@@ -542,27 +542,14 @@ impl ThreadLocalUnprocessedPackets {
         )
     }
 
-    fn filter_forwardable_packets_and_add_batches(
-        &mut self,
-        bank: Arc<Bank>,
-        forward_packet_batches_by_accounts: &mut ForwardPacketBatchesByAccounts,
-    ) -> FilterForwardingResults {
-        self.filter_and_forward_with_account_limits(
-            bank,
-            forward_packet_batches_by_accounts,
-            UNPROCESSED_BUFFER_STEP_SIZE,
-        )
-    }
-
     /// Filter out packets that fail to sanitize, or are no longer valid (could be
     /// too old, a duplicate of something already processed). Doing this in batches to avoid
     /// checking bank's blockhash and status cache per transaction which could be bad for performance.
     /// Added valid and sanitized packets to forwarding queue.
-    fn filter_and_forward_with_account_limits(
+    fn filter_forwardable_packets_and_add_batches(
         &mut self,
         bank: Arc<Bank>,
         forward_buffer: &mut ForwardPacketBatchesByAccounts,
-        batch_size: usize,
     ) -> FilterForwardingResults {
         let mut total_forwardable_tracer_packets: usize = 0;
         let mut total_tracer_packets_in_buffer: usize = 0;
@@ -582,10 +569,10 @@ impl ThreadLocalUnprocessedPackets {
         new_priority_queue.extend(
             original_priority_queue
                 .drain_desc()
-                .chunks(batch_size)
+                .chunks(UNPROCESSED_BUFFER_STEP_SIZE)
                 .into_iter()
                 .flat_map(|packets_to_process| {
-                    // Only prcoess packets not yet forwarded
+                    // Only process packets not yet forwarded
                     let (forwarded_packets, packets_to_forward, is_tracer_packet) = self
                         .prepare_packets_to_forward(
                             packets_to_process,
@@ -636,6 +623,7 @@ impl ThreadLocalUnprocessedPackets {
                                     &transaction_to_packet_indexes,
                                     &forwardable_transaction_indexes,
                                     &mut dropped_tx_before_forwarding_count,
+                                    &bank.feature_set,
                                 );
                             accepting_packets = accepted_packet_indexes.len()
                                 == forwardable_transaction_indexes.len();
@@ -798,6 +786,7 @@ impl ThreadLocalUnprocessedPackets {
         transaction_to_packet_indexes: &[usize],
         forwardable_transaction_indexes: &[usize],
         dropped_tx_before_forwarding_count: &mut usize,
+        feature_set: &FeatureSet,
     ) -> Vec<usize> {
         let mut added_packets_count: usize = 0;
         let mut accepted_packet_indexes = Vec::with_capacity(transaction_to_packet_indexes.len());
@@ -807,8 +796,11 @@ impl ThreadLocalUnprocessedPackets {
                 transaction_to_packet_indexes[*forwardable_transaction_index];
             let immutable_deserialized_packet =
                 packets_to_process[forwardable_packet_index].clone();
-            if !forward_buffer.try_add_packet(sanitized_transaction, immutable_deserialized_packet)
-            {
+            if !forward_buffer.try_add_packet(
+                sanitized_transaction,
+                immutable_deserialized_packet,
+                feature_set,
+            ) {
                 break;
             }
             accepted_packet_indexes.push(forwardable_packet_index);
@@ -860,11 +852,11 @@ impl ThreadLocalUnprocessedPackets {
     }
 
     // returns `true` if reached end of slot
-    fn process_packets<'a, F>(
+    fn process_packets<F>(
         &mut self,
         bank: &Bank,
         banking_stage_stats: &BankingStageStats,
-        slot_metrics_tracker: &'a mut LeaderSlotMetricsTracker,
+        slot_metrics_tracker: &mut LeaderSlotMetricsTracker,
         mut processing_function: F,
     ) -> bool
     where
@@ -936,7 +928,7 @@ impl ThreadLocalUnprocessedPackets {
             .filter_map(|immutable_deserialized_packet| {
                 let is_tracer_packet = immutable_deserialized_packet
                     .original_packet()
-                    .meta
+                    .meta()
                     .is_tracer_packet();
                 if is_tracer_packet {
                     saturating_add_assign!(*total_tracer_packets_in_buffer, 1);
@@ -1055,8 +1047,8 @@ mod tests {
             .enumerate()
             .map(|(packets_id, transaction)| {
                 let mut p = Packet::from_data(None, transaction).unwrap();
-                p.meta.port = packets_id as u16;
-                p.meta.set_tracer(true);
+                p.meta_mut().port = packets_id as u16;
+                p.meta_mut().set_tracer(true);
                 DeserializedPacket::new(p).unwrap()
             })
             .collect_vec();
@@ -1090,12 +1082,7 @@ mod tests {
             let expected_ports: Vec<_> = (0..256).collect();
             let mut forwarded_ports: Vec<_> = forward_packet_batches_by_accounts
                 .iter_batches()
-                .flat_map(|batch| {
-                    batch
-                        .get_forwardable_packets()
-                        .into_iter()
-                        .map(|p| p.meta.port)
-                })
+                .flat_map(|batch| batch.get_forwardable_packets().map(|p| p.meta().port))
                 .collect();
             forwarded_ports.sort_unstable();
             assert_eq!(expected_ports, forwarded_ports);
@@ -1191,7 +1178,7 @@ mod tests {
                 None,
             ),
         )?;
-        vote.meta.flags.set(PacketFlags::SIMPLE_VOTE_TX, true);
+        vote.meta_mut().flags.set(PacketFlags::SIMPLE_VOTE_TX, true);
         let big_transfer = Packet::from_data(
             None,
             system_transaction::transfer(&keypair, &pubkey, 1000000, Hash::new_unique()),
@@ -1264,8 +1251,8 @@ mod tests {
             .enumerate()
             .map(|(packets_id, transaction)| {
                 let mut p = Packet::from_data(None, transaction).unwrap();
-                p.meta.port = packets_id as u16;
-                p.meta.set_tracer(true);
+                p.meta_mut().port = packets_id as u16;
+                p.meta_mut().set_tracer(true);
                 DeserializedPacket::new(p).unwrap()
             })
             .collect_vec();

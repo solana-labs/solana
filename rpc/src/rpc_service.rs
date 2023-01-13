@@ -575,9 +575,9 @@ mod tests {
         super::*,
         crate::rpc::create_validator_exit,
         solana_gossip::{
-            contact_info::ContactInfo,
             crds::GossipRoute,
             crds_value::{CrdsData, CrdsValue, SnapshotHashes},
+            legacy_contact_info::LegacyContactInfo as ContactInfo,
         },
         solana_ledger::{
             genesis_utils::{create_genesis_config, GenesisConfigInfo},

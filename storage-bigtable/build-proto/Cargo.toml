@@ -9,8 +9,6 @@ publish = false
 repository = "https://github.com/solana-labs/solana"
 version = "1.15.0"
 
-[workspace]
-
 [dependencies]
 tonic-build = "0.8.0"
 

@@ -1,5 +1,6 @@
 //! The `pubsub` module implements a threaded subscription service on client RPC request
-
+#[cfg(test)]
+use crate::{rpc_pubsub_service, rpc_subscriptions::RpcSubscriptions};
 use {
     crate::{
         rpc::check_is_at_least_confirmed,
@@ -400,12 +401,20 @@ impl RpcSolPubSubImpl {
             })
         }
     }
+
+    #[cfg(test)]
+    pub fn block_until_processed(&self, rpc_subscriptions: &Arc<RpcSubscriptions>) {
+        let (rpc, mut receiver) = rpc_pubsub_service::test_connection(rpc_subscriptions);
+        rpc.slot_subscribe().unwrap();
+        rpc_subscriptions.notify_slot(1, 0, 0);
+        receiver.recv();
+    }
 }
 
 fn param<T: FromStr>(param_str: &str, thing: &str) -> Result<T> {
     param_str.parse::<T>().map_err(|_e| Error {
         code: ErrorCode::InvalidParams,
-        message: format!("Invalid Request: Invalid {} provided", thing),
+        message: format!("Invalid Request: Invalid {thing} provided"),
         data: None,
     })
 }
@@ -886,12 +895,7 @@ mod tests {
             }),
         )
         .unwrap();
-
-        // Make sure the subscription is processed before continuing.
-        let (rpc2, mut receiver2) = rpc_pubsub_service::test_connection(&rpc_subscriptions);
-        rpc2.slot_subscribe().unwrap();
-        rpc_subscriptions.notify_slot(1, 0, 0);
-        receiver2.recv();
+        rpc.block_until_processed(&rpc_subscriptions);
 
         let balance = {
             let bank = bank_forks.read().unwrap().working_bank();
@@ -933,7 +937,7 @@ mod tests {
                        "lamports": balance,
                        "data": [base64::encode(expected_data), encoding],
                        "executable": false,
-                       "rentEpoch": 0,
+                       "rentEpoch": u64::MAX,
                        "space": expected_data.len(),
                    },
                },
@@ -1015,12 +1019,7 @@ mod tests {
             }),
         )
         .unwrap();
-
-        // Make sure the subscription is processed before continuing.
-        let (rpc2, mut receiver2) = rpc_pubsub_service::test_connection(&rpc_subscriptions);
-        rpc2.slot_subscribe().unwrap();
-        rpc_subscriptions.notify_slot(1, 0, 0);
-        receiver2.recv();
+        rpc.block_until_processed(&rpc_subscriptions);
 
         let ixs = system_instruction::create_nonce_account(
             &alice.pubkey(),
@@ -1059,7 +1058,7 @@ mod tests {
                        "lamports": 100,
                        "data": expected_data,
                        "executable": false,
-                       "rentEpoch": 0,
+                       "rentEpoch": u64::MAX,
                        "space": account.data().len(),
                    },
                },
@@ -1095,8 +1094,7 @@ mod tests {
         io.extend_with(rpc.to_delegate());
 
         let req = format!(
-            r#"{{"jsonrpc":"2.0","id":1,"method":"accountSubscribe","params":["{}"]}}"#,
-            bob_pubkey
+            r#"{{"jsonrpc":"2.0","id":1,"method":"accountSubscribe","params":["{bob_pubkey}"]}}"#
         );
         let _res = io.handle_request_sync(&req);
 
@@ -1240,7 +1238,7 @@ mod tests {
                        "lamports": 100,
                        "data": "",
                        "executable": false,
-                       "rentEpoch": 0,
+                       "rentEpoch": u64::MAX,
                        "space": 0,
                    },
                },
@@ -1280,8 +1278,7 @@ mod tests {
         let expected_res_str = serde_json::to_string(&expected_res).unwrap();
 
         let expected = format!(
-            r#"{{"jsonrpc":"2.0","method":"slotNotification","params":{{"result":{},"subscription":0}}}}"#,
-            expected_res_str
+            r#"{{"jsonrpc":"2.0","method":"slotNotification","params":{{"result":{expected_res_str},"subscription":0}}}}"#
         );
         assert_eq!(expected, response);
     }
@@ -1310,8 +1307,7 @@ mod tests {
         let expected_res_str = serde_json::to_string(&expected_res).unwrap();
 
         let expected = format!(
-            r#"{{"jsonrpc":"2.0","method":"slotNotification","params":{{"result":{},"subscription":0}}}}"#,
-            expected_res_str
+            r#"{{"jsonrpc":"2.0","method":"slotNotification","params":{{"result":{expected_res_str},"subscription":0}}}}"#
         );
         assert_eq!(expected, response);
 

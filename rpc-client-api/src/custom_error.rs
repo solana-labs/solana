@@ -98,8 +98,7 @@ impl From<RpcCustomError> for Error {
             } => Self {
                 code: ErrorCode::ServerError(JSON_RPC_SERVER_ERROR_BLOCK_CLEANED_UP),
                 message: format!(
-                    "Block {} cleaned up, does not exist on node. First available block: {}",
-                    slot, first_available_block,
+                    "Block {slot} cleaned up, does not exist on node. First available block: {first_available_block}",
                 ),
                 data: None,
             },
@@ -119,13 +118,13 @@ impl From<RpcCustomError> for Error {
             },
             RpcCustomError::BlockNotAvailable { slot } => Self {
                 code: ErrorCode::ServerError(JSON_RPC_SERVER_ERROR_BLOCK_NOT_AVAILABLE),
-                message: format!("Block not available for slot {}", slot),
+                message: format!("Block not available for slot {slot}"),
                 data: None,
             },
             RpcCustomError::NodeUnhealthy { num_slots_behind } => Self {
                 code: ErrorCode::ServerError(JSON_RPC_SERVER_ERROR_NODE_UNHEALTHY),
                 message: if let Some(num_slots_behind) = num_slots_behind {
-                    format!("Node is behind by {} slots", num_slots_behind)
+                    format!("Node is behind by {num_slots_behind} slots")
                 } else {
                     "Node is unhealthy".to_string()
                 },
@@ -135,16 +134,15 @@ impl From<RpcCustomError> for Error {
             },
             RpcCustomError::TransactionPrecompileVerificationFailure(e) => Self {
                 code: ErrorCode::ServerError(
-                    JSON_RPC_SERVER_ERROR_TRANSACTION_SIGNATURE_VERIFICATION_FAILURE,
+                    JSON_RPC_SERVER_ERROR_TRANSACTION_PRECOMPILE_VERIFICATION_FAILURE,
                 ),
-                message: format!("Transaction precompile verification failure {:?}", e),
+                message: format!("Transaction precompile verification failure {e:?}"),
                 data: None,
             },
             RpcCustomError::SlotSkipped { slot } => Self {
                 code: ErrorCode::ServerError(JSON_RPC_SERVER_ERROR_SLOT_SKIPPED),
                 message: format!(
-                    "Slot {} was skipped, or missing due to ledger jump to recent snapshot",
-                    slot
+                    "Slot {slot} was skipped, or missing due to ledger jump to recent snapshot"
                 ),
                 data: None,
             },
@@ -155,7 +153,7 @@ impl From<RpcCustomError> for Error {
             },
             RpcCustomError::LongTermStorageSlotSkipped { slot } => Self {
                 code: ErrorCode::ServerError(JSON_RPC_SERVER_ERROR_LONG_TERM_STORAGE_SLOT_SKIPPED),
-                message: format!("Slot {} was skipped, or missing in long-term storage", slot),
+                message: format!("Slot {slot} was skipped, or missing in long-term storage"),
                 data: None,
             },
             RpcCustomError::KeyExcludedFromSecondaryIndex { index_key } => Self {
@@ -163,9 +161,8 @@ impl From<RpcCustomError> for Error {
                     JSON_RPC_SERVER_ERROR_KEY_EXCLUDED_FROM_SECONDARY_INDEX,
                 ),
                 message: format!(
-                    "{} excluded from account secondary indexes; \
-                    this RPC method unavailable for key",
-                    index_key
+                    "{index_key} excluded from account secondary indexes; \
+                    this RPC method unavailable for key"
                 ),
                 data: None,
             },
@@ -190,16 +187,15 @@ impl From<RpcCustomError> for Error {
             },
             RpcCustomError::BlockStatusNotAvailableYet { slot } => Self {
                 code: ErrorCode::ServerError(JSON_RPC_SERVER_ERROR_BLOCK_STATUS_NOT_AVAILABLE_YET),
-                message: format!("Block status not yet available for slot {}", slot),
+                message: format!("Block status not yet available for slot {slot}"),
                 data: None,
             },
             RpcCustomError::UnsupportedTransactionVersion(version) => Self {
                 code: ErrorCode::ServerError(JSON_RPC_SERVER_ERROR_UNSUPPORTED_TRANSACTION_VERSION),
                 message: format!(
-                    "Transaction version ({0}) is not supported by the requesting client. \
+                    "Transaction version ({version}) is not supported by the requesting client. \
                     Please try the request again with the following configuration parameter: \
-                    \"maxSupportedTransactionVersion\": {0}",
-                    version
+                    \"maxSupportedTransactionVersion\": {version}"
                 ),
                 data: None,
             },

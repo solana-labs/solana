@@ -1,5 +1,6 @@
 use {
     crate::shred::{Shred, ShredType},
+    bitflags::bitflags,
     serde::{Deserialize, Deserializer, Serialize, Serializer},
     solana_sdk::{
         clock::{Slot, UnixTimestamp},
@@ -10,6 +11,43 @@ use {
         ops::{Range, RangeBounds},
     },
 };
+
+bitflags! {
+    #[derive(Deserialize, Serialize)]
+    /// Flags to indicate whether a slot is a descendant of a slot on the main fork
+    pub struct ConnectedFlags:u8 {
+        // A slot S should be considered to be connected if:
+        // 1) S is a rooted slot itself OR
+        // 2) S's parent is connected AND S is full (S's complete block present)
+        //
+        // 1) is a straightfoward case, roots are finalized blocks on the main fork
+        // so by definition, they are connected. All roots are connected, but not
+        // all connected slots are (or will become) roots.
+        //
+        // Based on the criteria stated in 2), S is connected iff it has a series
+        // of ancestors (that are each connected) that form a chain back to
+        // some root slot.
+        //
+        // A ledger that is updating with a cluster will have either begun at
+        // genesis or at at some snapshot slot.
+        // - Genesis is obviously a special case, and slot 0's parent is deemed
+        //   to be connected in order to kick off the induction
+        // - Snapshots are taken at rooted slots, and as such, the snapshot slot
+        //   should be marked as connected so that a connected chain can start
+        //
+        // CONNECTED is explicitly the first bit to ensure backwards compatibility
+        // with the boolean field that ConnectedFlags replaced in SlotMeta.
+        const CONNECTED        = 0b0000_0001;
+        // PARENT_CONNECTED IS INTENTIIONALLY UNUSED FOR NOW
+        const PARENT_CONNECTED = 0b1000_0000;
+    }
+}
+
+impl Default for ConnectedFlags {
+    fn default() -> Self {
+        ConnectedFlags::empty()
+    }
+}
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize, Eq, PartialEq)]
 // The Meta column family
@@ -37,9 +75,8 @@ pub struct SlotMeta {
     // The list of slots, each of which contains a block that derives
     // from this one.
     pub next_slots: Vec<Slot>,
-    // True if this slot is full (consumed == last_index + 1) and if every
-    // slot that is a parent of this slot is also connected.
-    pub is_connected: bool,
+    // Connected status flags of this slot
+    pub connected_flags: ConnectedFlags,
     // Shreds indices which are marked data complete.
     pub completed_data_indexes: BTreeSet<u32>,
 }
@@ -214,6 +251,14 @@ impl SlotMeta {
         Some(self.consumed) == self.last_index.map(|ix| ix + 1)
     }
 
+    pub fn is_connected(&self) -> bool {
+        self.connected_flags.contains(ConnectedFlags::CONNECTED)
+    }
+
+    pub fn set_connected(&mut self) {
+        self.connected_flags.set(ConnectedFlags::CONNECTED, true);
+    }
+
     /// Dangerous. Currently only needed for a local-cluster test
     pub fn unset_parent(&mut self) {
         self.parent_slot = None;
@@ -225,10 +270,17 @@ impl SlotMeta {
     }
 
     pub(crate) fn new(slot: Slot, parent_slot: Option<Slot>) -> Self {
+        let connected_flags = if slot == 0 {
+            // Slot 0 is the start, mark it as having its' parent connected
+            // such that slot 0 becoming full will be updated as connected
+            ConnectedFlags::CONNECTED
+        } else {
+            ConnectedFlags::default()
+        };
         SlotMeta {
             slot,
             parent_slot,
-            is_connected: slot == 0,
+            connected_flags,
             ..SlotMeta::default()
         }
     }
@@ -322,11 +374,46 @@ pub struct AddressSignatureMeta {
     pub writeable: bool,
 }
 
-#[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq, Eq)]
-pub struct PerfSample {
+/// Performance information about validator execution during a time slice.
+///
+/// Older versions should only arise as a result of deserialization of entries stored by a previous
+/// version of the validator.  Current version should only produce [`PerfSampleV2`].
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum PerfSample {
+    V1(PerfSampleV1),
+    V2(PerfSampleV2),
+}
+
+impl From<PerfSampleV1> for PerfSample {
+    fn from(value: PerfSampleV1) -> PerfSample {
+        PerfSample::V1(value)
+    }
+}
+
+impl From<PerfSampleV2> for PerfSample {
+    fn from(value: PerfSampleV2) -> PerfSample {
+        PerfSample::V2(value)
+    }
+}
+
+/// Version of [`PerfSample`] used before 1.15.x.
+#[derive(Clone, Debug, PartialEq, Eq, Deserialize, Serialize)]
+pub struct PerfSampleV1 {
     pub num_transactions: u64,
     pub num_slots: u64,
     pub sample_period_secs: u16,
+}
+
+/// Version of the [`PerfSample`] introduced in 1.15.x.
+#[derive(Clone, Debug, PartialEq, Eq, Deserialize, Serialize)]
+pub struct PerfSampleV2 {
+    // `PerfSampleV1` part
+    pub num_transactions: u64,
+    pub num_slots: u64,
+    pub sample_period_secs: u16,
+
+    // New fields.
+    pub num_non_vote_transactions: u64,
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq, Eq)]
@@ -368,6 +455,12 @@ mod test {
         super::*,
         rand::{seq::SliceRandom, thread_rng},
     };
+
+    #[test]
+    fn test_slot_meta_slot_zero_connected() {
+        let meta = SlotMeta::new(0 /* slot */, None /* parent */);
+        assert!(meta.is_connected());
+    }
 
     #[test]
     fn test_erasure_meta_status() {
@@ -427,6 +520,79 @@ mod test {
     }
 
     #[test]
+    fn test_connected_flags_compatibility() {
+        // Define a couple structs with bool and ConnectedFlags to illustrate
+        // that that ConnectedFlags can be deserialized into a bool if the
+        // PARENT_CONNECTED bit is NOT set
+        #[derive(Debug, Deserialize, PartialEq, Serialize)]
+        struct WithBool {
+            slot: Slot,
+            connected: bool,
+        }
+        #[derive(Debug, Deserialize, PartialEq, Serialize)]
+        struct WithFlags {
+            slot: Slot,
+            connected: ConnectedFlags,
+        }
+
+        let slot = 3;
+        let mut with_bool = WithBool {
+            slot,
+            connected: false,
+        };
+        let mut with_flags = WithFlags {
+            slot,
+            connected: ConnectedFlags::default(),
+        };
+
+        // Confirm that serialized byte arrays are same length
+        assert_eq!(
+            bincode::serialized_size(&with_bool).unwrap(),
+            bincode::serialized_size(&with_flags).unwrap()
+        );
+
+        // Confirm that connected=false equivalent to ConnectedFlags::default()
+        assert_eq!(
+            bincode::serialize(&with_bool).unwrap(),
+            bincode::serialize(&with_flags).unwrap()
+        );
+
+        // Set connected in WithBool and confirm inequality
+        with_bool.connected = true;
+        assert_ne!(
+            bincode::serialize(&with_bool).unwrap(),
+            bincode::serialize(&with_flags).unwrap()
+        );
+
+        // Set connected in WithFlags and confirm equality regained
+        with_flags.connected.set(ConnectedFlags::CONNECTED, true);
+        assert_eq!(
+            bincode::serialize(&with_bool).unwrap(),
+            bincode::serialize(&with_flags).unwrap()
+        );
+
+        // Dserializing WithBool into WithFlags succeeds
+        assert_eq!(
+            with_flags,
+            bincode::deserialize::<WithFlags>(&bincode::serialize(&with_bool).unwrap()).unwrap()
+        );
+
+        // Deserializing WithFlags into WithBool succeeds
+        assert_eq!(
+            with_bool,
+            bincode::deserialize::<WithBool>(&bincode::serialize(&with_flags).unwrap()).unwrap()
+        );
+
+        // Deserializing WithFlags with extra bit set into WithBool fails
+        with_flags
+            .connected
+            .set(ConnectedFlags::PARENT_CONNECTED, true);
+        assert!(
+            bincode::deserialize::<WithBool>(&bincode::serialize(&with_flags).unwrap()).is_err()
+        );
+    }
+
+    #[test]
     fn test_clear_unconfirmed_slot() {
         let mut slot_meta = SlotMeta::new_orphan(5);
         slot_meta.consumed = 5;
@@ -437,5 +603,29 @@ mod test {
         let mut expected = SlotMeta::new_orphan(5);
         expected.next_slots = vec![6, 7];
         assert_eq!(slot_meta, expected);
+    }
+
+    // `PerfSampleV2` should contain `PerfSampleV1` as a prefix, in order for the column to be
+    // backward and forward compatible.
+    #[test]
+    fn perf_sample_v1_is_prefix_of_perf_sample_v2() {
+        let v2 = PerfSampleV2 {
+            num_transactions: 4190143848,
+            num_slots: 3607325588,
+            sample_period_secs: 31263,
+            num_non_vote_transactions: 4056116066,
+        };
+
+        let v2_bytes = bincode::serialize(&v2).expect("`PerfSampleV2` can be serialized");
+
+        let actual: PerfSampleV1 = bincode::deserialize(&v2_bytes)
+            .expect("Bytes encoded as `PerfSampleV2` can be decoded as `PerfSampleV1`");
+        let expected = PerfSampleV1 {
+            num_transactions: v2.num_transactions,
+            num_slots: v2.num_slots,
+            sample_period_secs: v2.sample_period_secs,
+        };
+
+        assert_eq!(actual, expected);
     }
 }

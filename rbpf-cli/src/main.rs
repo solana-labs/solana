@@ -3,17 +3,15 @@ use {
     serde::{Deserialize, Serialize},
     serde_json::Result,
     solana_bpf_loader_program::{
-        create_vm, serialization::serialize_parameters, syscalls::register_syscalls,
+        create_vm, serialization::serialize_parameters, syscalls::create_loader,
     },
-    solana_program_runtime::invoke_context::{prepare_mock_invoke_context, InvokeContext},
+    solana_program_runtime::{
+        compute_budget::ComputeBudget,
+        invoke_context::{prepare_mock_invoke_context, InvokeContext},
+    },
     solana_rbpf::{
-        assembler::assemble,
-        debugger,
-        elf::Executable,
-        interpreter::Interpreter,
-        static_analysis::Analysis,
-        verifier::RequisiteVerifier,
-        vm::{Config, VerifiedExecutable},
+        assembler::assemble, elf::Executable, static_analysis::Analysis,
+        verifier::RequisiteVerifier, vm::VerifiedExecutable,
     },
     solana_sdk::{
         account::AccountSharedData, bpf_loader, instruction::AccountMeta, pubkey::Pubkey,
@@ -22,7 +20,7 @@ use {
     std::{
         fmt::{Debug, Formatter},
         fs::File,
-        io::{Read, Seek, SeekFrom},
+        io::{Read, Seek},
         path::Path,
         time::{Duration, Instant},
     },
@@ -159,12 +157,16 @@ before execting it in the virtual machine.",
                 .takes_value(true)
                 .possible_values(["json", "json-compact"]),
         )
+        .arg(
+            Arg::new("trace")
+                .help("Output instruction trace")
+                .short('t')
+                .long("trace")
+                .takes_value(true)
+                .value_name("FILE"),
+        )
         .get_matches();
 
-    let config = Config {
-        enable_symbol_and_section_labels: true,
-        ..Config::default()
-    };
     let loader_id = bpf_loader::id();
     let mut transaction_accounts = vec![
         (
@@ -244,27 +246,32 @@ before execting it in the virtual machine.",
     let mut file = File::open(Path::new(program)).unwrap();
     let mut magic = [0u8; 4];
     file.read_exact(&mut magic).unwrap();
-    file.seek(SeekFrom::Start(0)).unwrap();
+    file.rewind().unwrap();
     let mut contents = Vec::new();
     file.read_to_end(&mut contents).unwrap();
-    let syscall_registry = register_syscalls(&invoke_context.feature_set, true).unwrap();
+    let loader = create_loader(
+        &invoke_context.feature_set,
+        &ComputeBudget::default(),
+        true,
+        true,
+        true,
+    )
+    .unwrap();
     let executable = if magic == [0x7f, 0x45, 0x4c, 0x46] {
-        Executable::<InvokeContext>::from_elf(&contents, config, syscall_registry)
-            .map_err(|err| format!("Executable constructor failed: {:?}", err))
+        Executable::<InvokeContext>::from_elf(&contents, loader)
+            .map_err(|err| format!("Executable constructor failed: {err:?}"))
     } else {
-        assemble::<InvokeContext>(
-            std::str::from_utf8(contents.as_slice()).unwrap(),
-            config,
-            syscall_registry,
-        )
+        assemble::<InvokeContext>(std::str::from_utf8(contents.as_slice()).unwrap(), loader)
     }
     .unwrap();
 
+    #[allow(unused_mut)]
     let mut verified_executable =
         VerifiedExecutable::<RequisiteVerifier, InvokeContext>::from_executable(executable)
-            .map_err(|err| format!("Executable verifier failed: {:?}", err))
+            .map_err(|err| format!("Executable verifier failed: {err:?}"))
             .unwrap();
 
+    #[cfg(all(not(target_os = "windows"), target_arch = "x86_64"))]
     verified_executable.jit_compile().unwrap();
     let mut analysis = LazyAnalysis::new(verified_executable.get_executable());
 
@@ -293,18 +300,32 @@ before execting it in the virtual machine.",
     )
     .unwrap();
     let start_time = Instant::now();
-    let (instruction_count, result) = if matches.value_of("use").unwrap() == "debugger" {
-        let mut interpreter = Interpreter::new(&mut vm).unwrap();
-        let port = matches.value_of("port").unwrap().parse::<u16>().unwrap();
-        debugger::execute(&mut interpreter, port)
-    } else {
-        vm.execute_program(matches.value_of("use").unwrap() == "interpreter")
-    };
+    if matches.value_of("use").unwrap() == "debugger" {
+        vm.debug_port = Some(matches.value_of("port").unwrap().parse::<u16>().unwrap());
+    }
+    let (instruction_count, result) = vm.execute_program(matches.value_of("use").unwrap() != "jit");
     let duration = Instant::now() - start_time;
+    if matches.occurrences_of("trace") > 0 {
+        let trace_log = vm.env.context_object_pointer.trace_log.as_slice();
+        if matches.value_of("trace").unwrap() == "stdout" {
+            analysis
+                .analyze()
+                .disassemble_trace_log(&mut std::io::stdout(), trace_log)
+                .unwrap();
+        } else {
+            analysis
+                .analyze()
+                .disassemble_trace_log(
+                    &mut File::create(matches.value_of("trace").unwrap()).unwrap(),
+                    trace_log,
+                )
+                .unwrap();
+        }
+    }
     drop(vm);
 
     let output = Output {
-        result: format!("{:?}", result),
+        result: format!("{result:?}"),
         instruction_count,
         execution_time: duration,
         log: invoke_context
@@ -323,7 +344,7 @@ before execting it in the virtual machine.",
         }
         _ => {
             println!("Program output:");
-            println!("{:?}", output);
+            println!("{output:?}");
         }
     }
 }
@@ -342,7 +363,7 @@ impl Debug for Output {
         writeln!(f, "Instruction Count: {}", self.instruction_count)?;
         writeln!(f, "Execution time: {} us", self.execution_time.as_micros())?;
         for line in &self.log {
-            writeln!(f, "{}", line)?;
+            writeln!(f, "{line}")?;
         }
         Ok(())
     }
@@ -351,7 +372,7 @@ impl Debug for Output {
 // Replace with std::lazy::Lazy when stabilized.
 // https://github.com/rust-lang/rust/issues/74465
 struct LazyAnalysis<'a, 'b> {
-    analysis: Option<Analysis<'a, InvokeContext<'b>>>,
+    analysis: Option<Analysis<'a>>,
     executable: &'a Executable<InvokeContext<'b>>,
 }
 
@@ -363,7 +384,7 @@ impl<'a, 'b> LazyAnalysis<'a, 'b> {
         }
     }
 
-    fn analyze(&mut self) -> &Analysis<InvokeContext<'b>> {
+    fn analyze(&mut self) -> &Analysis {
         if let Some(ref analysis) = self.analysis {
             return analysis;
         }

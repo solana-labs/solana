@@ -715,6 +715,18 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                        request from validators outside this set [default: all validators]")
         )
         .arg(
+            Arg::with_name("repair_whitelist")
+                .hidden(true)
+                .long("repair-whitelist")
+                .validator(is_pubkey)
+                .value_name("VALIDATOR IDENTITY")
+                .multiple(true)
+                .takes_value(true)
+                .help("A list of validators to prioritize repairs from. If specified, repair requests \
+                       from validators in the list will be prioritized over requests from other validators. \
+                       [default: all validators]")
+        )
+        .arg(
             Arg::with_name("gossip_validators")
                 .long("gossip-validator")
                 .validator(is_pubkey)
@@ -1109,7 +1121,7 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                     let core_index = usize::from_str(&s).map_err(|e| e.to_string())?;
                     let max_index = core_affinity::get_core_ids().map(|cids| cids.len() - 1).unwrap_or(0);
                     if core_index > max_index {
-                        return Err(format!("core index must be in the range [0, {}]", max_index));
+                        return Err(format!("core index must be in the range [0, {max_index}]"));
                     }
                     Ok(())
                 })
@@ -1170,17 +1182,10 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                       This option is for use during testing."),
         )
         .arg(
-            Arg::with_name("accounts_db_skip_rewrites")
-                .long("accounts-db-skip-rewrites")
-                .help("Accounts that are rent exempt and have no changes are not rewritten. \
-                      This produces snapshots that older versions cannot read.")
-                .hidden(true),
-        )
-        .arg(
             Arg::with_name("accounts_db_ancient_append_vecs")
                 .long("accounts-db-ancient-append-vecs")
                 .value_name("SLOT-OFFSET")
-                .validator(is_parsable::<u64>)
+                .validator(is_parsable::<i64>)
                 .takes_value(true)
                 .help("AppendVecs that are older than (slots_per_epoch - SLOT-OFFSET) are squashed together.")
                 .hidden(true),
@@ -1388,6 +1393,46 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                 )
         )
         .subcommand(
+            SubCommand::with_name("repair-whitelist")
+                .about("Manage the validator's repair protocol whitelist")
+                .setting(AppSettings::SubcommandRequiredElseHelp)
+                .setting(AppSettings::InferSubcommands)
+                .subcommand(
+                    SubCommand::with_name("get")
+                        .about("Display the validator's repair protocol whitelist")
+                        .arg(
+                            Arg::with_name("output")
+                                .long("output")
+                                .takes_value(true)
+                                .value_name("MODE")
+                                .possible_values(&["json", "json-compact"])
+                                .help("Output display mode")
+                        )
+                )
+                .subcommand(
+                    SubCommand::with_name("set")
+                        .about("Set the validator's repair protocol whitelist")
+                        .setting(AppSettings::ArgRequiredElseHelp)
+                        .arg(
+                            Arg::with_name("whitelist")
+                            .long("whitelist")
+                            .validator(is_pubkey)
+                            .value_name("VALIDATOR IDENTITY")
+                            .multiple(true)
+                            .takes_value(true)
+                            .help("Set the validator's repair protocol whitelist")
+                        )
+                        .after_help("Note: repair protocol whitelist changes only apply to the currently \
+                                    running validator instance")
+                )
+                .subcommand(
+                    SubCommand::with_name("remove-all")
+                        .about("Clear the validator's repair protocol whitelist")
+                        .after_help("Note: repair protocol whitelist changes only apply to the currently \
+                                    running validator instance")
+                )
+        )
+        .subcommand(
             SubCommand::with_name("init")
                 .about("Initialize the ledger directory then exit")
         )
@@ -1577,7 +1622,7 @@ pub fn warn_for_deprecated_arguments(matches: &ArgMatches) {
         if matches.is_present(arg) {
             warn!(
                 "{}",
-                format!("--{} is deprecated. {}", arg, help).replace('_', "-")
+                format!("--{arg} is deprecated. {help}").replace('_', "-")
             );
         }
     }
@@ -1736,7 +1781,7 @@ impl Default for DefaultArgs {
 pub fn port_validator(port: String) -> Result<(), String> {
     port.parse::<u16>()
         .map(|_| ())
-        .map_err(|e| format!("{:?}", e))
+        .map_err(|e| format!("{e:?}"))
 }
 
 pub fn port_range_validator(port_range: String) -> Result<(), String> {
@@ -1760,7 +1805,7 @@ pub fn port_range_validator(port_range: String) -> Result<(), String> {
 fn hash_validator(hash: String) -> Result<(), String> {
     Hash::from_str(&hash)
         .map(|_| ())
-        .map_err(|e| format!("{:?}", e))
+        .map_err(|e| format!("{e:?}"))
 }
 
 lazy_static! {
@@ -1971,12 +2016,12 @@ pub fn test_app<'a>(version: &'a str, default_args: &'a DefaultTestArgs) -> App<
                 .validator(|value| {
                     value
                         .parse::<PathBuf>()
-                        .map_err(|err| format!("error parsing '{}': {}", value, err))
+                        .map_err(|err| format!("error parsing '{value}': {err}"))
                         .and_then(|path| {
                             if path.exists() && path.is_dir() {
                                 Ok(())
                             } else {
-                                Err(format!("path does not exist or is not a directory: {}", value))
+                                Err(format!("path does not exist or is not a directory: {value}"))
                             }
                         })
                 })
@@ -2009,10 +2054,10 @@ pub fn test_app<'a>(version: &'a str, default_args: &'a DefaultTestArgs) -> App<
                 .validator(|value| {
                     value
                         .parse::<Slot>()
-                        .map_err(|err| format!("error parsing '{}': {}", value, err))
+                        .map_err(|err| format!("error parsing '{value}': {err}"))
                         .and_then(|slot| {
                             if slot < MINIMUM_SLOTS_PER_EPOCH {
-                                Err(format!("value must be >= {}", MINIMUM_SLOTS_PER_EPOCH))
+                                Err(format!("value must be >= {MINIMUM_SLOTS_PER_EPOCH}"))
                             } else {
                                 Ok(())
                             }

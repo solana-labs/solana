@@ -320,6 +320,10 @@ impl AccountsCache {
         slots
     }
 
+    pub fn contains(&self, slot: Slot) -> bool {
+        self.cache.contains_key(&slot)
+    }
+
     pub fn num_slots(&self) -> usize {
         self.cache.len()
     }

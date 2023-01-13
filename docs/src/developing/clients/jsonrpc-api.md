@@ -1956,7 +1956,7 @@ Returns all accounts owned by the provided program Pubkey
   - `offset: <usize>` - offset into program account data to start comparison
   - `bytes: <string>` - data to match, as encoded string
   - `encoding: <string>` - encoding for filter `bytes` data, either "base58" or "base64". Data is limited in size to 128 or fewer decoded bytes.
-    **NEW: This field, and base64 support generally, is only available in solana-core v1.11.2 or newer. Please omit when querying nodes on earlier versions**
+    **NEW: This field, and base64 support generally, is only available in solana-core v1.14.0 or newer. Please omit when querying nodes on earlier versions**
 
 - `dataSize: <u64>` - compares the program account data length with the provided data size
 
@@ -2125,20 +2125,20 @@ Result:
 
 ### getRecentPrioritizationFees
 
-Returns a list of minimum prioritization fees from recent blocks. Currently, a
+Returns a list of prioritization fees from recent blocks. Currently, a
 node's prioritization-fee cache stores data from up to 150 blocks.
 
 #### Parameters:
 
-- `<array>` - (optional) An array of account address strings. If this parameter is provided, the response will reflect the minimum prioritization fee to land a transaction locking all of the provided accounts as writable.
+- `<array>` - (optional) An array of account address strings (up to a maximum of 128 addresses). If this parameter is provided, the response will reflect a fee to land a transaction locking all of the provided accounts as writable.
 
 #### Results:
 
 An array of:
 
 - `RpcPrioritizationFee<object>`
-  - `slot: <u64>` - Slot in which minimum fee was observed
-  - `prioritizationFee: <u64>` - Minimum fee paid for a successfully landed transaction
+  - `slot: <u64>` - Slot in which fee was observed
+  - `prioritizationFee: <u64>` - a fee paid by at least one successfully landed transaction, specified in increments of 0.000001 lamports
 
 #### Example:
 

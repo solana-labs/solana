@@ -40,7 +40,6 @@ fn run_bench_packet_discard(num_ips: usize, bencher: &mut Bencher) {
     let mut total = 0;
 
     let ips: Vec<_> = (0..num_ips)
-        .into_iter()
         .map(|_| {
             let mut addr = [0u16; 8];
             thread_rng().fill(&mut addr);
@@ -52,7 +51,7 @@ fn run_bench_packet_discard(num_ips: usize, bencher: &mut Bencher) {
         total += batch.len();
         for p in batch.iter_mut() {
             let ip_index = thread_rng().gen_range(0, ips.len());
-            p.meta.addr = ips[ip_index];
+            p.meta_mut().addr = ips[ip_index];
         }
     }
     info!("total packets: {}", total);
@@ -62,10 +61,10 @@ fn run_bench_packet_discard(num_ips: usize, bencher: &mut Bencher) {
         let mut num_packets = 0;
         for batch in batches.iter_mut() {
             for p in batch.iter_mut() {
-                if !p.meta.discard() {
+                if !p.meta().discard() {
                     num_packets += 1;
                 }
-                p.meta.set_discard(false);
+                p.meta_mut().set_discard(false);
             }
         }
         assert_eq!(num_packets, 10_000);
@@ -97,7 +96,7 @@ fn bench_packet_discard_mixed_senders(bencher: &mut Bencher) {
     for batch in batches.iter_mut() {
         for packet in batch.iter_mut() {
             // One spam address, ~1000 unique addresses.
-            packet.meta.addr = if rng.gen_ratio(1, 30) {
+            packet.meta_mut().addr = if rng.gen_ratio(1, 30) {
                 new_rand_addr(&mut rng)
             } else {
                 spam_addr
@@ -109,10 +108,10 @@ fn bench_packet_discard_mixed_senders(bencher: &mut Bencher) {
         let mut num_packets = 0;
         for batch in batches.iter_mut() {
             for packet in batch.iter_mut() {
-                if !packet.meta.discard() {
+                if !packet.meta().discard() {
                     num_packets += 1;
                 }
-                packet.meta.set_discard(false);
+                packet.meta_mut().set_discard(false);
             }
         }
         assert_eq!(num_packets, 10_000);
@@ -215,7 +214,7 @@ fn prepare_batches(discard_factor: i32) -> (Vec<PacketBatch>, usize) {
         batch.iter_mut().for_each(|p| {
             let throw = die.sample(&mut rng);
             if throw < discard_factor {
-                p.meta.set_discard(true);
+                p.meta_mut().set_discard(true);
                 c += 1;
             }
         })

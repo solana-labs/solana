@@ -295,6 +295,12 @@ impl PubsubClient {
         self.ws.await.unwrap() // WS future should not be cancelled or panicked
     }
 
+    pub async fn set_node_version(&self, version: semver::Version) -> Result<(), ()> {
+        let mut w_node_version = self.node_version.write().await;
+        *w_node_version = Some(version);
+        Ok(())
+    }
+
     async fn get_node_version(&self) -> PubsubClientResult<semver::Version> {
         let r_node_version = self.node_version.read().await;
         if let Some(version) = &*r_node_version {
@@ -319,7 +325,7 @@ impl PubsubClient {
         let node_version: RpcVersionInfo = serde_json::from_value(result)?;
         let node_version = semver::Version::parse(&node_version.solana_core).map_err(|e| {
             PubsubClientError::RequestFailed {
-                reason: format!("failed to parse cluster version: {}", e),
+                reason: format!("failed to parse cluster version: {e}"),
                 message: "getVersion".to_string(),
             }
         })?;
@@ -550,7 +556,7 @@ impl PubsubClient {
                 // Read message for subscribe
                 Some((operation, params, response_tx)) = subscribe_rx.recv() => {
                     request_id += 1;
-                    let method = format!("{}Subscribe", operation);
+                    let method = format!("{operation}Subscribe");
                     let text = json!({"jsonrpc":"2.0","id":request_id,"method":method,"params":params}).to_string();
                     ws.send(Message::Text(text)).await?;
                     requests_subscribe.insert(request_id, (operation, response_tx));
@@ -559,7 +565,7 @@ impl PubsubClient {
                 Some((operation, sid, response_tx)) = unsubscribe_rx.recv() => {
                     subscriptions.remove(&sid);
                     request_id += 1;
-                    let method = format!("{}Unsubscribe", operation);
+                    let method = format!("{operation}Unsubscribe");
                     let text = json!({"jsonrpc":"2.0","id":request_id,"method":method,"params":[sid]}).to_string();
                     ws.send(Message::Text(text)).await?;
                     requests_unsubscribe.insert(request_id, response_tx);

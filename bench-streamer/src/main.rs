@@ -25,8 +25,8 @@ fn producer(addr: &SocketAddr, exit: Arc<AtomicBool>) -> JoinHandle<()> {
     let mut packet_batch = PacketBatch::with_capacity(batch_size);
     packet_batch.resize(batch_size, Packet::default());
     for w in packet_batch.iter_mut() {
-        w.meta.size = PACKET_DATA_SIZE;
-        w.meta.set_socket_addr(addr);
+        w.meta_mut().size = PACKET_DATA_SIZE;
+        w.meta_mut().set_socket_addr(addr);
     }
     let packet_batch = Arc::new(packet_batch);
     spawn(move || loop {
@@ -35,8 +35,8 @@ fn producer(addr: &SocketAddr, exit: Arc<AtomicBool>) -> JoinHandle<()> {
         }
         let mut num = 0;
         for p in packet_batch.iter() {
-            let a = p.meta.socket_addr();
-            assert!(p.meta.size <= PACKET_DATA_SIZE);
+            let a = p.meta().socket_addr();
+            assert!(p.meta().size <= PACKET_DATA_SIZE);
             let data = p.data(..).unwrap_or_default();
             send.send_to(data, a).unwrap();
             num += 1;
@@ -120,7 +120,6 @@ fn main() -> Result<()> {
     }
 
     let producer_threads: Vec<_> = (0..num_producers)
-        .into_iter()
         .map(|_| producer(&addr, exit.clone()))
         .collect();
 

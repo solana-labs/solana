@@ -58,14 +58,14 @@ where
             last_balance,
         )
         .unwrap_or_else(|e| {
-            eprintln!("Error could not fund keys: {:?}", e);
+            eprintln!("Error could not fund keys: {e:?}");
             exit(1);
         });
         keypairs
     } else {
         generate_and_fund_keypairs(client, id, keypair_count, num_lamports_per_account)
             .unwrap_or_else(|e| {
-                eprintln!("Error could not fund keys: {:?}", e);
+                eprintln!("Error could not fund keys: {e:?}");
                 exit(1);
             })
     }

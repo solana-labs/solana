@@ -59,6 +59,10 @@ solana-version = { path = "../version", version = "=1.15.0" }
 solana-vote-program = { path = "../programs/vote", version = "=1.15.0" }
 symlink = "0.1.0"
 
+[dev-dependencies]
+solana-account-decoder = { path = "../account-decoder", version = "=1.15.0" }
+spl-token-2022 = { version = "=0.5.0", features = ["no-entrypoint"] }
+
 [target.'cfg(not(target_env = "msvc"))'.dependencies]
 jemallocator = { package = "tikv-jemallocator", version = "0.4.1", features = ["unprefixed_malloc_on_supported_platforms"] }
 

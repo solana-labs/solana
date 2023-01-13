@@ -6,9 +6,9 @@ use {
     rayon::iter::*,
     solana_gossip::{
         cluster_info::{ClusterInfo, Node},
-        contact_info::ContactInfo,
         crds::Cursor,
         gossip_service::GossipService,
+        legacy_contact_info::LegacyContactInfo as ContactInfo,
     },
     solana_perf::packet::Packet,
     solana_runtime::bank_forks::BankForks,
@@ -255,7 +255,7 @@ pub fn cluster_info_retransmit() {
     }
     assert!(done);
     let mut p = Packet::default();
-    p.meta.size = 10;
+    p.meta_mut().size = 10;
     let peers = c1.tvu_peers();
     let retransmit_peers: Vec<_> = peers.iter().collect();
     retransmit_to(

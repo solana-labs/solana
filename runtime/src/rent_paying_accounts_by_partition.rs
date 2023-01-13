@@ -32,7 +32,6 @@ impl RentPayingAccountsByPartition {
         Self {
             partition_count,
             accounts: (0..=partition_count)
-                .into_iter()
                 .map(|_| HashSet::<Pubkey>::default())
                 .collect(),
         }

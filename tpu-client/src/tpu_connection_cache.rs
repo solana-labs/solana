@@ -506,7 +506,7 @@ mod tests {
         let c = rng.gen_range(1, 255);
         let d = rng.gen_range(1, 255);
 
-        let addr_str = format!("{}.{}.{}.{}:80", a, b, c, d);
+        let addr_str = format!("{a}.{b}.{c}.{d}:80");
 
         addr_str.parse().expect("Invalid address")
     }
@@ -530,7 +530,6 @@ mod tests {
             TpuConnectionCache::<MockUdpPool>::new(DEFAULT_TPU_CONNECTION_POOL_SIZE).unwrap();
         let port_offset = MOCK_PORT_OFFSET;
         let addrs = (0..MAX_CONNECTIONS)
-            .into_iter()
             .map(|_| {
                 let addr = get_addr(&mut rng);
                 connection_cache.get_connection(&addr);

@@ -3,8 +3,11 @@ import {Buffer} from 'buffer';
 import * as splToken from '@solana/spl-token';
 import {expect, use} from 'chai';
 import chaiAsPromised from 'chai-as-promised';
-import {mock, useFakeTimers, SinonFakeTimers} from 'sinon';
+import {Agent as HttpAgent} from 'http';
+import {Agent as HttpsAgent} from 'https';
+import {match, mock, spy, useFakeTimers, SinonFakeTimers} from 'sinon';
 import sinonChai from 'sinon-chai';
+import {fail} from 'assert';
 
 import {
   Authorized,
@@ -22,10 +25,11 @@ import {
   AddressLookupTableProgram,
   SYSTEM_INSTRUCTION_LAYOUTS,
   NONCE_ACCOUNT_LENGTH,
+  MessageAddressTableLookup,
 } from '../src';
 import invariant from '../src/utils/assert';
 import {toBuffer} from '../src/utils/to-buffer';
-import {MOCK_PORT, url} from './url';
+import {MOCK_PORT, url, Node14Controller, nodeVersion} from './url';
 import {
   AccountInfo,
   BLOCKHASH_CACHE_TIMEOUT_MS,
@@ -36,6 +40,7 @@ import {
   Context,
   EpochInfo,
   InflationGovernor,
+  InflationRate,
   Logs,
   SignatureResult,
   SlotInfo,
@@ -167,10 +172,15 @@ describe('Connection', function () {
     it('should allow middleware to augment request', async () => {
       let connection = new Connection(url, {
         fetchMiddleware: (url, options, fetch) => {
-          options.headers = Object.assign(options.headers, {
-            Authorization: 'Bearer 123',
-          });
-          fetch(url, options);
+          if (options) {
+            options.headers = Object.assign(options.headers!, {
+              Authorization: 'Bearer 123',
+            });
+
+            fetch(url, options);
+          } else {
+            fail('options must be defined!');
+          }
         },
       });
 
@@ -186,6 +196,50 @@ describe('Connection', function () {
       expect(await connection.getVersion()).to.be.not.null;
     });
   }
+
+  describe('override HTTP agent', () => {
+    let previousBrowserEnv: string | undefined;
+    beforeEach(() => {
+      previousBrowserEnv = process.env.BROWSER;
+      delete process.env.BROWSER;
+    });
+    afterEach(() => {
+      process.env.BROWSER = previousBrowserEnv;
+    });
+
+    it('uses no agent with fetch when `overrideAgent` is `false`', () => {
+      const fetch = spy();
+      const c = new Connection(url, {httpAgent: false, fetch});
+      c.getBlock(0);
+      expect(fetch).to.have.been.calledWith(
+        match.any,
+        match({agent: undefined}),
+      );
+    });
+
+    it('uses the supplied `overrideAgent` with fetch', () => {
+      const fetch = spy();
+      const httpAgent = new HttpsAgent();
+      const c = new Connection('https://example.com', {httpAgent, fetch});
+      c.getBlock(0);
+      expect(fetch).to.have.been.calledWith(
+        match.any,
+        match({agent: httpAgent}),
+      );
+    });
+
+    it('throws when the supplied `overrideAgent` is http but the endpoint is https', () => {
+      expect(() => {
+        new Connection('https://example.com', {httpAgent: new HttpAgent()});
+      }).to.throw;
+    });
+
+    it('throws when the supplied `overrideAgent` is https but the endpoint is http', () => {
+      expect(() => {
+        new Connection('http://example.com', {httpAgent: new HttpsAgent()});
+      }).to.throw;
+    });
+  });
 
   it('should attribute middleware fatals to the middleware', async () => {
     let connection = new Connection(url, {
@@ -206,7 +260,9 @@ describe('Connection', function () {
   it('should not attribute fetch errors to the middleware', async () => {
     let connection = new Connection(url, {
       fetchMiddleware: (url, _options, fetch) => {
-        fetch(url, 'An `Object` was expected here; this is a `TypeError`.');
+        fetch(url, {
+          body: 'An `Object` was expected here; this is a `TypeError`.',
+        });
       },
     });
     const error = await expect(connection.getVersion()).to.be.rejected;
@@ -760,6 +816,7 @@ describe('Connection', function () {
             effectiveSlot: 432000,
             epoch: 0,
             postBalance: 30504783,
+            commission: 0,
           },
           null,
         ],
@@ -774,6 +831,36 @@ describe('Connection', function () {
       );
 
       expect(inflationReward).to.have.lengthOf(2);
+    }
+  });
+
+  it('get inflation rate', async () => {
+    await mockRpcResponse({
+      method: 'getInflationRate',
+      params: [],
+      value: {
+        total: 0.08,
+        validator: 0.076,
+        foundation: 0.004,
+        epoch: 1,
+      },
+    });
+
+    const inflation = await connection.getInflationRate();
+    const inflationKeys: (keyof InflationRate)[] = [
+      'total',
+      'validator',
+      'foundation',
+      'epoch',
+    ];
+
+    for (const key of inflationKeys) {
+      expect(inflation).to.have.property(key);
+      if (mockServer) {
+        expect(inflation[key]).to.be.greaterThan(0);
+      } else {
+        expect(inflation[key]).to.be.at.least(0);
+      }
     }
   });
 
@@ -1167,6 +1254,46 @@ describe('Connection', function () {
       });
 
       describe('block height strategy', () => {
+        it('rejects if called with an already-aborted `abortSignal`', () => {
+          const mockSignature =
+            'w2Zeq8YkpyB463DttvfzARD7k9ZxGEwbsEw4boEK7jDp3pfoxZbTdLFSsEPhzXhpCcjGi2kHtHFobgX49MMhbWt';
+          const abortController: any =
+            nodeVersion >= 16 ? new AbortController() : Node14Controller();
+          abortController.abort();
+          expect(
+            connection.confirmTransaction({
+              abortSignal: abortController.signal,
+              blockhash: 'sampleBlockhash',
+              lastValidBlockHeight: 1,
+              signature: mockSignature,
+            }),
+          ).to.eventually.be.rejectedWith('AbortError');
+        });
+
+        it('rejects upon receiving an abort signal', async () => {
+          const mockSignature =
+            'w2Zeq8YkpyB463DttvfzARD7k9ZxGEwbsEw4boEK7jDp3pfoxZbTdLFSsEPhzXhpCcjGi2kHtHFobgX49MMhbWt';
+          const abortController: any =
+            nodeVersion >= 16 ? new AbortController() : Node14Controller();
+          // Keep the subscription from ever returning data.
+          await mockRpcMessage({
+            method: 'signatureSubscribe',
+            params: [mockSignature, {commitment: 'finalized'}],
+            result: new Promise(() => {}), // Never resolve.
+          });
+          clock.runAllAsync();
+          const confirmationPromise = connection.confirmTransaction({
+            abortSignal: abortController.signal,
+            blockhash: 'sampleBlockhash',
+            lastValidBlockHeight: 1,
+            signature: mockSignature,
+          });
+          clock.runAllAsync();
+          expect(confirmationPromise).not.to.have.been.rejected;
+          abortController.abort();
+          await expect(confirmationPromise).to.eventually.be.rejected;
+        });
+
         it('throws a `TransactionExpiredBlockheightExceededError` when the block height advances past the last valid one for this transaction without a signature confirmation', async () => {
           const mockSignature =
             '4oCEqwGrMdBeMxpzuWiukCYqSfV4DsSKXSiVVCh1iJ6pS772X7y219JZP3mgqBz5PhsvprpKyhzChjYc3VSBQXzG';
@@ -1218,7 +1345,10 @@ describe('Connection', function () {
           const mockSignature =
             'LPJ18iiyfz3G1LpNNbcBnBtaS4dVBdPHKrnELqikjER2DcvB4iyTgz43nKQJH3JQAJHuZdM1xVh5Cnc5Hc7LrqC';
 
-          let resolveResultPromise: (result: SignatureResult) => void;
+          let resolveResultPromise = function (result: SignatureResult): any {
+            return result;
+          };
+
           await mockRpcMessage({
             method: 'signatureSubscribe',
             params: [mockSignature, {commitment: 'finalized'}],
@@ -1228,7 +1358,7 @@ describe('Connection', function () {
           });
 
           // Simulate a failure to fetch the block height.
-          let rejectBlockheightPromise: () => void;
+          let rejectBlockheightPromise = function (): void {};
           await mockRpcResponse({
             method: 'getBlockHeight',
             params: [],
@@ -1259,7 +1389,9 @@ describe('Connection', function () {
           const mockSignature =
             'LPJ18iiyfz3G1LpNNbcBnBtaS4dVBdPHKrnELqikjER2DcvB4iyTgz43nKQJH3JQAJHuZdM1xVh5Cnc5Hc7LrqC';
 
-          let resolveResultPromise: (result: SignatureResult) => void;
+          let resolveResultPromise = function (result: SignatureResult): any {
+            return result;
+          };
           await mockRpcMessage({
             method: 'signatureSubscribe',
             params: [mockSignature, {commitment: 'finalized'}],
@@ -1295,11 +1427,55 @@ describe('Connection', function () {
       });
 
       describe('nonce strategy', () => {
+        it('rejects if called with an already-aborted `abortSignal`', () => {
+          const mockSignature =
+            'w2Zeq8YkpyB463DttvfzARD7k9ZxGEwbsEw4boEK7jDp3pfoxZbTdLFSsEPhzXhpCcjGi2kHtHFobgX49MMhbWt';
+          const abortController: any =
+            nodeVersion >= 16 ? new AbortController() : Node14Controller();
+          abortController.abort();
+          expect(
+            connection.confirmTransaction({
+              abortSignal: abortController.signal,
+              minContextSlot: 1,
+              nonceAccountPubkey: new PublicKey(1),
+              nonceValue: 'fakenonce',
+              signature: mockSignature,
+            }),
+          ).to.eventually.be.rejectedWith('AbortError');
+        });
+
+        it('rejects upon receiving an abort signal', async () => {
+          const mockSignature =
+            'w2Zeq8YkpyB463DttvfzARD7k9ZxGEwbsEw4boEK7jDp3pfoxZbTdLFSsEPhzXhpCcjGi2kHtHFobgX49MMhbWt';
+          const abortController: any =
+            nodeVersion >= 16 ? new AbortController() : Node14Controller();
+          // Keep the subscription from ever returning data.
+          await mockRpcMessage({
+            method: 'signatureSubscribe',
+            params: [mockSignature, {commitment: 'finalized'}],
+            result: new Promise(() => {}), // Never resolve.
+          });
+          clock.runAllAsync();
+          const confirmationPromise = connection.confirmTransaction({
+            abortSignal: abortController.signal,
+            minContextSlot: 1,
+            nonceAccountPubkey: new PublicKey(1),
+            nonceValue: 'fakenonce',
+            signature: mockSignature,
+          });
+          clock.runAllAsync();
+          expect(confirmationPromise).not.to.have.been.rejected;
+          abortController.abort();
+          await expect(confirmationPromise).to.eventually.be.rejected;
+        });
+
         it('confirms the transaction if the signature confirmation is received before the nonce is advanced', async () => {
           const mockSignature =
             '4oCEqwGrMdBeMxpzuWiukCYqSfV4DsSKXSiVVCh1iJ6pS772X7y219JZP3mgqBz5PhsvprpKyhzChjYc3VSBQXzG';
 
-          let resolveResultPromise: (result: SignatureResult) => void;
+          let resolveResultPromise = function (result: SignatureResult): any {
+            return result;
+          };
           await mockRpcMessage({
             method: 'signatureSubscribe',
             params: [mockSignature, {commitment: 'finalized'}],
@@ -1510,7 +1686,9 @@ describe('Connection', function () {
           const mockSignature =
             'LPJ18iiyfz3G1LpNNbcBnBtaS4dVBdPHKrnELqikjER2DcvB4iyTgz43nKQJH3JQAJHuZdM1xVh5Cnc5Hc7LrqC';
 
-          let resolveResultPromise: (result: SignatureResult) => void;
+          let resolveResultPromise = function (result: SignatureResult): any {
+            return result;
+          };
           await mockRpcMessage({
             method: 'signatureSubscribe',
             params: [mockSignature, {commitment: 'finalized'}],
@@ -1520,7 +1698,7 @@ describe('Connection', function () {
           });
 
           // Simulate a failure to fetch the nonce account.
-          let rejectNonceAccountFetchPromise: () => void;
+          let rejectNonceAccountFetchPromise = function (): void {};
           await mockRpcResponse({
             method: 'getAccountInfo',
             params: [],
@@ -1606,7 +1784,9 @@ describe('Connection', function () {
           const mockSignature =
             'LPJ18iiyfz3G1LpNNbcBnBtaS4dVBdPHKrnELqikjER2DcvB4iyTgz43nKQJH3JQAJHuZdM1xVh5Cnc5Hc7LrqC';
 
-          let resolveResultPromise: (result: SignatureResult) => void;
+          let resolveResultPromise = function (result: SignatureResult): any {
+            return result;
+          };
           await mockRpcMessage({
             method: 'signatureSubscribe',
             params: [mockSignature, {commitment: 'finalized'}],
@@ -3071,6 +3251,229 @@ describe('Connection', function () {
     });
   }
 
+  describe('get parsed block', function () {
+    it('can deserialize a response when `transactionDetails` is `full`', async () => {
+      // Mock block with transaction, fetched using `"transactionDetails": "full"`.
+      await mockRpcResponse({
+        method: 'getBlock',
+        params: [
+          1,
+          {
+            encoding: 'jsonParsed',
+            maxSupportedTransactionVersion: 0,
+            transactionDetails: 'full',
+          },
+        ],
+        value: {
+          blockHeight: 0,
+          blockTime: 1614281964,
+          blockhash: '49d2UbduiZWjtR3Wvfv2t2QxmXvtZNWSPFRZxEDYAvQN',
+          parentSlot: 0,
+          previousBlockhash: 'mDd5yMLfuroS1JVZMHo2VZLTgKXXNBXrzPR5UkzFD4X',
+          transactions: [
+            {
+              meta: {
+                err: null,
+                fee: 5000,
+                innerInstructions: [],
+                logMessages: [
+                  'Program Vote111111111111111111111111111111111111111 invoke [1]',
+                  'Program Vote111111111111111111111111111111111111111 success',
+                ],
+                postBalances: [3712706991, 5765419239, 1169280, 143487360, 1],
+                postTokenBalances: [],
+                preBalances: [3712711991, 5765419239, 1169280, 143487360, 1],
+                preTokenBalances: [],
+                rewards: null,
+                status: {Ok: null},
+              },
+              transaction: {
+                message: {
+                  accountKeys: [
+                    {
+                      pubkey: '7v5fMKBqC9PuwjSdS9k9JU7efEXmq3bHTMF5fuSHnqrm',
+                      signer: true,
+                      source: 'transaction',
+                      writable: true,
+                    },
+                    {
+                      pubkey: 'AhcvnNdppGEcgdpK5gfcaZnAWz4ct8V4n7De5QiLiuzG',
+                      signer: false,
+                      source: 'transaction',
+                      writable: true,
+                    },
+                    {
+                      pubkey: 'SysvarC1ock11111111111111111111111111111111',
+                      signer: false,
+                      source: 'transaction',
+                      writable: false,
+                    },
+                    {
+                      pubkey: 'SysvarS1otHashes111111111111111111111111111',
+                      signer: false,
+                      source: 'transaction',
+                      writable: false,
+                    },
+                    {
+                      pubkey: 'Vote111111111111111111111111111111111111111',
+                      signer: false,
+                      source: 'transaction',
+                      writable: false,
+                    },
+                  ],
+                  addressTableLookups: null,
+                  instructions: [
+                    {
+                      parsed: {
+                        info: {
+                          clockSysvar:
+                            'SysvarC1ock11111111111111111111111111111111',
+                          slotHashesSysvar:
+                            'SysvarS1otHashes111111111111111111111111111',
+                          vote: {
+                            hash: '2gmQ8xMjZaXn63kr8qzPAUjQAHi7xCDjSibPdJxhVYMm',
+                            slots: [164153060, 164153061],
+                            timestamp: 1669845645,
+                          },
+                          voteAccount:
+                            'AhcvnNdppGEcgdpK5gfcaZnAWz4ct8V4n7De5QiLiuzG',
+                          voteAuthority:
+                            '7v5fMKBqC9PuwjSdS9k9JU7efEXmq3bHTMF5fuSHnqrm',
+                        },
+                        type: 'vote',
+                      },
+                      program: 'vote',
+                      programId: 'Vote111111111111111111111111111111111111111',
+                    },
+                  ],
+                  recentBlockhash:
+                    'GLqYrN6AQxCGtFTQywkPj2WN5tafC3KerBhW4QkmAyD4',
+                },
+                signatures: [
+                  '5qDZ3nUUwp8VHFfAE5ydTQRULCoVLMGs16EprwdXsvyNCLe1NfckCkRE4BPi6wyEW9hXvG9iWU2prXfbM8SNPVEC',
+                ],
+              },
+              version: 'legacy',
+            },
+          ],
+        },
+      });
+      await expect(
+        connection.getParsedBlock(1, {
+          maxSupportedTransactionVersion: 0,
+          transactionDetails: 'full',
+        }),
+      ).not.to.eventually.be.rejected;
+    });
+
+    it('can deserialize a response when `transactionDetails` is `none`', async () => {
+      // Mock block with transaction, fetched using `"transactionDetails": "none"`.
+      await mockRpcResponse({
+        method: 'getBlock',
+        params: [
+          1,
+          {
+            encoding: 'jsonParsed',
+            maxSupportedTransactionVersion: 0,
+            transactionDetails: 'none',
+          },
+        ],
+        value: {
+          blockHeight: 0,
+          blockTime: 1614281964,
+          blockhash: '49d2UbduiZWjtR3Wvfv2t2QxmXvtZNWSPFRZxEDYAvQN',
+          parentSlot: 0,
+          previousBlockhash: 'mDd5yMLfuroS1JVZMHo2VZLTgKXXNBXrzPR5UkzFD4X',
+        },
+      });
+      await expect(
+        connection.getParsedBlock(1, {
+          maxSupportedTransactionVersion: 0,
+          transactionDetails: 'none',
+        }),
+      ).not.to.eventually.be.rejected;
+    });
+
+    it('can deserialize a response when `transactionDetails` is `accounts`', async () => {
+      // Mock block with transaction, fetched using `"transactionDetails": "accounts"`.
+      await mockRpcResponse({
+        method: 'getBlock',
+        params: [
+          1,
+          {
+            encoding: 'jsonParsed',
+            maxSupportedTransactionVersion: 0,
+            transactionDetails: 'accounts',
+          },
+        ],
+        value: {
+          blockHeight: 0,
+          blockTime: 1614281964,
+          blockhash: '49d2UbduiZWjtR3Wvfv2t2QxmXvtZNWSPFRZxEDYAvQN',
+          parentSlot: 0,
+          previousBlockhash: 'mDd5yMLfuroS1JVZMHo2VZLTgKXXNBXrzPR5UkzFD4X',
+          transactions: [
+            {
+              meta: {
+                err: null,
+                fee: 5000,
+                postBalances: [18237691394, 26858640, 1169280, 143487360, 1],
+                postTokenBalances: [],
+                preBalances: [18237696394, 26858640, 1169280, 143487360, 1],
+                preTokenBalances: [],
+                status: {Ok: null},
+              },
+              transaction: {
+                accountKeys: [
+                  {
+                    pubkey: '914RFshndUeZaNPjf8UWDCyo49ahQ1XQ2w9BnEMwpHKF',
+                    signer: true,
+                    source: 'transaction',
+                    writable: true,
+                  },
+                  {
+                    pubkey: '4cCd4SGrMswhqboYBJ5AcCVvCjh5NtaeZNwWFJzsnUWY',
+                    signer: false,
+                    source: 'transaction',
+                    writable: true,
+                  },
+                  {
+                    pubkey: 'SysvarC1ock11111111111111111111111111111111',
+                    signer: false,
+                    source: 'transaction',
+                    writable: false,
+                  },
+                  {
+                    pubkey: 'SysvarS1otHashes111111111111111111111111111',
+                    signer: false,
+                    source: 'transaction',
+                    writable: false,
+                  },
+                  {
+                    pubkey: 'Vote111111111111111111111111111111111111111',
+                    signer: false,
+                    source: 'transaction',
+                    writable: false,
+                  },
+                ],
+                signatures: [
+                  '5ZDp1HfNZhNRHc75ncsiZ4sCq1fGJHMGf9u36M3foD5PMH4Xu5S4X2x7aryn4JinUdG11oSYCk7zxbNmLJzzqUft',
+                ],
+              },
+              version: 'legacy',
+            },
+          ],
+        },
+      });
+      await expect(
+        connection.getParsedBlock(1, {
+          maxSupportedTransactionVersion: 0,
+          transactionDetails: 'accounts',
+        }),
+      ).not.to.eventually.be.rejected;
+    });
+  });
+
   describe('get block', function () {
     beforeEach(async function () {
       await mockRpcResponse({
@@ -3235,6 +3638,187 @@ describe('Connection', function () {
       ).to.be.rejectedWith(
         `Block not available for slot ${Number.MAX_SAFE_INTEGER}`,
       );
+    });
+
+    it('can deserialize a response when `transactionDetails` is `full`', async () => {
+      // Mock block with transaction, fetched using `"transactionDetails": "full"`.
+      await mockRpcResponse({
+        method: 'getBlock',
+        params: [
+          1,
+          {
+            maxSupportedTransactionVersion: 0,
+            transactionDetails: 'full',
+          },
+        ],
+        value: {
+          blockHeight: 0,
+          blockTime: 1614281964,
+          blockhash: '49d2UbduiZWjtR3Wvfv2t2QxmXvtZNWSPFRZxEDYAvQN',
+          parentSlot: 0,
+          previousBlockhash: 'mDd5yMLfuroS1JVZMHo2VZLTgKXXNBXrzPR5UkzFD4X',
+          transactions: [
+            {
+              meta: {
+                err: null,
+                fee: 5000,
+                innerInstructions: [],
+                loadedAddresses: {readonly: [], writable: []},
+                logMessages: [
+                  'Program Vote111111111111111111111111111111111111111 invoke [1]',
+                  'Program Vote111111111111111111111111111111111111111 success',
+                ],
+                postBalances: [12278161908, 39995373, 1169280, 143487360, 1],
+                postTokenBalances: [],
+                preBalances: [12278166908, 39995373, 1169280, 143487360, 1],
+                preTokenBalances: [],
+                rewards: null,
+                status: {Ok: null},
+              },
+              transaction: {
+                message: {
+                  accountKeys: [
+                    'FTWuJ2tqjecNizCSE66z4BD1tBHomG6DVffGUwRuWUkM',
+                    'H2z3pBT62ByS4jpqsiEMtgN3NUFEuZHiTvoKCFjqCtD6',
+                    'SysvarC1ock11111111111111111111111111111111',
+                    'SysvarS1otHashes111111111111111111111111111',
+                    'Vote111111111111111111111111111111111111111',
+                  ],
+                  header: {
+                    numReadonlySignedAccounts: 0,
+                    numReadonlyUnsignedAccounts: 3,
+                    numRequiredSignatures: 1,
+                  },
+                  instructions: [
+                    {
+                      accounts: [1, 3, 2, 0],
+                      data: '29z5mr1JoRmJYQ6zG7p2F3mu68pWTNw9q49Tu7KrSEgoS6Jh1LMPGUK3HXs1N3Dody3icCcXxu6xPYoXLWnUTafEGm3knK',
+                      programIdIndex: 4,
+                    },
+                  ],
+                  recentBlockhash:
+                    'GLqYrN6AQxCGtFTQywkPj2WN5tafC3KerBhW4QkmAyD4',
+                },
+                signatures: [
+                  '4SZofEnXEVzCYvzk16z6ScR6F3iNtZ3FsCC1PEWegpzvGwTJR6x9cDi8VHRmCFGC5XFs2yEFms3j36Mj7XVyHXbb',
+                ],
+              },
+              version: 'legacy',
+            },
+          ],
+        },
+      });
+      await expect(
+        connection.getBlock(1, {
+          maxSupportedTransactionVersion: 0,
+          transactionDetails: 'full',
+        }),
+      ).not.to.eventually.be.rejected;
+    });
+
+    it('can deserialize a response when `transactionDetails` is `none`', async () => {
+      // Mock block with transaction, fetched using `"transactionDetails": "none"`.
+      await mockRpcResponse({
+        method: 'getBlock',
+        params: [
+          1,
+          {
+            maxSupportedTransactionVersion: 0,
+            transactionDetails: 'none',
+          },
+        ],
+        value: {
+          blockHeight: 0,
+          blockTime: 1614281964,
+          blockhash: '49d2UbduiZWjtR3Wvfv2t2QxmXvtZNWSPFRZxEDYAvQN',
+          parentSlot: 0,
+          previousBlockhash: 'mDd5yMLfuroS1JVZMHo2VZLTgKXXNBXrzPR5UkzFD4X',
+        },
+      });
+      await expect(
+        connection.getBlock(1, {
+          maxSupportedTransactionVersion: 0,
+          transactionDetails: 'none',
+        }),
+      ).not.to.eventually.be.rejected;
+    });
+
+    it('can deserialize a response when `transactionDetails` is `accounts`', async () => {
+      // Mock block with transaction, fetched using `"transactionDetails": "accounts"`.
+      await mockRpcResponse({
+        method: 'getBlock',
+        params: [
+          1,
+          {
+            maxSupportedTransactionVersion: 0,
+            transactionDetails: 'accounts',
+          },
+        ],
+        value: {
+          blockHeight: 0,
+          blockTime: 1614281964,
+          blockhash: '49d2UbduiZWjtR3Wvfv2t2QxmXvtZNWSPFRZxEDYAvQN',
+          parentSlot: 0,
+          previousBlockhash: 'mDd5yMLfuroS1JVZMHo2VZLTgKXXNBXrzPR5UkzFD4X',
+          transactions: [
+            {
+              meta: {
+                err: null,
+                fee: 5000,
+                postBalances: [2751549948, 11751747405, 1169280, 143487360, 1],
+                postTokenBalances: [],
+                preBalances: [2751554948, 11751747405, 1169280, 143487360, 1],
+                preTokenBalances: [],
+                status: {Ok: null},
+              },
+              transaction: {
+                accountKeys: [
+                  {
+                    pubkey: 'D7hwgGRTr1vaCxzmfEKCaf56SPgBJmjHh6UXHG3p12bB',
+                    signer: true,
+                    source: 'transaction',
+                    writable: true,
+                  },
+                  {
+                    pubkey: '8iLE53Y9k4sccy4gxrT936BHbhYS6J13kQT5vRXhXFMX',
+                    signer: false,
+                    source: 'transaction',
+                    writable: true,
+                  },
+                  {
+                    pubkey: 'SysvarC1ock11111111111111111111111111111111',
+                    signer: false,
+                    source: 'transaction',
+                    writable: false,
+                  },
+                  {
+                    pubkey: 'SysvarS1otHashes111111111111111111111111111',
+                    signer: false,
+                    source: 'transaction',
+                    writable: false,
+                  },
+                  {
+                    pubkey: 'Vote111111111111111111111111111111111111111',
+                    signer: false,
+                    source: 'transaction',
+                    writable: false,
+                  },
+                ],
+                signatures: [
+                  'uNKj2ogn8ZRRjyVWXLC7sLRWpKQyMUomm66RXoDuWLXikPSJN8C7ZZK95j8S2bzcjwH6MvrXKSHtCWEURPpEXMB',
+                ],
+              },
+              version: 'legacy',
+            },
+          ],
+        },
+      });
+      await expect(
+        connection.getBlock(1, {
+          maxSupportedTransactionVersion: 0,
+          transactionDetails: 'accounts',
+        }),
+      ).not.to.eventually.be.rejected;
     });
   });
 
@@ -3989,7 +4573,8 @@ describe('Connection', function () {
 
         expect(largestAccounts).to.have.length(2);
         const largestAccount = largestAccounts[0];
-        expect(largestAccount.address).to.eql(testTokenAccountPubkey);
+        expect(largestAccount.address.equals(testTokenAccountPubkey)).to.be
+          .true;
         expect(largestAccount.amount).to.eq('11110');
         expect(largestAccount.decimals).to.eq(2);
         expect(largestAccount.uiAmount).to.eq(111.1);
@@ -4830,9 +5415,9 @@ describe('Connection', function () {
       );
 
       await connection.confirmTransaction({
-        blockhash: transaction.recentBlockhash,
-        lastValidBlockHeight: transaction.lastValidBlockHeight,
-        signature,
+        blockhash: transaction.recentBlockhash!,
+        lastValidBlockHeight: transaction.lastValidBlockHeight!,
+        signature: signature,
       });
 
       const response = (await connection.getSignatureStatus(signature)).value;
@@ -5172,8 +5757,8 @@ describe('Connection', function () {
         }
       });
 
-      let signature;
-      let addressTableLookups;
+      let signature: TransactionSignature;
+      let addressTableLookups: MessageAddressTableLookup[];
       it('send and confirm', async () => {
         const {blockhash, lastValidBlockHeight} =
           await connection.getLatestBlockhash();
@@ -5241,7 +5826,7 @@ describe('Connection', function () {
         );
       });
 
-      let transactionSlot;
+      let transactionSlot: number;
       it('getTransaction', async () => {
         // fetch v0 transaction
         const fetchedTransaction = await connection.getTransaction(signature, {

@@ -1,3 +1,5 @@
+//! The definition of a Solana network packet.
+
 use {
     bincode::{Options, Result},
     bitflags::bitflags,
@@ -44,7 +46,7 @@ pub struct Packet {
     // Bytes past Packet.meta.size are not valid to read from.
     // Use Packet.data(index) to read from the buffer.
     buffer: [u8; PACKET_DATA_SIZE],
-    pub meta: Meta,
+    meta: Meta,
 }
 
 impl Packet {
@@ -79,6 +81,16 @@ impl Packet {
     pub fn buffer_mut(&mut self) -> &mut [u8] {
         debug_assert!(!self.meta.discard());
         &mut self.buffer[..]
+    }
+
+    #[inline]
+    pub fn meta(&self) -> &Meta {
+        &self.meta
+    }
+
+    #[inline]
+    pub fn meta_mut(&mut self) -> &mut Meta {
+        &mut self.meta
     }
 
     pub fn from_data<T: Serialize>(dest: Option<&SocketAddr>, data: T) -> Result<Self> {
@@ -140,7 +152,7 @@ impl Default for Packet {
 
 impl PartialEq for Packet {
     fn eq(&self, other: &Packet) -> bool {
-        self.meta == other.meta && self.data(..) == other.data(..)
+        self.meta() == other.meta() && self.data(..) == other.data(..)
     }
 }
 

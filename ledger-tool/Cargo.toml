@@ -16,9 +16,11 @@ clap = "2.33.1"
 crossbeam-channel = "0.5"
 csv = "1.1.6"
 dashmap = "4.0.2"
+futures = "0.3"
 histogram = "0.6.9"
 itertools = "0.10.5"
 log = { version = "0.4.17" }
+num_cpus = "1.13.1"
 regex = "1"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0.83"
