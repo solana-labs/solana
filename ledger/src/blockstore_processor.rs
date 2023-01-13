@@ -184,6 +184,11 @@ fn execute_batch(
         timings,
     );
 
+    info!(
+        " ==TAOTAOTAO== bank {} executed a batch, {:?}",
+        bank.slot(), timings
+    );
+
     if bank
         .feature_set
         .is_active(&feature_set::gate_large_block::id())
