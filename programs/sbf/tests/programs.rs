@@ -483,7 +483,6 @@ fn test_sol_alloc_free_no_longer_deployable() {
 
     let program_keypair = Keypair::new();
     let program_address = program_keypair.pubkey();
-    let loader_address = bpf_loader_deprecated::id();
 
     let GenesisConfigInfo {
         genesis_config,
@@ -492,13 +491,12 @@ fn test_sol_alloc_free_no_longer_deployable() {
     } = create_genesis_config(50);
     let mut bank = Bank::new_for_tests(&genesis_config);
 
-    bank.deactivate_feature(&solana_sdk::feature_set::disable_deprecated_loader::id());
-    let (name, id, entrypoint) = solana_bpf_loader_deprecated_program!();
+    let (name, id, entrypoint) = solana_bpf_loader_program!();
     bank.add_builtin(&name, &id, entrypoint);
 
     // Populate loader account with elf that depends on _sol_alloc_free syscall
     let elf = load_program_from_file("solana_sbf_rust_deprecated_loader");
-    let mut program_account = AccountSharedData::new(1, elf.len(), &loader_address);
+    let mut program_account = AccountSharedData::new(1, elf.len(), &bpf_loader::id());
     program_account
         .data_as_mut_slice()
         .get_mut(..)
@@ -511,7 +509,7 @@ fn test_sol_alloc_free_no_longer_deployable() {
         Message::new(
             &[loader_instruction::finalize(
                 &program_keypair.pubkey(),
-                &loader_address,
+                &bpf_loader::id(),
             )],
             Some(&mint_keypair.pubkey()),
         ),
@@ -3557,7 +3555,7 @@ fn test_program_sbf_inner_instruction_alignment_checks() {
     solana_logger::setup();
 
     let GenesisConfigInfo {
-        mut genesis_config,
+        genesis_config,
         mint_keypair,
         ..
     } = create_genesis_config(50);
