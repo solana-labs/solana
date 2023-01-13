@@ -71,7 +71,6 @@ pub struct TimedTracedEvent(std::time::SystemTime, TracedEvent);
 #[derive(Serialize, Deserialize, Debug)]
 enum TracedEvent {
     PacketBatch(ChannelLabel, BankingPacketBatch),
-    Bank(Slot, u32, BankStatus, usize),
     BlockAndBankHash(Slot, Hash, Hash),
 }
 
@@ -251,19 +250,6 @@ impl BankingTracer {
         })
     }
 
-    fn bank_event(
-        &self,
-        slot: Slot,
-        id: u32,
-        status: BankStatus,
-        unprocessed_transaction_count: usize,
-    ) {
-        self.trace_event(TimedTracedEvent(
-            SystemTime::now(),
-            TracedEvent::Bank(slot, id, status, unprocessed_transaction_count),
-        ))
-    }
-
     pub fn hash_event(&self, slot: Slot, blockhash: Hash, bank_hash: Hash) {
         self.trace_event(TimedTracedEvent(
             SystemTime::now(),
@@ -279,14 +265,6 @@ impl BankingTracer {
                     .expect("active tracer thread unless exited");
             }
         }
-    }
-
-    pub fn bank_start(&self, slot: Slot, id: u32, unprocessed_transaction_count: usize) {
-        self.bank_event(slot, id, BankStatus::Started, unprocessed_transaction_count);
-    }
-
-    pub fn bank_end(&self, slot: Slot, id: u32, unprocessed_transaction_count: usize) {
-        self.bank_event(slot, id, BankStatus::Ended, unprocessed_transaction_count);
     }
 
     pub fn channel_for_test() -> (TracedSender, Receiver<BankingPacketBatch>) {
@@ -490,7 +468,9 @@ mod tests {
         tracer_thread.unwrap().join().unwrap().unwrap();
 
         // shouldn't panic
-        tracer.bank_end(1, 2, 3);
+        let blockhash = Hash::from_str("B1ockhash1111111111111111111111111111111111").unwrap();
+        let bank_hash = Hash::from_str("BankHash11111111111111111111111111111111111").unwrap();
+        tracer.hash_event(4, blockhash, bank_hash);
 
         drop(tracer);
 
@@ -528,7 +508,6 @@ mod tests {
         non_vote_sender
             .send(for_test::sample_packet_batch())
             .unwrap();
-        tracer.bank_start(1, 2, 3);
         let blockhash = Hash::from_str("B1ockhash1111111111111111111111111111111111").unwrap();
         let bank_hash = Hash::from_str("BankHash11111111111111111111111111111111111").unwrap();
         tracer.hash_event(4, blockhash, bank_hash);
@@ -546,14 +525,6 @@ mod tests {
             Ok(TimedTracedEvent(
                 _,
                 TracedEvent::PacketBatch(ChannelLabel::NonVote, _)
-            ))
-        );
-        i += 1;
-        assert_matches!(
-            results[i],
-            Ok(TimedTracedEvent(
-                _,
-                TracedEvent::Bank(1, 2, BankStatus::Started, 3)
             ))
         );
         i += 1;

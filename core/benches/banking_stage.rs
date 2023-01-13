@@ -103,7 +103,7 @@ fn bench_consume_buffered(bencher: &mut Bencher) {
                 &BankingStageStats::default(),
                 &recorder,
                 &QosService::new(1),
-                &mut LeaderSlotMetricsTracker::new_for_test(),
+                &mut LeaderSlotMetricsTracker::new(0),
                 None,
             );
         });

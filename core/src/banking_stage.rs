@@ -483,7 +483,6 @@ impl BankingStage {
                 let data_budget = data_budget.clone();
                 let connection_cache = connection_cache.clone();
                 let bank_forks = bank_forks.clone();
-                let banking_tracer = banking_tracer.clone();
                 Builder::new()
                     .name(format!("solBanknStgTx{i:02}"))
                     .spawn(move || {
@@ -500,7 +499,6 @@ impl BankingStage {
                             connection_cache,
                             &bank_forks,
                             unprocessed_transaction_storage,
-                            banking_tracer,
                         );
                     })
                     .unwrap()
@@ -850,9 +848,7 @@ impl BankingStage {
                 // Take metrics action after forwarding packets
                 slot_metrics_tracker.apply_action(metrics_action);
             }
-            BufferedPacketsDecision::Hold => {
-                slot_metrics_tracker.apply_action(metrics_action);
-            }
+            _ => {}
         }
     }
 
@@ -967,7 +963,6 @@ impl BankingStage {
         connection_cache: Arc<ConnectionCache>,
         bank_forks: &Arc<RwLock<BankForks>>,
         mut unprocessed_transaction_storage: UnprocessedTransactionStorage,
-        banking_tracer: Arc<BankingTracer>,
     ) {
         let recorder = poh_recorder.read().unwrap().recorder();
         let socket = UdpSocket::bind("0.0.0.0:0").unwrap();
@@ -975,7 +970,7 @@ impl BankingStage {
         let mut tracer_packet_stats = TracerPacketStats::new(id);
         let qos_service = QosService::new(id);
 
-        let mut slot_metrics_tracker = LeaderSlotMetricsTracker::new(id, banking_tracer);
+        let mut slot_metrics_tracker = LeaderSlotMetricsTracker::new(id);
         let mut last_metrics_update = Instant::now();
 
         loop {
@@ -3421,7 +3416,7 @@ mod tests {
                 &BankingStageStats::default(),
                 &recorder,
                 &QosService::new(1),
-                &mut LeaderSlotMetricsTracker::new_for_test(),
+                &mut LeaderSlotMetricsTracker::new(0),
                 None,
             );
             assert!(buffered_packet_batches.is_empty());
@@ -3479,7 +3474,7 @@ mod tests {
                 &BankingStageStats::default(),
                 &recorder,
                 &QosService::new(1),
-                &mut LeaderSlotMetricsTracker::new_for_test(),
+                &mut LeaderSlotMetricsTracker::new(0),
                 None,
             );
             assert!(buffered_packet_batches.is_empty());
@@ -3541,7 +3536,7 @@ mod tests {
                         &BankingStageStats::default(),
                         &recorder,
                         &QosService::new(1),
-                        &mut LeaderSlotMetricsTracker::new_for_test(),
+                        &mut LeaderSlotMetricsTracker::new(0),
                         None,
                     );
 
@@ -3634,7 +3629,7 @@ mod tests {
                     &socket,
                     true,
                     &data_budget,
-                    &mut LeaderSlotMetricsTracker::new_for_test(),
+                    &mut LeaderSlotMetricsTracker::new(0),
                     &stats,
                     &connection_cache,
                     &mut TracerPacketStats::new(0),
@@ -3731,7 +3726,7 @@ mod tests {
                     &socket,
                     hold,
                     &DataBudget::default(),
-                    &mut LeaderSlotMetricsTracker::new_for_test(),
+                    &mut LeaderSlotMetricsTracker::new(0),
                     &stats,
                     &connection_cache,
                     &mut TracerPacketStats::new(0),
