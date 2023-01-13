@@ -26,7 +26,7 @@ use {
         bank::Bank,
         bank_client::BankClient,
         genesis_utils::{create_genesis_config, GenesisConfigInfo},
-        loader_utils::{create_deprecated_program, load_program_from_file},
+        loader_utils::{load_program, load_program_from_file},
     },
     solana_sdk::{
         bpf_loader,
@@ -159,8 +159,7 @@ fn bench_program_execute_noop(bencher: &mut Bencher) {
     let bank = Arc::new(bank);
     let bank_client = BankClient::new_shared(&bank);
 
-    let invoke_program_id =
-        create_deprecated_program(&bank_client, &bpf_loader::id(), &mint_keypair, "noop");
+    let invoke_program_id = load_program(&bank_client, &bpf_loader::id(), &mint_keypair, "noop");
 
     let mint_pubkey = mint_keypair.pubkey();
     let account_metas = vec![AccountMeta::new(mint_pubkey, true)];
