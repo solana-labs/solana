@@ -2138,7 +2138,7 @@ An array of:
 
 - `RpcPrioritizationFee<object>`
   - `slot: <u64>` - Slot in which fee was observed
-  - `prioritizationFee: <u64>` - a fee paid by at least one successfully landed transaction, specified in increments of 0.000001 lamports
+  - `prioritizationFee: <u64>` - the per-compute-unit fee paid by at least one successfully landed transaction, specified in increments of 0.000001 lamports
 
 #### Example:
 
