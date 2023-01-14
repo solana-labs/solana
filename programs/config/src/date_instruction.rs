@@ -27,9 +27,7 @@ impl Default for DateConfig {
 }
 impl DateConfig {
     pub fn new(date_time: DateTime<Utc>) -> Self {
-        Self {
-            date_time,
-        }
+        Self { date_time }
     }
 
     pub fn deserialize(input: &[u8]) -> Option<Self> {
