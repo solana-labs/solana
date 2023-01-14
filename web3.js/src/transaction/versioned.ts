@@ -8,6 +8,8 @@ import * as shortvec from '../utils/shortvec-encoding';
 import * as Layout from '../layout';
 import {sign} from '../utils/ed25519';
 import {PublicKey} from '../publickey';
+import { Transaction } from './legacy';
+import { TransactionMessage } from './message';
 
 export type TransactionVersion = 'legacy' | 0;
 
@@ -88,6 +90,27 @@ export class VersionedTransaction {
 
     const message = VersionedMessage.deserialize(new Uint8Array(byteArray));
     return new VersionedTransaction(message, signatures);
+  }
+
+  static fromLegacyTransaction(transaction: Transaction): VersionedTransaction {
+    const isUnsigned = transaction.signatures.every(signature => signature.signature == null);
+    if (isUnsigned && transaction.feePayer != null && transaction.recentBlockhash != null) {    
+      const message = new TransactionMessage({
+        instructions: transaction.instructions,
+        payerKey: transaction.feePayer,
+        recentBlockhash: transaction.recentBlockhash,
+      })
+      return new VersionedTransaction(message.compileToV0Message());
+    }
+
+    const message = transaction.compileMessage();        
+    const versionedTransaction = new VersionedTransaction(message);
+    transaction.signatures.forEach((signature) => {
+        if (signature.publicKey != null && signature.signature != null) {
+            versionedTransaction.addSignature(signature.publicKey, signature.signature);
+        }
+    });
+    return versionedTransaction;
   }
 
   sign(signers: Array<Signer>) {
