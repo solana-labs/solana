@@ -399,9 +399,10 @@ fn execute_batches(
 /// 3. Register the `Tick` if it's available
 /// 4. Update the leader scheduler, goto 1
 ///
-/// This method is for use testing against a single Bank, and assumes `Bank::transaction_count()`
-/// represents the number of transactions executed in this Bank
-pub fn process_entries_for_tests(
+/// This method is used in testing against a single Bank, and assumes `Bank::transaction_count()`
+/// represents the number of transactions executed in this Bank.
+#[cfg(test)]
+fn process_entries_for_tests(
     bank: &Arc<Bank>,
     entries: Vec<Entry>,
     randomize: bool,
