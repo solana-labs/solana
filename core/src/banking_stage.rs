@@ -8,7 +8,7 @@ use {
         packet_receiver::PacketReceiver,
     },
     crate::{
-        banking_trace::{BankingPacketReceiver, BankingTracer, TracerThread},
+        banking_trace::BankingPacketReceiver,
         forward_packet_batches_by_accounts::ForwardPacketBatchesByAccounts,
         immutable_deserialized_packet::ImmutableDeserializedPacket,
         latest_unprocessed_votes::{LatestUnprocessedVotes, VoteSource},
@@ -349,7 +349,6 @@ pub struct BatchedTransactionErrorDetails {
 /// Stores the stage's thread handle and output receiver.
 pub struct BankingStage {
     bank_thread_hdls: Vec<JoinHandle<()>>,
-    tracer_thread_hdl: TracerThread,
 }
 
 #[derive(Debug, Clone)]
@@ -382,7 +381,6 @@ impl BankingStage {
         log_messages_bytes_limit: Option<usize>,
         connection_cache: Arc<ConnectionCache>,
         bank_forks: Arc<RwLock<BankForks>>,
-        banking_tracer: Arc<BankingTracer>,
     ) -> Self {
         Self::new_num_threads(
             cluster_info,
@@ -396,7 +394,6 @@ impl BankingStage {
             log_messages_bytes_limit,
             connection_cache,
             bank_forks,
-            banking_tracer,
         )
     }
 
@@ -413,7 +410,6 @@ impl BankingStage {
         log_messages_bytes_limit: Option<usize>,
         connection_cache: Arc<ConnectionCache>,
         bank_forks: Arc<RwLock<BankForks>>,
-        banking_tracer: Arc<BankingTracer>,
     ) -> Self {
         assert!(num_threads >= MIN_TOTAL_THREADS);
         // Single thread to generate entries from many banks.
@@ -505,10 +501,7 @@ impl BankingStage {
             })
             .collect();
 
-        Self {
-            bank_thread_hdls,
-            tracer_thread_hdl: banking_tracer.take_tracer_thread_join_handle(),
-        }
+        Self { bank_thread_hdls }
     }
 
     /// Forwards all valid, unprocessed packets in the buffer, up to a rate limit. Returns
@@ -1743,11 +1736,6 @@ impl BankingStage {
         for bank_thread_hdl in self.bank_thread_hdls {
             bank_thread_hdl.join()?;
         }
-        if let Some(tracer_thread_hdl) = self.tracer_thread_hdl {
-            if let Err(tracer_result) = tracer_thread_hdl.join()? {
-                error!("tracer thread error: {:?}", tracer_result);
-            }
-        }
         Ok(())
     }
 }
@@ -1756,7 +1744,10 @@ impl BankingStage {
 mod tests {
     use {
         super::*,
-        crate::{banking_trace::BankingPacketBatch, unprocessed_packet_batches},
+        crate::{
+            banking_trace::{BankingPacketBatch, BankingTracer},
+            unprocessed_packet_batches,
+        },
         crossbeam_channel::{unbounded, Receiver},
         solana_address_lookup_table_program::state::{AddressLookupTable, LookupTableMeta},
         solana_entry::entry::{next_entry, next_versioned_entry, Entry, EntrySlice},
@@ -1848,7 +1839,6 @@ mod tests {
                 None,
                 Arc::new(ConnectionCache::default()),
                 bank_forks,
-                banking_tracer,
             );
             drop(non_vote_sender);
             drop(tpu_vote_sender);
@@ -1904,7 +1894,6 @@ mod tests {
                 None,
                 Arc::new(ConnectionCache::default()),
                 bank_forks,
-                banking_tracer,
             );
             trace!("sending bank");
             drop(non_vote_sender);
@@ -1985,7 +1974,6 @@ mod tests {
                 None,
                 Arc::new(ConnectionCache::default()),
                 bank_forks,
-                banking_tracer,
             );
 
             // fund another account so we can send 2 good transactions in a single batch.
@@ -2147,7 +2135,6 @@ mod tests {
                     None,
                     Arc::new(ConnectionCache::default()),
                     bank_forks,
-                    banking_tracer,
                 );
 
                 // wait for banking_stage to eat the packets
@@ -3838,7 +3825,6 @@ mod tests {
                 None,
                 Arc::new(ConnectionCache::default()),
                 bank_forks,
-                banking_tracer,
             );
 
             let keypairs = (0..100).map(|_| Keypair::new()).collect_vec();

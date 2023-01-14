@@ -290,7 +290,6 @@ fn bench_banking(bencher: &mut Bencher, tx_type: TransactionType) {
             None,
             Arc::new(ConnectionCache::default()),
             bank_forks,
-            banking_tracer,
         );
         poh_recorder.write().unwrap().set_bank(&bank, false);
 

@@ -4,7 +4,7 @@
 use {
     crate::{
         banking_stage::BankingStage,
-        banking_trace::BankingTracer,
+        banking_trace::{BankingTracer, TracerThread},
         broadcast_stage::{BroadcastStage, BroadcastStageType, RetransmitSlotsReceiver},
         cluster_info_vote_listener::{
             ClusterInfoVoteListener, GossipDuplicateConfirmedSlotsSender,
@@ -69,6 +69,7 @@ pub struct Tpu {
     find_packet_sender_stake_stage: FindPacketSenderStakeStage,
     vote_find_packet_sender_stake_stage: FindPacketSenderStakeStage,
     staked_nodes_updater_service: StakedNodesUpdaterService,
+    tracer_thread_hdl: TracerThread,
 }
 
 impl Tpu {
@@ -234,7 +235,6 @@ impl Tpu {
             log_messages_bytes_limit,
             connection_cache.clone(),
             bank_forks.clone(),
-            banking_tracer,
         );
 
         let broadcast_stage = broadcast_type.new_broadcast_stage(
@@ -260,6 +260,7 @@ impl Tpu {
             find_packet_sender_stake_stage,
             vote_find_packet_sender_stake_stage,
             staked_nodes_updater_service,
+            tracer_thread_hdl: banking_tracer.take_tracer_thread_join_handle(),
         }
     }
 
@@ -281,6 +282,14 @@ impl Tpu {
             result?;
         }
         let _ = broadcast_result?;
+        if let Some(tracer_thread_hdl) = self.tracer_thread_hdl {
+            if let Err(tracer_result) = tracer_thread_hdl.join()? {
+                error!(
+                    "banking tracer thread returned error after successful thread join: {:?}",
+                    tracer_result
+                );
+            }
+        }
         Ok(())
     }
 }

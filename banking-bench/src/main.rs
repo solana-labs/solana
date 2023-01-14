@@ -449,7 +449,6 @@ fn main() {
             None,
             Arc::new(connection_cache),
             bank_forks.clone(),
-            banking_tracer,
         );
         poh_recorder.write().unwrap().set_bank(&bank, false);
 
