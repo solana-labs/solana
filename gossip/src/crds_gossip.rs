@@ -18,6 +18,7 @@ use {
         ping_pong::PingCache,
     },
     itertools::Itertools,
+    rand::{CryptoRng, Rng},
     rayon::ThreadPool,
     solana_ledger::shred::Shred,
     solana_sdk::{
@@ -31,7 +32,7 @@ use {
         collections::{HashMap, HashSet},
         net::SocketAddr,
         sync::{Mutex, RwLock},
-        time::Duration,
+        time::{Duration, Instant},
     },
 };
 
@@ -227,14 +228,6 @@ impl CrdsGossip {
         )
     }
 
-    /// Time when a request to `from` was initiated.
-    ///
-    /// This is used for weighted random selection during `new_pull_request`
-    /// It's important to use the local nodes request creation time as the weight
-    /// instead of the response received time otherwise failed nodes will increase their weight.
-    pub fn mark_pull_request_creation_time(&self, from: Pubkey, now: u64) {
-        self.pull.mark_pull_request_creation_time(from, now)
-    }
     /// Process a pull request and create a response.
     pub fn process_pull_requests<I>(&self, callers: I, now: u64)
     where
@@ -339,38 +332,49 @@ impl CrdsGossip {
     }
 }
 
-/// Computes a normalized (log of actual stake) stake.
-pub fn get_stake<S: std::hash::BuildHasher>(id: &Pubkey, stakes: &HashMap<Pubkey, u64, S>) -> f32 {
-    // cap the max balance to u32 max (it should be plenty)
-    let bal = f64::from(u32::max_value()).min(*stakes.get(id).unwrap_or(&0) as f64);
-    1_f32.max((bal as f32).ln())
-}
-
-/// Computes bounded weight given some max, a time since last selected, and a stake value.
-///
-/// The minimum stake is 1 and not 0 to allow 'time since last' picked to factor in.
-pub fn get_weight(max_weight: f32, time_since_last_selected: u32, stake: f32) -> f32 {
-    let mut weight = time_since_last_selected as f32 * stake;
-    if weight.is_infinite() {
-        weight = max_weight;
-    }
-    1.0_f32.max(weight.min(max_weight))
-}
-
-// Dedups gossip addresses, keeping only the one with the highest weight.
-pub(crate) fn dedup_gossip_addresses<I, T: PartialOrd>(
-    nodes: I,
-) -> HashMap</*gossip:*/ SocketAddr, (/*weight:*/ T, ContactInfo)>
-where
-    I: IntoIterator<Item = (/*weight:*/ T, ContactInfo)>,
-{
+// Dedups gossip addresses, keeping only the one with the highest stake.
+pub(crate) fn dedup_gossip_addresses(
+    nodes: impl IntoIterator<Item = ContactInfo>,
+    stakes: &HashMap<Pubkey, u64>,
+) -> HashMap</*gossip:*/ SocketAddr, (/*stake:*/ u64, ContactInfo)> {
     nodes
         .into_iter()
-        .into_grouping_map_by(|(_weight, node)| node.gossip)
-        .aggregate(|acc, _node_gossip, (weight, node)| match acc {
-            Some((ref w, _)) if w >= &weight => acc,
-            Some(_) | None => Some((weight, node)),
+        .into_grouping_map_by(|node| node.gossip)
+        .aggregate(|acc, _node_gossip, node| {
+            let stake = stakes.get(&node.id).copied().unwrap_or_default();
+            match acc {
+                Some((ref s, _)) if s >= &stake => acc,
+                Some(_) | None => Some((stake, node)),
+            }
         })
+}
+
+// Pings gossip addresses if needed.
+// Returns nodes which have recently responded to a ping message.
+#[must_use]
+pub(crate) fn maybe_ping_gossip_addresses<R: Rng + CryptoRng>(
+    rng: &mut R,
+    nodes: impl IntoIterator<Item = ContactInfo>,
+    keypair: &Keypair,
+    ping_cache: &Mutex<PingCache>,
+    pings: &mut Vec<(SocketAddr, Ping)>,
+) -> Vec<ContactInfo> {
+    let mut ping_cache = ping_cache.lock().unwrap();
+    let mut pingf = move || Ping::new_rand(rng, keypair).ok();
+    let now = Instant::now();
+    nodes
+        .into_iter()
+        .filter(|node| {
+            let (check, ping) = {
+                let node = (node.id, node.gossip);
+                ping_cache.check(now, node, &mut pingf)
+            };
+            if let Some(ping) = ping {
+                pings.push((node.gossip, ping));
+            }
+            check
+        })
+        .collect()
 }
 
 #[cfg(test)]
