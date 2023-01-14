@@ -500,7 +500,6 @@ impl BankingStage {
                     .unwrap()
             })
             .collect();
-
         Self { bank_thread_hdls }
     }
 
@@ -841,7 +840,7 @@ impl BankingStage {
                 // Take metrics action after forwarding packets
                 slot_metrics_tracker.apply_action(metrics_action);
             }
-            _ => {}
+            _ => (),
         }
     }
 
