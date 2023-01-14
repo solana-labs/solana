@@ -120,6 +120,8 @@ pub async fn run_server(
                 stats.clone(),
             ));
             sleep(Duration::from_micros(WAIT_BETWEEN_NEW_CONNECTIONS_US)).await;
+        } else {
+            debug!("accept(): Timed out waiting for connection");
         }
     }
 }
