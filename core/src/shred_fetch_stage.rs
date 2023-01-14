@@ -19,7 +19,6 @@ use {
 };
 
 const DEFAULT_LRU_SIZE: usize = 10_000;
-type ShredsReceived = LruCache<u64, ()>;
 
 pub(crate) struct ShredFetchStage {
     thread_hdls: Vec<JoinHandle<()>>,
@@ -229,7 +228,7 @@ fn should_discard_packet(
     max_slot: Slot, // Max slot to ingest shreds for.
     shred_version: u16,
     packet_hasher: &PacketHasher,
-    shreds_received: &mut ShredsReceived,
+    shreds_received: &mut LruCache<u64, ()>,
     stats: &mut ShredFetchStats,
 ) -> bool {
     if should_discard_shred(packet, root, max_slot, shred_version, stats) {
