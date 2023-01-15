@@ -1,88 +1,149 @@
 // this is a service to handle bidirections quinn channel
-use crossbeam_channel::{Receiver};
+use bincode::serialize;
+use crossbeam_channel::{Receiver, Sender};
 use quinn::SendStream;
-use solana_perf::packet::{PacketBatch, Packet};
-use solana_sdk::{signature::Signature, message::Message};
-use std::{sync::{Mutex, Arc, RwLock}, collections::HashMap, net::SocketAddr};
+use serde_derive::{Deserialize, Serialize};
+use solana_perf::packet::{Packet, PacketBatch};
 use solana_sdk::hash::Hash;
+use solana_sdk::{message::Message, signature::Signature};
+use std::{
+    collections::HashMap,
+    net::SocketAddr,
+    sync::{Arc, RwLock},
+};
 
+#[derive(Serialize, Deserialize)]
 pub struct QuicReplyMessage {
-    transaction_sig : Option<Signature>,
+    transaction_sig: Option<Signature>,
     message_hash: Option<Hash>,
-    message: String,   
+    message: String,
 }
 
 pub struct QuicBidirectionalData {
-    pub message_hash_map : HashMap<Hash, u64>,
-    pub transaction_signature_map : HashMap<Signature, u64>,
-    pub sender_ids_map : HashMap<u64, Arc<Mutex<SendStream>>>,
+    pub message_hash_map: HashMap<Hash, u64>,
+    pub transaction_signature_map: HashMap<Signature, u64>,
+    pub sender_ids_map: HashMap<u64, Sender<QuicReplyMessage>>,
     pub sender_socket_address_map: HashMap<SocketAddr, u64>,
-    pub last_id : u64,
+    pub last_id: u64,
 }
 
+#[derive(Clone)]
 pub struct QuicBidirectionalReplyService {
-    data : Arc<RwLock<QuicBidirectionalData>>,
-    pub service_reciever : Receiver<QuicReplyMessage>,
+    data: Arc<RwLock<QuicBidirectionalData>>,
+    pub service_reciever: Receiver<QuicReplyMessage>,
 }
 
 pub fn get_signature_from_packet(packet: &Packet) -> Option<Signature> {
     // add instruction signature for message
     match packet.data(1..33) {
         Some(signature_bytes) => {
-            let sig =  Signature::new(&signature_bytes);
+            let sig = Signature::new(&signature_bytes);
             Some(sig)
-        },
-        None => {
-            None
         }
+        None => None,
     }
 }
 
 impl QuicBidirectionalReplyService {
-
-    pub fn new(
-        service_reciever : Receiver<QuicReplyMessage>,
-    ) -> Self {
-        Self{
+    pub fn new(service_reciever: Receiver<QuicReplyMessage>) -> Self {
+        Self {
             service_reciever: service_reciever,
             data: Arc::new(RwLock::new(QuicBidirectionalData {
-                message_hash_map : HashMap::new(),
-                transaction_signature_map : HashMap::new(),
-                sender_ids_map : HashMap::new(),
-                sender_socket_address_map : HashMap::new(),
-                last_id : 1,
+                message_hash_map: HashMap::new(),
+                transaction_signature_map: HashMap::new(),
+                sender_ids_map: HashMap::new(),
+                sender_socket_address_map: HashMap::new(),
+                last_id: 1,
             })),
         }
     }
 
-    pub fn add_stream( &self, quic_address: &SocketAddr, send_stream: SendStream ) {
+    pub fn add_stream(&self, quic_address: &SocketAddr, send_stream: SendStream) {
+        let (sender_channel, reciever_channel) = crossbeam_channel::bounded(256);
         let data = self.data.write();
-        if let Ok(data) = data {
-            let send_stream = Arc::new(Mutex::new(send_stream));
-            match data.sender_socket_address_map.get( quic_address ) {
-                Some(x) => {
-                    // replace current stream
-                    data.sender_ids_map.insert( *x, send_stream);
-                },
-                None => {
-                    let current_id = data.last_id;
-                    data.last_id += 1;
-                    data.sender_ids_map.insert( current_id, send_stream);
-                    data.sender_socket_address_map.insert( quic_address.clone(), current_id);
-                }
+        let sender_id = if let Ok(mut data) = data {
+            let data = &mut *data;
+            if let Some(x) = data.sender_socket_address_map.get(quic_address) {
+                // remove existing channel
+                data.sender_ids_map.remove(x);
+            };
+            let current_id = data.last_id;
+            data.last_id += 1;
+            data.sender_ids_map
+                .insert(current_id, sender_channel.clone());
+            data.sender_socket_address_map
+                .insert(quic_address.clone(), current_id);
+            // create a new or replace the exisiting id
+            data.sender_ids_map
+                .insert(current_id, sender_channel.clone());
+            data.sender_socket_address_map
+                .insert(quic_address.clone(), current_id);
+            current_id
+        } else {
+            0
+        };
+
+        if sender_id == 0 {
+            return;
+        }
+
+        let subscriptions = self.data.clone();
+        // start listnening to stream specific cross beam channel
+        tokio::spawn(async move {
+            tokio::pin!(send_stream);
+            loop {
+                let reciever_channel = reciever_channel.clone();
+                let recv_task = async move { reciever_channel.recv() };
+                let send_stream_close_task = async { send_stream.stopped() };
+                tokio::select! {
+                    task = recv_task => {
+                        match task {
+                            Ok(message) => {
+                                let serialized_message = serialize(&message).unwrap();
+                                let _ =send_stream.write(serialized_message.as_slice()).await;
+                            },
+                            Err(_) => {
+                                // disconnect
+                                let _ = send_stream.finish().await;
+                                break;
+                            }
+                        }
+                    },
+                    _task = send_stream_close_task => {
+                        // disconnect
+                        let _ = send_stream.finish().await;
+                        break;
+                    }
+                };
             }
 
-        }
+            // remove all data belonging to sender_id
+            let write_lock = subscriptions.write();
+            if let Ok(mut sub_data) = write_lock {
+                let subscriptions = &mut *sub_data;
+                subscriptions
+                    .message_hash_map
+                    .retain(|_, v| *v != sender_id);
+                subscriptions.sender_ids_map.remove(&sender_id);
+                subscriptions
+                    .transaction_signature_map
+                    .retain(|_, v| *v != sender_id);
+                subscriptions
+                    .sender_socket_address_map
+                    .retain(|_, v| *v != sender_id);
+            }
+        });
     }
 
-    pub fn add_packets( &self, quic_address: &SocketAddr, packets: &PacketBatch ) {
+    pub fn add_packets(&self, quic_address: &SocketAddr, packets: &PacketBatch) {
         // check if socket is registered;
         let id = {
             let data = self.data.read();
             if let Ok(data) = data {
-                data.sender_socket_address_map.get(quic_address).map_or(0, |x| *x)
-            }
-            else {
+                data.sender_socket_address_map
+                    .get(quic_address)
+                    .map_or(0, |x| *x)
+            } else {
                 0
             }
         };
@@ -90,14 +151,13 @@ impl QuicBidirectionalReplyService {
             return;
         }
         let data = self.data.write();
-        if let Ok(data) = data {
+        if let Ok(mut data) = data {
+            let data = &mut *data;
             packets.iter().for_each(|packet| {
                 let signature = get_signature_from_packet(packet);
-                signature.map(|x|{
-                    data.transaction_signature_map.insert(x, id)
-                });
+                signature.map(|x| data.transaction_signature_map.insert(x, id));
 
-                if let Some(data_packet) =  packet.data(..) {
+                if let Some(data_packet) = packet.data(..) {
                     let hash = Message::hash_raw_message(data_packet);
                     data.message_hash_map.insert(hash, id);
                 }
@@ -105,40 +165,47 @@ impl QuicBidirectionalReplyService {
         }
     }
 
-    fn serve(self) {
-        let service_reciever = self.service_reciever;
+
+    // this method will start bidirectional relay service
+    // the the message sent to bidirectional service, 
+    // will be dispactched to the appropriate sender channel 
+    // depending on transcation signature or message hash
+    pub fn serve(&self) {
+        let service_reciever = self.service_reciever.clone();
+        let subscription_data = self.data.clone();
         tokio::spawn(async move {
             loop {
-                let service_reciever = service_reciever;
+                let service_reciever = service_reciever.clone();
                 let bidirectional_message = service_reciever.recv();
                 match bidirectional_message {
                     Ok(bidirectional_message) => {
-                        let data = self.data.read();
-                        
+                        let data = subscription_data.read();
+
                         if let Ok(data) = data {
                             let send_stream = {
                                 // if the message has transaction signature then find stream from transaction signature
                                 // else find stream by packet hash
-                                let send_stream_id = if let Some(sig) = bidirectional_message.transaction_sig {
-                                    data.transaction_signature_map.get(&sig).map(|x| *x)
-                                } else if let Some(hash) = bidirectional_message.message_hash {
-                                    data.message_hash_map.get(&hash).map(|x| *x)
-                                } else {
-                                    None
-                                };
+                                let send_stream_id =
+                                    if let Some(sig) = bidirectional_message.transaction_sig {
+                                        data.transaction_signature_map.get(&sig).map(|x| *x)
+                                    } else if let Some(hash) = bidirectional_message.message_hash {
+                                        data.message_hash_map.get(&hash).map(|x| *x)
+                                    } else {
+                                        None
+                                    };
                                 send_stream_id.and_then(|x| data.sender_ids_map.get(&x))
                             };
                             if let Some(send_stream) = send_stream {
-                                let locked_send_stream = send_stream.lock();
-                                if let Ok(send_stream) = locked_send_stream {
-                                    let message= bidirectional_message.transaction_sig.map_or_else(
-                                        || bidirectional_message.message_hash.map_or_else( || "".to_string(), |x| format!("hashed packet: {} message: {}", x, bidirectional_message.message).to_string()),
-                                        |x| format!("transaction signature {}, message : {}", x, bidirectional_message.message));
-                                    send_stream.write(message.as_bytes());
+                                match send_stream.send(bidirectional_message) {
+                                    Err(e ) => {
+                                        warn!("Error sending a bidirectional message {}", e.to_string());
+                                    }
+                                    _=>{}
                                 }
+
                             }
                         }
-                    },
+                    }
                     Err(e) => {
                         // recv error
                         warn!("got {} on quic bidirectional channel", e.to_string());

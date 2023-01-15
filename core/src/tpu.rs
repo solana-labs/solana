@@ -153,6 +153,8 @@ impl Tpu {
         );
 
         let (verified_sender, verified_receiver) = unbounded();
+        // this channel is used to send back error to clients who have connected in mode bidirectional
+        let (_quic_bidir_sender, quic_bidir_reciever) = unbounded();
 
         let stats = Arc::new(StreamStats::default());
         let tpu_quic_t = spawn_server(
@@ -166,6 +168,7 @@ impl Tpu {
             MAX_STAKED_CONNECTIONS,
             MAX_UNSTAKED_CONNECTIONS,
             stats.clone(),
+            quic_bidir_reciever.clone(),
         )
         .unwrap();
 
@@ -180,6 +183,7 @@ impl Tpu {
             MAX_STAKED_CONNECTIONS.saturating_add(MAX_UNSTAKED_CONNECTIONS),
             0, // Prevent unstaked nodes from forwarding transactions
             stats,
+            quic_bidir_reciever,
         )
         .unwrap();
 

@@ -284,7 +284,7 @@ impl QuicClient {
     }
 
     async fn _send_buffer_using_conn(
-        tpu_address : SocketAddr,
+        tpu_address: SocketAddr,
         data: &[u8],
         connection: &NewConnection,
         listen_to_server_errors: bool,
@@ -319,17 +319,28 @@ impl QuicClient {
                                     let string = String::from_utf8(buf.to_vec());
                                     match string {
                                         Ok(string) => {
-                                            lock.push(format!("got error from tpu {} {}", tpu_address.to_string(), string));
+                                            lock.push(format!(
+                                                "got error from tpu {} {}",
+                                                tpu_address.to_string(),
+                                                string
+                                            ));
                                         }
                                         Err(e) => {
-                                            lock.push(format!("utf8 format error {}", e.to_string()));
+                                            lock.push(format!(
+                                                "utf8 format error {}",
+                                                e.to_string()
+                                            ));
                                         }
                                     }
                                 }
                             }
                             Err(e) => {
                                 let mut lock = server_errors.write().await;
-                                lock.push(format!("connection read error for {} error : {}", tpu_address.to_string(), e));
+                                lock.push(format!(
+                                    "connection read error for {} error : {}",
+                                    tpu_address.to_string(),
+                                    e
+                                ));
                             }
                         }
                         timeout =
@@ -343,10 +354,9 @@ impl QuicClient {
         } else {
             let mut send_stream = connection.connection.open_uni().await?;
 
-
-        send_stream.write_all(data).await?;
             send_stream.write_all(data).await?;
-        send_stream.finish().await?;
+            send_stream.write_all(data).await?;
+            send_stream.finish().await?;
             send_stream.finish().await?;
         }
         Ok(())
@@ -457,7 +467,15 @@ impl QuicClient {
                 .update_stat(&self.stats.tx_acks, new_stats.frame_tx.acks);
 
             last_connection_id = connection.connection.stable_id();
-            match Self::_send_buffer_using_conn(*self.tpu_addr(), data, &connection, stats.get_tpu_errors, stats.server_errors.clone()).await {
+            match Self::_send_buffer_using_conn(
+                *self.tpu_addr(),
+                data,
+                &connection,
+                stats.get_tpu_errors,
+                stats.server_errors.clone(),
+            )
+            .await
+            {
                 Ok(()) => {
                     return Ok(connection);
                 }
@@ -539,11 +557,15 @@ impl QuicClient {
         let futures: Vec<_> = chunks
             .into_iter()
             .map(|buffs| {
-                join_all(
-                    buffs
-                        .into_iter()
-                        .map(|buf| Self::_send_buffer_using_conn(*self.tpu_addr(), buf.as_ref(), connection_ref, stats.get_tpu_errors, stats.server_errors.clone())),
-                )
+                join_all(buffs.into_iter().map(|buf| {
+                    Self::_send_buffer_using_conn(
+                        *self.tpu_addr(),
+                        buf.as_ref(),
+                        connection_ref,
+                        stats.get_tpu_errors,
+                        stats.server_errors.clone(),
+                    )
+                }))
             })
             .collect();
 
@@ -611,7 +633,7 @@ impl TpuConnection for QuicTpuConnection {
         T: AsRef<[u8]> + Send + Sync,
     {
         let stats = ClientStats {
-            get_tpu_errors : self.connection_stats.get_tpu_errors.load(Ordering::Relaxed),
+            get_tpu_errors: self.connection_stats.get_tpu_errors.load(Ordering::Relaxed),
             ..Default::default()
         };
         let len = buffers.len();
@@ -630,7 +652,7 @@ impl TpuConnection for QuicTpuConnection {
         T: AsRef<[u8]> + Send + Sync,
     {
         let stats = ClientStats {
-            get_tpu_errors : self.connection_stats.get_tpu_errors.load(Ordering::Relaxed),
+            get_tpu_errors: self.connection_stats.get_tpu_errors.load(Ordering::Relaxed),
             ..Default::default()
         };
         let send_buffer =
