@@ -31,6 +31,7 @@ pub struct QuicBidirectionalData {
 pub struct QuicBidirectionalReplyService {
     data: Arc<RwLock<QuicBidirectionalData>>,
     pub service_reciever: Receiver<QuicReplyMessage>,
+    pub service_sender: Sender<QuicReplyMessage>,
 }
 
 pub fn get_signature_from_packet(packet: &Packet) -> Option<Signature> {
@@ -45,9 +46,11 @@ pub fn get_signature_from_packet(packet: &Packet) -> Option<Signature> {
 }
 
 impl QuicBidirectionalReplyService {
-    pub fn new(service_reciever: Receiver<QuicReplyMessage>) -> Self {
+    pub fn new() -> Self {
+        let (service_sender, service_reciever) = crossbeam_channel::unbounded();
         Self {
             service_reciever: service_reciever,
+            service_sender: service_sender,
             data: Arc::new(RwLock::new(QuicBidirectionalData {
                 message_hash_map: HashMap::new(),
                 transaction_signature_map: HashMap::new(),
@@ -214,5 +217,27 @@ impl QuicBidirectionalReplyService {
                 }
             }
         });
+    }
+}
+
+
+#[cfg(test)]
+pub mod test {
+    use solana_perf::packet::Packet;
+    use solana_sdk::{transaction::Transaction, system_instruction, signature::Keypair, signer::Signer, message::Message};
+
+    use crate::bidirectional_channel::get_signature_from_packet;
+
+    #[tokio::test]
+    async fn test_we_correctly_get_signature_from_packet(){
+        let k1 = Keypair::new();
+        let k2 = Keypair::new();
+
+        let hash = Message::hash_raw_message(&[0]);
+        let ix = system_instruction::transfer(&k1.pubkey(), &k2.pubkey(), 10);
+        let tx = Transaction::new_signed_with_payer(&[ix], Some(&k1.pubkey()), &[&k1], hash);
+        let sig = tx.signatures[0];
+        let packet = Packet::from_data(None, tx).unwrap();
+        assert_eq!(Some(sig), get_signature_from_packet(&packet));
     }
 }
