@@ -1,5 +1,7 @@
 #[cfg(test)]
 mod tests {
+    use solana_streamer::bidirectional_channel::QuicBidirectionalReplyService;
+
     use {
         crossbeam_channel::{unbounded, Receiver},
         solana_client::{
@@ -78,6 +80,7 @@ mod tests {
             10,
             10,
             stats,
+            QuicBidirectionalReplyService::new(),
         )
         .unwrap();
 
@@ -123,6 +126,7 @@ mod tests {
             10,
             10,
             stats,
+            QuicBidirectionalReplyService::new(),
         )
         .unwrap();
 

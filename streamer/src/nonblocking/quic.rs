@@ -1,7 +1,6 @@
-use crossbeam_channel::Receiver;
-use quinn::{IncomingBiStreams, SendStream};
+use quinn::{IncomingBiStreams};
 
-use crate::bidirectional_channel::{QuicBidirectionalReplyService, QuicReplyMessage};
+use crate::bidirectional_channel::{QuicBidirectionalReplyService};
 use {
     crate::{
         quic::{configure_server, QuicServerError, StreamStats},
@@ -59,7 +58,7 @@ pub fn spawn_server(
     max_staked_connections: usize,
     max_unstaked_connections: usize,
     stats: Arc<StreamStats>,
-    bidirectional_service_reciever: Receiver<QuicReplyMessage>,
+    bidirectional_reply_service : QuicBidirectionalReplyService,
 ) -> Result<JoinHandle<()>, QuicServerError> {
     let (config, _cert) = configure_server(keypair, gossip_host)?;
 
@@ -77,7 +76,7 @@ pub fn spawn_server(
         max_staked_connections,
         max_unstaked_connections,
         stats,
-        bidirectional_service_reciever,
+        bidirectional_reply_service,
     ));
     Ok(handle)
 }
@@ -91,7 +90,7 @@ pub async fn run_server(
     max_staked_connections: usize,
     max_unstaked_connections: usize,
     stats: Arc<StreamStats>,
-    bidirectional_service_reciever: Receiver<QuicReplyMessage>,
+    bidirectional_reply_service : QuicBidirectionalReplyService,
 ) {
     debug!("spawn quic server");
     let mut last_datapoint = Instant::now();
@@ -100,12 +99,6 @@ pub async fn run_server(
     ));
     let staked_connection_table: Arc<Mutex<ConnectionTable>> =
         Arc::new(Mutex::new(ConnectionTable::new(ConnectionPeerType::Staked)));
-
-    let bidirectional_reply_service =
-        QuicBidirectionalReplyService::new(bidirectional_service_reciever.clone());
-
-    // start serving bidirectional reply service
-    bidirectional_reply_service.serve(); 
 
     while !exit.load(Ordering::Relaxed) {
         const WAIT_FOR_CONNECTION_TIMEOUT_MS: u64 = 1000;
@@ -360,13 +353,6 @@ async fn setup_connection(
     }
 }
 
-async fn reply_on_send_channel(send_channel: &mut SendStream, data: &[u8]) {
-    let send_res = send_channel.write(data).await;
-    if let Err(e) = send_res {
-        debug!("error sending timeout results {}", e.to_string());
-    }
-}
-
 async fn handle_connection(
     mut uni_streams: IncomingUniStreams,
     mut bi_streams: IncomingBiStreams,
@@ -387,45 +373,25 @@ async fn handle_connection(
         stats.total_connections.load(Ordering::Relaxed),
     );
     while !stream_exit.load(Ordering::Relaxed) {
-        let selected_stream = tokio::select! {
-            v = bi_streams.next() => match v {
-                Some(s) => {
-                    match s {
-                        Ok(x) => {
-                            Some((x.1, Some(x.0)))
-                        },
-                        Err(_) =>
-                        {
-                            None
-                        }
-                    }
-                }
-                None=> None,
-            },
-            v = tokio::time::timeout(
-                Duration::from_millis(WAIT_FOR_STREAM_TIMEOUT_MS),
-                uni_streams.next(),
-            ) => match v {
-                Ok(v) => match v {
-                    Some(x) => {
-                        match x {
-                            Ok(x) => {
-                                Some((x, None))
-                            },
-                            Err(_) =>
-                            {
-                                None
-                            }
-                        }
-                    }
-                    None=> None,
-                },
-                Err(_) => None,
-            }
-        };
         let bidirectional_service = bidirectional_service.clone();
+        
+        let selected_stream = tokio::select! {
+            v = bi_streams.next() => {
+                v.map_or(None, |x| {
+                    if let Ok((send, recv)) = x {
+                        bidirectional_service.add_stream(&remote_addr, send);
+                        Some(recv)
+                    } else {
+                        None
+                    }
+                })
+            },
+            v = uni_streams.next() => {
+                v.map_or(None, |x| x.ok())
+            },
+        };
 
-        if let Some((mut stream, mut replier)) = selected_stream {
+        if let Some(mut stream) = selected_stream {
             stats.total_streams.fetch_add(1, Ordering::Relaxed);
             stats.total_new_streams.fetch_add(1, Ordering::Relaxed);
             let stream_exit = stream_exit.clone();
@@ -450,30 +416,13 @@ async fn handle_connection(
                                     &packet_sender,
                                     stats.clone(),
                                     stake,
+                                    bidirectional_service.clone(),
                                 ) {
                                     last_update.store(timing::timestamp(), Ordering::Relaxed);
                                     break;
                                 }
-                                if let Some(replier) = &mut replier {
-                                    reply_on_send_channel(replier, b"ok").await;
-                                }
                             }
                             Err(e) => {
-                                if let Some(replier) = &mut replier {
-                                    let e = e.clone();
-                                    let data: &[u8] = match e {
-                                        quinn::ReadError::Reset(_) => b"reset_error",
-                                        quinn::ReadError::ConnectionLost(_) => {
-                                            b"connection_lost_error"
-                                        }
-                                        quinn::ReadError::IllegalOrderedRead => {
-                                            b"illegal_ordered_read_error"
-                                        }
-                                        quinn::ReadError::UnknownStream => b"unknown_stream_error",
-                                        quinn::ReadError::ZeroRttRejected => b"zero_rtt_rejected",
-                                    };
-                                    reply_on_send_channel(replier, data).await;
-                                }
                                 debug!("Received stream error: {:?}", e);
                                 stats
                                     .total_stream_read_errors
@@ -483,9 +432,6 @@ async fn handle_connection(
                             }
                         }
                     } else {
-                        if let Some(ref mut s) = replier {
-                            reply_on_send_channel(s, b"timeout").await;
-                        }
                         debug!("Timeout in receiving on stream");
                         stats
                             .total_stream_read_timeouts
@@ -518,6 +464,7 @@ fn handle_chunk(
     packet_sender: &Sender<PacketBatch>,
     stats: Arc<StreamStats>,
     stake: u64,
+    bidirectional_service: QuicBidirectionalReplyService,
 ) -> bool {
     if let Some(chunk) = chunk {
         trace!("got chunk: {:?}", chunk);
@@ -567,6 +514,7 @@ fn handle_chunk(
         // done receiving chunks
         if let Some(batch) = maybe_batch.take() {
             let len = batch[0].meta.size;
+            bidirectional_service.add_packets(&remote_addr, &batch);
             if let Err(e) = packet_sender.send(batch) {
                 stats
                     .total_packet_batch_send_err
@@ -864,7 +812,6 @@ pub mod test {
         let server_address = s.local_addr().unwrap();
         let staked_nodes = Arc::new(RwLock::new(option_staked_nodes.unwrap_or_default()));
         let stats = Arc::new(StreamStats::default());
-        let (_, reciever) = crossbeam_channel::unbounded();
 
         let t = spawn_server(
             s,
@@ -877,7 +824,7 @@ pub mod test {
             MAX_STAKED_CONNECTIONS,
             MAX_UNSTAKED_CONNECTIONS,
             stats.clone(),
-            reciever,
+            QuicBidirectionalReplyService::new(),
         )
         .unwrap();
         (t, exit, receiver, server_address, stats)
@@ -1180,7 +1127,6 @@ pub mod test {
         let server_address = s.local_addr().unwrap();
         let staked_nodes = Arc::new(RwLock::new(StakedNodes::default()));
         let stats = Arc::new(StreamStats::default());
-        let (_, bidirectional_channel_recv) = unbounded();
         let t = spawn_server(
             s,
             &keypair,
@@ -1192,7 +1138,7 @@ pub mod test {
             MAX_STAKED_CONNECTIONS,
             0, // Do not allow any connection from unstaked clients/nodes
             stats,
-            bidirectional_channel_recv,
+            QuicBidirectionalReplyService::new(),
         )
         .unwrap();
 
@@ -1213,7 +1159,6 @@ pub mod test {
         let staked_nodes = Arc::new(RwLock::new(StakedNodes::default()));
         let stats = Arc::new(StreamStats::default());
 
-        let (_, bidirectional_channel_recv) = unbounded();
         let t = spawn_server(
             s,
             &keypair,
@@ -1225,7 +1170,7 @@ pub mod test {
             MAX_STAKED_CONNECTIONS,
             MAX_UNSTAKED_CONNECTIONS,
             stats.clone(),
-            bidirectional_channel_recv,
+            QuicBidirectionalReplyService::new(),
         )
         .unwrap();
 
