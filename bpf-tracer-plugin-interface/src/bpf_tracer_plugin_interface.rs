@@ -1,3 +1,4 @@
+use solana_rbpf::static_analysis::TraceLogEntry;
 use {
     solana_rbpf::{
         ebpf::Insn,
@@ -87,7 +88,7 @@ pub trait BpfTracerPlugin: Any + Send + Sync + std::fmt::Debug {
         program_id: &Pubkey,
         block_hash: &Hash,
         transaction_id: &[u8],
-        trace: &[[u64; 12]],
+        trace: &[TraceLogEntry],
         executor: Arc<dyn ExecutorAdditional>,
     ) -> Result<()>;
 }
