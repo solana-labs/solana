@@ -10726,10 +10726,10 @@ pub mod tests {
         let mut append_vec_histogram = HashMap::new();
         let mut all_storages = vec![];
         for slot_storage in accounts.storage.iter() {
-            all_storages.push(slot_storage.1)
+            all_storages.push(slot_storage.0)
         }
-        for storage in all_storages {
-            *append_vec_histogram.entry(storage.slot()).or_insert(0) += 1;
+        for slot in all_storages {
+            *append_vec_histogram.entry(slot).or_insert(0) += 1;
         }
         for count in append_vec_histogram.values() {
             assert!(*count >= 2);
@@ -17184,7 +17184,6 @@ pub mod tests {
             .write()
             .unwrap()
             .insert(slot0, BankHashInfo::default());
-        db.storage.insert_empty_at_slot(slot0);
         assert!(!db.bank_hashes.read().unwrap().is_empty());
         db.accounts_index.add_root(slot0);
         db.accounts_index.add_uncleaned_roots([slot0].into_iter());

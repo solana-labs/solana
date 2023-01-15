@@ -1,11 +1,9 @@
 //! Provides interfaces for rebuilding snapshot storages
 
-use crate::account_storage::AccountStorageReference;
-
 use {
     super::{get_io_error, snapshot_version_from_file, SnapshotError, SnapshotVersion},
     crate::{
-        account_storage::AccountStorageMap,
+        account_storage::{AccountStorageMap, AccountStorageReference},
         accounts_db::{AccountStorageEntry, AppendVecId, AtomicAppendVecId},
         serde_snapshot::{
             self, remap_and_reconstruct_single_storage, snapshot_storage_lengths_from_fields,
