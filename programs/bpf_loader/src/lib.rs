@@ -30,13 +30,13 @@ use {
     },
     solana_rbpf::{
         aligned_memory::AlignedMemory,
-        ebpf::{HOST_ALIGN, MM_HEAP_START},
+        ebpf::{Insn, HOST_ALIGN, MM_HEAP_START},
         elf::Executable,
         error::{EbpfError, UserDefinedError},
         memory_region::MemoryRegion,
-        static_analysis::TraceLogEntry,
+        static_analysis::{Analysis, CfgNode, TraceLogEntry},
         verifier::{RequisiteVerifier, VerifierError},
-        vm::{ContextObject, EbpfVm, ProgramResult, TestContextObject, VerifiedExecutable},
+        vm::{Config, ContextObject, EbpfVm, ProgramResult, VerifiedExecutable},
     },
     solana_sdk::{
         bpf_loader, bpf_loader_deprecated,
@@ -66,6 +66,7 @@ use {
     },
     std::{
         cell::{RefCell, RefMut},
+        collections::BTreeMap,
         fmt::Debug,
         rc::Rc,
         sync::{Arc, RwLock},
@@ -1404,7 +1405,7 @@ fn trace_bpf(
             block_hash,
             transaction_id,
             trace_log,
-            Arc::clone(&bpf_executor) as Arc<dyn bpf_tracer_plugin_interface::ExecutableGetter>,
+            Arc::clone(&bpf_executor) as Arc<dyn bpf_tracer_plugin_interface::ExecutorAdditional>,
         ) {
             error!(
                 "Error running BPF tracing plugin: {} for program ID: {}. Error: {:?}",
@@ -1585,11 +1586,40 @@ impl Executor for BpfExecutor {
     }
 }
 
-impl bpf_tracer_plugin_interface::ExecutableGetter for BpfExecutor {
-    fn get_executable(&self) -> &Executable<TestContextObject> {
-        // SAFETY: Until we are not going to execute this executable,
-        //         it is safe to get rid of `InvokeContext`
-        unsafe { std::mem::transmute(self.verified_executable.get_executable()) }
+impl bpf_tracer_plugin_interface::ExecutorAdditional for BpfExecutor {
+    fn do_static_analysis(&self) -> Result<Analysis, EbpfError> {
+        Analysis::from_executable(self.verified_executable.get_executable())
+    }
+
+    fn get_text_section_offset(&self) -> u64 {
+        self.verified_executable.get_executable().get_text_bytes().0
+            - self
+                .verified_executable
+                .get_executable()
+                .get_ro_region()
+                .vm_addr
+    }
+
+    fn lookup_internal_function(&self, hash: u32) -> Option<usize> {
+        self.verified_executable
+            .get_executable()
+            .lookup_internal_function(hash)
+    }
+
+    fn get_config(&self) -> &Config {
+        self.verified_executable.get_executable().get_config()
+    }
+
+    fn disassemble_instruction(
+        &self,
+        ebpf_instr: &Insn,
+        cfg_nodes: &BTreeMap<usize, CfgNode>,
+    ) -> String {
+        solana_rbpf::disassembler::disassemble_instruction(
+            ebpf_instr,
+            cfg_nodes,
+            self.verified_executable.get_executable().get_loader(),
+        )
     }
 }
 

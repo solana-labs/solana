@@ -1,8 +1,14 @@
 use {
-    solana_rbpf::{elf::Executable, vm::TestContextObject},
+    solana_rbpf::{
+        ebpf::Insn,
+        error::EbpfError,
+        static_analysis::{Analysis, CfgNode},
+        vm::Config,
+    },
     solana_sdk::{hash::Hash, pubkey::Pubkey},
     std::{
         any::Any,
+        collections::BTreeMap,
         sync::Arc,
         {error, io},
     },
@@ -27,8 +33,22 @@ pub enum BpfTracerPluginError {
     Custom(Box<dyn error::Error + Send + Sync>),
 }
 
-pub trait ExecutableGetter: Send + Sync {
-    fn get_executable(&self) -> &Executable<TestContextObject>;
+/// Additional methods for `BpfExecutor`
+pub trait ExecutorAdditional: Send + Sync {
+    /// Performs static analysis of current verified executable
+    fn do_static_analysis(&self) -> std::result::Result<Analysis, EbpfError>;
+    /// Calculates `text` section offset of current executable
+    fn get_text_section_offset(&self) -> u64;
+    /// Gets program counter of function by its hash
+    fn lookup_internal_function(&self, hash: u32) -> Option<usize>;
+    /// Gets executable configuration
+    fn get_config(&self) -> &Config;
+    /// Disassembles instruction
+    fn disassemble_instruction(
+        &self,
+        ebpf_instr: &Insn,
+        cfg_nodes: &BTreeMap<usize, CfgNode>,
+    ) -> String;
 }
 
 pub type Result<T> = std::result::Result<T, BpfTracerPluginError>;
@@ -68,6 +88,6 @@ pub trait BpfTracerPlugin: Any + Send + Sync + std::fmt::Debug {
         block_hash: &Hash,
         transaction_id: &[u8],
         trace: &[[u64; 12]],
-        executable_getter: Arc<dyn ExecutableGetter>,
+        executor: Arc<dyn ExecutorAdditional>,
     ) -> Result<()>;
 }
