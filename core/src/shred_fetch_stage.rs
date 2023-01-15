@@ -1,14 +1,21 @@
 //! The `shred_fetch_stage` pulls shreds from UDP sockets and sends it to a channel.
 
 use {
-    crate::{packet_hasher::PacketHasher, serve_repair::ServeRepair},
+    crate::{
+        cluster_nodes::check_feature_activation, packet_hasher::PacketHasher,
+        serve_repair::ServeRepair,
+    },
     crossbeam_channel::{unbounded, Sender},
     lru::LruCache,
     solana_gossip::cluster_info::ClusterInfo,
     solana_ledger::shred::{should_discard_shred, ShredFetchStats},
     solana_perf::packet::{Packet, PacketBatch, PacketBatchRecycler, PacketFlags},
-    solana_runtime::bank_forks::BankForks,
-    solana_sdk::clock::{Slot, DEFAULT_MS_PER_SLOT},
+    solana_runtime::{bank::Bank, bank_forks::BankForks},
+    solana_sdk::{
+        clock::{Slot, DEFAULT_MS_PER_SLOT},
+        feature_set,
+        genesis_config::ClusterType,
+    },
     solana_streamer::streamer::{self, PacketBatchReceiver, StreamerReceiveStats},
     std::{
         net::UdpSocket,
@@ -43,6 +50,7 @@ impl ShredFetchStage {
             .map(|(_, cluster_info)| cluster_info.keypair().clone());
 
         // In the case of bank_forks=None, setup to accept any slot range
+        let mut root_bank = bank_forks.read().unwrap().root_bank();
         let mut last_root = 0;
         let mut last_slot = std::u64::MAX;
         let mut slots_per_epoch = 0;
@@ -60,7 +68,7 @@ impl ShredFetchStage {
                     last_root = bank_forks_r.root();
                     let working_bank = bank_forks_r.working_bank();
                     last_slot = working_bank.slot();
-                    let root_bank = bank_forks_r.root_bank();
+                    root_bank = bank_forks_r.root_bank();
                     slots_per_epoch = root_bank.get_slots_in_epoch(root_bank.epoch());
                 }
                 keypair = repair_context
@@ -84,6 +92,8 @@ impl ShredFetchStage {
 
             // Limit shreds to 2 epochs away.
             let max_slot = last_slot + 2 * slots_per_epoch;
+            let should_drop_merkle_shreds =
+                |shred_slot| should_drop_merkle_shreds(shred_slot, &root_bank);
             for packet in packet_batch.iter_mut() {
                 if should_discard_packet(
                     packet,
@@ -92,6 +102,7 @@ impl ShredFetchStage {
                     shred_version,
                     &packet_hasher,
                     &mut shreds_received,
+                    should_drop_merkle_shreds,
                     &mut stats,
                 ) {
                     packet.meta_mut().set_discard(true);
@@ -229,9 +240,17 @@ fn should_discard_packet(
     shred_version: u16,
     packet_hasher: &PacketHasher,
     shreds_received: &mut LruCache<u64, ()>,
+    should_drop_merkle_shreds: impl Fn(Slot) -> bool,
     stats: &mut ShredFetchStats,
 ) -> bool {
-    if should_discard_shred(packet, root, max_slot, shred_version, stats) {
+    if should_discard_shred(
+        packet,
+        root,
+        max_slot,
+        shred_version,
+        should_drop_merkle_shreds,
+        stats,
+    ) {
         return true;
     }
     let hash = packet_hasher.hash_packet(packet);
@@ -242,6 +261,21 @@ fn should_discard_packet(
             true
         }
     }
+}
+
+#[must_use]
+fn should_drop_merkle_shreds(shred_slot: Slot, root_bank: &Bank) -> bool {
+    root_bank.cluster_type() == ClusterType::Testnet
+        && check_feature_activation(
+            &feature_set::drop_merkle_shreds::id(),
+            shred_slot,
+            root_bank,
+        )
+        && !check_feature_activation(
+            &feature_set::keep_merkle_shreds::id(),
+            shred_slot,
+            root_bank,
+        )
 }
 
 #[cfg(test)]
@@ -288,6 +322,7 @@ mod tests {
             shred_version,
             &hasher,
             &mut shreds_received,
+            |_| false, // should_drop_merkle_shreds
             &mut stats,
         ));
         let coding = solana_ledger::shred::Shredder::generate_coding_shreds(
@@ -303,6 +338,7 @@ mod tests {
             shred_version,
             &hasher,
             &mut shreds_received,
+            |_| false, // should_drop_merkle_shreds
             &mut stats,
         ));
     }
@@ -329,6 +365,7 @@ mod tests {
             shred_version,
             &hasher,
             &mut shreds_received,
+            |_| false, // should_drop_merkle_shreds
             &mut stats,
         ));
         assert_eq!(stats.index_overrun, 1);
@@ -352,6 +389,7 @@ mod tests {
             shred_version,
             &hasher,
             &mut shreds_received,
+            |_| false, // should_drop_merkle_shreds
             &mut stats,
         ));
         assert_eq!(stats.slot_out_of_range, 1);
@@ -363,6 +401,7 @@ mod tests {
             345, // shred_version
             &hasher,
             &mut shreds_received,
+            |_| false, // should_drop_merkle_shreds
             &mut stats,
         ));
         assert_eq!(stats.shred_version_mismatch, 1);
@@ -375,6 +414,7 @@ mod tests {
             shred_version,
             &hasher,
             &mut shreds_received,
+            |_| false, // should_drop_merkle_shreds
             &mut stats,
         ));
 
@@ -386,6 +426,7 @@ mod tests {
             shred_version,
             &hasher,
             &mut shreds_received,
+            |_| false, // should_drop_merkle_shreds
             &mut stats,
         ));
         assert_eq!(stats.duplicate_shred, 1);
@@ -410,6 +451,7 @@ mod tests {
             shred_version,
             &hasher,
             &mut shreds_received,
+            |_| false, // should_drop_merkle_shreds
             &mut stats,
         ));
 
@@ -423,6 +465,7 @@ mod tests {
             shred_version,
             &hasher,
             &mut shreds_received,
+            |_| false, // should_drop_merkle_shreds
             &mut stats,
         ));
     }
