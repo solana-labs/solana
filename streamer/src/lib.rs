@@ -1,4 +1,5 @@
 #![allow(clippy::integer_arithmetic)]
+pub mod bidirectional_channel;
 pub mod nonblocking;
 pub mod packet;
 pub mod quic;

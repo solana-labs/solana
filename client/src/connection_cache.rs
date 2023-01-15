@@ -21,7 +21,7 @@ use {
         error::Error,
         net::{IpAddr, Ipv4Addr, SocketAddr, UdpSocket},
         sync::{
-            atomic::{AtomicU64, AtomicBool, Ordering},
+            atomic::{AtomicBool, AtomicU64, Ordering},
             Arc, RwLock,
         },
     },
@@ -297,7 +297,7 @@ impl ConnectionCache {
             use_quic: true,
             connection_pool_size,
             stats: Arc::new(ConnectionCacheStats {
-                get_tpu_errors : AtomicBool::new(true),
+                get_tpu_errors: AtomicBool::new(true),
                 ..Default::default()
             }),
             ..Self::default()

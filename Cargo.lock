@@ -6280,6 +6280,7 @@ dependencies = [
 name = "solana-streamer"
 version = "1.14.12"
 dependencies = [
+ "bincode",
  "crossbeam-channel",
  "futures-util",
  "histogram",
@@ -6295,6 +6296,8 @@ dependencies = [
  "rand 0.7.3",
  "rcgen",
  "rustls 0.20.6",
+ "serde",
+ "serde_derive",
  "solana-logger 1.14.12",
  "solana-metrics",
  "solana-perf",
