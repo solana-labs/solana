@@ -95,15 +95,6 @@ impl AccountHashesFile {
     }
 }
 
-#[derive(Debug)]
-#[allow(dead_code)]
-pub struct FullSnapshotAccountsHashInfo {
-    /// accounts hash over all accounts when the full snapshot was taken
-    hash: AccountsHash,
-    /// slot where full snapshot was taken
-    slot: Slot,
-}
-
 /// parameters to calculate accounts hash
 #[derive(Debug)]
 pub struct CalcAccountsHashConfig<'a> {
@@ -120,8 +111,6 @@ pub struct CalcAccountsHashConfig<'a> {
     pub rent_collector: &'a RentCollector,
     /// used for tracking down hash mismatches after the fact
     pub store_detailed_debug_info_on_failure: bool,
-    /// `Some` if this is an incremental snapshot which only hashes slots since the base full snapshot
-    pub full_snapshot: Option<FullSnapshotAccountsHashInfo>,
 }
 
 impl<'a> CalcAccountsHashConfig<'a> {
