@@ -6535,8 +6535,7 @@ impl AccountsDb {
         let mut total_alive_bytes = 0;
         for (slot, store) in self.storage.iter() {
             total_count += 1;
-            if slot > newest_slot {
-                newest_slot = slot;
+            newest_slot = std::cmp::map(newest_slot, slot);
             }
 
             if slot < oldest_slot {
