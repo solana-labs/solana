@@ -1,7 +1,7 @@
 //! Manage the map of slot -> append vecs
 
 use {
-    crate::accounts_db::{AccountStorageEntry, AppendVecId, SlotStores},
+    crate::accounts_db::{AccountStorageEntry, AppendVecId, SlotStores, SnapshotStorageOne},
     dashmap::DashMap,
     solana_sdk::clock::Slot,
     std::{
@@ -115,10 +115,10 @@ impl AccountStorage {
         })
     }
 
-    /// iterate through all (slot, append-vecs)
-    pub(crate) fn iter(&self) -> dashmap::iter::Iter<Slot, SlotStores> {
+    /// iterate through all (slot, append-vec)
+    pub(crate) fn iter(&self) -> AccountStorageIter<'_> {
         assert!(self.shrink_in_progress_map.is_empty());
-        self.map.iter()
+        AccountStorageIter::new(self)
     }
 
     pub(crate) fn insert(&self, slot: Slot, store: Arc<AccountStorageEntry>) {
@@ -208,6 +208,35 @@ impl AccountStorage {
     #[cfg(test)]
     pub(crate) fn len(&self) -> usize {
         self.map.len()
+    }
+}
+
+/// iterate contents of AccountStorage without exposing internals
+pub struct AccountStorageIter<'a> {
+    iter: dashmap::iter::Iter<'a, Slot, SlotStores>,
+}
+
+impl<'a> AccountStorageIter<'a> {
+    pub fn new(storage: &'a AccountStorage) -> Self {
+        Self {
+            iter: storage.map.iter(),
+        }
+    }
+}
+
+impl<'a> Iterator for AccountStorageIter<'a> {
+    type Item = (Slot, SnapshotStorageOne);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        for entry in self.iter.by_ref() {
+            // if no stores for a slot, then don't return the item at all, loops to try next slot
+            let slot = entry.key();
+            let stores = entry.value();
+            if let Some((_, store)) = stores.read().unwrap().iter().next() {
+                return Some((*slot, Arc::clone(store)));
+            }
+        }
+        None
     }
 }
 
