@@ -7097,7 +7097,6 @@ impl AccountsDb {
                     epoch_schedule,
                     rent_collector,
                     store_detailed_debug_info_on_failure: false,
-                    full_snapshot: None,
                 },
                 expected_capitalization,
             )
@@ -7386,7 +7385,6 @@ impl AccountsDb {
                     epoch_schedule,
                     rent_collector,
                     store_detailed_debug_info_on_failure: store_hash_raw_data_for_debug,
-                    full_snapshot: None,
                 },
                 None,
             )?;
@@ -12084,7 +12082,6 @@ pub mod tests {
                 epoch_schedule: &EPOCH_SCHEDULE,
                 rent_collector: &RENT_COLLECTOR,
                 store_detailed_debug_info_on_failure: false,
-                full_snapshot: None,
             }
         }
     }
