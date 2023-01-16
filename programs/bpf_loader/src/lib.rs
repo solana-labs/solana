@@ -42,9 +42,8 @@ use {
         feature_set::{
             cap_accounts_data_allocations_per_transaction, cap_bpf_program_instruction_accounts,
             check_slice_translation_size, disable_deploy_of_alloc_free_syscall,
-            disable_deprecated_loader, enable_bpf_loader_extend_program_ix,
-            enable_bpf_loader_set_authority_checked_ix, enable_program_redeployment_cooldown,
-            limit_max_instruction_trace_length, FeatureSet,
+            enable_bpf_loader_extend_program_ix, enable_bpf_loader_set_authority_checked_ix,
+            enable_program_redeployment_cooldown, limit_max_instruction_trace_length, FeatureSet,
         },
         instruction::{AccountMeta, InstructionError},
         loader_instruction::LoaderInstruction,
@@ -439,20 +438,15 @@ fn process_instruction_common(
     } else {
         drop(program);
         debug_assert_eq!(first_instruction_account, 1);
-        let disable_deprecated_loader = invoke_context
-            .feature_set
-            .is_active(&disable_deprecated_loader::id());
         if bpf_loader_upgradeable::check_id(program_id) {
             process_loader_upgradeable_instruction(
                 first_instruction_account,
                 invoke_context,
                 use_jit,
             )
-        } else if bpf_loader::check_id(program_id)
-            || (!disable_deprecated_loader && bpf_loader_deprecated::check_id(program_id))
-        {
+        } else if bpf_loader::check_id(program_id) {
             process_loader_instruction(first_instruction_account, invoke_context, use_jit)
-        } else if disable_deprecated_loader && bpf_loader_deprecated::check_id(program_id) {
+        } else if bpf_loader_deprecated::check_id(program_id) {
             ic_logger_msg!(log_collector, "Deprecated loader is no longer supported");
             Err(InstructionError::UnsupportedProgramId)
         } else {

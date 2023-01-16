@@ -84,7 +84,6 @@ use {
         borrow::{Borrow, Cow},
         boxed::Box,
         collections::{hash_map::Entry, BTreeSet, HashMap, HashSet},
-        convert::TryFrom,
         hash::{Hash as StdHash, Hasher as StdHasher},
         io::{Error as IoError, Result as IoResult},
         ops::{Range, RangeBounds},
@@ -124,12 +123,6 @@ pub const PUBKEY_BINS_FOR_CALCULATING_HASHES: usize = 65536;
 // If this is too small, then we produce too many output vectors to iterate.
 // Metrics indicate a sweet spot in the 2.5k-5k range for mnb.
 const MAX_ITEMS_PER_CHUNK: Slot = 2_500;
-
-// A specially reserved write version (identifier for ordering writes in an AppendVec)
-// for entries in the cache, so that  operations that take a storage entry can maintain
-// a common interface when interacting with cached accounts. This version is "virtual" in
-// that it doesn't actually map to an entry in an AppendVec.
-const CACHE_VIRTUAL_WRITE_VERSION: StoredMetaWriteVersion = 0;
 
 // A specially reserved offset (represents an offset into an AppendVec)
 // for entries in the cache, so that  operations that take a storage entry can maintain
@@ -421,8 +414,6 @@ pub struct AccountsDbConfig {
 
 #[cfg(not(test))]
 const ABSURD_CONSECUTIVE_FAILED_ITERATIONS: usize = 100;
-
-type DashMapVersionHash = DashMap<Pubkey, (u64, Hash)>;
 
 #[derive(Debug, Clone, Copy)]
 pub enum AccountShrinkThreshold {
@@ -737,15 +728,6 @@ impl<'a> LoadedAccount<'a> {
         match self {
             LoadedAccount::Stored(stored_account_meta) => stored_account_meta.pubkey(),
             LoadedAccount::Cached(cached_account) => cached_account.pubkey(),
-        }
-    }
-
-    pub fn write_version(&self) -> StoredMetaWriteVersion {
-        match self {
-            LoadedAccount::Stored(stored_account_meta) => {
-                stored_account_meta.meta.write_version_obsolete
-            }
-            LoadedAccount::Cached(_) => CACHE_VIRTUAL_WRITE_VERSION,
         }
     }
 
@@ -4465,14 +4447,7 @@ impl AccountsDb {
                     .clean_dead_slot(*slot, &mut AccountsIndexRootsStats::default());
                 self.bank_hashes.write().unwrap().remove(slot);
                 // all storages have been removed from this slot and recycled or dropped
-                assert!(self
-                    .storage
-                    .remove(slot)
-                    .unwrap()
-                    .1
-                    .read()
-                    .unwrap()
-                    .is_empty());
+                assert!(self.storage.remove(slot).is_none());
             });
         }
     }
@@ -5504,27 +5479,21 @@ impl AccountsDb {
     fn recycle_slot_stores(
         &self,
         total_removed_storage_entries: usize,
-        slot_stores: &[SlotStores],
+        slot_stores: &[SnapshotStorageOne],
     ) -> u64 {
-        let mut recycled_count = 0;
-
         let mut recycle_stores_write_elapsed = Measure::start("recycle_stores_write_elapsed");
         let mut recycle_stores = self.recycle_stores.write().unwrap();
         recycle_stores_write_elapsed.stop();
 
-        for slot_entries in slot_stores {
-            let entry = slot_entries.read().unwrap();
-            for (_store_id, stores) in entry.iter() {
-                if recycle_stores.entry_count() > MAX_RECYCLE_STORES {
-                    let dropped_count = total_removed_storage_entries - recycled_count;
-                    self.stats
-                        .dropped_stores
-                        .fetch_add(dropped_count as u64, Ordering::Relaxed);
-                    return recycle_stores_write_elapsed.as_us();
-                }
-                recycle_stores.add_entry(stores.clone());
-                recycled_count += 1;
+        for (recycled_count, store) in slot_stores.iter().enumerate() {
+            if recycle_stores.entry_count() > MAX_RECYCLE_STORES {
+                let dropped_count = total_removed_storage_entries - recycled_count;
+                self.stats
+                    .dropped_stores
+                    .fetch_add(dropped_count as u64, Ordering::Relaxed);
+                return recycle_stores_write_elapsed.as_us();
             }
+            recycle_stores.add_entry(Arc::clone(store));
         }
         recycle_stores_write_elapsed.as_us()
     }
@@ -5615,16 +5584,12 @@ impl AccountsDb {
         let mut remove_storage_entries_elapsed = Measure::start("remove_storage_entries_elapsed");
         for remove_slot in removed_slots {
             // Remove the storage entries and collect some metrics
-            if let Some((_, slot_storages_to_be_removed)) = self.storage.remove(remove_slot) {
+            if let Some(store) = self.storage.remove(remove_slot) {
                 {
-                    let r_slot_removed_storages = slot_storages_to_be_removed.read().unwrap();
-                    total_removed_storage_entries += r_slot_removed_storages.len();
-                    total_removed_stored_bytes += r_slot_removed_storages
-                        .values()
-                        .map(|i| i.accounts.capacity())
-                        .sum::<u64>();
+                    total_removed_storage_entries += 1;
+                    total_removed_stored_bytes += store.accounts.capacity();
                 }
-                all_removed_slot_storages.push(slot_storages_to_be_removed.clone());
+                all_removed_slot_storages.push(store);
             }
         }
         remove_storage_entries_elapsed.stop();
@@ -5933,9 +5898,7 @@ impl AccountsDb {
         hasher.update(owner.as_ref());
         hasher.update(pubkey.as_ref());
 
-        Hash::new_from_array(
-            <[u8; solana_sdk::hash::HASH_BYTES]>::try_from(hasher.finalize().as_slice()).unwrap(),
-        )
+        Hash::new_from_array(hasher.finalize().into())
     }
 
     fn bulk_assign_write_version(&self, count: usize) -> StoredMetaWriteVersion {
@@ -7486,28 +7449,16 @@ impl AccountsDb {
     ) -> (Vec<(Pubkey, Hash)>, u64, Measure) {
         let mut scan = Measure::start("scan");
 
-        let scan_result: ScanStorageResult<(Pubkey, Hash), DashMapVersionHash> = self
+        let scan_result: ScanStorageResult<(Pubkey, Hash), DashMap<Pubkey, Hash>> = self
             .scan_account_storage(
                 slot,
                 |loaded_account: LoadedAccount| {
                     // Cache only has one version per key, don't need to worry about versioning
                     Some((*loaded_account.pubkey(), loaded_account.loaded_hash()))
                 },
-                |accum: &DashMap<Pubkey, (u64, Hash)>, loaded_account: LoadedAccount| {
-                    let loaded_write_version = loaded_account.write_version();
+                |accum: &DashMap<Pubkey, Hash>, loaded_account: LoadedAccount| {
                     let loaded_hash = loaded_account.loaded_hash();
-                    // keep the latest write version for each pubkey
-                    match accum.entry(*loaded_account.pubkey()) {
-                        Occupied(mut occupied_entry) => {
-                            assert!(loaded_write_version > occupied_entry.get().version());
-                            // overwrite
-                            occupied_entry.insert((loaded_write_version, loaded_hash));
-                        }
-
-                        Vacant(vacant_entry) => {
-                            vacant_entry.insert((loaded_write_version, loaded_hash));
-                        }
-                    }
+                    accum.insert(*loaded_account.pubkey(), loaded_hash);
                 },
             );
         scan.stop();
@@ -7515,10 +7466,7 @@ impl AccountsDb {
         let accumulate = Measure::start("accumulate");
         let hashes: Vec<_> = match scan_result {
             ScanStorageResult::Cached(cached_result) => cached_result,
-            ScanStorageResult::Stored(stored_result) => stored_result
-                .into_iter()
-                .map(|(pubkey, (_latest_write_version, hash))| (pubkey, hash))
-                .collect(),
+            ScanStorageResult::Stored(stored_result) => stored_result.into_iter().collect(),
         };
         (hashes, scan.as_us(), accumulate)
     }
@@ -10248,11 +10196,11 @@ pub mod tests {
             "test_accountsdb_scan_account_storage_no_bank",
         );
         let write_version1 = 0;
-        let write_version2 = 1;
         let pubkey1 = solana_sdk::pubkey::new_rand();
         let pubkey2 = solana_sdk::pubkey::new_rand();
         let storage =
             sample_storage_with_entries(&tf, write_version1, slot_expected, &pubkey1).remove(0);
+        let lamports = storage.accounts.account_iter().next().unwrap().lamports();
         let calls = Arc::new(AtomicU64::new(0));
         let mut scanner = TestScanSimple {
             current_slot: 0,
@@ -10261,8 +10209,6 @@ pub mod tests {
             pubkey2,
             accum: Vec::default(),
             calls: calls.clone(),
-            write_version1,
-            write_version2,
         };
         AccountsDb::scan_single_account_storage(&storage, &mut scanner);
         let accum = scanner.scanning_complete();
@@ -10273,7 +10219,7 @@ pub mod tests {
                 .flatten()
                 .map(|a| a.lamports)
                 .collect::<Vec<_>>(),
-            vec![write_version1]
+            vec![lamports]
         );
     }
 
@@ -10285,8 +10231,6 @@ pub mod tests {
         accum: BinnedHashData,
         pubkey1: Pubkey,
         pubkey2: Pubkey,
-        write_version1: u64,
-        write_version2: u64,
     }
 
     impl AppendVecScan for TestScanSimple {
@@ -10299,14 +10243,8 @@ pub mod tests {
         fn init_accum(&mut self, _count: usize) {}
         fn found_account(&mut self, loaded_account: &LoadedAccount) {
             self.calls.fetch_add(1, Ordering::Relaxed);
-            let write_version = loaded_account.write_version();
-            let first =
-                loaded_account.pubkey() == &self.pubkey1 && write_version == self.write_version1;
-            assert!(
-                first
-                    || loaded_account.pubkey() == &self.pubkey2
-                        && write_version == self.write_version2
-            );
+            let first = loaded_account.pubkey() == &self.pubkey1;
+            assert!(first || loaded_account.pubkey() == &self.pubkey2);
             assert_eq!(self.slot_expected, self.current_slot);
             if first {
                 assert!(self.accum.is_empty());
@@ -10315,7 +10253,7 @@ pub mod tests {
             }
             self.accum.push(vec![CalculateHashIntermediate {
                 hash: Hash::default(),
-                lamports: write_version,
+                lamports: loaded_account.lamports(),
                 pubkey: Pubkey::default(),
             }]);
         }
@@ -17303,9 +17241,7 @@ pub mod tests {
     }
 
     #[test]
-    #[should_panic(
-        expected = "assertion failed: self.storage.remove(slot).unwrap().1.read().unwrap().is_empty()"
-    )]
+    #[should_panic(expected = "assertion failed: self.storage.remove(slot).is_none()")]
     fn test_handle_dropped_roots_for_ancient_assert() {
         solana_logger::setup();
         let common_store_path = Path::new("");
