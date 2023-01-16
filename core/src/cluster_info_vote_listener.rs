@@ -755,12 +755,13 @@ impl ClusterInfoVoteListener {
 
         // Process votes from gossip and ReplayStage
         let mut gossip_vote_txn_processing_time = Measure::start("gossip_vote_processing_time");
-        let votes = gossip_vote_txs
-            .iter()
-            .filter_map(vote_parser::parse_vote_transaction)
-            .zip(repeat(/*is_gossip:*/ true))
-            .chain(replayed_votes.into_iter().zip(repeat(/*is_gossip:*/ false)));
+        let votes = replayed_votes.into_iter().zip(repeat(/*is_gossip:*/ false));
         for ((vote_pubkey, vote, _switch_proof, signature), is_gossip) in votes {
+            println!(
+                "Optimistic conf got vote pubkey from {:?} for slots {:?}",
+                vote_pubkey,
+                vote.slots()
+            );
             Self::track_new_votes_and_notify_confirmations(
                 vote,
                 &vote_pubkey,
