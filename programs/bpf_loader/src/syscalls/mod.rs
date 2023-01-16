@@ -1757,7 +1757,9 @@ declare_syscall!(
         consume_compute_meter(
             invoke_context,
             budget.syscall_base_cost.saturating_add(
-                input_len.saturating_mul(input_len).saturating_div(budget.big_modular_exponentiation_cost)
+                input_len
+                    .saturating_mul(input_len)
+                    .saturating_div(budget.big_modular_exponentiation_cost),
             ),
         )?;
 
