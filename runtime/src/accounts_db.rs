@@ -84,7 +84,6 @@ use {
         borrow::{Borrow, Cow},
         boxed::Box,
         collections::{hash_map::Entry, BTreeSet, HashMap, HashSet},
-        convert::TryFrom,
         hash::{Hash as StdHash, Hasher as StdHasher},
         io::{Error as IoError, Result as IoResult},
         ops::{Range, RangeBounds},
@@ -5899,9 +5898,7 @@ impl AccountsDb {
         hasher.update(owner.as_ref());
         hasher.update(pubkey.as_ref());
 
-        Hash::new_from_array(
-            <[u8; solana_sdk::hash::HASH_BYTES]>::try_from(hasher.finalize().as_slice()).unwrap(),
-        )
+        Hash::new_from_array(hasher.finalize().into())
     }
 
     fn bulk_assign_write_version(&self, count: usize) -> StoredMetaWriteVersion {
