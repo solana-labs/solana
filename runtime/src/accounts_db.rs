@@ -6535,16 +6535,16 @@ impl AccountsDb {
         let mut total_alive_bytes = 0;
         for (slot, store) in self.storage.iter() {
             total_count += 1;
-            newest_slot = std::cmp::map(newest_slot, slot);
-            }
+            newest_slot = std::cmp::max(newest_slot, slot);
 
             oldest_slot = std::cmp::min(oldest_slot, slot);
-            }
 
             total_alive_bytes += Self::page_align(store.alive_bytes() as u64);
             total_bytes += store.total_bytes();
         }
-        info!("total_stores: {total_count}, newest_slot: {newest_slot}, oldest_slot: {oldest_slot}");
+        info!(
+            "total_stores: {total_count}, newest_slot: {newest_slot}, oldest_slot: {oldest_slot}"
+        );
 
         let total_alive_ratio = if total_bytes > 0 {
             total_alive_bytes as f64 / total_bytes as f64
