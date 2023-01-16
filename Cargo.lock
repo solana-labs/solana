@@ -6298,6 +6298,7 @@ dependencies = [
  "rustls 0.20.6",
  "serde",
  "serde_derive",
+ "solana-client",
  "solana-logger 1.14.12",
  "solana-metrics",
  "solana-perf",

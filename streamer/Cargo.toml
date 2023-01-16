@@ -37,6 +37,7 @@ serde_derive = "1.0.103"
 
 [dev-dependencies]
 solana-logger = { path = "../logger", version = "=1.14.12" }
+solana-client = { path = "../client", version = "=1.14.12" }
 
 [lib]
 crate-type = ["lib"]

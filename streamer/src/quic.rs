@@ -1,4 +1,4 @@
-use crate::bidirectional_channel::{QuicBidirectionalReplyService};
+use crate::bidirectional_channel::QuicBidirectionalReplyService;
 
 use {
     crate::{
@@ -90,9 +90,10 @@ pub(crate) fn configure_server(
     let timeout = IdleTimeout::from(VarInt::from_u32(QUIC_MAX_TIMEOUT_MS));
     config.max_idle_timeout(Some(timeout));
 
-    // disable bidi & datagrams
-    const MAX_CONCURRENT_BIDI_STREAMS: u32 = 0;
+    // enable bidi streams so that we can send back error using BidirectionalReplyService
+    const MAX_CONCURRENT_BIDI_STREAMS: u32 = MAX_CONCURRENT_UNI_STREAMS;
     config.max_concurrent_bidi_streams(MAX_CONCURRENT_BIDI_STREAMS.into());
+    // disable datagrams
     config.datagram_receive_buffer_size(None);
 
     Ok((server_config, cert_chain_pem))

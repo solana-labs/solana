@@ -14,9 +14,9 @@ use std::{
 
 #[derive(Serialize, Deserialize)]
 pub struct QuicReplyMessage {
-    transaction_sig: Option<Signature>,
-    message_hash: Option<Hash>,
-    message: String,
+    pub transaction_signature: Option<Signature>,
+    pub message_hash: Option<Hash>,
+    pub message: String,
 }
 
 pub struct QuicBidirectionalData {
@@ -36,7 +36,7 @@ pub struct QuicBidirectionalReplyService {
 
 pub fn get_signature_from_packet(packet: &Packet) -> Option<Signature> {
     // add instruction signature for message
-    match packet.data(1..33) {
+    match packet.data(1..65) {
         Some(signature_bytes) => {
             let sig = Signature::new(&signature_bytes);
             Some(sig)
@@ -168,10 +168,9 @@ impl QuicBidirectionalReplyService {
         }
     }
 
-
     // this method will start bidirectional relay service
-    // the the message sent to bidirectional service, 
-    // will be dispactched to the appropriate sender channel 
+    // the the message sent to bidirectional service,
+    // will be dispactched to the appropriate sender channel
     // depending on transcation signature or message hash
     pub fn serve(&self) {
         let service_reciever = self.service_reciever.clone();
@@ -188,24 +187,27 @@ impl QuicBidirectionalReplyService {
                             let send_stream = {
                                 // if the message has transaction signature then find stream from transaction signature
                                 // else find stream by packet hash
-                                let send_stream_id =
-                                    if let Some(sig) = bidirectional_message.transaction_sig {
-                                        data.transaction_signature_map.get(&sig).map(|x| *x)
-                                    } else if let Some(hash) = bidirectional_message.message_hash {
-                                        data.message_hash_map.get(&hash).map(|x| *x)
-                                    } else {
-                                        None
-                                    };
+                                let send_stream_id = if let Some(sig) =
+                                    bidirectional_message.transaction_signature
+                                {
+                                    data.transaction_signature_map.get(&sig).map(|x| *x)
+                                } else if let Some(hash) = bidirectional_message.message_hash {
+                                    data.message_hash_map.get(&hash).map(|x| *x)
+                                } else {
+                                    None
+                                };
                                 send_stream_id.and_then(|x| data.sender_ids_map.get(&x))
                             };
                             if let Some(send_stream) = send_stream {
                                 match send_stream.send(bidirectional_message) {
-                                    Err(e ) => {
-                                        warn!("Error sending a bidirectional message {}", e.to_string());
+                                    Err(e) => {
+                                        warn!(
+                                            "Error sending a bidirectional message {}",
+                                            e.to_string()
+                                        );
                                     }
-                                    _=>{}
+                                    _ => {}
                                 }
-
                             }
                         }
                     }
@@ -220,16 +222,51 @@ impl QuicBidirectionalReplyService {
     }
 }
 
-
 #[cfg(test)]
 pub mod test {
-    use solana_perf::packet::Packet;
-    use solana_sdk::{transaction::Transaction, system_instruction, signature::Keypair, signer::Signer, message::Message};
+    use std::net::{IpAddr, Ipv4Addr, SocketAddr, UdpSocket};
+    use std::sync::Arc;
 
-    use crate::bidirectional_channel::get_signature_from_packet;
+    use futures_util::StreamExt;
+    use quinn::{Endpoint, EndpointConfig};
+    use solana_client::connection_cache::ConnectionCacheStats;
+    use solana_client::nonblocking::quic_client::{
+        QuicClient, QuicClientCertificate, QuicLazyInitializedEndpoint,
+    };
+    use solana_client::tpu_connection::ClientStats;
 
-    #[tokio::test]
-    async fn test_we_correctly_get_signature_from_packet(){
+    use solana_perf::packet::{Packet, PacketBatch};
+    use solana_perf::thread::renice_this_thread;
+    use solana_sdk::{
+        message::Message,
+        signature::{Keypair, Signature},
+        signer::Signer,
+        system_instruction,
+        transaction::Transaction,
+    };
+
+    use crate::{
+        bidirectional_channel::{
+            get_signature_from_packet, QuicBidirectionalReplyService, QuicReplyMessage,
+        },
+        quic::{configure_server, QuicServerError},
+        tls_certificates::new_self_signed_tls_certificate_chain,
+    };
+
+    fn create_dummy_transaction() -> Transaction {
+        let k1 = Keypair::new();
+        let k2 = Keypair::new();
+        let hash = Message::hash_raw_message(&[0]);
+        let ix = system_instruction::transfer(&k1.pubkey(), &k2.pubkey(), 10);
+        let tx = Transaction::new_signed_with_payer(&[ix], Some(&k1.pubkey()), &[&k1], hash);
+        tx
+    }
+
+    fn _create_n_transactions(size: usize) -> Vec<Transaction> {
+        vec![create_dummy_transaction(); size]
+    }
+
+    fn create_dummy_packet() -> (Packet, Signature) {
         let k1 = Keypair::new();
         let k2 = Keypair::new();
 
@@ -237,7 +274,112 @@ pub mod test {
         let ix = system_instruction::transfer(&k1.pubkey(), &k2.pubkey(), 10);
         let tx = Transaction::new_signed_with_payer(&[ix], Some(&k1.pubkey()), &[&k1], hash);
         let sig = tx.signatures[0];
-        let packet = Packet::from_data(None, tx).unwrap();
+        (Packet::from_data(None, tx).unwrap(), sig)
+    }
+
+    fn create_dummy_packet_batch(size: usize) -> PacketBatch {
+        let mut vec = vec![];
+        for _i in 0..size {
+            vec.push(create_dummy_packet().0)
+        }
+        PacketBatch::new(vec)
+    }
+
+    #[tokio::test]
+    async fn test_we_correctly_get_signature_from_packet() {
+        let (packet, sig) = create_dummy_packet();
         assert_eq!(Some(sig), get_signature_from_packet(&packet));
+    }
+
+    #[tokio::test]
+    async fn test_addition_add_packets_without_any_quic_socket_registered() {
+        let bidirectional_replay_service = QuicBidirectionalReplyService::new();
+
+        bidirectional_replay_service.serve();
+        let socket = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 20000);
+        let batch = create_dummy_packet_batch(5);
+        bidirectional_replay_service.add_packets(&socket, &batch);
+    }
+
+    #[tokio::test]
+    async fn test_addition_of_packets_with_quic_socket_registered() {
+        let bidirectional_replay_service = QuicBidirectionalReplyService::new();
+        bidirectional_replay_service.serve();
+
+        // configuring quic service
+        let k1 = Keypair::new();
+        let localhost_v4 = IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1));
+        let (config, _cert) = configure_server(&k1, localhost_v4).unwrap();
+        let socket = UdpSocket::bind("127.0.0.1:21000").expect("couldn't bind to address");
+        let (_, mut incoming) = {
+            Endpoint::new(EndpointConfig::default(), Some(config), socket)
+                .map_err(|_e| QuicServerError::EndpointFailed)
+                .unwrap()
+        };
+        let socket_quic = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 10900);
+
+        let (packet, signature) = create_dummy_packet();
+
+        let (quic_replied_sender, quic_replied_reciever) = crossbeam_channel::unbounded();
+        let runtime = Arc::new(
+            tokio::runtime::Builder::new_multi_thread()
+                .worker_threads(1)
+                .on_thread_start(move || renice_this_thread(0).unwrap())
+                .thread_name("solLiteRpcProcessor")
+                .enable_all()
+                .build()
+                .expect("Runtime"),
+        );
+        // create a async task to create a client
+        //let handle = runtime.spawn(async move {
+        std::thread::spawn(move || {
+            // create a quic client to connect to our server
+            let (certs, priv_key) = new_self_signed_tls_certificate_chain(
+                &Keypair::new(),
+                IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)),
+            )
+            .expect("Failed to initialize QUIC client certificates");
+            let client_certificate = Arc::new(QuicClientCertificate {
+                certificates: certs,
+                key: priv_key,
+            });
+            let endpoint = Arc::new(QuicLazyInitializedEndpoint::new(client_certificate.clone()));
+            let quic_address = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 21000);
+            let client = Arc::new(QuicClient::new(endpoint, quic_address, 3));
+            let client_stats = ClientStats {
+                server_reply_channel: Some(quic_replied_sender.clone()),
+                ..Default::default()
+            };
+            let fut = client.send_buffer(
+                packet.data(..).unwrap(),
+                &client_stats,
+                Arc::new(ConnectionCacheStats::default()),
+            );
+            runtime.block_on(fut).unwrap();
+        });
+
+        // create a quinn stream and add it to the bidirectional reply service
+        let connection = incoming.next().await.unwrap();
+        let quinn::NewConnection { mut bi_streams, .. } = connection.await.unwrap();
+        let (send, _recv) = bi_streams.next().await.unwrap().unwrap();
+        bidirectional_replay_service.add_stream(&socket_quic, send);
+        let batch = create_dummy_packet_batch(5);
+        bidirectional_replay_service.add_packets(&socket_quic, &batch);
+
+        let reply_message = "Some error message".to_string();
+
+        bidirectional_replay_service
+            .service_sender
+            .send(QuicReplyMessage {
+                transaction_signature: Some(signature),
+                message_hash: None,
+                message: reply_message.clone(),
+            })
+            .unwrap();
+
+        // check for reply message
+        let message = quic_replied_reciever.recv().unwrap();
+        assert_eq!(message.transaction_signature, Some(signature));
+        assert_eq!(message.message, reply_message);
     }
 }

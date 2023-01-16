@@ -6,6 +6,7 @@ use {
         },
         tpu_connection::{BlockingConnection, ClientStats},
     },
+    crossbeam_channel::Sender,
     indexmap::map::{Entry, IndexMap},
     rand::{thread_rng, Rng},
     solana_measure::measure::Measure,
@@ -13,6 +14,7 @@ use {
         pubkey::Pubkey, quic::QUIC_PORT_OFFSET, signature::Keypair, timing::AtomicInterval,
     },
     solana_streamer::{
+        bidirectional_channel::QuicReplyMessage,
         nonblocking::quic::{compute_max_allowed_uni_streams, ConnectionPeerType},
         streamer::StakedNodes,
         tls_certificates::new_self_signed_tls_certificate_chain,
@@ -21,7 +23,7 @@ use {
         error::Error,
         net::{IpAddr, Ipv4Addr, SocketAddr, UdpSocket},
         sync::{
-            atomic::{AtomicBool, AtomicU64, Ordering},
+            atomic::{AtomicU64, Ordering},
             Arc, RwLock,
         },
     },
@@ -59,8 +61,7 @@ pub struct ConnectionCacheStats {
     pub total_client_stats: ClientStats,
 
     // getting quic errors from leader
-    pub get_tpu_errors: AtomicBool,
-    pub server_errors: Arc<tokio::sync::RwLock<Vec<String>>>,
+    pub server_reply_channel: Option<Sender<QuicReplyMessage>>,
 }
 
 const CONNECTION_STAT_SUBMISSION_INTERVAL: u64 = 2000;
@@ -291,13 +292,16 @@ impl ConnectionCache {
         }
     }
 
-    pub fn new_with_errors_from_tpu(connection_pool_size: usize) -> Self {
+    pub fn new_with_replies_from_tpu(
+        connection_pool_size: usize,
+        reply_channel: Sender<QuicReplyMessage>,
+    ) -> Self {
         let connection_pool_size = 1.max(connection_pool_size);
         Self {
             use_quic: true,
             connection_pool_size,
             stats: Arc::new(ConnectionCacheStats {
-                get_tpu_errors: AtomicBool::new(true),
+                server_reply_channel: Some(reply_channel.clone()),
                 ..Default::default()
             }),
             ..Self::default()
