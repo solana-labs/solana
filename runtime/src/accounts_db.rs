@@ -6538,8 +6538,7 @@ impl AccountsDb {
             newest_slot = std::cmp::map(newest_slot, slot);
             }
 
-            if slot < oldest_slot {
-                oldest_slot = slot;
+            oldest_slot = std::cmp::min(oldest_slot, slot);
             }
 
             total_alive_bytes += Self::page_align(store.alive_bytes() as u64);
