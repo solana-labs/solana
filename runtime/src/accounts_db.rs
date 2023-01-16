@@ -6544,10 +6544,7 @@ impl AccountsDb {
             total_alive_bytes += Self::page_align(store.alive_bytes() as u64);
             total_bytes += store.total_bytes();
         }
-        info!(
-            "total_stores: {}, newest_slot: {}, oldest_slot: {}",
-            total_count, newest_slot, oldest_slot
-        );
+        info!("total_stores: {total_count}, newest_slot: {newest_slot}, oldest_slot: {oldest_slot}");
 
         let total_alive_ratio = if total_bytes > 0 {
             total_alive_bytes as f64 / total_bytes as f64
