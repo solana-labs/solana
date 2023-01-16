@@ -317,6 +317,7 @@ impl SnapshotStorageRebuilder {
             })
             .collect::<Result<HashMap<AppendVecId, Arc<AccountStorageEntry>>, std::io::Error>>()?;
 
+        assert_eq!(slot_stores.len(), 1);
         let (id, storage) = slot_stores.drain().next().unwrap();
         self.storage
             .insert(slot, AccountStorageReference { id, storage });

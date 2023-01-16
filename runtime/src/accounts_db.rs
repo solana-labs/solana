@@ -10724,11 +10724,11 @@ pub mod tests {
         }
 
         let mut append_vec_histogram = HashMap::new();
-        let mut all_storages = vec![];
+        let mut all_slots = vec![];
         for slot_storage in accounts.storage.iter() {
-            all_storages.push(slot_storage.0)
+            all_slots.push(slot_storage.0)
         }
-        for slot in all_storages {
+        for slot in all_slots {
             *append_vec_histogram.entry(slot).or_insert(0) += 1;
         }
         for count in append_vec_histogram.values() {
