@@ -1,6 +1,6 @@
-use quinn::{IncomingBiStreams};
+use quinn::IncomingBiStreams;
 
-use crate::bidirectional_channel::{QuicBidirectionalReplyService};
+use crate::bidirectional_channel::QuicBidirectionalReplyService;
 use {
     crate::{
         quic::{configure_server, QuicServerError, StreamStats},
@@ -58,7 +58,7 @@ pub fn spawn_server(
     max_staked_connections: usize,
     max_unstaked_connections: usize,
     stats: Arc<StreamStats>,
-    bidirectional_reply_service : QuicBidirectionalReplyService,
+    bidirectional_reply_service: QuicBidirectionalReplyService,
 ) -> Result<JoinHandle<()>, QuicServerError> {
     let (config, _cert) = configure_server(keypair, gossip_host)?;
 
@@ -90,7 +90,7 @@ pub async fn run_server(
     max_staked_connections: usize,
     max_unstaked_connections: usize,
     stats: Arc<StreamStats>,
-    bidirectional_reply_service : QuicBidirectionalReplyService,
+    bidirectional_reply_service: QuicBidirectionalReplyService,
 ) {
     debug!("spawn quic server");
     let mut last_datapoint = Instant::now();
@@ -374,7 +374,7 @@ async fn handle_connection(
     );
     while !stream_exit.load(Ordering::Relaxed) {
         let bidirectional_service = bidirectional_service.clone();
-        
+
         let selected_stream = tokio::select! {
             v = bi_streams.next() => {
                 v.map_or(None, |x| {

@@ -3,6 +3,9 @@
 //! server's flow control.
 
 use std::time::Instant;
+
+use crossbeam_channel::Sender;
+use solana_streamer::bidirectional_channel::QuicReplyMessage;
 use {
     crate::{
         client_error::ClientErrorKind, connection_cache::ConnectionCacheStats,
@@ -284,23 +287,21 @@ impl QuicClient {
     }
 
     async fn _send_buffer_using_conn(
-        tpu_address: SocketAddr,
+        _tpu_address: SocketAddr,
         data: &[u8],
         connection: &NewConnection,
-        listen_to_server_errors: bool,
-        server_errors: Arc<RwLock<Vec<String>>>,
+        server_reply_channel: Option<Sender<QuicReplyMessage>>,
     ) -> Result<(), QuicError> {
-        if listen_to_server_errors {
+        if let Some(server_reply_channel) = server_reply_channel {
             let (mut send_stream, mut recv_stream) = connection.connection.open_bi().await?;
 
             send_stream.write_all(data).await?;
             send_stream.finish().await?;
 
             // create task to fetch errors from the leader
-            let server_errors = server_errors.clone();
             tokio::spawn(async move {
-                // wait for 500 ms max
-                let mut timeout: u64 = 500;
+                // wait for 1000 ms max
+                let mut timeout: u64 = 1000;
                 let mut start = Instant::now();
                 let mut buf: [u8; 256] = [0; 256];
                 let buf: &mut [u8] = &mut buf;
@@ -314,33 +315,20 @@ impl QuicClient {
                         match buf_size {
                             Ok(buf_size) => {
                                 if let Some(buf_size) = buf_size {
-                                    let mut lock = server_errors.write().await;
-                                    buf[buf_size] = 0; // end the string
-                                    let string = String::from_utf8(buf.to_vec());
-                                    match string {
-                                        Ok(string) => {
-                                            lock.push(format!(
-                                                "got error from tpu {} {}",
-                                                tpu_address.to_string(),
-                                                string
-                                            ));
+                                    let buffer = &buf[0..buf_size];
+                                    match bincode::deserialize::<QuicReplyMessage>(buffer) {
+                                        Ok(message) => {
+                                            let _ = server_reply_channel.send(message);
                                         }
-                                        Err(e) => {
-                                            lock.push(format!(
-                                                "utf8 format error {}",
-                                                e.to_string()
-                                            ));
+                                        _ => {
+                                            // unformatted message
+                                            break;
                                         }
                                     }
                                 }
                             }
-                            Err(e) => {
-                                let mut lock = server_errors.write().await;
-                                lock.push(format!(
-                                    "connection read error for {} error : {}",
-                                    tpu_address.to_string(),
-                                    e
-                                ));
+                            Err(_e) => {
+                                break;
                             }
                         }
                         timeout =
@@ -471,8 +459,7 @@ impl QuicClient {
                 *self.tpu_addr(),
                 data,
                 &connection,
-                stats.get_tpu_errors,
-                stats.server_errors.clone(),
+                stats.server_reply_channel.clone(),
             )
             .await
             {
@@ -562,8 +549,7 @@ impl QuicClient {
                         *self.tpu_addr(),
                         buf.as_ref(),
                         connection_ref,
-                        stats.get_tpu_errors,
-                        stats.server_errors.clone(),
+                        stats.server_reply_channel.clone(),
                     )
                 }))
             })
@@ -633,7 +619,7 @@ impl TpuConnection for QuicTpuConnection {
         T: AsRef<[u8]> + Send + Sync,
     {
         let stats = ClientStats {
-            get_tpu_errors: self.connection_stats.get_tpu_errors.load(Ordering::Relaxed),
+            server_reply_channel: self.connection_stats.server_reply_channel.clone(),
             ..Default::default()
         };
         let len = buffers.len();
@@ -652,7 +638,7 @@ impl TpuConnection for QuicTpuConnection {
         T: AsRef<[u8]> + Send + Sync,
     {
         let stats = ClientStats {
-            get_tpu_errors: self.connection_stats.get_tpu_errors.load(Ordering::Relaxed),
+            server_reply_channel: self.connection_stats.server_reply_channel.clone(),
             ..Default::default()
         };
         let send_buffer =
