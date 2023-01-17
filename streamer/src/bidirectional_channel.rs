@@ -215,17 +215,18 @@ impl QuicBidirectionalReplyService {
 #[cfg(test)]
 pub mod test {
     use std::net::{IpAddr, Ipv4Addr, SocketAddr};
-    use std::sync::Arc;
+    use std::sync::{Arc, RwLock};
 
-    use futures_util::StreamExt;
-    use quinn::Endpoint;
+    use itertools::Itertools;
+    use quinn::{EndpointConfig, NewConnection};
     use solana_client::bidirectional_channel_handler::BidirectionalChannelHandler;
-    use solana_client::connection_cache::ConnectionCacheStats;
-    use solana_client::nonblocking::quic_client::{QuicClient, QuicLazyInitializedEndpoint};
-    use solana_client::tpu_connection::ClientStats;
 
+    use crate::nonblocking::quic::{spawn_server, test::get_client_config};
+    use crate::quic::{StreamStats, MAX_UNSTAKED_CONNECTIONS};
+    use crate::streamer::StakedNodes;
+    use crossbeam_channel::unbounded;
     use solana_perf::packet::{Packet, PacketBatch};
-    use solana_perf::thread::renice_this_thread;
+    use solana_sdk::transaction::TransactionError;
     use solana_sdk::{
         message::Message,
         signature::{Keypair, Signature},
@@ -233,13 +234,11 @@ pub mod test {
         system_instruction,
         transaction::Transaction,
     };
+    use std::net::UdpSocket;
+    use std::sync::atomic::AtomicBool;
+    use tokio::task::JoinHandle;
 
-    use crate::{
-        bidirectional_channel::{
-            get_signature_from_packet, QuicBidirectionalReplyService, QuicReplyMessage,
-        },
-        quic::{configure_server, QuicServerError},
-    };
+    use crate::bidirectional_channel::{get_signature_from_packet, QuicBidirectionalReplyService};
 
     fn _create_dummy_transaction() -> Transaction {
         let k1 = Keypair::new();
@@ -289,90 +288,109 @@ pub mod test {
         bidirectional_replay_service.add_packets(&socket, &batch);
     }
 
+    fn setup_quic_server(
+        bidirectional_quic_service: QuicBidirectionalReplyService,
+    ) -> (
+        JoinHandle<()>,
+        Arc<AtomicBool>,
+        crossbeam_channel::Receiver<PacketBatch>,
+        SocketAddr,
+        Arc<StreamStats>,
+    ) {
+        let option_staked_nodes: Option<StakedNodes> = None;
+        let s = UdpSocket::bind("127.0.0.1:0").unwrap();
+        let exit = Arc::new(AtomicBool::new(false));
+        let (sender, receiver) = unbounded();
+        let keypair = Keypair::new();
+        let ip = "127.0.0.1".parse().unwrap();
+        let server_address = s.local_addr().unwrap();
+        let staked_nodes = Arc::new(RwLock::new(option_staked_nodes.unwrap_or_default()));
+        let stats = Arc::new(StreamStats::default());
+
+        let t = spawn_server(
+            s,
+            &keypair,
+            ip,
+            sender,
+            exit.clone(),
+            1,
+            staked_nodes,
+            MAX_UNSTAKED_CONNECTIONS,
+            MAX_UNSTAKED_CONNECTIONS,
+            stats.clone(),
+            bidirectional_quic_service,
+        )
+        .unwrap();
+        (t, exit, receiver, server_address, stats)
+    }
+
+    pub async fn make_bidirectional_client_endpoint(addr: &SocketAddr) -> NewConnection {
+        let client_socket = UdpSocket::bind("127.0.0.1:0").unwrap();
+        let mut endpoint = quinn::Endpoint::new(EndpointConfig::default(), None, client_socket)
+            .unwrap()
+            .0;
+        let default_keypair = Keypair::new();
+        endpoint.set_default_client_config(get_client_config(&default_keypair));
+        endpoint
+            .connect(*addr, "localhost")
+            .expect("Failed in connecting")
+            .await
+            .expect("Failed in waiting")
+    }
+
+    pub async fn send_packet_batch(
+        conn: Arc<NewConnection>,
+        packets: &PacketBatch,
+        bidirectional_reply_handler: BidirectionalChannelHandler,
+    ) {
+        // Send a full size packet with single byte writes.
+        let (mut s1, recv) = conn.connection.open_bi().await.unwrap();
+        bidirectional_reply_handler.start_serving(recv);
+        for i in 0..packets.len() {
+            s1.write_all(packets[i].data(..).unwrap()).await.unwrap();
+        }
+        s1.finish().await.unwrap();
+    }
+
     #[tokio::test]
     async fn test_addition_of_packets_with_quic_socket_registered() {
         let bidirectional_replay_service = QuicBidirectionalReplyService::new();
         bidirectional_replay_service.serve();
 
-        // configuring quic service
-        let k1 = Keypair::new();
-        let localhost_v4 = IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1));
-        let (config, _cert) = configure_server(&k1, localhost_v4).unwrap();
+        let bidirectional_reply_handler = BidirectionalChannelHandler::new();
 
-        let quic_address = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 21000);
-        let (_, mut incoming) = {
-            Endpoint::server(config, quic_address)
-                .map_err(|_e| QuicServerError::EndpointFailed)
-                .unwrap()
-        };
-        let (packet, signature) = create_dummy_packet();
+        let (_, exit, reciever, server_address, _stream_stats) =
+            setup_quic_server(bidirectional_replay_service.clone());
 
-        let quic_reply_handler = BidirectionalChannelHandler::new();
-        let runtime = Arc::new(
-            tokio::runtime::Builder::new_multi_thread()
-                .worker_threads(1)
-                .on_thread_start(move || renice_this_thread(0).unwrap())
-                .thread_name("clientThread")
-                .enable_all()
-                .build()
-                .expect("Runtime"),
-        );
+        let nb_packets = 5;
 
-        let quic_reply_handler_clone = quic_reply_handler.clone();
-        // create a async task to create a client
-        runtime.spawn(async move {
-            //std::thread::spawn(move || {
-            // create a quic client to connect to our server
-            // let (certs, priv_key) = new_self_signed_tls_certificate_chain(
-            //     &Keypair::new(),
-            //     IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)),
-            // )
-            // .expect("Failed to initialize QUIC client certificates");
-            // let client_certificate = Arc::new(QuicClientCertificate {
-            //     certificates: certs,
-            //     key: priv_key,
-            // });
-            let endpoint = Arc::new(QuicLazyInitializedEndpoint::default());
-            let client = Arc::new(QuicClient::new(endpoint, quic_address, 128));
-            let client_stats = ClientStats {
-                server_reply_channel: Some(quic_reply_handler_clone),
-                ..Default::default()
-            };
-            loop {
-                let _ = client
-                    .send_buffer(
-                        packet.data(..).unwrap(),
-                        &client_stats,
-                        Arc::new(ConnectionCacheStats::default()),
-                    )
-                    .await;
+        let conn = Arc::new(make_bidirectional_client_endpoint(&server_address).await);
+        let batch = create_dummy_packet_batch(nb_packets);
+        let signatures = batch
+            .iter()
+            .map(|x| get_signature_from_packet(x).unwrap())
+            .collect_vec();
+        send_packet_batch(conn, &batch, bidirectional_reply_handler.clone()).await;
+
+        // replying to each packet with a message
+        for _i in 1..nb_packets {
+            let packets = reciever.recv().unwrap();
+            for packet in packets.iter() {
+                let sig = get_signature_from_packet(&packet).unwrap();
+                bidirectional_replay_service
+                    .send_message(&sig, TransactionError::InvalidRentPayingAccount.to_string());
             }
-            //runtime.block_on(fut).unwrap();
-        });
+        }
 
-        // create a quinn stream and add it to the bidirectional reply service
-        let connection = incoming.next().await.unwrap();
-        let quinn::NewConnection { mut bi_streams, .. } = connection.await.unwrap();
-
-        let socket_quic = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 10900); // dummy socket
-        let (send, _recv) = bi_streams.next().await.unwrap().unwrap();
-        bidirectional_replay_service.add_stream(&socket_quic, send);
-        let batch = create_dummy_packet_batch(5);
-        bidirectional_replay_service.add_packets(&socket_quic, &batch);
-
-        let reply_message = "Some error message".to_string();
-
-        bidirectional_replay_service
-            .service_sender
-            .send(QuicReplyMessage {
-                transaction_signature: signature,
-                message: reply_message.clone(),
-            })
-            .unwrap();
-
-        // check for reply message
-        let message = quic_reply_handler.reciever.recv().unwrap();
-        assert_eq!(message.transaction_signature, signature);
-        assert_eq!(message.message, reply_message);
+        for _i in 1..nb_packets {
+            let message = bidirectional_reply_handler.reciever.recv().unwrap();
+            // check if
+            assert!(signatures.contains(&message.transaction_signature));
+            assert_eq!(
+                message.message,
+                TransactionError::InvalidRentPayingAccount.to_string()
+            );
+        }
+        exit.store(true, std::sync::atomic::Ordering::Relaxed);
     }
 }
