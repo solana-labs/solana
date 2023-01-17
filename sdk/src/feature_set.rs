@@ -594,6 +594,10 @@ pub mod disable_builtin_loader_ownership_chains {
     solana_sdk::declare_id!("4UDcAfQ6EcA6bdcadkeHpkarkhZGJ7Bpq7wTAiRMjkoi");
 }
 
+pub mod cap_transaction_accounts_data_size {
+    solana_sdk::declare_id!("DdLwVYuvDz26JohmgSbA7mjpJFgX5zP2dkp8qsF2C33V");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -737,6 +741,7 @@ lazy_static! {
         (update_hashes_per_tick::id(), "Update desired hashes per tick on epoch boundary"),
         (enable_big_mod_exp_syscall::id(), "add big_mod_exp syscall #28503"),
         (disable_builtin_loader_ownership_chains::id(), "disable builtin loader ownership chains #29956"),
+        (cap_transaction_accounts_data_size::id(), "cap transaction accounts data size up to a limit #27839"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()
