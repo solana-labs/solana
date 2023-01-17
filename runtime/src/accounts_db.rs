@@ -13706,10 +13706,6 @@ pub mod tests {
         }
     }
 
-    fn slot_stores(db: &AccountsDb, slot: Slot) -> Vec<SnapshotStorageOne> {
-        db.get_storages_for_slot(slot).unwrap_or_default()
-    }
-
     #[test]
     fn test_read_only_accounts_cache() {
         let db = Arc::new(AccountsDb::new_with_config_for_tests(
@@ -14627,8 +14623,8 @@ pub mod tests {
 
         db.print_accounts_stats("post-clean1");
         // Check stores > 0
-        assert!(!slot_stores(&db, 0).is_empty());
-        assert!(!slot_stores(&db, 1).is_empty());
+        assert!(!db.storage.is_empty_entry(0));
+        assert!(!db.storage.is_empty_entry(1));
 
         // root slot 0
         db.add_root_and_flush_write_cache(0);
@@ -14658,8 +14654,8 @@ pub mod tests {
 
         db.print_accounts_stats("post-clean4");
 
-        assert!(slot_stores(&db, 0).is_empty());
-        assert!(!slot_stores(&db, 1).is_empty());
+        assert!(db.storage.is_empty_entry(0));
+        assert!(!db.storage.is_empty_entry(1));
     }
 
     #[test]
