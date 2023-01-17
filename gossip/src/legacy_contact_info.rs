@@ -107,16 +107,6 @@ impl LegacyContactInfo {
         }
     }
 
-    // we reuse the old udp tpu port for quic gossip traffic
-    pub fn get_gossip(&self, use_quic: bool) -> SocketAddr {
-        if use_quic {
-            self.tpu
-        }
-        else {
-            self.gossip
-        }
-    }
-
     /// New random LegacyContactInfo for tests and simulations.
     pub fn new_rand<R: rand::Rng>(rng: &mut R, pubkey: Option<Pubkey>) -> Self {
         let delay = 10 * 60 * 1000; // 10 minutes
