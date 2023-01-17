@@ -6,9 +6,11 @@
 use {
     crate::{
         cuda_runtime::PinnedVec,
+        discard::count_packets_in_batches,
         packet::{Packet, PacketBatch, PacketFlags, PACKET_DATA_SIZE},
         perf_libs,
         recycler::Recycler,
+        tx_packet_batch::TxPacketBatch,
     },
     rayon::{prelude::*, ThreadPool},
     solana_metrics::inc_new_counter_debug,
@@ -156,10 +158,6 @@ fn verify_packet(packet: &mut Packet, reject_non_vote: bool) -> bool {
     true
 }
 
-pub fn count_packets_in_batches(batches: &[PacketBatch]) -> usize {
-    batches.iter().map(|batch| batch.len()).sum()
-}
-
 pub fn count_valid_packets(
     batches: &[PacketBatch],
     mut process_valid_packet: impl FnMut(&Packet),
@@ -181,7 +179,7 @@ pub fn count_valid_packets(
         .sum()
 }
 
-pub fn count_discarded_packets(batches: &[PacketBatch]) -> usize {
+pub fn count_discarded_packets(batches: &[TxPacketBatch]) -> usize {
     batches
         .iter()
         .map(|batch| batch.iter().filter(|p| p.meta().discard()).count())

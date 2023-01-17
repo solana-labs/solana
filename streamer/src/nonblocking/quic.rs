@@ -10,9 +10,9 @@ use {
     quinn::{Connecting, Connection, Endpoint, EndpointConfig, TokioRuntime, VarInt},
     quinn_proto::VarIntBoundsExceeded,
     rand::{thread_rng, Rng},
-    solana_perf::packet::PacketBatch,
+    solana_perf::tx_packet_batch::TxPacketBatch,
     solana_sdk::{
-        packet::{Packet, PACKET_DATA_SIZE},
+        packet::PACKET_DATA_SIZE,
         pubkey::Pubkey,
         quic::{
             QUIC_CONNECTION_HANDSHAKE_TIMEOUT_MS, QUIC_MAX_STAKED_CONCURRENT_STREAMS,
@@ -59,7 +59,7 @@ pub fn spawn_server(
     sock: UdpSocket,
     keypair: &Keypair,
     gossip_host: IpAddr,
-    packet_sender: Sender<PacketBatch>,
+    packet_sender: Sender<TxPacketBatch>,
     exit: Arc<AtomicBool>,
     max_connections_per_peer: usize,
     staked_nodes: Arc<RwLock<StakedNodes>>,
@@ -92,7 +92,7 @@ pub fn spawn_server(
 
 pub async fn run_server(
     incoming: Endpoint,
-    packet_sender: Sender<PacketBatch>,
+    packet_sender: Sender<TxPacketBatch>,
     exit: Arc<AtomicBool>,
     max_connections_per_peer: usize,
     staked_nodes: Arc<RwLock<StakedNodes>>,
@@ -229,7 +229,7 @@ enum ConnectionHandlerError {
 }
 
 struct NewConnectionHandlerParams {
-    packet_sender: Sender<PacketBatch>,
+    packet_sender: Sender<TxPacketBatch>,
     remote_pubkey: Option<Pubkey>,
     stake: u64,
     total_stake: u64,
@@ -241,7 +241,7 @@ struct NewConnectionHandlerParams {
 
 impl NewConnectionHandlerParams {
     fn new_unstaked(
-        packet_sender: Sender<PacketBatch>,
+        packet_sender: Sender<TxPacketBatch>,
         max_connections_per_peer: usize,
         stats: Arc<StreamStats>,
     ) -> NewConnectionHandlerParams {
@@ -415,7 +415,7 @@ async fn setup_connection(
     connecting: Connecting,
     unstaked_connection_table: Arc<Mutex<ConnectionTable>>,
     staked_connection_table: Arc<Mutex<ConnectionTable>>,
-    packet_sender: Sender<PacketBatch>,
+    packet_sender: Sender<TxPacketBatch>,
     max_connections_per_peer: usize,
     staked_nodes: Arc<RwLock<StakedNodes>>,
     max_staked_connections: usize,
@@ -522,7 +522,7 @@ async fn setup_connection(
 #[allow(clippy::too_many_arguments)]
 async fn handle_connection(
     connection: Connection,
-    packet_sender: Sender<PacketBatch>,
+    packet_sender: Sender<TxPacketBatch>,
     remote_addr: SocketAddr,
     remote_pubkey: Option<Pubkey>,
     last_update: Arc<AtomicU64>,
@@ -627,9 +627,9 @@ async fn handle_connection(
 // Return true if the server should drop the stream
 fn handle_chunk(
     chunk: &Result<Option<quinn::Chunk>, quinn::ReadError>,
-    maybe_batch: &mut Option<PacketBatch>,
+    maybe_batch: &mut Option<TxPacketBatch>,
     remote_addr: &SocketAddr,
-    packet_sender: &Sender<PacketBatch>,
+    packet_sender: &Sender<TxPacketBatch>,
     stats: Arc<StreamStats>,
     stake: u64,
     peer_type: ConnectionPeerType,
@@ -658,11 +658,9 @@ fn handle_chunk(
 
                 // chunk looks valid
                 if maybe_batch.is_none() {
-                    let mut batch = PacketBatch::with_capacity(1);
-                    let mut packet = Packet::default();
-                    packet.meta_mut().set_socket_addr(remote_addr);
-                    packet.meta_mut().sender_stake = stake;
-                    batch.push(packet);
+                    let mut batch = TxPacketBatch::with_size(1);
+                    batch.meta_mut(0).set_socket_addr(remote_addr);
+                    batch.meta_mut(0).sender_stake = stake;
                     *maybe_batch = Some(batch);
                     stats
                         .total_packets_allocated
@@ -675,9 +673,15 @@ fn handle_chunk(
                         Some(end) => end,
                         None => return true,
                     };
-                    batch[0].buffer_mut()[chunk.offset as usize..end_of_chunk]
+                    /*
+                    if end_of_chunk > batch.buffer_len() {
+                        batch.grow();
+                        assert!(batch.buffer_len() > end_of_chunk);
+                    }
+                    */
+                    batch.buffer_mut(0)[chunk.offset as usize..end_of_chunk]
                         .copy_from_slice(&chunk.bytes);
-                    batch[0].meta_mut().size = std::cmp::max(batch[0].meta().size, end_of_chunk);
+                    batch.meta_mut(0).size = std::cmp::max(batch.meta(0).size, end_of_chunk);
                     stats.total_chunks_received.fetch_add(1, Ordering::Relaxed);
                     match peer_type {
                         ConnectionPeerType::Staked => {
@@ -696,7 +700,7 @@ fn handle_chunk(
                 trace!("chunk is none");
                 // done receiving chunks
                 if let Some(batch) = maybe_batch.take() {
-                    let len = batch[0].meta().size;
+                    let len = batch.meta(0).size;
                     if let Err(e) = packet_sender.send(batch) {
                         stats
                             .total_packet_batch_send_err

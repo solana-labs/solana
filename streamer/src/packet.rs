@@ -8,8 +8,11 @@ use {
     std::{io::Result, net::UdpSocket, time::Instant},
 };
 pub use {
-    solana_perf::packet::{
-        to_packet_batches, PacketBatch, PacketBatchRecycler, NUM_PACKETS, PACKETS_PER_BATCH,
+    solana_perf::{
+        packet::{
+            to_packet_batches, PacketBatch, PacketBatchRecycler, NUM_PACKETS, PACKETS_PER_BATCH,
+        },
+        tx_packet_batch::TxPacketBatch,
     },
     solana_sdk::packet::{Meta, Packet, PACKET_DATA_SIZE},
 };

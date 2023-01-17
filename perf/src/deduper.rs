@@ -1,7 +1,7 @@
 //! Utility to deduplicate baches of incoming network packets.
 
 use {
-    crate::packet::{Packet, PacketBatch},
+    crate::tx_packet_batch::{TxPacketBatch, TxPacketViewMut},
     ahash::AHasher,
     rand::{thread_rng, Rng},
     solana_sdk::saturating_add_assign,
@@ -51,7 +51,8 @@ impl Deduper {
     }
 
     /// Compute hash from packet data, returns (hash, bin_pos).
-    fn compute_hash(&self, packet: &Packet) -> (u64, usize) {
+    // TODO: this function doesn't need mut, demote to TxPacketView
+    fn compute_hash(&self, packet: &TxPacketViewMut) -> (u64, usize) {
         let mut hasher = AHasher::new_with_keys(self.seed.0, self.seed.1);
         hasher.write(packet.data(..).unwrap_or_default());
         let h = hasher.finish();
@@ -61,7 +62,7 @@ impl Deduper {
     }
 
     // Deduplicates packets and returns 1 if packet is to be discarded. Else, 0.
-    fn dedup_packet(&self, packet: &mut Packet) -> u64 {
+    fn dedup_packet(&self, packet: &TxPacketViewMut) -> u64 {
         // If this packet was already marked as discard, drop it
         if packet.meta().discard() {
             return 1;
@@ -83,18 +84,18 @@ impl Deduper {
 
     pub fn dedup_packets_and_count_discards(
         &self,
-        batches: &mut [PacketBatch],
-        mut process_received_packet: impl FnMut(&mut Packet, bool, bool),
+        batches: &mut [TxPacketBatch],
+        mut process_received_packet: impl FnMut(&TxPacketViewMut, bool, bool),
     ) -> u64 {
         let mut num_removed: u64 = 0;
         batches.iter_mut().for_each(|batch| {
             batch.iter_mut().for_each(|p| {
                 let removed_before_sigverify = p.meta().discard();
-                let is_duplicate = self.dedup_packet(p);
+                let is_duplicate = self.dedup_packet(&p);
                 if is_duplicate == 1 {
                     saturating_add_assign!(num_removed, 1);
                 }
-                process_received_packet(p, removed_before_sigverify, is_duplicate == 1);
+                process_received_packet(&p, removed_before_sigverify, is_duplicate == 1);
             })
         });
         num_removed
@@ -106,7 +107,7 @@ impl Deduper {
 mod tests {
     use {
         super::*,
-        crate::{packet::to_packet_batches, sigverify, test_tx::test_tx},
+        crate::{discard::count_packets_in_batches, packet::to_packet_batches, test_tx::test_tx},
     };
 
     #[test]
@@ -115,7 +116,7 @@ mod tests {
 
         let mut batches =
             to_packet_batches(&std::iter::repeat(tx).take(1024).collect::<Vec<_>>(), 128);
-        let packet_count = sigverify::count_packets_in_batches(&batches);
+        let packet_count = count_packets_in_batches(&batches);
         let filter = Deduper::new(1_000_000, Duration::from_millis(0));
         let mut num_deduped = 0;
         let discard = filter.dedup_packets_and_count_discards(

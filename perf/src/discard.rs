@@ -1,10 +1,24 @@
 use {
-    crate::packet::PacketBatch,
+    crate::{packet::PacketBatch, tx_packet_batch::TxPacketBatch},
     rand::{thread_rng, Rng},
 };
 
-pub fn discard_batches_randomly(
-    batches: &mut Vec<PacketBatch>,
+pub trait Batch {
+    fn len(&self) -> usize;
+}
+impl Batch for PacketBatch {
+    fn len(&self) -> usize {
+        self.len()
+    }
+}
+impl Batch for TxPacketBatch {
+    fn len(&self) -> usize {
+        self.len()
+    }
+}
+
+pub fn discard_batches_randomly<T: Batch>(
+    batches: &mut Vec<T>,
     max_packets: usize,
     mut total_packets: usize,
 ) -> usize {
@@ -14,6 +28,12 @@ pub fn discard_batches_randomly(
         total_packets = total_packets.saturating_sub(removed.len());
     }
     total_packets
+}
+
+// TODO: Moved here to reuse trait, but probably need a better
+//       spot for this function (and maybe the trait too)
+pub fn count_packets_in_batches<T: Batch>(batches: &[T]) -> usize {
+    batches.iter().map(|batch| batch.len()).sum()
 }
 
 #[cfg(test)]

@@ -5,7 +5,7 @@
 //!
 
 pub use solana_perf::sigverify::{
-    count_packets_in_batches, ed25519_verify_cpu, ed25519_verify_disabled, init, TxOffset,
+    ed25519_verify_cpu, ed25519_verify_disabled, init, TxOffset,
 };
 use {
 <<<<<<< HEAD
@@ -16,8 +16,15 @@ use {
 =======
     crate::{banking_stage::BankingPacketBatch, sigverify_stage::SigVerifyServiceError},
     crossbeam_channel::Sender,
+<<<<<<< HEAD
 >>>>>>> e59cd309c9 (Rip out SigVerifier trait)
     solana_perf::{cuda_runtime::PinnedVec, packet::PacketBatch, recycler::Recycler, sigverify},
+=======
+    solana_perf::{
+        cuda_runtime::PinnedVec, packet::PacketBatch, recycler::Recycler, sigverify,
+        tx_packet_batch::TxPacketViewMut,
+    },
+>>>>>>> 4ba1998ccb (Plumbing TxPacketBatch through Tx packet path)
     solana_sdk::{packet::Packet, saturating_add_assign},
 };
 
@@ -100,11 +107,12 @@ impl TransactionSigVerifier {
     #[inline(always)]
     pub fn process_received_packet(
         &mut self,
-        packet: &mut Packet,
+        packet: &TxPacketViewMut,
         removed_before_sigverify_stage: bool,
         is_dup: bool,
     ) {
-        sigverify::check_for_tracer_packet(packet);
+        // TODO: re-enable tracer check
+        //sigverify::check_for_tracer_packet(packet);
         if packet.meta().is_tracer_packet() {
             if removed_before_sigverify_stage {
                 self.tracer_packet_stats
@@ -120,7 +128,7 @@ impl TransactionSigVerifier {
     }
 
     #[inline(always)]
-    pub fn process_excess_packet(&mut self, packet: &Packet) {
+    pub fn process_excess_packet(&mut self, packet: &TxPacketViewMut) {
         if packet.meta().is_tracer_packet() {
             self.tracer_packet_stats.total_excess_tracer_packets += 1;
         }

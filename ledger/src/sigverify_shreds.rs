@@ -7,10 +7,11 @@ use {
     solana_metrics::inc_new_counter_debug,
     solana_perf::{
         cuda_runtime::PinnedVec,
+        discard::count_packets_in_batches,
         packet::{Packet, PacketBatch},
         perf_libs,
         recycler_cache::RecyclerCache,
-        sigverify::{self, count_packets_in_batches, TxOffset},
+        sigverify::{self, TxOffset},
     },
     solana_rayon_threadlimit::get_thread_count,
     solana_sdk::{
