@@ -1184,4 +1184,60 @@ mod tests {
         }
         withdraw_durable_nonce_accounts(client, &authority_keypairs, &nonce_keypairs)
     }
+
+    #[test]
+    fn test_bench_tps_key_chunks_new() {
+        let num_keypairs = 16;
+        let chunk_size = 4;
+        let keypairs = (0..num_keypairs)
+            .map(|_| Keypair::new())
+            .collect::<Vec<_>>();
+
+        let chunks = KeypairChunks::new(&keypairs, chunk_size);
+        assert_eq!(
+            chunks.source[0],
+            &[&keypairs[0], &keypairs[1], &keypairs[2], &keypairs[3]]
+        );
+        assert_eq!(
+            chunks.dest[0],
+            &[&keypairs[4], &keypairs[5], &keypairs[6], &keypairs[7]]
+        );
+        assert_eq!(
+            chunks.source[1],
+            &[&keypairs[8], &keypairs[9], &keypairs[10], &keypairs[11]]
+        );
+        assert_eq!(
+            chunks.dest[1],
+            &[&keypairs[12], &keypairs[13], &keypairs[14], &keypairs[15]]
+        );
+    }
+
+    #[test]
+    fn test_bench_tps_key_chunks_new_with_conflict_groups() {
+        let num_keypairs = 16;
+        let chunk_size = 4;
+        let num_conflict_groups = 2;
+        let keypairs = (0..num_keypairs)
+            .map(|_| Keypair::new())
+            .collect::<Vec<_>>();
+
+        let chunks =
+            KeypairChunks::new_with_conflict_groups(&keypairs, chunk_size, num_conflict_groups);
+        assert_eq!(
+            chunks.source[0],
+            &[&keypairs[0], &keypairs[1], &keypairs[2], &keypairs[3]]
+        );
+        assert_eq!(
+            chunks.dest[0],
+            &[&keypairs[4], &keypairs[5], &keypairs[4], &keypairs[5]]
+        );
+        assert_eq!(
+            chunks.source[1],
+            &[&keypairs[8], &keypairs[9], &keypairs[10], &keypairs[11]]
+        );
+        assert_eq!(
+            chunks.dest[1],
+            &[&keypairs[12], &keypairs[13], &keypairs[12], &keypairs[13]]
+        );
+    }
 }
