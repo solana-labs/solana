@@ -267,12 +267,8 @@ impl Accounts {
             .iter()
             .enumerate()
             .map(|(i, key)| {
-                let account = if !message.is_non_loader_key(i) {
-                    // Fill in an empty account for the program slots.
-                    AccountSharedData::default()
-                } else {
                     #[allow(clippy::collapsible_else_if)]
-                    if solana_sdk::sysvar::instructions::check_id(key) {
+                    let account = if solana_sdk::sysvar::instructions::check_id(key) {
                         Self::construct_instructions_account(
                             message,
                             feature_set
@@ -313,7 +309,7 @@ impl Accounts {
                                 })
                         };
 
-                        if !validated_fee_payer {
+                        if !validated_fee_payer && message.is_non_loader_key(i) {
                             if i != 0 {
                                 warn!("Payer index should be 0! {:?}", tx);
                             }
@@ -367,8 +363,7 @@ impl Accounts {
                         rent_debits.insert(key, rent, account.lamports());
 
                         account
-                    }
-                };
+                    };
 
                 Ok((*key, account))
             })
