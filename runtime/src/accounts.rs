@@ -451,6 +451,7 @@ impl Accounts {
                 Err(TransactionError::CallChainTooDeep)
             })
             .collect::<Result<Vec<Vec<IndexOfAccount>>>>()?;
+        accounts.append(&mut account_deps);
 
         Ok(LoadedTransaction {
             accounts,
