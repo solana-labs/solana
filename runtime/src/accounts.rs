@@ -268,109 +268,108 @@ impl Accounts {
             .iter()
             .enumerate()
             .map(|(i, key)| {
-                    let mut account_found = true;
-                    let mut account_dep_index = None;
-                    #[allow(clippy::collapsible_else_if)]
-                    let account = if solana_sdk::sysvar::instructions::check_id(key) {
-                        Self::construct_instructions_account(
-                            message,
-                            feature_set
-                                .is_active(&feature_set::instructions_sysvar_owned_by_sysvar::id()),
-                        )
+                let mut account_found = true;
+                let mut account_dep_index = None;
+                #[allow(clippy::collapsible_else_if)]
+                let account = if solana_sdk::sysvar::instructions::check_id(key) {
+                    Self::construct_instructions_account(
+                        message,
+                        feature_set
+                            .is_active(&feature_set::instructions_sysvar_owned_by_sysvar::id()),
+                    )
+                } else {
+                    let (mut account, rent) = if let Some(account_override) =
+                        account_overrides.and_then(|overrides| overrides.get(key))
+                    {
+                        (account_override.clone(), 0)
                     } else {
-                        let (mut account, rent) = if let Some(account_override) =
-                            account_overrides.and_then(|overrides| overrides.get(key))
-                        {
-                            (account_override.clone(), 0)
-                        } else {
-                            self.accounts_db
-                                .load_with_fixed_root(ancestors, key)
-                                .map(|(mut account, _)| {
-                                    if message.is_writable(i) {
-                                        let rent_due = rent_collector
-                                            .collect_from_existing_account(
-                                                key,
-                                                &mut account,
-                                                self.accounts_db.filler_account_suffix.as_ref(),
-                                                set_exempt_rent_epoch_max,
-                                            )
-                                            .rent_amount;
-                                        (account, rent_due)
-                                    } else {
-                                        (account, 0)
-                                    }
-                                })
-                                .unwrap_or_else(|| {
-                                    account_found = false;
-                                    let mut default_account = AccountSharedData::default();
-                                    if set_exempt_rent_epoch_max {
-                                        // All new accounts must be rent-exempt (enforced in Bank::execute_loaded_transaction).
-                                        // Currently, rent collection sets rent_epoch to u64::MAX, but initializing the account
-                                        // with this field already set would allow us to skip rent collection for these accounts.
-                                        default_account.set_rent_epoch(u64::MAX);
-                                    }
-                                    (default_account, 0)
-                                })
-                        };
+                        self.accounts_db
+                            .load_with_fixed_root(ancestors, key)
+                            .map(|(mut account, _)| {
+                                if message.is_writable(i) {
+                                    let rent_due = rent_collector
+                                        .collect_from_existing_account(
+                                            key,
+                                            &mut account,
+                                            self.accounts_db.filler_account_suffix.as_ref(),
+                                            set_exempt_rent_epoch_max,
+                                        )
+                                        .rent_amount;
+                                    (account, rent_due)
+                                } else {
+                                    (account, 0)
+                                }
+                            })
+                            .unwrap_or_else(|| {
+                                account_found = false;
+                                let mut default_account = AccountSharedData::default();
+                                if set_exempt_rent_epoch_max {
+                                    // All new accounts must be rent-exempt (enforced in Bank::execute_loaded_transaction).
+                                    // Currently, rent collection sets rent_epoch to u64::MAX, but initializing the account
+                                    // with this field already set would allow us to skip rent collection for these accounts.
+                                    default_account.set_rent_epoch(u64::MAX);
+                                }
+                                (default_account, 0)
+                            })
+                    };
 
-                        if !validated_fee_payer && message.is_non_loader_key(i) {
-                            if i != 0 {
-                                warn!("Payer index should be 0! {:?}", tx);
-                            }
-
-                            Self::validate_fee_payer(
-                                key,
-                                &mut account,
-                                i as IndexOfAccount,
-                                error_counters,
-                                rent_collector,
-                                feature_set,
-                                fee,
-                            )?;
-
-                            validated_fee_payer = true;
+                    if !validated_fee_payer && message.is_non_loader_key(i) {
+                        if i != 0 {
+                            warn!("Payer index should be 0! {:?}", tx);
                         }
 
-                        if bpf_loader_upgradeable::check_id(account.owner()) {
-                            if message.is_writable(i) && !message.is_upgradeable_loader_present() {
-                                error_counters.invalid_writable_account += 1;
-                                return Err(TransactionError::InvalidWritableAccount);
-                            }
+                        Self::validate_fee_payer(
+                            key,
+                            &mut account,
+                            i as IndexOfAccount,
+                            error_counters,
+                            rent_collector,
+                            feature_set,
+                            fee,
+                        )?;
 
-                            if account.executable() {
-                                // The upgradeable loader requires the derived ProgramData account
-                                if let Ok(UpgradeableLoaderState::Program {
-                                    programdata_address,
-                                }) = account.state()
-                                {
-                                    if let Some((programdata_account, _)) = self
-                                        .accounts_db
-                                        .load_with_fixed_root(ancestors, &programdata_address)
-                                    {
-                                        account_dep_index =
-                                            Some(account_keys.len().saturating_add(account_deps.len())
-                                                as IndexOfAccount);
-                                        account_deps
-                                            .push((programdata_address, programdata_account));
-                                    } else {
-                                        error_counters.account_not_found += 1;
-                                        return Err(TransactionError::ProgramAccountNotFound);
-                                    }
-                                } else {
-                                    error_counters.invalid_program_for_execution += 1;
-                                    return Err(TransactionError::InvalidProgramForExecution);
-                                }
-                            }
-                        } else if account.executable() && message.is_writable(i) {
+                        validated_fee_payer = true;
+                    }
+
+                    if bpf_loader_upgradeable::check_id(account.owner()) {
+                        if message.is_writable(i) && !message.is_upgradeable_loader_present() {
                             error_counters.invalid_writable_account += 1;
                             return Err(TransactionError::InvalidWritableAccount);
                         }
 
-                        tx_rent += rent;
-                        rent_debits.insert(key, rent, account.lamports());
+                        if account.executable() {
+                            // The upgradeable loader requires the derived ProgramData account
+                            if let Ok(UpgradeableLoaderState::Program {
+                                programdata_address,
+                            }) = account.state()
+                            {
+                                if let Some((programdata_account, _)) = self
+                                    .accounts_db
+                                    .load_with_fixed_root(ancestors, &programdata_address)
+                                {
+                                    account_dep_index =
+                                        Some(account_keys.len().saturating_add(account_deps.len())
+                                            as IndexOfAccount);
+                                    account_deps.push((programdata_address, programdata_account));
+                                } else {
+                                    error_counters.account_not_found += 1;
+                                    return Err(TransactionError::ProgramAccountNotFound);
+                                }
+                            } else {
+                                error_counters.invalid_program_for_execution += 1;
+                                return Err(TransactionError::InvalidProgramForExecution);
+                            }
+                        }
+                    } else if account.executable() && message.is_writable(i) {
+                        error_counters.invalid_writable_account += 1;
+                        return Err(TransactionError::InvalidWritableAccount);
+                    }
 
-                        account
-                    };
+                    tx_rent += rent;
+                    rent_debits.insert(key, rent, account.lamports());
+
+                    account
+                };
 
                 account_found_and_dep_index.push((account_found, account_dep_index));
                 Ok((*key, account))
