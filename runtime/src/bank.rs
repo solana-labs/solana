@@ -4245,33 +4245,51 @@ impl Bank {
             .filter_map(|(index, res)| match res {
                 // following are retryable errors
                 Err(TransactionError::AccountInUse) => {
-                    bidirection_reply_service.send_message( sanitized_txs[index].signature(), TransactionError::AccountInUse.to_string());
+                    bidirection_reply_service.send_message(
+                        sanitized_txs[index].signature(),
+                        TransactionError::AccountInUse.to_string(),
+                    );
                     error_counters.account_in_use += 1;
                     Some(index)
                 }
                 Err(TransactionError::WouldExceedMaxBlockCostLimit) => {
-                    bidirection_reply_service.send_message( sanitized_txs[index].signature(), TransactionError::WouldExceedMaxBlockCostLimit.to_string());
+                    bidirection_reply_service.send_message(
+                        sanitized_txs[index].signature(),
+                        TransactionError::WouldExceedMaxBlockCostLimit.to_string(),
+                    );
                     error_counters.would_exceed_max_block_cost_limit += 1;
                     Some(index)
                 }
                 Err(TransactionError::WouldExceedMaxVoteCostLimit) => {
-                    bidirection_reply_service.send_message( sanitized_txs[index].signature(), TransactionError::WouldExceedMaxVoteCostLimit.to_string());
+                    bidirection_reply_service.send_message(
+                        sanitized_txs[index].signature(),
+                        TransactionError::WouldExceedMaxVoteCostLimit.to_string(),
+                    );
                     error_counters.would_exceed_max_vote_cost_limit += 1;
                     Some(index)
                 }
                 Err(TransactionError::WouldExceedMaxAccountCostLimit) => {
-                    bidirection_reply_service.send_message( sanitized_txs[index].signature(), TransactionError::WouldExceedMaxAccountCostLimit.to_string());
+                    bidirection_reply_service.send_message(
+                        sanitized_txs[index].signature(),
+                        TransactionError::WouldExceedMaxAccountCostLimit.to_string(),
+                    );
                     error_counters.would_exceed_max_account_cost_limit += 1;
                     Some(index)
                 }
                 Err(TransactionError::WouldExceedAccountDataBlockLimit) => {
-                    bidirection_reply_service.send_message( sanitized_txs[index].signature(), TransactionError::WouldExceedAccountDataBlockLimit.to_string());
+                    bidirection_reply_service.send_message(
+                        sanitized_txs[index].signature(),
+                        TransactionError::WouldExceedAccountDataBlockLimit.to_string(),
+                    );
                     error_counters.would_exceed_account_data_block_limit += 1;
                     Some(index)
                 }
                 // following are non-retryable errors
                 Err(TransactionError::TooManyAccountLocks) => {
-                    bidirection_reply_service.send_message( sanitized_txs[index].signature(), TransactionError::TooManyAccountLocks.to_string());
+                    bidirection_reply_service.send_message(
+                        sanitized_txs[index].signature(),
+                        TransactionError::TooManyAccountLocks.to_string(),
+                    );
                     error_counters.too_many_account_locks += 1;
                     None
                 }

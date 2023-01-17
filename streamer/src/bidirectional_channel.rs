@@ -4,7 +4,7 @@ use crossbeam_channel::{Receiver, Sender};
 use quinn::SendStream;
 use serde_derive::{Deserialize, Serialize};
 use solana_perf::packet::{Packet, PacketBatch};
-use solana_sdk::{signature::Signature};
+use solana_sdk::signature::Signature;
 use std::{
     collections::HashMap,
     net::SocketAddr,
@@ -218,11 +218,11 @@ pub mod test {
     use std::sync::Arc;
 
     use futures_util::StreamExt;
-    use quinn::{Endpoint};
+    use quinn::Endpoint;
+    use solana_client::bidirectional_channel_handler::BidirectionalChannelHandler;
     use solana_client::connection_cache::ConnectionCacheStats;
     use solana_client::nonblocking::quic_client::{QuicClient, QuicLazyInitializedEndpoint};
     use solana_client::tpu_connection::ClientStats;
-    use solana_client::bidirectional_channel_handler::BidirectionalChannelHandler;
 
     use solana_perf::packet::{Packet, PacketBatch};
     use solana_perf::thread::renice_this_thread;
@@ -317,11 +317,11 @@ pub mod test {
                 .build()
                 .expect("Runtime"),
         );
-        
+
         let quic_reply_handler_clone = quic_reply_handler.clone();
         // create a async task to create a client
         runtime.spawn(async move {
-        //std::thread::spawn(move || {
+            //std::thread::spawn(move || {
             // create a quic client to connect to our server
             // let (certs, priv_key) = new_self_signed_tls_certificate_chain(
             //     &Keypair::new(),
@@ -339,11 +339,13 @@ pub mod test {
                 ..Default::default()
             };
             loop {
-                let _ = client.send_buffer(
-                    packet.data(..).unwrap(),
-                    &client_stats,
-                    Arc::new(ConnectionCacheStats::default()),
-                ).await;
+                let _ = client
+                    .send_buffer(
+                        packet.data(..).unwrap(),
+                        &client_stats,
+                        Arc::new(ConnectionCacheStats::default()),
+                    )
+                    .await;
             }
             //runtime.block_on(fut).unwrap();
         });
