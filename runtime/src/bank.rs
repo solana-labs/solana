@@ -327,6 +327,7 @@ pub struct BankRc {
 
 #[cfg(RUSTC_WITH_SPECIALIZATION)]
 use solana_frozen_abi::abi_example::AbiExample;
+use solana_streamer::bidirectional_channel::QuicBidirectionalReplyService;
 
 #[cfg(RUSTC_WITH_SPECIALIZATION)]
 impl AbiExample for BankRc {
@@ -3777,6 +3778,7 @@ impl Bank {
             &mut timings,
             Some(&account_overrides),
             None,
+            QuicBidirectionalReplyService::new(),
         );
 
         let post_simulation_accounts = loaded_transactions
@@ -4263,6 +4265,7 @@ impl Bank {
         timings: &mut ExecuteTimings,
         account_overrides: Option<&AccountOverrides>,
         log_messages_bytes_limit: Option<usize>,
+        bidirection_reply_service: QuicBidirectionalReplyService,
     ) -> LoadAndExecuteTransactionsOutput {
         let sanitized_txs = batch.sanitized_transactions();
         debug!("processing transactions: {}", sanitized_txs.len());
@@ -4276,27 +4279,33 @@ impl Bank {
             .filter_map(|(index, res)| match res {
                 // following are retryable errors
                 Err(TransactionError::AccountInUse) => {
+                    bidirection_reply_service.send_message( sanitized_txs[index].signature(), TransactionError::AccountInUse.to_string());
                     error_counters.account_in_use += 1;
                     Some(index)
                 }
                 Err(TransactionError::WouldExceedMaxBlockCostLimit) => {
+                    bidirection_reply_service.send_message( sanitized_txs[index].signature(), TransactionError::WouldExceedMaxBlockCostLimit.to_string());
                     error_counters.would_exceed_max_block_cost_limit += 1;
                     Some(index)
                 }
                 Err(TransactionError::WouldExceedMaxVoteCostLimit) => {
+                    bidirection_reply_service.send_message( sanitized_txs[index].signature(), TransactionError::WouldExceedMaxVoteCostLimit.to_string());
                     error_counters.would_exceed_max_vote_cost_limit += 1;
                     Some(index)
                 }
                 Err(TransactionError::WouldExceedMaxAccountCostLimit) => {
+                    bidirection_reply_service.send_message( sanitized_txs[index].signature(), TransactionError::WouldExceedMaxAccountCostLimit.to_string());
                     error_counters.would_exceed_max_account_cost_limit += 1;
                     Some(index)
                 }
                 Err(TransactionError::WouldExceedAccountDataBlockLimit) => {
+                    bidirection_reply_service.send_message( sanitized_txs[index].signature(), TransactionError::WouldExceedAccountDataBlockLimit.to_string());
                     error_counters.would_exceed_account_data_block_limit += 1;
                     Some(index)
                 }
                 // following are non-retryable errors
                 Err(TransactionError::TooManyAccountLocks) => {
+                    bidirection_reply_service.send_message( sanitized_txs[index].signature(), TransactionError::TooManyAccountLocks.to_string());
                     error_counters.too_many_account_locks += 1;
                     None
                 }
@@ -5990,6 +5999,7 @@ impl Bank {
         enable_return_data_recording: bool,
         timings: &mut ExecuteTimings,
         log_messages_bytes_limit: Option<usize>,
+        bidirection_reply_service: QuicBidirectionalReplyService,
     ) -> (TransactionResults, TransactionBalancesSet) {
         let pre_balances = if collect_balances {
             self.collect_balances(batch)
@@ -6013,6 +6023,7 @@ impl Bank {
             timings,
             None,
             log_messages_bytes_limit,
+            bidirection_reply_service,
         );
 
         let (last_blockhash, lamports_per_signature) =
@@ -6066,6 +6077,7 @@ impl Bank {
             false,
             &mut ExecuteTimings::default(),
             None,
+            QuicBidirectionalReplyService::new(),
         );
         tx.signatures
             .get(0)
@@ -6128,6 +6140,7 @@ impl Bank {
             false,
             &mut ExecuteTimings::default(),
             None,
+            QuicBidirectionalReplyService::new(),
         )
         .0
         .fee_collection_results
@@ -11142,6 +11155,7 @@ pub(crate) mod tests {
                 false,
                 &mut ExecuteTimings::default(),
                 None,
+                QuicBidirectionalReplyService::new(),
             )
             .0
             .fee_collection_results;
@@ -13814,6 +13828,7 @@ pub(crate) mod tests {
                 false,
                 &mut ExecuteTimings::default(),
                 None,
+                QuicBidirectionalReplyService::new(),
             );
 
         assert_eq!(transaction_balances_set.pre_balances.len(), 3);
@@ -16586,6 +16601,7 @@ pub(crate) mod tests {
                 false,
                 &mut ExecuteTimings::default(),
                 None,
+                QuicBidirectionalReplyService::new(),
             )
             .0
             .execution_results;
@@ -16695,6 +16711,7 @@ pub(crate) mod tests {
                     true,
                     &mut ExecuteTimings::default(),
                     None,
+                    QuicBidirectionalReplyService::new(),
                 )
                 .0
                 .execution_results[0]

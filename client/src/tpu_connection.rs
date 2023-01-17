@@ -1,11 +1,11 @@
+use crate::bidirectional_channel_handler::BidirectionalChannelHandler;
+
 use {
     crate::{quic_client::QuicTpuConnection, udp_client::UdpTpuConnection},
-    crossbeam_channel::Sender,
     enum_dispatch::enum_dispatch,
     rayon::iter::{IntoParallelIterator, ParallelIterator},
     solana_metrics::MovingStat,
     solana_sdk::{transaction::VersionedTransaction, transport::Result as TransportResult},
-    solana_streamer::bidirectional_channel::QuicReplyMessage,
     std::{net::SocketAddr, sync::atomic::AtomicU64},
 };
 
@@ -25,7 +25,7 @@ pub struct ClientStats {
     pub make_connection_ms: AtomicU64,
     pub send_timeout: AtomicU64,
 
-    pub server_reply_channel: Option<Sender<QuicReplyMessage>>,
+    pub server_reply_channel: Option<BidirectionalChannelHandler>,
 }
 
 #[enum_dispatch]

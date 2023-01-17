@@ -1,4 +1,6 @@
 #![allow(clippy::integer_arithmetic)]
+
+use solana_streamer::bidirectional_channel::QuicBidirectionalReplyService;
 use {
     clap::{crate_description, crate_name, Arg, ArgEnum, Command},
     crossbeam_channel::{unbounded, Receiver},
@@ -359,6 +361,7 @@ fn main() {
             None,
             Arc::new(connection_cache),
             bank_forks.clone(),
+            QuicBidirectionalReplyService::new(),
         );
         poh_recorder.write().unwrap().set_bank(&bank, false);
 
