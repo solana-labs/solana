@@ -195,10 +195,7 @@ impl ClusterSlots {
             .iter()
             .map(|peer| slot_peers.get(&peer.id).cloned().unwrap_or(0))
             .zip(stakes)
-            .map(|(a, b)| {
-                let non_zero = a > 0 || b > 0;
-                (a / 2 + b / 2).max(u64::from(non_zero))
-            })
+            .map(|(a, b)| (a / 2 + b / 2).max(1u64))
             .collect()
     }
 
@@ -208,12 +205,12 @@ impl ClusterSlots {
         repair_peers: &[ContactInfo],
     ) -> Vec<(u64, usize)> {
         self.lookup(slot)
-            .and_then(|slot_peers| {
+            .map(|slot_peers| {
                 let slot_peers = slot_peers.read().unwrap();
                 repair_peers
                     .iter()
                     .enumerate()
-                    .filter_map(|(i, x)| slot_peers.get(&x.id).map(|stake| Some((*stake + 1, i))))
+                    .filter_map(|(i, ci)| Some((slot_peers.get(&ci.id)? + 1, i)))
                     .collect()
             })
             .unwrap_or_default()
