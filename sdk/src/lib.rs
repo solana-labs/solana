@@ -7,7 +7,25 @@ extern crate self as solana_sdk;
 
 #[cfg(feature = "full")]
 pub use signer::signers;
+<<<<<<< HEAD
 pub use solana_program::*;
+=======
+// These solana_program imports could be *-imported, but that causes a bunch of
+// confusing duplication in the docs due to a rustdoc bug. #26211
+#[cfg(not(target_os = "solana"))]
+pub use solana_program::program_stubs;
+pub use solana_program::{
+    account_info, address_lookup_table_account, alt_bn128, blake3, borsh, bpf_loader,
+    bpf_loader_deprecated, bpf_loader_upgradeable, clock, config, custom_heap_default,
+    custom_panic_default, debug_account_data, declare_deprecated_sysvar_id, declare_sysvar_id,
+    decode_error, ed25519_program, epoch_schedule, fee_calculator, impl_sysvar_get, incinerator,
+    instruction, keccak, lamports, loader_instruction, loader_upgradeable_instruction, message,
+    msg, native_token, nonce, program, program_error, program_memory, program_option, program_pack,
+    rent, sanitize, sdk_ids, secp256k1_program, secp256k1_recover, serde_varint, serialize_utils,
+    short_vec, slot_hashes, slot_history, stake, stake_history, syscalls, system_instruction,
+    system_program, sysvar, unchecked_div_by_const, vote, wasm_bindgen,
+};
+>>>>>>> 0941d133a (adds new solana_version::Version with ClientId (#29649))
 
 pub mod account;
 pub mod account_utils;
