@@ -258,6 +258,7 @@ impl Accounts {
         let mut tx_rent: TransactionRent = 0;
         let message = tx.message();
         let account_keys = message.account_keys();
+        let mut account_found_and_dep_index = Vec::with_capacity(account_keys.len());
         let mut account_deps = Vec::with_capacity(account_keys.len());
         let mut rent_debits = RentDebits::default();
 
@@ -267,6 +268,8 @@ impl Accounts {
             .iter()
             .enumerate()
             .map(|(i, key)| {
+                    let mut account_found = true;
+                    let mut account_dep_index = None;
                     #[allow(clippy::collapsible_else_if)]
                     let account = if solana_sdk::sysvar::instructions::check_id(key) {
                         Self::construct_instructions_account(
@@ -298,6 +301,7 @@ impl Accounts {
                                     }
                                 })
                                 .unwrap_or_else(|| {
+                                    account_found = false;
                                     let mut default_account = AccountSharedData::default();
                                     if set_exempt_rent_epoch_max {
                                         // All new accounts must be rent-exempt (enforced in Bank::execute_loaded_transaction).
@@ -343,6 +347,9 @@ impl Accounts {
                                         .accounts_db
                                         .load_with_fixed_root(ancestors, &programdata_address)
                                     {
+                                        account_dep_index =
+                                            Some(account_keys.len().saturating_add(account_deps.len())
+                                                as IndexOfAccount);
                                         account_deps
                                             .push((programdata_address, programdata_account));
                                     } else {
@@ -365,6 +372,7 @@ impl Accounts {
                         account
                     };
 
+                account_found_and_dep_index.push((account_found, account_dep_index));
                 Ok((*key, account))
             })
             .collect::<Result<Vec<_>>>()?;
