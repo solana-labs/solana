@@ -605,9 +605,6 @@ pub type SnapshotStorages = Vec<Vec<SnapshotStorageOne>>;
 /// exactly 1 append vec per slot
 pub type SnapshotStoragesOne = Vec<SnapshotStorageOne>;
 
-// Each slot has a set of storage entries.
-pub(crate) type SlotStores = Arc<RwLock<HashMap<AppendVecId, Arc<AccountStorageEntry>>>>;
-
 type AccountSlots = HashMap<Pubkey, HashSet<Slot>>;
 type AppendVecOffsets = HashMap<AppendVecId, HashSet<usize>>;
 type ReclaimResult = (AccountSlots, AppendVecOffsets);
@@ -3915,12 +3912,9 @@ impl AccountsDb {
             // shrink is in progress, so 1 new append vec to keep, 1 old one to throw away
             not_retaining_store(shrink_in_progress.old_storage());
             // dropping 'shrink_in_progress' removes the old append vec that was being shrunk from db's storage
-        } else if let Some(slot_stores) = self.storage.get_slot_stores(slot) {
+        } else if let Some(store) = self.storage.remove(&slot) {
             // no shrink in progress, so all append vecs in this slot are dead
-            let mut list = slot_stores.write().unwrap();
-            list.drain().for_each(|(_key, store)| {
-                not_retaining_store(&store);
-            });
+            not_retaining_store(&store);
         }
 
         dead_storages
@@ -10730,12 +10724,12 @@ pub mod tests {
         }
 
         let mut append_vec_histogram = HashMap::new();
-        let mut all_storages = vec![];
+        let mut all_slots = vec![];
         for slot_storage in accounts.storage.iter() {
-            all_storages.push(slot_storage.1)
+            all_slots.push(slot_storage.0)
         }
-        for storage in all_storages {
-            *append_vec_histogram.entry(storage.slot()).or_insert(0) += 1;
+        for slot in all_slots {
+            *append_vec_histogram.entry(slot).or_insert(0) += 1;
         }
         for count in append_vec_histogram.values() {
             assert!(*count >= 2);
@@ -17190,7 +17184,6 @@ pub mod tests {
             .write()
             .unwrap()
             .insert(slot0, BankHashInfo::default());
-        db.storage.insert_empty_at_slot(slot0);
         assert!(!db.bank_hashes.read().unwrap().is_empty());
         db.accounts_index.add_root(slot0);
         db.accounts_index.add_uncleaned_roots([slot0].into_iter());
