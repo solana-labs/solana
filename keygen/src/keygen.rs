@@ -752,9 +752,10 @@ fn do_main(matches: &ArgMatches) -> Result<(), Box<dyn error::Error>> {
                         let attempts = attempts.fetch_add(1, Ordering::Relaxed);
                         if attempts % 1_000_000 == 0 {
                             println!(
-                                "Searched {} keypairs in {}s. {} matches found.",
+                                "Searched {} keypairs in {}s (avg: {:.3} Mkps). {} matches found.",
                                 attempts,
                                 start.elapsed().as_secs(),
+                                attempts as f64 / start.elapsed().as_micros() as f64,
                                 found.load(Ordering::Relaxed),
                             );
                         }
