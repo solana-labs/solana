@@ -9211,12 +9211,6 @@ pub mod tests {
         fn get_storage_for_slot(&self, slot: Slot) -> Option<Arc<AccountStorageEntry>> {
             self.storage.get_slot_storage_entry(slot)
         }
-
-        fn get_storages_for_slot(&self, slot: Slot) -> Option<Vec<SnapshotStorageOne>> {
-            self.storage
-                .get_slot_storage_entry(slot)
-                .map(|storage| vec![storage])
-        }
     }
 
     /// This impl exists until this feature is activated:
@@ -15501,7 +15495,7 @@ pub mod tests {
 
     /// asserts that not only are there 0 append vecs, but there is not even an entry in the storage map for 'slot'
     fn assert_no_storages_at_slot(db: &AccountsDb, slot: Slot) {
-        assert!(db.get_storages_for_slot(slot).is_none());
+        assert!(db.storage.get_slot_storage_entry(slot).is_none());
     }
 
     /// Test to make sure `clean_accounts()` works properly with the `last_full_snapshot_slot`
@@ -16016,12 +16010,7 @@ pub mod tests {
             } else {
                 assert!(db.dirty_stores.is_empty());
             }
-            assert_eq!(
-                1,
-                db.get_storages_for_slot(slot)
-                    .map(|storages| storages.len())
-                    .unwrap_or_default()
-            );
+            assert!(db.storage.get_slot_storage_entry(slot).is_some());
         }
     }
 
@@ -16818,12 +16807,9 @@ pub mod tests {
 
     fn get_all_accounts(db: &AccountsDb, slots: Range<Slot>) -> Vec<(Pubkey, AccountSharedData)> {
         slots
-            .clone()
             .filter_map(|slot| {
-                let storages = db.get_storages_for_slot(slot);
-                storages.map(|storages| {
-                    assert_eq!(storages.len(), 1, "slot: {slot}, slots: {slots:?}");
-                    let storage = storages.first().unwrap();
+                let storage = db.storage.get_slot_storage_entry(slot);
+                storage.map(|storage| {
                     storage
                         .accounts
                         .account_iter()
@@ -16922,7 +16908,10 @@ pub mod tests {
                 .unwrap()
                 .accounts
         ));
-        assert!(db.get_storages_for_slot(max_slot_inclusive).is_none());
+        assert!(db
+            .storage
+            .get_slot_storage_entry(max_slot_inclusive)
+            .is_none());
     }
 
     #[test]
@@ -16990,7 +16979,7 @@ pub mod tests {
         // this removes the storages entry completely from the hashmap for 'next_slot'.
         // Otherwise, we have a zero length vec in that hashmap
         db.handle_dropped_roots_for_ancient(dropped_roots);
-        assert!(db.get_storages_for_slot(next_slot).is_none());
+        assert!(db.storage.get_slot_storage_entry(next_slot).is_none());
 
         // include all the slots we put into the ancient append vec - they should contain nothing
         compare_all_accounts(
@@ -17003,7 +16992,7 @@ pub mod tests {
             &get_all_accounts(&db, ancient_slot..(ancient_slot + 1)),
         );
         // make sure there is only 1 ancient append vec at the ancient slot
-        assert_eq!(db.get_storages_for_slot(ancient_slot).unwrap().len(), 1);
+        assert!(db.storage.get_slot_storage_entry(ancient_slot).is_some());
         assert!(is_ancient(
             &db.storage
                 .get_slot_storage_entry(ancient_slot)
@@ -17011,7 +17000,7 @@ pub mod tests {
                 .accounts
         ));
         ((ancient_slot + 1)..=max_slot_inclusive)
-            .for_each(|slot| assert!(db.get_storages_for_slot(slot).is_none()));
+            .for_each(|slot| assert!(db.storage.get_slot_storage_entry(slot).is_none()));
     }
 
     #[test]
@@ -17063,11 +17052,11 @@ pub mod tests {
                 );
 
                 // normal slots should have been appended to the ancient append vec in the first slot
-                assert_eq!(1, db.get_storages_for_slot(ancient_slot).unwrap().len());
+                assert!(db.storage.get_slot_storage_entry(ancient_slot).is_some());
                 let ancient = db.get_storage_for_slot(ancient_slot).unwrap();
                 assert!(is_ancient(&ancient.accounts));
                 for slot in (ancient_slot + 1)..=max_slot_inclusive {
-                    assert!(db.get_storages_for_slot(slot).is_none());
+                    assert!(db.storage.get_slot_storage_entry(slot).is_none());
                 }
 
                 let GetUniqueAccountsResult {
@@ -17190,7 +17179,7 @@ pub mod tests {
         let created_accounts = db.get_unique_accounts_from_storage(&storage);
 
         db.combine_ancient_slots(vec![slot1], CAN_RANDOMLY_SHRINK_FALSE);
-        assert_eq!(1, db.get_storages_for_slot(slot1).unwrap().len());
+        assert!(db.storage.get_slot_storage_entry(slot1).is_some());
         let ancient = db.get_storage_for_slot(slot1).unwrap();
         assert!(is_ancient(&ancient.accounts));
         let after_store = db.get_storage_for_slot(slot1).unwrap();
