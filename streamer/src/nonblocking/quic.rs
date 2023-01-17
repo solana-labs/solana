@@ -138,7 +138,7 @@ pub async fn run_server(
             ));
             sleep(Duration::from_micros(WAIT_BETWEEN_NEW_CONNECTIONS_US)).await;
         } else {
-            info!("Timed out waiting for connection");
+            debug!("accept(): Timed out waiting for connection");
         }
     }
 }

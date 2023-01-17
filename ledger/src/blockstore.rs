@@ -5395,49 +5395,29 @@ pub mod tests {
 
     #[test]
     fn test_handle_chaining_missing_slots() {
+        solana_logger::setup();
         let ledger_path = get_tmp_ledger_path_auto_delete!();
         let blockstore = Blockstore::open(ledger_path.path()).unwrap();
 
         let num_slots = 30;
         let entries_per_slot = 5;
+        // Make a bunch of shreds and split by whether slot is even or odd
+        let (shreds, _) = make_many_slot_entries(0, num_slots, entries_per_slot);
+        let shreds_per_slot = shreds.len() as u64 / num_slots;
+        let (even_slots, odd_slots): (Vec<_>, Vec<_>) =
+            shreds.into_iter().partition(|shred| shred.slot() % 2 == 0);
 
-        // Separate every other slot into two separate vectors
-        let mut slots = vec![];
-        let mut missing_slots = vec![];
-        let mut shreds_per_slot = 2;
+        // Write the odd slot shreds
+        blockstore.insert_shreds(odd_slots, None, false).unwrap();
+
         for slot in 0..num_slots {
-            let parent_slot = {
-                if slot == 0 {
-                    0
-                } else {
-                    slot - 1
-                }
-            };
-            let (slot_shreds, _) = make_slot_entries(
-                slot,
-                parent_slot,
-                entries_per_slot,
-                true, // merkle_variant
-            );
-            shreds_per_slot = slot_shreds.len();
-
-            if slot % 2 == 1 {
-                slots.extend(slot_shreds);
-            } else {
-                missing_slots.extend(slot_shreds);
-            }
-        }
-
-        // Write the shreds for every other slot
-        blockstore.insert_shreds(slots, None, false).unwrap();
-
-        // Check metadata
-        for slot in 0..num_slots {
-            // If "i" is the index of a slot we just inserted, then next_slots should be empty
-            // for slot "i" because no slots chain to that slot, because slot i + 1 is missing.
-            // However, if it's a slot we haven't inserted, aka one of the gaps, then one of the
-            // slots we just inserted will chain to that gap, so next_slots for that orphan slot
-            // won't be empty, but the parent slot is unknown so should equal std::u64::MAX.
+            // The slots that were inserted (the odds) will ...
+            // - Know who their parent is (parent encoded in the shreds)
+            // - Have empty next_slots since next_slots would be evens
+            // The slots that were not inserted (the evens) will ...
+            // - Still have a meta since their child linked back to them
+            // - Have next_slots link to child because of the above
+            // - Have an unknown parent since no shreds to indicate
             let meta = blockstore.meta(slot).unwrap().unwrap();
             if slot % 2 == 0 {
                 assert_eq!(meta.next_slots, vec![slot + 1]);
@@ -5447,34 +5427,30 @@ pub mod tests {
                 assert_eq!(meta.parent_slot, Some(slot - 1));
             }
 
-            if slot == 0 {
-                assert!(meta.is_connected());
-            } else {
-                assert!(!meta.is_connected());
-            }
+            // Slot 0 is the only connected slot
+            assert!(!meta.is_connected() || meta.slot == 0);
         }
 
-        // Write the shreds for the other half of the slots that we didn't insert earlier
-        blockstore
-            .insert_shreds(missing_slots, None, false)
-            .unwrap();
+        // Write the even slot shreds that we did not earlier
+        blockstore.insert_shreds(even_slots, None, false).unwrap();
 
         for slot in 0..num_slots {
-            // Check that all the slots chain correctly once the missing slots
-            // have been filled
             let meta = blockstore.meta(slot).unwrap().unwrap();
+            // All slots except the last one should have a slot in next_slots
             if slot != num_slots - 1 {
                 assert_eq!(meta.next_slots, vec![slot + 1]);
             } else {
                 assert!(meta.next_slots.is_empty());
             }
-
+            // All slots should have the link back to their parent
             if slot == 0 {
                 assert_eq!(meta.parent_slot, Some(0));
             } else {
                 assert_eq!(meta.parent_slot, Some(slot - 1));
             }
-            assert_eq!(meta.last_index, Some(shreds_per_slot as u64 - 1));
+            // All inserted slots were full and should be connected
+            assert_eq!(meta.last_index, Some(shreds_per_slot - 1));
+            assert!(meta.is_full());
             assert!(meta.is_connected());
         }
     }
