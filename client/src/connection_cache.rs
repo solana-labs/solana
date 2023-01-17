@@ -1,3 +1,5 @@
+use crate::bidirectional_channel_handler::BidirectionalChannelHandler;
+
 use {
     crate::{
         nonblocking::{
@@ -6,7 +8,6 @@ use {
         },
         tpu_connection::{BlockingConnection, ClientStats},
     },
-    crossbeam_channel::Sender,
     indexmap::map::{Entry, IndexMap},
     rand::{thread_rng, Rng},
     solana_measure::measure::Measure,
@@ -14,7 +15,6 @@ use {
         pubkey::Pubkey, quic::QUIC_PORT_OFFSET, signature::Keypair, timing::AtomicInterval,
     },
     solana_streamer::{
-        bidirectional_channel::QuicReplyMessage,
         nonblocking::quic::{compute_max_allowed_uni_streams, ConnectionPeerType},
         streamer::StakedNodes,
         tls_certificates::new_self_signed_tls_certificate_chain,
@@ -61,7 +61,7 @@ pub struct ConnectionCacheStats {
     pub total_client_stats: ClientStats,
 
     // getting quic errors from leader
-    pub server_reply_channel: Option<Sender<QuicReplyMessage>>,
+    pub server_reply_channel: Option<BidirectionalChannelHandler>,
 }
 
 const CONNECTION_STAT_SUBMISSION_INTERVAL: u64 = 2000;
@@ -294,7 +294,7 @@ impl ConnectionCache {
 
     pub fn new_with_replies_from_tpu(
         connection_pool_size: usize,
-        reply_channel: Sender<QuicReplyMessage>,
+        reply_channel: BidirectionalChannelHandler,
     ) -> Self {
         let connection_pool_size = 1.max(connection_pool_size);
         Self {

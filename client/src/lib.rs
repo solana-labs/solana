@@ -30,6 +30,7 @@ pub mod tpu_connection;
 pub mod transaction_executor;
 pub mod udp_client;
 pub mod version_req;
+pub mod bidirectional_channel_handler;
 
 pub mod mock_sender_for_cli {
     /// Magic `SIGNATURE` value used by `solana-cli` unit tests.

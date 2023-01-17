@@ -1,11 +1,7 @@
 //! Simple nonblocking client that connects to a given UDP port with the QUIC protocol
 //! and provides an interface for sending transactions which is restricted by the
 //! server's flow control.
-
-use std::time::Instant;
-
-use crossbeam_channel::Sender;
-use solana_streamer::bidirectional_channel::QuicReplyMessage;
+use crate::bidirectional_channel_handler::BidirectionalChannelHandler;
 use {
     crate::{
         client_error::ClientErrorKind, connection_cache::ConnectionCacheStats,
@@ -192,6 +188,10 @@ impl QuicNewConnection {
         .await
         {
             if connecting_result.is_err() {
+                println!(
+                    "error while connecting is {} ",
+                    connecting_result.as_ref().err().unwrap()
+                );
                 stats.connection_errors.fetch_add(1, Ordering::Relaxed);
             }
             make_connection_measure.stop();
@@ -290,55 +290,19 @@ impl QuicClient {
         _tpu_address: SocketAddr,
         data: &[u8],
         connection: &NewConnection,
-        server_reply_channel: Option<Sender<QuicReplyMessage>>,
+        server_reply_channel: Option<BidirectionalChannelHandler>,
     ) -> Result<(), QuicError> {
-        if let Some(server_reply_channel) = server_reply_channel {
-            let (mut send_stream, mut recv_stream) = connection.connection.open_bi().await?;
+        let create_bichannel = match &server_reply_channel {
+            Some(x) => !x.is_serving(),
+            None => false,
+        };
+        if create_bichannel {
+            let (mut send_stream, recv_stream) = connection.connection.open_bi().await?;
 
             send_stream.write_all(data).await?;
             send_stream.finish().await?;
-
-            // create task to fetch errors from the leader
-            tokio::spawn(async move {
-                // wait for 1000 ms max
-                let mut timeout: u64 = 1000;
-                let mut start = Instant::now();
-                let mut buf: [u8; 256] = [0; 256];
-                let buf: &mut [u8] = &mut buf;
-                loop {
-                    if timeout == 0 {
-                        break;
-                    } else if let Ok(buf_size) =
-                        tokio::time::timeout(Duration::from_millis(timeout), recv_stream.read(buf))
-                            .await
-                    {
-                        match buf_size {
-                            Ok(buf_size) => {
-                                if let Some(buf_size) = buf_size {
-                                    let buffer = &buf[0..buf_size];
-                                    match bincode::deserialize::<QuicReplyMessage>(buffer) {
-                                        Ok(message) => {
-                                            let _ = server_reply_channel.send(message);
-                                        }
-                                        _ => {
-                                            // unformatted message
-                                            break;
-                                        }
-                                    }
-                                }
-                            }
-                            Err(_e) => {
-                                break;
-                            }
-                        }
-                        timeout =
-                            timeout.saturating_sub((Instant::now() - start).as_millis() as u64);
-                        start = Instant::now();
-                    } else {
-                        break;
-                    }
-                }
-            });
+            let server_reply_channel = server_reply_channel.unwrap();
+            server_reply_channel.start_serving(recv_stream);
         } else {
             let mut send_stream = connection.connection.open_uni().await?;
 

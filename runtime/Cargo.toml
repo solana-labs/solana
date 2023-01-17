@@ -55,6 +55,7 @@ solana-stake-program = { path = "../programs/stake", version = "=1.14.12" }
 solana-vote-program = { path = "../programs/vote", version = "=1.14.12" }
 solana-zk-token-proof-program = { path = "../programs/zk-token-proof", version = "=1.14.12" }
 solana-zk-token-sdk = { path = "../zk-token-sdk", version = "=1.14.12" }
+solana-streamer = { path = "../streamer", version = "=1.14.12" }
 strum = { version = "0.24", features = ["derive"] }
 strum_macros = "0.24"
 symlink = "0.1.0"

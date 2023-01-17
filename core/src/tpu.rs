@@ -184,7 +184,7 @@ impl Tpu {
             MAX_STAKED_CONNECTIONS.saturating_add(MAX_UNSTAKED_CONNECTIONS),
             0, // Prevent unstaked nodes from forwarding transactions
             stats,
-            bidirection_reply_service,
+            bidirection_reply_service.clone(),
         )
         .unwrap();
 
@@ -235,6 +235,7 @@ impl Tpu {
             log_messages_bytes_limit,
             connection_cache.clone(),
             bank_forks.clone(),
+            bidirection_reply_service.clone(),
         );
 
         let broadcast_stage = broadcast_type.new_broadcast_stage(
