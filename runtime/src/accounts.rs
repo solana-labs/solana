@@ -374,17 +374,17 @@ impl Accounts {
             })
             .collect::<Result<Vec<_>>>()?;
 
+        if !validated_fee_payer {
+            error_counters.account_not_found += 1;
+            return Err(TransactionError::AccountNotFound);
+        }
+
         // Appends the account_deps at the end of the accounts,
         // this way they can be accessed in a uniform way.
         // At places where only the accounts are needed,
         // the account_deps are truncated using e.g:
         // accounts.iter().take(message.account_keys.len())
         accounts.append(&mut account_deps);
-
-        if !validated_fee_payer {
-            error_counters.account_not_found += 1;
-            return Err(TransactionError::AccountNotFound);
-        }
 
         let program_indices = message
             .instructions()
