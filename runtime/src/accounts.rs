@@ -381,30 +381,30 @@ impl Accounts {
         // accounts.iter().take(message.account_keys.len())
         accounts.append(&mut account_deps);
 
-        if validated_fee_payer {
-            let program_indices = message
-                .instructions()
-                .iter()
-                .map(|instruction| {
-                    self.load_executable_accounts(
-                        ancestors,
-                        &mut accounts,
-                        instruction.program_id_index as IndexOfAccount,
-                        error_counters,
-                    )
-                })
-                .collect::<Result<Vec<Vec<IndexOfAccount>>>>()?;
-
-            Ok(LoadedTransaction {
-                accounts,
-                program_indices,
-                rent: tx_rent,
-                rent_debits,
-            })
-        } else {
+        if !validated_fee_payer {
             error_counters.account_not_found += 1;
-            Err(TransactionError::AccountNotFound)
+            return Err(TransactionError::AccountNotFound);
         }
+
+        let program_indices = message
+            .instructions()
+            .iter()
+            .map(|instruction| {
+                self.load_executable_accounts(
+                    ancestors,
+                    &mut accounts,
+                    instruction.program_id_index as IndexOfAccount,
+                    error_counters,
+                )
+            })
+            .collect::<Result<Vec<Vec<IndexOfAccount>>>>()?;
+
+        Ok(LoadedTransaction {
+            accounts,
+            program_indices,
+            rent: tx_rent,
+            rent_debits,
+        })
     }
 
     fn validate_fee_payer(
