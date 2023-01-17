@@ -32,6 +32,8 @@ pub struct ProcessShredsStats {
 pub struct ShredFetchStats {
     pub index_overrun: usize,
     pub shred_count: usize,
+    pub(crate) num_shreds_merkle_code: usize,
+    pub(crate) num_shreds_merkle_data: usize,
     pub ping_count: usize,
     pub ping_err_verify_count: usize,
     pub(crate) index_bad_deserialize: usize,
@@ -115,6 +117,8 @@ impl ShredFetchStats {
             name,
             ("index_overrun", self.index_overrun, i64),
             ("shred_count", self.shred_count, i64),
+            ("num_shreds_merkle_code", self.num_shreds_merkle_code, i64),
+            ("num_shreds_merkle_data", self.num_shreds_merkle_data, i64),
             ("ping_count", self.ping_count, i64),
             ("ping_err_verify_count", self.ping_err_verify_count, i64),
             ("slot_bad_deserialize", self.slot_bad_deserialize, i64),

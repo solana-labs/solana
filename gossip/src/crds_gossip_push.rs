@@ -41,7 +41,6 @@ use {
             atomic::{AtomicUsize, Ordering},
             Mutex, RwLock,
         },
-        time::Instant,
     },
 };
 
@@ -259,29 +258,14 @@ impl CrdsGossipPush {
             socket_addr_space,
         );
         // Check for nodes which have responded to ping messages.
-        let nodes: Vec<_> = {
-            let mut ping_cache = ping_cache.lock().unwrap();
-            let mut pingf = move || Ping::new_rand(&mut rng, self_keypair).ok();
-            let now = Instant::now();
-            nodes
-                .into_iter()
-                .filter(|node| {
-                    let (check, ping) = {
-                        let node = (node.id, node.gossip);
-                        ping_cache.check(now, node, &mut pingf)
-                    };
-                    if let Some(ping) = ping {
-                        pings.push((node.gossip, ping));
-                    }
-                    check
-                })
-                .collect()
-        };
-        let nodes = nodes.into_iter().map(|node| {
-            let stake = stakes.get(&node.id).copied().unwrap_or_default();
-            (stake, node)
-        });
-        let nodes = crds_gossip::dedup_gossip_addresses(nodes)
+        let nodes = crds_gossip::maybe_ping_gossip_addresses(
+            &mut rng,
+            nodes,
+            self_keypair,
+            ping_cache,
+            pings,
+        );
+        let nodes = crds_gossip::dedup_gossip_addresses(nodes, stakes)
             .into_values()
             .map(|(_stake, node)| node.id)
             .collect::<Vec<_>>();
@@ -353,7 +337,7 @@ mod tests {
     use {
         super::*,
         crate::{crds_value::CrdsData, socketaddr},
-        std::time::Duration,
+        std::time::{Duration, Instant},
     };
 
     fn new_ping_cache() -> PingCache {

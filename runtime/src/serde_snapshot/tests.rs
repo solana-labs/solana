@@ -3,7 +3,7 @@
 use {
     super::*,
     crate::{
-        account_storage::AccountStorageMap,
+        account_storage::{AccountStorageMap, AccountStorageReference},
         accounts::Accounts,
         accounts_db::{
             get_temp_accounts_paths, test_utils::create_test_accounts, AccountShrinkThreshold,
@@ -60,15 +60,13 @@ fn copy_append_vecs<P: AsRef<Path>>(
             num_accounts,
         );
         next_append_vec_id = next_append_vec_id.max(new_storage_entry.append_vec_id());
-        storage
-            .entry(new_storage_entry.slot())
-            .or_default()
-            .write()
-            .unwrap()
-            .insert(
-                new_storage_entry.append_vec_id(),
-                Arc::new(new_storage_entry),
-            );
+        storage.insert(
+            new_storage_entry.slot(),
+            AccountStorageReference {
+                id: new_storage_entry.append_vec_id(),
+                storage: Arc::new(new_storage_entry),
+            },
+        );
     }
 
     Ok(StorageAndNextAppendVecId {
