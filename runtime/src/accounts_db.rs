@@ -4144,13 +4144,6 @@ impl AccountsDb {
             .unwrap_or_default()
     }
 
-    #[cfg(test)]
-    fn get_storages_for_slot(&self, slot: Slot) -> Option<Vec<SnapshotStorageOne>> {
-        self.storage
-            .get_slot_storage_entry(slot)
-            .map(|storage| vec![storage])
-    }
-
     /// 'accounts' that exist in the current slot we are combining into a different ancient slot
     /// 'existing_ancient_pubkeys': pubkeys that exist currently in the ancient append vec slot
     /// returns the pubkeys that are in 'accounts' that are already in 'existing_ancient_pubkeys'
@@ -4190,10 +4183,10 @@ impl AccountsDb {
         );
     }
 
-    /// get the storages from 'slot' to squash
+    /// get the storage from 'slot' to squash
     /// or None if this slot should be skipped
     /// side effect could be updating 'current_ancient'
-    fn get_storages_to_move_to_ancient_append_vec(
+    fn get_storage_to_move_to_ancient_append_vec(
         &self,
         slot: Slot,
         current_ancient: &mut CurrentAncientAppendVec,
@@ -4290,7 +4283,7 @@ impl AccountsDb {
 
         let len = sorted_slots.len();
         for slot in sorted_slots {
-            let old_storage = match self.get_storages_to_move_to_ancient_append_vec(
+            let old_storage = match self.get_storage_to_move_to_ancient_append_vec(
                 slot,
                 &mut current_ancient,
                 can_randomly_shrink,
@@ -4440,7 +4433,7 @@ impl AccountsDb {
                 self.accounts_index
                     .clean_dead_slot(*slot, &mut AccountsIndexRootsStats::default());
                 self.bank_hashes.write().unwrap().remove(slot);
-                // all storages have been removed from this slot and recycled or dropped
+                // the storage has been removed from this slot and recycled or dropped
                 assert!(self.storage.remove(slot).is_none());
             });
         }
@@ -6815,8 +6808,8 @@ impl AccountsDb {
         }
     }
 
-    /// hash info about 'storages' into 'hasher'
-    /// return true iff storages are valid for loading from cache
+    /// hash info about 'storage' into 'hasher'
+    /// return true iff storage is valid for loading from cache
     fn hash_storage_info(
         hasher: &mut impl StdHasher,
         storage: Option<&SnapshotStorageOne>,
@@ -6895,16 +6888,16 @@ impl AccountsDb {
                     let is_first_scan_pass = bin_range.start == 0;
 
                     // calculate hash representing all storages in this chunk
-                    for (slot, sub_storages) in snapshot_storages.iter_range(&range_this_chunk) {
+                    for (slot, storage) in snapshot_storages.iter_range(&range_this_chunk) {
                         if is_first_scan_pass && slot < one_epoch_old {
-                            self.update_old_slot_stats(stats, sub_storages);
+                            self.update_old_slot_stats(stats, storage);
                         }
-                        if !Self::hash_storage_info(&mut hasher, sub_storages, slot) {
+                        if !Self::hash_storage_info(&mut hasher, storage, slot) {
                             load_from_cache = false;
                             break;
                         }
                     }
-                    // we have a hash value for all the storages in this slot
+                    // we have a hash value for the storages in this chunk
                     // so, build a file name:
                     let hash = hasher.finish();
                     let file_name = format!(
@@ -9181,6 +9174,12 @@ pub mod tests {
 
         fn get_storage_for_slot(&self, slot: Slot) -> Option<Arc<AccountStorageEntry>> {
             self.storage.get_slot_storage_entry(slot)
+        }
+
+        fn get_storages_for_slot(&self, slot: Slot) -> Option<Vec<SnapshotStorageOne>> {
+            self.storage
+                .get_slot_storage_entry(slot)
+                .map(|storage| vec![storage])
         }
     }
 
