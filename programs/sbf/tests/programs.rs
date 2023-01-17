@@ -1822,14 +1822,11 @@ fn test_program_sbf_invoke_in_same_tx_as_deployment() {
     )
     .unwrap();
 
-    // Deployment is invisible to top-level-instructions but visible to CPI instructions
-    for (invoke_instruction, expected) in [
-        (
-            invoke_instruction,
-            Err(TransactionError::ProgramAccountNotFound),
-        ),
-        (indirect_invoke_instruction, Ok(())),
-    ] {
+    // Deployment is invisible to both top-level-instructions and CPI instructions
+    for (index, invoke_instruction) in [invoke_instruction, indirect_invoke_instruction]
+        .into_iter()
+        .enumerate()
+    {
         let mut instructions = deployment_instructions.clone();
         instructions.push(invoke_instruction);
         let tx = Transaction::new(
@@ -1837,11 +1834,18 @@ fn test_program_sbf_invoke_in_same_tx_as_deployment() {
             Message::new(&instructions, Some(&mint_keypair.pubkey())),
             bank.last_blockhash(),
         );
-        let results = execute_transactions(&bank, vec![tx]);
-        if let Err(err) = expected {
-            assert_eq!(results[0].as_ref().unwrap_err(), &err);
+        if index == 0 {
+            let results = execute_transactions(&bank, vec![tx]);
+            assert_eq!(
+                results[0].as_ref().unwrap_err(),
+                &TransactionError::ProgramAccountNotFound,
+            );
         } else {
-            assert!(results[0].is_ok());
+            let (result, _, _) = process_transaction_and_record_inner(&bank, tx);
+            assert_eq!(
+                result.unwrap_err(),
+                TransactionError::InstructionError(2, InstructionError::InvalidAccountData),
+            );
         }
     }
 }
@@ -1887,6 +1891,17 @@ fn test_program_sbf_invoke_in_same_tx_as_redeployment() {
         "solana_sbf_rust_invoke_and_return",
     );
 
+    // Deploy panic program
+    let panic_program_keypair = Keypair::new();
+    load_upgradeable_program(
+        &bank_client,
+        &mint_keypair,
+        &buffer_keypair,
+        &panic_program_keypair,
+        &authority_keypair,
+        "solana_sbf_rust_panic",
+    );
+
     let invoke_instruction =
         Instruction::new_with_bytes(program_id, &[0], vec![AccountMeta::new(clock::id(), false)]);
     let indirect_invoke_instruction = Instruction::new_with_bytes(
@@ -1899,6 +1914,7 @@ fn test_program_sbf_invoke_in_same_tx_as_redeployment() {
     );
 
     // Prepare redeployment
+    let buffer_keypair = Keypair::new();
     load_upgradeable_buffer(
         &bank_client,
         &mint_keypair,
@@ -1913,7 +1929,7 @@ fn test_program_sbf_invoke_in_same_tx_as_redeployment() {
         &mint_keypair.pubkey(),
     );
 
-    // Redeployment is visible to both top-level-instructions and CPI instructions
+    // Redeployment causes programs to be unavailable to both top-level-instructions and CPI instructions
     for invoke_instruction in [invoke_instruction, indirect_invoke_instruction] {
         // Call upgradeable program
         let result =
@@ -1933,7 +1949,7 @@ fn test_program_sbf_invoke_in_same_tx_as_redeployment() {
         let (result, _, _) = process_transaction_and_record_inner(&bank, tx);
         assert_eq!(
             result.unwrap_err(),
-            TransactionError::InstructionError(1, InstructionError::ProgramFailedToComplete),
+            TransactionError::InstructionError(1, InstructionError::InvalidAccountData),
         );
     }
 }
