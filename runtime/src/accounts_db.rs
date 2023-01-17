@@ -83,7 +83,7 @@ use {
     std::{
         borrow::{Borrow, Cow},
         boxed::Box,
-        collections::{hash_map::Entry, BTreeSet, HashMap, HashSet},
+        collections::{BTreeSet, HashMap, HashSet},
         hash::{Hash as StdHash, Hasher as StdHasher},
         io::{Error as IoError, Result as IoResult},
         ops::{Range, RangeBounds},
@@ -3608,18 +3608,7 @@ impl AccountsDb {
         let mut stored_accounts: HashMap<Pubkey, StoredAccountMeta> = HashMap::new();
         let original_bytes = store.total_bytes();
         store.accounts.account_iter().for_each(|account| {
-            match stored_accounts.entry(*account.pubkey()) {
-                Entry::Occupied(mut occupied_entry) => {
-                    assert!(
-                        account.meta.write_version_obsolete
-                            > occupied_entry.get().meta.write_version_obsolete
-                    );
-                    occupied_entry.insert(account);
-                }
-                Entry::Vacant(vacant_entry) => {
-                    vacant_entry.insert(account);
-                }
-            }
+            stored_accounts.insert(*account.pubkey(), account);
         });
 
         // sort by pubkey to keep account index lookups close
@@ -8298,24 +8287,14 @@ impl AccountsDb {
             let this_version = stored_account.meta.write_version_obsolete;
             let pubkey = stored_account.pubkey();
             assert!(!self.is_filler_account(pubkey));
-            match accounts_map.entry(*pubkey) {
-                Entry::Vacant(entry) => {
-                    entry.insert(IndexAccountMapEntry {
-                        write_version: this_version,
-                        store_id: storage.append_vec_id(),
-                        stored_account,
-                    });
-                }
-                Entry::Occupied(mut entry) => {
-                    let occupied_version = entry.get().write_version;
-                    assert!(occupied_version < this_version);
-                    entry.insert(IndexAccountMapEntry {
-                        write_version: this_version,
-                        store_id: storage.append_vec_id(),
-                        stored_account,
-                    });
-                }
-            }
+            accounts_map.insert(
+                *pubkey,
+                IndexAccountMapEntry {
+                    write_version: this_version,
+                    store_id: storage.append_vec_id(),
+                    stored_account,
+                },
+            );
         });
         accounts_map
     }
