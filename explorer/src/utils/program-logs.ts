@@ -96,17 +96,19 @@ export function parseProgramLogs(
         const instructionLog = prettyLogs[prettyLogs.length - 1];
         instructionLog.failed = true;
 
-        let currText =`Program returned error: "${log.slice(log.indexOf(": ") + 2)}"`;
-        // failed to verify log of previous program so reset depth and print full log 
+        let currText = `Program returned error: "${log.slice(
+          log.indexOf(": ") + 2
+        )}"`;
+        // failed to verify log of previous program so reset depth and print full log
         if (log.startsWith("failed")) {
           depth++;
           currText = log.charAt(0).toUpperCase() + log.slice(1);
         }
-        
+
         instructionLog.logs.push({
           prefix: prefixBuilder(depth),
           style: "warning",
-          text: currText
+          text: currText,
         });
         depth--;
       } else {
@@ -135,7 +137,7 @@ export function parseProgramLogs(
             return `Program consumed: ${p1} ${p2}`;
           }
         );
-        
+
         // native program logs don't start with "Program log:"
         prettyLogs[prettyLogs.length - 1].logs.push({
           prefix: prefixBuilder(depth),
