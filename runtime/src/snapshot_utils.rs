@@ -3,7 +3,7 @@ use {
         account_storage::AccountStorageMap,
         accounts_db::{
             AccountShrinkThreshold, AccountStorageEntry, AccountsDbConfig, AtomicAppendVecId,
-            CalcAccountsHashDataSource, SnapshotStoragesOne,
+            CalcAccountsHashDataSource,
         },
         accounts_index::AccountSecondaryIndexes,
         accounts_update_notifier_interface::AccountsUpdateNotifier,
@@ -2181,7 +2181,7 @@ pub fn purge_old_bank_snapshots(bank_snapshots_dir: impl AsRef<Path>) {
 }
 
 /// Get the snapshot storages for this bank
-pub fn get_snapshot_storages(bank: &Bank) -> SnapshotStoragesOne {
+pub fn get_snapshot_storages(bank: &Bank) -> Vec<Arc<AccountStorageEntry>> {
     let mut measure_snapshot_storages = Measure::start("snapshot-storages");
     let snapshot_storages = bank.get_snapshot_storages(None);
     measure_snapshot_storages.stop();
@@ -2297,7 +2297,7 @@ pub fn package_and_archive_full_snapshot(
     bank_snapshots_dir: impl AsRef<Path>,
     full_snapshot_archives_dir: impl AsRef<Path>,
     incremental_snapshot_archives_dir: impl AsRef<Path>,
-    snapshot_storages: SnapshotStoragesOne,
+    snapshot_storages: Vec<Arc<AccountStorageEntry>>,
     archive_format: ArchiveFormat,
     snapshot_version: SnapshotVersion,
     maximum_full_snapshot_archives_to_retain: usize,
@@ -2349,7 +2349,7 @@ pub fn package_and_archive_incremental_snapshot(
     bank_snapshots_dir: impl AsRef<Path>,
     full_snapshot_archives_dir: impl AsRef<Path>,
     incremental_snapshot_archives_dir: impl AsRef<Path>,
-    snapshot_storages: SnapshotStoragesOne,
+    snapshot_storages: Vec<Arc<AccountStorageEntry>>,
     archive_format: ArchiveFormat,
     snapshot_version: SnapshotVersion,
     maximum_full_snapshot_archives_to_retain: usize,

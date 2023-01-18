@@ -600,9 +600,6 @@ impl<'a> MultiThreadProgress<'a> {
 /// An offset into the AccountsDb::storage vector
 pub type AtomicAppendVecId = AtomicU32;
 pub type AppendVecId = u32;
-pub type SnapshotStorages = Vec<Vec<Arc<AccountStorageEntry>>>;
-/// exactly 1 append vec per slot
-pub type SnapshotStoragesOne = Vec<Arc<AccountStorageEntry>>;
 
 type AccountSlots = HashMap<Pubkey, HashSet<Slot>>;
 type AppendVecOffsets = HashMap<AppendVecId, HashSet<usize>>;
@@ -8257,7 +8254,7 @@ impl AccountsDb {
         &self,
         requested_slots: impl RangeBounds<Slot> + Sync,
         ancestors: Option<&Ancestors>,
-    ) -> (SnapshotStoragesOne, Vec<Slot>) {
+    ) -> (Vec<Arc<AccountStorageEntry>>, Vec<Slot>) {
         let mut m = Measure::start("get slots");
         let mut slots_and_storages = self
             .storage
@@ -9556,7 +9553,10 @@ pub mod tests {
     fn sample_storages_and_account_in_slot(
         slot: Slot,
         accounts: &AccountsDb,
-    ) -> (SnapshotStoragesOne, Vec<CalculateHashIntermediate>) {
+    ) -> (
+        Vec<Arc<AccountStorageEntry>>,
+        Vec<CalculateHashIntermediate>,
+    ) {
         let pubkey0 = Pubkey::new(&[0u8; 32]);
         let pubkey127 = Pubkey::new(&[0x7fu8; 32]);
         let pubkey128 = Pubkey::new(&[0x80u8; 32]);
@@ -9618,7 +9618,10 @@ pub mod tests {
 
     fn sample_storages_and_accounts(
         accounts: &AccountsDb,
-    ) -> (SnapshotStoragesOne, Vec<CalculateHashIntermediate>) {
+    ) -> (
+        Vec<Arc<AccountStorageEntry>>,
+        Vec<CalculateHashIntermediate>,
+    ) {
         sample_storages_and_account_in_slot(1, accounts)
     }
 
@@ -9963,7 +9966,7 @@ pub mod tests {
         assert_eq!(result, (expected_accounts_hash, sum));
     }
 
-    fn sample_storage() -> (SnapshotStoragesOne, usize, Slot) {
+    fn sample_storage() -> (Vec<Arc<AccountStorageEntry>>, usize, Slot) {
         let (_temp_dirs, paths) = get_temp_accounts_paths(1).unwrap();
         let slot_expected: Slot = 0;
         let size: usize = 123;
@@ -10144,7 +10147,7 @@ pub mod tests {
     }
 
     fn append_sample_data_to_storage(
-        storages: &SnapshotStoragesOne,
+        storages: &[Arc<AccountStorageEntry>],
         pubkey: &Pubkey,
         write_version: StoredMetaWriteVersion,
     ) {
@@ -10157,7 +10160,7 @@ pub mod tests {
         write_version: StoredMetaWriteVersion,
         slot: Slot,
         pubkey: &Pubkey,
-    ) -> SnapshotStoragesOne {
+    ) -> Vec<Arc<AccountStorageEntry>> {
         sample_storage_with_entries_id(tf, write_version, slot, pubkey, 0)
     }
 
@@ -10167,7 +10170,7 @@ pub mod tests {
         slot: Slot,
         pubkey: &Pubkey,
         id: AppendVecId,
-    ) -> SnapshotStoragesOne {
+    ) -> Vec<Arc<AccountStorageEntry>> {
         let (_temp_dirs, paths) = get_temp_accounts_paths(1).unwrap();
         let size: usize = 123;
         let mut data = AccountStorageEntry::new(&paths[0], slot, id, size as u64);

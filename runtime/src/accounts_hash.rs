@@ -1,6 +1,6 @@
 use {
     crate::{
-        accounts_db::{SnapshotStoragesOne, PUBKEY_BINS_FOR_CALCULATING_HASHES},
+        accounts_db::{AccountStorageEntry, PUBKEY_BINS_FOR_CALCULATING_HASHES},
         ancestors::Ancestors,
         rent_collector::RentCollector,
     },
@@ -22,7 +22,7 @@ use {
         io::{BufWriter, Write},
         sync::{
             atomic::{AtomicU64, AtomicUsize, Ordering},
-            Mutex,
+            Arc, Mutex,
         },
     },
     tempfile::tempfile,
@@ -162,7 +162,7 @@ pub struct HashStats {
     pub count_ancient_scans: AtomicU64,
 }
 impl HashStats {
-    pub fn calc_storage_size_quartiles(&mut self, storages: &SnapshotStoragesOne) {
+    pub fn calc_storage_size_quartiles(&mut self, storages: &[Arc<AccountStorageEntry>]) {
         let mut sum = 0;
         let mut sizes = storages
             .iter()
