@@ -1089,17 +1089,17 @@ fn load_bank_forks(
             "Default accounts path is switched aligning with Blockstore's secondary access: {:?}",
             non_primary_accounts_path
         );
-
-        if non_primary_accounts_path.exists() {
-            info!("Clearing {:?}", non_primary_accounts_path);
-            let mut measure_time = Measure::start("clean_non_primary_accounts_paths");
-            move_and_async_delete_path(&non_primary_accounts_path);
-            measure_time.stop();
-            info!("done. {}", measure_time);
-        }
-
         vec![non_primary_accounts_path]
     };
+    info!("Cleaning contents of account paths: {:?}", account_paths);
+    let mut measure = Measure::start("clean_accounts_paths");
+    account_paths.iter().for_each(|path| {
+        if path.exists() {
+            move_and_async_delete_path(path);
+        }
+    });
+    measure.stop();
+    info!("done. {}", measure);
 
     let mut accounts_update_notifier = Option::<AccountsUpdateNotifier>::default();
     if arg_matches.is_present("geyser_plugin_config") {

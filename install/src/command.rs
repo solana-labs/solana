@@ -596,7 +596,9 @@ fn release_channel_version_url(release_channel: &str) -> String {
 }
 
 fn print_update_manifest(update_manifest: &UpdateManifest) {
-    let when = Local.timestamp(update_manifest.timestamp_secs as i64, 0);
+    let when = Local
+        .timestamp_opt(update_manifest.timestamp_secs as i64, 0)
+        .unwrap();
     println_name_value(&format!("{BULLET}release date:"), &when.to_string());
     println_name_value(
         &format!("{BULLET}download URL:"),
