@@ -74,13 +74,13 @@ struct KeypairChunks<'a> {
 }
 
 impl<'a> KeypairChunks<'a> {
-    /// Split input vector of keypairs into two sets of chunks of given size
+    /// Split input slice of keypairs into two sets of chunks of given size
     fn new(keypairs: &'a [Keypair], chunk_size: usize) -> Self {
         // Use `chunk_size` as the number of conflict groups per chunk so that each destination key is unique
         Self::new_with_conflict_groups(keypairs, chunk_size, chunk_size)
     }
 
-    /// Split input vector of keypairs into two sets of chunks of given size. Each chunk
+    /// Split input slice of keypairs into two sets of chunks of given size. Each chunk
     /// has a set of source keys and a set of destination keys. There will be
     /// `num_conflict_groups_per_chunk` unique destination keys per chunk, so that the
     /// destination keys may conflict with each other.
