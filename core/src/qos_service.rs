@@ -51,7 +51,7 @@ pub struct QosService {
     // metrics reporting runs on a private thread
     reporting_thread: Option<JoinHandle<()>>,
     running_flag: Arc<AtomicBool>,
-    pub bidirection_reply_service: QuicBidirectionalReplyService,
+    bidirection_reply_service: QuicBidirectionalReplyService,
 }
 
 impl Drop for QosService {
@@ -359,6 +359,18 @@ impl QosService {
             }
             thread::sleep(Duration::from_millis(100));
         }
+    }
+
+    pub fn bidirection_reply_service(&self) -> QuicBidirectionalReplyService {
+        self.bidirection_reply_service.clone()
+    }
+
+    pub fn new_for_test() -> Self {
+        Self::new(
+            Arc::new(RwLock::new(CostModel::default())),
+            1,
+            QuicBidirectionalReplyService::new(),
+        )
     }
 }
 

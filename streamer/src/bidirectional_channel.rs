@@ -5,16 +5,18 @@ use quinn::SendStream;
 use serde_derive::{Deserialize, Serialize};
 use solana_perf::packet::{Packet, PacketBatch};
 use solana_sdk::signature::Signature;
-use std::{
-    collections::HashMap,
-    net::SocketAddr,
-    sync::{Arc, RwLock},
-};
+use std::{collections::HashMap, net::SocketAddr, sync::Arc};
+use tokio::sync::RwLock;
 
 #[derive(Serialize, Deserialize)]
 pub struct QuicReplyMessage {
     pub transaction_signature: Signature,
     pub message: String,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct QuicReplyMessageBatch {
+    pub messages: Vec<QuicReplyMessage>,
 }
 
 pub struct QuicBidirectionalData {
@@ -64,13 +66,19 @@ impl QuicBidirectionalReplyService {
         });
     }
 
-    pub fn add_stream(&self, quic_address: &SocketAddr, send_stream: SendStream) {
-        let (sender_channel, reciever_channel) = crossbeam_channel::bounded(256);
-        let data = self.data.write();
-        let sender_id = if let Ok(mut data) = data {
+    // When we get a bidirectional stream then we add the send stream to the service.
+    // This will create a crossbeam channel to dispatch messages and a task which will listen to the crossbeam channel and will send the replies back throught send stream.
+    // When you add again a new send_stream channel for the same socket address then we will remove the previous one from the socket address map,
+    // This will then destroy the sender of the crossbeam channel putting the reciever_channel in error state starting the clean up sequence for the old channel.
+    // So when you add again a new channel for same socket, we will no longer get the messages for old channel.
+    pub async fn add_stream(&self, quic_address: SocketAddr, send_stream: SendStream) {
+        let (sender_channel, reciever_channel) = crossbeam_channel::unbounded();
+        let mut data = self.data.write().await;
+        let sender_id = {
             let data = &mut *data;
-            if let Some(x) = data.sender_socket_address_map.get(quic_address) {
-                // remove existing channel
+            if let Some(x) = data.sender_socket_address_map.get(&quic_address) {
+                // remove existing channel and replace with new one
+                // removing this channel should also destroy the p
                 data.sender_ids_map.remove(x);
             };
             let current_id = data.last_id;
@@ -85,13 +93,7 @@ impl QuicBidirectionalReplyService {
             data.sender_socket_address_map
                 .insert(quic_address.clone(), current_id);
             current_id
-        } else {
-            0
         };
-
-        if sender_id == 0 {
-            return;
-        }
 
         let subscriptions = self.data.clone();
         // start listnening to stream specific cross beam channel
@@ -101,66 +103,85 @@ impl QuicBidirectionalReplyService {
                 let reciever_channel = reciever_channel.clone();
                 let recv_task = async move { reciever_channel.recv() };
                 let send_stream_close_task = async { send_stream.stopped() };
-                tokio::select! {
+                let mut message_batch = QuicReplyMessageBatch { messages: vec![] };
+
+                let finish = tokio::select! {
                     task = recv_task => {
                         match task {
                             Ok(message) => {
-                                let serialized_message = serialize(&message).unwrap();
-                                let _ =send_stream.write(serialized_message.as_slice()).await;
+                                message_batch.messages.push(message);
+                                false
                             },
                             Err(_) => {
-                                // disconnect
-                                let _ = send_stream.finish().await;
-                                break;
+                                true
                             }
                         }
                     },
                     _task = send_stream_close_task => {
-                        // disconnect
+                        true
+                    }
+                };
+                // limiting t
+                if finish || message_batch.messages.len() >= 16 {
+                    let serialized_message = serialize(&message_batch).unwrap();
+                    let res = send_stream.write_all(serialized_message.as_slice()).await;
+                    if let Err(error) = res {
+                        info!(
+                            "Bidirectional writing stopped for socket {} because {}",
+                            quic_address,
+                            error.to_string()
+                        );
+                        break;
+                    }
+                    if finish {
                         let _ = send_stream.finish().await;
                         break;
                     }
-                };
+                }
             }
 
             // remove all data belonging to sender_id
-            let write_lock = subscriptions.write();
-            if let Ok(mut sub_data) = write_lock {
-                let subscriptions = &mut *sub_data;
-                subscriptions.sender_ids_map.remove(&sender_id);
-                subscriptions
-                    .transaction_signature_map
-                    .retain(|_, v| *v != sender_id);
-                subscriptions
-                    .sender_socket_address_map
-                    .retain(|_, v| *v != sender_id);
-            }
+            let mut sub_data = subscriptions.write().await;
+            let subscriptions = &mut *sub_data;
+            subscriptions.sender_ids_map.remove(&sender_id);
+            subscriptions
+                .transaction_signature_map
+                .retain(|_, v| *v != sender_id);
+            subscriptions
+                .sender_socket_address_map
+                .retain(|_, v| *v != sender_id);
         });
     }
 
-    pub fn add_packets(&self, quic_address: &SocketAddr, packets: &PacketBatch) {
+    pub async fn add_packets(&self, quic_address: &SocketAddr, packets: &PacketBatch) {
         // check if socket is registered;
         let id = {
-            let data = self.data.read();
-            if let Ok(data) = data {
-                data.sender_socket_address_map
-                    .get(quic_address)
-                    .map_or(0, |x| *x)
-            } else {
-                0
-            }
+            let data = self.data.read().await;
+            data.sender_socket_address_map
+                .get(quic_address)
+                .map_or(0, |x| *x)
         };
+
+        // this means that there is not bidirectional connection, and packets came from unidirectional socket
         if id == 0 {
             return;
         }
-        let data = self.data.write();
-        if let Ok(mut data) = data {
-            let data = &mut *data;
-            packets.iter().for_each(|packet| {
-                let signature = get_signature_from_packet(packet);
-                signature.map(|x| data.transaction_signature_map.insert(x, id));
-            });
-        }
+        let mut data = self.data.write().await;
+        let data = &mut *data;
+        packets.iter().for_each(|packet| {
+            let meta = &packet.meta;
+            if meta.discard()
+                || meta.forwarded()
+                || meta.is_simple_vote_tx()
+                || meta.is_tracer_packet()
+                || meta.repair()
+            {
+                return;
+            }
+
+            let signature = get_signature_from_packet(packet);
+            signature.map(|x| data.transaction_signature_map.insert(x, id));
+        });
     }
 
     // this method will start bidirectional relay service
@@ -176,28 +197,26 @@ impl QuicBidirectionalReplyService {
                 let bidirectional_message = service_reciever.recv();
                 match bidirectional_message {
                     Ok(bidirectional_message) => {
-                        let data = subscription_data.read();
+                        let data = subscription_data.read().await;
 
-                        if let Ok(data) = data {
-                            let send_stream = {
-                                // if the message has transaction signature then find stream from transaction signature
-                                // else find stream by packet hash
-                                let send_stream_id = data
-                                    .transaction_signature_map
-                                    .get(&bidirectional_message.transaction_signature)
-                                    .map(|x| *x);
-                                send_stream_id.and_then(|x| data.sender_ids_map.get(&x))
-                            };
-                            if let Some(send_stream) = send_stream {
-                                match send_stream.send(bidirectional_message) {
-                                    Err(e) => {
-                                        warn!(
-                                            "Error sending a bidirectional message {}",
-                                            e.to_string()
-                                        );
-                                    }
-                                    _ => {}
+                        let send_stream = {
+                            // if the message has transaction signature then find stream from transaction signature
+                            // else find stream by packet hash
+                            let send_stream_id = data
+                                .transaction_signature_map
+                                .get(&bidirectional_message.transaction_signature)
+                                .map(|x| *x);
+                            send_stream_id.and_then(|x| data.sender_ids_map.get(&x))
+                        };
+                        if let Some(send_stream) = send_stream {
+                            match send_stream.send(bidirectional_message) {
+                                Err(e) => {
+                                    warn!(
+                                        "Error sending a bidirectional message {}",
+                                        e.to_string()
+                                    );
                                 }
+                                _ => {}
                             }
                         }
                     }
@@ -285,7 +304,9 @@ pub mod test {
         bidirectional_replay_service.serve();
         let socket = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 20000);
         let batch = create_dummy_packet_batch(5);
-        bidirectional_replay_service.add_packets(&socket, &batch);
+        bidirectional_replay_service
+            .add_packets(&socket, &batch)
+            .await;
     }
 
     fn setup_quic_server(
@@ -359,9 +380,10 @@ pub mod test {
 
         let bidirectional_reply_handler = BidirectionalChannelHandler::new();
 
-        let (_, exit, reciever, server_address, _stream_stats) =
+        let (_thread_handle, exit, reciever, server_address, _stream_stats) =
             setup_quic_server(bidirectional_replay_service.clone());
 
+        tokio::time::sleep(std::time::Duration::from_secs(5)).await;
         let nb_packets = 5;
 
         let conn = Arc::new(make_bidirectional_client_endpoint(&server_address).await);
@@ -373,23 +395,35 @@ pub mod test {
         send_packet_batch(conn, &batch, bidirectional_reply_handler.clone()).await;
 
         // replying to each packet with a message
-        for _i in 1..nb_packets {
+        loop {
+            let mut i = 0;
             let packets = reciever.recv().unwrap();
             for packet in packets.iter() {
                 let sig = get_signature_from_packet(&packet).unwrap();
                 bidirectional_replay_service
                     .send_message(&sig, TransactionError::InvalidRentPayingAccount.to_string());
+                i += 1;
+            }
+            if i >= nb_packets {
+                break;
             }
         }
 
-        for _i in 1..nb_packets {
-            let message = bidirectional_reply_handler.reciever.recv().unwrap();
-            // check if
-            assert!(signatures.contains(&message.transaction_signature));
-            assert_eq!(
-                message.message,
-                TransactionError::InvalidRentPayingAccount.to_string()
-            );
+        loop {
+            let mut i = 0;
+            let messages = bidirectional_reply_handler.reciever.recv().unwrap();
+            for message in messages.messages {
+                // check if transaction signature is present
+                assert!(signatures.contains(&message.transaction_signature));
+                assert_eq!(
+                    message.message,
+                    TransactionError::InvalidRentPayingAccount.to_string()
+                );
+                i += 1;
+            }
+            if i >= nb_packets {
+                break;
+            }
         }
         exit.store(true, std::sync::atomic::Ordering::Relaxed);
     }
