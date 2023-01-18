@@ -1,7 +1,7 @@
 use {
     crate::spl_convert::FromOtherSolana,
     clap::{crate_description, crate_name, App, Arg, ArgMatches},
-    solana_clap_utils::input_validators::{is_url, is_url_or_moniker},
+    solana_clap_utils::input_validators::{is_url, is_url_or_moniker, is_within_range},
     solana_cli_config::{ConfigInput, CONFIG_FILE},
     solana_sdk::{
         fee_calculator::FeeRateGovernor,
@@ -348,6 +348,7 @@ pub fn build_args<'a>(version: &'_ str) -> App<'a, '_> {
             Arg::with_name("num_conflict_groups")
                 .long("num-conflict-groups")
                 .takes_value(true)
+                .validator(|arg| is_within_range(arg, 1, usize::MAX - 1))
                 .help("The number of unique destination accounts per transactions 'chunk'. Lower values will result in more transaction conflicts.")
         )
 }
