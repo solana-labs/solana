@@ -601,7 +601,6 @@ impl<'a> MultiThreadProgress<'a> {
 pub type AtomicAppendVecId = AtomicU32;
 pub type AppendVecId = u32;
 pub type SnapshotStorageOne = Arc<AccountStorageEntry>;
-pub type SnapshotStorages = Vec<Vec<SnapshotStorageOne>>;
 /// exactly 1 append vec per slot
 pub type SnapshotStoragesOne = Vec<SnapshotStorageOne>;
 
