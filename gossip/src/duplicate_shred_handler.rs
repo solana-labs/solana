@@ -4,6 +4,7 @@ use {
         duplicate_shred_listener::DuplicateShredHandlerTrait,
     },
     log::*,
+    lru::LruCache,
     solana_ledger::{blockstore::Blockstore, leader_schedule_cache::LeaderScheduleCache},
     solana_sdk::{clock::Slot, pubkey::Pubkey},
     std::{
@@ -23,6 +24,8 @@ const ALLOWED_SLOTS_PER_PUBKEY: usize = 5;
 // To prevent an attacker inflating this map, we discard any proof which is too
 // far away in the future compared to root.
 const MAX_SLOT_DISTANCE_TO_ROOT: Slot = 100;
+// We limit the pubkey for each slot to be 100 for now.
+const MAX_PUBKEY_PER_SLOT: usize = 100;
 
 struct ProofChunkMap {
     num_chunks: u8,
@@ -42,7 +45,7 @@ impl ProofChunkMap {
 
 // Group received chunks by peer pubkey, when we receive an invalid proof,
 // set the value to Frozen so we don't accept future proofs with the same key.
-type SlotChunkMap = HashMap<Pubkey, ProofChunkMap>;
+type SlotChunkMap = LruCache<Pubkey, ProofChunkMap>;
 
 enum SlotStatus {
     // When a valid proof has been inserted, we change the entry for that slot to Frozen
@@ -136,14 +139,14 @@ impl DuplicateShredHandler {
                 return false;
             }
         }
-        // Also skip frozen slots or slots with a newer proof than me.
+        // Also skip frozen slots or slots with an older proof than me.
         match self.chunk_map.get(&slot) {
             Some(SlotStatus::Frozen) => {
                 return false;
             }
             Some(SlotStatus::UnfinishedProof(slot_map)) => {
-                if let Some(proof_chunkmap) = slot_map.get(&data.from) {
-                    if proof_chunkmap.wallclock > data.wallclock {
+                if let Some(proof_chunkmap) = slot_map.peek(&data.from) {
+                    if proof_chunkmap.wallclock < data.wallclock {
                         return false;
                     }
                 }
@@ -164,37 +167,42 @@ impl DuplicateShredHandler {
         if let SlotStatus::UnfinishedProof(slot_chunk_map) = self
             .chunk_map
             .entry(data.slot)
-            .or_insert_with(|| SlotStatus::UnfinishedProof(HashMap::new()))
+            .or_insert_with(|| SlotStatus::UnfinishedProof(LruCache::new(MAX_PUBKEY_PER_SLOT)))
         {
-            let proof_chunk_map = slot_chunk_map
-                .entry(data.from)
-                .or_insert_with(|| ProofChunkMap::new(data.num_chunks(), data.wallclock));
-            if proof_chunk_map.wallclock < data.wallclock {
-                proof_chunk_map.num_chunks = data.num_chunks();
-                proof_chunk_map.wallclock = data.wallclock;
-                proof_chunk_map.chunks.clear();
+            if !slot_chunk_map.contains(&data.from) {
+                slot_chunk_map.put(
+                    data.from,
+                    ProofChunkMap::new(data.num_chunks(), data.wallclock),
+                );
             }
-            let num_chunks = data.num_chunks();
-            let chunk_index = data.chunk_index();
-            let slot = data.slot;
-            let from = data.from;
-            if num_chunks == proof_chunk_map.num_chunks
-                && chunk_index < num_chunks
-                && !proof_chunk_map.chunks.contains_key(&chunk_index)
-            {
-                proof_chunk_map.chunks.insert(chunk_index, data);
-                if proof_chunk_map.chunks.len() >= proof_chunk_map.num_chunks.into() {
-                    let mut result: Vec<DuplicateShred> = Vec::new();
-                    for i in 0..num_chunks {
-                        result.push(proof_chunk_map.chunks.remove(&i).unwrap())
-                    }
-                    return Ok(Some(result));
+            if let Some(mut proof_chunk_map) = slot_chunk_map.get_mut(&data.from) {
+                if proof_chunk_map.wallclock > data.wallclock {
+                    proof_chunk_map.num_chunks = data.num_chunks();
+                    proof_chunk_map.wallclock = data.wallclock;
+                    proof_chunk_map.chunks.clear();
                 }
+                let num_chunks = data.num_chunks();
+                let chunk_index = data.chunk_index();
+                let slot = data.slot;
+                let from = data.from;
+                if num_chunks == proof_chunk_map.num_chunks
+                    && chunk_index < num_chunks
+                    && !proof_chunk_map.chunks.contains_key(&chunk_index)
+                {
+                    proof_chunk_map.chunks.insert(chunk_index, data);
+                    if proof_chunk_map.chunks.len() >= proof_chunk_map.num_chunks.into() {
+                        let mut result: Vec<DuplicateShred> = Vec::new();
+                        for i in 0..num_chunks {
+                            result.push(proof_chunk_map.chunks.remove(&i).unwrap())
+                        }
+                        return Ok(Some(result));
+                    }
+                }
+                self.validator_pending_proof_map
+                    .entry(from)
+                    .or_default()
+                    .insert(slot);
             }
-            self.validator_pending_proof_map
-                .entry(from)
-                .or_default()
-                .insert(slot);
         }
         Ok(None)
     }
@@ -390,7 +398,7 @@ mod tests {
         }
         assert!(!blockstore.has_duplicate_shreds_in_slot(future_slot));
 
-        // Send in two proofs, only the proof with later wallclock will be accepted.
+        // Send in two proofs, only the proof with older wallclock will be accepted.
         let chunks = create_duplicate_proof(
             my_keypair.clone(),
             1,
@@ -405,10 +413,10 @@ mod tests {
             DUPLICATE_SHRED_MAX_PAYLOAD_SIZE,
         )
         .unwrap();
-        for (chunk1, chunk2) in chunks.zip(chunks1) {
+        for (chunk1, chunk2) in chunks1.zip(chunks) {
             duplicate_shred_handler.handle(chunk1);
             // The first proof will never succeed because it's replaced in chunkmap by next one
-            // with newer wallclock.
+            // with older wallclock.
             assert!(!blockstore.has_duplicate_shreds_in_slot(1));
             duplicate_shred_handler.handle(chunk2);
         }
