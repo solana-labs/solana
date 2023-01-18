@@ -44,8 +44,8 @@ use {
             TransactionLoadResult,
         },
         accounts_db::{
-            AccountShrinkThreshold, AccountsDbConfig, CalcAccountsHashDataSource,
-            IncludeSlotInHash, SnapshotStoragesOne, ACCOUNTS_DB_CONFIG_FOR_BENCHMARKS,
+            AccountShrinkThreshold, AccountStorageEntry, AccountsDbConfig,
+            CalcAccountsHashDataSource, IncludeSlotInHash, ACCOUNTS_DB_CONFIG_FOR_BENCHMARKS,
             ACCOUNTS_DB_CONFIG_FOR_TESTING,
         },
         accounts_hash::AccountsHash,
@@ -6828,7 +6828,7 @@ impl Bank {
     /// Get this bank's storages to use for snapshots.
     ///
     /// If a base slot is provided, return only the storages that are *higher* than this slot.
-    pub fn get_snapshot_storages(&self, base_slot: Option<Slot>) -> SnapshotStoragesOne {
+    pub fn get_snapshot_storages(&self, base_slot: Option<Slot>) -> Vec<Arc<AccountStorageEntry>> {
         // if a base slot is provided, request storages starting at the slot *after*
         let start_slot = base_slot.map_or(0, |slot| slot.saturating_add(1));
         // we want to *include* the storage at our slot
