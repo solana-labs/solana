@@ -94,8 +94,9 @@ impl<'a> KeypairChunks<'a> {
         for chunk in keypairs.chunks_exact(2 * chunk_size) {
             source_keypair_chunks.push(chunk[..chunk_size].iter().collect());
             dest_keypair_chunks.push(
-                (0..chunk_size)
-                    .map(|idx| &chunk[chunk_size + (idx % num_conflict_groups_per_chunk)])
+                std::iter::repeat(&chunk[chunk_size..chunk_size + num_conflict_groups_per_chunk])
+                    .flatten()
+                    .take(chunk_size)
                     .collect(),
             );
         }
