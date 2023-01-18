@@ -197,9 +197,10 @@ fn bench_banking(bencher: &mut Bencher, tx_type: TransactionType) {
     // during the benchmark
     genesis_config.ticks_per_slot = 10_000;
 
-    let (verified_sender, verified_receiver) = unbounded();
+    let (non_vote_sender, non_vote_receiver) = unbounded();
     let (tpu_vote_sender, tpu_vote_receiver) = unbounded();
-    let (vote_sender, vote_receiver) = unbounded();
+    let (gossip_vote_sender, gossip_vote_receiver) = unbounded();
+
     let mut bank = Bank::new_for_benches(&genesis_config);
     // Allow arbitrary transaction processing time for the purposes of this bench
     bank.ns_per_slot = u128::MAX;
@@ -279,9 +280,9 @@ fn bench_banking(bencher: &mut Bencher, tx_type: TransactionType) {
         let _banking_stage = BankingStage::new(
             &cluster_info,
             &poh_recorder,
-            verified_receiver,
+            non_vote_receiver,
             tpu_vote_receiver,
-            vote_receiver,
+            gossip_vote_receiver,
             None,
             s,
             None,
@@ -305,7 +306,7 @@ fn bench_banking(bencher: &mut Bencher, tx_type: TransactionType) {
                 tpu_vote_sender
                     .send((vote_packets[start..start + chunk_len].to_vec(), None))
                     .unwrap();
-                vote_sender
+                gossip_vote_sender
                     .send((vote_packets[start..start + chunk_len].to_vec(), None))
                     .unwrap();
             }
@@ -320,7 +321,7 @@ fn bench_banking(bencher: &mut Bencher, tx_type: TransactionType) {
                 for xv in v {
                     sent += xv.len();
                 }
-                verified_sender.send((v.to_vec(), None)).unwrap();
+                non_vote_sender.send((v.to_vec(), None)).unwrap();
             }
 
             check_txs(&signal_receiver2, txes / CHUNKS);
