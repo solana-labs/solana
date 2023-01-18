@@ -539,7 +539,7 @@ impl AccountsBackgroundService {
             .spawn(move || {
                 let mut stats = StatsManager::new();
                 let mut last_snapshot_end_time = None;
-                let mut last_slot_snapshot_storages: Option<SnapshotStorages> = None;
+                let mut _last_snapshot_storages: Option<SnapshotStorages> = None;
                 loop {
                     if exit.load(Ordering::Relaxed) {
                         break;
@@ -617,7 +617,8 @@ impl AccountsBackgroundService {
                             last_cleaned_block_height = snapshot_block_height;
                             // Update the option, so the older one is released, causing the release of
                             // its reference counts of the appendvecs
-                            let _ret = last_slot_snapshot_storages.replace(snapshot_storages);
+                            // Prefix with _ because of the compiler warning - value assigned never read
+                            _last_snapshot_storages = Some(snapshot_storages);
                         } else {
                             exit.store(true, Ordering::Relaxed);
                             return;

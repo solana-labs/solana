@@ -29,7 +29,7 @@ use {
     solana_rpc_client_api::config::RpcLeaderScheduleConfig,
     solana_runtime::{
         accounts_db::{
-            AccountShrinkThreshold, AccountsDb, AccountsDbConfig, CreateAncientStorage,
+            setup_accounts_run_and_snapshot_paths, AccountShrinkThreshold, AccountsDb, AccountsDbConfig, CreateAncientStorage,
             FillerAccountsConfig,
         },
         accounts_index::{

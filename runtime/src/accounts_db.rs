@@ -85,7 +85,9 @@ use {
     std::{
         borrow::{Borrow, Cow},
         boxed::Box,
-        collections::{BTreeSet, HashMap, HashSet},
+        collections::{hash_map::Entry, BTreeSet, HashMap, HashSet},
+        convert::TryFrom,
+        fs,
         hash::{Hash as StdHash, Hasher as StdHasher},
         io::{Error as IoError, Result as IoResult},
         ops::{Range, RangeBounds},
@@ -1175,6 +1177,18 @@ impl AccountStorageEntry {
     }
 }
 
+/// To allow generating a bank snapshot directory with full state information, we need to
+/// hardlink account appendvec files from the runtime operation directory to a snapshot
+/// hardlink directory.  This is to create the run/ and snapshot sub directories for an
+/// account_path provided by the user.  These two sub directories are on the same file
+/// system partition to allow hard-linking.
+pub fn setup_accounts_run_and_snapshot_paths<P: AsRef<Path>>(path: P) -> IoResult<PathBuf> {
+    let run_path = path.as_ref().join("run");
+    let snapshot_path = path.as_ref().join("snapshot");
+    fs::create_dir_all(&run_path)?;
+    fs::create_dir_all(snapshot_path)?;
+    Ok(run_path)
+}
 pub fn get_temp_accounts_paths(count: u32) -> IoResult<(Vec<TempDir>, Vec<PathBuf>)> {
     let temp_dirs: IoResult<Vec<TempDir>> = (0..count).map(|_| TempDir::new()).collect();
     let temp_dirs = temp_dirs?;
