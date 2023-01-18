@@ -469,14 +469,10 @@ impl ServeRepair {
         let my_id = identity_keypair.pubkey();
         let cluster_type = root_bank.cluster_type();
 
-        let max_buffered_packets = if cluster_type != ClusterType::MainnetBeta {
-            if self.repair_whitelist.read().unwrap().len() > 0 {
-                4 * MAX_REQUESTS_PER_ITERATION
-            } else {
-                2 * MAX_REQUESTS_PER_ITERATION
-            }
+        let max_buffered_packets = if self.repair_whitelist.read().unwrap().len() > 0 {
+            4 * MAX_REQUESTS_PER_ITERATION
         } else {
-            MAX_REQUESTS_PER_ITERATION
+            2 * MAX_REQUESTS_PER_ITERATION
         };
 
         let mut dropped_requests = 0;
