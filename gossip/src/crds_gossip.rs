@@ -332,6 +332,51 @@ impl CrdsGossip {
     }
 }
 
+// Returns active and valid cluster nodes to gossip with.
+pub(crate) fn get_gossip_nodes<R: Rng>(
+    rng: &mut R,
+    now: u64,
+    pubkey: &Pubkey, // This node.
+    // By default, should only push to or pull from gossip nodes with the same
+    // shred-version. Except for spy nodes (shred_version == 0u16) which can
+    // pull from any node.
+    verify_shred_version: impl Fn(/*shred_version:*/ u16) -> bool,
+    crds: &RwLock<Crds>,
+    gossip_validators: Option<&HashSet<Pubkey>>,
+    stakes: &HashMap<Pubkey, u64>,
+    socket_addr_space: &SocketAddrSpace,
+) -> Vec<ContactInfo> {
+    // Exclude nodes which have not been active for this long.
+    const ACTIVE_TIMEOUT: Duration = Duration::from_secs(60);
+    let active_cutoff = now.saturating_sub(ACTIVE_TIMEOUT.as_millis() as u64);
+    let crds = crds.read().unwrap();
+    crds.get_nodes()
+        .filter_map(|value| {
+            let node = value.value.contact_info().unwrap();
+            // Exclude nodes which have not been active recently.
+            if value.local_timestamp < active_cutoff {
+                // In order to mitigate eclipse attack, for staked nodes
+                // continue retrying periodically.
+                let stake = stakes.get(&node.id).copied().unwrap_or_default();
+                if stake == 0u64 || !rng.gen_ratio(1, 16) {
+                    return None;
+                }
+            }
+            Some(node)
+        })
+        .filter(|node| {
+            &node.id != pubkey
+                && verify_shred_version(node.shred_version)
+                && ContactInfo::is_valid_address(&node.gossip, socket_addr_space)
+                && match gossip_validators {
+                    Some(nodes) => nodes.contains(&node.id),
+                    None => true,
+                }
+        })
+        .cloned()
+        .collect()
+}
+
 // Dedups gossip addresses, keeping only the one with the highest stake.
 pub(crate) fn dedup_gossip_addresses(
     nodes: impl IntoIterator<Item = ContactInfo>,
