@@ -19,13 +19,13 @@ impl PacketReceiver {
     /// Receive incoming packets, push into unprocessed buffer with packet indexes
     pub fn receive_and_buffer_packets(
         packet_deserializer: &mut PacketDeserializer,
-        recv_timeout: Duration,
         id: u32,
         unprocessed_transaction_storage: &mut UnprocessedTransactionStorage,
         banking_stage_stats: &mut BankingStageStats,
         tracer_packet_stats: &mut TracerPacketStats,
         slot_metrics_tracker: &mut LeaderSlotMetricsTracker,
     ) -> Result<(), RecvTimeoutError> {
+        let recv_timeout = Self::get_receive_timeout(unprocessed_transaction_storage);
         let mut recv_time = Measure::start("receive_and_buffer_packets_recv");
         let ReceivePacketResults {
             deserialized_packets,
@@ -76,6 +76,22 @@ impl PacketReceiver {
             .current_buffered_packets_count
             .swap(unprocessed_transaction_storage.len(), Ordering::Relaxed);
         Ok(())
+    }
+
+    fn get_receive_timeout(
+        unprocessed_transaction_storage: &UnprocessedTransactionStorage,
+    ) -> Duration {
+        // Gossip thread will almost always not wait because the transaction storage will most likely not be empty
+        if !unprocessed_transaction_storage.is_empty() {
+            // If there are buffered packets, run the equivalent of try_recv to try reading more
+            // packets. This prevents starving BankingStage::consume_buffered_packets due to
+            // buffered_packet_batches containing transactions that exceed the cost model for
+            // the current bank.
+            Duration::from_millis(0)
+        } else {
+            // Default wait time
+            Duration::from_millis(100)
+        }
     }
 
     fn push_unprocessed(
