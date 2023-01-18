@@ -495,9 +495,19 @@ impl CumulativeOffsets {
     }
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct AccountsHasher {
     pub filler_account_suffix: Option<Pubkey>,
+    pub zero_lamport_accounts: ZeroLamportAccounts,
+}
+
+impl Default for AccountsHasher {
+    fn default() -> Self {
+        Self {
+            filler_account_suffix: None,
+            zero_lamport_accounts: ZeroLamportAccounts::Excluded,
+        }
+    }
 }
 
 impl AccountsHasher {
@@ -862,7 +872,7 @@ impl AccountsHasher {
     /// Vec, with one entry per bin
     ///  for each entry, Vec<Hash> in pubkey order
     /// If return Vec<AccountHashesFile> was flattened, it would be all hashes, in pubkey order.
-    fn de_dup_and_eliminate_zeros<'a>(
+    fn de_dup_accounts<'a>(
         &self,
         sorted_data_by_pubkey: &'a [SortedDataByPubkey<'a>],
         stats: &mut HashStats,
@@ -947,7 +957,7 @@ impl AccountsHasher {
 
     // go through: [..][pubkey_bin][..] and return hashes and lamport sum
     //   slot groups^                ^accounts found in a slot group, sorted by pubkey, higher slot, write_version
-    // 1. eliminate zero lamport accounts
+    // 1. handle zero lamport accounts
     // 2. pick the highest slot or (slot = and highest version) of each pubkey
     // 3. produce this output:
     //   a. AccountHashesFile: individual account hashes in pubkey order
@@ -1021,15 +1031,26 @@ impl AccountsHasher {
                 &mut first_item_to_pubkey_division,
             );
 
-            // add lamports, get hash as long as the lamports are > 0
-            if item.lamports != 0
-                && (!filler_accounts_enabled || !self.is_filler_account(&item.pubkey))
-            {
-                overall_sum = Self::checked_cast_for_capitalization(
-                    item.lamports as u128 + overall_sum as u128,
-                );
-                hashes.write(&item.hash);
+            // add lamports and get hash
+            if item.lamports != 0 {
+                // do not include filler accounts in the hash
+                if !(filler_accounts_enabled && self.is_filler_account(&item.pubkey)) {
+                    overall_sum = Self::checked_cast_for_capitalization(
+                        item.lamports as u128 + overall_sum as u128,
+                    );
+                    hashes.write(&item.hash);
+                }
+            } else {
+                // if lamports == 0, check if they should be included
+                if self.zero_lamport_accounts == ZeroLamportAccounts::Included {
+                    // For incremental accounts hash, the hash of a zero lamport account is
+                    // the hash of its pubkey
+                    let hash = blake3::hash(bytemuck::bytes_of(&item.pubkey));
+                    let hash = Hash::new_from_array(hash.into());
+                    hashes.write(&hash);
+                }
             }
+
             if !duplicate_pubkey_indexes.is_empty() {
                 // skip past duplicate keys in earlier slots
                 // reverse this list because get_item can remove first_items[*i] when *i is exhausted
@@ -1066,7 +1087,7 @@ impl AccountsHasher {
         data_sections_by_pubkey: Vec<SortedDataByPubkey<'_>>,
         mut stats: &mut HashStats,
     ) -> (Hash, u64) {
-        let (hashes, total_lamports) = self.de_dup_and_eliminate_zeros(
+        let (hashes, total_lamports) = self.de_dup_accounts(
             &data_sections_by_pubkey,
             stats,
             PUBKEY_BINS_FOR_CALCULATING_HASHES,
@@ -1088,7 +1109,14 @@ impl AccountsHasher {
     }
 }
 
-/// Hash of all the accounts
+/// How should zero-lamport accounts be treated by the accounts hasher?
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+pub enum ZeroLamportAccounts {
+    Excluded,
+    Included,
+}
+
+/// Hash of accounts
 #[derive(Debug, Default, Copy, Clone, Eq, PartialEq, Serialize, Deserialize, AbiExample)]
 pub struct AccountsHash(pub Hash);
 
@@ -1291,7 +1319,7 @@ pub mod tests {
 
         let vec = vec![vec![], vec![]];
         let (hashes, lamports) =
-            accounts_hash.de_dup_and_eliminate_zeros(&vec, &mut HashStats::default(), one_range());
+            accounts_hash.de_dup_accounts(&vec, &mut HashStats::default(), one_range());
         assert_eq!(
             vec![Hash::default(); 0],
             get_vec_vec(hashes)
@@ -1302,7 +1330,7 @@ pub mod tests {
         assert_eq!(lamports, 0);
         let vec = vec![];
         let (hashes, lamports) =
-            accounts_hash.de_dup_and_eliminate_zeros(&vec, &mut HashStats::default(), zero_range());
+            accounts_hash.de_dup_accounts(&vec, &mut HashStats::default(), zero_range());
         let empty: Vec<Vec<Hash>> = Vec::default();
         assert_eq!(empty, get_vec_vec(hashes));
         assert_eq!(lamports, 0);
@@ -1399,25 +1427,16 @@ pub mod tests {
                     let (hashes3, lamports3, _) = hash.de_dup_accounts_in_parallel(&slice3, 0);
                     let vec = slice.to_vec();
                     let slice4 = convert_to_slice2(&vec);
-                    let (hashes4, lamports4) = hash.de_dup_and_eliminate_zeros(
-                        &slice4,
-                        &mut HashStats::default(),
-                        end - start,
-                    );
+                    let (hashes4, lamports4) =
+                        hash.de_dup_accounts(&slice4, &mut HashStats::default(), end - start);
                     let vec = slice.to_vec();
                     let slice5 = convert_to_slice2(&vec);
-                    let (hashes5, lamports5) = hash.de_dup_and_eliminate_zeros(
-                        &slice5,
-                        &mut HashStats::default(),
-                        end - start,
-                    );
+                    let (hashes5, lamports5) =
+                        hash.de_dup_accounts(&slice5, &mut HashStats::default(), end - start);
                     let vec = slice.to_vec();
                     let slice5 = convert_to_slice2(&vec);
-                    let (hashes6, lamports6) = hash.de_dup_and_eliminate_zeros(
-                        &slice5,
-                        &mut HashStats::default(),
-                        end - start,
-                    );
+                    let (hashes6, lamports6) =
+                        hash.de_dup_accounts(&slice5, &mut HashStats::default(), end - start);
 
                     let hashes2 = get_vec(hashes2);
                     let hashes3 = get_vec(hashes3);
@@ -1936,7 +1955,7 @@ pub mod tests {
                 Pubkey::new_unique(),
             )],
         ];
-        AccountsHasher::default().de_dup_and_eliminate_zeros(
+        AccountsHasher::default().de_dup_accounts(
             &[convert_to_slice(&input)],
             &mut HashStats::default(),
             2, // accounts above are in 2 groups

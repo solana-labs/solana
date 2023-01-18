@@ -19,4 +19,4 @@ cargo_audit_ignores=(
   # https://github.com/solana-labs/solana/issues/29586
   --ignore RUSTSEC-2023-0001
 )
-scripts/cargo-for-all-lock-files.sh stable audit "${cargo_audit_ignores[@]}"
+scripts/cargo-for-all-lock-files.sh audit "${cargo_audit_ignores[@]}"
