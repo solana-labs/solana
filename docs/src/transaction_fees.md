@@ -65,7 +65,7 @@ Since each transaction may require a different amount of computational resources
 
 The execution of each instruction within a transaction consumes a different number of _compute units_. After the maximum number of _compute units_ has been consumed (aka compute budget exhaustion), the runtime will halt the transaction and return an error. This results in a failed transaction.
 
-> **Learn more:** compute units and the [Compute Budget](./developing/programming-model/runtime#compute-budget) in the Runtime and [requesting a fee estimate](./developing/clients/jsonrpc-api.md#getfeeformessage) from the RPC.
+> **Learn more:** compute units and the [Compute Budget](./developing/programming-model/runtime#compute-budget) in the Runtime and [requesting a fee estimate](../api/http#getfeeformessage) from the RPC.
 
 ## Prioritization fee
 
