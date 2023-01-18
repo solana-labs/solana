@@ -27,7 +27,11 @@ export function AnchorAccountCard({ account }: { account: Account }) {
       );
       if (accountDefTmp) {
         accountDef = accountDefTmp;
-        decodedAccountData = coder.decode(accountDef.name, rawData);
+        try {
+          decodedAccountData = coder.decode(accountDef.name, rawData);
+        } catch (err) {
+          console.log(err);
+        }
       }
     }
 
