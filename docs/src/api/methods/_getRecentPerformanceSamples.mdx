@@ -1,0 +1,89 @@
+import {
+  DocBlock,
+  DocSideBySide,
+  CodeParams,
+  Parameter,
+  Field,
+  Values,
+  CodeSnippets,
+} from "../../../components/CodeDocBlock";
+
+<DocBlock>
+
+## getRecentPerformanceSamples
+
+Returns a list of recent performance samples, in reverse slot order. Performance samples are taken every 60 seconds and
+include the number of transactions and slots that occur in a given time window.
+
+<DocSideBySide>
+<CodeParams>
+
+### Parameters:
+
+<Parameter name="limit" type={"usize"} optional={true}> 
+number of samples to return (maximum 720)
+
+</Parameter>
+
+### Result:
+
+An array of `RpcPerfSample<object>` with the following fields:
+
+- `slot: <u64>` - Slot in which sample was taken at
+- `numTransactions: <u64>` - Number of transactions in sample
+- `numSlots: <u64>` - Number of slots in sample
+- `samplePeriodSecs: <u16>` - Number of seconds in a sample window
+
+</CodeParams>
+
+<CodeSnippets>
+
+### Code sample:
+
+```bash
+curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
+  {
+    "jsonrpc":"2.0", "id":1,
+    "method": "getRecentPerformanceSamples",
+    "params": [4]}
+'
+```
+
+### Response:
+
+```json
+{
+  "jsonrpc": "2.0",
+  "result": [
+    {
+      "numSlots": 126,
+      "numTransactions": 126,
+      "samplePeriodSecs": 60,
+      "slot": 348125
+    },
+    {
+      "numSlots": 126,
+      "numTransactions": 126,
+      "samplePeriodSecs": 60,
+      "slot": 347999
+    },
+    {
+      "numSlots": 125,
+      "numTransactions": 125,
+      "samplePeriodSecs": 60,
+      "slot": 347873
+    },
+    {
+      "numSlots": 125,
+      "numTransactions": 125,
+      "samplePeriodSecs": 60,
+      "slot": 347748
+    }
+  ],
+  "id": 1
+}
+```
+
+</CodeSnippets>
+</DocSideBySide>
+</DocBlock>

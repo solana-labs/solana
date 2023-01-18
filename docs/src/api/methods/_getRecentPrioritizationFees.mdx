@@ -1,0 +1,94 @@
+import {
+  DocBlock,
+  DocSideBySide,
+  CodeParams,
+  Parameter,
+  Field,
+  Values,
+  CodeSnippets,
+} from "../../../components/CodeDocBlock";
+
+<DocBlock>
+
+## getRecentPrioritizationFees
+
+Returns a list of minimum prioritization fees from recent blocks.
+
+:::info
+Currently, a node's prioritization-fee cache stores data from up to 150 blocks.
+:::
+
+<DocSideBySide>
+<CodeParams>
+
+### Parameters:
+
+<Parameter type={"array"} optional={true}>
+
+An array of Account addresses, as base-58 encoded strings
+
+:::note
+If this parameter is provided, the response will reflect the minimum prioritization fee to land a transaction locking all of the provided accounts as writable.
+:::
+
+</Parameter>
+
+### Result:
+
+An array of `RpcPrioritizationFee<object>` with the following fields:
+
+- `slot: <u64>` - Slot in which minimum fee was observed
+- `prioritizationFee: <u64>` - Minimum fee paid for a successfully landed transaction
+
+</CodeParams>
+
+<CodeSnippets>
+
+### Code sample:
+
+```bash
+curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
+  {
+    "jsonrpc":"2.0", "id":1,
+    "method": "getRecentPrioritizationFees",
+    "params": [
+      ["CxELquR1gPP8wHe33gZ4QxqGB3sZ9RSwsJ2KshVewkFY"]
+    ]
+  }
+'
+```
+
+### Response:
+
+```json
+{
+  "jsonrpc": "2.0",
+  "result": [
+    {
+      "slot": 348125,
+      "prioritizationFee": 0
+    },
+    {
+      "slot": 348126,
+      "prioritizationFee": 1000
+    },
+    {
+      "slot": 348127,
+      "prioritizationFee": 500
+    },
+    {
+      "slot": 348128,
+      "prioritizationFee": 0
+    },
+    {
+      "slot": 348129,
+      "prioritizationFee": 1234
+    }
+  ],
+  "id": 1
+}
+```
+
+</CodeSnippets>
+</DocSideBySide>
+</DocBlock>
