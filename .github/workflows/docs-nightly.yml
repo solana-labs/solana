@@ -1,0 +1,67 @@
+name: docs-nightly
+
+on:
+  schedule:
+    - cron: "0 14 * * *"
+
+jobs:
+  branch_info:
+    outputs:
+      edge: ${{ steps.check.outputs.edge }}
+      beta: ${{ steps.check.outputs.beta }}
+    runs-on: ubuntu-20.04
+    steps:
+      - uses: actions/checkout@v3
+      - name: check
+        id: check
+        shell: bash
+        run: |
+          eval "$(ci/channel-info.sh)"
+          echo edge="$EDGE_CHANNEL" >> $GITHUB_OUTPUT
+          echo beta="$BETA_CHANNEL" >> $GITHUB_OUTPUT
+
+  edge:
+    runs-on: ubuntu-20.04
+    needs:
+      - branch_info
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          ref: ${{ needs.branch_info.outputs.edge }}
+
+      - name: Setup Node
+        uses: actions/setup-node@v3
+        with:
+          node-version: 16
+
+      - name: Build
+        working-directory: docs
+        run: |
+          npm install
+          ./build.sh
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+
+  beta:
+    runs-on: ubuntu-20.04
+    needs:
+      - branch_info
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          ref: ${{ needs.branch_info.outputs.beta }}
+
+      - name: Setup Node
+        uses: actions/setup-node@v3
+        with:
+          node-version: 16
+
+      - name: Build
+        working-directory: docs
+        run: |
+          npm install
+          ./build.sh
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
