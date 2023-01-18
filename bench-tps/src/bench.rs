@@ -1190,8 +1190,8 @@ mod tests {
     fn test_bench_tps_key_chunks_new() {
         let num_keypairs = 16;
         let chunk_size = 4;
-        let keypairs = (0..num_keypairs)
-            .map(|_| Keypair::new())
+        let keypairs = std::iter::repeat_with(Keypair::new)
+            .take(num_keypairs)
             .collect::<Vec<_>>();
 
         let chunks = KeypairChunks::new(&keypairs, chunk_size);
@@ -1218,8 +1218,8 @@ mod tests {
         let num_keypairs = 16;
         let chunk_size = 4;
         let num_conflict_groups = 2;
-        let keypairs = (0..num_keypairs)
-            .map(|_| Keypair::new())
+        let keypairs = std::iter::repeat_with(Keypair::new)
+            .take(num_keypairs)
             .collect::<Vec<_>>();
 
         let chunks =
