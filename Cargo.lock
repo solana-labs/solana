@@ -2560,6 +2560,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "lazy-st"
+version = "0.2.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b428d1a595e7ea6e853401f52e452c7afc281a2335b6115525e1a3002aa3a4f6"
+
+[[package]]
 name = "lazy_static"
 version = "1.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5683,6 +5689,7 @@ dependencies = [
  "bs58",
  "clap 3.1.8",
  "dirs-next",
+ "lazy-st",
  "num_cpus",
  "solana-clap-v3-utils",
  "solana-cli-config",

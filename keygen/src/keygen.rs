@@ -2,6 +2,7 @@
 use {
     bip39::{Language, Mnemonic, MnemonicType, Seed},
     clap::{crate_description, crate_name, Arg, ArgMatches, Command},
+    lazy_st::lazy,
     solana_clap_v3_utils::{
         input_parsers::STDOUT_OUTFILE_TOKEN,
         input_validators::{is_parsable, is_prompt_signer_source},
@@ -44,6 +45,7 @@ struct GrindMatch {
     starts: String,
     ends: String,
     count: AtomicU64,
+    starts_bytes: Vec<Vec<u8>>,
 }
 
 const WORD_COUNT_ARG: ArgConstant<'static> = ArgConstant {
@@ -285,6 +287,67 @@ fn grind_parse_args(
     starts_and_ends_with_args: HashSet<String>,
     num_threads: usize,
 ) -> Vec<GrindMatch> {
+    let starts_to_bytes = |starts: &str, ignore_case: bool| -> Vec<Vec<u8>> {
+        let mut all_starts = HashSet::<String>::new();
+        if !ignore_case {
+            all_starts.insert(starts.to_string());
+        } else {
+            let starts_lower = starts.to_lowercase().chars().collect::<Vec<_>>();
+            let starts_upper = starts.to_uppercase().chars().collect::<Vec<_>>();
+            let bitmask_len = starts_lower
+                .iter()
+                .filter(|&&c| !"0123456789oil".contains(c))
+                .count();
+            for b in 0..2u64.pow(bitmask_len as u32) {
+                let bitmask = format!("{:01$b}", b, bitmask_len)
+                    .chars()
+                    .into_iter()
+                    .map(|c| c == '1')
+                    .collect::<Vec<_>>();
+                let mut result = String::new();
+                let mut bi = 0;
+                for i in 0..starts.len() {
+                    let lower = starts_lower[i];
+                    result.push(if lower == 'l' {
+                        'L'
+                    } else if "0123456789oi".contains(lower) {
+                        lower
+                    } else {
+                        bi += 1;
+                        if bitmask[bi - 1] {
+                            starts_upper[i]
+                        } else {
+                            lower
+                        }
+                    });
+                }
+                all_starts.insert(result);
+            }
+        };
+        let append_tail_to_bytes = |head: &String, tail: char| -> Vec<u8> {
+            let mut tailed = head.clone();
+            while bs58::decode(&tailed).into_vec().unwrap().len() < 32 {
+                tailed.push(tail);
+            }
+            bs58::decode(tailed).into_vec().unwrap()
+        };
+        let same_start = |a: Vec<u8>, b: Vec<u8>| -> Vec<u8> {
+            for i in 0..31 {
+                if a[i] != b[i] {
+                    return a[0..i].to_vec();
+                }
+            }
+            a
+        };
+        all_starts
+            .iter()
+            .map(|starts| {
+                let starts_111 = append_tail_to_bytes(starts, '1');
+                let starts_zzz = append_tail_to_bytes(starts, 'z');
+                same_start(starts_111, starts_zzz)
+            })
+            .collect()
+    };
     let mut grind_matches = Vec::<GrindMatch>::new();
     for sw in starts_with_args {
         let args: Vec<&str> = sw.split(':').collect();
@@ -296,6 +359,7 @@ fn grind_parse_args(
             },
             ends: "".to_string(),
             count: AtomicU64::new(args[1].parse::<u64>().unwrap()),
+            starts_bytes: starts_to_bytes(args[0], ignore_case),
         });
     }
     for ew in ends_with_args {
@@ -308,6 +372,7 @@ fn grind_parse_args(
                 args[0].to_string()
             },
             count: AtomicU64::new(args[1].parse::<u64>().unwrap()),
+            starts_bytes: [].to_vec(),
         });
     }
     for swew in starts_and_ends_with_args {
@@ -324,6 +389,7 @@ fn grind_parse_args(
                 args[1].to_string()
             },
             count: AtomicU64::new(args[2].parse::<u64>().unwrap()),
+            starts_bytes: starts_to_bytes(args[0], ignore_case),
         });
     }
     grind_print_info(&grind_matches, num_threads);
@@ -566,6 +632,15 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     do_main(&matches).map_err(|err| DisplayError::new_as_boxed(err).into())
 }
 
+fn pubkey_to_address(pubkey: Pubkey, ignore_case: bool) -> String {
+    let address = bs58::encode(pubkey).into_string();
+    if ignore_case {
+        address.to_lowercase()
+    } else {
+        address
+    }
+}
+
 fn do_main(matches: &ArgMatches) -> Result<(), Box<dyn error::Error>> {
     let config = if let Some(config_file) = matches.value_of("config_file") {
         Config::load(config_file).unwrap_or_default()
@@ -770,10 +845,11 @@ fn do_main(matches: &ArgMatches) -> Result<(), Box<dyn error::Error>> {
                         } else {
                             (Keypair::new(), "".to_string())
                         };
-                        let mut pubkey = bs58::encode(keypair.pubkey()).into_string();
-                        if ignore_case {
-                            pubkey = pubkey.to_lowercase();
-                        }
+
+                        let pubkey = keypair.pubkey();
+                        let pubkey_bytes = pubkey.to_bytes();
+                        let pubkey = lazy!(pubkey_to_address(pubkey, ignore_case));
+
                         let mut total_matches_found = 0;
                         for i in 0..grind_matches_thread_safe.len() {
                             if grind_matches_thread_safe[i].count.load(Ordering::Relaxed) == 0 {
@@ -782,12 +858,14 @@ fn do_main(matches: &ArgMatches) -> Result<(), Box<dyn error::Error>> {
                             }
                             if (!grind_matches_thread_safe[i].starts.is_empty()
                                 && grind_matches_thread_safe[i].ends.is_empty()
+                                && grind_matches_thread_safe[i].starts_bytes.iter().any(|starts_bytes| *starts_bytes == pubkey_bytes[0..starts_bytes.len()])
                                 && pubkey.starts_with(&grind_matches_thread_safe[i].starts))
                                 || (grind_matches_thread_safe[i].starts.is_empty()
                                     && !grind_matches_thread_safe[i].ends.is_empty()
                                     && pubkey.ends_with(&grind_matches_thread_safe[i].ends))
                                 || (!grind_matches_thread_safe[i].starts.is_empty()
                                     && !grind_matches_thread_safe[i].ends.is_empty()
+                                    && grind_matches_thread_safe[i].starts_bytes.iter().any(|starts_bytes| *starts_bytes == pubkey_bytes[0..starts_bytes.len()])
                                     && pubkey.starts_with(&grind_matches_thread_safe[i].starts)
                                     && pubkey.ends_with(&grind_matches_thread_safe[i].ends))
                             {

@@ -13,6 +13,7 @@ edition = "2021"
 bs58 = "0.4.0"
 clap = { version = "3.1.5", features = ["cargo"] }
 dirs-next = "2.0.0"
+lazy-st = "0.2.2"
 num_cpus = "1.13.1"
 solana-clap-v3-utils = { path = "../clap-v3-utils", version = "=1.16.0" }
 solana-cli-config = { path = "../cli-config", version = "=1.16.0" }
