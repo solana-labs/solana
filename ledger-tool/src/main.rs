@@ -516,13 +516,13 @@ fn graph_forks(bank_forks: &BankForks, config: &GraphConfig) -> String {
             let vote_state = vote_state.as_ref().unwrap_or(&default_vote_state);
             if let Some(last_vote) = vote_state.votes.iter().last() {
                 let entry = last_votes.entry(vote_state.node_pubkey).or_insert((
-                    last_vote.slot,
+                    last_vote.slot(),
                     vote_state.clone(),
                     *stake,
                     total_stake,
                 ));
-                if entry.0 < last_vote.slot {
-                    *entry = (last_vote.slot, vote_state.clone(), *stake, total_stake);
+                if entry.0 < last_vote.slot() {
+                    *entry = (last_vote.slot(), vote_state.clone(), *stake, total_stake);
                 }
             }
         }
@@ -558,7 +558,7 @@ fn graph_forks(bank_forks: &BankForks, config: &GraphConfig) -> String {
                 if let Some(last_vote) = vote_state.votes.iter().last() {
                     let validator_votes = all_votes.entry(vote_state.node_pubkey).or_default();
                     validator_votes
-                        .entry(last_vote.slot)
+                        .entry(last_vote.slot())
                         .or_insert_with(|| vote_state.clone());
                 }
             }
@@ -662,7 +662,8 @@ fn graph_forks(bank_forks: &BankForks, config: &GraphConfig) -> String {
                             .iter()
                             .map(|vote| format!(
                                 "slot {} (conf={})",
-                                vote.slot, vote.confirmation_count
+                                vote.slot(),
+                                vote.confirmation_count()
                             ))
                             .collect::<Vec<_>>()
                             .join("\n")
@@ -673,7 +674,7 @@ fn graph_forks(bank_forks: &BankForks, config: &GraphConfig) -> String {
                         vote_state
                             .votes
                             .back()
-                            .map(|vote| vote.slot.to_string())
+                            .map(|vote| vote.slot().to_string())
                             .unwrap_or_else(|| "none".to_string())
                     )
                 };
@@ -721,7 +722,7 @@ fn graph_forks(bank_forks: &BankForks, config: &GraphConfig) -> String {
                     vote_state
                         .votes
                         .iter()
-                        .map(|vote| format!("slot {} (conf={})", vote.slot, vote.confirmation_count))
+                        .map(|vote| format!("slot {} (conf={})", vote.slot(), vote.confirmation_count()))
                         .collect::<Vec<_>>()
                         .join("\n")
                 ));
