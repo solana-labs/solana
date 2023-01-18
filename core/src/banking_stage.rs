@@ -2034,7 +2034,7 @@ mod tests {
                 create_test_recorder(&bank, &blockstore, None, None);
             let cluster_info = new_test_cluster_info(Node::new_localhost().info);
             let cluster_info = Arc::new(cluster_info);
-            let (replay_vote_sender, _repaly_vote_receiver) = unbounded();
+            let (replay_vote_sender, _replay_vote_receiver) = unbounded();
 
             let banking_stage = BankingStage::new(
                 &cluster_info,
@@ -2087,7 +2087,7 @@ mod tests {
             let cluster_info = new_test_cluster_info(Node::new_localhost().info);
             let cluster_info = Arc::new(cluster_info);
             let (verified_gossip_vote_sender, verified_gossip_vote_receiver) = unbounded();
-            let (replay_vote_sender, _repaly_vote_receiver) = unbounded();
+            let (replay_vote_sender, _replay_vote_receiver) = unbounded();
 
             let banking_stage = BankingStage::new(
                 &cluster_info,
@@ -2165,7 +2165,7 @@ mod tests {
                 create_test_recorder(&bank, &blockstore, Some(poh_config), None);
             let cluster_info = new_test_cluster_info(Node::new_localhost().info);
             let cluster_info = Arc::new(cluster_info);
-            let (replay_vote_sender, _repaly_vote_receiver) = unbounded();
+            let (replay_vote_sender, _replay_vote_receiver) = unbounded();
 
             let banking_stage = BankingStage::new(
                 &cluster_info,
@@ -2300,7 +2300,7 @@ mod tests {
         let (tpu_vote_sender, tpu_vote_receiver) = unbounded();
         let ledger_path = get_tmp_ledger_path_auto_delete!();
         {
-            let (replay_vote_sender, _repaly_vote_receiver) = unbounded();
+            let (replay_vote_sender, _replay_vote_receiver) = unbounded();
 
             let entry_receiver = {
                 // start a banking_stage to eat verified receiver
@@ -2634,7 +2634,7 @@ mod tests {
             let poh_simulator = simulate_poh(record_receiver, &poh_recorder);
 
             poh_recorder.write().unwrap().set_bank(&bank, false);
-            let (replay_vote_sender, _repaly_vote_receiver) = unbounded();
+            let (replay_vote_sender, _replay_vote_receiver) = unbounded();
 
             let process_transactions_batch_output = BankingStage::process_and_record_transactions(
                 &bank,
@@ -2771,7 +2771,7 @@ mod tests {
             let poh_simulator = simulate_poh(record_receiver, &poh_recorder);
 
             poh_recorder.write().unwrap().set_bank(&bank, false);
-            let (replay_vote_sender, _repaly_vote_receiver) = unbounded();
+            let (replay_vote_sender, _replay_vote_receiver) = unbounded();
 
             let process_transactions_batch_output = BankingStage::process_and_record_transactions(
                 &bank,
@@ -2845,7 +2845,7 @@ mod tests {
             let poh_simulator = simulate_poh(record_receiver, &poh_recorder);
 
             poh_recorder.write().unwrap().set_bank(&bank, false);
-            let (replay_vote_sender, _repaly_vote_receiver) = unbounded();
+            let (replay_vote_sender, _replay_vote_receiver) = unbounded();
 
             let qos_service = QosService::new(1);
 
@@ -3000,7 +3000,7 @@ mod tests {
 
             let poh_simulator = simulate_poh(record_receiver, &poh_recorder);
 
-            let (replay_vote_sender, _repaly_vote_receiver) = unbounded();
+            let (replay_vote_sender, _replay_vote_receiver) = unbounded();
 
             let process_transactions_batch_output = BankingStage::process_and_record_transactions(
                 &bank,
@@ -3078,7 +3078,7 @@ mod tests {
 
             let poh_simulator = simulate_poh(record_receiver, &Arc::new(RwLock::new(poh_recorder)));
 
-            let (replay_vote_sender, _repaly_vote_receiver) = unbounded();
+            let (replay_vote_sender, _replay_vote_receiver) = unbounded();
 
             let process_transactions_summary = BankingStage::process_transactions(
                 &bank,
@@ -3145,7 +3145,7 @@ mod tests {
 
         let poh_simulator = simulate_poh(record_receiver, &poh_recorder);
 
-        let (replay_vote_sender, _repaly_vote_receiver) = unbounded();
+        let (replay_vote_sender, _replay_vote_receiver) = unbounded();
 
         let process_transactions_summary = BankingStage::process_transactions(
             &bank,
@@ -3373,7 +3373,7 @@ mod tests {
                 &Arc::new(AtomicBool::new(false)),
             );
 
-            let (replay_vote_sender, _repaly_vote_receiver) = unbounded();
+            let (replay_vote_sender, _replay_vote_receiver) = unbounded();
 
             let _ = BankingStage::process_and_record_transactions(
                 &bank,
@@ -3542,7 +3542,7 @@ mod tests {
                 &Arc::new(AtomicBool::new(false)),
             );
 
-            let (replay_vote_sender, _repaly_vote_receiver) = unbounded();
+            let (replay_vote_sender, _replay_vote_receiver) = unbounded();
 
             let _ = BankingStage::process_and_record_transactions(
                 &bank,
@@ -3663,7 +3663,7 @@ mod tests {
                     ThreadType::Transactions,
                 );
 
-            let (replay_vote_sender, _repaly_vote_receiver) = unbounded();
+            let (replay_vote_sender, _replay_vote_receiver) = unbounded();
 
             // When the working bank in poh_recorder is None, no packets should be processed (consume will not be called)
             assert!(!poh_recorder.read().unwrap().has_bank());
@@ -3721,7 +3721,7 @@ mod tests {
                     ThreadType::Transactions,
                 );
 
-            let (replay_vote_sender, _repaly_vote_receiver) = unbounded();
+            let (replay_vote_sender, _replay_vote_receiver) = unbounded();
 
             // When the working bank in poh_recorder is None, no packets should be processed
             assert!(!poh_recorder.read().unwrap().has_bank());
@@ -3772,7 +3772,7 @@ mod tests {
             let poh_recorder_ = poh_recorder.clone();
             let recorder = poh_recorder_.read().unwrap().recorder();
             let bank_start = poh_recorder.read().unwrap().bank_start().unwrap();
-            let (replay_vote_sender, _repaly_vote_receiver) = unbounded();
+            let (replay_vote_sender, _replay_vote_receiver) = unbounded();
             // Start up thread to process the banks
             let t_consume = Builder::new()
                 .name("consume-buffered-packets".to_string())
@@ -4094,7 +4094,7 @@ mod tests {
                 create_test_recorder(&bank, &blockstore, Some(poh_config), None);
             let cluster_info = new_test_cluster_info(Node::new_localhost().info);
             let cluster_info = Arc::new(cluster_info);
-            let (replay_vote_sender, _repaly_vote_receiver) = unbounded();
+            let (replay_vote_sender, _replay_vote_receiver) = unbounded();
 
             let banking_stage = BankingStage::new(
                 &cluster_info,
