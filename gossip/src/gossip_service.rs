@@ -138,7 +138,7 @@ impl GossipService {
             let (endpoint, t_receiver) = spawn_server(
                 gossip_socket.try_clone().unwrap(),
                 &keypair,
-                cluster_info.my_contact_info().tpu.ip(),
+                cluster_info.my_contact_info().gossip.ip(),
                 request_sender,
                 exit.clone(),
                 MAX_QUIC_CONNECTIONS_PER_PEER,
