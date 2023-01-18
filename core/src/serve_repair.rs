@@ -54,7 +54,7 @@ use {
         net::{SocketAddr, UdpSocket},
         sync::{
             atomic::{AtomicBool, AtomicUsize, Ordering},
-            Arc, RwLock, RwLockReadGuard,
+            Arc, RwLock,
         },
         thread::{Builder, JoinHandle},
         time::{Duration, Instant},
@@ -85,6 +85,7 @@ const REPAIR_PING_CACHE_RATE_LIMIT_DELAY: Duration = Duration::from_secs(2);
 pub(crate) const REPAIR_RESPONSE_SERIALIZED_PING_BYTES: usize =
     4 /*enum discriminator*/ + PUBKEY_BYTES + REPAIR_PING_TOKEN_SIZE + SIGNATURE_BYTES;
 const SIGNED_REPAIR_TIME_WINDOW: Duration = Duration::from_secs(60 * 10); // 10 min
+const MAX_REPAIR_REQUEST_DECODE_THREADS: usize = 4;
 
 #[cfg(test)]
 static_assertions::const_assert_eq!(MAX_ANCESTOR_RESPONSES, 30);
@@ -95,6 +96,8 @@ pub enum RepairVerifyError {
     IdMismatch,
     #[error("Malformed")]
     Malformed,
+    #[error("SelfRepair")]
+    SelfRepair,
     #[error("SigVerify")]
     SigVerify,
     #[error("TimeSkew")]
@@ -193,7 +196,7 @@ struct ServeRepairStats {
     decode_time_us: u64,
     handle_requests_staked: AtomicUsize,
     handle_requests_unstaked: AtomicUsize,
-    self_repair: AtomicUsize,
+    err_self_repair: AtomicUsize,
     err_time_skew: AtomicUsize,
     err_malformed: AtomicUsize,
     err_sig_verify: AtomicUsize,
@@ -464,97 +467,127 @@ impl ServeRepair {
         }
     }
 
+    fn decode_request(
+        packet: &Packet,
+        epoch_staked_nodes: &Option<Arc<HashMap<Pubkey, u64>>>,
+        whitelist: &HashSet<Pubkey>,
+        my_id: &Pubkey,
+        socket_addr_space: &SocketAddrSpace,
+        cluster_type: ClusterType,
+    ) -> Result<RepairRequestWithMeta> {
+        let request: RepairProtocol = match packet.deserialize_slice(..) {
+            Ok(request) => request,
+            Err(_) => {
+                return Err(Error::from(RepairVerifyError::Malformed));
+            }
+        };
+        let from_addr = packet.meta().socket_addr();
+        if !ContactInfo::is_valid_address(&from_addr, socket_addr_space) {
+            return Err(Error::from(RepairVerifyError::Malformed));
+        }
+        match Self::verify_signed_packet(my_id, packet, &request) {
+            Ok(()) => (),
+            Err(e) => match cluster_type {
+                ClusterType::Testnet | ClusterType::Development => {
+                    return Err(e);
+                }
+                ClusterType::MainnetBeta | ClusterType::Devnet => (),
+            },
+        }
+        if request.sender() == my_id {
+            return Err(Error::from(RepairVerifyError::SelfRepair));
+        }
+        let stake = *epoch_staked_nodes
+            .as_ref()
+            .and_then(|stakes| stakes.get(request.sender()))
+            .unwrap_or(&0);
+
+        let whitelisted = whitelist.contains(request.sender());
+
+        Ok(RepairRequestWithMeta {
+            request,
+            from_addr,
+            stake,
+            whitelisted,
+        })
+    }
+
+    fn record_request_decode_error(error: &Error, stats: &ServeRepairStats) {
+        match error {
+            Error::RepairVerify(RepairVerifyError::IdMismatch) => {
+                stats.err_id_mismatch.fetch_add(1, Ordering::Relaxed);
+            }
+            Error::RepairVerify(RepairVerifyError::Malformed) => {
+                stats.err_malformed.fetch_add(1, Ordering::Relaxed);
+            }
+            Error::RepairVerify(RepairVerifyError::SelfRepair) => {
+                stats.err_self_repair.fetch_add(1, Ordering::Relaxed);
+            }
+            Error::RepairVerify(RepairVerifyError::SigVerify) => {
+                stats.err_sig_verify.fetch_add(1, Ordering::Relaxed);
+            }
+            Error::RepairVerify(RepairVerifyError::TimeSkew) => {
+                stats.err_time_skew.fetch_add(1, Ordering::Relaxed);
+            }
+            Error::RepairVerify(RepairVerifyError::Unsigned) => {
+                stats.err_unsigned.fetch_add(1, Ordering::Relaxed);
+            }
+            _ => {
+                debug_assert!(false, "unhandled error {:?}", error);
+            }
+        }
+    }
+
     fn decode_requests(
         thread_pool: &ThreadPool,
         reqs_v: Vec<PacketBatch>,
         epoch_staked_nodes: &Option<Arc<HashMap<Pubkey, u64>>>,
-        whitelist: &RwLockReadGuard<HashSet<Pubkey>>,
+        whitelist: &HashSet<Pubkey>,
         my_id: &Pubkey,
         socket_addr_space: &SocketAddrSpace,
         stats: &mut ServeRepairStats,
         cluster_type: ClusterType,
     ) -> Vec<RepairRequestWithMeta> {
-        thread_pool
-            .install(|| {
-                reqs_v
-                    .par_iter()
-                    .with_min_len(VERIFY_MIN_PACKETS_PER_THREAD)
-                    .flatten()
-                    .filter_map(|packet| {
-                        let request: RepairProtocol = match packet.deserialize_slice(..) {
-                            Ok(request) => request,
-                            Err(_) => {
-                                stats.err_malformed.fetch_add(1, Ordering::Relaxed);
-                                return None;
-                            }
-                        };
-
-                        let from_addr = packet.meta().socket_addr();
-                        if !ContactInfo::is_valid_address(&from_addr, socket_addr_space) {
-                            stats.err_malformed.fetch_add(1, Ordering::Relaxed);
-                            return None;
-                        }
-
-                        match Self::verify_signed_packet(my_id, packet, &request) {
-                            Ok(()) => (),
-                            Err(e) => {
-                                match e {
-                                    Error::RepairVerify(RepairVerifyError::IdMismatch) => {
-                                        stats.err_id_mismatch.fetch_add(1, Ordering::Relaxed);
-                                    }
-                                    Error::RepairVerify(RepairVerifyError::Malformed) => {
-                                        stats.err_malformed.fetch_add(1, Ordering::Relaxed);
-                                    }
-                                    Error::RepairVerify(RepairVerifyError::SigVerify) => {
-                                        stats.err_sig_verify.fetch_add(1, Ordering::Relaxed);
-                                    }
-                                    Error::RepairVerify(RepairVerifyError::TimeSkew) => {
-                                        stats.err_time_skew.fetch_add(1, Ordering::Relaxed);
-                                    }
-                                    Error::RepairVerify(RepairVerifyError::Unsigned) => {
-                                        stats.err_unsigned.fetch_add(1, Ordering::Relaxed);
-                                    }
-                                    _ => {
-                                        debug_assert!(false, "unhandled error {:?}", &e);
-                                    }
-                                }
-                                match cluster_type {
-                                    ClusterType::Testnet | ClusterType::Development => {
-                                        return None;
-                                    }
-                                    ClusterType::MainnetBeta | ClusterType::Devnet => (),
-                                }
-                            }
-                        }
-
-                        if request.sender() == my_id {
-                            stats.self_repair.fetch_add(1, Ordering::Relaxed);
-                            return None;
-                        }
-
-                        let stake = *epoch_staked_nodes
-                            .as_ref()
-                            .and_then(|stakes| stakes.get(request.sender()))
-                            .unwrap_or(&0);
-                        if stake == 0 {
-                            stats
-                                .handle_requests_unstaked
-                                .fetch_add(1, Ordering::Relaxed);
-                        } else {
-                            stats.handle_requests_staked.fetch_add(1, Ordering::Relaxed);
-                        }
-
-                        let whitelisted = whitelist.contains(request.sender());
-
-                        Some(RepairRequestWithMeta {
-                            request,
-                            from_addr,
-                            stake,
-                            whitelisted,
-                        })
-                    })
-            })
-            .collect::<Vec<_>>()
+        let stats = Arc::new(stats);
+        let decode_packet = |packet| {
+            let result = Self::decode_request(
+                packet,
+                epoch_staked_nodes,
+                whitelist,
+                my_id,
+                socket_addr_space,
+                cluster_type,
+            );
+            match &result {
+                Ok(req) => {
+                    if req.stake == 0 {
+                        stats
+                            .handle_requests_unstaked
+                            .fetch_add(1, Ordering::Relaxed);
+                    } else {
+                        stats.handle_requests_staked.fetch_add(1, Ordering::Relaxed);
+                    }
+                }
+                Err(e) => {
+                    Self::record_request_decode_error(e, &stats);
+                }
+            }
+            result.ok()
+        };
+        let packet_count: usize = reqs_v.iter().map(PacketBatch::len).sum();
+        if packet_count < VERIFY_MIN_PACKETS_PER_THREAD * MAX_REPAIR_REQUEST_DECODE_THREADS {
+            reqs_v.iter().flatten().filter_map(decode_packet).collect()
+        } else {
+            thread_pool
+                .install(|| {
+                    reqs_v
+                        .par_iter()
+                        .with_min_len(VERIFY_MIN_PACKETS_PER_THREAD)
+                        .flatten()
+                        .filter_map(decode_packet)
+                })
+                .collect()
+        }
     }
 
     /// Process messages from the network
@@ -640,14 +673,14 @@ impl ServeRepair {
     }
 
     fn report_reset_stats(&self, stats: &mut ServeRepairStats) {
-        let self_repair = stats.self_repair.load(Ordering::Relaxed);
-        if self_repair > 0 {
+        let err_self_repair = stats.err_self_repair.load(Ordering::Relaxed);
+        if err_self_repair > 0 {
             let my_id = self.cluster_info.id();
             warn!(
                 "{}: Ignored received repair requests from ME: {}",
-                my_id, self_repair,
+                my_id, err_self_repair,
             );
-            inc_new_counter_debug!("serve_repair-handle-repair--eq", self_repair);
+            inc_new_counter_debug!("serve_repair-handle-repair--eq", err_self_repair);
         }
 
         datapoint_info!(
@@ -696,7 +729,7 @@ impl ServeRepair {
                 stats.total_response_bytes_unstaked,
                 i64
             ),
-            ("self_repair", self_repair, i64),
+            ("self_repair", err_self_repair, i64),
             ("window_index", stats.window_index, i64),
             (
                 "request-highest-window-index",
@@ -770,7 +803,7 @@ impl ServeRepair {
         let recycler = PacketBatchRecycler::default();
 
         let thread_pool = rayon::ThreadPoolBuilder::new()
-            .num_threads(get_thread_count().min(4))
+            .num_threads(get_thread_count().min(MAX_REPAIR_REQUEST_DECODE_THREADS))
             .thread_name(|i| format!("solRepairDeco{i:02}"))
             .build()
             .unwrap();
