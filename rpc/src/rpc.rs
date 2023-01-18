@@ -4020,17 +4020,19 @@ fn rpc_perf_sample_from_perf_sample(slot: u64, sample: PerfSample) -> RpcPerfSam
         }) => RpcPerfSample {
             slot,
             num_transactions,
+            num_non_vote_transactions: None,
             num_slots,
             sample_period_secs,
         },
         PerfSample::V2(PerfSampleV2 {
             num_transactions,
-            num_non_vote_transactions: _,
+            num_non_vote_transactions,
             num_slots,
             sample_period_secs,
         }) => RpcPerfSample {
             slot,
             num_transactions,
+            num_non_vote_transactions: Some(num_non_vote_transactions),
             num_slots,
             sample_period_secs,
         },
@@ -5162,6 +5164,7 @@ pub mod tests {
             "slot": slot,
             "numSlots": num_slots,
             "numTransactions": num_transactions,
+            "numNonVoteTransactions": num_non_vote_transactions,
             "samplePeriodSecs": sample_period_secs,
         }]);
         assert_eq!(result, expected);

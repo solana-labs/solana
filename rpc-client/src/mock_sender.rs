@@ -417,6 +417,7 @@ impl RpcSender for MockSender {
             "getRecentPerformanceSamples" => serde_json::to_value(vec![RpcPerfSample {
                 slot: 347873,
                 num_transactions: 125,
+                num_non_vote_transactions: Some(1),
                 num_slots: 123,
                 sample_period_secs: 60,
             }])?,
