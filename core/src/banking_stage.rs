@@ -455,7 +455,6 @@ impl BankingStage {
                 let mut packet_deserializer = PacketDeserializer::new(packet_receiver);
                 let poh_recorder = poh_recorder.clone();
                 let cluster_info = cluster_info.clone();
-                let mut recv_start = Instant::now();
                 let transaction_status_sender = transaction_status_sender.clone();
                 let replay_vote_sender = replay_vote_sender.clone();
                 let data_budget = data_budget.clone();
@@ -472,7 +471,6 @@ impl BankingStage {
                             &decision_maker,
                             &poh_recorder,
                             &cluster_info,
-                            &mut recv_start,
                             i,
                             transaction_status_sender,
                             replay_vote_sender,
@@ -737,7 +735,6 @@ impl BankingStage {
         decision_maker: &DecisionMaker,
         poh_recorder: &Arc<RwLock<PohRecorder>>,
         cluster_info: &ClusterInfo,
-        recv_start: &mut Instant,
         id: u32,
         transaction_status_sender: Option<TransactionStatusSender>,
         replay_vote_sender: ReplayVoteSender,
@@ -803,7 +800,6 @@ impl BankingStage {
             let (res, receive_and_buffer_packets_time) = measure!(
                 PacketReceiver::receive_and_buffer_packets(
                     packet_deserializer,
-                    recv_start,
                     recv_timeout,
                     id,
                     &mut unprocessed_transaction_storage,

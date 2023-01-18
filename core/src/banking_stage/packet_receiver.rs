@@ -9,24 +9,16 @@ use {
     },
     crossbeam_channel::RecvTimeoutError,
     solana_measure::measure::Measure,
-    solana_sdk::{
-        saturating_add_assign,
-        timing::{duration_as_ms, timestamp},
-    },
-    std::{
-        sync::atomic::Ordering,
-        time::{Duration, Instant},
-    },
+    solana_sdk::{saturating_add_assign, timing::timestamp},
+    std::{sync::atomic::Ordering, time::Duration},
 };
 
 pub struct PacketReceiver;
 
 impl PacketReceiver {
-    #[allow(clippy::too_many_arguments)]
     /// Receive incoming packets, push into unprocessed buffer with packet indexes
     pub fn receive_and_buffer_packets(
         packet_deserializer: &mut PacketDeserializer,
-        recv_start: &mut Instant,
         recv_timeout: Duration,
         id: u32,
         unprocessed_transaction_storage: &mut UnprocessedTransactionStorage,
@@ -45,13 +37,7 @@ impl PacketReceiver {
             unprocessed_transaction_storage.max_receive_size(),
         )?;
         let packet_count = deserialized_packets.len();
-        debug!(
-            "@{:?} process start stalled for: {:?}ms txs: {} id: {}",
-            timestamp(),
-            duration_as_ms(&recv_start.elapsed()),
-            packet_count,
-            id,
-        );
+        debug!("@{:?} txs: {} id: {}", timestamp(), packet_count, id);
 
         if let Some(new_sigverify_stats) = &new_tracer_stats_option {
             tracer_packet_stats.aggregate_sigverify_tracer_packet_stats(new_sigverify_stats);
@@ -89,7 +75,6 @@ impl PacketReceiver {
         banking_stage_stats
             .current_buffered_packets_count
             .swap(unprocessed_transaction_storage.len(), Ordering::Relaxed);
-        *recv_start = Instant::now();
         Ok(())
     }
 
