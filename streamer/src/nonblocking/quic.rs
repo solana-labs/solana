@@ -375,23 +375,28 @@ async fn handle_connection(
     while !stream_exit.load(Ordering::Relaxed) {
         let bidirectional_service = bidirectional_service.clone();
 
-        let selected_stream = tokio::select! {
+        let (recv_stream, send_stream) = tokio::select! {
             v = bi_streams.next() => {
-                v.map_or(None, |x| {
+                v.map_or((None, None), |x| {
                     if let Ok((send, recv)) = x {
-                        bidirectional_service.add_stream(&remote_addr, send);
-                        Some(recv)
+                        (Some(recv), Some(send))
                     } else {
-                        None
+                        (None, None)
                     }
                 })
             },
             v = uni_streams.next() => {
-                v.map_or(None, |x| x.ok())
+                (v.map_or(None, |x| x.ok()), None)
             },
         };
 
-        if let Some(mut stream) = selected_stream {
+        if let Some(send_stream) = send_stream {
+            bidirectional_service
+                .add_stream(remote_addr.clone(), send_stream)
+                .await;
+        }
+
+        if let Some(mut stream) = recv_stream {
             stats.total_streams.fetch_add(1, Ordering::Relaxed);
             stats.total_new_streams.fetch_add(1, Ordering::Relaxed);
             let stream_exit = stream_exit.clone();
@@ -417,7 +422,9 @@ async fn handle_connection(
                                     stats.clone(),
                                     stake,
                                     bidirectional_service.clone(),
-                                ) {
+                                )
+                                .await
+                                {
                                     last_update.store(timing::timestamp(), Ordering::Relaxed);
                                     break;
                                 }
@@ -457,7 +464,7 @@ async fn handle_connection(
 }
 
 // Return true if the server should drop the stream
-fn handle_chunk(
+async fn handle_chunk(
     chunk: &Option<quinn::Chunk>,
     maybe_batch: &mut Option<PacketBatch>,
     remote_addr: &SocketAddr,
@@ -514,7 +521,9 @@ fn handle_chunk(
         // done receiving chunks
         if let Some(batch) = maybe_batch.take() {
             let len = batch[0].meta.size;
-            bidirectional_service.add_packets(&remote_addr, &batch);
+            bidirectional_service
+                .add_packets(&remote_addr, &batch)
+                .await;
             if let Err(e) = packet_sender.send(batch) {
                 stats
                     .total_packet_batch_send_err

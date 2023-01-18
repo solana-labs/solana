@@ -1666,7 +1666,7 @@ impl BankingStage {
                 transaction_status_sender,
                 gossip_vote_sender,
                 log_messages_bytes_limit,
-                qos_service.bidirection_reply_service.clone(),
+                qos_service.bidirection_reply_service(),
             );
 
         let mut unlock_time = Measure::start("unlock_time");
@@ -2994,11 +2994,7 @@ mod tests {
                 0,
                 None,
                 &gossip_vote_sender,
-                &QosService::new(
-                    Arc::new(RwLock::new(CostModel::default())),
-                    1,
-                    QuicBidirectionalReplyService::new(),
-                ),
+                &QosService::new_for_test(),
                 None,
             );
 
