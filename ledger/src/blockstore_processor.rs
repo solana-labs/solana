@@ -3727,13 +3727,15 @@ pub mod tests {
         // Create an transaction that references the new blockhash, should still
         // be able to find the blockhash if we process transactions all in the same
         // batch
-        let mut expected_signatures = BTreeSet::new();
+        let mut expected_successful_voter_pubkeys = BTreeSet::new();
         let vote_txs: Vec<_> = validator_keypairs
             .iter()
             .enumerate()
             .map(|(i, validator_keypairs)| {
-                let vote_tx = if i % 3 == 0 {
+                if i % 3 == 0 {
                     // These votes are correct
+                    expected_successful_voter_pubkeys
+                        .insert(validator_keypairs.vote_keypair.pubkey());
                     vote_transaction::new_vote_transaction(
                         vec![0],
                         bank0.hash(),
@@ -3765,20 +3767,18 @@ pub mod tests {
                         &validator_keypairs.vote_keypair,
                         None,
                     )
-                };
-                expected_signatures.insert(vote_tx.signatures[0]);
-                vote_tx
+                }
             })
             .collect();
         let entry = next_entry(&bank_1_blockhash, 1, vote_txs);
         let (replay_vote_sender, replay_vote_receiver) = crossbeam_channel::unbounded();
         let _ =
             process_entries_for_tests(&bank1, vec![entry], true, None, Some(&replay_vote_sender));
-        let signatures: BTreeSet<_> = replay_vote_receiver
+        let successes: BTreeSet<Pubkey> = replay_vote_receiver
             .try_iter()
-            .map(|(.., signature)| signature)
+            .map(|(vote_pubkey, ..)| vote_pubkey)
             .collect();
-        assert_eq!(signatures, expected_signatures);
+        assert_eq!(successes, expected_successful_voter_pubkeys);
     }
 
     fn make_slot_with_vote_tx(
