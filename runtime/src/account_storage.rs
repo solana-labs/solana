@@ -1,7 +1,7 @@
 //! Manage the map of slot -> append vec
 
 use {
-    crate::accounts_db::{AccountStorageEntry, AppendVecId, SnapshotStorageOne},
+    crate::accounts_db::{AccountStorageEntry, AppendVecId},
     dashmap::DashMap,
     solana_sdk::clock::Slot,
     std::sync::Arc,
@@ -10,7 +10,7 @@ use {
 #[derive(Clone, Debug)]
 pub struct AccountStorageReference {
     /// the single storage for a given slot
-    pub(crate) storage: SnapshotStorageOne,
+    pub(crate) storage: Arc<AccountStorageEntry>,
     /// id can be read from 'storage', but it is an atomic read.
     /// id will never change while a storage is held, so we store it separately here for faster runtime lookup in 'get_account_storage_entry'
     pub(crate) id: AppendVecId,
@@ -92,7 +92,7 @@ impl AccountStorage {
 
     /// remove the append vec at 'slot'
     /// returns the current contents
-    pub(crate) fn remove(&self, slot: &Slot) -> Option<SnapshotStorageOne> {
+    pub(crate) fn remove(&self, slot: &Slot) -> Option<Arc<AccountStorageEntry>> {
         assert!(self.shrink_in_progress_map.is_empty());
         self.map.remove(slot).map(|(_, entry)| entry.storage)
     }
@@ -192,7 +192,7 @@ impl<'a> AccountStorageIter<'a> {
 }
 
 impl<'a> Iterator for AccountStorageIter<'a> {
-    type Item = (Slot, SnapshotStorageOne);
+    type Item = (Slot, Arc<AccountStorageEntry>);
 
     fn next(&mut self) -> Option<Self::Item> {
         if let Some(entry) = self.iter.next() {

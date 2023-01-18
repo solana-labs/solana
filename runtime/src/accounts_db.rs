@@ -600,10 +600,9 @@ impl<'a> MultiThreadProgress<'a> {
 /// An offset into the AccountsDb::storage vector
 pub type AtomicAppendVecId = AtomicU32;
 pub type AppendVecId = u32;
-pub type SnapshotStorageOne = Arc<AccountStorageEntry>;
-pub type SnapshotStorages = Vec<Vec<SnapshotStorageOne>>;
+pub type SnapshotStorages = Vec<Vec<Arc<AccountStorageEntry>>>;
 /// exactly 1 append vec per slot
-pub type SnapshotStoragesOne = Vec<SnapshotStorageOne>;
+pub type SnapshotStoragesOne = Vec<Arc<AccountStorageEntry>>;
 
 type AccountSlots = HashMap<Pubkey, HashSet<Slot>>;
 type AppendVecOffsets = HashMap<AppendVecId, HashSet<usize>>;
@@ -1121,7 +1120,7 @@ impl RecycleStores {
         self.entries.iter()
     }
 
-    fn add_entries(&mut self, new_entries: Vec<SnapshotStorageOne>) {
+    fn add_entries(&mut self, new_entries: Vec<Arc<AccountStorageEntry>>) {
         let now = Instant::now();
         for new_entry in new_entries {
             self.total_bytes += new_entry.total_bytes();
@@ -1129,7 +1128,7 @@ impl RecycleStores {
         }
     }
 
-    fn expire_old_entries(&mut self) -> Vec<SnapshotStorageOne> {
+    fn expire_old_entries(&mut self) -> Vec<Arc<AccountStorageEntry>> {
         let mut expired = vec![];
         let now = Instant::now();
         let mut expired_bytes = 0;
@@ -3888,7 +3887,7 @@ impl AccountsDb {
         slot: Slot,
         add_dirty_stores: bool,
         shrink_in_progress: Option<ShrinkInProgress>,
-    ) -> Vec<SnapshotStorageOne> {
+    ) -> Vec<Arc<AccountStorageEntry>> {
         let mut dead_storages = Vec::default();
 
         let mut not_retaining_store = |store: &Arc<AccountStorageEntry>| {
@@ -3913,7 +3912,7 @@ impl AccountsDb {
 
     pub(crate) fn drop_or_recycle_stores(
         &self,
-        dead_storages: Vec<SnapshotStorageOne>,
+        dead_storages: Vec<Arc<AccountStorageEntry>>,
         stats: &ShrinkStats,
     ) {
         let mut recycle_stores_write_elapsed = Measure::start("recycle_stores_write_time");
@@ -5457,7 +5456,7 @@ impl AccountsDb {
     fn recycle_slot_stores(
         &self,
         total_removed_storage_entries: usize,
-        slot_stores: &[SnapshotStorageOne],
+        slot_stores: &[Arc<AccountStorageEntry>],
     ) -> u64 {
         let mut recycle_stores_write_elapsed = Measure::start("recycle_stores_write_elapsed");
         let mut recycle_stores = self.recycle_stores.write().unwrap();
@@ -6735,7 +6734,7 @@ impl AccountsDb {
     }
 
     /// iterate over a single storage, calling scanner on each item
-    fn scan_single_account_storage<S>(storage: &SnapshotStorageOne, scanner: &mut S)
+    fn scan_single_account_storage<S>(storage: &Arc<AccountStorageEntry>, scanner: &mut S)
     where
         S: AppendVecScan,
     {
@@ -6746,7 +6745,7 @@ impl AccountsDb {
         });
     }
 
-    fn update_old_slot_stats(&self, stats: &HashStats, storage: Option<&SnapshotStorageOne>) {
+    fn update_old_slot_stats(&self, stats: &HashStats, storage: Option<&Arc<AccountStorageEntry>>) {
         if let Some(storage) = storage {
             stats.roots_older_than_epoch.fetch_add(1, Ordering::Relaxed);
             let mut ancients = 0;
@@ -6802,7 +6801,7 @@ impl AccountsDb {
     /// return true iff storage is valid for loading from cache
     fn hash_storage_info(
         hasher: &mut impl StdHasher,
-        storage: Option<&SnapshotStorageOne>,
+        storage: Option<&Arc<AccountStorageEntry>>,
         slot: Slot,
     ) -> bool {
         if let Some(append_vec) = storage {
@@ -8289,7 +8288,7 @@ impl AccountsDb {
                             let store = std::mem::take(store).unwrap();
                             store.has_accounts().then_some((store, *slot))
                         })
-                        .collect::<Vec<(SnapshotStorageOne, Slot)>>()
+                        .collect::<Vec<(Arc<AccountStorageEntry>, Slot)>>()
                 })
                 .collect::<Vec<_>>()
         });
@@ -9623,7 +9622,7 @@ pub mod tests {
         sample_storages_and_account_in_slot(1, accounts)
     }
 
-    fn get_storage_refs(input: &[SnapshotStorageOne]) -> SortedStorages {
+    fn get_storage_refs(input: &[Arc<AccountStorageEntry>]) -> SortedStorages {
         SortedStorages::new(input)
     }
 

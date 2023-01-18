@@ -2,8 +2,8 @@ use {
     crate::{
         account_storage::AccountStorageMap,
         accounts_db::{
-            AccountShrinkThreshold, AccountsDbConfig, AtomicAppendVecId,
-            CalcAccountsHashDataSource, SnapshotStorageOne, SnapshotStoragesOne,
+            AccountShrinkThreshold, AccountStorageEntry, AccountsDbConfig, AtomicAppendVecId,
+            CalcAccountsHashDataSource, SnapshotStoragesOne,
         },
         accounts_index::AccountSecondaryIndexes,
         accounts_update_notifier_interface::AccountsUpdateNotifier,
@@ -847,7 +847,7 @@ where
 pub fn add_bank_snapshot(
     bank_snapshots_dir: impl AsRef<Path>,
     bank: &Bank,
-    snapshot_storages: &[SnapshotStorageOne],
+    snapshot_storages: &[Arc<AccountStorageEntry>],
     snapshot_version: SnapshotVersion,
 ) -> Result<BankSnapshotInfo> {
     let mut add_snapshot_time = Measure::start("add-snapshot-ms");
@@ -908,11 +908,11 @@ pub fn add_bank_snapshot(
     })
 }
 
-/// serializing needs Vec<Vec<SnapshotStorageOne>>, but data structure at runtime is Vec<SnapshotStorageOne>
+/// serializing needs Vec<Vec<Arc<AccountStorageEntry>>>, but data structure at runtime is Vec<Arc<AccountStorageEntry>>
 /// translates to what we need
 pub(crate) fn get_storages_to_serialize(
-    snapshot_storages: &[SnapshotStorageOne],
-) -> Vec<Vec<SnapshotStorageOne>> {
+    snapshot_storages: &[Arc<AccountStorageEntry>],
+) -> Vec<Vec<Arc<AccountStorageEntry>>> {
     snapshot_storages
         .iter()
         .map(|storage| vec![Arc::clone(storage)])
