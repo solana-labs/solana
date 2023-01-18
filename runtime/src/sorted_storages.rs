@@ -1,11 +1,12 @@
 use {
-    crate::accounts_db::SnapshotStorageOne,
+    crate::accounts_db::AccountStorageEntry,
     log::*,
     solana_measure::measure::Measure,
     solana_sdk::clock::Slot,
     std::{
         collections::HashMap,
         ops::{Bound, Range, RangeBounds},
+        sync::Arc,
     },
 };
 
@@ -16,7 +17,7 @@ pub struct SortedStorages<'a> {
     /// the actual storages
     /// A HashMap allows sparse storage and fast lookup of Slot -> Storage.
     /// We expect ~432k slots.
-    storages: HashMap<Slot, &'a SnapshotStorageOne>,
+    storages: HashMap<Slot, &'a Arc<AccountStorageEntry>>,
 }
 
 impl<'a> SortedStorages<'a> {
@@ -28,7 +29,7 @@ impl<'a> SortedStorages<'a> {
         }
     }
 
-    /// primary method of retrieving (Slot, SnapshotStorageOne)
+    /// primary method of retrieving (Slot, Arc<AccountStorageEntry>)
     pub fn iter_range<R>(&'a self, range: &R) -> SortedStoragesIter<'a>
     where
         R: RangeBounds<Slot>,
@@ -36,7 +37,7 @@ impl<'a> SortedStorages<'a> {
         SortedStoragesIter::new(self, range)
     }
 
-    fn get(&self, slot: Slot) -> Option<&SnapshotStorageOne> {
+    fn get(&self, slot: Slot) -> Option<&Arc<AccountStorageEntry>> {
         self.storages.get(&slot).copied()
     }
 
@@ -62,7 +63,7 @@ impl<'a> SortedStorages<'a> {
 
     // assumption:
     // source.slot() is unique from all other items in 'source'
-    pub fn new(source: &'a [SnapshotStorageOne]) -> Self {
+    pub fn new(source: &'a [Arc<AccountStorageEntry>]) -> Self {
         let slots = source.iter().map(|storage| {
             storage.slot() // this must be unique. Will be enforced in new_with_slots
         });
@@ -70,10 +71,10 @@ impl<'a> SortedStorages<'a> {
     }
 
     /// create `SortedStorages` from 'source' iterator.
-    /// 'source' contains a SnapshotStorageOne and its associated slot
+    /// 'source' contains a Arc<AccountStorageEntry> and its associated slot
     /// 'source' does not have to be sorted in any way, but is assumed to not have duplicate slot #s
     pub fn new_with_slots(
-        source: impl Iterator<Item = (&'a SnapshotStorageOne, Slot)> + Clone,
+        source: impl Iterator<Item = (&'a Arc<AccountStorageEntry>, Slot)> + Clone,
         // A slot used as a lower bound, but potentially smaller than the smallest slot in the given 'source' iterator
         min_slot: Option<Slot>,
         // highest valid slot. Only matters if source array does not contain a slot >= max_slot_inclusive.
@@ -142,7 +143,7 @@ pub struct SortedStoragesIter<'a> {
 }
 
 impl<'a> Iterator for SortedStoragesIter<'a> {
-    type Item = (Slot, Option<&'a SnapshotStorageOne>);
+    type Item = (Slot, Option<&'a Arc<AccountStorageEntry>>);
 
     fn next(&mut self) -> Option<Self::Item> {
         let slot = self.next_slot;
@@ -194,13 +195,17 @@ pub mod tests {
     use {
         super::*,
         crate::{
-            accounts_db::{AccountStorageEntry, AppendVecId, SnapshotStorageOne},
+            accounts_db::{AccountStorageEntry, AppendVecId},
             append_vec::AppendVec,
         },
         std::sync::Arc,
     };
     impl<'a> SortedStorages<'a> {
-        pub fn new_debug(source: &[(&'a SnapshotStorageOne, Slot)], min: Slot, len: usize) -> Self {
+        pub fn new_debug(
+            source: &[(&'a Arc<AccountStorageEntry>, Slot)],
+            min: Slot,
+            len: usize,
+        ) -> Self {
             let mut storages = HashMap::default();
             let range = Range {
                 start: min,
@@ -213,7 +218,7 @@ pub mod tests {
             Self { range, storages }
         }
 
-        pub fn new_for_tests(storages: &[&'a SnapshotStorageOne], slots: &[Slot]) -> Self {
+        pub fn new_for_tests(storages: &[&'a Arc<AccountStorageEntry>], slots: &[Slot]) -> Self {
             assert_eq!(storages.len(), slots.len());
             SortedStorages::new_with_slots(
                 storages.iter().cloned().zip(slots.iter().cloned()),
@@ -226,7 +231,7 @@ pub mod tests {
     #[test]
     fn test_sorted_storages_range_iter() {
         let storages = SortedStorages::empty();
-        let check = |(slot, storages): (Slot, Option<&SnapshotStorageOne>)| {
+        let check = |(slot, storages): (Slot, Option<&Arc<AccountStorageEntry>>)| {
             assert!(storages.is_none());
             slot
         };
@@ -250,7 +255,7 @@ pub mod tests {
         // only item is slot 3
         let s1 = create_sample_store(1);
         let storages = SortedStorages::new_for_tests(&[&s1], &[3]);
-        let check = |(slot, storages): (Slot, Option<&SnapshotStorageOne>)| {
+        let check = |(slot, storages): (Slot, Option<&Arc<AccountStorageEntry>>)| {
             assert!(
                 (slot != 3) ^ storages.is_some(),
                 "slot: {slot}, storages: {storages:?}"
@@ -286,7 +291,7 @@ pub mod tests {
         let store4 = create_sample_store(4);
 
         let storages = SortedStorages::new_for_tests(&[&store2, &store4], &[2, 4]);
-        let check = |(slot, storage): (Slot, Option<&SnapshotStorageOne>)| {
+        let check = |(slot, storage): (Slot, Option<&Arc<AccountStorageEntry>>)| {
             assert!(
                 (slot != 2 && slot != 4)
                     ^ storage
@@ -358,7 +363,7 @@ pub mod tests {
         );
     }
 
-    fn create_sample_store(id: AppendVecId) -> SnapshotStorageOne {
+    fn create_sample_store(id: AppendVecId) -> Arc<AccountStorageEntry> {
         let tf = crate::append_vec::test_utils::get_append_vec_path("create_sample_store");
         let (_temp_dirs, paths) = crate::accounts_db::get_temp_accounts_paths(1).unwrap();
         let size: usize = 123;

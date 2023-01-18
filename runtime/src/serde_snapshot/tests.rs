@@ -146,7 +146,7 @@ fn accountsdb_to_stream<W>(
     stream: &mut W,
     accounts_db: &AccountsDb,
     slot: Slot,
-    account_storage_entries: &[Vec<SnapshotStorageOne>],
+    account_storage_entries: &[Vec<Arc<AccountStorageEntry>>],
 ) -> Result<(), Error>
 where
     W: Write,
