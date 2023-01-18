@@ -5,7 +5,7 @@
 mod stats;
 use {
     crate::{
-        accounts_db::{CalcAccountsHashDataSource, SnapshotStorages},
+        accounts_db::{CalcAccountsHashDataSource, SnapshotStoragesOne},
         accounts_hash::CalcAccountsHashConfig,
         bank::{Bank, BankSlotDelta, DropCallback},
         bank_forks::BankForks,
@@ -148,7 +148,7 @@ impl SnapshotRequestHandler {
         test_hash_calculation: bool,
         non_snapshot_time_us: u128,
         last_full_snapshot_slot: &mut Option<Slot>,
-    ) -> Option<Result<(u64, SnapshotStorages), SnapshotError>> {
+    ) -> Option<Result<(u64, SnapshotStoragesOne), SnapshotError>> {
         let (
             snapshot_request,
             accounts_package_type,
@@ -265,7 +265,7 @@ impl SnapshotRequestHandler {
         last_full_snapshot_slot: &mut Option<Slot>,
         snapshot_request: SnapshotRequest,
         accounts_package_type: AccountsPackageType,
-    ) -> Result<(u64, SnapshotStorages), SnapshotError> {
+    ) -> Result<(u64, SnapshotStoragesOne), SnapshotError> {
         debug!(
             "handling snapshot request: {:?}, {:?}",
             snapshot_request, accounts_package_type
@@ -507,7 +507,7 @@ impl AbsRequestHandlers {
         test_hash_calculation: bool,
         non_snapshot_time_us: u128,
         last_full_snapshot_slot: &mut Option<Slot>,
-    ) -> Option<Result<(u64, SnapshotStorages), SnapshotError>> {
+    ) -> Option<Result<(u64, SnapshotStoragesOne), SnapshotError>> {
         self.snapshot_request_handler.handle_snapshot_requests(
             test_hash_calculation,
             non_snapshot_time_us,
@@ -539,7 +539,7 @@ impl AccountsBackgroundService {
             .spawn(move || {
                 let mut stats = StatsManager::new();
                 let mut last_snapshot_end_time = None;
-                let mut _last_snapshot_storages: Option<SnapshotStorages> = None;
+                let mut _last_snapshot_storages: Option<SnapshotStoragesOne> = None;
                 loop {
                     if exit.load(Ordering::Relaxed) {
                         break;

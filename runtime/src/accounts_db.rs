@@ -85,8 +85,7 @@ use {
     std::{
         borrow::{Borrow, Cow},
         boxed::Box,
-        collections::{hash_map::Entry, BTreeSet, HashMap, HashSet},
-        convert::TryFrom,
+        collections::{BTreeSet, HashMap, HashSet},
         fs,
         hash::{Hash as StdHash, Hasher as StdHasher},
         io::{Error as IoError, Result as IoResult},

@@ -926,35 +926,33 @@ fn get_snapshot_accounts_hardlink_dir(
 /// and id.
 fn hard_link_storages_to_snapshot(
     bank_snapshot_dir: impl AsRef<Path>,
-    snapshot_storages: &[SnapshotStorage],
+    snapshot_storages: &[SnapshotStorageOne],
 ) -> Result<()> {
     let accounts_hardlinks_dir = bank_snapshot_dir.as_ref().join("accounts_hardlinks");
     fs::create_dir_all(&accounts_hardlinks_dir)?;
 
     let mut account_paths: HashMap<PathBuf, PathBuf> = HashMap::new();
-    for slot_storages in snapshot_storages {
-        for storage in slot_storages {
-            storage.flush()?;
-            let path = storage.accounts.get_path();
-            let slot = storage.slot();
-            let snapshot_hardlink_dir = get_snapshot_accounts_hardlink_dir(
-                &path,
-                slot,
-                &mut account_paths,
-                &accounts_hardlinks_dir,
-            )?;
-            let hard_link_path =
-                snapshot_hardlink_dir.join(AppendVec::file_name(slot, storage.append_vec_id()));
-            fs::hard_link(&path, &hard_link_path).map_err(|e| {
-                let err_msg = format!(
-                    "hard-link appendvec file {} to {} failed.  Error: {}",
-                    path.display(),
-                    hard_link_path.display(),
-                    e,
-                );
-                SnapshotError::Io(IoError::new(ErrorKind::Other, err_msg))
-            })?;
-        }
+    for storage in snapshot_storages {
+        storage.flush()?;
+        let path = storage.accounts.get_path();
+        let slot = storage.slot();
+        let snapshot_hardlink_dir = get_snapshot_accounts_hardlink_dir(
+            &path,
+            slot,
+            &mut account_paths,
+            &accounts_hardlinks_dir,
+        )?;
+        let hard_link_path =
+            snapshot_hardlink_dir.join(AppendVec::file_name(slot, storage.append_vec_id()));
+        fs::hard_link(&path, &hard_link_path).map_err(|e| {
+            let err_msg = format!(
+                "hard-link appendvec file {} to {} failed.  Error: {}",
+                path.display(),
+                hard_link_path.display(),
+                e,
+            );
+            SnapshotError::Io(IoError::new(ErrorKind::Other, err_msg))
+        })?;
     }
     Ok(())
 }

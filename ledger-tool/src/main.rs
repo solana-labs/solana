@@ -53,8 +53,8 @@ use {
             PrunedBanksRequestHandler, SnapshotRequestHandler,
         },
         accounts_db::{
-            setup_accounts_run_and_snapshot_paths, AccountsDb, AccountsDbConfig, CalcAccountsHashDataSource,
-            FillerAccountsConfig,
+            setup_accounts_run_and_snapshot_paths, AccountsDb, AccountsDbConfig,
+            CalcAccountsHashDataSource, FillerAccountsConfig,
         },
         accounts_index::{AccountsIndexConfig, IndexLimitMb, ScanConfig},
         accounts_update_notifier_interface::AccountsUpdateNotifier,
