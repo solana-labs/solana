@@ -399,11 +399,11 @@ impl Accounts {
                                     .load_with_fixed_root(ancestors, &programdata_address)
                                 {
                                     Self::accumulate_and_check_loaded_account_data_size(
-                                            &mut accumulated_accounts_data_size,
-                                            programdata_account.data().len(),
-                                            requested_loaded_accounts_data_size_limit,
-                                            error_counters,
-                                        )?;
+                                        &mut accumulated_accounts_data_size,
+                                        programdata_account.data().len(),
+                                        requested_loaded_accounts_data_size_limit,
+                                        error_counters,
+                                    )?;
                                     account_dep_index =
                                         Some(account_keys.len().saturating_add(account_deps.len())
                                             as IndexOfAccount);
@@ -493,11 +493,11 @@ impl Accounts {
                             self.accounts_db.load_with_fixed_root(ancestors, owner_id)
                         {
                             Self::accumulate_and_check_loaded_account_data_size(
-                                            &mut accumulated_accounts_data_size,
-                                            program_account.data().len(),
-                                            requested_loaded_accounts_data_size_limit,
-                                            error_counters,
-                                        )?;
+                                &mut accumulated_accounts_data_size,
+                                program_account.data().len(),
+                                requested_loaded_accounts_data_size_limit,
+                                error_counters,
+                            )?;
                             accounts.push((*owner_id, program_account));
                         } else {
                             error_counters.account_not_found += 1;
@@ -3797,6 +3797,55 @@ mod tests {
             assert!(!Accounts::accumulate_and_check_scan_result_size(
                 &sum, &account, &None
             ));
+        }
+    }
+
+    #[test]
+    fn test_accumulate_and_check_loaded_account_data_size() {
+        let mut error_counter = TransactionErrorMetrics::default();
+
+        // assert check is OK if data limit is not enabled
+        {
+            let mut accumulated_data_size: usize = 0;
+            let data_size = usize::MAX;
+            let requested_data_size_limit = None;
+
+            assert!(Accounts::accumulate_and_check_loaded_account_data_size(
+                &mut accumulated_data_size,
+                data_size,
+                requested_data_size_limit,
+                &mut error_counter
+            )
+            .is_ok());
+        }
+
+        // assert check will fail with correct error if loaded data exceeds limit
+        {
+            let mut accumulated_data_size: usize = 0;
+            let data_size: usize = 123;
+            let requested_data_size_limit = NonZeroUsize::new(data_size);
+
+            // OK - loaded data size is up to limit
+            assert!(Accounts::accumulate_and_check_loaded_account_data_size(
+                &mut accumulated_data_size,
+                data_size,
+                requested_data_size_limit,
+                &mut error_counter
+            )
+            .is_ok());
+            assert_eq!(data_size, accumulated_data_size);
+
+            // fail - loading more data that would exceed limit
+            let another_byte: usize = 1;
+            assert_eq!(
+                Accounts::accumulate_and_check_loaded_account_data_size(
+                    &mut accumulated_data_size,
+                    another_byte,
+                    requested_data_size_limit,
+                    &mut error_counter
+                ),
+                Err(TransactionError::MaxLoadedAccountsDataSizeExceeded)
+            );
         }
     }
 }

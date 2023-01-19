@@ -151,10 +151,8 @@ pub enum TransactionError {
     InsufficientFundsForRent { account_index: u8 },
 
     /// Transaction exceeded max loaded accounts data size cap
-    #[error(
-        "Transaction exceeded max loaded accounts data size cap"
-    )]
-    MaxLoadedAccountsDataSizeExceeded
+    #[error("Transaction exceeded max loaded accounts data size cap")]
+    MaxLoadedAccountsDataSizeExceeded,
 }
 
 impl From<SanitizeError> for TransactionError {
