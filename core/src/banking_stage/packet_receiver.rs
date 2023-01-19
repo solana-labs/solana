@@ -8,7 +8,7 @@ use {
         unprocessed_transaction_storage::UnprocessedTransactionStorage,
     },
     crossbeam_channel::RecvTimeoutError,
-    solana_measure::measure::Measure,
+    solana_measure::{measure, measure_us},
     solana_sdk::{saturating_add_assign, timing::timestamp},
     std::{sync::atomic::Ordering, time::Duration},
 };
@@ -25,17 +25,62 @@ impl PacketReceiver {
         tracer_packet_stats: &mut TracerPacketStats,
         slot_metrics_tracker: &mut LeaderSlotMetricsTracker,
     ) -> Result<(), RecvTimeoutError> {
-        let recv_timeout = Self::get_receive_timeout(unprocessed_transaction_storage);
-        let mut recv_time = Measure::start("receive_and_buffer_packets_recv");
-        let ReceivePacketResults {
+        let (result, recv_time_us) = measure_us!({
+            let recv_timeout = Self::get_receive_timeout(unprocessed_transaction_storage);
+            let receive_packet_results = packet_deserializer.handle_received_packets(
+                recv_timeout,
+                unprocessed_transaction_storage.max_receive_size(),
+            )?;
+
+            Self::buffer_packets(
+                receive_packet_results,
+                id,
+                unprocessed_transaction_storage,
+                banking_stage_stats,
+                tracer_packet_stats,
+                slot_metrics_tracker,
+            );
+
+            Ok(())
+        });
+
+        banking_stage_stats
+            .receive_and_buffer_packets_elapsed
+            .fetch_add(recv_time_us, Ordering::Relaxed);
+        slot_metrics_tracker.increment_receive_and_buffer_packets_us(recv_time_us);
+
+        result
+    }
+
+    fn get_receive_timeout(
+        unprocessed_transaction_storage: &UnprocessedTransactionStorage,
+    ) -> Duration {
+        // Gossip thread will almost always not wait because the transaction storage will most likely not be empty
+        if !unprocessed_transaction_storage.is_empty() {
+            // If there are buffered packets, run the equivalent of try_recv to try reading more
+            // packets. This prevents starving BankingStage::consume_buffered_packets due to
+            // buffered_packet_batches containing transactions that exceed the cost model for
+            // the current bank.
+            Duration::from_millis(0)
+        } else {
+            // Default wait time
+            Duration::from_millis(100)
+        }
+    }
+
+    fn buffer_packets(
+        ReceivePacketResults {
             deserialized_packets,
             new_tracer_stats_option,
             passed_sigverify_count,
             failed_sigverify_count,
-        } = packet_deserializer.handle_received_packets(
-            recv_timeout,
-            unprocessed_transaction_storage.max_receive_size(),
-        )?;
+        }: ReceivePacketResults,
+        id: u32,
+        unprocessed_transaction_storage: &mut UnprocessedTransactionStorage,
+        banking_stage_stats: &mut BankingStageStats,
+        tracer_packet_stats: &mut TracerPacketStats,
+        slot_metrics_tracker: &mut LeaderSlotMetricsTracker,
+    ) {
         let packet_count = deserialized_packets.len();
         debug!("@{:?} txs: {} id: {}", timestamp(), packet_count, id);
 
@@ -58,11 +103,7 @@ impl PacketReceiver {
             slot_metrics_tracker,
             tracer_packet_stats,
         );
-        recv_time.stop();
 
-        banking_stage_stats
-            .receive_and_buffer_packets_elapsed
-            .fetch_add(recv_time.as_us(), Ordering::Relaxed);
         banking_stage_stats
             .receive_and_buffer_packets_count
             .fetch_add(packet_count, Ordering::Relaxed);
@@ -75,23 +116,6 @@ impl PacketReceiver {
         banking_stage_stats
             .current_buffered_packets_count
             .swap(unprocessed_transaction_storage.len(), Ordering::Relaxed);
-        Ok(())
-    }
-
-    fn get_receive_timeout(
-        unprocessed_transaction_storage: &UnprocessedTransactionStorage,
-    ) -> Duration {
-        // Gossip thread will almost always not wait because the transaction storage will most likely not be empty
-        if !unprocessed_transaction_storage.is_empty() {
-            // If there are buffered packets, run the equivalent of try_recv to try reading more
-            // packets. This prevents starving BankingStage::consume_buffered_packets due to
-            // buffered_packet_batches containing transactions that exceed the cost model for
-            // the current bank.
-            Duration::from_millis(0)
-        } else {
-            // Default wait time
-            Duration::from_millis(100)
-        }
     }
 
     fn push_unprocessed(

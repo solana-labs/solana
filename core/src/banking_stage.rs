@@ -785,21 +785,14 @@ impl BankingStage {
 
             tracer_packet_stats.report(1000);
 
-            let (res, receive_and_buffer_packets_time) = measure!(
-                PacketReceiver::receive_and_buffer_packets(
-                    packet_deserializer,
-                    id,
-                    &mut unprocessed_transaction_storage,
-                    &mut banking_stage_stats,
-                    &mut tracer_packet_stats,
-                    &mut slot_metrics_tracker,
-                ),
-                "receive_and_buffer_packets",
-            );
-            slot_metrics_tracker
-                .increment_receive_and_buffer_packets_us(receive_and_buffer_packets_time.as_us());
-
-            match res {
+            match PacketReceiver::receive_and_buffer_packets(
+                packet_deserializer,
+                id,
+                &mut unprocessed_transaction_storage,
+                &mut banking_stage_stats,
+                &mut tracer_packet_stats,
+                &mut slot_metrics_tracker,
+            ) {
                 Ok(()) | Err(RecvTimeoutError::Timeout) => (),
                 Err(RecvTimeoutError::Disconnected) => break,
             }
