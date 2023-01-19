@@ -1,7 +1,16 @@
 ---
 title: "Rust Program Quickstart"
 description: "This quickstart guide will demonstrate how to quickly setup, build, and deploy your first Rust based Solana program to the blockchain."
-keywords: "rust, cargo, toml, program, tutorial, intro to solana development, blockchain developer, blockchain tutorial, web3 developer"
+keywords:
+  - rust
+  - cargo
+  - toml
+  - program
+  - tutorial
+  - intro to solana development
+  - blockchain developer
+  - blockchain tutorial
+  - web3 developer
 ---
 
 Rust is the most common programming language to write Solana programs with. This quickstart guide will demonstrate how to quickly setup, build, and deploy your first Rust based Solana program to the blockchain.
