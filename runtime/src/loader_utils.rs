@@ -149,9 +149,6 @@ pub fn load_upgradeable_program<T: Client>(
     authority_keypair: &Keypair,
     name: &str,
 ) {
-    let program_pubkey = executable_keypair.pubkey();
-    let authority_pubkey = authority_keypair.pubkey();
-
     let program = load_upgradeable_buffer(
         bank_client,
         from_keypair,
@@ -163,9 +160,9 @@ pub fn load_upgradeable_program<T: Client>(
     let message = Message::new(
         &bpf_loader_upgradeable::deploy_with_max_program_len(
             &from_keypair.pubkey(),
-            &program_pubkey,
+            &executable_keypair.pubkey(),
             &buffer_keypair.pubkey(),
-            &authority_pubkey,
+            &authority_keypair.pubkey(),
             1.max(
                 bank_client
                     .get_minimum_balance_for_rent_exemption(
