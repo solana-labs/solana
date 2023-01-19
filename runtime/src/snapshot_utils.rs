@@ -930,7 +930,7 @@ fn get_snapshot_accounts_hardlink_dir(
 fn hard_link_storages_to_snapshot(
     bank_snapshot_dir: impl AsRef<Path>,
     bank_slot: u64,
-    snapshot_storages: &[SnapshotStorageOne],
+    snapshot_storages: &[Arc<AccountStorageEntry>],
 ) -> Result<()> {
     let accounts_hardlinks_dir = bank_snapshot_dir.as_ref().join("accounts_hardlinks");
     fs::create_dir_all(&accounts_hardlinks_dir)?;
