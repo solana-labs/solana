@@ -10,7 +10,7 @@ homepage = "https://solana.com/"
 documentation = "https://docs.rs/solana-tokens"
 
 [dependencies]
-chrono = { version = "0.4", features = ["serde"] }
+chrono = { version = "0.4.23", features = ["serde"] }
 clap = "2.33.0"
 console = "0.15.0"
 csv = "1.1.6"

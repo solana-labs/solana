@@ -760,7 +760,9 @@ impl RepairService {
 mod test {
     use {
         super::*,
-        solana_gossip::{cluster_info::Node, contact_info::ContactInfo},
+        solana_gossip::{
+            cluster_info::Node, legacy_contact_info::LegacyContactInfo as ContactInfo,
+        },
         solana_ledger::{
             blockstore::{
                 make_chaining_slot_entries, make_many_slot_entries, make_slot_entries, Blockstore,

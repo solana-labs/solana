@@ -1082,12 +1082,7 @@ mod tests {
             let expected_ports: Vec<_> = (0..256).collect();
             let mut forwarded_ports: Vec<_> = forward_packet_batches_by_accounts
                 .iter_batches()
-                .flat_map(|batch| {
-                    batch
-                        .get_forwardable_packets()
-                        .into_iter()
-                        .map(|p| p.meta().port)
-                })
+                .flat_map(|batch| batch.get_forwardable_packets().map(|p| p.meta().port))
                 .collect();
             forwarded_ports.sort_unstable();
             assert_eq!(expected_ports, forwarded_ports);

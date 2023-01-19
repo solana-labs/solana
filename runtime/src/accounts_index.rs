@@ -754,7 +754,6 @@ impl<T: IndexValue> AccountsIndex<T> {
         let bin_calculator = PubkeyBinCalculator24::new(bins);
         let storage = AccountsIndexStorage::new(bins, &config, exit);
         let account_maps = (0..bins)
-            .into_iter()
             .map(|bin| Arc::clone(&storage.in_mem[bin]))
             .collect::<Vec<_>>();
         (account_maps, bin_calculator, storage)
@@ -1582,7 +1581,6 @@ impl<T: IndexValue> AccountsIndex<T> {
         let random_offset = thread_rng().gen_range(0, bins);
         let use_disk = self.storage.storage.disk.is_some();
         let mut binned = (0..bins)
-            .into_iter()
             .map(|mut pubkey_bin| {
                 // opposite of (pubkey_bin + random_offset) % bins
                 pubkey_bin = if pubkey_bin < random_offset {
@@ -1637,7 +1635,6 @@ impl<T: IndexValue> AccountsIndex<T> {
     /// return Vec<Vec<>> because the internal vecs are already allocated per bin
     pub fn retrieve_duplicate_keys_from_startup(&self) -> Vec<Vec<(Slot, Pubkey)>> {
         (0..self.bins())
-            .into_iter()
             .map(|pubkey_bin| {
                 let r_account_maps = &self.account_maps[pubkey_bin];
                 r_account_maps.retrieve_duplicate_keys_from_startup()
@@ -3961,14 +3958,7 @@ pub mod tests {
         );
         assert_eq!((bins - 1, usize::MAX), iter.bin_start_and_range());
 
-        assert_eq!(
-            (0..2)
-                .into_iter()
-                .skip(1)
-                .take(usize::MAX)
-                .collect::<Vec<_>>(),
-            vec![1]
-        );
+        assert_eq!((0..2).skip(1).take(usize::MAX).collect::<Vec<_>>(), vec![1]);
     }
 
     #[test]

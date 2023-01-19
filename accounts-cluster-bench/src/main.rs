@@ -13,6 +13,7 @@ use {
     solana_runtime::inline_spl_token,
     solana_sdk::{
         commitment_config::CommitmentConfig,
+        hash::Hash,
         instruction::{AccountMeta, Instruction},
         message::Message,
         pubkey::Pubkey,
@@ -36,6 +37,52 @@ use {
     },
 };
 
+pub const MAX_RPC_CALL_RETRIES: usize = 5;
+
+pub fn poll_get_latest_blockhash(client: &RpcClient) -> Option<Hash> {
+    let mut num_retries = MAX_RPC_CALL_RETRIES;
+    loop {
+        let response = client.get_latest_blockhash();
+        if let Ok(blockhash) = response {
+            return Some(blockhash);
+        } else {
+            num_retries -= 1;
+            warn!(
+                "get_latest_blockhash failure: {:?}. remaining retries {}",
+                response, num_retries
+            );
+        }
+        if num_retries == 0 {
+            panic!("failed to get_latest_blockhash(), rpc node down?")
+        }
+        sleep(Duration::from_millis(100));
+    }
+}
+
+pub fn poll_get_fee_for_message(client: &RpcClient, message: &mut Message) -> (Option<u64>, Hash) {
+    let mut num_retries = MAX_RPC_CALL_RETRIES;
+    loop {
+        let response = client.get_fee_for_message(message);
+
+        if let Ok(fee) = response {
+            return (Some(fee), message.recent_blockhash);
+        } else {
+            num_retries -= 1;
+            warn!(
+                "get_fee_for_message failure: {:?}. remaining retries {}",
+                response, num_retries
+            );
+
+            let blockhash = poll_get_latest_blockhash(client).expect("blockhash");
+            message.recent_blockhash = blockhash;
+        }
+        if num_retries == 0 {
+            panic!("failed to get_fee_for_message(), rpc node down?")
+        }
+        sleep(Duration::from_millis(100));
+    }
+}
+
 pub fn airdrop_lamports(
     client: &RpcClient,
     faucet_addr: &SocketAddr,
@@ -54,8 +101,13 @@ pub fn airdrop_lamports(
             id.pubkey(),
         );
 
-        let blockhash = client.get_latest_blockhash().unwrap();
-        match request_airdrop_transaction(faucet_addr, &id.pubkey(), airdrop_amount, blockhash) {
+        let blockhash = poll_get_latest_blockhash(client);
+        match request_airdrop_transaction(
+            faucet_addr,
+            &id.pubkey(),
+            airdrop_amount,
+            blockhash.unwrap(),
+        ) {
             Ok(transaction) => {
                 let mut tries = 0;
                 loop {
@@ -114,7 +166,6 @@ fn make_create_message(
     let space = maybe_space.unwrap_or_else(|| thread_rng().gen_range(0, 1000));
 
     let instructions: Vec<_> = (0..num_instructions)
-        .into_iter()
         .flat_map(|_| {
             let program_id = if mint.is_some() {
                 inline_spl_token::id()
@@ -162,7 +213,6 @@ fn make_close_message(
     spl_token: bool,
 ) -> Message {
     let instructions: Vec<_> = (0..num_instructions)
-        .into_iter()
         .filter_map(|_| {
             let program_id = if spl_token {
                 inline_spl_token::id()
@@ -227,7 +277,7 @@ fn run_accounts_bench(
     let mut latest_blockhash = Instant::now();
     let mut last_log = Instant::now();
     let mut count = 0;
-    let mut blockhash = client.get_latest_blockhash().expect("blockhash");
+    let mut blockhash = poll_get_latest_blockhash(&client).expect("blockhash");
     let mut tx_sent_count = 0;
     let mut total_accounts_created = 0;
     let mut total_accounts_closed = 0;
@@ -274,14 +324,13 @@ fn run_accounts_bench(
 
     loop {
         if latest_blockhash.elapsed().as_millis() > 10_000 {
-            blockhash = client.get_latest_blockhash().expect("blockhash");
+            blockhash = poll_get_latest_blockhash(&client).expect("blockhash");
             latest_blockhash = Instant::now();
         }
 
         message.recent_blockhash = blockhash;
-        let fee = client
-            .get_fee_for_message(&message)
-            .expect("get_fee_for_message");
+        let (fee, blockhash) = poll_get_fee_for_message(&client, &mut message);
+        let fee = fee.expect("get_fee_for_message");
         let lamports = min_balance + fee;
 
         for (i, balance) in balances.iter_mut().enumerate() {
@@ -402,13 +451,12 @@ fn run_accounts_bench(
             let max_created_seed = seed_tracker.max_created.load(Ordering::Relaxed);
 
             if latest_blockhash.elapsed().as_millis() > 10_000 {
-                blockhash = client.get_latest_blockhash().expect("blockhash");
+                blockhash = poll_get_latest_blockhash(&client).expect("blockhash");
                 latest_blockhash = Instant::now();
             }
             message.recent_blockhash = blockhash;
-            let fee = client
-                .get_fee_for_message(&message)
-                .expect("get_fee_for_message");
+            let (fee, blockhash) = poll_get_fee_for_message(&client, &mut message);
+            let fee = fee.expect("get_fee_for_message");
 
             let sigs_len = executor.num_outstanding();
             if sigs_len < batch_size && max_closed_seed < max_created_seed {

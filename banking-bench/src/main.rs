@@ -321,9 +321,6 @@ fn main() {
         ..
     } = create_genesis_config(mint_total);
 
-    let (verified_sender, verified_receiver) = unbounded();
-    let (vote_sender, vote_receiver) = unbounded();
-    let (tpu_vote_sender, tpu_vote_receiver) = unbounded();
     let (replay_vote_sender, _replay_vote_receiver) = unbounded();
     let bank0 = Bank::new_for_benches(&genesis_config);
     let bank_forks = Arc::new(RwLock::new(BankForks::new(bank0)));
@@ -410,6 +407,9 @@ fn main() {
         let leader_schedule_cache = Arc::new(LeaderScheduleCache::new_from_bank(&bank));
         let (exit, poh_recorder, poh_service, signal_receiver) =
             create_test_recorder(&bank, &blockstore, None, Some(leader_schedule_cache));
+        let (non_vote_sender, non_vote_receiver) = unbounded();
+        let (tpu_vote_sender, tpu_vote_receiver) = unbounded();
+        let (gossip_vote_sender, gossip_vote_receiver) = unbounded();
         let cluster_info = ClusterInfo::new(
             Node::new_localhost().info,
             Arc::new(Keypair::new()),
@@ -424,9 +424,9 @@ fn main() {
         let banking_stage = BankingStage::new_num_threads(
             &cluster_info,
             &poh_recorder,
-            verified_receiver,
+            non_vote_receiver,
             tpu_vote_receiver,
-            vote_receiver,
+            gossip_vote_receiver,
             num_banking_threads,
             None,
             replay_vote_sender,
@@ -461,7 +461,7 @@ fn main() {
                     packet_batch_index,
                     timestamp(),
                 );
-                verified_sender
+                non_vote_sender
                     .send((vec![packet_batch.clone()], None))
                     .unwrap();
             }
@@ -574,9 +574,9 @@ fn main() {
             (1000.0 * 1000.0 * (txs_processed - base_tx_count) as f64) / (total_us as f64),
         );
 
-        drop(verified_sender);
+        drop(non_vote_sender);
         drop(tpu_vote_sender);
-        drop(vote_sender);
+        drop(gossip_vote_sender);
         exit.store(true, Ordering::Relaxed);
         banking_stage.join().unwrap();
         debug!("waited for banking_stage");

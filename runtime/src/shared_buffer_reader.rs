@@ -755,7 +755,6 @@ pub mod tests {
         let reader2 = SharedBufferReader::new(&shared_buffer);
 
         let sent = (0..size)
-            .into_iter()
             .map(|i| ((i + size) % 256) as u8)
             .collect::<Vec<_>>();
 
@@ -835,7 +834,6 @@ pub mod tests {
                                 None
                             };
                             let sent = (0..data_size)
-                                .into_iter()
                                 .map(|i| ((i + data_size) % 256) as u8)
                                 .collect::<Vec<_>>();
 
@@ -846,7 +844,6 @@ pub mod tests {
                                 let threads = std::cmp::min(8, rayon::current_num_threads());
                                 Some({
                                     let parallel = (0..threads)
-                                        .into_iter()
                                         .map(|_| {
                                             // create before any reading starts
                                             let reader_ = SharedBufferReader::new(&shared_buffer);

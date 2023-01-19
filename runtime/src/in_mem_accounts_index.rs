@@ -585,7 +585,6 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
         let mut found_slot = false;
         let mut found_other_slot = false;
         (0..slot_list.len())
-            .into_iter()
             .rev() // rev since we delete from the list in some cases
             .for_each(|slot_list_index| {
                 let (cur_slot, cur_account_info) = &slot_list[slot_list_index];
@@ -1758,7 +1757,6 @@ mod tests {
         {
             // up to 3 ignored slot account_info (ignored means not 'new_slot', not 'other_slot', but different slot #s which could exist in the slot_list initially)
             possible_initial_slot_list_contents = (0..3)
-                .into_iter()
                 .map(|i| (ignored_slot + i, ignored_value + i))
                 .collect::<Vec<_>>();
             // account_info that already exists in the slot_list AT 'new_slot'
