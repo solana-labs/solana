@@ -33,6 +33,15 @@ An array of `RpcPerfSample<object>` with the following fields:
 - `numTransactions: <u64>` - Number of transactions in sample
 - `numSlots: <u64>` - Number of slots in sample
 - `samplePeriodSecs: <u16>` - Number of seconds in a sample window
+- `numNonVoteTransaction: <u64>` - Number of non-vote transactions in
+  sample.
+
+:::info
+`numNonVoteTransaction` is present starting with v1.15.
+
+To get a number of voting transactions compute:<br />
+`numTransactions - numNonVoteTransaction`
+:::
 
 </CodeParams>
 
@@ -58,24 +67,28 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
     {
       "numSlots": 126,
       "numTransactions": 126,
+      "numNonVoteTransaction": 1,
       "samplePeriodSecs": 60,
       "slot": 348125
     },
     {
       "numSlots": 126,
       "numTransactions": 126,
+      "numNonVoteTransaction": 1,
       "samplePeriodSecs": 60,
       "slot": 347999
     },
     {
       "numSlots": 125,
       "numTransactions": 125,
+      "numNonVoteTransaction": 0,
       "samplePeriodSecs": 60,
       "slot": 347873
     },
     {
       "numSlots": 125,
       "numTransactions": 125,
+      "numNonVoteTransaction": 0,
       "samplePeriodSecs": 60,
       "slot": 347748
     }
