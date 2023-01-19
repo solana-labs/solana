@@ -804,7 +804,7 @@ impl Accounts {
         store_detailed_debug_info: bool,
         use_bg_thread_pool: bool,
     ) -> bool {
-        if let Err(err) = self.accounts_db.verify_bank_hash_and_lamports_new(
+        if let Err(err) = self.accounts_db.verify_bank_hash_and_lamports(
             slot,
             ancestors,
             total_lamports,
