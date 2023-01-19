@@ -7,7 +7,6 @@ use {
         },
         accounts_index::AccountSecondaryIndexes,
         accounts_update_notifier_interface::AccountsUpdateNotifier,
-        append_vec::AppendVec,
         bank::{Bank, BankFieldsToDeserialize, BankSlotDelta},
         builtins::Builtins,
         hardened_unpack::{
@@ -882,19 +881,27 @@ pub fn create_accounts_run_and_snapshot_dirs(
 /// directory does not exist, create it.
 fn get_snapshot_accounts_hardlink_dir(
     appendvec_path: &Path,
-    slot: u64,
-    account_paths: &mut HashMap<PathBuf, PathBuf>,
+    bank_slot: u64,
+    account_paths: &mut HashSet<PathBuf>,
     hardlinks_dir: impl AsRef<Path>,
 ) -> Result<PathBuf> {
     let run_path = appendvec_path.parent().unwrap();
     // All appendvec files should be under <account_path>/run/.
     // When generating the bank snapshot directory, they are hardlinked to <account_path>/snapshot/<slot>/
-    assert!(run_path.file_name().unwrap() == "run");
+    if run_path.file_name().unwrap() != "run" {
+        panic!(
+            "The account path {} does not run/ as the immediate parent directory.",
+            run_path.display()
+        );
+    }
 
     let account_path = run_path.parent().unwrap();
 
-    let snapshot_hardlink_dir = account_path.join("snapshot").join(slot.to_string());
-    let symlink_path: PathBuf = if !account_paths.contains_key(account_path) {
+    let snapshot_hardlink_dir = account_path.join("snapshot").join(bank_slot.to_string());
+
+    // Use the hashset to track, to avoid checking the file system.  Only set up the hardlink directory
+    // and the symlink to it at the first time of seeing the account_path.
+    if !account_paths.contains(account_path) {
         let idx = account_paths.len();
         info!(
             "for appendvec_path {}, create hard-link path {}",
@@ -909,45 +916,41 @@ fn get_snapshot_accounts_hardlink_dir(
             )
         })?;
         let symlink_path = hardlinks_dir.as_ref().join(format!("account_path_{idx}"));
-        account_paths.insert(account_path.to_path_buf(), symlink_path.clone());
-        symlink_path
-    } else {
-        account_paths.get(account_path).unwrap().to_path_buf()
+        symlink::symlink_dir(&snapshot_hardlink_dir, symlink_path)?;
+        account_paths.insert(account_path.to_path_buf());
     };
-
-    symlink::symlink_dir(&snapshot_hardlink_dir, symlink_path)?;
 
     Ok(snapshot_hardlink_dir)
 }
 
-/// Hard-link the files from accounts/ to snapshot/<slot>/accounts/
+/// Hard-link the files from accounts/ to snapshot/<bank_slot>/accounts/
 /// This keeps the appendvec files alive and with the bank snapshot.  The slot and id
 /// in the file names are also updated in case its file is a recycled one with inconsistent slot
 /// and id.
 fn hard_link_storages_to_snapshot(
     bank_snapshot_dir: impl AsRef<Path>,
+    bank_slot: u64,
     snapshot_storages: &[SnapshotStorageOne],
 ) -> Result<()> {
     let accounts_hardlinks_dir = bank_snapshot_dir.as_ref().join("accounts_hardlinks");
     fs::create_dir_all(&accounts_hardlinks_dir)?;
 
-    let mut account_paths: HashMap<PathBuf, PathBuf> = HashMap::new();
+    let mut account_paths: HashSet<PathBuf> = HashSet::new();
     for storage in snapshot_storages {
         storage.flush()?;
-        let path = storage.accounts.get_path();
-        let slot = storage.slot();
+        let storage_path = storage.accounts.get_path();
         let snapshot_hardlink_dir = get_snapshot_accounts_hardlink_dir(
-            &path,
-            slot,
+            &storage_path,
+            bank_slot,
             &mut account_paths,
             &accounts_hardlinks_dir,
         )?;
-        let hard_link_path =
-            snapshot_hardlink_dir.join(AppendVec::file_name(slot, storage.append_vec_id()));
-        fs::hard_link(&path, &hard_link_path).map_err(|e| {
+        let storage_filename = storage_path.file_name().unwrap();
+        let hard_link_path = snapshot_hardlink_dir.join(storage_filename);
+        fs::hard_link(&storage_path, &hard_link_path).map_err(|e| {
             let err_msg = format!(
                 "hard-link appendvec file {} to {} failed.  Error: {}",
-                path.display(),
+                storage_path.display(),
                 hard_link_path.display(),
                 e,
             );
@@ -955,6 +958,19 @@ fn hard_link_storages_to_snapshot(
         })?;
     }
     Ok(())
+}
+
+/// To allow generating a bank snapshot directory with full state information, we need to
+/// hardlink account appendvec files from the runtime operation directory to a snapshot
+/// hardlink directory.  This is to create the run/ and snapshot sub directories for an
+/// account_path provided by the user.  These two sub directories are on the same file
+/// system partition to allow hard-linking.
+pub fn setup_accounts_run_and_snapshot_paths<P: AsRef<Path>>(path: P) -> Result<PathBuf> {
+    let run_path = path.as_ref().join("run");
+    let snapshot_path = path.as_ref().join("snapshot");
+    fs::create_dir_all(&run_path)?;
+    fs::create_dir_all(snapshot_path)?;
+    Ok(run_path)
 }
 
 /// Serialize a bank to a snapshot
@@ -1000,7 +1016,7 @@ pub fn add_bank_snapshot(
     // constructing a bank from this directory.  It acts like an archive to include the full state.
     // The set of the account appendvec files is the necessary part of this snapshot state.  Hard-link them
     // from the operational accounts/ directory to here.
-    hard_link_storages_to_snapshot(&bank_snapshot_dir, snapshot_storages)?;
+    hard_link_storages_to_snapshot(&bank_snapshot_dir, slot, snapshot_storages)?;
 
     let mut bank_serialize = Measure::start("bank-serialize-ms");
     let bank_snapshot_serializer = move |stream: &mut BufWriter<File>| -> Result<()> {
@@ -3495,6 +3511,11 @@ mod tests {
             actual_remaining_incremental_snapshot_archive_slots,
             expected_remaing_incremental_snapshot_archive_slots
         );
+    }
+
+    fn generate_test_tmp_account_path() -> PathBuf {
+        let accounts_dir = tempfile::TempDir::new().unwrap();
+        setup_accounts_run_and_snapshot_paths(accounts_dir.path()).unwrap()
     }
 
     #[test]
