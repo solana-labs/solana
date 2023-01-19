@@ -390,7 +390,7 @@ fn test_concurrent_snapshot_packaging(
     // Also, make a saved copy of the state of the snapshot for a bank with
     // bank.slot == saved_slot, so we can use it for a correctness check later.
     let saved_snapshots_dir = TempDir::new().unwrap();
-    let saved_accounts_dir = generate_test_tmp_account_path();
+    let saved_accounts_dir = TempDir::new().unwrap();
     let saved_slot = 4;
     let mut saved_archive_path = None;
 
@@ -459,7 +459,11 @@ fn test_concurrent_snapshot_packaging(
             // will lead to test failure by mismatch when `saved_accounts_dir` is compared to
             // the unpacked snapshot later in this test's call to `verify_snapshot_archive()`.
             for file in snapshot_storage_files {
-                fs::copy(&file, saved_accounts_dir.join(file.file_name().unwrap())).unwrap();
+                fs::copy(
+                    &file,
+                    saved_accounts_dir.path().join(file.file_name().unwrap()),
+                )
+                .unwrap();
             }
             let last_snapshot_path = fs::read_dir(bank_snapshots_dir)
                 .unwrap()
@@ -573,7 +577,7 @@ fn test_concurrent_snapshot_packaging(
     snapshot_utils::verify_snapshot_archive(
         saved_archive_path.unwrap(),
         saved_snapshots_dir.path(),
-        saved_accounts_dir.as_path(),
+        saved_accounts_dir.path(),
         ArchiveFormat::TarBzip2,
         snapshot_utils::VerifyBank::NonDeterministic(saved_slot),
     );
