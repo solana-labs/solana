@@ -1800,13 +1800,6 @@ pub fn main() {
                        inclusive."),
         )
         .arg(
-            Arg::with_name("no_duplicate_instance_check")
-                .long("no-duplicate-instance-check")
-                .takes_value(false)
-                .help("Disables duplicate instance check")
-                .hidden(true),
-        )
-        .arg(
             Arg::with_name("allow_private_addr")
                 .long("allow-private-addr")
                 .takes_value(false)
@@ -3088,7 +3081,7 @@ pub fn main() {
 
     let identity_keypair = Arc::new(identity_keypair);
 
-    let should_check_duplicate_instance = !matches.is_present("no_duplicate_instance_check");
+    let should_check_duplicate_instance = true;
     if !cluster_entrypoints.is_empty() {
         bootstrap::rpc_bootstrap(
             &node,
