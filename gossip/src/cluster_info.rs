@@ -111,7 +111,7 @@ const MAX_GOSSIP_TRAFFIC: usize = 128_000_000 / PACKET_DATA_SIZE;
 /// is equal to PACKET_DATA_SIZE minus serialized size of an empty push
 /// message: Protocol::PushMessage(Pubkey::default(), Vec::default())
 const PUSH_MESSAGE_MAX_PAYLOAD_SIZE: usize = PACKET_DATA_SIZE - 44;
-const DUPLICATE_SHRED_MAX_PAYLOAD_SIZE: usize = PACKET_DATA_SIZE - 115;
+pub(crate) const DUPLICATE_SHRED_MAX_PAYLOAD_SIZE: usize = PACKET_DATA_SIZE - 115;
 /// Maximum number of hashes in SnapshotHashes/AccountsHashes a node publishes
 /// such that the serialized size of the push/pull message stays below
 /// PACKET_DATA_SIZE.
@@ -4708,5 +4708,56 @@ RPC Enabled Nodes: 1"#;
             epoch_duration.as_millis() as u64,
             DEFAULT_SLOTS_PER_EPOCH * DEFAULT_MS_PER_SLOT // 48 hours
         );
+    }
+
+    #[test]
+    fn test_get_duplicate_shreds() {
+        let node = Node::new_localhost();
+        let host1_key = Arc::new(Keypair::new());
+        let cluster_info = Arc::new(ClusterInfo::new(
+            node.info,
+            host1_key.clone(),
+            SocketAddrSpace::Unspecified,
+        ));
+        let mut cursor = Cursor::default();
+        assert!(cluster_info.get_duplicate_shreds(&mut cursor).is_empty());
+
+        let mut rng = rand::thread_rng();
+        let (slot, parent_slot, reference_tick, version) = (53084024, 53084023, 0, 0);
+        let shredder = Shredder::new(slot, parent_slot, reference_tick, version).unwrap();
+        let next_shred_index = 353;
+        let leader = Arc::new(Keypair::new());
+        let shred1 = new_rand_shred(&mut rng, next_shred_index, &shredder, &leader);
+        let shred2 = new_rand_shred(&mut rng, next_shred_index, &shredder, &leader);
+        assert!(cluster_info
+            .push_duplicate_shred(&shred1, shred2.payload())
+            .is_ok());
+        cluster_info.flush_push_queue();
+        let entries = cluster_info.get_duplicate_shreds(&mut cursor);
+        // One duplicate shred proof is split into 3 chunks.
+        assert_eq!(3, entries.len());
+        for (i, shred_data) in entries.iter().enumerate() {
+            assert_eq!(shred_data.from, host1_key.pubkey());
+            assert_eq!(shred_data.slot, 53084024);
+            assert_eq!(shred_data.chunk_index() as usize, i);
+        }
+
+        let slot = 53084025;
+        let shredder = Shredder::new(slot, parent_slot, reference_tick, version).unwrap();
+        let next_shred_index = 354;
+        let shred3 = new_rand_shred(&mut rng, next_shred_index, &shredder, &leader);
+        let shred4 = new_rand_shred(&mut rng, next_shred_index, &shredder, &leader);
+        assert!(cluster_info
+            .push_duplicate_shred(&shred3, shred4.payload())
+            .is_ok());
+        cluster_info.flush_push_queue();
+        let entries1 = cluster_info.get_duplicate_shreds(&mut cursor);
+        // One duplicate shred proof is split into 3 chunks.
+        assert_eq!(3, entries1.len());
+        for (i, shred_data) in entries1.iter().enumerate() {
+            assert_eq!(shred_data.from, host1_key.pubkey());
+            assert_eq!(shred_data.slot, 53084025);
+            assert_eq!(shred_data.chunk_index() as usize, i);
+        }
     }
 }
