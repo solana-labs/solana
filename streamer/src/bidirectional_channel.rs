@@ -173,9 +173,8 @@ impl QuicBidirectionalReplyService {
             let mut send_stream = send_stream;
             let mut reciever_channel = reciever_channel;
             loop {
-                let recv_task = reciever_channel.recv();
                 let finish = tokio::select! {
-                    message = recv_task => {
+                    message = reciever_channel.recv() => {
                         if let Some(message) = message {
                             let serialized_message = serialize(&message).unwrap();
 
@@ -454,14 +453,12 @@ pub mod test {
         )
     }
 
-    #[tokio::test(flavor = "multi_thread")]
+    #[tokio::test]
     async fn test_addition_of_packets_with_quic_socket_registered() {
         let bidirectional_replay_service = QuicBidirectionalReplyService::new();
 
         let (_thread_handle, exit, reciever, server_address, _stream_stats) =
             setup_quic_server(bidirectional_replay_service.clone());
-
-        tokio::time::sleep(std::time::Duration::from_secs(5)).await;
         let nb_packets = 5;
 
         // create transactions
@@ -480,8 +477,12 @@ pub mod test {
             .await
             .unwrap();
 
+        // one shot channels so that we do not block runtime for joining threads
+        let (oscs1, oscr1) = tokio::sync::oneshot::channel();
+        let (oscs2, oscr2) = tokio::sync::oneshot::channel();
+
         // replying to each packet with a message
-        let repling_thread = std::thread::spawn(move || {
+        std::thread::spawn(move || {
             let mut i = 0;
             loop {
                 let packets = reciever.recv().unwrap();
@@ -495,9 +496,10 @@ pub mod test {
                     break;
                 }
             }
+            oscs1.send(()).unwrap();
         });
 
-        let sig_collector = std::thread::spawn(move || {
+        std::thread::spawn(move || {
             let mut messages_to_return = vec![];
             let mut i = 0;
             loop {
@@ -509,10 +511,10 @@ pub mod test {
                     break;
                 }
             }
-            messages_to_return
+            let _ = oscs2.send(messages_to_return);
         });
-        repling_thread.join().unwrap();
-        let messages = sig_collector.join().unwrap();
+        oscr1.await.unwrap();
+        let messages = oscr2.await.unwrap();
         // asserting for messages
         for message in messages {
             assert!(signatures.contains(&message.signature()));
