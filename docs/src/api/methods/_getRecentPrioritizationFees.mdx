@@ -12,7 +12,7 @@ import {
 
 ## getRecentPrioritizationFees
 
-Returns a list of minimum prioritization fees from recent blocks.
+Returns a list of prioritization fees from recent blocks.
 
 :::info
 Currently, a node's prioritization-fee cache stores data from up to 150 blocks.
@@ -25,7 +25,7 @@ Currently, a node's prioritization-fee cache stores data from up to 150 blocks.
 
 <Parameter type={"array"} optional={true}>
 
-An array of Account addresses, as base-58 encoded strings
+An array of Account addresses (up to a maximum of 128 addresses), as base-58 encoded strings
 
 :::note
 If this parameter is provided, the response will reflect the minimum prioritization fee to land a transaction locking all of the provided accounts as writable.
@@ -37,8 +37,9 @@ If this parameter is provided, the response will reflect the minimum prioritizat
 
 An array of `RpcPrioritizationFee<object>` with the following fields:
 
-- `slot: <u64>` - Slot in which minimum fee was observed
-- `prioritizationFee: <u64>` - Minimum fee paid for a successfully landed transaction
+- `slot: <u64>` - slot in which the fee was observed
+- `prioritizationFee: <u64>` - the per-compute-unit fee paid by at least
+  one successfully landed transaction, specified in increments of 0.000001 lamports
 
 </CodeParams>
 
