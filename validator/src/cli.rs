@@ -1283,13 +1283,6 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                        inclusive."),
         )
         .arg(
-            Arg::with_name("no_duplicate_instance_check")
-                .long("no-duplicate-instance-check")
-                .takes_value(false)
-                .help("Disables duplicate instance check")
-                .hidden(true),
-        )
-        .arg(
             Arg::with_name("allow_private_addr")
                 .long("allow-private-addr")
                 .takes_value(false)
