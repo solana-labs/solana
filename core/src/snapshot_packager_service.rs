@@ -228,7 +228,8 @@ mod tests {
             snapshot_hash::SnapshotHash,
             snapshot_package::{SnapshotPackage, SnapshotType},
             snapshot_utils::{
-                self, ArchiveFormat, SnapshotVersion, SNAPSHOT_STATUS_CACHE_FILENAME,
+                self, setup_accounts_run_and_snapshot_paths, ArchiveFormat, SnapshotVersion,
+                SNAPSHOT_STATUS_CACHE_FILENAME,
             },
         },
         solana_sdk::hash::Hash,
@@ -267,6 +268,8 @@ mod tests {
 
     fn create_and_verify_snapshot(temp_dir: &Path) {
         let accounts_dir = temp_dir.join("accounts");
+        let accounts_dir = setup_accounts_run_and_snapshot_paths(accounts_dir.as_path()).unwrap();
+
         let snapshots_dir = temp_dir.join("snapshots");
         let full_snapshot_archives_dir = temp_dir.join("full_snapshot_archives");
         let incremental_snapshot_archives_dir = temp_dir.join("incremental_snapshot_archives");
