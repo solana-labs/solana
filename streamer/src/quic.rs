@@ -1,7 +1,6 @@
-use crate::bidirectional_channel::QuicBidirectionalReplyService;
-
 use {
     crate::{
+        bidirectional_channel::QuicBidirectionalReplyService,
         nonblocking::quic::ALPN_TPU_PROTOCOL_ID, streamer::StakedNodes,
         tls_certificates::new_self_signed_tls_certificate_chain,
     },

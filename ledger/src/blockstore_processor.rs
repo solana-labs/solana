@@ -1,5 +1,3 @@
-use solana_streamer::bidirectional_channel::QuicBidirectionalReplyService;
-
 use {
     crate::{
         block_error::BlockError, blockstore::Blockstore, blockstore_db::BlockstoreError,
@@ -53,6 +51,7 @@ use {
             VersionedTransaction,
         },
     },
+    solana_streamer::bidirectional_channel::QuicBidirectionalReplyService,
     solana_transaction_status::token_balances::TransactionTokenBalancesSet,
     std::{
         borrow::Cow,

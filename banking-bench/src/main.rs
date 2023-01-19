@@ -1,6 +1,5 @@
 #![allow(clippy::integer_arithmetic)]
 
-use solana_streamer::bidirectional_channel::QuicBidirectionalReplyService;
 use {
     clap::{crate_description, crate_name, Arg, ArgEnum, Command},
     crossbeam_channel::{unbounded, Receiver},
@@ -30,7 +29,9 @@ use {
         timing::{duration_as_us, timestamp},
         transaction::Transaction,
     },
-    solana_streamer::socket::SocketAddrSpace,
+    solana_streamer::{
+        bidirectional_channel::QuicBidirectionalReplyService, socket::SocketAddrSpace,
+    },
     std::{
         sync::{atomic::Ordering, Arc, RwLock},
         thread::sleep,

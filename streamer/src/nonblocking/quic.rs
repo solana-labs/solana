@@ -1,8 +1,6 @@
-use quinn::IncomingBiStreams;
-
-use crate::bidirectional_channel::QuicBidirectionalReplyService;
 use {
     crate::{
+        bidirectional_channel::QuicBidirectionalReplyService,
         quic::{configure_server, QuicServerError, StreamStats},
         streamer::StakedNodes,
         tls_certificates::get_pubkey_from_tls_certificate,
@@ -12,8 +10,8 @@ use {
     indexmap::map::{Entry, IndexMap},
     percentage::Percentage,
     quinn::{
-        Connecting, Connection, Endpoint, EndpointConfig, Incoming, IncomingUniStreams,
-        NewConnection, VarInt,
+        Connecting, Connection, Endpoint, EndpointConfig, Incoming, IncomingBiStreams,
+        IncomingUniStreams, NewConnection, VarInt,
     },
     rand::{thread_rng, Rng},
     solana_perf::packet::PacketBatch,
@@ -60,6 +58,7 @@ pub fn spawn_server(
     stats: Arc<StreamStats>,
     bidirectional_reply_service: QuicBidirectionalReplyService,
 ) -> Result<JoinHandle<()>, QuicServerError> {
+    println!("spawn quic server");
     let (config, _cert) = configure_server(keypair, gossip_host)?;
 
     let (_, incoming) = {
@@ -92,6 +91,7 @@ pub async fn run_server(
     stats: Arc<StreamStats>,
     bidirectional_reply_service: QuicBidirectionalReplyService,
 ) {
+    println!("running quic server");
     debug!("spawn quic server");
     let mut last_datapoint = Instant::now();
     let unstaked_connection_table: Arc<Mutex<ConnectionTable>> = Arc::new(Mutex::new(
@@ -207,6 +207,7 @@ async fn setup_connection(
     stats: Arc<StreamStats>,
     bidirectional_service: QuicBidirectionalReplyService,
 ) {
+    println!("setting up connection");
     if let Ok(connecting_result) = timeout(
         Duration::from_millis(QUIC_CONNECTION_HANDSHAKE_TIMEOUT_MS),
         connecting,
@@ -366,6 +367,7 @@ async fn handle_connection(
     stake: u64,
     bidirectional_service: QuicBidirectionalReplyService,
 ) {
+    println!("handle connection");
     debug!(
         "quic new connection {} streams: {} connections: {}",
         remote_addr,
@@ -376,77 +378,80 @@ async fn handle_connection(
         let bidirectional_service = bidirectional_service.clone();
 
         let (recv_stream, send_stream) = tokio::select! {
-            v = bi_streams.next() => {
-                v.map_or((None, None), |x| {
-                    if let Ok((send, recv)) = x {
-                        (Some(recv), Some(send))
-                    } else {
-                        (None, None)
-                    }
-                })
+            v = tokio::time::timeout( Duration::from_millis(WAIT_FOR_STREAM_TIMEOUT_MS), uni_streams.next()) => {
+                (v,None)
             },
-            v = uni_streams.next() => {
-                (v.map_or(None, |x| x.ok()), None)
+            v = bi_streams.next() => {
+                v.map_or( (Ok(None), None), |x| x.map_or(
+                    (Ok(None), None), |(send_stream, recv_stream)| (Ok(Some(Ok(recv_stream))), Some(send_stream)) )
+                )
             },
         };
 
         if let Some(send_stream) = send_stream {
+            println!("got bi directional connection {}", remote_addr);
             bidirectional_service
                 .add_stream(remote_addr.clone(), send_stream)
                 .await;
         }
 
-        if let Some(mut stream) = recv_stream {
-            stats.total_streams.fetch_add(1, Ordering::Relaxed);
-            stats.total_new_streams.fetch_add(1, Ordering::Relaxed);
-            let stream_exit = stream_exit.clone();
-            let stats = stats.clone();
-            let packet_sender = packet_sender.clone();
-            let last_update = last_update.clone();
-            tokio::spawn(async move {
-                let mut maybe_batch = None;
-                while !stream_exit.load(Ordering::Relaxed) {
-                    if let Ok(chunk) = tokio::time::timeout(
-                        Duration::from_millis(WAIT_FOR_STREAM_TIMEOUT_MS),
-                        stream.read_chunk(PACKET_DATA_SIZE, false),
-                    )
-                    .await
-                    {
-                        match chunk {
-                            Ok(chunk) => {
-                                if handle_chunk(
-                                    &chunk,
-                                    &mut maybe_batch,
-                                    &remote_addr,
-                                    &packet_sender,
-                                    stats.clone(),
-                                    stake,
-                                    bidirectional_service.clone(),
+        if let Ok(stream) = recv_stream {
+            match stream {
+                Some(stream_result) => match stream_result {
+                    Ok(mut stream) => {
+                        stats.total_streams.fetch_add(1, Ordering::Relaxed);
+                        stats.total_new_streams.fetch_add(1, Ordering::Relaxed);
+                        let stream_exit = stream_exit.clone();
+                        let stats = stats.clone();
+                        let packet_sender = packet_sender.clone();
+                        let last_update = last_update.clone();
+                        tokio::spawn(async move {
+                            let mut maybe_batch = None;
+                            while !stream_exit.load(Ordering::Relaxed) {
+                                if let Ok(chunk) = tokio::time::timeout(
+                                    Duration::from_millis(WAIT_FOR_STREAM_TIMEOUT_MS),
+                                    stream.read_chunk(PACKET_DATA_SIZE, false),
                                 )
                                 .await
                                 {
-                                    last_update.store(timing::timestamp(), Ordering::Relaxed);
-                                    break;
+                                    if handle_chunk(
+                                        &chunk,
+                                        &mut maybe_batch,
+                                        &remote_addr,
+                                        &packet_sender,
+                                        stats.clone(),
+                                        stake,
+                                        bidirectional_service.clone(),
+                                    )
+                                    .await
+                                    {
+                                        last_update.store(timing::timestamp(), Ordering::Relaxed);
+                                        break;
+                                    }
+                                } else {
+                                    debug!("Timeout in receiving on stream");
+                                    stats
+                                        .total_stream_read_timeouts
+                                        .fetch_add(1, Ordering::Relaxed);
+
+                                    // if has_bi_directional_stream_associated {
+                                    //     println!("stopping on bidirectional stream");
+                                    //     tokio::time::sleep(Duration::from_secs(60)).await;
+                                    // }
                                 }
                             }
-                            Err(e) => {
-                                debug!("Received stream error: {:?}", e);
-                                stats
-                                    .total_stream_read_errors
-                                    .fetch_add(1, Ordering::Relaxed);
-
-                                last_update.store(timing::timestamp(), Ordering::Relaxed);
-                            }
-                        }
-                    } else {
-                        debug!("Timeout in receiving on stream");
-                        stats
-                            .total_stream_read_timeouts
-                            .fetch_add(1, Ordering::Relaxed);
+                            stats.total_streams.fetch_sub(1, Ordering::Relaxed);
+                        });
                     }
+                    Err(e) => {
+                        debug!("stream error: {:?}", e);
+                        break;
+                    }
+                },
+                None => {
+                    break;
                 }
-                stats.total_streams.fetch_sub(1, Ordering::Relaxed);
-            });
+            }
         }
     }
 
@@ -465,7 +470,7 @@ async fn handle_connection(
 
 // Return true if the server should drop the stream
 async fn handle_chunk(
-    chunk: &Option<quinn::Chunk>,
+    chunk: &Result<Option<quinn::Chunk>, quinn::ReadError>,
     maybe_batch: &mut Option<PacketBatch>,
     remote_addr: &SocketAddr,
     packet_sender: &Sender<PacketBatch>,
@@ -473,74 +478,95 @@ async fn handle_chunk(
     stake: u64,
     bidirectional_service: QuicBidirectionalReplyService,
 ) -> bool {
-    if let Some(chunk) = chunk {
-        trace!("got chunk: {:?}", chunk);
-        let chunk_len = chunk.bytes.len() as u64;
+    match chunk {
+        Ok(maybe_chunk) => {
+            if let Some(chunk) = maybe_chunk {
+                trace!("got chunk: {:?}", chunk);
+                let chunk_len = chunk.bytes.len() as u64;
 
-        // shouldn't happen, but sanity check the size and offsets
-        if chunk.offset > PACKET_DATA_SIZE as u64 || chunk_len > PACKET_DATA_SIZE as u64 {
-            stats.total_invalid_chunks.fetch_add(1, Ordering::Relaxed);
-            return true;
-        }
-        let end_of_chunk = match chunk.offset.checked_add(chunk_len) {
-            Some(end) => end,
-            None => return true,
-        };
-        if end_of_chunk > PACKET_DATA_SIZE as u64 {
-            stats
-                .total_invalid_chunk_size
-                .fetch_add(1, Ordering::Relaxed);
-            return true;
-        }
+                // shouldn't happen, but sanity check the size and offsets
+                if chunk.offset > PACKET_DATA_SIZE as u64 || chunk_len > PACKET_DATA_SIZE as u64 {
+                    stats.total_invalid_chunks.fetch_add(1, Ordering::Relaxed);
+                    return true;
+                }
+                let end_of_chunk = match chunk.offset.checked_add(chunk_len) {
+                    Some(end) => end,
+                    None => return true,
+                };
+                if end_of_chunk > PACKET_DATA_SIZE as u64 {
+                    stats
+                        .total_invalid_chunk_size
+                        .fetch_add(1, Ordering::Relaxed);
+                    return true;
+                }
 
-        // chunk looks valid
-        if maybe_batch.is_none() {
-            let mut batch = PacketBatch::with_capacity(1);
-            let mut packet = Packet::default();
-            packet.meta.set_socket_addr(remote_addr);
-            packet.meta.sender_stake = stake;
-            batch.push(packet);
-            *maybe_batch = Some(batch);
-            stats
-                .total_packets_allocated
-                .fetch_add(1, Ordering::Relaxed);
-        }
+                // chunk looks valid
+                if maybe_batch.is_none() {
+                    let mut batch = PacketBatch::with_capacity(1);
+                    let mut packet = Packet::default();
+                    packet.meta.set_socket_addr(remote_addr);
+                    packet.meta.sender_stake = stake;
+                    batch.push(packet);
+                    *maybe_batch = Some(batch);
+                    stats
+                        .total_packets_allocated
+                        .fetch_add(1, Ordering::Relaxed);
+                }
 
-        if let Some(batch) = maybe_batch.as_mut() {
-            let end_of_chunk = match (chunk.offset as usize).checked_add(chunk.bytes.len()) {
-                Some(end) => end,
-                None => return true,
-            };
-            batch[0].buffer_mut()[chunk.offset as usize..end_of_chunk]
-                .copy_from_slice(&chunk.bytes);
-            batch[0].meta.size = std::cmp::max(batch[0].meta.size, end_of_chunk);
-            stats.total_chunks_received.fetch_add(1, Ordering::Relaxed);
-        }
-    } else {
-        trace!("chunk is none");
-        // done receiving chunks
-        if let Some(batch) = maybe_batch.take() {
-            let len = batch[0].meta.size;
-            bidirectional_service
-                .add_packets(&remote_addr, &batch)
-                .await;
-            if let Err(e) = packet_sender.send(batch) {
-                stats
-                    .total_packet_batch_send_err
-                    .fetch_add(1, Ordering::Relaxed);
-                info!("send error: {}", e);
+                if let Some(batch) = maybe_batch.as_mut() {
+                    let end_of_chunk = match (chunk.offset as usize).checked_add(chunk.bytes.len())
+                    {
+                        Some(end) => end,
+                        None => return true,
+                    };
+                    batch[0].buffer_mut()[chunk.offset as usize..end_of_chunk]
+                        .copy_from_slice(&chunk.bytes);
+                    batch[0].meta.size = std::cmp::max(batch[0].meta.size, end_of_chunk);
+                    stats.total_chunks_received.fetch_add(1, Ordering::Relaxed);
+                }
             } else {
-                stats
-                    .total_packet_batches_sent
-                    .fetch_add(1, Ordering::Relaxed);
-                trace!("sent {} byte packet", len);
+                trace!("chunk is none");
+                // done receiving chunks
+                if let Some(batch) = maybe_batch.take() {
+                    let len = batch[0].meta.size;
+
+                    // add packages to the bidirectional service
+                    {
+                        let remote_addr = remote_addr.clone();
+                        let batch = batch.clone();
+                        tokio::spawn(async move {
+                            bidirectional_service
+                                .add_packets(&remote_addr, &batch)
+                                .await
+                        });
+                    }
+
+                    if let Err(e) = packet_sender.send(batch) {
+                        stats
+                            .total_packet_batch_send_err
+                            .fetch_add(1, Ordering::Relaxed);
+                        info!("send error: {}", e);
+                    } else {
+                        stats
+                            .total_packet_batches_sent
+                            .fetch_add(1, Ordering::Relaxed);
+                        trace!("sent {} byte packet", len);
+                    }
+                } else {
+                    stats
+                        .total_packet_batches_none
+                        .fetch_add(1, Ordering::Relaxed);
+                }
+                return true;
             }
-        } else {
-            stats
-                .total_packet_batches_none
-                .fetch_add(1, Ordering::Relaxed);
         }
-        return true;
+        Err(e) => {
+            debug!("Received stream error: {:?}", e);
+            stats
+                .total_stream_read_errors
+                .fetch_add(1, Ordering::Relaxed);
+            return true;
+        }
     }
     false
 }

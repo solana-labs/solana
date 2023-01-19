@@ -2,8 +2,6 @@
 //! to construct a software pipeline. The stage uses all available CPU cores and
 //! can do its processing in parallel with signature verification on the GPU.
 
-use solana_streamer::bidirectional_channel::QuicBidirectionalReplyService;
-
 use {
     crate::{
         forward_packet_batches_by_accounts::ForwardPacketBatchesByAccounts,
@@ -64,7 +62,7 @@ use {
         transaction::{self, SanitizedTransaction, TransactionError, VersionedTransaction},
         transport::TransportError,
     },
-    solana_streamer::sendmmsg::batch_send,
+    solana_streamer::{bidirectional_channel::QuicBidirectionalReplyService, sendmmsg::batch_send},
     solana_transaction_status::token_balances::TransactionTokenBalancesSet,
     std::{
         cmp,

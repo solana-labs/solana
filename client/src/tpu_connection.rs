@@ -1,7 +1,8 @@
-use crate::bidirectional_channel_handler::BidirectionalChannelHandler;
-
 use {
-    crate::{quic_client::QuicTpuConnection, udp_client::UdpTpuConnection},
+    crate::{
+        bidirectional_channel_handler::BidirectionalChannelHandler, quic_client::QuicTpuConnection,
+        udp_client::UdpTpuConnection,
+    },
     enum_dispatch::enum_dispatch,
     rayon::iter::{IntoParallelIterator, ParallelIterator},
     solana_metrics::MovingStat,

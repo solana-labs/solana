@@ -1,7 +1,6 @@
-use crate::bidirectional_channel_handler::BidirectionalChannelHandler;
-
 use {
     crate::{
+        bidirectional_channel_handler::BidirectionalChannelHandler,
         nonblocking::{
             quic_client::{QuicClient, QuicClientCertificate, QuicLazyInitializedEndpoint},
             tpu_connection::NonblockingConnection,

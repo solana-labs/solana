@@ -1,11 +1,11 @@
 //! Simple nonblocking client that connects to a given UDP port with the QUIC protocol
 //! and provides an interface for sending transactions which is restricted by the
 //! server's flow control.
-use crate::bidirectional_channel_handler::BidirectionalChannelHandler;
 use {
     crate::{
-        client_error::ClientErrorKind, connection_cache::ConnectionCacheStats,
-        nonblocking::tpu_connection::TpuConnection, tpu_connection::ClientStats,
+        bidirectional_channel_handler::BidirectionalChannelHandler, client_error::ClientErrorKind,
+        connection_cache::ConnectionCacheStats, nonblocking::tpu_connection::TpuConnection,
+        tpu_connection::ClientStats,
     },
     async_mutex::Mutex,
     async_trait::async_trait,
@@ -20,8 +20,8 @@ use {
     solana_net_utils::VALIDATOR_PORT_RANGE,
     solana_sdk::{
         quic::{
-            QUIC_CONNECTION_HANDSHAKE_TIMEOUT_MS, QUIC_KEEP_ALIVE_MS, QUIC_MAX_TIMEOUT_MS,
-            QUIC_MAX_UNSTAKED_CONCURRENT_STREAMS,
+            QUIC_CHUNK_SIZE, QUIC_CONNECTION_HANDSHAKE_TIMEOUT_MS, QUIC_KEEP_ALIVE_MS,
+            QUIC_MAX_TIMEOUT_MS,
         },
         signature::Keypair,
         transport::Result as TransportResult,
@@ -551,11 +551,7 @@ impl QuicTpuConnection {
         addr: SocketAddr,
         connection_stats: Arc<ConnectionCacheStats>,
     ) -> Self {
-        let client = Arc::new(QuicClient::new(
-            endpoint,
-            addr,
-            QUIC_MAX_UNSTAKED_CONCURRENT_STREAMS,
-        ));
+        let client = Arc::new(QuicClient::new(endpoint, addr, QUIC_CHUNK_SIZE));
         Self::new_with_client(client, connection_stats)
     }
 
