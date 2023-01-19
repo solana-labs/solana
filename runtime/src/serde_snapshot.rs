@@ -3,7 +3,7 @@ use {
         accounts::Accounts,
         accounts_db::{
             AccountShrinkThreshold, AccountStorageEntry, AccountsDb, AccountsDbConfig, AppendVecId,
-            AtomicAppendVecId, BankHashInfo, IndexGenerationInfo, SnapshotStorage,
+            AtomicAppendVecId, BankHashInfo, IndexGenerationInfo,
         },
         accounts_hash::AccountsHash,
         accounts_index::AccountSecondaryIndexes,
@@ -345,7 +345,7 @@ pub(crate) fn bank_to_stream<W>(
     serde_style: SerdeStyle,
     stream: &mut BufWriter<W>,
     bank: &Bank,
-    snapshot_storages: &[SnapshotStorage],
+    snapshot_storages: &[Vec<Arc<AccountStorageEntry>>],
 ) -> Result<(), Error>
 where
     W: Write,
@@ -367,7 +367,7 @@ pub(crate) fn bank_to_stream_no_extra_fields<W>(
     serde_style: SerdeStyle,
     stream: &mut BufWriter<W>,
     bank: &Bank,
-    snapshot_storages: &[SnapshotStorage],
+    snapshot_storages: &[Vec<Arc<AccountStorageEntry>>],
 ) -> Result<(), Error>
 where
     W: Write,
@@ -445,7 +445,7 @@ pub fn reserialize_bank_with_new_accounts_hash(
 
 struct SerializableBankAndStorage<'a, C> {
     bank: &'a Bank,
-    snapshot_storages: &'a [SnapshotStorage],
+    snapshot_storages: &'a [Vec<Arc<AccountStorageEntry>>],
     phantom: std::marker::PhantomData<C>,
 }
 
@@ -461,7 +461,7 @@ impl<'a, C: TypeContext<'a>> Serialize for SerializableBankAndStorage<'a, C> {
 #[cfg(test)]
 struct SerializableBankAndStorageNoExtra<'a, C> {
     bank: &'a Bank,
-    snapshot_storages: &'a [SnapshotStorage],
+    snapshot_storages: &'a [Vec<Arc<AccountStorageEntry>>],
     phantom: std::marker::PhantomData<C>,
 }
 
@@ -494,7 +494,7 @@ impl<'a, C> From<SerializableBankAndStorageNoExtra<'a, C>> for SerializableBankA
 struct SerializableAccountsDb<'a, C> {
     accounts_db: &'a AccountsDb,
     slot: Slot,
-    account_storage_entries: &'a [SnapshotStorage],
+    account_storage_entries: &'a [Vec<Arc<AccountStorageEntry>>],
     phantom: std::marker::PhantomData<C>,
 }
 
@@ -711,10 +711,6 @@ where
         next_append_vec_id,
     } = storage_and_next_append_vec_id;
 
-    // discard any slots with no storage entries
-    // this can happen if a non-root slot was serialized
-    // but non-root stores should not be included in the snapshot
-    storage.retain(|_slot, stores| !stores.read().unwrap().is_empty());
     assert!(
         !storage.is_empty(),
         "At least one storage entry must exist from deserializing stream"
@@ -733,7 +729,7 @@ where
         .write()
         .unwrap()
         .insert(snapshot_slot, snapshot_bank_hash_info);
-    accounts_db.storage.extend(storage);
+    accounts_db.storage.initialize(storage);
     accounts_db
         .next_id
         .store(next_append_vec_id, Ordering::Release);
@@ -766,11 +762,7 @@ where
         .set(rent_paying_accounts_by_partition)
         .unwrap();
 
-    accounts_db.maybe_add_filler_accounts(
-        &genesis_config.epoch_schedule,
-        &genesis_config.rent,
-        snapshot_slot,
-    );
+    accounts_db.maybe_add_filler_accounts(&genesis_config.epoch_schedule, snapshot_slot);
 
     handle.join().unwrap();
     measure_notify.stop();

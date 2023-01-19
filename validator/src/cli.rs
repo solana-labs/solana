@@ -1182,17 +1182,10 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                       This option is for use during testing."),
         )
         .arg(
-            Arg::with_name("accounts_db_skip_rewrites")
-                .long("accounts-db-skip-rewrites")
-                .help("Accounts that are rent exempt and have no changes are not rewritten. \
-                      This produces snapshots that older versions cannot read.")
-                .hidden(true),
-        )
-        .arg(
             Arg::with_name("accounts_db_ancient_append_vecs")
                 .long("accounts-db-ancient-append-vecs")
                 .value_name("SLOT-OFFSET")
-                .validator(is_parsable::<u64>)
+                .validator(is_parsable::<i64>)
                 .takes_value(true)
                 .help("AppendVecs that are older than (slots_per_epoch - SLOT-OFFSET) are squashed together.")
                 .hidden(true),

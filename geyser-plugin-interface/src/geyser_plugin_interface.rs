@@ -133,8 +133,20 @@ pub struct ReplicaBlockInfo<'a> {
     pub block_height: Option<u64>,
 }
 
+/// Extending ReplicaBlockInfo by sending the transaction_entries_count.
+#[derive(Clone, Debug)]
+pub struct ReplicaBlockInfoV2<'a> {
+    pub slot: u64,
+    pub blockhash: &'a str,
+    pub rewards: &'a [Reward],
+    pub block_time: Option<UnixTimestamp>,
+    pub block_height: Option<u64>,
+    pub executed_transaction_count: u64,
+}
+
 pub enum ReplicaBlockInfoVersions<'a> {
     V0_0_1(&'a ReplicaBlockInfo<'a>),
+    V0_0_2(&'a ReplicaBlockInfoV2<'a>),
 }
 
 /// Errors returned by plugin calls

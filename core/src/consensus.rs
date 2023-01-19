@@ -304,22 +304,22 @@ impl Tower {
                 lockout_intervals
                     .entry(vote.last_locked_out_slot())
                     .or_insert_with(Vec::new)
-                    .push((vote.slot, key));
+                    .push((vote.slot(), key));
             }
 
             if key == *vote_account_pubkey {
-                my_latest_landed_vote = vote_state.nth_recent_vote(0).map(|v| v.slot);
+                my_latest_landed_vote = vote_state.nth_recent_vote(0).map(|v| v.slot());
                 debug!("vote state {:?}", vote_state);
                 debug!(
                     "observed slot {}",
-                    vote_state.nth_recent_vote(0).map(|v| v.slot).unwrap_or(0) as i64
+                    vote_state.nth_recent_vote(0).map(|v| v.slot()).unwrap_or(0) as i64
                 );
                 debug!("observed root {}", vote_state.root_slot.unwrap_or(0) as i64);
                 datapoint_info!(
                     "tower-observed",
                     (
                         "slot",
-                        vote_state.nth_recent_vote(0).map(|v| v.slot).unwrap_or(0),
+                        vote_state.nth_recent_vote(0).map(|v| v.slot()).unwrap_or(0),
                         i64
                     ),
                     ("root", vote_state.root_slot.unwrap_or(0), i64)
@@ -341,27 +341,22 @@ impl Tower {
 
             for vote in &vote_state.votes {
                 bank_weight += vote.lockout() as u128 * voted_stake as u128;
-                vote_slots.insert(vote.slot);
+                vote_slots.insert(vote.slot());
             }
 
             if start_root != vote_state.root_slot {
                 if let Some(root) = start_root {
-                    let vote = Lockout {
-                        confirmation_count: MAX_LOCKOUT_HISTORY as u32,
-                        slot: root,
-                    };
-                    trace!("ROOT: {}", vote.slot);
+                    let vote =
+                        Lockout::new_with_confirmation_count(root, MAX_LOCKOUT_HISTORY as u32);
+                    trace!("ROOT: {}", vote.slot());
                     bank_weight += vote.lockout() as u128 * voted_stake as u128;
-                    vote_slots.insert(vote.slot);
+                    vote_slots.insert(vote.slot());
                 }
             }
             if let Some(root) = vote_state.root_slot {
-                let vote = Lockout {
-                    confirmation_count: MAX_LOCKOUT_HISTORY as u32,
-                    slot: root,
-                };
+                let vote = Lockout::new_with_confirmation_count(root, MAX_LOCKOUT_HISTORY as u32);
                 bank_weight += vote.lockout() as u128 * voted_stake as u128;
-                vote_slots.insert(vote.slot);
+                vote_slots.insert(vote.slot());
             }
 
             // The last vote in the vote stack is a simulated vote on bank_slot, which
@@ -374,14 +369,14 @@ impl Tower {
             // this vote stack is the simulated vote, so this fetch should be sufficient
             // to find the last unsimulated vote.
             assert_eq!(
-                vote_state.nth_recent_vote(0).map(|l| l.slot),
+                vote_state.nth_recent_vote(0).map(|l| l.slot()),
                 Some(bank_slot)
             );
             if let Some(vote) = vote_state.nth_recent_vote(1) {
                 // Update all the parents of this last vote with the stake of this vote account
                 Self::update_ancestor_voted_stakes(
                     &mut voted_stakes,
-                    vote.slot,
+                    vote.slot(),
                     voted_stake,
                     ancestors,
                 );
@@ -443,11 +438,11 @@ impl Tower {
             local_vote_state
                 .votes
                 .iter()
-                .map(|v| v.slot)
+                .map(|v| v.slot())
                 .skip_while(|s| *s <= last_voted_slot)
                 .collect()
         } else {
-            local_vote_state.votes.iter().map(|v| v.slot).collect()
+            local_vote_state.votes.iter().map(|v| v.slot()).collect()
         };
         VoteTransaction::from(Vote::new(slots, hash))
     }
@@ -523,7 +518,7 @@ impl Tower {
     /// Used for tests
     pub fn increase_lockout(&mut self, confirmation_count_increase: u32) {
         for vote in self.vote_state.votes.iter_mut() {
-            vote.confirmation_count += confirmation_count_increase;
+            vote.increase_confirmation_count(confirmation_count_increase);
         }
     }
 
@@ -591,7 +586,7 @@ impl Tower {
 
     pub fn has_voted(&self, slot: Slot) -> bool {
         for vote in &self.vote_state.votes {
-            if slot == vote.slot {
+            if slot == vote.slot() {
                 return true;
             }
         }
@@ -610,7 +605,7 @@ impl Tower {
         let mut vote_state = self.vote_state.clone();
         process_slot_vote_unchecked(&mut vote_state, slot);
         for vote in &vote_state.votes {
-            if slot != vote.slot && !ancestors.contains(&vote.slot) {
+            if slot != vote.slot() && !ancestors.contains(&vote.slot()) {
                 return true;
             }
         }
@@ -993,16 +988,16 @@ impl Tower {
         process_slot_vote_unchecked(&mut vote_state, slot);
         let vote = vote_state.nth_recent_vote(self.threshold_depth);
         if let Some(vote) = vote {
-            if let Some(fork_stake) = voted_stakes.get(&vote.slot) {
+            if let Some(fork_stake) = voted_stakes.get(&vote.slot()) {
                 let lockout = *fork_stake as f64 / total_stake as f64;
                 trace!(
                     "fork_stake slot: {}, vote slot: {}, lockout: {} fork_stake: {} total_stake: {}",
-                    slot, vote.slot, lockout, fork_stake, total_stake
+                    slot, vote.slot(), lockout, fork_stake, total_stake
                 );
-                if vote.confirmation_count as usize > self.threshold_depth {
+                if vote.confirmation_count() as usize > self.threshold_depth {
                     for old_vote in &self.vote_state.votes {
-                        if old_vote.slot == vote.slot
-                            && old_vote.confirmation_count == vote.confirmation_count
+                        if old_vote.slot() == vote.slot()
+                            && old_vote.confirmation_count() == vote.confirmation_count()
                         {
                             return true;
                         }
@@ -1058,7 +1053,7 @@ impl Tower {
         self.vote_state
             .votes
             .iter()
-            .map(|lockout| lockout.slot)
+            .map(|lockout| lockout.slot())
             .collect()
     }
 
@@ -1270,7 +1265,7 @@ impl Tower {
                 .expect("vote_account isn't a VoteState?")
                 .clone();
             self.initialize_root(root);
-            self.initialize_lockouts(|v| v.slot > root);
+            self.initialize_lockouts(|v| v.slot() > root);
             trace!(
                 "Lockouts in tower for {} is initialized using bank {}",
                 self.vote_state.node_pubkey,
@@ -1554,9 +1549,9 @@ pub mod test {
         }
 
         for i in 1..5 {
-            assert_eq!(tower.vote_state.votes[i - 1].slot as usize, i);
+            assert_eq!(tower.vote_state.votes[i - 1].slot() as usize, i);
             assert_eq!(
-                tower.vote_state.votes[i - 1].confirmation_count as usize,
+                tower.vote_state.votes[i - 1].confirmation_count() as usize,
                 6 - i
             );
         }
@@ -2166,10 +2161,7 @@ pub mod test {
             tower.record_vote(i as u64, Hash::default());
             ancestors.insert(i as u64, (0..i as u64).collect());
         }
-        let root = Lockout {
-            confirmation_count: MAX_LOCKOUT_HISTORY as u32,
-            slot: 0,
-        };
+        let root = Lockout::new_with_confirmation_count(0, MAX_LOCKOUT_HISTORY as u32);
         let root_weight = root.lockout() as u128;
         let vote_account_expected_weight = tower
             .vote_state
@@ -2200,7 +2192,8 @@ pub mod test {
 
         // should be the sum of all the weights for root
         assert_eq!(bank_weight, expected_bank_weight);
-        let mut new_votes = latest_validator_votes_for_frozen_banks.take_votes_dirty_set(root.slot);
+        let mut new_votes =
+            latest_validator_votes_for_frozen_banks.take_votes_dirty_set(root.slot());
         new_votes.sort();
         assert_eq!(new_votes, account_latest_votes);
     }
@@ -2325,10 +2318,10 @@ pub mod test {
         tower.record_vote(1, Hash::default());
         assert!(!tower.is_locked_out(4, &ancestors));
         tower.record_vote(4, Hash::default());
-        assert_eq!(tower.vote_state.votes[0].slot, 0);
-        assert_eq!(tower.vote_state.votes[0].confirmation_count, 2);
-        assert_eq!(tower.vote_state.votes[1].slot, 4);
-        assert_eq!(tower.vote_state.votes[1].confirmation_count, 1);
+        assert_eq!(tower.vote_state.votes[0].slot(), 0);
+        assert_eq!(tower.vote_state.votes[0].confirmation_count(), 2);
+        assert_eq!(tower.vote_state.votes[1].slot(), 4);
+        assert_eq!(tower.vote_state.votes[1].confirmation_count(), 1);
     }
 
     #[test]
@@ -2515,9 +2508,8 @@ pub mod test {
         let mut tower = Tower::new_for_tests(1, 0.67);
         let slots = if num_votes > 0 {
             { 0..num_votes }
-                .map(|i| Lockout {
-                    slot: i as u64,
-                    confirmation_count: (num_votes as u32) - (i as u32),
+                .map(|i| {
+                    Lockout::new_with_confirmation_count(i as Slot, (num_votes as u32) - (i as u32))
                 })
                 .collect()
         } else {

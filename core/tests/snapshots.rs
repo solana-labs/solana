@@ -10,7 +10,9 @@ use {
         accounts_hash_verifier::AccountsHashVerifier,
         snapshot_packager_service::SnapshotPackagerService,
     },
-    solana_gossip::{cluster_info::ClusterInfo, contact_info::ContactInfo},
+    solana_gossip::{
+        cluster_info::ClusterInfo, legacy_contact_info::LegacyContactInfo as ContactInfo,
+    },
     solana_runtime::{
         accounts_background_service::{
             AbsRequestHandlers, AbsRequestSender, AccountsBackgroundService,
@@ -440,7 +442,6 @@ fn test_concurrent_snapshot_packaging(
             let snapshot_storage_files: HashSet<_> = bank_forks[slot]
                 .get_snapshot_storages(None)
                 .into_iter()
-                .flatten()
                 .map(|s| s.get_path())
                 .collect();
 

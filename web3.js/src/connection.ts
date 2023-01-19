@@ -767,6 +767,8 @@ export type InflationReward = {
   amount: number;
   /** post balance of the account in lamports */
   postBalance: number;
+  /** vote account commission when the reward was credited */
+  commission?: number | null;
 };
 
 /**
@@ -780,10 +782,32 @@ const GetInflationRewardResult = jsonRpcResult(
         effectiveSlot: number(),
         amount: number(),
         postBalance: number(),
+        commission: optional(nullable(number())),
       }),
     ),
   ),
 );
+
+export type InflationRate = {
+  /** total inflation */
+  total: number;
+  /** inflation allocated to validators */
+  validator: number;
+  /** inflation allocated to the foundation */
+  foundation: number;
+  /** epoch for which these values are valid */
+  epoch: number;
+};
+
+/**
+ * Expected JSON RPC response for the "getInflationRate" message
+ */
+const GetInflationRateResult = pick({
+  total: number(),
+  validator: number(),
+  foundation: number(),
+  epoch: number(),
+});
 
 /**
  * Information about the current epoch
@@ -1211,6 +1235,8 @@ export type BlockResponse = {
     postBalance: number | null;
     /** Type of reward received */
     rewardType: string | null;
+    /** Vote account commission when the reward was credited, only present for voting and staking rewards */
+    commission?: number | null;
   }>;
   /** The unix timestamp of when the block was processed */
   blockTime: number | null;
@@ -1255,6 +1281,8 @@ export type ParsedBlockResponse = {
     postBalance: number | null;
     /** Type of reward received */
     rewardType: string | null;
+    /** Vote account commission when the reward was credited, only present for voting and staking rewards */
+    commission?: number | null;
   }>;
   /** The unix timestamp of when the block was processed */
   blockTime: number | null;
@@ -1323,6 +1351,8 @@ export type VersionedBlockResponse = {
     postBalance: number | null;
     /** Type of reward received */
     rewardType: string | null;
+    /** Vote account commission when the reward was credited, only present for voting and staking rewards */
+    commission?: number | null;
   }>;
   /** The unix timestamp of when the block was processed */
   blockTime: number | null;
@@ -1378,6 +1408,7 @@ export type ConfirmedBlock = {
     lamports: number;
     postBalance: number | null;
     rewardType: string | null;
+    commission?: number | null;
   }>;
   /** The unix timestamp of when the block was processed */
   blockTime: number | null;
@@ -1625,6 +1656,11 @@ function createRpcBatchRequest(client: RpcClient): RpcBatchRequest {
  * Expected JSON RPC response for the "getInflationGovernor" message
  */
 const GetInflationGovernorRpcResult = jsonRpcResult(GetInflationGovernorResult);
+
+/**
+ * Expected JSON RPC response for the "getInflationRate" message
+ */
+const GetInflationRateRpcResult = jsonRpcResult(GetInflationRateResult);
 
 /**
  * Expected JSON RPC response for the "getEpochInfo" message
@@ -2271,6 +2307,7 @@ const RewardsResult = pick({
   lamports: number(),
   postBalance: nullable(number()),
   rewardType: nullable(string()),
+  commission: optional(nullable(number())),
 });
 
 /**
@@ -4250,6 +4287,18 @@ export class Connection {
     const res = create(unsafeRes, GetInflationRewardResult);
     if ('error' in res) {
       throw new SolanaJSONRPCError(res.error, 'failed to get inflation reward');
+    }
+    return res.result;
+  }
+
+  /**
+   * Fetch the specific inflation values for the current epoch
+   */
+  async getInflationRate(): Promise<InflationRate> {
+    const unsafeRes = await this._rpcRequest('getInflationRate', []);
+    const res = create(unsafeRes, GetInflationRateRpcResult);
+    if ('error' in res) {
+      throw new SolanaJSONRPCError(res.error, 'failed to get inflation rate');
     }
     return res.result;
   }

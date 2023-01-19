@@ -12,7 +12,8 @@ use {
         validator::{Validator, ValidatorConfig, ValidatorStartProgress},
     },
     solana_gossip::{
-        cluster_info::Node, contact_info::ContactInfo, gossip_service::discover_cluster,
+        cluster_info::Node, gossip_service::discover_cluster,
+        legacy_contact_info::LegacyContactInfo as ContactInfo,
     },
     solana_ledger::create_new_tmp_ledger,
     solana_runtime::{

@@ -3,7 +3,7 @@
 use {
     super::*,
     crate::{
-        account_storage::AccountStorageMap,
+        account_storage::{AccountStorageMap, AccountStorageReference},
         accounts::Accounts,
         accounts_db::{
             get_temp_accounts_paths, test_utils::create_test_accounts, AccountShrinkThreshold,
@@ -13,7 +13,7 @@ use {
         bank::{Bank, BankTestConfig},
         epoch_accounts_hash,
         genesis_utils::{self, activate_all_features, activate_feature},
-        snapshot_utils::ArchiveFormat,
+        snapshot_utils::{get_storages_to_serialize, ArchiveFormat},
         status_cache::StatusCache,
     },
     bincode::serialize_into,
@@ -43,7 +43,7 @@ fn copy_append_vecs<P: AsRef<Path>>(
     let storage_entries = accounts_db.get_snapshot_storages(RangeFull, None).0;
     let storage: AccountStorageMap = AccountStorageMap::with_capacity(storage_entries.len());
     let mut next_append_vec_id = 0;
-    for storage_entry in storage_entries.into_iter().flatten() {
+    for storage_entry in storage_entries.into_iter() {
         // Copy file to new directory
         let storage_path = storage_entry.get_path();
         let file_name = AppendVec::file_name(storage_entry.slot(), storage_entry.append_vec_id());
@@ -60,15 +60,13 @@ fn copy_append_vecs<P: AsRef<Path>>(
             num_accounts,
         );
         next_append_vec_id = next_append_vec_id.max(new_storage_entry.append_vec_id());
-        storage
-            .entry(new_storage_entry.slot())
-            .or_default()
-            .write()
-            .unwrap()
-            .insert(
-                new_storage_entry.append_vec_id(),
-                Arc::new(new_storage_entry),
-            );
+        storage.insert(
+            new_storage_entry.slot(),
+            AccountStorageReference {
+                id: new_storage_entry.append_vec_id(),
+                storage: Arc::new(new_storage_entry),
+            },
+        );
     }
 
     Ok(StorageAndNextAppendVecId {
@@ -148,7 +146,7 @@ fn accountsdb_to_stream<W>(
     stream: &mut W,
     accounts_db: &AccountsDb,
     slot: Slot,
-    account_storage_entries: &[SnapshotStorage],
+    account_storage_entries: &[Vec<Arc<AccountStorageEntry>>],
 ) -> Result<(), Error>
 where
     W: Write,
@@ -187,7 +185,7 @@ fn test_accounts_serialize_style(serde_style: SerdeStyle) {
         &mut writer,
         &accounts.accounts_db,
         0,
-        &accounts.accounts_db.get_snapshot_storages(..=0, None).0,
+        &get_storages_to_serialize(&accounts.accounts_db.get_snapshot_storages(..=0, None).0),
     )
     .unwrap();
 
@@ -281,7 +279,7 @@ fn test_bank_serialize_style(
         serde_style,
         &mut std::io::BufWriter::new(&mut writer),
         &bank2,
-        &snapshot_storages,
+        &get_storages_to_serialize(&snapshot_storages),
     )
     .unwrap();
 
@@ -431,7 +429,7 @@ pub(crate) fn reconstruct_accounts_db_via_serialization(
         &mut writer,
         accounts,
         slot,
-        &snapshot_storages,
+        &get_storages_to_serialize(&snapshot_storages),
     )
     .unwrap();
 
@@ -516,11 +514,12 @@ fn test_extra_fields_eof() {
     let snapshot_storages = bank.get_snapshot_storages(None);
     let mut buf = vec![];
     let mut writer = Cursor::new(&mut buf);
+
     crate::serde_snapshot::bank_to_stream(
         SerdeStyle::Newer,
         &mut std::io::BufWriter::new(&mut writer),
         &bank,
-        &snapshot_storages,
+        &get_storages_to_serialize(&snapshot_storages),
     )
     .unwrap();
 
@@ -643,11 +642,12 @@ fn test_blank_extra_fields() {
     let snapshot_storages = bank.get_snapshot_storages(None);
     let mut buf = vec![];
     let mut writer = Cursor::new(&mut buf);
+
     crate::serde_snapshot::bank_to_stream_no_extra_fields(
         SerdeStyle::Newer,
         &mut std::io::BufWriter::new(&mut writer),
         &bank,
-        &snapshot_storages,
+        &get_storages_to_serialize(&snapshot_storages),
     )
     .unwrap();
 
@@ -713,7 +713,7 @@ mod test_bank_serialize {
 
         (SerializableBankAndStorage::<newer::Context> {
             bank,
-            snapshot_storages: &snapshot_storages,
+            snapshot_storages: &get_storages_to_serialize(&snapshot_storages),
             phantom: std::marker::PhantomData::default(),
         })
         .serialize(s)

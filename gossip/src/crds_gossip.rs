@@ -8,15 +8,17 @@ use {
     crate::{
         cluster_info::Ping,
         cluster_info_metrics::GossipStats,
-        contact_info::ContactInfo,
         crds::{Crds, GossipRoute},
         crds_gossip_error::CrdsGossipError,
         crds_gossip_pull::{CrdsFilter, CrdsGossipPull, ProcessPullStats},
-        crds_gossip_push::{CrdsGossipPush, CRDS_GOSSIP_NUM_ACTIVE},
+        crds_gossip_push::CrdsGossipPush,
         crds_value::{CrdsData, CrdsValue},
         duplicate_shred::{self, DuplicateShredIndex, LeaderScheduleFn, MAX_DUPLICATE_SHREDS},
+        legacy_contact_info::LegacyContactInfo as ContactInfo,
         ping_pong::PingCache,
     },
+    itertools::Itertools,
+    rand::{CryptoRng, Rng},
     rayon::ThreadPool,
     solana_ledger::shred::Shred,
     solana_sdk::{
@@ -30,7 +32,7 @@ use {
         collections::{HashMap, HashSet},
         net::SocketAddr,
         sync::{Mutex, RwLock},
-        time::Duration,
+        time::{Duration, Instant},
     },
 };
 
@@ -68,8 +70,10 @@ impl CrdsGossip {
 
     pub fn new_push_messages(
         &self,
+        pubkey: &Pubkey, // This node.
         pending_push_messages: Vec<CrdsValue>,
         now: u64,
+        stakes: &HashMap<Pubkey, u64>,
     ) -> (
         HashMap<Pubkey, Vec<CrdsValue>>,
         usize, // number of values
@@ -81,7 +85,7 @@ impl CrdsGossip {
                 let _ = crds.insert(entry, now, GossipRoute::LocalMessage);
             }
         }
-        self.push.new_push_messages(&self.crds, now)
+        self.push.new_push_messages(pubkey, &self.crds, now, stakes)
     }
 
     pub(crate) fn push_duplicate_shred(
@@ -156,11 +160,13 @@ impl CrdsGossip {
         origin: &[Pubkey],
         wallclock: u64,
         now: u64,
+        stakes: &HashMap<Pubkey, u64>,
     ) -> Result<(), CrdsGossipError> {
         if now > wallclock.saturating_add(self.push.prune_timeout) {
             Err(CrdsGossipError::PruneMessageTimeout)
         } else if self_pubkey == destination {
-            self.push.process_prune_msg(self_pubkey, peer, origin);
+            self.push
+                .process_prune_msg(self_pubkey, peer, origin, stakes);
             Ok(())
         } else {
             Err(CrdsGossipError::BadPruneDestination)
@@ -186,7 +192,6 @@ impl CrdsGossip {
             self_keypair,
             self_shred_version,
             network_size,
-            CRDS_GOSSIP_NUM_ACTIVE,
             ping_cache,
             pings,
             socket_addr_space,
@@ -223,14 +228,6 @@ impl CrdsGossip {
         )
     }
 
-    /// Time when a request to `from` was initiated.
-    ///
-    /// This is used for weighted random selection during `new_pull_request`
-    /// It's important to use the local nodes request creation time as the weight
-    /// instead of the response received time otherwise failed nodes will increase their weight.
-    pub fn mark_pull_request_creation_time(&self, from: Pubkey, now: u64) {
-        self.pull.mark_pull_request_creation_time(from, now)
-    }
     /// Process a pull request and create a response.
     pub fn process_pull_requests<I>(&self, callers: I, now: u64)
     where
@@ -335,29 +332,101 @@ impl CrdsGossip {
     }
 }
 
-/// Computes a normalized (log of actual stake) stake.
-pub fn get_stake<S: std::hash::BuildHasher>(id: &Pubkey, stakes: &HashMap<Pubkey, u64, S>) -> f32 {
-    // cap the max balance to u32 max (it should be plenty)
-    let bal = f64::from(u32::max_value()).min(*stakes.get(id).unwrap_or(&0) as f64);
-    1_f32.max((bal as f32).ln())
+// Returns active and valid cluster nodes to gossip with.
+pub(crate) fn get_gossip_nodes<R: Rng>(
+    rng: &mut R,
+    now: u64,
+    pubkey: &Pubkey, // This node.
+    // By default, should only push to or pull from gossip nodes with the same
+    // shred-version. Except for spy nodes (shred_version == 0u16) which can
+    // pull from any node.
+    verify_shred_version: impl Fn(/*shred_version:*/ u16) -> bool,
+    crds: &RwLock<Crds>,
+    gossip_validators: Option<&HashSet<Pubkey>>,
+    stakes: &HashMap<Pubkey, u64>,
+    socket_addr_space: &SocketAddrSpace,
+) -> Vec<ContactInfo> {
+    // Exclude nodes which have not been active for this long.
+    const ACTIVE_TIMEOUT: Duration = Duration::from_secs(60);
+    let active_cutoff = now.saturating_sub(ACTIVE_TIMEOUT.as_millis() as u64);
+    let crds = crds.read().unwrap();
+    crds.get_nodes()
+        .filter_map(|value| {
+            let node = value.value.contact_info().unwrap();
+            // Exclude nodes which have not been active recently.
+            if value.local_timestamp < active_cutoff {
+                // In order to mitigate eclipse attack, for staked nodes
+                // continue retrying periodically.
+                let stake = stakes.get(&node.id).copied().unwrap_or_default();
+                if stake == 0u64 || !rng.gen_ratio(1, 16) {
+                    return None;
+                }
+            }
+            Some(node)
+        })
+        .filter(|node| {
+            &node.id != pubkey
+                && verify_shred_version(node.shred_version)
+                && ContactInfo::is_valid_address(&node.gossip, socket_addr_space)
+                && match gossip_validators {
+                    Some(nodes) => nodes.contains(&node.id),
+                    None => true,
+                }
+        })
+        .cloned()
+        .collect()
 }
 
-/// Computes bounded weight given some max, a time since last selected, and a stake value.
-///
-/// The minimum stake is 1 and not 0 to allow 'time since last' picked to factor in.
-pub fn get_weight(max_weight: f32, time_since_last_selected: u32, stake: f32) -> f32 {
-    let mut weight = time_since_last_selected as f32 * stake;
-    if weight.is_infinite() {
-        weight = max_weight;
-    }
-    1.0_f32.max(weight.min(max_weight))
+// Dedups gossip addresses, keeping only the one with the highest stake.
+pub(crate) fn dedup_gossip_addresses(
+    nodes: impl IntoIterator<Item = ContactInfo>,
+    stakes: &HashMap<Pubkey, u64>,
+) -> HashMap</*gossip:*/ SocketAddr, (/*stake:*/ u64, ContactInfo)> {
+    nodes
+        .into_iter()
+        .into_grouping_map_by(|node| node.gossip)
+        .aggregate(|acc, _node_gossip, node| {
+            let stake = stakes.get(&node.id).copied().unwrap_or_default();
+            match acc {
+                Some((ref s, _)) if s >= &stake => acc,
+                Some(_) | None => Some((stake, node)),
+            }
+        })
+}
+
+// Pings gossip addresses if needed.
+// Returns nodes which have recently responded to a ping message.
+#[must_use]
+pub(crate) fn maybe_ping_gossip_addresses<R: Rng + CryptoRng>(
+    rng: &mut R,
+    nodes: impl IntoIterator<Item = ContactInfo>,
+    keypair: &Keypair,
+    ping_cache: &Mutex<PingCache>,
+    pings: &mut Vec<(SocketAddr, Ping)>,
+) -> Vec<ContactInfo> {
+    let mut ping_cache = ping_cache.lock().unwrap();
+    let mut pingf = move || Ping::new_rand(rng, keypair).ok();
+    let now = Instant::now();
+    nodes
+        .into_iter()
+        .filter(|node| {
+            let (check, ping) = {
+                let node = (node.id, node.gossip);
+                ping_cache.check(now, node, &mut pingf)
+            };
+            if let Some(ping) = ping {
+                pings.push((node.gossip, ping));
+            }
+            check
+        })
+        .collect()
 }
 
 #[cfg(test)]
 mod test {
     use {
         super::*,
-        crate::{contact_info::ContactInfo, crds_value::CrdsData},
+        crate::crds_value::CrdsData,
         solana_sdk::{hash::hash, timing::timestamp},
     };
 
@@ -373,7 +442,7 @@ mod test {
             .write()
             .unwrap()
             .insert(
-                CrdsValue::new_unsigned(CrdsData::ContactInfo(ci.clone())),
+                CrdsValue::new_unsigned(CrdsData::LegacyContactInfo(ci.clone())),
                 0,
                 GossipRoute::LocalMessage,
             )
@@ -402,6 +471,7 @@ mod test {
             &[prune_pubkey],
             now,
             now,
+            &HashMap::<Pubkey, u64>::default(), // stakes
         );
         assert_eq!(res.err(), Some(CrdsGossipError::BadPruneDestination));
         //correct dest
@@ -412,6 +482,7 @@ mod test {
             &[prune_pubkey], // origins
             now,
             now,
+            &HashMap::<Pubkey, u64>::default(), // stakes
         );
         res.unwrap();
         //test timeout
@@ -423,6 +494,7 @@ mod test {
             &[prune_pubkey], // origins
             now,
             timeout,
+            &HashMap::<Pubkey, u64>::default(), // stakes
         );
         assert_eq!(res.err(), Some(CrdsGossipError::PruneMessageTimeout));
     }

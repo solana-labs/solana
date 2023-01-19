@@ -1,6 +1,8 @@
 //! Data shared between program runtime and built-in programs as well as SBF programs.
 #![deny(clippy::indexing_slicing)]
 
+#[cfg(all(not(target_os = "solana"), debug_assertions))]
+use crate::signature::Signature;
 #[cfg(not(target_os = "solana"))]
 use crate::{
     account::WritableAccount,
@@ -68,6 +70,9 @@ pub struct TransactionContext {
     rent: Option<Rent>,
     #[cfg(not(target_os = "solana"))]
     is_cap_accounts_data_allocations_per_transaction_enabled: bool,
+    /// Useful for debugging to filter by or to look it up on the explorer
+    #[cfg(all(not(target_os = "solana"), debug_assertions))]
+    signature: Signature,
 }
 
 impl TransactionContext {
@@ -97,6 +102,8 @@ impl TransactionContext {
             accounts_resize_delta: RefCell::new(0),
             rent,
             is_cap_accounts_data_allocations_per_transaction_enabled: false,
+            #[cfg(all(not(target_os = "solana"), debug_assertions))]
+            signature: Signature::default(),
         }
     }
 
@@ -116,6 +123,18 @@ impl TransactionContext {
     #[cfg(not(target_os = "solana"))]
     pub fn is_early_verification_of_account_modifications_enabled(&self) -> bool {
         self.rent.is_some()
+    }
+
+    /// Stores the signature of the current transaction
+    #[cfg(all(not(target_os = "solana"), debug_assertions))]
+    pub fn set_signature(&mut self, signature: &Signature) {
+        self.signature = *signature;
+    }
+
+    /// Returns the signature of the current transaction
+    #[cfg(all(not(target_os = "solana"), debug_assertions))]
+    pub fn get_signature(&self) -> &Signature {
+        &self.signature
     }
 
     /// Returns the total number of accounts loaded in this Transaction

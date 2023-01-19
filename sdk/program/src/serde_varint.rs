@@ -115,12 +115,13 @@ macro_rules! impl_var_int {
     };
 }
 
+impl_var_int!(u16);
 impl_var_int!(u32);
 impl_var_int!(u64);
 
 #[cfg(test)]
 mod tests {
-    use rand::Rng;
+    use {crate::short_vec::ShortU16, rand::Rng};
 
     #[derive(Debug, Eq, PartialEq, Serialize, Deserialize)]
     struct Dummy {
@@ -251,6 +252,37 @@ mod tests {
                 }
             }
         }
-        assert!(num_errors > 2_000);
+        assert!(
+            (3_000..23_000).contains(&num_errors),
+            "num errors: {num_errors}"
+        );
+    }
+
+    #[test]
+    fn test_serde_varint_cross_fuzz() {
+        #[derive(Serialize, Deserialize)]
+        struct U16(#[serde(with = "super")] u16);
+        let mut rng = rand::thread_rng();
+        let mut buffer = [0u8; 16];
+        let mut num_errors = 0;
+        for _ in 0..200_000 {
+            rng.fill(&mut buffer[..]);
+            match bincode::deserialize::<U16>(&buffer) {
+                Err(_) => {
+                    assert!(bincode::deserialize::<ShortU16>(&buffer).is_err());
+                    num_errors += 1;
+                }
+                Ok(k) => {
+                    let bytes = bincode::serialize(&k).unwrap();
+                    assert_eq!(bytes, &buffer[..bytes.len()]);
+                    assert_eq!(bytes, bincode::serialize(&ShortU16(k.0)).unwrap());
+                    assert_eq!(bincode::deserialize::<ShortU16>(&buffer).unwrap().0, k.0);
+                }
+            }
+        }
+        assert!(
+            (30_000..70_000).contains(&num_errors),
+            "num errors: {num_errors}"
+        );
     }
 }

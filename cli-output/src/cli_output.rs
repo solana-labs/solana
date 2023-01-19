@@ -1536,8 +1536,8 @@ pub struct CliLockout {
 impl From<&Lockout> for CliLockout {
     fn from(lockout: &Lockout) -> Self {
         Self {
-            slot: lockout.slot,
-            confirmation_count: lockout.confirmation_count,
+            slot: lockout.slot(),
+            confirmation_count: lockout.confirmation_count(),
         }
     }
 }
@@ -2412,7 +2412,11 @@ impl fmt::Display for CliBlock {
             self.encoded_confirmed_block.previous_blockhash
         )?;
         if let Some(block_time) = self.encoded_confirmed_block.block_time {
-            writeln!(f, "Block Time: {:?}", Local.timestamp(block_time, 0))?;
+            writeln!(
+                f,
+                "Block Time: {:?}",
+                Local.timestamp_opt(block_time, 0).unwrap()
+            )?;
         }
         if let Some(block_height) = self.encoded_confirmed_block.block_height {
             writeln!(f, "Block Height: {block_height:?}")?;
@@ -2594,6 +2598,8 @@ pub struct CliGossipNode {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub rpc_host: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub pubsub_host: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub version: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub feature_set: Option<u32>,
@@ -2608,6 +2614,7 @@ impl CliGossipNode {
             gossip_port: info.gossip.map(|addr| addr.port()),
             tpu_port: info.tpu.map(|addr| addr.port()),
             rpc_host: info.rpc.map(|addr| addr.to_string()),
+            pubsub_host: info.pubsub.map(|addr| addr.to_string()),
             version: info.version,
             feature_set: info.feature_set,
         }
