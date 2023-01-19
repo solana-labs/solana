@@ -62,8 +62,8 @@ use {
         snapshot_hash::StartingSnapshotHashes,
         snapshot_minimizer::SnapshotMinimizer,
         snapshot_utils::{
-            self, move_and_async_delete_path, ArchiveFormat, SnapshotVersion,
-            DEFAULT_ARCHIVE_COMPRESSION, SUPPORTED_ARCHIVE_COMPRESSION,
+            self, move_and_async_delete_path, setup_accounts_run_and_snapshot_paths, ArchiveFormat,
+            SnapshotVersion, DEFAULT_ARCHIVE_COMPRESSION, SUPPORTED_ARCHIVE_COMPRESSION,
         },
     },
     solana_sdk::{
@@ -1106,6 +1106,22 @@ fn load_bank_forks(
         );
         vec![non_primary_accounts_path]
     };
+
+    // For all account_paths, set up the run/ and snapshot/ sub directories.
+    let account_run_paths: Vec<PathBuf> = account_paths.into_iter().map(
+        |account_path| {
+            match setup_accounts_run_and_snapshot_paths(&account_path) {
+                Ok(account_run_path) => account_run_path,
+                Err(err) => {
+                    eprintln!("Unable to set up account run and snapshot sub directories: {account_path:?}, err: {err:?}");
+                    exit(1);
+                }
+            }
+        }).collect();
+
+    // From now on, use run/ paths in the same way as the previous account_paths.
+    let account_paths = account_run_paths;
+
     info!("Cleaning contents of account paths: {:?}", account_paths);
     let mut measure = Measure::start("clean_accounts_paths");
     account_paths.iter().for_each(|path| {
