@@ -1,7 +1,7 @@
 use {
     crate::{
         cluster_info::{ClusterInfo, GOSSIP_SLEEP_MILLIS},
-        crds::Cursor,
+        //        crds::Cursor,
         duplicate_shred::DuplicateShred,
     },
     std::{
@@ -50,20 +50,21 @@ impl DuplicateShredListener {
     // we may send different type of CrdsData to different senders.
     fn recv_loop(
         exit: Arc<AtomicBool>,
-        cluster_info: &ClusterInfo,
-        mut handler: impl DuplicateShredHandlerTrait + 'static,
+        _cluster_info: &ClusterInfo,
+        mut _handler: impl DuplicateShredHandlerTrait + 'static,
     ) {
-        let mut cursor = Cursor::default();
+        //        let mut cursor = Cursor::default();
         while !exit.load(Ordering::Relaxed) {
-            let entries: Vec<DuplicateShred> = cluster_info.get_duplicate_shreds(&mut cursor);
+            // Do not handle packets until map size problem is resolved.
+            /*     let entries: Vec<DuplicateShred> = cluster_info.get_duplicate_shreds(&mut cursor);
             for x in entries {
                 handler.handle(x);
-            }
+            }*/
             sleep(Duration::from_millis(GOSSIP_SLEEP_MILLIS));
         }
     }
 }
-
+/*
 #[cfg(test)]
 mod tests {
     use {
@@ -97,7 +98,7 @@ mod tests {
         }
     }
 
-    #[test]
+     #[test]
     fn test_listener_get_entries() {
         let node = Node::new_localhost();
         let host1_key = Arc::new(Keypair::new());
@@ -126,4 +127,4 @@ mod tests {
         exit.store(true, Ordering::Relaxed);
         assert!(listener.join().is_ok());
     }
-}
+}*/
