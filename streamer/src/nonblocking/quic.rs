@@ -58,7 +58,6 @@ pub fn spawn_server(
     stats: Arc<StreamStats>,
     bidirectional_reply_service: QuicBidirectionalReplyService,
 ) -> Result<JoinHandle<()>, QuicServerError> {
-    println!("spawn quic server");
     let (config, _cert) = configure_server(keypair, gossip_host)?;
 
     let (_, incoming) = {
@@ -91,7 +90,6 @@ pub async fn run_server(
     stats: Arc<StreamStats>,
     bidirectional_reply_service: QuicBidirectionalReplyService,
 ) {
-    println!("running quic server");
     debug!("spawn quic server");
     let mut last_datapoint = Instant::now();
     let unstaked_connection_table: Arc<Mutex<ConnectionTable>> = Arc::new(Mutex::new(
@@ -205,7 +203,6 @@ async fn setup_connection(
     stats: Arc<StreamStats>,
     bidirectional_service: QuicBidirectionalReplyService,
 ) {
-    println!("setting up connection");
     if let Ok(connecting_result) = timeout(
         Duration::from_millis(QUIC_CONNECTION_HANDSHAKE_TIMEOUT_MS),
         connecting,
@@ -365,7 +362,6 @@ async fn handle_connection(
     stake: u64,
     bidirectional_service: QuicBidirectionalReplyService,
 ) {
-    println!("handle connection");
     debug!(
         "quic new connection {} streams: {} connections: {}",
         remote_addr,
@@ -387,7 +383,6 @@ async fn handle_connection(
         };
 
         if let Some(send_stream) = send_stream {
-            println!("got bi directional connection {}", remote_addr);
             bidirectional_service
                 .add_stream(remote_addr.clone(), send_stream)
                 .await;
@@ -431,11 +426,6 @@ async fn handle_connection(
                                     stats
                                         .total_stream_read_timeouts
                                         .fetch_add(1, Ordering::Relaxed);
-
-                                    // if has_bi_directional_stream_associated {
-                                    //     println!("stopping on bidirectional stream");
-                                    //     tokio::time::sleep(Duration::from_secs(60)).await;
-                                    // }
                                 }
                             }
                             stats.total_streams.fetch_sub(1, Ordering::Relaxed);

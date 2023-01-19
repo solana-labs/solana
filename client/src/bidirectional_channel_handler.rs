@@ -42,7 +42,7 @@ impl BidirectionalChannelHandler {
         self.recv_channel_is_set.load(Ordering::Relaxed)
     }
 
-    pub fn start_serving(&self, mut recv_stream: RecvStream) {
+    pub fn start_serving(&self, recv_stream: RecvStream) {
         if self.is_serving() {
             return;
         }
@@ -61,7 +61,7 @@ impl BidirectionalChannelHandler {
             let mut buffer_written = 0;
             // when we reset the buffer we keep track of the last offset using this variable
             let mut last_offset = 0;
-
+            let mut recv_stream = recv_stream;
             loop {
                 if let Ok(chunk) = tokio::time::timeout(
                     Duration::from_millis(timeout),
@@ -80,7 +80,6 @@ impl BidirectionalChannelHandler {
                                         None => break,
                                     };
 
-                                    println!("BidirectionalChannelHandler got chunk length {} offset {} end of chunk {} last_offset {} ", chunk.bytes.len(), chunk.offset, end_of_chunk, last_offset);
                                     // move chunk into buffer
                                     buffer[(chunk.offset as usize - last_offset)
                                         ..(end_of_chunk - last_offset)]
@@ -98,8 +97,6 @@ impl BidirectionalChannelHandler {
                                             .try_into()
                                             .unwrap();
                                         if let Ok(signature) = signature {
-                                            println!("BidirectionalChannelHandler got a message for signature {}", signature);
-
                                             if let Err(_) =
                                                 sender.send(QuicReplyMessage::new_with_bytes(
                                                     signature, message,
@@ -109,7 +106,6 @@ impl BidirectionalChannelHandler {
                                                 break;
                                             }
                                         } else {
-                                            println!("deserializing error on BidirectionalChannelHandler");
                                             // deserializing error
                                             debug!("deserializing error on BidirectionalChannelHandler");
                                         }
@@ -129,42 +125,15 @@ impl BidirectionalChannelHandler {
                             break;
                         }
                     }
-                    // match buf_size {
-                    //     Ok(buf_size) => {
-                    //         if let Some(buf_size) = buf_size {
-                    //             let buffer = &buf[0..buf_size];
-                    //             match bincode::deserialize::<QuicReplyMessageBatch>(buffer) {
-                    //                 Ok(messages) => {
-                    //                     println!(
-                    //                         "recieved a buffered data of size {}",
-                    //                         messages.messages.len()
-                    //                     );
-                    //                     let _ = sender.send(messages);
-                    //                 }
-                    //                 _ => {
-                    //                     println!("unformatted message");
-                    //                     // unformatted message
-                    //                     break;
-                    //                 }
-                    //             }
-                    //         }
-                    //     }
-                    //     Err(e) => {
-                    //         println!("BidirectionalChannelHandler stream got error {}", e);
-                    //         break;
-                    //     }
-                    // }
                 } else {
-                    println!("BidirectionalChannelHandler timeout");
                     break;
                 }
 
                 timeout = timeout.saturating_sub((Instant::now() - start).as_millis() as u64);
                 start = Instant::now();
             }
-            println!("BidirectionalChannelHandler finished");
             recv_channel_is_set.store(false, Ordering::Relaxed);
-            true
+            println!("stopping recv stream");
         });
     }
 }
