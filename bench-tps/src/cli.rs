@@ -1,7 +1,7 @@
 use {
     crate::spl_convert::FromOtherSolana,
     clap::{crate_description, crate_name, App, Arg, ArgMatches},
-    solana_clap_utils::input_validators::{is_url, is_url_or_moniker},
+    solana_clap_utils::input_validators::{is_url, is_url_or_moniker, is_within_range},
     solana_cli_config::{ConfigInput, CONFIG_FILE},
     solana_sdk::{
         fee_calculator::FeeRateGovernor,
@@ -65,6 +65,7 @@ pub struct Config {
     pub use_randomized_compute_unit_price: bool,
     pub use_durable_nonce: bool,
     pub instruction_padding_config: Option<InstructionPaddingConfig>,
+    pub num_conflict_groups: Option<usize>,
 }
 
 impl Default for Config {
@@ -95,6 +96,7 @@ impl Default for Config {
             use_randomized_compute_unit_price: false,
             use_durable_nonce: false,
             instruction_padding_config: None,
+            num_conflict_groups: None,
         }
     }
 }
@@ -342,6 +344,13 @@ pub fn build_args<'a>(version: &'_ str) -> App<'a, '_> {
                 .takes_value(true)
                 .help("If set, wraps all instructions in the instruction padding program, with the given amount of padding bytes in instruction data."),
         )
+        .arg(
+            Arg::with_name("num_conflict_groups")
+                .long("num-conflict-groups")
+                .takes_value(true)
+                .validator(|arg| is_within_range(arg, 1, usize::MAX - 1))
+                .help("The number of unique destination accounts per transactions 'chunk'. Lower values will result in more transaction conflicts.")
+        )
 }
 
 /// Parses a clap `ArgMatches` structure into a `Config`
@@ -492,6 +501,14 @@ pub fn extract_args(matches: &ArgMatches) -> Config {
                 .parse()
                 .expect("Can't parse padded instruction data size"),
         });
+    }
+
+    if let Some(num_conflict_groups) = matches.value_of("num_conflict_groups") {
+        args.num_conflict_groups = Some(
+            num_conflict_groups
+                .parse()
+                .expect("Can't parse conflict groups"),
+        );
     }
 
     args
