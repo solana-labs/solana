@@ -1,3 +1,4 @@
+use x509_parser::nom::AsBytes;
 // this is a service to handle bidirections quinn channel
 use {
     bincode::serialize,
@@ -18,7 +19,7 @@ pub struct QuicReplyMessage {
     transaction_signature: Signature,
     message: [u8; 128],
 }
-
+// header + signature + 128 bytes for message
 pub const QUIC_REPLY_MESSAGE_SIZE: usize = 8 + 64 + 128;
 pub const QUIC_REPLY_MESSAGE_SIGNATURE_OFFSET: usize = 8;
 pub const QUIC_REPLY_MESSAGE_OFFSET: usize = 8 + 64;
@@ -30,9 +31,7 @@ impl QuicReplyMessage {
             message[..128].try_into().unwrap()
         } else {
             let mut array: [u8; 128] = [0; 128];
-            message.iter().enumerate().for_each(|(index, char)| {
-                array[index] = *char;
-            });
+            array[0..message.len()].copy_from_slice(message.as_bytes());
             array
         };
         Self {
@@ -49,7 +48,11 @@ impl QuicReplyMessage {
     }
 
     pub fn message(&self) -> String {
-        match String::from_utf8(self.message.to_vec()) {
+        let index_end = match self.message.iter().position(|x| *x == 0) {
+            Some(x) => x,
+            None => 128,
+        };
+        match String::from_utf8(self.message[0..index_end].to_vec()) {
             Ok(x) => x,
             Err(_) => String::from_str("").unwrap(),
         }
@@ -122,14 +125,13 @@ impl QuicBidirectionalReplyService {
     }
 
     pub fn send_message(&self, transaction_signature: &Signature, message: String) {
-        println!("send_message {} {}", transaction_signature, message);
         let message = QuicReplyMessage::new(*transaction_signature, message);
         match self.service_sender.send(message) {
-            Ok(_) => {
-                println!("send ok");
-            }
             Err(e) => {
-                println!("send error {}", e);
+                debug!("send error {}", e);
+            }
+            _ => {
+                // continue
             }
         }
     }
@@ -166,7 +168,6 @@ impl QuicBidirectionalReplyService {
 
         let subscriptions = self.data.clone();
 
-        println!("adding stream {}", sender_id);
         // start listnening to stream specific cross beam channel
         tokio::spawn(async move {
             let mut send_stream = send_stream;
@@ -178,7 +179,6 @@ impl QuicBidirectionalReplyService {
                         if let Some(message) = message {
                             let serialized_message = serialize(&message).unwrap();
 
-                            println!("packet batch for message {} of length {}", message.transaction_signature, serialized_message.len());
                             let res = send_stream.write_all(serialized_message.as_slice()).await;
                             if let Err(error) = res {
                                 info!(
@@ -191,21 +191,21 @@ impl QuicBidirectionalReplyService {
                                 false
                             }
                         } else {
-                            println!("recv channel closed");
+                            trace!("recv channel closed");
                             true
                         }
                     },
+                    _task = send_stream.stopped() => {
+                        true
+                    }
                 };
 
                 if finish {
-                    if finish {
-                        println!("finishing the stream");
-                        let _ = send_stream.finish().await;
-                        break;
-                    }
+                    trace!("finishing the stream");
+                    let _ = send_stream.finish().await;
+                    break;
                 }
             }
-            println!("finshed stream {}", sender_id);
             // remove all data belonging to sender_id
             let mut sub_data = subscriptions.write().await;
             let subscriptions = &mut *sub_data;
@@ -230,14 +230,12 @@ impl QuicBidirectionalReplyService {
 
         // this means that there is not bidirectional connection, and packets came from unidirectional socket
         if id == 0 {
-            println!("id is 0");
             return;
         }
         let mut data = self.data.write().await;
         let data = &mut *data;
         packets.iter().for_each(|packet| {
             let meta = &packet.meta;
-            println!("got a packet in add_packet");
             if meta.discard()
                 || meta.forwarded()
                 || meta.is_simple_vote_tx()
@@ -248,11 +246,8 @@ impl QuicBidirectionalReplyService {
             }
             let signature = get_signature_from_packet(packet);
 
-            println!("adding packet {} for id {}", signature.unwrap(), id);
             signature.map(|x| data.transaction_signature_map.insert(x, id));
         });
-
-        println!("adding packets finished");
     }
 
     // this method will start bidirectional relay service
@@ -267,13 +262,10 @@ impl QuicBidirectionalReplyService {
         tokio::spawn(async move {
             let mut service_reciever = service_reciever;
             loop {
-                println!("start serving");
                 let bidirectional_message = service_reciever.recv().await;
-                println!("serve recieved a message");
                 if bidirectional_message.is_none() {
-                    println!("bi dir channel closed");
                     // the channel has be closed
-                    warn!("quic bidirectional channel is closed");
+                    trace!("quic bidirectional channel is closed");
                     break;
                 }
                 let message = bidirectional_message.unwrap();
@@ -289,11 +281,9 @@ impl QuicBidirectionalReplyService {
                         .transaction_signature_map
                         .get(&message.transaction_signature)
                         .map(|x| *x);
-                    println!("serve for id {}", send_stream_id.unwrap());
                     send_stream_id.and_then(|x| data.sender_ids_map.get(&x))
                 };
                 if let Some(send_stream) = send_stream {
-                    println!("sending message for {}", message.transaction_signature);
                     match send_stream.send(message) {
                         Err(e) => {
                             warn!("Error sending a bidirectional message {}", e.to_string());
@@ -491,27 +481,27 @@ pub mod test {
             .unwrap();
 
         // replying to each packet with a message
-        let repling_thread = std::thread::spawn(move || loop {
+        let repling_thread = std::thread::spawn(move || {
             let mut i = 0;
-            let packets = reciever.recv().unwrap();
-            for packet in packets.iter() {
-                let sig = get_signature_from_packet(&packet).unwrap();
-                println!("getting reply for signature {} ", sig);
-                bidirectional_replay_service
-                    .send_message(&sig, TransactionError::InvalidRentPayingAccount.to_string());
-                i += 1;
-            }
-            if i >= nb_packets {
-                break;
+            loop {
+                let packets = reciever.recv().unwrap();
+                for packet in packets.iter() {
+                    let sig = get_signature_from_packet(&packet).unwrap();
+                    bidirectional_replay_service
+                        .send_message(&sig, TransactionError::InvalidRentPayingAccount.to_string());
+                    i += 1;
+                }
+                if i >= nb_packets {
+                    break;
+                }
             }
         });
 
         let sig_collector = std::thread::spawn(move || {
             let mut messages_to_return = vec![];
+            let mut i = 0;
             loop {
-                let mut i = 0;
                 let message = bidirectional_reply_handler.reciever.recv().unwrap();
-                println!("client for reply for signature {} ", message.signature());
                 // check if transaction signature is present
                 messages_to_return.push(message);
                 i += 1;
@@ -523,7 +513,7 @@ pub mod test {
         });
         repling_thread.join().unwrap();
         let messages = sig_collector.join().unwrap();
-
+        // asserting for messages
         for message in messages {
             assert!(signatures.contains(&message.signature()));
             assert_eq!(
