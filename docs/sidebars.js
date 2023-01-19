@@ -1,6 +1,5 @@
 module.exports = {
   introductionSidebar: [
-    // "home",
     {
       type: "category",
       collapsed: false,
