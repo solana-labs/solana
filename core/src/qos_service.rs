@@ -3,7 +3,6 @@
 //! how transactions are included in blocks, and optimize those blocks.
 //!
 
-use solana_streamer::bidirectional_channel::QuicBidirectionalReplyService;
 use {
     crate::banking_stage::{BatchedTransactionDetails, CommitTransactionDetails},
     crossbeam_channel::{unbounded, Receiver, Sender},
@@ -17,6 +16,7 @@ use {
         clock::Slot,
         transaction::{self, SanitizedTransaction, TransactionError},
     },
+    solana_streamer::bidirectional_channel::QuicBidirectionalReplyService,
     std::{
         sync::{
             atomic::{AtomicBool, AtomicU64, Ordering},
