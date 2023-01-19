@@ -3513,11 +3513,6 @@ mod tests {
         );
     }
 
-    fn generate_test_tmp_account_path() -> PathBuf {
-        let accounts_dir = tempfile::TempDir::new().unwrap();
-        setup_accounts_run_and_snapshot_paths(accounts_dir.path()).unwrap()
-    }
-
     #[test]
     fn test_purge_all_incremental_snapshot_archives_when_no_full_snapshot_archives() {
         let full_snapshot_archives_dir = tempfile::TempDir::new().unwrap();
