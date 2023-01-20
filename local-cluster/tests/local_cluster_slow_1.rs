@@ -25,9 +25,13 @@ use {
         local_cluster::{ClusterConfig, LocalCluster},
         validator_configs::*,
     },
-    solana_runtime::vote_parser,
+    solana_pubsub_client::pubsub_client::PubsubClient,
+    solana_rpc::rpc_pubsub_service::PubSubConfig,
+    solana_rpc_client_api::config::{RpcBlockSubscribeConfig, RpcBlockSubscribeFilter},
+    solana_runtime::{commitment::VOTE_THRESHOLD_SIZE, vote_parser},
     solana_sdk::{
         clock::{Slot, MAX_PROCESSING_AGE},
+        commitment_config::CommitmentConfig,
         hash::Hash,
         pubkey::Pubkey,
         signature::Signer,
@@ -40,7 +44,7 @@ use {
         collections::{BTreeSet, HashSet},
         path::Path,
         sync::{
-            atomic::{AtomicBool, Ordering},
+            atomic::{AtomicBool, AtomicUsize, Ordering},
             Arc,
         },
         thread::sleep,
@@ -391,16 +395,21 @@ fn test_kill_partition_switch_threshold_progress() {
 #[test]
 #[serial]
 #[allow(unused_attributes)]
-fn test_oc_vuln() {
+fn test_oc_bad_signatures() {
     solana_logger::setup_with_default(RUST_LOG_FILTER);
-    let leader_stake = 10_000_000 * DEFAULT_NODE_STAKE;
-    let our_node_stake = 1 * DEFAULT_NODE_STAKE;
 
+    let total_stake = 100 * DEFAULT_NODE_STAKE;
+    let leader_stake = (total_stake as f64 * VOTE_THRESHOLD_SIZE) as u64;
+    let our_node_stake = total_stake - leader_stake;
     let node_stakes = vec![leader_stake, our_node_stake];
-    let total_stake: u64 = node_stakes.iter().sum();
 
+    let pubsub_config = PubSubConfig {
+        enable_block_subscription: true,
+        ..PubSubConfig::default()
+    };
     let validator_config = ValidatorConfig {
         require_tower: true,
+        pubsub_config,
         ..ValidatorConfig::default_for_test()
     };
     let validator_keys = vec![
@@ -411,7 +420,7 @@ fn test_oc_vuln() {
     .map(|s| (Arc::new(Keypair::from_base58_string(s)), true))
     .take(node_stakes.len())
     .collect::<Vec<_>>();
-    // This is why it's important our node was last in `node_stakes`
+
     let our_id = validator_keys.last().unwrap().0.pubkey();
     let mut config = ClusterConfig {
         cluster_lamports: total_stake,
@@ -428,7 +437,7 @@ fn test_oc_vuln() {
     let vote_keypair = our_info.info.voting_keypair;
     let bad_leader_id = cluster.entry_point_info.id;
     let bad_leader_ledger_path = cluster.validators[&bad_leader_id].info.ledger_path.clone();
-    println!(
+    info!(
         "our node id: {}, vote id: {}",
         node_keypair.pubkey(),
         vote_keypair.pubkey()
@@ -448,8 +457,14 @@ fn test_oc_vuln() {
         SocketAddrSpace::Unspecified,
     );
 
+    let num_votes_simulated = Arc::new(AtomicUsize::new(0));
     let t_voter = {
         let exit = exit.clone();
+        let num_votes_simulated = num_votes_simulated.clone();
+        // push to tpu
+        let (rpc, tpu) = cluster_tests::get_client_facing_addr(&cluster.entry_point_info);
+        let client = ThinClient::new(rpc, tpu, cluster.connection_cache.clone());
+        let cluster_funding_keypair = cluster.funding_keypair.insecure_clone();
         std::thread::spawn(move || {
             let mut cursor = Cursor::default();
             loop {
@@ -461,8 +476,7 @@ fn test_oc_vuln() {
                 let mut parsed_vote_iter: Vec<_> = labels
                     .into_iter()
                     .zip(votes.into_iter())
-                    .filter_map(|(label, leader_vote_tx)| {
-                        // Filter out votes not from the bad leader
+                    .filter_map(|(_label, leader_vote_tx)| {
                         let vote = vote_parser::parse_vote_transaction(&leader_vote_tx)
                             .map(|(_, vote, ..)| vote)
                             .unwrap();
@@ -483,20 +497,16 @@ fn test_oc_vuln() {
 
                 for (parsed_vote, leader_vote_tx) in &parsed_vote_iter {
                     if let Some(latest_vote_slot) = parsed_vote.last_voted_slot() {
-                        println!("received vote for {}", latest_vote_slot);
-                        // Only vote on even slots. Note this may violate lockouts if the
-                        // validator started voting on a different fork before we could exit
-                        // it above.
+                        info!("received vote for {}", latest_vote_slot);
                         let vote_hash = parsed_vote.hash();
-                        println!(
+                        info!(
                             "Simulating vote from our node on slot {}, hash {}",
                             latest_vote_slot, vote_hash
                         );
 
                         // Add all recent vote slots on this fork to allow cluster to pass
                         // vote threshold checks in replay. Note this will instantly force a
-                        // root by this validator, but we're not concerned with lockout violations
-                        // by this validator so it's fine.
+                        // root by this validator.
                         let leader_blockstore = open_blockstore(&bad_leader_ledger_path);
                         let mut vote_slots: Vec<Slot> =
                             AncestorIterator::new_inclusive(latest_vote_slot, &leader_blockstore)
@@ -515,15 +525,12 @@ fn test_oc_vuln() {
                             &bad_authorized_signer_keypair,
                             None,
                         );
-                        // push to tpu
-                        let (rpc, tpu) =
-                            cluster_tests::get_client_facing_addr(&cluster.entry_point_info);
-                        let client = ThinClient::new(rpc, tpu, cluster.connection_cache.clone());
                         client
-                            .retry_transfer(&cluster.funding_keypair, &mut vote_tx, 5)
+                            .retry_transfer(&cluster_funding_keypair, &mut vote_tx, 5)
                             .unwrap();
                     }
                     // Give vote some time to propagate
+                    num_votes_simulated.fetch_add(1, Ordering::Relaxed);
                     sleep(Duration::from_millis(100));
                 }
 
@@ -534,7 +541,40 @@ fn test_oc_vuln() {
         })
     };
 
-    loop {}
+    let (mut block_subscribe_client, receiver) = PubsubClient::block_subscribe(
+        &format!("ws://{}", &cluster.entry_point_info.rpc_pubsub.to_string()),
+        RpcBlockSubscribeFilter::All,
+        Some(RpcBlockSubscribeConfig {
+            commitment: Some(CommitmentConfig::confirmed()),
+            encoding: None,
+            transaction_details: None,
+            show_rewards: None,
+            max_supported_transaction_version: None,
+        }),
+    )
+    .unwrap();
+
+    const MAX_VOTES_TO_SIMULATE: usize = 100;
+    loop {
+        let responses: Vec<_> = receiver.try_iter().collect();
+        // Nothing should get optimistically confirmed or rooted
+        assert!(responses.is_empty());
+        // Wait for the voter thread to attempt sufficient number of votes to give
+        // a chance for the violation to occur
+        if num_votes_simulated.load(Ordering::Relaxed) > MAX_VOTES_TO_SIMULATE {
+            break;
+        }
+    }
+
+    // Clean up voter thread
+    exit.store(true, Ordering::Relaxed);
+    t_voter.join().unwrap();
+    gossip_service.join().unwrap();
+
+    // If we don't drop the cluster, the blocking web socket service
+    // won't return, and the `block_subscribe_client` won't shut down
+    drop(cluster);
+    block_subscribe_client.shutdown().unwrap();
 }
 
 #[test]

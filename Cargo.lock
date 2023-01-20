@@ -5780,6 +5780,7 @@ dependencies = [
  "solana-ledger",
  "solana-logger 1.15.0",
  "solana-pubsub-client",
+ "solana-rpc",
  "solana-rpc-client",
  "solana-rpc-client-api",
  "solana-runtime",
