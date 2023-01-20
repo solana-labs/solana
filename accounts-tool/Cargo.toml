@@ -8,3 +8,10 @@ homepage = "https://solana.com/"
 documentation = "https://docs.rs/solana-accounts-tool"
 license = "Apache-2.0"
 edition = "2021"
+
+[dependencies]
+clap = "2.33.1"
+log = { version = "0.4.17" }
+solana-logger = { path = "../logger", version = "=1.15.0" }
+solana-measure = { path = "../measure", version = "=1.15.0" }
+solana-version = { path = "../version", version = "=1.15.0" }
