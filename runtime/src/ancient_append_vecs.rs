@@ -11,9 +11,10 @@ use {
             ShrinkCollectAliveSeparatedByRefs, ShrinkStatsSub, StoreReclaims,
             INCLUDE_SLOT_IN_HASH_IRRELEVANT_APPEND_VEC_OPERATION,
         },
+        accounts_file::AccountsFile,
         accounts_index::ZeroLamport,
         active_stats::ActiveStatItem,
-        append_vec::{aligned_stored_size, AppendVec, StoredAccountMeta},
+        append_vec::{aligned_stored_size, StoredAccountMeta},
         storable_accounts::{StorableAccounts, StorableAccountsBySlot},
     },
     rand::{thread_rng, Rng},
@@ -748,8 +749,10 @@ pub fn get_ancient_append_vec_capacity() -> u64 {
 }
 
 /// is this a max-size append vec designed to be used as an ancient append vec?
-pub fn is_ancient(storage: &AppendVec) -> bool {
-    storage.capacity() >= get_ancient_append_vec_capacity()
+pub fn is_ancient(storage: &AccountsFile) -> bool {
+    match storage {
+        AccountsFile::AppendVec(storage) => storage.capacity() >= get_ancient_append_vec_capacity(),
+    }
 }
 
 #[cfg(test)]
@@ -766,7 +769,9 @@ pub mod tests {
                 },
                 INCLUDE_SLOT_IN_HASH_TESTS,
             },
-            append_vec::{aligned_stored_size, AccountMeta, StoredAccountMeta, StoredMeta},
+            append_vec::{
+                aligned_stored_size, AccountMeta, AppendVec, StoredAccountMeta, StoredMeta,
+            },
             storable_accounts::StorableAccountsBySlot,
         },
         solana_sdk::{
@@ -1670,7 +1675,7 @@ pub mod tests {
         ] {
             let tf = crate::append_vec::test_utils::get_append_vec_path("test_is_ancient");
             let (_temp_dirs, _paths) = get_temp_accounts_paths(1).unwrap();
-            let av = AppendVec::new(&tf.path, true, size as usize);
+            let av = AccountsFile::AppendVec(AppendVec::new(&tf.path, true, size as usize));
 
             assert_eq!(expected_ancient, is_ancient(&av));
         }
