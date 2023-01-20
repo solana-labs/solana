@@ -1036,6 +1036,49 @@ mod tests {
     }
 
     #[test]
+    fn test_entry_gpu_verify_invalid_hashes() {
+        let verify_transaction = {
+            move |versioned_tx: VersionedTransaction,
+                  verification_mode: TransactionVerificationMode|
+                  -> Result<SanitizedTransaction> {
+                assert!(verification_mode == TransactionVerificationMode::FullVerification);
+
+                let message_hash = versioned_tx.verify_and_hash_message()?;
+                SanitizedTransaction::try_create(
+                    versioned_tx,
+                    message_hash,
+                    None,
+                    SimpleAddressLoader::Disabled,
+                    true, // require_static_program_ids
+                )
+            }
+        };
+
+        let recycler = VerifyRecyclers::default();
+
+        let entry_count = 1025u32;
+        let entries = (0..entry_count)
+            .map(|_| {
+                let transaction = test_tx();
+                let entry = next_entry_mut(&mut Hash::default(), 0, vec![transaction]);
+
+                Entry {
+                    num_hashes: entry.num_hashes,
+                    hash: Hash::default(),
+                    transactions: entry.transactions,
+                }
+            })
+            .collect::<Vec<_>>();
+
+        assert!(test_verify_transactions(
+            entries,
+            false,
+            recycler,
+            Arc::new(verify_transaction)
+        ));
+    }
+
+    #[test]
     fn test_transaction_reorder_attack() {
         let zero = Hash::default();
 
