@@ -47,6 +47,7 @@ curve25519-dalek = { version = "3.2.1", features = ["serde"] }
 itertools = "0.10.5"
 libc = { version = "0.2.126", features = ["extra_traits"] }
 libsecp256k1 = "0.6.0"
+num-bigint = "0.4.3"
 rand = "0.7"
 rand_chacha = { version = "0.2.2", default-features = true, features = ["simd", "std"] }
 tiny-bip39 = "0.8.2"
