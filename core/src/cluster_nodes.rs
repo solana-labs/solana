@@ -33,9 +33,16 @@ use {
         sync::{Arc, Mutex},
         time::{Duration, Instant},
     },
+    thiserror::Error,
 };
 
 pub(crate) const MAX_NUM_TURBINE_HOPS: usize = 4;
+
+#[derive(Debug, Error)]
+pub enum Error {
+    #[error("Loopback from slot leader: {leader}, shred: {shred:?}")]
+    Loopback { leader: Pubkey, shred: ShredId },
+}
 
 #[allow(clippy::large_enum_variant)]
 enum NodeId {
@@ -150,14 +157,14 @@ impl ClusterNodes<RetransmitStage> {
         shred: &ShredId,
         root_bank: &Bank,
         fanout: usize,
-    ) -> (/*root_distance:*/ usize, Vec<SocketAddr>) {
+    ) -> Result<(/*root_distance:*/ usize, Vec<SocketAddr>), Error> {
         let RetransmitPeers {
             root_distance,
             neighbors,
             children,
             addrs,
             frwds,
-        } = self.get_retransmit_peers(slot_leader, shred, root_bank, fanout);
+        } = self.get_retransmit_peers(slot_leader, shred, root_bank, fanout)?;
         if neighbors.is_empty() {
             let peers = children
                 .into_iter()
@@ -165,7 +172,7 @@ impl ClusterNodes<RetransmitStage> {
                 .filter(|node| addrs.get(&node.tvu) == Some(&node.id))
                 .map(|node| node.tvu)
                 .collect();
-            return (root_distance, peers);
+            return Ok((root_distance, peers));
         }
         // If the node is on the critical path (i.e. the first node in each
         // neighborhood), it should send the packet to tvu socket of its
@@ -177,7 +184,7 @@ impl ClusterNodes<RetransmitStage> {
                 .filter_map(Node::contact_info)
                 .filter(|node| frwds.get(&node.tvu_forwards) == Some(&node.id))
                 .map(|node| node.tvu_forwards);
-            return (root_distance, peers.collect());
+            return Ok((root_distance, peers.collect()));
         }
         // First neighbor is this node itself, so skip it.
         let peers = neighbors[1..]
@@ -192,7 +199,7 @@ impl ClusterNodes<RetransmitStage> {
                     .filter(|node| addrs.get(&node.tvu) == Some(&node.id))
                     .map(|node| node.tvu),
             );
-        (root_distance, peers.collect())
+        Ok((root_distance, peers.collect()))
     }
 
     pub fn get_retransmit_peers(
@@ -201,15 +208,19 @@ impl ClusterNodes<RetransmitStage> {
         shred: &ShredId,
         root_bank: &Bank,
         fanout: usize,
-    ) -> RetransmitPeers {
+    ) -> Result<RetransmitPeers, Error> {
         let shred_seed = shred.seed(slot_leader);
         let mut weighted_shuffle = self.weighted_shuffle.clone();
         // Exclude slot leader from list of nodes.
         if slot_leader == &self.pubkey {
-            error!("retransmit from slot leader: {}", slot_leader);
-        } else if let Some(index) = self.index.get(slot_leader) {
+            return Err(Error::Loopback {
+                leader: *slot_leader,
+                shred: *shred,
+            });
+        }
+        if let Some(index) = self.index.get(slot_leader) {
             weighted_shuffle.remove_index(*index);
-        };
+        }
         let mut addrs = HashMap::<SocketAddr, Pubkey>::with_capacity(self.nodes.len());
         let mut frwds = HashMap::<SocketAddr, Pubkey>::with_capacity(self.nodes.len());
         let mut rng = ChaChaRng::from_seed(shred_seed);
@@ -241,13 +252,13 @@ impl ClusterNodes<RetransmitStage> {
                 3 // If changed, update MAX_NUM_TURBINE_HOPS.
             };
             let peers = get_retransmit_peers(fanout, self_index, &nodes);
-            return RetransmitPeers {
+            return Ok(RetransmitPeers {
                 root_distance,
                 neighbors: Vec::default(),
                 children: peers.collect(),
                 addrs,
                 frwds,
-            };
+            });
         }
         let root_distance = if self_index == 0 {
             0
@@ -262,13 +273,13 @@ impl ClusterNodes<RetransmitStage> {
         // Assert that the node itself is included in the set of neighbors, at
         // the right offset.
         debug_assert_eq!(neighbors[self_index % fanout].pubkey(), self.pubkey);
-        RetransmitPeers {
+        Ok(RetransmitPeers {
             root_distance,
             neighbors,
             children,
             addrs,
             frwds,
-        }
+        })
     }
 }
 
