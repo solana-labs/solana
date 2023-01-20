@@ -72,9 +72,9 @@ pub struct StorableAccountsWithHashesAndWriteVersions<
     /// accounts to store
     /// always has pubkey and account
     /// may also have hash and write_version per account
-    accounts: &'b U,
+    pub(crate) accounts: &'b U,
     /// if accounts does not have hash and write version, this has a hash and write version per account
-    hashes_and_write_versions: Option<(Vec<V>, Vec<StoredMetaWriteVersion>)>,
+    pub(crate) hashes_and_write_versions: Option<(Vec<V>, Vec<StoredMetaWriteVersion>)>,
     _phantom: PhantomData<&'a T>,
 }
 
@@ -220,7 +220,7 @@ impl<'a> StoredAccountMeta<'a> {
         &self.meta.pubkey
     }
 
-    fn sanitize(&self) -> bool {
+    pub(crate) fn sanitize(&self) -> bool {
         self.sanitize_executable() && self.sanitize_lamports()
     }
 
@@ -685,6 +685,7 @@ impl AppendVec {
         let mut rv = Vec::with_capacity(len);
         for i in skip..len {
             let (account, pubkey, hash, write_version_obsolete) = accounts.get(i);
+            println!("av hash = {}", hash);
             let account_meta = account
                 .map(|account| AccountMeta {
                     lamports: account.lamports(),
@@ -754,7 +755,10 @@ pub mod tests {
             self.current_len.store(len, Ordering::Release);
         }
 
-        fn append_account_test(&self, data: &(StoredMeta, AccountSharedData)) -> Option<usize> {
+        pub(crate) fn append_account_test(
+            &self,
+            data: &(StoredMeta, AccountSharedData),
+        ) -> Option<usize> {
             let slot_ignored = Slot::MAX;
             let accounts = [(&data.0.pubkey, &data.1)];
             let slice = &accounts[..];

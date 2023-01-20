@@ -52,11 +52,13 @@ use {
             AbsRequestHandlers, AbsRequestSender, AccountsBackgroundService,
             PrunedBanksRequestHandler, SnapshotRequestHandler,
         },
+        accounts_data_storage::{AccountMetaFlags, AccountsDataStorage},
         accounts_db::{
             AccountsDb, AccountsDbConfig, CalcAccountsHashDataSource, FillerAccountsConfig,
         },
         accounts_index::{AccountsIndexConfig, IndexLimitMb, ScanConfig},
         accounts_update_notifier_interface::AccountsUpdateNotifier,
+        append_vec::{AppendVec, StoredAccountMeta, StoredMeta},
         bank::{Bank, RewardCalculationEvent, TotalAccountsStats},
         bank_forks::BankForks,
         cost_model::CostModel,
@@ -2369,6 +2371,24 @@ fn main() {
                            If no file name is specified, it will print the metadata of all ledger files.")
             )
         )
+        .subcommand(
+            SubCommand::with_name("new_ads_file")
+            .about("Create a new accounts-data-storage file from an existing append_vec file.")
+            .arg(
+                Arg::with_name("append_vec")
+                    .long("append-vec")
+                    .takes_value(true)
+                    .value_name("APPEND_VEC_FILE_NAME")
+                    .help("The name of the append vec file.")
+            )
+            .arg(
+                Arg::with_name("ads_file_name")
+                    .long("ads-file-name")
+                    .takes_value(true)
+                    .value_name("ADS_FILE_NAME")
+                    .help("The name of the output ads file.")
+            )
+        )
         .get_matches();
 
     info!("{} {}", crate_name!(), solana_version::version!());
@@ -4328,6 +4348,89 @@ fn main() {
                 let sst_file_name = arg_matches.value_of("file_name");
                 if let Err(err) = print_blockstore_file_metadata(&blockstore, &sst_file_name) {
                     eprintln!("{err}");
+                }
+            }
+            ("new_ads_file", Some(arg_matches)) => {
+                let append_vec_path = value_t_or_exit!(arg_matches, "append_vec", String);
+                let ads_file_path =
+                    PathBuf::from(value_t_or_exit!(arg_matches, "ads_file_name", String));
+                let append_vec_len = std::fs::metadata(&append_vec_path).unwrap().len() as usize;
+                let mut append_vec =
+                    AppendVec::new_from_file_unchecked(append_vec_path, append_vec_len)
+                        .expect("should succeed");
+                append_vec.set_no_remove_on_drop();
+                let ads = AccountsDataStorage::new(&ads_file_path, true /* create */);
+                ads.write_from_append_vec(&append_vec).unwrap();
+
+                let footer = ads.read_footer_block().unwrap();
+                info!("footer = {:?}", footer);
+
+                // read append-vec
+                let mut num_accounts = 0;
+                let mut offset = 0;
+                let mut account_map: HashMap<Pubkey, StoredAccountMeta> = HashMap::new();
+                while let Some((account, next_offset)) = append_vec.get_account(offset) {
+                    offset = next_offset;
+                    num_accounts += 1;
+                    account_map.insert(account.meta.pubkey, account);
+                }
+                assert_eq!(num_accounts, footer.account_meta_count as u64);
+                info!("# accounts from append_vec = {:?}", num_accounts);
+
+                let mut metas = ads
+                    .read_account_metas_block(
+                        footer.account_metas_offset,
+                        footer.account_meta_count,
+                    )
+                    .unwrap();
+
+                for i in 0..footer.account_meta_count as usize {
+                    let account_pubkey = ads
+                        .read_account_pubkey(&footer, i.try_into().unwrap())
+                        .unwrap();
+                    let account_owner = ads
+                        .read_owner(footer.owners_offset, metas[i].owner_local_id)
+                        .unwrap();
+                    if account_pubkey == Pubkey::default() {
+                        continue;
+                    }
+                    if account_owner == Pubkey::default() {
+                        continue;
+                    }
+                    let av_account = &account_map[&account_pubkey];
+                    info!("verifing account {:?}", account_pubkey);
+                    info!(
+                        "    lamport: append_vec({:?}) vs ads_file ({:?})",
+                        av_account.account_meta.lamports, metas[i].lamports
+                    );
+                    assert_eq!(av_account.account_meta.lamports, metas[i].lamports);
+
+                    let data_block = ads.read_account_data_block(&footer, &mut metas, i).unwrap();
+                    let account_data_from_storage = metas[i].get_account_data(&data_block);
+
+                    let stored_meta_from_storage = StoredMeta {
+                        // we no longer store write_version anymore
+                        write_version_obsolete: av_account.meta.write_version_obsolete,
+                        // load the first pubkey in the storage
+                        pubkey: account_pubkey,
+                        data_len: (account_data_from_storage.len()) as u64,
+                    };
+                    assert_eq!(&stored_meta_from_storage, av_account.meta);
+                    info!(" StoredMeta: append_vec({:?})", av_account.meta);
+                    info!("             ads_file  ({:?})", stored_meta_from_storage);
+
+                    let account_from_storage = AccountSharedData {
+                        lamports: metas[i].lamports,
+                        data: Arc::new(account_data_from_storage.to_vec()),
+                        owner: account_owner,
+                        executable: metas[i].flags_get(AccountMetaFlags::EXECUTABLE),
+                        rent_epoch: metas[i].rent_epoch(&data_block).unwrap_or(0),
+                    };
+                    let av_shared_meta = av_account.clone_account();
+
+                    info!(" AccountSharedData: append_vec({:?})", av_shared_meta);
+                    info!("                    ads_file  ({:?})", account_from_storage);
+                    assert_eq!(account_from_storage, av_shared_meta);
                 }
             }
             ("", _) => {

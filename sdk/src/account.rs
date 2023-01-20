@@ -103,15 +103,15 @@ impl Serialize for AccountSharedData {
 #[serde(from = "Account")]
 pub struct AccountSharedData {
     /// lamports in the account
-    lamports: u64,
+    pub lamports: u64,
     /// data held in this account
-    data: Arc<Vec<u8>>,
+    pub data: Arc<Vec<u8>>,
     /// the program that owns this account. If executable, the program that loads this account.
-    owner: Pubkey,
+    pub owner: Pubkey,
     /// this account's data contains a loaded program (and is now read-only)
-    executable: bool,
+    pub executable: bool,
     /// the epoch at which this account will next owe rent
-    rent_epoch: Epoch,
+    pub rent_epoch: Epoch,
 }
 
 /// Compares two ReadableAccounts

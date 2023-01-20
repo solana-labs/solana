@@ -1,7 +1,15 @@
 use {
-    crate::{append_vec::*, storable_accounts::StorableAccounts},
+    crate::{
+        accounts_data_storage::{AccountsDataStorage, AccountsDataStorageWriter},
+        append_vec::*,
+        storable_accounts::StorableAccounts,
+    },
     solana_sdk::{account::ReadableAccount, clock::Slot, hash::Hash, pubkey::Pubkey},
-    std::{borrow::Borrow, io, path::PathBuf},
+    std::{
+        borrow::Borrow,
+        io,
+        path::{Path, PathBuf},
+    },
 };
 
 #[derive(Debug)]
@@ -9,51 +17,105 @@ use {
 /// under different formats.
 pub enum AccountsFile {
     AppendVec(AppendVec),
+    Cold(Option<AccountsDataStorage>, PathBuf, bool),
 }
 
 impl AccountsFile {
+    pub fn new_cold_entry(file_path: &Path, create: bool) -> Self {
+        if create {
+            Self::Cold(
+                None,
+                file_path.to_path_buf(),
+                true, // remove_on_drop
+            )
+        } else {
+            Self::Cold(
+                Some(AccountsDataStorage::new(file_path, create)),
+                file_path.to_path_buf(),
+                true, // remove_on_drop
+            )
+        }
+    }
+
     /// By default, all AccountsFile will remove its underlying file on
     /// drop.  Calling this function to disable such behavior for this
     /// instance.
     pub fn set_no_remove_on_drop(&mut self) {
         match self {
             Self::AppendVec(av) => av.set_no_remove_on_drop(),
+            Self::Cold(ads, _, remove_on_drop) => {
+                if *remove_on_drop != true {
+                    if let Some(reader) = ads.as_mut() {
+                        reader.set_no_remove_on_drop();
+                    }
+                }
+            }
         }
     }
 
     pub fn flush(&self) -> io::Result<()> {
         match self {
             Self::AppendVec(av) => av.flush(),
+            Self::Cold(..) => Ok(()),
         }
     }
 
     pub fn reset(&self) {
         match self {
             Self::AppendVec(av) => av.reset(),
+            Self::Cold(..) => {}
         }
     }
 
     pub fn remaining_bytes(&self) -> u64 {
         match self {
             Self::AppendVec(av) => av.remaining_bytes(),
+            Self::Cold(ads, ..) => {
+                if let Some(_reader) = ads {
+                    return 0;
+                } else {
+                    return std::u64::MAX;
+                }
+            }
         }
     }
 
     pub fn len(&self) -> usize {
         match self {
             Self::AppendVec(av) => av.len(),
+            Self::Cold(ads, ..) => {
+                if let Some(reader) = ads {
+                    return reader.len();
+                } else {
+                    return 0;
+                }
+            }
         }
     }
 
     pub fn is_empty(&self) -> bool {
         match self {
             Self::AppendVec(av) => av.is_empty(),
+            Self::Cold(ads, ..) => {
+                if let Some(_reader) = ads {
+                    return false;
+                } else {
+                    return true;
+                }
+            }
         }
     }
 
     pub fn capacity(&self) -> u64 {
         match self {
             Self::AppendVec(av) => av.capacity(),
+            Self::Cold(ads, ..) => {
+                if let Some(_reader) = ads {
+                    return 0;
+                } else {
+                    return std::u64::MAX;
+                }
+            }
         }
     }
 
@@ -67,6 +129,13 @@ impl AccountsFile {
     pub fn get_account(&self, index: usize) -> Option<(StoredAccountMeta<'_>, usize)> {
         match self {
             Self::AppendVec(av) => av.get_account(index),
+            Self::Cold(ads, ..) => {
+                if let Some(reader) = ads {
+                    return reader.get_account(index);
+                } else {
+                    return None;
+                }
+            }
         }
     }
 
@@ -77,6 +146,7 @@ impl AccountsFile {
     ) -> Result<usize, MatchAccountOwnerError> {
         match self {
             Self::AppendVec(av) => av.account_matches_owners(offset, owners),
+            Self::Cold(..) => todo!(),
         }
     }
 
@@ -84,6 +154,7 @@ impl AccountsFile {
     pub fn get_path(&self) -> PathBuf {
         match self {
             Self::AppendVec(av) => av.get_path(),
+            Self::Cold(_, path, ..) => path.clone(),
         }
     }
 
@@ -96,6 +167,13 @@ impl AccountsFile {
     pub fn accounts(&self, offset: usize) -> Vec<StoredAccountMeta> {
         match self {
             Self::AppendVec(av) => av.accounts(offset),
+            Self::Cold(ads, ..) => {
+                if let Some(reader) = ads {
+                    return reader.accounts(offset);
+                } else {
+                    return Vec::new();
+                }
+            }
         }
     }
 
@@ -119,6 +197,22 @@ impl AccountsFile {
     ) -> Option<Vec<usize>> {
         match self {
             Self::AppendVec(av) => av.append_accounts(accounts, skip),
+            Self::Cold(ads, path, remove_on_drop) => {
+                if let Some(_) = ads {
+                    return None;
+                } else {
+                    let result;
+                    {
+                        let writer = AccountsDataStorageWriter::new(path);
+                        result = writer.append_accounts(accounts, skip);
+                    }
+                    let mut file = AccountsDataStorage::new(path, false);
+                    if !remove_on_drop {
+                        file.set_no_remove_on_drop();
+                    }
+                    return result;
+                }
+            }
         }
     }
 }
@@ -157,6 +251,7 @@ pub mod tests {
         pub(crate) fn set_current_len_for_tests(&self, len: usize) {
             match self {
                 Self::AppendVec(av) => av.set_current_len_for_tests(len),
+                Self::Cold(..) => todo!(),
             }
         }
     }
