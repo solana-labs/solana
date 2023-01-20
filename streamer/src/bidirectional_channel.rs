@@ -1,11 +1,19 @@
-use x509_parser::nom::AsBytes;
 // this is a service to handle bidirections quinn channel
 use {
     bincode::serialize,
     quinn::SendStream,
     solana_perf::packet::{Packet, PacketBatch},
     solana_sdk::signature::Signature,
-    std::{collections::HashMap, net::SocketAddr, str::FromStr, sync::Arc},
+    std::{
+        collections::HashMap,
+        net::SocketAddr,
+        str::FromStr,
+        sync::{
+            atomic::{AtomicU64, Ordering},
+            Arc,
+        },
+        time::Duration,
+    },
     tokio::{
         sync::{
             mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender},
@@ -13,8 +21,10 @@ use {
         },
         task::JoinHandle,
     },
+    x509_parser::nom::AsBytes,
 };
 
+#[derive(Clone)]
 pub struct QuicReplyMessage {
     transaction_signature: Signature,
     message: [u8; 128],
@@ -81,11 +91,54 @@ impl serde::Serialize for QuicReplyMessage {
     }
 }
 
+const TRANSACTION_TIMEOUT: u64 = 30_000; // 30s
+
 pub struct QuicBidirectionalData {
-    pub transaction_signature_map: HashMap<Signature, u64>,
+    pub transaction_signature_map: HashMap<Signature, Vec<u64>>,
     pub sender_ids_map: HashMap<u64, UnboundedSender<QuicReplyMessage>>,
     pub sender_socket_address_map: HashMap<SocketAddr, u64>,
     pub last_id: u64,
+}
+
+#[derive(Clone)]
+pub struct QuicBidirectionalMetrics {
+    pub connections_added: Arc<AtomicU64>,
+    pub transactions_added: Arc<AtomicU64>,
+    pub transactions_replied_to: Arc<AtomicU64>,
+    pub transactions_removed: Arc<AtomicU64>,
+    pub connections_disconnected: Arc<AtomicU64>,
+}
+
+impl QuicBidirectionalMetrics {
+    pub fn new() -> Self {
+        Self {
+            connections_added: Arc::new(AtomicU64::new(0)),
+            transactions_added: Arc::new(AtomicU64::new(0)),
+            transactions_replied_to: Arc::new(AtomicU64::new(0)),
+            connections_disconnected: Arc::new(AtomicU64::new(0)),
+            transactions_removed: Arc::new(AtomicU64::new(0)),
+        }
+    }
+
+    pub fn connections_added(&self) -> u64 {
+        self.connections_added.load(Ordering::Relaxed)
+    }
+
+    pub fn transactions_added(&self) -> u64 {
+        self.transactions_added.load(Ordering::Relaxed)
+    }
+
+    pub fn transactions_replied_to(&self) -> u64 {
+        self.transactions_replied_to.load(Ordering::Relaxed)
+    }
+
+    pub fn transactions_removed(&self) -> u64 {
+        self.transactions_removed.load(Ordering::Relaxed)
+    }
+
+    pub fn connections_disconnected(&self) -> u64 {
+        self.connections_disconnected.load(Ordering::Relaxed)
+    }
 }
 
 #[derive(Clone)]
@@ -93,6 +146,7 @@ pub struct QuicBidirectionalReplyService {
     data: Arc<RwLock<QuicBidirectionalData>>,
     pub service_sender: UnboundedSender<QuicReplyMessage>,
     serving_handle: Arc<Option<JoinHandle<()>>>,
+    pub metrics: QuicBidirectionalMetrics,
 }
 
 pub fn get_signature_from_packet(packet: &Packet) -> Option<Signature> {
@@ -118,6 +172,7 @@ impl QuicBidirectionalReplyService {
                 last_id: 1,
             })),
             serving_handle: Arc::new(None),
+            metrics: QuicBidirectionalMetrics::new(),
         };
         let join_handle = instance.serve(service_reciever);
         instance.serving_handle = Arc::new(Some(join_handle));
@@ -166,7 +221,11 @@ impl QuicBidirectionalReplyService {
             current_id
         };
 
+        self.metrics
+            .connections_added
+            .fetch_add(1, Ordering::Relaxed);
         let subscriptions = self.data.clone();
+        let metrics = self.metrics.clone();
 
         // start listnening to stream specific cross beam channel
         tokio::spawn(async move {
@@ -210,11 +269,12 @@ impl QuicBidirectionalReplyService {
             let subscriptions = &mut *sub_data;
             subscriptions.sender_ids_map.remove(&sender_id);
             subscriptions
-                .transaction_signature_map
-                .retain(|_, v| *v != sender_id);
-            subscriptions
                 .sender_socket_address_map
                 .retain(|_, v| *v != sender_id);
+
+            metrics
+                .connections_disconnected
+                .fetch_add(1, Ordering::Relaxed);
         });
     }
 
@@ -233,6 +293,7 @@ impl QuicBidirectionalReplyService {
         }
         let mut data = self.data.write().await;
         let data = &mut *data;
+        let metrics = self.metrics.clone();
         packets.iter().for_each(|packet| {
             let meta = &packet.meta;
             if meta.discard()
@@ -244,8 +305,27 @@ impl QuicBidirectionalReplyService {
                 return;
             }
             let signature = get_signature_from_packet(packet);
+            metrics.transactions_added.fetch_add(1, Ordering::Relaxed);
+            signature.map(|x| {
+                let ids = data.transaction_signature_map.get_mut(&x);
+                match ids {
+                    Some(ids) => ids.push(id), // push in exisiting ids
+                    None => {
+                        data.transaction_signature_map.insert(x, vec![id]); // push a new id vector
 
-            signature.map(|x| data.transaction_signature_map.insert(x, id));
+                        // create a task to clean up Timedout transactions
+                        let me = self.clone();
+                        tokio::spawn(async move {
+                            tokio::time::sleep(Duration::from_millis(TRANSACTION_TIMEOUT)).await;
+                            let mut data = me.data.write().await;
+                            data.transaction_signature_map.remove(&x);
+                            me.metrics
+                                .transactions_removed
+                                .fetch_add(1, Ordering::Relaxed);
+                        });
+                    }
+                }
+            });
         });
     }
 
@@ -258,8 +338,10 @@ impl QuicBidirectionalReplyService {
         service_reciever: UnboundedReceiver<QuicReplyMessage>,
     ) -> tokio::task::JoinHandle<()> {
         let subscription_data = self.data.clone();
+        let metrics = self.metrics.clone();
         tokio::spawn(async move {
             let mut service_reciever = service_reciever;
+            let metrics = metrics.clone();
             loop {
                 let bidirectional_message = service_reciever.recv().await;
                 if bidirectional_message.is_none() {
@@ -272,22 +354,29 @@ impl QuicBidirectionalReplyService {
                 let subscription_data = subscription_data.clone();
 
                 let data = subscription_data.read().await;
-
-                let send_stream = {
-                    // if the message has transaction signature then find stream from transaction signature
-                    // else find stream by packet hash
-                    let send_stream_id = data
-                        .transaction_signature_map
-                        .get(&message.transaction_signature)
-                        .map(|x| *x);
-                    send_stream_id.and_then(|x| data.sender_ids_map.get(&x))
-                };
-                if let Some(send_stream) = send_stream {
-                    match send_stream.send(message) {
-                        Err(e) => {
-                            warn!("Error sending a bidirectional message {}", e.to_string());
+                // if the message has transaction signature then find stream from transaction signature
+                // else find stream by packet hash
+                let send_stream_ids = data
+                    .transaction_signature_map
+                    .get(&message.transaction_signature)
+                    .map(|x| x);
+                if let Some(send_stream_ids) = send_stream_ids {
+                    for send_stream_id in send_stream_ids {
+                        if let Some(send_stream) = data.sender_ids_map.get(&send_stream_id) {
+                            match send_stream.send(message.clone()) {
+                                Err(e) => {
+                                    warn!(
+                                        "Error sending a bidirectional message {}",
+                                        e.to_string()
+                                    );
+                                }
+                                Ok(_) => {
+                                    metrics
+                                        .transactions_replied_to
+                                        .fetch_add(1, Ordering::Relaxed);
+                                }
+                            }
                         }
-                        _ => {}
                     }
                 }
             }
@@ -299,7 +388,9 @@ impl QuicBidirectionalReplyService {
 pub mod test {
     use {
         crate::{
-            bidirectional_channel::{get_signature_from_packet, QuicBidirectionalReplyService},
+            bidirectional_channel::{
+                get_signature_from_packet, QuicBidirectionalReplyService, TRANSACTION_TIMEOUT,
+            },
             nonblocking::quic::{spawn_server, test::get_client_config},
             quic::{StreamStats, MAX_UNSTAKED_CONNECTIONS},
             streamer::StakedNodes,
@@ -326,6 +417,7 @@ pub mod test {
         std::{
             net::{IpAddr, Ipv4Addr, SocketAddr, UdpSocket},
             sync::{atomic::AtomicBool, Arc, RwLock},
+            time::Duration,
         },
         tokio::task::JoinHandle,
     };
@@ -453,9 +545,14 @@ pub mod test {
         )
     }
 
+    // This test is the main test, we send 5 transactions to the quic connection and the quic connection replies
+    // them with errors. Then we check ght the QuicReplyHandler process these messages correctly
+    // we also check if the metrics are updated correctly, the connections are dropped  correctly
+    // the transactions are removed after a timeout
     #[tokio::test]
-    async fn test_addition_of_packets_with_quic_socket_registered() {
+    async fn test_send_5_transaction_to_quic_server_and_get_replies() {
         let bidirectional_replay_service = QuicBidirectionalReplyService::new();
+        let metrics = bidirectional_replay_service.metrics.clone();
 
         let (_thread_handle, exit, reciever, server_address, _stream_stats) =
             setup_quic_server(bidirectional_replay_service.clone());
@@ -477,6 +574,7 @@ pub mod test {
             .await
             .unwrap();
 
+        assert_eq!(metrics.connections_added(), 1);
         // one shot channels so that we do not block runtime for joining threads
         let (oscs1, oscr1) = tokio::sync::oneshot::channel();
         let (oscs2, oscr2) = tokio::sync::oneshot::channel();
@@ -515,6 +613,12 @@ pub mod test {
         });
         oscr1.await.unwrap();
         let messages = oscr2.await.unwrap();
+
+        // sleep some time so that other tasks can progress
+        tokio::time::sleep(Duration::from_millis(100)).await;
+        assert_eq!(metrics.transactions_added(), nb_packets);
+        assert_eq!(metrics.transactions_replied_to(), nb_packets);
+        assert_eq!(metrics.transactions_removed(), 0);
         // asserting for messages
         for message in messages {
             assert!(signatures.contains(&message.signature()));
@@ -523,6 +627,11 @@ pub mod test {
                 TransactionError::InvalidRentPayingAccount.to_string()
             );
         }
+        assert_eq!(metrics.connections_disconnected(), 0);
+        tokio::time::sleep(Duration::from_millis(TRANSACTION_TIMEOUT)).await;
+        // connection is disconnected after the timeout
+        assert_eq!(metrics.connections_added(), 1);
+        assert_eq!(metrics.transactions_removed(), nb_packets);
         exit.store(true, std::sync::atomic::Ordering::Relaxed);
     }
 }
