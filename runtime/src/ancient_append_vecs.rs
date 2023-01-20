@@ -119,14 +119,14 @@ pub mod tests {
 
     #[test]
     fn test_accounts_to_store_more() {
-        let pubkey = Pubkey::new(&[1; 32]);
+        let pubkey = Pubkey::from([1; 32]);
         let account_size = 3;
 
         let account = AccountSharedData::default();
 
         let account_meta = AccountMeta {
             lamports: 1,
-            owner: Pubkey::new(&[2; 32]),
+            owner: Pubkey::from([2; 32]),
             executable: false,
             rent_epoch: 0,
         };

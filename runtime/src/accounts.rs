@@ -1473,7 +1473,7 @@ mod tests {
     #[test]
     fn test_hold_range_in_memory() {
         let accts = Accounts::default_for_tests();
-        let range = Pubkey::new(&[0; 32])..=Pubkey::new(&[0xff; 32]);
+        let range = Pubkey::from([0; 32])..=Pubkey::from([0xff; 32]);
         accts.hold_range_in_memory(&range, true, &test_thread_pool());
         accts.hold_range_in_memory(&range, false, &test_thread_pool());
         accts.hold_range_in_memory(&range, true, &test_thread_pool());
@@ -1485,7 +1485,7 @@ mod tests {
     #[test]
     fn test_hold_range_in_memory2() {
         let accts = Accounts::default_for_tests();
-        let range = Pubkey::new(&[0; 32])..=Pubkey::new(&[0xff; 32]);
+        let range = Pubkey::from([0; 32])..=Pubkey::from([0xff; 32]);
         let idx = &accts.accounts_db.accounts_index;
         let bins = idx.account_maps.len();
         // use bins * 2 to get the first half of the range within bin 0
@@ -1557,7 +1557,7 @@ mod tests {
 
         let keypair = Keypair::new();
         let key0 = keypair.pubkey();
-        let key1 = Pubkey::new(&[5u8; 32]);
+        let key1 = Pubkey::from([5u8; 32]);
 
         let account = AccountSharedData::new(1, 0, &Pubkey::default());
         accounts.push((key0, account));
@@ -1748,7 +1748,7 @@ mod tests {
 
         let keypair = Keypair::new();
         let key0 = keypair.pubkey();
-        let key1 = Pubkey::new(&[5u8; 32]);
+        let key1 = Pubkey::from([5u8; 32]);
 
         let mut account = AccountSharedData::new(1, 0, &Pubkey::default());
         account.set_rent_epoch(1);
@@ -1790,12 +1790,12 @@ mod tests {
 
         let keypair = Keypair::new();
         let key0 = keypair.pubkey();
-        let key1 = Pubkey::new(&[5u8; 32]);
-        let key2 = Pubkey::new(&[6u8; 32]);
-        let key3 = Pubkey::new(&[7u8; 32]);
-        let key4 = Pubkey::new(&[8u8; 32]);
-        let key5 = Pubkey::new(&[9u8; 32]);
-        let key6 = Pubkey::new(&[10u8; 32]);
+        let key1 = Pubkey::from([5u8; 32]);
+        let key2 = Pubkey::from([6u8; 32]);
+        let key3 = Pubkey::from([7u8; 32]);
+        let key4 = Pubkey::from([8u8; 32]);
+        let key5 = Pubkey::from([9u8; 32]);
+        let key6 = Pubkey::from([10u8; 32]);
 
         let account = AccountSharedData::new(1, 0, &Pubkey::default());
         accounts.push((key0, account));
@@ -1856,7 +1856,7 @@ mod tests {
 
         let keypair = Keypair::new();
         let key0 = keypair.pubkey();
-        let key1 = Pubkey::new(&[5u8; 32]);
+        let key1 = Pubkey::from([5u8; 32]);
 
         let account = AccountSharedData::new(1, 0, &Pubkey::default());
         accounts.push((key0, account));
@@ -1891,7 +1891,7 @@ mod tests {
 
         let keypair = Keypair::new();
         let key0 = keypair.pubkey();
-        let key1 = Pubkey::new(&[5u8; 32]);
+        let key1 = Pubkey::from([5u8; 32]);
 
         let account = AccountSharedData::new(1, 0, &Pubkey::default());
         accounts.push((key0, account));
@@ -1925,8 +1925,8 @@ mod tests {
 
         let keypair = Keypair::new();
         let key0 = keypair.pubkey();
-        let key1 = Pubkey::new(&[5u8; 32]);
-        let key2 = Pubkey::new(&[6u8; 32]);
+        let key1 = Pubkey::from([5u8; 32]);
+        let key2 = Pubkey::from([6u8; 32]);
 
         let mut account = AccountSharedData::new(1, 0, &Pubkey::default());
         account.set_rent_epoch(1);
@@ -2132,20 +2132,20 @@ mod tests {
 
         // Load accounts owned by various programs into AccountsDb
         let pubkey0 = solana_sdk::pubkey::new_rand();
-        let account0 = AccountSharedData::new(1, 0, &Pubkey::new(&[2; 32]));
+        let account0 = AccountSharedData::new(1, 0, &Pubkey::from([2; 32]));
         accounts.store_slow_uncached(0, &pubkey0, &account0);
         let pubkey1 = solana_sdk::pubkey::new_rand();
-        let account1 = AccountSharedData::new(1, 0, &Pubkey::new(&[2; 32]));
+        let account1 = AccountSharedData::new(1, 0, &Pubkey::from([2; 32]));
         accounts.store_slow_uncached(0, &pubkey1, &account1);
         let pubkey2 = solana_sdk::pubkey::new_rand();
-        let account2 = AccountSharedData::new(1, 0, &Pubkey::new(&[3; 32]));
+        let account2 = AccountSharedData::new(1, 0, &Pubkey::from([3; 32]));
         accounts.store_slow_uncached(0, &pubkey2, &account2);
 
-        let loaded = accounts.load_by_program_slot(0, Some(&Pubkey::new(&[2; 32])));
+        let loaded = accounts.load_by_program_slot(0, Some(&Pubkey::from([2; 32])));
         assert_eq!(loaded.len(), 2);
-        let loaded = accounts.load_by_program_slot(0, Some(&Pubkey::new(&[3; 32])));
+        let loaded = accounts.load_by_program_slot(0, Some(&Pubkey::from([3; 32])));
         assert_eq!(loaded, vec![(pubkey2, account2)]);
-        let loaded = accounts.load_by_program_slot(0, Some(&Pubkey::new(&[4; 32])));
+        let loaded = accounts.load_by_program_slot(0, Some(&Pubkey::from([4; 32])));
         assert_eq!(loaded, vec![]);
     }
 
@@ -2156,8 +2156,8 @@ mod tests {
 
         let keypair = Keypair::new();
         let key0 = keypair.pubkey();
-        let key1 = Pubkey::new(&[5u8; 32]);
-        let key2 = Pubkey::new(&[6u8; 32]);
+        let key1 = Pubkey::from([5u8; 32]);
+        let key2 = Pubkey::from([6u8; 32]);
 
         let mut account = AccountSharedData::new(1, 0, &Pubkey::default());
         account.set_rent_epoch(1);
@@ -2217,10 +2217,10 @@ mod tests {
 
         let keypair = Keypair::new();
         let key0 = keypair.pubkey();
-        let key1 = Pubkey::new(&[5u8; 32]);
-        let key2 = Pubkey::new(&[6u8; 32]);
-        let programdata_key1 = Pubkey::new(&[7u8; 32]);
-        let programdata_key2 = Pubkey::new(&[8u8; 32]);
+        let key1 = Pubkey::from([5u8; 32]);
+        let key2 = Pubkey::from([6u8; 32]);
+        let programdata_key1 = Pubkey::from([7u8; 32]);
+        let programdata_key2 = Pubkey::from([8u8; 32]);
 
         let mut account = AccountSharedData::new(1, 0, &Pubkey::default());
         account.set_rent_epoch(1);
@@ -2329,8 +2329,8 @@ mod tests {
 
         let keypair = Keypair::new();
         let key0 = keypair.pubkey();
-        let key1 = Pubkey::new(&[5u8; 32]);
-        let key2 = Pubkey::new(&[6u8; 32]);
+        let key1 = Pubkey::from([5u8; 32]);
+        let key2 = Pubkey::from([6u8; 32]);
 
         let mut account = AccountSharedData::new(1, 0, &Pubkey::default());
         account.set_rent_epoch(1);
@@ -3276,7 +3276,7 @@ mod tests {
         let expect_account = post_account.clone();
         // Wrong key
         assert!(run_prepare_if_nonce_account_test(
-            &Pubkey::new(&[1u8; 32]),
+            &Pubkey::from([1u8; 32]),
             &mut post_account,
             &Ok(()),
             false,

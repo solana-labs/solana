@@ -435,8 +435,8 @@ mod test {
         let crds_gossip = CrdsGossip::default();
         let keypair = Keypair::new();
         let id = keypair.pubkey();
-        let ci = ContactInfo::new_localhost(&Pubkey::new(&[1; 32]), 0);
-        let prune_pubkey = Pubkey::new(&[2; 32]);
+        let ci = ContactInfo::new_localhost(&Pubkey::from([1; 32]), 0);
+        let prune_pubkey = Pubkey::from([2; 32]);
         crds_gossip
             .crds
             .write()
@@ -467,7 +467,7 @@ mod test {
         let mut res = crds_gossip.process_prune_msg(
             &id,
             &ci.id,
-            &Pubkey::new(hash(&[1; 32]).as_ref()),
+            &Pubkey::from(hash(&[1; 32]).to_bytes()),
             &[prune_pubkey],
             now,
             now,

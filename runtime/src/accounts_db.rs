@@ -8922,7 +8922,7 @@ impl AccountsDb {
         #[allow(clippy::stable_sort_primitive)]
         alive_roots.sort();
         info!("{}: accounts_index alive_roots: {:?}", label, alive_roots,);
-        let full_pubkey_range = Pubkey::new(&[0; 32])..=Pubkey::new(&[0xff; 32]);
+        let full_pubkey_range = Pubkey::from([0; 32])..=Pubkey::from([0xff; 32]);
 
         self.accounts_index.account_maps.iter().for_each(|map| {
             for (pubkey, account_entry) in map.items(&full_pubkey_range) {
@@ -9266,14 +9266,14 @@ pub mod tests {
         let mut current_ancient = CurrentAncientAppendVec::default();
 
         // setup 'to_store'
-        let pubkey = Pubkey::new(&[1; 32]);
+        let pubkey = Pubkey::from([1; 32]);
         let account_size = 3;
 
         let account = AccountSharedData::default();
 
         let account_meta = AccountMeta {
             lamports: 1,
-            owner: Pubkey::new(&[2; 32]),
+            owner: Pubkey::from([2; 32]),
             executable: false,
             rent_epoch: 0,
         };
@@ -9534,10 +9534,10 @@ pub mod tests {
         Vec<Arc<AccountStorageEntry>>,
         Vec<CalculateHashIntermediate>,
     ) {
-        let pubkey0 = Pubkey::new(&[0u8; 32]);
-        let pubkey127 = Pubkey::new(&[0x7fu8; 32]);
-        let pubkey128 = Pubkey::new(&[0x80u8; 32]);
-        let pubkey255 = Pubkey::new(&[0xffu8; 32]);
+        let pubkey0 = Pubkey::from([0u8; 32]);
+        let pubkey127 = Pubkey::from([0x7fu8; 32]);
+        let pubkey128 = Pubkey::from([0x80u8; 32]);
+        let pubkey255 = Pubkey::from([0xffu8; 32]);
 
         let mut raw_expected = vec![
             CalculateHashIntermediate::new(Hash::default(), 1, pubkey0),
@@ -15373,8 +15373,8 @@ pub mod tests {
     fn test_calculate_storage_count_and_alive_bytes_2_accounts() {
         let accounts = AccountsDb::new_single_for_tests();
         let keys = [
-            solana_sdk::pubkey::Pubkey::new(&[0; 32]),
-            solana_sdk::pubkey::Pubkey::new(&[255; 32]),
+            solana_sdk::pubkey::Pubkey::from([0; 32]),
+            solana_sdk::pubkey::Pubkey::from([255; 32]),
         ];
         // make sure accounts are in 2 different bins
         assert!(
@@ -15758,7 +15758,7 @@ pub mod tests {
     /// test 'unref' parameter 'pubkeys_removed_from_accounts_index'
     fn test_unref_pubkeys_removed_from_accounts_index() {
         let slot1 = 1;
-        let pk1 = Pubkey::new(&[1; 32]);
+        let pk1 = Pubkey::from([1; 32]);
         for already_removed in [false, true] {
             let mut pubkeys_removed_from_accounts_index =
                 PubkeysRemovedFromAccountsIndex::default();
@@ -15816,8 +15816,8 @@ pub mod tests {
 
             let slot1 = 1;
             let slot2 = 2;
-            let pk1 = Pubkey::new(&[1; 32]);
-            let pk2 = Pubkey::new(&[2; 32]);
+            let pk1 = Pubkey::from([1; 32]);
+            let pk2 = Pubkey::from([2; 32]);
             {
                 // pk1 in slot1, purge it
                 let db = AccountsDb::new_single_for_tests();
@@ -15895,7 +15895,7 @@ pub mod tests {
         let db = AccountsDb::new_single_for_tests();
         let mut purged_stored_account_slots = AccountSlots::default();
         let mut reclaims = SlotList::default();
-        let pk1 = Pubkey::new(&[1; 32]);
+        let pk1 = Pubkey::from([1; 32]);
         // make sure we have > 1 batch. Bigger numbers cost more in test time here.
         let n = (UNREF_ACCOUNTS_BATCH_SIZE + 1) as Slot;
         // put the pubkey into the acct idx in 'n' slots
@@ -16294,7 +16294,7 @@ pub mod tests {
     fn test_add_uncleaned_pubkeys_after_shrink() {
         let db = AccountsDb::new_single_for_tests();
         let slot = 0;
-        let pubkey = Pubkey::new(&[1; 32]);
+        let pubkey = Pubkey::from([1; 32]);
         db.add_uncleaned_pubkeys_after_shrink(slot, vec![pubkey].into_iter());
         assert_eq!(&*db.uncleaned_pubkeys.get(&slot).unwrap(), &vec![pubkey]);
     }

@@ -4188,7 +4188,7 @@ RPC Enabled Nodes: 1"#;
 
     #[test]
     fn test_tvu_peers_and_stakes() {
-        let d = ContactInfo::new_localhost(&Pubkey::new(&[0; 32]), timestamp());
+        let d = ContactInfo::new_localhost(&Pubkey::from([0; 32]), timestamp());
         let cluster_info = ClusterInfo::new(
             d.clone(),
             Arc::new(Keypair::new()),
@@ -4197,12 +4197,12 @@ RPC Enabled Nodes: 1"#;
         let mut stakes = HashMap::new();
 
         // no stake
-        let id = Pubkey::new(&[1u8; 32]);
+        let id = Pubkey::from([1u8; 32]);
         let contact_info = ContactInfo::new_localhost(&id, timestamp());
         cluster_info.insert_info(contact_info);
 
         // normal
-        let id2 = Pubkey::new(&[2u8; 32]);
+        let id2 = Pubkey::from([2u8; 32]);
         let mut contact_info = ContactInfo::new_localhost(&id2, timestamp());
         cluster_info.insert_info(contact_info.clone());
         stakes.insert(id2, 10);
@@ -4212,14 +4212,14 @@ RPC Enabled Nodes: 1"#;
         cluster_info.insert_info(contact_info);
 
         // no tvu
-        let id3 = Pubkey::new(&[3u8; 32]);
+        let id3 = Pubkey::from([3u8; 32]);
         let mut contact_info = ContactInfo::new_localhost(&id3, timestamp());
         contact_info.tvu = "0.0.0.0:0".parse().unwrap();
         cluster_info.insert_info(contact_info);
         stakes.insert(id3, 10);
 
         // normal but with different shred version
-        let id4 = Pubkey::new(&[4u8; 32]);
+        let id4 = Pubkey::from([4u8; 32]);
         let mut contact_info = ContactInfo::new_localhost(&id4, timestamp());
         contact_info.shred_version = 1;
         assert_ne!(contact_info.shred_version, d.shred_version);

@@ -795,12 +795,12 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
         assert!(!only_add_if_already_held || start_holding);
         let start = match range.start_bound() {
             Bound::Included(bound) | Bound::Excluded(bound) => *bound,
-            Bound::Unbounded => Pubkey::new(&[0; 32]),
+            Bound::Unbounded => Pubkey::from([0; 32]),
         };
 
         let end = match range.end_bound() {
             Bound::Included(bound) | Bound::Excluded(bound) => *bound,
-            Bound::Unbounded => Pubkey::new(&[0xff; 32]),
+            Bound::Unbounded => Pubkey::from([0xff; 32]),
         };
 
         // this becomes inclusive - that is ok - we are just roughly holding a range of items.
@@ -1593,10 +1593,10 @@ mod tests {
     fn test_hold_range_in_memory() {
         let bucket = new_disk_buckets_for_test::<u64>();
         // 0x81 is just some other range
-        let all = Pubkey::new(&[0; 32])..=Pubkey::new(&[0xff; 32]);
+        let all = Pubkey::from([0; 32])..=Pubkey::from([0xff; 32]);
         let ranges = [
             all.clone(),
-            Pubkey::new(&[0x81; 32])..=Pubkey::new(&[0xff; 32]),
+            Pubkey::from([0x81; 32])..=Pubkey::from([0xff; 32]),
         ];
         for range in ranges.clone() {
             assert!(bucket.cache_ranges_held.read().unwrap().is_empty());

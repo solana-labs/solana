@@ -56,14 +56,11 @@ pub fn new_self_signed_tls_certificate(
 }
 
 pub fn get_pubkey_from_tls_certificate(der_cert: &rustls::Certificate) -> Option<Pubkey> {
-    X509Certificate::from_der(der_cert.as_ref())
-        .ok()
-        .and_then(|(_, cert)| {
-            cert.public_key().parsed().ok().and_then(|key| match key {
-                PublicKey::Unknown(inner_key) => Some(Pubkey::new(inner_key)),
-                _ => None,
-            })
-        })
+    let (_, cert) = X509Certificate::from_der(der_cert.as_ref()).ok()?;
+    match cert.public_key().parsed().ok()? {
+        PublicKey::Unknown(key) => Pubkey::try_from(key).ok(),
+        _ => None,
+    }
 }
 
 #[cfg(test)]

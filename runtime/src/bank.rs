@@ -9003,7 +9003,7 @@ pub(crate) mod tests {
     #[allow(clippy::cognitive_complexity)]
     fn test_rent_complex() {
         solana_logger::setup();
-        let mock_program_id = Pubkey::new(&[2u8; 32]);
+        let mock_program_id = Pubkey::from([2u8; 32]);
 
         #[derive(Serialize, Deserialize)]
         enum MockInstruction {
@@ -9977,7 +9977,7 @@ pub(crate) mod tests {
         solana_logger::setup();
 
         for skip_rewrites in [false, true] {
-            let zero_lamport_pubkey = Pubkey::new(&[0; 32]);
+            let zero_lamport_pubkey = Pubkey::from([0; 32]);
 
             let genesis_bank = create_simple_test_arc_bank(100000);
             let mut first_bank = new_from_parent(&genesis_bank);
@@ -12612,7 +12612,7 @@ pub(crate) mod tests {
 
         let bank0 = Arc::new(new_from_parent(&parent));
         let pubkey0 = solana_sdk::pubkey::new_rand();
-        let program_id = Pubkey::new(&[2; 32]);
+        let program_id = Pubkey::from([2; 32]);
         let account0 = AccountSharedData::new(1, 0, &program_id);
         bank0.store_account(&pubkey0, &account0);
 
@@ -12795,7 +12795,7 @@ pub(crate) mod tests {
         let mut bank = Bank::new_for_tests(&genesis_config);
 
         fn mock_vote_program_id() -> Pubkey {
-            Pubkey::new(&[42u8; 32])
+            Pubkey::from([42u8; 32])
         }
         fn mock_vote_processor(
             _first_instruction_account: IndexOfAccount,
@@ -13374,7 +13374,7 @@ pub(crate) mod tests {
         let blockhash = bank.last_blockhash();
         bank.store_account(&nonce.pubkey(), &nonce_account);
 
-        let ix = system_instruction::assign(&nonce.pubkey(), &Pubkey::new(&[9u8; 32]));
+        let ix = system_instruction::assign(&nonce.pubkey(), &Pubkey::from([9u8; 32]));
         let message = Message::new(&[ix], Some(&nonce.pubkey()));
         let tx = Transaction::new(&[&nonce], message, blockhash);
 
@@ -14068,7 +14068,7 @@ pub(crate) mod tests {
         let keypair = Keypair::new();
         let pubkey0 = solana_sdk::pubkey::new_rand();
         let pubkey1 = solana_sdk::pubkey::new_rand();
-        let program_id = Pubkey::new(&[2; 32]);
+        let program_id = Pubkey::from([2; 32]);
         let keypair_account = AccountSharedData::new(8, 0, &program_id);
         let account0 = AccountSharedData::new(11, 0, &program_id);
         let program_account = AccountSharedData::new(1, 10, &Pubkey::default());
@@ -14222,7 +14222,7 @@ pub(crate) mod tests {
             Ok(())
         }
 
-        let mock_program_id = Pubkey::new(&[2u8; 32]);
+        let mock_program_id = Pubkey::from([2u8; 32]);
         bank.add_builtin("mock_program", &mock_program_id, mock_process_instruction);
 
         let from_pubkey = solana_sdk::pubkey::new_rand();
@@ -14266,7 +14266,7 @@ pub(crate) mod tests {
             Ok(())
         }
 
-        let mock_program_id = Pubkey::new(&[2u8; 32]);
+        let mock_program_id = Pubkey::from([2u8; 32]);
         bank.add_builtin("mock_program", &mock_program_id, mock_process_instruction);
 
         let from_pubkey = solana_sdk::pubkey::new_rand();
@@ -14686,7 +14686,7 @@ pub(crate) mod tests {
 
         let mut genesis_config = GenesisConfig::new(
             &[(
-                Pubkey::new(&[42; 32]),
+                Pubkey::from([42; 32]),
                 AccountSharedData::new(1_000_000_000_000, 0, &system_program::id()),
             )],
             &[],
@@ -14804,8 +14804,8 @@ pub(crate) mod tests {
         solana_logger::setup();
 
         let (genesis_config, _mint_keypair) = create_genesis_config(1_000_000_000);
-        let pubkey0 = Pubkey::new(&[0; 32]);
-        let pubkey1 = Pubkey::new(&[1; 32]);
+        let pubkey0 = Pubkey::from([0; 32]);
+        let pubkey1 = Pubkey::from([1; 32]);
 
         info!("pubkey0: {}", pubkey0);
         info!("pubkey1: {}", pubkey1);
@@ -17710,12 +17710,12 @@ pub(crate) mod tests {
         );
         let mut bank = Bank::new_for_tests(&genesis_config);
 
-        let mock_program_id = Pubkey::new(&[2u8; 32]);
+        let mock_program_id = Pubkey::from([2u8; 32]);
         fn mock_process_instruction(
             _first_instruction_account: IndexOfAccount,
             invoke_context: &mut InvokeContext,
         ) -> result::Result<(), InstructionError> {
-            let mock_program_id = Pubkey::new(&[2u8; 32]);
+            let mock_program_id = Pubkey::from([2u8; 32]);
             let transaction_context = &mut invoke_context.transaction_context;
             let instruction_context = transaction_context.get_current_instruction_context()?;
             let instruction_data = instruction_context.get_instruction_data();
@@ -19981,8 +19981,8 @@ pub(crate) mod tests {
         assert!(bank.get_rent_paying_pubkeys(&(0, 2, n)).is_none());
         assert!(bank.get_rent_paying_pubkeys(&(0, 0, n)).is_none());
 
-        let pk1 = Pubkey::new(&[2; 32]);
-        let pk2 = Pubkey::new(&[3; 32]);
+        let pk1 = Pubkey::from([2; 32]);
+        let pk2 = Pubkey::from([3; 32]);
         let index1 = Bank::partition_from_pubkey(&pk1, n);
         let index2 = Bank::partition_from_pubkey(&pk2, n);
         assert!(index1 > 0, "{}", index1);

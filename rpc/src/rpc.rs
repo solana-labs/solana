@@ -2348,7 +2348,7 @@ fn get_spl_token_owner_filter(program_id: &Pubkey, filters: &[RpcFilterType]) ->
                 ..
             }) if *offset == SPL_TOKEN_ACCOUNT_OWNER_OFFSET => {
                 if bytes.len() == PUBKEY_BYTES {
-                    owner_key = Some(Pubkey::new(bytes));
+                    owner_key = Pubkey::try_from(&bytes[..]).ok();
                 } else {
                     incorrect_owner_len = Some(bytes.len());
                 }
@@ -2404,7 +2404,7 @@ fn get_spl_token_mint_filter(program_id: &Pubkey, filters: &[RpcFilterType]) -> 
                 ..
             }) if *offset == SPL_TOKEN_ACCOUNT_MINT_OFFSET => {
                 if bytes.len() == PUBKEY_BYTES {
-                    mint = Some(Pubkey::new(bytes));
+                    mint = Pubkey::try_from(&bytes[..]).ok();
                 } else {
                     incorrect_mint_len = Some(bytes.len());
                 }
