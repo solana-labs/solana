@@ -35,10 +35,13 @@ Configuration object containing the following fields:
   href="/api/http#configuring-state-commitment"
 ></Field>
 
-<Field name="filters" type="array" optional={true}>
+<Field name="filters" type="array" optional={true} href={"/api/http#filter-criteria"}>
 
-filter results using various [filter objects](#filters); account must meet all
-filter criteria to be included in results
+filter results using various [filter objects](/api/http#filter-criteria)
+
+:::info
+The resultant account must meet **ALL** filter criteria to be included in the returned results
+:::
 
 </Field>
 

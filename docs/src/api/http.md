@@ -136,6 +136,19 @@ JSON parsing for the following native and SPL programs:
 
 The list of account parsers can be found [here](https://github.com/solana-labs/solana/blob/master/account-decoder/src/parse_account_data.rs), and instruction parsers [here](https://github.com/solana-labs/solana/blob/master/transaction-status/src/parse_instruction.rs).
 
+## Filter criteria
+
+Some methods support providing a `filters` object to enable pre-filtering the data returned within the RpcResponse JSON object. The following filters exist:
+
+- `memcmp: object` - compares a provided series of bytes with program account data at a particular offset. Fields:
+
+  - `offset: usize` - offset into program account data to start comparison
+  - `bytes: string` - data to match, as encoded string
+  - `encoding: string` - encoding for filter `bytes` data, either "base58" or "base64". Data is limited in size to 128 or fewer decoded bytes.<br />
+    **NEW: This field, and base64 support generally, is only available in solana-core v1.14.0 or newer. Please omit when querying nodes on earlier versions**
+
+- `dataSize: u64` - compares the program account data length with the provided data size
+
 ## Health Check
 
 Although not a JSON RPC API, a `GET /health` at the RPC HTTP Endpoint provides a

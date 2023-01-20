@@ -69,18 +69,9 @@ limit the returned account data using the provided `offset: usize` and `length: 
 
 </Field>
 
-<Field name="filters" type="array" optional={true} href={"#filters"}>
+<Field name="filters" type="array" optional={true} href={"/api/http#filter-criteria"}>
 
-filter results using up to 4 filter objects listed below:
-
-- `memcmp: object` - compares a provided series of bytes with program account data at a particular offset. Fields:
-
-  - `offset: usize` - offset into program account data to start comparison
-  - `bytes: string` - data to match, as encoded string
-  - `encoding: string` - encoding for filter `bytes` data, either "base58" or "base64". Data is limited in size to 128 or fewer decoded bytes.
-    **NEW: This field, and base64 support generally, is only available in solana-core v1.14.0 or newer. Please omit when querying nodes on earlier versions**
-
-- `dataSize: u64` - compares the program account data length with the provided data size
+filter results using up to 4 filter objects
 
 :::info
 The resultant account(s) must meet **ALL** filter criteria to be included in the returned results
