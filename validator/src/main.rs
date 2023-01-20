@@ -36,7 +36,7 @@ use {
         runtime_config::RuntimeConfig,
         snapshot_config::{SnapshotConfig, SnapshotUsage},
         snapshot_utils::{
-            self, setup_accounts_run_and_snapshot_paths, ArchiveFormat, SnapshotVersion,
+            self, create_accounts_run_and_snapshot_dirs, ArchiveFormat, SnapshotVersion,
         },
     },
     solana_sdk::{
@@ -1282,8 +1282,8 @@ pub fn main() {
         }).map(
         |account_path| {
             // For all account_paths, set up the run/ and snapshot/ sub directories.
-            match setup_accounts_run_and_snapshot_paths(&account_path) {
-                Ok(account_run_path) => account_run_path,
+            match create_accounts_run_and_snapshot_dirs(&account_path) {
+                Ok((account_run_path, _account_snapshot_path)) => account_run_path,
                 Err(err) => {
                     eprintln!("Unable to set up account run and snapshot sub directories: {account_path:?}, err: {err:?}");
                     exit(1);

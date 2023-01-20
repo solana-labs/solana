@@ -228,7 +228,7 @@ mod tests {
             snapshot_hash::SnapshotHash,
             snapshot_package::{SnapshotPackage, SnapshotType},
             snapshot_utils::{
-                self, setup_accounts_run_and_snapshot_paths, ArchiveFormat, SnapshotVersion,
+                self, create_accounts_run_and_snapshot_dirs, ArchiveFormat, SnapshotVersion,
                 SNAPSHOT_STATUS_CACHE_FILENAME,
             },
         },
@@ -268,7 +268,9 @@ mod tests {
 
     fn create_and_verify_snapshot(temp_dir: &Path) {
         let accounts_dir = temp_dir.join("accounts");
-        let accounts_dir = setup_accounts_run_and_snapshot_paths(accounts_dir.as_path()).unwrap();
+        let accounts_dir = create_accounts_run_and_snapshot_dirs(accounts_dir.as_path())
+            .unwrap()
+            .0;
 
         let snapshots_dir = temp_dir.join("snapshots");
         let full_snapshot_archives_dir = temp_dir.join("full_snapshot_archives");

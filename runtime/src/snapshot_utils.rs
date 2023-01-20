@@ -838,12 +838,14 @@ where
 /// hardlink directory.  This is to create the run/ and snapshot sub directories for an
 /// account_path provided by the user.  These two sub directories are on the same file
 /// system partition to allow hard-linking.
-pub fn setup_accounts_run_and_snapshot_paths<P: AsRef<Path>>(path: P) -> Result<PathBuf> {
-    let run_path = path.as_ref().join("run");
-    let snapshot_path = path.as_ref().join("snapshot");
+pub fn create_accounts_run_and_snapshot_dirs(
+    account_dir: impl AsRef<Path>,
+) -> Result<(PathBuf, PathBuf)> {
+    let run_path = account_dir.as_ref().join("run");
+    let snapshot_path = account_dir.as_ref().join("snapshot");
     fs::create_dir_all(&run_path)?;
-    fs::create_dir_all(snapshot_path)?;
-    Ok(run_path)
+    fs::create_dir_all(&snapshot_path)?;
+    Ok((run_path, snapshot_path))
 }
 
 /// Serialize a bank to a snapshot
@@ -2136,7 +2138,7 @@ pub fn verify_snapshot_archive<P, Q, R>(
 {
     let temp_dir = tempfile::TempDir::new().unwrap();
     let unpack_dir = temp_dir.path();
-    let account_dir = setup_accounts_run_and_snapshot_paths(unpack_dir).unwrap();
+    let account_dir = create_accounts_run_and_snapshot_dirs(unpack_dir).unwrap().0;
     untar_snapshot_in(
         snapshot_archive,
         unpack_dir,
@@ -2427,7 +2429,9 @@ pub fn should_take_incremental_snapshot(
 
 pub fn generate_test_tmp_account_path() -> PathBuf {
     let accounts_dir = tempfile::TempDir::new().unwrap();
-    setup_accounts_run_and_snapshot_paths(accounts_dir.path()).unwrap()
+    create_accounts_run_and_snapshot_dirs(accounts_dir.path())
+        .unwrap()
+        .0
 }
 
 #[cfg(test)]

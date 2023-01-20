@@ -62,7 +62,7 @@ use {
         snapshot_hash::StartingSnapshotHashes,
         snapshot_minimizer::SnapshotMinimizer,
         snapshot_utils::{
-            self, move_and_async_delete_path, setup_accounts_run_and_snapshot_paths, ArchiveFormat,
+            self, create_accounts_run_and_snapshot_dirs, move_and_async_delete_path, ArchiveFormat,
             SnapshotVersion, DEFAULT_ARCHIVE_COMPRESSION, SUPPORTED_ARCHIVE_COMPRESSION,
         },
     },
@@ -1110,8 +1110,8 @@ fn load_bank_forks(
     // For all account_paths, set up the run/ and snapshot/ sub directories.
     let account_run_paths: Vec<PathBuf> = account_paths.into_iter().map(
         |account_path| {
-            match setup_accounts_run_and_snapshot_paths(&account_path) {
-                Ok(account_run_path) => account_run_path,
+            match create_accounts_run_and_snapshot_dirs(&account_path) {
+                Ok((account_run_path, _account_snapshot_path)) => account_run_path,
                 Err(err) => {
                     eprintln!("Unable to set up account run and snapshot sub directories: {account_path:?}, err: {err:?}");
                     exit(1);

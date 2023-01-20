@@ -22,7 +22,7 @@ use {
     },
     solana_rpc_client::rpc_client::RpcClient,
     solana_runtime::{
-        snapshot_config::SnapshotConfig, snapshot_utils::setup_accounts_run_and_snapshot_paths,
+        snapshot_config::SnapshotConfig, snapshot_utils::create_accounts_run_and_snapshot_dirs,
     },
     solana_sdk::{
         account::AccountSharedData,
@@ -438,7 +438,7 @@ pub fn generate_account_paths(num_account_paths: usize) -> (Vec<TempDir>, Vec<Pa
         .collect();
     let account_storage_paths: Vec<_> = account_storage_dirs
         .iter()
-        .map(|a| setup_accounts_run_and_snapshot_paths(a.path()).unwrap())
+        .map(|a| create_accounts_run_and_snapshot_dirs(a.path()).unwrap().0)
         .collect();
     (account_storage_dirs, account_storage_paths)
 }
