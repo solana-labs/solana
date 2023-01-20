@@ -1,5 +1,8 @@
 use {
-    crate::{append_vec::AppendVecAccountMeta, storable_accounts::StorableAccounts},
+    crate::{
+        accounts_data_storage::reader::TieredAccountMeta, append_vec::AppendVecAccountMeta,
+        storable_accounts::StorableAccounts,
+    },
     solana_sdk::{
         account::{AccountSharedData, ReadableAccount},
         hash::Hash,
@@ -105,6 +108,7 @@ impl<'a: 'b, 'b, T: ReadableAccount + Sync + 'b, U: StorableAccounts<'a, T>, V: 
 #[derive(PartialEq, Eq, Debug)]
 pub enum StoredAccountMeta<'a> {
     AppendVec(AppendVecAccountMeta<'a>),
+    Tiered(TieredAccountMeta<'a>),
 }
 
 impl<'a> StoredAccountMeta<'a> {
@@ -112,66 +116,77 @@ impl<'a> StoredAccountMeta<'a> {
     pub fn clone_account(&self) -> AccountSharedData {
         match self {
             Self::AppendVec(av) => av.clone_account(),
+            Self::Tiered(ts) => ts.clone_account(),
         }
     }
 
     pub fn pubkey(&self) -> &Pubkey {
         match self {
             Self::AppendVec(av) => av.pubkey(),
+            Self::Tiered(ts) => ts.pubkey(),
         }
     }
 
     pub fn hash(&self) -> &Hash {
         match self {
             Self::AppendVec(av) => av.hash(),
+            Self::Tiered(ts) => ts.hash(),
         }
     }
 
     pub fn stored_size(&self) -> usize {
         match self {
             Self::AppendVec(av) => av.stored_size(),
+            Self::Tiered(ts) => ts.stored_size(),
         }
     }
 
     pub fn offset(&self) -> usize {
         match self {
             Self::AppendVec(av) => av.offset(),
+            Self::Tiered(ts) => ts.offset(),
         }
     }
 
     pub fn data(&self) -> &[u8] {
         match self {
             Self::AppendVec(av) => av.data(),
+            Self::Tiered(ts) => ts.data(),
         }
     }
 
     pub fn data_len(&self) -> u64 {
         match self {
             Self::AppendVec(av) => av.data_len(),
+            Self::Tiered(ts) => ts.data_len(),
         }
     }
 
     pub fn write_version(&self) -> StoredMetaWriteVersion {
         match self {
             Self::AppendVec(av) => av.write_version(),
+            Self::Tiered(ts) => ts.write_version(),
         }
     }
 
     pub fn meta(&self) -> &StoredMeta {
         match self {
             Self::AppendVec(av) => av.meta(),
+            Self::Tiered(_) => unreachable!(),
         }
     }
 
     pub fn set_meta(&mut self, meta: &'a StoredMeta) {
         match self {
             Self::AppendVec(av) => av.set_meta(meta),
+            Self::Tiered(_) => unreachable!(),
         }
     }
 
     pub(crate) fn sanitize(&self) -> bool {
         match self {
             Self::AppendVec(av) => av.sanitize(),
+            Self::Tiered(_) => unimplemented!(),
         }
     }
 }
@@ -180,26 +195,31 @@ impl<'a> ReadableAccount for StoredAccountMeta<'a> {
     fn lamports(&self) -> u64 {
         match self {
             Self::AppendVec(av) => av.lamports(),
+            Self::Tiered(ts) => ts.lamports(),
         }
     }
     fn data(&self) -> &[u8] {
         match self {
             Self::AppendVec(av) => av.data(),
+            Self::Tiered(ts) => ts.data(),
         }
     }
     fn owner(&self) -> &Pubkey {
         match self {
             Self::AppendVec(av) => av.owner(),
+            Self::Tiered(ts) => ts.owner(),
         }
     }
     fn executable(&self) -> bool {
         match self {
             Self::AppendVec(av) => av.executable(),
+            Self::Tiered(ts) => ts.executable(),
         }
     }
     fn rent_epoch(&self) -> Epoch {
         match self {
             Self::AppendVec(av) => av.rent_epoch(),
+            Self::Tiered(ts) => ts.rent_epoch(),
         }
     }
 }

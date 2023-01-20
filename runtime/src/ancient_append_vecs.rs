@@ -752,6 +752,9 @@ pub fn get_ancient_append_vec_capacity() -> u64 {
 pub fn is_ancient(storage: &AccountsFile) -> bool {
     match storage {
         AccountsFile::AppendVec(storage) => storage.capacity() >= get_ancient_append_vec_capacity(),
+        AccountsFile::Cold(..) => {
+            return false;
+        }
     }
 }
 
