@@ -4771,6 +4771,13 @@ dependencies = [
 [[package]]
 name = "solana-accounts-tool"
 version = "1.15.0"
+dependencies = [
+ "clap 2.33.3",
+ "log",
+ "solana-logger 1.15.0",
+ "solana-measure",
+ "solana-version",
+]
 
 [[package]]
 name = "solana-address-lookup-table-program"
