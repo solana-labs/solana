@@ -152,7 +152,7 @@ impl AccountsPackage {
             snapshot_storages,
             expected_capitalization: bank.capitalization(),
             accounts_hash_for_testing,
-            accounts: bank.accounts(),
+            accounts: bank.accounts().clone(),
             epoch_schedule: *bank.epoch_schedule(),
             rent_collector: bank.rent_collector().clone(),
             snapshot_info,

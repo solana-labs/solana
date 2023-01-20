@@ -6317,8 +6317,8 @@ impl Bank {
         Ok(account.lamports())
     }
 
-    pub fn accounts(&self) -> Arc<Accounts> {
-        self.rc.accounts.clone()
+    pub fn accounts(&self) -> &Arc<Accounts> {
+        &self.rc.accounts
     }
 
     fn finish_init(
