@@ -6630,7 +6630,7 @@ impl Bank {
 
         let mut hash = hashv(&[
             self.parent_hash.as_ref(),
-            bank_hash_info.accounts_delta_hash.as_ref(),
+            bank_hash_info.accounts_delta_hash.0.as_ref(),
             &signature_count_buf,
             self.last_blockhash().as_ref(),
         ]);
@@ -6662,7 +6662,7 @@ impl Bank {
             "bank frozen: {} hash: {} accounts_delta: {} signature_count: {} last_blockhash: {} capitalization: {}{}",
             self.slot(),
             hash,
-            bank_hash_info.accounts_delta_hash,
+            bank_hash_info.accounts_delta_hash.0,
             self.signature_count(),
             self.last_blockhash(),
             self.capitalization(),

@@ -25,8 +25,8 @@ use {
         accounts_background_service::{DroppedSlotsSender, SendDroppedBankCallback},
         accounts_cache::{AccountsCache, CachedAccount, SlotCache},
         accounts_hash::{
-            AccountsHash, AccountsHasher, CalcAccountsHashConfig, CalculateHashIntermediate,
-            HashStats, ZeroLamportAccounts,
+            AccountsDeltaHash, AccountsHash, AccountsHasher, CalcAccountsHashConfig,
+            CalculateHashIntermediate, HashStats, ZeroLamportAccounts,
         },
         accounts_index::{
             AccountIndexGetResult, AccountSecondaryIndexes, AccountsIndex, AccountsIndexConfig,
@@ -1076,7 +1076,7 @@ impl BankHashStats {
 
 #[derive(Clone, Default, Debug, Serialize, Deserialize, PartialEq, Eq, AbiExample)]
 pub struct BankHashInfo {
-    pub accounts_delta_hash: Hash,
+    pub accounts_delta_hash: AccountsDeltaHash,
     pub accounts_hash: AccountsHash,
     pub stats: BankHashStats,
 }
@@ -7437,7 +7437,7 @@ impl AccountsDb {
         (hashes, scan.as_us(), accumulate)
     }
 
-    pub fn get_accounts_delta_hash(&self, slot: Slot) -> Hash {
+    pub fn get_accounts_delta_hash(&self, slot: Slot) -> AccountsDeltaHash {
         let (mut hashes, scan_us, mut accumulate) = self.get_pubkey_hash_for_slot(slot);
         let dirty_keys = hashes.iter().map(|(pubkey, _hash)| *pubkey).collect();
 
@@ -7446,7 +7446,8 @@ impl AccountsDb {
             hashes.retain(|(pubkey, _hash)| !self.is_filler_account(pubkey));
         }
 
-        let ret = AccountsHasher::accumulate_account_hashes(hashes);
+        let accounts_delta_hash =
+            AccountsDeltaHash(AccountsHasher::accumulate_account_hashes(hashes));
         accumulate.stop();
         let mut uncleaned_time = Measure::start("uncleaned_index");
         self.uncleaned_pubkeys.insert(slot, dirty_keys);
@@ -7462,7 +7463,7 @@ impl AccountsDb {
             .delta_hash_accumulate_time_total_us
             .fetch_add(accumulate.as_us(), Ordering::Relaxed);
         self.stats.delta_hash_num.fetch_add(1, Ordering::Relaxed);
-        ret
+        accounts_delta_hash
     }
 
     fn update_index<'a, T: ReadableAccount + Sync>(
@@ -12178,9 +12179,8 @@ pub mod tests {
             Err(MissingBankHash)
         );
 
-        let some_bank_hash = Hash::new(&[0xca; HASH_BYTES]);
         let bank_hash_info = BankHashInfo {
-            accounts_delta_hash: some_bank_hash,
+            accounts_delta_hash: AccountsDeltaHash(Hash::new(&[0xca; HASH_BYTES])),
             accounts_hash: AccountsHash(Hash::new(&[0xca; HASH_BYTES])),
             stats: BankHashStats::default(),
         };
