@@ -1,11 +1,12 @@
 use {
     crossbeam_channel::{Receiver, RecvTimeoutError, SendError, Sender},
+    solana_gossip::cluster_info::ClusterInfo,
     solana_ledger::{
         leader_schedule_cache::LeaderScheduleCache, shred, sigverify_shreds::verify_shreds_gpu,
     },
     solana_perf::{self, packet::PacketBatch, recycler_cache::RecyclerCache},
     solana_runtime::{bank::Bank, bank_forks::BankForks},
-    solana_sdk::{clock::Slot, pubkey::Pubkey},
+    solana_sdk::{clock::Slot, pubkey::Pubkey, signature::Signer},
     std::{
         collections::HashMap,
         sync::{
@@ -25,8 +26,7 @@ enum Error {
 }
 
 pub(crate) fn spawn_shred_sigverify(
-    // TODO: Hot swap will change pubkey.
-    self_pubkey: Pubkey,
+    cluster_info: Arc<ClusterInfo>,
     bank_forks: Arc<RwLock<BankForks>>,
     leader_schedule_cache: Arc<LeaderScheduleCache>,
     shred_fetch_receiver: Receiver<PacketBatch>,
@@ -39,6 +39,9 @@ pub(crate) fn spawn_shred_sigverify(
     Builder::new()
         .name("solShredVerifr".to_string())
         .spawn(move || loop {
+            // We can't store the pubkey outside the loop
+            // because the identity might be hot swapped.
+            let self_pubkey = cluster_info.keypair().pubkey();
             match run_shred_sigverify(
                 &self_pubkey,
                 &bank_forks,
