@@ -6899,15 +6899,27 @@ impl Bank {
 
     /// only called from ledger-tool or tests
     fn calculate_capitalization(&self, debug_verify: bool) -> u64 {
-        self.rc.accounts.calculate_capitalization(
-            &self.ancestors,
-            self.slot(),
-            debug_verify,
-            self.epoch_schedule(),
-            &self.rent_collector,
-            // we have to use the index since the slot could be in the write cache still
-            CalcAccountsHashDataSource::IndexForTests,
-        )
+        let is_startup = true;
+        self.rc
+            .accounts
+            .accounts_db
+            .verify_accounts_hash_in_bg
+            .wait_for_complete();
+        self.rc
+            .accounts
+            .accounts_db
+            .update_accounts_hash(
+                // we have to use the index since the slot could be in the write cache still
+                CalcAccountsHashDataSource::IndexForTests,
+                debug_verify,
+                self.slot(),
+                &self.ancestors,
+                None,
+                self.epoch_schedule(),
+                &self.rent_collector,
+                is_startup,
+            )
+            .1
     }
 
     /// only called from tests or ledger tool
