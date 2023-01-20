@@ -965,12 +965,14 @@ fn hard_link_storages_to_snapshot(
 /// hardlink directory.  This is to create the run/ and snapshot sub directories for an
 /// account_path provided by the user.  These two sub directories are on the same file
 /// system partition to allow hard-linking.
-pub fn setup_accounts_run_and_snapshot_paths<P: AsRef<Path>>(path: P) -> Result<PathBuf> {
-    let run_path = path.as_ref().join("run");
-    let snapshot_path = path.as_ref().join("snapshot");
+pub fn create_accounts_run_and_snapshot_dirs(
+    account_dir: impl AsRef<Path>,
+) -> Result<(PathBuf, PathBuf)> {
+    let run_path = account_dir.as_ref().join("run");
+    let snapshot_path = account_dir.as_ref().join("snapshot");
     fs::create_dir_all(&run_path)?;
-    fs::create_dir_all(snapshot_path)?;
-    Ok(run_path)
+    fs::create_dir_all(&snapshot_path)?;
+    Ok((run_path, snapshot_path))
 }
 
 /// Serialize a bank to a snapshot
