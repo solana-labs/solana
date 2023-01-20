@@ -2161,9 +2161,12 @@ pub fn verify_snapshot_archive<P, Q, R>(
 
     assert!(!dir_diff::is_different(&snapshots_to_verify, unpacked_snapshots).unwrap());
 
-    // The account files in the archive accounts/ have been expanded to [account_paths].
+    // In the unarchiving case, there is an extra empty "accounts" directory. The account
+    // files in the archive accounts/ have been expanded to [account_paths].
     // Remove the empty "accounts" directory for the directory comparison below.
-    std::fs::remove_dir(account_dir.join("accounts")).unwrap();
+    // In some test cases the directory to compare do not come from unchiving.  Use
+    // unwarp_or_default to ignore the error if this directory does not exist.
+    std::fs::remove_dir(account_dir.join("accounts")).unwrap_or_default();
     // Check the account entries are the same
     assert!(!dir_diff::is_different(&storages_to_verify, account_dir).unwrap());
 }
