@@ -307,8 +307,7 @@ impl SnapshotRequestHandler {
         assert!(
             snapshot_root_bank.slot()
                 <= snapshot_root_bank
-                    .rc
-                    .accounts
+                    .accounts()
                     .accounts_db
                     .accounts_cache
                     .fetch_max_flush_root()
@@ -461,7 +460,7 @@ impl PrunedBanksRequestHandler {
         let mut count = 0;
         for (pruned_slot, pruned_bank_id) in self.pruned_banks_receiver.try_iter() {
             count += 1;
-            bank.rc.accounts.accounts_db.purge_slot(
+            bank.accounts().accounts_db.purge_slot(
                 pruned_slot,
                 pruned_bank_id,
                 is_serialized_with_abs,
@@ -650,8 +649,7 @@ impl AccountsBackgroundService {
             let root_bank = bank_forks.read().unwrap().root_bank();
             root_bank.set_callback(Some(Box::new(
                 root_bank
-                    .rc
-                    .accounts
+                    .accounts()
                     .accounts_db
                     .create_drop_bank_callback(pruned_banks_sender),
             )));
@@ -762,11 +760,11 @@ mod test {
         assert!(bank0.get_account(&account_key).is_some());
         pruned_banks_sender.send((0, 0)).unwrap();
 
-        assert!(!bank0.rc.accounts.scan_slot(0, |_| Some(())).is_empty());
+        assert!(!bank0.accounts().scan_slot(0, |_| Some(())).is_empty());
 
         pruned_banks_request_handler.remove_dead_slots(&bank0, &mut 0, &mut 0);
 
-        assert!(bank0.rc.accounts.scan_slot(0, |_| Some(())).is_empty());
+        assert!(bank0.accounts().scan_slot(0, |_| Some(())).is_empty());
     }
 
     /// Ensure that unhandled snapshot requests are properly re-enqueued or dropped
@@ -819,8 +817,7 @@ mod test {
         bank.set_startup_verification_complete();
         // Need to set the EAH to Valid so that `Bank::new_from_parent()` doesn't panic during
         // freeze when parent is in the EAH calculation window.
-        bank.rc
-            .accounts
+        bank.accounts()
             .accounts_db
             .epoch_accounts_hash_manager
             .set_valid(EpochAccountsHash::new(Hash::new_unique()), 0);

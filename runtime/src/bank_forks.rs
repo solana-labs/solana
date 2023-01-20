@@ -307,8 +307,7 @@ impl BankForks {
             is_root_bank_squashed = eah_bank.slot() == root;
 
             eah_bank
-                .rc
-                .accounts
+                .accounts()
                 .accounts_db
                 .epoch_accounts_hash_manager
                 .set_in_flight(eah_bank.slot());
@@ -764,8 +763,7 @@ mod tests {
                         .for_each(|snapshot_request| {
                             snapshot_request
                                 .snapshot_root_bank
-                                .rc
-                                .accounts
+                                .accounts()
                                 .accounts_db
                                 .epoch_accounts_hash_manager
                                 .set_valid(

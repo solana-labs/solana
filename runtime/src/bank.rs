@@ -1475,7 +1475,7 @@ impl Bank {
 
         let (rc, bank_rc_creation_time_us) = measure_us!(BankRc {
             accounts: Arc::new(Accounts::new_from_parent(
-                &parent.rc.accounts,
+                parent.accounts(),
                 slot,
                 parent.slot(),
             )),
@@ -1736,8 +1736,7 @@ impl Bank {
     }
 
     pub fn byte_limit_for_scans(&self) -> Option<usize> {
-        self.rc
-            .accounts
+        self.accounts()
             .accounts_db
             .accounts_index
             .scan_results_limit_bytes
@@ -1777,16 +1776,14 @@ impl Bank {
     ) -> Self {
         parent.freeze();
         parent
-            .rc
-            .accounts
+            .accounts()
             .accounts_db
             .epoch_accounts_hash_manager
             .set_in_flight(parent.slot());
         let accounts_hash = parent.update_accounts_hash(data_source, false, true);
         let epoch_accounts_hash = accounts_hash.into();
         parent
-            .rc
-            .accounts
+            .accounts()
             .accounts_db
             .epoch_accounts_hash_manager
             .set_valid(epoch_accounts_hash, parent.slot());
@@ -3144,7 +3141,7 @@ impl Bank {
             // freeze is a one-way trip, idempotent
             self.freeze_started.store(true, Relaxed);
             *hash = self.hash_internal_state();
-            self.rc.accounts.accounts_db.mark_slot_frozen(self.slot());
+            self.accounts().accounts_db.mark_slot_frozen(self.slot());
         }
     }
 
@@ -3173,7 +3170,7 @@ impl Bank {
         let mut squash_accounts_time = Measure::start("squash_accounts_time");
         for slot in roots.iter().rev() {
             // root forks cannot be purged
-            let add_root_timing = self.rc.accounts.add_root(*slot);
+            let add_root_timing = self.accounts().add_root(*slot);
             total_index_us += add_root_timing.index_us;
             total_cache_us += add_root_timing.cache_us;
             total_store_us += add_root_timing.store_us;
@@ -3443,16 +3440,14 @@ impl Bank {
 
     pub fn get_startup_verification_complete(&self) -> &Arc<AtomicBool> {
         &self
-            .rc
-            .accounts
+            .accounts()
             .accounts_db
             .verify_accounts_hash_in_bg
             .verified
     }
 
     pub fn is_startup_verification_complete(&self) -> bool {
-        self.rc
-            .accounts
+        self.accounts()
             .accounts_db
             .verify_accounts_hash_in_bg
             .check_complete()
@@ -3461,8 +3456,7 @@ impl Bank {
     /// This can occur because it completed in the background
     /// or if the verification was run in the foreground.
     pub fn set_startup_verification_complete(&self) {
-        self.rc
-            .accounts
+        self.accounts()
             .accounts_db
             .verify_accounts_hash_in_bg
             .verification_complete()
@@ -3634,8 +3628,7 @@ impl Bank {
             .map(SanitizedTransaction::from_transaction_for_tests)
             .collect::<Vec<_>>();
         let lock_results = self
-            .rc
-            .accounts
+            .accounts()
             .lock_accounts(sanitized_txs.iter(), transaction_account_lock_limit);
         TransactionBatch::new(lock_results, self, Cow::Owned(sanitized_txs))
     }
@@ -3658,8 +3651,7 @@ impl Bank {
             .collect::<Result<Vec<_>>>()?;
         let tx_account_lock_limit = self.get_transaction_account_lock_limit();
         let lock_results = self
-            .rc
-            .accounts
+            .accounts()
             .lock_accounts(sanitized_txs.iter(), tx_account_lock_limit);
         Ok(TransactionBatch::new(
             lock_results,
@@ -3675,8 +3667,7 @@ impl Bank {
     ) -> TransactionBatch<'a, 'b> {
         let tx_account_lock_limit = self.get_transaction_account_lock_limit();
         let lock_results = self
-            .rc
-            .accounts
+            .accounts()
             .lock_accounts(txs.iter(), tx_account_lock_limit);
         TransactionBatch::new(lock_results, self, Cow::Borrowed(txs))
     }
@@ -3690,7 +3681,7 @@ impl Bank {
     ) -> TransactionBatch<'a, 'b> {
         // this lock_results could be: Ok, AccountInUse, WouldExceedBlockMaxLimit or WouldExceedAccountMaxLimit
         let tx_account_lock_limit = self.get_transaction_account_lock_limit();
-        let lock_results = self.rc.accounts.lock_accounts_with_results(
+        let lock_results = self.accounts().lock_accounts_with_results(
             transactions.iter(),
             transaction_results,
             tx_account_lock_limit,
@@ -3821,18 +3812,17 @@ impl Bank {
     pub fn unlock_accounts(&self, batch: &mut TransactionBatch) {
         if batch.needs_unlock() {
             batch.set_needs_unlock(false);
-            self.rc
-                .accounts
+            self.accounts()
                 .unlock_accounts(batch.sanitized_transactions().iter(), batch.lock_results())
         }
     }
 
     pub fn remove_unrooted_slots(&self, slots: &[(Slot, BankId)]) {
-        self.rc.accounts.accounts_db.remove_unrooted_slots(slots)
+        self.accounts().accounts_db.remove_unrooted_slots(slots)
     }
 
     pub fn set_shrink_paths(&self, paths: Vec<PathBuf>) {
-        self.rc.accounts.accounts_db.set_shrink_paths(paths);
+        self.accounts().accounts_db.set_shrink_paths(paths);
     }
 
     fn check_age<'a>(
@@ -4351,7 +4341,7 @@ impl Bank {
         check_time.stop();
 
         let mut load_time = Measure::start("accounts_load");
-        let mut loaded_transactions = self.rc.accounts.load_accounts(
+        let mut loaded_transactions = self.accounts().load_accounts(
             &self.ancestors,
             sanitized_txs,
             check_results,
@@ -4849,7 +4839,7 @@ impl Bank {
 
         let mut write_time = Measure::start("write_time");
         let durable_nonce = DurableNonce::from_blockhash(&last_blockhash);
-        self.rc.accounts.store_cached(
+        self.accounts().store_cached(
             self.slot(),
             sanitized_txs,
             &execution_results,
@@ -5193,7 +5183,7 @@ impl Bank {
             }
 
             if parallel {
-                let thread_pool = &self.rc.accounts.accounts_db.thread_pool;
+                let thread_pool = &self.accounts().accounts_db.thread_pool;
                 thread_pool.install(|| {
                     ranges.into_par_iter().for_each(|range| {
                         self.collect_rent_in_range(range.0, range.1, &rent_metrics)
@@ -5289,7 +5279,7 @@ impl Bank {
                 measure!(self.rent_collector.collect_from_existing_account(
                     pubkey,
                     account,
-                    self.rc.accounts.accounts_db.filler_account_suffix.as_ref(),
+                    self.accounts().accounts_db.filler_account_suffix.as_ref(),
                     set_exempt_rent_epoch_max,
                 ));
             time_collecting_rent_us += measure.as_us();
@@ -5362,8 +5352,7 @@ impl Bank {
 
     /// get all pubkeys that we expect to be rent-paying or None, if this was not initialized at load time (that should only exist in test cases)
     fn get_rent_paying_pubkeys(&self, partition: &Partition) -> Option<HashSet<Pubkey>> {
-        self.rc
-            .accounts
+        self.accounts()
             .accounts_db
             .accounts_index
             .rent_paying_accounts_by_partition
@@ -5394,10 +5383,9 @@ impl Bank {
         metrics: &RentMetrics,
     ) {
         let mut hold_range = Measure::start("hold_range");
-        let thread_pool = &self.rc.accounts.accounts_db.thread_pool;
+        let thread_pool = &self.accounts().accounts_db.thread_pool;
         thread_pool.install(|| {
-            self.rc
-                .accounts
+            self.accounts()
                 .hold_range_in_memory(&subrange_full, true, thread_pool);
             hold_range.stop();
             metrics.hold_range_us.fetch_add(hold_range.as_us(), Relaxed);
@@ -5428,14 +5416,12 @@ impl Bank {
                     let (accounts, measure_load_accounts) = measure!(if last {
                         let end = *subrange_full.end();
                         let subrange = start..=end; // IN-clusive
-                        self.rc
-                            .accounts
+                        self.accounts()
                             .load_to_collect_rent_eagerly(&self.ancestors, subrange)
                     } else {
                         let end = merge_prefix(offset(chunk + 1), *subrange_full.start());
                         let subrange = start..end; // EX-clusive, the next 'start' will be this same value
-                        self.rc
-                            .accounts
+                        self.accounts()
                             .load_to_collect_rent_eagerly(&self.ancestors, subrange)
                     });
                     CollectRentInPartitionInfo::new(
@@ -5451,8 +5437,7 @@ impl Bank {
             // We cannot assert here that we collected from all expected keys.
             // Some accounts may have been topped off or may have had all funds removed and gone to 0 lamports.
 
-            self.rc
-                .accounts
+            self.accounts()
                 .hold_range_in_memory(&subrange_full, false, thread_pool);
 
             self.collected_rent
@@ -6193,10 +6178,9 @@ impl Bank {
             self.stakes_cache
                 .check_and_store(accounts.pubkey(i), accounts.account(i))
         });
-        self.rc.accounts.store_accounts_cached(accounts);
+        self.accounts().store_accounts_cached(accounts);
         m.stop();
-        self.rc
-            .accounts
+        self.accounts()
             .accounts_db
             .stats
             .stakes_cache_check_and_store_us
@@ -6204,29 +6188,26 @@ impl Bank {
     }
 
     pub fn force_flush_accounts_cache(&self) {
-        self.rc
-            .accounts
+        self.accounts()
             .accounts_db
             .flush_accounts_cache(true, Some(self.slot()))
     }
 
     pub fn flush_accounts_cache_if_needed(&self) {
-        self.rc
-            .accounts
+        self.accounts()
             .accounts_db
             .flush_accounts_cache(false, Some(self.slot()))
     }
 
     #[cfg(test)]
     pub fn flush_accounts_cache_slot_for_tests(&self) {
-        self.rc
-            .accounts
+        self.accounts()
             .accounts_db
             .flush_accounts_cache_slot_for_tests(self.slot())
     }
 
     pub fn expire_old_recycle_stores(&self) {
-        self.rc.accounts.accounts_db.expire_old_recycle_stores()
+        self.accounts().accounts_db.expire_old_recycle_stores()
     }
 
     /// Technically this issues (or even burns!) new lamports,
@@ -6410,7 +6391,7 @@ impl Bank {
         // get_account (= primary this fn caller) may be called from on-chain Bank code even if we
         // try hard to use get_account_with_fixed_root for that purpose...
         // so pass safer LoadHint:Unspecified here as a fallback
-        self.rc.accounts.load_without_fixed_root(ancestors, pubkey)
+        self.accounts().load_without_fixed_root(ancestors, pubkey)
     }
 
     fn load_slow_with_fixed_root(
@@ -6418,7 +6399,7 @@ impl Bank {
         ancestors: &Ancestors,
         pubkey: &Pubkey,
     ) -> Option<(AccountSharedData, Slot)> {
-        self.rc.accounts.load_with_fixed_root(ancestors, pubkey)
+        self.accounts().load_with_fixed_root(ancestors, pubkey)
     }
 
     pub fn get_program_accounts(
@@ -6426,8 +6407,7 @@ impl Bank {
         program_id: &Pubkey,
         config: &ScanConfig,
     ) -> ScanResult<Vec<TransactionAccount>> {
-        self.rc
-            .accounts
+        self.accounts()
             .load_by_program(&self.ancestors, self.bank_id, program_id, config)
     }
 
@@ -6437,7 +6417,7 @@ impl Bank {
         filter: F,
         config: &ScanConfig,
     ) -> ScanResult<Vec<TransactionAccount>> {
-        self.rc.accounts.load_by_program_with_filter(
+        self.accounts().load_by_program_with_filter(
             &self.ancestors,
             self.bank_id,
             program_id,
@@ -6453,7 +6433,7 @@ impl Bank {
         config: &ScanConfig,
         byte_limit_for_scan: Option<usize>,
     ) -> ScanResult<Vec<TransactionAccount>> {
-        self.rc.accounts.load_by_index_key_with_filter(
+        self.accounts().load_by_index_key_with_filter(
             &self.ancestors,
             self.bank_id,
             index_key,
@@ -6464,19 +6444,18 @@ impl Bank {
     }
 
     pub fn account_indexes_include_key(&self, key: &Pubkey) -> bool {
-        self.rc.accounts.account_indexes_include_key(key)
+        self.accounts().account_indexes_include_key(key)
     }
 
     pub fn get_all_accounts_with_modified_slots(&self) -> ScanResult<Vec<PubkeyAccountSlot>> {
-        self.rc.accounts.load_all(&self.ancestors, self.bank_id)
+        self.accounts().load_all(&self.ancestors, self.bank_id)
     }
 
     pub fn scan_all_accounts_with_modified_slots<F>(&self, scan_func: F) -> ScanResult<()>
     where
         F: FnMut(Option<(&Pubkey, AccountSharedData, Slot)>),
     {
-        self.rc
-            .accounts
+        self.accounts()
             .scan_all(&self.ancestors, self.bank_id, scan_func)
     }
 
@@ -6484,8 +6463,7 @@ impl Bank {
         &self,
         program_id: &Pubkey,
     ) -> Vec<TransactionAccount> {
-        self.rc
-            .accounts
+        self.accounts()
             .load_by_program_slot(self.slot(), Some(program_id))
     }
 
@@ -6500,7 +6478,7 @@ impl Bank {
     }
 
     pub fn get_all_accounts_modified_since_parent(&self) -> Vec<TransactionAccount> {
-        self.rc.accounts.load_by_program_slot(self.slot(), None)
+        self.accounts().load_by_program_slot(self.slot(), None)
     }
 
     // if you want get_account_modified_since_parent without fixed_root, please define so...
@@ -6523,7 +6501,7 @@ impl Bank {
         filter_by_address: &HashSet<Pubkey>,
         filter: AccountAddressFilter,
     ) -> ScanResult<Vec<(Pubkey, u64)>> {
-        self.rc.accounts.load_largest_accounts(
+        self.accounts().load_largest_accounts(
             &self.ancestors,
             self.bank_id,
             num,
@@ -6624,7 +6602,7 @@ impl Bank {
     ///  of the delta of the ledger since the last vote and up to now
     fn hash_internal_state(&self) -> Hash {
         // If there are no accounts, return the hash of the previous state and the latest blockhash
-        let bank_hash_info = self.rc.accounts.bank_hash_info_at(self.slot());
+        let bank_hash_info = self.accounts().bank_hash_info_at(self.slot());
         let mut signature_count_buf = [0u8; 8];
         LittleEndian::write_u64(&mut signature_count_buf[..], self.signature_count());
 
@@ -6703,8 +6681,7 @@ impl Bank {
     /// calculation has not completed yet, this fn will block until it does complete.
     fn wait_get_epoch_accounts_hash(&self) -> EpochAccountsHash {
         let (epoch_accounts_hash, measure) = measure!(self
-            .rc
-            .accounts
+            .accounts()
             .accounts_db
             .epoch_accounts_hash_manager
             .wait_get_epoch_accounts_hash());
@@ -6723,7 +6700,7 @@ impl Bank {
     /// Only called from startup or test code.
     #[must_use]
     pub fn verify_bank_hash(&self, config: VerifyBankHash) -> bool {
-        let accounts = &self.rc.accounts;
+        let accounts = self.accounts();
         // Wait until initial hash calc is complete before starting a new hash calc.
         // This should only occur when we halt at a slot in ledger-tool.
         accounts
@@ -6807,8 +6784,7 @@ impl Bank {
     /// Called internally when verification runs in the foreground thread.
     /// Also has to be called by some tests which don't do verification on startup.
     pub fn set_initial_accounts_hash_verification_completed(&self) {
-        self.rc
-            .accounts
+        self.accounts()
             .accounts_db
             .verify_accounts_hash_in_bg
             .verification_complete();
@@ -6818,8 +6794,7 @@ impl Bank {
     /// return false if bg hash verification has not completed yet
     /// if hash verification failed, a panic will occur
     pub fn has_initial_accounts_hash_verification_completed(&self) -> bool {
-        self.rc
-            .accounts
+        self.accounts()
             .accounts_db
             .verify_accounts_hash_in_bg
             .check_complete()
@@ -6834,8 +6809,7 @@ impl Bank {
         // we want to *include* the storage at our slot
         let requested_slots = start_slot..=self.slot();
 
-        self.rc
-            .accounts
+        self.accounts()
             .accounts_db
             .get_snapshot_storages(requested_slots, None)
             .0
@@ -6900,13 +6874,11 @@ impl Bank {
     /// only called from ledger-tool or tests
     fn calculate_capitalization(&self, debug_verify: bool) -> u64 {
         let is_startup = true;
-        self.rc
-            .accounts
+        self.accounts()
             .accounts_db
             .verify_accounts_hash_in_bg
             .wait_for_complete();
-        self.rc
-            .accounts
+        self.accounts()
             .accounts_db
             .update_accounts_hash(
                 // we have to use the index since the slot could be in the write cache still
@@ -6951,7 +6923,7 @@ impl Bank {
     }
 
     pub fn get_accounts_hash(&self) -> AccountsHash {
-        self.rc.accounts.accounts_db.get_accounts_hash(self.slot)
+        self.accounts().accounts_db.get_accounts_hash(self.slot)
     }
 
     pub fn get_snapshot_hash(&self) -> SnapshotHash {
@@ -6961,12 +6933,11 @@ impl Bank {
     }
 
     pub fn get_thread_pool(&self) -> &ThreadPool {
-        &self.rc.accounts.accounts_db.thread_pool_clean
+        &self.accounts().accounts_db.thread_pool_clean
     }
 
     pub fn load_account_into_read_cache(&self, key: &Pubkey) {
-        self.rc
-            .accounts
+        self.accounts()
             .accounts_db
             .load_account_into_read_cache(&self.ancestors, key);
     }
@@ -6977,7 +6948,7 @@ impl Bank {
         mut debug_verify: bool,
         is_startup: bool,
     ) -> AccountsHash {
-        let (accounts_hash, total_lamports) = self.rc.accounts.accounts_db.update_accounts_hash(
+        let (accounts_hash, total_lamports) = self.accounts().accounts_db.update_accounts_hash(
             data_source,
             debug_verify,
             self.slot(),
@@ -6999,7 +6970,7 @@ impl Bank {
                 // cap mismatch detected. It has been logged to metrics above.
                 // Run both versions of the calculation to attempt to get more info.
                 debug_verify = true;
-                self.rc.accounts.accounts_db.update_accounts_hash(
+                self.accounts().accounts_db.update_accounts_hash(
                     data_source,
                     debug_verify,
                     self.slot(),
@@ -7036,8 +7007,7 @@ impl Bank {
         let mut clean_time = Measure::start("clean");
         if !accounts_db_skip_shrink && self.slot() > 0 {
             info!("cleaning..");
-            self.rc
-                .accounts
+            self.accounts()
                 .accounts_db
                 .clean_accounts(None, true, Some(last_full_snapshot_slot));
         }
@@ -7046,14 +7016,13 @@ impl Bank {
         let mut shrink_all_slots_time = Measure::start("shrink_all_slots");
         if !accounts_db_skip_shrink && self.slot() > 0 {
             info!("shrinking..");
-            self.rc
-                .accounts
+            self.accounts()
                 .accounts_db
                 .shrink_all_slots(true, Some(last_full_snapshot_slot));
         }
         shrink_all_slots_time.stop();
 
-        let (mut verify, verify_time_us) = if !self.rc.accounts.accounts_db.skip_initial_hash_calc {
+        let (mut verify, verify_time_us) = if !self.accounts().accounts_db.skip_initial_hash_calc {
             info!("verify_bank_hash..");
             let mut verify_time = Measure::start("verify_bank_hash");
             let verify = self.verify_bank_hash(VerifyBankHash {
@@ -7066,8 +7035,7 @@ impl Bank {
             verify_time.stop();
             (verify, verify_time.as_us())
         } else {
-            self.rc
-                .accounts
+            self.accounts()
                 .accounts_db
                 .verify_accounts_hash_in_bg
                 .verification_complete();
@@ -7158,7 +7126,7 @@ impl Bank {
                 load_result,
                 execution_results[i].was_executed_successfully(),
             ) {
-                // note that this could get timed to: self.rc.accounts.accounts_db.stats.stakes_cache_check_and_store_us,
+                // note that this could get timed to: self.accounts().accounts_db.stats.stakes_cache_check_and_store_us,
                 //  but this code path is captured separately in ExecuteTimingType::UpdateStakesCacheUs
                 let message = tx.message();
                 for (_i, (pubkey, account)) in
@@ -7335,7 +7303,7 @@ impl Bank {
         // So when we're snapshotting, the highest slot to clean is lowered by one.
         let highest_slot_to_clean = self.slot().saturating_sub(1);
 
-        self.rc.accounts.accounts_db.clean_accounts(
+        self.accounts().accounts_db.clean_accounts(
             Some(highest_slot_to_clean),
             false,
             last_full_snapshot_slot,
@@ -7343,7 +7311,7 @@ impl Bank {
     }
 
     pub fn print_accounts_stats(&self) {
-        self.rc.accounts.accounts_db.print_accounts_stats("");
+        self.accounts().accounts_db.print_accounts_stats("");
     }
 
     pub fn bank_transaction_count_fix_enabled(&self) -> bool {
@@ -7352,7 +7320,7 @@ impl Bank {
     }
 
     pub fn shrink_candidate_slots(&self) -> usize {
-        self.rc.accounts.accounts_db.shrink_candidate_slots()
+        self.accounts().accounts_db.shrink_candidate_slots()
     }
 
     pub fn no_overflow_rent_distribution_enabled(&self) -> bool {
@@ -7699,8 +7667,7 @@ impl Bank {
         }
 
         let (epoch_accounts_hash, measure) = measure!(self
-            .rc
-            .accounts
+            .accounts()
             .accounts_db
             .epoch_accounts_hash_manager
             .wait_get_epoch_accounts_hash());
@@ -7715,8 +7682,7 @@ impl Bank {
 
     /// Convenience fn to get the Epoch Accounts Hash
     pub fn epoch_accounts_hash(&self) -> Option<EpochAccountsHash> {
-        self.rc
-            .accounts
+        self.accounts()
             .accounts_db
             .epoch_accounts_hash_manager
             .try_get_epoch_accounts_hash()
@@ -7901,8 +7867,7 @@ impl Drop for Bank {
             drop_callback.callback(self);
         } else {
             // Default case for tests
-            self.rc
-                .accounts
+            self.accounts()
                 .accounts_db
                 .purge_slot(self.slot(), self.bank_id(), false);
         }
@@ -8026,7 +7991,7 @@ pub(crate) mod tests {
 
     impl Bank {
         fn clean_accounts_for_tests(&self) {
-            self.rc.accounts.accounts_db.clean_accounts_for_tests()
+            self.accounts().accounts_db.clean_accounts_for_tests()
         }
     }
 
@@ -9848,8 +9813,7 @@ pub(crate) mod tests {
     impl Bank {
         fn slots_by_pubkey(&self, pubkey: &Pubkey, ancestors: &Ancestors) -> Vec<Slot> {
             let (locked_entry, _) = self
-                .rc
-                .accounts
+                .accounts()
                 .accounts_db
                 .accounts_index
                 .get(pubkey, Some(ancestors), None)
@@ -10006,8 +9970,7 @@ pub(crate) mod tests {
             );
 
             let deltas = later_bank
-                .rc
-                .accounts
+                .accounts()
                 .accounts_db
                 .get_pubkey_hash_for_slot(later_slot)
                 .0;
@@ -10040,14 +10003,12 @@ pub(crate) mod tests {
         bank1_without_zero.store_account(&zero_lamport_pubkey, &account);
 
         bank1_without_zero
-            .rc
-            .accounts
+            .accounts()
             .accounts_db
             .accounts_index
             .add_root(genesis_bank1.slot() + 1);
         bank1_without_zero
-            .rc
-            .accounts
+            .accounts()
             .accounts_db
             .accounts_index
             .purge_roots(&zero_lamport_pubkey);
@@ -14784,8 +14745,7 @@ pub(crate) mod tests {
         add_root_and_flush_write_cache(&bank0);
 
         let sizes = bank0
-            .rc
-            .accounts
+            .accounts()
             .accounts_db
             .sizes_of_accounts_in_storage_for_tests(0);
 
@@ -14862,12 +14822,11 @@ pub(crate) mod tests {
 
         bank3.clean_accounts_for_tests();
         assert_eq!(
-            bank3.rc.accounts.accounts_db.ref_count_for_pubkey(&pubkey0),
+            bank3.accounts().accounts_db.ref_count_for_pubkey(&pubkey0),
             2
         );
         assert!(bank3
-            .rc
-            .accounts
+            .accounts()
             .accounts_db
             .storage
             .get_slot_storage_entry(1)
@@ -14937,8 +14896,7 @@ pub(crate) mod tests {
         let alive_counts: Vec<usize> = (0..3)
             .map(|slot| {
                 bank2
-                    .rc
-                    .accounts
+                    .accounts()
                     .accounts_db
                     .alive_account_count_in_slot(slot)
             })
@@ -15111,7 +15069,7 @@ pub(crate) mod tests {
     /// useful to adapt tests written prior to introduction of the write cache
     /// to use the write cache
     fn add_root_and_flush_write_cache(bank: &Bank) {
-        bank.rc.accounts.add_root(bank.slot());
+        bank.accounts().add_root(bank.slot());
         bank.flush_accounts_cache_slot_for_tests()
     }
 
@@ -18051,8 +18009,7 @@ pub(crate) mod tests {
 
         assert_eq!(
             bank2
-                .rc
-                .accounts
+                .accounts()
                 .accounts_db
                 .accounts_index
                 .ref_count_from_storage(&key1.pubkey()),
@@ -18060,8 +18017,7 @@ pub(crate) mod tests {
         );
         assert_ne!(
             bank2
-                .rc
-                .accounts
+                .accounts()
                 .accounts_db
                 .accounts_index
                 .ref_count_from_storage(&key3.pubkey()),
@@ -18069,8 +18025,7 @@ pub(crate) mod tests {
         );
         assert_eq!(
             bank2
-                .rc
-                .accounts
+                .accounts()
                 .accounts_db
                 .accounts_index
                 .ref_count_from_storage(&key4.pubkey()),
@@ -18078,8 +18033,7 @@ pub(crate) mod tests {
         );
         assert_eq!(
             bank2
-                .rc
-                .accounts
+                .accounts()
                 .accounts_db
                 .accounts_index
                 .ref_count_from_storage(&key5.pubkey()),
@@ -18087,7 +18041,7 @@ pub(crate) mod tests {
         );
 
         assert_eq!(
-            bank2.rc.accounts.accounts_db.alive_account_count_in_slot(1),
+            bank2.accounts().accounts_db.alive_account_count_in_slot(1),
             0
         );
     }
@@ -19361,7 +19315,7 @@ pub(crate) mod tests {
         let num_accounts = tx.message().account_keys.len();
         let sanitized_tx = SanitizedTransaction::try_from_legacy_transaction(tx).unwrap();
         let mut error_counters = TransactionErrorMetrics::default();
-        let loaded_txs = bank.rc.accounts.load_accounts(
+        let loaded_txs = bank.accounts().load_accounts(
             &bank.ancestors,
             &[sanitized_tx.clone()],
             vec![(Ok(()), None)],
@@ -19995,8 +19949,7 @@ pub(crate) mod tests {
         rent_paying_accounts_by_partition.add_account(&pk1);
         rent_paying_accounts_by_partition.add_account(&pk2);
 
-        bank.rc
-            .accounts
+        bank.accounts()
             .accounts_db
             .accounts_index
             .rent_paying_accounts_by_partition

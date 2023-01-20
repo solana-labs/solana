@@ -265,8 +265,7 @@ fn test_bank_serialize_style(
     if initial_epoch_accounts_hash {
         expected_epoch_accounts_hash = Some(Hash::new(&[7; 32]));
         bank2
-            .rc
-            .accounts
+            .accounts()
             .accounts_db
             .epoch_accounts_hash_manager
             .set_valid(
@@ -377,7 +376,7 @@ fn test_bank_serialize_style(
     // Create a directory to simulate AppendVecs unpackaged from a snapshot tar
     let copied_accounts = TempDir::new().unwrap();
     let storage_and_next_append_vec_id =
-        copy_append_vecs(&bank2.rc.accounts.accounts_db, copied_accounts.path()).unwrap();
+        copy_append_vecs(&bank2.accounts().accounts_db, copied_accounts.path()).unwrap();
     let mut snapshot_streams = SnapshotStreams {
         full_snapshot_stream: &mut reader,
         incremental_snapshot_stream: None,
@@ -489,7 +488,7 @@ fn test_bank_serialize_newer() {
 }
 
 fn add_root_and_flush_write_cache(bank: &Bank) {
-    bank.rc.accounts.add_root(bank.slot());
+    bank.accounts().add_root(bank.slot());
     bank.flush_accounts_cache_slot_for_tests()
 }
 
@@ -533,7 +532,7 @@ fn test_extra_fields_eof() {
     let (_accounts_dir, dbank_paths) = get_temp_accounts_paths(4).unwrap();
     let copied_accounts = TempDir::new().unwrap();
     let storage_and_next_append_vec_id =
-        copy_append_vecs(&bank.rc.accounts.accounts_db, copied_accounts.path()).unwrap();
+        copy_append_vecs(&bank.accounts().accounts_db, copied_accounts.path()).unwrap();
     let dbank = crate::serde_snapshot::bank_from_streams(
         SerdeStyle::Newer,
         &mut snapshot_streams,
@@ -661,7 +660,7 @@ fn test_blank_extra_fields() {
     let (_accounts_dir, dbank_paths) = get_temp_accounts_paths(4).unwrap();
     let copied_accounts = TempDir::new().unwrap();
     let storage_and_next_append_vec_id =
-        copy_append_vecs(&bank.rc.accounts.accounts_db, copied_accounts.path()).unwrap();
+        copy_append_vecs(&bank.accounts().accounts_db, copied_accounts.path()).unwrap();
     let dbank = crate::serde_snapshot::bank_from_streams(
         SerdeStyle::Newer,
         &mut snapshot_streams,
@@ -703,8 +702,7 @@ mod test_bank_serialize {
         S: serde::Serializer,
     {
         let snapshot_storages = bank
-            .rc
-            .accounts
+            .accounts()
             .accounts_db
             .get_snapshot_storages(..=0, None)
             .0;

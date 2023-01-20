@@ -402,7 +402,7 @@ impl<'a> SnapshotMinimizer<'a> {
 
     /// Convenience function for getting accounts_db
     fn accounts_db(&self) -> &AccountsDb {
-        &self.bank.rc.accounts.accounts_db
+        &self.bank.accounts().accounts_db
     }
 }
 

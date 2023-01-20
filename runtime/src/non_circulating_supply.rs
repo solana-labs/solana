@@ -30,8 +30,7 @@ pub fn calculate_non_circulating_supply(bank: &Arc<Bank>) -> ScanResult<NonCircu
     let clock = bank.clock();
     let config = &ScanConfig::default();
     let stake_accounts = if bank
-        .rc
-        .accounts
+        .accounts()
         .accounts_db
         .account_indexes
         .contains(&AccountIndex::ProgramId)
