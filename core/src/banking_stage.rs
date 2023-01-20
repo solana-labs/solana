@@ -631,7 +631,7 @@ impl BankingStage {
 
     #[allow(clippy::too_many_arguments)]
     fn process_buffered_packets(
-        my_pubkey: &Pubkey,
+        decision_maker: &DecisionMaker,
         socket: &UdpSocket,
         poh_recorder: &Arc<RwLock<PohRecorder>>,
         cluster_info: &ClusterInfo,
@@ -652,11 +652,7 @@ impl BankingStage {
             return;
         }
         let ((metrics_action, decision), make_decision_time) =
-            measure!(DecisionMaker::make_consume_or_forward_decision(
-                my_pubkey,
-                poh_recorder,
-                slot_metrics_tracker
-            ));
+            measure!(decision_maker.make_consume_or_forward_decision(slot_metrics_tracker));
         slot_metrics_tracker.increment_make_decision_us(make_decision_time.as_us());
 
         match decision {
@@ -752,17 +748,18 @@ impl BankingStage {
         let mut tracer_packet_stats = TracerPacketStats::new(id);
         let qos_service = QosService::new(id);
 
+        let decision_maker = DecisionMaker::new(cluster_info.id(), poh_recorder.clone());
+
         let mut slot_metrics_tracker = LeaderSlotMetricsTracker::new(id);
         let mut last_metrics_update = Instant::now();
 
         loop {
-            let my_pubkey = cluster_info.id();
             if !unprocessed_transaction_storage.is_empty()
                 || last_metrics_update.elapsed() >= SLOT_BOUNDARY_CHECK_PERIOD
             {
                 let (_, process_buffered_packets_time) = measure!(
                     Self::process_buffered_packets(
-                        &my_pubkey,
+                        &decision_maker,
                         &socket,
                         poh_recorder,
                         cluster_info,
