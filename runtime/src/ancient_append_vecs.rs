@@ -135,15 +135,19 @@ pub mod tests {
 
     #[test]
     fn test_accounts_to_store_more() {
+<<<<<<< HEAD
         let pubkey = Pubkey::new(&[1; 32]);
         let store_id = AppendVecId::default();
+=======
+        let pubkey = Pubkey::from([1; 32]);
+>>>>>>> 272e667cb (deprecates Pubkey::new in favor of Pubkey::{,try_}from (#29805))
         let account_size = 3;
 
         let account = AccountSharedData::default();
 
         let account_meta = AccountMeta {
             lamports: 1,
-            owner: Pubkey::new(&[2; 32]),
+            owner: Pubkey::from([2; 32]),
             executable: false,
             rent_epoch: 0,
         };

@@ -56,6 +56,7 @@ pub fn new_self_signed_tls_certificate_chain(
     Ok((cert_chain, priv_key))
 }
 
+<<<<<<< HEAD
 pub fn get_pubkey_from_tls_certificate(certificates: &[rustls::Certificate]) -> Option<Pubkey> {
     if certificates.len() == 1 {
         let der_cert = &certificates[0];
@@ -69,6 +70,13 @@ pub fn get_pubkey_from_tls_certificate(certificates: &[rustls::Certificate]) -> 
             })
     } else {
         None
+=======
+pub fn get_pubkey_from_tls_certificate(der_cert: &rustls::Certificate) -> Option<Pubkey> {
+    let (_, cert) = X509Certificate::from_der(der_cert.as_ref()).ok()?;
+    match cert.public_key().parsed().ok()? {
+        PublicKey::Unknown(key) => Pubkey::try_from(key).ok(),
+        _ => None,
+>>>>>>> 272e667cb (deprecates Pubkey::new in favor of Pubkey::{,try_}from (#29805))
     }
 }
 

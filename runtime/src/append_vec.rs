@@ -606,6 +606,162 @@ pub mod tests {
         }
     }
 
+<<<<<<< HEAD
+=======
+    static_assertions::const_assert_eq!(
+        STORE_META_OVERHEAD,
+        std::mem::size_of::<StoredMeta>()
+            + std::mem::size_of::<AccountMeta>()
+            + std::mem::size_of::<Hash>()
+    );
+
+    // Hash is [u8; 32], which has no alignment
+    static_assertions::assert_eq_align!(u64, StoredMeta, AccountMeta);
+
+    #[test]
+    #[should_panic(expected = "assertion failed: accounts.has_hash_and_write_version()")]
+    fn test_storable_accounts_with_hashes_and_write_versions_new() {
+        let account = AccountSharedData::default();
+        // for (Slot, &'a [(&'a Pubkey, &'a T)], IncludeSlotInHash)
+        let slot = 0 as Slot;
+        let pubkey = Pubkey::default();
+        StorableAccountsWithHashesAndWriteVersions::<'_, '_, _, _, &Hash>::new(&(
+            slot,
+            &[(&pubkey, &account)][..],
+            INCLUDE_SLOT_IN_HASH_TESTS,
+        ));
+    }
+
+    fn test_mismatch(correct_hashes: bool, correct_write_versions: bool) {
+        let account = AccountSharedData::default();
+        // for (Slot, &'a [(&'a Pubkey, &'a T)], IncludeSlotInHash)
+        let slot = 0 as Slot;
+        let pubkey = Pubkey::default();
+        // mismatch between lens of accounts, hashes, write_versions
+        let mut hashes = Vec::default();
+        if correct_hashes {
+            hashes.push(Hash::default());
+        }
+        let mut write_versions = Vec::default();
+        if correct_write_versions {
+            write_versions.push(0);
+        }
+        StorableAccountsWithHashesAndWriteVersions::new_with_hashes_and_write_versions(
+            &(slot, &[(&pubkey, &account)][..], INCLUDE_SLOT_IN_HASH_TESTS),
+            hashes,
+            write_versions,
+        );
+    }
+
+    #[test]
+    #[should_panic(expected = "assertion failed:")]
+    fn test_storable_accounts_with_hashes_and_write_versions_new2() {
+        test_mismatch(false, false);
+    }
+
+    #[test]
+    #[should_panic(expected = "assertion failed:")]
+    fn test_storable_accounts_with_hashes_and_write_versions_new3() {
+        test_mismatch(false, true);
+    }
+
+    #[test]
+    #[should_panic(expected = "assertion failed:")]
+    fn test_storable_accounts_with_hashes_and_write_versions_new4() {
+        test_mismatch(true, false);
+    }
+
+    #[test]
+    fn test_storable_accounts_with_hashes_and_write_versions_empty() {
+        // for (Slot, &'a [(&'a Pubkey, &'a T)], IncludeSlotInHash)
+        let account = AccountSharedData::default();
+        let slot = 0 as Slot;
+        let pubkeys = vec![Pubkey::default()];
+        let hashes = Vec::<Hash>::default();
+        let write_versions = Vec::default();
+        let mut accounts = vec![(&pubkeys[0], &account)];
+        accounts.clear();
+        let accounts2 = (slot, &accounts[..], INCLUDE_SLOT_IN_HASH_TESTS);
+        let storable =
+            StorableAccountsWithHashesAndWriteVersions::new_with_hashes_and_write_versions(
+                &accounts2,
+                hashes,
+                write_versions,
+            );
+        assert_eq!(storable.len(), 0);
+        assert!(storable.is_empty());
+    }
+
+    #[test]
+    fn test_storable_accounts_with_hashes_and_write_versions_hash_and_write_version() {
+        // for (Slot, &'a [(&'a Pubkey, &'a T)], IncludeSlotInHash)
+        let account = AccountSharedData::default();
+        let slot = 0 as Slot;
+        let pubkeys = vec![Pubkey::from([5; 32]), Pubkey::from([6; 32])];
+        let hashes = vec![Hash::new(&[3; 32]), Hash::new(&[4; 32])];
+        let write_versions = vec![42, 43];
+        let accounts = vec![(&pubkeys[0], &account), (&pubkeys[1], &account)];
+        let accounts2 = (slot, &accounts[..], INCLUDE_SLOT_IN_HASH_TESTS);
+        let storable =
+            StorableAccountsWithHashesAndWriteVersions::new_with_hashes_and_write_versions(
+                &accounts2,
+                hashes.clone(),
+                write_versions.clone(),
+            );
+        assert_eq!(storable.len(), pubkeys.len());
+        assert!(!storable.is_empty());
+        (0..2).for_each(|i| {
+            assert_eq!(storable.hash(i), &hashes[i]);
+            assert_eq!(&storable.write_version(i), &write_versions[i]);
+            assert_eq!(storable.pubkey(i), &pubkeys[i]);
+        });
+    }
+
+    #[test]
+    fn test_storable_accounts_with_hashes_and_write_versions_default() {
+        // 0 lamport account, should return default account (or None in this case)
+        let account = Account {
+            data: vec![0],
+            ..Account::default()
+        }
+        .to_account_shared_data();
+        // for (Slot, &'a [(&'a Pubkey, &'a T)], IncludeSlotInHash)
+        let slot = 0 as Slot;
+        let pubkey = Pubkey::default();
+        let hashes = vec![Hash::default()];
+        let write_versions = vec![0];
+        let accounts = vec![(&pubkey, &account)];
+        let accounts2 = (slot, &accounts[..], INCLUDE_SLOT_IN_HASH_TESTS);
+        let storable =
+            StorableAccountsWithHashesAndWriteVersions::new_with_hashes_and_write_versions(
+                &accounts2,
+                hashes.clone(),
+                write_versions.clone(),
+            );
+        let get_account = storable.account(0);
+        assert!(get_account.is_none());
+
+        // non-zero lamports, data should be correct
+        let account = Account {
+            lamports: 1,
+            data: vec![0],
+            ..Account::default()
+        }
+        .to_account_shared_data();
+        // for (Slot, &'a [(&'a Pubkey, &'a T)], IncludeSlotInHash)
+        let accounts = vec![(&pubkey, &account)];
+        let accounts2 = (slot, &accounts[..], INCLUDE_SLOT_IN_HASH_TESTS);
+        let storable =
+            StorableAccountsWithHashesAndWriteVersions::new_with_hashes_and_write_versions(
+                &accounts2,
+                hashes,
+                write_versions,
+            );
+        let get_account = storable.account(0);
+        assert!(accounts_equal(&account, get_account.unwrap()));
+    }
+
+>>>>>>> 272e667cb (deprecates Pubkey::new in favor of Pubkey::{,try_}from (#29805))
     #[test]
     fn test_account_meta_default() {
         let def1 = AccountMeta::default();

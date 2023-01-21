@@ -179,7 +179,7 @@ mod tests {
         let off_curve_point = curve25519_dalek::edwards::CompressedEdwardsY(off_curve_bits);
         assert_eq!(off_curve_point.decompress(), None);
 
-        let pubkey = Pubkey::new(&off_curve_bytes);
+        let pubkey = Pubkey::try_from(off_curve_bytes).unwrap();
         let signature = Signature::default();
         // Unfortunately, ed25519-dalek doesn't surface the internal error types that we'd ideally
         // `source()` out of the `SignatureError` returned by `verify_strict()`.  So the best we

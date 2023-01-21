@@ -578,8 +578,8 @@ pub mod tests {
                 .write_transaction_status(
                     x,
                     Signature::new(&random_bytes),
-                    vec![&Pubkey::new(&random_bytes[0..32])],
-                    vec![&Pubkey::new(&random_bytes[32..])],
+                    vec![&Pubkey::try_from(&random_bytes[..32]).unwrap()],
+                    vec![&Pubkey::try_from(&random_bytes[32..]).unwrap()],
                     TransactionStatusMeta::default(),
                 )
                 .unwrap();
@@ -593,8 +593,8 @@ pub mod tests {
                 .write_transaction_status(
                     x,
                     Signature::new(&random_bytes),
-                    vec![&Pubkey::new(&random_bytes[0..32])],
-                    vec![&Pubkey::new(&random_bytes[32..])],
+                    vec![&Pubkey::try_from(&random_bytes[..32]).unwrap()],
+                    vec![&Pubkey::try_from(&random_bytes[32..]).unwrap()],
                     TransactionStatusMeta::default(),
                 )
                 .unwrap();
@@ -628,8 +628,8 @@ pub mod tests {
                 .write_transaction_status(
                     slot,
                     Signature::new(&random_bytes),
-                    vec![&Pubkey::new(&random_bytes[0..32])],
-                    vec![&Pubkey::new(&random_bytes[32..])],
+                    vec![&Pubkey::try_from(&random_bytes[..32]).unwrap()],
+                    vec![&Pubkey::try_from(&random_bytes[32..]).unwrap()],
                     TransactionStatusMeta::default(),
                 )
                 .unwrap();
@@ -828,8 +828,8 @@ pub mod tests {
                 .write_transaction_status(
                     x,
                     signature,
-                    vec![&Pubkey::new(&random_bytes[0..32])],
-                    vec![&Pubkey::new(&random_bytes[32..])],
+                    vec![&Pubkey::try_from(&random_bytes[..32]).unwrap()],
+                    vec![&Pubkey::try_from(&random_bytes[32..]).unwrap()],
                     TransactionStatusMeta::default(),
                 )
                 .unwrap();
@@ -871,8 +871,8 @@ pub mod tests {
                 .write_transaction_status(
                     x,
                     signature,
-                    vec![&Pubkey::new(&random_bytes[0..32])],
-                    vec![&Pubkey::new(&random_bytes[32..])],
+                    vec![&Pubkey::try_from(&random_bytes[..32]).unwrap()],
+                    vec![&Pubkey::try_from(&random_bytes[32..]).unwrap()],
                     TransactionStatusMeta::default(),
                 )
                 .unwrap();
