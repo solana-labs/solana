@@ -1,3 +1,4 @@
+use tokio::runtime::Builder;
 // this is a service to handle bidirections quinn channel
 use {
     bincode::serialize,
@@ -14,12 +15,9 @@ use {
         },
         time::Duration,
     },
-    tokio::{
-        sync::{
-            mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender},
-            RwLock,
-        },
-        task::JoinHandle,
+    tokio::sync::{
+        mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender},
+        RwLock,
     },
     x509_parser::nom::AsBytes,
 };
@@ -107,6 +105,7 @@ pub struct QuicBidirectionalMetrics {
     pub transactions_replied_to: Arc<AtomicU64>,
     pub transactions_removed: Arc<AtomicU64>,
     pub connections_disconnected: Arc<AtomicU64>,
+    pub connections_errors: Arc<AtomicU64>,
 }
 
 impl QuicBidirectionalMetrics {
@@ -117,6 +116,7 @@ impl QuicBidirectionalMetrics {
             transactions_replied_to: Arc::new(AtomicU64::new(0)),
             connections_disconnected: Arc::new(AtomicU64::new(0)),
             transactions_removed: Arc::new(AtomicU64::new(0)),
+            connections_errors: Arc::new(AtomicU64::new(0)),
         }
     }
 
@@ -145,7 +145,7 @@ impl QuicBidirectionalMetrics {
 pub struct QuicBidirectionalReplyService {
     data: Arc<RwLock<QuicBidirectionalData>>,
     pub service_sender: UnboundedSender<QuicReplyMessage>,
-    serving_handle: Arc<Option<JoinHandle<()>>>,
+    serving_handle: Option<Arc<std::thread::JoinHandle<()>>>,
     pub metrics: QuicBidirectionalMetrics,
 }
 
@@ -171,11 +171,10 @@ impl QuicBidirectionalReplyService {
                 sender_socket_address_map: HashMap::new(),
                 last_id: 1,
             })),
-            serving_handle: Arc::new(None),
+            serving_handle: None,
             metrics: QuicBidirectionalMetrics::new(),
         };
-        let join_handle = instance.serve(service_reciever);
-        instance.serving_handle = Arc::new(Some(join_handle));
+        instance.serve(service_reciever);
         instance
     }
 
@@ -244,8 +243,12 @@ impl QuicBidirectionalReplyService {
                                     quic_address,
                                     error.to_string()
                                 );
+                                metrics.connections_errors.fetch_add(1, Ordering::Relaxed);
                                 true
                             } else {
+                                metrics
+                                .transactions_replied_to
+                                .fetch_add(1, Ordering::Relaxed);
                                 false
                             }
                         } else {
@@ -333,17 +336,20 @@ impl QuicBidirectionalReplyService {
     // the the message sent to bidirectional service,
     // will be dispactched to the appropriate sender channel
     // depending on transcation signature or message hash
-    pub fn serve(
-        &self,
-        service_reciever: UnboundedReceiver<QuicReplyMessage>,
-    ) -> tokio::task::JoinHandle<()> {
+    pub fn serve(&mut self, service_reciever: UnboundedReceiver<QuicReplyMessage>) {
         let subscription_data = self.data.clone();
-        let metrics = self.metrics.clone();
-        tokio::spawn(async move {
+
+        let runtime = Builder::new_multi_thread()
+            .worker_threads(1)
+            .enable_all()
+            .build()
+            .unwrap();
+
+        let handle = std::thread::spawn(move || {
             let mut service_reciever = service_reciever;
-            let metrics = metrics.clone();
+            let runtime = runtime;
             loop {
-                let bidirectional_message = service_reciever.recv().await;
+                let bidirectional_message = runtime.block_on(service_reciever.recv());
                 if bidirectional_message.is_none() {
                     // the channel has be closed
                     trace!("quic bidirectional channel is closed");
@@ -353,7 +359,7 @@ impl QuicBidirectionalReplyService {
 
                 let subscription_data = subscription_data.clone();
 
-                let data = subscription_data.read().await;
+                let data = runtime.block_on(subscription_data.read());
                 // if the message has transaction signature then find stream from transaction signature
                 // else find stream by packet hash
                 let send_stream_ids = data
@@ -370,17 +376,14 @@ impl QuicBidirectionalReplyService {
                                         e.to_string()
                                     );
                                 }
-                                Ok(_) => {
-                                    metrics
-                                        .transactions_replied_to
-                                        .fetch_add(1, Ordering::Relaxed);
-                                }
+                                Ok(_) => {}
                             }
                         }
                     }
                 }
             }
-        })
+        });
+        self.serving_handle = Some(Arc::new(handle));
     }
 }
 
@@ -398,6 +401,7 @@ pub mod test {
         crossbeam_channel::unbounded,
         itertools::Itertools,
         quinn::{EndpointConfig, NewConnection},
+        rand::{distributions::Alphanumeric, Rng},
         solana_client::{
             bidirectional_channel_handler::BidirectionalChannelHandler,
             connection_cache::ConnectionCacheStats,
@@ -415,7 +419,9 @@ pub mod test {
             transaction::{Transaction, TransactionError},
         },
         std::{
+            collections::HashMap,
             net::{IpAddr, Ipv4Addr, SocketAddr, UdpSocket},
+            str::FromStr,
             sync::{atomic::AtomicBool, Arc, RwLock},
             time::Duration,
         },
@@ -499,7 +505,7 @@ pub mod test {
             ip,
             sender,
             exit.clone(),
-            1,
+            8,
             staked_nodes,
             MAX_UNSTAKED_CONNECTIONS,
             MAX_UNSTAKED_CONNECTIONS,
@@ -632,6 +638,308 @@ pub mod test {
         // connection is disconnected after the timeout
         assert_eq!(metrics.connections_added(), 1);
         assert_eq!(metrics.transactions_removed(), nb_packets);
+        exit.store(true, std::sync::atomic::Ordering::Relaxed);
+    }
+
+    #[tokio::test]
+    async fn test_send_5_transactions_one_after_another_to_quic_server() {
+        let bidirectional_replay_service = QuicBidirectionalReplyService::new();
+        let metrics = bidirectional_replay_service.metrics.clone();
+
+        let (_thread_handle, exit, reciever, server_address, _stream_stats) =
+            setup_quic_server(bidirectional_replay_service.clone());
+        let nb_packets = 5;
+
+        // create transactions
+        let transactions = create_n_transactions(5);
+        let bidirectional_reply_handler = BidirectionalChannelHandler::new();
+        let signatures = transactions.iter().map(|x| x.signatures[0]).collect_vec();
+
+        // send transactions to the tpu
+        let quic_client = create_a_quic_client(server_address, bidirectional_reply_handler.clone());
+        let wire_transactions = transactions
+            .iter()
+            .map(|x| bincode::serialize(x).unwrap())
+            .collect_vec();
+
+        for transaction in wire_transactions {
+            quic_client
+                .send_wire_transaction(&transaction)
+                .await
+                .unwrap();
+        }
+
+        assert_eq!(metrics.connections_added(), 1);
+        // one shot channels so that we do not block runtime for joining threads
+        let (oscs1, oscr1) = tokio::sync::oneshot::channel();
+        let (oscs2, oscr2) = tokio::sync::oneshot::channel();
+
+        // replying to each packet with a message
+        std::thread::spawn(move || {
+            let mut i = 0;
+            loop {
+                let packets = reciever.recv().unwrap();
+                for packet in packets.iter() {
+                    let sig = get_signature_from_packet(&packet).unwrap();
+                    bidirectional_replay_service
+                        .send_message(&sig, TransactionError::InvalidRentPayingAccount.to_string());
+                    i += 1;
+                }
+                if i >= nb_packets {
+                    break;
+                }
+            }
+            oscs1.send(()).unwrap();
+        });
+
+        std::thread::spawn(move || {
+            let mut messages_to_return = vec![];
+            let mut i = 0;
+            loop {
+                let message = bidirectional_reply_handler.reciever.recv().unwrap();
+                // check if transaction signature is present
+                messages_to_return.push(message);
+                i += 1;
+                if i >= nb_packets {
+                    break;
+                }
+            }
+            let _ = oscs2.send(messages_to_return);
+        });
+        oscr1.await.unwrap();
+        let messages = oscr2.await.unwrap();
+
+        // sleep some time so that other tasks can progress
+        tokio::time::sleep(Duration::from_millis(100)).await;
+        assert_eq!(metrics.transactions_added(), nb_packets);
+        assert_eq!(metrics.transactions_replied_to(), nb_packets);
+        // asserting for messages
+        for message in messages {
+            assert!(signatures.contains(&message.signature()));
+            assert_eq!(
+                message.message(),
+                TransactionError::InvalidRentPayingAccount.to_string()
+            );
+        }
+        exit.store(true, std::sync::atomic::Ordering::Relaxed);
+    }
+
+    #[tokio::test]
+    async fn test_replies_are_truncated_to_128_chars() {
+        let bidirectional_replay_service = QuicBidirectionalReplyService::new();
+        let metrics = bidirectional_replay_service.metrics.clone();
+
+        let (_thread_handle, exit, reciever, server_address, _stream_stats) =
+            setup_quic_server(bidirectional_replay_service.clone());
+        let nb_packets = 5;
+
+        // create transactions
+        let transactions = create_n_transactions(5);
+        let bidirectional_reply_handler = BidirectionalChannelHandler::new();
+        let signatures = transactions.iter().map(|x| x.signatures[0]).collect_vec();
+
+        // send transactions to the tpu
+        let quic_client = create_a_quic_client(server_address, bidirectional_reply_handler.clone());
+        let wire_transactions = transactions
+            .iter()
+            .map(|x| bincode::serialize(x).unwrap())
+            .collect_vec();
+
+        for transaction in wire_transactions {
+            quic_client
+                .send_wire_transaction(&transaction)
+                .await
+                .unwrap();
+        }
+
+        assert_eq!(metrics.connections_added(), 1);
+        // one shot channels so that we do not block runtime for joining threads
+        let (oscs1, oscr1) = tokio::sync::oneshot::channel();
+        let (oscs2, oscr2) = tokio::sync::oneshot::channel();
+        let message = String::from_str("abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyz").unwrap();
+
+        // replying to each packet with a message
+        std::thread::spawn(move || {
+            let mut i = 0;
+            loop {
+                let packets = reciever.recv().unwrap();
+                for packet in packets.iter() {
+                    let sig = get_signature_from_packet(&packet).unwrap();
+                    bidirectional_replay_service.send_message(&sig, message.clone());
+                    i += 1;
+                }
+                if i >= nb_packets {
+                    break;
+                }
+            }
+            oscs1.send(()).unwrap();
+        });
+
+        std::thread::spawn(move || {
+            let mut messages_to_return = vec![];
+            let mut i = 0;
+            loop {
+                let message = bidirectional_reply_handler.reciever.recv().unwrap();
+                // check if transaction signature is present
+                messages_to_return.push(message);
+                i += 1;
+                if i >= nb_packets {
+                    break;
+                }
+            }
+            let _ = oscs2.send(messages_to_return);
+        });
+        oscr1.await.unwrap();
+        let messages = oscr2.await.unwrap();
+
+        // sleep some time so that other tasks can progress
+        tokio::time::sleep(Duration::from_millis(100)).await;
+        assert_eq!(metrics.transactions_added(), nb_packets);
+        assert_eq!(metrics.transactions_replied_to(), nb_packets);
+        // asserting for messages
+        for message in messages {
+            assert!(signatures.contains(&message.signature()));
+            assert_eq!(
+                message.message(),
+                "abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwx".to_string() // only 128 chars
+            );
+        }
+        exit.store(true, std::sync::atomic::Ordering::Relaxed);
+    }
+
+    async fn send_buffer(
+        buffer: &Vec<u8>,
+        connection: Arc<NewConnection>,
+        handler: BidirectionalChannelHandler,
+        is_first: bool,
+    ) {
+        if is_first {
+            let conn = connection.clone();
+            let handler = handler.clone();
+            let (mut sender, reciever) = conn.connection.open_bi().await.unwrap();
+            handler.start_serving(reciever);
+            let _ = sender.write_all(buffer.as_slice()).await;
+            sender.finish().await.unwrap();
+        } else {
+            let mut sender = connection.connection.open_uni().await.unwrap();
+            let _ = sender.write_all(buffer.as_slice()).await;
+            sender.finish().await.unwrap();
+        }
+    }
+
+    async fn send_multiple_transactions_using_connection(
+        transactions: &Vec<Vec<u8>>,
+        connection: Arc<NewConnection>,
+        handler: BidirectionalChannelHandler,
+    ) {
+        let mut is_first = true;
+        for transaction in transactions {
+            send_buffer(transaction, connection.clone(), handler.clone(), is_first).await;
+            is_first = false;
+        }
+    }
+
+    #[tokio::test]
+    async fn test_multiple_connections_dispatching() {
+        let bidirectional_replay_service = QuicBidirectionalReplyService::new();
+        let metrics = bidirectional_replay_service.metrics.clone();
+
+        let (_thread_handle, exit, reciever, server_address, _stream_stats) =
+            setup_quic_server(bidirectional_replay_service.clone());
+
+        let mut signatures_vec = vec![];
+        let mut reply_handlers = vec![];
+        let nb_quic_clients: u64 = 5;
+        let nb_transaction_per_client: u64 = 5;
+        for _i in 0..nb_quic_clients {
+            // create transactions
+            let bidirectional_reply_handler = BidirectionalChannelHandler::new();
+            let connection = Arc::new(make_bidirectional_client_endpoint(&server_address).await);
+
+            let transactions = create_n_transactions(nb_transaction_per_client as usize);
+            let signatures = transactions.iter().map(|x| x.signatures[0]).collect_vec();
+            let wire_transactions = transactions
+                .iter()
+                .map(|x| bincode::serialize(x).unwrap())
+                .collect_vec();
+
+            send_multiple_transactions_using_connection(
+                &wire_transactions,
+                connection.clone(),
+                bidirectional_reply_handler.clone(),
+            )
+            .await;
+
+            signatures_vec.push(signatures);
+            reply_handlers.push(bidirectional_reply_handler);
+            tokio::time::sleep(Duration::from_millis(100)).await;
+        }
+        let signatures = signatures_vec
+            .iter()
+            .map(|x| x.clone())
+            .flatten()
+            .collect_vec();
+        let nb_packets = nb_transaction_per_client * nb_quic_clients;
+        tokio::time::sleep(Duration::from_millis(100)).await;
+
+        assert_eq!(metrics.connections_added(), nb_quic_clients);
+        // one shot channels so that we do not block runtime for joining threads
+        let (oscs1, oscr1) = tokio::sync::oneshot::channel();
+        let (oscs2, oscr2) = tokio::sync::oneshot::channel();
+
+        // replying to each packet with a message
+        std::thread::spawn(move || {
+            let mut i = 0;
+            let mut map_of_signatures_replies = HashMap::new();
+            loop {
+                let packets = reciever.recv().unwrap();
+                for packet in packets.iter() {
+                    let sig = get_signature_from_packet(&packet).unwrap();
+                    let message: String = rand::thread_rng()
+                        .sample_iter(&Alphanumeric)
+                        .take(7)
+                        .map(char::from)
+                        .collect();
+                    bidirectional_replay_service.send_message(&sig, message.clone());
+                    map_of_signatures_replies.insert(sig, message);
+                    i += 1;
+                }
+                if i >= nb_packets {
+                    break;
+                }
+            }
+            oscs1.send(map_of_signatures_replies).unwrap();
+        });
+
+        std::thread::spawn(move || {
+            let mut messages_to_return = vec![];
+            for i in 0..nb_quic_clients {
+                for _i in 0..nb_transaction_per_client {
+                    let bidirectional_reply_handler = reply_handlers[i as usize].clone();
+                    let message = bidirectional_reply_handler.reciever.recv().unwrap();
+                    // check if transaction signature is present
+                    messages_to_return.push(message);
+                }
+            }
+            let _ = oscs2.send(messages_to_return);
+        });
+        let maps_signature_and_messages = oscr1.await.unwrap();
+        let messages = oscr2.await.unwrap();
+
+        // sleep some time so that other tasks can progress
+        tokio::time::sleep(Duration::from_millis(100)).await;
+        assert_eq!(metrics.transactions_added(), nb_packets);
+        assert_eq!(metrics.transactions_replied_to(), nb_packets);
+        assert_eq!(metrics.transactions_removed(), 0);
+        // asserting for messages
+        for message in messages {
+            assert!(signatures.contains(&message.signature()));
+            assert_eq!(
+                Some(&message.message()),
+                maps_signature_and_messages.get(&message.signature())
+            );
+        }
+        assert_eq!(metrics.connections_disconnected(), 0);
         exit.store(true, std::sync::atomic::Ordering::Relaxed);
     }
 }
