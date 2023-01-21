@@ -589,7 +589,7 @@ mod test {
             0,   // version
         );
         let mut shreds = vec![shred.clone(), shred.clone(), shred];
-        let _from_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8080);
+        let _from_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 8080);
         let repair_meta = RepairMeta {
             _from_addr,
             nonce: 0,
