@@ -101,19 +101,6 @@ impl PushActiveSet {
     fn get_entry(&self, stake: Option<&u64>) -> &PushActiveSetEntry {
         &self.0[get_stake_bucket(stake)]
     }
-
-    // Only for tests and simulations.
-    pub(crate) fn mock_clone(&self) -> Self {
-        Self(std::array::from_fn(|k| {
-            PushActiveSetEntry(
-                self.0[k]
-                    .0
-                    .iter()
-                    .map(|(&node, filter)| (node, filter.mock_clone()))
-                    .collect(),
-            )
-        }))
-    }
 }
 
 impl PushActiveSetEntry {

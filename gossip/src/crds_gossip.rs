@@ -320,16 +320,6 @@ impl CrdsGossip {
         self.pull.purge_failed_inserts(now);
         rv
     }
-
-    // Only for tests and simulations.
-    pub(crate) fn mock_clone(&self) -> Self {
-        let crds = self.crds.read().unwrap().mock_clone();
-        Self {
-            crds: RwLock::new(crds),
-            push: self.push.mock_clone(),
-            pull: self.pull.mock_clone(),
-        }
-    }
 }
 
 // Returns active and valid cluster nodes to gossip with.
