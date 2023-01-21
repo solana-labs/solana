@@ -330,16 +330,18 @@ pub fn request_airdrop_transaction(
 pub fn run_local_faucet_with_port(
     faucet_keypair: Keypair,
     sender: Sender<Result<SocketAddr, String>>,
+    time_input: Option<u64>,
     per_time_cap: Option<u64>,
+    per_request_cap: Option<u64>,
     port: u16, // 0 => auto assign
 ) {
     thread::spawn(move || {
         let faucet_addr = socketaddr!(0, port);
         let faucet = Arc::new(Mutex::new(Faucet::new(
             faucet_keypair,
-            None,
+            time_input,
             per_time_cap,
-            None,
+            per_request_cap,
         )));
         let runtime = Runtime::new().unwrap();
         runtime.block_on(run_faucet(faucet, faucet_addr, Some(sender)));
@@ -349,7 +351,7 @@ pub fn run_local_faucet_with_port(
 // For integration tests. Listens on random open port and reports port to Sender.
 pub fn run_local_faucet(faucet_keypair: Keypair, per_time_cap: Option<u64>) -> SocketAddr {
     let (sender, receiver) = unbounded();
-    run_local_faucet_with_port(faucet_keypair, sender, per_time_cap, 0);
+    run_local_faucet_with_port(faucet_keypair, sender, None, per_time_cap, None, 0);
     receiver
         .recv()
         .expect("run_local_faucet")
