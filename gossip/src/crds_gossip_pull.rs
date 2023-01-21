@@ -630,6 +630,7 @@ impl CrdsGossipPull {
             stats.success,
         )
     }
+<<<<<<< HEAD
 
     // Only for tests and simulations.
     pub(crate) fn mock_clone(&self) -> Self {
@@ -654,6 +655,8 @@ impl CrdsGossipPull {
     pub(crate) fn pull_request_time(&self) -> std::sync::RwLockReadGuard<LruCache<Pubkey, u64>> {
         self.pull_request_time.read().unwrap()
     }
+=======
+>>>>>>> 590b75140 (removes legacy retransmit tests (#29817))
 }
 
 #[cfg(test)]

@@ -484,6 +484,7 @@ impl CrdsGossipPush {
             !v.is_empty()
         });
     }
+<<<<<<< HEAD
 
     // Only for tests and simulations.
     pub(crate) fn mock_clone(&self) -> Self {
@@ -515,6 +516,8 @@ impl CrdsGossipPush {
             ..*self
         }
     }
+=======
+>>>>>>> 590b75140 (removes legacy retransmit tests (#29817))
 }
 
 #[cfg(test)]

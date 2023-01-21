@@ -199,19 +199,6 @@ impl<T: BloomHashIndex> AtomicBloom<T> {
             bit.store(0u64, Ordering::Relaxed);
         });
     }
-
-    // Only for tests and simulations.
-    pub fn mock_clone(&self) -> Self {
-        Self {
-            keys: self.keys.clone(),
-            bits: self
-                .bits
-                .iter()
-                .map(|v| AtomicU64::new(v.load(Ordering::Relaxed)))
-                .collect(),
-            ..*self
-        }
-    }
 }
 
 impl<T: BloomHashIndex> From<AtomicBloom<T>> for Bloom<T> {

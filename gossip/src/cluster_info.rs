@@ -432,33 +432,6 @@ impl ClusterInfo {
         me
     }
 
-    // Should only be used by tests and simulations
-    pub fn clone_with_id(&self, new_id: &Pubkey) -> Self {
-        let mut my_contact_info = self.my_contact_info.read().unwrap().clone();
-        my_contact_info.id = *new_id;
-        ClusterInfo {
-            gossip: self.gossip.mock_clone(),
-            keypair: RwLock::new(self.keypair.read().unwrap().clone()),
-            entrypoints: RwLock::new(self.entrypoints.read().unwrap().clone()),
-            outbound_budget: self.outbound_budget.clone_non_atomic(),
-            my_contact_info: RwLock::new(my_contact_info),
-            ping_cache: Mutex::new(self.ping_cache.lock().unwrap().mock_clone()),
-            stats: GossipStats::default(),
-            socket: UdpSocket::bind("0.0.0.0:0").unwrap(),
-            local_message_pending_push_queue: Mutex::new(
-                self.local_message_pending_push_queue
-                    .lock()
-                    .unwrap()
-                    .clone(),
-            ),
-            contact_debug_interval: self.contact_debug_interval,
-            instance: RwLock::new(NodeInstance::new(&mut thread_rng(), *new_id, timestamp())),
-            contact_info_path: PathBuf::default(),
-            contact_save_interval: 0, // disabled
-            ..*self
-        }
-    }
-
     pub fn set_contact_debug_interval(&mut self, new: u64) {
         self.contact_debug_interval = new;
     }
