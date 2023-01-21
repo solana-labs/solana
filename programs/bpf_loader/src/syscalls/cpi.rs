@@ -925,7 +925,12 @@ fn cpi_common<S: SyscallInvokeSigned>(
             &mut compute_units_consumed,
             &mut ExecuteTimings::default(),
         )
-        .map_err(SyscallError::InstructionError)?;
+        // .map_err(SyscallError::InstructionError)?;
+        .map_err(|e| {
+            panic!("Noah you're a genius");
+            // println!("Noah you're a genius");
+            SyscallError::InstructionError(e)
+        })?;
 
     // re-bind to please the borrow checker
     let transaction_context = &invoke_context.transaction_context;
