@@ -9841,12 +9841,7 @@ pub(crate) mod tests {
     fn test_collect_rent_from_accounts() {
         solana_logger::setup();
 
-<<<<<<< HEAD
-        let zero_lamport_pubkey = Pubkey::new(&[0; 32]);
-=======
-        for skip_rewrites in [false, true] {
-            let zero_lamport_pubkey = Pubkey::from([0; 32]);
->>>>>>> 272e667cb (deprecates Pubkey::new in favor of Pubkey::{,try_}from (#29805))
+        let zero_lamport_pubkey = Pubkey::from([0; 32]);
 
         let genesis_bank = create_simple_test_arc_bank(100000);
         let first_bank = Arc::new(new_from_parent(&genesis_bank));
@@ -18485,7 +18480,7 @@ pub(crate) mod tests {
         assert!(bank.rewrites_skipped_this_slot.read().unwrap().is_empty());
 
         // bank's map is initially empty
-        let mut test = vec![(Pubkey::new(&[4; 32]), Hash::new(&[5; 32]))];
+        let mut test = vec![(Pubkey::from([4; 32]), Hash::new(&[5; 32]))];
         bank.remember_skipped_rewrites(test.clone());
         assert_eq!(
             *bank.rewrites_skipped_this_slot.read().unwrap(),
@@ -18493,7 +18488,7 @@ pub(crate) mod tests {
         );
 
         // now there is already some stuff in the bank's map
-        test.push((Pubkey::new(&[6; 32]), Hash::new(&[7; 32])));
+        test.push((Pubkey::from([6; 32]), Hash::new(&[7; 32])));
         bank.remember_skipped_rewrites(test[1..].to_vec());
         assert_eq!(
             *bank.rewrites_skipped_this_slot.read().unwrap(),

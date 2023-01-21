@@ -1109,13 +1109,13 @@ pub mod tests {
         for pass in 0..3 {
             let mut account_maps = Vec::new();
 
-            let key = Pubkey::new(&[11u8; 32]);
+            let key = Pubkey::from([11u8; 32]);
             let hash = Hash::new(&[1u8; 32]);
             let val = CalculateHashIntermediate::new(hash, 88, key);
             account_maps.push(val);
 
             // 2nd key - zero lamports, so will be removed
-            let key = Pubkey::new(&[12u8; 32]);
+            let key = Pubkey::from([12u8; 32]);
             let hash = Hash::new(&[2u8; 32]);
             let val = CalculateHashIntermediate::new(hash, ZERO_RAW_LAMPORTS_SENTINEL, key);
             account_maps.push(val);
@@ -1196,12 +1196,12 @@ pub mod tests {
 
         let mut account_maps = Vec::new();
 
-        let key = Pubkey::new(&[11u8; 32]);
+        let key = Pubkey::from([11u8; 32]);
         let hash = Hash::new(&[1u8; 32]);
         let val = CalculateHashIntermediate::new(hash, 88, key);
         account_maps.push(val);
 
-        let key = Pubkey::new(&[12u8; 32]);
+        let key = Pubkey::from([12u8; 32]);
         let hash = Hash::new(&[2u8; 32]);
         let val = CalculateHashIntermediate::new(hash, 20, key);
         account_maps.push(val);
@@ -2055,45 +2055,4 @@ pub mod tests {
             2, // accounts above are in 2 groups
         );
     }
-<<<<<<< HEAD
-=======
-
-    #[test]
-    fn test_get_binned_data() {
-        let data = [CalculateHashIntermediate::new(
-            Hash::default(),
-            1,
-            Pubkey::from([1u8; 32]),
-        )];
-        let data2 = vec![&data[..]];
-        let bins = 1;
-        let result = AccountsHasher::get_binned_data(&data2, bins, &(0..bins));
-        assert_eq!(result, vec![vec![&data[..]]]);
-        let bins = 2;
-        let result = AccountsHasher::get_binned_data(&data2, bins, &(0..bins));
-        assert_eq!(result, vec![vec![&data[..], &data[0..0]]]);
-        let data = [CalculateHashIntermediate::new(
-            Hash::default(),
-            1,
-            Pubkey::from([255u8; 32]),
-        )];
-        let data2 = vec![&data[..]];
-        let result = AccountsHasher::get_binned_data(&data2, bins, &(0..bins));
-        assert_eq!(result, vec![vec![&data[0..0], &data[..]]]);
-        let data = [
-            CalculateHashIntermediate::new(Hash::default(), 1, Pubkey::from([254u8; 32])),
-            CalculateHashIntermediate::new(Hash::default(), 1, Pubkey::from([255u8; 32])),
-        ];
-        let data2 = vec![&data[..]];
-        let result = AccountsHasher::get_binned_data(&data2, bins, &(0..bins));
-        assert_eq!(result, vec![vec![&data[0..0], &data[..]]]);
-        let data = [
-            CalculateHashIntermediate::new(Hash::default(), 1, Pubkey::from([1u8; 32])),
-            CalculateHashIntermediate::new(Hash::default(), 1, Pubkey::from([255u8; 32])),
-        ];
-        let data2 = vec![&data[..]];
-        let result = AccountsHasher::get_binned_data(&data2, bins, &(0..bins));
-        assert_eq!(result, vec![vec![&data[0..1], &data[1..2]]]);
-    }
->>>>>>> 272e667cb (deprecates Pubkey::new in favor of Pubkey::{,try_}from (#29805))
 }

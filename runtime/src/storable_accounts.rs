@@ -136,12 +136,8 @@ pub mod tests {
 
     #[test]
     fn test_contains_multiple_slots() {
-<<<<<<< HEAD
-        let pk = Pubkey::new(&[1; 32]);
-        let account = AccountSharedData::create(1, Vec::default(), Pubkey::default(), false, 0);
-=======
         let pk = Pubkey::from([1; 32]);
->>>>>>> 272e667cb (deprecates Pubkey::new in favor of Pubkey::{,try_}from (#29805))
+        let account = AccountSharedData::create(1, Vec::default(), Pubkey::default(), false, 0);
         let slot = 0;
         let test3 = (
             slot,
@@ -163,19 +159,7 @@ pub mod tests {
                 for starting_slot in 0..max_slots {
                     let mut raw = Vec::new();
                     for entry in 0..entries {
-<<<<<<< HEAD
-                        let pk = Pubkey::new(&[entry; 32]);
-=======
                         let pk = Pubkey::from([entry; 32]);
-                        let account = AccountSharedData::create(
-                            (entry as u64) * starting_slot,
-                            Vec::default(),
-                            Pubkey::default(),
-                            false,
-                            0,
-                        );
-
->>>>>>> 272e667cb (deprecates Pubkey::new in favor of Pubkey::{,try_}from (#29805))
                         raw.push((
                             pk,
                             AccountSharedData::create(

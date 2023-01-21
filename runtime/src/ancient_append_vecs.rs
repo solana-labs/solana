@@ -135,12 +135,8 @@ pub mod tests {
 
     #[test]
     fn test_accounts_to_store_more() {
-<<<<<<< HEAD
-        let pubkey = Pubkey::new(&[1; 32]);
-        let store_id = AppendVecId::default();
-=======
         let pubkey = Pubkey::from([1; 32]);
->>>>>>> 272e667cb (deprecates Pubkey::new in favor of Pubkey::{,try_}from (#29805))
+        let store_id = AppendVecId::default();
         let account_size = 3;
 
         let account = AccountSharedData::default();
@@ -242,7 +238,7 @@ pub mod tests {
 
         let sm = StoredMeta {
             write_version: 0,
-            pubkey: Pubkey::new(&[0; 32]),
+            pubkey: Pubkey::from([0; 32]),
             data_len: data_len as u64,
         };
         av.append_accounts(&[(sm, Some(&account))], &[Hash::default()]);

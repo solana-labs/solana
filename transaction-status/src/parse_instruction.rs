@@ -193,13 +193,8 @@ mod test {
             }
         );
 
-<<<<<<< HEAD
-        let non_parsable_program_id = Pubkey::new(&[1; 32]);
-        assert!(parse(&non_parsable_program_id, &memo_instruction, &no_keys).is_err());
-=======
         let non_parsable_program_id = Pubkey::from([1; 32]);
-        assert!(parse(&non_parsable_program_id, &memo_instruction, &no_keys, None).is_err());
->>>>>>> 272e667cb (deprecates Pubkey::new in favor of Pubkey::{,try_}from (#29805))
+        assert!(parse(&non_parsable_program_id, &memo_instruction, &no_keys).is_err());
     }
 
     #[test]
