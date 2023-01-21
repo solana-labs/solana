@@ -410,11 +410,11 @@ fn main() {
         let (non_vote_sender, non_vote_receiver) = unbounded();
         let (tpu_vote_sender, tpu_vote_receiver) = unbounded();
         let (gossip_vote_sender, gossip_vote_receiver) = unbounded();
-        let cluster_info = ClusterInfo::new(
-            Node::new_localhost().info,
-            Arc::new(Keypair::new()),
-            SocketAddrSpace::Unspecified,
-        );
+        let cluster_info = {
+            let keypair = Arc::new(Keypair::new());
+            let node = Node::new_localhost_with_pubkey(&keypair.pubkey());
+            ClusterInfo::new(node.info, keypair, SocketAddrSpace::Unspecified)
+        };
         let cluster_info = Arc::new(cluster_info);
         let tpu_use_quic = matches.is_present("tpu_use_quic");
         let connection_cache = match tpu_use_quic {

@@ -518,7 +518,7 @@ mod test {
         let leader_info = Node::new_localhost_with_pubkey(&leader_pubkey);
         let cluster_info = Arc::new(ClusterInfo::new(
             leader_info.info,
-            Arc::new(Keypair::new()),
+            leader_keypair.clone(),
             SocketAddrSpace::Unspecified,
         ));
         let socket = UdpSocket::bind("0.0.0.0:0").unwrap();

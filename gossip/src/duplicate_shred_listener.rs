@@ -73,7 +73,7 @@ mod tests {
             duplicate_shred_listener::DuplicateShredHandlerTrait,
         },
         solana_ledger::shred::Shredder,
-        solana_sdk::signature::Keypair,
+        solana_sdk::signature::{Keypair, Signer},
         solana_streamer::socket::SocketAddrSpace,
         std::sync::{
             atomic::{AtomicU32, Ordering},
@@ -99,8 +99,8 @@ mod tests {
 
     #[test]
     fn test_listener_get_entries() {
-        let node = Node::new_localhost();
         let host1_key = Arc::new(Keypair::new());
+        let node = Node::new_localhost_with_pubkey(&host1_key.pubkey());
         let cluster_info = Arc::new(ClusterInfo::new(
             node.info,
             host1_key,
