@@ -402,21 +402,11 @@ fn test_oc_bad_signatures() {
     let leader_stake = (total_stake as f64 * VOTE_THRESHOLD_SIZE) as u64;
     let our_node_stake = total_stake - leader_stake;
     let node_stakes = vec![leader_stake, our_node_stake];
-
-    let pubsub_config = PubSubConfig {
-        enable_block_subscription: true,
-        ..PubSubConfig::default()
-    };
-    let rpc_config = JsonRpcConfig {
-        enable_rpc_transaction_history: true,
-        ..JsonRpcConfig::default_for_test()
-    };
-    let validator_config = ValidatorConfig {
+    let mut validator_config = ValidatorConfig {
         require_tower: true,
-        pubsub_config,
-        rpc_config,
         ..ValidatorConfig::default_for_test()
     };
+    validator_config.enable_default_rpc_block_subscribe();
     let validator_keys = vec![
         "28bN3xyvrP4E8LwEgtLjhnkb7cY4amQb6DrYAbAYjgRV4GAGgkVM2K7wnxnAS7WDneuavza7x21MiafLu1HkwQt4",
         "2saHBBoTkLMmttmPQP8KfBkcCw45S5cwtV3wTdGCscRC8uxdgvHxpHiWXKx4LvJjNJtnNcbSv5NdheokFFqnNDt8",
@@ -464,6 +454,7 @@ fn test_oc_bad_signatures() {
     );
 
     let num_votes_simulated = Arc::new(AtomicUsize::new(0));
+    let voter_thread_sleep_ms: usize = 100;
     let t_voter = {
         let exit = exit.clone();
         let num_votes_simulated = num_votes_simulated.clone();
@@ -471,7 +462,6 @@ fn test_oc_bad_signatures() {
         let (rpc, tpu) = cluster_tests::get_client_facing_addr(&cluster.entry_point_info);
         let client = ThinClient::new(rpc, tpu, cluster.connection_cache.clone());
         let cluster_funding_keypair = cluster.funding_keypair.insecure_clone();
-        let voter_thread_sleep = 100;
         std::thread::spawn(move || {
             let mut cursor = Cursor::default();
             loop {
@@ -538,11 +528,11 @@ fn test_oc_bad_signatures() {
                     }
                     // Give vote some time to propagate
                     num_votes_simulated.fetch_add(1, Ordering::Relaxed);
-                    sleep(Duration::from_millis(voter_thread_sleep));
+                    sleep(Duration::from_millis(voter_thread_sleep_ms as u64));
                 }
 
                 if parsed_vote_iter.is_empty() {
-                    sleep(Duration::from_millis(voter_thread_sleep));
+                    sleep(Duration::from_millis(voter_thread_sleep_ms as u64));
                 }
             }
         })
@@ -563,9 +553,8 @@ fn test_oc_bad_signatures() {
 
     const MAX_VOTES_TO_SIMULATE: usize = 10;
     // Make sure test doesn't take too long
-    assert!(voter_thread_sleep * MAX_VOTES_TO_SIMULATE <= 1000);
+    assert!(voter_thread_sleep_ms * MAX_VOTES_TO_SIMULATE <= 1000);
     loop {
-        println!("Trying recv");
         let responses: Vec<_> = receiver.try_iter().collect();
         // Nothing should get optimistically confirmed or rooted
         assert!(responses.is_empty());

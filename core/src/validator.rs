@@ -253,6 +253,20 @@ impl ValidatorConfig {
             ..Self::default()
         }
     }
+
+    pub fn enable_default_rpc_block_subscribe(&mut self) {
+        let pubsub_config = PubSubConfig {
+            enable_block_subscription: true,
+            ..PubSubConfig::default()
+        };
+        let rpc_config = JsonRpcConfig {
+            enable_rpc_transaction_history: true,
+            ..JsonRpcConfig::default_for_test()
+        };
+
+        self.pubsub_config = pubsub_config;
+        self.rpc_config = rpc_config;
+    }
 }
 
 // `ValidatorStartProgress` contains status information that is surfaced to the node operator over

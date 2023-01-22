@@ -30,7 +30,10 @@ use {
     solana_pubsub_client::pubsub_client::PubsubClient,
     solana_rpc_client::rpc_client::RpcClient,
     solana_rpc_client_api::{
-        config::{RpcProgramAccountsConfig, RpcSignatureSubscribeConfig},
+        config::{
+            RpcBlockSubscribeConfig, RpcBlockSubscribeFilter, RpcProgramAccountsConfig,
+            RpcSignatureSubscribeConfig,
+        },
         response::RpcSignatureResult,
     },
     solana_runtime::{
@@ -2508,6 +2511,64 @@ fn run_test_load_program_accounts_partition(scan_commitment: CommitmentConfig) {
         None,
         additional_accounts,
     );
+}
+
+#[test]
+#[serial]
+fn test_rpc_block_subscribe() {
+    let total_stake = 100 * DEFAULT_NODE_STAKE;
+    let leader_stake = total_stake;
+    let node_stakes = vec![leader_stake];
+    let mut validator_config = ValidatorConfig::default_for_test();
+    validator_config.enable_default_rpc_block_subscribe();
+
+    let validator_keys = vec![
+        "28bN3xyvrP4E8LwEgtLjhnkb7cY4amQb6DrYAbAYjgRV4GAGgkVM2K7wnxnAS7WDneuavza7x21MiafLu1HkwQt4",
+    ]
+    .iter()
+    .map(|s| (Arc::new(Keypair::from_base58_string(s)), true))
+    .take(node_stakes.len())
+    .collect::<Vec<_>>();
+
+    let mut config = ClusterConfig {
+        cluster_lamports: total_stake,
+        node_stakes,
+        validator_configs: vec![validator_config],
+        validator_keys: Some(validator_keys),
+        skip_warmup_slots: true,
+        ..ClusterConfig::default()
+    };
+    let cluster = LocalCluster::new(&mut config, SocketAddrSpace::Unspecified);
+    let (mut block_subscribe_client, receiver) = PubsubClient::block_subscribe(
+        &format!("ws://{}", &cluster.entry_point_info.rpc_pubsub.to_string()),
+        RpcBlockSubscribeFilter::All,
+        Some(RpcBlockSubscribeConfig {
+            commitment: Some(CommitmentConfig::confirmed()),
+            encoding: None,
+            transaction_details: None,
+            show_rewards: None,
+            max_supported_transaction_version: None,
+        }),
+    )
+    .unwrap();
+
+    loop {
+        let responses: Vec<_> = receiver.try_iter().collect();
+        // Wait for a response
+        if !responses.is_empty() {
+            for response in responses {
+                assert!(response.value.err.is_none());
+                assert!(response.value.block.is_some());
+            }
+            break;
+        }
+        sleep(Duration::from_millis(100));
+    }
+
+    // If we don't drop the cluster, the blocking web socket service
+    // won't return, and the `block_subscribe_client` won't shut down
+    drop(cluster);
+    block_subscribe_client.shutdown().unwrap();
 }
 
 #[test]
