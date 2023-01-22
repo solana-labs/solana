@@ -287,7 +287,6 @@ impl QuicClient {
     }
 
     async fn _send_buffer_using_conn(
-        _tpu_address: SocketAddr,
         data: &[u8],
         connection: &NewConnection,
         server_reply_channel: Option<BidirectionalChannelHandler>,
@@ -418,7 +417,6 @@ impl QuicClient {
 
             last_connection_id = connection.connection.stable_id();
             match Self::_send_buffer_using_conn(
-                *self.tpu_addr(),
                 data,
                 &connection,
                 stats.server_reply_channel.clone(),
@@ -508,7 +506,6 @@ impl QuicClient {
             .map(|buffs| {
                 join_all(buffs.into_iter().map(|buf| {
                     Self::_send_buffer_using_conn(
-                        *self.tpu_addr(),
                         buf.as_ref(),
                         connection_ref,
                         stats.server_reply_channel.clone(),
