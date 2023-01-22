@@ -4812,13 +4812,7 @@ impl Bank {
             signature_count,
         } = counts;
 
-        let tx_count = if self.bank_transaction_count_fix_enabled() {
-            committed_transactions_count
-        } else {
-            committed_transactions_count.saturating_sub(committed_with_failure_result_count)
-        };
-
-        self.increment_transaction_count(tx_count);
+        self.increment_transaction_count(committed_transactions_count);
         self.increment_non_vote_transaction_count_since_restart(
             committed_non_vote_transactions_count,
         );
@@ -6543,16 +6537,8 @@ impl Bank {
 
     /// Return the transaction count executed only in this bank
     pub fn executed_transaction_count(&self) -> u64 {
-        let mut executed_transaction_count = self
-            .transaction_count()
-            .saturating_sub(self.parent().map_or(0, |parent| parent.transaction_count()));
-        if !self.bank_transaction_count_fix_enabled() {
-            // When the feature bank_tranaction_count_fix is enabled, transaction_count() excludes
-            // the transactions which were executed but landed in error, we add it here.
-            executed_transaction_count =
-                executed_transaction_count.saturating_add(self.transaction_error_count());
-        }
-        executed_transaction_count
+        self.transaction_count()
+            .saturating_sub(self.parent().map_or(0, |parent| parent.transaction_count()))
     }
 
     pub fn transaction_error_count(&self) -> u64 {
@@ -7344,11 +7330,6 @@ impl Bank {
 
     pub fn print_accounts_stats(&self) {
         self.rc.accounts.accounts_db.print_accounts_stats("");
-    }
-
-    pub fn bank_transaction_count_fix_enabled(&self) -> bool {
-        self.feature_set
-            .is_active(&feature_set::bank_transaction_count_fix::id())
     }
 
     pub fn shrink_candidate_slots(&self) -> usize {
@@ -10603,57 +10584,14 @@ pub(crate) mod tests {
                 SystemError::ResultWithNegativeLamports.into(),
             ))
         );
-        assert_eq!(bank.transaction_count(), 1);
+        // transaction_count returns the count of all committed transactions since
+        // bank_transaction_count_fix was activated, regardless of success
+        assert_eq!(bank.transaction_count(), 2);
         assert_eq!(bank.non_vote_transaction_count_since_restart(), 1);
 
         let mint_pubkey = mint_keypair.pubkey();
         assert_eq!(bank.get_balance(&mint_pubkey), mint_amount - amount);
         assert_eq!(bank.get_balance(&pubkey), amount);
-    }
-
-    #[test]
-    fn test_executed_transaction_count_pre_bank_transaction_count_fix() {
-        let mint_amount = sol_to_lamports(1.);
-        let (genesis_config, mint_keypair) = create_genesis_config(mint_amount);
-        let mut bank = Bank::new_for_tests(&genesis_config);
-        bank.deactivate_feature(&feature_set::bank_transaction_count_fix::id());
-        let pubkey = solana_sdk::pubkey::new_rand();
-        let amount = genesis_config.rent.minimum_balance(0);
-        bank.transfer(amount, &mint_keypair, &pubkey).unwrap();
-        assert_eq!(
-            bank.transfer((mint_amount - amount) + 1, &mint_keypair, &pubkey),
-            Err(TransactionError::InstructionError(
-                0,
-                SystemError::ResultWithNegativeLamports.into(),
-            ))
-        );
-
-        // Without bank_transaction_count_fix, transaction_count should include only the successful
-        // transactions, but executed_transaction_count include all always
-        assert_eq!(bank.transaction_count(), 1);
-        assert_eq!(bank.executed_transaction_count(), 2);
-        assert_eq!(bank.transaction_error_count(), 1);
-
-        let bank = Arc::new(bank);
-        let bank2 = Bank::new_from_parent(
-            &bank,
-            &Pubkey::default(),
-            genesis_config.epoch_schedule.first_normal_slot,
-        );
-
-        assert_eq!(
-            bank2.transfer((mint_amount - amount) + 2, &mint_keypair, &pubkey),
-            Err(TransactionError::InstructionError(
-                0,
-                SystemError::ResultWithNegativeLamports.into(),
-            ))
-        );
-
-        // The transaction_count inherited from parent bank is still 1 as it does
-        // not include the failed ones!
-        assert_eq!(bank2.transaction_count(), 1);
-        assert_eq!(bank2.executed_transaction_count(), 1);
-        assert_eq!(bank2.transaction_error_count(), 1);
     }
 
     #[test]
