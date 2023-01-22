@@ -26,7 +26,7 @@ use {
         validator_configs::*,
     },
     solana_pubsub_client::pubsub_client::PubsubClient,
-    solana_rpc::rpc_pubsub_service::PubSubConfig,
+    solana_rpc::{rpc::JsonRpcConfig, rpc_pubsub_service::PubSubConfig},
     solana_rpc_client_api::config::{RpcBlockSubscribeConfig, RpcBlockSubscribeFilter},
     solana_runtime::{commitment::VOTE_THRESHOLD_SIZE, vote_parser},
     solana_sdk::{
@@ -407,9 +407,14 @@ fn test_oc_bad_signatures() {
         enable_block_subscription: true,
         ..PubSubConfig::default()
     };
+    let rpc_config = JsonRpcConfig {
+        enable_rpc_transaction_history: true,
+        ..JsonRpcConfig::default_for_test()
+    };
     let validator_config = ValidatorConfig {
         require_tower: true,
         pubsub_config,
+        rpc_config,
         ..ValidatorConfig::default_for_test()
     };
     let validator_keys = vec![
@@ -427,6 +432,7 @@ fn test_oc_bad_signatures() {
         node_stakes,
         validator_configs: make_identical_validator_configs(&validator_config, 2),
         validator_keys: Some(validator_keys),
+        skip_warmup_slots: true,
         ..ClusterConfig::default()
     };
     let mut cluster = LocalCluster::new(&mut config, SocketAddrSpace::Unspecified);
@@ -465,6 +471,7 @@ fn test_oc_bad_signatures() {
         let (rpc, tpu) = cluster_tests::get_client_facing_addr(&cluster.entry_point_info);
         let client = ThinClient::new(rpc, tpu, cluster.connection_cache.clone());
         let cluster_funding_keypair = cluster.funding_keypair.insecure_clone();
+        let voter_thread_sleep = 100;
         std::thread::spawn(move || {
             let mut cursor = Cursor::default();
             loop {
@@ -531,11 +538,11 @@ fn test_oc_bad_signatures() {
                     }
                     // Give vote some time to propagate
                     num_votes_simulated.fetch_add(1, Ordering::Relaxed);
-                    sleep(Duration::from_millis(100));
+                    sleep(Duration::from_millis(voter_thread_sleep));
                 }
 
                 if parsed_vote_iter.is_empty() {
-                    sleep(Duration::from_millis(100));
+                    sleep(Duration::from_millis(voter_thread_sleep));
                 }
             }
         })
@@ -554,8 +561,11 @@ fn test_oc_bad_signatures() {
     )
     .unwrap();
 
-    const MAX_VOTES_TO_SIMULATE: usize = 100;
+    const MAX_VOTES_TO_SIMULATE: usize = 10;
+    // Make sure test doesn't take too long
+    assert!(voter_thread_sleep * MAX_VOTES_TO_SIMULATE <= 1000);
     loop {
+        println!("Trying recv");
         let responses: Vec<_> = receiver.try_iter().collect();
         // Nothing should get optimistically confirmed or rooted
         assert!(responses.is_empty());
@@ -564,6 +574,7 @@ fn test_oc_bad_signatures() {
         if num_votes_simulated.load(Ordering::Relaxed) > MAX_VOTES_TO_SIMULATE {
             break;
         }
+        sleep(Duration::from_millis(100));
     }
 
     // Clean up voter thread

@@ -84,6 +84,7 @@ impl OptimisticConfirmationVerifier {
                         new_optimistic_slot, &e
                     );
                 }
+                println!("optimistic slot: {}", new_optimistic_slot);
                 datapoint_info!("optimistic_slot", ("slot", new_optimistic_slot, i64),);
                 self.unchecked_slots.insert((new_optimistic_slot, hash));
             }

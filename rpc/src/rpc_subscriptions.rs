@@ -977,9 +977,11 @@ impl RpcSubscriptions {
                 }
                 SubscriptionParams::Block(params) => {
                     num_blocks_found.fetch_add(1, Ordering::Relaxed);
+                    println!("found subscribed block notification");
                     if let Some(slot) = slot {
                         let bank = bank_forks.read().unwrap().get(slot);
                         if let Some(bank) = bank {
+                            println!("trying subscribed 1");
                             // We're calling it unnotified in this context
                             // because, logically, it gets set to `last_notified_slot + 1`
                             // on the final iteration of the loop down below.
@@ -1006,6 +1008,7 @@ impl RpcSubscriptions {
                             slots_to_notify.retain(|slot| ancestors.contains(slot));
                             slots_to_notify.push(slot);
                             for s in slots_to_notify {
+                                println!("trying subscribed 2");
                                 // To avoid skipping a slot that fails this condition,
                                 // caused by non-deterministic concurrency accesses, we
                                 // break out of the loop. Besides if the current `s` is
@@ -1013,7 +1016,7 @@ impl RpcSubscriptions {
                                 if s > max_complete_transaction_status_slot.load(Ordering::SeqCst) {
                                     break;
                                 }
-
+                                println!("trying subscribed 3");
                                 let block_update_result = blockstore
                                     .get_complete_block(s, false)
                                     .map_err(|e| {
@@ -1024,7 +1027,9 @@ impl RpcSubscriptions {
 
                                 match block_update_result {
                                     Ok(block_update) => {
+                                        println!("trying subscribed 4");
                                         if let Some(block_update) = block_update {
+                                            println!("trying pushing subscribed block notification for slot {}", slot);
                                             notifier.notify(
                                                 RpcResponse::from(RpcNotificationResponse {
                                                     context: RpcNotificationContext { slot: s },
@@ -1040,6 +1045,7 @@ impl RpcSubscriptions {
                                         }
                                     }
                                     Err(err) => {
+                                        println!("trying subscribed error");
                                         // we don't advance `w_last_unnotified_slot` so that
                                         // it'll retry on the next notification trigger
                                         notifier.notify(
