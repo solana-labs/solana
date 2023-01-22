@@ -26,7 +26,6 @@ use {
         validator_configs::*,
     },
     solana_pubsub_client::pubsub_client::PubsubClient,
-    solana_rpc::{rpc::JsonRpcConfig, rpc_pubsub_service::PubSubConfig},
     solana_rpc_client_api::config::{RpcBlockSubscribeConfig, RpcBlockSubscribeFilter},
     solana_runtime::{commitment::VOTE_THRESHOLD_SIZE, vote_parser},
     solana_sdk::{

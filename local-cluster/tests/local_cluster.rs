@@ -2552,6 +2552,7 @@ fn test_rpc_block_subscribe() {
     )
     .unwrap();
 
+    let mut received_block = false;
     loop {
         let responses: Vec<_> = receiver.try_iter().collect();
         // Wait for a response
@@ -2559,7 +2560,12 @@ fn test_rpc_block_subscribe() {
             for response in responses {
                 assert!(response.value.err.is_none());
                 assert!(response.value.block.is_some());
+                if response.value.slot > 1 {
+                    received_block = true;
+                }
             }
+        }
+        if received_block {
             break;
         }
         sleep(Duration::from_millis(100));
