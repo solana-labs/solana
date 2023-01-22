@@ -57,10 +57,9 @@ impl BidirectionalChannelHandler {
             let mut timeout: u64 = 10_000;
             let mut start = Instant::now();
 
-            let mut buffer: [u8; PACKET_DATA_SIZE] = [0; PACKET_DATA_SIZE];
+            const LAST_BUFFER_SIZE: usize = QUIC_REPLY_MESSAGE_SIZE + 1;
+            let mut last_buffer: [u8; LAST_BUFFER_SIZE] = [0; LAST_BUFFER_SIZE];
             let mut buffer_written = 0;
-            // when we reset the buffer we keep track of the last offset using this variable
-            let mut last_offset = 0;
             let mut recv_stream = recv_stream;
             loop {
                 if let Ok(chunk) = tokio::time::timeout(
@@ -73,19 +72,16 @@ impl BidirectionalChannelHandler {
                         Ok(maybe_chunk) => {
                             match maybe_chunk {
                                 Some(chunk) => {
-                                    let end_of_chunk = match (chunk.offset as usize)
-                                        .checked_add(chunk.bytes.len())
-                                    {
-                                        Some(end) => end,
-                                        None => break,
-                                    };
-
-                                    // move chunk into buffer
-                                    buffer[(chunk.offset as usize - last_offset)
-                                        ..(end_of_chunk - last_offset)]
+                                    // move data into current buffer
+                                    let mut buffer = vec![0; buffer_written + chunk.bytes.len()];
+                                    if buffer_written > 0 {
+                                        // copy remaining data from previous buffer
+                                        buffer[0..buffer_written]
+                                            .copy_from_slice(&last_buffer[0..buffer_written]);
+                                    }
+                                    buffer[buffer_written..buffer_written + chunk.bytes.len()]
                                         .copy_from_slice(&chunk.bytes);
-                                    buffer_written =
-                                        std::cmp::max(buffer_written, end_of_chunk - last_offset);
+                                    buffer_written = buffer_written + chunk.bytes.len();
 
                                     while buffer_written >= QUIC_REPLY_MESSAGE_SIZE {
                                         let signature = bincode::deserialize::<Signature>(
@@ -111,7 +107,11 @@ impl BidirectionalChannelHandler {
                                         }
                                         buffer.copy_within(QUIC_REPLY_MESSAGE_SIZE.., 0);
                                         buffer_written -= QUIC_REPLY_MESSAGE_SIZE;
-                                        last_offset = end_of_chunk;
+                                    }
+                                    if buffer_written > 0 {
+                                        // move remianing data into last buffer
+                                        last_buffer[0..buffer_written]
+                                            .copy_from_slice(&buffer[0..buffer_written]);
                                     }
                                 }
                                 None => {
