@@ -4346,13 +4346,15 @@ impl AccountsDb {
         let mut ancient_slot_pubkeys = AncientSlotPubkeys::default();
 
         let len = sorted_slots.len();
-        for slot in sorted_slots {
+        let mut alive_bytes = 0;
+        let mut alive = Vec::with_capacity(sorted_slots.len());
+        for slot in &sorted_slots {
             let old_storage = match self.get_storage_to_move_to_ancient_append_vec(
-                slot,
+                *slot,
                 &mut current_ancient,
                 can_randomly_shrink,
             ) {
-                Some(old_storages) => old_storages,
+                Some(old_storage) => old_storage,
                 None => {
                     // nothing to squash for this slot
                     continue;
@@ -4368,6 +4370,24 @@ impl AccountsDb {
                 );
             }
 
+            let this_alive = old_storage.alive_bytes();
+            alive.push((*slot, Some(old_storage), this_alive));
+            alive_bytes += this_alive;
+        }
+
+        if alive_bytes != 0 {
+            for slot in sorted_slots {
+                let old_storage = match self.get_storage_to_move_to_ancient_append_vec(
+                    slot,
+                    &mut current_ancient,
+                    can_randomly_shrink,
+                ) {
+                    Some(old_storages) => old_storages,
+                    None => {
+                        // nothing to squash for this slot
+                        continue;
+                    }
+                };
                 self.combine_one_store_into_ancient(
                     slot,
                     &old_storage,
@@ -4375,6 +4395,19 @@ impl AccountsDb {
                     &mut ancient_slot_pubkeys,
                     &mut dropped_roots,
                 );
+                let mut stored_accounts = Vec::default();
+                // this will be ShrinkCollectAliveSeparatedByRefs
+                let shrink_collect = self.shrink_collect::<AliveAccounts<'_>>(
+                    &old_storage,
+                    &mut stored_accounts,
+                    &self.shrink_ancient_stats.shrink_stats,
+                );
+
+                // could follow what shrink does more closely
+                if shrink_collect.total_starting_accounts == 0 {
+                    return; // skipping slot with no useful accounts to write
+                }
+            }
         }
 
         self.handle_dropped_roots_for_ancient(dropped_roots);
