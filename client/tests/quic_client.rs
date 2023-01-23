@@ -81,7 +81,7 @@ mod tests {
             10,
             10,
             stats,
-            QuicBidirectionalReplyService::new(),
+            QuicBidirectionalReplyService::new_for_test(),
         )
         .unwrap();
 
@@ -127,7 +127,7 @@ mod tests {
             10,
             10,
             stats,
-            QuicBidirectionalReplyService::new(),
+            QuicBidirectionalReplyService::new_for_test(),
         )
         .unwrap();
 

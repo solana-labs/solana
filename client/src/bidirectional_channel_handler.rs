@@ -2,12 +2,10 @@ use {
     crossbeam_channel::{Receiver, Sender},
     log::debug,
     quinn::RecvStream,
-    solana_sdk::signature::Signature,
-    solana_streamer::bidirectional_channel::{
-        QuicReplyMessage, QUIC_REPLY_MESSAGE_OFFSET, QUIC_REPLY_MESSAGE_SIGNATURE_OFFSET,
-        QUIC_REPLY_MESSAGE_SIZE,
-    },
+    solana_sdk::{pubkey::Pubkey, signature::Signature, transaction::VersionedTransaction},
+    solana_streamer::bidirectional_channel::{QuicReplyMessage, QUIC_REPLY_MESSAGE_SIZE},
     std::{
+        net::SocketAddr,
         sync::{
             atomic::{AtomicBool, Ordering},
             Arc,
@@ -18,13 +16,31 @@ use {
 
 pub const PACKET_DATA_SIZE: usize = 1280 - 40 - 8;
 
+pub struct QuicHandlerMessage {
+    pub transaction_signature: Signature,
+    pub message: String,
+    pub server_identity: Option<Pubkey>,
+    pub server_socket: Option<SocketAddr>,
+    pub quic_connection_error: bool,
+}
+
+impl QuicHandlerMessage {
+    pub fn signature(&self) -> Signature {
+        self.transaction_signature
+    }
+
+    pub fn message(&self) -> String {
+        self.message.clone()
+    }
+}
+
 // This structure will handle the bidirectional messages that we get from the quic server
 // It will save 1024 QuicReplyMessages sent by the server in the crossbeam receiver
 // This class will also handle recv channel created by the QuicClient when connecting to the server in bidirectional mode
 #[derive(Clone)]
 pub struct BidirectionalChannelHandler {
-    sender: Arc<Sender<QuicReplyMessage>>,
-    pub reciever: Receiver<QuicReplyMessage>,
+    sender: Arc<Sender<QuicHandlerMessage>>,
+    pub reciever: Receiver<QuicHandlerMessage>,
     recv_channel_is_set: Arc<AtomicBool>,
 }
 
@@ -40,6 +56,24 @@ impl BidirectionalChannelHandler {
 
     pub fn is_serving(&self) -> bool {
         self.recv_channel_is_set.load(Ordering::Relaxed)
+    }
+    pub fn mark_buffer_as_error(&self, buffer: &[u8], error: String, tpu_socket: SocketAddr) {
+        let buffer = buffer.to_vec();
+        let error = error.clone();
+        let sender = self.sender.clone();
+        tokio::spawn(async move {
+            let versioned_transaction = bincode::deserialize::<VersionedTransaction>(&buffer[..]);
+            if let Ok(versioned_transaction) = versioned_transaction {
+                let message = QuicHandlerMessage {
+                    transaction_signature: versioned_transaction.signatures[0],
+                    server_identity: None,
+                    message: error,
+                    server_socket: Some(tpu_socket),
+                    quic_connection_error: true,
+                };
+                let _ = sender.send(message);
+            }
+        });
     }
 
     pub fn start_serving(&self, recv_stream: RecvStream) {
@@ -84,20 +118,17 @@ impl BidirectionalChannelHandler {
                                     buffer_written = buffer_written + chunk.bytes.len();
 
                                     while buffer_written >= QUIC_REPLY_MESSAGE_SIZE {
-                                        let signature = bincode::deserialize::<Signature>(
-                                            &buffer[QUIC_REPLY_MESSAGE_SIGNATURE_OFFSET
-                                                ..QUIC_REPLY_MESSAGE_OFFSET],
-                                        );
-                                        let message: [u8; 128] = buffer
-                                            [QUIC_REPLY_MESSAGE_OFFSET..QUIC_REPLY_MESSAGE_SIZE]
-                                            .try_into()
-                                            .unwrap();
-                                        if let Ok(signature) = signature {
-                                            if let Err(_) =
-                                                sender.send(QuicReplyMessage::new_with_bytes(
-                                                    signature, message,
-                                                ))
-                                            {
+                                        let message =
+                                            QuicReplyMessage::deserialize(buffer.as_slice());
+                                        if let Some(message) = message {
+                                            let message = QuicHandlerMessage {
+                                                transaction_signature: message.signature(),
+                                                server_identity: Some(message.identity()),
+                                                message: message.message(),
+                                                server_socket: None,
+                                                quic_connection_error: false,
+                                            };
+                                            if let Err(_) = sender.send(message) {
                                                 // crossbeam channel closed
                                                 break;
                                             }
@@ -133,7 +164,6 @@ impl BidirectionalChannelHandler {
                 start = Instant::now();
             }
             recv_channel_is_set.store(false, Ordering::Relaxed);
-            println!("stopping recv stream");
         });
     }
 }

@@ -291,7 +291,7 @@ async fn setup_connection(
                     if let Some((last_update, stream_exit)) = connection_table_l.try_add_connection(
                         ConnectionTableKey::new(remote_addr.ip(), remote_pubkey),
                         remote_addr.port(),
-                        Some(connection),
+                        Some(connection.clone()),
                         stake,
                         timing::timestamp(),
                         max_connections_per_peer,
@@ -326,15 +326,20 @@ async fn setup_connection(
                             bidirectional_service.clone(),
                         ));
                     } else {
+                        connection.close(
+                            0u32.into(),
+                            "surpass max concurrent connections per peer".as_bytes(),
+                        );
                         stats.connection_add_failed.fetch_add(1, Ordering::Relaxed);
                     }
                 } else {
+                    connection.close(0u32.into(), "surpass max connections".as_bytes());
                     stats
                         .connection_add_failed_invalid_stream_count
                         .fetch_add(1, Ordering::Relaxed);
                 }
             } else {
-                connection.close(0u32.into(), &[0u8]);
+                connection.close(0u32.into(), "failed to add unstaked node".as_bytes());
                 stats
                     .connection_add_failed_unstaked_node
                     .fetch_add(1, Ordering::Relaxed);
@@ -847,7 +852,7 @@ pub mod test {
             MAX_STAKED_CONNECTIONS,
             MAX_UNSTAKED_CONNECTIONS,
             stats.clone(),
-            QuicBidirectionalReplyService::new(),
+            QuicBidirectionalReplyService::new_for_test(),
         )
         .unwrap();
         (t, exit, receiver, server_address, stats)
@@ -1161,7 +1166,7 @@ pub mod test {
             MAX_STAKED_CONNECTIONS,
             0, // Do not allow any connection from unstaked clients/nodes
             stats,
-            QuicBidirectionalReplyService::new(),
+            QuicBidirectionalReplyService::new_for_test(),
         )
         .unwrap();
 
@@ -1193,7 +1198,7 @@ pub mod test {
             MAX_STAKED_CONNECTIONS,
             MAX_UNSTAKED_CONNECTIONS,
             stats.clone(),
-            QuicBidirectionalReplyService::new(),
+            QuicBidirectionalReplyService::new_for_test(),
         )
         .unwrap();
 

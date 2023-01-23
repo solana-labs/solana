@@ -1,10 +1,9 @@
-use tokio::runtime::Builder;
 // this is a service to handle bidirections quinn channel
 use {
     bincode::serialize,
     quinn::SendStream,
     solana_perf::packet::{Packet, PacketBatch},
-    solana_sdk::signature::Signature,
+    solana_sdk::{pubkey::Pubkey, signature::Signature},
     std::{
         collections::HashMap,
         net::SocketAddr,
@@ -15,25 +14,30 @@ use {
         },
         time::Duration,
     },
-    tokio::sync::{
-        mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender},
-        RwLock,
+    tokio::{
+        runtime::Builder,
+        sync::{
+            mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender},
+            RwLock,
+        },
     },
     x509_parser::nom::AsBytes,
 };
 
 #[derive(Clone)]
 pub struct QuicReplyMessage {
+    sender_identity: Pubkey,
     transaction_signature: Signature,
     message: [u8; 128],
 }
 // header + signature + 128 bytes for message
-pub const QUIC_REPLY_MESSAGE_SIZE: usize = 8 + 64 + 128;
-pub const QUIC_REPLY_MESSAGE_SIGNATURE_OFFSET: usize = 8;
-pub const QUIC_REPLY_MESSAGE_OFFSET: usize = 8 + 64;
+pub const QUIC_REPLY_MESSAGE_SIZE: usize = 8 + 32 + 64 + 128;
+pub const QUIC_REPLY_MESSAGE_IDENTITY_OFFSET: usize = 8;
+pub const QUIC_REPLY_MESSAGE_SIGNATURE_OFFSET: usize = 8 + 32;
+pub const QUIC_REPLY_MESSAGE_OFFSET: usize = 8 + 32 + 64;
 
 impl QuicReplyMessage {
-    pub fn new(transaction_signature: Signature, message: String) -> Self {
+    pub fn new(identity: Pubkey, transaction_signature: Signature, message: String) -> Self {
         let message = message.as_bytes();
         let message: [u8; 128] = if message.len() >= 128 {
             message[..128].try_into().unwrap()
@@ -43,15 +47,9 @@ impl QuicReplyMessage {
             array
         };
         Self {
+            sender_identity: identity,
             message: message,
             transaction_signature: transaction_signature,
-        }
-    }
-
-    pub fn new_with_bytes(transaction_signature: Signature, message: [u8; 128]) -> Self {
-        Self {
-            transaction_signature,
-            message,
         }
     }
 
@@ -69,6 +67,35 @@ impl QuicReplyMessage {
     pub fn signature(&self) -> Signature {
         self.transaction_signature
     }
+
+    pub fn identity(&self) -> Pubkey {
+        self.sender_identity
+    }
+
+    pub fn deserialize(bytes: &[u8]) -> Option<QuicReplyMessage> {
+        let identity = bincode::deserialize::<Pubkey>(
+            &bytes[QUIC_REPLY_MESSAGE_IDENTITY_OFFSET..QUIC_REPLY_MESSAGE_SIGNATURE_OFFSET],
+        );
+        if let Ok(identity) = identity {
+            let signature = bincode::deserialize::<Signature>(
+                &bytes[QUIC_REPLY_MESSAGE_SIGNATURE_OFFSET..QUIC_REPLY_MESSAGE_OFFSET],
+            );
+            if let Ok(signature) = signature {
+                let message: [u8; 128] = bytes[QUIC_REPLY_MESSAGE_OFFSET..QUIC_REPLY_MESSAGE_SIZE]
+                    .try_into()
+                    .unwrap();
+                Some(QuicReplyMessage {
+                    sender_identity: identity,
+                    transaction_signature: signature,
+                    message,
+                })
+            } else {
+                None
+            }
+        } else {
+            None
+        }
+    }
 }
 
 impl serde::Serialize for QuicReplyMessage {
@@ -76,6 +103,8 @@ impl serde::Serialize for QuicReplyMessage {
     where
         S: serde::Serializer,
     {
+        let mut identity_bytes = self.identity().to_bytes().to_vec();
+
         let mut sig_bytes = match bincode::serialize(&self.transaction_signature) {
             Ok(bytes) => bytes,
             Err(_) => {
@@ -83,9 +112,10 @@ impl serde::Serialize for QuicReplyMessage {
                 [0; 64].to_vec()
             }
         };
+        identity_bytes.append(&mut sig_bytes);
         let message = &mut self.message.to_vec();
-        sig_bytes.append(message);
-        serializer.serialize_bytes(sig_bytes.as_slice())
+        identity_bytes.append(message);
+        serializer.serialize_bytes(identity_bytes.as_slice())
     }
 }
 
@@ -147,6 +177,7 @@ pub struct QuicBidirectionalReplyService {
     pub service_sender: UnboundedSender<QuicReplyMessage>,
     serving_handle: Option<Arc<std::thread::JoinHandle<()>>>,
     pub metrics: QuicBidirectionalMetrics,
+    pub identity: Pubkey,
 }
 
 pub fn get_signature_from_packet(packet: &Packet) -> Option<Signature> {
@@ -161,7 +192,7 @@ pub fn get_signature_from_packet(packet: &Packet) -> Option<Signature> {
 }
 
 impl QuicBidirectionalReplyService {
-    pub fn new() -> Self {
+    pub fn new(identity: Pubkey) -> Self {
         let (service_sender, service_reciever) = unbounded_channel();
         let mut instance = Self {
             service_sender: service_sender,
@@ -173,13 +204,20 @@ impl QuicBidirectionalReplyService {
             })),
             serving_handle: None,
             metrics: QuicBidirectionalMetrics::new(),
+            identity: identity,
         };
-        instance.serve(service_reciever);
+        if !identity.eq(&Pubkey::default()) {
+            instance.serve(service_reciever);
+        }
         instance
     }
 
+    pub fn new_for_test() -> Self {
+        Self::new(Pubkey::default())
+    }
+
     pub fn send_message(&self, transaction_signature: &Signature, message: String) {
-        let message = QuicReplyMessage::new(*transaction_signature, message);
+        let message = QuicReplyMessage::new(self.identity, *transaction_signature, message);
         match self.service_sender.send(message) {
             Err(e) => {
                 debug!("send error {}", e);
@@ -390,6 +428,7 @@ impl QuicBidirectionalReplyService {
 #[cfg(test)]
 pub mod test {
     use {
+        super::QuicReplyMessage,
         crate::{
             bidirectional_channel::{
                 get_signature_from_packet, QuicBidirectionalReplyService, TRANSACTION_TIMEOUT,
@@ -472,12 +511,24 @@ pub mod test {
 
     #[tokio::test]
     async fn test_addition_add_packets_without_any_quic_socket_registered() {
-        let bidirectional_replay_service = QuicBidirectionalReplyService::new();
+        let bidirectional_replay_service = QuicBidirectionalReplyService::new_for_test();
         let socket = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 20000);
         let batch = create_dummy_packet_batch(5);
         bidirectional_replay_service
             .add_packets(&socket, &batch)
             .await;
+    }
+
+    #[test]
+    fn test_quic_reply_message_serialize_and_deserialize() {
+        let k1 = Keypair::new();
+        let signature = Signature::new_unique();
+        let message = QuicReplyMessage::new(k1.pubkey(), signature, "toto".to_string());
+        let buffer = bincode::serialize(&message).unwrap();
+        let des_message = QuicReplyMessage::deserialize(buffer.as_slice()).unwrap();
+        assert_eq!(des_message.identity(), message.identity());
+        assert_eq!(des_message.signature(), message.signature());
+        assert_eq!(des_message.message(), message.message());
     }
 
     fn setup_quic_server(
@@ -557,7 +608,8 @@ pub mod test {
     // the transactions are removed after a timeout
     #[tokio::test]
     async fn test_send_5_transaction_to_quic_server_and_get_replies() {
-        let bidirectional_replay_service = QuicBidirectionalReplyService::new();
+        let identity = Keypair::new();
+        let bidirectional_replay_service = QuicBidirectionalReplyService::new(identity.pubkey());
         let metrics = bidirectional_replay_service.metrics.clone();
 
         let (_thread_handle, exit, reciever, server_address, _stream_stats) =
@@ -643,7 +695,8 @@ pub mod test {
 
     #[tokio::test]
     async fn test_send_5_transactions_one_after_another_to_quic_server() {
-        let bidirectional_replay_service = QuicBidirectionalReplyService::new();
+        let identity = Keypair::new();
+        let bidirectional_replay_service = QuicBidirectionalReplyService::new(identity.pubkey());
         let metrics = bidirectional_replay_service.metrics.clone();
 
         let (_thread_handle, exit, reciever, server_address, _stream_stats) =
@@ -726,7 +779,8 @@ pub mod test {
 
     #[tokio::test]
     async fn test_replies_are_truncated_to_128_chars() {
-        let bidirectional_replay_service = QuicBidirectionalReplyService::new();
+        let identity = Keypair::new();
+        let bidirectional_replay_service = QuicBidirectionalReplyService::new(identity.pubkey());
         let metrics = bidirectional_replay_service.metrics.clone();
 
         let (_thread_handle, exit, reciever, server_address, _stream_stats) =
@@ -841,7 +895,8 @@ pub mod test {
 
     #[tokio::test]
     async fn test_multiple_connections_dispatching() {
-        let bidirectional_replay_service = QuicBidirectionalReplyService::new();
+        let identity = Keypair::new();
+        let bidirectional_replay_service = QuicBidirectionalReplyService::new(identity.pubkey());
         let metrics = bidirectional_replay_service.metrics.clone();
 
         let (_thread_handle, exit, reciever, server_address, _stream_stats) =

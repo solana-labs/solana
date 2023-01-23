@@ -3744,7 +3744,7 @@ impl Bank {
             &mut timings,
             Some(&account_overrides),
             None,
-            QuicBidirectionalReplyService::new(),
+            QuicBidirectionalReplyService::new_for_test(),
         );
 
         let post_simulation_accounts = loaded_transactions
@@ -6061,7 +6061,7 @@ impl Bank {
             false,
             &mut ExecuteTimings::default(),
             None,
-            QuicBidirectionalReplyService::new(),
+            QuicBidirectionalReplyService::new_for_test(),
         );
         tx.signatures
             .get(0)
@@ -6124,7 +6124,7 @@ impl Bank {
             false,
             &mut ExecuteTimings::default(),
             None,
-            QuicBidirectionalReplyService::new(),
+            QuicBidirectionalReplyService::new_for_test(),
         )
         .0
         .fee_collection_results
@@ -11140,7 +11140,7 @@ pub(crate) mod tests {
                 false,
                 &mut ExecuteTimings::default(),
                 None,
-                QuicBidirectionalReplyService::new(),
+                QuicBidirectionalReplyService::new_for_test(),
             )
             .0
             .fee_collection_results;
@@ -13813,7 +13813,7 @@ pub(crate) mod tests {
                 false,
                 &mut ExecuteTimings::default(),
                 None,
-                QuicBidirectionalReplyService::new(),
+                QuicBidirectionalReplyService::new_for_test(),
             );
 
         assert_eq!(transaction_balances_set.pre_balances.len(), 3);
@@ -16586,7 +16586,7 @@ pub(crate) mod tests {
                 false,
                 &mut ExecuteTimings::default(),
                 None,
-                QuicBidirectionalReplyService::new(),
+                QuicBidirectionalReplyService::new_for_test(),
             )
             .0
             .execution_results;
@@ -16696,7 +16696,7 @@ pub(crate) mod tests {
                     true,
                     &mut ExecuteTimings::default(),
                     None,
-                    QuicBidirectionalReplyService::new(),
+                    QuicBidirectionalReplyService::new_for_test(),
                 )
                 .0
                 .execution_results[0]

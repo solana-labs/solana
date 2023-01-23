@@ -29,7 +29,7 @@ use {
         cost_model::CostModel,
         vote_sender_types::{ReplayVoteReceiver, ReplayVoteSender},
     },
-    solana_sdk::signature::Keypair,
+    solana_sdk::{signature::Keypair, signer::Signer},
     solana_streamer::{
         bidirectional_channel::QuicBidirectionalReplyService,
         quic::{spawn_server, StreamStats, MAX_STAKED_CONNECTIONS, MAX_UNSTAKED_CONNECTIONS},
@@ -155,7 +155,7 @@ impl Tpu {
 
         let (verified_sender, verified_receiver) = unbounded();
         // this channel is used to send back error to clients who have connected in mode bidirectional
-        let bidirection_reply_service = QuicBidirectionalReplyService::new();
+        let bidirection_reply_service = QuicBidirectionalReplyService::new(keypair.pubkey());
 
         let stats = Arc::new(StreamStats::default());
         let tpu_quic_t = spawn_server(
