@@ -209,39 +209,19 @@ pub fn verify_shreds_gpu(
         shred_gpu_offsets(offset, batches, recycler_cache);
     let mut out = recycler_cache.buffer().allocate("out_buffer");
     out.set_pinnable();
-<<<<<<< HEAD
-    elems.push(perf_libs::Elems {
-        #[allow(clippy::cast_ptr_alignment)]
-        elems: pubkeys.as_ptr() as *const solana_sdk::packet::Packet,
-        num: num_packets as u32,
-    });
-
-    for batch in batches {
-        elems.push(perf_libs::Elems {
-            elems: batch.as_ptr(),
-            num: batch.len() as u32,
-        });
-        let mut v = Vec::new();
-        v.resize(batch.len(), 0);
-        rvs.push(v);
-        num_packets += batch.len();
-    }
-    out.resize(signature_offsets.len(), 0);
-
-=======
     out.resize(signature_offsets.len(), 0u8);
     debug_assert_eq!(pubkeys.len() % std::mem::size_of::<Packet>(), 0);
     let num_pubkey_packets = pubkeys.len() / std::mem::size_of::<Packet>();
     let mut elems = vec![perf_libs::Elems {
-        elems: pubkeys.as_ptr().cast::<u8>(),
+        #[allow(clippy::cast_ptr_alignment)]
+        elems: pubkeys.as_ptr() as *const solana_sdk::packet::Packet,
         num: num_pubkey_packets as u32,
     }];
     elems.extend(batches.iter().map(|batch| perf_libs::Elems {
-        elems: batch.as_ptr().cast::<u8>(),
+        elems: batch.as_ptr(),
         num: batch.len() as u32,
     }));
     let num_packets = elems.iter().map(|elem| elem.num).sum();
->>>>>>> 1de161c13 (simplifies shreds sigverify (#29436))
     trace!("Starting verify num packets: {}", num_packets);
     trace!("elem len: {}", elems.len() as u32);
     trace!("packet sizeof: {}", size_of::<Packet>() as u32);
@@ -356,37 +336,19 @@ pub fn sign_shreds_gpu(
     let mut signatures_out = recycler_cache.buffer().allocate("ed25519 signatures");
     signatures_out.set_pinnable();
     signatures_out.resize(total_sigs * sig_size, 0);
-<<<<<<< HEAD
-    elems.push(perf_libs::Elems {
-        #[allow(clippy::cast_ptr_alignment)]
-        elems: pinned_keypair.as_ptr() as *const solana_sdk::packet::Packet,
-        num: num_keypair_packets as u32,
-    });
-
-    for batch in batches.iter() {
-        elems.push(perf_libs::Elems {
-            elems: batch.as_ptr(),
-            num: batch.len() as u32,
-        });
-        let mut v = Vec::new();
-        v.resize(batch.len(), 0);
-        num_packets += batch.len();
-    }
-
-=======
 
     debug_assert_eq!(pinned_keypair.len() % std::mem::size_of::<Packet>(), 0);
     let num_keypair_packets = pinned_keypair.len() / std::mem::size_of::<Packet>();
     let mut elems = vec![perf_libs::Elems {
-        elems: pinned_keypair.as_ptr().cast::<u8>(),
+        #[allow(clippy::cast_ptr_alignment)]
+        elems: pinned_keypair.as_ptr() as *const solana_sdk::packet::Packet,
         num: num_keypair_packets as u32,
     }];
     elems.extend(batches.iter().map(|batch| perf_libs::Elems {
-        elems: batch.as_ptr().cast::<u8>(),
+        elems: batch.as_ptr(),
         num: batch.len() as u32,
     }));
     let num_packets = elems.iter().map(|elem| elem.num).sum();
->>>>>>> 1de161c13 (simplifies shreds sigverify (#29436))
     trace!("Starting verify num packets: {}", num_packets);
     trace!("elem len: {}", elems.len() as u32);
     trace!("packet sizeof: {}", size_of::<Packet>() as u32);
