@@ -1114,7 +1114,7 @@ impl AccountStorageEntry {
 pub fn get_temp_accounts_paths(count: u32) -> IoResult<(Vec<TempDir>, Vec<PathBuf>)> {
     let temp_dirs: IoResult<Vec<TempDir>> = (0..count).map(|_| TempDir::new()).collect();
     let temp_dirs = temp_dirs?;
-    let paths: Vec<PathBuf> = temp_dirs
+    let paths = temp_dirs
         .iter()
         .map(|t: &TempDir| -> PathBuf {
             create_accounts_run_and_snapshot_dirs(t.path()).unwrap().0
