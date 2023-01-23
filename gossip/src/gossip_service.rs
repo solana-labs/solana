@@ -50,6 +50,7 @@ fn recv_send_quic(
     if let Some(stats) = stats {
         packet_batch.iter().for_each(|p| stats.record(p));
     }
+    info!("recv_send_quic packet batch length: {}", packet_batch.len());
     let packets = packet_batch.iter().filter_map(|pkt| {
         let addr = pkt.meta().socket_addr();
         let data = pkt.data(..)?;
