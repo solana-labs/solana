@@ -4368,13 +4368,13 @@ impl AccountsDb {
                 );
             }
 
-                self.combine_one_store_into_ancient(
-                    slot,
-                    &old_storage,
-                    &mut current_ancient,
-                    &mut ancient_slot_pubkeys,
-                    &mut dropped_roots,
-                );
+            self.combine_one_store_into_ancient(
+                slot,
+                &old_storage,
+                &mut current_ancient,
+                &mut ancient_slot_pubkeys,
+                &mut dropped_roots,
+            );
         }
 
         self.handle_dropped_roots_for_ancient(dropped_roots);
@@ -4401,7 +4401,7 @@ impl AccountsDb {
         dropped_roots: &mut Vec<Slot>,
     ) {
         let mut stored_accounts = Vec::default();
-        let shrink_collect = self.shrink_collect::<AliveAccounts<'_>>(
+        let shrink_collect = self.shrink_collect::<ShrinkCollectAliveSeparatedByRefs<'_>>(
             old_storage,
             &mut stored_accounts,
             &self.shrink_ancient_stats.shrink_stats,
