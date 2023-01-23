@@ -542,7 +542,7 @@ impl Accounts {
                     if should_accumulate_program_account_size {
                         loaded_account_total_size =
                             loaded_account_total_size.saturating_add(program_account.data().len());
-            info!(" ==TAOTAO== slot {} transaction {:?} account {:?} type executable size {:?}", ancestors.max_slot(), tx.signature(), program_id, program_account.data().len()); 
+            info!(" ==TAOTAO== slot {} transaction {:?} account {:?} type executable size {:?} depth {}", ancestors.max_slot(), tx.signature(), program_id, program_account.data().len(), depth); 
                     }
 
                     accounts.push((program_id, program_account));
@@ -588,7 +588,7 @@ impl Accounts {
                             if should_accumulate_program_account_size {
                                 loaded_account_total_size = loaded_account_total_size
                                     .saturating_add(programdata_account.data().len());
-            info!(" ==TAOTAO== slot {} transaction {:?} account {:?} type executable_programdata, size {:?}", ancestors.max_slot(), tx.signature(), programdata_address, programdata_account.data().len()); 
+            info!(" ==TAOTAO== slot {} transaction {:?} account {:?} type executable_programdata size {:?} depth {}", ancestors.max_slot(), tx.signature(), programdata_address, programdata_account.data().len(), depth); 
                             }
                             accounts.push((programdata_address, programdata_account));
                             account_index
