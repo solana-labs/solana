@@ -804,6 +804,7 @@ impl Validator {
                 connection_cache.clone(),
                 max_complete_transaction_status_slot,
                 prioritization_fee_cache.clone(),
+                node.sockets.rpc,
             )?;
 
             (

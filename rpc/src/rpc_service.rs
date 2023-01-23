@@ -43,7 +43,7 @@ use {
     solana_storage_bigtable::CredentialType,
     std::{
         collections::HashSet,
-        net::SocketAddr,
+        net::{SocketAddr, UdpSocket},
         path::{Path, PathBuf},
         sync::{
             atomic::{AtomicBool, AtomicU64, Ordering},
@@ -358,6 +358,7 @@ impl JsonRpcService {
         connection_cache: Arc<ConnectionCache>,
         current_transaction_status_slot: Arc<AtomicU64>,
         prioritization_fee_cache: Arc<PrioritizationFeeCache>,
+        rpc: Option<UdpSocket>,
     ) -> Result<Self, String> {
         info!("rpc bound to {:?}", rpc_addr);
         info!("rpc configuration: {:?}", config);
@@ -512,6 +513,11 @@ impl JsonRpcService {
                     bank_forks.clone(),
                     health.clone(),
                 );
+                if let Some(rpc) = rpc {
+                    // This RPC socket was only to prevent other applications (e.g. parallel
+                    // unit tests) from stealing the port we bookmarked earlier.
+                    drop(rpc);
+                }
                 let server = ServerBuilder::with_meta_extractor(
                     io,
                     move |_req: &hyper::Request<hyper::Body>| request_processor.clone(),
@@ -651,6 +657,7 @@ mod tests {
             connection_cache,
             Arc::new(AtomicU64::default()),
             Arc::new(PrioritizationFeeCache::default()),
+            None,
         )
         .expect("assume successful JsonRpcService start");
         let thread = rpc_service.thread_hdl.thread();

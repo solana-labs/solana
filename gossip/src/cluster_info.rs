@@ -2767,6 +2767,7 @@ pub struct Sockets {
     pub ancestor_hashes_requests: UdpSocket,
     pub tpu_quic: UdpSocket,
     pub tpu_forwards_quic: UdpSocket,
+    pub rpc: Option<UdpSocket>,
 }
 
 #[derive(Debug)]
@@ -2836,6 +2837,7 @@ impl Node {
                 ancestor_hashes_requests,
                 tpu_quic,
                 tpu_forwards_quic,
+                rpc: None,
             },
         }
     }
@@ -2880,8 +2882,8 @@ impl Node {
         let (serve_repair_port, serve_repair) = Self::bind(bind_ip_addr, port_range);
         let (_, broadcast) = Self::bind(bind_ip_addr, port_range);
         let (_, ancestor_hashes_requests) = Self::bind(bind_ip_addr, port_range);
+        let (rpc_port, rpc) = Self::bind(bind_ip_addr, port_range);
 
-        let rpc_port = find_available_port_in_range(bind_ip_addr, port_range).unwrap();
         let rpc_pubsub_port = find_available_port_in_range(bind_ip_addr, port_range).unwrap();
 
         let info = ContactInfo {
@@ -2918,6 +2920,7 @@ impl Node {
                 ancestor_hashes_requests,
                 tpu_quic,
                 tpu_forwards_quic,
+                rpc: Some(rpc),
             },
         }
     }
@@ -3005,6 +3008,7 @@ impl Node {
                 ancestor_hashes_requests,
                 tpu_quic,
                 tpu_forwards_quic,
+                rpc: None,
             },
         }
     }
@@ -3195,6 +3199,7 @@ mod tests {
                     ancestor_hashes_requests: UdpSocket::bind("0.0.0.0:0").unwrap(),
                     tpu_quic: UdpSocket::bind("0.0.0.0:0").unwrap(),
                     tpu_forwards_quic: UdpSocket::bind("0.0.0.0:0").unwrap(),
+                    rpc: None,
                 },
             }
         };
