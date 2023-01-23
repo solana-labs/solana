@@ -10008,11 +10008,10 @@ pub mod tests {
         let av = AppendVec::new(&tf.path, true, 1024 * 1024);
         data.accounts = av;
 
-        let arc = Arc::new(data);
-        let storages = vec![arc];
+        let storage = Arc::new(data);
         let pubkey = solana_sdk::pubkey::new_rand();
         let acc = AccountSharedData::new(1, 48, AccountSharedData::default().owner());
-        append_single_account_with_default_hash(&storages[0].accounts, &pubkey, &acc, 1);
+        append_single_account_with_default_hash(&storage.accounts, &pubkey, &acc, 1);
 
         let calls = Arc::new(AtomicU64::new(0));
         let temp_dir = TempDir::new().unwrap();
@@ -10031,7 +10030,7 @@ pub mod tests {
         let result = accounts_db.scan_account_storage_no_bank(
             &CacheHashData::new(accounts_hash_cache_path),
             &CalcAccountsHashConfig::default(),
-            &get_storage_refs(&storages),
+            &get_storage_refs(&[storage]),
             test_scan,
             &Range { start: 0, end: 1 },
             &HashStats::default(),
