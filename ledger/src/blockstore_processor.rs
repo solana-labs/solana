@@ -155,7 +155,7 @@ fn execute_batch(
         transaction_status_sender.is_some(),
         timings,
         log_messages_bytes_limit,
-        QuicBidirectionalReplyService::new(), // No quic bi-directional service for tvu
+        QuicBidirectionalReplyService::new_for_test(), // No quic bi-directional service for tvu
     );
 
     bank_utils::find_and_send_votes(
@@ -3675,7 +3675,7 @@ pub mod tests {
             false,
             &mut ExecuteTimings::default(),
             None,
-            QuicBidirectionalReplyService::new(),
+            QuicBidirectionalReplyService::new_for_test(),
         );
         let (err, signature) = get_first_error(&batch, fee_collection_results).unwrap();
         assert_eq!(err.unwrap_err(), TransactionError::AccountNotFound);

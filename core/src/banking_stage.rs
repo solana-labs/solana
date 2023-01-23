@@ -2399,7 +2399,7 @@ mod tests {
                 None,
                 Arc::new(ConnectionCache::default()),
                 bank_forks,
-                QuicBidirectionalReplyService::new(),
+                QuicBidirectionalReplyService::new_for_test(),
             );
             drop(verified_sender);
             drop(gossip_verified_vote_sender);
@@ -2454,7 +2454,7 @@ mod tests {
                 None,
                 Arc::new(ConnectionCache::default()),
                 bank_forks,
-                QuicBidirectionalReplyService::new(),
+                QuicBidirectionalReplyService::new_for_test(),
             );
             trace!("sending bank");
             drop(verified_sender);
@@ -2534,7 +2534,7 @@ mod tests {
                 None,
                 Arc::new(ConnectionCache::default()),
                 bank_forks,
-                QuicBidirectionalReplyService::new(),
+                QuicBidirectionalReplyService::new_for_test(),
             );
 
             // fund another account so we can send 2 good transactions in a single batch.
@@ -2691,7 +2691,7 @@ mod tests {
                     None,
                     Arc::new(ConnectionCache::default()),
                     bank_forks,
-                    QuicBidirectionalReplyService::new(),
+                    QuicBidirectionalReplyService::new_for_test(),
                 );
 
                 // wait for banking_stage to eat the packets
@@ -3048,7 +3048,7 @@ mod tests {
                 &QosService::new(
                     Arc::new(RwLock::new(CostModel::default())),
                     1,
-                    QuicBidirectionalReplyService::new(),
+                    QuicBidirectionalReplyService::new_for_test(),
                 ),
                 None,
             );
@@ -3136,7 +3136,7 @@ mod tests {
                 &QosService::new(
                     Arc::new(RwLock::new(CostModel::default())),
                     1,
-                    QuicBidirectionalReplyService::new(),
+                    QuicBidirectionalReplyService::new_for_test(),
                 ),
                 None,
             );
@@ -3207,7 +3207,7 @@ mod tests {
             let qos_service = QosService::new(
                 Arc::new(RwLock::new(CostModel::default())),
                 1,
-                QuicBidirectionalReplyService::new(),
+                QuicBidirectionalReplyService::new_for_test(),
             );
 
             let get_block_cost = || bank.read_cost_tracker().unwrap().block_cost();
@@ -3373,7 +3373,7 @@ mod tests {
                 &QosService::new(
                     Arc::new(RwLock::new(CostModel::default())),
                     1,
-                    QuicBidirectionalReplyService::new(),
+                    QuicBidirectionalReplyService::new_for_test(),
                 ),
                 None,
             );
@@ -3543,7 +3543,7 @@ mod tests {
                 &QosService::new(
                     Arc::new(RwLock::new(CostModel::default())),
                     1,
-                    QuicBidirectionalReplyService::new(),
+                    QuicBidirectionalReplyService::new_for_test(),
                 ),
                 None,
             );
@@ -3614,7 +3614,7 @@ mod tests {
             &QosService::new(
                 Arc::new(RwLock::new(CostModel::default())),
                 1,
-                QuicBidirectionalReplyService::new(),
+                QuicBidirectionalReplyService::new_for_test(),
             ),
             None,
         );
@@ -3848,7 +3848,7 @@ mod tests {
                 &QosService::new(
                     Arc::new(RwLock::new(CostModel::default())),
                     1,
-                    QuicBidirectionalReplyService::new(),
+                    QuicBidirectionalReplyService::new_for_test(),
                 ),
                 None,
             );
@@ -4021,7 +4021,7 @@ mod tests {
                 &QosService::new(
                     Arc::new(RwLock::new(CostModel::default())),
                     1,
-                    QuicBidirectionalReplyService::new(),
+                    QuicBidirectionalReplyService::new_for_test(),
                 ),
                 None,
             );
@@ -4147,7 +4147,7 @@ mod tests {
                 &QosService::new(
                     Arc::new(RwLock::new(CostModel::default())),
                     1,
-                    QuicBidirectionalReplyService::new(),
+                    QuicBidirectionalReplyService::new_for_test(),
                 ),
                 &mut LeaderSlotMetricsTracker::new(0),
                 None,
@@ -4169,7 +4169,7 @@ mod tests {
                 &QosService::new(
                     Arc::new(RwLock::new(CostModel::default())),
                     1,
-                    QuicBidirectionalReplyService::new(),
+                    QuicBidirectionalReplyService::new_for_test(),
                 ),
                 &mut LeaderSlotMetricsTracker::new(0),
                 None,
@@ -4233,7 +4233,7 @@ mod tests {
                         &QosService::new(
                             Arc::new(RwLock::new(CostModel::default())),
                             1,
-                            QuicBidirectionalReplyService::new(),
+                            QuicBidirectionalReplyService::new_for_test(),
                         ),
                         &mut LeaderSlotMetricsTracker::new(0),
                         None,

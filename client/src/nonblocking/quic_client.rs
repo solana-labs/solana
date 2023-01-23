@@ -298,10 +298,12 @@ impl QuicClient {
         if create_bichannel {
             let (mut send_stream, recv_stream) = connection.connection.open_bi().await?;
 
+            let server_reply_channel = server_reply_channel;
+            if let Some(server_reply_channel) = server_reply_channel {
+                server_reply_channel.start_serving(recv_stream);
+            }
             send_stream.write_all(data).await?;
             send_stream.finish().await?;
-            let server_reply_channel = server_reply_channel.unwrap();
-            server_reply_channel.start_serving(recv_stream);
         } else {
             let mut send_stream = connection.connection.open_uni().await?;
 
@@ -309,6 +311,22 @@ impl QuicClient {
             send_stream.finish().await?;
         }
         Ok(())
+    }
+
+    async fn _send_buffer_using_conn_with_handler(
+        data: &[u8],
+        connection: &NewConnection,
+        server_reply_channel: Option<BidirectionalChannelHandler>,
+        socket: SocketAddr,
+    ) -> Result<(), QuicError> {
+        let res =
+            Self::_send_buffer_using_conn(data, connection, server_reply_channel.clone()).await;
+        if let Err(e) = &res {
+            if let Some(handler) = server_reply_channel {
+                handler.mark_buffer_as_error(data, e.to_string(), socket)
+            }
+        }
+        res
     }
 
     // Attempts to send data, connecting/reconnecting as necessary
@@ -351,6 +369,13 @@ impl QuicClient {
                                         "Cannot make 0rtt connection to {}, error {:}",
                                         self.addr, err
                                     );
+                                    if let Some(handler) = stats.server_reply_channel.clone() {
+                                        handler.mark_buffer_as_error(
+                                            data,
+                                            err.to_string(),
+                                            self.addr.clone(),
+                                        );
+                                    }
                                     return Err(err);
                                 }
                             }
@@ -380,6 +405,13 @@ impl QuicClient {
                             }
                             Err(err) => {
                                 info!("Cannot make connection to {}, error {:}", self.addr, err);
+                                if let Some(handler) = stats.server_reply_channel.clone() {
+                                    handler.mark_buffer_as_error(
+                                        data,
+                                        err.to_string(),
+                                        self.addr.clone(),
+                                    );
+                                }
                                 return Err(err);
                             }
                         }
@@ -438,6 +470,9 @@ impl QuicClient {
                             err,
                             thread::current().id(),
                         );
+                        if let Some(handler) = stats.server_reply_channel.clone() {
+                            handler.mark_buffer_as_error(data, err.to_string(), self.addr.clone());
+                        }
                         return Err(err);
                     }
                 },
