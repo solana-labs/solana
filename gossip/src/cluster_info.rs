@@ -1619,6 +1619,9 @@ impl ClusterInfo {
                 "run_gossip",
                 &reqs,
             );
+            for p in packet_batch.iter() {
+                info!("run_gossip to addr {}", p.meta().addr);
+            }
             self.stats
                 .packets_sent_gossip_requests_count
                 .add_relaxed(packet_batch.len() as u64);
@@ -1755,7 +1758,7 @@ impl ClusterInfo {
                     {
                         // Log contact info
                         info!(
-                            "\n{}\n\n{}",
+                            "pub fn gossip(\n{}\n\n{}",
                             self.contact_info_trace(),
                             self.rpc_info_trace()
                         );
