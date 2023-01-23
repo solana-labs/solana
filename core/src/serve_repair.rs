@@ -133,7 +133,8 @@ impl AncestorHashesRepairType {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, AbiEnumVisitor, AbiExample, Deserialize, Serialize)]
+#[frozen_abi(digest = "AKpurCovzn6rsji4aQrP3hUdEHxjtXUfT7AatZXN7Rpz")]
 pub enum AncestorHashesResponse {
     Hashes(Vec<SlotHash>),
     Ping(Ping),
@@ -182,7 +183,7 @@ struct ServeRepairStats {
     err_id_mismatch: usize,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, AbiExample, Deserialize, Serialize)]
 pub struct RepairRequestHeader {
     signature: Signature,
     sender: Pubkey,
@@ -206,7 +207,8 @@ impl RepairRequestHeader {
 pub(crate) type Ping = ping_pong::Ping<[u8; REPAIR_PING_TOKEN_SIZE]>;
 
 /// Window protocol messages
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Debug, AbiEnumVisitor, AbiExample, Deserialize, Serialize)]
+#[frozen_abi(digest = "3bgE3sYHRqetvpo4fcDL6PTV3z2LMAtY6H8BoLFSjCwf")]
 pub enum RepairProtocol {
     LegacyWindowIndex(LegacyContactInfo, Slot, u64),
     LegacyHighestWindowIndex(LegacyContactInfo, Slot, u64),
@@ -236,7 +238,8 @@ pub enum RepairProtocol {
     },
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Debug, AbiEnumVisitor, AbiExample, Deserialize, Serialize)]
+#[frozen_abi(digest = "CkffjyMPCwuJgk9NiCMELXLCecAnTPZqpKEnUCb3VyVf")]
 pub(crate) enum RepairResponse {
     Ping(Ping),
 }
