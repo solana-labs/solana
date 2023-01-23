@@ -452,7 +452,9 @@ pub fn start_gossip_voter(
     vote_filter: impl Fn((CrdsValueLabel, Transaction)) -> Option<(VoteTransaction, Transaction)>
         + std::marker::Send
         + 'static,
-    process_vote_tx: impl Fn(Slot, &Transaction, &VoteTransaction) + std::marker::Send + 'static,
+    mut process_vote_tx: impl FnMut(Slot, &Transaction, &VoteTransaction, &ClusterInfo)
+        + std::marker::Send
+        + 'static,
     sleep_ms: u64,
 ) -> GossipVoter {
     let exit = Arc::new(AtomicBool::new(false));
@@ -473,7 +475,6 @@ pub fn start_gossip_voter(
         let cluster_info = cluster_info.clone();
         std::thread::spawn(move || {
             let mut cursor = Cursor::default();
-            let mut max_vote_slot = 0;
             loop {
                 if exit.load(Ordering::Relaxed) {
                     return;
@@ -495,19 +496,12 @@ pub fn start_gossip_voter(
                 for (parsed_vote, leader_vote_tx) in &parsed_vote_iter {
                     if let Some(latest_vote_slot) = parsed_vote.last_voted_slot() {
                         info!("received vote for {}", latest_vote_slot);
-                        // Add to EpochSlots. Mark all slots frozen between slot..=max_vote_slot.
-                        if latest_vote_slot > max_vote_slot {
-                            let new_epoch_slots: Vec<Slot> =
-                                (max_vote_slot + 1..latest_vote_slot + 1).collect();
-                            info!(
-                                "Simulating epoch slots from our node: {:?}",
-                                new_epoch_slots
-                            );
-                            cluster_info.push_epoch_slots(&new_epoch_slots);
-                            max_vote_slot = latest_vote_slot;
-                        }
-
-                        process_vote_tx(latest_vote_slot, leader_vote_tx, parsed_vote)
+                        process_vote_tx(
+                            latest_vote_slot,
+                            leader_vote_tx,
+                            parsed_vote,
+                            &cluster_info,
+                        )
                     }
                     // Give vote some time to propagate
                     sleep(Duration::from_millis(sleep_ms));

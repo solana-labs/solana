@@ -2657,7 +2657,7 @@ fn test_oc_bad_signatures() {
             let node_keypair = node_keypair.insecure_clone();
             let vote_keypair = vote_keypair.insecure_clone();
             let num_votes_simulated = num_votes_simulated.clone();
-            move |vote_slot, leader_vote_tx, parsed_vote| {
+            move |vote_slot, leader_vote_tx, parsed_vote, _cluster_info| {
                 info!("received vote for {}", vote_slot);
                 let vote_hash = parsed_vote.hash();
                 info!(
@@ -2690,86 +2690,6 @@ fn test_oc_bad_signatures() {
         },
         voter_thread_sleep_ms as u64,
     );
-
-    /*let num_votes_simulated = Arc::new(AtomicUsize::new(0));
-    let t_voter = {
-        let exit = exit.clone();
-        let num_votes_simulated = num_votes_simulated.clone();
-        // push to tpu
-        let (rpc, tpu) = cluster_tests::get_client_facing_addr(&cluster.entry_point_info);
-        let client = ThinClient::new(rpc, tpu, cluster.connection_cache.clone());
-        let cluster_funding_keypair = cluster.funding_keypair.insecure_clone();
-        std::thread::spawn(move || {
-            let mut cursor = Cursor::default();
-            loop {
-                if exit.load(Ordering::Relaxed) {
-                    return;
-                }
-
-                let (labels, votes) = cluster_info.get_votes_with_labels(&mut cursor);
-                let mut parsed_vote_iter: Vec<_> = labels
-                    .into_iter()
-                    .zip(votes.into_iter())
-                    .filter_map(|(_label, leader_vote_tx)| {
-                        let vote = vote_parser::parse_vote_transaction(&leader_vote_tx)
-                            .map(|(_, vote, ..)| vote)
-                            .unwrap();
-                        // Filter out empty votes
-                        if !vote.is_empty() {
-                            Some((vote, leader_vote_tx))
-                        } else {
-                            None
-                        }
-                    })
-                    .collect();
-
-                parsed_vote_iter.sort_by(|(vote, _), (vote2, _)| {
-                    vote.last_voted_slot()
-                        .unwrap()
-                        .cmp(&vote2.last_voted_slot().unwrap())
-                });
-
-                for (parsed_vote, leader_vote_tx) in &parsed_vote_iter {
-                    if let Some(latest_vote_slot) = parsed_vote.last_voted_slot() {
-                        info!("received vote for {}", latest_vote_slot);
-                        let vote_hash = parsed_vote.hash();
-                        info!(
-                            "Simulating vote from our node on slot {}, hash {}",
-                            latest_vote_slot, vote_hash
-                        );
-
-                        let mut vote_slots: Vec<Slot> =
-                            AncestorIterator::new_inclusive(latest_vote_slot, &leader_blockstore)
-                                .take(MAX_LOCKOUT_HISTORY)
-                                .collect();
-                        vote_slots.reverse();
-
-                        let bad_authorized_signer_keypair = Keypair::new();
-                        let mut vote_tx = vote_transaction::new_vote_transaction(
-                            vote_slots,
-                            vote_hash,
-                            leader_vote_tx.message.recent_blockhash,
-                            &node_keypair,
-                            &vote_keypair,
-                            // Make a bad signer
-                            &bad_authorized_signer_keypair,
-                            None,
-                        );
-                        client
-                            .retry_transfer(&cluster_funding_keypair, &mut vote_tx, 5)
-                            .unwrap();
-                    }
-                    // Give vote some time to propagate
-                    num_votes_simulated.fetch_add(1, Ordering::Relaxed);
-                    sleep(Duration::from_millis(voter_thread_sleep_ms as u64));
-                }
-
-                if parsed_vote_iter.is_empty() {
-                    sleep(Duration::from_millis(voter_thread_sleep_ms as u64));
-                }
-            }
-        })
-    };*/
 
     let (mut block_subscribe_client, receiver) = PubsubClient::block_subscribe(
         &format!("ws://{}", &cluster.entry_point_info.rpc_pubsub.to_string()),
