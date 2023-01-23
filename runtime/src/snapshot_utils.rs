@@ -2166,9 +2166,9 @@ pub fn verify_snapshot_archive<P, Q, R>(
     // In the unarchiving case, there is an extra empty "accounts" directory. The account
     // files in the archive accounts/ have been expanded to [account_paths].
     // Remove the empty "accounts" directory for the directory comparison below.
-    // In some test cases the directory to compare do not come from unchiving.  Use
+    // In some test cases the directory to compare do not come from unarchiving.  Use
     // unwarp_or_default to ignore the error if this directory does not exist.
-    std::fs::remove_dir(account_dir.join("accounts")).unwrap_or_default();
+    _ = std::fs::remove_dir(account_dir.join("accounts"));
     // Check the account entries are the same
     assert!(!dir_diff::is_different(&storages_to_verify, account_dir).unwrap());
 }
@@ -2427,11 +2427,12 @@ pub fn should_take_incremental_snapshot(
         && last_full_snapshot_slot.is_some()
 }
 
-pub fn generate_test_tmp_account_path() -> PathBuf {
-    let accounts_dir = tempfile::TempDir::new().unwrap();
-    create_accounts_run_and_snapshot_dirs(accounts_dir.path())
+pub fn create_tmp_accounts_dir_for_tests() -> (TempDir, PathBuf) {
+    let tmp_dir = tempfile::TempDir::new().unwrap();
+    let account_dir = create_accounts_run_and_snapshot_dirs(tmp_dir.path())
         .unwrap()
-        .0
+        .0;
+    (tmp_dir, account_dir)
 }
 
 #[cfg(test)]
@@ -3352,7 +3353,7 @@ mod tests {
             original_bank.register_tick(&Hash::new_unique());
         }
 
-        let accounts_dir = generate_test_tmp_account_path();
+        let (_tmp_dir, accounts_dir) = create_tmp_accounts_dir_for_tests();
         let bank_snapshots_dir = tempfile::TempDir::new().unwrap();
         let full_snapshot_archives_dir = tempfile::TempDir::new().unwrap();
         let incremental_snapshot_archives_dir = tempfile::TempDir::new().unwrap();
@@ -3464,7 +3465,7 @@ mod tests {
             bank4.register_tick(&Hash::new_unique());
         }
 
-        let accounts_dir = generate_test_tmp_account_path();
+        let (_tmp_dir, accounts_dir) = create_tmp_accounts_dir_for_tests();
         let bank_snapshots_dir = tempfile::TempDir::new().unwrap();
         let full_snapshot_archives_dir = tempfile::TempDir::new().unwrap();
         let incremental_snapshot_archives_dir = tempfile::TempDir::new().unwrap();
@@ -3555,7 +3556,7 @@ mod tests {
             bank1.register_tick(&Hash::new_unique());
         }
 
-        let accounts_dir = generate_test_tmp_account_path();
+        let (_tmp_dir, accounts_dir) = create_tmp_accounts_dir_for_tests();
         let bank_snapshots_dir = tempfile::TempDir::new().unwrap();
         let full_snapshot_archives_dir = tempfile::TempDir::new().unwrap();
         let incremental_snapshot_archives_dir = tempfile::TempDir::new().unwrap();
@@ -3677,7 +3678,7 @@ mod tests {
             bank1.register_tick(&Hash::new_unique());
         }
 
-        let accounts_dir = generate_test_tmp_account_path();
+        let (_tmp_dir, accounts_dir) = create_tmp_accounts_dir_for_tests();
         let bank_snapshots_dir = tempfile::TempDir::new().unwrap();
         let full_snapshot_archives_dir = tempfile::TempDir::new().unwrap();
         let incremental_snapshot_archives_dir = tempfile::TempDir::new().unwrap();
@@ -3790,7 +3791,7 @@ mod tests {
         let key1 = Keypair::new();
         let key2 = Keypair::new();
 
-        let accounts_dir = generate_test_tmp_account_path();
+        let (_tmp_dir, accounts_dir) = create_tmp_accounts_dir_for_tests();
         let bank_snapshots_dir = tempfile::TempDir::new().unwrap();
         let full_snapshot_archives_dir = tempfile::TempDir::new().unwrap();
         let incremental_snapshot_archives_dir = tempfile::TempDir::new().unwrap();
