@@ -6,7 +6,7 @@
 //! if perf-libs are available
 
 use {
-    crate::{find_packet_sender_stake_stage, sigverify},
+    crate::{find_packet_sender_stake_stage::FindPacketSenderStakeReceiver, sigverify},
     core::time::Duration,
     crossbeam_channel::{RecvTimeoutError, SendError},
     itertools::Itertools,
@@ -235,7 +235,7 @@ impl SigVerifier for DisabledSigVerifier {
 impl SigVerifyStage {
     #[allow(clippy::new_ret_no_self)]
     pub fn new<T: SigVerifier + 'static + Send + Clone>(
-        packet_receiver: find_packet_sender_stake_stage::FindPacketSenderStakeReceiver,
+        packet_receiver: FindPacketSenderStakeReceiver,
         verifier: T,
         name: &'static str,
     ) -> Self {
@@ -291,7 +291,7 @@ impl SigVerifyStage {
 
     fn verifier<T: SigVerifier>(
         deduper: &Deduper,
-        recvr: &find_packet_sender_stake_stage::FindPacketSenderStakeReceiver,
+        recvr: &FindPacketSenderStakeReceiver,
         verifier: &mut T,
         stats: &mut SigVerifierStats,
     ) -> Result<(), T::SendType> {
@@ -403,7 +403,7 @@ impl SigVerifyStage {
     }
 
     fn verifier_service<T: SigVerifier + 'static + Send + Clone>(
-        packet_receiver: find_packet_sender_stake_stage::FindPacketSenderStakeReceiver,
+        packet_receiver: FindPacketSenderStakeReceiver,
         mut verifier: T,
         name: &'static str,
     ) -> JoinHandle<()> {
@@ -444,7 +444,7 @@ impl SigVerifyStage {
     }
 
     fn verifier_services<T: SigVerifier + 'static + Send + Clone>(
-        packet_receiver: find_packet_sender_stake_stage::FindPacketSenderStakeReceiver,
+        packet_receiver: FindPacketSenderStakeReceiver,
         verifier: T,
         name: &'static str,
     ) -> JoinHandle<()> {
