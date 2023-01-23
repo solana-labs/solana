@@ -45,6 +45,7 @@ fn recv_send_quic(
     _socket_addr_space: &SocketAddrSpace,
     stats: &mut Option<StreamerSendStats>,
 ) -> Result<()> {
+    info!("enter recv_send_quic");
     let timer = Duration::new(1, 0);
     let packet_batch = r.recv_timeout(timer)?;
     if let Some(stats) = stats {
@@ -91,7 +92,9 @@ fn quic_responder(
                 if let Err(e) = recv_send_quic(&connection_cache, &r, &socket_addr_space, &mut stats) {
                     match e {
                         StreamerError::RecvTimeout(RecvTimeoutError::Disconnected) => break,
-                        StreamerError::RecvTimeout(RecvTimeoutError::Timeout) => (),
+                        StreamerError::RecvTimeout(RecvTimeoutError::Timeout) => {
+                            info!("quic_responder: recv_send_quic timed out");
+                        },
                         _ => {
                             errors += 1;
                             last_error = Some(e);
