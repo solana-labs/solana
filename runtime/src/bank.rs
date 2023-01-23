@@ -4662,20 +4662,12 @@ impl Bank {
     /// Calculate fee for `SanitizedMessage`
     pub fn calculate_fee(
         message: &SanitizedMessage,
-        lamports_per_signature: u64,
+        _lamports_per_signature: u64,
         fee_structure: &FeeStructure,
         use_default_units_per_instruction: bool,
         support_request_units_deprecated: bool,
     ) -> u64 {
         // Fee based on compute units and signatures
-        const BASE_CONGESTION: f64 = 5_000.0;
-        let current_congestion = BASE_CONGESTION.max(lamports_per_signature as f64);
-        let congestion_multiplier = if lamports_per_signature == 0 {
-            0.0 // test only
-        } else {
-            BASE_CONGESTION / current_congestion
-        };
-
         let mut compute_budget = ComputeBudget::default();
         let prioritization_fee_details = compute_budget
             .process_instructions(
@@ -4702,11 +4694,10 @@ impl Bank {
                     .unwrap_or_default()
             });
 
-        ((prioritization_fee
+        (prioritization_fee
             .saturating_add(signature_fee)
             .saturating_add(write_lock_fee)
             .saturating_add(compute_fee) as f64)
-            * congestion_multiplier)
             .round() as u64
     }
 
