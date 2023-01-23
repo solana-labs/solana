@@ -811,7 +811,7 @@ mod tests {
             let size = rng.gen_range(0, 16);
             let packets = packets.by_ref().take(size).collect();
             let batch = PacketBatch::new(packets);
-            (size == 0 || !batch.is_empty()).then_some(batch)
+            (size == 0 || !batch.is_empty()).then(|| batch)
         })
         .while_some()
         .collect();
