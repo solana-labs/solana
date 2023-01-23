@@ -42,7 +42,7 @@ pub struct GossipService {
 fn recv_send_quic(
     connection_cache: &ConnectionCache,
     r: &PacketBatchReceiver,
-    socket_addr_space: &SocketAddrSpace,
+    _socket_addr_space: &SocketAddrSpace,
     stats: &mut Option<StreamerSendStats>,
 ) -> Result<()> {
     let timer = Duration::new(1, 0);
@@ -53,7 +53,8 @@ fn recv_send_quic(
     let packets = packet_batch.iter().filter_map(|pkt| {
         let addr = pkt.meta().socket_addr();
         let data = pkt.data(..)?;
-        socket_addr_space.check(&addr).then_some((data, addr))
+        //_socket_addr_space.check(&addr).then_some((data, addr))
+        Some((data, addr))
     });
     for p in packets {
         info!("recv_send_quic get_connection addr: {}", p.1);
