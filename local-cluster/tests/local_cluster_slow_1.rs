@@ -17,7 +17,7 @@ use {
     solana_ledger::ancestor_iterator::AncestorIterator,
     solana_local_cluster::{
         cluster::{Cluster, ClusterValidatorInfo},
-        cluster_tests::{self, GossipVoter},
+        cluster_tests::{self},
         local_cluster::{ClusterConfig, LocalCluster},
         validator_configs::*,
     },
@@ -34,7 +34,6 @@ use {
     std::{
         collections::{BTreeSet, HashSet},
         path::Path,
-        sync::atomic::Ordering,
         thread::sleep,
         time::Duration,
     },
@@ -455,13 +454,7 @@ fn test_duplicate_shreds_broadcast_leader() {
 
     // 3) Start up a gossip instance to listen for and push votes
     let voter_thread_sleep_ms = 100;
-    let GossipVoter {
-        gossip_service,
-        tcp_listener: _tcp_listener,
-        cluster_info: _cluster_info,
-        t_voter,
-        exit,
-    } = cluster_tests::start_gossip_voter(
+    let gossip_voter = cluster_tests::start_gossip_voter(
         &cluster.entry_point_info.gossip,
         &node_keypair,
         move |(label, leader_vote_tx)| {
@@ -551,9 +544,7 @@ fn test_duplicate_shreds_broadcast_leader() {
     );
 
     // Clean up threads
-    exit.store(true, Ordering::Relaxed);
-    t_voter.join().unwrap();
-    gossip_service.join().unwrap();
+    gossip_voter.close();
 }
 
 #[test]

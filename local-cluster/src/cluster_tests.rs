@@ -443,6 +443,14 @@ pub struct GossipVoter {
     pub exit: Arc<AtomicBool>,
 }
 
+impl GossipVoter {
+    pub fn close(self) {
+        self.exit.store(true, Ordering::Relaxed);
+        self.t_voter.join().unwrap();
+        self.gossip_service.join().unwrap();
+    }
+}
+
 /// Reads votes from gossip and runs them through `vote_filter` to filter votes that then
 /// get passed to `generate_vote_tx` to create votes that are then pushed into gossip as if
 /// sent by a node with identity `node_keypair`.

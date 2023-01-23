@@ -23,7 +23,7 @@ use {
     },
     solana_local_cluster::{
         cluster::{Cluster, ClusterValidatorInfo},
-        cluster_tests::{self, GossipVoter},
+        cluster_tests::{self},
         local_cluster::{ClusterConfig, LocalCluster},
         validator_configs::*,
     },
@@ -2633,13 +2633,7 @@ fn test_oc_bad_signatures() {
     let cluster_funding_keypair = cluster.funding_keypair.insecure_clone();
     let voter_thread_sleep_ms: usize = 100;
     let num_votes_simulated = Arc::new(AtomicUsize::new(0));
-    let GossipVoter {
-        gossip_service,
-        tcp_listener: _tcp_listener,
-        cluster_info: _cluster_info,
-        t_voter,
-        exit,
-    } = cluster_tests::start_gossip_voter(
+    let gossip_voter = cluster_tests::start_gossip_voter(
         &cluster.entry_point_info.gossip,
         &node_keypair,
         |(_label, leader_vote_tx)| {
@@ -2720,9 +2714,7 @@ fn test_oc_bad_signatures() {
     }
 
     // Clean up voter thread
-    exit.store(true, Ordering::Relaxed);
-    t_voter.join().unwrap();
-    gossip_service.join().unwrap();
+    gossip_voter.close();
 
     // If we don't drop the cluster, the blocking web socket service
     // won't return, and the `block_subscribe_client` won't shut down
