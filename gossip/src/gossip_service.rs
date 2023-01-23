@@ -56,9 +56,12 @@ fn recv_send_quic(
         socket_addr_space.check(&addr).then_some((data, addr))
     });
     for p in packets {
+        info!("recv_send_quic get_connection addr: {}", p.1);
         let conn = connection_cache.get_connection(&p.1);
+        info!("recv_send_quic connection remote address: {}", conn.tpu_addr());
         //todo: handle this error (e.g. logging)
-        let _ = conn.send_wire_transaction(p.0);
+        let res = conn.send_wire_transaction(p.0);
+        info!("recv_send_quic send result: {:?}", res);
     }
     Ok(())
 }
