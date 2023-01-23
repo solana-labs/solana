@@ -1,6 +1,6 @@
 # Note: when the rust version is changed also modify
 # ci/rust-version.sh to pick up the new image tag
-FROM rust:1.65.0
+FROM rust:1.66.1
 
 RUN set -x \
  && apt update \
