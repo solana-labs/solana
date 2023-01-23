@@ -482,14 +482,14 @@ async fn setup_connection(
                         wait_for_chunk_timeout_ms,
                     ) {
                         stats
-                            .connection_added_from_staked_peer
+                            .connection_added_from_unstaked_peer
                             .fetch_add(1, Ordering::Relaxed);
                     } else {
                         stats
                             .connection_add_failed_on_pruning
                             .fetch_add(1, Ordering::Relaxed);
                         stats
-                            .connection_add_failed_staked_node
+                            .connection_add_failed_unstaked_node
                             .fetch_add(1, Ordering::Relaxed);
                     }
                 }
