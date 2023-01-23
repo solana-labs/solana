@@ -23,7 +23,7 @@ use {
     },
     solana_local_cluster::{
         cluster::{Cluster, ClusterValidatorInfo},
-        cluster_tests,
+        cluster_tests::{self, GossipVoter},
         local_cluster::{ClusterConfig, LocalCluster},
         validator_configs::*,
     },
@@ -37,6 +37,7 @@ use {
         response::RpcSignatureResult,
     },
     solana_runtime::{
+        commitment::VOTE_THRESHOLD_SIZE,
         hardened_unpack::open_genesis_config,
         snapshot_archive_info::SnapshotArchiveInfoGetter,
         snapshot_config::SnapshotConfig,
@@ -44,6 +45,7 @@ use {
         snapshot_utils::{
             self, create_accounts_run_and_snapshot_dirs, ArchiveFormat, SnapshotVersion,
         },
+        vote_parser,
     },
     solana_sdk::{
         account::AccountSharedData,
@@ -59,7 +61,7 @@ use {
         system_program, system_transaction,
     },
     solana_streamer::socket::SocketAddrSpace,
-    solana_vote_program::vote_state::MAX_LOCKOUT_HISTORY,
+    solana_vote_program::{vote_state::MAX_LOCKOUT_HISTORY, vote_transaction},
     std::{
         collections::{HashMap, HashSet},
         fs,
@@ -67,7 +69,7 @@ use {
         iter,
         path::Path,
         sync::{
-            atomic::{AtomicBool, Ordering},
+            atomic::{AtomicBool, AtomicUsize, Ordering},
             Arc, Mutex,
         },
         thread::{sleep, Builder, JoinHandle},
@@ -2553,7 +2555,13 @@ fn test_rpc_block_subscribe() {
     .unwrap();
 
     let mut received_block = false;
-    loop {
+    let max_wait = 10_000;
+    let start = Instant::now();
+    while !received_block {
+        assert!(
+            start.elapsed() <= Duration::from_millis(max_wait),
+            "Went too long {max_wait} ms without receiving a confirmed block",
+        );
         let responses: Vec<_> = receiver.try_iter().collect();
         // Wait for a response
         if !responses.is_empty() {
@@ -2565,11 +2573,236 @@ fn test_rpc_block_subscribe() {
                 }
             }
         }
-        if received_block {
+        sleep(Duration::from_millis(100));
+    }
+
+    // If we don't drop the cluster, the blocking web socket service
+    // won't return, and the `block_subscribe_client` won't shut down
+    drop(cluster);
+    block_subscribe_client.shutdown().unwrap();
+}
+
+#[test]
+#[serial]
+#[allow(unused_attributes)]
+fn test_oc_bad_signatures() {
+    solana_logger::setup_with_default(RUST_LOG_FILTER);
+
+    let total_stake = 100 * DEFAULT_NODE_STAKE;
+    let leader_stake = (total_stake as f64 * VOTE_THRESHOLD_SIZE) as u64;
+    let our_node_stake = total_stake - leader_stake;
+    let node_stakes = vec![leader_stake, our_node_stake];
+    let mut validator_config = ValidatorConfig {
+        require_tower: true,
+        ..ValidatorConfig::default_for_test()
+    };
+    validator_config.enable_default_rpc_block_subscribe();
+    let validator_keys = vec![
+        "28bN3xyvrP4E8LwEgtLjhnkb7cY4amQb6DrYAbAYjgRV4GAGgkVM2K7wnxnAS7WDneuavza7x21MiafLu1HkwQt4",
+        "2saHBBoTkLMmttmPQP8KfBkcCw45S5cwtV3wTdGCscRC8uxdgvHxpHiWXKx4LvJjNJtnNcbSv5NdheokFFqnNDt8",
+    ]
+    .iter()
+    .map(|s| (Arc::new(Keypair::from_base58_string(s)), true))
+    .take(node_stakes.len())
+    .collect::<Vec<_>>();
+
+    let our_id = validator_keys.last().unwrap().0.pubkey();
+    let mut config = ClusterConfig {
+        cluster_lamports: total_stake,
+        node_stakes,
+        validator_configs: make_identical_validator_configs(&validator_config, 2),
+        validator_keys: Some(validator_keys),
+        skip_warmup_slots: true,
+        ..ClusterConfig::default()
+    };
+    let mut cluster = LocalCluster::new(&mut config, SocketAddrSpace::Unspecified);
+
+    // 2) Kill our node and start up a thread to simulate votes to control our voting behavior
+    let our_info = cluster.exit_node(&our_id);
+    let node_keypair = our_info.info.keypair;
+    let vote_keypair = our_info.info.voting_keypair;
+    info!(
+        "our node id: {}, vote id: {}",
+        node_keypair.pubkey(),
+        vote_keypair.pubkey()
+    );
+
+    // 3) Start up a spy to listen for and push votes to leader TPU
+    let (rpc, tpu) = cluster_tests::get_client_facing_addr(&cluster.entry_point_info);
+    let client = ThinClient::new(rpc, tpu, cluster.connection_cache.clone());
+    let cluster_funding_keypair = cluster.funding_keypair.insecure_clone();
+    let voter_thread_sleep_ms: usize = 100;
+    let num_votes_simulated = Arc::new(AtomicUsize::new(0));
+    let GossipVoter {
+        gossip_service,
+        tcp_listener: _tcp_listener,
+        cluster_info: _cluster_info,
+        t_voter,
+        exit,
+    } = cluster_tests::start_gossip_voter(
+        &cluster.entry_point_info.gossip,
+        &node_keypair,
+        |(_label, leader_vote_tx)| {
+            let vote = vote_parser::parse_vote_transaction(&leader_vote_tx)
+                .map(|(_, vote, ..)| vote)
+                .unwrap();
+            // Filter out empty votes
+            if !vote.is_empty() {
+                Some((vote, leader_vote_tx))
+            } else {
+                None
+            }
+        },
+        {
+            let node_keypair = node_keypair.insecure_clone();
+            let vote_keypair = vote_keypair.insecure_clone();
+            let num_votes_simulated = num_votes_simulated.clone();
+            move |vote_slot, leader_vote_tx, parsed_vote| {
+                info!("received vote for {}", vote_slot);
+                let vote_hash = parsed_vote.hash();
+                info!(
+                    "Simulating vote from our node on slot {}, hash {}",
+                    vote_slot, vote_hash
+                );
+
+                // Add all recent vote slots on this fork to allow cluster to pass
+                // vote threshold checks in replay. Note this will instantly force a
+                // root by this validator.
+                let vote_slots: Vec<Slot> = vec![vote_slot];
+
+                let bad_authorized_signer_keypair = Keypair::new();
+                let mut vote_tx = vote_transaction::new_vote_transaction(
+                    vote_slots,
+                    vote_hash,
+                    leader_vote_tx.message.recent_blockhash,
+                    &node_keypair,
+                    &vote_keypair,
+                    // Make a bad signer
+                    &bad_authorized_signer_keypair,
+                    None,
+                );
+                client
+                    .retry_transfer(&cluster_funding_keypair, &mut vote_tx, 5)
+                    .unwrap();
+
+                num_votes_simulated.fetch_add(1, Ordering::Relaxed);
+            }
+        },
+        voter_thread_sleep_ms as u64,
+    );
+
+    /*let num_votes_simulated = Arc::new(AtomicUsize::new(0));
+    let t_voter = {
+        let exit = exit.clone();
+        let num_votes_simulated = num_votes_simulated.clone();
+        // push to tpu
+        let (rpc, tpu) = cluster_tests::get_client_facing_addr(&cluster.entry_point_info);
+        let client = ThinClient::new(rpc, tpu, cluster.connection_cache.clone());
+        let cluster_funding_keypair = cluster.funding_keypair.insecure_clone();
+        std::thread::spawn(move || {
+            let mut cursor = Cursor::default();
+            loop {
+                if exit.load(Ordering::Relaxed) {
+                    return;
+                }
+
+                let (labels, votes) = cluster_info.get_votes_with_labels(&mut cursor);
+                let mut parsed_vote_iter: Vec<_> = labels
+                    .into_iter()
+                    .zip(votes.into_iter())
+                    .filter_map(|(_label, leader_vote_tx)| {
+                        let vote = vote_parser::parse_vote_transaction(&leader_vote_tx)
+                            .map(|(_, vote, ..)| vote)
+                            .unwrap();
+                        // Filter out empty votes
+                        if !vote.is_empty() {
+                            Some((vote, leader_vote_tx))
+                        } else {
+                            None
+                        }
+                    })
+                    .collect();
+
+                parsed_vote_iter.sort_by(|(vote, _), (vote2, _)| {
+                    vote.last_voted_slot()
+                        .unwrap()
+                        .cmp(&vote2.last_voted_slot().unwrap())
+                });
+
+                for (parsed_vote, leader_vote_tx) in &parsed_vote_iter {
+                    if let Some(latest_vote_slot) = parsed_vote.last_voted_slot() {
+                        info!("received vote for {}", latest_vote_slot);
+                        let vote_hash = parsed_vote.hash();
+                        info!(
+                            "Simulating vote from our node on slot {}, hash {}",
+                            latest_vote_slot, vote_hash
+                        );
+
+                        let mut vote_slots: Vec<Slot> =
+                            AncestorIterator::new_inclusive(latest_vote_slot, &leader_blockstore)
+                                .take(MAX_LOCKOUT_HISTORY)
+                                .collect();
+                        vote_slots.reverse();
+
+                        let bad_authorized_signer_keypair = Keypair::new();
+                        let mut vote_tx = vote_transaction::new_vote_transaction(
+                            vote_slots,
+                            vote_hash,
+                            leader_vote_tx.message.recent_blockhash,
+                            &node_keypair,
+                            &vote_keypair,
+                            // Make a bad signer
+                            &bad_authorized_signer_keypair,
+                            None,
+                        );
+                        client
+                            .retry_transfer(&cluster_funding_keypair, &mut vote_tx, 5)
+                            .unwrap();
+                    }
+                    // Give vote some time to propagate
+                    num_votes_simulated.fetch_add(1, Ordering::Relaxed);
+                    sleep(Duration::from_millis(voter_thread_sleep_ms as u64));
+                }
+
+                if parsed_vote_iter.is_empty() {
+                    sleep(Duration::from_millis(voter_thread_sleep_ms as u64));
+                }
+            }
+        })
+    };*/
+
+    let (mut block_subscribe_client, receiver) = PubsubClient::block_subscribe(
+        &format!("ws://{}", &cluster.entry_point_info.rpc_pubsub.to_string()),
+        RpcBlockSubscribeFilter::All,
+        Some(RpcBlockSubscribeConfig {
+            commitment: Some(CommitmentConfig::confirmed()),
+            encoding: None,
+            transaction_details: None,
+            show_rewards: None,
+            max_supported_transaction_version: None,
+        }),
+    )
+    .unwrap();
+
+    const MAX_VOTES_TO_SIMULATE: usize = 10;
+    // Make sure test doesn't take too long
+    assert!(voter_thread_sleep_ms * MAX_VOTES_TO_SIMULATE <= 1000);
+    loop {
+        let responses: Vec<_> = receiver.try_iter().collect();
+        // Nothing should get optimistically confirmed or rooted
+        assert!(responses.is_empty());
+        // Wait for the voter thread to attempt sufficient number of votes to give
+        // a chance for the violation to occur
+        if num_votes_simulated.load(Ordering::Relaxed) > MAX_VOTES_TO_SIMULATE {
             break;
         }
         sleep(Duration::from_millis(100));
     }
+
+    // Clean up voter thread
+    exit.store(true, Ordering::Relaxed);
+    t_voter.join().unwrap();
+    gossip_service.join().unwrap();
 
     // If we don't drop the cluster, the blocking web socket service
     // won't return, and the `block_subscribe_client` won't shut down
