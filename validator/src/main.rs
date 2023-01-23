@@ -1269,7 +1269,7 @@ pub fn main() {
             match create_accounts_run_and_snapshot_dirs(&account_path) {
                 Ok((account_run_path, _account_snapshot_path)) => account_run_path,
                 Err(err) => {
-                    eprintln!("Unable to set up account run and snapshot sub directories: {account_path:?}, err: {err:?}");
+                    eprintln!("Unable to create account run and snapshot sub directories: {}, err: {err:?}", account_path.display());
                     exit(1);
                 }
             }

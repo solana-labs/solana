@@ -14,7 +14,7 @@ use {
         epoch_accounts_hash,
         genesis_utils::{self, activate_all_features, activate_feature},
         snapshot_utils::{
-            generate_test_tmp_account_path, get_storages_to_serialize, ArchiveFormat,
+            create_tmp_accounts_dir_for_tests, get_storages_to_serialize, ArchiveFormat,
         },
         status_cache::StatusCache,
     },
@@ -577,7 +577,7 @@ fn test_extra_fields_full_snapshot_archive() {
     // Set extra field
     bank.fee_rate_governor.lamports_per_signature = 7000;
 
-    let accounts_dir = generate_test_tmp_account_path();
+    let (_tmp_dir, accounts_dir) = create_tmp_accounts_dir_for_tests();
     let bank_snapshots_dir = TempDir::new().unwrap();
     let full_snapshot_archives_dir = TempDir::new().unwrap();
     let incremental_snapshot_archives_dir = TempDir::new().unwrap();
