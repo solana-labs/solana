@@ -515,7 +515,7 @@ mod tests {
     fn test_clear_caches() {
         let keypair = Keypair::new();
         let mut faucet = Faucet::new(keypair, None, None, None);
-        let ip = socketaddr!([127, 0, 0, 1], 0).ip();
+        let ip = socketaddr!(Ipv4Addr::LOCALHOST, 0).ip();
         assert_eq!(faucet.ip_cache.len(), 0);
         faucet.check_time_request_limit(1, ip).unwrap();
         assert_eq!(faucet.ip_cache.len(), 1);
@@ -589,7 +589,7 @@ mod tests {
         // Test multiple requests from loopback with different addresses succeed
         let mint = Keypair::new();
         faucet = Faucet::new(mint, None, Some(2), None);
-        let ip = socketaddr!([127, 0, 0, 1], 0).ip();
+        let ip = socketaddr!(Ipv4Addr::LOCALHOST, 0).ip();
         let other = Pubkey::new_unique();
         let _tx0 = faucet.build_airdrop_transaction(request, ip).unwrap(); // first request succeeds
         let request1 = FaucetRequest::GetAirdrop {

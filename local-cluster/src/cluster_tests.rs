@@ -47,7 +47,7 @@ pub fn get_client_facing_addr(contact_info: &ContactInfo) -> (SocketAddr, Socket
     let (rpc, mut tpu) = contact_info.client_facing_addr();
     // QUIC certificate authentication requires the IP Address to match. ContactInfo might have
     // 0.0.0.0 as the IP instead of 127.0.0.1.
-    tpu.set_ip(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)));
+    tpu.set_ip(IpAddr::V4(Ipv4Addr::LOCALHOST));
     (rpc, tpu)
 }
 

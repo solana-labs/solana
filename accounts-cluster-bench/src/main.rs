@@ -26,7 +26,7 @@ use {
     solana_transaction_status::parse_token::spl_token_instruction,
     std::{
         cmp::min,
-        net::SocketAddr,
+        net::{Ipv4Addr, SocketAddr},
         process::exit,
         sync::{
             atomic::{AtomicU64, Ordering},
@@ -618,14 +618,14 @@ fn main() {
     let skip_gossip = !matches.is_present("check_gossip");
 
     let port = if skip_gossip { DEFAULT_RPC_PORT } else { 8001 };
-    let mut entrypoint_addr = SocketAddr::from(([127, 0, 0, 1], port));
+    let mut entrypoint_addr = SocketAddr::from((Ipv4Addr::LOCALHOST, port));
     if let Some(addr) = matches.value_of("entrypoint") {
         entrypoint_addr = solana_net_utils::parse_host_port(addr).unwrap_or_else(|e| {
             eprintln!("failed to parse entrypoint address: {e}");
             exit(1)
         });
     }
-    let mut faucet_addr = SocketAddr::from(([127, 0, 0, 1], FAUCET_PORT));
+    let mut faucet_addr = SocketAddr::from((Ipv4Addr::LOCALHOST, FAUCET_PORT));
     if let Some(addr) = matches.value_of("faucet_addr") {
         faucet_addr = solana_net_utils::parse_host_port(addr).unwrap_or_else(|e| {
             eprintln!("failed to parse entrypoint address: {e}");
@@ -730,7 +730,7 @@ pub mod test {
             ..ClusterConfig::default()
         };
 
-        let faucet_addr = SocketAddr::from(([127, 0, 0, 1], 9900));
+        let faucet_addr = SocketAddr::from((Ipv4Addr::LOCALHOST, 9900));
         let cluster = LocalCluster::new(&mut config, SocketAddrSpace::Unspecified);
         let iterations = 10;
         let maybe_space = None;

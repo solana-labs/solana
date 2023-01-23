@@ -1257,7 +1257,7 @@ mod tests {
             timing::timestamp,
         },
         solana_streamer::socket::SocketAddrSpace,
-        std::io::Cursor,
+        std::{io::Cursor, net::Ipv4Addr},
     };
 
     #[test]
@@ -1740,18 +1740,18 @@ mod tests {
         );
         assert_matches!(rv, Err(Error::ClusterInfo(ClusterInfoError::NoPeers)));
 
-        let serve_repair_addr = socketaddr!([127, 0, 0, 1], 1243);
+        let serve_repair_addr = socketaddr!(Ipv4Addr::LOCALHOST, 1243);
         let nxt = ContactInfo {
             id: solana_sdk::pubkey::new_rand(),
-            gossip: socketaddr!([127, 0, 0, 1], 1234),
-            tvu: socketaddr!([127, 0, 0, 1], 1235),
-            tvu_forwards: socketaddr!([127, 0, 0, 1], 1236),
-            repair: socketaddr!([127, 0, 0, 1], 1237),
-            tpu: socketaddr!([127, 0, 0, 1], 1238),
-            tpu_forwards: socketaddr!([127, 0, 0, 1], 1239),
-            tpu_vote: socketaddr!([127, 0, 0, 1], 1240),
-            rpc: socketaddr!([127, 0, 0, 1], 1241),
-            rpc_pubsub: socketaddr!([127, 0, 0, 1], 1242),
+            gossip: socketaddr!(Ipv4Addr::LOCALHOST, 1234),
+            tvu: socketaddr!(Ipv4Addr::LOCALHOST, 1235),
+            tvu_forwards: socketaddr!(Ipv4Addr::LOCALHOST, 1236),
+            repair: socketaddr!(Ipv4Addr::LOCALHOST, 1237),
+            tpu: socketaddr!(Ipv4Addr::LOCALHOST, 1238),
+            tpu_forwards: socketaddr!(Ipv4Addr::LOCALHOST, 1239),
+            tpu_vote: socketaddr!(Ipv4Addr::LOCALHOST, 1240),
+            rpc: socketaddr!(Ipv4Addr::LOCALHOST, 1241),
+            rpc_pubsub: socketaddr!(Ipv4Addr::LOCALHOST, 1242),
             serve_repair: serve_repair_addr,
             wallclock: 0,
             shred_version: 0,
@@ -1774,15 +1774,15 @@ mod tests {
         let serve_repair_addr2 = socketaddr!([127, 0, 0, 2], 1243);
         let nxt = ContactInfo {
             id: solana_sdk::pubkey::new_rand(),
-            gossip: socketaddr!([127, 0, 0, 1], 1234),
-            tvu: socketaddr!([127, 0, 0, 1], 1235),
-            tvu_forwards: socketaddr!([127, 0, 0, 1], 1236),
-            repair: socketaddr!([127, 0, 0, 1], 1237),
-            tpu: socketaddr!([127, 0, 0, 1], 1238),
-            tpu_forwards: socketaddr!([127, 0, 0, 1], 1239),
-            tpu_vote: socketaddr!([127, 0, 0, 1], 1240),
-            rpc: socketaddr!([127, 0, 0, 1], 1241),
-            rpc_pubsub: socketaddr!([127, 0, 0, 1], 1242),
+            gossip: socketaddr!(Ipv4Addr::LOCALHOST, 1234),
+            tvu: socketaddr!(Ipv4Addr::LOCALHOST, 1235),
+            tvu_forwards: socketaddr!(Ipv4Addr::LOCALHOST, 1236),
+            repair: socketaddr!(Ipv4Addr::LOCALHOST, 1237),
+            tpu: socketaddr!(Ipv4Addr::LOCALHOST, 1238),
+            tpu_forwards: socketaddr!(Ipv4Addr::LOCALHOST, 1239),
+            tpu_vote: socketaddr!(Ipv4Addr::LOCALHOST, 1240),
+            rpc: socketaddr!(Ipv4Addr::LOCALHOST, 1241),
+            rpc_pubsub: socketaddr!(Ipv4Addr::LOCALHOST, 1242),
             serve_repair: serve_repair_addr2,
             wallclock: 0,
             shred_version: 0,
