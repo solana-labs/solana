@@ -268,7 +268,7 @@ mod tests {
 
     fn create_and_verify_snapshot(temp_dir: &Path) {
         let accounts_dir = temp_dir.join("accounts");
-        let accounts_dir = create_accounts_run_and_snapshot_dirs(accounts_dir.as_path())
+        let accounts_dir = create_accounts_run_and_snapshot_dirs(accounts_dir)
             .unwrap()
             .0;
 
