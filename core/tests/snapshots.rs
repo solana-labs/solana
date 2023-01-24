@@ -71,7 +71,6 @@ struct SnapshotTestConfig {
     incremental_snapshot_archives_dir: TempDir,
     full_snapshot_archives_dir: TempDir,
     bank_snapshots_dir: TempDir,
-    _accounts_tmp_dir: TempDir,
     accounts_dir: PathBuf,
     _accounts_tmp_dir: TempDir,
 }
@@ -129,7 +128,6 @@ impl SnapshotTestConfig {
             incremental_snapshot_archives_dir,
             full_snapshot_archives_dir,
             bank_snapshots_dir,
-            _accounts_tmp_dir,
             accounts_dir,
             _accounts_tmp_dir,
         }

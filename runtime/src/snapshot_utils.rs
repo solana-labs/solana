@@ -2638,9 +2638,7 @@ pub fn should_take_incremental_snapshot(
 
 pub fn create_tmp_accounts_dir_for_tests() -> (TempDir, PathBuf) {
     let tmp_dir = tempfile::TempDir::new().unwrap();
-    let account_dir = create_accounts_run_and_snapshot_dirs(tmp_dir.path())
-        .unwrap()
-        .0;
+    let account_dir = create_accounts_run_and_snapshot_dirs(&tmp_dir).unwrap().0;
     (tmp_dir, account_dir)
 }
 
