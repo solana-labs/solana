@@ -59,7 +59,6 @@ use {
             slot_history::SlotHistory,
             stake_history::{self},
         },
-        timing,
         transaction::Transaction,
     },
     solana_transaction_status::UiTransactionEncoding,
@@ -453,7 +452,7 @@ impl ClusterQuerySubCommands for App<'_, '_> {
         )
         .subcommand(
             SubCommand::with_name("rent")
-                .about("Calculate per-epoch and rent-exempt-minimum values for a given account data field length.")
+                .about("Calculate rent-exempt-minimum value for a given account data field length.")
                 .arg(
                     Arg::with_name("data_length")
                         .index(1)
@@ -2088,8 +2087,6 @@ pub fn process_transaction_history(
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct CliRentCalculation {
-    pub lamports_per_byte_year: u64,
-    pub lamports_per_epoch: u64,
     pub rent_exempt_minimum_lamports: u64,
     #[serde(skip)]
     pub use_lamports_unit: bool,
@@ -2103,11 +2100,7 @@ impl CliRentCalculation {
 
 impl fmt::Display for CliRentCalculation {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let per_byte_year = self.build_balance_message(self.lamports_per_byte_year);
-        let per_epoch = self.build_balance_message(self.lamports_per_epoch);
         let exempt_minimum = self.build_balance_message(self.rent_exempt_minimum_lamports);
-        writeln_name_value(f, "Rent per byte-year:", &per_byte_year)?;
-        writeln_name_value(f, "Rent per epoch:", &per_epoch)?;
         writeln_name_value(f, "Rent-exempt minimum:", &exempt_minimum)
     }
 }
@@ -2162,19 +2155,10 @@ pub fn process_calculate_rent(
     data_length: usize,
     use_lamports_unit: bool,
 ) -> ProcessResult {
-    let epoch_schedule = rpc_client.get_epoch_schedule()?;
     let rent_account = rpc_client.get_account(&sysvar::rent::id())?;
     let rent: Rent = rent_account.deserialize_data()?;
     let rent_exempt_minimum_lamports = rent.minimum_balance(data_length);
-    let seconds_per_tick = Duration::from_secs_f64(1.0 / clock::DEFAULT_TICKS_PER_SECOND as f64);
-    let slots_per_year =
-        timing::years_as_slots(1.0, &seconds_per_tick, clock::DEFAULT_TICKS_PER_SLOT);
-    let slots_per_epoch = epoch_schedule.slots_per_epoch as f64;
-    let years_per_epoch = slots_per_epoch / slots_per_year;
-    let lamports_per_epoch = rent.due(0, data_length, years_per_epoch).lamports();
     let cli_rent_calculation = CliRentCalculation {
-        lamports_per_byte_year: rent.lamports_per_byte_year,
-        lamports_per_epoch,
         rent_exempt_minimum_lamports,
         use_lamports_unit,
     };
