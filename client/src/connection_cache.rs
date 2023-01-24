@@ -78,6 +78,17 @@ impl ConnectionCache {
         }
     }
 
+    pub fn new_with_client(connection_pool_size: usize, pubkey: Pubkey) -> Self {
+        // The minimum pool size is 1.
+        let connection_pool_size = 1.max(connection_pool_size);
+        Self {
+            use_quic: true,
+            connection_pool_size,
+            maybe_client_pubkey: Some(pubkey),
+            ..Self::default()
+        }
+    }
+
     pub fn update_client_certificate(
         &mut self,
         keypair: &Keypair,

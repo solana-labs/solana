@@ -129,6 +129,7 @@ impl StakedNodesUpdaterService {
                     .all_peers()
                     .into_iter()
                     .find_map(|(node, _seen_time)| {
+                        info!("@ ID = {}, IP = {:?}", node.id, node.tvu.ip());
                         if node.id == *id_override {
                             return Some(node.tvu.ip());
                         }

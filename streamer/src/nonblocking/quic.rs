@@ -171,12 +171,12 @@ fn get_connection_stake(
         .and_then(|der_cert_any| der_cert_any.downcast::<Vec<rustls::Certificate>>().ok())
         .and_then(|der_certs| {
             get_pubkey_from_tls_certificate(&der_certs).and_then(|pubkey| {
-                debug!("Peer public key is {:?}", pubkey);
 
                 let staked_nodes = staked_nodes.read().unwrap();
                 let total_stake = staked_nodes.total_stake;
                 let max_stake = staked_nodes.max_stake;
                 let min_stake = staked_nodes.min_stake;
+                info!("Peer public key is {:?}, total_stake = {}, min_stake = {}, max_stake = {}", pubkey, total_stake, min_stake, max_stake);
                 staked_nodes
                     .pubkey_stake_map
                     .get(&pubkey)
@@ -458,9 +458,12 @@ async fn setup_connection<const N: usize>(
                     },
                 );
 
+            info!("@ params.stake = {}", params.stake);
+
             if params.stake > 0 {
                 let mut connection_table_l = staked_connection_table.lock().unwrap();
                 if connection_table_l.total_size >= max_staked_connections {
+                    info!("@ Trying to prune connection");
                     let num_pruned = connection_table_l.prune_random(params.stake);
                     stats.num_evictions.fetch_add(num_pruned, Ordering::Relaxed);
                 }
@@ -473,11 +476,13 @@ async fn setup_connection<const N: usize>(
                         &params,
                         wait_for_chunk_timeout_ms,
                     ) {
+                        info!("@ Added staked connection");
                         stats
                             .connection_added_from_staked_peer
                             .fetch_add(1, Ordering::Relaxed);
                     }
                 } else {
+                    info!("@ Failed staked connection, try unstaked");
                     // If we couldn't prune a connection in the staked connection table, let's
                     // put this connection in the unstaked connection table. If needed, prune a
                     // connection from the unstaked connection table.
@@ -489,10 +494,12 @@ async fn setup_connection<const N: usize>(
                         &params,
                         wait_for_chunk_timeout_ms,
                     ) {
+                        info!("@ Success unstaked");
                         stats
                             .connection_added_from_staked_peer
                             .fetch_add(1, Ordering::Relaxed);
                     } else {
+                        info!("@ Failed unstaked");
                         stats
                             .connection_add_failed_on_pruning
                             .fetch_add(1, Ordering::Relaxed);
@@ -509,6 +516,7 @@ async fn setup_connection<const N: usize>(
                 &params,
                 wait_for_chunk_timeout_ms,
             ) {
+                info!("@ Success unstaked 2");
                 stats
                     .connection_added_from_unstaked_peer
                     .fetch_add(1, Ordering::Relaxed);
