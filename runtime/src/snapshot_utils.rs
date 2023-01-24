@@ -967,7 +967,7 @@ fn hard_link_storages_to_snapshot(
 /// system partition to allow hard-linking.
 pub fn create_accounts_run_and_snapshot_dirs(
     account_dir: impl AsRef<Path>,
-) -> Result<(PathBuf, PathBuf)> {
+) -> std::io::Result<(PathBuf, PathBuf)> {
     let run_path = account_dir.as_ref().join("run");
     let snapshot_path = account_dir.as_ref().join("snapshot");
     fs::create_dir_all(&run_path)?;
