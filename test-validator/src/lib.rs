@@ -87,7 +87,7 @@ impl Default for TestValidatorNodeConfig {
         const MIN_PORT_RANGE: u16 = 1024;
         const MAX_PORT_RANGE: u16 = 65535;
 
-        let bind_ip_addr = IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0));
+        let bind_ip_addr = IpAddr::V4(Ipv4Addr::UNSPECIFIED);
         let port_range = (MIN_PORT_RANGE, MAX_PORT_RANGE);
 
         Self {
@@ -793,9 +793,9 @@ impl TestValidator {
         let mut validator_config = ValidatorConfig {
             geyser_plugin_config_files: config.geyser_plugin_config_files.clone(),
             rpc_addrs: Some((
-                SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), node.info.rpc.port()),
+                SocketAddr::new(IpAddr::V4(Ipv4Addr::UNSPECIFIED), node.info.rpc.port()),
                 SocketAddr::new(
-                    IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)),
+                    IpAddr::V4(Ipv4Addr::UNSPECIFIED),
                     node.info.rpc_pubsub.port(),
                 ),
             )),

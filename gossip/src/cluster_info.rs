@@ -432,33 +432,6 @@ impl ClusterInfo {
         me
     }
 
-    // Should only be used by tests and simulations
-    pub fn clone_with_id(&self, new_id: &Pubkey) -> Self {
-        let mut my_contact_info = self.my_contact_info.read().unwrap().clone();
-        my_contact_info.id = *new_id;
-        ClusterInfo {
-            gossip: self.gossip.mock_clone(),
-            keypair: RwLock::new(self.keypair.read().unwrap().clone()),
-            entrypoints: RwLock::new(self.entrypoints.read().unwrap().clone()),
-            outbound_budget: self.outbound_budget.clone_non_atomic(),
-            my_contact_info: RwLock::new(my_contact_info),
-            ping_cache: Mutex::new(self.ping_cache.lock().unwrap().mock_clone()),
-            stats: GossipStats::default(),
-            socket: UdpSocket::bind("0.0.0.0:0").unwrap(),
-            local_message_pending_push_queue: Mutex::new(
-                self.local_message_pending_push_queue
-                    .lock()
-                    .unwrap()
-                    .clone(),
-            ),
-            contact_debug_interval: self.contact_debug_interval,
-            instance: RwLock::new(NodeInstance::new(&mut thread_rng(), *new_id, timestamp())),
-            contact_info_path: PathBuf::default(),
-            contact_save_interval: 0, // disabled
-            ..*self
-        }
-    }
-
     pub fn set_contact_debug_interval(&mut self, new: u64) {
         self.contact_debug_interval = new;
     }
@@ -2705,7 +2678,7 @@ impl ClusterInfo {
         gossip_addr: &SocketAddr,
         shred_version: u16,
     ) -> (ContactInfo, UdpSocket, Option<TcpListener>) {
-        let bind_ip_addr = IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0));
+        let bind_ip_addr = IpAddr::V4(Ipv4Addr::UNSPECIFIED);
         let (port, (gossip_socket, ip_echo)) =
             Node::get_gossip_port(gossip_addr, VALIDATOR_PORT_RANGE, bind_ip_addr);
         let contact_info =
@@ -2719,7 +2692,7 @@ impl ClusterInfo {
         id: Pubkey,
         shred_version: u16,
     ) -> (ContactInfo, UdpSocket, Option<TcpListener>) {
-        let bind_ip_addr = IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0));
+        let bind_ip_addr = IpAddr::V4(Ipv4Addr::UNSPECIFIED);
         let (_, gossip_socket) = bind_in_range(bind_ip_addr, VALIDATOR_PORT_RANGE).unwrap();
         let contact_info = Self::gossip_contact_info(id, socketaddr_any!(), shred_version);
 
@@ -2808,13 +2781,13 @@ impl Node {
         Self::new_localhost_with_pubkey(&pubkey)
     }
     pub fn new_localhost_with_pubkey(pubkey: &Pubkey) -> Self {
-        let bind_ip_addr = IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1));
+        let bind_ip_addr = IpAddr::V4(Ipv4Addr::LOCALHOST);
         let port_range = (1024, 65535);
         let ((_tpu_port, tpu), (_tpu_quic_port, tpu_quic)) =
             bind_two_in_range_with_offset(bind_ip_addr, port_range, QUIC_PORT_OFFSET).unwrap();
         let (gossip_port, (gossip, ip_echo)) =
             bind_common_in_range(bind_ip_addr, port_range).unwrap();
-        let gossip_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), gossip_port);
+        let gossip_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), gossip_port);
         let tvu = UdpSocket::bind("127.0.0.1:0").unwrap();
         let tvu_forwards = UdpSocket::bind("127.0.0.1:0").unwrap();
         let ((_tpu_forwards_port, tpu_forwards), (_tpu_forwards_quic_port, tpu_forwards_quic)) =
@@ -2822,10 +2795,9 @@ impl Node {
         let tpu_vote = UdpSocket::bind("127.0.0.1:0").unwrap();
         let repair = UdpSocket::bind("127.0.0.1:0").unwrap();
         let rpc_port = find_available_port_in_range(bind_ip_addr, port_range).unwrap();
-        let rpc_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), rpc_port);
+        let rpc_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), rpc_port);
         let rpc_pubsub_port = find_available_port_in_range(bind_ip_addr, port_range).unwrap();
-        let rpc_pubsub_addr =
-            SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), rpc_pubsub_port);
+        let rpc_pubsub_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), rpc_pubsub_port);
 
         let broadcast = vec![UdpSocket::bind("0.0.0.0:0").unwrap()];
         let retransmit_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
@@ -3176,20 +3148,20 @@ mod tests {
         let keypair = Keypair::from_base58_string("3jATNWfbii1btv6nCpToAXAJz6a4km5HsLSWiwLfNvHNQAmvksLFVAKGUz286bXb9N4ivXx8nuwkn91PFDTyoFEp");
 
         let node = {
-            let tpu = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8900);
-            let _tpu_quic = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8901);
+            let tpu = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 8900);
+            let _tpu_quic = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 8901);
 
-            let gossip = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8888);
-            let tvu = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8902);
-            let tvu_forwards = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8903);
-            let tpu_forwards = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8904);
+            let gossip = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 8888);
+            let tvu = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 8902);
+            let tvu_forwards = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 8903);
+            let tpu_forwards = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 8904);
 
-            let tpu_vote = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8906);
-            let repair = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8907);
-            let rpc = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8908);
-            let rpc_pubsub = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8909);
+            let tpu_vote = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 8906);
+            let repair = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 8907);
+            let rpc = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 8908);
+            let rpc_pubsub = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 8909);
 
-            let serve_repair = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8910);
+            let serve_repair = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 8910);
 
             let info = ContactInfo {
                 id: keypair.pubkey(),
@@ -4188,7 +4160,7 @@ RPC Enabled Nodes: 1"#;
 
     #[test]
     fn test_tvu_peers_and_stakes() {
-        let d = ContactInfo::new_localhost(&Pubkey::new(&[0; 32]), timestamp());
+        let d = ContactInfo::new_localhost(&Pubkey::from([0; 32]), timestamp());
         let cluster_info = ClusterInfo::new(
             d.clone(),
             Arc::new(Keypair::new()),
@@ -4197,12 +4169,12 @@ RPC Enabled Nodes: 1"#;
         let mut stakes = HashMap::new();
 
         // no stake
-        let id = Pubkey::new(&[1u8; 32]);
+        let id = Pubkey::from([1u8; 32]);
         let contact_info = ContactInfo::new_localhost(&id, timestamp());
         cluster_info.insert_info(contact_info);
 
         // normal
-        let id2 = Pubkey::new(&[2u8; 32]);
+        let id2 = Pubkey::from([2u8; 32]);
         let mut contact_info = ContactInfo::new_localhost(&id2, timestamp());
         cluster_info.insert_info(contact_info.clone());
         stakes.insert(id2, 10);
@@ -4212,14 +4184,14 @@ RPC Enabled Nodes: 1"#;
         cluster_info.insert_info(contact_info);
 
         // no tvu
-        let id3 = Pubkey::new(&[3u8; 32]);
+        let id3 = Pubkey::from([3u8; 32]);
         let mut contact_info = ContactInfo::new_localhost(&id3, timestamp());
         contact_info.tvu = "0.0.0.0:0".parse().unwrap();
         cluster_info.insert_info(contact_info);
         stakes.insert(id3, 10);
 
         // normal but with different shred version
-        let id4 = Pubkey::new(&[4u8; 32]);
+        let id4 = Pubkey::from([4u8; 32]);
         let mut contact_info = ContactInfo::new_localhost(&id4, timestamp());
         contact_info.shred_version = 1;
         assert_ne!(contact_info.shred_version, d.shred_version);

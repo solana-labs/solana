@@ -4812,13 +4812,7 @@ impl Bank {
             signature_count,
         } = counts;
 
-        let tx_count = if self.bank_transaction_count_fix_enabled() {
-            committed_transactions_count
-        } else {
-            committed_transactions_count.saturating_sub(committed_with_failure_result_count)
-        };
-
-        self.increment_transaction_count(tx_count);
+        self.increment_transaction_count(committed_transactions_count);
         self.increment_non_vote_transaction_count_since_restart(
             committed_non_vote_transactions_count,
         );
@@ -6543,16 +6537,8 @@ impl Bank {
 
     /// Return the transaction count executed only in this bank
     pub fn executed_transaction_count(&self) -> u64 {
-        let mut executed_transaction_count = self
-            .transaction_count()
-            .saturating_sub(self.parent().map_or(0, |parent| parent.transaction_count()));
-        if !self.bank_transaction_count_fix_enabled() {
-            // When the feature bank_tranaction_count_fix is enabled, transaction_count() excludes
-            // the transactions which were executed but landed in error, we add it here.
-            executed_transaction_count =
-                executed_transaction_count.saturating_add(self.transaction_error_count());
-        }
-        executed_transaction_count
+        self.transaction_count()
+            .saturating_sub(self.parent().map_or(0, |parent| parent.transaction_count()))
     }
 
     pub fn transaction_error_count(&self) -> u64 {
@@ -6630,7 +6616,7 @@ impl Bank {
 
         let mut hash = hashv(&[
             self.parent_hash.as_ref(),
-            bank_hash_info.accounts_delta_hash.as_ref(),
+            bank_hash_info.accounts_delta_hash.0.as_ref(),
             &signature_count_buf,
             self.last_blockhash().as_ref(),
         ]);
@@ -6662,7 +6648,7 @@ impl Bank {
             "bank frozen: {} hash: {} accounts_delta: {} signature_count: {} last_blockhash: {} capitalization: {}{}",
             self.slot(),
             hash,
-            bank_hash_info.accounts_delta_hash,
+            bank_hash_info.accounts_delta_hash.0,
             self.signature_count(),
             self.last_blockhash(),
             self.capitalization(),
@@ -6899,15 +6885,27 @@ impl Bank {
 
     /// only called from ledger-tool or tests
     fn calculate_capitalization(&self, debug_verify: bool) -> u64 {
-        self.rc.accounts.calculate_capitalization(
-            &self.ancestors,
-            self.slot(),
-            debug_verify,
-            self.epoch_schedule(),
-            &self.rent_collector,
-            // we have to use the index since the slot could be in the write cache still
-            CalcAccountsHashDataSource::IndexForTests,
-        )
+        let is_startup = true;
+        self.rc
+            .accounts
+            .accounts_db
+            .verify_accounts_hash_in_bg
+            .wait_for_complete();
+        self.rc
+            .accounts
+            .accounts_db
+            .update_accounts_hash(
+                // we have to use the index since the slot could be in the write cache still
+                CalcAccountsHashDataSource::IndexForTests,
+                debug_verify,
+                self.slot(),
+                &self.ancestors,
+                None,
+                self.epoch_schedule(),
+                &self.rent_collector,
+                is_startup,
+            )
+            .1
     }
 
     /// only called from tests or ledger tool
@@ -7332,11 +7330,6 @@ impl Bank {
 
     pub fn print_accounts_stats(&self) {
         self.rc.accounts.accounts_db.print_accounts_stats("");
-    }
-
-    pub fn bank_transaction_count_fix_enabled(&self) -> bool {
-        self.feature_set
-            .is_active(&feature_set::bank_transaction_count_fix::id())
     }
 
     pub fn shrink_candidate_slots(&self) -> usize {
@@ -8991,7 +8984,7 @@ pub(crate) mod tests {
     #[allow(clippy::cognitive_complexity)]
     fn test_rent_complex() {
         solana_logger::setup();
-        let mock_program_id = Pubkey::new(&[2u8; 32]);
+        let mock_program_id = Pubkey::from([2u8; 32]);
 
         #[derive(Serialize, Deserialize)]
         enum MockInstruction {
@@ -9965,7 +9958,7 @@ pub(crate) mod tests {
         solana_logger::setup();
 
         for skip_rewrites in [false, true] {
-            let zero_lamport_pubkey = Pubkey::new(&[0; 32]);
+            let zero_lamport_pubkey = Pubkey::from([0; 32]);
 
             let genesis_bank = create_simple_test_arc_bank(100000);
             let mut first_bank = new_from_parent(&genesis_bank);
@@ -10591,57 +10584,14 @@ pub(crate) mod tests {
                 SystemError::ResultWithNegativeLamports.into(),
             ))
         );
-        assert_eq!(bank.transaction_count(), 1);
+        // transaction_count returns the count of all committed transactions since
+        // bank_transaction_count_fix was activated, regardless of success
+        assert_eq!(bank.transaction_count(), 2);
         assert_eq!(bank.non_vote_transaction_count_since_restart(), 1);
 
         let mint_pubkey = mint_keypair.pubkey();
         assert_eq!(bank.get_balance(&mint_pubkey), mint_amount - amount);
         assert_eq!(bank.get_balance(&pubkey), amount);
-    }
-
-    #[test]
-    fn test_executed_transaction_count_pre_bank_transaction_count_fix() {
-        let mint_amount = sol_to_lamports(1.);
-        let (genesis_config, mint_keypair) = create_genesis_config(mint_amount);
-        let mut bank = Bank::new_for_tests(&genesis_config);
-        bank.deactivate_feature(&feature_set::bank_transaction_count_fix::id());
-        let pubkey = solana_sdk::pubkey::new_rand();
-        let amount = genesis_config.rent.minimum_balance(0);
-        bank.transfer(amount, &mint_keypair, &pubkey).unwrap();
-        assert_eq!(
-            bank.transfer((mint_amount - amount) + 1, &mint_keypair, &pubkey),
-            Err(TransactionError::InstructionError(
-                0,
-                SystemError::ResultWithNegativeLamports.into(),
-            ))
-        );
-
-        // Without bank_transaction_count_fix, transaction_count should include only the successful
-        // transactions, but executed_transaction_count include all always
-        assert_eq!(bank.transaction_count(), 1);
-        assert_eq!(bank.executed_transaction_count(), 2);
-        assert_eq!(bank.transaction_error_count(), 1);
-
-        let bank = Arc::new(bank);
-        let bank2 = Bank::new_from_parent(
-            &bank,
-            &Pubkey::default(),
-            genesis_config.epoch_schedule.first_normal_slot,
-        );
-
-        assert_eq!(
-            bank2.transfer((mint_amount - amount) + 2, &mint_keypair, &pubkey),
-            Err(TransactionError::InstructionError(
-                0,
-                SystemError::ResultWithNegativeLamports.into(),
-            ))
-        );
-
-        // The transaction_count inherited from parent bank is still 1 as it does
-        // not include the failed ones!
-        assert_eq!(bank2.transaction_count(), 1);
-        assert_eq!(bank2.executed_transaction_count(), 1);
-        assert_eq!(bank2.transaction_error_count(), 1);
     }
 
     #[test]
@@ -12600,7 +12550,7 @@ pub(crate) mod tests {
 
         let bank0 = Arc::new(new_from_parent(&parent));
         let pubkey0 = solana_sdk::pubkey::new_rand();
-        let program_id = Pubkey::new(&[2; 32]);
+        let program_id = Pubkey::from([2; 32]);
         let account0 = AccountSharedData::new(1, 0, &program_id);
         bank0.store_account(&pubkey0, &account0);
 
@@ -12783,7 +12733,7 @@ pub(crate) mod tests {
         let mut bank = Bank::new_for_tests(&genesis_config);
 
         fn mock_vote_program_id() -> Pubkey {
-            Pubkey::new(&[42u8; 32])
+            Pubkey::from([42u8; 32])
         }
         fn mock_vote_processor(
             _first_instruction_account: IndexOfAccount,
@@ -13362,7 +13312,7 @@ pub(crate) mod tests {
         let blockhash = bank.last_blockhash();
         bank.store_account(&nonce.pubkey(), &nonce_account);
 
-        let ix = system_instruction::assign(&nonce.pubkey(), &Pubkey::new(&[9u8; 32]));
+        let ix = system_instruction::assign(&nonce.pubkey(), &Pubkey::from([9u8; 32]));
         let message = Message::new(&[ix], Some(&nonce.pubkey()));
         let tx = Transaction::new(&[&nonce], message, blockhash);
 
@@ -14056,7 +14006,7 @@ pub(crate) mod tests {
         let keypair = Keypair::new();
         let pubkey0 = solana_sdk::pubkey::new_rand();
         let pubkey1 = solana_sdk::pubkey::new_rand();
-        let program_id = Pubkey::new(&[2; 32]);
+        let program_id = Pubkey::from([2; 32]);
         let keypair_account = AccountSharedData::new(8, 0, &program_id);
         let account0 = AccountSharedData::new(11, 0, &program_id);
         let program_account = AccountSharedData::new(1, 10, &Pubkey::default());
@@ -14210,7 +14160,7 @@ pub(crate) mod tests {
             Ok(())
         }
 
-        let mock_program_id = Pubkey::new(&[2u8; 32]);
+        let mock_program_id = Pubkey::from([2u8; 32]);
         bank.add_builtin("mock_program", &mock_program_id, mock_process_instruction);
 
         let from_pubkey = solana_sdk::pubkey::new_rand();
@@ -14254,7 +14204,7 @@ pub(crate) mod tests {
             Ok(())
         }
 
-        let mock_program_id = Pubkey::new(&[2u8; 32]);
+        let mock_program_id = Pubkey::from([2u8; 32]);
         bank.add_builtin("mock_program", &mock_program_id, mock_process_instruction);
 
         let from_pubkey = solana_sdk::pubkey::new_rand();
@@ -14674,7 +14624,7 @@ pub(crate) mod tests {
 
         let mut genesis_config = GenesisConfig::new(
             &[(
-                Pubkey::new(&[42; 32]),
+                Pubkey::from([42; 32]),
                 AccountSharedData::new(1_000_000_000_000, 0, &system_program::id()),
             )],
             &[],
@@ -14792,8 +14742,8 @@ pub(crate) mod tests {
         solana_logger::setup();
 
         let (genesis_config, _mint_keypair) = create_genesis_config(1_000_000_000);
-        let pubkey0 = Pubkey::new(&[0; 32]);
-        let pubkey1 = Pubkey::new(&[1; 32]);
+        let pubkey0 = Pubkey::from([0; 32]);
+        let pubkey1 = Pubkey::from([1; 32]);
 
         info!("pubkey0: {}", pubkey0);
         info!("pubkey1: {}", pubkey1);
@@ -17698,12 +17648,12 @@ pub(crate) mod tests {
         );
         let mut bank = Bank::new_for_tests(&genesis_config);
 
-        let mock_program_id = Pubkey::new(&[2u8; 32]);
+        let mock_program_id = Pubkey::from([2u8; 32]);
         fn mock_process_instruction(
             _first_instruction_account: IndexOfAccount,
             invoke_context: &mut InvokeContext,
         ) -> result::Result<(), InstructionError> {
-            let mock_program_id = Pubkey::new(&[2u8; 32]);
+            let mock_program_id = Pubkey::from([2u8; 32]);
             let transaction_context = &mut invoke_context.transaction_context;
             let instruction_context = transaction_context.get_current_instruction_context()?;
             let instruction_data = instruction_context.get_instruction_data();
@@ -19969,8 +19919,8 @@ pub(crate) mod tests {
         assert!(bank.get_rent_paying_pubkeys(&(0, 2, n)).is_none());
         assert!(bank.get_rent_paying_pubkeys(&(0, 0, n)).is_none());
 
-        let pk1 = Pubkey::new(&[2; 32]);
-        let pk2 = Pubkey::new(&[3; 32]);
+        let pk1 = Pubkey::from([2; 32]);
+        let pk2 = Pubkey::from([3; 32]);
         let index1 = Bank::partition_from_pubkey(&pk1, n);
         let index2 = Bank::partition_from_pubkey(&pk2, n);
         assert!(index1 > 0, "{}", index1);

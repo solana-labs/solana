@@ -320,6 +320,7 @@ pub fn run_cluster_partition<C>(
         skip_warmup_slots: true,
         additional_accounts,
         ticks_per_slot: ticks_per_slot.unwrap_or(DEFAULT_TICKS_PER_SLOT),
+        tpu_connection_pool_size: 2,
         ..ClusterConfig::default()
     };
 

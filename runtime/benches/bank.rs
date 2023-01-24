@@ -48,7 +48,7 @@ pub fn create_builtin_transactions(
     bank_client: &BankClient,
     mint_keypair: &Keypair,
 ) -> Vec<Transaction> {
-    let program_id = Pubkey::new(&BUILTIN_PROGRAM_ID);
+    let program_id = Pubkey::from(BUILTIN_PROGRAM_ID);
 
     (0..4096)
         .map(|_| {
@@ -70,7 +70,7 @@ pub fn create_native_loader_transactions(
     bank_client: &BankClient,
     mint_keypair: &Keypair,
 ) -> Vec<Transaction> {
-    let program_id = Pubkey::new(&NOOP_PROGRAM_ID);
+    let program_id = Pubkey::from(NOOP_PROGRAM_ID);
 
     (0..4096)
         .map(|_| {
@@ -138,10 +138,10 @@ fn do_bench_transactions(
     let mut bank = Bank::new_from_parent(&Arc::new(bank), &Pubkey::default(), 1);
     bank.add_builtin(
         "builtin_program",
-        &Pubkey::new(&BUILTIN_PROGRAM_ID),
+        &Pubkey::from(BUILTIN_PROGRAM_ID),
         process_instruction,
     );
-    bank.add_builtin_account("solana_noop_program", &Pubkey::new(&NOOP_PROGRAM_ID), false);
+    bank.add_builtin_account("solana_noop_program", &Pubkey::from(NOOP_PROGRAM_ID), false);
     let bank = Arc::new(bank);
     let bank_client = BankClient::new_shared(&bank);
     let transactions = create_transactions(&bank_client, &mint_keypair);

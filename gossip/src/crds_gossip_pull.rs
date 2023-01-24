@@ -569,16 +569,6 @@ impl CrdsGossipPull {
             stats.success,
         )
     }
-
-    // Only for tests and simulations.
-    pub(crate) fn mock_clone(&self) -> Self {
-        let failed_inserts = self.failed_inserts.read().unwrap().clone();
-        Self {
-            failed_inserts: RwLock::new(failed_inserts),
-            num_pulls: AtomicUsize::new(self.num_pulls.load(Ordering::Relaxed)),
-            ..*self
-        }
-    }
 }
 
 #[cfg(test)]

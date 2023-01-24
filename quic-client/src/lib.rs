@@ -98,7 +98,7 @@ impl NewTpuConfig for QuicConfig {
 
     fn new() -> Result<Self, QuicClientError> {
         let (cert, priv_key) =
-            new_self_signed_tls_certificate(&Keypair::new(), IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)))
+            new_self_signed_tls_certificate(&Keypair::new(), IpAddr::V4(Ipv4Addr::UNSPECIFIED))
                 .map_err(|err| QuicClientError::CertificateError(err.to_string()))?;
         Ok(Self {
             client_certificate: Arc::new(QuicClientCertificate {

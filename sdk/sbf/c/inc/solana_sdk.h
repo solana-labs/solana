@@ -4,6 +4,7 @@
  */
 
 #include <sol/assert.h>
+#include <sol/big_mod_exp.h>
 #include <sol/blake3.h>
 #include <sol/cpi.h>
 #include <sol/deserialize.h>
