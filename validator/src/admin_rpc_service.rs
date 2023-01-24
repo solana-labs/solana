@@ -644,13 +644,13 @@ mod tests {
         }
 
         fn start_with_config(config: TestConfig) -> Self {
-            let identity = Pubkey::new_unique();
+            let keypair = Arc::new(Keypair::new());
             let cluster_info = Arc::new(ClusterInfo::new(
                 ContactInfo {
-                    id: identity,
+                    id: keypair.pubkey(),
                     ..ContactInfo::default()
                 },
-                Arc::new(Keypair::new()),
+                keypair,
                 SocketAddrSpace::Unspecified,
             ));
             let exit = Arc::new(AtomicBool::new(false));

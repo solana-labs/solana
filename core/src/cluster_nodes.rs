@@ -18,7 +18,7 @@ use {
         clock::{Epoch, Slot},
         feature_set,
         pubkey::Pubkey,
-        signature::Keypair,
+        signature::{Keypair, Signer},
         timing::timestamp,
     },
     solana_streamer::socket::SocketAddrSpace,
@@ -463,6 +463,8 @@ pub fn make_test_cluster<R: Rng>(
         .take(num_nodes)
         .collect();
     nodes.shuffle(rng);
+    let keypair = Arc::new(Keypair::new());
+    nodes[0].id = keypair.pubkey();
     let this_node = nodes[0].clone();
     let mut stakes: HashMap<Pubkey, u64> = nodes
         .iter()
@@ -476,11 +478,7 @@ pub fn make_test_cluster<R: Rng>(
         .collect();
     // Add some staked nodes with no contact-info.
     stakes.extend(repeat_with(|| (Pubkey::new_unique(), rng.gen_range(0, 20))).take(100));
-    let cluster_info = ClusterInfo::new(
-        this_node,
-        Arc::new(Keypair::new()),
-        SocketAddrSpace::Unspecified,
-    );
+    let cluster_info = ClusterInfo::new(this_node, keypair, SocketAddrSpace::Unspecified);
     {
         let now = timestamp();
         let mut gossip_crds = cluster_info.gossip.crds.write().unwrap();
