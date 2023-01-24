@@ -63,8 +63,10 @@ pub struct DuplicateShredHandler {
     // We don't want bad guys to inflate the chunk map, so we limit the number of
     // pending proofs from each pubkey to ALLOWED_SLOTS_PER_PUBKEY.
     validator_pending_proof_map: HashMap<Pubkey, HashSet<Slot>>,
-    // remember the last root slot handled, clear anything older than last_root.
+    // Cache last root to reduce read lock.
     last_root: Slot,
+    // remember the last root slot cleaned, clear anything between last_root and last_root_cleaned.
+    last_root_cleaned: Slot,
     blockstore: Arc<Blockstore>,
     leader_schedule_cache: Arc<LeaderScheduleCache>,
     bank_forks: Arc<RwLock<BankForks>>,
@@ -78,6 +80,7 @@ impl DuplicateShredHandlerTrait for DuplicateShredHandler {
     // Here we are sending data one by one rather than in a batch because in the future
     // we may send different type of CrdsData to different senders.
     fn handle(&mut self, shred_data: DuplicateShred) {
+        self.cache_root_info();
         if let Err(error) = self.handle_shred_data(shred_data) {
             error!("handle packet: {:?}", error)
         }
@@ -99,10 +102,18 @@ impl DuplicateShredHandler {
             validator_pending_proof_map: HashMap::new(),
             cached_staked_nodes: None,
             last_root: 0,
+            last_root_cleaned: 0,
             blockstore,
             leader_schedule_cache,
             bank_forks,
             cleanup_count: CLEANUP_EVERY_N_LOOPS,
+        }
+    }
+
+    fn cache_root_info(&mut self) {
+        let last_root = self.blockstore.last_root();
+        if last_root != self.last_root {
+            self.last_root = last_root;
         }
     }
 
@@ -125,9 +136,8 @@ impl DuplicateShredHandler {
     fn should_insert_chunk(&mut self, data: &DuplicateShred) -> bool {
         let slot = data.slot;
         // Do not insert if this slot is rooted or too far away in the future or has a proof already.
-        let last_root = self.blockstore.last_root();
-        if slot <= last_root
-            || slot > last_root + MAX_SLOT_DISTANCE_TO_ROOT
+        if slot <= self.last_root
+            || slot > self.last_root + MAX_SLOT_DISTANCE_TO_ROOT
             || self.blockstore.has_duplicate_shreds_in_slot(slot)
         {
             return false;
@@ -264,8 +274,7 @@ impl DuplicateShredHandler {
     }
 
     fn verify_and_apply_proof(&self, slot: Slot, chunks: Vec<DuplicateShred>) -> Result<(), Error> {
-        if slot <= self.blockstore.last_root() || self.blockstore.has_duplicate_shreds_in_slot(slot)
-        {
+        if slot <= self.last_root || self.blockstore.has_duplicate_shreds_in_slot(slot) {
             return Ok(());
         }
         let (shred1, shred2) = into_shreds(chunks, |slot| {
@@ -277,13 +286,12 @@ impl DuplicateShredHandler {
     }
 
     fn cleanup_old_slots(&mut self) {
-        let new_last_root = self.blockstore.last_root();
-        if self.last_root < new_last_root {
-            self.chunk_map.retain(|k, _| k > &new_last_root);
+        if self.last_root_cleaned != self.last_root {
+            self.chunk_map.retain(|k, _| k > &self.last_root);
             for (_, slots_sets) in self.validator_pending_proof_map.iter_mut() {
-                slots_sets.retain(|k| k > &new_last_root);
+                slots_sets.retain(|k| k > &self.last_root);
             }
-            self.last_root = new_last_root;
+            self.last_root_cleaned = self.last_root;
             self.cached_staked_nodes = None;
         }
     }
