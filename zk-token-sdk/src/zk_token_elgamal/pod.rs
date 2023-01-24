@@ -29,6 +29,21 @@ impl From<PodU64> for u64 {
     }
 }
 
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Pod, Zeroable)]
+#[repr(transparent)]
+pub struct PodBool(u8);
+impl From<bool> for PodBool {
+    fn from(b: bool) -> Self {
+        Self(if b { 1 } else { 0 })
+    }
+}
+
+impl From<PodBool> for bool {
+    fn from(b: PodBool) -> Self {
+        b.0 != 0
+    }
+}
+
 #[derive(Clone, Copy, Pod, Zeroable, PartialEq, Eq)]
 #[repr(transparent)]
 pub struct CompressedRistretto(pub [u8; 32]);
