@@ -195,7 +195,21 @@ EOF
         # Skip first line, as it contains header
         tail -n +2 -q config/bench-tps"$i".yml >> config/client-accounts.yml
         echo "" >> config/client-accounts.yml
+
+        # generate identities for clients
+        solana-keygen new --no-passphrase -so config/client-identity-"$i".json
       done
+
+      # create stake file for clients
+      echo -n "staked_map_id: {" > out.txt
+      for i in $(seq 0 $((numBenchTpsClients-2))); do
+        pubkey="$(solana-keygen pubkey "config/client-identity-$i.json")"
+        echo -n "$pubkey: 1000," >> out.txt
+      done;
+      pubkey="$(solana-keygen pubkey "config/client-identity-$((numBenchTpsClients-1)).json")"
+      echo "$pubkey: 1000 }" >> out.txt
+      ####
+
       if [[ -f $externalPrimordialAccountsFile ]]; then
         cat "$externalPrimordialAccountsFile" >> config/validator-balances.yml
       fi

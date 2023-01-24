@@ -68,6 +68,9 @@ solana-bench-tps)
   net/scripts/rsync-retry.sh -vPrc \
     "$entrypointIp":~/solana/config/bench-tps"$clientIndex".yml ./client-accounts.yml
 
+  net/scripts/rsync-retry.sh -vPrc \
+    "$entrypointIp":~/solana/config/client-identity-"$clientIndex".json ./client-identity.json
+
   args=()
 
   if ${TPU_CLIENT}; then
@@ -82,6 +85,7 @@ solana-bench-tps)
 
   clientCommand="\
     solana-bench-tps \
+      --identity ./client-identity.json \
       --duration 7500 \
       --sustained \
       --threads $threadCount \
