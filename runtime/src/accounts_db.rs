@@ -4735,18 +4735,15 @@ impl AccountsDb {
     ///
     /// The new bank hash is empty/default except for the slot.  This fn is called when creating a
     /// new bank from parent.  The bank hash for this slot is updated with real values later.
+    ///
+    /// It is invalid to call this function more than once per `slot`.
     pub fn insert_default_bank_hash(&self, slot: Slot, parent_slot: Slot) {
-        let mut bank_hashes = self.bank_hashes.write().unwrap();
-        if bank_hashes.get(&slot).is_some() {
-            error!(
-                "set_hash: already exists; multiple forks with shared slot {} as child (parent: {})!?",
-                slot, parent_slot,
-            );
-            return;
-        }
-
-        let new_hash_info = BankHashInfo::default();
-        bank_hashes.insert(slot, new_hash_info);
+        let old_bank_hash = self
+            .bank_hashes
+            .write()
+            .unwrap()
+            .insert(slot, BankHashInfo::default());
+        assert!(old_bank_hash.is_none(), "bank hash already exists; multiple forks with shared slot {slot} as child (parent: {parent_slot})!?");
     }
 
     pub fn load(
