@@ -10124,12 +10124,12 @@ pub mod tests {
     }
 
     fn append_sample_data_to_storage(
-        storages: &[Arc<AccountStorageEntry>],
+        storage: &Arc<AccountStorageEntry>,
         pubkey: &Pubkey,
         write_version: StoredMetaWriteVersion,
     ) {
         let acc = AccountSharedData::new(1, 48, AccountSharedData::default().owner());
-        append_single_account_with_default_hash(&storages[0].accounts, pubkey, &acc, write_version);
+        append_single_account_with_default_hash(&storage.accounts, pubkey, &acc, write_version);
     }
 
     fn sample_storage_with_entries(
@@ -10137,7 +10137,7 @@ pub mod tests {
         write_version: StoredMetaWriteVersion,
         slot: Slot,
         pubkey: &Pubkey,
-    ) -> Vec<Arc<AccountStorageEntry>> {
+    ) -> Arc<AccountStorageEntry> {
         sample_storage_with_entries_id(tf, write_version, slot, pubkey, 0)
     }
 
@@ -10147,7 +10147,7 @@ pub mod tests {
         slot: Slot,
         pubkey: &Pubkey,
         id: AppendVecId,
-    ) -> Vec<Arc<AccountStorageEntry>> {
+    ) -> Arc<AccountStorageEntry> {
         let (_temp_dirs, paths) = get_temp_accounts_paths(1).unwrap();
         let size: usize = 123;
         let mut data = AccountStorageEntry::new(&paths[0], slot, id, size as u64);
@@ -10155,9 +10155,8 @@ pub mod tests {
         data.accounts = av;
 
         let arc = Arc::new(data);
-        let storages = vec![arc];
-        append_sample_data_to_storage(&storages, pubkey, write_version);
-        storages
+        append_sample_data_to_storage(&arc, pubkey, write_version);
+        arc
     }
 
     #[test]
@@ -10171,8 +10170,7 @@ pub mod tests {
         let write_version1 = 0;
         let pubkey1 = solana_sdk::pubkey::new_rand();
         let pubkey2 = solana_sdk::pubkey::new_rand();
-        let storage =
-            sample_storage_with_entries(&tf, write_version1, slot_expected, &pubkey1).remove(0);
+        let storage = sample_storage_with_entries(&tf, write_version1, slot_expected, &pubkey1);
         let lamports = storage.accounts.account_iter().next().unwrap().lamports();
         let calls = Arc::new(AtomicU64::new(0));
         let mut scanner = TestScanSimple {
@@ -16422,32 +16420,32 @@ pub mod tests {
             );
             let write_version1 = 0;
             let pubkey1 = solana_sdk::pubkey::new_rand();
-            let storages = sample_storage_with_entries(&tf, write_version1, slot, &pubkey1);
+            let storage = sample_storage_with_entries(&tf, write_version1, slot, &pubkey1);
 
-            let load = AccountsDb::hash_storage_info(&mut hasher, Some(&storages[0]), slot);
+            let load = AccountsDb::hash_storage_info(&mut hasher, Some(&storage), slot);
             let hash = hasher.finish();
             // can't assert hash here - it is a function of mod date
             assert!(load);
             let slot = 2; // changed this
             let mut hasher = std::collections::hash_map::DefaultHasher::new();
-            let load = AccountsDb::hash_storage_info(&mut hasher, Some(&storages[0]), slot);
+            let load = AccountsDb::hash_storage_info(&mut hasher, Some(&storage), slot);
             let hash2 = hasher.finish();
             assert_ne!(hash, hash2); // slot changed, these should be different
                                      // can't assert hash here - it is a function of mod date
             assert!(load);
             let mut hasher = std::collections::hash_map::DefaultHasher::new();
             append_sample_data_to_storage(
-                &storages,
+                &storage,
                 &solana_sdk::pubkey::new_rand(),
                 write_version1,
             );
-            let load = AccountsDb::hash_storage_info(&mut hasher, Some(&storages[0]), slot);
+            let load = AccountsDb::hash_storage_info(&mut hasher, Some(&storage), slot);
             let hash3 = hasher.finish();
             assert_ne!(hash2, hash3); // moddate and written size changed
                                       // can't assert hash here - it is a function of mod date
             assert!(load);
             let mut hasher = std::collections::hash_map::DefaultHasher::new();
-            let load = AccountsDb::hash_storage_info(&mut hasher, Some(&storages[0]), slot);
+            let load = AccountsDb::hash_storage_info(&mut hasher, Some(&storage), slot);
             let hash4 = hasher.finish();
             assert_eq!(hash4, hash3); // same
                                       // can't assert hash here - it is a function of mod date
@@ -17134,9 +17132,7 @@ pub mod tests {
                 starting_slot + (i as Slot),
                 &pubkey1,
                 id,
-            )
-            .pop()
-            .unwrap();
+            );
             insert_store(db, Arc::clone(&storage));
         }
 
@@ -17257,9 +17253,7 @@ pub mod tests {
         );
         let write_version1 = 0;
         let pubkey1 = solana_sdk::pubkey::new_rand();
-        let storage = sample_storage_with_entries(&tf, write_version1, slot5, &pubkey1)
-            .pop()
-            .unwrap();
+        let storage = sample_storage_with_entries(&tf, write_version1, slot5, &pubkey1);
         let mut current_ancient = CurrentAncientAppendVec::default();
 
         let should_move = db.should_move_to_ancient_append_vec(
@@ -17402,9 +17396,8 @@ pub mod tests {
     }
 
     fn make_ancient_append_vec_full(ancient: &Arc<AccountStorageEntry>) {
-        let vecs = vec![ancient.clone()];
         for _ in 0..100 {
-            append_sample_data_to_storage(&vecs, &Pubkey::default(), 0);
+            append_sample_data_to_storage(ancient, &Pubkey::default(), 0);
         }
         // since we're not adding to the index, this is how we specify that all these accounts are alive
         adjust_alive_bytes(ancient, ancient.total_bytes() as usize);
