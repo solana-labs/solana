@@ -164,7 +164,7 @@ fn bench_sigverify_stage(bencher: &mut Bencher, use_same_tx: bool) {
 
     bencher.iter(move || {
         let now = Instant::now();
-        let mut batches = gen_batches(use_same_tx);
+        let batches = gen_batches(use_same_tx);
         trace!(
             "starting... generation took: {} ms batches: {}",
             duration_as_ms(&now.elapsed()),
@@ -172,14 +172,12 @@ fn bench_sigverify_stage(bencher: &mut Bencher, use_same_tx: bool) {
         );
 
         let mut sent_len = 0;
-        for _ in 0..batches.len() {
-            if let Some(mut batch) = batches.pop() {
-                sent_len += batch.len();
-                batch
-                    .iter_mut()
-                    .for_each(|packet| packet.meta_mut().flags |= PacketFlags::TRACER_PACKET);
-                packet_s.send(vec![batch]).unwrap();
-            }
+        for mut batch in batches.into_iter() {
+            sent_len += batch.len();
+            batch
+                .iter_mut()
+                .for_each(|packet| packet.meta_mut().flags |= PacketFlags::TRACER_PACKET);
+            packet_s.send(vec![batch]).unwrap();
         }
         let mut received = 0;
         let mut total_tracer_packets_received_in_sigverify_stage = 0;

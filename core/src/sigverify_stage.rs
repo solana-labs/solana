@@ -554,7 +554,7 @@ mod tests {
         // This is important so that we don't discard any packets and fail asserts below about
         // `total_excess_tracer_packets`
         assert!(total_packets < MAX_SIGVERIFY_BATCH);
-        let mut batches = gen_batches(use_same_tx, packets_per_batch, total_packets);
+        let batches = gen_batches(use_same_tx, packets_per_batch, total_packets);
         trace!(
             "starting... generation took: {} ms batches: {}",
             duration_as_ms(&now.elapsed()),
@@ -562,15 +562,13 @@ mod tests {
         );
 
         let mut sent_len = 0;
-        for _ in 0..batches.len() {
-            if let Some(mut batch) = batches.pop() {
-                sent_len += batch.len();
-                batch
-                    .iter_mut()
-                    .for_each(|packet| packet.meta_mut().flags |= PacketFlags::TRACER_PACKET);
-                assert_eq!(batch.len(), packets_per_batch);
-                packet_s.send(vec![batch]).unwrap();
-            }
+        for mut batch in batches.into_iter() {
+            sent_len += batch.len();
+            batch
+                .iter_mut()
+                .for_each(|packet| packet.meta_mut().flags |= PacketFlags::TRACER_PACKET);
+            assert_eq!(batch.len(), packets_per_batch);
+            packet_s.send(vec![batch]).unwrap();
         }
         let mut received = 0;
         let mut total_tracer_packets_received_in_sigverify_stage = 0;
