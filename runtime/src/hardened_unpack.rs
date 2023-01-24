@@ -133,7 +133,7 @@ where
 
         let parts: Vec<_> = parts.map(|p| p.unwrap()).collect();
         let account_filename =
-            (parts.len() == 2 && parts[0] == "accounts").then_some(PathBuf::from(parts[1]));
+            (parts.len() == 2 && parts[0] == "accounts").then(|| PathBuf::from(parts[1]));
         let unpack_dir = match entry_checker(parts.as_slice(), kind) {
             UnpackPath::Invalid => {
                 return Err(UnpackError::Archive(format!(
