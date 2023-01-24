@@ -4563,22 +4563,8 @@ impl Bank {
 
     /// Load the accounts data size, in bytes
     pub fn load_accounts_data_size(&self) -> u64 {
-        // Mixed integer ops currently not stable, so copying the impl.
-        // Copied from: https://github.com/a1phyr/rust/blob/47edde1086412b36e9efd6098b191ec15a2a760a/library/core/src/num/uint_macros.rs#L1039-L1048
-        fn saturating_add_signed(lhs: u64, rhs: i64) -> u64 {
-            let (res, overflow) = lhs.overflowing_add(rhs as u64);
-            if overflow == (rhs < 0) {
-                res
-            } else if overflow {
-                u64::MAX
-            } else {
-                u64::MIN
-            }
-        }
-        saturating_add_signed(
-            self.accounts_data_size_initial,
-            self.load_accounts_data_size_delta(),
-        )
+        self.accounts_data_size_initial
+            .saturating_add_signed(self.load_accounts_data_size_delta())
     }
 
     /// Load the change in accounts data size in this Bank, in bytes
