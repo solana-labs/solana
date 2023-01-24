@@ -1068,7 +1068,8 @@ fn load_bank_forks(
     if let Some(halt_slot) = process_options.halt_at_slot {
         if halt_slot < starting_slot {
             eprintln!(
-                "Unable to load bank forks at slot {halt_slot} because it is less than the starting slot {starting_slot}."
+                "Unable to load bank forks at slot {halt_slot} because it is less than the starting slot {starting_slot}. \
+                The starting slot will be the latest snapshot slot, or genesis if --no-snapshot flag specified or no snapshots found."
             );
             exit(1);
         }
