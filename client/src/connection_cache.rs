@@ -2,8 +2,7 @@ use {
     quinn::Endpoint,
     solana_connection_cache::{
         client_connection::ClientConnection as BlockingClientConnection,
-        connection_cache::ConnectionCache as BaseConnectionCache,
-        connection_cache::NewConnectionConfig,
+        connection_cache::{ConnectionCache as BaseConnectionCache, NewConnectionConfig},
         nonblocking::client_connection::ClientConnection as NonblockingClientConnection,
     },
     solana_quic_client::{QuicConfig, QuicConnectionManager},
