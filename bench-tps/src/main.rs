@@ -16,13 +16,21 @@ use {
         tpu_client::{TpuClient, TpuClientConfig},
     },
     solana_genesis::Base64Account,
-    solana_gossip::gossip_service::{discover_cluster, get_client, get_multi_client},
+    solana_gossip::gossip_service::{
+        discover_cluster, discover_cluster_keypair, get_client, get_multi_client,
+    },
     solana_rpc_client::rpc_client::RpcClient,
     solana_sdk::{
-        commitment_config::CommitmentConfig, fee_calculator::FeeRateGovernor, pubkey::Pubkey,
+        commitment_config::CommitmentConfig,
+        fee_calculator::FeeRateGovernor,
+        pubkey::Pubkey,
+        signature::{Keypair, Signer},
         system_program,
     },
     solana_streamer::socket::SocketAddrSpace,
+    solana_streamer::streamer::StakedNodes,
+    std::net::{IpAddr, Ipv4Addr},
+    std::sync::RwLock,
     std::{
         collections::HashMap, fs::File, io::prelude::*, net::SocketAddr, path::Path, process::exit,
         sync::Arc,
@@ -34,6 +42,7 @@ pub const NUM_SIGNATURES_FOR_TXS: u64 = 100_000 * 60 * 60 * 24 * 7;
 
 #[allow(clippy::too_many_arguments)]
 fn create_client(
+    keypair: Keypair,
     external_client_type: &ExternalClientType,
     entrypoint_addr: &SocketAddr,
     json_rpc_url: &str,
@@ -51,20 +60,37 @@ fn create_client(
             CommitmentConfig::confirmed(),
         )),
         ExternalClientType::ThinClient => {
-            let connection_cache = match use_quic {
-                true => Arc::new(ConnectionCache::new(tpu_connection_pool_size)),
+            let mut connection_cache = match use_quic {
+                true => {
+                    //Arc::new(ConnectionCache::new_with_client(tpu_connection_pool_size, keypair.pubkey())),
+                    let ip = IpAddr::V4(Ipv4Addr::new(147, 75, 87, 167));
+                    let mut connection_cache = ConnectionCache::new(tpu_connection_pool_size);
+                    connection_cache
+                        .update_client_certificate(&keypair, ip)
+                        .expect("Failed to update QUIC client certificates");
+
+                    let staked_nodes = Arc::new(RwLock::new(StakedNodes::default()));
+                    connection_cache.set_staked_nodes(&staked_nodes, &keypair.pubkey());
+                    Arc::new(connection_cache)
+                }
                 false => Arc::new(ConnectionCache::with_udp(tpu_connection_pool_size)),
             };
 
             if let Some((rpc, tpu)) = rpc_tpu_sockets {
+                info!("@ AAA");
                 Arc::new(ThinClient::new(rpc, tpu, connection_cache))
             } else {
-                let nodes =
-                    discover_cluster(entrypoint_addr, num_nodes, SocketAddrSpace::Unspecified)
-                        .unwrap_or_else(|err| {
-                            eprintln!("Failed to discover {num_nodes} nodes: {err:?}");
-                            exit(1);
-                        });
+                info!("@ BBB");
+                let nodes = discover_cluster_keypair(
+                    keypair,
+                    entrypoint_addr,
+                    num_nodes,
+                    SocketAddrSpace::Unspecified,
+                )
+                .unwrap_or_else(|err| {
+                    eprintln!("Failed to discover {num_nodes} nodes: {err:?}");
+                    exit(1);
+                });
                 if multi_client {
                     let (client, num_clients) =
                         get_multi_client(&nodes, &SocketAddrSpace::Unspecified, connection_cache);
@@ -212,7 +238,10 @@ fn main() {
             None
         };
 
+    let b = id.to_bytes();
+    let id_copy = Keypair::from_bytes(&b).unwrap();
     let client = create_client(
+        id_copy,
         external_client_type,
         entrypoint_addr,
         json_rpc_url,

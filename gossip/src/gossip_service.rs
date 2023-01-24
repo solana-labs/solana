@@ -125,6 +125,27 @@ pub fn discover_cluster(
     Ok(validators)
 }
 
+pub fn discover_cluster_keypair(
+    keypair: Keypair,
+    entrypoint: &SocketAddr,
+    num_nodes: usize,
+    socket_addr_space: SocketAddrSpace,
+) -> std::io::Result<Vec<ContactInfo>> {
+    const DISCOVER_CLUSTER_TIMEOUT: Duration = Duration::from_secs(120);
+    let (_all_peers, validators) = discover(
+        Some(keypair), // keypair
+        Some(entrypoint),
+        Some(num_nodes),
+        DISCOVER_CLUSTER_TIMEOUT,
+        None, // find_node_by_pubkey
+        None, // find_node_by_gossip_addr
+        None, // my_gossip_addr
+        0,    // my_shred_version
+        socket_addr_space,
+    )?;
+    Ok(validators)
+}
+
 pub fn discover(
     keypair: Option<Keypair>,
     entrypoint: Option<&SocketAddr>,
