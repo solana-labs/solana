@@ -3362,7 +3362,7 @@ mod tests {
             &Arc::default(),
         )
         .unwrap();
-
+        roundtrip_bank.wait_for_initial_accounts_hash_verification_completed_for_tests();
         assert_eq!(original_bank, roundtrip_bank);
     }
 
@@ -3474,7 +3474,7 @@ mod tests {
             &Arc::default(),
         )
         .unwrap();
-
+        roundtrip_bank.wait_for_initial_accounts_hash_verification_completed_for_tests();
         assert_eq!(*bank4, roundtrip_bank);
     }
 
@@ -3606,7 +3606,7 @@ mod tests {
             &Arc::default(),
         )
         .unwrap();
-
+        roundtrip_bank.wait_for_initial_accounts_hash_verification_completed_for_tests();
         assert_eq!(*bank4, roundtrip_bank);
     }
 
@@ -3728,7 +3728,7 @@ mod tests {
             &Arc::default(),
         )
         .unwrap();
-
+        deserialized_bank.wait_for_initial_accounts_hash_verification_completed_for_tests();
         assert_eq!(deserialized_bank, *bank4);
     }
 
@@ -3867,6 +3867,7 @@ mod tests {
             &Arc::default(),
         )
         .unwrap();
+        deserialized_bank.wait_for_initial_accounts_hash_verification_completed_for_tests();
         assert_eq!(
             deserialized_bank, *bank2,
             "Ensure rebuilding from an incremental snapshot works"
@@ -3931,6 +3932,7 @@ mod tests {
             &Arc::default(),
         )
         .unwrap();
+        deserialized_bank.wait_for_initial_accounts_hash_verification_completed_for_tests();
         assert_eq!(
             deserialized_bank, *bank4,
             "Ensure rebuilding from an incremental snapshot works",

@@ -6811,6 +6811,14 @@ impl Bank {
             .check_complete()
     }
 
+    pub fn wait_for_initial_accounts_hash_verification_completed_for_tests(&self) {
+        self.rc
+            .accounts
+            .accounts_db
+            .verify_accounts_hash_in_bg
+            .wait_for_complete()
+    }
+
     /// Get this bank's storages to use for snapshots.
     ///
     /// If a base slot is provided, return only the storages that are *higher* than this slot.
