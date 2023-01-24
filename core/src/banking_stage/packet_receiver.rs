@@ -27,7 +27,7 @@ impl PacketReceiver {
     ) -> Result<(), RecvTimeoutError> {
         let (result, recv_time_us) = measure_us!({
             let recv_timeout = Self::get_receive_timeout(unprocessed_transaction_storage);
-            let receive_packet_results = packet_deserializer.handle_received_packets(
+            let receive_packet_results = packet_deserializer.receive_packets(
                 recv_timeout,
                 unprocessed_transaction_storage.max_receive_size(),
             )?;
