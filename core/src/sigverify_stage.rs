@@ -6,7 +6,11 @@
 //! if perf-libs are available
 
 use {
-    crate::{find_packet_sender_stake_stage::FindPacketSenderStakeReceiver, sigverify},
+    crate::{
+        banking_stage::BankingPacketBatch,
+        find_packet_sender_stake_stage::FindPacketSenderStakeReceiver,
+        sigverify::TransactionSigVerifier,
+    },
     core::time::Duration,
     crossbeam_channel::{RecvTimeoutError, SendError},
     itertools::Itertools,
@@ -53,24 +57,6 @@ type Result<T, SendType> = std::result::Result<T, SigVerifyServiceError<SendType
 pub struct SigVerifyStage {
     thread_hdl: JoinHandle<()>,
 }
-
-pub trait SigVerifier {
-    type SendType: std::fmt::Debug;
-    fn verify_batches(&self, batches: Vec<PacketBatch>, valid_packets: usize) -> Vec<PacketBatch>;
-    fn process_received_packet(
-        &mut self,
-        _packet: &mut Packet,
-        _removed_before_sigverify_stage: bool,
-        _is_dup: bool,
-    ) {
-    }
-    fn process_excess_packet(&mut self, _packet: &Packet) {}
-    fn process_passed_sigverify_packet(&mut self, _packet: &Packet) {}
-    fn send_packets(&mut self, packet_batches: Vec<PacketBatch>) -> Result<(), Self::SendType>;
-}
-
-#[derive(Default, Clone)]
-pub struct DisabledSigVerifier {}
 
 #[derive(Default)]
 struct SigVerifierStats {
@@ -216,27 +202,15 @@ impl SigVerifierStats {
     }
 }
 
-impl SigVerifier for DisabledSigVerifier {
-    type SendType = ();
-    fn verify_batches(
-        &self,
-        mut batches: Vec<PacketBatch>,
-        _valid_packets: usize,
-    ) -> Vec<PacketBatch> {
-        sigverify::ed25519_verify_disabled(&mut batches);
-        batches
-    }
-
-    fn send_packets(&mut self, _packet_batches: Vec<PacketBatch>) -> Result<(), Self::SendType> {
-        Ok(())
-    }
-}
-
 impl SigVerifyStage {
     #[allow(clippy::new_ret_no_self)]
+<<<<<<< HEAD
     pub fn new<T: SigVerifier + 'static + Send>(
+=======
+    pub fn new(
+>>>>>>> e59cd309c9 (Rip out SigVerifier trait)
         packet_receiver: FindPacketSenderStakeReceiver,
-        verifier: T,
+        verifier: TransactionSigVerifier,
         name: &'static str,
     ) -> Self {
         let thread_hdl = Self::verifier_services(packet_receiver, verifier, name);
@@ -289,12 +263,12 @@ impl SigVerifyStage {
         (shrink_time.as_us(), shrink_total)
     }
 
-    fn verifier<T: SigVerifier>(
+    fn verifier(
         deduper: &Deduper,
         recvr: &FindPacketSenderStakeReceiver,
-        verifier: &mut T,
+        verifier: &mut TransactionSigVerifier,
         stats: &mut SigVerifierStats,
-    ) -> Result<(), T::SendType> {
+    ) -> Result<(), BankingPacketBatch> {
         let (mut batches, num_packets, recv_duration) = streamer::recv_vec_packet_batches(recvr)?;
 
         let batches_len = batches.len();
@@ -402,9 +376,13 @@ impl SigVerifyStage {
         Ok(())
     }
 
+<<<<<<< HEAD
     fn verifier_service<T: SigVerifier + 'static + Send>(
+=======
+    fn verifier_service(
+>>>>>>> e59cd309c9 (Rip out SigVerifier trait)
         packet_receiver: FindPacketSenderStakeReceiver,
-        mut verifier: T,
+        mut verifier: TransactionSigVerifier,
         name: &'static str,
     ) -> JoinHandle<()> {
         let mut stats = SigVerifierStats::default();
@@ -443,9 +421,13 @@ impl SigVerifyStage {
             .unwrap()
     }
 
+<<<<<<< HEAD
     fn verifier_services<T: SigVerifier + 'static + Send>(
+=======
+    fn verifier_services(
+>>>>>>> e59cd309c9 (Rip out SigVerifier trait)
         packet_receiver: FindPacketSenderStakeReceiver,
-        verifier: T,
+        verifier: TransactionSigVerifier,
         name: &'static str,
     ) -> JoinHandle<()> {
         Self::verifier_service(packet_receiver, verifier, name)
@@ -460,10 +442,14 @@ impl SigVerifyStage {
 mod tests {
     use {
         super::*,
+<<<<<<< HEAD
         crate::{
             banking_trace::BankingTracer, sigverify::TransactionSigVerifier,
             sigverify_stage::timing::duration_as_ms,
         },
+=======
+        crate::sigverify_stage::timing::duration_as_ms,
+>>>>>>> e59cd309c9 (Rip out SigVerifier trait)
         crossbeam_channel::unbounded,
         solana_perf::{
             packet::{to_packet_batches, Packet},
