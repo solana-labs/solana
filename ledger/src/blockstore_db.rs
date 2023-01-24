@@ -69,7 +69,7 @@ const ROOT_CF: &str = "root";
 /// Column family for indexes
 const INDEX_CF: &str = "index";
 /// Column family for Data Shreds
-const DATA_SHRED_CF: &str = "data_shred";
+pub const DATA_SHRED_CF: &str = "data_shred";
 /// Column family for Code Shreds
 const CODE_SHRED_CF: &str = "code_shred";
 /// Column family for Transaction Status
@@ -729,7 +729,7 @@ impl Column for columns::AddressSignatures {
 
     fn index(key: &[u8]) -> (u64, Pubkey, Slot, Signature) {
         let index = BigEndian::read_u64(&key[0..8]);
-        let pubkey = Pubkey::new(&key[8..40]);
+        let pubkey = Pubkey::try_from(&key[8..40]).unwrap();
         let slot = BigEndian::read_u64(&key[40..48]);
         let signature = Signature::new(&key[48..112]);
         (index, pubkey, slot, signature)
@@ -857,7 +857,7 @@ impl Column for columns::ProgramCosts {
     }
 
     fn index(key: &[u8]) -> Self::Index {
-        Pubkey::new(&key[0..32])
+        Pubkey::try_from(&key[..32]).unwrap()
     }
 
     fn primary_index(_index: Self::Index) -> u64 {

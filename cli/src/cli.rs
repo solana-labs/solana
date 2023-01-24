@@ -2563,7 +2563,7 @@ mod tests {
         );
 
         //Test Transfer Subcommand, with nonce
-        let nonce_address = Pubkey::new(&[1u8; 32]);
+        let nonce_address = Pubkey::from([1u8; 32]);
         let nonce_address_string = nonce_address.to_string();
         let nonce_authority = keypair_from_seed(&[2u8; 32]).unwrap();
         let nonce_authority_file = make_tmp_path("nonce_authority_file");

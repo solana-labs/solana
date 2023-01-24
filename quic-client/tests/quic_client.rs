@@ -229,7 +229,7 @@ mod tests {
         let connection_cache_stats = Arc::new(ConnectionCacheStats::default());
 
         let (cert, priv_key) =
-            new_self_signed_tls_certificate(&Keypair::new(), IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)))
+            new_self_signed_tls_certificate(&Keypair::new(), IpAddr::V4(Ipv4Addr::UNSPECIFIED))
                 .expect("Failed to initialize QUIC client certificates");
         let client_certificate = Arc::new(QuicClientCertificate {
             certificate: cert,
@@ -252,11 +252,9 @@ mod tests {
         info!("Received requests!");
 
         // Response sender
-        let (cert, priv_key) = new_self_signed_tls_certificate(
-            &Keypair::new(),
-            IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)),
-        )
-        .expect("Failed to initialize QUIC client certificates");
+        let (cert, priv_key) =
+            new_self_signed_tls_certificate(&Keypair::new(), IpAddr::V4(Ipv4Addr::LOCALHOST))
+                .expect("Failed to initialize QUIC client certificates");
 
         let client_certificate2 = Arc::new(QuicClientCertificate {
             certificate: cert,

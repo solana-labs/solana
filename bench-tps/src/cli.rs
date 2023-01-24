@@ -11,7 +11,11 @@ use {
     solana_tpu_client::tpu_connection_cache::{
         DEFAULT_TPU_CONNECTION_POOL_SIZE, DEFAULT_TPU_USE_QUIC,
     },
-    std::{net::SocketAddr, process::exit, time::Duration},
+    std::{
+        net::{Ipv4Addr, SocketAddr},
+        process::exit,
+        time::Duration,
+    },
 };
 
 const NUM_LAMPORTS_PER_ACCOUNT_DEFAULT: u64 = solana_sdk::native_token::LAMPORTS_PER_SOL;
@@ -71,7 +75,7 @@ pub struct Config {
 impl Default for Config {
     fn default() -> Config {
         Config {
-            entrypoint_addr: SocketAddr::from(([127, 0, 0, 1], 8001)),
+            entrypoint_addr: SocketAddr::from((Ipv4Addr::LOCALHOST, 8001)),
             json_rpc_url: ConfigInput::default().json_rpc_url,
             websocket_url: ConfigInput::default().websocket_url,
             id: Keypair::new(),

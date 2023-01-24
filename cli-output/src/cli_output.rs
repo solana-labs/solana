@@ -2926,10 +2926,10 @@ mod tests {
         }
 
         let present: Box<dyn Signer> = Box::new(keypair_from_seed(&[2u8; 32]).unwrap());
-        let absent: Box<dyn Signer> = Box::new(NullSigner::new(&Pubkey::new(&[3u8; 32])));
-        let bad: Box<dyn Signer> = Box::new(BadSigner::new(Pubkey::new(&[4u8; 32])));
-        let to = Pubkey::new(&[5u8; 32]);
-        let nonce = Pubkey::new(&[6u8; 32]);
+        let absent: Box<dyn Signer> = Box::new(NullSigner::new(&Pubkey::from([3u8; 32])));
+        let bad: Box<dyn Signer> = Box::new(BadSigner::new(Pubkey::from([4u8; 32])));
+        let to = Pubkey::from([5u8; 32]);
+        let nonce = Pubkey::from([6u8; 32]);
         let from = present.pubkey();
         let fee_payer = absent.pubkey();
         let nonce_auth = bad.pubkey();

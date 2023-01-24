@@ -4320,6 +4320,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "solana-bpf-rust-big-mod-exp"
+version = "1.15.0"
+dependencies = [
+ "array-bytes",
+ "serde",
+ "serde_json",
+ "solana-program 1.15.0",
+]
+
+[[package]]
 name = "solana-bucket-map"
 version = "1.15.0"
 dependencies = [
@@ -4974,6 +4984,7 @@ dependencies = [
  "libsecp256k1 0.6.0",
  "log",
  "memoffset",
+ "num-bigint 0.4.3",
  "num-derive",
  "num-traits",
  "parking_lot 0.12.1",

@@ -55,8 +55,8 @@ impl ReceivedCache {
         .flatten()
     }
 
-    // Only for tests and simulations.
-    pub(crate) fn mock_clone(&self) -> Self {
+    #[cfg(test)]
+    fn mock_clone(&self) -> Self {
         let mut cache = LruCache::new(self.0.cap());
         for (&origin, entry) in self.0.iter().rev() {
             cache.put(origin, entry.clone());
