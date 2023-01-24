@@ -674,7 +674,7 @@ fn main() {
             0,                       // my_shred_version
             SocketAddrSpace::Unspecified,
             staked_nodes,
-            false
+            true,
         )
         .unwrap_or_else(|err| {
             eprintln!("Failed to discover {entrypoint_addr} node: {err:?}");

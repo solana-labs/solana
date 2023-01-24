@@ -331,10 +331,10 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     let socket_addr_space = SocketAddrSpace::new(matches.is_present("allow_private_addr"));
     match matches.subcommand() {
         ("spy", Some(matches)) => {
-            process_spy(matches, socket_addr_space, false)?;
+            process_spy(matches, socket_addr_space, true)?;
         }
         ("rpc-url", Some(matches)) => {
-            process_rpc_url(matches, socket_addr_space, false)?;
+            process_rpc_url(matches, socket_addr_space, true)?;
         }
         _ => unreachable!(),
     }

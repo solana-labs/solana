@@ -543,7 +543,7 @@ impl LocalCluster {
             alive_node_contact_infos.len(),
             socket_addr_space,
             staked_nodes,
-            false
+            true
         )
         .unwrap();
         info!("{} discovered {} nodes", test_name, cluster_nodes.len());
@@ -576,7 +576,7 @@ impl LocalCluster {
             alive_node_contact_infos.len(),
             socket_addr_space,
             staked_nodes,
-            false
+            true
         )
         .unwrap();
         info!("{} discovered {} nodes", test_name, cluster_nodes.len());

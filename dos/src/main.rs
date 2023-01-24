@@ -749,7 +749,7 @@ fn main() {
             0,                                 // my_shred_version
             socket_addr_space,
             staked_nodes,
-            false
+            true,
         )
         .unwrap_or_else(|err| {
             eprintln!(
