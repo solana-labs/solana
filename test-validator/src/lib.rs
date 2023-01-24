@@ -56,11 +56,16 @@ use {
         net::{IpAddr, Ipv4Addr, SocketAddr},
         path::{Path, PathBuf},
         str::FromStr,
-        sync::{Arc, RwLock},
+        sync::{Arc, Mutex, RwLock},
         time::Duration,
     },
     tokio::time::sleep,
 };
+
+// This mutex is to prevent race conditions where a port gets sniped out from under us
+// inbetween the time we check for port availability and start the JSON RPC Service.
+// This can happen when running multiple tests concurrently.
+static TEST_RPC_PORT_MUTEX: Mutex<usize> = Mutex::new(0);
 
 #[derive(Clone)]
 pub struct AccountInfo<'a> {
@@ -743,6 +748,7 @@ impl TestValidator {
                 .unwrap(),
         )?;
 
+        let _guard = TEST_RPC_PORT_MUTEX.lock().unwrap();
         let mut node = Node::new_single_bind(
             &validator_identity.pubkey(),
             &config.node_config.gossip_addr,
