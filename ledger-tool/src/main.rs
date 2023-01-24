@@ -1065,18 +1065,25 @@ fn load_bank_forks(
         })
     };
 
-    if let Some(halt_slot) = process_options.halt_at_slot {
-        if halt_slot < starting_slot && halt_slot != 0 {
-            eprintln!(
+    match process_options.halt_at_slot {
+        // For Sentinel value of `Some(0)` and None of halt_at_slot, lets us skip
+        // additional checks and will not replay any transactions.
+        None | Some(0) => {}
+        Some(halt_slot) => {
+            if halt_slot < starting_slot {
+                eprintln!(
                 "Unable to load bank forks at slot {halt_slot} because it is less than the starting slot {starting_slot}. \
                 The starting slot will be the latest snapshot slot, or genesis if --no-snapshot flag specified or no snapshots found."
             );
-            exit(1);
-        }
-        // Check if we have the slot data necessary to replay from starting_slot to <= halt_slot.
-        if !blockstore.slot_range_connected(starting_slot, halt_slot) && halt_slot != 0 {
-            eprintln!("Unable to load bank forks at slot {halt_slot} due to disconnected blocks.",);
-            exit(1);
+                exit(1);
+            }
+            // Check if we have the slot data necessary to replay from starting_slot to <= halt_slot.
+            if !blockstore.slot_range_connected(starting_slot, halt_slot) {
+                eprintln!(
+                    "Unable to load bank forks at slot {halt_slot} due to disconnected blocks.",
+                );
+                exit(1);
+            }
         }
     }
 
