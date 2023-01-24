@@ -135,9 +135,10 @@ impl GossipService {
         let (request_sender, request_receiver) = unbounded();
         let gossip_socket = Arc::new(gossip_socket);
         info!(
-            "GossipService: id: {}, listening on: {:?}",
+            "GossipService: id: {}, listening on: {:?} use_quic: {}",
             &cluster_info.id(),
-            gossip_socket.local_addr().unwrap()
+            gossip_socket.local_addr().unwrap(),
+            use_quic
         );
         let socket_addr_space = *cluster_info.socket_addr_space();
         let (maybe_endpoint, t_receiver) = if use_quic{
