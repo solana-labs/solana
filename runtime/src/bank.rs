@@ -4189,14 +4189,6 @@ impl Bank {
             process_message_time.as_us()
         );
 
-        let mut store_missing_executors_time = Measure::start("store_missing_executors_time");
-        self.store_missing_executors(&tx_executor_cache);
-        store_missing_executors_time.stop();
-        saturating_add_assign!(
-            timings.execute_accessories.update_executors_us,
-            store_missing_executors_time.as_us()
-        );
-
         let status = process_result
             .and_then(|info| {
                 let post_account_state_info =
