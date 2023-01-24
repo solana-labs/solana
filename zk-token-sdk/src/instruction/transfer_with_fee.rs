@@ -1,6 +1,6 @@
 use {
-    crate::zk_token_elgamal::pod,
-    bytemuck::{Pod, Zeroable},
+    crate::zk_token_elgamal::{pod, pod::PodBool},
+    bytemuck::{bytes_of, Pod, Zeroable},
 };
 #[cfg(not(target_os = "solana"))]
 use {
@@ -14,7 +14,7 @@ use {
         errors::ProofError,
         instruction::{
             combine_lo_hi_ciphertexts, combine_lo_hi_commitments, combine_lo_hi_openings,
-            combine_lo_hi_u64, split_u64, transfer::TransferAmountEncryption, Role, Verifiable,
+            combine_lo_hi_u64, split_u64, transfer::TransferAmountEncryption, Role, ZkProofData,
         },
         range_proof::RangeProof,
         sigma_proofs::{
@@ -61,6 +61,19 @@ lazy_static::lazy_static! {
 #[derive(Clone, Copy, Pod, Zeroable)]
 #[repr(C)]
 pub struct TransferWithFeeData {
+    /// Initialize a proof context account
+    pub create_context_state: PodBool,
+
+    /// The context data for the transfer with fee proof
+    pub context: TransferWithFeeProofContext,
+
+    // transfer fee proof
+    pub proof: TransferWithFeeProof,
+}
+
+#[derive(Clone, Copy, Pod, Zeroable)]
+#[repr(C)]
+pub struct TransferWithFeeProofContext {
     /// Group encryption of the low 16 bites of the transfer amount
     pub ciphertext_lo: pod::TransferAmountEncryption,
 
@@ -81,9 +94,6 @@ pub struct TransferWithFeeData {
 
     // fee parameters
     pub fee_parameters: pod::FeeParameters,
-
-    // transfer fee proof
-    pub proof: TransferWithFeeProof,
 }
 
 #[cfg(not(target_os = "solana"))]
@@ -95,6 +105,7 @@ impl TransferWithFeeData {
         (destination_pubkey, auditor_pubkey): (&ElGamalPubkey, &ElGamalPubkey),
         fee_parameters: FeeParameters,
         withdraw_withheld_authority_pubkey: &ElGamalPubkey,
+        create_context_state: bool,
     ) -> Result<Self, ProofError> {
         // split and encrypt transfer amount
         let (amount_lo, amount_hi) = split_u64(transfer_amount, TRANSFER_AMOUNT_LO_BITS);
@@ -173,6 +184,16 @@ impl TransferWithFeeData {
         let pod_fee_ciphertext_lo: pod::FeeEncryption = fee_ciphertext_lo.to_pod();
         let pod_fee_ciphertext_hi: pod::FeeEncryption = fee_ciphertext_hi.to_pod();
 
+        let context = TransferWithFeeProofContext {
+            ciphertext_lo: pod_ciphertext_lo,
+            ciphertext_hi: pod_ciphertext_hi,
+            transfer_with_fee_pubkeys: pod_transfer_with_fee_pubkeys,
+            new_source_ciphertext: pod_new_source_ciphertext,
+            fee_ciphertext_lo: pod_fee_ciphertext_lo,
+            fee_ciphertext_hi: pod_fee_ciphertext_hi,
+            fee_parameters: fee_parameters.into(),
+        };
+
         let mut transcript = TransferWithFeeProof::transcript_new(
             &pod_transfer_with_fee_pubkeys,
             &pod_ciphertext_lo,
@@ -197,20 +218,15 @@ impl TransferWithFeeData {
         );
 
         Ok(Self {
-            ciphertext_lo: pod_ciphertext_lo,
-            ciphertext_hi: pod_ciphertext_hi,
-            transfer_with_fee_pubkeys: pod_transfer_with_fee_pubkeys,
-            new_source_ciphertext: pod_new_source_ciphertext,
-            fee_ciphertext_lo: pod_fee_ciphertext_lo,
-            fee_ciphertext_hi: pod_fee_ciphertext_hi,
-            fee_parameters: fee_parameters.into(),
+            create_context_state: create_context_state.into(),
+            context,
             proof,
         })
     }
 
     /// Extracts the lo ciphertexts associated with a transfer-with-fee data
     fn ciphertext_lo(&self, role: Role) -> Result<ElGamalCiphertext, ProofError> {
-        let ciphertext_lo: TransferAmountEncryption = self.ciphertext_lo.try_into()?;
+        let ciphertext_lo: TransferAmountEncryption = self.context.ciphertext_lo.try_into()?;
 
         let handle_lo = match role {
             Role::Source => Some(ciphertext_lo.source_handle),
@@ -231,7 +247,7 @@ impl TransferWithFeeData {
 
     /// Extracts the lo ciphertexts associated with a transfer-with-fee data
     fn ciphertext_hi(&self, role: Role) -> Result<ElGamalCiphertext, ProofError> {
-        let ciphertext_hi: TransferAmountEncryption = self.ciphertext_hi.try_into()?;
+        let ciphertext_hi: TransferAmountEncryption = self.context.ciphertext_hi.try_into()?;
 
         let handle_hi = match role {
             Role::Source => Some(ciphertext_hi.source_handle),
@@ -252,7 +268,7 @@ impl TransferWithFeeData {
 
     /// Extracts the lo fee ciphertexts associated with a transfer_with_fee data
     fn fee_ciphertext_lo(&self, role: Role) -> Result<ElGamalCiphertext, ProofError> {
-        let fee_ciphertext_lo: FeeEncryption = self.fee_ciphertext_lo.try_into()?;
+        let fee_ciphertext_lo: FeeEncryption = self.context.fee_ciphertext_lo.try_into()?;
 
         let fee_handle_lo = match role {
             Role::Source => None,
@@ -275,7 +291,7 @@ impl TransferWithFeeData {
 
     /// Extracts the hi fee ciphertexts associated with a transfer_with_fee data
     fn fee_ciphertext_hi(&self, role: Role) -> Result<ElGamalCiphertext, ProofError> {
-        let fee_ciphertext_hi: FeeEncryption = self.fee_ciphertext_hi.try_into()?;
+        let fee_ciphertext_hi: FeeEncryption = self.context.fee_ciphertext_hi.try_into()?;
 
         let fee_handle_hi = match role {
             Role::Source => None,
@@ -330,25 +346,35 @@ impl TransferWithFeeData {
 }
 
 #[cfg(not(target_os = "solana"))]
-impl Verifiable for TransferWithFeeData {
-    fn verify(&self) -> Result<(), ProofError> {
+impl ZkProofData for TransferWithFeeData {
+    type ProofContext = TransferWithFeeProofContext;
+
+    fn create_context_state(&self) -> bool {
+        self.create_context_state.into()
+    }
+
+    fn context_data(&self) -> &[u8] {
+        bytes_of(&self.context)
+    }
+
+    fn verify_proof(&self) -> Result<(), ProofError> {
         let mut transcript = TransferWithFeeProof::transcript_new(
-            &self.transfer_with_fee_pubkeys,
-            &self.ciphertext_lo,
-            &self.ciphertext_hi,
-            &self.new_source_ciphertext,
-            &self.fee_ciphertext_lo,
-            &self.fee_ciphertext_hi,
+            &self.context.transfer_with_fee_pubkeys,
+            &self.context.ciphertext_lo,
+            &self.context.ciphertext_hi,
+            &self.context.new_source_ciphertext,
+            &self.context.fee_ciphertext_lo,
+            &self.context.fee_ciphertext_hi,
         );
 
-        let ciphertext_lo = self.ciphertext_lo.try_into()?;
-        let ciphertext_hi = self.ciphertext_hi.try_into()?;
-        let pubkeys_transfer_with_fee = self.transfer_with_fee_pubkeys.try_into()?;
-        let new_source_ciphertext = self.new_source_ciphertext.try_into()?;
+        let ciphertext_lo = self.context.ciphertext_lo.try_into()?;
+        let ciphertext_hi = self.context.ciphertext_hi.try_into()?;
+        let pubkeys_transfer_with_fee = self.context.transfer_with_fee_pubkeys.try_into()?;
+        let new_source_ciphertext = self.context.new_source_ciphertext.try_into()?;
 
-        let fee_ciphertext_lo = self.fee_ciphertext_lo.try_into()?;
-        let fee_ciphertext_hi = self.fee_ciphertext_hi.try_into()?;
-        let fee_parameters = self.fee_parameters.into();
+        let fee_ciphertext_lo = self.context.fee_ciphertext_lo.try_into()?;
+        let fee_ciphertext_hi = self.context.fee_ciphertext_hi.try_into()?;
+        let fee_parameters = self.context.fee_parameters.into();
 
         self.proof.verify(
             &ciphertext_lo,
@@ -883,6 +909,7 @@ mod test {
             (&destination_pubkey, &auditor_pubkey),
             fee_parameters,
             &withdraw_withheld_authority_pubkey,
+            false,
         )
         .unwrap();
 
@@ -907,6 +934,7 @@ mod test {
             (&destination_pubkey, &auditor_pubkey),
             fee_parameters,
             &withdraw_withheld_authority_pubkey,
+            false,
         )
         .unwrap();
 
@@ -930,6 +958,7 @@ mod test {
             (&destination_pubkey, &auditor_pubkey),
             fee_parameters,
             &withdraw_withheld_authority_pubkey,
+            false,
         )
         .unwrap();
 
@@ -958,6 +987,7 @@ mod test {
             (&destination_pubkey, &auditor_pubkey),
             fee_parameters,
             &withdraw_withheld_authority_pubkey,
+            false,
         )
         .unwrap();
 
@@ -975,6 +1005,7 @@ mod test {
             (&destination_pubkey, &auditor_pubkey),
             fee_parameters,
             &withdraw_withheld_authority_pubkey,
+            false,
         )
         .unwrap();
 
@@ -992,6 +1023,7 @@ mod test {
             (&destination_pubkey, &auditor_pubkey),
             fee_parameters,
             &withdraw_withheld_authority_pubkey,
+            false,
         )
         .unwrap();
 

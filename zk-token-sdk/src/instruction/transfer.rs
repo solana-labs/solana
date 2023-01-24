@@ -1,6 +1,6 @@
 use {
-    crate::zk_token_elgamal::pod,
-    bytemuck::{Pod, Zeroable},
+    crate::zk_token_elgamal::{pod, pod::PodBool},
+    bytemuck::{bytes_of, Pod, Zeroable},
 };
 #[cfg(not(target_os = "solana"))]
 use {
@@ -12,7 +12,7 @@ use {
             pedersen::{Pedersen, PedersenCommitment, PedersenOpening},
         },
         errors::ProofError,
-        instruction::{combine_lo_hi_ciphertexts, split_u64, Role, Verifiable},
+        instruction::{combine_lo_hi_ciphertexts, split_u64, Role, ZkProofData},
         range_proof::RangeProof,
         sigma_proofs::{
             equality_proof::CtxtCommEqualityProof, validity_proof::AggregatedValidityProof,
@@ -42,6 +42,19 @@ lazy_static::lazy_static! {
 #[derive(Clone, Copy, Pod, Zeroable)]
 #[repr(C)]
 pub struct TransferData {
+    /// Initialize a proof context account
+    pub create_context_state: PodBool,
+
+    /// The context data for the transfer proof
+    pub context: TransferProofContext,
+
+    /// Zero-knowledge proofs for Transfer
+    pub proof: TransferProof,
+}
+
+#[derive(Clone, Copy, Pod, Zeroable)]
+#[repr(C)]
+pub struct TransferProofContext {
     /// Group encryption of the low 16 bits of the transfer amount
     pub ciphertext_lo: pod::TransferAmountEncryption,
 
@@ -53,9 +66,6 @@ pub struct TransferData {
 
     /// The final spendable ciphertext after the transfer
     pub new_source_ciphertext: pod::ElGamalCiphertext,
-
-    /// Zero-knowledge proofs for Transfer
-    pub proof: TransferProof,
 }
 
 #[cfg(not(target_os = "solana"))]
@@ -66,6 +76,7 @@ impl TransferData {
         (spendable_balance, ciphertext_old_source): (u64, &ElGamalCiphertext),
         source_keypair: &ElGamalKeypair,
         (destination_pubkey, auditor_pubkey): (&ElGamalPubkey, &ElGamalPubkey),
+        create_context_state: bool,
     ) -> Result<Self, ProofError> {
         // split and encrypt transfer amount
         let (amount_lo, amount_hi) = split_u64(transfer_amount, TRANSFER_AMOUNT_LO_BITS);
@@ -116,6 +127,13 @@ impl TransferData {
         let pod_ciphertext_hi: pod::TransferAmountEncryption = ciphertext_hi.into();
         let pod_new_source_ciphertext: pod::ElGamalCiphertext = new_source_ciphertext.into();
 
+        let context = TransferProofContext {
+            ciphertext_lo: pod_ciphertext_lo,
+            ciphertext_hi: pod_ciphertext_hi,
+            transfer_pubkeys: pod_transfer_pubkeys,
+            new_source_ciphertext: pod_new_source_ciphertext,
+        };
+
         let mut transcript = TransferProof::transcript_new(
             &pod_transfer_pubkeys,
             &pod_ciphertext_lo,
@@ -134,17 +152,15 @@ impl TransferData {
         );
 
         Ok(Self {
-            ciphertext_lo: pod_ciphertext_lo,
-            ciphertext_hi: pod_ciphertext_hi,
-            transfer_pubkeys: pod_transfer_pubkeys,
-            new_source_ciphertext: pod_new_source_ciphertext,
+            create_context_state: create_context_state.into(),
+            context,
             proof,
         })
     }
 
     /// Extracts the lo ciphertexts associated with a transfer data
     fn ciphertext_lo(&self, role: Role) -> Result<ElGamalCiphertext, ProofError> {
-        let ciphertext_lo: TransferAmountEncryption = self.ciphertext_lo.try_into()?;
+        let ciphertext_lo: TransferAmountEncryption = self.context.ciphertext_lo.try_into()?;
 
         let handle_lo = match role {
             Role::Source => Some(ciphertext_lo.source_handle),
@@ -165,7 +181,7 @@ impl TransferData {
 
     /// Extracts the lo ciphertexts associated with a transfer data
     fn ciphertext_hi(&self, role: Role) -> Result<ElGamalCiphertext, ProofError> {
-        let ciphertext_hi: TransferAmountEncryption = self.ciphertext_hi.try_into()?;
+        let ciphertext_hi: TransferAmountEncryption = self.context.ciphertext_hi.try_into()?;
 
         let handle_hi = match role {
             Role::Source => Some(ciphertext_hi.source_handle),
@@ -202,20 +218,30 @@ impl TransferData {
 }
 
 #[cfg(not(target_os = "solana"))]
-impl Verifiable for TransferData {
-    fn verify(&self) -> Result<(), ProofError> {
+impl ZkProofData for TransferData {
+    type ProofContext = TransferProofContext;
+
+    fn create_context_state(&self) -> bool {
+        self.create_context_state.into()
+    }
+
+    fn context_data(&self) -> &[u8] {
+        bytes_of(&self.context)
+    }
+
+    fn verify_proof(&self) -> Result<(), ProofError> {
         // generate transcript and append all public inputs
         let mut transcript = TransferProof::transcript_new(
-            &self.transfer_pubkeys,
-            &self.ciphertext_lo,
-            &self.ciphertext_hi,
-            &self.new_source_ciphertext,
+            &self.context.transfer_pubkeys,
+            &self.context.ciphertext_lo,
+            &self.context.ciphertext_hi,
+            &self.context.new_source_ciphertext,
         );
 
-        let ciphertext_lo = self.ciphertext_lo.try_into()?;
-        let ciphertext_hi = self.ciphertext_hi.try_into()?;
-        let transfer_pubkeys = self.transfer_pubkeys.try_into()?;
-        let new_spendable_ciphertext = self.new_source_ciphertext.try_into()?;
+        let ciphertext_lo = self.context.ciphertext_lo.try_into()?;
+        let ciphertext_hi = self.context.ciphertext_hi.try_into()?;
+        let transfer_pubkeys = self.context.transfer_pubkeys.try_into()?;
+        let new_spendable_ciphertext = self.context.new_source_ciphertext.try_into()?;
 
         self.proof.verify(
             &ciphertext_lo,
@@ -534,6 +560,7 @@ mod test {
             (spendable_balance, &spendable_ciphertext),
             &source_keypair,
             (&dest_pk, &auditor_pk),
+            false,
         )
         .unwrap();
 
@@ -555,6 +582,7 @@ mod test {
             (spendable_balance, &spendable_ciphertext),
             &source_keypair,
             (&dest_pk, &auditor_pk),
+            false,
         )
         .unwrap();
 
@@ -575,6 +603,7 @@ mod test {
             (spendable_balance, &spendable_ciphertext),
             &source_keypair,
             (&dest_pk, &auditor_pk),
+            false,
         )
         .unwrap();
 
@@ -595,6 +624,7 @@ mod test {
             (spendable_balance, &spendable_ciphertext),
             &source_keypair,
             (&dest_pk, &auditor_pk),
+            false,
         )
         .unwrap();
 
@@ -609,6 +639,7 @@ mod test {
             (spendable_balance, &spendable_ciphertext),
             &source_keypair,
             (&dest_pk, &auditor_pk),
+            false,
         )
         .unwrap();
 
@@ -643,6 +674,7 @@ mod test {
             (spendable_balance, &spendable_ciphertext),
             &source_keypair,
             (&dest_pk, &auditor_pk),
+            false,
         )
         .unwrap();
 

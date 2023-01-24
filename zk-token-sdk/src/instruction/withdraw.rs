@@ -1,6 +1,6 @@
 use {
-    crate::zk_token_elgamal::pod,
-    bytemuck::{Pod, Zeroable},
+    crate::zk_token_elgamal::{pod, pod::PodBool},
+    bytemuck::{bytes_of, Pod, Zeroable},
 };
 #[cfg(not(target_os = "solana"))]
 use {
@@ -10,7 +10,7 @@ use {
             pedersen::{Pedersen, PedersenCommitment},
         },
         errors::ProofError,
-        instruction::Verifiable,
+        instruction::ZkProofData,
         range_proof::RangeProof,
         sigma_proofs::equality_proof::CtxtCommEqualityProof,
         transcript::TranscriptProtocol,
@@ -32,15 +32,25 @@ const WITHDRAW_AMOUNT_BIT_LENGTH: usize = 64;
 #[derive(Clone, Copy, Pod, Zeroable)]
 #[repr(C)]
 pub struct WithdrawData {
+    /// Initialize a proof context account
+    pub create_context_state: PodBool,
+
+    /// The context data for the withdraw proof
+    pub context: WithdrawProofContext,
+
+    /// Range proof
+    pub proof: WithdrawProof, // 736 bytes
+}
+
+#[derive(Clone, Copy, Pod, Zeroable)]
+#[repr(C)]
+pub struct WithdrawProofContext {
     /// The source account ElGamal pubkey
     pub pubkey: pod::ElGamalPubkey, // 32 bytes
 
     /// The source account available balance *after* the withdraw (encrypted by
     /// `source_pk`
     pub final_ciphertext: pod::ElGamalCiphertext, // 64 bytes
-
-    /// Range proof
-    pub proof: WithdrawProof, // 736 bytes
 }
 
 #[cfg(not(target_os = "solana"))]
@@ -50,6 +60,7 @@ impl WithdrawData {
         keypair: &ElGamalKeypair,
         current_balance: u64,
         current_ciphertext: &ElGamalCiphertext,
+        create_context_state: bool,
     ) -> Result<Self, ProofError> {
         // subtract withdraw amount from current balance
         //
@@ -64,24 +75,41 @@ impl WithdrawData {
 
         let pod_pubkey = pod::ElGamalPubkey(keypair.public.to_bytes());
         let pod_final_ciphertext: pod::ElGamalCiphertext = final_ciphertext.into();
+
+        let context = WithdrawProofContext {
+            pubkey: pod_pubkey,
+            final_ciphertext: pod_final_ciphertext,
+        };
+
         let mut transcript = WithdrawProof::transcript_new(&pod_pubkey, &pod_final_ciphertext);
         let proof = WithdrawProof::new(keypair, final_balance, &final_ciphertext, &mut transcript);
 
         Ok(Self {
-            pubkey: pod_pubkey,
-            final_ciphertext: pod_final_ciphertext,
+            create_context_state: create_context_state.into(),
+            context,
             proof,
         })
     }
 }
 
 #[cfg(not(target_os = "solana"))]
-impl Verifiable for WithdrawData {
-    fn verify(&self) -> Result<(), ProofError> {
-        let mut transcript = WithdrawProof::transcript_new(&self.pubkey, &self.final_ciphertext);
+impl ZkProofData for WithdrawData {
+    type ProofContext = WithdrawProofContext;
 
-        let elgamal_pubkey = self.pubkey.try_into()?;
-        let final_balance_ciphertext = self.final_ciphertext.try_into()?;
+    fn create_context_state(&self) -> bool {
+        self.create_context_state.into()
+    }
+
+    fn context_data(&self) -> &[u8] {
+        bytes_of(&self.context)
+    }
+
+    fn verify_proof(&self) -> Result<(), ProofError> {
+        let mut transcript =
+            WithdrawProof::transcript_new(&self.context.pubkey, &self.context.final_ciphertext);
+
+        let elgamal_pubkey = self.context.pubkey.try_into()?;
+        let final_balance_ciphertext = self.context.final_ciphertext.try_into()?;
         self.proof
             .verify(&elgamal_pubkey, &final_balance_ciphertext, &mut transcript)
     }
@@ -198,6 +226,7 @@ mod test {
             &keypair,
             current_balance,
             &current_ciphertext,
+            false,
         )
         .unwrap();
         assert!(data.verify().is_ok());
@@ -209,6 +238,7 @@ mod test {
             &keypair,
             wrong_balance,
             &current_ciphertext,
+            false,
         )
         .unwrap();
         assert!(data.verify().is_err());
