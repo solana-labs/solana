@@ -1117,7 +1117,9 @@ pub fn get_temp_accounts_paths(count: u32) -> IoResult<(Vec<TempDir>, Vec<PathBu
     let paths = temp_dirs
         .iter()
         .map(|t: &TempDir| -> PathBuf {
-            create_accounts_run_and_snapshot_dirs(t.path()).unwrap().0
+            let (run_dir, _snapshot_dir) = create_accounts_run_and_snapshot_dirs(t.path())
+                .expect("failed to create the run and snapshot sub-directories for an ccount path");
+            run_dir
         })
         .collect();
     Ok((temp_dirs, paths))
