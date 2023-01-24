@@ -50,7 +50,7 @@ export function Parameter(props) {
 }
 
 /*
-  Display a single Parameter's field data 
+  Display a single Parameter's field data
 */
 export function Field(props) {
   const {
