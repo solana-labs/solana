@@ -8,7 +8,7 @@ use {
         unprocessed_transaction_storage::UnprocessedTransactionStorage,
     },
     crossbeam_channel::RecvTimeoutError,
-    solana_measure::{measure, measure_us},
+    solana_measure::{measure, measure::Measure, measure_us},
     solana_sdk::{saturating_add_assign, timing::timestamp},
     std::{sync::atomic::Ordering, time::Duration},
 };
@@ -27,6 +27,7 @@ impl PacketReceiver {
     ) -> Result<(), RecvTimeoutError> {
         let (result, recv_time_us) = measure_us!({
             let recv_timeout = Self::get_receive_timeout(unprocessed_transaction_storage);
+            let mut recv_and_buffer_measure = Measure::start("recv_and_buffer");
             let receive_packet_results = packet_deserializer.receive_packets(
                 recv_timeout,
                 unprocessed_transaction_storage.max_receive_size(),
@@ -40,13 +41,16 @@ impl PacketReceiver {
                 tracer_packet_stats,
                 slot_metrics_tracker,
             );
+            recv_and_buffer_measure.stop();
+
+            // Only incremented if packets are received
+            banking_stage_stats
+                .receive_and_buffer_packets_elapsed
+                .fetch_add(recv_and_buffer_measure.as_us(), Ordering::Relaxed);
 
             Ok(())
         });
 
-        banking_stage_stats
-            .receive_and_buffer_packets_elapsed
-            .fetch_add(recv_time_us, Ordering::Relaxed);
         slot_metrics_tracker.increment_receive_and_buffer_packets_us(recv_time_us);
 
         result
