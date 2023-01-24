@@ -647,9 +647,6 @@ pub mod layout {
                 SignedData::MerkleRoot(merkle_root)
             }
         };
-<<<<<<< HEAD
-        (range.end <= shred.len()).then(|| range)
-=======
         Some(data)
     }
 
@@ -664,8 +661,7 @@ pub mod layout {
                 merkle::ShredData::get_signed_data_offsets(proof_size)?
             }
         };
-        (offsets.end <= shred.len()).then_some(offsets)
->>>>>>> 50afb80f5 (adds shred::layout::get_signed_data (#29438))
+        (offsets.end <= shred.len()).then(|| offsets)
     }
 
     pub(crate) fn get_reference_tick(shred: &[u8]) -> Result<u8, Error> {
