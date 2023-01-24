@@ -996,7 +996,7 @@ impl SystemMonitorService {
             if report_os_memory_stats && mem_timer.should_update(SAMPLE_INTERVAL_MEM_MS) {
                 Self::report_mem_stats();
             }
-            if config.report_os_cpu_stats {
+            if report_os_cpu_stats {
                 if cpu_timer.should_update(SAMPLE_INTERVAL_CPU_MS) {
                     Self::report_cpu_stats();
                 }
