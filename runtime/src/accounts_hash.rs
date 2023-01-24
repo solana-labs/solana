@@ -1035,13 +1035,13 @@ pub mod tests {
 
         let mut account_maps = Vec::new();
 
-        let key = Pubkey::new(&[11u8; 32]);
+        let key = Pubkey::from([11u8; 32]);
         let hash = Hash::new(&[1u8; 32]);
         let val = CalculateHashIntermediate::new(hash, 88, key);
         account_maps.push(val);
 
         // 2nd key - zero lamports, so will be removed
-        let key = Pubkey::new(&[12u8; 32]);
+        let key = Pubkey::from([12u8; 32]);
         let hash = Hash::new(&[2u8; 32]);
         let val = CalculateHashIntermediate::new(hash, ZERO_RAW_LAMPORTS_SENTINEL, key);
         account_maps.push(val);
@@ -1058,7 +1058,7 @@ pub mod tests {
         assert_eq!((result.0, result.1), (expected_hash, 88));
 
         // 3rd key - with pubkey value before 1st key so it will be sorted first
-        let key = Pubkey::new(&[10u8; 32]);
+        let key = Pubkey::from([10u8; 32]);
         let hash = Hash::new(&[2u8; 32]);
         let val = CalculateHashIntermediate::new(hash, 20, key);
         account_maps.insert(0, val);
@@ -1074,7 +1074,7 @@ pub mod tests {
         assert_eq!((result.0, result.1), (expected_hash, 108));
 
         // 3rd key - with later slot
-        let key = Pubkey::new(&[10u8; 32]);
+        let key = Pubkey::from([10u8; 32]);
         let hash = Hash::new(&[99u8; 32]);
         let val = CalculateHashIntermediate::new(hash, 30, key);
         account_maps.insert(1, val);
@@ -1109,13 +1109,13 @@ pub mod tests {
         for pass in 0..3 {
             let mut account_maps = Vec::new();
 
-            let key = Pubkey::new(&[11u8; 32]);
+            let key = Pubkey::from([11u8; 32]);
             let hash = Hash::new(&[1u8; 32]);
             let val = CalculateHashIntermediate::new(hash, 88, key);
             account_maps.push(val);
 
             // 2nd key - zero lamports, so will be removed
-            let key = Pubkey::new(&[12u8; 32]);
+            let key = Pubkey::from([12u8; 32]);
             let hash = Hash::new(&[2u8; 32]);
             let val = CalculateHashIntermediate::new(hash, ZERO_RAW_LAMPORTS_SENTINEL, key);
             account_maps.push(val);
@@ -1196,12 +1196,12 @@ pub mod tests {
 
         let mut account_maps = Vec::new();
 
-        let key = Pubkey::new(&[11u8; 32]);
+        let key = Pubkey::from([11u8; 32]);
         let hash = Hash::new(&[1u8; 32]);
         let val = CalculateHashIntermediate::new(hash, 88, key);
         account_maps.push(val);
 
-        let key = Pubkey::new(&[12u8; 32]);
+        let key = Pubkey::from([12u8; 32]);
         let hash = Hash::new(&[2u8; 32]);
         let val = CalculateHashIntermediate::new(hash, 20, key);
         account_maps.push(val);
@@ -1435,9 +1435,9 @@ pub mod tests {
     fn test_accountsdb_de_dup_accounts_from_stores() {
         solana_logger::setup();
 
-        let key_a = Pubkey::new(&[1u8; 32]);
-        let key_b = Pubkey::new(&[2u8; 32]);
-        let key_c = Pubkey::new(&[3u8; 32]);
+        let key_a = Pubkey::from([1u8; 32]);
+        let key_b = Pubkey::from([2u8; 32]);
+        let key_c = Pubkey::from([3u8; 32]);
         const COUNT: usize = 6;
         let hashes = (0..COUNT).into_iter().map(|i| Hash::new(&[i as u8; 32]));
         // create this vector
@@ -1981,7 +1981,7 @@ pub mod tests {
             for count in start..iterations {
                 let mut input: Vec<_> = (0..count)
                     .map(|i| {
-                        let key = Pubkey::new(&[(pass * iterations + count) as u8; 32]);
+                        let key = Pubkey::from([(pass * iterations + count) as u8; 32]);
                         let hash = Hash::new(&[(pass * iterations + count + i + 1) as u8; 32]);
                         (key, hash)
                     })

@@ -135,7 +135,7 @@ pub mod tests {
 
     #[test]
     fn test_accounts_to_store_more() {
-        let pubkey = Pubkey::new(&[1; 32]);
+        let pubkey = Pubkey::from([1; 32]);
         let store_id = AppendVecId::default();
         let account_size = 3;
 
@@ -143,7 +143,7 @@ pub mod tests {
 
         let account_meta = AccountMeta {
             lamports: 1,
-            owner: Pubkey::new(&[2; 32]),
+            owner: Pubkey::from([2; 32]),
             executable: false,
             rent_epoch: 0,
         };
@@ -238,7 +238,7 @@ pub mod tests {
 
         let sm = StoredMeta {
             write_version: 0,
-            pubkey: Pubkey::new(&[0; 32]),
+            pubkey: Pubkey::from([0; 32]),
             data_len: data_len as u64,
         };
         av.append_accounts(&[(sm, Some(&account))], &[Hash::default()]);

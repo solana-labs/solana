@@ -8856,7 +8856,7 @@ impl AccountsDb {
         #[allow(clippy::stable_sort_primitive)]
         alive_roots.sort();
         info!("{}: accounts_index alive_roots: {:?}", label, alive_roots,);
-        let full_pubkey_range = Pubkey::new(&[0; 32])..=Pubkey::new(&[0xff; 32]);
+        let full_pubkey_range = Pubkey::from([0; 32])..=Pubkey::from([0xff; 32]);
 
         self.accounts_index.account_maps.iter().for_each(|map| {
             for (pubkey, account_entry) in map.items(&full_pubkey_range) {
@@ -9218,10 +9218,10 @@ pub mod tests {
         slot: Slot,
     ) -> (SnapshotStorages, Vec<CalculateHashIntermediate>) {
         let accounts = AccountsDb::new(Vec::new(), &ClusterType::Development);
-        let pubkey0 = Pubkey::new(&[0u8; 32]);
-        let pubkey127 = Pubkey::new(&[0x7fu8; 32]);
-        let pubkey128 = Pubkey::new(&[0x80u8; 32]);
-        let pubkey255 = Pubkey::new(&[0xffu8; 32]);
+        let pubkey0 = Pubkey::from([0u8; 32]);
+        let pubkey127 = Pubkey::from([0x7fu8; 32]);
+        let pubkey128 = Pubkey::from([0x80u8; 32]);
+        let pubkey255 = Pubkey::from([0xffu8; 32]);
 
         let mut raw_expected = vec![
             CalculateHashIntermediate::new(Hash::default(), 1, pubkey0),
@@ -15161,8 +15161,8 @@ pub mod tests {
     fn test_calculate_storage_count_and_alive_bytes_2_accounts() {
         let accounts = AccountsDb::new_single_for_tests();
         let keys = [
-            solana_sdk::pubkey::Pubkey::new(&[0; 32]),
-            solana_sdk::pubkey::Pubkey::new(&[255; 32]),
+            solana_sdk::pubkey::Pubkey::from([0; 32]),
+            solana_sdk::pubkey::Pubkey::from([255; 32]),
         ];
         // make sure accounts are in 2 different bins
         assert!(
@@ -15486,7 +15486,7 @@ pub mod tests {
         let rewrites = Rewrites::default();
         db.extend_hashes_with_skipped_rewrites(&mut hashes, &rewrites);
         assert!(hashes.is_empty());
-        let pubkey = Pubkey::new(&[1; 32]);
+        let pubkey = Pubkey::from([1; 32]);
         let hash = Hash::new(&[2; 32]);
         rewrites.write().unwrap().insert(pubkey, hash);
         db.extend_hashes_with_skipped_rewrites(&mut hashes, &rewrites);
@@ -15494,7 +15494,7 @@ pub mod tests {
         // pubkey is already in hashes, will not be added a second time
         db.extend_hashes_with_skipped_rewrites(&mut hashes, &rewrites);
         assert_eq!(hashes, vec![(pubkey, hash)]);
-        let pubkey2 = Pubkey::new(&[2; 32]);
+        let pubkey2 = Pubkey::from([2; 32]);
         let hash2 = Hash::new(&[3; 32]);
         rewrites.write().unwrap().insert(pubkey2, hash2);
         db.extend_hashes_with_skipped_rewrites(&mut hashes, &rewrites);

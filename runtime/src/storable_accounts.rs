@@ -136,7 +136,7 @@ pub mod tests {
 
     #[test]
     fn test_contains_multiple_slots() {
-        let pk = Pubkey::new(&[1; 32]);
+        let pk = Pubkey::from([1; 32]);
         let account = AccountSharedData::create(1, Vec::default(), Pubkey::default(), false, 0);
         let slot = 0;
         let test3 = (
@@ -159,7 +159,7 @@ pub mod tests {
                 for starting_slot in 0..max_slots {
                     let mut raw = Vec::new();
                     for entry in 0..entries {
-                        let pk = Pubkey::new(&[entry; 32]);
+                        let pk = Pubkey::from([entry; 32]);
                         raw.push((
                             pk,
                             AccountSharedData::create(
