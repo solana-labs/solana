@@ -24,7 +24,7 @@ use {
     },
     
     std::{
-        collections::HashSet,
+        collections::{HashMap, HashSet},
         net::{SocketAddr, TcpListener, UdpSocket},
         sync::{
             atomic::{AtomicBool, Ordering},
@@ -58,13 +58,23 @@ fn recv_send_quic(
         //_socket_addr_space.check(&addr).then_some((data, addr))
         Some((data, addr))
     });
+    //todo: bench this
+    let mut hashmap : HashMap<SocketAddr, Vec<&[u8]>> = HashMap::new();
     for p in packets {
-        info!("recv_send_quic get_connection addr: {}", p.1);
-        let conn = connection_cache.get_connection(&p.1);
-        info!("recv_send_quic connection remote address: {}", conn.tpu_addr());
-        //todo: handle this error (e.g. logging)
-        let res = conn.send_wire_transaction(p.0);
-        info!("recv_send_quic send result: {:?}", res);
+        match hashmap.get_mut(&p.1) {
+            Some(packet_set) => {
+                packet_set.push(p.0);
+            },
+            None => {
+                hashmap.insert(p.1, vec![p.0]);
+            }
+        }
+    }
+    for packet_set in hashmap.iter() {
+        let conn = connection_cache.get_connection(packet_set.0);
+	info!("recv_send_quic connection remote address: {}", conn.tpu_addr());        
+	let res = conn.send_wire_transaction_batch(packet_set.1);
+	info!("recv_send_quic send result: {:?}", res);    
     }
     Ok(())
 }
