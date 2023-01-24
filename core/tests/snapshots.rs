@@ -828,7 +828,7 @@ fn test_bank_forks_incremental_snapshot(
             restore_from_snapshots_and_check_banks_are_equal(
                 &bank,
                 &snapshot_test_config.snapshot_config,
-                temporary_accounts_dir.as_path().to_path_buf(),
+                temporary_accounts_dir,
                 &snapshot_test_config.genesis_config_info.genesis_config,
             )
             .unwrap();
