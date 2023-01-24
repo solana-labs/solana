@@ -10088,7 +10088,7 @@ pub mod tests {
         let storage = Arc::new(data);
         let pubkey = solana_sdk::pubkey::new_rand();
         let acc = AccountSharedData::new(1, 48, AccountSharedData::default().owner());
-        append_single_account_with_default_hash(&storage.accounts, &pubkey, &acc, 1);
+        append_single_account_with_default_hash(&storage, &pubkey, &acc, 1);
 
         let calls = Arc::new(AtomicU64::new(0));
         let temp_dir = TempDir::new().unwrap();
@@ -10136,7 +10136,7 @@ pub mod tests {
     }
 
     fn append_single_account_with_default_hash(
-        vec: &AppendVec,
+        storage: &AccountStorageEntry,
         pubkey: &Pubkey,
         account: &AccountSharedData,
         write_version: StoredMetaWriteVersion,
@@ -10152,7 +10152,7 @@ pub mod tests {
                 vec![&hash],
                 vec![write_version],
             );
-        vec.append_accounts(&storable_accounts, 0);
+        storage.accounts.append_accounts(&storable_accounts, 0);
     }
 
     #[test]
@@ -10173,7 +10173,7 @@ pub mod tests {
         let storage = Arc::new(data);
         let pubkey = solana_sdk::pubkey::new_rand();
         let acc = AccountSharedData::new(1, 48, AccountSharedData::default().owner());
-        append_single_account_with_default_hash(&storage.accounts, &pubkey, &acc, 1);
+        append_single_account_with_default_hash(&storage, &pubkey, &acc, 1);
 
         let calls = Arc::new(AtomicU64::new(0));
 
@@ -10205,7 +10205,7 @@ pub mod tests {
         write_version: StoredMetaWriteVersion,
     ) {
         let acc = AccountSharedData::new(1, 48, AccountSharedData::default().owner());
-        append_single_account_with_default_hash(&storage.accounts, pubkey, &acc, write_version);
+        append_single_account_with_default_hash(storage, pubkey, &acc, write_version);
     }
 
     fn sample_storage_with_entries(
