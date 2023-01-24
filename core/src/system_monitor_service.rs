@@ -28,6 +28,7 @@ const SAMPLE_INTERVAL_UDP_MS: u64 = 2 * MS_PER_S;
 const SAMPLE_INTERVAL_OS_NETWORK_LIMITS_MS: u64 = MS_PER_H;
 const SAMPLE_INTERVAL_MEM_MS: u64 = 5 * MS_PER_S;
 const SAMPLE_INTERVAL_CPU_MS: u64 = 10 * MS_PER_S;
+const SAMPLE_INTERVAL_CPU_ID_MS: u64 = MS_PER_H;
 const SAMPLE_INTERVAL_DISK_MS: u64 = 5 * MS_PER_S;
 const SLEEP_INTERVAL: Duration = Duration::from_millis(500);
 
@@ -822,9 +823,6 @@ impl SystemMonitorService {
                 ("total_num_threads", info.num_threads as i64, i64),
             )
         }
-
-        #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
-        Self::report_cpuid_values();
     }
 
     #[cfg(target_os = "linux")]
@@ -969,6 +967,7 @@ impl SystemMonitorService {
         let udp_timer = AtomicInterval::default();
         let mem_timer = AtomicInterval::default();
         let cpu_timer = AtomicInterval::default();
+        let cpuid_timer = AtomicInterval::default();
         let disk_timer = AtomicInterval::default();
 
         loop {
@@ -986,8 +985,14 @@ impl SystemMonitorService {
             if config.report_os_memory_stats && mem_timer.should_update(SAMPLE_INTERVAL_MEM_MS) {
                 Self::report_mem_stats();
             }
-            if config.report_os_cpu_stats && cpu_timer.should_update(SAMPLE_INTERVAL_CPU_MS) {
-                Self::report_cpu_stats();
+            if config.report_os_cpu_stats {
+                if cpu_timer.should_update(SAMPLE_INTERVAL_CPU_MS) {
+                    Self::report_cpu_stats();
+                }
+                if cpuid_timer.should_update(SAMPLE_INTERVAL_CPU_ID_MS) {
+                    #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+                    Self::report_cpuid_values();
+                }
             }
             if config.report_os_disk_stats && disk_timer.should_update(SAMPLE_INTERVAL_DISK_MS) {
                 Self::process_disk_stats(&mut disk_stats);
