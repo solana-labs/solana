@@ -55,8 +55,9 @@ pub struct SlotMeta {
     // The number of slots above the root (the genesis block). The first
     // slot has slot 0.
     pub slot: Slot,
-    // The total number of consecutive shreds starting from index 0
-    // we have received for this slot.
+    // The total number of consecutive shreds starting from index 0 we have received for this slot.
+    // At the same time, it is also an index of the first missing shred for this slot, while the
+    // slot is incomplete.
     pub consumed: u64,
     // The index *plus one* of the highest shred received for this slot.  Useful
     // for checking if the slot has received any shreds yet, and to calculate the
@@ -77,7 +78,8 @@ pub struct SlotMeta {
     pub next_slots: Vec<Slot>,
     // Connected status flags of this slot
     pub connected_flags: ConnectedFlags,
-    // Shreds indices which are marked data complete.
+    // Shreds indices which are marked data complete.  That is, those that have the
+    // [`ShredFlags::DATA_COMPLETE_SHRED`] set.
     pub completed_data_indexes: BTreeSet<u32>,
 }
 
