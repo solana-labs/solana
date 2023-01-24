@@ -23,8 +23,12 @@ pub use {
 };
 
 #[cfg(not(target_os = "solana"))]
-pub trait Verifiable {
-    fn verify(&self) -> Result<(), ProofError>;
+pub trait ZkProofData {
+    type ProofContext;
+
+    fn create_context_state(&self) -> bool;
+    fn context_data(&self) -> &[u8];
+    fn verify_proof(&self) -> Result<(), ProofError>;
 }
 
 #[cfg(not(target_os = "solana"))]
