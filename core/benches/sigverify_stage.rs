@@ -144,7 +144,16 @@ fn gen_batches(use_same_tx: bool) -> Vec<PacketBatch> {
 }
 
 #[bench]
-fn bench_sigverify_stage(bencher: &mut Bencher) {
+fn bench_sigverify_stage_with_same_tx(bencher: &mut Bencher) {
+    bench_sigverify_stage(bencher, true)
+}
+
+#[bench]
+fn bench_sigverify_stage_without_same_tx(bencher: &mut Bencher) {
+    bench_sigverify_stage(bencher, false)
+}
+
+fn bench_sigverify_stage(bencher: &mut Bencher, use_same_tx: bool) {
     solana_logger::setup();
     trace!("start");
     let (packet_s, packet_r) = unbounded();
@@ -152,7 +161,6 @@ fn bench_sigverify_stage(bencher: &mut Bencher) {
     let verifier = TransactionSigVerifier::new(verified_s);
     let stage = SigVerifyStage::new(packet_r, verifier, "bench");
 
-    let use_same_tx = true;
     bencher.iter(move || {
         let now = Instant::now();
         let mut batches = gen_batches(use_same_tx);
@@ -171,21 +179,17 @@ fn bench_sigverify_stage(bencher: &mut Bencher) {
         }
         let mut received = 0;
         trace!("sent: {}", sent_len);
-        let mut messages = vec![];
         loop {
             if let Ok(message) = verified_r.recv_timeout(Duration::from_millis(10)) {
                 let (verifieds, _) = &*message;
-                for v in verifieds.iter().rev() {
-                    received += v.len();
-                }
-                messages.push(message);
+                received += verifieds.iter().map(|batch| batch.len()).sum::<usize>();
+                test::black_box(message);
                 if use_same_tx || received >= sent_len {
                     break;
                 }
             }
         }
         trace!("received: {}", received);
-        test::black_box(messages);
     });
     stage.join().unwrap();
 }

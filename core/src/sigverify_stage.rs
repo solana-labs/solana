@@ -531,7 +531,16 @@ mod tests {
     }
 
     #[test]
-    fn test_sigverify_stage() {
+    fn test_sigverify_stage_with_same_tx() {
+        test_sigverify_stage(true)
+    }
+
+    #[test]
+    fn test_sigverify_stage_without_same_tx() {
+        test_sigverify_stage(false)
+    }
+
+    fn test_sigverify_stage(use_same_tx: bool) {
         solana_logger::setup();
         trace!("start");
         let (packet_s, packet_r) = unbounded();
@@ -539,7 +548,6 @@ mod tests {
         let verifier = TransactionSigVerifier::new(verified_s);
         let stage = SigVerifyStage::new(packet_r, verifier, "test");
 
-        let use_same_tx = true;
         let now = Instant::now();
         let packets_per_batch = 128;
         let total_packets = 1920;
@@ -607,10 +615,7 @@ mod tests {
                     );
                 }
                 assert_eq!(tracer_packet_stats.total_excess_tracer_packets, 0);
-                for v in verifieds.iter().rev() {
-                    received += v.len();
-                    batches.push(v.clone());
-                }
+                received += verifieds.iter().map(|batch| batch.len()).sum::<usize>();
             }
 
             if total_tracer_packets_received_in_sigverify_stage >= sent_len {
