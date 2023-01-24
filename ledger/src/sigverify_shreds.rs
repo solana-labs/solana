@@ -158,7 +158,7 @@ fn get_merkle_roots(
             .par_iter()
             .flat_map(|packets| {
                 packets.par_iter().map(|packet| {
-                    if packet.meta().discard() {
+                    if packet.meta.discard() {
                         return None;
                     }
                     let shred = shred::layout::get_shred(packet)?;
@@ -203,7 +203,8 @@ fn elems_from_buffer(buffer: &PinnedVec<u8>) -> perf_libs::Elems {
     debug_assert_eq!(buffer.len() % std::mem::size_of::<Packet>(), 0);
     let num_packets = buffer.len() / std::mem::size_of::<Packet>();
     perf_libs::Elems {
-        elems: buffer.as_ptr().cast::<u8>(),
+        #[allow(clippy::cast_ptr_alignment)]
+        elems: buffer.as_ptr() as *const solana_sdk::packet::Packet,
         num: num_packets as u32,
     }
 }
@@ -277,20 +278,10 @@ pub fn verify_shreds_gpu(
     let mut out = recycler_cache.buffer().allocate("out_buffer");
     out.set_pinnable();
     out.resize(signature_offsets.len(), 0u8);
-<<<<<<< HEAD
-    debug_assert_eq!(pubkeys.len() % std::mem::size_of::<Packet>(), 0);
-    let num_pubkey_packets = pubkeys.len() / std::mem::size_of::<Packet>();
-    let mut elems = vec![perf_libs::Elems {
-        #[allow(clippy::cast_ptr_alignment)]
-        elems: pubkeys.as_ptr() as *const solana_sdk::packet::Packet,
-        num: num_pubkey_packets as u32,
-    }];
-=======
     let mut elems = vec![
         elems_from_buffer(&pubkeys),
         elems_from_buffer(&merkle_roots),
     ];
->>>>>>> 9db25655f (recovers merkle roots from shreds binary in {verify,sign}_shreds_gpu (#29445))
     elems.extend(batches.iter().map(|batch| perf_libs::Elems {
         elems: batch.as_ptr(),
         num: batch.len() as u32,
@@ -419,20 +410,10 @@ pub fn sign_shreds_gpu(
     signatures_out.set_pinnable();
     signatures_out.resize(total_sigs * sig_size, 0);
 
-<<<<<<< HEAD
-    debug_assert_eq!(pinned_keypair.len() % std::mem::size_of::<Packet>(), 0);
-    let num_keypair_packets = pinned_keypair.len() / std::mem::size_of::<Packet>();
-    let mut elems = vec![perf_libs::Elems {
-        #[allow(clippy::cast_ptr_alignment)]
-        elems: pinned_keypair.as_ptr() as *const solana_sdk::packet::Packet,
-        num: num_keypair_packets as u32,
-    }];
-=======
     let mut elems = vec![
         elems_from_buffer(pinned_keypair),
         elems_from_buffer(&merkle_roots),
     ];
->>>>>>> 9db25655f (recovers merkle roots from shreds binary in {verify,sign}_shreds_gpu (#29445))
     elems.extend(batches.iter().map(|batch| perf_libs::Elems {
         elems: batch.as_ptr(),
         num: batch.len() as u32,
