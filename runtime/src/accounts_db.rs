@@ -4331,7 +4331,7 @@ impl AccountsDb {
         );
 
         // could follow what shrink does more closely
-        if shrink_collect.total_starting_accounts == 0 {
+        if shrink_collect.total_starting_accounts == 0 || shrink_collect.alive_total_bytes == 0 {
             return; // skipping slot with no useful accounts to write
         }
 
@@ -17053,7 +17053,8 @@ pub mod tests {
                 assert!(db.storage.get_slot_storage_entry(ancient_slot).is_some());
                 let ancient = db.get_storage_for_slot(ancient_slot).unwrap();
                 assert!(is_ancient(&ancient.accounts));
-                for slot in (ancient_slot + 1)..=max_slot_inclusive {
+                let first_alive = ancient_slot + 1 + (dead_accounts as Slot);
+                for slot in first_alive..=max_slot_inclusive {
                     assert!(db.storage.get_slot_storage_entry(slot).is_none());
                 }
 
@@ -17179,15 +17180,21 @@ pub mod tests {
         db.combine_ancient_slots(vec![slot1], CAN_RANDOMLY_SHRINK_FALSE);
         assert!(db.storage.get_slot_storage_entry(slot1).is_some());
         let ancient = db.get_storage_for_slot(slot1).unwrap();
-        assert!(is_ancient(&ancient.accounts));
+        assert_eq!(alive, is_ancient(&ancient.accounts));
         let after_store = db.get_storage_for_slot(slot1).unwrap();
         let GetUniqueAccountsResult {
             stored_accounts: after_stored_accounts,
             original_bytes: after_original_bytes,
         } = db.get_unique_accounts_from_storage(&after_store);
-        assert_ne!(created_accounts.original_bytes, after_original_bytes);
+        if alive {
+            assert_ne!(created_accounts.original_bytes, after_original_bytes);
+        } else {
+            assert_eq!(created_accounts.original_bytes, after_original_bytes);
+        }
         assert_eq!(created_accounts.stored_accounts.len(), 1);
-        assert_eq!(after_stored_accounts.len(), usize::from(alive));
+        // always 1 account: either we leave the append vec alone if it is all dead
+        // or we create a new one and copy into it if account is alive
+        assert_eq!(after_stored_accounts.len(), 1);
         (db, slot1)
     }
 
