@@ -1676,7 +1676,7 @@ impl Bank {
                             apply_feature_activations_time.as_us(),
                             i64
                         ),
-                        ("activate_epoch_Us", activate_epoch_time.as_us(), i64),
+                        ("activate_epoch_us", activate_epoch_time.as_us(), i64),
                         (
                             "update_epoch_stakes_us",
                             update_epoch_stakes_time.as_us(),
