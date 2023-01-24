@@ -416,12 +416,13 @@ fn main() {
         let leader_schedule_cache = Arc::new(LeaderScheduleCache::new_from_bank(&bank));
         let (exit, poh_recorder, poh_service, signal_receiver) =
             create_test_recorder(&bank, &blockstore, None, Some(leader_schedule_cache));
-        let banking_tracer = BankingTracer::new(matches.is_present("trace_banking").then_some((
-            blockstore.banking_trace_path(),
-            exit.clone(),
-            BANKING_TRACE_DIR_DEFAULT_BYTE_LIMIT,
-        )))
-        .unwrap();
+        let (banking_tracer, tracer_thread) =
+            BankingTracer::new(matches.is_present("trace_banking").then_some((
+                blockstore.banking_trace_path(),
+                exit.clone(),
+                BANKING_TRACE_DIR_DEFAULT_BYTE_LIMIT,
+            )))
+            .unwrap();
         let (non_vote_sender, non_vote_receiver) = banking_tracer.create_channel_non_vote();
         let (tpu_vote_sender, tpu_vote_receiver) = banking_tracer.create_channel_tpu_vote();
         let (gossip_vote_sender, gossip_vote_receiver) =
@@ -599,6 +600,7 @@ fn main() {
         poh_service.join().unwrap();
         sleep(Duration::from_secs(1));
         debug!("waited for poh_service");
+        tracer_thread.unwrap().join().unwrap().unwrap();
     }
     let _unused = Blockstore::destroy(&ledger_path);
 }

@@ -101,6 +101,7 @@ impl Tpu {
         staked_nodes: &Arc<RwLock<StakedNodes>>,
         shared_staked_nodes_overrides: Arc<RwLock<HashMap<Pubkey, u64>>>,
         banking_tracer: Arc<BankingTracer>,
+        tracer_thread_hdl: TracerThread,
         tpu_enable_udp: bool,
     ) -> Self {
         let TpuSockets {
@@ -260,7 +261,7 @@ impl Tpu {
             find_packet_sender_stake_stage,
             vote_find_packet_sender_stake_stage,
             staked_nodes_updater_service,
-            tracer_thread_hdl: banking_tracer.take_tracer_thread_join_handle(),
+            tracer_thread_hdl,
         }
     }
 

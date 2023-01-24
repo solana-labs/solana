@@ -15,7 +15,7 @@ use {
         path::PathBuf,
         sync::{
             atomic::{AtomicBool, Ordering},
-            Arc, Mutex,
+            Arc,
         },
         thread::{self, sleep, JoinHandle},
         time::{Duration, SystemTime},
@@ -58,11 +58,7 @@ pub const BANKING_TRACE_DIR_DEFAULT_BYTE_LIMIT: DirByteLimit =
 #[allow(clippy::type_complexity)]
 #[derive(Debug)]
 pub struct BankingTracer {
-    enabled_tracer: Option<(
-        Sender<TimedTracedEvent>,
-        Mutex<Option<JoinHandle<TracerThreadResult>>>,
-        Arc<AtomicBool>,
-    )>,
+    enabled_tracer: Option<(Sender<TimedTracedEvent>, Arc<AtomicBool>)>,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -183,9 +179,10 @@ pub fn receiving_loop_with_minimized_sender_overhead<T, E, const SLEEP_MS: u64>(
 impl BankingTracer {
     pub fn new(
         maybe_config: Option<(PathBuf, Arc<AtomicBool>, DirByteLimit)>,
-    ) -> Result<Arc<Self>, TraceError> {
-        let enabled_tracer = maybe_config
-            .map(|(path, exit, dir_byte_limit)| {
+    ) -> Result<(Arc<Self>, TracerThread), TraceError> {
+        match maybe_config {
+            None => Ok((Self::new_disabled(), None)),
+            Some((path, exit, dir_byte_limit)) => {
                 let rotate_threshold_size = dir_byte_limit / TRACE_FILE_ROTATE_COUNT;
                 if rotate_threshold_size == 0 {
                     return Err(TraceError::TooSmallDirByteLimit(
@@ -199,14 +196,17 @@ impl BankingTracer {
                 Self::ensure_prepare_path(&path)?;
                 let file_appender = Self::create_file_appender(path, rotate_threshold_size)?;
 
-                let tracing_thread =
+                let tracer_thread =
                     Self::spawn_background_thread(trace_receiver, file_appender, exit.clone())?;
 
-                Ok((trace_sender, Mutex::new(Some(tracing_thread)), exit))
-            })
-            .transpose()?;
-
-        Ok(Arc::new(Self { enabled_tracer }))
+                Ok((
+                    Arc::new(Self {
+                        enabled_tracer: Some((trace_sender, exit)),
+                    }),
+                    Some(tracer_thread),
+                ))
+            }
+        }
     }
 
     pub fn new_disabled() -> Arc<Self> {
@@ -224,7 +224,7 @@ impl BankingTracer {
             label,
             self.enabled_tracer
                 .as_ref()
-                .map(|(sender, _, exit)| (sender.clone(), exit.clone())),
+                .map(|(sender, exit)| (sender.clone(), exit.clone())),
         )
     }
 
@@ -240,16 +240,6 @@ impl BankingTracer {
         self.create_channel(ChannelLabel::GossipVote)
     }
 
-    pub fn take_tracer_thread_join_handle(&self) -> TracerThread {
-        self.enabled_tracer.as_ref().map(|(_, tracer_thread, _)| {
-            tracer_thread
-                .lock()
-                .unwrap()
-                .take()
-                .expect("no double take; BankingStage should only do once!")
-        })
-    }
-
     pub fn hash_event(&self, slot: Slot, blockhash: Hash, bank_hash: Hash) {
         self.trace_event(TimedTracedEvent(
             SystemTime::now(),
@@ -258,7 +248,7 @@ impl BankingTracer {
     }
 
     fn trace_event(&self, event: TimedTracedEvent) {
-        if let Some((sender, _, exit)) = &self.enabled_tracer {
+        if let Some((sender, exit)) = &self.enabled_tracer {
             if !exit.load(Ordering::Relaxed) {
                 sender
                     .send(event)
@@ -394,6 +384,7 @@ pub mod for_test {
 
     pub fn terminate_tracer(
         tracer: Arc<BankingTracer>,
+        tracer_thread: TracerThread,
         main_thread: JoinHandle<TracerThreadResult>,
         sender: TracedSender,
         exit: Option<Arc<AtomicBool>>,
@@ -401,7 +392,6 @@ pub mod for_test {
         if let Some(exit) = exit {
             exit.store(true, Ordering::Relaxed);
         }
-        let tracer_thread = tracer.take_tracer_thread_join_handle();
         drop((sender, tracer));
         main_thread.join().unwrap().unwrap();
         if let Some(tracer_thread) = tracer_thread {
@@ -440,7 +430,7 @@ mod tests {
         non_vote_sender
             .send(BankingPacketBatch::new((vec![], None)))
             .unwrap();
-        for_test::terminate_tracer(tracer, dummy_main_thread, non_vote_sender, None);
+        for_test::terminate_tracer(tracer, None, dummy_main_thread, non_vote_sender, None);
     }
 
     #[test]
@@ -448,9 +438,8 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let path = temp_dir.path().join("banking-trace");
         let exit = Arc::<AtomicBool>::default();
-        let tracer =
+        let (tracer, tracer_thread) =
             BankingTracer::new(Some((path, exit.clone(), DirByteLimit::max_value()))).unwrap();
-        let tracer_thread = tracer.take_tracer_thread_join_handle();
         let (non_vote_sender, non_vote_receiver) = tracer.create_channel_non_vote();
 
         let exit_for_dummy_thread = Arc::<AtomicBool>::default();
@@ -489,7 +478,7 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let path = temp_dir.path().join("banking-trace");
         let exit = Arc::<AtomicBool>::default();
-        let tracer = BankingTracer::new(Some((
+        let (tracer, tracer_thread) = BankingTracer::new(Some((
             path.clone(),
             exit.clone(),
             DirByteLimit::max_value(),
@@ -512,7 +501,13 @@ mod tests {
         let bank_hash = Hash::from_str("BankHash11111111111111111111111111111111111").unwrap();
         tracer.hash_event(4, blockhash, bank_hash);
 
-        for_test::terminate_tracer(tracer, dummy_main_thread, non_vote_sender, None);
+        for_test::terminate_tracer(
+            tracer,
+            tracer_thread,
+            dummy_main_thread,
+            non_vote_sender,
+            None,
+        );
 
         let mut stream = BufReader::new(File::open(path.join(BASENAME)).unwrap());
         let results = (0..=3)
