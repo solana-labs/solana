@@ -27,7 +27,7 @@ pub(super) trait Shred: Sized {
     fn erasure_shard_as_slice(&self) -> Result<&[u8], Error>;
 
     // Portion of the payload which is signed.
-    fn signed_message(&self) -> &[u8];
+    fn signed_data(&self) -> &[u8];
 
     // Only for tests.
     fn set_index(&mut self, index: u32);
