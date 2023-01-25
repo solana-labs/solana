@@ -20276,4 +20276,63 @@ pub(crate) mod tests {
             RENT_EXEMPT_RENT_EPOCH
         );
     }
+
+    #[test]
+    fn test_calculate_fee_with_congestion_multiplier() {
+        let lamports_scale: u64 = 5;
+        let base_lamports_per_signature: u64 = 5_000;
+        let cheap_lamports_per_signature: u64 = base_lamports_per_signature / lamports_scale;
+        let expensive_lamports_per_signature: u64 = base_lamports_per_signature * lamports_scale;
+        let signature_count: u64 = 2;
+        let signature_fee: u64 = 10;
+        let fee_structure = FeeStructure {
+            lamports_per_signature: signature_fee,
+            ..FeeStructure::default()
+        };
+
+        // Two signatures, double the fee.
+        let key0 = Pubkey::new_unique();
+        let key1 = Pubkey::new_unique();
+        let ix0 = system_instruction::transfer(&key0, &key1, 1);
+        let ix1 = system_instruction::transfer(&key1, &key0, 1);
+        let message = SanitizedMessage::try_from(Message::new(&[ix0, ix1], Some(&key0))).unwrap();
+
+        // assert when lamports_per_signature is less than BASE_LAMPORTS, turnning on/off
+        // congestion_multiplier has no effect on fee.
+        for remove_congestion_multiplier in [true, false] {
+            assert_eq!(
+                Bank::calculate_fee(
+                    &message,
+                    cheap_lamports_per_signature,
+                    &fee_structure,
+                    true,
+                    false,
+                    remove_congestion_multiplier,
+                ),
+                signature_fee * signature_count
+            );
+        }
+
+        // assert when lamports_per_signature is more than BASE_LAMPORTS, turnning on/off
+        // congestion_multiplier will change calculated fee.
+        for remove_congestion_multiplier in [true, false] {
+            let denominator: u64 = if remove_congestion_multiplier {
+                1
+            } else {
+                lamports_scale
+            };
+
+            assert_eq!(
+                Bank::calculate_fee(
+                    &message,
+                    expensive_lamports_per_signature,
+                    &fee_structure,
+                    true,
+                    false,
+                    remove_congestion_multiplier,
+                ),
+                signature_fee * signature_count / denominator
+            );
+        }
+    }
 }

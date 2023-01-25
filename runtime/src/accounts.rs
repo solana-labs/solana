@@ -1640,7 +1640,7 @@ mod tests {
             &FeeStructure::default(),
             true,
             false,
-            false,
+            true,
         );
         assert_eq!(fee, lamports_per_signature);
 
