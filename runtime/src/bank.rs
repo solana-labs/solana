@@ -3419,29 +3419,16 @@ impl Bank {
         &self.fee_rate_governor
     }
 
-    pub fn get_fee_for_message(&self, message: &SanitizedMessage) -> Option<u64> {
-        let lamports_per_signature = {
-            let blockhash_queue = self.blockhash_queue.read().unwrap();
-            blockhash_queue.get_lamports_per_signature(message.recent_blockhash())
-        }
-        .or_else(|| {
-            self.check_message_for_nonce(message)
-                .and_then(|(address, account)| {
-                    NoncePartial::new(address, account).lamports_per_signature()
-                })
-        })?;
-        Some(Self::calculate_fee(
+    pub fn get_fee_for_message(&self, message: &SanitizedMessage) -> u64 {
+        Self::calculate_fee(
             message,
-            lamports_per_signature,
             &self.fee_structure,
             self.feature_set
                 .is_active(&use_default_units_in_fee_calculation::id()),
             !self
                 .feature_set
                 .is_active(&remove_deprecated_request_unit_ix::id()),
-            self.feature_set
-                .is_active(&remove_congestion_multiplier_from_fee_calculation::id()),
-        ))
+        )
     }
 
     pub fn get_startup_verification_complete(&self) -> &Arc<AtomicBool> {
@@ -3469,25 +3456,6 @@ impl Bank {
             .accounts_db
             .verify_accounts_hash_in_bg
             .verification_complete()
-    }
-
-    pub fn get_fee_for_message_with_lamports_per_signature(
-        &self,
-        message: &SanitizedMessage,
-        lamports_per_signature: u64,
-    ) -> u64 {
-        Self::calculate_fee(
-            message,
-            lamports_per_signature,
-            &self.fee_structure,
-            self.feature_set
-                .is_active(&use_default_units_in_fee_calculation::id()),
-            !self
-                .feature_set
-                .is_active(&remove_deprecated_request_unit_ix::id()),
-            self.feature_set
-                .is_active(&remove_congestion_multiplier_from_fee_calculation::id()),
-        )
     }
 
     #[deprecated(
@@ -4667,25 +4635,10 @@ impl Bank {
     /// Calculate fee for `SanitizedMessage`
     pub fn calculate_fee(
         message: &SanitizedMessage,
-        lamports_per_signature: u64,
         fee_structure: &FeeStructure,
         use_default_units_per_instruction: bool,
         support_request_units_deprecated: bool,
-        remove_congestion_multiplier: bool,
     ) -> u64 {
-        // Fee based on compute units and signatures
-        let congestion_multiplier = if remove_congestion_multiplier {
-            1.0 // multiplier that has no effect
-        } else {
-            const BASE_CONGESTION: f64 = 5_000.0;
-            let current_congestion = BASE_CONGESTION.max(lamports_per_signature as f64);
-            if lamports_per_signature == 0 {
-                0.0 // test only
-            } else {
-                BASE_CONGESTION / current_congestion
-            }
-        };
-
         let mut compute_budget = ComputeBudget::default();
         let prioritization_fee_details = compute_budget
             .process_instructions(
@@ -4712,11 +4665,10 @@ impl Bank {
                     .unwrap_or_default()
             });
 
-        ((prioritization_fee
+        (prioritization_fee
             .saturating_add(signature_fee)
             .saturating_add(write_lock_fee)
             .saturating_add(compute_fee) as f64)
-            * congestion_multiplier)
             .round() as u64
     }
 
@@ -4739,7 +4691,7 @@ impl Bank {
                     TransactionExecutionResult::NotExecuted(err) => Err(err.clone()),
                 }?;
 
-                let (lamports_per_signature, is_nonce) = durable_nonce_fee
+                let (_lamports_per_signature, is_nonce) = durable_nonce_fee
                     .map(|durable_nonce_fee| durable_nonce_fee.lamports_per_signature())
                     .map(|maybe_lamports_per_signature| (maybe_lamports_per_signature, true))
                     .unwrap_or_else(|| {
@@ -4749,19 +4701,14 @@ impl Bank {
                         )
                     });
 
-                let lamports_per_signature =
-                    lamports_per_signature.ok_or(TransactionError::BlockhashNotFound)?;
                 let fee = Self::calculate_fee(
                     tx.message(),
-                    lamports_per_signature,
                     &self.fee_structure,
                     self.feature_set
                         .is_active(&use_default_units_in_fee_calculation::id()),
                     !self
                         .feature_set
                         .is_active(&remove_deprecated_request_unit_ix::id()),
-                    self.feature_set
-                        .is_active(&remove_congestion_multiplier_from_fee_calculation::id()),
                 );
 
                 // In case of instruction error, even though no accounts
@@ -10877,13 +10824,8 @@ pub(crate) mod tests {
 
         let expected_fee_paid = Bank::calculate_fee(
             &SanitizedMessage::try_from(Message::new(&[], Some(&Pubkey::new_unique()))).unwrap(),
-            genesis_config
-                .fee_rate_governor
-                .create_fee_calculator()
-                .lamports_per_signature,
             &FeeStructure::default(),
             true,
-            false,
             false,
         );
 
@@ -11062,10 +11004,8 @@ pub(crate) mod tests {
         assert_eq!(bank.get_balance(&key), 1);
         let cheap_fee = Bank::calculate_fee(
             &SanitizedMessage::try_from(Message::new(&[], Some(&Pubkey::new_unique()))).unwrap(),
-            cheap_lamports_per_signature,
             &FeeStructure::default(),
             true,
-            false,
             false,
         );
         assert_eq!(
@@ -11081,10 +11021,8 @@ pub(crate) mod tests {
         assert_eq!(bank.get_balance(&key), 1);
         let expensive_fee = Bank::calculate_fee(
             &SanitizedMessage::try_from(Message::new(&[], Some(&Pubkey::new_unique()))).unwrap(),
-            expensive_lamports_per_signature,
             &FeeStructure::default(),
             true,
-            false,
             false,
         );
         assert_eq!(
@@ -11195,13 +11133,8 @@ pub(crate) mod tests {
                                 Some(&Pubkey::new_unique())
                             ))
                             .unwrap(),
-                            genesis_config
-                                .fee_rate_governor
-                                .create_fee_calculator()
-                                .lamports_per_signature,
                             &FeeStructure::default(),
                             true,
-                            false,
                             false,
                         ) * 2
                     )
@@ -13421,8 +13354,7 @@ pub(crate) mod tests {
         recent_message.recent_blockhash = bank.last_blockhash();
         let mut expected_balance = 4_650_000
             - bank
-                .get_fee_for_message(&recent_message.try_into().unwrap())
-                .unwrap();
+                .get_fee_for_message(&recent_message.try_into().unwrap());
         assert_eq!(bank.get_balance(&custodian_pubkey), expected_balance);
         assert_eq!(bank.get_balance(&nonce_pubkey), 250_000);
         assert_eq!(bank.get_balance(&alice_pubkey), 100_000);
@@ -13480,8 +13412,7 @@ pub(crate) mod tests {
         let mut recent_message = nonce_tx.message.clone();
         recent_message.recent_blockhash = bank.last_blockhash();
         expected_balance -= bank
-            .get_fee_for_message(&SanitizedMessage::try_from(recent_message).unwrap())
-            .unwrap();
+            .get_fee_for_message(&SanitizedMessage::try_from(recent_message).unwrap());
         assert_eq!(bank.get_balance(&custodian_pubkey), expected_balance);
         assert_ne!(
             nonce_hash,
@@ -13549,8 +13480,7 @@ pub(crate) mod tests {
         recent_message.recent_blockhash = bank.last_blockhash();
         let mut expected_balance = 4_650_000
             - bank
-                .get_fee_for_message(&recent_message.try_into().unwrap())
-                .unwrap();
+                .get_fee_for_message(&recent_message.try_into().unwrap());
         assert_eq!(bank.get_balance(&custodian_pubkey), expected_balance);
         assert_eq!(bank.get_balance(&nonce_pubkey), 250_000);
         assert_eq!(bank.get_balance(&alice_pubkey), 100_000);
@@ -13608,8 +13538,7 @@ pub(crate) mod tests {
         let mut recent_message = nonce_tx.message.clone();
         recent_message.recent_blockhash = bank.last_blockhash();
         expected_balance -= bank
-            .get_fee_for_message(&SanitizedMessage::try_from(recent_message).unwrap())
-            .unwrap();
+            .get_fee_for_message(&SanitizedMessage::try_from(recent_message).unwrap());
         assert_eq!(bank.get_balance(&custodian_pubkey), expected_balance);
         assert_ne!(
             nonce_hash,
@@ -13739,7 +13668,6 @@ pub(crate) mod tests {
             nonce_starting_balance
                 - bank
                     .get_fee_for_message(&recent_message.try_into().unwrap())
-                    .unwrap()
         );
         assert_ne!(
             nonce_hash,
@@ -13805,7 +13733,6 @@ pub(crate) mod tests {
             nonce_starting_balance
                 - bank
                     .get_fee_for_message(&recent_message.try_into().unwrap())
-                    .unwrap()
         );
         assert_ne!(
             nonce_hash,
@@ -18381,13 +18308,11 @@ pub(crate) mod tests {
         assert_eq!(
             Bank::calculate_fee(
                 &message,
-                0,
                 &FeeStructure {
                     lamports_per_signature: 0,
                     ..FeeStructure::default()
                 },
                 true,
-                false,
                 false,
             ),
             0
@@ -18397,13 +18322,11 @@ pub(crate) mod tests {
         assert_eq!(
             Bank::calculate_fee(
                 &message,
-                1,
                 &FeeStructure {
-                    lamports_per_signature: 1,
+                    lamports_per_signature: 0,
                     ..FeeStructure::default()
                 },
                 true,
-                false,
                 false,
             ),
             1
@@ -18418,13 +18341,11 @@ pub(crate) mod tests {
         assert_eq!(
             Bank::calculate_fee(
                 &message,
-                2,
                 &FeeStructure {
-                    lamports_per_signature: 2,
+                    lamports_per_signature: 0,
                     ..FeeStructure::default()
                 },
                 true,
-                false,
                 false,
             ),
             4
@@ -18445,7 +18366,7 @@ pub(crate) mod tests {
         let message =
             SanitizedMessage::try_from(Message::new(&[], Some(&Pubkey::new_unique()))).unwrap();
         assert_eq!(
-            Bank::calculate_fee(&message, 1, &fee_structure, true, false, false),
+            Bank::calculate_fee(&message, &fee_structure, true, false),
             max_fee + lamports_per_signature
         );
 
@@ -18457,7 +18378,7 @@ pub(crate) mod tests {
             SanitizedMessage::try_from(Message::new(&[ix0, ix1], Some(&Pubkey::new_unique())))
                 .unwrap();
         assert_eq!(
-            Bank::calculate_fee(&message, 1, &fee_structure, true, false, false),
+            Bank::calculate_fee(&message, &fee_structure, true, false),
             max_fee + 3 * lamports_per_signature
         );
 
@@ -18490,7 +18411,7 @@ pub(crate) mod tests {
                 Some(&Pubkey::new_unique()),
             ))
             .unwrap();
-            let fee = Bank::calculate_fee(&message, 1, &fee_structure, true, false, false);
+            let fee = Bank::calculate_fee(&message, &fee_structure, true, false);
             assert_eq!(
                 fee,
                 lamports_per_signature + prioritization_fee_details.get_fee()
@@ -18529,7 +18450,7 @@ pub(crate) mod tests {
         ))
         .unwrap();
         assert_eq!(
-            Bank::calculate_fee(&message, 1, &fee_structure, true, false, false),
+            Bank::calculate_fee(&message, &fee_structure, true, false),
             2
         );
 
@@ -18541,7 +18462,7 @@ pub(crate) mod tests {
         ))
         .unwrap();
         assert_eq!(
-            Bank::calculate_fee(&message, 1, &fee_structure, true, false, false),
+            Bank::calculate_fee(&message, &fee_structure, true, false),
             11
         );
     }
@@ -19082,7 +19003,7 @@ pub(crate) mod tests {
             &recent_blockhash,
         ))
         .unwrap();
-        let fee = bank.get_fee_for_message(&dummy_message).unwrap();
+        let fee = bank.get_fee_for_message(&dummy_message);
 
         // RentPaying fee-payer can remain RentPaying
         let tx = Transaction::new(

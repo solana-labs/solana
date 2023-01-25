@@ -537,7 +537,7 @@ impl Accounts {
         ancestors: &Ancestors,
         txs: &[SanitizedTransaction],
         lock_results: Vec<TransactionCheckResult>,
-        hash_queue: &BlockhashQueue,
+        _hash_queue: &BlockhashQueue,
         error_counters: &mut TransactionErrorMetrics,
         rent_collector: &RentCollector,
         feature_set: &FeatureSet,
@@ -548,24 +548,13 @@ impl Accounts {
             .zip(lock_results)
             .map(|etx| match etx {
                 (tx, (Ok(()), nonce)) => {
-                    let lamports_per_signature = nonce
-                        .as_ref()
-                        .map(|nonce| nonce.lamports_per_signature())
-                        .unwrap_or_else(|| {
-                            hash_queue.get_lamports_per_signature(tx.message().recent_blockhash())
-                        });
-                    let fee = if let Some(lamports_per_signature) = lamports_per_signature {
+                    let fee = 
                         Bank::calculate_fee(
                             tx.message(),
-                            lamports_per_signature,
                             fee_structure,
                             feature_set.is_active(&use_default_units_in_fee_calculation::id()),
                             !feature_set.is_active(&remove_deprecated_request_unit_ix::id()),
-                            feature_set.is_active(&remove_congestion_multiplier_from_fee_calculation::id()),
-                        )
-                    } else {
-                        return (Err(TransactionError::BlockhashNotFound), None);
-                    };
+                        );
 
                     let loaded_transaction = match self.load_transaction_accounts(
                         ancestors,
@@ -1608,7 +1597,6 @@ mod tests {
 
         let fee = Bank::calculate_fee(
             &SanitizedMessage::try_from(tx.message().clone()).unwrap(),
-            lamports_per_signature,
             &FeeStructure::default(),
             true,
             false,
