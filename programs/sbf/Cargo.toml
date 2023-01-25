@@ -1,67 +1,15 @@
-[workspace.package]
-version = "1.15.0"
-description = "Solana SBF test program written in Rust"
-authors = ["Solana Maintainers <maintainers@solana.foundation>"]
-repository = "https://github.com/solana-labs/solana"
-homepage = "https://solana.com/"
-license = "Apache-2.0"
-edition = "2021"
-
-[workspace.dependencies]
-array-bytes = "=1.4.1"
-bincode = { version = "1.1.4", default-features = false }
-blake3 = "1.0.0"
-byteorder = "1.3.2"
-elf = "0.0.10"
-getrandom = { version = "0.1.14" }
-itertools = "0.10.1"
-libsecp256k1 = { version = "0.7.0", default-features = false }
-log = "0.4.11"
-miow = "0.3.6"
-net2 = "0.2.37"
-num-derive = "0.3"
-num-traits = "0.2"
-rand = "0.7"
-serde = "1.0.112"
-serde_json = "1.0.56"
-solana_rbpf = "=0.2.38"
-solana-account-decoder = { path = "../../account-decoder", version = "=1.15.0" }
-solana-address-lookup-table-program = { path = "../../programs/address-lookup-table", version = "=1.15.0" }
-solana-bpf-loader-program = { path = "../bpf_loader", version = "=1.15.0" }
-solana-cli-output = { path = "../../cli-output", version = "=1.15.0" }
-solana-ledger = { path = "../../ledger", version = "=1.15.0" }
-solana-logger = { path = "../../logger", version = "=1.15.0" }
-solana-measure = { path = "../../measure", version = "=1.15.0" }
-solana-program = { path = "../../sdk/program", version = "=1.15.0" }
-solana-program-runtime = { path = "../../program-runtime", version = "=1.15.0" }
-solana-program-test = { path = "../../program-test", version = "=1.15.0" }
-solana-runtime = { path = "../../runtime", version = "=1.15.0" }
-solana-sbf-rust-128bit-dep = { path = "rust/128bit_dep", version = "=1.15.0" }
-solana-sbf-rust-invoke = { path = "rust/invoke", version = "=1.15.0" }
-solana-sbf-rust-invoked = { path = "rust/invoked", version = "=1.15.0", default-features = false }
-solana-sbf-rust-many-args-dep = { path = "rust/many_args_dep", version = "=1.15.0" }
-solana-sbf-rust-mem = { path = "rust/mem", version = "=1.15.0" }
-solana-sbf-rust-param-passing-dep = { path = "rust/param_passing_dep", version = "=1.15.0" }
-solana-sbf-rust-realloc = { path = "rust/realloc", version = "=1.15.0", default-features = false }
-solana-sbf-rust-realloc-invoke = { path = "rust/realloc_invoke", version = "=1.15.0" }
-solana-sdk = { path = "../../sdk", version = "=1.15.0" }
-solana-transaction-status = { path = "../../transaction-status", version = "=1.15.0" }
-solana-validator = { path = "../../validator", version = "=1.15.0" }
-solana-zk-token-sdk = { path = "../../zk-token-sdk", version = "=1.15.0" }
-thiserror = "1.0"
-
 [package]
 name = "solana-sbf-programs"
 description = "Blockchain, Rebuilt for Scale"
+version = "1.15.0"
 documentation = "https://docs.rs/solana"
+homepage = "https://solana.com/"
 readme = "README.md"
+repository = "https://github.com/solana-labs/solana"
+authors = ["Solana Maintainers <maintainers@solana.foundation>"]
+license = "Apache-2.0"
+edition = "2021"
 publish = false
-version = { workspace = true }
-authors = { workspace = true }
-repository = { workspace = true }
-homepage = { workspace = true }
-license = { workspace = true }
-edition = { workspace = true }
 
 [features]
 sbf_c = []
@@ -71,29 +19,29 @@ sbf_rust = []
 walkdir = "2"
 
 [dependencies]
-bincode = { workspace = true }
-byteorder = { workspace = true }
-elf = { workspace = true }
-itertools = { workspace = true }
-log = { workspace = true }
-miow = { workspace = true }
-net2 = { workspace = true }
-solana-account-decoder = { workspace = true }
-solana-bpf-loader-program = { workspace = true }
-solana-cli-output = { workspace = true }
-solana-logger = { workspace = true }
-solana-measure = { workspace = true }
-solana-program-runtime = { workspace = true }
-solana-runtime = { workspace = true }
-solana-sbf-rust-invoke = { workspace = true }
-solana-sbf-rust-realloc = { workspace = true, features = ["default"] }
-solana-sbf-rust-realloc-invoke = { workspace = true }
-solana-sdk = { workspace = true }
-solana-transaction-status = { workspace = true }
-solana_rbpf = { workspace = true }
+bincode = "1.1.4"
+byteorder = "1.3.2"
+elf = "0.0.10"
+itertools = "0.10.1"
+log = "0.4.11"
+miow = "0.3.6"
+net2 = "0.2.37"
+solana-account-decoder = { path = "../../account-decoder", version = "=1.15.0" }
+solana-bpf-loader-program = { path = "../bpf_loader", version = "=1.15.0" }
+solana-cli-output = { path = "../../cli-output", version = "=1.15.0" }
+solana-logger = { path = "../../logger", version = "=1.15.0" }
+solana-measure = { path = "../../measure", version = "=1.15.0" }
+solana-program-runtime = { path = "../../program-runtime", version = "=1.15.0" }
+solana-runtime = { path = "../../runtime", version = "=1.15.0" }
+solana-sbf-rust-invoke = { path = "rust/invoke", version = "=1.15.0" }
+solana-sbf-rust-realloc = { path = "rust/realloc", version = "=1.15.0" }
+solana-sbf-rust-realloc-invoke = { path = "rust/realloc_invoke", version = "=1.15.0" }
+solana-sdk = { path = "../../sdk", version = "=1.15.0" }
+solana-transaction-status = { path = "../../transaction-status", version = "=1.15.0" }
+solana_rbpf = "=0.2.38"
 
 [dev-dependencies]
-solana-ledger = { workspace = true }
+solana-ledger = { path = "../../ledger", version = "=1.15.0" }
 
 [[bench]]
 name = "bpf_loader"

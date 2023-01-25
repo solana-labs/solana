@@ -1,21 +1,21 @@
 [package]
 name = "solana-frozen-abi-macro"
+version = "1.15.0"
 description = "Solana Frozen ABI Macro"
+authors = ["Solana Maintainers <maintainers@solana.foundation>"]
+repository = "https://github.com/solana-labs/solana"
+homepage = "https://solana.com/"
 documentation = "https://docs.rs/solana-frozen-abi-macro"
-version = { workspace = true }
-authors = { workspace = true }
-repository = { workspace = true }
-homepage = { workspace = true }
-license = { workspace = true }
-edition = { workspace = true }
+license = "Apache-2.0"
+edition = "2021"
 
 [lib]
 proc-macro = true
 
 [dependencies]
-proc-macro2 = { workspace = true }
-quote = { workspace = true }
-syn = { workspace = true, features = ["full", "extra-traits", "visit-mut"] }
+proc-macro2 = "1.0"
+quote = "1.0"
+syn = { version = "1.0", features = ["full", "extra-traits", "visit-mut"] }
 
 [build-dependencies]
-rustc_version = { workspace = true }
+rustc_version = "0.4"
