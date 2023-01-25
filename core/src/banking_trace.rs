@@ -193,7 +193,7 @@ impl BankingTracer {
 
                 let (trace_sender, trace_receiver) = unbounded();
 
-                Self::ensure_prepare_path(&path)?;
+                create_dir_all(&path)?;
                 let file_appender = Self::create_file_appender(path, rotate_threshold_size)?;
 
                 let tracer_thread =
@@ -267,10 +267,6 @@ impl BankingTracer {
     ) -> (TracedSender, Receiver<BankingPacketBatch>) {
         let (sender, receiver) = unbounded();
         (TracedSender::new(label, sender, trace_sender), receiver)
-    }
-
-    fn ensure_prepare_path(path: &PathBuf) -> Result<(), io::Error> {
-        create_dir_all(path)
     }
 
     pub fn ensure_cleanup_path(path: &PathBuf) -> Result<(), io::Error> {
