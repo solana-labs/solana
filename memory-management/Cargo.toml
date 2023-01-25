@@ -1,9 +1,9 @@
 [package]
 name = "solana-memory-management"
+version = "1.15.0"
 description = "Solana memory management"
-version = { workspace = true }
-authors = { workspace = true }
-repository = { workspace = true }
-homepage = { workspace = true }
-license = { workspace = true }
-edition = { workspace = true }
+authors = ["Solana Maintainers <maintainers@solana.foundation>"]
+repository = "https://github.com/solana-labs/solana"
+homepage = "https://solana.com/"
+license = "Apache-2.0"
+edition = "2021"

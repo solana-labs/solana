@@ -1,65 +1,65 @@
 [package]
 name = "solana-ledger"
+version = "1.15.0"
 description = "Solana ledger"
+authors = ["Solana Maintainers <maintainers@solana.foundation>"]
+repository = "https://github.com/solana-labs/solana"
+license = "Apache-2.0"
+homepage = "https://solana.com/"
 documentation = "https://docs.rs/solana-ledger"
-version = { workspace = true }
-authors = { workspace = true }
-repository = { workspace = true }
-homepage = { workspace = true }
-license = { workspace = true }
-edition = { workspace = true }
+edition = "2021"
 
 [dependencies]
-assert_matches = { workspace = true }
-bincode = { workspace = true }
-bitflags = { workspace = true }
-byteorder = { workspace = true }
-chrono = { workspace = true, features = ["default", "serde"] }
-chrono-humanize = { workspace = true }
-crossbeam-channel = { workspace = true }
-dashmap = { workspace = true, features = ["rayon", "raw-api"] }
-fs_extra = { workspace = true }
-futures = { workspace = true }
-itertools = { workspace = true }
-lazy_static = { workspace = true }
-libc = { workspace = true }
-log = { workspace = true }
-lru = { workspace = true }
-num_cpus = { workspace = true }
-num_enum = { workspace = true }
-prost = { workspace = true }
-rand = { workspace = true }
-rand_chacha = { workspace = true }
-rayon = { workspace = true }
-reed-solomon-erasure = { workspace = true, features = ["simd-accel"] }
-serde = { workspace = true }
-serde_bytes = { workspace = true }
-sha2 = { workspace = true }
-solana-account-decoder = { workspace = true }
-solana-bpf-loader-program = { workspace = true }
-solana-entry = { workspace = true }
-solana-frozen-abi = { workspace = true }
-solana-frozen-abi-macro = { workspace = true }
-solana-measure = { workspace = true }
-solana-metrics = { workspace = true }
-solana-perf = { workspace = true }
-solana-program-runtime = { workspace = true }
-solana-rayon-threadlimit = { workspace = true }
-solana-runtime = { workspace = true }
-solana-sdk = { workspace = true }
-solana-stake-program = { workspace = true }
-solana-storage-bigtable = { workspace = true }
-solana-storage-proto = { workspace = true }
-solana-transaction-status = { workspace = true }
-solana-vote-program = { workspace = true }
-spl-token = { workspace = true, features = ["no-entrypoint"] }
-spl-token-2022 = { workspace = true, features = ["no-entrypoint"] }
-static_assertions = { workspace = true }
-tempfile = { workspace = true }
-thiserror = { workspace = true }
-tokio = { workspace = true, features = ["full"] }
-tokio-stream = { workspace = true }
-trees = { workspace = true }
+assert_matches = "1.5.0"
+bincode = "1.3.3"
+bitflags = "1.3.1"
+byteorder = "1.4.3"
+chrono = { version = "0.4.22", features = ["serde"] }
+chrono-humanize = "0.2.1"
+crossbeam-channel = "0.5"
+dashmap = { version = "4.0.2", features = ["rayon", "raw-api"] }
+fs_extra = "1.2.0"
+futures = "0.3.24"
+itertools = "0.10.5"
+lazy_static = "1.4.0"
+libc = "0.2.131"
+log = { version = "0.4.17" }
+lru = "0.7.7"
+num_cpus = "1.13.1"
+num_enum = "0.5.7"
+prost = "0.11.0"
+rand = "0.7.0"
+rand_chacha = "0.2.2"
+rayon = "1.5.3"
+reed-solomon-erasure = { version = "6.0.0", features = ["simd-accel"] }
+serde = "1.0.144"
+serde_bytes = "0.11.7"
+sha2 = "0.10.5"
+solana-account-decoder = { path = "../account-decoder", version = "=1.15.0" }
+solana-bpf-loader-program = { path = "../programs/bpf_loader", version = "=1.15.0" }
+solana-entry = { path = "../entry", version = "=1.15.0" }
+solana-frozen-abi = { path = "../frozen-abi", version = "=1.15.0" }
+solana-frozen-abi-macro = { path = "../frozen-abi/macro", version = "=1.15.0" }
+solana-measure = { path = "../measure", version = "=1.15.0" }
+solana-metrics = { path = "../metrics", version = "=1.15.0" }
+solana-perf = { path = "../perf", version = "=1.15.0" }
+solana-program-runtime = { path = "../program-runtime", version = "=1.15.0" }
+solana-rayon-threadlimit = { path = "../rayon-threadlimit", version = "=1.15.0" }
+solana-runtime = { path = "../runtime", version = "=1.15.0" }
+solana-sdk = { path = "../sdk", version = "=1.15.0" }
+solana-stake-program = { path = "../programs/stake", version = "=1.15.0" }
+solana-storage-bigtable = { path = "../storage-bigtable", version = "=1.15.0" }
+solana-storage-proto = { path = "../storage-proto", version = "=1.15.0" }
+solana-transaction-status = { path = "../transaction-status", version = "=1.15.0" }
+solana-vote-program = { path = "../programs/vote", version = "=1.15.0" }
+spl-token = { version = "=3.5.0", features = ["no-entrypoint"] }
+spl-token-2022 = { version = "=0.5.0", features = ["no-entrypoint"] }
+static_assertions = "1.1.0"
+tempfile = "3.3.0"
+thiserror = "1.0"
+tokio = { version = "1", features = ["full"] }
+tokio-stream = "0.1"
+trees = "0.4.2"
 
 [dependencies.rocksdb]
 # Avoid the vendored bzip2 within rocksdb-sys that can cause linker conflicts
@@ -69,14 +69,14 @@ default-features = false
 features = ["lz4"]
 
 [dev-dependencies]
-bs58 = { workspace = true }
-matches = { workspace = true }
-solana-account-decoder = { workspace = true }
-solana-logger = { workspace = true }
-test-case = { workspace = true }
+bs58 = "0.4.0"
+matches = "0.1.9"
+solana-account-decoder = { path = "../account-decoder", version = "=1.15.0" }
+solana-logger = { path = "../logger", version = "=1.15.0" }
+test-case = "2.2.2"
 
 [build-dependencies]
-rustc_version = { workspace = true }
+rustc_version = "0.4"
 
 [lib]
 crate-type = ["lib"]

@@ -1,18 +1,17 @@
 [package]
 name = "solana-zk-token-proof-program"
 description = "Solana Zk Token Proof Program"
-version = { workspace = true }
-authors = { workspace = true }
-repository = { workspace = true }
-homepage = { workspace = true }
-license = { workspace = true }
-edition = { workspace = true }
+authors = ["Solana Maintainers <maintainers@solana.foundation>"]
+repository = "https://github.com/solana-labs/solana"
+version = "1.15.0"
+license = "Apache-2.0"
+edition = "2021"
 
 [dependencies]
-bytemuck = { workspace = true, features = ["derive"] }
-getrandom = { workspace = true, features = ["dummy"] }
-num-derive = { workspace = true }
-num-traits = { workspace = true }
-solana-program-runtime = { workspace = true }
-solana-sdk = { workspace = true }
-solana-zk-token-sdk = { workspace = true }
+bytemuck = { version = "1.11.0", features = ["derive"] }
+getrandom = { version = "0.1", features = ["dummy"] }
+num-derive = "0.3"
+num-traits = "0.2"
+solana-program-runtime = { path = "../../program-runtime", version = "=1.15.0" }
+solana-sdk = { path = "../../sdk", version = "=1.15.0" }
+solana-zk-token-sdk = { path = "../../zk-token-sdk", version = "=1.15.0" }

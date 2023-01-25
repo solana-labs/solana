@@ -9,7 +9,7 @@ source ci/_
 source scripts/patch-crates.sh
 source scripts/read-cargo-variable.sh
 
-solana_ver=$(readCargoVariable version Cargo.toml)
+solana_ver=$(readCargoVariable version sdk/Cargo.toml)
 solana_dir=$PWD
 cargo_build_sbf="$solana_dir"/cargo-build-sbf
 cargo_test_sbf="$solana_dir"/cargo-test-sbf

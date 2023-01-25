@@ -1,16 +1,16 @@
 [package]
 name = "solana-cargo-test-bpf"
+version = "1.15.0"
 description = "Execute all unit and integration tests after building with the Solana SBF SDK"
+authors = ["Solana Maintainers <maintainers@solana.foundation>"]
+repository = "https://github.com/solana-labs/solana"
+homepage = "https://solana.com/"
+license = "Apache-2.0"
+edition = "2021"
 publish = false
-version = { workspace = true }
-authors = { workspace = true }
-repository = { workspace = true }
-homepage = { workspace = true }
-license = { workspace = true }
-edition = { workspace = true }
 
 [dependencies]
-cargo_metadata = { workspace = true }
+cargo_metadata = "0.15.0"
 clap = { version = "3.1.5", features = ["cargo"] }
 
 [[bin]]

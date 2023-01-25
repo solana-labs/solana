@@ -1,16 +1,13 @@
 [package]
 name = "gen-headers"
+version = "1.15.0"
+edition = "2021"
+license = "Apache-2.0"
 publish = false
-version = { workspace = true }
-authors = { workspace = true }
-repository = { workspace = true }
-homepage = { workspace = true }
-license = { workspace = true }
-edition = { workspace = true }
 
 [dependencies]
-log = { workspace = true, features = ["std"] }
-regex = { workspace = true }
+log = { version = "0.4.17", features = ["std"] }
+regex = "1.6.0"
 
 [[bin]]
 name = "gen-headers"

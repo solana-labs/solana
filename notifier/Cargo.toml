@@ -1,19 +1,19 @@
 [package]
 name = "solana-notifier"
+version = "1.15.0"
 description = "Solana Notifier"
+authors = ["Solana Maintainers <maintainers@solana.foundation>"]
+repository = "https://github.com/solana-labs/solana"
+license = "Apache-2.0"
+homepage = "https://solana.com/"
 documentation = "https://docs.rs/solana-notifier"
-version = { workspace = true }
-authors = { workspace = true }
-repository = { workspace = true }
-homepage = { workspace = true }
-license = { workspace = true }
-edition = { workspace = true }
+edition = "2021"
 
 [dependencies]
-log = { workspace = true }
-reqwest = { workspace = true, features = ["blocking", "brotli", "deflate", "gzip", "rustls-tls", "json"] }
-serde_json = { workspace = true }
-solana-sdk = { workspace = true }
+log = "0.4.17"
+reqwest = { version = "0.11.12", default-features = false, features = ["blocking", "brotli", "deflate", "gzip", "rustls-tls", "json"] }
+serde_json = "1.0"
+solana-sdk = { path = "../sdk", version = "=1.15.0" }
 
 [lib]
 name = "solana_notifier"

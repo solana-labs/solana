@@ -1,17 +1,17 @@
 [package]
 name = "solana-sbf-rust-sha"
+version = "1.15.0"
+description = "Solana SBF test program written in Rust"
+authors = ["Solana Maintainers <maintainers@solana.foundation>"]
+repository = "https://github.com/solana-labs/solana"
+license = "Apache-2.0"
+homepage = "https://solana.com/"
 documentation = "https://docs.rs/solana-sbf-rust-sha"
-version = { workspace = true }
-description = { workspace = true }
-authors = { workspace = true }
-repository = { workspace = true }
-homepage = { workspace = true }
-license = { workspace = true }
-edition = { workspace = true }
+edition = "2021"
 
 [dependencies]
-blake3 = { workspace = true }
-solana-program = { workspace = true }
+blake3 = "1.0.0"
+solana-program = { path = "../../../../sdk/program", version = "=1.15.0" }
 
 [lib]
 crate-type = ["cdylib"]

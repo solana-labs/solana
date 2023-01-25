@@ -1,26 +1,26 @@
 [package]
 name = "solana-send-transaction-service"
+version = "1.15.0"
 description = "Solana send transaction service"
+authors = ["Solana Maintainers <maintainers@solana.foundation>"]
+repository = "https://github.com/solana-labs/solana"
+homepage = "https://solana.com/"
 documentation = "https://docs.rs/solana-send-transaction-service"
-version = { workspace = true }
-authors = { workspace = true }
-repository = { workspace = true }
-homepage = { workspace = true }
-license = { workspace = true }
-edition = { workspace = true }
+license = "Apache-2.0"
+edition = "2021"
 
 [dependencies]
-crossbeam-channel = { workspace = true }
-log = { workspace = true }
-solana-client = { workspace = true }
-solana-measure = { workspace = true }
-solana-metrics = { workspace = true }
-solana-runtime = { workspace = true }
-solana-sdk = { workspace = true }
-solana-tpu-client = { workspace = true }
+crossbeam-channel = "0.5"
+log = "0.4.17"
+solana-client = { path = "../client", version = "=1.15.0" }
+solana-measure = { path = "../measure", version = "=1.15.0" }
+solana-metrics = { path = "../metrics", version = "=1.15.0" }
+solana-runtime = { path = "../runtime", version = "=1.15.0" }
+solana-sdk = { path = "../sdk", version = "=1.15.0" }
+solana-tpu-client = { path = "../tpu-client", version = "=1.15.0", default-features = false }
 
 [dev-dependencies]
-solana-logger = { workspace = true }
+solana-logger = { path = "../logger", version = "=1.15.0" }
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
