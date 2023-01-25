@@ -75,12 +75,6 @@ enum TracedEvent {
     BlockAndBankHash(Slot, Hash, Hash),
 }
 
-#[derive(Serialize, Deserialize, Debug)]
-enum BankStatus {
-    Started,
-    Ended,
-}
-
 #[derive(Serialize, Deserialize, Debug, Clone, Copy)]
 pub enum ChannelLabel {
     NonVote,
