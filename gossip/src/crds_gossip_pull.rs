@@ -630,33 +630,11 @@ impl CrdsGossipPull {
             stats.success,
         )
     }
-<<<<<<< HEAD
-
-    // Only for tests and simulations.
-    pub(crate) fn mock_clone(&self) -> Self {
-        let pull_request_time = {
-            let pull_request_time = self.pull_request_time.read().unwrap();
-            let mut clone = LruCache::new(pull_request_time.cap());
-            for (k, v) in pull_request_time.iter().rev() {
-                clone.put(*k, *v);
-            }
-            clone
-        };
-        let failed_inserts = self.failed_inserts.read().unwrap().clone();
-        Self {
-            pull_request_time: RwLock::new(pull_request_time),
-            failed_inserts: RwLock::new(failed_inserts),
-            num_pulls: AtomicUsize::new(self.num_pulls.load(Ordering::Relaxed)),
-            ..*self
-        }
-    }
 
     #[cfg(test)]
     pub(crate) fn pull_request_time(&self) -> std::sync::RwLockReadGuard<LruCache<Pubkey, u64>> {
         self.pull_request_time.read().unwrap()
     }
-=======
->>>>>>> 590b75140 (removes legacy retransmit tests (#29817))
 }
 
 #[cfg(test)]

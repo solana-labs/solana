@@ -484,40 +484,6 @@ impl CrdsGossipPush {
             !v.is_empty()
         });
     }
-<<<<<<< HEAD
-
-    // Only for tests and simulations.
-    pub(crate) fn mock_clone(&self) -> Self {
-        let active_set = {
-            let active_set = self.active_set.read().unwrap();
-            active_set
-                .iter()
-                .map(|(k, v)| (*k, v.mock_clone()))
-                .collect()
-        };
-        let last_pushed_to = {
-            let last_pushed_to = self.last_pushed_to.read().unwrap();
-            let mut clone = LruCache::new(last_pushed_to.cap());
-            for (k, v) in last_pushed_to.iter().rev() {
-                clone.put(*k, *v);
-            }
-            clone
-        };
-        let received_cache = self.received_cache.lock().unwrap().clone();
-        let crds_cursor = *self.crds_cursor.lock().unwrap();
-        Self {
-            active_set: RwLock::new(active_set),
-            received_cache: Mutex::new(received_cache),
-            last_pushed_to: RwLock::new(last_pushed_to),
-            crds_cursor: Mutex::new(crds_cursor),
-            num_total: AtomicUsize::new(self.num_total.load(Ordering::Relaxed)),
-            num_old: AtomicUsize::new(self.num_old.load(Ordering::Relaxed)),
-            num_pushes: AtomicUsize::new(self.num_pushes.load(Ordering::Relaxed)),
-            ..*self
-        }
-    }
-=======
->>>>>>> 590b75140 (removes legacy retransmit tests (#29817))
 }
 
 #[cfg(test)]
