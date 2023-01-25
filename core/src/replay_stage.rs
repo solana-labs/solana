@@ -2176,6 +2176,16 @@ impl ReplayStage {
             return;
         }
 
+        // Check if the slot is inside SlotHash of the tip of the fork. If not, then
+        // this vote will not do anything, we should vote on the tip of the fork instead.
+        if last_voted_slot < heaviest_bank_on_same_fork.slot()
+            && !heaviest_bank_on_same_fork.slot_within_slothash(&last_voted_slot)
+        {
+            let new_root = tower.record_bank_vote(heaviest_bank_on_same_fork, vote_account_pubkey);
+            // Because the last vote is too old, new_root should be none.
+            assert!(new_root.is_none());
+        }
+
         // TODO: check the timestamp in this vote is correct, i.e. it shouldn't
         // have changed from the original timestamp of the vote.
         let vote_tx = Self::generate_vote_tx(

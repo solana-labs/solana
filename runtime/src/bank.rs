@@ -7726,6 +7726,17 @@ impl Bank {
             &mut error_counters,
         )
     }
+
+    pub fn slot_within_slothash(&self, slot: &Slot) -> bool {
+        if slot < &self.slot {
+            if let Ok(sysvar_cache) = self.sysvar_cache.read() {
+                if let Ok(slot_hashes) = sysvar_cache.get_slot_hashes() {
+                    return slot_hashes.get(slot).is_some();
+                }
+            }
+        }
+        false
+    }
 }
 
 /// Compute how much an account has changed size.  This function is useful when the data size delta
@@ -20152,5 +20163,22 @@ pub(crate) mod tests {
         // Activate feature "again"
         bank.apply_feature_activations(ApplyFeatureActivationsCaller::NewFromParent, false);
         assert_eq!(bank.hashes_per_tick, Some(DEFAULT_HASHES_PER_TICK));
+    }
+
+    #[test]
+    fn test_slot_within_slothash() {
+        use solana_sdk::slot_hashes::MAX_ENTRIES;
+
+        let bank0 = create_simple_test_arc_bank(1);
+        assert!(!bank0.slot_within_slothash(&0));
+        assert!(!bank0.slot_within_slothash(&1));
+        let mut last_bank = bank0;
+        for _ in 0..MAX_ENTRIES {
+            let new_bank = Arc::new(new_from_parent(&last_bank));
+            assert!(new_bank.slot_within_slothash(&0));
+            last_bank = new_bank;
+        }
+        let new_bank = Arc::new(new_from_parent(&last_bank));
+        assert!(!new_bank.slot_within_slothash(&0));
     }
 }
