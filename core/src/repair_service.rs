@@ -16,6 +16,11 @@ use {
     },
     crossbeam_channel::{Receiver as CrossbeamReceiver, Sender as CrossbeamSender},
     lru::LruCache,
+    quinn::Endpoint,
+    solana_client::{
+        connection_cache::ConnectionCache,
+        quic_sendmmsg::{self, SendPktsError as QuicSendPktsError},
+    },
     solana_gossip::cluster_info::ClusterInfo,
     solana_ledger::{
         blockstore::{Blockstore, SlotMeta},
@@ -228,6 +233,7 @@ impl RepairService {
         blockstore: Arc<Blockstore>,
         exit: Arc<AtomicBool>,
         repair_socket: Arc<UdpSocket>,
+        quic_repair_endpoint: Option<Endpoint>,
         ancestor_hashes_socket: Arc<UdpSocket>,
         repair_info: RepairInfo,
         verified_vote_receiver: VerifiedVoteReceiver,
@@ -246,6 +252,7 @@ impl RepairService {
                         &blockstore,
                         &exit,
                         &repair_socket,
+                        quic_repair_endpoint,
                         repair_info,
                         verified_vote_receiver,
                         &outstanding_requests,
@@ -273,6 +280,7 @@ impl RepairService {
         blockstore: &Blockstore,
         exit: &AtomicBool,
         repair_socket: &UdpSocket,
+        quic_repair_endpoint: Option<Endpoint>,
         repair_info: RepairInfo,
         verified_vote_receiver: VerifiedVoteReceiver,
         outstanding_requests: &RwLock<OutstandingShredRepairs>,
@@ -290,6 +298,10 @@ impl RepairService {
         let mut best_repairs_stats = BestRepairsStats::default();
         let mut last_stats = Instant::now();
         let mut peers_cache = LruCache::new(REPAIR_PEERS_CACHE_CAPACITY);
+
+        let connection_cache = quic_repair_endpoint.map(|client_endpoint| {
+            ConnectionCache::new_with_client_options(1, Some(client_endpoint), None, None)
+        });
 
         loop {
             if exit.load(Ordering::Relaxed) {
@@ -393,7 +405,18 @@ impl RepairService {
 
             let mut batch_send_repairs_elapsed = Measure::start("batch_send_repairs_elapsed");
             if !batch.is_empty() {
-                if let Err(SendPktsError::IoError(err, num_failed)) =
+                if let Some(connection_cache) = &connection_cache {
+                    let result = quic_sendmmsg::batch_send(connection_cache, &batch);
+                    if let Err(QuicSendPktsError::TransportError(err, num_failed)) = result {
+                        error!(
+                            "{} batch_send failed to send {}/{} packets first error {:?}",
+                            id,
+                            num_failed,
+                            batch.len(),
+                            err
+                        );
+                    }
+                } else if let Err(SendPktsError::IoError(err, num_failed)) =
                     batch_send(repair_socket, &batch)
                 {
                     error!(
