@@ -4069,7 +4069,7 @@ mod tests {
         )
         .unwrap();
         let (deserialized_bank, _) = bank_from_snapshot_archives(
-            &[accounts_dir.as_path().to_path_buf()],
+            &[accounts_dir.clone()],
             bank_snapshots_dir.path(),
             &full_snapshot_archive_info,
             Some(&incremental_snapshot_archive_info),
@@ -4134,7 +4134,7 @@ mod tests {
         .unwrap();
 
         let (deserialized_bank, _) = bank_from_snapshot_archives(
-            &[accounts_dir.as_path().to_path_buf()],
+            &[accounts_dir],
             bank_snapshots_dir.path(),
             &full_snapshot_archive_info,
             Some(&incremental_snapshot_archive_info),
