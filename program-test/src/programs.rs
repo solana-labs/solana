@@ -7,6 +7,9 @@ use solana_sdk::{
 mod spl_token {
     solana_sdk::declare_id!("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA");
 }
+mod spl_token_2022 {
+    solana_sdk::declare_id!("TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb");
+}
 mod spl_memo_1_0 {
     solana_sdk::declare_id!("Memo1UhkJRfHyvLMcVucJwxXeuD728EqVDDwQDxFMNo");
 }
@@ -19,6 +22,10 @@ mod spl_associated_token_account {
 
 static SPL_PROGRAMS: &[(Pubkey, &[u8])] = &[
     (spl_token::ID, include_bytes!("programs/spl_token-3.5.0.so")),
+    (
+        spl_token_2022::ID,
+        include_bytes!("programs/spl_token_2022-0.5.0.so"),
+    ),
     (
         spl_memo_1_0::ID,
         include_bytes!("programs/spl_memo-1.0.0.so"),
