@@ -506,11 +506,14 @@ fn test_concurrent_snapshot_packaging(
     // channel hold hard links to these deleted snapshots. We verify this is the case below.
     let exit = Arc::new(AtomicBool::new(false));
 
-    let cluster_info = Arc::new(ClusterInfo::new(
-        ContactInfo::default(),
-        Arc::new(Keypair::new()),
-        SocketAddrSpace::Unspecified,
-    ));
+    let cluster_info = Arc::new({
+        let keypair = Arc::new(Keypair::new());
+        let contact_info = ContactInfo {
+            id: keypair.pubkey(),
+            ..ContactInfo::default()
+        };
+        ClusterInfo::new(contact_info, keypair, SocketAddrSpace::Unspecified)
+    });
 
     let pending_snapshot_package = PendingSnapshotPackage::default();
     let snapshot_packager_service = SnapshotPackagerService::new(

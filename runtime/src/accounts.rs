@@ -1068,7 +1068,7 @@ impl Accounts {
     }
 
     pub fn bank_hash_info_at(&self, slot: Slot) -> BankHashInfo {
-        let accounts_delta_hash = self.accounts_db.get_accounts_delta_hash(slot);
+        let accounts_delta_hash = self.accounts_db.calculate_accounts_delta_hash(slot);
         let bank_hashes = self.accounts_db.bank_hashes.read().unwrap();
         let mut bank_hash_info = bank_hashes
             .get(&slot)

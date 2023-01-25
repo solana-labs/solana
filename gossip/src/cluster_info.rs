@@ -406,6 +406,7 @@ impl ClusterInfo {
         keypair: Arc<Keypair>,
         socket_addr_space: SocketAddrSpace,
     ) -> Self {
+        assert_eq!(contact_info.id, keypair.pubkey());
         let id = contact_info.id;
         let me = Self {
             gossip: CrdsGossip::default(),
@@ -622,7 +623,7 @@ impl ClusterInfo {
     }
 
     pub fn id(&self) -> Pubkey {
-        self.my_contact_info.read().unwrap().id
+        self.keypair.read().unwrap().pubkey()
     }
 
     pub fn keypair(&self) -> RwLockReadGuard<Arc<Keypair>> {
@@ -3230,13 +3231,11 @@ RPC Enabled Nodes: 1"#;
     #[test]
     fn test_handle_pull() {
         solana_logger::setup();
-        let node = Node::new_localhost();
-        let cluster_info = Arc::new(ClusterInfo::new(
-            node.info,
-            Arc::new(Keypair::new()),
-            SocketAddrSpace::Unspecified,
-        ));
-
+        let cluster_info = Arc::new({
+            let keypair = Arc::new(Keypair::new());
+            let node = Node::new_localhost_with_pubkey(&keypair.pubkey());
+            ClusterInfo::new(node.info, keypair, SocketAddrSpace::Unspecified)
+        });
         let entrypoint_pubkey = solana_sdk::pubkey::new_rand();
         let data = test_crds_values(entrypoint_pubkey);
         let timeouts = HashMap::new();
@@ -3542,13 +3541,12 @@ RPC Enabled Nodes: 1"#;
     fn test_cluster_spy_gossip() {
         let thread_pool = ThreadPoolBuilder::new().build().unwrap();
         //check that gossip doesn't try to push to invalid addresses
-        let node = Node::new_localhost();
         let (spy, _, _) = ClusterInfo::spy_node(solana_sdk::pubkey::new_rand(), 0);
-        let cluster_info = Arc::new(ClusterInfo::new(
-            node.info,
-            Arc::new(Keypair::new()),
-            SocketAddrSpace::Unspecified,
-        ));
+        let cluster_info = Arc::new({
+            let keypair = Arc::new(Keypair::new());
+            let node = Node::new_localhost_with_pubkey(&keypair.pubkey());
+            ClusterInfo::new(node.info, keypair, SocketAddrSpace::Unspecified)
+        });
         cluster_info.insert_info(spy);
         cluster_info.gossip.refresh_push_active_set(
             &cluster_info.keypair(),
@@ -3575,20 +3573,17 @@ RPC Enabled Nodes: 1"#;
 
     #[test]
     fn test_cluster_info_new() {
-        let d = ContactInfo::new_localhost(&solana_sdk::pubkey::new_rand(), timestamp());
-        let cluster_info = ClusterInfo::new(
-            d.clone(),
-            Arc::new(Keypair::new()),
-            SocketAddrSpace::Unspecified,
-        );
+        let keypair = Arc::new(Keypair::new());
+        let d = ContactInfo::new_localhost(&keypair.pubkey(), timestamp());
+        let cluster_info = ClusterInfo::new(d.clone(), keypair, SocketAddrSpace::Unspecified);
         assert_eq!(d.id, cluster_info.id());
     }
 
     #[test]
     fn insert_info_test() {
-        let d = ContactInfo::new_localhost(&solana_sdk::pubkey::new_rand(), timestamp());
-        let cluster_info =
-            ClusterInfo::new(d, Arc::new(Keypair::new()), SocketAddrSpace::Unspecified);
+        let keypair = Arc::new(Keypair::new());
+        let d = ContactInfo::new_localhost(&keypair.pubkey(), timestamp());
+        let cluster_info = ClusterInfo::new(d, keypair, SocketAddrSpace::Unspecified);
         let d = ContactInfo::new_localhost(&solana_sdk::pubkey::new_rand(), timestamp());
         let label = CrdsValueLabel::LegacyContactInfo(d.id);
         cluster_info.insert_info(d);
@@ -3727,13 +3722,9 @@ RPC Enabled Nodes: 1"#;
 
     #[test]
     fn test_refresh_vote() {
-        let keys = Keypair::new();
-        let contact_info = ContactInfo::new_localhost(&keys.pubkey(), 0);
-        let cluster_info = ClusterInfo::new(
-            contact_info,
-            Arc::new(Keypair::new()),
-            SocketAddrSpace::Unspecified,
-        );
+        let keypair = Arc::new(Keypair::new());
+        let contact_info = ContactInfo::new_localhost(&keypair.pubkey(), 0);
+        let cluster_info = ClusterInfo::new(contact_info, keypair, SocketAddrSpace::Unspecified);
 
         // Construct and push a vote for some other slot
         let unrefresh_slot = 5;
@@ -3820,13 +3811,10 @@ RPC Enabled Nodes: 1"#;
     #[test]
     fn test_push_vote() {
         let mut rng = rand::thread_rng();
-        let keys = Keypair::new();
-        let contact_info = ContactInfo::new_localhost(&keys.pubkey(), 0);
-        let cluster_info = ClusterInfo::new(
-            contact_info,
-            Arc::new(Keypair::new()),
-            SocketAddrSpace::Unspecified,
-        );
+        let keypair = Arc::new(Keypair::new());
+        let contact_info = ContactInfo::new_localhost(&keypair.pubkey(), 0);
+        let cluster_info =
+            ClusterInfo::new(contact_info, keypair.clone(), SocketAddrSpace::Unspecified);
 
         // make sure empty crds is handled correctly
         let mut cursor = Cursor::default();
@@ -3855,7 +3843,7 @@ RPC Enabled Nodes: 1"#;
         assert_eq!(labels.len(), 1);
         match labels[0] {
             CrdsValueLabel::Vote(_, pubkey) => {
-                assert_eq!(pubkey, keys.pubkey());
+                assert_eq!(pubkey, keypair.pubkey());
             }
 
             _ => panic!("Bad match"),
@@ -3895,13 +3883,9 @@ RPC Enabled Nodes: 1"#;
             vote_slots.into_iter().collect()
         };
         let mut rng = rand::thread_rng();
-        let keys = Keypair::new();
-        let contact_info = ContactInfo::new_localhost(&keys.pubkey(), 0);
-        let cluster_info = ClusterInfo::new(
-            contact_info,
-            Arc::new(Keypair::new()),
-            SocketAddrSpace::Unspecified,
-        );
+        let keypair = Arc::new(Keypair::new());
+        let contact_info = ContactInfo::new_localhost(&keypair.pubkey(), 0);
+        let cluster_info = ClusterInfo::new(contact_info, keypair, SocketAddrSpace::Unspecified);
         let mut tower = Vec::new();
         for k in 0..MAX_LOCKOUT_HISTORY {
             let slot = k as Slot;
@@ -3948,13 +3932,9 @@ RPC Enabled Nodes: 1"#;
 
     #[test]
     fn test_push_epoch_slots() {
-        let keys = Keypair::new();
-        let contact_info = ContactInfo::new_localhost(&keys.pubkey(), 0);
-        let cluster_info = ClusterInfo::new(
-            contact_info,
-            Arc::new(Keypair::new()),
-            SocketAddrSpace::Unspecified,
-        );
+        let keypair = Arc::new(Keypair::new());
+        let contact_info = ContactInfo::new_localhost(&keypair.pubkey(), 0);
+        let cluster_info = ClusterInfo::new(contact_info, keypair, SocketAddrSpace::Unspecified);
         let slots = cluster_info.get_epoch_slots(&mut Cursor::default());
         assert!(slots.is_empty());
         cluster_info.push_epoch_slots(&[0]);
@@ -4160,12 +4140,9 @@ RPC Enabled Nodes: 1"#;
 
     #[test]
     fn test_tvu_peers_and_stakes() {
-        let d = ContactInfo::new_localhost(&Pubkey::from([0; 32]), timestamp());
-        let cluster_info = ClusterInfo::new(
-            d.clone(),
-            Arc::new(Keypair::new()),
-            SocketAddrSpace::Unspecified,
-        );
+        let keypair = Arc::new(Keypair::new());
+        let d = ContactInfo::new_localhost(&keypair.pubkey(), timestamp());
+        let cluster_info = ClusterInfo::new(d.clone(), keypair, SocketAddrSpace::Unspecified);
         let mut stakes = HashMap::new();
 
         // no stake
@@ -4684,8 +4661,8 @@ RPC Enabled Nodes: 1"#;
 
     #[test]
     fn test_get_duplicate_shreds() {
-        let node = Node::new_localhost();
         let host1_key = Arc::new(Keypair::new());
+        let node = Node::new_localhost_with_pubkey(&host1_key.pubkey());
         let cluster_info = Arc::new(ClusterInfo::new(
             node.info,
             host1_key.clone(),

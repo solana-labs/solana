@@ -270,11 +270,11 @@ fn bench_banking(bencher: &mut Bencher, tx_type: TransactionType) {
         );
         let (exit, poh_recorder, poh_service, signal_receiver) =
             create_test_recorder(&bank, &blockstore, None, None);
-        let cluster_info = ClusterInfo::new(
-            Node::new_localhost().info,
-            Arc::new(Keypair::new()),
-            SocketAddrSpace::Unspecified,
-        );
+        let cluster_info = {
+            let keypair = Arc::new(Keypair::new());
+            let node = Node::new_localhost_with_pubkey(&keypair.pubkey());
+            ClusterInfo::new(node.info, keypair, SocketAddrSpace::Unspecified)
+        };
         let cluster_info = Arc::new(cluster_info);
         let (s, _r) = unbounded();
         let _banking_stage = BankingStage::new(

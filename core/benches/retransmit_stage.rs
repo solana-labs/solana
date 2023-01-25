@@ -50,11 +50,11 @@ use {
 #[bench]
 fn bench_retransmitter(bencher: &mut Bencher) {
     solana_logger::setup();
-    let cluster_info = ClusterInfo::new(
-        Node::new_localhost().info,
-        Arc::new(Keypair::new()),
-        SocketAddrSpace::Unspecified,
-    );
+    let cluster_info = {
+        let keypair = Arc::new(Keypair::new());
+        let node = Node::new_localhost_with_pubkey(&keypair.pubkey());
+        ClusterInfo::new(node.info, keypair, SocketAddrSpace::Unspecified)
+    };
     const NUM_PEERS: usize = 4;
     let peer_sockets: Vec<_> = repeat_with(|| {
         let id = Pubkey::new_unique();
