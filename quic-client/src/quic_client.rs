@@ -1,18 +1,18 @@
 //! Simple client that connects to a given UDP port with the QUIC protocol and provides
-//! an interface for sending transactions which is restricted by the server's flow control.
+//! an interface for sending data which is restricted by the server's flow control.
 
 use {
     crate::nonblocking::quic_client::{
-        QuicClient, QuicLazyInitializedEndpoint, QuicTpuConnection as NonblockingQuicTpuConnection,
+        QuicClient, QuicClientConnection as NonblockingQuicConnection, QuicLazyInitializedEndpoint,
     },
     lazy_static::lazy_static,
     log::*,
-    solana_sdk::transport::{Result as TransportResult, TransportError},
-    solana_tpu_client::{
+    solana_connection_cache::{
+        client_connection::{ClientConnection, ClientStats},
         connection_cache_stats::ConnectionCacheStats,
-        nonblocking::tpu_connection::TpuConnection as NonblockingTpuConnection,
-        tpu_connection::{ClientStats, TpuConnection},
+        nonblocking::client_connection::ClientConnection as NonblockingClientConnection,
     },
+    solana_sdk::transport::{Result as TransportResult, TransportError},
     std::{
         net::SocketAddr,
         sync::{atomic::Ordering, Arc, Condvar, Mutex, MutexGuard},
@@ -25,7 +25,7 @@ pub mod temporary_pub {
     use super::*;
 
     pub const MAX_OUTSTANDING_TASK: u64 = 2000;
-    pub const SEND_TRANSACTION_TIMEOUT_MS: u64 = 10000;
+    pub const SEND_DATA_TIMEOUT_MS: u64 = 10000;
 
     /// A semaphore used for limiting the number of asynchronous tasks spawn to the
     /// runtime. Before spawnning a task, use acquire. After the task is done (be it
@@ -78,28 +78,28 @@ pub mod temporary_pub {
             .unwrap();
     }
 
-    pub async fn send_wire_transaction_async(
-        connection: Arc<NonblockingQuicTpuConnection>,
-        wire_transaction: Vec<u8>,
+    pub async fn send_data_async(
+        connection: Arc<NonblockingQuicConnection>,
+        buffer: Vec<u8>,
     ) -> TransportResult<()> {
         let result = timeout(
-            Duration::from_millis(SEND_TRANSACTION_TIMEOUT_MS),
-            connection.send_wire_transaction(wire_transaction),
+            Duration::from_millis(SEND_DATA_TIMEOUT_MS),
+            connection.send_data(&buffer),
         )
         .await;
         ASYNC_TASK_SEMAPHORE.release();
         handle_send_result(result, connection)
     }
 
-    pub async fn send_wire_transaction_batch_async(
-        connection: Arc<NonblockingQuicTpuConnection>,
+    pub async fn send_data_batch_async(
+        connection: Arc<NonblockingQuicConnection>,
         buffers: Vec<Vec<u8>>,
     ) -> TransportResult<()> {
-        let time_out = SEND_TRANSACTION_TIMEOUT_MS * buffers.len() as u64;
+        let time_out = SEND_DATA_TIMEOUT_MS * buffers.len() as u64;
 
         let result = timeout(
             Duration::from_millis(time_out),
-            connection.send_wire_transaction_batch(&buffers),
+            connection.send_data_batch(&buffers),
         )
         .await;
         ASYNC_TASK_SEMAPHORE.release();
@@ -109,7 +109,7 @@ pub mod temporary_pub {
     /// Check the send result and update stats if timedout. Returns the checked result.
     pub fn handle_send_result(
         result: Result<Result<(), TransportError>, tokio::time::error::Elapsed>,
-        connection: Arc<NonblockingQuicTpuConnection>,
+        connection: Arc<NonblockingQuicConnection>,
     ) -> Result<(), TransportError> {
         match result {
             Ok(result) => result,
@@ -118,28 +118,28 @@ pub mod temporary_pub {
                 client_stats.send_timeout.fetch_add(1, Ordering::Relaxed);
                 let stats = connection.connection_stats();
                 stats.add_client_stats(&client_stats, 0, false);
-                info!("Timedout sending transaction {:?}", connection.tpu_addr());
-                Err(TransportError::Custom(
-                    "Timedout sending transaction".to_string(),
-                ))
+                info!("Timedout sending data {:?}", connection.server_addr());
+                Err(TransportError::Custom("Timedout sending data".to_string()))
             }
         }
     }
 }
+
 use temporary_pub::*;
 
-pub struct QuicTpuConnection {
-    pub inner: Arc<NonblockingQuicTpuConnection>,
+pub struct QuicClientConnection {
+    pub inner: Arc<NonblockingQuicConnection>,
 }
-impl QuicTpuConnection {
+
+impl QuicClientConnection {
     pub fn new(
         endpoint: Arc<QuicLazyInitializedEndpoint>,
-        tpu_addr: SocketAddr,
+        server_addr: SocketAddr,
         connection_stats: Arc<ConnectionCacheStats>,
     ) -> Self {
-        let inner = Arc::new(NonblockingQuicTpuConnection::new(
+        let inner = Arc::new(NonblockingQuicConnection::new(
             endpoint,
-            tpu_addr,
+            server_addr,
             connection_stats,
         ));
         Self { inner }
@@ -149,7 +149,7 @@ impl QuicTpuConnection {
         client: Arc<QuicClient>,
         connection_stats: Arc<ConnectionCacheStats>,
     ) -> Self {
-        let inner = Arc::new(NonblockingQuicTpuConnection::new_with_client(
+        let inner = Arc::new(NonblockingQuicConnection::new_with_client(
             client,
             connection_stats,
         ));
@@ -157,33 +157,33 @@ impl QuicTpuConnection {
     }
 }
 
-impl TpuConnection for QuicTpuConnection {
-    fn tpu_addr(&self) -> &SocketAddr {
-        self.inner.tpu_addr()
+impl ClientConnection for QuicClientConnection {
+    fn server_addr(&self) -> &SocketAddr {
+        self.inner.server_addr()
     }
 
-    fn send_wire_transaction_batch<T>(&self, buffers: &[T]) -> TransportResult<()>
-    where
-        T: AsRef<[u8]> + Send + Sync,
-    {
-        RUNTIME.block_on(self.inner.send_wire_transaction_batch(buffers))?;
+    fn send_data_batch(&self, buffers: &[Vec<u8>]) -> TransportResult<()> {
+        RUNTIME.block_on(self.inner.send_data_batch(buffers))?;
         Ok(())
     }
 
-    fn send_wire_transaction_async(&self, wire_transaction: Vec<u8>) -> TransportResult<()> {
+    fn send_data_async(&self, data: Vec<u8>) -> TransportResult<()> {
         let _lock = ASYNC_TASK_SEMAPHORE.acquire();
         let inner = self.inner.clone();
 
-        let _handle = RUNTIME
-            .spawn(async move { send_wire_transaction_async(inner, wire_transaction).await });
+        let _handle = RUNTIME.spawn(async move { send_data_async(inner, data).await });
         Ok(())
     }
 
-    fn send_wire_transaction_batch_async(&self, buffers: Vec<Vec<u8>>) -> TransportResult<()> {
+    fn send_data_batch_async(&self, buffers: Vec<Vec<u8>>) -> TransportResult<()> {
         let _lock = ASYNC_TASK_SEMAPHORE.acquire();
         let inner = self.inner.clone();
-        let _handle =
-            RUNTIME.spawn(async move { send_wire_transaction_batch_async(inner, buffers).await });
+        let _handle = RUNTIME.spawn(async move { send_data_batch_async(inner, buffers).await });
+        Ok(())
+    }
+
+    fn send_data(&self, buffer: &[u8]) -> TransportResult<()> {
+        RUNTIME.block_on(self.inner.send_data(buffer))?;
         Ok(())
     }
 }

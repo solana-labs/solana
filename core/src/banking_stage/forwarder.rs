@@ -7,7 +7,7 @@ use {
         tracer_packet_stats::TracerPacketStats,
         unprocessed_transaction_storage::UnprocessedTransactionStorage,
     },
-    solana_client::{connection_cache::ConnectionCache, tpu_connection::TpuConnection},
+    solana_client::connection_cache::ConnectionCache,
     solana_gossip::cluster_info::ClusterInfo,
     solana_measure::measure::Measure,
     solana_perf::{data_budget::DataBudget, packet::Packet},
@@ -197,7 +197,7 @@ impl Forwarder {
                     .forwarded_transaction_count
                     .fetch_add(packet_vec_len, Ordering::Relaxed);
                 let conn = connection_cache.get_connection(&addr);
-                conn.send_wire_transaction_batch_async(packet_vec)
+                conn.send_data_batch_async(packet_vec)
             };
 
             measure.stop();

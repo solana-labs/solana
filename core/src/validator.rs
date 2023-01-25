@@ -759,11 +759,12 @@ impl Validator {
 
         let connection_cache = match use_quic {
             true => {
-                let mut connection_cache = ConnectionCache::new(tpu_connection_pool_size);
-                connection_cache
-                    .update_client_certificate(&identity_keypair, node.info.gossip.ip())
-                    .expect("Failed to update QUIC client certificates");
-                connection_cache.set_staked_nodes(&staked_nodes, &identity_keypair.pubkey());
+                let connection_cache = ConnectionCache::new_with_client_options(
+                    tpu_connection_pool_size,
+                    None,
+                    Some((&identity_keypair, node.info.gossip.ip())),
+                    Some((&staked_nodes, &identity_keypair.pubkey())),
+                );
                 Arc::new(connection_cache)
             }
             false => Arc::new(ConnectionCache::with_udp(tpu_connection_pool_size)),
@@ -2089,7 +2090,7 @@ mod tests {
         crossbeam_channel::{bounded, RecvTimeoutError},
         solana_ledger::{create_new_tmp_ledger, genesis_utils::create_genesis_config_with_leader},
         solana_sdk::{genesis_config::create_genesis_config, poh_config::PohConfig},
-        solana_tpu_client::tpu_connection_cache::{
+        solana_tpu_client::tpu_client::{
             DEFAULT_TPU_CONNECTION_POOL_SIZE, DEFAULT_TPU_ENABLE_UDP, DEFAULT_TPU_USE_QUIC,
         },
         std::{fs::remove_dir_all, thread, time::Duration},

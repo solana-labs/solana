@@ -5,11 +5,9 @@ pub mod nonblocking;
 pub mod quic_client;
 pub mod thin_client;
 pub mod tpu_client;
-pub mod tpu_connection;
 pub mod transaction_executor;
 pub mod udp_client;
 
-#[macro_use]
 extern crate solana_metrics;
 
 pub use solana_rpc_client::mock_sender_for_cli;
