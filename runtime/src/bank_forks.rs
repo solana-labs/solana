@@ -9,6 +9,7 @@ use {
     },
     log::*,
     solana_measure::measure::Measure,
+    solana_program_runtime::loaded_programs::{BlockRelation, ForkGraph},
     solana_sdk::{clock::Slot, feature_set, hash::Hash, timing},
     std::{
         collections::{hash_map::Entry, HashMap, HashSet},
@@ -626,6 +627,20 @@ impl BankForks {
         bank.slot() > self.last_accounts_hash_slot
             && bank.parent_slot() < start_slot
             && bank.slot() >= start_slot
+    }
+}
+
+impl ForkGraph for BankForks {
+    fn relationship(&self, a: Slot, b: Slot) -> BlockRelation {
+        let block_relation = BlockRelation::Unrelated;
+        if a == b { return BlockRelation::Equal; }
+        if let Some(x) = self.descendants().get(&b).map(|x| x.contains(&a)) {
+            if x { return BlockRelation::Descendant; }
+        }
+        if let Some(x) = self.ancestors().get(&b).map(|x| x.contains(&a)) {
+            if x { return BlockRelation::Ancestor; }
+        }
+        block_relation
     }
 }
 

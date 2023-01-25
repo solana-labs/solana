@@ -35,14 +35,6 @@ pub enum BlockRelation {
 pub trait ForkGraph {
     /// Returns the BlockRelation of A to B
     fn relationship(&self, a: Slot, b: Slot) -> BlockRelation;
-    /* {
-        match self.partial_cmp(other) {
-            Some(Ordering::Less) => BlockRelation::Ancestor,
-            Some(Ordering::Equal) => BlockRelation::Equal,
-            Some(Ordering::Greater) => BlockRelation::Descendant,
-            None => BlockRelation::Unrelated,
-        }
-    }*/
 }
 
 pub enum LoadedProgramType {
