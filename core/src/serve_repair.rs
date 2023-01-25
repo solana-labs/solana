@@ -1301,8 +1301,7 @@ mod tests {
         let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(10_000);
         let bank = Bank::new_for_tests(&genesis_config);
         let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
-        let me = ContactInfo::new_localhost(&solana_sdk::pubkey::new_rand(), timestamp());
-        let cluster_info = Arc::new(new_test_cluster_info(me));
+        let cluster_info = Arc::new(new_test_cluster_info());
         let serve_repair = ServeRepair::new(
             cluster_info.clone(),
             bank_forks,
@@ -1344,8 +1343,7 @@ mod tests {
     fn test_serialize_deserialize_ancestor_hashes_request() {
         let slot: Slot = 50;
         let nonce = 70;
-        let me = ContactInfo::new_localhost(&solana_sdk::pubkey::new_rand(), timestamp());
-        let cluster_info = Arc::new(new_test_cluster_info(me));
+        let cluster_info = Arc::new(new_test_cluster_info());
         let repair_peer_id = solana_sdk::pubkey::new_rand();
         let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(10_000);
         let keypair = cluster_info.keypair().clone();
@@ -1389,8 +1387,7 @@ mod tests {
         let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(10_000);
         let bank = Bank::new_for_tests(&genesis_config);
         let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
-        let me = ContactInfo::new_localhost(&solana_sdk::pubkey::new_rand(), timestamp());
-        let cluster_info = Arc::new(new_test_cluster_info(me));
+        let cluster_info = Arc::new(new_test_cluster_info());
         let serve_repair = ServeRepair::new(
             cluster_info.clone(),
             bank_forks,
@@ -1706,12 +1703,10 @@ mod tests {
         Blockstore::destroy(&ledger_path).expect("Expected successful database destruction");
     }
 
-    fn new_test_cluster_info(contact_info: ContactInfo) -> ClusterInfo {
-        ClusterInfo::new(
-            contact_info,
-            Arc::new(Keypair::new()),
-            SocketAddrSpace::Unspecified,
-        )
+    fn new_test_cluster_info() -> ClusterInfo {
+        let keypair = Arc::new(Keypair::new());
+        let contact_info = ContactInfo::new_localhost(&keypair.pubkey(), timestamp());
+        ClusterInfo::new(contact_info, keypair, SocketAddrSpace::Unspecified)
     }
 
     #[test]
@@ -1720,8 +1715,7 @@ mod tests {
         let bank = Bank::new_for_tests(&genesis_config);
         let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
         let cluster_slots = ClusterSlots::default();
-        let me = ContactInfo::new_localhost(&solana_sdk::pubkey::new_rand(), timestamp());
-        let cluster_info = Arc::new(new_test_cluster_info(me));
+        let cluster_info = Arc::new(new_test_cluster_info());
         let serve_repair = ServeRepair::new(
             cluster_info.clone(),
             bank_forks,
@@ -2046,8 +2040,8 @@ mod tests {
         let bank = Bank::new_for_tests(&genesis_config);
         let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
         let cluster_slots = ClusterSlots::default();
-        let me = ContactInfo::new_localhost(&solana_sdk::pubkey::new_rand(), timestamp());
-        let cluster_info = Arc::new(new_test_cluster_info(me.clone()));
+        let cluster_info = Arc::new(new_test_cluster_info());
+        let me = cluster_info.my_contact_info();
 
         // Insert two peers on the network
         let contact_info2 =

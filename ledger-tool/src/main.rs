@@ -1066,7 +1066,14 @@ fn load_bank_forks(
     };
 
     if let Some(halt_slot) = process_options.halt_at_slot {
-        // Check if we have the slot data necessary to replay from starting_slot to >= halt_slot.
+        if halt_slot < starting_slot {
+            eprintln!(
+                "Unable to load bank forks at slot {halt_slot} because it is less than the starting slot {starting_slot}. \
+                The starting slot will be the latest snapshot slot, or genesis if --no-snapshot flag specified or no snapshots found."
+            );
+            exit(1);
+        }
+        // Check if we have the slot data necessary to replay from starting_slot to <= halt_slot.
         //  - This will not catch the case when loading from genesis without a full slot 0.
         if !blockstore.slot_range_connected(starting_slot, halt_slot) {
             eprintln!("Unable to load bank forks at slot {halt_slot} due to disconnected blocks.",);
@@ -1737,6 +1744,7 @@ fn main() {
             SubCommand::with_name("bank-hash")
             .about("Prints the hash of the working bank after reading the ledger")
             .arg(&max_genesis_archive_unpacked_size_arg)
+            .arg(&halt_at_slot_arg)
         )
         .subcommand(
             SubCommand::with_name("bounds")
@@ -2473,7 +2481,7 @@ fn main() {
             ("bank-hash", Some(arg_matches)) => {
                 let process_options = ProcessOptions {
                     new_hard_forks: hardforks_of(arg_matches, "hard_forks"),
-                    halt_at_slot: Some(0),
+                    halt_at_slot: value_t!(arg_matches, "halt_at_slot", Slot).ok(),
                     poh_verify: false,
                     ..ProcessOptions::default()
                 };

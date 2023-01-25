@@ -160,17 +160,18 @@ mod tests {
     use {
         super::*,
         solana_gossip::legacy_contact_info::LegacyContactInfo as ContactInfo,
+        solana_sdk::signature::Signer,
         solana_streamer::socket::SocketAddrSpace,
         std::net::{IpAddr, Ipv4Addr, SocketAddr},
     };
 
     #[test]
     fn test_tvu_peers_ordering() {
-        let cluster = ClusterInfo::new(
-            ContactInfo::new_localhost(&solana_sdk::pubkey::new_rand(), 0),
-            Arc::new(Keypair::new()),
-            SocketAddrSpace::Unspecified,
-        );
+        let cluster = {
+            let keypair = Arc::new(Keypair::new());
+            let contact_info = ContactInfo::new_localhost(&keypair.pubkey(), 0);
+            ClusterInfo::new(contact_info, keypair, SocketAddrSpace::Unspecified)
+        };
         cluster.insert_info(ContactInfo::new_with_socketaddr(&SocketAddr::new(
             IpAddr::V4(Ipv4Addr::new(192, 168, 1, 1)),
             8080,

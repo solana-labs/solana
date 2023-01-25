@@ -1752,12 +1752,12 @@ mod tests {
         crossbeam_channel::{unbounded, Receiver},
         solana_address_lookup_table_program::state::{AddressLookupTable, LookupTableMeta},
         solana_entry::entry::{next_entry, next_versioned_entry, Entry, EntrySlice},
-        solana_gossip::{
-            cluster_info::Node, legacy_contact_info::LegacyContactInfo as ContactInfo,
-        },
+        solana_gossip::cluster_info::Node,
         solana_ledger::{
             blockstore::{entries_to_test_shreds, Blockstore},
-            genesis_utils::{create_genesis_config, GenesisConfigInfo},
+            genesis_utils::{
+                create_genesis_config, create_genesis_config_with_leader, GenesisConfigInfo,
+            },
             get_tmp_ledger_path_auto_delete,
             leader_schedule_cache::LeaderScheduleCache,
         },
@@ -1768,7 +1768,10 @@ mod tests {
         },
         solana_program_runtime::timings::ProgramTiming,
         solana_rpc::transaction_status_service::TransactionStatusService,
-        solana_runtime::{bank_forks::BankForks, genesis_utils::activate_feature},
+        solana_runtime::{
+            bank_forks::BankForks,
+            genesis_utils::{activate_feature, bootstrap_validator_stake_lamports},
+        },
         solana_sdk::{
             account::AccountSharedData,
             hash::Hash,
@@ -1795,12 +1798,12 @@ mod tests {
         },
     };
 
-    fn new_test_cluster_info(contact_info: ContactInfo) -> ClusterInfo {
-        ClusterInfo::new(
-            contact_info,
-            Arc::new(Keypair::new()),
-            SocketAddrSpace::Unspecified,
-        )
+    fn new_test_cluster_info(keypair: Option<Arc<Keypair>>) -> (Node, ClusterInfo) {
+        let keypair = keypair.unwrap_or_else(|| Arc::new(Keypair::new()));
+        let node = Node::new_localhost_with_pubkey(&keypair.pubkey());
+        let cluster_info =
+            ClusterInfo::new(node.info.clone(), keypair, SocketAddrSpace::Unspecified);
+        (node, cluster_info)
     }
 
     #[test]
@@ -1820,7 +1823,7 @@ mod tests {
             );
             let (exit, poh_recorder, poh_service, _entry_receiever) =
                 create_test_recorder(&bank, &blockstore, None, None);
-            let cluster_info = new_test_cluster_info(Node::new_localhost().info);
+            let (_, cluster_info) = new_test_cluster_info(/*keypair:*/ None);
             let cluster_info = Arc::new(cluster_info);
             let (replay_vote_sender, _replay_vote_receiver) = unbounded();
 
@@ -1873,7 +1876,7 @@ mod tests {
             };
             let (exit, poh_recorder, poh_service, entry_receiver) =
                 create_test_recorder(&bank, &blockstore, Some(poh_config), None);
-            let cluster_info = new_test_cluster_info(Node::new_localhost().info);
+            let (_, cluster_info) = new_test_cluster_info(/*keypair:*/ None);
             let cluster_info = Arc::new(cluster_info);
             let (replay_vote_sender, _replay_vote_receiver) = unbounded();
 
@@ -1951,7 +1954,7 @@ mod tests {
             };
             let (exit, poh_recorder, poh_service, entry_receiver) =
                 create_test_recorder(&bank, &blockstore, Some(poh_config), None);
-            let cluster_info = new_test_cluster_info(Node::new_localhost().info);
+            let (_, cluster_info) = new_test_cluster_info(/*keypair:*/ None);
             let cluster_info = Arc::new(cluster_info);
             let (replay_vote_sender, _replay_vote_receiver) = unbounded();
 
@@ -2107,7 +2110,7 @@ mod tests {
                 };
                 let (exit, poh_recorder, poh_service, entry_receiver) =
                     create_test_recorder(&bank, &blockstore, Some(poh_config), None);
-                let cluster_info = new_test_cluster_info(Node::new_localhost().info);
+                let (_, cluster_info) = new_test_cluster_info(/*keypair:*/ None);
                 let cluster_info = Arc::new(cluster_info);
                 let _banking_stage = BankingStage::new_num_threads(
                     &cluster_info,
@@ -2284,7 +2287,19 @@ mod tests {
     }
 
     fn create_slow_genesis_config(lamports: u64) -> GenesisConfigInfo {
-        let mut config_info = create_genesis_config(lamports);
+        create_slow_genesis_config_with_leader(lamports, &solana_sdk::pubkey::new_rand())
+    }
+
+    fn create_slow_genesis_config_with_leader(
+        lamports: u64,
+        validator_pubkey: &Pubkey,
+    ) -> GenesisConfigInfo {
+        let mut config_info = create_genesis_config_with_leader(
+            lamports,
+            validator_pubkey,
+            // See solana_ledger::genesis_utils::create_genesis_config.
+            bootstrap_validator_stake_lamports(),
+        );
         // For these tests there's only 1 slot, don't want to run out of ticks
         config_info.genesis_config.ticks_per_slot *= 8;
         config_info
@@ -3539,12 +3554,10 @@ mod tests {
         let packet = Packet::from_data(None, tx).unwrap();
         let deserialized_packet = DeserializedPacket::new(packet).unwrap();
 
-        let genesis_config_info = create_slow_genesis_config(10_000);
-        let GenesisConfigInfo {
-            genesis_config,
-            validator_pubkey,
-            ..
-        } = &genesis_config_info;
+        let validator_keypair = Arc::new(Keypair::new());
+        let genesis_config_info =
+            create_slow_genesis_config_with_leader(10_000, &validator_keypair.pubkey());
+        let GenesisConfigInfo { genesis_config, .. } = &genesis_config_info;
 
         let bank = Bank::new_no_wallclock_throttle_for_tests(genesis_config);
         let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
@@ -3565,8 +3578,7 @@ mod tests {
             let (exit, poh_recorder, poh_service, _entry_receiver) =
                 create_test_recorder(&bank, &blockstore, Some(poh_config), None);
 
-            let local_node = Node::new_localhost_with_pubkey(validator_pubkey);
-            let cluster_info = new_test_cluster_info(local_node.info);
+            let (local_node, cluster_info) = new_test_cluster_info(Some(validator_keypair));
             let recv_socket = &local_node.sockets.tpu_forwards[0];
 
             let test_cases = vec![
@@ -3647,12 +3659,10 @@ mod tests {
             ThreadType::Transactions,
         );
 
-        let genesis_config_info = create_slow_genesis_config(10_000);
-        let GenesisConfigInfo {
-            genesis_config,
-            validator_pubkey,
-            ..
-        } = &genesis_config_info;
+        let validator_keypair = Arc::new(Keypair::new());
+        let genesis_config_info =
+            create_slow_genesis_config_with_leader(10_000, &validator_keypair.pubkey());
+        let GenesisConfigInfo { genesis_config, .. } = &genesis_config_info;
         let bank = Bank::new_no_wallclock_throttle_for_tests(genesis_config);
         let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
         let bank = Arc::new(bank_forks.read().unwrap().get(0).unwrap());
@@ -3672,8 +3682,7 @@ mod tests {
             let (exit, poh_recorder, poh_service, _entry_receiver) =
                 create_test_recorder(&bank, &blockstore, Some(poh_config), None);
 
-            let local_node = Node::new_localhost_with_pubkey(validator_pubkey);
-            let cluster_info = new_test_cluster_info(local_node.info);
+            let (local_node, cluster_info) = new_test_cluster_info(Some(validator_keypair));
             let recv_socket = &local_node.sockets.tpu_forwards[0];
             let connection_cache = ConnectionCache::default();
 
@@ -3788,7 +3797,7 @@ mod tests {
             };
             let (exit, poh_recorder, poh_service, _entry_receiver) =
                 create_test_recorder(&bank, &blockstore, Some(poh_config), None);
-            let cluster_info = new_test_cluster_info(Node::new_localhost().info);
+            let (_, cluster_info) = new_test_cluster_info(/*keypair:*/ None);
             let cluster_info = Arc::new(cluster_info);
             let (replay_vote_sender, _replay_vote_receiver) = unbounded();
 
