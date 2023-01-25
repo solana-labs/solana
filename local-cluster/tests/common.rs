@@ -21,9 +21,7 @@ use {
         validator_configs::*,
     },
     solana_rpc_client::rpc_client::RpcClient,
-    solana_runtime::{
-        snapshot_config::SnapshotConfig, snapshot_utils::create_accounts_run_and_snapshot_dirs,
-    },
+    solana_runtime::snapshot_config::SnapshotConfig,
     solana_sdk::{
         account::AccountSharedData,
         clock::{self, Slot, DEFAULT_MS_PER_SLOT, DEFAULT_TICKS_PER_SLOT},
@@ -438,7 +436,7 @@ pub fn generate_account_paths(num_account_paths: usize) -> (Vec<TempDir>, Vec<Pa
         .collect();
     let account_storage_paths: Vec<_> = account_storage_dirs
         .iter()
-        .map(|a| create_accounts_run_and_snapshot_dirs(a.path()).unwrap().0)
+        .map(|a| a.path().to_path_buf())
         .collect();
     (account_storage_dirs, account_storage_paths)
 }
