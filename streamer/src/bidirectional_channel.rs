@@ -178,6 +178,7 @@ pub struct QuicBidirectionalReplyService {
     serving_handle: Option<Arc<std::thread::JoinHandle<()>>>,
     pub metrics: QuicBidirectionalMetrics,
     pub identity: Pubkey,
+    pub is_serving: bool,
 }
 
 pub fn get_signature_from_packet(packet: &Packet) -> Option<Signature> {
@@ -205,9 +206,11 @@ impl QuicBidirectionalReplyService {
             serving_handle: None,
             metrics: QuicBidirectionalMetrics::new(),
             identity: identity,
+            is_serving: false,
         };
         if !identity.eq(&Pubkey::default()) {
             instance.serve(service_reciever);
+            instance.is_serving = true;
         }
         instance
     }
@@ -217,6 +220,9 @@ impl QuicBidirectionalReplyService {
     }
 
     pub fn send_message(&self, transaction_signature: &Signature, message: String) {
+        if !self.is_serving {
+            return;
+        }
         let message = QuicReplyMessage::new(self.identity, *transaction_signature, message);
         match self.service_sender.send(message) {
             Err(e) => {
@@ -691,6 +697,12 @@ pub mod test {
         assert_eq!(metrics.connections_added(), 1);
         assert_eq!(metrics.transactions_removed(), nb_packets);
         exit.store(true, std::sync::atomic::Ordering::Relaxed);
+    }
+
+    #[tokio::test]
+    async fn not_serving_test_reply_services() {
+        let test = QuicBidirectionalReplyService::new_for_test();
+        assert_eq!(test.is_serving, false);
     }
 
     #[tokio::test]
