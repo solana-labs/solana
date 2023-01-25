@@ -68,7 +68,6 @@ pub struct DuplicateShredHandler {
     leader_schedule_cache: Arc<LeaderScheduleCache>,
     bank_forks: Arc<RwLock<BankForks>>,
     // Cache information from root bank so we could function correctly without reading roots.
-    cached_on_slot: Slot,
     cached_staked_nodes: Option<Arc<HashMap<Pubkey, u64>>>,
     cached_slots_in_epoch: u64,
     // Because cleanup could potentially be very expensive, only clean up when clean up
@@ -100,10 +99,9 @@ impl DuplicateShredHandler {
         Self {
             chunk_map: HashMap::new(),
             validator_pending_proof_map: HashMap::new(),
+            cached_staked_nodes: None,
             last_root: None,
             last_root_cleaned: None,
-            cached_on_slot: 0,
-            cached_staked_nodes: None,
             cached_slots_in_epoch: 100,
             blockstore,
             leader_schedule_cache,
@@ -116,17 +114,10 @@ impl DuplicateShredHandler {
         let last_root = self.blockstore.last_root();
         if Some(last_root) != self.last_root {
             self.last_root = Some(last_root);
-            // The stuff we need only changes per epoch, so we only need to cache
-            // once per epoch, and it's okay if we use old data in a few slots.
-            if self.cached_staked_nodes.is_some()
-                && last_root < self.cached_slots_in_epoch + self.cached_on_slot {
-                return;
-            }
             if let Ok(bank_forks_result) = self.bank_forks.read() {
                 let root_bank = bank_forks_result.root_bank();
                 self.cached_staked_nodes = Some(root_bank.staked_nodes());
                 self.cached_slots_in_epoch = root_bank.get_epoch_info().slots_in_epoch;
-                self.cached_on_slot = last_root;
             }
         }
     }
