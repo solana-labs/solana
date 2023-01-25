@@ -136,6 +136,9 @@ impl Tpu {
 
         let (find_packet_sender_stake_sender, find_packet_sender_stake_receiver) = unbounded();
 
+        // this channel is used to send back error to clients who have connected in mode bidirectional
+        let bidirection_reply_service = QuicBidirectionalReplyService::new(keypair.pubkey());
+
         let find_packet_sender_stake_stage = FindPacketSenderStakeStage::new(
             packet_receiver,
             find_packet_sender_stake_sender,
@@ -154,8 +157,6 @@ impl Tpu {
         );
 
         let (verified_sender, verified_receiver) = unbounded();
-        // this channel is used to send back error to clients who have connected in mode bidirectional
-        let bidirection_reply_service = QuicBidirectionalReplyService::new(keypair.pubkey());
 
         let stats = Arc::new(StreamStats::default());
         let tpu_quic_t = spawn_server(
@@ -190,7 +191,12 @@ impl Tpu {
 
         let sigverify_stage = {
             let verifier = TransactionSigVerifier::new(verified_sender);
-            SigVerifyStage::new(find_packet_sender_stake_receiver, verifier, "tpu-verifier")
+            SigVerifyStage::new(
+                find_packet_sender_stake_receiver,
+                verifier,
+                "tpu-verifier",
+                bidirection_reply_service.clone(),
+            )
         };
 
         let (verified_tpu_vote_packets_sender, verified_tpu_vote_packets_receiver) = unbounded();
@@ -202,6 +208,7 @@ impl Tpu {
                 vote_find_packet_sender_stake_receiver,
                 verifier,
                 "tpu-vote-verifier",
+                bidirection_reply_service.clone(),
             )
         };
 

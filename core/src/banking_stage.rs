@@ -1974,6 +1974,7 @@ impl BankingStage {
         bank: &Arc<Bank>,
         transactions: &[SanitizedTransaction],
         pending_indexes: &[usize],
+        bidirectional_reply_service: QuicBidirectionalReplyService,
     ) -> Vec<usize> {
         let filter =
             Self::prepare_filter_for_pending_transactions(transactions.len(), pending_indexes);
@@ -1998,6 +1999,7 @@ impl BankingStage {
                 .saturating_sub(max_tx_fwd_delay)
                 .saturating_sub(FORWARD_TRANSACTIONS_TO_LEADER_AT_SLOT_OFFSET as usize),
             &mut error_counters,
+            bidirectional_reply_service,
         );
 
         Self::filter_valid_transaction_indexes(&results)
@@ -2067,12 +2069,14 @@ impl BankingStage {
         let retryable_tx_count = retryable_transaction_indexes.len();
         inc_new_counter_info!("banking_stage-unprocessed_transactions", retryable_tx_count);
 
+        let bidirectional_reply_service = qos_service.bidirection_reply_service();
         // Filter out the retryable transactions that are too old
         let (filtered_retryable_transaction_indexes, filter_retryable_packets_time) = measure!(
             Self::filter_pending_packets_from_pending_txs(
                 bank,
                 sanitized_transactions,
-                retryable_transaction_indexes
+                retryable_transaction_indexes,
+                bidirectional_reply_service,
             ),
             "filter_retryable_packets_time"
         );

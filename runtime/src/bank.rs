@@ -3869,6 +3869,7 @@ impl Bank {
         lock_results: &[Result<()>],
         max_age: usize,
         error_counters: &mut TransactionErrorMetrics,
+        bidirectional_channel: QuicBidirectionalReplyService,
     ) -> Vec<TransactionCheckResult> {
         let hash_queue = self.blockhash_queue.read().unwrap();
         let last_blockhash = hash_queue.last_hash();
@@ -3885,6 +3886,10 @@ impl Bank {
                     {
                         (Ok(()), Some(NoncePartial::new(address, account)))
                     } else {
+                        bidirectional_channel.send_message(
+                            tx.signature(),
+                            TransactionError::BlockhashNotFound.to_string(),
+                        );
                         error_counters.blockhash_not_found += 1;
                         (Err(TransactionError::BlockhashNotFound), None)
                     }
@@ -3975,9 +3980,15 @@ impl Bank {
         lock_results: &[Result<()>],
         max_age: usize,
         error_counters: &mut TransactionErrorMetrics,
+        bidirection_reply_service: QuicBidirectionalReplyService,
     ) -> Vec<TransactionCheckResult> {
-        let age_results =
-            self.check_age(sanitized_txs.iter(), lock_results, max_age, error_counters);
+        let age_results = self.check_age(
+            sanitized_txs.iter(),
+            lock_results,
+            max_age,
+            error_counters,
+            bidirection_reply_service,
+        );
         self.check_status_cache(sanitized_txs, age_results, error_counters)
     }
 
@@ -4287,34 +4298,18 @@ impl Bank {
                     Some(index)
                 }
                 Err(TransactionError::WouldExceedMaxBlockCostLimit) => {
-                    bidirection_reply_service.send_message(
-                        sanitized_txs[index].signature(),
-                        TransactionError::WouldExceedMaxBlockCostLimit.to_string(),
-                    );
                     error_counters.would_exceed_max_block_cost_limit += 1;
                     Some(index)
                 }
                 Err(TransactionError::WouldExceedMaxVoteCostLimit) => {
-                    bidirection_reply_service.send_message(
-                        sanitized_txs[index].signature(),
-                        TransactionError::WouldExceedMaxVoteCostLimit.to_string(),
-                    );
                     error_counters.would_exceed_max_vote_cost_limit += 1;
                     Some(index)
                 }
                 Err(TransactionError::WouldExceedMaxAccountCostLimit) => {
-                    bidirection_reply_service.send_message(
-                        sanitized_txs[index].signature(),
-                        TransactionError::WouldExceedMaxAccountCostLimit.to_string(),
-                    );
                     error_counters.would_exceed_max_account_cost_limit += 1;
                     Some(index)
                 }
                 Err(TransactionError::WouldExceedAccountDataBlockLimit) => {
-                    bidirection_reply_service.send_message(
-                        sanitized_txs[index].signature(),
-                        TransactionError::WouldExceedAccountDataBlockLimit.to_string(),
-                    );
                     error_counters.would_exceed_account_data_block_limit += 1;
                     Some(index)
                 }
@@ -4338,6 +4333,7 @@ impl Bank {
             batch.lock_results(),
             max_age,
             &mut error_counters,
+            bidirection_reply_service,
         );
         check_time.stop();
 
