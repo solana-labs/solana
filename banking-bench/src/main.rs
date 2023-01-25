@@ -600,7 +600,9 @@ fn main() {
         poh_service.join().unwrap();
         sleep(Duration::from_secs(1));
         debug!("waited for poh_service");
-        tracer_thread.unwrap().join().unwrap().unwrap();
+        if let Some(tracer_thread) = tracer_thread {
+            tracer_thread.join().unwrap().unwrap();
+        }
     }
     let _unused = Blockstore::destroy(&ledger_path);
 }
