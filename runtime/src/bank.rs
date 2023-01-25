@@ -2494,6 +2494,12 @@ impl Bank {
                         }
                     };
                     if cached_stake_account.account() != &stake_account {
+                        if self.rc.accounts.accounts_db.assert_stakes_cache_consistency {
+                            panic!(
+                                "stakes cache accounts mismatch {:?} {:?}",
+                                cached_stake_account, stake_account
+                            );
+                        }
                         invalid_cached_stake_accounts.fetch_add(1, Relaxed);
                         let cached_stake_account = cached_stake_account.account();
                         if cached_stake_account.lamports() == stake_account.lamports()
@@ -7916,6 +7922,7 @@ pub(crate) mod tests {
                 genesis_sysvar_and_builtin_program_lamports, GenesisConfigInfo,
                 ValidatorVoteKeypairs,
             },
+            rent_collector::RENT_EXEMPT_RENT_EPOCH,
             rent_paying_accounts_by_partition::RentPayingAccountsByPartition,
             status_cache::MAX_CACHE_ENTRIES,
         },
@@ -17423,7 +17430,23 @@ pub(crate) mod tests {
             &validator_keypairs,
             vec![LAMPORTS_PER_SOL; 2],
         );
-        let bank = Arc::new(Bank::new_for_tests(&genesis_config));
+        let bank = Arc::new(Bank::new_with_paths(
+            &genesis_config,
+            Arc::<RuntimeConfig>::default(),
+            Vec::new(),
+            None,
+            None,
+            AccountSecondaryIndexes::default(),
+            AccountShrinkThreshold::default(),
+            false,
+            Some(AccountsDbConfig {
+                // at least one tests hit this assert, so disable it
+                assert_stakes_cache_consistency: false,
+                ..ACCOUNTS_DB_CONFIG_FOR_TESTING
+            }),
+            None,
+            &Arc::default(),
+        ));
         let vote_and_stake_accounts =
             load_vote_and_stake_accounts(&bank).vote_with_stake_delegations_map;
         assert_eq!(vote_and_stake_accounts.len(), 2);
@@ -20150,5 +20173,87 @@ pub(crate) mod tests {
         // Activate feature "again"
         bank.apply_feature_activations(ApplyFeatureActivationsCaller::NewFromParent, false);
         assert_eq!(bank.hashes_per_tick, Some(DEFAULT_HASHES_PER_TICK));
+    }
+
+    #[test]
+    fn test_stake_account_consistency_with_rent_epoch_max_feature() {
+        // this test can be removed once set_exempt_rent_epoch_max gets activated
+        solana_logger::setup();
+        for rent_epoch_max_enabled_initially in [false, true] {
+            let (mut genesis_config, _mint_keypair) = create_genesis_config(100 * LAMPORTS_PER_SOL);
+            genesis_config.rent = Rent::default();
+            let mut bank = Bank::new_for_tests(&genesis_config);
+            let expected_initial_rent_epoch = if rent_epoch_max_enabled_initially {
+                bank.activate_feature(&solana_sdk::feature_set::set_exempt_rent_epoch_max::id());
+                RENT_EXEMPT_RENT_EPOCH
+            } else {
+                Epoch::default()
+            };
+
+            assert!(bank.rc.accounts.accounts_db.assert_stakes_cache_consistency);
+            let mut pubkey_bytes_early = [0u8; 32];
+            pubkey_bytes_early[31] = 2;
+            let stake_acct = Pubkey::from(pubkey_bytes_early);
+            let vote_id = solana_sdk::pubkey::new_rand();
+            let (stake_id1, stake_account1) =
+                crate::stakes::tests::create_stake_account_with_id(12300000, &vote_id, stake_acct);
+
+            // set up accounts
+            bank.store_account_and_update_capitalization(&stake_id1, &stake_account1);
+
+            // create banks at a few slots
+            assert_eq!(
+                bank.load_slow(&bank.ancestors, &stake_id1)
+                    .unwrap()
+                    .0
+                    .rent_epoch(),
+                0 // manually created, so default is 0
+            );
+            let slot = 1;
+            let slots_per_epoch = bank.epoch_schedule().get_slots_in_epoch(0);
+            let mut bank = Bank::new_from_parent(&Arc::new(bank), &Pubkey::default(), slot);
+            if !rent_epoch_max_enabled_initially {
+                bank.activate_feature(&solana_sdk::feature_set::set_exempt_rent_epoch_max::id());
+            }
+            let bank = Arc::new(bank);
+
+            let slot = slots_per_epoch - 1;
+            assert_eq!(
+                bank.load_slow(&bank.ancestors, &stake_id1)
+                    .unwrap()
+                    .0
+                    .rent_epoch(),
+                // rent has been collected, so if rent epoch is max is activated, this will be max by now
+                expected_initial_rent_epoch
+            );
+            let mut bank = Arc::new(Bank::new_from_parent(&bank, &Pubkey::default(), slot));
+
+            let last_slot_in_epoch = bank.epoch_schedule().get_last_slot_in_epoch(1);
+            let slot = last_slot_in_epoch - 2;
+            assert_eq!(
+                bank.load_slow(&bank.ancestors, &stake_id1)
+                    .unwrap()
+                    .0
+                    .rent_epoch(),
+                expected_initial_rent_epoch
+            );
+            bank = Arc::new(Bank::new_from_parent(&bank, &Pubkey::default(), slot));
+            assert_eq!(
+                bank.load_slow(&bank.ancestors, &stake_id1)
+                    .unwrap()
+                    .0
+                    .rent_epoch(),
+                expected_initial_rent_epoch
+            );
+            let slot = last_slot_in_epoch - 1;
+            bank = Arc::new(Bank::new_from_parent(&bank, &Pubkey::default(), slot));
+            assert_eq!(
+                bank.load_slow(&bank.ancestors, &stake_id1)
+                    .unwrap()
+                    .0
+                    .rent_epoch(),
+                RENT_EXEMPT_RENT_EPOCH
+            );
+        }
     }
 }

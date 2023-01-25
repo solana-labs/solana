@@ -533,6 +533,15 @@ pub(crate) mod tests {
         vote_pubkey: &Pubkey,
     ) -> (Pubkey, AccountSharedData) {
         let stake_pubkey = solana_sdk::pubkey::new_rand();
+        create_stake_account_with_id(stake, vote_pubkey, stake_pubkey)
+    }
+
+    //   add stake to a vote_pubkey                               (   stake    )
+    pub(crate) fn create_stake_account_with_id(
+        stake: u64,
+        vote_pubkey: &Pubkey,
+        stake_pubkey: Pubkey,
+    ) -> (Pubkey, AccountSharedData) {
         (
             stake_pubkey,
             stake_state::create_account(

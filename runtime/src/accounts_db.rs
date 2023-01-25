@@ -423,6 +423,7 @@ pub const ACCOUNTS_DB_CONFIG_FOR_TESTING: AccountsDbConfig = AccountsDbConfig {
     ancient_append_vec_offset: None,
     skip_initial_hash_calc: false,
     exhaustively_verify_refcounts: false,
+    assert_stakes_cache_consistency: true,
 };
 pub const ACCOUNTS_DB_CONFIG_FOR_BENCHMARKS: AccountsDbConfig = AccountsDbConfig {
     index: Some(ACCOUNTS_INDEX_CONFIG_FOR_BENCHMARKS),
@@ -432,6 +433,7 @@ pub const ACCOUNTS_DB_CONFIG_FOR_BENCHMARKS: AccountsDbConfig = AccountsDbConfig
     ancient_append_vec_offset: None,
     skip_initial_hash_calc: false,
     exhaustively_verify_refcounts: false,
+    assert_stakes_cache_consistency: false,
 };
 
 pub type BinnedHashData = Vec<Vec<CalculateHashIntermediate>>;
@@ -489,6 +491,8 @@ pub struct AccountsDbConfig {
     pub ancient_append_vec_offset: Option<i64>,
     pub skip_initial_hash_calc: bool,
     pub exhaustively_verify_refcounts: bool,
+    /// when stakes cache consistency check occurs, assert that cached accounts match accounts db
+    pub assert_stakes_cache_consistency: bool,
 }
 
 #[cfg(not(test))]
@@ -1274,6 +1278,8 @@ pub struct AccountsDb {
     pub skip_initial_hash_calc: bool,
 
     pub(crate) storage: AccountStorage,
+
+    pub(crate) assert_stakes_cache_consistency: bool,
 
     pub accounts_cache: AccountsCache,
 
@@ -2291,6 +2297,7 @@ impl AccountsDb {
         const ACCOUNTS_STACK_SIZE: usize = 8 * 1024 * 1024;
 
         AccountsDb {
+            assert_stakes_cache_consistency: false,
             verify_accounts_hash_in_bg: VerifyAccountsHashInBackground::default(),
             filler_accounts_per_slot: AtomicU64::default(),
             filler_account_slots_remaining: AtomicU64::default(),
@@ -2409,6 +2416,11 @@ impl AccountsDb {
             .map(|config| config.exhaustively_verify_refcounts)
             .unwrap_or_default();
 
+        let assert_stakes_cache_consistency = accounts_db_config
+            .as_ref()
+            .map(|config| config.assert_stakes_cache_consistency)
+            .unwrap_or_default();
+
         let filler_account_suffix = if filler_accounts_config.count > 0 {
             Some(solana_sdk::pubkey::new_rand())
         } else {
@@ -2425,6 +2437,7 @@ impl AccountsDb {
             accounts_update_notifier,
             filler_accounts_config,
             filler_account_suffix,
+            assert_stakes_cache_consistency,
             write_cache_limit_bytes: accounts_db_config
                 .as_ref()
                 .and_then(|x| x.write_cache_limit_bytes),
