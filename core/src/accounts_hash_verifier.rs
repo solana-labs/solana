@@ -334,17 +334,13 @@ impl AccountsHashVerifier {
 mod tests {
     use {
         super::*,
-<<<<<<< HEAD
-        solana_gossip::{cluster_info::make_accounts_hashes_message, contact_info::ContactInfo},
-        solana_runtime::{
-            rent_collector::RentCollector,
-            snapshot_utils::{ArchiveFormat, SnapshotVersion},
-=======
-        rand::seq::SliceRandom,
         solana_gossip::{
             cluster_info::make_accounts_hashes_message,
             legacy_contact_info::LegacyContactInfo as ContactInfo,
->>>>>>> 8c212f59a (renames ContactInfo to LegacyContactInfo (#29566))
+        },
+        solana_runtime::{
+            rent_collector::RentCollector,
+            snapshot_utils::{ArchiveFormat, SnapshotVersion},
         },
         solana_sdk::{
             genesis_config::ClusterType,

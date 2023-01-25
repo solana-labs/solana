@@ -10,14 +10,10 @@ use {
     itertools::{izip, Itertools},
     lru::LruCache,
     rayon::{prelude::*, ThreadPool, ThreadPoolBuilder},
-<<<<<<< HEAD
     solana_client::rpc_response::SlotUpdate,
-    solana_gossip::{cluster_info::ClusterInfo, contact_info::ContactInfo},
-=======
     solana_gossip::{
         cluster_info::ClusterInfo, legacy_contact_info::LegacyContactInfo as ContactInfo,
     },
->>>>>>> 8c212f59a (renames ContactInfo to LegacyContactInfo (#29566))
     solana_ledger::{
         leader_schedule_cache::LeaderScheduleCache,
         shred::{self, ShredId},

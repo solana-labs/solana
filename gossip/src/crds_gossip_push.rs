@@ -14,12 +14,7 @@
 use {
     crate::{
         cluster_info::{Ping, CRDS_UNIQUE_PUBKEY_CAPACITY},
-<<<<<<< HEAD
-        contact_info::ContactInfo,
         crds::{Crds, Cursor, GossipRoute},
-=======
-        crds::{Crds, CrdsError, Cursor, GossipRoute},
->>>>>>> 8c212f59a (renames ContactInfo to LegacyContactInfo (#29566))
         crds_gossip::{self, get_stake, get_weight},
         crds_value::CrdsValue,
         legacy_contact_info::LegacyContactInfo as ContactInfo,
@@ -549,9 +544,9 @@ mod tests {
         stakes.insert(self_id, 100);
         stakes.insert(origin, 100);
 
-        let value = CrdsValue::new_unsigned(CrdsData::ContactInfo(ContactInfo::new_localhost(
-            &origin, 0,
-        )));
+        let value = CrdsValue::new_unsigned(CrdsData::LegacyContactInfo(
+            ContactInfo::new_localhost(&origin, 0),
+        ));
         let low_staked_peers = (0..10).map(|_| solana_sdk::pubkey::new_rand());
         let mut low_staked_set = HashSet::new();
         low_staked_peers.for_each(|p| {
