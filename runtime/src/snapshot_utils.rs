@@ -4399,9 +4399,6 @@ mod tests {
         bank.force_flush_accounts_cache();
 
         let snapshot_version = SnapshotVersion::default();
-
-        //let temp_dir = tempfile::tempdir_in(bank_snapshots_dir).unwrap();
-        //let bank_snapshots_dir = temp_dir.path();
         let snapshot_storages = bank.get_snapshot_storages(None);
 
         add_bank_snapshot(
