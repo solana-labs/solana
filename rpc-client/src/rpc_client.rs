@@ -521,9 +521,9 @@ impl RpcClient {
     /// # Examples
     ///
     /// ```
-    /// # use std::net::SocketAddr;
+    /// # use std::net::{Ipv4Addr, SocketAddr};
     /// # use solana_rpc_client::rpc_client::RpcClient;
-    /// let addr = SocketAddr::from(([127, 0, 0, 1], 8899));
+    /// let addr = SocketAddr::from((Ipv4Addr::LOCALHOST, 8899));
     /// let client = RpcClient::new_socket(addr);
     /// ```
     pub fn new_socket(addr: SocketAddr) -> Self {
@@ -542,10 +542,10 @@ impl RpcClient {
     /// # Examples
     ///
     /// ```
-    /// # use std::net::SocketAddr;
+    /// # use std::net::{Ipv4Addr, SocketAddr};
     /// # use solana_rpc_client::rpc_client::RpcClient;
     /// # use solana_sdk::commitment_config::CommitmentConfig;
-    /// let addr = SocketAddr::from(([127, 0, 0, 1], 8899));
+    /// let addr = SocketAddr::from((Ipv4Addr::LOCALHOST, 8899));
     /// let commitment_config = CommitmentConfig::processed();
     /// let client = RpcClient::new_socket_with_commitment(
     ///     addr,
@@ -569,10 +569,10 @@ impl RpcClient {
     /// # Examples
     ///
     /// ```
-    /// # use std::net::SocketAddr;
+    /// # use std::net::{Ipv4Addr, SocketAddr};
     /// # use std::time::Duration;
     /// # use solana_rpc_client::rpc_client::RpcClient;
-    /// let addr = SocketAddr::from(([127, 0, 0, 1], 8899));
+    /// let addr = SocketAddr::from((Ipv4Addr::LOCALHOST, 8899));
     /// let timeout = Duration::from_secs(1);
     /// let client = RpcClient::new_socket_with_timeout(addr, timeout);
     /// ```

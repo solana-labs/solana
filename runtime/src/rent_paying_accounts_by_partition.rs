@@ -64,7 +64,7 @@ pub(crate) mod tests {
     #[test]
     fn test_add() {
         let mut test = RentPayingAccountsByPartition::new(&EpochSchedule::custom(32, 0, false));
-        let pk = Pubkey::new(&[1; 32]);
+        let pk = Pubkey::from([1; 32]);
         test.add_account(&pk);
         // make sure duplicate adds only result in a single item
         test.add_account(&pk);

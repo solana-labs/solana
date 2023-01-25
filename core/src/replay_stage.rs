@@ -2565,7 +2565,6 @@ impl ReplayStage {
                     r_replay_stats.execute_timings
                     );
                 did_complete_bank = true;
-                info!("bank frozen: {}", bank.slot());
                 let _ = cluster_slots_update_sender.send(vec![bank_slot]);
                 if let Some(transaction_status_sender) = transaction_status_sender {
                     transaction_status_sender.send_transaction_status_freeze_message(bank);

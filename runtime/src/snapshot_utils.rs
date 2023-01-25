@@ -84,15 +84,10 @@ pub const DEFAULT_MAX_INCREMENTAL_SNAPSHOT_ARCHIVES_TO_RETAIN: usize = 4;
 pub const FULL_SNAPSHOT_ARCHIVE_FILENAME_REGEX: &str = r"^snapshot-(?P<slot>[[:digit:]]+)-(?P<hash>[[:alnum:]]+)\.(?P<ext>tar|tar\.bz2|tar\.zst|tar\.gz|tar\.lz4)$";
 pub const INCREMENTAL_SNAPSHOT_ARCHIVE_FILENAME_REGEX: &str = r"^incremental-snapshot-(?P<base>[[:digit:]]+)-(?P<slot>[[:digit:]]+)-(?P<hash>[[:alnum:]]+)\.(?P<ext>tar|tar\.bz2|tar\.zst|tar\.gz|tar\.lz4)$";
 
-#[derive(Copy, Clone, Eq, PartialEq, Debug)]
+#[derive(Copy, Clone, Default, Eq, PartialEq, Debug)]
 pub enum SnapshotVersion {
+    #[default]
     V1_2_0,
-}
-
-impl Default for SnapshotVersion {
-    fn default() -> Self {
-        SnapshotVersion::V1_2_0
-    }
 }
 
 impl fmt::Display for SnapshotVersion {
@@ -836,6 +831,21 @@ where
     }
 
     Ok(())
+}
+
+/// To allow generating a bank snapshot directory with full state information, we need to
+/// hardlink account appendvec files from the runtime operation directory to a snapshot
+/// hardlink directory.  This is to create the run/ and snapshot sub directories for an
+/// account_path provided by the user.  These two sub directories are on the same file
+/// system partition to allow hard-linking.
+pub fn create_accounts_run_and_snapshot_dirs(
+    account_dir: impl AsRef<Path>,
+) -> std::io::Result<(PathBuf, PathBuf)> {
+    let run_path = account_dir.as_ref().join("run");
+    let snapshot_path = account_dir.as_ref().join("snapshot");
+    fs::create_dir_all(&run_path)?;
+    fs::create_dir_all(&snapshot_path)?;
+    Ok((run_path, snapshot_path))
 }
 
 /// Serialize a bank to a snapshot
@@ -2128,10 +2138,11 @@ pub fn verify_snapshot_archive<P, Q, R>(
 {
     let temp_dir = tempfile::TempDir::new().unwrap();
     let unpack_dir = temp_dir.path();
+    let account_dir = create_accounts_run_and_snapshot_dirs(unpack_dir).unwrap().0;
     untar_snapshot_in(
         snapshot_archive,
         unpack_dir,
-        &[unpack_dir.to_path_buf()],
+        &[account_dir.clone()],
         archive_format,
         1,
     )
@@ -2152,9 +2163,14 @@ pub fn verify_snapshot_archive<P, Q, R>(
 
     assert!(!dir_diff::is_different(&snapshots_to_verify, unpacked_snapshots).unwrap());
 
+    // In the unarchiving case, there is an extra empty "accounts" directory. The account
+    // files in the archive accounts/ have been expanded to [account_paths].
+    // Remove the empty "accounts" directory for the directory comparison below.
+    // In some test cases the directory to compare do not come from unarchiving.
+    // Ignore the error when this directory does not exist.
+    _ = std::fs::remove_dir(account_dir.join("accounts"));
     // Check the account entries are the same
-    let unpacked_accounts = unpack_dir.join("accounts");
-    assert!(!dir_diff::is_different(&storages_to_verify, unpacked_accounts).unwrap());
+    assert!(!dir_diff::is_different(&storages_to_verify, account_dir).unwrap());
 }
 
 /// Remove outdated bank snapshots
@@ -2409,6 +2425,12 @@ pub fn should_take_incremental_snapshot(
 ) -> bool {
     block_height % incremental_snapshot_archive_interval_slots == 0
         && last_full_snapshot_slot.is_some()
+}
+
+pub fn create_tmp_accounts_dir_for_tests() -> (TempDir, PathBuf) {
+    let tmp_dir = tempfile::TempDir::new().unwrap();
+    let account_dir = create_accounts_run_and_snapshot_dirs(&tmp_dir).unwrap().0;
+    (tmp_dir, account_dir)
 }
 
 #[cfg(test)]
@@ -3329,7 +3351,7 @@ mod tests {
             original_bank.register_tick(&Hash::new_unique());
         }
 
-        let accounts_dir = tempfile::TempDir::new().unwrap();
+        let (_tmp_dir, accounts_dir) = create_tmp_accounts_dir_for_tests();
         let bank_snapshots_dir = tempfile::TempDir::new().unwrap();
         let full_snapshot_archives_dir = tempfile::TempDir::new().unwrap();
         let incremental_snapshot_archives_dir = tempfile::TempDir::new().unwrap();
@@ -3348,7 +3370,7 @@ mod tests {
         .unwrap();
 
         let (roundtrip_bank, _) = bank_from_snapshot_archives(
-            &[PathBuf::from(accounts_dir.path())],
+            &[accounts_dir],
             bank_snapshots_dir.path(),
             &snapshot_archive_info,
             None,
@@ -3367,7 +3389,7 @@ mod tests {
             &Arc::default(),
         )
         .unwrap();
-
+        roundtrip_bank.wait_for_initial_accounts_hash_verification_completed_for_tests();
         assert_eq!(original_bank, roundtrip_bank);
     }
 
@@ -3441,7 +3463,7 @@ mod tests {
             bank4.register_tick(&Hash::new_unique());
         }
 
-        let accounts_dir = tempfile::TempDir::new().unwrap();
+        let (_tmp_dir, accounts_dir) = create_tmp_accounts_dir_for_tests();
         let bank_snapshots_dir = tempfile::TempDir::new().unwrap();
         let full_snapshot_archives_dir = tempfile::TempDir::new().unwrap();
         let incremental_snapshot_archives_dir = tempfile::TempDir::new().unwrap();
@@ -3460,7 +3482,7 @@ mod tests {
         .unwrap();
 
         let (roundtrip_bank, _) = bank_from_snapshot_archives(
-            &[PathBuf::from(accounts_dir.path())],
+            &[accounts_dir],
             bank_snapshots_dir.path(),
             &full_snapshot_archive_info,
             None,
@@ -3479,7 +3501,7 @@ mod tests {
             &Arc::default(),
         )
         .unwrap();
-
+        roundtrip_bank.wait_for_initial_accounts_hash_verification_completed_for_tests();
         assert_eq!(*bank4, roundtrip_bank);
     }
 
@@ -3532,7 +3554,7 @@ mod tests {
             bank1.register_tick(&Hash::new_unique());
         }
 
-        let accounts_dir = tempfile::TempDir::new().unwrap();
+        let (_tmp_dir, accounts_dir) = create_tmp_accounts_dir_for_tests();
         let bank_snapshots_dir = tempfile::TempDir::new().unwrap();
         let full_snapshot_archives_dir = tempfile::TempDir::new().unwrap();
         let incremental_snapshot_archives_dir = tempfile::TempDir::new().unwrap();
@@ -3592,7 +3614,7 @@ mod tests {
         .unwrap();
 
         let (roundtrip_bank, _) = bank_from_snapshot_archives(
-            &[PathBuf::from(accounts_dir.path())],
+            &[accounts_dir],
             bank_snapshots_dir.path(),
             &full_snapshot_archive_info,
             Some(&incremental_snapshot_archive_info),
@@ -3611,7 +3633,7 @@ mod tests {
             &Arc::default(),
         )
         .unwrap();
-
+        roundtrip_bank.wait_for_initial_accounts_hash_verification_completed_for_tests();
         assert_eq!(*bank4, roundtrip_bank);
     }
 
@@ -3654,7 +3676,7 @@ mod tests {
             bank1.register_tick(&Hash::new_unique());
         }
 
-        let accounts_dir = tempfile::TempDir::new().unwrap();
+        let (_tmp_dir, accounts_dir) = create_tmp_accounts_dir_for_tests();
         let bank_snapshots_dir = tempfile::TempDir::new().unwrap();
         let full_snapshot_archives_dir = tempfile::TempDir::new().unwrap();
         let incremental_snapshot_archives_dir = tempfile::TempDir::new().unwrap();
@@ -3717,7 +3739,7 @@ mod tests {
             &bank_snapshots_dir,
             &full_snapshot_archives_dir,
             &incremental_snapshot_archives_dir,
-            &[accounts_dir.as_ref().to_path_buf()],
+            &[accounts_dir],
             &genesis_config,
             &RuntimeConfig::default(),
             None,
@@ -3733,7 +3755,7 @@ mod tests {
             &Arc::default(),
         )
         .unwrap();
-
+        deserialized_bank.wait_for_initial_accounts_hash_verification_completed_for_tests();
         assert_eq!(deserialized_bank, *bank4);
     }
 
@@ -3767,7 +3789,7 @@ mod tests {
         let key1 = Keypair::new();
         let key2 = Keypair::new();
 
-        let accounts_dir = tempfile::TempDir::new().unwrap();
+        let (_tmp_dir, accounts_dir) = create_tmp_accounts_dir_for_tests();
         let bank_snapshots_dir = tempfile::TempDir::new().unwrap();
         let full_snapshot_archives_dir = tempfile::TempDir::new().unwrap();
         let incremental_snapshot_archives_dir = tempfile::TempDir::new().unwrap();
@@ -3779,7 +3801,7 @@ mod tests {
         let bank0 = Arc::new(Bank::new_with_paths_for_tests(
             &genesis_config,
             Arc::<RuntimeConfig>::default(),
-            vec![accounts_dir.path().to_path_buf()],
+            vec![accounts_dir.clone()],
             AccountSecondaryIndexes::default(),
             AccountShrinkThreshold::default(),
         ));
@@ -3853,7 +3875,7 @@ mod tests {
         )
         .unwrap();
         let (deserialized_bank, _) = bank_from_snapshot_archives(
-            &[accounts_dir.path().to_path_buf()],
+            &[accounts_dir.as_path().to_path_buf()],
             bank_snapshots_dir.path(),
             &full_snapshot_archive_info,
             Some(&incremental_snapshot_archive_info),
@@ -3872,6 +3894,7 @@ mod tests {
             &Arc::default(),
         )
         .unwrap();
+        deserialized_bank.wait_for_initial_accounts_hash_verification_completed_for_tests();
         assert_eq!(
             deserialized_bank, *bank2,
             "Ensure rebuilding from an incremental snapshot works"
@@ -3917,7 +3940,7 @@ mod tests {
         .unwrap();
 
         let (deserialized_bank, _) = bank_from_snapshot_archives(
-            &[accounts_dir.path().to_path_buf()],
+            &[accounts_dir.as_path().to_path_buf()],
             bank_snapshots_dir.path(),
             &full_snapshot_archive_info,
             Some(&incremental_snapshot_archive_info),
@@ -3936,6 +3959,7 @@ mod tests {
             &Arc::default(),
         )
         .unwrap();
+        deserialized_bank.wait_for_initial_accounts_hash_verification_completed_for_tests();
         assert_eq!(
             deserialized_bank, *bank4,
             "Ensure rebuilding from an incremental snapshot works",

@@ -967,7 +967,7 @@ pub mod test {
     }
 
     pub fn get_client_config(keypair: &Keypair) -> ClientConfig {
-        let ipaddr = IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1));
+        let ipaddr = IpAddr::V4(Ipv4Addr::LOCALHOST);
         let (cert, key) = new_self_signed_tls_certificate(keypair, ipaddr)
             .expect("Failed to generate client certificate");
 

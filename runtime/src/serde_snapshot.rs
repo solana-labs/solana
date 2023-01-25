@@ -281,14 +281,8 @@ pub(crate) fn fields_from_streams<R: Read>(
         .as_mut()
         .map(|stream| fields_from_stream(serde_style, stream))
         .transpose()?;
-
-    // Option::unzip() not stabilized yet
     let (incremental_snapshot_bank_fields, incremental_snapshot_accounts_db_fields) =
-        if let Some((bank_fields, accounts_fields)) = incremental_fields {
-            (Some(bank_fields), Some(accounts_fields))
-        } else {
-            (None, None)
-        };
+        incremental_fields.unzip();
 
     let snapshot_accounts_db_fields = SnapshotAccountsDbFields {
         full_snapshot_accounts_db_fields,

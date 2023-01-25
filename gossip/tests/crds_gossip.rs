@@ -732,8 +732,8 @@ fn test_prune_errors() {
     let crds_gossip = CrdsGossip::default();
     let keypair = Keypair::new();
     let id = keypair.pubkey();
-    let ci = ContactInfo::new_localhost(&Pubkey::new(&[1; 32]), 0);
-    let prune_pubkey = Pubkey::new(&[2; 32]);
+    let ci = ContactInfo::new_localhost(&Pubkey::from([1; 32]), 0);
+    let prune_pubkey = Pubkey::from([2; 32]);
     crds_gossip
         .crds
         .write()
@@ -758,10 +758,10 @@ fn test_prune_errors() {
     let stakes = HashMap::<Pubkey, u64>::default();
     //incorrect dest
     let mut res = crds_gossip.process_prune_msg(
-        &id,                                   // self_pubkey
-        &ci.id,                                // peer
-        &Pubkey::new(hash(&[1; 32]).as_ref()), // destination
-        &[prune_pubkey],                       // origins
+        &id,                                      // self_pubkey
+        &ci.id,                                   // peer
+        &Pubkey::from(hash(&[1; 32]).to_bytes()), // destination
+        &[prune_pubkey],                          // origins
         now,
         now,
         &stakes,
