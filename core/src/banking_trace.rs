@@ -42,7 +42,7 @@ pub enum TraceError {
     #[error("Integer Cast Error: {0}")]
     IntegerCastError(#[from] std::num::TryFromIntError),
 
-    #[error("dir byte limit is too small (must be larger than {1}): {0}")]
+    #[error("Trace directory's byte limit is too small (must be larger than {1}): {0}")]
     TooSmallDirByteLimit(DirByteLimit, DirByteLimit),
 }
 
