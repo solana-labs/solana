@@ -51,10 +51,9 @@ mod non_bpf_modules {
     pub use {account_keys::*, address_loader::*, sanitized::*, versions::*};
 }
 
-use compiled_keys::*;
-pub use legacy::Message;
 #[cfg(not(target_os = "solana"))]
 pub use non_bpf_modules::*;
+pub use {compiled_keys::CompileError, legacy::Message};
 
 /// The length of a message header in bytes.
 pub const MESSAGE_HEADER_LENGTH: usize = 3;

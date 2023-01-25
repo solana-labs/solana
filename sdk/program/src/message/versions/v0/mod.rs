@@ -15,8 +15,9 @@ use crate::{
     hash::Hash,
     instruction::{CompiledInstruction, Instruction},
     message::{
-        compiled_keys::CompileError, legacy::is_builtin_key_or_sysvar, AccountKeys, CompiledKeys,
-        MessageHeader, MESSAGE_VERSION_PREFIX,
+        compiled_keys::{CompileError, CompiledKeys},
+        legacy::is_builtin_key_or_sysvar,
+        AccountKeys, MessageHeader, MESSAGE_VERSION_PREFIX,
     },
     pubkey::Pubkey,
     sanitize::SanitizeError,
