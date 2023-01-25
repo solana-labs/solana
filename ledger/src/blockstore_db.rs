@@ -229,14 +229,14 @@ pub mod columns {
     /// The shred data column
     ///
     /// index type: (u64, u64)
-    /// value type: Vec<u8>
+    /// value type: [`Vec<u8>`]
     pub struct ShredData;
 
     #[derive(Debug)]
     /// The shred erasure code column
     ///
     /// index type: (u64, u64)
-    /// value type: Vec<u8>
+    /// value type: [`Vec<u8>`]
     pub struct ShredCode;
 
     #[derive(Debug)]
