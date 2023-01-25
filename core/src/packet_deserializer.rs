@@ -2,16 +2,14 @@
 
 use {
     crate::{
+        banking_trace::{BankingPacketBatch, BankingPacketReceiver},
         immutable_deserialized_packet::ImmutableDeserializedPacket,
         sigverify::SigverifyTracerPacketStats,
     },
-    crossbeam_channel::{Receiver as CrossbeamReceiver, RecvTimeoutError},
+    crossbeam_channel::RecvTimeoutError,
     solana_perf::packet::PacketBatch,
     std::time::{Duration, Instant},
 };
-
-pub type BankingPacketBatch = (Vec<PacketBatch>, Option<SigverifyTracerPacketStats>);
-pub type BankingPacketReceiver = CrossbeamReceiver<BankingPacketBatch>;
 
 /// Results from deserializing packet batches.
 pub struct ReceivePacketResults {
@@ -43,84 +41,87 @@ impl PacketDeserializer {
         recv_timeout: Duration,
         capacity: usize,
     ) -> Result<ReceivePacketResults, RecvTimeoutError> {
-        let (packet_batches, sigverify_tracer_stats_option) =
-            self.receive_until(recv_timeout, capacity)?;
+        let (packet_count, packet_batches) = self.receive_until(recv_timeout, capacity)?;
         Ok(Self::deserialize_and_collect_packets(
+            packet_count,
             &packet_batches,
-            sigverify_tracer_stats_option,
         ))
     }
 
-    /// Deserialize packet batches and collect them into ReceivePacketResults
+    /// Deserialize packet batches, aggregates tracer packet stats, and collect
+    /// them into ReceivePacketResults
     fn deserialize_and_collect_packets(
-        packet_batches: &[PacketBatch],
-        sigverify_tracer_stats_option: Option<SigverifyTracerPacketStats>,
+        packet_count: usize,
+        banking_batches: &[BankingPacketBatch],
     ) -> ReceivePacketResults {
-        let packet_count: usize = packet_batches.iter().map(|x| x.len()).sum();
         let mut passed_sigverify_count: usize = 0;
         let mut failed_sigverify_count: usize = 0;
         let mut deserialized_packets = Vec::with_capacity(packet_count);
-        for packet_batch in packet_batches {
-            let packet_indexes = Self::generate_packet_indexes(packet_batch);
+        let mut aggregated_tracer_packet_stats_option = None::<SigverifyTracerPacketStats>;
 
-            passed_sigverify_count += packet_indexes.len();
-            failed_sigverify_count += packet_batch.len().saturating_sub(packet_indexes.len());
+        for banking_batch in banking_batches {
+            for packet_batch in &banking_batch.0 {
+                let packet_indexes = Self::generate_packet_indexes(packet_batch);
 
-            deserialized_packets.extend(Self::deserialize_packets(packet_batch, &packet_indexes));
-        }
+                passed_sigverify_count += packet_indexes.len();
+                failed_sigverify_count += packet_batch.len().saturating_sub(packet_indexes.len());
 
-        ReceivePacketResults {
-            deserialized_packets,
-            new_tracer_stats_option: sigverify_tracer_stats_option,
-            passed_sigverify_count: passed_sigverify_count as u64,
-            failed_sigverify_count: failed_sigverify_count as u64,
-        }
-    }
+                deserialized_packets
+                    .extend(Self::deserialize_packets(packet_batch, &packet_indexes));
+            }
 
-    /// Receives packet batches from sigverify stage with a timeout, and aggregates tracer packet stats
-    fn receive_until(
-        &self,
-        recv_timeout: Duration,
-        packet_count_upperbound: usize,
-    ) -> Result<(Vec<PacketBatch>, Option<SigverifyTracerPacketStats>), RecvTimeoutError> {
-        let start = Instant::now();
-
-        let (mut packet_batches_received_so_far, mut aggregated_tracer_packet_stats_option) =
-            self.packet_batch_receiver.recv_timeout(recv_timeout)?;
-        let mut num_packets_received = packet_batches_received_so_far
-            .iter()
-            .map(|batch| batch.len())
-            .sum::<usize>();
-
-        while let Ok((packet_batches, tracer_packet_stats_option)) =
-            self.packet_batch_receiver.try_recv()
-        {
-            trace!("got more packet batches in packet deserializer");
-            num_packets_received += packet_batches
-                .iter()
-                .map(|batch| batch.len())
-                .sum::<usize>();
-            packet_batches_received_so_far.extend(packet_batches);
-
-            if let Some(tracer_packet_stats) = &tracer_packet_stats_option {
+            if let Some(tracer_packet_stats) = &banking_batch.1 {
                 if let Some(aggregated_tracer_packet_stats) =
                     &mut aggregated_tracer_packet_stats_option
                 {
                     aggregated_tracer_packet_stats.aggregate(tracer_packet_stats);
                 } else {
-                    aggregated_tracer_packet_stats_option = tracer_packet_stats_option;
+                    // BankingPacketBatch is owned by Arc; so we have to clone its internal field
+                    // (SigverifyTracerPacketStats).
+                    aggregated_tracer_packet_stats_option = Some(tracer_packet_stats.clone());
                 }
             }
+        }
+
+        ReceivePacketResults {
+            deserialized_packets,
+            new_tracer_stats_option: aggregated_tracer_packet_stats_option,
+            passed_sigverify_count: passed_sigverify_count as u64,
+            failed_sigverify_count: failed_sigverify_count as u64,
+        }
+    }
+
+    /// Receives packet batches from sigverify stage with a timeout
+    fn receive_until(
+        &self,
+        recv_timeout: Duration,
+        packet_count_upperbound: usize,
+    ) -> Result<(usize, Vec<BankingPacketBatch>), RecvTimeoutError> {
+        let start = Instant::now();
+
+        let message = self.packet_batch_receiver.recv_timeout(recv_timeout)?;
+        let packet_batches = &message.0;
+        let mut num_packets_received = packet_batches
+            .iter()
+            .map(|batch| batch.len())
+            .sum::<usize>();
+        let mut messages = vec![message];
+
+        while let Ok(message) = self.packet_batch_receiver.try_recv() {
+            let packet_batches = &message.0;
+            trace!("got more packet batches in packet deserializer");
+            num_packets_received += packet_batches
+                .iter()
+                .map(|batch| batch.len())
+                .sum::<usize>();
+            messages.push(message);
 
             if start.elapsed() >= recv_timeout || num_packets_received >= packet_count_upperbound {
                 break;
             }
         }
 
-        Ok((
-            packet_batches_received_so_far,
-            aggregated_tracer_packet_stats_option,
-        ))
+        Ok((num_packets_received, messages))
     }
 
     fn generate_packet_indexes(packet_batch: &PacketBatch) -> Vec<usize> {
@@ -159,7 +160,7 @@ mod tests {
 
     #[test]
     fn test_deserialize_and_collect_packets_empty() {
-        let results = PacketDeserializer::deserialize_and_collect_packets(&[], None);
+        let results = PacketDeserializer::deserialize_and_collect_packets(0, &[]);
         assert_eq!(results.deserialized_packets.len(), 0);
         assert!(results.new_tracer_stats_option.is_none());
         assert_eq!(results.passed_sigverify_count, 0);
@@ -172,7 +173,11 @@ mod tests {
         let packet_batches = to_packet_batches(&transactions, 1);
         assert_eq!(packet_batches.len(), 2);
 
-        let results = PacketDeserializer::deserialize_and_collect_packets(&packet_batches, None);
+        let packet_count: usize = packet_batches.iter().map(|x| x.len()).sum();
+        let results = PacketDeserializer::deserialize_and_collect_packets(
+            packet_count,
+            &[BankingPacketBatch::new((packet_batches, None))],
+        );
         assert_eq!(results.deserialized_packets.len(), 2);
         assert!(results.new_tracer_stats_option.is_none());
         assert_eq!(results.passed_sigverify_count, 2);
@@ -186,7 +191,11 @@ mod tests {
         assert_eq!(packet_batches.len(), 2);
         packet_batches[0][0].meta_mut().set_discard(true);
 
-        let results = PacketDeserializer::deserialize_and_collect_packets(&packet_batches, None);
+        let packet_count: usize = packet_batches.iter().map(|x| x.len()).sum();
+        let results = PacketDeserializer::deserialize_and_collect_packets(
+            packet_count,
+            &[BankingPacketBatch::new((packet_batches, None))],
+        );
         assert_eq!(results.deserialized_packets.len(), 1);
         assert!(results.new_tracer_stats_option.is_none());
         assert_eq!(results.passed_sigverify_count, 1);

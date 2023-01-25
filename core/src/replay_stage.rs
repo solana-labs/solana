@@ -3,6 +3,7 @@
 use {
     crate::{
         ancestor_hashes_service::AncestorHashesReplayUpdateSender,
+        banking_trace::BankingTracer,
         broadcast_stage::RetransmitSlotsSender,
         cache_block_meta_service::CacheBlockMetaSender,
         cluster_info_vote_listener::{
@@ -402,6 +403,7 @@ impl ReplayStage {
         log_messages_bytes_limit: Option<usize>,
         prioritization_fee_cache: Arc<PrioritizationFeeCache>,
         dumped_slots_sender: DumpedSlotsSender,
+        banking_tracer: Arc<BankingTracer>,
     ) -> Result<Self, String> {
         let mut tower = if let Some(process_blockstore) = maybe_process_blockstore {
             let tower = process_blockstore.process_to_create_tower()?;
@@ -943,6 +945,7 @@ impl ReplayStage {
                         &mut progress,
                         &retransmit_slots_sender,
                         &mut skipped_slots_info,
+                        &banking_tracer,
                         has_new_vote_been_rooted,
                         transaction_status_sender.is_some(),
                     );
@@ -1654,6 +1657,7 @@ impl ReplayStage {
         progress_map: &mut ProgressMap,
         retransmit_slots_sender: &RetransmitSlotsSender,
         skipped_slots_info: &mut SkippedSlotsInfo,
+        banking_tracer: &Arc<BankingTracer>,
         has_new_vote_been_rooted: bool,
         track_transaction_indexes: bool,
     ) {
@@ -1774,6 +1778,9 @@ impl ReplayStage {
                 rpc_subscriptions,
                 NewBankOptions { vote_only_bank },
             );
+            // make sure parent is frozen for finalized hashes via the above
+            // new()-ing of its child bank
+            banking_tracer.hash_event(parent.slot(), &parent.last_blockhash(), &parent.hash());
 
             let tpu_bank = bank_forks.write().unwrap().insert(tpu_bank);
             poh_recorder

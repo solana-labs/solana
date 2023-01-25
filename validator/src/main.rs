@@ -8,6 +8,7 @@ use {
     rand::{seq::SliceRandom, thread_rng},
     solana_clap_utils::input_parsers::{keypair_of, keypairs_of, pubkey_of, value_of},
     solana_core::{
+        banking_trace::DISABLED_BAKING_TRACE_DIR,
         ledger_cleanup_service::{DEFAULT_MAX_LEDGER_SHREDS, DEFAULT_MIN_MAX_LEDGER_SHREDS},
         system_monitor_service::SystemMonitorService,
         tower_storage,
@@ -425,6 +426,21 @@ fn get_cluster_shred_version(entrypoints: &[SocketAddr]) -> Option<u16> {
         }
     }
     None
+}
+
+fn configure_banking_trace_dir_byte_limit(
+    validator_config: &mut ValidatorConfig,
+    matches: &ArgMatches,
+) {
+    validator_config.banking_trace_dir_byte_limit =
+        if matches.occurrences_of("banking_trace_dir_byte_limit") == 0 {
+            // disable with no explicit flag; then, this effectively becomes `opt-in` even if we're
+            // specifying a default value in clap configuration.
+            DISABLED_BAKING_TRACE_DIR
+        } else {
+            // BANKING_TRACE_DIR_DEFAULT_BYTE_LIMIT or user-supplied override value
+            value_t_or_exit!(matches, "banking_trace_dir_byte_limit", u64)
+        };
 }
 
 pub fn main() {
@@ -1426,6 +1442,8 @@ pub fn main() {
         }
         validator_config.max_ledger_shreds = Some(limit_ledger_size);
     }
+
+    configure_banking_trace_dir_byte_limit(&mut validator_config, &matches);
 
     validator_config.ledger_column_options = LedgerColumnOptions {
         compression_type: match matches.value_of("rocksdb_ledger_compression") {

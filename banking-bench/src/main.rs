@@ -6,7 +6,10 @@ use {
     rand::{thread_rng, Rng},
     rayon::prelude::*,
     solana_client::connection_cache::ConnectionCache,
-    solana_core::banking_stage::BankingStage,
+    solana_core::{
+        banking_stage::BankingStage,
+        banking_trace::{BankingPacketBatch, BankingTracer, BANKING_TRACE_DIR_DEFAULT_BYTE_LIMIT},
+    },
     solana_gossip::cluster_info::{ClusterInfo, Node},
     solana_ledger::{
         blockstore::Blockstore,
@@ -256,6 +259,12 @@ fn main() {
                 .help("Skip transaction sanity execution"),
         )
         .arg(
+            Arg::new("trace_banking")
+                .long("trace-banking")
+                .takes_value(false)
+                .help("Enable banking tracing"),
+        )
+        .arg(
             Arg::new("write_lock_contention")
                 .long("write-lock-contention")
                 .takes_value(true)
@@ -407,9 +416,17 @@ fn main() {
         let leader_schedule_cache = Arc::new(LeaderScheduleCache::new_from_bank(&bank));
         let (exit, poh_recorder, poh_service, signal_receiver) =
             create_test_recorder(&bank, &blockstore, None, Some(leader_schedule_cache));
-        let (non_vote_sender, non_vote_receiver) = unbounded();
-        let (tpu_vote_sender, tpu_vote_receiver) = unbounded();
-        let (gossip_vote_sender, gossip_vote_receiver) = unbounded();
+        let (banking_tracer, tracer_thread) =
+            BankingTracer::new(matches.is_present("trace_banking").then_some((
+                &blockstore.banking_trace_path(),
+                exit.clone(),
+                BANKING_TRACE_DIR_DEFAULT_BYTE_LIMIT,
+            )))
+            .unwrap();
+        let (non_vote_sender, non_vote_receiver) = banking_tracer.create_channel_non_vote();
+        let (tpu_vote_sender, tpu_vote_receiver) = banking_tracer.create_channel_tpu_vote();
+        let (gossip_vote_sender, gossip_vote_receiver) =
+            banking_tracer.create_channel_gossip_vote();
         let cluster_info = {
             let keypair = Arc::new(Keypair::new());
             let node = Node::new_localhost_with_pubkey(&keypair.pubkey());
@@ -462,7 +479,7 @@ fn main() {
                     timestamp(),
                 );
                 non_vote_sender
-                    .send((vec![packet_batch.clone()], None))
+                    .send(BankingPacketBatch::new((vec![packet_batch.clone()], None)))
                     .unwrap();
             }
 
@@ -583,6 +600,9 @@ fn main() {
         poh_service.join().unwrap();
         sleep(Duration::from_secs(1));
         debug!("waited for poh_service");
+        if let Some(tracer_thread) = tracer_thread {
+            tracer_thread.join().unwrap().unwrap();
+        }
     }
     let _unused = Blockstore::destroy(&ledger_path);
 }
