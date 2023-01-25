@@ -13,7 +13,9 @@ use {
         bank::{Bank, BankTestConfig},
         epoch_accounts_hash,
         genesis_utils::{self, activate_all_features, activate_feature},
-        snapshot_utils::{get_storages_to_serialize, ArchiveFormat},
+        snapshot_utils::{
+            create_tmp_accounts_dir_for_tests, get_storages_to_serialize, ArchiveFormat,
+        },
         status_cache::StatusCache,
     },
     bincode::serialize_into,
@@ -146,7 +148,7 @@ fn accountsdb_to_stream<W>(
     stream: &mut W,
     accounts_db: &AccountsDb,
     slot: Slot,
-    account_storage_entries: &[Vec<SnapshotStorageOne>],
+    account_storage_entries: &[Vec<Arc<AccountStorageEntry>>],
 ) -> Result<(), Error>
 where
     W: Write,
@@ -575,7 +577,7 @@ fn test_extra_fields_full_snapshot_archive() {
     // Set extra field
     bank.fee_rate_governor.lamports_per_signature = 7000;
 
-    let accounts_dir = TempDir::new().unwrap();
+    let (_tmp_dir, accounts_dir) = create_tmp_accounts_dir_for_tests();
     let bank_snapshots_dir = TempDir::new().unwrap();
     let full_snapshot_archives_dir = TempDir::new().unwrap();
     let incremental_snapshot_archives_dir = TempDir::new().unwrap();
@@ -595,7 +597,7 @@ fn test_extra_fields_full_snapshot_archive() {
 
     // Deserialize
     let (dbank, _) = snapshot_utils::bank_from_snapshot_archives(
-        &[PathBuf::from(accounts_dir.path())],
+        &[accounts_dir],
         bank_snapshots_dir.path(),
         &snapshot_archive_info,
         None,
@@ -691,7 +693,7 @@ mod test_bank_serialize {
 
     // This some what long test harness is required to freeze the ABI of
     // Bank's serialization due to versioned nature
-    #[frozen_abi(digest = "464v92sAyLDZWCXjH6cuQfgrSNuB3PY8cmoVu2dciXvV")]
+    #[frozen_abi(digest = "DVS6Qqzxe2w86mdaEuVnsdZqXQVXaPab54uCJG2GypT6")]
     #[derive(Serialize, AbiExample)]
     pub struct BankAbiTestWrapperNewer {
         #[serde(serialize_with = "wrapper_newer")]

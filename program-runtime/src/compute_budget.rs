@@ -107,6 +107,8 @@ pub struct ComputeBudget {
     /// + alt_bn128_pairing_one_pair_cost_other * (num_elems - 1)
     pub alt_bn128_pairing_one_pair_cost_first: u64,
     pub alt_bn128_pairing_one_pair_cost_other: u64,
+    /// Big integer modular exponentiation cost
+    pub big_modular_exponentiation_cost: u64,
 }
 
 impl Default for ComputeBudget {
@@ -154,6 +156,7 @@ impl ComputeBudget {
             alt_bn128_multiplication_cost: 3_840,
             alt_bn128_pairing_one_pair_cost_first: 36_364,
             alt_bn128_pairing_one_pair_cost_other: 12_121,
+            big_modular_exponentiation_cost: 33,
         }
     }
 

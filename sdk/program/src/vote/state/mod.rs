@@ -58,21 +58,25 @@ impl Vote {
 
 #[derive(Serialize, Default, Deserialize, Debug, PartialEq, Eq, Copy, Clone, AbiExample)]
 pub struct Lockout {
-    pub slot: Slot,
-    pub confirmation_count: u32,
+    slot: Slot,
+    confirmation_count: u32,
 }
 
 impl Lockout {
     pub fn new(slot: Slot) -> Self {
+        Self::new_with_confirmation_count(slot, 1)
+    }
+
+    pub fn new_with_confirmation_count(slot: Slot, confirmation_count: u32) -> Self {
         Self {
             slot,
-            confirmation_count: 1,
+            confirmation_count,
         }
     }
 
     // The number of slots for which this vote is locked
     pub fn lockout(&self) -> u64 {
-        (INITIAL_LOCKOUT as u64).pow(self.confirmation_count)
+        (INITIAL_LOCKOUT as u64).pow(self.confirmation_count())
     }
 
     // The last slot at which a vote is still locked out. Validators should not
@@ -85,6 +89,18 @@ impl Lockout {
 
     pub fn is_locked_out_at_slot(&self, slot: Slot) -> bool {
         self.last_locked_out_slot() >= slot
+    }
+
+    pub fn slot(&self) -> Slot {
+        self.slot
+    }
+
+    pub fn confirmation_count(&self) -> u32 {
+        self.confirmation_count
+    }
+
+    pub fn increase_confirmation_count(&mut self, by: u32) {
+        self.confirmation_count = self.confirmation_count.saturating_add(by)
     }
 }
 
@@ -105,9 +121,8 @@ impl From<Vec<(Slot, u32)>> for VoteStateUpdate {
     fn from(recent_slots: Vec<(Slot, u32)>) -> Self {
         let lockouts: VecDeque<Lockout> = recent_slots
             .into_iter()
-            .map(|(slot, confirmation_count)| Lockout {
-                slot,
-                confirmation_count,
+            .map(|(slot, confirmation_count)| {
+                Lockout::new_with_confirmation_count(slot, confirmation_count)
             })
             .collect();
         Self {
@@ -130,11 +145,11 @@ impl VoteStateUpdate {
     }
 
     pub fn slots(&self) -> Vec<Slot> {
-        self.lockouts.iter().map(|lockout| lockout.slot).collect()
+        self.lockouts.iter().map(|lockout| lockout.slot()).collect()
     }
 
     pub fn last_voted_slot(&self) -> Option<Slot> {
-        self.lockouts.back().map(|l| l.slot)
+        self.lockouts.back().map(|l| l.slot())
     }
 }
 
@@ -329,7 +344,7 @@ impl VoteState {
     /// Returns if the vote state contains a slot `candidate_slot`
     pub fn contains_slot(&self, candidate_slot: Slot) -> bool {
         self.votes
-            .binary_search_by(|lockout| lockout.slot.cmp(&candidate_slot))
+            .binary_search_by(|lockout| lockout.slot().cmp(&candidate_slot))
             .is_ok()
     }
 
@@ -365,7 +380,7 @@ impl VoteState {
         // Once the stack is full, pop the oldest lockout and distribute rewards
         if self.votes.len() == MAX_LOCKOUT_HISTORY {
             let vote = self.votes.pop_front().unwrap();
-            self.root_slot = Some(vote.slot);
+            self.root_slot = Some(vote.slot());
 
             self.increment_credits(epoch, 1);
         }
@@ -417,13 +432,13 @@ impl VoteState {
     }
 
     pub fn last_voted_slot(&self) -> Option<Slot> {
-        self.last_lockout().map(|v| v.slot)
+        self.last_lockout().map(|v| v.slot())
     }
 
     // Upto MAX_LOCKOUT_HISTORY many recent unexpired
     // vote slots pushed onto the stack.
     pub fn tower(&self) -> Vec<Slot> {
-        self.votes.iter().map(|v| v.slot).collect()
+        self.votes.iter().map(|v| v.slot()).collect()
     }
 
     pub fn current_epoch(&self) -> Epoch {
@@ -544,8 +559,8 @@ impl VoteState {
         for (i, v) in self.votes.iter_mut().enumerate() {
             // Don't increase the lockout for this vote until we get more confirmations
             // than the max number of confirmations this vote has seen
-            if stack_depth > i + v.confirmation_count as usize {
-                v.confirmation_count += 1;
+            if stack_depth > i + v.confirmation_count() as usize {
+                v.increase_confirmation_count(1);
             }
         }
     }
@@ -612,11 +627,11 @@ pub mod serde_compact_vote_state_update {
         let lockout_offsets = vote_state_update.lockouts.iter().scan(
             vote_state_update.root.unwrap_or_default(),
             |slot, lockout| {
-                let offset = match lockout.slot.checked_sub(*slot) {
+                let offset = match lockout.slot().checked_sub(*slot) {
                     None => return Some(Err(serde::ser::Error::custom("Invalid vote lockout"))),
                     Some(offset) => offset,
                 };
-                let confirmation_count = match u8::try_from(lockout.confirmation_count) {
+                let confirmation_count = match u8::try_from(lockout.confirmation_count()) {
                     Ok(confirmation_count) => confirmation_count,
                     Err(_) => {
                         return Some(Err(serde::ser::Error::custom("Invalid confirmation count")))
@@ -626,7 +641,7 @@ pub mod serde_compact_vote_state_update {
                     offset,
                     confirmation_count,
                 };
-                *slot = lockout.slot;
+                *slot = lockout.slot();
                 Some(Ok(lockout_offset))
             },
         );
@@ -660,10 +675,10 @@ pub mod serde_compact_vote_state_update {
                         }
                         Some(slot) => slot,
                     };
-                    let lockout = Lockout {
-                        slot: *slot,
-                        confirmation_count: u32::from(lockout_offset.confirmation_count),
-                    };
+                    let lockout = Lockout::new_with_confirmation_count(
+                        *slot,
+                        u32::from(lockout_offset.confirmation_count),
+                    );
                     Some(Ok(lockout))
                 });
         Ok(VoteStateUpdate {
@@ -1132,16 +1147,17 @@ mod tests {
 
     #[allow(clippy::integer_arithmetic)]
     fn run_serde_compact_vote_state_update<R: Rng>(rng: &mut R) {
-        let lockouts: VecDeque<_> = std::iter::repeat_with(|| Lockout {
-            slot: 149_303_885 + rng.gen_range(0, 10_000),
-            confirmation_count: rng.gen_range(0, 33),
+        let lockouts: VecDeque<_> = std::iter::repeat_with(|| {
+            let slot = 149_303_885 + rng.gen_range(0, 10_000);
+            let confirmation_count = rng.gen_range(0, 33);
+            Lockout::new_with_confirmation_count(slot, confirmation_count)
         })
         .take(32)
-        .sorted_by_key(|lockout| lockout.slot)
+        .sorted_by_key(|lockout| lockout.slot())
         .collect();
         let root = rng
             .gen_ratio(1, 2)
-            .then(|| lockouts[0].slot - rng.gen_range(0, 1_000));
+            .then(|| lockouts[0].slot() - rng.gen_range(0, 1_000));
         let timestamp = rng.gen_ratio(1, 2).then(|| rng.gen());
         let hash = Hash::from(rng.gen::<[u8; 32]>());
         let vote_state_update = VoteStateUpdate {

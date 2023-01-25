@@ -154,7 +154,7 @@ impl Tpu {
             "Vote",
         );
 
-        let (verified_sender, verified_receiver) = unbounded();
+        let (non_vote_sender, non_vote_receiver) = unbounded();
 
         let stats = Arc::new(StreamStats::default());
         let (_, tpu_quic_t) = spawn_server(
@@ -188,15 +188,14 @@ impl Tpu {
         .unwrap();
 
         let sigverify_stage = {
-            let verifier = TransactionSigVerifier::new(verified_sender);
+            let verifier = TransactionSigVerifier::new(non_vote_sender);
             SigVerifyStage::new(find_packet_sender_stake_receiver, verifier, "tpu-verifier")
         };
 
-        let (verified_tpu_vote_packets_sender, verified_tpu_vote_packets_receiver) = unbounded();
+        let (tpu_vote_sender, tpu_vote_receiver) = unbounded();
 
         let vote_sigverify_stage = {
-            let verifier =
-                TransactionSigVerifier::new_reject_non_vote(verified_tpu_vote_packets_sender);
+            let verifier = TransactionSigVerifier::new_reject_non_vote(tpu_vote_sender);
             SigVerifyStage::new(
                 vote_find_packet_sender_stake_receiver,
                 verifier,
@@ -204,12 +203,11 @@ impl Tpu {
             )
         };
 
-        let (verified_gossip_vote_packets_sender, verified_gossip_vote_packets_receiver) =
-            unbounded();
+        let (gossip_vote_sender, gossip_vote_receiver) = unbounded();
         let cluster_info_vote_listener = ClusterInfoVoteListener::new(
             exit.clone(),
             cluster_info.clone(),
-            verified_gossip_vote_packets_sender,
+            gossip_vote_sender,
             poh_recorder.clone(),
             vote_tracker,
             bank_forks.clone(),
@@ -225,9 +223,9 @@ impl Tpu {
         let banking_stage = BankingStage::new(
             cluster_info,
             poh_recorder,
-            verified_receiver,
-            verified_tpu_vote_packets_receiver,
-            verified_gossip_vote_packets_receiver,
+            non_vote_receiver,
+            tpu_vote_receiver,
+            gossip_vote_receiver,
             transaction_status_sender,
             replay_vote_sender,
             log_messages_bytes_limit,

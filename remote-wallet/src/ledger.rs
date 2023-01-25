@@ -420,10 +420,7 @@ impl RemoteWallet<hidapi::DeviceInfo> for LedgerWallet {
             0,
             &derivation_path,
         )?;
-        if key.len() != 32 {
-            return Err(RemoteWalletError::Protocol("Key packet size mismatch"));
-        }
-        Ok(Pubkey::new(&key))
+        Pubkey::try_from(key).map_err(|_| RemoteWalletError::Protocol("Key packet size mismatch"))
     }
 
     fn sign_message(

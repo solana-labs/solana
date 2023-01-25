@@ -21,7 +21,9 @@ use {
         validator_configs::*,
     },
     solana_rpc_client::rpc_client::RpcClient,
-    solana_runtime::snapshot_config::SnapshotConfig,
+    solana_runtime::{
+        snapshot_config::SnapshotConfig, snapshot_utils::create_accounts_run_and_snapshot_dirs,
+    },
     solana_sdk::{
         account::AccountSharedData,
         clock::{self, Slot, DEFAULT_MS_PER_SLOT, DEFAULT_TICKS_PER_SLOT},
@@ -320,6 +322,7 @@ pub fn run_cluster_partition<C>(
         skip_warmup_slots: true,
         additional_accounts,
         ticks_per_slot: ticks_per_slot.unwrap_or(DEFAULT_TICKS_PER_SLOT),
+        tpu_connection_pool_size: 2,
         ..ClusterConfig::default()
     };
 
@@ -435,7 +438,7 @@ pub fn generate_account_paths(num_account_paths: usize) -> (Vec<TempDir>, Vec<Pa
         .collect();
     let account_storage_paths: Vec<_> = account_storage_dirs
         .iter()
-        .map(|a| a.path().to_path_buf())
+        .map(|a| create_accounts_run_and_snapshot_dirs(a.path()).unwrap().0)
         .collect();
     (account_storage_dirs, account_storage_paths)
 }

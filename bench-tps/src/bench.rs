@@ -74,13 +74,31 @@ struct KeypairChunks<'a> {
 }
 
 impl<'a> KeypairChunks<'a> {
-    /// Split input vector of keypairs into two sets of chunks of given size
+    /// Split input slice of keypairs into two sets of chunks of given size
     fn new(keypairs: &'a [Keypair], chunk_size: usize) -> Self {
+        // Use `chunk_size` as the number of conflict groups per chunk so that each destination key is unique
+        Self::new_with_conflict_groups(keypairs, chunk_size, chunk_size)
+    }
+
+    /// Split input slice of keypairs into two sets of chunks of given size. Each chunk
+    /// has a set of source keys and a set of destination keys. There will be
+    /// `num_conflict_groups_per_chunk` unique destination keys per chunk, so that the
+    /// destination keys may conflict with each other.
+    fn new_with_conflict_groups(
+        keypairs: &'a [Keypair],
+        chunk_size: usize,
+        num_conflict_groups_per_chunk: usize,
+    ) -> Self {
         let mut source_keypair_chunks: Vec<Vec<&Keypair>> = Vec::new();
         let mut dest_keypair_chunks: Vec<VecDeque<&Keypair>> = Vec::new();
         for chunk in keypairs.chunks_exact(2 * chunk_size) {
             source_keypair_chunks.push(chunk[..chunk_size].iter().collect());
-            dest_keypair_chunks.push(chunk[chunk_size..].iter().collect());
+            dest_keypair_chunks.push(
+                std::iter::repeat(&chunk[chunk_size..chunk_size + num_conflict_groups_per_chunk])
+                    .flatten()
+                    .take(chunk_size)
+                    .collect(),
+            );
         }
         KeypairChunks {
             source: source_keypair_chunks,
@@ -110,8 +128,13 @@ where
         chunk_size: usize,
         use_randomized_compute_unit_price: bool,
         instruction_padding_config: Option<InstructionPaddingConfig>,
+        num_conflict_groups: Option<usize>,
     ) -> Self {
-        let account_chunks = KeypairChunks::new(gen_keypairs, chunk_size);
+        let account_chunks = if let Some(num_conflict_groups) = num_conflict_groups {
+            KeypairChunks::new_with_conflict_groups(gen_keypairs, chunk_size, num_conflict_groups)
+        } else {
+            KeypairChunks::new(gen_keypairs, chunk_size)
+        };
         let nonce_chunks =
             nonce_keypairs.map(|nonce_keypairs| KeypairChunks::new(nonce_keypairs, chunk_size));
 
@@ -353,6 +376,7 @@ where
         use_randomized_compute_unit_price,
         use_durable_nonce,
         instruction_padding_config,
+        num_conflict_groups,
         ..
     } = config;
 
@@ -364,6 +388,7 @@ where
         tx_count,
         use_randomized_compute_unit_price,
         instruction_padding_config,
+        num_conflict_groups,
     );
 
     let first_tx_count = loop {
@@ -1159,5 +1184,61 @@ mod tests {
             );
         }
         withdraw_durable_nonce_accounts(client, &authority_keypairs, &nonce_keypairs)
+    }
+
+    #[test]
+    fn test_bench_tps_key_chunks_new() {
+        let num_keypairs = 16;
+        let chunk_size = 4;
+        let keypairs = std::iter::repeat_with(Keypair::new)
+            .take(num_keypairs)
+            .collect::<Vec<_>>();
+
+        let chunks = KeypairChunks::new(&keypairs, chunk_size);
+        assert_eq!(
+            chunks.source[0],
+            &[&keypairs[0], &keypairs[1], &keypairs[2], &keypairs[3]]
+        );
+        assert_eq!(
+            chunks.dest[0],
+            &[&keypairs[4], &keypairs[5], &keypairs[6], &keypairs[7]]
+        );
+        assert_eq!(
+            chunks.source[1],
+            &[&keypairs[8], &keypairs[9], &keypairs[10], &keypairs[11]]
+        );
+        assert_eq!(
+            chunks.dest[1],
+            &[&keypairs[12], &keypairs[13], &keypairs[14], &keypairs[15]]
+        );
+    }
+
+    #[test]
+    fn test_bench_tps_key_chunks_new_with_conflict_groups() {
+        let num_keypairs = 16;
+        let chunk_size = 4;
+        let num_conflict_groups = 2;
+        let keypairs = std::iter::repeat_with(Keypair::new)
+            .take(num_keypairs)
+            .collect::<Vec<_>>();
+
+        let chunks =
+            KeypairChunks::new_with_conflict_groups(&keypairs, chunk_size, num_conflict_groups);
+        assert_eq!(
+            chunks.source[0],
+            &[&keypairs[0], &keypairs[1], &keypairs[2], &keypairs[3]]
+        );
+        assert_eq!(
+            chunks.dest[0],
+            &[&keypairs[4], &keypairs[5], &keypairs[4], &keypairs[5]]
+        );
+        assert_eq!(
+            chunks.source[1],
+            &[&keypairs[8], &keypairs[9], &keypairs[10], &keypairs[11]]
+        );
+        assert_eq!(
+            chunks.dest[1],
+            &[&keypairs[12], &keypairs[13], &keypairs[12], &keypairs[13]]
+        );
     }
 }

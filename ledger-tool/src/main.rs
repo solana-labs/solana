@@ -62,8 +62,8 @@ use {
         snapshot_hash::StartingSnapshotHashes,
         snapshot_minimizer::SnapshotMinimizer,
         snapshot_utils::{
-            self, move_and_async_delete_path, ArchiveFormat, SnapshotVersion,
-            DEFAULT_ARCHIVE_COMPRESSION, SUPPORTED_ARCHIVE_COMPRESSION,
+            self, create_accounts_run_and_snapshot_dirs, move_and_async_delete_path, ArchiveFormat,
+            SnapshotVersion, DEFAULT_ARCHIVE_COMPRESSION, SUPPORTED_ARCHIVE_COMPRESSION,
         },
     },
     solana_sdk::{
@@ -516,13 +516,13 @@ fn graph_forks(bank_forks: &BankForks, config: &GraphConfig) -> String {
             let vote_state = vote_state.as_ref().unwrap_or(&default_vote_state);
             if let Some(last_vote) = vote_state.votes.iter().last() {
                 let entry = last_votes.entry(vote_state.node_pubkey).or_insert((
-                    last_vote.slot,
+                    last_vote.slot(),
                     vote_state.clone(),
                     *stake,
                     total_stake,
                 ));
-                if entry.0 < last_vote.slot {
-                    *entry = (last_vote.slot, vote_state.clone(), *stake, total_stake);
+                if entry.0 < last_vote.slot() {
+                    *entry = (last_vote.slot(), vote_state.clone(), *stake, total_stake);
                 }
             }
         }
@@ -558,7 +558,7 @@ fn graph_forks(bank_forks: &BankForks, config: &GraphConfig) -> String {
                 if let Some(last_vote) = vote_state.votes.iter().last() {
                     let validator_votes = all_votes.entry(vote_state.node_pubkey).or_default();
                     validator_votes
-                        .entry(last_vote.slot)
+                        .entry(last_vote.slot())
                         .or_insert_with(|| vote_state.clone());
                 }
             }
@@ -662,7 +662,8 @@ fn graph_forks(bank_forks: &BankForks, config: &GraphConfig) -> String {
                             .iter()
                             .map(|vote| format!(
                                 "slot {} (conf={})",
-                                vote.slot, vote.confirmation_count
+                                vote.slot(),
+                                vote.confirmation_count()
                             ))
                             .collect::<Vec<_>>()
                             .join("\n")
@@ -673,7 +674,7 @@ fn graph_forks(bank_forks: &BankForks, config: &GraphConfig) -> String {
                         vote_state
                             .votes
                             .back()
-                            .map(|vote| vote.slot.to_string())
+                            .map(|vote| vote.slot().to_string())
                             .unwrap_or_else(|| "none".to_string())
                     )
                 };
@@ -721,7 +722,7 @@ fn graph_forks(bank_forks: &BankForks, config: &GraphConfig) -> String {
                     vote_state
                         .votes
                         .iter()
-                        .map(|vote| format!("slot {} (conf={})", vote.slot, vote.confirmation_count))
+                        .map(|vote| format!("slot {} (conf={})", vote.slot(), vote.confirmation_count()))
                         .collect::<Vec<_>>()
                         .join("\n")
                 ));
@@ -1065,7 +1066,14 @@ fn load_bank_forks(
     };
 
     if let Some(halt_slot) = process_options.halt_at_slot {
-        // Check if we have the slot data necessary to replay from starting_slot to >= halt_slot.
+        if halt_slot < starting_slot {
+            eprintln!(
+                "Unable to load bank forks at slot {halt_slot} because it is less than the starting slot {starting_slot}. \
+                The starting slot will be the latest snapshot slot, or genesis if --no-snapshot flag specified or no snapshots found."
+            );
+            exit(1);
+        }
+        // Check if we have the slot data necessary to replay from starting_slot to <= halt_slot.
         //  - This will not catch the case when loading from genesis without a full slot 0.
         if !blockstore.slot_range_connected(starting_slot, halt_slot) {
             eprintln!("Unable to load bank forks at slot {halt_slot} due to disconnected blocks.",);
@@ -1091,6 +1099,22 @@ fn load_bank_forks(
         );
         vec![non_primary_accounts_path]
     };
+
+    // For all account_paths, set up the run/ and snapshot/ sub directories.
+    let account_run_paths: Vec<PathBuf> = account_paths.into_iter().map(
+        |account_path| {
+            match create_accounts_run_and_snapshot_dirs(&account_path) {
+                Ok((account_run_path, _account_snapshot_path)) => account_run_path,
+                Err(err) => {
+                    eprintln!("Unable to create account run and snapshot sub directories: {}, err: {err:?}", account_path.display());
+                    exit(1);
+                }
+            }
+        }).collect();
+
+    // From now on, use run/ paths in the same way as the previous account_paths.
+    let account_paths = account_run_paths;
+
     info!("Cleaning contents of account paths: {:?}", account_paths);
     let mut measure = Measure::start("clean_accounts_paths");
     account_paths.iter().for_each(|path| {
@@ -1736,6 +1760,7 @@ fn main() {
             SubCommand::with_name("bank-hash")
             .about("Prints the hash of the working bank after reading the ledger")
             .arg(&max_genesis_archive_unpacked_size_arg)
+            .arg(&halt_at_slot_arg)
         )
         .subcommand(
             SubCommand::with_name("bounds")
@@ -2472,7 +2497,7 @@ fn main() {
             ("bank-hash", Some(arg_matches)) => {
                 let process_options = ProcessOptions {
                     new_hard_forks: hardforks_of(arg_matches, "hard_forks"),
-                    halt_at_slot: Some(0),
+                    halt_at_slot: value_t!(arg_matches, "halt_at_slot", Slot).ok(),
                     poh_verify: false,
                     ..ProcessOptions::default()
                 };

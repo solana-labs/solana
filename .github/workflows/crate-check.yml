@@ -22,7 +22,7 @@ jobs:
       - name: Get commit range (push)
         if: ${{ github.event_name == 'push' }}
         run: |
-          echo "COMMIT_RANGE=$GITHUB_SHA" >> $GITHUB_ENV
+          echo "COMMIT_RANGE=${{ github.event.before }}..$GITHUB_SHA" >> $GITHUB_ENV
 
       - name: Get commit range (pull_request)
         if: ${{ github.event_name == 'pull_request' }}
