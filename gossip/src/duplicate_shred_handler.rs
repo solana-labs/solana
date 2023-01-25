@@ -442,11 +442,8 @@ mod tests {
             &bank_forks.working_bank(),
         ));
         let bank_forks_ptr = Arc::new(RwLock::new(bank_forks));
-        let mut duplicate_shred_handler = DuplicateShredHandler::new(
-            blockstore.clone(),
-            leader_schedule_cache,
-            bank_forks_ptr.clone(),
-        );
+        let mut duplicate_shred_handler =
+            DuplicateShredHandler::new(blockstore.clone(), leader_schedule_cache, bank_forks_ptr);
         let mut start_slot: Slot = 1;
 
         // This proof will not be accepted because num_chunks is too large.
@@ -513,7 +510,7 @@ mod tests {
                 create_duplicate_proof(
                     my_keypair.clone(),
                     None,
-                    (start_slot + i as u64).try_into().unwrap(),
+                    start_slot + i as u64,
                     None,
                     DUPLICATE_SHRED_MAX_PAYLOAD_SIZE,
                 )
@@ -532,15 +529,12 @@ mod tests {
             }
         }
         for i in 0..ALLOWED_SLOTS_PER_PUBKEY {
-            assert!(blockstore
-                .has_duplicate_shreds_in_slot((start_slot + i as u64).try_into().unwrap()));
+            assert!(blockstore.has_duplicate_shreds_in_slot(start_slot + i as u64));
         }
         // The last proof should fail because we only allow limited entries per pubkey.
-        assert!(!blockstore.has_duplicate_shreds_in_slot(
-            (start_slot + ALLOWED_SLOTS_PER_PUBKEY as u64)
-                .try_into()
-                .unwrap()
-        ));
+        assert!(
+            !blockstore.has_duplicate_shreds_in_slot(start_slot + ALLOWED_SLOTS_PER_PUBKEY as u64)
+        );
 
         start_slot += ALLOWED_SLOTS_PER_PUBKEY as u64 + 1;
         // Now send in MAX_PUBKEY_PER_SLOT number of incomplete proofs.
@@ -575,7 +569,7 @@ mod tests {
         assert!(!blockstore.has_duplicate_shreds_in_slot(start_slot));
         // Now put in a proof where sender has stake.
         let chunks = create_duplicate_proof(
-            my_keypair.clone(),
+            my_keypair,
             None,
             start_slot,
             None,
