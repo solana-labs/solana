@@ -585,28 +585,32 @@ fn main() -> Result<(), Box<dyn error::Error>> {
 
     add_genesis_accounts(&mut genesis_config, issued_lamports - faucet_lamports);
 
+    let parse_address = |address: &str, input_type: &str| {
+        address.parse::<Pubkey>().unwrap_or_else(|err| {
+            eprintln!("Error: invalid {input_type} {address}: {err}");
+            process::exit(1);
+        })
+    };
+
+    let parse_program_data = |program: &str| {
+        let mut program_data = vec![];
+        File::open(program)
+            .and_then(|mut file| file.read_to_end(&mut program_data))
+            .unwrap_or_else(|err| {
+                eprintln!("Error: failed to read {program}: {err}");
+                process::exit(1);
+            });
+        program_data
+    };
+
     if let Some(values) = matches.values_of("bpf_program") {
         let values: Vec<&str> = values.collect::<Vec<_>>();
         for address_loader_program in values.chunks(3) {
             match address_loader_program {
                 [address, loader, program] => {
-                    let address = address.parse::<Pubkey>().unwrap_or_else(|err| {
-                        eprintln!("Error: invalid address {address}: {err}");
-                        process::exit(1);
-                    });
-
-                    let loader = loader.parse::<Pubkey>().unwrap_or_else(|err| {
-                        eprintln!("Error: invalid loader {loader}: {err}");
-                        process::exit(1);
-                    });
-
-                    let mut program_data = vec![];
-                    File::open(program)
-                        .and_then(|mut file| file.read_to_end(&mut program_data))
-                        .unwrap_or_else(|err| {
-                            eprintln!("Error: failed to read {program}: {err}");
-                            process::exit(1);
-                        });
+                    let address = parse_address(address, "address");
+                    let loader = parse_address(loader, "loader");
+                    let program_data = parse_program_data(program);
                     genesis_config.add_account(
                         address,
                         AccountSharedData::from(Account {
