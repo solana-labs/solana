@@ -13,7 +13,9 @@ use {
         bank::{Bank, BankTestConfig},
         epoch_accounts_hash,
         genesis_utils::{self, activate_all_features, activate_feature},
-        snapshot_utils::{get_storages_to_serialize, ArchiveFormat},
+        snapshot_utils::{
+            create_tmp_accounts_dir_for_tests, get_storages_to_serialize, ArchiveFormat,
+        },
         status_cache::StatusCache,
     },
     bincode::serialize_into,
@@ -575,7 +577,7 @@ fn test_extra_fields_full_snapshot_archive() {
     // Set extra field
     bank.fee_rate_governor.lamports_per_signature = 7000;
 
-    let accounts_dir = TempDir::new().unwrap();
+    let (_tmp_dir, accounts_dir) = create_tmp_accounts_dir_for_tests();
     let bank_snapshots_dir = TempDir::new().unwrap();
     let full_snapshot_archives_dir = TempDir::new().unwrap();
     let incremental_snapshot_archives_dir = TempDir::new().unwrap();
@@ -595,7 +597,7 @@ fn test_extra_fields_full_snapshot_archive() {
 
     // Deserialize
     let (dbank, _) = snapshot_utils::bank_from_snapshot_archives(
-        &[PathBuf::from(accounts_dir.path())],
+        &[accounts_dir],
         bank_snapshots_dir.path(),
         &snapshot_archive_info,
         None,
