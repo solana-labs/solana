@@ -2443,7 +2443,6 @@ mod tests {
     }
 
     #[test]
-    #[should_panic]
     fn test_accounts_empty_bank_hash() {
         let accounts = Accounts::new_with_config_for_tests(
             Vec::new(),
@@ -2451,7 +2450,8 @@ mod tests {
             AccountSecondaryIndexes::default(),
             AccountShrinkThreshold::default(),
         );
-        accounts.bank_hash_info_at(1);
+        assert!(accounts.accounts_db.get_bank_hash_info(0).is_some());
+        assert!(accounts.accounts_db.get_bank_hash_info(1).is_none());
     }
 
     #[test]
