@@ -43,6 +43,7 @@ fetch_program memo  1.0.0 Memo1UhkJRfHyvLMcVucJwxXeuD728EqVDDwQDxFMNo BPFLoader1
 fetch_program memo  3.0.0 MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr BPFLoader2111111111111111111111111111111111
 fetch_program associated-token-account 1.1.2 ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL BPFLoader2111111111111111111111111111111111
 fetch_program feature-proposal 1.0.0 Feat1YXHhH6t1juaWF74WLcfv4XoNocjXA6sPWHNgAse BPFLoader2111111111111111111111111111111111
+fetch_program instruction_padding 0.1.0 Kqc3iY94x3nJvxYBqxqkqRVL3fgrzibJ4f2K5dUem6L BPFLoader2111111111111111111111111111111111
 
 echo "${genesis_args[@]}" > spl-genesis-args.sh
 
