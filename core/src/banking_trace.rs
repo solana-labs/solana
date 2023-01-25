@@ -452,14 +452,15 @@ mod tests {
         exit.store(true, Ordering::Relaxed);
         tracer_thread.unwrap().join().unwrap().unwrap();
 
-        // shouldn't panic
+        // .hash_event() must succeed even after exit is already set to true
         let blockhash = Hash::from_str("B1ockhash1111111111111111111111111111111111").unwrap();
         let bank_hash = Hash::from_str("BankHash11111111111111111111111111111111111").unwrap();
         tracer.hash_event(4, blockhash, bank_hash);
 
         drop(tracer);
 
-        // shouldn't panic
+        // .send() must succeed even after exit is already set to true and further tracer is
+        // already dropped
         non_vote_sender
             .send(for_test::sample_packet_batch())
             .unwrap();
