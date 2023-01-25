@@ -7547,6 +7547,11 @@ impl AccountsDb {
         accounts_delta_hash
     }
 
+    /// Get the bank hash info for `slot`
+    pub fn get_bank_hash_info(&self, slot: Slot) -> Option<BankHashInfo> {
+        self.bank_hashes.read().unwrap().get(&slot).cloned()
+    }
+
     fn update_index<'a, T: ReadableAccount + Sync>(
         &self,
         infos: Vec<AccountInfo>,
