@@ -1310,7 +1310,7 @@ impl ClusterInfo {
             .filter(|node| {
                 node.id != self_pubkey
                     && node.shred_version == self_shred_version
-                    && ContactInfo::is_valid_tvu_address(&node.tvu)
+                    && ContactInfo::is_valid_address(&node.tvu, &self.socket_addr_space)
             })
             .cloned()
             .collect()
@@ -1327,7 +1327,7 @@ impl ClusterInfo {
             .filter(|node| {
                 node.id != self_pubkey
                     && node.shred_version == self_shred_version
-                    && ContactInfo::is_valid_tvu_address(&node.tvu)
+                    && ContactInfo::is_valid_address(&node.tvu, &self.socket_addr_space)
                     && ContactInfo::is_valid_address(&node.serve_repair, &self.socket_addr_space)
                     && match gossip_crds.get::<&LowestSlot>(node.id) {
                         None => true, // fallback to legacy behavior
