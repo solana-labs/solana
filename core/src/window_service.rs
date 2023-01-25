@@ -11,6 +11,7 @@ use {
         result::{Error, Result},
     },
     crossbeam_channel::{unbounded, Receiver, RecvTimeoutError, Sender},
+    quinn::Endpoint,
     rayon::{prelude::*, ThreadPool},
     solana_gossip::cluster_info::ClusterInfo,
     solana_ledger::{
@@ -309,6 +310,7 @@ impl WindowService {
         verified_receiver: Receiver<Vec<PacketBatch>>,
         retransmit_sender: Sender<Vec<ShredPayload>>,
         repair_socket: Arc<UdpSocket>,
+        quic_repair_endpoint: Option<Endpoint>,
         ancestor_hashes_socket: Arc<UdpSocket>,
         exit: Arc<AtomicBool>,
         repair_info: RepairInfo,
@@ -327,6 +329,7 @@ impl WindowService {
             blockstore.clone(),
             exit.clone(),
             repair_socket,
+            quic_repair_endpoint,
             ancestor_hashes_socket,
             repair_info,
             verified_vote_receiver,

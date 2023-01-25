@@ -5347,6 +5347,7 @@ dependencies = [
  "matches",
  "min-max-heap",
  "num_enum",
+ "quinn",
  "rand 0.7.3",
  "rand_chacha 0.2.2",
  "raptorq",

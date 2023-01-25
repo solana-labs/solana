@@ -208,6 +208,7 @@ impl Tvu {
                 verified_receiver,
                 retransmit_sender,
                 repair_socket,
+                fetch_stage.get_quic_repair_endpoint(),
                 ancestor_hashes_socket,
                 exit.clone(),
                 repair_info,
