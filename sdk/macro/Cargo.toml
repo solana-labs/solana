@@ -1,23 +1,23 @@
 [package]
 name = "solana-sdk-macro"
-version = "1.15.0"
 description = "Solana SDK Macro"
-authors = ["Solana Maintainers <maintainers@solana.foundation>"]
-repository = "https://github.com/solana-labs/solana"
-homepage = "https://solana.com/"
 documentation = "https://docs.rs/solana-sdk-macro"
-license = "Apache-2.0"
-edition = "2021"
+version = { workspace = true }
+authors = { workspace = true }
+repository = { workspace = true }
+homepage = { workspace = true }
+license = { workspace = true }
+edition = { workspace = true }
 
 [lib]
 proc-macro = true
 
 [dependencies]
-bs58 = "0.4.0"
-proc-macro2 = "1.0.19"
-quote = "1.0"
+bs58 = { workspace = true }
+proc-macro2 = { workspace = true }
+quote = { workspace = true }
 rustversion = "1.0.7"
-syn = { version = "1.0", features = ["full", "extra-traits"] }
+syn = { workspace = true, features = ["full", "extra-traits"] }
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]

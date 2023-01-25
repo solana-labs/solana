@@ -1,74 +1,74 @@
 [package]
-authors = ["Solana Maintainers <maintainers@solana.foundation>"]
-edition = "2021"
 name = "solana-validator"
 description = "Blockchain, Rebuilt for Scale"
-version = "1.15.0"
-repository = "https://github.com/solana-labs/solana"
-license = "Apache-2.0"
-homepage = "https://solana.com/"
 documentation = "https://docs.rs/solana-validator"
 default-run = "solana-validator"
+version = { workspace = true }
+authors = { workspace = true }
+repository = { workspace = true }
+homepage = { workspace = true }
+license = { workspace = true }
+edition = { workspace = true }
 
 [dependencies]
-chrono = { version = "0.4.22", features = ["serde"] }
-clap = "2.33.1"
-console = "0.15.0"
-core_affinity = "0.5.10"
-crossbeam-channel = "0.5"
-fd-lock = "3.0.6"
-indicatif = "0.17.1"
-jsonrpc-core = "18.0.0"
-jsonrpc-core-client = { version = "18.0.0", features = ["ipc"] }
-jsonrpc-derive = "18.0.0"
-jsonrpc-ipc-server = "18.0.0"
-jsonrpc-server-utils = "18.0.0"
-lazy_static = "1.4.0"
-log = "0.4.17"
-num_cpus = "1.13.1"
-rand = "0.7.0"
-rayon = "1.5.3"
-serde = "1.0.144"
-serde_json = "1.0.83"
-serde_yaml = "0.9.13"
-solana-clap-utils = { path = "../clap-utils", version = "=1.15.0" }
-solana-cli-config = { path = "../cli-config", version = "=1.15.0" }
-solana-core = { path = "../core", version = "=1.15.0" }
-solana-download-utils = { path = "../download-utils", version = "=1.15.0" }
-solana-entry = { path = "../entry", version = "=1.15.0" }
-solana-faucet = { path = "../faucet", version = "=1.15.0" }
-solana-genesis-utils = { path = "../genesis-utils", version = "=1.15.0" }
-solana-gossip = { path = "../gossip", version = "=1.15.0" }
-solana-ledger = { path = "../ledger", version = "=1.15.0" }
-solana-logger = { path = "../logger", version = "=1.15.0" }
-solana-metrics = { path = "../metrics", version = "=1.15.0" }
-solana-net-utils = { path = "../net-utils", version = "=1.15.0" }
-solana-perf = { path = "../perf", version = "=1.15.0" }
-solana-poh = { path = "../poh", version = "=1.15.0" }
-solana-rpc = { path = "../rpc", version = "=1.15.0" }
-solana-rpc-client = { path = "../rpc-client", version = "=1.15.0", default-features = false }
-solana-rpc-client-api = { path = "../rpc-client-api", version = "=1.15.0" }
-solana-runtime = { path = "../runtime", version = "=1.15.0" }
-solana-sdk = { path = "../sdk", version = "=1.15.0" }
-solana-send-transaction-service = { path = "../send-transaction-service", version = "=1.15.0" }
-solana-storage-bigtable = { path = "../storage-bigtable", version = "=1.15.0" }
-solana-streamer = { path = "../streamer", version = "=1.15.0" }
-solana-test-validator = { path = "../test-validator", version = "=1.15.0" }
-solana-tpu-client = { path = "../tpu-client", version = "=1.15.0", default-features = false }
-solana-version = { path = "../version", version = "=1.15.0" }
-solana-vote-program = { path = "../programs/vote", version = "=1.15.0" }
-symlink = "0.1.0"
+chrono = { workspace = true, features = ["default", "serde"] }
+clap = { workspace = true }
+console = { workspace = true }
+core_affinity = { workspace = true }
+crossbeam-channel = { workspace = true }
+fd-lock = { workspace = true }
+indicatif = { workspace = true }
+jsonrpc-core = { workspace = true }
+jsonrpc-core-client = { workspace = true, features = ["ipc"] }
+jsonrpc-derive = { workspace = true }
+jsonrpc-ipc-server = { workspace = true }
+jsonrpc-server-utils = { workspace = true }
+lazy_static = { workspace = true }
+log = { workspace = true }
+num_cpus = { workspace = true }
+rand = { workspace = true }
+rayon = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+serde_yaml = { workspace = true }
+solana-clap-utils = { workspace = true }
+solana-cli-config = { workspace = true }
+solana-core = { workspace = true }
+solana-download-utils = { workspace = true }
+solana-entry = { workspace = true }
+solana-faucet = { workspace = true }
+solana-genesis-utils = { workspace = true }
+solana-gossip = { workspace = true }
+solana-ledger = { workspace = true }
+solana-logger = { workspace = true }
+solana-metrics = { workspace = true }
+solana-net-utils = { workspace = true }
+solana-perf = { workspace = true }
+solana-poh = { workspace = true }
+solana-rpc = { workspace = true }
+solana-rpc-client = { workspace = true }
+solana-rpc-client-api = { workspace = true }
+solana-runtime = { workspace = true }
+solana-sdk = { workspace = true }
+solana-send-transaction-service = { workspace = true }
+solana-storage-bigtable = { workspace = true }
+solana-streamer = { workspace = true }
+solana-test-validator = { workspace = true }
+solana-tpu-client = { workspace = true }
+solana-version = { workspace = true }
+solana-vote-program = { workspace = true }
+symlink = { workspace = true }
 
 [dev-dependencies]
-solana-account-decoder = { path = "../account-decoder", version = "=1.15.0" }
-spl-token-2022 = { version = "=0.5.0", features = ["no-entrypoint"] }
+solana-account-decoder = { workspace = true }
+spl-token-2022 = { workspace = true, features = ["no-entrypoint"] }
 
 [target.'cfg(not(target_env = "msvc"))'.dependencies]
-jemallocator = { package = "tikv-jemallocator", version = "0.4.1", features = ["unprefixed_malloc_on_supported_platforms"] }
+jemallocator = { workspace = true }
 
 [target."cfg(unix)".dependencies]
-libc = "0.2.131"
-signal-hook = "0.3.14"
+libc = { workspace = true }
+signal-hook = { workspace = true }
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]

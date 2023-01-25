@@ -1,40 +1,40 @@
 [package]
 name = "solana-client-test"
-version = "1.15.0"
 description = "Solana RPC Test"
-authors = ["Solana Maintainers <maintainers@solana.foundation>"]
-repository = "https://github.com/solana-labs/solana"
-license = "Apache-2.0"
-homepage = "https://solana.com/"
 documentation = "https://docs.rs/solana-client-test"
-edition = "2021"
 publish = false
+version = { workspace = true }
+authors = { workspace = true }
+repository = { workspace = true }
+homepage = { workspace = true }
+license = { workspace = true }
+edition = { workspace = true }
 
 [dependencies]
-futures-util = "0.3.25"
-serde_json = "1.0.83"
-solana-ledger = { path = "../ledger", version = "=1.15.0" }
-solana-measure = { path = "../measure", version = "=1.15.0" }
-solana-merkle-tree = { path = "../merkle-tree", version = "=1.15.0" }
-solana-metrics = { path = "../metrics", version = "=1.15.0" }
-solana-perf = { path = "../perf", version = "=1.15.0" }
-solana-pubsub-client = { path = "../pubsub-client", version = "=1.15.0" }
-solana-rayon-threadlimit = { path = "../rayon-threadlimit", version = "=1.15.0" }
-solana-rpc = { path = "../rpc", version = "=1.15.0" }
-solana-rpc-client = { path = "../rpc-client", version = "=1.15.0", default-features = false }
-solana-rpc-client-api = { path = "../rpc-client-api", version = "=1.15.0" }
-solana-runtime = { path = "../runtime", version = "=1.15.0" }
-solana-sdk = { path = "../sdk", version = "=1.15.0" }
-solana-streamer = { path = "../streamer", version = "=1.15.0" }
-solana-test-validator = { path = "../test-validator", version = "=1.15.0" }
-solana-transaction-status = { path = "../transaction-status", version = "=1.15.0" }
-solana-version = { path = "../version", version = "=1.15.0" }
-systemstat = "0.2.0"
-tokio = { version = "~1.14.1", features = ["full"] }
-tungstenite = { version = "0.17.2", features = ["rustls-tls-webpki-roots"] }
+futures-util = { workspace = true }
+serde_json = { workspace = true }
+solana-ledger = { workspace = true }
+solana-measure = { workspace = true }
+solana-merkle-tree = { workspace = true }
+solana-metrics = { workspace = true }
+solana-perf = { workspace = true }
+solana-pubsub-client = { workspace = true }
+solana-rayon-threadlimit = { workspace = true }
+solana-rpc = { workspace = true }
+solana-rpc-client = { workspace = true }
+solana-rpc-client-api = { workspace = true }
+solana-runtime = { workspace = true }
+solana-sdk = { workspace = true }
+solana-streamer = { workspace = true }
+solana-test-validator = { workspace = true }
+solana-transaction-status = { workspace = true }
+solana-version = { workspace = true }
+systemstat = { workspace = true }
+tokio = { workspace = true, features = ["full"] }
+tungstenite = { workspace = true, features = ["rustls-tls-webpki-roots"] }
 
 [dev-dependencies]
-solana-logger = { path = "../logger", version = "=1.15.0" }
+solana-logger = { workspace = true }
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]

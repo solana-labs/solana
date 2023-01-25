@@ -109,6 +109,290 @@ exclude = [
 # This prevents a Travis CI error when building for Windows.
 resolver = "2"
 
+[workspace.package]
+version = "1.15.0"
+authors = ["Solana Maintainers <maintainers@solana.foundation>"]
+repository = "https://github.com/solana-labs/solana"
+homepage = "https://solana.com/"
+license = "Apache-2.0"
+edition = "2021"
+
+[workspace.dependencies]
+aes-gcm-siv = "0.10.3"
+ahash = "0.7.6"
+anyhow = "1.0.58"
+ark-bn254 = "0.3.0"
+ark-ec = "0.3.0"
+ark-ff = "0.3.0"
+array-bytes = "=1.4.1"
+arrayref = "0.3.6"
+assert_cmd = "2.0"
+assert_matches = "1.5.0"
+async-mutex = "1.4.0"
+async-trait = "0.1.57"
+atty = "0.2.11"
+backoff = "0.4.0"
+base64 = "0.13.0"
+bincode = "1.3.3"
+bitflags = "1.3.1"
+blake3 = "1.3.1"
+block-buffer = "0.9.0"
+borsh = "0.9.3"
+borsh-derive = "0.9.1"
+bs58 = "0.4.0"
+bv = "0.11.1"
+byte-unit = "4.0.14"
+bytecount = "0.6.3"
+bytemuck = "1.11.0"
+byteorder = "1.4.3"
+bytes = "1.2"
+bzip2 = "0.4.4"
+caps = "0.5.4"
+cargo_metadata = "0.15.0"
+cc = "1.0.78"
+chrono = { version = "0.4.23", default-features = false }
+chrono-humanize = "0.2.1"
+cipher = "0.4"
+clap = "2.33.1"
+console = "0.15.0"
+console_error_panic_hook = "0.1.7"
+console_log = "0.2.0"
+const_format = "0.2.26"
+core_affinity = "0.5.10"
+criterion-stats = "0.3.0"
+crossbeam-channel = "0.5.6"
+csv = "1.1.6"
+ctrlc = "3.2.3"
+curve25519-dalek = "3.2.1"
+dashmap = "4.0.2"
+derivation-path = { version = "0.2.0", default-features = false }
+dialoguer = "0.10.2"
+digest = "0.10.1"
+dir-diff = "0.3.2"
+dirs-next = "2.0.0"
+dlopen = "0.1.8"
+dlopen_derive = "0.1.4"
+eager = "0.1.0"
+ed25519-dalek = "=1.0.1"
+ed25519-dalek-bip32 = "0.2.0"
+either = "1.7.0"
+enum_dispatch = "0.3.8"
+enum-iterator = "1.2.0"
+env_logger = "0.9.3"
+etcd-client = "0.8.1"
+fast-math = "0.1"
+fd-lock = "3.0.6"
+flate2 = "1.0.24"
+fnv = "1.0.7"
+fs_extra = "1.2.0"
+futures = "0.3.24"
+futures-util = "0.3.25"
+gag = "1.0.0"
+generic-array = { version = "0.14.6", default-features = false }
+gethostname = "0.2.3"
+getrandom = "0.1.14"
+goauth = "0.13.1"
+hashbrown = "0.12"
+hex = "0.4.3"
+hidapi = { version = "1.4.1", default-features = false }
+histogram = "0.6.9"
+hmac = "0.12.1"
+http = "0.2.8"
+humantime = "2.0.1"
+hyper = "0.14.20"
+hyper-proxy = "0.9.1"
+im = "15.1.0"
+index_list = "0.2.7"
+indexmap = "1.9.1"
+indicatif = "0.17.1"
+Inflector = "0.11.4"
+itertools = "0.10.5"
+jemallocator = { package = "tikv-jemallocator", version = "0.4.1", features = ["unprefixed_malloc_on_supported_platforms"] }
+js-sys = "0.3.59"
+json5 = "0.4.1"
+jsonrpc-core = "18.0.0"
+jsonrpc-core-client = "18.0.0"
+jsonrpc-derive = "18.0.0"
+jsonrpc-http-server = "18.0.0"
+jsonrpc-ipc-server = "18.0.0"
+jsonrpc-pubsub = "18.0.0"
+jsonrpc-server-utils = "18.0.0"
+lazy_static = "1.4.0"
+libc = "0.2.131"
+libloading = "0.7.3"
+libsecp256k1 = "0.6.0"
+log = "0.4.17"
+lru = "0.7.7"
+lz4 = "1.24.0"
+matches = "0.1.9"
+memmap2 = "0.5.8"
+memoffset = "0.6"
+merlin = "3"
+min-max-heap = "1.3.0"
+modular-bitfield = "0.11.2"
+nix = "0.25.0"
+num-bigint = "0.4.3"
+num_cpus = "1.13.1"
+num_enum = "0.5.7"
+num-derive = "0.3"
+num-traits = "0.2"
+once_cell = "1.13.0"
+openssl = "0.10"
+ouroboros = "0.15.0"
+parking_lot = "0.12"
+pbkdf2 = { version = "0.11.0", default-features = false }
+pem = "1.1.1"
+percentage = "0.1.0"
+pickledb = { version = "0.5.1", default-features = false }
+pkcs8 = "0.8.0"
+predicates = "2.1"
+pretty-hex = "0.3.0"
+proc-macro2 = "1.0.19"
+proptest = "1.0"
+prost = "0.11.0"
+prost-types = "0.11.1"
+protobuf-src = "1.0.5"
+qstring = "0.7.2"
+quinn = "0.9.3"
+quinn-proto = "0.9.2"
+quinn-udp = "0.3.2"
+quote = "1.0"
+rand = "0.7.0"
+rand_chacha = "0.2.2"
+rand_core = "0.6.3"
+raptorq = "1.7.0"
+rayon = "1.5.3"
+rcgen = "0.10.0"
+reed-solomon-erasure = "6.0.0"
+regex = "1.6.0"
+reqwest = { version = "0.11.12", default-features = false }
+rpassword = "7.0"
+rustc_version = "0.4"
+rustls = { version = "0.20.6", default-features = false }
+rustversion = "1.0.9"
+scopeguard = "1.1.0"
+semver = "1.0.16"
+serde = "1.0.144"
+serde_bytes = "0.11.7"
+serde_derive = "1.0.103"
+serde_json = "1.0.83"
+serde_yaml = "0.9.13"
+serial_test = "0.9.0"
+sha2 = "0.10.5"
+sha3 = "0.10.4"
+signal-hook = "0.3.14"
+smpl_jwt = "0.7.1"
+socket2 = "0.4.7"
+soketto = "0.7"
+solana_rbpf = "=0.2.38"
+solana-account-decoder = { path = "account-decoder", version = "=1.15.0" }
+solana-address-lookup-table-program = { path = "programs/address-lookup-table", version = "=1.15.0" }
+solana-banks-client = { path = "banks-client", version = "=1.15.0" }
+solana-banks-interface = { path = "banks-interface", version = "=1.15.0" }
+solana-banks-server = { path = "banks-server", version = "=1.15.0" }
+solana-bench-tps = { path = "bench-tps", version = "=1.15.0" }
+solana-bloom = { path = "bloom", version = "=1.15.0" }
+solana-bpf-loader-program = { path = "programs/bpf_loader", version = "=1.15.0" }
+solana-bucket-map = { path = "bucket_map", version = "=1.15.0" }
+solana-clap-utils = { path = "clap-utils", version = "=1.15.0" }
+solana-clap-v3-utils = { path = "clap-v3-utils", version = "=1.15.0" }
+solana-cli = { path = "cli", version = "=1.15.0" }
+solana-cli-config = { path = "cli-config", version = "=1.15.0" }
+solana-cli-output = { path = "cli-output", version = "=1.15.0" }
+solana-client = { path = "client", version = "=1.15.0" }
+solana-compute-budget-program = { path = "programs/compute-budget", version = "=1.15.0" }
+solana-config-program = { path = "programs/config", version = "=1.15.0" }
+solana-core = { path = "core", version = "=1.15.0" }
+solana-download-utils = { path = "download-utils", version = "=1.15.0" }
+solana-entry = { path = "entry", version = "=1.15.0" }
+solana-faucet = { path = "faucet", version = "=1.15.0" }
+solana-frozen-abi = { path = "frozen-abi", version = "=1.15.0" }
+solana-frozen-abi-macro = { path = "frozen-abi/macro", version = "=1.15.0" }
+solana-genesis = { path = "genesis", version = "=1.15.0" }
+solana-genesis-utils = { path = "genesis-utils", version = "=1.15.0" }
+solana-geyser-plugin-interface = { path = "geyser-plugin-interface", version = "=1.15.0" }
+solana-geyser-plugin-manager = { path = "geyser-plugin-manager", version = "=1.15.0" }
+solana-gossip = { path = "gossip", version = "=1.15.0" }
+solana-ledger = { path = "ledger", version = "=1.15.0" }
+solana-local-cluster = { path = "local-cluster", version = "=1.15.0" }
+solana-logger = { path = "logger", version = "=1.15.0" }
+solana-measure = { path = "measure", version = "=1.15.0" }
+solana-merkle-tree = { path = "merkle-tree", version = "=1.15.0" }
+solana-metrics = { path = "metrics", version = "=1.15.0" }
+solana-net-utils = { path = "net-utils", version = "=1.15.0" }
+solana-notifier = { path = "notifier", version = "=1.15.0" }
+solana-perf = { path = "perf", version = "=1.15.0" }
+solana-poh = { path = "poh", version = "=1.15.0" }
+solana-program = { path = "sdk/program", version = "=1.15.0" }
+solana-program-runtime = { path = "program-runtime", version = "=1.15.0" }
+solana-program-test = { path = "program-test", version = "=1.15.0" }
+solana-pubsub-client = { path = "pubsub-client", version = "=1.15.0" }
+solana-quic-client = { path = "quic-client", version = "=1.15.0" }
+solana-rayon-threadlimit = { path = "rayon-threadlimit", version = "=1.15.0" }
+solana-remote-wallet = { path = "remote-wallet", version = "=1.15.0", default-features = false }
+solana-rpc = { path = "rpc", version = "=1.15.0" }
+solana-rpc-client = { path = "rpc-client", version = "=1.15.0", default-features = false }
+solana-rpc-client-api = { path = "rpc-client-api", version = "=1.15.0" }
+solana-rpc-client-nonce-utils = { path = "rpc-client-nonce-utils", version = "=1.15.0" }
+solana-runtime = { path = "runtime", version = "=1.15.0" }
+solana-sdk = { path = "sdk", version = "=1.15.0" }
+solana-sdk-macro = { path = "sdk/macro", version = "=1.15.0" }
+solana-send-transaction-service = { path = "send-transaction-service", version = "=1.15.0" }
+solana-stake-program = { path = "programs/stake", version = "=1.15.0" }
+solana-storage-bigtable = { path = "storage-bigtable", version = "=1.15.0" }
+solana-storage-proto = { path = "storage-proto", version = "=1.15.0" }
+solana-streamer = { path = "streamer", version = "=1.15.0" }
+solana-sys-tuner = { path = "sys-tuner", version = "=1.15.0" }
+solana-test-validator = { path = "test-validator", version = "=1.15.0" }
+solana-thin-client = { path = "thin-client", version = "=1.15.0" }
+solana-tpu-client = { path = "tpu-client", version = "=1.15.0", default-features = false }
+solana-transaction-status = { path = "transaction-status", version = "=1.15.0" }
+solana-udp-client = { path = "udp-client", version = "=1.15.0" }
+solana-version = { path = "version", version = "=1.15.0" }
+solana-vote-program = { path = "programs/vote", version = "=1.15.0" }
+solana-zk-token-proof-program = { path = "programs/zk-token-proof", version = "=1.15.0" }
+solana-zk-token-sdk = { path = "zk-token-sdk", version = "=1.15.0" }
+spl-associated-token-account = "=1.1.2"
+spl-instruction-padding = "0.1"
+spl-memo = "=3.0.1"
+spl-token = "=3.5.0"
+spl-token-2022 = "=0.5.0"
+static_assertions = "1.1.0"
+stream-cancel = "0.8.1"
+strum = "0.24"
+strum_macros = "0.24"
+subtle = "2.4.1"
+symlink = "0.1.0"
+syn = "1.0"
+sys-info = "0.9.1"
+sysctl = "0.4.4"
+systemstat = "0.2.0"
+tar = "0.4.38"
+tarpc = "0.29.0"
+tempfile = "3.3.0"
+test-case = "2.2.2"
+thiserror = "1.0.31"
+tiny-bip39 = "0.8.2"
+tokio = "~1.14.1"
+tokio-serde = "0.8"
+tokio-stream = "0.1.9"
+tokio-tungstenite = "0.17.2"
+tokio-util = "0.6"
+tonic = "0.8.2"
+tonic-build = "0.8.0"
+trees = "0.4.2"
+tungstenite = "0.17.2"
+unix_socket2 = "0.5.4"
+uriparse = "0.6.4"
+url = "2.2.2"
+users = "0.10.0"
+wasm-bindgen = "0.2"
+winapi = "0.3.8"
+winreg = "0.10"
+x509-parser = "0.14.0"
+zeroize = { version = "1.3", default-features = false }
+zstd = "0.11.2"
+
 # for details, see https://github.com/solana-labs/crossbeam/commit/fd279d707025f0e60951e429bf778b4813d1b6bf
 [patch.crates-io]
 crossbeam-epoch = { git = "https://github.com/solana-labs/crossbeam", rev = "fd279d707025f0e60951e429bf778b4813d1b6bf" }

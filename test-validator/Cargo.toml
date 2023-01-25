@@ -1,36 +1,35 @@
 [package]
 name = "solana-test-validator"
 description = "Blockchain, Rebuilt for Scale"
-version = "1.15.0"
-homepage = "https://solana.com/"
-documentation = "https://docs.rs/solana-test-validator"
 readme = "../README.md"
-repository = "https://github.com/solana-labs/solana"
-authors = ["Solana Maintainers <maintainers@solana.foundation>"]
-license = "Apache-2.0"
-edition = "2021"
+version = { workspace = true }
+authors = { workspace = true }
+repository = { workspace = true }
+homepage = { workspace = true }
+license = { workspace = true }
+edition = { workspace = true }
 
 [dependencies]
-base64 = "0.13.0"
-log = "0.4.17"
-serde_derive = "1.0.103"
-serde_json = "1.0.83"
-solana-cli-output = { path = "../cli-output", version = "=1.15.0" }
-solana-client = { path = "../client", version = "=1.15.0" }
-solana-core = { path = "../core", version = "=1.15.0" }
-solana-gossip = { path = "../gossip", version = "=1.15.0" }
-solana-ledger = { path = "../ledger", version = "=1.15.0" }
-solana-logger = { path = "../logger", version = "=1.15.0" }
-solana-net-utils = { path = "../net-utils", version = "=1.15.0" }
-solana-program-runtime = { path = "../program-runtime", version = "=1.15.0" }
-solana-program-test = { path = "../program-test", version = "=1.15.0" }
-solana-rpc = { path = "../rpc", version = "=1.15.0" }
-solana-rpc-client = { path = "../rpc-client", version = "=1.15.0", default-features = false }
-solana-runtime = { path = "../runtime", version = "=1.15.0" }
-solana-sdk = { path = "../sdk", version = "=1.15.0" }
-solana-streamer = { path = "../streamer", version = "=1.15.0" }
-solana-tpu-client = { path = "../tpu-client", version = "=1.15.0", default-features = false }
-tokio = { version = "1", features = ["full"] }
+base64 = { workspace = true }
+log = { workspace = true }
+serde_derive = { workspace = true }
+serde_json = { workspace = true }
+solana-cli-output = { workspace = true }
+solana-client = { workspace = true }
+solana-core = { workspace = true }
+solana-gossip = { workspace = true }
+solana-ledger = { workspace = true }
+solana-logger = { workspace = true }
+solana-net-utils = { workspace = true }
+solana-program-runtime = { workspace = true }
+solana-program-test = { workspace = true }
+solana-rpc = { workspace = true }
+solana-rpc-client = { workspace = true }
+solana-runtime = { workspace = true }
+solana-sdk = { workspace = true }
+solana-streamer = { workspace = true }
+solana-tpu-client = { workspace = true }
+tokio = { workspace = true, features = ["full"] }
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]

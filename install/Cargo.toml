@@ -1,45 +1,45 @@
 [package]
-authors = ["Solana Maintainers <maintainers@solana.foundation>"]
-edition = "2021"
 name = "solana-install"
 description = "The solana cluster software installer"
-version = "1.15.0"
-repository = "https://github.com/solana-labs/solana"
-license = "Apache-2.0"
-homepage = "https://solana.com/"
 documentation = "https://docs.rs/solana-install"
+version = { workspace = true }
+authors = { workspace = true }
+repository = { workspace = true }
+homepage = { workspace = true }
+license = { workspace = true }
+edition = { workspace = true }
 
 [dependencies]
-atty = "0.2.11"
-bincode = "1.3.3"
-bzip2 = "0.4.4"
-chrono = { version = "0.4.22", features = ["serde"] }
-clap = { version = "2.33.1" }
-console = "0.15.0"
-crossbeam-channel = "0.5"
-ctrlc = { version = "3.2.3", features = ["termination"] }
-dirs-next = "2.0.0"
-indicatif = "0.17.1"
-lazy_static = "1.4.0"
-nix = "0.25.0"
-reqwest = { version = "0.11.12", default-features = false, features = ["blocking", "brotli", "deflate", "gzip", "rustls-tls", "json"] }
-scopeguard = "1.1.0"
-semver = "1.0.16"
-serde = { version = "1.0.144", features = ["derive"] }
-serde_yaml = "0.9.13"
-solana-clap-utils = { path = "../clap-utils", version = "=1.15.0" }
-solana-config-program = { path = "../programs/config", version = "=1.15.0" }
-solana-logger = { path = "../logger", version = "=1.15.0" }
-solana-rpc-client = { path = "../rpc-client", version = "=1.15.0", default-features = false }
-solana-sdk = { path = "../sdk", version = "=1.15.0" }
-solana-version = { path = "../version", version = "=1.15.0" }
-tar = "0.4.38"
-tempfile = "3.3.0"
-url = "2.2.2"
+atty = { workspace = true }
+bincode = { workspace = true }
+bzip2 = { workspace = true }
+chrono = { workspace = true, features = ["default", "serde"] }
+clap = { workspace = true }
+console = { workspace = true }
+crossbeam-channel = { workspace = true }
+ctrlc = { workspace = true, features = ["termination"] }
+dirs-next = { workspace = true }
+indicatif = { workspace = true }
+lazy_static = { workspace = true }
+nix = { workspace = true }
+reqwest = { workspace = true, features = ["blocking", "brotli", "deflate", "gzip", "rustls-tls", "json"] }
+scopeguard = { workspace = true }
+semver = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+serde_yaml = { workspace = true }
+solana-clap-utils = { workspace = true }
+solana-config-program = { workspace = true }
+solana-logger = { workspace = true }
+solana-rpc-client = { workspace = true }
+solana-sdk = { workspace = true }
+solana-version = { workspace = true }
+tar = { workspace = true }
+tempfile = { workspace = true }
+url = { workspace = true }
 
 [target."cfg(windows)".dependencies]
-winapi = "0.3.8"
-winreg = "0.10"
+winapi = { workspace = true }
+winreg = { workspace = true }
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]

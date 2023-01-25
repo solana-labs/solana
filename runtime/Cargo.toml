@@ -1,88 +1,88 @@
 [package]
 name = "solana-runtime"
-version = "1.15.0"
 description = "Solana runtime"
-authors = ["Solana Maintainers <maintainers@solana.foundation>"]
-repository = "https://github.com/solana-labs/solana"
-license = "Apache-2.0"
-homepage = "https://solana.com/"
 documentation = "https://docs.rs/solana-runtime"
-edition = "2021"
+version = { workspace = true }
+authors = { workspace = true }
+repository = { workspace = true }
+homepage = { workspace = true }
+license = { workspace = true }
+edition = { workspace = true }
 
 [dependencies]
-arrayref = "0.3.6"
-bincode = "1.3.3"
-blake3 = "1.3.1"
-bv = { version = "0.11.1", features = ["serde"] }
-bytemuck = "1.11.0"
-byteorder = "1.4.3"
-bzip2 = "0.4.4"
-crossbeam-channel = "0.5"
-dashmap = { version = "4.0.2", features = ["rayon", "raw-api"] }
-dir-diff = "0.3.2"
-flate2 = "1.0.24"
-fnv = "1.0.7"
-im = { version = "15.1.0", features = ["rayon", "serde"] }
-index_list = "0.2.7"
-itertools = "0.10.5"
-lazy_static = "1.4.0"
-log = "0.4.17"
-lru = "0.7.7"
-lz4 = "1.24.0"
-memmap2 = "0.5.8"
-num-derive = { version = "0.3" }
-num-traits = { version = "0.2" }
-num_cpus = "1.13.1"
-once_cell = "1.13.0"
-ouroboros = "0.15.0"
-rand = "0.7.0"
-rayon = "1.5.3"
-regex = "1.6.0"
-serde = { version = "1.0.144", features = ["rc"] }
-serde_derive = "1.0.103"
-solana-address-lookup-table-program = { path = "../programs/address-lookup-table", version = "=1.15.0" }
-solana-bpf-loader-program = { path = "../programs/bpf_loader", version = "=1.15.0" }
-solana-bucket-map = { path = "../bucket_map", version = "=1.15.0" }
-solana-compute-budget-program = { path = "../programs/compute-budget", version = "=1.15.0" }
-solana-config-program = { path = "../programs/config", version = "=1.15.0" }
-solana-frozen-abi = { path = "../frozen-abi", version = "=1.15.0" }
-solana-frozen-abi-macro = { path = "../frozen-abi/macro", version = "=1.15.0" }
-solana-measure = { path = "../measure", version = "=1.15.0" }
-solana-metrics = { path = "../metrics", version = "=1.15.0" }
-solana-perf = { path = "../perf", version = "=1.15.0" }
-solana-program-runtime = { path = "../program-runtime", version = "=1.15.0" }
-solana-rayon-threadlimit = { path = "../rayon-threadlimit", version = "=1.15.0" }
-solana-sdk = { path = "../sdk", version = "=1.15.0" }
-solana-stake-program = { path = "../programs/stake", version = "=1.15.0" }
-solana-vote-program = { path = "../programs/vote", version = "=1.15.0" }
-solana-zk-token-proof-program = { path = "../programs/zk-token-proof", version = "=1.15.0" }
-solana-zk-token-sdk = { path = "../zk-token-sdk", version = "=1.15.0" }
-strum = { version = "0.24", features = ["derive"] }
-strum_macros = "0.24"
-symlink = "0.1.0"
-tar = "0.4.38"
-tempfile = "3.3.0"
-thiserror = "1.0"
-zstd = "0.11.2"
+arrayref = { workspace = true }
+bincode = { workspace = true }
+blake3 = { workspace = true }
+bv = { workspace = true, features = ["serde"] }
+bytemuck = { workspace = true }
+byteorder = { workspace = true }
+bzip2 = { workspace = true }
+crossbeam-channel = { workspace = true }
+dashmap = { workspace = true, features = ["rayon", "raw-api"] }
+dir-diff = { workspace = true }
+flate2 = { workspace = true }
+fnv = { workspace = true }
+im = { workspace = true, features = ["rayon", "serde"] }
+index_list = { workspace = true }
+itertools = { workspace = true }
+lazy_static = { workspace = true }
+log = { workspace = true }
+lru = { workspace = true }
+lz4 = { workspace = true }
+memmap2 = { workspace = true }
+num-derive = { workspace = true }
+num-traits = { workspace = true }
+num_cpus = { workspace = true }
+once_cell = { workspace = true }
+ouroboros = { workspace = true }
+rand = { workspace = true }
+rayon = { workspace = true }
+regex = { workspace = true }
+serde = { workspace = true, features = ["rc"] }
+serde_derive = { workspace = true }
+solana-address-lookup-table-program = { workspace = true }
+solana-bpf-loader-program = { workspace = true }
+solana-bucket-map = { workspace = true }
+solana-compute-budget-program = { workspace = true }
+solana-config-program = { workspace = true }
+solana-frozen-abi = { workspace = true }
+solana-frozen-abi-macro = { workspace = true }
+solana-measure = { workspace = true }
+solana-metrics = { workspace = true }
+solana-perf = { workspace = true }
+solana-program-runtime = { workspace = true }
+solana-rayon-threadlimit = { workspace = true }
+solana-sdk = { workspace = true }
+solana-stake-program = { workspace = true }
+solana-vote-program = { workspace = true }
+solana-zk-token-proof-program = { workspace = true }
+solana-zk-token-sdk = { workspace = true }
+strum = { workspace = true, features = ["derive"] }
+strum_macros = { workspace = true }
+symlink = { workspace = true }
+tar = { workspace = true }
+tempfile = { workspace = true }
+thiserror = { workspace = true }
+zstd = { workspace = true }
 
 [lib]
 crate-type = ["lib"]
 name = "solana_runtime"
 
 [dev-dependencies]
-assert_matches = "1.5.0"
-ed25519-dalek = "=1.0.1"
-libsecp256k1 = "0.6.0"
-rand_chacha = "0.2.2"
-solana-logger = { path = "../logger", version = "=1.15.0" }
-static_assertions = "1.1.0"
-test-case = "2.2.2"
+assert_matches = { workspace = true }
+ed25519-dalek = { workspace = true }
+libsecp256k1 = { workspace = true }
+rand_chacha = { workspace = true }
+solana-logger = { workspace = true }
+static_assertions = { workspace = true }
+test-case = { workspace = true }
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
 
 [build-dependencies]
-rustc_version = "0.4"
+rustc_version = { workspace = true }
 
 [[bench]]
 name = "prioritization_fee_cache"

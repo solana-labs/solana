@@ -1,83 +1,83 @@
 [package]
 name = "solana-program"
-version = "1.15.0"
 description = "Solana Program"
-authors = ["Solana Maintainers <maintainers@solana.foundation>"]
-repository = "https://github.com/solana-labs/solana"
-homepage = "https://solana.com/"
 documentation = "https://docs.rs/solana-program"
 readme = "README.md"
-license = "Apache-2.0"
-edition = "2021"
+version = { workspace = true }
+authors = { workspace = true }
+repository = { workspace = true }
+homepage = { workspace = true }
+license = { workspace = true }
+edition = { workspace = true }
 
 [dependencies]
 bincode = "1.3.1"
-blake3 = { version = "1.3.1", features = ["digest", "traits-preview"] }
+blake3 = { workspace = true, features = ["digest", "traits-preview"] }
 borsh = "0.9.1"
-borsh-derive = "0.9.1"
-bs58 = "0.4.0"
-bv = { version = "0.11.1", features = ["serde"] }
+borsh-derive = { workspace = true }
+bs58 = { workspace = true }
+bv = { workspace = true, features = ["serde"] }
 bytemuck = { version = "1.8.0", features = ["derive"] }
-itertools =  "0.10.5"
-lazy_static = "1.4.0"
-log = "0.4.17"
-memoffset = "0.6"
-num-derive = "0.3"
-num-traits = { version = "0.2", default-features = true, features = ["i128", "std"] }
+itertools =  { workspace = true }
+lazy_static = { workspace = true }
+log = { workspace = true }
+memoffset = { workspace = true }
+num-derive = { workspace = true }
+num-traits = { workspace = true, features = ["i128"] }
 rustversion = "1.0.7"
-serde = { version = "1.0", features = ["derive"] }
-serde_bytes = "0.11"
-serde_derive = "1.0"
-serde_json = "1.0"
+serde = { workspace = true, features = ["derive"] }
+serde_bytes = { workspace = true }
+serde_derive = { workspace = true }
+serde_json = { workspace = true }
 sha2 = "0.10.0"
 sha3 = "0.10.0"
-solana-frozen-abi = { path = "../../frozen-abi", version = "=1.15.0" }
-solana-frozen-abi-macro = { path = "../../frozen-abi/macro", version = "=1.15.0" }
-solana-sdk-macro = { path = "../macro", version = "=1.15.0" }
-thiserror = "1.0"
+solana-frozen-abi = { workspace = true }
+solana-frozen-abi-macro = { workspace = true }
+solana-sdk-macro = { workspace = true }
+thiserror = { workspace = true }
 
 [target.'cfg(not(target_os = "solana"))'.dependencies]
-ark-bn254 = "0.3.0"
-ark-ec = "0.3.0"
-ark-ff = "0.3.0"
-array-bytes = "=1.4.1"
-bitflags = "1.3.1"
-base64 = { version = "0.13", features = ["alloc", "std"] }
-curve25519-dalek = { version = "3.2.1", features = ["serde"] }
-itertools = "0.10.5"
+ark-bn254 = { workspace = true }
+ark-ec = { workspace = true }
+ark-ff = { workspace = true }
+array-bytes = { workspace = true }
+bitflags = { workspace = true }
+base64 = { workspace = true, features = ["alloc", "std"] }
+curve25519-dalek = { workspace = true, features = ["serde"] }
+itertools = { workspace = true }
 libc = { version = "0.2.126", features = ["extra_traits"] }
-libsecp256k1 = "0.6.0"
-num-bigint = "0.4.3"
-rand = "0.7"
-rand_chacha = { version = "0.2.2", default-features = true, features = ["simd", "std"] }
-tiny-bip39 = "0.8.2"
-wasm-bindgen = "0.2"
-zeroize = { version = "1.3", default-features = true, features = ["zeroize_derive"] }
+libsecp256k1 = { workspace = true }
+num-bigint = { workspace = true }
+rand = { workspace = true }
+rand_chacha = { workspace = true }
+tiny-bip39 = { workspace = true }
+wasm-bindgen = { workspace = true }
+zeroize = { workspace = true, features = ["default", "zeroize_derive"] }
 
 [target.'cfg(not(target_os = "solana"))'.dev-dependencies]
-solana-logger = { path = "../../logger", version = "=1.15.0" }
+solana-logger = { workspace = true }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
-console_error_panic_hook = "0.1.7"
-console_log = "0.2.0"
+console_error_panic_hook = { workspace = true }
+console_log = { workspace = true }
 js-sys = "0.3.55"
 getrandom = { version = "0.2", features = ["js", "wasm-bindgen"] }
 
 [target.'cfg(not(target_pointer_width = "64"))'.dependencies]
-parking_lot = "0.12"
+parking_lot = { workspace = true }
 
 [dev-dependencies]
 anyhow = "1.0.58"
 assert_matches = "1.3.0"
 bincode = "1.3.1"
 borsh = "0.9.1"
-borsh-derive = "0.9.1"
+borsh-derive = { workspace = true }
 serde_json = "1.0.56"
-static_assertions = "1.1.0"
+static_assertions = { workspace = true }
 
 [build-dependencies]
 cc = { version = "1.0.67", features = ["jobserver", "parallel"] }
-rustc_version = "0.4"
+rustc_version = { workspace = true }
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]

@@ -1,18 +1,18 @@
 [package]
 name = "solana-logger"
-version = "1.15.0"
 description = "Solana Logger"
-authors = ["Solana Maintainers <maintainers@solana.foundation>"]
-repository = "https://github.com/solana-labs/solana"
-license = "Apache-2.0"
-homepage = "https://solana.com/"
 documentation = "https://docs.rs/solana-logger"
-edition = "2021"
+version = { workspace = true }
+authors = { workspace = true }
+repository = { workspace = true }
+homepage = { workspace = true }
+license = { workspace = true }
+edition = { workspace = true }
 
 [dependencies]
-env_logger = "0.9.3"
-lazy_static = "1.4.0"
-log = "0.4.17"
+env_logger = { workspace = true }
+lazy_static = { workspace = true }
+log = { workspace = true }
 
 [lib]
 name = "solana_logger"

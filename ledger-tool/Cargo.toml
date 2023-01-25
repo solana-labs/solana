@@ -1,56 +1,56 @@
 [package]
-authors = ["Solana Maintainers <maintainers@solana.foundation>"]
-edition = "2021"
 name = "solana-ledger-tool"
 description = "Blockchain, Rebuilt for Scale"
-version = "1.15.0"
-repository = "https://github.com/solana-labs/solana"
-license = "Apache-2.0"
-homepage = "https://solana.com/"
 documentation = "https://docs.rs/solana-ledger-tool"
+version = { workspace = true }
+authors = { workspace = true }
+repository = { workspace = true }
+homepage = { workspace = true }
+license = { workspace = true }
+edition = { workspace = true }
 
 [dependencies]
-bs58 = "0.4.0"
-chrono = "0.4.22"
-clap = "2.33.1"
-crossbeam-channel = "0.5"
-csv = "1.1.6"
-dashmap = "4.0.2"
-futures = "0.3"
-histogram = "0.6.9"
-itertools = "0.10.5"
-log = { version = "0.4.17" }
-num_cpus = "1.13.1"
-regex = "1"
-serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0.83"
-solana-account-decoder = { path = "../account-decoder", version = "=1.15.0" }
-solana-clap-utils = { path = "../clap-utils", version = "=1.15.0" }
-solana-cli-output = { path = "../cli-output", version = "=1.15.0" }
-solana-core = { path = "../core", version = "=1.15.0" }
-solana-entry = { path = "../entry", version = "=1.15.0" }
-solana-geyser-plugin-manager = { path = "../geyser-plugin-manager", version = "=1.15.0" }
-solana-ledger = { path = "../ledger", version = "=1.15.0" }
-solana-logger = { path = "../logger", version = "=1.15.0" }
-solana-measure = { path = "../measure", version = "=1.15.0" }
-solana-runtime = { path = "../runtime", version = "=1.15.0" }
-solana-sdk = { path = "../sdk", version = "=1.15.0" }
-solana-stake-program = { path = "../programs/stake", version = "=1.15.0" }
-solana-storage-bigtable = { path = "../storage-bigtable", version = "=1.15.0" }
-solana-transaction-status = { path = "../transaction-status", version = "=1.15.0" }
-solana-version = { path = "../version", version = "=1.15.0" }
-solana-vote-program = { path = "../programs/vote", version = "=1.15.0" }
-tokio = { version = "1", features = ["full"] }
+bs58 = { workspace = true }
+chrono = { workspace = true, features = ["default"] }
+clap = { workspace = true }
+crossbeam-channel = { workspace = true }
+csv = { workspace = true }
+dashmap = { workspace = true }
+futures = { workspace = true }
+histogram = { workspace = true }
+itertools = { workspace = true }
+log = { workspace = true }
+num_cpus = { workspace = true }
+regex = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+solana-account-decoder = { workspace = true }
+solana-clap-utils = { workspace = true }
+solana-cli-output = { workspace = true }
+solana-core = { workspace = true }
+solana-entry = { workspace = true }
+solana-geyser-plugin-manager = { workspace = true }
+solana-ledger = { workspace = true }
+solana-logger = { workspace = true }
+solana-measure = { workspace = true }
+solana-runtime = { workspace = true }
+solana-sdk = { workspace = true }
+solana-stake-program = { workspace = true }
+solana-storage-bigtable = { workspace = true }
+solana-transaction-status = { workspace = true }
+solana-version = { workspace = true }
+solana-vote-program = { workspace = true }
+tokio = { workspace = true, features = ["full"] }
 
 [target.'cfg(not(target_env = "msvc"))'.dependencies]
-jemallocator = { package = "tikv-jemallocator", version = "0.4.1", features = ["unprefixed_malloc_on_supported_platforms"] }
+jemallocator = { workspace = true }
 
 [dev-dependencies]
-assert_cmd = "2.0"
-bytecount = "0.6.3"
+assert_cmd = { workspace = true }
+bytecount = { workspace = true }
 
 [target."cfg(unix)".dependencies]
-signal-hook = "0.3.14"
+signal-hook = { workspace = true }
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]

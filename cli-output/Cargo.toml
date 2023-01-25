@@ -1,37 +1,37 @@
 [package]
-authors = ["Solana Maintainers <maintainers@solana.foundation>"]
-edition = "2021"
 name = "solana-cli-output"
 description = "Blockchain, Rebuilt for Scale"
-version = "1.15.0"
-repository = "https://github.com/solana-labs/solana"
-license = "Apache-2.0"
-homepage = "https://solana.com/"
 documentation = "https://docs.rs/solana-cli-output"
+version = { workspace = true }
+authors = { workspace = true }
+repository = { workspace = true }
+homepage = { workspace = true }
+license = { workspace = true }
+edition = { workspace = true }
 
 [dependencies]
-Inflector = "0.11.4"
-base64 = "0.13.0"
-chrono = { version = "0.4.22", features = ["serde"] }
+Inflector = { workspace = true }
+base64 = { workspace = true }
+chrono = { workspace = true, features = ["default", "serde"] }
 clap = "2.33.0"
-console = "0.15.0"
-humantime = "2.0.1"
-indicatif = "0.17.1"
-pretty-hex = "0.3.0"
-semver = "1.0.16"
-serde = "1.0.144"
-serde_json = "1.0.83"
-solana-account-decoder = { path = "../account-decoder", version = "=1.15.0" }
-solana-clap-utils = { path = "../clap-utils", version = "=1.15.0" }
-solana-cli-config = { path = "../cli-config", version = "=1.15.0" }
-solana-rpc-client-api = { path = "../rpc-client-api", version = "=1.15.0" }
-solana-sdk = { path = "../sdk", version = "=1.15.0" }
-solana-transaction-status = { path = "../transaction-status", version = "=1.15.0" }
-solana-vote-program = { path = "../programs/vote", version = "=1.15.0" }
-spl-memo = { version = "=3.0.1", features = ["no-entrypoint"] }
+console = { workspace = true }
+humantime = { workspace = true }
+indicatif = { workspace = true }
+pretty-hex = { workspace = true }
+semver = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+solana-account-decoder = { workspace = true }
+solana-clap-utils = { workspace = true }
+solana-cli-config = { workspace = true }
+solana-rpc-client-api = { workspace = true }
+solana-sdk = { workspace = true }
+solana-transaction-status = { workspace = true }
+solana-vote-program = { workspace = true }
+spl-memo = { workspace = true, features = ["no-entrypoint"] }
 
 [dev-dependencies]
-ed25519-dalek = "=1.0.1"
+ed25519-dalek = { workspace = true }
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]

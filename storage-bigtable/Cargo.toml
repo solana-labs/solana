@@ -1,50 +1,50 @@
 [package]
 name = "solana-storage-bigtable"
-version = "1.15.0"
 description = "Solana Storage BigTable"
-authors = ["Solana Maintainers <maintainers@solana.com>"]
-repository = "https://github.com/solana-labs/solana"
-license = "Apache-2.0"
-homepage = "https://solana.com/"
 documentation = "https://docs.rs/solana-storage-bigtable"
-edition = "2021"
+version = { workspace = true }
+authors = { workspace = true }
+repository = { workspace = true }
+homepage = { workspace = true }
+license = { workspace = true }
+edition = { workspace = true }
 
 [dependencies]
-backoff = { version = "0.4.0", features = ["tokio"] }
-bincode = "1.3.3"
-bytes = "1.2"
-bzip2 = "0.4.4"
-enum-iterator = "1.2.0"
-flate2 = "1.0.24"
-futures = "0.3.24"
-goauth = "0.13.1"
-http = "0.2.8"
-hyper = "0.14.23"
-hyper-proxy = "0.9.1"
-log = "0.4.17"
-prost = "0.11.0"
-prost-types = "0.11.1"
-serde = "1.0.144"
-serde_derive = "1.0.103"
-smpl_jwt = "0.7.1"
-solana-metrics = { path = "../metrics", version = "=1.15.0" }
-solana-sdk = { path = "../sdk", version = "=1.15.0" }
-solana-storage-proto = { path = "../storage-proto", version = "=1.15.0" }
-solana-transaction-status = { path = "../transaction-status", version = "=1.15.0" }
-thiserror = "1.0"
-tokio = "1"
-tonic = { version = "0.8.2", features = ["tls", "transport"] }
-zstd = "0.11.2"
+backoff = { workspace = true, features = ["tokio"] }
+bincode = { workspace = true }
+bytes = { workspace = true }
+bzip2 = { workspace = true }
+enum-iterator = { workspace = true }
+flate2 = { workspace = true }
+futures = { workspace = true }
+goauth = { workspace = true }
+http = { workspace = true }
+hyper = { workspace = true }
+hyper-proxy = { workspace = true }
+log = { workspace = true }
+prost = { workspace = true }
+prost-types = { workspace = true }
+serde = { workspace = true }
+serde_derive = { workspace = true }
+smpl_jwt = { workspace = true }
+solana-metrics = { workspace = true }
+solana-sdk = { workspace = true }
+solana-storage-proto = { workspace = true }
+solana-transaction-status = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true }
+tonic = { workspace = true, features = ["tls", "transport"] }
+zstd = { workspace = true }
 
 # openssl is a dependency of the goauth and smpl_jwt crates, but explicitly
 # declare it here as well to activate the "vendored" feature that builds OpenSSL
 # statically...
 [target."cfg(not(windows))".dependencies]
-openssl = { version = "0.10", features = ["vendored"] }
+openssl = { workspace = true, features = ["vendored"] }
 # ...except on Windows to avoid having to deal with getting CI past a build-time
 # Perl dependency
 [target."cfg(windows)".dependencies]
-openssl = { version = "0.10", features = [] }
+openssl = { workspace = true, features = [] }
 
 [lib]
 crate-type = ["lib"]
