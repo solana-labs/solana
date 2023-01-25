@@ -111,7 +111,7 @@ where
         })
     }
 
-    pub fn send_and_confirm_messages_with_spinner<T: Signers>(
+    pub fn send_and_confirm_messages_with_spinner<T: Signers + ?Sized>(
         &self,
         messages: &[Message],
         signers: &T,
