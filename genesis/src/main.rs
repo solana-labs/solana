@@ -28,6 +28,7 @@ use {
         pubkey::Pubkey,
         rent::Rent,
         signature::{Keypair, Signer},
+        signer::keypair::read_keypair_file,
         stake::state::StakeState,
         system_program, timing,
     },
@@ -380,11 +381,11 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         .arg(
             Arg::with_name("upgradeable_program")
                 .long("upgradeable-program")
-                .value_name("ADDRESS UPGRADEABLE_LOADER BPF_PROGRAM.SO")
+                .value_name("ADDRESS UPGRADEABLE_LOADER BPF_PROGRAM.SO UPGRADE_AUTHORITY")
                 .takes_value(true)
-                .number_of_values(3)
+                .number_of_values(4)
                 .multiple(true)
-                .help("Install an upgradeable SBF program at the given address"),
+                .help("Install an upgradeable SBF program at the given address with the given upgrade authority (or \"none\")"),
         )
         .arg(
             Arg::with_name("inflation")
@@ -639,19 +640,29 @@ fn main() -> Result<(), Box<dyn error::Error>> {
 
     if let Some(values) = matches.values_of("upgradeable_program") {
         let values: Vec<&str> = values.collect::<Vec<_>>();
-        for address_loader_program in values.chunks(3) {
-            match address_loader_program {
-                [address, loader, program] => {
+        for address_loader_program_upgrade_authority in values.chunks(4) {
+            match address_loader_program_upgrade_authority {
+                [address, loader, program, upgrade_authority] => {
                     let address = parse_address(address, "address");
                     let loader = parse_address(loader, "loader");
                     let program_data_elf = parse_program_data(program);
+                    let upgrade_authority_address = if *upgrade_authority == "none" {
+                        Pubkey::default()
+                    } else {
+                        upgrade_authority.parse::<Pubkey>().unwrap_or_else(|_| {
+                          read_keypair_file(upgrade_authority).map(|keypair| keypair.pubkey()).unwrap_or_else(|err| {
+                              eprintln!("Error: invalid upgrade_authority {upgrade_authority}: {err}");
+                              process::exit(1);
+                          })
+                      })
+                    };
 
                     let (programdata_address, _) =
                         Pubkey::find_program_address(&[address.as_ref()], &loader);
                     let mut program_data =
                         bincode::serialize(&UpgradeableLoaderState::ProgramData {
                             slot: 0,
-                            upgrade_authority_address: Some(Pubkey::default()),
+                            upgrade_authority_address: Some(upgrade_authority_address),
                         })
                         .unwrap();
                     program_data.extend_from_slice(&program_data_elf);
