@@ -82,14 +82,7 @@ impl fmt::Debug for Version {
             self.major,
             self.minor,
             self.patch,
-<<<<<<< HEAD
-            match self.commit {
-                None => "devbuild".to_string(),
-                Some(commit) => format!("{:08x}", commit),
-            },
-=======
             self.commit,
->>>>>>> 0941d133a (adds new solana_version::Version with ClientId (#29649))
             self.feature_set,
             self.client(),
         )
