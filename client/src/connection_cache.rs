@@ -2,7 +2,7 @@ use {
     quinn::Endpoint,
     solana_connection_cache::{
         client_connection::ClientConnection as BlockingClientConnection,
-        connection_cache::{ConnectionCache as BaseConnectionCache, NewConnectionConfig},
+        connection_cache::{ConnectionCache as BackendConnectionCache, NewConnectionConfig},
         nonblocking::client_connection::ClientConnection as NonblockingClientConnection,
     },
     solana_quic_client::{QuicConfig, QuicConnectionManager},
@@ -24,7 +24,7 @@ pub const MAX_CONNECTIONS: usize = 1024;
 /// For the scenario only with udp or quic, use connection-cache/ConnectionCache directly.
 pub struct ConnectionCache {
     use_quic: bool,
-    cache: BaseConnectionCache,
+    cache: BackendConnectionCache,
 }
 
 impl ConnectionCache {
@@ -56,7 +56,7 @@ impl ConnectionCache {
         }
         let connection_manager =
             Box::new(QuicConnectionManager::new_with_connection_config(config));
-        let cache = BaseConnectionCache::new(connection_manager, connection_pool_size).unwrap();
+        let cache = BackendConnectionCache::new(connection_manager, connection_pool_size).unwrap();
         Self {
             use_quic: true,
             cache,
@@ -67,7 +67,7 @@ impl ConnectionCache {
         // The minimum pool size is 1.
         let connection_pool_size = 1.max(connection_pool_size);
         let connection_manager = Box::<UdpConnectionManager>::default();
-        let cache = BaseConnectionCache::new(connection_manager, connection_pool_size).unwrap();
+        let cache = BackendConnectionCache::new(connection_manager, connection_pool_size).unwrap();
         Self {
             use_quic: false,
             cache,
