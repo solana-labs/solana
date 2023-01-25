@@ -138,12 +138,22 @@ mod tests {
 
     #[test]
     fn test_close_account() {
+        // success case: do not create proof context
         let elgamal_keypair = ElGamalKeypair::new_rand();
         let ciphertext = elgamal_keypair.public.encrypt(0_u64);
         let close_account_data =
-            CloseAccountData::new(&elgamal_keypair, &ciphertext, true).unwrap();
-        let proof_context_length = close_account_data.context_data().len();
+            CloseAccountData::new(&elgamal_keypair, &ciphertext, false).unwrap(); // no context
 
+        let instruction_data = ProofInstruction::VerifyCloseAccount
+            .encode(&close_account_data, None)
+            .data;
+
+        process_instruction(&instruction_data, vec![], vec![], Ok(()));
+
+        // success case: create proof context
+        let close_account_data =
+            CloseAccountData::new(&elgamal_keypair, &ciphertext, true).unwrap(); // create context
+        let proof_context_length = close_account_data.context_data().len();
         let rent = Rent::default();
         let rent_exempt_reserve = rent.minimum_balance(proof_context_length);
         let proof_context_address = solana_sdk::pubkey::new_rand();
@@ -170,11 +180,51 @@ mod tests {
         process_instruction(
             &instruction_data,
             vec![
-                (proof_context_address, proof_context_account),
+                (proof_context_address, proof_context_account.clone()),
                 (sysvar::rent::id(), create_default_rent_account()),
             ],
-            instruction_accounts,
+            instruction_accounts.clone(),
             Ok(()),
+        );
+
+        // create proof context, but do not provide account info
+        process_instruction(
+            &instruction_data,
+            vec![],
+            vec![],
+            Err(InstructionError::NotEnoughAccountKeys),
+        );
+
+        // insufficient rent
+        let proof_context_account =
+            AccountSharedData::new(rent_exempt_reserve - 1, proof_context_length, &id());
+
+        process_instruction(
+            &instruction_data,
+            vec![
+                (proof_context_address, proof_context_account.clone()),
+                (sysvar::rent::id(), create_default_rent_account()),
+            ],
+            instruction_accounts.clone(),
+            Err(InstructionError::InsufficientFunds),
+        );
+
+        // invalid proof
+        let ciphertext = elgamal_keypair.public.encrypt(1_u64); // non-zero amount
+        let close_account_data =
+            CloseAccountData::new(&elgamal_keypair, &ciphertext, true).unwrap();
+        let instruction_data = ProofInstruction::VerifyCloseAccount
+            .encode(&close_account_data, Some(&proof_context_address))
+            .data;
+
+        process_instruction(
+            &instruction_data,
+            vec![
+                (proof_context_address, proof_context_account.clone()),
+                (sysvar::rent::id(), create_default_rent_account()),
+            ],
+            instruction_accounts.clone(),
+            Err(InstructionError::InvalidInstructionData),
         );
     }
 }
