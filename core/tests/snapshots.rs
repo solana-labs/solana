@@ -1,7 +1,6 @@
 #![allow(clippy::integer_arithmetic)]
 
 use {
-    crate::snapshot_utils::create_tmp_accounts_dir_for_tests,
     bincode::serialize_into,
     crossbeam_channel::unbounded,
     fs_extra::dir::CopyOptions,
@@ -75,8 +74,7 @@ struct SnapshotTestConfig {
     incremental_snapshot_archives_dir: TempDir,
     full_snapshot_archives_dir: TempDir,
     bank_snapshots_dir: TempDir,
-    accounts_dir: PathBuf,
-    _accounts_tmp_dir: TempDir,
+    accounts_dir: TempDir,
 }
 
 impl SnapshotTestConfig {
@@ -87,7 +85,7 @@ impl SnapshotTestConfig {
         full_snapshot_archive_interval_slots: Slot,
         incremental_snapshot_archive_interval_slots: Slot,
     ) -> SnapshotTestConfig {
-        let (_accounts_tmp_dir, accounts_dir) = create_tmp_accounts_dir_for_tests();
+        let accounts_dir = TempDir::new().unwrap();
         let bank_snapshots_dir = TempDir::new().unwrap();
         let full_snapshot_archives_dir = TempDir::new().unwrap();
         let incremental_snapshot_archives_dir = TempDir::new().unwrap();
@@ -104,7 +102,7 @@ impl SnapshotTestConfig {
         let bank0 = Bank::new_with_paths_for_tests(
             &genesis_config_info.genesis_config,
             Arc::<RuntimeConfig>::default(),
-            vec![accounts_dir.clone()],
+            vec![accounts_dir.path().to_path_buf()],
             AccountSecondaryIndexes::default(),
             accounts_db::AccountShrinkThreshold::default(),
         );
@@ -133,7 +131,6 @@ impl SnapshotTestConfig {
             full_snapshot_archives_dir,
             bank_snapshots_dir,
             accounts_dir,
-            _accounts_tmp_dir,
         }
     }
 }
@@ -299,8 +296,8 @@ fn run_bank_forks_snapshot_n<F>(
     .unwrap();
 
     // Restore bank from snapshot
-    let (_tmp_dir, temporary_accounts_dir) = create_tmp_accounts_dir_for_tests();
-    let account_paths = &[temporary_accounts_dir];
+    let temporary_accounts_dir = TempDir::new().unwrap();
+    let account_paths = &[temporary_accounts_dir.path().to_path_buf()];
     let genesis_config = &snapshot_test_config.genesis_config_info.genesis_config;
     restore_from_snapshot(bank_forks, last_slot, genesis_config, account_paths);
 
@@ -729,7 +726,7 @@ fn test_bank_forks_incremental_snapshot(
         INCREMENTAL_SNAPSHOT_ARCHIVE_INTERVAL_SLOTS,
     );
     trace!("SnapshotTestConfig:\naccounts_dir: {}\nbank_snapshots_dir: {}\nfull_snapshot_archives_dir: {}\nincremental_snapshot_archives_dir: {}",
-            snapshot_test_config.accounts_dir.display(), snapshot_test_config.bank_snapshots_dir.path().display(), snapshot_test_config.full_snapshot_archives_dir.path().display(), snapshot_test_config.incremental_snapshot_archives_dir.path().display());
+            snapshot_test_config.accounts_dir.path().display(), snapshot_test_config.bank_snapshots_dir.path().display(), snapshot_test_config.full_snapshot_archives_dir.path().display(), snapshot_test_config.incremental_snapshot_archives_dir.path().display());
 
     let bank_forks = &mut snapshot_test_config.bank_forks;
     let mint_keypair = &snapshot_test_config.genesis_config_info.mint_keypair;
@@ -824,11 +821,11 @@ fn test_bank_forks_incremental_snapshot(
             // Accounts directory needs to be separate from the active accounts directory
             // so that dropping append vecs in the active accounts directory doesn't
             // delete the unpacked appendvecs in the snapshot
-            let (_tmp_dir, temporary_accounts_dir) = create_tmp_accounts_dir_for_tests();
+            let temporary_accounts_dir = TempDir::new().unwrap();
             restore_from_snapshots_and_check_banks_are_equal(
                 &bank,
                 &snapshot_test_config.snapshot_config,
-                temporary_accounts_dir,
+                temporary_accounts_dir.path().to_path_buf(),
                 &snapshot_test_config.genesis_config_info.genesis_config,
             )
             .unwrap();
@@ -1123,7 +1120,7 @@ fn test_snapshots_with_background_services(
     }
 
     // Load the snapshot and ensure it matches what's in BankForks
-    let (_tmp_dir, temporary_accounts_dir) = create_tmp_accounts_dir_for_tests();
+    let temporary_accounts_dir = TempDir::new().unwrap();
     let (deserialized_bank, ..) = snapshot_utils::bank_from_latest_snapshot_archives(
         &snapshot_test_config.snapshot_config.bank_snapshots_dir,
         &snapshot_test_config
@@ -1132,7 +1129,7 @@ fn test_snapshots_with_background_services(
         &snapshot_test_config
             .snapshot_config
             .incremental_snapshot_archives_dir,
-        &[temporary_accounts_dir],
+        &[temporary_accounts_dir.as_ref().to_path_buf()],
         &snapshot_test_config.genesis_config_info.genesis_config,
         &RuntimeConfig::default(),
         None,
