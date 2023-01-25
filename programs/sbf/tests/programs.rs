@@ -3587,6 +3587,7 @@ fn test_program_fees() {
         &fee_structure,
         true,
         false,
+        true,
     );
     bank_client
         .send_and_confirm_message(&[&mint_keypair], message)
@@ -3609,6 +3610,7 @@ fn test_program_fees() {
         &fee_structure,
         true,
         false,
+        true,
     );
     assert!(expected_normal_fee < expected_prioritized_fee);
 
