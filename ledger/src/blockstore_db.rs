@@ -606,7 +606,6 @@ pub trait Column {
     fn index(key: &[u8]) -> Self::Index;
     // this return Slot or some u64
     fn primary_index(index: Self::Index) -> u64;
-    #[allow(clippy::wrong_self_convention)]
     fn as_index(slot: Slot) -> Self::Index;
     fn slot(index: Self::Index) -> Slot {
         Self::primary_index(index)
@@ -666,7 +665,6 @@ impl<T: SlotColumn> Column for T {
         index
     }
 
-    #[allow(clippy::wrong_self_convention)]
     /// Converts a Slot to its u64 Index.
     fn as_index(slot: Slot) -> u64 {
         slot
@@ -703,7 +701,6 @@ impl Column for columns::TransactionStatus {
         index.2
     }
 
-    #[allow(clippy::wrong_self_convention)]
     fn as_index(index: u64) -> Self::Index {
         (index, Signature::default(), 0)
     }
@@ -743,7 +740,6 @@ impl Column for columns::AddressSignatures {
         index.2
     }
 
-    #[allow(clippy::wrong_self_convention)]
     fn as_index(index: u64) -> Self::Index {
         (index, Pubkey::default(), 0, Signature::default())
     }
@@ -773,7 +769,6 @@ impl Column for columns::TransactionMemos {
         unimplemented!()
     }
 
-    #[allow(clippy::wrong_self_convention)]
     fn as_index(_index: u64) -> Self::Index {
         Signature::default()
     }
@@ -803,7 +798,6 @@ impl Column for columns::TransactionStatusIndex {
         unimplemented!()
     }
 
-    #[allow(clippy::wrong_self_convention)]
     fn as_index(slot: u64) -> u64 {
         slot
     }
@@ -868,7 +862,6 @@ impl Column for columns::ProgramCosts {
         unimplemented!()
     }
 
-    #[allow(clippy::wrong_self_convention)]
     fn as_index(_index: u64) -> Self::Index {
         Pubkey::default()
     }
@@ -889,7 +882,6 @@ impl Column for columns::ShredCode {
         index.0
     }
 
-    #[allow(clippy::wrong_self_convention)]
     fn as_index(slot: Slot) -> Self::Index {
         (slot, 0)
     }
@@ -918,7 +910,6 @@ impl Column for columns::ShredData {
         index.0
     }
 
-    #[allow(clippy::wrong_self_convention)]
     fn as_index(slot: Slot) -> Self::Index {
         (slot, 0)
     }
@@ -1004,7 +995,6 @@ impl Column for columns::ErasureMeta {
         index.0
     }
 
-    #[allow(clippy::wrong_self_convention)]
     fn as_index(slot: Slot) -> Self::Index {
         (slot, 0)
     }
