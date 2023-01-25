@@ -1262,7 +1262,7 @@ pub mod test {
         let default_keypair = Keypair::new();
         endpoint.set_default_client_config(get_client_config(&default_keypair));
         let conn1 = endpoint
-            .connect(server_address.clone(), "localhost")
+            .connect(server_address, "localhost")
             .expect("Failed in connecting")
             .await
             .expect("Failed in waiting");
