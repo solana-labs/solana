@@ -261,7 +261,7 @@ impl BankingTracer {
         Self::channel(ChannelLabel::Dummy, None)
     }
 
-    pub fn channel(
+    fn channel(
         label: ChannelLabel,
         trace_sender: Option<(Sender<TimedTracedEvent>, Arc<AtomicBool>)>,
     ) -> (TracedSender, Receiver<BankingPacketBatch>) {
