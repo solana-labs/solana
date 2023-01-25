@@ -13,8 +13,9 @@ use {
     },
     solana_streamer::{
         socket::SocketAddrSpace,
-        streamer::{self, StreamerReceiveStats},
+        streamer::{self, ResponderOption, StreamerReceiveStats},
     },
+    solana_udp_client::{UdpConfig, UdpConnectionManager, UdpPool},
     std::{
         collections::HashSet,
         net::{SocketAddr, TcpListener, UdpSocket},
@@ -79,9 +80,9 @@ impl GossipService {
             gossip_validators,
             exit.clone(),
         );
-        let t_responder = streamer::responder(
+        let t_responder = streamer::responder::<UdpPool, UdpConnectionManager, UdpConfig>(
             "Gossip",
-            gossip_socket,
+            ResponderOption::Socket(gossip_socket),
             response_receiver,
             socket_addr_space,
             stats_reporter_sender,

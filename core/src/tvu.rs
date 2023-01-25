@@ -50,11 +50,16 @@ use {
         vote_sender_types::ReplayVoteSender,
     },
     solana_sdk::{clock::Slot, pubkey::Pubkey, signature::Keypair},
+    solana_streamer::streamer::StakedNodes,
     std::{
         collections::HashSet,
         net::UdpSocket,
-        sync::{atomic::AtomicBool, Arc, RwLock},
+        sync::{
+            atomic::{AtomicBool, Ordering},
+            Arc, RwLock,
+        },
         thread::{self, JoinHandle},
+        time::Duration,
     },
 };
 
@@ -71,6 +76,7 @@ pub struct Tvu {
     warm_quic_cache_service: Option<WarmQuicCacheService>,
     drop_bank_service: DropBankService,
     duplicate_shred_listener: DuplicateShredListener,
+    shred_stage_exit: Arc<AtomicBool>,
 }
 
 pub struct TvuSockets {
@@ -91,6 +97,25 @@ pub struct TvuConfig {
     pub repair_whitelist: Arc<RwLock<HashSet<Pubkey>>>,
     pub wait_for_vote_to_start_leader: bool,
     pub replay_slots_concurrently: bool,
+}
+
+/// Configuration for repair using Quic
+#[derive(Clone)]
+pub struct RepairQuicConfig {
+    /// The address from which to send repair request via Quic
+    pub repair_address: Arc<UdpSocket>,
+    /// The address from which to send AncestorHash requests via Quic
+    pub ancestor_hash_address: Arc<UdpSocket>,
+    /// The address at which to serve repair request via Quic
+    pub serve_repair_address: Arc<UdpSocket>,
+    /// Used for identifying the Quic client
+    pub identity_keypair: Arc<Keypair>,
+    /// Used for QOS control based on stakes using Quic
+    pub staked_nodes: Arc<RwLock<StakedNodes>>,
+    /// Timeout for the quic server waiting for a chunk.
+    pub wait_for_chunk_timeout: Duration,
+    /// Packet batching coalesce timeout
+    pub repair_packet_coalesce_timeout: Duration,
 }
 
 impl Tvu {
@@ -138,7 +163,9 @@ impl Tvu {
         connection_cache: &Arc<ConnectionCache>,
         prioritization_fee_cache: &Arc<PrioritizationFeeCache>,
         banking_tracer: Arc<BankingTracer>,
+        repair_quic_config: Option<RepairQuicConfig>,
     ) -> Result<Self, String> {
+        let shred_stage_exit = Arc::<AtomicBool>::default();
         let TvuSockets {
             repair: repair_socket,
             fetch: fetch_sockets,
@@ -154,16 +181,17 @@ impl Tvu {
         let fetch_sockets: Vec<Arc<UdpSocket>> = fetch_sockets.into_iter().map(Arc::new).collect();
         let forward_sockets: Vec<Arc<UdpSocket>> =
             tvu_forward_sockets.into_iter().map(Arc::new).collect();
-        let fetch_stage = ShredFetchStage::new(
+        let (quic_repair_connection_cache, fetch_stage) = ShredFetchStage::new(
             fetch_sockets,
             forward_sockets,
             repair_socket.clone(),
+            repair_quic_config.as_ref(),
             fetch_sender,
             tvu_config.shred_version,
             bank_forks.clone(),
             cluster_info.clone(),
             turbine_disabled,
-            exit,
+            &shred_stage_exit,
         );
 
         let (verified_sender, verified_receiver) = unbounded();
@@ -205,11 +233,16 @@ impl Tvu {
                 cluster_info: cluster_info.clone(),
                 cluster_slots: cluster_slots.clone(),
             };
+
+            let quic_repair_option = repair_quic_config
+                .as_ref()
+                .zip(quic_repair_connection_cache);
             WindowService::new(
                 blockstore.clone(),
                 verified_receiver,
                 retransmit_sender,
                 repair_socket,
+                quic_repair_option,
                 ancestor_hashes_socket,
                 exit.clone(),
                 repair_info,
@@ -340,13 +373,15 @@ impl Tvu {
             warm_quic_cache_service,
             drop_bank_service,
             duplicate_shred_listener,
+            shred_stage_exit,
         })
     }
 
     pub fn join(self) -> thread::Result<()> {
-        self.retransmit_stage.join()?;
-        self.window_service.join()?;
         self.cluster_slots_service.join()?;
+        self.window_service.join()?;
+        self.shred_stage_exit.store(true, Ordering::Relaxed);
+        self.retransmit_stage.join()?;
         self.fetch_stage.join()?;
         self.shred_sigverify.join()?;
         if self.ledger_cleanup_service.is_some() {
@@ -398,12 +433,10 @@ pub mod tests {
 
         let bank_forks = BankForks::new(Bank::new_for_tests(&genesis_config));
 
+        let keypair = Arc::new(Keypair::new());
         //start cluster_info1
-        let cluster_info1 = ClusterInfo::new(
-            target1.info.clone(),
-            Arc::new(Keypair::new()),
-            SocketAddrSpace::Unspecified,
-        );
+        let cluster_info1 =
+            ClusterInfo::new(target1.info.clone(), keypair, SocketAddrSpace::Unspecified);
         cluster_info1.insert_info(leader.info);
         let cref1 = Arc::new(cluster_info1);
 
@@ -483,6 +516,7 @@ pub mod tests {
             &Arc::new(ConnectionCache::new("connection_cache_test")),
             &ignored_prioritization_fee_cache,
             BankingTracer::new_disabled(),
+            None,
         )
         .expect("assume success");
         exit.store(true, Ordering::Relaxed);

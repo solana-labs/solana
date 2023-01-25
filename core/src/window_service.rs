@@ -1,6 +1,7 @@
 //! `window_service` handles the data plane incoming shreds, storing them in
 //!   blockstore and retransmitting where required
 //!
+
 use {
     crate::{
         ancestor_hashes_service::AncestorHashesReplayUpdateReceiver,
@@ -12,9 +13,11 @@ use {
             RepairService,
         },
         result::{Error, Result},
+        tvu::RepairQuicConfig,
     },
     crossbeam_channel::{unbounded, Receiver, RecvTimeoutError, Sender},
     rayon::{prelude::*, ThreadPool},
+    solana_client::connection_cache::ConnectionCache,
     solana_gossip::cluster_info::ClusterInfo,
     solana_ledger::{
         blockstore::{Blockstore, BlockstoreInsertionMetrics},
@@ -310,6 +313,7 @@ impl WindowService {
         verified_receiver: Receiver<Vec<PacketBatch>>,
         retransmit_sender: Sender<Vec<ShredPayload>>,
         repair_socket: Arc<UdpSocket>,
+        quic_repair_option: Option<(&RepairQuicConfig, Arc<ConnectionCache>)>,
         ancestor_hashes_socket: Arc<UdpSocket>,
         exit: Arc<AtomicBool>,
         repair_info: RepairInfo,
@@ -329,6 +333,7 @@ impl WindowService {
             blockstore.clone(),
             exit.clone(),
             repair_socket,
+            quic_repair_option,
             ancestor_hashes_socket,
             repair_info,
             verified_vote_receiver,

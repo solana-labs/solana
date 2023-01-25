@@ -3,7 +3,7 @@ use {
         cluster_slots::ClusterSlots,
         duplicate_repair_status::get_ancestor_hash_repair_sample_size,
         repair_response,
-        repair_service::{OutstandingShredRepairs, RepairStats, REPAIR_MS},
+        repair_service::{OutstandingShredRepairs, RepairStats, RepairTransportConfig, REPAIR_MS},
         request_response::RequestResponse,
         result::{Error, Result},
     },
@@ -12,6 +12,9 @@ use {
     rand::{
         distributions::{Distribution, WeightedError, WeightedIndex},
         Rng,
+    },
+    solana_client::quic_sendmmsg::{
+        batch_send as batch_send_quic, SendPktsError as QuicSendPktsError,
     },
     solana_gossip::{
         cluster_info::{ClusterInfo, ClusterInfoError},
@@ -35,6 +38,7 @@ use {
         hash::{Hash, HASH_BYTES},
         packet::PACKET_DATA_SIZE,
         pubkey::{Pubkey, PUBKEY_BYTES},
+        quic::QUIC_PORT_OFFSET,
         signature::{Signable, Signature, Signer, SIGNATURE_BYTES},
         signer::keypair::Keypair,
         timing::{duration_as_ms, timestamp},
@@ -47,7 +51,7 @@ use {
     std::{
         cmp::Reverse,
         collections::{HashMap, HashSet},
-        net::{SocketAddr, UdpSocket},
+        net::SocketAddr,
         sync::{
             atomic::{AtomicBool, Ordering},
             Arc, RwLock,
@@ -1083,9 +1087,11 @@ impl ServeRepair {
             identity_keypair,
         )?;
         debug!(
-            "Sending repair request from {} for {:#?}",
+            "Sending repair request from {} for {:?} peer {:?} peer addr {:?}",
             identity_keypair.pubkey(),
-            repair_request
+            repair_request,
+            peer,
+            addr,
         );
         Ok((addr, out))
     }
@@ -1185,7 +1191,7 @@ impl ServeRepair {
     /// Distinguish and process `RepairResponse` ping packets ignoring other
     /// packets in the batch.
     pub(crate) fn handle_repair_response_pings(
-        repair_socket: &UdpSocket,
+        repair_socket: &RepairTransportConfig,
         keypair: &Keypair,
         packet_batch: &mut PacketBatch,
         stats: &mut ShredFetchStats,
@@ -1211,22 +1217,48 @@ impl ServeRepair {
                 if let Ok(pong) = Pong::new(&ping, keypair) {
                     let pong = RepairProtocol::Pong(pong);
                     if let Ok(pong_bytes) = serialize(&pong) {
-                        let from_addr = packet.meta().socket_addr();
+                        let from_addr = if matches!(repair_socket, RepairTransportConfig::Quic(_)) {
+                            // As we are using the same connection cache which is doing the port offset logic
+                            // we need to substract the offset here.
+                            SocketAddr::new(
+                                packet.meta().socket_addr().ip(),
+                                packet.meta().socket_addr().port() - QUIC_PORT_OFFSET,
+                            )
+                        } else {
+                            packet.meta().socket_addr()
+                        };
                         pending_pongs.push((pong_bytes, from_addr));
                     }
                 }
             }
         }
         if !pending_pongs.is_empty() {
-            if let Err(SendPktsError::IoError(err, num_failed)) =
-                batch_send(repair_socket, &pending_pongs)
-            {
-                warn!(
-                    "batch_send failed to send {}/{} packets. First error: {:?}",
-                    num_failed,
-                    pending_pongs.len(),
-                    err
-                );
+            let pongs_len = pending_pongs.len();
+            match repair_socket {
+                RepairTransportConfig::Udp(repair_socket) => {
+                    if let Err(SendPktsError::IoError(err, num_failed)) =
+                        batch_send(repair_socket, &pending_pongs)
+                    {
+                        warn!(
+                            "batch_send failed to send {}/{} packets. First error: {:?}",
+                            num_failed,
+                            pending_pongs.len(),
+                            err
+                        );
+                    }
+                }
+                RepairTransportConfig::Quic(connection_cache) => {
+                    if let Err(QuicSendPktsError::TransportError(err, num_failed)) =
+                        batch_send_quic(connection_cache.as_ref(), pending_pongs)
+                    {
+                        warn!(
+                            "batch_send failed to send {}/{} packets using connection cache. First error {:?}",
+                            num_failed,
+                            pongs_len,
+                            err
+                        );
+                    }
+                }
             }
         }
     }

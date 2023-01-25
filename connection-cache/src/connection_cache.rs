@@ -27,7 +27,7 @@ pub enum Protocol {
     QUIC,
 }
 
-pub trait ConnectionManager {
+pub trait ConnectionManager: Send + Sync {
     type ConnectionPool: ConnectionPool;
     type NewConnectionConfig: NewConnectionConfig;
 
@@ -300,11 +300,11 @@ pub enum ClientError {
     IoError(#[from] std::io::Error),
 }
 
-pub trait NewConnectionConfig: Sized {
+pub trait NewConnectionConfig: Sized + Send + Sync {
     fn new() -> Result<Self, ClientError>;
 }
 
-pub trait ConnectionPool {
+pub trait ConnectionPool: Send + Sync {
     type NewConnectionConfig: NewConnectionConfig;
     type BaseClientConnection: BaseClientConnection;
 

@@ -21,7 +21,7 @@ use {
     tokio::{runtime::Runtime, time::timeout},
 };
 
-pub const MAX_OUTSTANDING_TASK: u64 = 2000;
+pub const MAX_OUTSTANDING_TASK: u64 = 20000;
 const SEND_DATA_TIMEOUT: Duration = Duration::from_secs(10);
 
 /// A semaphore used for limiting the number of asynchronous tasks spawn to the

@@ -10,12 +10,20 @@ use {
     std::os::unix::io::AsRawFd,
 };
 use {
+    solana_connection_cache::{
+        client_connection::ClientConnection,
+        connection_cache::{
+            ConnectionCache, ConnectionManager, ConnectionPool, NewConnectionConfig,
+        },
+    },
+    solana_perf::packet::PacketBatch,
     solana_sdk::transport::TransportError,
     std::{
         borrow::Borrow,
         io,
         iter::repeat,
         net::{SocketAddr, UdpSocket},
+        sync::Arc,
     },
     thiserror::Error,
 };
@@ -142,6 +150,49 @@ where
         mmsghdr_for_packet(pkt.as_ref(), dest.borrow(), iov, addr, hdr);
     }
     sendmmsg_retry(sock, &mut hdrs)
+}
+
+fn transport_error_to_io_error(err: TransportError) -> io::Error {
+    match err {
+        TransportError::IoError(err) => err,
+        TransportError::TransactionError(err) => io::Error::new(io::ErrorKind::Other, err),
+        TransportError::Custom(err) => io::Error::new(io::ErrorKind::Other, err),
+    }
+}
+
+pub fn batch_send_with_connection_cache<P, M, C>(
+    packets: PacketBatch,
+    connection_cache: &Arc<ConnectionCache<P, M, C>>,
+) -> Result<(), SendPktsError>
+where
+    P: ConnectionPool<NewConnectionConfig = C>,
+    M: ConnectionManager<ConnectionPool = P, NewConnectionConfig = C>,
+    C: NewConnectionConfig,
+{
+    let mut num_failed = 0;
+    let mut erropt = None;
+
+    for packet in packets.iter() {
+        let a = packet.meta().socket_addr();
+        let p = packet.data(..).unwrap();
+        let connection = connection_cache.get_connection(&a);
+        let e = connection.send_data_async(p.to_vec());
+        if let Err(e) = e {
+            num_failed += 1;
+            if erropt.is_none() {
+                erropt = Some(e);
+            }
+        }
+    }
+
+    if let Some(err) = erropt {
+        Err(SendPktsError::IoError(
+            transport_error_to_io_error(err),
+            num_failed,
+        ))
+    } else {
+        Ok(())
+    }
 }
 
 pub fn multi_target_send<S, T>(

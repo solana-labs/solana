@@ -16,7 +16,7 @@ use {
         tpu::DEFAULT_TPU_COALESCE,
         validator::{
             is_snapshot_config_valid, BlockProductionMethod, BlockVerificationMethod, Validator,
-            ValidatorConfig, ValidatorStartProgress,
+            ValidatorConfig, ValidatorStartProgress, DEFAULT_REPAIR_USE_QUIC,
         },
     },
     solana_gossip::{cluster_info::Node, legacy_contact_info::LegacyContactInfo as ContactInfo},
@@ -1030,6 +1030,12 @@ pub fn main() {
         DEFAULT_TPU_ENABLE_UDP
     };
 
+    let repair_use_quic = if matches.is_present("repair_use_quic") {
+        true
+    } else {
+        DEFAULT_REPAIR_USE_QUIC
+    };
+
     let tpu_connection_pool_size = value_t_or_exit!(matches, "tpu_connection_pool_size", usize);
 
     let shrink_ratio = value_t_or_exit!(matches, "accounts_shrink_ratio", f64);
@@ -1829,6 +1835,7 @@ pub fn main() {
         tpu_connection_pool_size,
         tpu_enable_udp,
         admin_service_post_init,
+        repair_use_quic,
     )
     .unwrap_or_else(|e| {
         error!("Failed to start validator: {:?}", e);
