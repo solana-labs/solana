@@ -3345,29 +3345,61 @@ fn update_completed_data_indexes(
     let start_shred_index = completed_data_indexes
         .range(..new_shred_index)
         .next_back()
+        // `index` here is the last shred in the previous data set, so we need `+ 1`, as we are
+        // looking for the first shred in the current data set.
         .map(|index| index + 1)
-        .unwrap_or_default();
-    // Consecutive entries i, k, j in this vector represent potential ranges [i, k),
-    // [k, j) that could be completed data ranges
-    let mut shred_indices = vec![start_shred_index];
-    // `new_shred_index` is data complete, so need to insert here into the
-    // `completed_data_indexes`
+        .unwrap_or(0);
+
     if is_last_in_data {
         completed_data_indexes.insert(new_shred_index);
-        shred_indices.push(new_shred_index + 1);
     }
-    if let Some(index) = completed_data_indexes.range(new_shred_index + 1..).next() {
-        shred_indices.push(index + 1);
+
+    let end_shred_index = completed_data_indexes
+        .range(new_shred_index + 1..)
+        .next()
+        .copied();
+
+    // Checks that all shards in the `[begin, end]` range are present in `received_data_shreds`.
+    let is_complete_set = |begin: u32, end: u32| {
+        let num_shreds = usize::try_from(end - begin + 1).unwrap();
+        received_data_shreds
+            .range(u64::from(begin)..=u64::from(end))
+            .count()
+            == num_shreds
+    };
+
+    // There are several possibilities here.  Newly added shred could be the last one in a data set.
+    // It may also end a data set, creating two completed data sets at once.
+    //
+    // And it is possible that we do not know an index of the last shred in a subsequent data set
+    // (`end_shred_index`).
+    match (is_last_in_data, end_shred_index) {
+        (false, None) => vec![],
+        (false, Some(end_shred_index)) => {
+            if is_complete_set(start_shred_index, end_shred_index) {
+                vec![(start_shred_index, end_shred_index)]
+            } else {
+                vec![]
+            }
+        }
+        (true, None) => {
+            if is_complete_set(start_shred_index, new_shred_index) {
+                vec![(start_shred_index, new_shred_index)]
+            } else {
+                vec![]
+            }
+        }
+        (true, Some(end_shred_index)) => {
+            let mut res = vec![];
+            if is_complete_set(start_shred_index, new_shred_index) {
+                res.push((start_shred_index, new_shred_index));
+            }
+            if is_complete_set(new_shred_index + 1, end_shred_index) {
+                res.push((new_shred_index + 1, end_shred_index));
+            }
+            res
+        }
     }
-    shred_indices
-        .windows(2)
-        .filter(|ix| {
-            let (begin, end) = (ix[0] as u64, ix[1] as u64);
-            let num_shreds = (end - begin) as usize;
-            received_data_shreds.range(begin..end).count() == num_shreds
-        })
-        .map(|ix| (ix[0], ix[1] - 1))
-        .collect()
 }
 
 fn update_slot_meta(
