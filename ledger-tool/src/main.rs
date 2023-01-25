@@ -1066,8 +1066,10 @@ fn load_bank_forks(
     };
 
     match process_options.halt_at_slot {
-        // For Sentinel value of `Some(0)` and None of halt_at_slot, lets us skip
-        // additional checks and will not replay any transactions.
+        // There are no needs to do the following checks for Sentinel value of `Some(0)` and None
+        // of halt_at_slot, because for Sentinel value of `Some(0)`, no transaction will be
+        // replayed, and for `None`, which implies `Some(Slot::MAX), all transactions that are
+        // available will be replayed.
         None | Some(0) => {}
         Some(halt_slot) => {
             if halt_slot < starting_slot {
