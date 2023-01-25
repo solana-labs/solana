@@ -613,8 +613,8 @@ pub(crate) fn submit_gossip_stats(
     );
     datapoint_info!(
         "cluster_info_crds_stats",
-        ("ContactInfo-push", crds_stats.push.counts[0], i64),
-        ("ContactInfo-pull", crds_stats.pull.counts[0], i64),
+        ("LegacyContactInfo-push", crds_stats.push.counts[0], i64),
+        ("LegacyContactInfo-pull", crds_stats.pull.counts[0], i64),
         ("Vote-push", crds_stats.push.counts[1], i64),
         ("Vote-pull", crds_stats.pull.counts[1], i64),
         ("LowestSlot-push", crds_stats.push.counts[2], i64),
@@ -656,8 +656,8 @@ pub(crate) fn submit_gossip_stats(
     );
     datapoint_info!(
         "cluster_info_crds_stats_fails",
-        ("ContactInfo-push", crds_stats.push.fails[0], i64),
-        ("ContactInfo-pull", crds_stats.pull.fails[0], i64),
+        ("LegacyContactInfo-push", crds_stats.push.fails[0], i64),
+        ("LegacyContactInfo-pull", crds_stats.pull.fails[0], i64),
         ("Vote-push", crds_stats.push.fails[1], i64),
         ("Vote-pull", crds_stats.pull.fails[1], i64),
         ("LowestSlot-push", crds_stats.push.fails[2], i64),

@@ -15,7 +15,7 @@ use {
 #[derive(
     Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd, AbiExample, Deserialize, Serialize,
 )]
-pub struct ContactInfo {
+pub struct LegacyContactInfo {
     pub id: Pubkey,
     /// gossip address
     pub gossip: SocketAddr,
@@ -43,7 +43,7 @@ pub struct ContactInfo {
     pub shred_version: u16,
 }
 
-impl Sanitize for ContactInfo {
+impl Sanitize for LegacyContactInfo {
     fn sanitize(&self) -> std::result::Result<(), SanitizeError> {
         if self.wallclock >= MAX_WALLCLOCK {
             return Err(SanitizeError::ValueOutOfBounds);
@@ -68,9 +68,9 @@ macro_rules! socketaddr_any {
     };
 }
 
-impl Default for ContactInfo {
+impl Default for LegacyContactInfo {
     fn default() -> Self {
-        ContactInfo {
+        LegacyContactInfo {
             id: Pubkey::default(),
             gossip: socketaddr_any!(),
             tvu: socketaddr_any!(),
@@ -88,7 +88,7 @@ impl Default for ContactInfo {
     }
 }
 
-impl ContactInfo {
+impl LegacyContactInfo {
     pub fn new_localhost(id: &Pubkey, now: u64) -> Self {
         Self {
             id: *id,
@@ -107,18 +107,18 @@ impl ContactInfo {
         }
     }
 
-    /// New random ContactInfo for tests and simulations.
+    /// New random LegacyContactInfo for tests and simulations.
     pub fn new_rand<R: rand::Rng>(rng: &mut R, pubkey: Option<Pubkey>) -> Self {
         let delay = 10 * 60 * 1000; // 10 minutes
         let now = timestamp() - delay + rng.gen_range(0, 2 * delay);
         let pubkey = pubkey.unwrap_or_else(solana_sdk::pubkey::new_rand);
-        let mut node = ContactInfo::new_localhost(&pubkey, now);
+        let mut node = LegacyContactInfo::new_localhost(&pubkey, now);
         node.gossip.set_port(rng.gen_range(1024, u16::MAX));
         node
     }
 
     #[cfg(test)]
-    /// ContactInfo with multicast addresses for adversarial testing.
+    /// LegacyContactInfo with multicast addresses for adversarial testing.
     pub fn new_multicast() -> Self {
         let addr = socketaddr!("224.0.1.255:1000");
         assert!(addr.ip().is_multicast());
@@ -180,13 +180,13 @@ impl ContactInfo {
         Self::new_with_pubkey_socketaddr(&keypair.pubkey(), bind_addr)
     }
 
-    // Construct a ContactInfo that's only usable for gossip
+    // Construct a LegacyContactInfo that's only usable for gossip
     pub fn new_gossip_entry_point(gossip_addr: &SocketAddr) -> Self {
         Self {
             id: Pubkey::default(),
             gossip: *gossip_addr,
             wallclock: timestamp(),
-            ..ContactInfo::default()
+            ..LegacyContactInfo::default()
         }
     }
 
@@ -219,8 +219,8 @@ impl ContactInfo {
         &self,
         socket_addr_space: &SocketAddrSpace,
     ) -> Option<(SocketAddr, SocketAddr)> {
-        if ContactInfo::is_valid_address(&self.rpc, socket_addr_space)
-            && ContactInfo::is_valid_address(&self.tpu, socket_addr_space)
+        if LegacyContactInfo::is_valid_address(&self.rpc, socket_addr_space)
+            && LegacyContactInfo::is_valid_address(&self.tpu, socket_addr_space)
         {
             Some((self.rpc, self.tpu))
         } else {
@@ -236,31 +236,31 @@ mod tests {
     #[test]
     fn test_is_valid_address() {
         let bad_address_port = socketaddr!("127.0.0.1:0");
-        assert!(!ContactInfo::is_valid_address(
+        assert!(!LegacyContactInfo::is_valid_address(
             &bad_address_port,
             &SocketAddrSpace::Unspecified
         ));
         let bad_address_unspecified = socketaddr!(0, 1234);
-        assert!(!ContactInfo::is_valid_address(
+        assert!(!LegacyContactInfo::is_valid_address(
             &bad_address_unspecified,
             &SocketAddrSpace::Unspecified
         ));
         let bad_address_multicast = socketaddr!([224, 254, 0, 0], 1234);
-        assert!(!ContactInfo::is_valid_address(
+        assert!(!LegacyContactInfo::is_valid_address(
             &bad_address_multicast,
             &SocketAddrSpace::Unspecified
         ));
         let loopback = socketaddr!("127.0.0.1:1234");
-        assert!(ContactInfo::is_valid_address(
+        assert!(LegacyContactInfo::is_valid_address(
             &loopback,
             &SocketAddrSpace::Unspecified
         ));
-        //        assert!(!ContactInfo::is_valid_ip_internal(loopback.ip(), false));
+        //        assert!(!LegacyContactInfo::is_valid_ip_internal(loopback.ip(), false));
     }
 
     #[test]
     fn test_default() {
-        let ci = ContactInfo::default();
+        let ci = LegacyContactInfo::default();
         assert!(ci.gossip.ip().is_unspecified());
         assert!(ci.tvu.ip().is_unspecified());
         assert!(ci.tpu_forwards.ip().is_unspecified());
@@ -272,7 +272,7 @@ mod tests {
     }
     #[test]
     fn test_multicast() {
-        let ci = ContactInfo::new_multicast();
+        let ci = LegacyContactInfo::new_multicast();
         assert!(ci.gossip.ip().is_multicast());
         assert!(ci.tvu.ip().is_multicast());
         assert!(ci.tpu_forwards.ip().is_multicast());
@@ -285,7 +285,7 @@ mod tests {
     #[test]
     fn test_entry_point() {
         let addr = socketaddr!("127.0.0.1:10");
-        let ci = ContactInfo::new_gossip_entry_point(&addr);
+        let ci = LegacyContactInfo::new_gossip_entry_point(&addr);
         assert_eq!(ci.gossip, addr);
         assert!(ci.tvu.ip().is_unspecified());
         assert!(ci.tpu_forwards.ip().is_unspecified());
@@ -298,7 +298,7 @@ mod tests {
     #[test]
     fn test_socketaddr() {
         let addr = socketaddr!("127.0.0.1:10");
-        let ci = ContactInfo::new_with_socketaddr(&addr);
+        let ci = LegacyContactInfo::new_with_socketaddr(&addr);
         assert_eq!(ci.tpu, addr);
         assert_eq!(ci.tpu_vote.port(), 17);
         assert_eq!(ci.gossip.port(), 11);
@@ -312,7 +312,7 @@ mod tests {
     #[test]
     fn replayed_data_new_with_socketaddr_with_pubkey() {
         let keypair = Keypair::new();
-        let d1 = ContactInfo::new_with_pubkey_socketaddr(
+        let d1 = LegacyContactInfo::new_with_pubkey_socketaddr(
             &keypair.pubkey(),
             &socketaddr!("127.0.0.1:1234"),
         );
@@ -337,7 +337,7 @@ mod tests {
 
     #[test]
     fn test_valid_client_facing() {
-        let mut ci = ContactInfo::default();
+        let mut ci = LegacyContactInfo::default();
         assert_eq!(
             ci.valid_client_facing_addr(&SocketAddrSpace::Unspecified),
             None
@@ -355,7 +355,7 @@ mod tests {
 
     #[test]
     fn test_sanitize() {
-        let mut ci = ContactInfo::default();
+        let mut ci = LegacyContactInfo::default();
         assert_eq!(ci.sanitize(), Ok(()));
         ci.wallclock = MAX_WALLCLOCK;
         assert_eq!(ci.sanitize(), Err(SanitizeError::ValueOutOfBounds));
