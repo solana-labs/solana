@@ -55,10 +55,15 @@ pub const DISABLED_BAKING_TRACE_DIR: DirByteLimit = 0;
 pub const BANKING_TRACE_DIR_DEFAULT_BYTE_LIMIT: DirByteLimit =
     TRACE_FILE_DEFAULT_ROTATE_BYTE_THRESHOLD * TRACE_FILE_ROTATE_COUNT;
 
-#[allow(clippy::type_complexity)]
+#[derive(Clone, Debug)]
+struct ActiveTracer {
+    trace_sender: Sender<TimedTracedEvent>,
+    exit: Arc<AtomicBool>,
+}
+
 #[derive(Debug)]
 pub struct BankingTracer {
-    enabled_tracer: Option<(Sender<TimedTracedEvent>, Arc<AtomicBool>)>,
+    active_tracer: Option<ActiveTracer>,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -200,7 +205,7 @@ impl BankingTracer {
 
                 Ok((
                     Arc::new(Self {
-                        enabled_tracer: Some((trace_sender, exit)),
+                        active_tracer: Some(ActiveTracer { trace_sender, exit }),
                     }),
                     Some(tracer_thread),
                 ))
@@ -210,21 +215,16 @@ impl BankingTracer {
 
     pub fn new_disabled() -> Arc<Self> {
         Arc::new(Self {
-            enabled_tracer: None,
+            active_tracer: None,
         })
     }
 
     pub fn is_enabled(&self) -> bool {
-        self.enabled_tracer.is_some()
+        self.active_tracer.is_some()
     }
 
     fn create_channel(&self, label: ChannelLabel) -> (BankingPacketSender, BankingPacketReceiver) {
-        Self::channel(
-            label,
-            self.enabled_tracer
-                .as_ref()
-                .map(|(sender, exit)| (sender.clone(), exit.clone())),
-        )
+        Self::channel(label, self.active_tracer.as_ref().cloned())
     }
 
     pub fn create_channel_non_vote(&self) -> (BankingPacketSender, BankingPacketReceiver) {
@@ -249,9 +249,9 @@ impl BankingTracer {
     }
 
     fn trace_event(&self, on_trace: impl Fn() -> TimedTracedEvent) {
-        if let Some((sender, exit)) = &self.enabled_tracer {
+        if let Some(ActiveTracer { trace_sender, exit }) = &self.active_tracer {
             if !exit.load(Ordering::Relaxed) {
-                sender
+                trace_sender
                     .send(on_trace())
                     .expect("active tracer thread unless exited");
             }
@@ -264,10 +264,10 @@ impl BankingTracer {
 
     fn channel(
         label: ChannelLabel,
-        trace_sender: Option<(Sender<TimedTracedEvent>, Arc<AtomicBool>)>,
+        active_tracer: Option<ActiveTracer>,
     ) -> (TracedSender, Receiver<BankingPacketBatch>) {
         let (sender, receiver) = unbounded();
-        (TracedSender::new(label, sender, trace_sender), receiver)
+        (TracedSender::new(label, sender, active_tracer), receiver)
     }
 
     pub fn ensure_cleanup_path(path: &PathBuf) -> Result<(), io::Error> {
@@ -327,24 +327,24 @@ impl BankingTracer {
 pub struct TracedSender {
     label: ChannelLabel,
     sender: Sender<BankingPacketBatch>,
-    trace_sender: Option<(Sender<TimedTracedEvent>, Arc<AtomicBool>)>,
+    active_tracer: Option<ActiveTracer>,
 }
 
 impl TracedSender {
     fn new(
         label: ChannelLabel,
         sender: Sender<BankingPacketBatch>,
-        trace_sender: Option<(Sender<TimedTracedEvent>, Arc<AtomicBool>)>,
+        active_tracer: Option<ActiveTracer>,
     ) -> Self {
         Self {
             label,
             sender,
-            trace_sender,
+            active_tracer,
         }
     }
 
     pub fn send(&self, batch: BankingPacketBatch) -> Result<(), SendError<BankingPacketBatch>> {
-        if let Some((trace_sender, exit)) = &self.trace_sender {
+        if let Some(ActiveTracer { trace_sender, exit }) = &self.active_tracer {
             if !exit.load(Ordering::Relaxed) {
                 trace_sender
                     .send(TimedTracedEvent(
