@@ -193,7 +193,6 @@ impl BankingTracer {
 
                 let (trace_sender, trace_receiver) = unbounded();
 
-                create_dir_all(&path)?;
                 let file_appender = Self::create_file_appender(path, rotate_threshold_size)?;
 
                 let tracer_thread =
@@ -285,6 +284,7 @@ impl BankingTracer {
         path: PathBuf,
         rotate_threshold_size: u64,
     ) -> Result<RollingFileAppender<RollingConditionGrouped>, TraceError> {
+        create_dir_all(&path)?;
         let grouped = RollingConditionGrouped::new(
             RollingConditionBasic::new()
                 .daily()
@@ -372,12 +372,10 @@ pub mod for_test {
     }
 
     pub fn drop_and_clean_temp_dir_unless_suppressed(temp_dir: TempDir) {
-        std::env::var("BANKING_TRACE_LEAVE_FILES_FROM_LAST_ITERATION")
-            .is_ok()
-            .then(|| {
-                warn!("prevented to remove {:?}", temp_dir.path());
-                drop(temp_dir.into_path());
-            });
+        std::env::var("BANKING_TRACE_LEAVE_FILES").is_ok().then(|| {
+            warn!("prevented to remove {:?}", temp_dir.path());
+            drop(temp_dir.into_path());
+        });
     }
 
     pub fn terminate_tracer(
@@ -536,6 +534,89 @@ mod tests {
                 **err,
                 BincodeIoError(ref error) if error.kind() == UnexpectedEof
             )
+        );
+
+        for_test::drop_and_clean_temp_dir_unless_suppressed(temp_dir);
+    }
+
+    #[test]
+    fn test_spill_over_at_rotation() {
+        let temp_dir = TempDir::new().unwrap();
+        let path = temp_dir.path().join("banking-trace");
+        const REALLY_SMALL_ROTATION_THRESHOLD: u64 = 1;
+
+        let mut file_appender =
+            BankingTracer::create_file_appender(path.clone(), REALLY_SMALL_ROTATION_THRESHOLD)
+                .unwrap();
+        file_appender.write_all(b"foo").unwrap();
+        file_appender.condition_mut().reset();
+        file_appender.write_all(b"bar").unwrap();
+        file_appender.condition_mut().reset();
+        file_appender.flush().unwrap();
+
+        assert_eq!(
+            [
+                std::fs::read_to_string(path.join("events")).ok(),
+                std::fs::read_to_string(path.join("events.1")).ok(),
+                std::fs::read_to_string(path.join("events.2")).ok(),
+            ],
+            [Some("bar".into()), Some("foo".into()), None]
+        );
+
+        for_test::drop_and_clean_temp_dir_unless_suppressed(temp_dir);
+    }
+
+    #[test]
+    fn test_reopen_with_blank_file() {
+        let temp_dir = TempDir::new().unwrap();
+
+        let path = temp_dir.path().join("banking-trace");
+
+        let mut file_appender = BankingTracer::create_file_appender(
+            path.clone(),
+            TRACE_FILE_DEFAULT_ROTATE_BYTE_THRESHOLD,
+        )
+        .unwrap();
+        // assume this is unclean write
+        file_appender.write_all(b"f").unwrap();
+        file_appender.flush().unwrap();
+
+        // reopen while shadow-dropping the old tracer
+        let mut file_appender = BankingTracer::create_file_appender(
+            path.clone(),
+            TRACE_FILE_DEFAULT_ROTATE_BYTE_THRESHOLD,
+        )
+        .unwrap();
+        // new file won't be created as appender is lazy
+        assert_eq!(
+            [
+                std::fs::read_to_string(path.join("events")).ok(),
+                std::fs::read_to_string(path.join("events.1")).ok(),
+                std::fs::read_to_string(path.join("events.2")).ok(),
+            ],
+            [Some("f".into()), None, None]
+        );
+
+        // initial write actually creates the new blank file
+        file_appender.write_all(b"bar").unwrap();
+        assert_eq!(
+            [
+                std::fs::read_to_string(path.join("events")).ok(),
+                std::fs::read_to_string(path.join("events.1")).ok(),
+                std::fs::read_to_string(path.join("events.2")).ok(),
+            ],
+            [Some("".into()), Some("f".into()), None]
+        );
+
+        // flush actually write the actual data
+        file_appender.flush().unwrap();
+        assert_eq!(
+            [
+                std::fs::read_to_string(path.join("events")).ok(),
+                std::fs::read_to_string(path.join("events.1")).ok(),
+                std::fs::read_to_string(path.join("events.2")).ok(),
+            ],
+            [Some("bar".into()), Some("f".into()), None]
         );
 
         for_test::drop_and_clean_temp_dir_unless_suppressed(temp_dir);
