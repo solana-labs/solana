@@ -59,7 +59,7 @@ fn bench_banking_tracer_main_thread_overhead_under_peak_write(bencher: &mut Benc
 
     let exit = Arc::<AtomicBool>::default();
     let (tracer, tracer_thread) = BankingTracer::new(Some((
-        temp_dir.path().join("banking-trace"),
+        &temp_dir.path().join("banking-trace"),
         exit.clone(),
         BANKING_TRACE_DIR_DEFAULT_BYTE_LIMIT,
     )))
@@ -96,7 +96,7 @@ fn bench_banking_tracer_main_thread_overhead_under_sustained_write(bencher: &mut
 
     let exit = Arc::<AtomicBool>::default();
     let (tracer, tracer_thread) = BankingTracer::new(Some((
-        temp_dir.path().join("banking-trace"),
+        &temp_dir.path().join("banking-trace"),
         exit.clone(),
         1024 * 1024, // cause more frequent trace file rotation
     )))
@@ -141,7 +141,7 @@ fn bench_banking_tracer_background_thread_throughput(bencher: &mut Bencher) {
         let exit = Arc::<AtomicBool>::default();
 
         let (tracer, tracer_thread) =
-            BankingTracer::new(Some((path, exit.clone(), 50 * 1024 * 1024))).unwrap();
+            BankingTracer::new(Some((&path, exit.clone(), 50 * 1024 * 1024))).unwrap();
         let (non_vote_sender, non_vote_receiver) = tracer.create_channel_non_vote();
 
         let dummy_main_thread = thread::spawn(move || {

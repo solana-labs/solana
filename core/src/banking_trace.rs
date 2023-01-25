@@ -178,7 +178,7 @@ pub fn receiving_loop_with_minimized_sender_overhead<T, E, const SLEEP_MS: u64>(
 
 impl BankingTracer {
     pub fn new(
-        maybe_config: Option<(PathBuf, Arc<AtomicBool>, DirByteLimit)>,
+        maybe_config: Option<(&PathBuf, Arc<AtomicBool>, DirByteLimit)>,
     ) -> Result<(Arc<Self>, TracerThread), TraceError> {
         match maybe_config {
             None => Ok((Self::new_disabled(), None)),
@@ -281,10 +281,10 @@ impl BankingTracer {
     }
 
     fn create_file_appender(
-        path: PathBuf,
+        path: &PathBuf,
         rotate_threshold_size: u64,
     ) -> Result<RollingFileAppender<RollingConditionGrouped>, TraceError> {
-        create_dir_all(&path)?;
+        create_dir_all(path)?;
         let grouped = RollingConditionGrouped::new(
             RollingConditionBasic::new()
                 .daily()
@@ -435,7 +435,7 @@ mod tests {
         let path = temp_dir.path().join("banking-trace");
         let exit = Arc::<AtomicBool>::default();
         let (tracer, tracer_thread) =
-            BankingTracer::new(Some((path, exit.clone(), DirByteLimit::max_value()))).unwrap();
+            BankingTracer::new(Some((&path, exit.clone(), DirByteLimit::max_value()))).unwrap();
         let (non_vote_sender, non_vote_receiver) = tracer.create_channel_non_vote();
 
         let exit_for_dummy_thread = Arc::<AtomicBool>::default();
@@ -475,12 +475,8 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let path = temp_dir.path().join("banking-trace");
         let exit = Arc::<AtomicBool>::default();
-        let (tracer, tracer_thread) = BankingTracer::new(Some((
-            path.clone(),
-            exit.clone(),
-            DirByteLimit::max_value(),
-        )))
-        .unwrap();
+        let (tracer, tracer_thread) =
+            BankingTracer::new(Some((&path, exit.clone(), DirByteLimit::max_value()))).unwrap();
         let (non_vote_sender, non_vote_receiver) = tracer.create_channel_non_vote();
 
         let dummy_main_thread = thread::spawn(move || {
@@ -546,8 +542,7 @@ mod tests {
         const REALLY_SMALL_ROTATION_THRESHOLD: u64 = 1;
 
         let mut file_appender =
-            BankingTracer::create_file_appender(path.clone(), REALLY_SMALL_ROTATION_THRESHOLD)
-                .unwrap();
+            BankingTracer::create_file_appender(&path, REALLY_SMALL_ROTATION_THRESHOLD).unwrap();
         file_appender.write_all(b"foo").unwrap();
         file_appender.condition_mut().reset();
         file_appender.write_all(b"bar").unwrap();
@@ -572,21 +567,17 @@ mod tests {
 
         let path = temp_dir.path().join("banking-trace");
 
-        let mut file_appender = BankingTracer::create_file_appender(
-            path.clone(),
-            TRACE_FILE_DEFAULT_ROTATE_BYTE_THRESHOLD,
-        )
-        .unwrap();
+        let mut file_appender =
+            BankingTracer::create_file_appender(&path, TRACE_FILE_DEFAULT_ROTATE_BYTE_THRESHOLD)
+                .unwrap();
         // assume this is unclean write
         file_appender.write_all(b"f").unwrap();
         file_appender.flush().unwrap();
 
         // reopen while shadow-dropping the old tracer
-        let mut file_appender = BankingTracer::create_file_appender(
-            path.clone(),
-            TRACE_FILE_DEFAULT_ROTATE_BYTE_THRESHOLD,
-        )
-        .unwrap();
+        let mut file_appender =
+            BankingTracer::create_file_appender(&path, TRACE_FILE_DEFAULT_ROTATE_BYTE_THRESHOLD)
+                .unwrap();
         // new file won't be created as appender is lazy
         assert_eq!(
             [

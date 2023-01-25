@@ -937,7 +937,7 @@ impl Validator {
 
         let (banking_tracer, tracer_thread) =
             BankingTracer::new((config.banking_trace_dir_byte_limit > 0).then_some((
-                blockstore.banking_trace_path(),
+                &blockstore.banking_trace_path(),
                 exit.clone(),
                 config.banking_trace_dir_byte_limit,
             )))
