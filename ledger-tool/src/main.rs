@@ -1078,7 +1078,7 @@ fn load_bank_forks(
             );
                 exit(1);
             }
-            // Check if we have the slot data necessary to replay from starting_slot to <= halt_slot.
+            // Check if we have the slot data necessary to replay from starting_slot to >= halt_slot.
             if !blockstore.slot_range_connected(starting_slot, halt_slot) {
                 eprintln!(
                     "Unable to load bank forks at slot {halt_slot} due to disconnected blocks.",
