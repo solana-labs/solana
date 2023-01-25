@@ -17,6 +17,7 @@ use {
     solana_runtime::hardened_unpack::MAX_GENESIS_ARCHIVE_UNPACKED_SIZE,
     solana_sdk::{
         account::{Account, AccountSharedData, ReadableAccount, WritableAccount},
+        bpf_loader_upgradeable::UpgradeableLoaderState,
         clock,
         epoch_schedule::EpochSchedule,
         fee_calculator::FeeRateGovernor,
@@ -377,6 +378,15 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 .help("Install a SBF program at the given address"),
         )
         .arg(
+            Arg::with_name("upgradeable_program")
+                .long("upgradeable-program")
+                .value_name("ADDRESS UPGRADEABLE_LOADER BPF_PROGRAM.SO")
+                .takes_value(true)
+                .number_of_values(3)
+                .multiple(true)
+                .help("Install an upgradeable SBF program at the given address"),
+        )
+        .arg(
             Arg::with_name("inflation")
                 .required(false)
                 .long("inflation")
@@ -618,6 +628,55 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                             data: program_data,
                             executable: true,
                             owner: loader,
+                            rent_epoch: 0,
+                        }),
+                    );
+                }
+                _ => unreachable!(),
+            }
+        }
+    }
+
+    if let Some(values) = matches.values_of("upgradeable_program") {
+        let values: Vec<&str> = values.collect::<Vec<_>>();
+        for address_loader_program in values.chunks(3) {
+            match address_loader_program {
+                [address, loader, program] => {
+                    let address = parse_address(address, "address");
+                    let loader = parse_address(loader, "loader");
+                    let program_data_elf = parse_program_data(program);
+
+                    let (programdata_address, _) =
+                        Pubkey::find_program_address(&[address.as_ref()], &loader);
+                    let mut program_data =
+                        bincode::serialize(&UpgradeableLoaderState::ProgramData {
+                            slot: 0,
+                            upgrade_authority_address: Some(Pubkey::default()),
+                        })
+                        .unwrap();
+                    program_data.extend_from_slice(&program_data_elf);
+                    genesis_config.add_account(
+                        programdata_address,
+                        AccountSharedData::from(Account {
+                            lamports: genesis_config.rent.minimum_balance(program_data.len()),
+                            data: program_data,
+                            owner: loader,
+                            executable: false,
+                            rent_epoch: 0,
+                        }),
+                    );
+
+                    let program_data = bincode::serialize(&UpgradeableLoaderState::Program {
+                        programdata_address,
+                    })
+                    .unwrap();
+                    genesis_config.add_account(
+                        address,
+                        AccountSharedData::from(Account {
+                            lamports: genesis_config.rent.minimum_balance(program_data.len()),
+                            data: program_data,
+                            owner: loader,
+                            executable: true,
                             rent_epoch: 0,
                         }),
                     );
