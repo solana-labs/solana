@@ -72,7 +72,8 @@ fn recv_send_quic(
     }
     for packet_set in hashmap.iter() {
         let conn = connection_cache.get_connection(packet_set.0);
-	    info!("recv_send_quic connection remote address: {}", conn.tpu_addr());        
+	    info!("recv_send_quic connection remote address: {}", conn.tpu_addr());
+        info!("recv_send_quic connection batch len: {}", packet_set.1.len());        
 	    let res = conn.send_wire_transaction_batch(packet_set.1);
 	    info!("recv_send_quic send result: {:?}", res);    
     }
