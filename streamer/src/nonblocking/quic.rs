@@ -528,7 +528,7 @@ async fn handle_connection(
     peer_type: ConnectionPeerType,
     wait_for_chunk_timeout_ms: u64,
 ) {
-    debug!(
+    info!(
         "quic new connection {} streams: {} connections: {}",
         remote_addr,
         stats.total_streams.load(Ordering::Relaxed),
@@ -627,7 +627,7 @@ fn handle_chunk(
     match chunk {
         Ok(maybe_chunk) => {
             if let Some(chunk) = maybe_chunk {
-                trace!("got chunk: {:?}", chunk);
+                info!("got chunk with len: {}", chunk.bytes.len());
                 let chunk_len = chunk.bytes.len() as u64;
 
                 // shouldn't happen, but sanity check the size and offsets
@@ -645,7 +645,7 @@ fn handle_chunk(
                         .fetch_add(1, Ordering::Relaxed);
                     return true;
                 }
-
+                info!("got chunk, is valid");
                 // chunk looks valid
                 if maybe_batch.is_none() {
                     let mut batch = PacketBatch::with_capacity(1);
