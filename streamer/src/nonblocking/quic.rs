@@ -610,7 +610,7 @@ async fn handle_connection(
     let removed_connection_count = connection_table.lock().unwrap().remove_connection(
         ConnectionTableKey::new(remote_addr.ip(), remote_pubkey),
         remote_addr.port(),
-        Some(stable_id),
+        stable_id,
     );
     if removed_connection_count > 0 {
         stats
@@ -910,34 +910,32 @@ impl ConnectionTable {
         }
     }
 
-    fn remove_connection(
-        &mut self,
-        key: ConnectionTableKey,
-        port: u16,
-        maybe_stable_id: Option<usize>,
-    ) -> usize {
+    // Returns number of connections that were removed
+    fn remove_connection(&mut self, key: ConnectionTableKey, port: u16, stable_id: usize) -> usize {
         if let Entry::Occupied(mut e) = self.table.entry(key) {
             let e_ref = e.get_mut();
             let old_size = e_ref.len();
 
             e_ref.retain(|connection_entry| {
+                // Retain the connection entry if the port is different, or if the connection's
+                // stable_id doesn't match the provided stable_id.
+                // (Some unit tests do not fill in a valid connection in the table. To support that,
+                // if the connection is none, the stable_id check is ignored. i.e. if the port matches,
+                // the connection gets removed)
                 connection_entry.port != port
-                    || maybe_stable_id
-                        .and_then(|stable_id| {
-                            connection_entry.connection.as_ref().and_then(|connection| {
-                                (connection.stable_id() != stable_id).then_some(0)
-                            })
-                        })
+                    || connection_entry
+                        .connection
+                        .as_ref()
+                        .and_then(|connection| (connection.stable_id() != stable_id).then_some(0))
                         .is_some()
             });
             let new_size = e_ref.len();
             if e_ref.is_empty() {
                 e.remove_entry();
             }
-            self.total_size = self
-                .total_size
-                .saturating_sub(old_size.saturating_sub(new_size));
-            old_size.saturating_sub(new_size)
+            let connections_removed = old_size.saturating_sub(new_size);
+            self.total_size = self.total_size.saturating_sub(connections_removed);
+            connections_removed
         } else {
             0
         }
@@ -1498,7 +1496,7 @@ pub mod test {
         assert_eq!(table.table.len(), new_size);
         assert_eq!(table.total_size, new_size);
         for socket in sockets.iter().take(num_entries as usize).skip(new_size - 1) {
-            table.remove_connection(ConnectionTableKey::IP(socket.ip()), socket.port(), None);
+            table.remove_connection(ConnectionTableKey::IP(socket.ip()), socket.port(), 0);
         }
         assert_eq!(table.total_size, 0);
     }
@@ -1533,7 +1531,7 @@ pub mod test {
         assert_eq!(table.table.len(), new_size);
         assert_eq!(table.total_size, new_size);
         for pubkey in pubkeys.iter().take(num_entries as usize).skip(new_size - 1) {
-            table.remove_connection(ConnectionTableKey::Pubkey(*pubkey), 0, None);
+            table.remove_connection(ConnectionTableKey::Pubkey(*pubkey), 0, 0);
         }
         assert_eq!(table.total_size, 0);
     }
@@ -1593,7 +1591,7 @@ pub mod test {
         assert!(table.table.len() <= new_max_size);
         assert!(table.total_size <= new_max_size);
 
-        table.remove_connection(ConnectionTableKey::Pubkey(pubkey2), 0, None);
+        table.remove_connection(ConnectionTableKey::Pubkey(pubkey2), 0, 0);
         assert_eq!(table.total_size, 0);
     }
 
@@ -1685,7 +1683,7 @@ pub mod test {
         sockets.push(zero_connection_addr);
 
         for socket in sockets.iter() {
-            table.remove_connection(ConnectionTableKey::IP(socket.ip()), socket.port(), None);
+            table.remove_connection(ConnectionTableKey::IP(socket.ip()), socket.port(), 0);
         }
         assert_eq!(table.total_size, 0);
     }
