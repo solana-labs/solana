@@ -578,9 +578,9 @@ impl ServeRepair {
             result.ok()
         };
         let packet_count: usize = reqs_v.iter().map(PacketBatch::len).sum();
-        if packet_count < VERIFY_MIN_PACKETS_PER_THREAD * MAX_REPAIR_REQUEST_DECODE_THREADS {
-            reqs_v.iter().flatten().filter_map(decode_packet).collect()
-        } else {
+        if cluster_type == ClusterType::Testnet
+            && packet_count >= VERIFY_MIN_PACKETS_PER_THREAD * MAX_REPAIR_REQUEST_DECODE_THREADS
+        {
             thread_pool
                 .install(|| {
                     reqs_v
@@ -590,6 +590,8 @@ impl ServeRepair {
                         .filter_map(decode_packet)
                 })
                 .collect()
+        } else {
+            reqs_v.iter().flatten().filter_map(decode_packet).collect()
         }
     }
 
