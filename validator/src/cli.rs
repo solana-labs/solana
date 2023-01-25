@@ -763,6 +763,13 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                 .help("Milliseconds to wait in the TPU receiver for packet coalescing."),
         )
         .arg(
+            Arg::with_name("repair_use_quic")
+                .long("repair-use-quic")
+                .takes_value(false)
+                .hidden(true)
+                .help("Use QUIC to send repair requests."),
+        )
+        .arg(
             Arg::with_name("tpu_use_quic")
                 .long("tpu-use-quic")
                 .takes_value(false)

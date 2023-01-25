@@ -7,7 +7,7 @@ use {
     solana_core::{
         admin_rpc_post_init::AdminRpcRequestMetadataPostInit,
         tower_storage::TowerStorage,
-        validator::{Validator, ValidatorConfig, ValidatorStartProgress},
+        validator::{Validator, ValidatorConfig, ValidatorStartProgress, DEFAULT_REPAIR_USE_QUIC},
     },
     solana_geyser_plugin_manager::{
         geyser_plugin_manager::GeyserPluginManager, GeyserPluginManagerRequest,
@@ -981,6 +981,7 @@ impl TestValidator {
             DEFAULT_TPU_CONNECTION_POOL_SIZE,
             config.tpu_enable_udp,
             config.admin_rpc_service_post_init.clone(),
+            DEFAULT_REPAIR_USE_QUIC,
         )?);
 
         // Needed to avoid panics in `solana-responder-gossip` in tests that create a number of

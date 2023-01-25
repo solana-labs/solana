@@ -13,9 +13,14 @@ use {
         outstanding_requests::OutstandingRequests,
         repair_weight::RepairWeight,
         serve_repair::{ServeRepair, ShredRepairType, REPAIR_PEERS_CACHE_CAPACITY},
+        tvu::RepairQuicConfig,
     },
     crossbeam_channel::{Receiver as CrossbeamReceiver, Sender as CrossbeamSender},
     lru::LruCache,
+    solana_client::{
+        connection_cache::ConnectionCache,
+        quic_sendmmsg::{self, SendPktsError as QuicSendPktsError},
+    },
     solana_gossip::cluster_info::ClusterInfo,
     solana_ledger::{
         blockstore::{Blockstore, SlotMeta},
@@ -218,16 +223,25 @@ impl Default for RepairSlotRange {
     }
 }
 
+/// Modelling either using a UDP socket or Quic connection cache for sending
+/// repair requests.
+pub(crate) enum RepairTransportConfig<'a> {
+    Udp(&'a UdpSocket),
+    Quic(Arc<ConnectionCache>),
+}
+
 pub struct RepairService {
     t_repair: JoinHandle<()>,
     ancestor_hashes_service: AncestorHashesService,
 }
 
 impl RepairService {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         blockstore: Arc<Blockstore>,
         exit: Arc<AtomicBool>,
         repair_socket: Arc<UdpSocket>,
+        quic_repair_option: Option<(&RepairQuicConfig, Arc<ConnectionCache>)>,
         ancestor_hashes_socket: Arc<UdpSocket>,
         repair_info: RepairInfo,
         verified_vote_receiver: VerifiedVoteReceiver,
@@ -235,6 +249,9 @@ impl RepairService {
         ancestor_hashes_replay_update_receiver: AncestorHashesReplayUpdateReceiver,
         dumped_slots_receiver: DumpedSlotsReceiver,
     ) -> Self {
+        let (repair_quic_config, connection_cache) = quic_repair_option
+            .map(|(config, option)| (Some(config), Some(option)))
+            .unwrap_or((None, None));
         let t_repair = {
             let blockstore = blockstore.clone();
             let exit = exit.clone();
@@ -246,6 +263,7 @@ impl RepairService {
                         &blockstore,
                         &exit,
                         &repair_socket,
+                        connection_cache,
                         repair_info,
                         verified_vote_receiver,
                         &outstanding_requests,
@@ -259,6 +277,7 @@ impl RepairService {
             exit,
             blockstore,
             ancestor_hashes_socket,
+            repair_quic_config,
             repair_info,
             ancestor_hashes_replay_update_receiver,
         );
@@ -273,6 +292,7 @@ impl RepairService {
         blockstore: &Blockstore,
         exit: &AtomicBool,
         repair_socket: &UdpSocket,
+        quic_repair_option: Option<Arc<ConnectionCache>>,
         repair_info: RepairInfo,
         verified_vote_receiver: VerifiedVoteReceiver,
         outstanding_requests: &RwLock<OutstandingShredRepairs>,
@@ -401,7 +421,18 @@ impl RepairService {
 
             let mut batch_send_repairs_elapsed = Measure::start("batch_send_repairs_elapsed");
             if !batch.is_empty() {
-                if let Err(SendPktsError::IoError(err, num_failed)) =
+                if let Some(connection_cache) = &quic_repair_option {
+                    let result = quic_sendmmsg::batch_send(connection_cache, &batch);
+                    if let Err(QuicSendPktsError::TransportError(err, num_failed)) = result {
+                        error!(
+                            "{} batch_send failed to send {}/{} packets using connection cache, first error {:?}",
+                            id,
+                            num_failed,
+                            batch.len(),
+                            err
+                        );
+                    }
+                } else if let Err(SendPktsError::IoError(err, num_failed)) =
                     batch_send(repair_socket, &batch)
                 {
                     error!(
@@ -541,6 +572,8 @@ impl RepairService {
             }
             sleep(Duration::from_millis(REPAIR_MS));
         }
+        drop(quic_repair_option);
+        error!("Exitting RepairService::run");
     }
 
     /// If this slot is missing shreds generate repairs

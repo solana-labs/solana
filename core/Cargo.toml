@@ -30,6 +30,7 @@ log = { workspace = true }
 lru = { workspace = true }
 min-max-heap = { workspace = true }
 num_enum = { workspace = true }
+quinn = { workspace = true }
 rand = { workspace = true }
 rand_chacha = { workspace = true }
 rayon = { workspace = true }
@@ -39,6 +40,7 @@ serde_derive = { workspace = true }
 solana-address-lookup-table-program = { workspace = true }
 solana-bloom = { workspace = true }
 solana-client = { workspace = true }
+solana-connection-cache = { workspace = true }
 solana-entry = { workspace = true }
 solana-frozen-abi = { workspace = true }
 solana-frozen-abi-macro = { workspace = true }
@@ -51,6 +53,7 @@ solana-net-utils = { workspace = true }
 solana-perf = { workspace = true }
 solana-poh = { workspace = true }
 solana-program-runtime = { workspace = true }
+solana-quic-client = { workspace = true }
 solana-rayon-threadlimit = { workspace = true }
 solana-rpc = { workspace = true }
 solana-rpc-client-api = { workspace = true }
@@ -60,6 +63,7 @@ solana-send-transaction-service = { workspace = true }
 solana-streamer = { workspace = true }
 solana-tpu-client = { workspace = true }
 solana-transaction-status = { workspace = true }
+solana-udp-client = { workspace = true }
 solana-version = { workspace = true }
 solana-vote-program = { workspace = true }
 strum = { workspace = true, features = ["derive"] }

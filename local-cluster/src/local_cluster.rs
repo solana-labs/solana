@@ -9,7 +9,7 @@ use {
     solana_client::{connection_cache::ConnectionCache, thin_client::ThinClient},
     solana_core::{
         tower_storage::FileTowerStorage,
-        validator::{Validator, ValidatorConfig, ValidatorStartProgress},
+        validator::{Validator, ValidatorConfig, ValidatorStartProgress, DEFAULT_REPAIR_USE_QUIC},
     },
     solana_gossip::{
         cluster_info::Node,
@@ -290,6 +290,7 @@ impl LocalCluster {
             DEFAULT_TPU_CONNECTION_POOL_SIZE,
             DEFAULT_TPU_ENABLE_UDP,
             Arc::new(RwLock::new(None)),
+            DEFAULT_REPAIR_USE_QUIC,
         )
         .expect("assume successful validator start");
 
@@ -497,6 +498,7 @@ impl LocalCluster {
             DEFAULT_TPU_CONNECTION_POOL_SIZE,
             DEFAULT_TPU_ENABLE_UDP,
             Arc::new(RwLock::new(None)),
+            DEFAULT_REPAIR_USE_QUIC,
         )
         .expect("assume successful validator start");
 
@@ -871,6 +873,7 @@ impl Cluster for LocalCluster {
             DEFAULT_TPU_CONNECTION_POOL_SIZE,
             DEFAULT_TPU_ENABLE_UDP,
             Arc::new(RwLock::new(None)),
+            DEFAULT_REPAIR_USE_QUIC,
         )
         .expect("assume successful validator start");
         cluster_validator_info.validator = Some(restarted_node);

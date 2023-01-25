@@ -17,6 +17,7 @@ use {
         sample_performance_service::SamplePerformanceService,
         serve_repair::ServeRepair,
         serve_repair_service::ServeRepairService,
+        serve_repair_service_quic::ServeRepairService as ServeRepairQuicService,
         sigverify,
         snapshot_packager_service::SnapshotPackagerService,
         stats_reporter_service::StatsReporterService,
@@ -25,7 +26,7 @@ use {
         },
         tower_storage::TowerStorage,
         tpu::{Tpu, TpuSockets, DEFAULT_TPU_COALESCE},
-        tvu::{Tvu, TvuConfig, TvuSockets},
+        tvu::{RepairQuicConfig, Tvu, TvuConfig, TvuSockets},
     },
     crossbeam_channel::{bounded, unbounded, Receiver},
     lazy_static::lazy_static,
@@ -104,7 +105,13 @@ use {
         timing::timestamp,
     },
     solana_send_transaction_service::send_transaction_service,
-    solana_streamer::{socket::SocketAddrSpace, streamer::StakedNodes},
+    solana_streamer::{
+        nonblocking::quic::{
+            DEFAULT_PACKET_BATCH_COALESCE_TIMEOUT_MS, DEFAULT_WAIT_FOR_CHUNK_TIMEOUT_MS,
+        },
+        socket::SocketAddrSpace,
+        streamer::StakedNodes,
+    },
     solana_vote_program::vote_state,
     std::{
         collections::{HashMap, HashSet},
@@ -123,6 +130,7 @@ use {
 
 const MAX_COMPLETED_DATA_SETS_IN_CHANNEL: usize = 100_000;
 const WAIT_FOR_SUPERMAJORITY_THRESHOLD_PERCENT: u64 = 80;
+pub const DEFAULT_REPAIR_USE_QUIC: bool = false;
 
 #[derive(Clone, EnumString, EnumVariantNames, Default, IntoStaticStr, Display)]
 #[strum(serialize_all = "kebab-case")]
@@ -171,7 +179,6 @@ impl BlockProductionMethod {
         &MESSAGE
     }
 }
-
 pub struct ValidatorConfig {
     pub halt_at_slot: Option<Slot>,
     pub expected_genesis_hash: Option<Hash>,
@@ -427,6 +434,7 @@ pub struct Validator {
     stats_reporter_service: StatsReporterService,
     gossip_service: GossipService,
     serve_repair_service: ServeRepairService,
+    serve_repair_quic_service: ServeRepairQuicService,
     completed_data_sets_service: CompletedDataSetsService,
     snapshot_packager_service: Option<SnapshotPackagerService>,
     poh_recorder: Arc<RwLock<PohRecorder>>,
@@ -457,10 +465,11 @@ impl Validator {
         rpc_to_plugin_manager_receiver: Option<Receiver<GeyserPluginManagerRequest>>,
         start_progress: Arc<RwLock<ValidatorStartProgress>>,
         socket_addr_space: SocketAddrSpace,
-        use_quic: bool,
+        tpu_use_quic: bool,
         tpu_connection_pool_size: usize,
         tpu_enable_udp: bool,
         admin_rpc_service_post_init: Arc<RwLock<Option<AdminRpcRequestMetadataPostInit>>>,
+        repair_use_quic: bool,
     ) -> Result<Self, String> {
         let id = identity_keypair.pubkey();
         assert_eq!(&id, node.info.pubkey());
@@ -847,7 +856,7 @@ impl Validator {
 
         let staked_nodes = Arc::new(RwLock::new(StakedNodes::default()));
 
-        let connection_cache = match use_quic {
+        let connection_cache = match tpu_use_quic {
             true => {
                 let connection_cache = ConnectionCache::new_with_client_options(
                     tpu_connection_pool_size,
@@ -990,10 +999,36 @@ impl Validator {
             bank_forks.clone(),
             config.repair_whitelist.clone(),
         );
+
         let serve_repair_service = ServeRepairService::new(
             serve_repair,
             blockstore.clone(),
             node.sockets.serve_repair,
+            socket_addr_space,
+            stats_reporter_sender.clone(),
+            exit.clone(),
+        );
+
+        let serve_repair_quic = ServeRepair::new(
+            cluster_info.clone(),
+            bank_forks.clone(),
+            config.repair_whitelist.clone(),
+        );
+
+        let repair_quic_config = RepairQuicConfig {
+            repair_address: Arc::new(node.sockets.repair_quic),
+            ancestor_hash_address: Arc::new(node.sockets.ancestor_hashes_requests_quic),
+            serve_repair_address: Arc::new(node.sockets.serve_repair_quic),
+            identity_keypair: identity_keypair.clone(),
+            staked_nodes: staked_nodes.clone(),
+            wait_for_chunk_timeout_ms: DEFAULT_WAIT_FOR_CHUNK_TIMEOUT_MS,
+            repair_packet_coalesce_timeout_ms: DEFAULT_PACKET_BATCH_COALESCE_TIMEOUT_MS,
+        };
+
+        let serve_repair_quic_service = ServeRepairQuicService::new(
+            serve_repair_quic,
+            blockstore.clone(),
+            repair_quic_config.clone(),
             socket_addr_space,
             stats_reporter_sender,
             exit.clone(),
@@ -1118,6 +1153,7 @@ impl Validator {
             &connection_cache,
             &prioritization_fee_cache,
             banking_tracer.clone(),
+            repair_use_quic.then_some(repair_quic_config),
         )?;
 
         let tpu = Tpu::new(
@@ -1170,6 +1206,7 @@ impl Validator {
             stats_reporter_service,
             gossip_service,
             serve_repair_service,
+            serve_repair_quic_service,
             json_rpc_service,
             pubsub_service,
             rpc_completed_slots_service,
@@ -1200,6 +1237,7 @@ impl Validator {
 
     // Used for notifying many nodes in parallel to exit
     pub fn exit(&mut self) {
+        error!("Quit validator {:?}", self.cluster_info.id());
         self.validator_exit.write().unwrap().exit();
 
         // drop all signals in blockstore
@@ -2268,6 +2306,7 @@ mod tests {
             DEFAULT_TPU_CONNECTION_POOL_SIZE,
             DEFAULT_TPU_ENABLE_UDP,
             Arc::new(RwLock::new(None)),
+            DEFAULT_REPAIR_USE_QUIC,
         )
         .expect("assume successful validator start");
         assert_eq!(
@@ -2367,6 +2406,7 @@ mod tests {
                     DEFAULT_TPU_CONNECTION_POOL_SIZE,
                     DEFAULT_TPU_ENABLE_UDP,
                     Arc::new(RwLock::new(None)),
+                    DEFAULT_REPAIR_USE_QUIC,
                 )
                 .expect("assume successful validator start")
             })

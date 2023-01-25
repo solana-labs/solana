@@ -87,6 +87,13 @@ pub struct QuicConfig {
     // The optional specified endpoint for the quic based client connections
     // If not specified, the connection cache will create as needed.
     client_endpoint: Option<Endpoint>,
+    do_port_offset: bool,
+}
+
+impl Drop for QuicConfig {
+    fn drop(&mut self) {
+        drop(self.client_endpoint.take());
+    }
 }
 
 impl NewConnectionConfig for QuicConfig {
@@ -102,6 +109,7 @@ impl NewConnectionConfig for QuicConfig {
             maybe_staked_nodes: None,
             maybe_client_pubkey: None,
             client_endpoint: None,
+            do_port_offset: true,
         })
     }
 }
@@ -156,6 +164,10 @@ impl QuicConfig {
 
     pub fn update_client_endpoint(&mut self, client_endpoint: Endpoint) {
         self.client_endpoint = Some(client_endpoint);
+    }
+
+    pub fn set_do_port_offset(&mut self, do_port_offset: bool) {
+        self.do_port_offset = do_port_offset;
     }
 }
 
@@ -214,7 +226,15 @@ impl ConnectionManager for QuicConnectionManager {
     }
 
     fn get_port_offset(&self) -> u16 {
-        QUIC_PORT_OFFSET
+        if self
+            .connection_config
+            .as_ref()
+            .map_or(true, |config| config.do_port_offset)
+        {
+            QUIC_PORT_OFFSET
+        } else {
+            0
+        }
     }
 }
 
