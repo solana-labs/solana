@@ -240,18 +240,20 @@ impl BankingTracer {
         self.create_channel(ChannelLabel::GossipVote)
     }
 
-    pub fn hash_event(&self, slot: Slot, blockhash: Hash, bank_hash: Hash) {
-        self.trace_event(TimedTracedEvent(
-            SystemTime::now(),
-            TracedEvent::BlockAndBankHash(slot, blockhash, bank_hash),
-        ))
+    pub fn hash_event(&self, slot: Slot, blockhash: &Hash, bank_hash: &Hash) {
+        self.trace_event(|| {
+            TimedTracedEvent(
+                SystemTime::now(),
+                TracedEvent::BlockAndBankHash(slot, *blockhash, *bank_hash),
+            )
+        })
     }
 
-    fn trace_event(&self, event: TimedTracedEvent) {
+    fn trace_event(&self, on_trace: impl Fn() -> TimedTracedEvent) {
         if let Some((sender, exit)) = &self.enabled_tracer {
             if !exit.load(Ordering::Relaxed) {
                 sender
-                    .send(event)
+                    .send(on_trace())
                     .expect("active tracer thread unless exited");
             }
         }
@@ -455,7 +457,7 @@ mod tests {
         // .hash_event() must succeed even after exit is already set to true
         let blockhash = Hash::from_str("B1ockhash1111111111111111111111111111111111").unwrap();
         let bank_hash = Hash::from_str("BankHash11111111111111111111111111111111111").unwrap();
-        tracer.hash_event(4, blockhash, bank_hash);
+        tracer.hash_event(4, &blockhash, &bank_hash);
 
         drop(tracer);
 
@@ -496,7 +498,7 @@ mod tests {
             .unwrap();
         let blockhash = Hash::from_str("B1ockhash1111111111111111111111111111111111").unwrap();
         let bank_hash = Hash::from_str("BankHash11111111111111111111111111111111111").unwrap();
-        tracer.hash_event(4, blockhash, bank_hash);
+        tracer.hash_event(4, &blockhash, &bank_hash);
 
         for_test::terminate_tracer(
             tracer,
