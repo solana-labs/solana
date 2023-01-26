@@ -2496,8 +2496,7 @@ impl Bank {
                     if cached_stake_account.account() != &stake_account {
                         if self.rc.accounts.accounts_db.assert_stakes_cache_consistency {
                             panic!(
-                                "stakes cache accounts mismatch {:?} {:?}",
-                                cached_stake_account, stake_account
+                                "stakes cache accounts mismatch {cached_stake_account:?} {stake_account:?}"
                             );
                         }
                         invalid_cached_stake_accounts.fetch_add(1, Relaxed);
@@ -20195,13 +20194,13 @@ pub(crate) mod tests {
             Epoch::default()
         };
 
-            assert!(bank.rc.accounts.accounts_db.assert_stakes_cache_consistency);
-            let mut pubkey_bytes_early = [0u8; 32];
-            pubkey_bytes_early[31] = 2;
-            let stake_id1 = Pubkey::from(pubkey_bytes_early);
-            let vote_id = solana_sdk::pubkey::new_rand();
-            let stake_account1 =
-                crate::stakes::tests::create_stake_account(12300000, &vote_id, &stake_id1);
+        assert!(bank.rc.accounts.accounts_db.assert_stakes_cache_consistency);
+        let mut pubkey_bytes_early = [0u8; 32];
+        pubkey_bytes_early[31] = 2;
+        let stake_id1 = Pubkey::from(pubkey_bytes_early);
+        let vote_id = solana_sdk::pubkey::new_rand();
+        let stake_account1 =
+            crate::stakes::tests::create_stake_account(12300000, &vote_id, &stake_id1);
 
         // set up accounts
         bank.store_account_and_update_capitalization(&stake_id1, &stake_account1);
