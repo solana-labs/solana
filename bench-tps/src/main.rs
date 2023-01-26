@@ -19,13 +19,21 @@ use {
     solana_gossip::gossip_service::{discover_cluster, get_client, get_multi_client},
     solana_rpc_client::rpc_client::RpcClient,
     solana_sdk::{
-        commitment_config::CommitmentConfig, fee_calculator::FeeRateGovernor, pubkey::Pubkey,
+        commitment_config::CommitmentConfig,
+        fee_calculator::FeeRateGovernor,
+        pubkey::Pubkey,
+        signature::{Keypair, Signer},
         system_program,
     },
-    solana_streamer::socket::SocketAddrSpace,
+    solana_streamer::{socket::SocketAddrSpace, streamer::StakedNodes},
     std::{
-        collections::HashMap, fs::File, io::prelude::*, net::SocketAddr, path::Path, process::exit,
-        sync::Arc,
+        collections::HashMap,
+        fs::File,
+        io::prelude::*,
+        net::{IpAddr, SocketAddr},
+        path::Path,
+        process::exit,
+        sync::{Arc, RwLock},
     },
 };
 
@@ -44,6 +52,8 @@ fn create_client(
     rpc_tpu_sockets: Option<(SocketAddr, SocketAddr)>,
     num_nodes: usize,
     target_node: Option<Pubkey>,
+    bind_address: IpAddr,
+    client_node_id: &Keypair,
 ) -> Arc<dyn BenchTpsClient + Send + Sync> {
     match external_client_type {
         ExternalClientType::RpcClient => Arc::new(RpcClient::new_with_commitment(
@@ -52,7 +62,16 @@ fn create_client(
         )),
         ExternalClientType::ThinClient => {
             let connection_cache = match use_quic {
-                true => Arc::new(ConnectionCache::new(tpu_connection_pool_size)),
+                true => {
+                    let mut connection_cache = ConnectionCache::new(tpu_connection_pool_size);
+                    connection_cache
+                        .update_client_certificate(client_node_id, bind_address)
+                        .expect("Failed to update QUIC client certificates");
+
+                    let staked_nodes = Arc::new(RwLock::new(StakedNodes::default()));
+                    connection_cache.set_staked_nodes(&staked_nodes, &client_node_id.pubkey());
+                    Arc::new(connection_cache)
+                }
                 false => Arc::new(ConnectionCache::with_udp(tpu_connection_pool_size)),
             };
 
@@ -168,6 +187,8 @@ fn main() {
         use_randomized_compute_unit_price,
         use_durable_nonce,
         instruction_padding_config,
+        bind_address,
+        client_node_id,
         ..
     } = &cli_config;
 
@@ -236,6 +257,8 @@ fn main() {
         rpc_tpu_sockets,
         *num_nodes,
         *target_node,
+        *bind_address,
+        client_node_id,
     );
     if let Some(instruction_padding_config) = instruction_padding_config {
         info!(
