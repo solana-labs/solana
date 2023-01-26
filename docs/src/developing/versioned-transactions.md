@@ -16,7 +16,11 @@ The Solana runtime supports two transaction versions:
 
 ## Max supported transaction version
 
+<<<<<<< HEAD
 All RPC requests that return a transaction **_should_** specify the highest version of transactions they will support in their application using the `maxSupportedTransactionVersion` option. Including [`getBlock`](./clients/jsonrpc-api.md#getblock) and [`getTransaction`](./clients/jsonrpc-api.md#gettransaction),
+=======
+All RPC requests that return a transaction **_should_** specify the highest version of transactions they will support in their application using the `maxSupportedTransactionVersion` option, including [`getBlock`](../api/http#getblock) and [`getTransaction`](../api/http#gettransaction).
+>>>>>>> 9b270020f ([docs] new JSON RPC API docs format (#29772))
 
 An RPC request will fail if a [Versioned Transaction](./versioned-transactions.md) is returned that is higher than the set `maxSupportedTransactionVersion`. (i.e. if a version `0` transaction is returned when `legacy` is selected)
 
