@@ -10243,8 +10243,10 @@ pub(crate) mod tests {
         let vote_id = solana_sdk::pubkey::new_rand();
         let mut vote_account =
             vote_state::create_account(&vote_id, &solana_sdk::pubkey::new_rand(), 0, 100);
-        let (stake_id1, stake_account1) = crate::stakes::tests::create_stake_account(123, &vote_id);
-        let (stake_id2, stake_account2) = crate::stakes::tests::create_stake_account(456, &vote_id);
+        let stake_id1 = solana_sdk::pubkey::new_rand();
+        let stake_account1 = crate::stakes::tests::create_stake_account(123, &vote_id, &stake_id1);
+        let stake_id2 = solana_sdk::pubkey::new_rand();
+        let stake_account2 = crate::stakes::tests::create_stake_account(456, &vote_id, &stake_id2);
 
         // set up accounts
         bank.store_account_and_update_capitalization(&stake_id1, &stake_account1);
@@ -20193,10 +20195,10 @@ pub(crate) mod tests {
             assert!(bank.rc.accounts.accounts_db.assert_stakes_cache_consistency);
             let mut pubkey_bytes_early = [0u8; 32];
             pubkey_bytes_early[31] = 2;
-            let stake_acct = Pubkey::from(pubkey_bytes_early);
+            let stake_id1 = Pubkey::from(pubkey_bytes_early);
             let vote_id = solana_sdk::pubkey::new_rand();
-            let (stake_id1, stake_account1) =
-                crate::stakes::tests::create_stake_account_with_id(12300000, &vote_id, stake_acct);
+            let stake_account1 =
+                crate::stakes::tests::create_stake_account(12300000, &vote_id, &stake_id1);
 
             // set up accounts
             bank.store_account_and_update_capitalization(&stake_id1, &stake_account1);
