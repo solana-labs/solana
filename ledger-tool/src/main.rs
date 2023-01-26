@@ -36,10 +36,11 @@ use {
             AccessType, BlockstoreOptions, BlockstoreRecoveryMode, LedgerColumnOptions,
             ShredStorageType, BLOCKSTORE_DIRECTORY_ROCKS_FIFO,
         },
-        blockstore_processor::{self, BlockstoreProcessorError, ProcessOptions},
+        blockstore_processor::{self, BlockstoreProcessorError, ProcessOptions, TransactionStatusSender},
         shred::Shred,
     },
     solana_measure::{measure, measure::Measure},
+    solana_rpc::{transaction_status_service::TransactionStatusService, transaction_notifier_interface::TransactionNotifierLock},
     solana_runtime::{
         accounts::Accounts,
         accounts_background_service::{
@@ -1024,7 +1025,7 @@ fn hardforks_of(matches: &ArgMatches<'_>, name: &str) -> Option<Vec<Slot>> {
 fn load_bank_forks(
     arg_matches: &ArgMatches,
     genesis_config: &GenesisConfig,
-    blockstore: &Blockstore,
+    blockstore: Arc<Blockstore>,
     process_options: ProcessOptions,
     snapshot_archive_path: Option<PathBuf>,
     incremental_snapshot_archive_path: Option<PathBuf>,
@@ -1117,6 +1118,7 @@ fn load_bank_forks(
     info!("done. {}", measure);
 
     let mut accounts_update_notifier = Option::<AccountsUpdateNotifier>::default();
+    let mut transaction_notifier = Option::<TransactionNotifierLock>::default();
     if arg_matches.is_present("geyser_plugin_config") {
         let geyser_config_files = values_t_or_exit!(arg_matches, "geyser_plugin_config", String)
             .into_iter()
@@ -1133,12 +1135,13 @@ fn load_bank_forks(
                 },
             );
         accounts_update_notifier = geyser_service.get_accounts_update_notifier();
+        transaction_notifier = geyser_service.get_transaction_notifier();
     }
 
     let (bank_forks, leader_schedule_cache, starting_snapshot_hashes, ..) =
         bank_forks_utils::load_bank_forks(
             genesis_config,
-            blockstore,
+            blockstore.as_ref(),
             account_paths,
             None,
             snapshot_config.as_ref(),
@@ -1175,12 +1178,28 @@ fn load_bank_forks(
         None,
     );
 
+    let (transaction_status_sender, transaction_status_service) = if transaction_notifier.is_some() {
+        let (transaction_status_sender, transaction_status_receiver) = unbounded();
+        let transaction_status_service = TransactionStatusService::new(
+            transaction_status_receiver,
+            Arc::default(),
+            false,
+            transaction_notifier,
+            blockstore.clone(),
+            false,
+            &exit.clone(),
+        );
+        (Some(TransactionStatusSender { sender: transaction_status_sender }), Some(transaction_status_service))
+    } else {
+        (None, None)
+    };
+
     let result = blockstore_processor::process_blockstore_from_root(
-        blockstore,
+        blockstore.as_ref(),
         &bank_forks,
         &leader_schedule_cache,
         &process_options,
-        None,
+        transaction_status_sender.as_ref(),
         None,
         &accounts_background_request_sender,
     )
@@ -1188,6 +1207,9 @@ fn load_bank_forks(
 
     exit.store(true, Ordering::Relaxed);
     accounts_background_service.join().unwrap();
+    if let Some(service) = transaction_status_service {
+        service.join().unwrap();
+    }
 
     result
 }
@@ -2410,7 +2432,7 @@ fn main() {
                 match load_bank_forks(
                     arg_matches,
                     &genesis_config,
-                    &blockstore,
+                    Arc::new(blockstore),
                     process_options,
                     snapshot_archive_path,
                     incremental_snapshot_archive_path,
@@ -2503,7 +2525,7 @@ fn main() {
                 match load_bank_forks(
                     arg_matches,
                     &genesis_config,
-                    &blockstore,
+                    Arc::new(blockstore),
                     process_options,
                     snapshot_archive_path,
                     incremental_snapshot_archive_path,
@@ -2804,7 +2826,7 @@ fn main() {
                 let (bank_forks, ..) = load_bank_forks(
                     arg_matches,
                     &open_genesis_config_by(&ledger_path, arg_matches),
-                    &blockstore,
+                    Arc::new(blockstore),
                     process_options,
                     snapshot_archive_path,
                     incremental_snapshot_archive_path,
@@ -2848,7 +2870,7 @@ fn main() {
                 match load_bank_forks(
                     arg_matches,
                     &open_genesis_config_by(&ledger_path, arg_matches),
-                    &blockstore,
+                    Arc::new(blockstore),
                     process_options,
                     snapshot_archive_path,
                     incremental_snapshot_archive_path,
@@ -2952,13 +2974,13 @@ fn main() {
                     usize
                 );
                 let genesis_config = open_genesis_config_by(&ledger_path, arg_matches);
-                let blockstore = open_blockstore(
+                let blockstore = Arc::new(open_blockstore(
                     &ledger_path,
                     AccessType::Secondary,
                     wal_recovery_mode,
                     &shred_storage_type,
                     force_update_to_open,
-                );
+                ));
 
                 let snapshot_slot = if Some("ROOT") == arg_matches.value_of("snapshot_slot") {
                     blockstore
@@ -3026,7 +3048,7 @@ fn main() {
                 match load_bank_forks(
                     arg_matches,
                     &genesis_config,
-                    &blockstore,
+                    blockstore.clone(),
                     ProcessOptions {
                         new_hard_forks,
                         halt_at_slot: Some(snapshot_slot),
@@ -3369,7 +3391,7 @@ fn main() {
                 let (bank_forks, ..) = load_bank_forks(
                     arg_matches,
                     &genesis_config,
-                    &blockstore,
+                    Arc::new(blockstore),
                     process_options,
                     snapshot_archive_path,
                     incremental_snapshot_archive_path,
@@ -3458,7 +3480,7 @@ fn main() {
                 match load_bank_forks(
                     arg_matches,
                     &genesis_config,
-                    &blockstore,
+                    Arc::new(blockstore),
                     process_options,
                     snapshot_archive_path,
                     incremental_snapshot_archive_path,
