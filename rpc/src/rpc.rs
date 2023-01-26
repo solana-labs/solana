@@ -6531,22 +6531,16 @@ pub mod tests {
 
     #[test]
     fn test_rpc_verify_filter() {
-        #[allow(deprecated)]
-        let filter = RpcFilterType::Memcmp(Memcmp {
-            offset: 0,
-            bytes: MemcmpEncodedBytes::Base58(
-                "13LeFbG6m2EP1fqCj9k66fcXsoTHMMtgr7c78AivUrYD".to_string(),
-            ),
-            encoding: None,
-        });
+        let filter = RpcFilterType::Memcmp(Memcmp::new(
+            0,                                                                                      // offset
+            MemcmpEncodedBytes::Base58("13LeFbG6m2EP1fqCj9k66fcXsoTHMMtgr7c78AivUrYD".to_string()), // encoded bytes
+        ));
         assert_eq!(verify_filter(&filter), Ok(()));
         // Invalid base-58
-        #[allow(deprecated)]
-        let filter = RpcFilterType::Memcmp(Memcmp {
-            offset: 0,
-            bytes: MemcmpEncodedBytes::Base58("III".to_string()),
-            encoding: None,
-        });
+        let filter = RpcFilterType::Memcmp(Memcmp::new(
+            0,                                             // offset
+            MemcmpEncodedBytes::Base58("III".to_string()), // encoded bytes
+        ));
         assert!(verify_filter(&filter).is_err());
     }
 
