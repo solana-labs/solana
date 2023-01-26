@@ -154,6 +154,14 @@ pub struct Memcmp {
 }
 
 impl Memcmp {
+    pub fn new(offset: usize, encoded_bytes: MemcmpEncodedBytes) -> Self {
+        Self {
+            offset,
+            bytes: encoded_bytes,
+            encoding: None,
+        }
+    }
+
     pub fn new_raw_bytes(offset: usize, bytes: Vec<u8>) -> Self {
         Self {
             offset,
