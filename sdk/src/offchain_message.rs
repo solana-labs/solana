@@ -6,8 +6,8 @@ use {
     crate::{
         hash::Hash,
         pubkey::Pubkey,
-        sanitize::SanitizeError,
-        signature::{Signature, Signer},
+        signature::Signature,
+        signer::{Signer, SignerError},
     },
     num_enum::{IntoPrimitive, TryFromPrimitive},
     std::str::FromStr,
@@ -20,6 +20,28 @@ static_assertions::const_assert_eq!(OffchainMessage::HEADER_LEN, 17);
 static_assertions::const_assert_eq!(v0::OffchainMessage::MAX_LEN, 65515);
 #[cfg(test)]
 static_assertions::const_assert_eq!(v0::OffchainMessage::MAX_LEN_LEDGER, 1212);
+
+#[derive(Debug, Error, PartialEq)]
+pub enum Error {
+    #[error("message is empty")]
+    MessageEmpty,
+    #[error("message is too long")]
+    MessageTooLong,
+    #[error("message candidate buffer is too short")]
+    BufferTooShort,
+    #[error("message candidate buffer is too long")]
+    BufferTooLong,
+    #[error("unexpected message format value: {0}")]
+    UnexpectedFormatDiscriminant(u8),
+    #[error("unexpected message encoding")]
+    UnexpectedMessageEncoding,
+    #[error("unexpected message version value: {0}")]
+    UnexpectedVersionDiscriminant(u8),
+    #[error("message is illegal for specified format")]
+    IllegalMessageForFormat,
+    #[error(transparent)]
+    SignerError(#[from] SignerError),
+}
 
 /// Check if given bytes contain only printable ASCII characters
 pub fn is_printable_ascii(message: &str) -> bool {
@@ -60,11 +82,10 @@ impl FromStr for Version {
 #[allow(clippy::arithmetic_side_effects)]
 pub mod v0 {
     use {
-        super::{is_printable_ascii, MessageFormat, OffchainMessage as Base},
+        super::{is_printable_ascii, Error, MessageFormat, OffchainMessage as Base},
         crate::{
             hash::{Hash, Hasher},
             packet::PACKET_DATA_SIZE,
-            sanitize::SanitizeError,
         },
     };
 
@@ -85,9 +106,9 @@ pub mod v0 {
         pub const MAX_LEN_LEDGER: usize = PACKET_DATA_SIZE - Base::HEADER_LEN - Self::HEADER_LEN;
 
         /// Construct a new OffchainMessage object from the given message
-        pub fn new(message: &str) -> Result<Self, SanitizeError> {
+        pub fn new(message: &str) -> Result<Self, Error> {
             let format = if message.is_empty() {
-                return Err(SanitizeError::InvalidValue);
+                return Err(Error::MessageEmpty);
             } else if message.len() <= OffchainMessage::MAX_LEN_LEDGER {
                 if is_printable_ascii(message) {
                     MessageFormat::RestrictedAscii
@@ -97,7 +118,7 @@ pub mod v0 {
             } else if message.len() <= OffchainMessage::MAX_LEN {
                 MessageFormat::ExtendedUtf8
             } else {
-                return Err(SanitizeError::ValueOutOfBounds);
+                return Err(Error::MessageTooLong);
             };
             Ok(Self {
                 format,
@@ -106,7 +127,7 @@ pub mod v0 {
         }
 
         /// Serialize the message to bytes, including the full header
-        pub fn serialize(&self, data: &mut Vec<u8>) -> Result<(), SanitizeError> {
+        pub fn serialize(&self, data: &mut Vec<u8>) -> Result<(), Error> {
             // invalid messages shouldn't be possible, but a quick sanity check never hurts
             assert!(!self.message.is_empty() && self.message.len() <= Self::MAX_LEN);
             data.reserve(Self::HEADER_LEN.saturating_add(self.message.len()));
@@ -120,47 +141,46 @@ pub mod v0 {
         }
 
         /// Deserialize the message from bytes that include a full header
-        pub fn deserialize(data: &[u8]) -> Result<Self, SanitizeError> {
+        pub fn deserialize(data: &[u8]) -> Result<Self, Error> {
             // validate data length
-            if data.len() <= Self::HEADER_LEN || data.len() > Self::HEADER_LEN + Self::MAX_LEN {
-                return Err(SanitizeError::ValueOutOfBounds);
+            if data.len() <= Self::HEADER_LEN {
+                return Err(Error::BufferTooShort);
+            }
+            if data.len() > Self::HEADER_LEN + Self::MAX_LEN {
+                return Err(Error::BufferTooLong);
             }
             // decode header
-            let format =
-                MessageFormat::try_from(data[0]).map_err(|_| SanitizeError::InvalidValue)?;
+            let format = MessageFormat::try_from(data[0])
+                .map_err(|e| Error::UnexpectedFormatDiscriminant(e.number))?;
             let message_len = u16::from_le_bytes([data[1], data[2]]) as usize;
             // check header
-            if Self::HEADER_LEN.saturating_add(message_len) != data.len() {
-                return Err(SanitizeError::InvalidValue);
+            let expected_buffer_len = Self::HEADER_LEN.saturating_add(message_len);
+            if expected_buffer_len > data.len() {
+                return Err(Error::BufferTooLong);
+            }
+            if expected_buffer_len < data.len() {
+                return Err(Error::BufferTooShort);
             }
             let message_bytes = &data[Self::HEADER_LEN..];
-            // ensure the entire buffer is consumed
-            if message_bytes.len() != message_len {
-                return Err(SanitizeError::InvalidValue);
-            }
             let message =
-                std::str::from_utf8(message_bytes).map_err(|_| SanitizeError::InvalidValue)?;
+                std::str::from_utf8(message_bytes).map_err(|_| Error::UnexpectedMessageEncoding)?;
             // check format
-            let is_valid = match format {
+            match format {
                 MessageFormat::RestrictedAscii => {
                     (message.len() <= Self::MAX_LEN_LEDGER) && is_printable_ascii(message)
                 }
                 MessageFormat::LimitedUtf8 => message.len() <= Self::MAX_LEN_LEDGER,
                 MessageFormat::ExtendedUtf8 => message.len() <= Self::MAX_LEN,
-            };
-
-            if is_valid {
-                Ok(Self {
-                    format,
-                    message: message.to_string(),
-                })
-            } else {
-                Err(SanitizeError::InvalidValue)
             }
+            .then_some(Self {
+                format,
+                message: message.to_string(),
+            })
+            .ok_or(Error::IllegalMessageForFormat)
         }
 
         /// Compute the SHA256 hash of the serialized off-chain message
-        pub fn hash(serialized_message: &[u8]) -> Result<Hash, SanitizeError> {
+        pub fn hash(serialized_message: &[u8]) -> Result<Hash, Error> {
             let mut hasher = Hasher::default();
             hasher.hash(serialized_message);
             Ok(hasher.result())
@@ -187,14 +207,14 @@ impl OffchainMessage {
     pub const HEADER_LEN: usize = Self::SIGNING_DOMAIN.len() + 1;
 
     /// Construct a new OffchainMessage object from the given version and message
-    pub fn new(version: Version, message: &str) -> Result<Self, SanitizeError> {
+    pub fn new(version: Version, message: &str) -> Result<Self, Error> {
         match version {
             Version::V0 => Ok(Self::V0(v0::OffchainMessage::new(message)?)),
         }
     }
 
     /// Serialize the off-chain message to bytes including full header
-    pub fn serialize(&self) -> Result<Vec<u8>, SanitizeError> {
+    pub fn serialize(&self) -> Result<Vec<u8>, Error> {
         // serialize signing domain
         let mut data = Self::SIGNING_DOMAIN.to_vec();
 
@@ -209,12 +229,12 @@ impl OffchainMessage {
     }
 
     /// Deserialize the off-chain message from bytes that include full header
-    pub fn deserialize(data: &[u8]) -> Result<Self, SanitizeError> {
+    pub fn deserialize(data: &[u8]) -> Result<Self, Error> {
         if data.len() <= Self::HEADER_LEN {
-            return Err(SanitizeError::ValueOutOfBounds);
+            return Err(Error::BufferTooShort);
         }
         let version = Version::try_from_primitive(data[Self::SIGNING_DOMAIN.len()])
-            .map_err(|_| SanitizeError::InvalidValue)?;
+            .map_err(|e| Error::UnexpectedVersionDiscriminant(e.number))?;
         let data = &data[Self::SIGNING_DOMAIN.len().saturating_add(1)..];
         match version {
             Version::V0 => Ok(Self::V0(v0::OffchainMessage::deserialize(data)?)),
@@ -222,7 +242,7 @@ impl OffchainMessage {
     }
 
     /// Compute the hash of the off-chain message
-    pub fn hash(&self) -> Result<Hash, SanitizeError> {
+    pub fn hash(&self) -> Result<Hash, Error> {
         match self {
             Self::V0(_) => v0::OffchainMessage::hash(&self.serialize()?),
         }
@@ -247,12 +267,12 @@ impl OffchainMessage {
     }
 
     /// Sign the message with provided keypair
-    pub fn sign(&self, signer: &dyn Signer) -> Result<Signature, SanitizeError> {
+    pub fn sign(&self, signer: &dyn Signer) -> Result<Signature, Error> {
         Ok(signer.sign_message(&self.serialize()?))
     }
 
     /// Verify that the message signature is valid for the given public key
-    pub fn verify(&self, signer: &Pubkey, signature: &Signature) -> Result<bool, SanitizeError> {
+    pub fn verify(&self, signer: &Pubkey, signature: &Signature) -> Result<bool, Error> {
         Ok(signature.verify(signer.as_ref(), &self.serialize()?))
     }
 }
