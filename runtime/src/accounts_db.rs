@@ -1,5 +1,5 @@
-//! Persistent accounts are stored in below path location:
-//!  <path>/<pid>/data/
+//! Persistent accounts are stored at this path location:
+//!  `<path>/<pid>/data/`
 //!
 //! The persistent store would allow for this mode of operation:
 //!  - Concurrent single thread append with many concurrent readers.
@@ -12,8 +12,8 @@
 //! The only required in memory data structure with a write lock is the index,
 //! which should be fast to update.
 //!
-//! AppendVec's only store accounts for single slots.  To bootstrap the
-//! index from a persistent store of AppendVec's, the entries include
+//! [`AppendVec`]'s only store accounts for single slots.  To bootstrap the
+//! index from a persistent store of [`AppendVec`]'s, the entries include
 //! a "write_version".  A single global atomic `AccountsDb::write_version`
 //! tracks the number of commits to the entire data store. So the latest
 //! commit for each slot entry would be indexed.

@@ -790,7 +790,7 @@ impl<'a> BorrowedAccount<'a> {
     /// Call this when you have an owned buffer and want to replace the account
     /// data with it.
     ///
-    /// If you have a slice, use set_data_from_slice().
+    /// If you have a slice, use [`Self::set_data_from_slice()`].
     #[cfg(not(target_os = "solana"))]
     pub fn set_data(&mut self, data: Vec<u8>) -> Result<(), InstructionError> {
         self.can_data_be_resized(data.len())?;
@@ -807,7 +807,7 @@ impl<'a> BorrowedAccount<'a> {
     /// Call this when you have a slice of data you do not own and want to
     /// replace the account data with it.
     ///
-    /// If you have an owned buffer (eg Vec<u8>), use set_data().
+    /// If you have an owned buffer (eg [`Vec<u8>`]), use [`Self::set_data()`].
     #[cfg(not(target_os = "solana"))]
     pub fn set_data_from_slice(&mut self, data: &[u8]) -> Result<(), InstructionError> {
         self.can_data_be_resized(data.len())?;
