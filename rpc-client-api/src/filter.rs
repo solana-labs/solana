@@ -187,6 +187,23 @@ impl Memcmp {
         }
     }
 
+    pub fn convert_to_raw_bytes(&mut self) {
+        use MemcmpEncodedBytes::*;
+        match &self.bytes {
+            Binary(bytes) | Base58(bytes) => {
+                if let Ok(bytes) = bs58::decode(bytes).into_vec() {
+                    self.bytes = Bytes(bytes);
+                }
+            }
+            Base64(bytes) => {
+                if let Ok(bytes) = base64::decode(bytes) {
+                    self.bytes = Bytes(bytes);
+                }
+            }
+            _ => {}
+        }
+    }
+
     pub fn bytes_match(&self, data: &[u8]) -> bool {
         match self.bytes() {
             Some(bytes) => {
