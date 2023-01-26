@@ -16,7 +16,7 @@ The Solana runtime supports two transaction versions:
 
 ## Max supported transaction version
 
-All RPC requests that return a transaction **_should_** specify the highest version of transactions they will support in their application using the `maxSupportedTransactionVersion` option. Including [`getBlock`](./clients/jsonrpc-api.md#getblock) and [`getTransaction`](./clients/jsonrpc-api.md#gettransaction),
+All RPC requests that return a transaction **_should_** specify the highest version of transactions they will support in their application using the `maxSupportedTransactionVersion` option, including [`getBlock`](../api/http#getblock) and [`getTransaction`](../api/http#gettransaction).
 
 An RPC request will fail if a [Versioned Transaction](./versioned-transactions.md) is returned that is higher than the set `maxSupportedTransactionVersion`. (i.e. if a version `0` transaction is returned when `legacy` is selected)
 
@@ -77,7 +77,7 @@ Below is an example of how to create a Versioned Transaction, using the `@solana
 
 Firstly, import the web3.js library and create a `connection` to your desired cluster.
 
-We then define the recent `blockhash` and `minRent` we will need for our transaction and the account.
+We then define the recent `blockhash` and `minRent` we will need for our transaction and the account:
 
 ```js
 const web3 = require("@solana/web3.js");
@@ -131,7 +131,7 @@ You can sign the transaction by either:
 > NOTE:
 > After calling the `transaction.sign()` method, all the previous transaction `signatures` will be fully replaced by new signatures created from the provided in `Signers`.
 
-After your `VersionedTransaction` has been signed by all required accounts, you can send it to the cluster and `await` the response.
+After your `VersionedTransaction` has been signed by all required accounts, you can send it to the cluster and `await` the response:
 
 ```js
 // send our v0 transaction to the cluster
@@ -146,4 +146,4 @@ console.log(`https://explorer.solana.com/tx/${txid}?cluster=devnet`);
 
 - using [Versioned Transactions for Address Lookup Tables](./lookup-tables.md#how-to-create-an-address-lookup-table)
 - view an [example of a v0 transaction](https://explorer.solana.com/tx/3jpoANiFeVGisWRY5UP648xRXs3iQasCHABPWRWnoEjeA93nc79WrnGgpgazjq4K9m8g2NJoyKoWBV1Kx5VmtwHQ/?cluster=devnet) on Solana Explorer
-- read the [accepted proposal](./../proposals/transactions-v2.md) for Versioned Transaction and Address Lookup Tables
+- read the [accepted proposal](./../proposals/versioned-transactions.md) for Versioned Transaction and Address Lookup Tables

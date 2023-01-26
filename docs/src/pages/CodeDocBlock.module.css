@@ -1,0 +1,80 @@
+/* stylelint-disable docusaurus/copyright-header */
+
+.DocBlock {
+  border-top: 1px solid #414141;
+  padding-top: 3rem;
+  /* display: flex; */
+  /* justify-content: space-between; */
+  margin-top: 5rem;
+  /* width: 100%; */
+  /* align-items: center; */
+}
+
+.DocSideBySide {
+  margin-top: 2rem;
+}
+
+.CodeParams {
+  display: block;
+  width: 100%;
+}
+
+.CodeSnippets {
+  display: block;
+  width: 100%;
+}
+
+@media screen and (min-width: 768px) {
+  .DocSideBySide {
+    display: flex;
+    width: 100%;
+  }
+  .CodeParams {
+    margin-right: 3rem;
+    width: 50%;
+  }
+  .CodeSnippets {
+    width: 50%;
+  }
+}
+
+.Parameter {
+  padding: 1em 0em;
+  margin-bottom: 1em;
+  border-top: 1px solid #414141;
+  /* // border-bottom: 1px solid #414141; */
+}
+
+.ParameterName {
+  font-weight: 700;
+}
+
+.ParameterHeader {
+  font-family: mono;
+  padding: 0.1em 0em;
+}
+
+.Field {
+  /* // padding: 1em 0em; */
+  margin: 1em 0em 1em 1em;
+  /* // border-top: 1px solid #414141; */
+  /* // border-bottom: 1px solid #414141; */
+}
+.Field section {
+  padding: 0em 1em;
+}
+
+.FlagItem {
+  margin: 0 0.5rem;
+  color: #767676;
+  font-weight: 600;
+}
+
+.Heading {
+  font-size: 1.24rem;
+  font-weight: 700;
+}
+.SubHeading {
+  /* font-size: 1.24rem; */
+  font-weight: 600;
+}
