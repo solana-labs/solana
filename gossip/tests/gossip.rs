@@ -22,6 +22,7 @@ use {
     solana_streamer::{
         sendmmsg::{multi_target_send, SendPktsError},
         socket::SocketAddrSpace,
+        streamer::StakedNodes,
     },
     solana_vote_program::{vote_instruction, vote_state::Vote},
     std::{
@@ -40,9 +41,10 @@ fn test_node(exit: &Arc<AtomicBool>) -> (Arc<ClusterInfo>, GossipService, UdpSoc
     let mut test_node = Node::new_localhost_with_pubkey(&keypair.pubkey());
     let cluster_info = Arc::new(ClusterInfo::new(
         test_node.info.clone(),
-        keypair,
+        keypair.clone(),
         SocketAddrSpace::Unspecified,
     ));
+
     let gossip_service = GossipService::new(
         &cluster_info,
         None,
@@ -51,6 +53,9 @@ fn test_node(exit: &Arc<AtomicBool>) -> (Arc<ClusterInfo>, GossipService, UdpSoc
         true, // should_check_duplicate_instance
         None,
         exit,
+        true,
+        keypair,
+        Arc::new(RwLock::new(StakedNodes::default()))
     );
     let _ = cluster_info.my_contact_info();
     (
@@ -68,7 +73,7 @@ fn test_node_with_bank(
     let mut test_node = Node::new_localhost_with_pubkey(&node_keypair.pubkey());
     let cluster_info = Arc::new(ClusterInfo::new(
         test_node.info.clone(),
-        node_keypair,
+        node_keypair.clone(),
         SocketAddrSpace::Unspecified,
     ));
     let gossip_service = GossipService::new(
@@ -79,6 +84,9 @@ fn test_node_with_bank(
         true, // should_check_duplicate_instance
         None,
         exit,
+        true,
+        node_keypair,
+        Arc::new(RwLock::new(StakedNodes::default()))
     );
     let _ = cluster_info.my_contact_info();
     (

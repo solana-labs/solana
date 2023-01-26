@@ -487,9 +487,10 @@ mod tests {
     fn test_exit() {
         let exit = Arc::new(AtomicBool::new(false));
         let tn = Node::new_localhost();
+        let keypair = Arc::new(Keypair::new());
         let cluster_info = ClusterInfo::new(
             tn.info.clone(),
-            Arc::new(Keypair::new()),
+            keypair.clone(),
             SocketAddrSpace::Unspecified,
         );
         let c = Arc::new(cluster_info);
@@ -501,10 +502,9 @@ mod tests {
             true, // should_check_duplicate_instance
             None,
             &exit,
-            //todo: fix
-            false,
-            //keypair
-            //staked_nodes
+            true,
+            keypair,
+            Arc::new(RwLock::new(StakedNodes::default()))
         );
         exit.store(true, Ordering::Relaxed);
         d.join().unwrap();
