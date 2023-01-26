@@ -1214,6 +1214,13 @@ pub struct AccountsStats {
     store_find_existing: AtomicU64,
     dropped_stores: AtomicU64,
     store_uncleaned_update: AtomicU64,
+
+    load_get_read_accessor_us: AtomicU64,
+    load_read_only_cache_us: AtomicU64,
+    load_accessor_retry_us: AtomicU64,
+    load_read_only_cache_update_us: AtomicU64,
+    load_accounts_index_us: AtomicU64,
+    load_get_account_accessor_us: AtomicU64,
 }
 
 #[derive(Debug, Default)]
@@ -4349,6 +4356,7 @@ impl AccountsDb {
         max_root: Option<Slot>,
         clone_in_lock: bool,
     ) -> Option<(Slot, StorageLocation, Option<LoadedAccountAccessor<'a>>)> {
+        let mut accounts_index_time = Measure::start("load_accounts_index");
         let (lock, index) = match self.accounts_index.get(pubkey, Some(ancestors), max_root) {
             AccountIndexGetResult::Found(lock, index) => (lock, index),
             // we bail out pretty early for missing.
@@ -4356,10 +4364,15 @@ impl AccountsDb {
                 return None;
             }
         };
+        accounts_index_time.stop();
+        self.stats
+            .load_accounts_index_us
+            .fetch_add(accounts_index_time.as_us(), Ordering::Relaxed);
 
         let slot_list = lock.slot_list();
         let (slot, info) = slot_list[index];
         let storage_location = info.storage_location();
+        let mut get_account_accessor_time = Measure::start("load_get_account_accessor");
         let some_from_slow_path = if clone_in_lock {
             // the fast path must have failed.... so take the slower approach
             // of copying potentially large Account::data inside the lock.
@@ -4371,6 +4384,10 @@ impl AccountsDb {
         } else {
             None
         };
+        get_account_accessor_time.stop();
+        self.stats
+            .load_get_account_accessor_us
+            .fetch_add(get_account_accessor_time.as_us(), Ordering::Relaxed);
 
         Some((slot, storage_location, some_from_slow_path))
         // `lock` is dropped here rather pretty quickly with clone_in_lock = false,
@@ -4685,15 +4702,26 @@ impl AccountsDb {
         #[cfg(not(test))]
         assert!(max_root.is_none());
 
+        let mut get_read_accessor = Measure::start("get_read_accessor");
         let (slot, storage_location, _maybe_account_accesor) =
             self.read_index_for_accessor_or_load_slow(ancestors, pubkey, max_root, false)?;
         // Notice the subtle `?` at previous line, we bail out pretty early if missing.
+        get_read_accessor.stop();
+        self.stats
+            .load_get_read_accessor_us
+            .fetch_add(get_read_accessor.as_us(), Ordering::Relaxed);
 
         if self.caching_enabled {
             let in_write_cache = storage_location.is_cached();
             if !load_into_read_cache_only {
                 if !in_write_cache {
+                    let mut read_only_cache_load = Measure::start("read_only_cache_load");
                     let result = self.read_only_accounts_cache.load(*pubkey, slot);
+                    read_only_cache_load.stop();
+                    self.stats
+                        .load_read_only_cache_us
+                        .fetch_add(read_only_cache_load.as_us(), Ordering::Relaxed);
+
                     if let Some(account) = result {
                         return Some((account, slot));
                     }
@@ -4711,19 +4739,26 @@ impl AccountsDb {
             }
         }
 
-        let (mut account_accessor, slot) = self.retry_to_get_account_accessor(
+        let mut accessor_retry = Measure::start("accessor_retry");
+        let accessor_result = self.retry_to_get_account_accessor(
             slot,
             storage_location,
             ancestors,
             pubkey,
             max_root,
             load_hint,
-        )?;
+        );
+        accessor_retry.stop();
+        self.stats
+            .load_accessor_retry_us
+            .fetch_add(accessor_retry.as_us(), Ordering::Relaxed);
+        let (mut account_accessor, slot) = accessor_result?;
         let loaded_account = account_accessor.check_and_get_loaded_account();
         let is_cached = loaded_account.is_cached();
         let account = loaded_account.take_account();
 
         if self.caching_enabled && !is_cached {
+            let mut read_only_cache_update = Measure::start("read_only_cache_update");
             /*
             We show this store into the read-only cache for account 'A' and future loads of 'A' from the read-only cache are
             safe/reflect 'A''s latest state on this fork.
@@ -4738,6 +4773,10 @@ impl AccountsDb {
             */
             self.read_only_accounts_cache
                 .store(*pubkey, slot, account.clone());
+            read_only_cache_update.stop();
+            self.stats
+                .load_read_only_cache_update_us
+                .fetch_add(read_only_cache_update.as_us(), Ordering::Relaxed);
         }
         Some((account, slot))
     }
@@ -7837,6 +7876,47 @@ impl AccountsDb {
                 (
                     "dropped_stores",
                     self.stats.dropped_stores.swap(0, Ordering::Relaxed),
+                    i64
+                ),
+            );
+            datapoint_info!(
+                "accounts_db_load_timings",
+                (
+                    "load_get_read_accessor_us",
+                    self.stats
+                        .load_get_read_accessor_us
+                        .swap(0, Ordering::Relaxed),
+                    i64
+                ),
+                (
+                    "load_read_only_cache_us",
+                    self.stats
+                        .load_read_only_cache_us
+                        .swap(0, Ordering::Relaxed),
+                    i64
+                ),
+                (
+                    "load_accessor_retry_us",
+                    self.stats.load_accessor_retry_us.swap(0, Ordering::Relaxed),
+                    i64
+                ),
+                (
+                    "load_read_only_cache_update_us",
+                    self.stats
+                        .load_read_only_cache_update_us
+                        .swap(0, Ordering::Relaxed),
+                    i64
+                ),
+                (
+                    "load_accounts_index_us",
+                    self.stats.load_accounts_index_us.swap(0, Ordering::Relaxed),
+                    i64
+                ),
+                (
+                    "load_get_account_accessor_us",
+                    self.stats
+                        .load_get_account_accessor_us
+                        .swap(0, Ordering::Relaxed),
                     i64
                 ),
             );
