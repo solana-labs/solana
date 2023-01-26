@@ -70,10 +70,7 @@ impl ConnectionCache {
     }
 
     pub fn use_quic(&self) -> bool {
-        match self.cache.get_protocol_type() {
-            ProtocolType::QUIC => true,
-            _ => false,
-        }
+        matches!(self.cache.get_protocol_type(), ProtocolType::QUIC)
     }
 
     pub fn get_connection(&self, addr: &SocketAddr) -> Arc<dyn BlockingClientConnection> {
