@@ -786,6 +786,14 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                             Format of the file: `staked_map_id: {<pubkey>: <SOL stake amount>}"),
         )
         .arg(
+            Arg::with_name("default_stake")
+                .long("default-stake")
+                .takes_value(true)
+                .value_name("NUMBER")
+                .validator(is_parsable::<u64>)
+                .help("If set, makes all connections to be staked with specified stake value"),
+        )
+        .arg(
             Arg::with_name("bind_address")
                 .long("bind-address")
                 .value_name("HOST")

@@ -910,7 +910,11 @@ pub fn main() {
         DEFAULT_TPU_ENABLE_UDP
     };
 
-    let default_stake = DEFAULT_TPU_DEFAULT_STAKE;
+    let default_stake = if matches.is_present("default_stake") {
+        Some(value_t_or_exit!(matches, "default_stake", u64))
+    } else {
+        DEFAULT_TPU_DEFAULT_STAKE
+    };
 
     let tpu_connection_pool_size = value_t_or_exit!(matches, "tpu_connection_pool_size", usize);
 
