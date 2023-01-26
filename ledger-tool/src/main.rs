@@ -3009,7 +3009,28 @@ fn main() {
                     output_directory.display()
                 );
 
+                let mut accounts_index_config = AccountsIndexConfig::default();
+                {
+                    let mut accounts_index_paths: Vec<PathBuf> =
+                        if arg_matches.is_present("accounts_index_path") {
+                            values_t_or_exit!(arg_matches, "accounts_index_path", String)
+                                .into_iter()
+                                .map(PathBuf::from)
+                                .collect()
+                        } else {
+                            vec![]
+                        };
+                    if accounts_index_paths.is_empty() {
+                        accounts_index_paths = vec![ledger_path.join("accounts_index")];
+                    }
+                    accounts_index_config.drives = Some(accounts_index_paths);
+                }
+
                 let accounts_db_config = Some(AccountsDbConfig {
+                    index: Some(accounts_index_config),
+                    accounts_hash_cache_path: Some(
+                        ledger_path.join(AccountsDb::ACCOUNTS_HASH_CACHE_DIR),
+                    ),
                     ancient_append_vec_offset: value_t!(
                         matches,
                         "accounts_db_ancient_append_vecs",
