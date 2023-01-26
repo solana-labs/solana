@@ -8,7 +8,8 @@ use {
     solana_runtime::bank_forks::BankForks,
     solana_sdk::{clock::Slot, pubkey::Pubkey},
     std::{
-        collections::{HashMap, HashSet},
+        cmp::Reverse,
+        collections::{BinaryHeap, HashMap, HashSet},
         sync::{Arc, RwLock},
     },
 };
@@ -21,7 +22,8 @@ const MAX_NUM_CHUNKS: u8 = 3;
 // is only 1 person sending out duplicate proofs, 1 person is leader for 4 slots,
 // so we allow 5 here to limit the chunk map size.
 const ALLOWED_SLOTS_PER_PUBKEY: usize = 5;
-// We limit the pubkey for each slot to be 100 for now.
+// We limit the pubkey for each slot to be 100 for now, when this limit is reached,
+// we drop 10% of stakes with lowest stakes.
 const MAX_PUBKEY_PER_SLOT: usize = 100;
 
 struct ProofChunkMap {
@@ -61,9 +63,9 @@ pub struct DuplicateShredHandler {
     // pending proofs from each pubkey to ALLOWED_SLOTS_PER_PUBKEY.
     validator_pending_proof_map: HashMap<Pubkey, HashSet<Slot>>,
     // Cache last root to reduce read lock.
-    last_root: Option<Slot>,
+    last_root: Slot,
     // remember the last root slot cleaned, clear anything between last_root and last_root_cleaned.
-    last_root_cleaned: Option<Slot>,
+    last_root_cleaned: Slot,
     blockstore: Arc<Blockstore>,
     leader_schedule_cache: Arc<LeaderScheduleCache>,
     bank_forks: Arc<RwLock<BankForks>>,
@@ -100,8 +102,8 @@ impl DuplicateShredHandler {
         Self {
             chunk_map: HashMap::new(),
             validator_pending_proof_map: HashMap::new(),
-            last_root: None,
-            last_root_cleaned: None,
+            last_root: 0,
+            last_root_cleaned: 0,
             cached_on_slot: 0,
             cached_staked_nodes: None,
             cached_slots_in_epoch: 100,
@@ -114,8 +116,8 @@ impl DuplicateShredHandler {
 
     fn cache_root_info(&mut self) {
         let last_root = self.blockstore.last_root();
-        if Some(last_root) != self.last_root {
-            self.last_root = Some(last_root);
+        if self.cached_staked_nodes.is_none() || last_root != self.last_root {
+            self.last_root = last_root;
             // The stuff we need only changes per epoch, so we only need to cache
             // once per epoch, and it's okay if we use old data in a few slots.
             if self.cached_staked_nodes.is_some()
@@ -123,12 +125,12 @@ impl DuplicateShredHandler {
             {
                 return;
             }
-            if let Ok(bank_forks_result) = self.bank_forks.read() {
-                let root_bank = bank_forks_result.root_bank();
-                self.cached_on_slot = root_bank.slot();
-                self.cached_staked_nodes = Some(root_bank.staked_nodes());
-                self.cached_slots_in_epoch = root_bank.get_epoch_info().slots_in_epoch;
-            }
+            let bank_forks_result = self.bank_forks.read().unwrap();
+            let root_bank = bank_forks_result.root_bank();
+            self.cached_on_slot = root_bank.slot();
+            let epoch_info = root_bank.get_epoch_info();
+            self.cached_staked_nodes = root_bank.epoch_staked_nodes(epoch_info.epoch);
+            self.cached_slots_in_epoch = epoch_info.slots_in_epoch;
         }
     }
 
@@ -151,10 +153,9 @@ impl DuplicateShredHandler {
     fn should_insert_chunk(&mut self, data: &DuplicateShred) -> bool {
         let slot = data.slot;
         // Do not insert if this slot is rooted or too far away in the future or has a proof already.
-        if self.last_root.is_some()
-            && (slot <= self.last_root.unwrap()
-                || slot > self.last_root.unwrap() + self.cached_slots_in_epoch
-                || self.blockstore.has_duplicate_shreds_in_slot(slot))
+        if slot <= self.last_root
+            || slot > self.last_root + self.cached_slots_in_epoch
+            || self.blockstore.has_duplicate_shreds_in_slot(slot)
         {
             return false;
         }
@@ -201,33 +202,35 @@ impl DuplicateShredHandler {
                 }
                 let slot_map = self.chunk_map.get_mut(slot);
                 match slot_map {
-                    None => return true,
+                    None => true,
                     Some(SlotStatus::UnfinishedProof(chunk_map)) => {
-                        let mut to_remove = None;
-                        let mut to_remove_stake = newkey_stake;
-                        // Remove the entry with lowest stake which is also lower than stake of new pubkey.
+                        let mut heap = BinaryHeap::new();
+                        // Push new pubkey in first so it's compared with those in the table.
+                        heap.push(Reverse::<(u64, Pubkey)>((newkey_stake, *newkey)));
                         for oldkey in chunk_map.keys() {
                             let oldkey_stake =
                                 cached_staked_nodes.get(oldkey).copied().unwrap_or_default();
-                            if oldkey_stake < to_remove_stake {
-                                to_remove = Some(*oldkey);
-                                to_remove_stake = oldkey_stake;
+                            heap.push(Reverse::<(u64, Pubkey)>((oldkey_stake, *oldkey)));
+                        }
+                        let mut newkey_popped = false;
+                        for _ in 0..(MAX_PUBKEY_PER_SLOT / 10) {
+                            if let Some(Reverse::<(u64, Pubkey)>((_, key))) = heap.pop() {
+                                if &key == newkey {
+                                    newkey_popped = true;
+                                } else {
+                                    chunk_map.remove(&key);
+                                }
                             }
                         }
-                        match to_remove {
-                            Some(oldkey) => {
-                                chunk_map.remove(&oldkey);
-                            }
-                            // If all current stakes are higher than new pubkey stake, do not insert.
-                            _ => return false,
-                        }
+                        // If new key is popped off heap, then we should not insert this key because its
+                        // stake is too low, return false in this case.
+                        !newkey_popped
                     }
-                    _ => return false,
+                    _ => false,
                 }
             }
-            _ => return false,
+            _ => false,
         }
-        true
     }
 
     fn mark_slot_proof_received(&mut self, slot: u64) {
@@ -278,9 +281,7 @@ impl DuplicateShredHandler {
     }
 
     fn verify_and_apply_proof(&self, slot: Slot, chunks: Vec<DuplicateShred>) -> Result<(), Error> {
-        if (self.last_root.is_some() && slot <= self.last_root.unwrap())
-            || self.blockstore.has_duplicate_shreds_in_slot(slot)
-        {
+        if slot <= self.last_root || self.blockstore.has_duplicate_shreds_in_slot(slot) {
             return Ok(());
         }
         let (shred1, shred2) = into_shreds(chunks, |slot| {
@@ -292,14 +293,12 @@ impl DuplicateShredHandler {
     }
 
     fn cleanup_old_slots(&mut self) {
-        if let Some(last_root) = self.last_root {
-            if self.last_root_cleaned != self.last_root {
-                self.chunk_map.retain(|k, _| k > &last_root);
-                for (_, slots_sets) in self.validator_pending_proof_map.iter_mut() {
-                    slots_sets.retain(|k| k > &last_root);
-                }
-                self.last_root_cleaned = self.last_root;
+        if self.last_root_cleaned != self.last_root {
+            self.chunk_map.retain(|k, _| k > &self.last_root);
+            for (_, slots_sets) in self.validator_pending_proof_map.iter_mut() {
+                slots_sets.retain(|k| k > &self.last_root);
             }
+            self.last_root_cleaned = self.last_root;
         }
     }
 }
