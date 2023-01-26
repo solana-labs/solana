@@ -2174,7 +2174,10 @@ impl JsonRpcRequestProcessor {
 fn optimize_filters(filters: &mut [RpcFilterType]) {
     filters.iter_mut().for_each(|filter_type| {
         if let RpcFilterType::Memcmp(compare) = filter_type {
-            compare.convert_to_raw_bytes()
+            if let Err(err) = compare.convert_to_raw_bytes() {
+                // All filters should have been previously verified
+                warn!("Invalid filter: bytes could not be decoded, {err}");
+            }
         }
     })
 }

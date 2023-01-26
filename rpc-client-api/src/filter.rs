@@ -187,20 +187,20 @@ impl Memcmp {
         }
     }
 
-    pub fn convert_to_raw_bytes(&mut self) {
+    pub fn convert_to_raw_bytes(&mut self) -> Result<(), RpcFilterError> {
         use MemcmpEncodedBytes::*;
         match &self.bytes {
             Binary(bytes) | Base58(bytes) => {
-                if let Ok(bytes) = bs58::decode(bytes).into_vec() {
-                    self.bytes = Bytes(bytes);
-                }
+                let bytes = bs58::decode(bytes).into_vec()?;
+                self.bytes = Bytes(bytes);
+                Ok(())
             }
             Base64(bytes) => {
-                if let Ok(bytes) = base64::decode(bytes) {
-                    self.bytes = Bytes(bytes);
-                }
+                let bytes = base64::decode(bytes)?;
+                self.bytes = Bytes(bytes);
+                Ok(())
             }
-            _ => {}
+            _ => Ok(()),
         }
     }
 
