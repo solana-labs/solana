@@ -2013,7 +2013,7 @@ mod tests {
             "sign-offchain-message",
             "Test Message",
         ]);
-        let message = OffchainMessage::new(0, b"Test Message").unwrap();
+        let message = OffchainMessage::new(0, "Test Message").unwrap();
         assert_eq!(
             parse_command(&test_sign_offchain, &default_signer, &mut None).unwrap(),
             CliCommandInfo {
@@ -2403,7 +2403,7 @@ mod tests {
         config.command = CliCommand::GetTransactionCount;
         assert!(process_command(&config).is_err());
 
-        let message = OffchainMessage::new(0, b"Test Message").unwrap();
+        let message = OffchainMessage::new(0, "Test Message").unwrap();
         config.command = CliCommand::SignOffchainMessage {
             message: message.clone(),
         };

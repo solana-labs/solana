@@ -20,18 +20,10 @@ static_assertions::const_assert_eq!(v0::OffchainMessage::MAX_LEN, 65515);
 static_assertions::const_assert_eq!(v0::OffchainMessage::MAX_LEN_LEDGER, 1212);
 
 /// Check if given bytes contain only printable ASCII characters
-pub fn is_printable_ascii(data: &[u8]) -> bool {
-    for &char in data {
-        if !(0x20..=0x7e).contains(&char) {
-            return false;
-        }
-    }
-    true
-}
-
-/// Check if given bytes contain valid UTF8 string
-pub fn is_utf8(data: &[u8]) -> bool {
-    std::str::from_utf8(data).is_ok()
+pub fn is_printable_ascii(message: &str) -> bool {
+    message
+        .chars()
+        .all(|c| c.is_ascii() && !c.is_ascii_control())
 }
 
 #[repr(u8)]
@@ -45,7 +37,7 @@ pub enum MessageFormat {
 #[allow(clippy::arithmetic_side_effects)]
 pub mod v0 {
     use {
-        super::{is_printable_ascii, is_utf8, MessageFormat, OffchainMessage as Base},
+        super::{is_printable_ascii, MessageFormat, OffchainMessage as Base},
         crate::{
             hash::{Hash, Hasher},
             packet::PACKET_DATA_SIZE,
@@ -58,7 +50,7 @@ pub mod v0 {
     #[derive(Debug, PartialEq, Eq, Clone)]
     pub struct OffchainMessage {
         format: MessageFormat,
-        message: Vec<u8>,
+        message: String,
     }
 
     impl OffchainMessage {
@@ -70,29 +62,23 @@ pub mod v0 {
         pub const MAX_LEN_LEDGER: usize = PACKET_DATA_SIZE - Base::HEADER_LEN - Self::HEADER_LEN;
 
         /// Construct a new OffchainMessage object from the given message
-        pub fn new(message: &[u8]) -> Result<Self, SanitizeError> {
+        pub fn new(message: &str) -> Result<Self, SanitizeError> {
             let format = if message.is_empty() {
                 return Err(SanitizeError::InvalidValue);
             } else if message.len() <= OffchainMessage::MAX_LEN_LEDGER {
                 if is_printable_ascii(message) {
                     MessageFormat::RestrictedAscii
-                } else if is_utf8(message) {
-                    MessageFormat::LimitedUtf8
                 } else {
-                    return Err(SanitizeError::InvalidValue);
+                    MessageFormat::LimitedUtf8
                 }
             } else if message.len() <= OffchainMessage::MAX_LEN {
-                if is_utf8(message) {
-                    MessageFormat::ExtendedUtf8
-                } else {
-                    return Err(SanitizeError::InvalidValue);
-                }
+                MessageFormat::ExtendedUtf8
             } else {
                 return Err(SanitizeError::ValueOutOfBounds);
             };
             Ok(Self {
                 format,
-                message: message.to_vec(),
+                message: message.to_string(),
             })
         }
 
@@ -106,7 +92,7 @@ pub mod v0 {
             // message length
             data.extend_from_slice(&(self.message.len() as u16).to_le_bytes());
             // message
-            data.extend_from_slice(&self.message);
+            data.extend_from_slice(self.message.as_bytes());
             Ok(())
         }
 
@@ -124,22 +110,26 @@ pub mod v0 {
             if Self::HEADER_LEN.saturating_add(message_len) != data.len() {
                 return Err(SanitizeError::InvalidValue);
             }
-            let message = &data[Self::HEADER_LEN..];
+            let message_bytes = &data[Self::HEADER_LEN..];
+            // ensure the entire buffer is consumed
+            if message_bytes.len() != message_len {
+                return Err(SanitizeError::InvalidValue);
+            }
+            let message =
+                std::str::from_utf8(message_bytes).map_err(|_| SanitizeError::InvalidValue)?;
             // check format
             let is_valid = match format {
                 MessageFormat::RestrictedAscii => {
                     (message.len() <= Self::MAX_LEN_LEDGER) && is_printable_ascii(message)
                 }
-                MessageFormat::LimitedUtf8 => {
-                    (message.len() <= Self::MAX_LEN_LEDGER) && is_utf8(message)
-                }
-                MessageFormat::ExtendedUtf8 => (message.len() <= Self::MAX_LEN) && is_utf8(message),
+                MessageFormat::LimitedUtf8 => message.len() <= Self::MAX_LEN_LEDGER,
+                MessageFormat::ExtendedUtf8 => message.len() <= Self::MAX_LEN,
             };
 
             if is_valid {
                 Ok(Self {
                     format,
-                    message: message.to_vec(),
+                    message: message.to_string(),
                 })
             } else {
                 Err(SanitizeError::InvalidValue)
@@ -157,7 +147,7 @@ pub mod v0 {
             self.format
         }
 
-        pub fn get_message(&self) -> &Vec<u8> {
+        pub fn get_message(&self) -> &str {
             &self.message
         }
     }
@@ -174,7 +164,7 @@ impl OffchainMessage {
     pub const HEADER_LEN: usize = Self::SIGNING_DOMAIN.len() + 1;
 
     /// Construct a new OffchainMessage object from the given version and message
-    pub fn new(version: u8, message: &[u8]) -> Result<Self, SanitizeError> {
+    pub fn new(version: u8, message: &str) -> Result<Self, SanitizeError> {
         match version {
             0 => Ok(Self::V0(v0::OffchainMessage::new(message)?)),
             _ => Err(SanitizeError::ValueOutOfBounds),
@@ -228,7 +218,7 @@ impl OffchainMessage {
         }
     }
 
-    pub fn get_message(&self) -> &Vec<u8> {
+    pub fn get_message(&self) -> &str {
         match self {
             Self::V0(msg) => msg.get_message(),
         }
@@ -251,10 +241,10 @@ mod tests {
 
     #[test]
     fn test_offchain_message_ascii() {
-        let message = OffchainMessage::new(0, b"Test Message").unwrap();
+        let message = OffchainMessage::new(0, "Test Message").unwrap();
         assert_eq!(message.get_version(), 0);
         assert_eq!(message.get_format(), MessageFormat::RestrictedAscii);
-        assert_eq!(message.get_message().as_slice(), b"Test Message");
+        assert_eq!(message.get_message(), "Test Message");
         assert!(
             matches!(message, OffchainMessage::V0(ref msg) if msg.get_format() == MessageFormat::RestrictedAscii)
         );
@@ -270,13 +260,10 @@ mod tests {
 
     #[test]
     fn test_offchain_message_utf8() {
-        let message = OffchainMessage::new(0, "Тестовое сообщение".as_bytes()).unwrap();
+        let message = OffchainMessage::new(0, "Тестовое сообщение").unwrap();
         assert_eq!(message.get_version(), 0);
         assert_eq!(message.get_format(), MessageFormat::LimitedUtf8);
-        assert_eq!(
-            message.get_message().as_slice(),
-            "Тестовое сообщение".as_bytes()
-        );
+        assert_eq!(message.get_message(), "Тестовое сообщение",);
         assert!(
             matches!(message, OffchainMessage::V0(ref msg) if msg.get_format() == MessageFormat::LimitedUtf8)
         );
@@ -294,7 +281,7 @@ mod tests {
 
     #[test]
     fn test_offchain_message_sign_and_verify() {
-        let message = OffchainMessage::new(0, b"Test Message").unwrap();
+        let message = OffchainMessage::new(0, "Test Message").unwrap();
         let keypair = Keypair::new();
         let signature = message.sign(&keypair).unwrap();
         assert!(message.verify(&keypair.pubkey(), &signature).unwrap());
