@@ -6595,14 +6595,19 @@ impl Bank {
     /// Hash the `accounts` HashMap. This represents a validator's interpretation
     ///  of the delta of the ledger since the last vote and up to now
     fn hash_internal_state(&self) -> Hash {
-        // If there are no accounts, return the hash of the previous state and the latest blockhash
-        let bank_hash_info = self.rc.accounts.bank_hash_info_at(self.slot());
+        let slot = self.slot();
+        let accounts_delta_hash = self
+            .rc
+            .accounts
+            .accounts_db
+            .calculate_accounts_delta_hash(slot);
+
         let mut signature_count_buf = [0u8; 8];
         LittleEndian::write_u64(&mut signature_count_buf[..], self.signature_count());
 
         let mut hash = hashv(&[
             self.parent_hash.as_ref(),
-            bank_hash_info.accounts_delta_hash.0.as_ref(),
+            accounts_delta_hash.0.as_ref(),
             &signature_count_buf,
             self.last_blockhash().as_ref(),
         ]);
@@ -6617,24 +6622,23 @@ impl Bank {
             .hard_forks
             .read()
             .unwrap()
-            .get_hash_data(self.slot(), self.parent_slot());
+            .get_hash_data(slot, self.parent_slot());
         if let Some(buf) = buf {
             let hard_forked_hash = extend_and_hash(&hash, &buf);
-            warn!(
-                "hard fork at slot {} by hashing {:?}: {} => {}",
-                self.slot(),
-                buf,
-                hash,
-                hard_forked_hash
-            );
+            warn!("hard fork at slot {slot} by hashing {buf:?}: {hash} => {hard_forked_hash}");
             hash = hard_forked_hash;
         }
 
+        let bank_hash_stats = self
+            .rc
+            .accounts
+            .accounts_db
+            .get_bank_hash_info(slot)
+            .expect("No bank hash was found for this bank, that should not be possible")
+            .stats;
         info!(
-            "bank frozen: {} hash: {} accounts_delta: {} signature_count: {} last_blockhash: {} capitalization: {}{}",
-            self.slot(),
-            hash,
-            bank_hash_info.accounts_delta_hash.0,
+            "bank frozen: {slot} hash: {hash} accounts_delta: {} signature_count: {} last_blockhash: {} capitalization: {}{}, stats: {bank_hash_stats:?}",
+            accounts_delta_hash.0,
             self.signature_count(),
             self.last_blockhash(),
             self.capitalization(),
@@ -6643,12 +6647,6 @@ impl Bank {
             } else {
                 "".to_string()
             }
-        );
-
-        info!(
-            "accounts hash slot: {} stats: {:?}",
-            self.slot(),
-            bank_hash_info.stats,
         );
         hash
     }
