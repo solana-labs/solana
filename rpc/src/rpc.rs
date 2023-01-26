@@ -2327,6 +2327,7 @@ fn get_spl_token_owner_filter(program_id: &Pubkey, filters: &[RpcFilterType]) ->
     for filter in filters {
         match filter {
             RpcFilterType::DataSize(size) => data_size_filter = Some(*size),
+            #[allow(deprecated)]
             RpcFilterType::Memcmp(Memcmp {
                 offset,
                 bytes: MemcmpEncodedBytes::Bytes(bytes),
@@ -2334,6 +2335,7 @@ fn get_spl_token_owner_filter(program_id: &Pubkey, filters: &[RpcFilterType]) ->
             }) if *offset == account_packed_len && *program_id == inline_spl_token_2022::id() => {
                 memcmp_filter = Some(bytes)
             }
+            #[allow(deprecated)]
             RpcFilterType::Memcmp(Memcmp {
                 offset,
                 bytes: MemcmpEncodedBytes::Bytes(bytes),
@@ -2383,6 +2385,7 @@ fn get_spl_token_mint_filter(program_id: &Pubkey, filters: &[RpcFilterType]) -> 
     for filter in filters {
         match filter {
             RpcFilterType::DataSize(size) => data_size_filter = Some(*size),
+            #[allow(deprecated)]
             RpcFilterType::Memcmp(Memcmp {
                 offset,
                 bytes: MemcmpEncodedBytes::Bytes(bytes),
@@ -2390,6 +2393,7 @@ fn get_spl_token_mint_filter(program_id: &Pubkey, filters: &[RpcFilterType]) -> 
             }) if *offset == account_packed_len && *program_id == inline_spl_token_2022::id() => {
                 memcmp_filter = Some(bytes)
             }
+            #[allow(deprecated)]
             RpcFilterType::Memcmp(Memcmp {
                 offset,
                 bytes: MemcmpEncodedBytes::Bytes(bytes),
