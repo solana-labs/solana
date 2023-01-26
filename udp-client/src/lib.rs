@@ -12,7 +12,7 @@ use {
         client_connection::ClientConnection as BlockingClientConnection,
         connection_cache::{
             BaseClientConnection, ClientError, ConnectionManager, ConnectionPool,
-            ConnectionPoolError, NewConnectionConfig,
+            ConnectionPoolError, NewConnectionConfig, ProtocolType,
         },
         connection_cache_stats::ConnectionCacheStats,
         nonblocking::client_connection::ClientConnection as NonblockingClientConnection,
@@ -25,11 +25,11 @@ use {
 };
 
 pub struct UdpPool {
-    connections: Vec<Arc<Box<dyn BaseClientConnection>>>,
+    connections: Vec<Arc<dyn BaseClientConnection>>,
 }
 impl ConnectionPool for UdpPool {
     fn add_connection(&mut self, config: &dyn NewConnectionConfig, addr: &SocketAddr) {
-        let connection = Arc::new(self.create_pool_entry(config, addr));
+        let connection = self.create_pool_entry(config, addr);
         self.connections.push(connection);
     }
 
@@ -37,7 +37,7 @@ impl ConnectionPool for UdpPool {
         self.connections.len()
     }
 
-    fn get(&self, index: usize) -> Result<Arc<Box<dyn BaseClientConnection>>, ConnectionPoolError> {
+    fn get(&self, index: usize) -> Result<Arc<dyn BaseClientConnection>, ConnectionPoolError> {
         self.connections
             .get(index)
             .cloned()
@@ -48,12 +48,12 @@ impl ConnectionPool for UdpPool {
         &self,
         config: &dyn NewConnectionConfig,
         _addr: &SocketAddr,
-    ) -> Box<dyn BaseClientConnection> {
+    ) -> Arc<dyn BaseClientConnection> {
         let config: &UdpConfig = match config.as_any().downcast_ref::<UdpConfig>() {
             Some(b) => b,
             None => panic!("Expecting a UdpConfig!"),
         };
-        Box::new(Udp(config.udp_socket.clone()))
+        Arc::new(Udp(config.udp_socket.clone()))
     }
 }
 
@@ -85,22 +85,19 @@ impl BaseClientConnection for Udp {
         &self,
         addr: SocketAddr,
         _stats: Arc<ConnectionCacheStats>,
-    ) -> Arc<Box<dyn BlockingClientConnection>> {
-        Arc::new(Box::new(BlockingUdpConnection::new_from_addr(
-            self.0.clone(),
-            addr,
-        )))
+    ) -> Arc<dyn BlockingClientConnection> {
+        Arc::new(BlockingUdpConnection::new_from_addr(self.0.clone(), addr))
     }
 
     fn new_nonblocking_connection(
         &self,
         addr: SocketAddr,
         _stats: Arc<ConnectionCacheStats>,
-    ) -> Arc<Box<dyn NonblockingClientConnection>> {
-        Arc::new(Box::new(NonblockingUdpConnection::new_from_addr(
+    ) -> Arc<dyn NonblockingClientConnection> {
+        Arc::new(NonblockingUdpConnection::new_from_addr(
             self.0.try_clone().unwrap(),
             addr,
-        )))
+        ))
     }
 }
 
@@ -120,5 +117,9 @@ impl ConnectionManager for UdpConnectionManager {
 
     fn get_port_offset(&self) -> u16 {
         0
+    }
+
+    fn get_protocol_type(&self) -> ProtocolType {
+        ProtocolType::UDP
     }
 }

@@ -2,7 +2,9 @@ use {
     quinn::Endpoint,
     solana_connection_cache::{
         client_connection::ClientConnection as BlockingClientConnection,
-        connection_cache::{ConnectionCache as BackendConnectionCache, NewConnectionConfig},
+        connection_cache::{
+            ConnectionCache as BackendConnectionCache, NewConnectionConfig, ProtocolType,
+        },
         nonblocking::client_connection::ClientConnection as NonblockingClientConnection,
     },
     solana_quic_client::{QuicConfig, QuicConnectionManager},
@@ -21,9 +23,8 @@ pub const MAX_CONNECTIONS: usize = 1024;
 
 /// A thin wrapper over connection-cache/ConnectionCache to ease
 /// construction of the ConnectionCache for code dealing both with udp and quic.
-/// For the scenario only with udp or quic, use connection-cache/ConnectionCache directly.
+/// For the scenario only using udp or quic, use connection-cache/ConnectionCache directly.
 pub struct ConnectionCache {
-    use_quic: bool,
     cache: BackendConnectionCache,
 }
 
@@ -57,10 +58,7 @@ impl ConnectionCache {
         let connection_manager =
             Box::new(QuicConnectionManager::new_with_connection_config(config));
         let cache = BackendConnectionCache::new(connection_manager, connection_pool_size).unwrap();
-        Self {
-            use_quic: true,
-            cache,
-        }
+        Self { cache }
     }
 
     pub fn with_udp(connection_pool_size: usize) -> Self {
@@ -68,24 +66,24 @@ impl ConnectionCache {
         let connection_pool_size = 1.max(connection_pool_size);
         let connection_manager = Box::<UdpConnectionManager>::default();
         let cache = BackendConnectionCache::new(connection_manager, connection_pool_size).unwrap();
-        Self {
-            use_quic: false,
-            cache,
-        }
+        Self { cache }
     }
 
     pub fn use_quic(&self) -> bool {
-        self.use_quic
+        match self.cache.get_protocol_type() {
+            ProtocolType::QUIC => true,
+            _ => false,
+        }
     }
 
-    pub fn get_connection(&self, addr: &SocketAddr) -> Arc<Box<dyn BlockingClientConnection>> {
+    pub fn get_connection(&self, addr: &SocketAddr) -> Arc<dyn BlockingClientConnection> {
         self.cache.get_connection(addr)
     }
 
     pub fn get_nonblocking_connection(
         &self,
         addr: &SocketAddr,
-    ) -> Arc<Box<dyn NonblockingClientConnection>> {
+    ) -> Arc<dyn NonblockingClientConnection> {
         self.cache.get_nonblocking_connection(addr)
     }
 }
