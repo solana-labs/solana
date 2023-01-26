@@ -8,7 +8,7 @@ A Solana cluster uses a multi-layer block propagation mechanism called _Turbine_
 
 In order for data plane fanout to work, the entire cluster must agree on how the cluster is divided into neighborhoods. To achieve this, all the recognized validator nodes \(the TVU peers\) are sorted by stake and stored in a list. This list is then indexed in different ways to figure out neighborhood boundaries and retransmit peers. For example, the leader will simply select the first `DATA_PLANE_FANOUT` nodes to make up layer 1. These will automatically be the highest stake holders, allowing the heaviest votes to come back to the leader first. Layer 1 and lower-layer nodes use the same logic to find their neighbors and next layer peers.
 
-To reduce the possibility of attack vectors, each shred is transmitted over a random tree of neighborhoods. Each node uses the same set of nodes representing the cluster. A random tree is generated from the set for each shred using a seed derived from the leader id, slot, shred index, and shred type.
+To reduce the possibility of attack vectors, each shred is transmitted over a random tree of neighborhoods. Each node uses the same set of nodes representing the cluster. A random tree is generated from the set for each shred using a seed derived from the slot leader id, slot, shred index, and shred type.
 
 ## Layer and Neighborhood Structure
 
