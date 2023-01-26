@@ -133,13 +133,22 @@ pub enum MemcmpEncodedBytes {
 #[serde(into = "RpcMemcmp", from = "RpcMemcmp")]
 pub struct Memcmp {
     /// Data offset to begin match
+    #[deprecated(
+        since = "1.15.0",
+        note = "Field will be made private in future. Please use a constructor method instead."
+    )]
     pub offset: usize,
     /// Bytes, encoded with specified encoding, or default Binary
+    #[deprecated(
+        since = "1.15.0",
+        note = "Field will be made private in future. Please use a constructor method instead."
+    )]
     pub bytes: MemcmpEncodedBytes,
     /// Optional encoding specification
     #[deprecated(
         since = "1.11.2",
-        note = "Field has no server-side effect. Specify encoding with `MemcmpEncodedBytes` variant instead."
+        note = "Field has no server-side effect. Specify encoding with `MemcmpEncodedBytes` variant instead. \
+            Field will be made private in future. Please use a constructor method instead."
     )]
     pub encoding: Option<MemcmpEncoding>,
 }
