@@ -7073,7 +7073,7 @@ impl AccountsDb {
                 let mut sort_time = Measure::start("sort_storages");
                 let min_root = self.accounts_index.min_alive_root();
                 let storages = SortedStorages::new_with_slots(
-                    combined_maps.iter().zip(slots.into_iter()),
+                    slots.into_iter().zip(combined_maps.iter()),
                     min_root,
                     Some(slot),
                 );
@@ -9223,10 +9223,6 @@ pub mod tests {
         ancestors
     }
 
-    fn empty_storages<'a>() -> SortedStorages<'a> {
-        SortedStorages::new(&[])
-    }
-
     impl AccountsDb {
         fn scan_snapshot_stores(
             &self,
@@ -9579,10 +9575,10 @@ pub mod tests {
     fn test_accountsdb_scan_snapshot_stores_illegal_range_start() {
         let mut stats = HashStats::default();
         let bounds = Range { start: 2, end: 2 };
+        let storages = SortedStorages::new(&[]);
         let accounts_db = AccountsDb::new_single_for_tests();
-
         accounts_db
-            .scan_snapshot_stores(&empty_storages(), &mut stats, 2, &bounds, false)
+            .scan_snapshot_stores(&storages, &mut stats, 2, &bounds, false)
             .unwrap();
     }
     #[test]
@@ -9592,10 +9588,10 @@ pub mod tests {
     fn test_accountsdb_scan_snapshot_stores_illegal_range_end() {
         let mut stats = HashStats::default();
         let bounds = Range { start: 1, end: 3 };
-
+        let storages = SortedStorages::new(&[]);
         let accounts_db = AccountsDb::new_single_for_tests();
         accounts_db
-            .scan_snapshot_stores(&empty_storages(), &mut stats, 2, &bounds, false)
+            .scan_snapshot_stores(&storages, &mut stats, 2, &bounds, false)
             .unwrap();
     }
 
@@ -9606,10 +9602,10 @@ pub mod tests {
     fn test_accountsdb_scan_snapshot_stores_illegal_range_inverse() {
         let mut stats = HashStats::default();
         let bounds = Range { start: 1, end: 0 };
-
+        let storages = SortedStorages::new(&[]);
         let accounts_db = AccountsDb::new_single_for_tests();
         accounts_db
-            .scan_snapshot_stores(&empty_storages(), &mut stats, 2, &bounds, false)
+            .scan_snapshot_stores(&storages, &mut stats, 2, &bounds, false)
             .unwrap();
     }
 
@@ -9817,10 +9813,10 @@ pub mod tests {
         let bins = 1;
         let slot = MAX_ITEMS_PER_CHUNK as Slot;
         let (storages, raw_expected) = sample_storages_and_account_in_slot(slot, &accounts_db);
-        let storage_data = vec![(&storages[0], slot)];
+        let storage_data = vec![(slot, &storages[0])];
 
         let sorted_storages =
-            SortedStorages::new_debug(&storage_data[..], 0, MAX_ITEMS_PER_CHUNK as usize + 1);
+            SortedStorages::new_debug(&storage_data, 0, MAX_ITEMS_PER_CHUNK as usize + 1);
 
         let mut stats = HashStats::default();
         let result = accounts_db
@@ -9954,10 +9950,10 @@ pub mod tests {
         let bins = 256;
         let slot = MAX_ITEMS_PER_CHUNK as Slot;
         let (storages, raw_expected) = sample_storages_and_account_in_slot(slot, &accounts_db);
-        let storage_data = vec![(&storages[0], slot)];
+        let storage_data = vec![(slot, &storages[0])];
 
         let sorted_storages =
-            SortedStorages::new_debug(&storage_data[..], 0, MAX_ITEMS_PER_CHUNK as usize + 1);
+            SortedStorages::new_debug(&storage_data, 0, MAX_ITEMS_PER_CHUNK as usize + 1);
 
         let mut stats = HashStats::default();
         let range = 1;
@@ -16097,7 +16093,7 @@ pub mod tests {
 
     #[test]
     fn test_split_storages_ancient_chunks() {
-        let storages = SortedStorages::empty();
+        let storages = SortedStorages::new(&[]);
         assert_eq!(storages.max_slot_inclusive(), 0);
         let result = SplitAncientStorages::new(0, &storages);
         assert_eq!(result, SplitAncientStorages::default());
@@ -16473,7 +16469,7 @@ pub mod tests {
                     non_ancient_storage,
                     Arc::clone(ancient3.new_storage()),
                 ];
-                let snapshot_storages = SortedStorages::new(&raw_storages[..]);
+                let snapshot_storages = SortedStorages::new(&raw_storages);
                 let one_epoch_old_slot = 0;
                 let ancient_slots =
                     SplitAncientStorages::get_ancient_slots(one_epoch_old_slot, &snapshot_storages);
