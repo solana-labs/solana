@@ -16,7 +16,7 @@ use {
         bpf_loader, bpf_loader_deprecated, bpf_loader_upgradeable,
         hash::Hash,
         instruction::{CompiledInstruction, Instruction},
-        message::{CompiledKeys, MessageHeader},
+        message::{compiled_keys::CompiledKeys, MessageHeader},
         pubkey::Pubkey,
         sanitize::{Sanitize, SanitizeError},
         short_vec, system_instruction, system_program, sysvar, wasm_bindgen,
