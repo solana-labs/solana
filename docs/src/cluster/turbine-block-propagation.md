@@ -16,6 +16,10 @@ The leader can be thought of as layer 0 and communicates with layer 1, which is 
 
 A good way to think about this is, layer 1 starts with 1 neighborhood with fanout nodes, layer 2 adds fanout neighborhoods, each with fanout nodes and layer 3 will have `fanout * number of nodes in layer 2` and so on.
 
+The following diagram shows a three layer cluster with a fanout of 2.
+
+![Two layer cluster with a Fanout of 2](/img/data-plane.svg)
+
 ### Configuration Values
 
 `DATA_PLANE_FANOUT` - Determines the size of layer 1. Subsequent layers grow by a factor of `DATA_PLANE_FANOUT`. The number of nodes in a neighborhood is equal to the fanout value. Neighborhoods will fill to capacity before new ones are added, i.e if a neighborhood isn't full, it _must_ be the last one.
@@ -35,10 +39,6 @@ The following diagram shows how the leader sends shreds with a fanout of 2 to th
 The following diagram shows how Neighborhood 0 fans out to Neighborhoods 1 and 2.
 
 ![Neighborhood 0 Fanout to Neighborhood 1 and 2](/img/data-plane-fanout.svg)
-
-Finally, the following diagram shows a two layer cluster with a fanout of 2.
-
-![Two layer cluster with a Fanout of 2](/img/data-plane.svg)
 
 ### Neighborhood Interaction
 
