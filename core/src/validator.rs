@@ -382,6 +382,7 @@ impl Validator {
         use_quic: bool,
         tpu_connection_pool_size: usize,
         tpu_enable_udp: bool,
+        default_stake: Option<u64>,
     ) -> Result<Self, String> {
         let id = identity_keypair.pubkey();
         assert_eq!(id, node.info.id);
@@ -1039,6 +1040,7 @@ impl Validator {
             banking_tracer,
             tracer_thread,
             tpu_enable_udp,
+            default_stake,
         );
 
         datapoint_info!(
@@ -2070,6 +2072,8 @@ pub fn is_snapshot_config_valid(
 
 #[cfg(test)]
 mod tests {
+    use solana_client::connection_cache::DEFAULT_TPU_DEFAULT_STAKE;
+
     use {
         super::*,
         crossbeam_channel::{bounded, RecvTimeoutError},
@@ -2114,6 +2118,7 @@ mod tests {
             DEFAULT_TPU_USE_QUIC,
             DEFAULT_TPU_CONNECTION_POOL_SIZE,
             DEFAULT_TPU_ENABLE_UDP,
+            DEFAULT_TPU_DEFAULT_STAKE,
         )
         .expect("assume successful validator start");
         assert_eq!(
@@ -2206,6 +2211,7 @@ mod tests {
                     DEFAULT_TPU_USE_QUIC,
                     DEFAULT_TPU_CONNECTION_POOL_SIZE,
                     DEFAULT_TPU_ENABLE_UDP,
+                    DEFAULT_TPU_DEFAULT_STAKE,
                 )
                 .expect("assume successful validator start")
             })

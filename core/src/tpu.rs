@@ -103,6 +103,7 @@ impl Tpu {
         banking_tracer: Arc<BankingTracer>,
         tracer_thread_hdl: TracerThread,
         tpu_enable_udp: bool,
+        default_stake: Option<u64>,
     ) -> Self {
         let TpuSockets {
             transactions: transactions_sockets,
@@ -173,6 +174,7 @@ impl Tpu {
             MAX_UNSTAKED_CONNECTIONS,
             stats.clone(),
             DEFAULT_WAIT_FOR_CHUNK_TIMEOUT_MS,
+            default_stake,
         )
         .unwrap();
 
@@ -188,6 +190,7 @@ impl Tpu {
             0, // Prevent unstaked nodes from forwarding transactions
             stats,
             DEFAULT_WAIT_FOR_CHUNK_TIMEOUT_MS,
+            None,
         )
         .unwrap();
 

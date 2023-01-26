@@ -44,7 +44,8 @@ use {
     solana_stake_program::{config::create_account as create_stake_config_account, stake_state},
     solana_streamer::socket::SocketAddrSpace,
     solana_tpu_client::tpu_connection_cache::{
-        DEFAULT_TPU_CONNECTION_POOL_SIZE, DEFAULT_TPU_ENABLE_UDP, DEFAULT_TPU_USE_QUIC,
+        DEFAULT_TPU_CONNECTION_POOL_SIZE, DEFAULT_TPU_DEFAULT_STAKE, DEFAULT_TPU_ENABLE_UDP,
+        DEFAULT_TPU_USE_QUIC,
     },
     solana_vote_program::{
         vote_instruction,
@@ -279,6 +280,7 @@ impl LocalCluster {
             DEFAULT_TPU_USE_QUIC,
             DEFAULT_TPU_CONNECTION_POOL_SIZE,
             DEFAULT_TPU_ENABLE_UDP,
+            DEFAULT_TPU_DEFAULT_STAKE,
         )
         .expect("assume successful validator start");
 
@@ -479,6 +481,7 @@ impl LocalCluster {
             DEFAULT_TPU_USE_QUIC,
             DEFAULT_TPU_CONNECTION_POOL_SIZE,
             DEFAULT_TPU_ENABLE_UDP,
+            DEFAULT_TPU_DEFAULT_STAKE,
         )
         .expect("assume successful validator start");
 
@@ -840,6 +843,7 @@ impl Cluster for LocalCluster {
             DEFAULT_TPU_USE_QUIC,
             DEFAULT_TPU_CONNECTION_POOL_SIZE,
             DEFAULT_TPU_ENABLE_UDP,
+            DEFAULT_TPU_DEFAULT_STAKE,
         )
         .expect("assume successful validator start");
         cluster_validator_info.validator = Some(restarted_node);

@@ -27,6 +27,8 @@ pub const DEFAULT_TPU_CONNECTION_POOL_SIZE: usize = 4;
 
 pub const DEFAULT_TPU_ENABLE_UDP: bool = false;
 
+pub const DEFAULT_TPU_DEFAULT_STAKE: Option<u64> = None;
+
 pub struct TpuConnectionCache<P: ConnectionPool> {
     pub map: RwLock<IndexMap<SocketAddr, P>>,
     pub stats: Arc<ConnectionCacheStats>,

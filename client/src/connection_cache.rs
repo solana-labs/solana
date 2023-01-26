@@ -1,5 +1,6 @@
 pub use solana_tpu_client::tpu_connection_cache::{
-    DEFAULT_TPU_CONNECTION_POOL_SIZE, DEFAULT_TPU_ENABLE_UDP, DEFAULT_TPU_USE_QUIC,
+    DEFAULT_TPU_CONNECTION_POOL_SIZE, DEFAULT_TPU_DEFAULT_STAKE, DEFAULT_TPU_ENABLE_UDP,
+    DEFAULT_TPU_USE_QUIC,
 };
 use {
     crate::{
@@ -667,6 +668,7 @@ mod tests {
             10,
             response_recv_stats,
             DEFAULT_WAIT_FOR_CHUNK_TIMEOUT_MS,
+            None,
         )
         .unwrap();
 

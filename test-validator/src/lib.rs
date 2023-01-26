@@ -45,7 +45,8 @@ use {
     },
     solana_streamer::socket::SocketAddrSpace,
     solana_tpu_client::tpu_connection_cache::{
-        DEFAULT_TPU_CONNECTION_POOL_SIZE, DEFAULT_TPU_ENABLE_UDP, DEFAULT_TPU_USE_QUIC,
+        DEFAULT_TPU_CONNECTION_POOL_SIZE, DEFAULT_TPU_DEFAULT_STAKE, DEFAULT_TPU_ENABLE_UDP,
+        DEFAULT_TPU_USE_QUIC,
     },
     std::{
         collections::{HashMap, HashSet},
@@ -841,6 +842,7 @@ impl TestValidator {
             DEFAULT_TPU_USE_QUIC,
             DEFAULT_TPU_CONNECTION_POOL_SIZE,
             config.tpu_enable_udp,
+            DEFAULT_TPU_DEFAULT_STAKE,
         )?);
 
         // Needed to avoid panics in `solana-responder-gossip` in tests that create a number of

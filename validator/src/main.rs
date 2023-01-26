@@ -46,7 +46,7 @@ use {
     },
     solana_send_transaction_service::send_transaction_service::{self},
     solana_streamer::socket::SocketAddrSpace,
-    solana_tpu_client::tpu_connection_cache::DEFAULT_TPU_ENABLE_UDP,
+    solana_tpu_client::tpu_connection_cache::{DEFAULT_TPU_DEFAULT_STAKE, DEFAULT_TPU_ENABLE_UDP},
     solana_validator::{
         admin_rpc_service,
         admin_rpc_service::{load_staked_nodes_overrides, StakedNodesOverrides},
@@ -910,6 +910,8 @@ pub fn main() {
         DEFAULT_TPU_ENABLE_UDP
     };
 
+    let default_stake = DEFAULT_TPU_DEFAULT_STAKE;
+
     let tpu_connection_pool_size = value_t_or_exit!(matches, "tpu_connection_pool_size", usize);
 
     let shrink_ratio = value_t_or_exit!(matches, "accounts_shrink_ratio", f64);
@@ -1656,6 +1658,7 @@ pub fn main() {
         tpu_use_quic,
         tpu_connection_pool_size,
         tpu_enable_udp,
+        default_stake,
     )
     .unwrap_or_else(|e| {
         error!("Failed to start validator: {:?}", e);

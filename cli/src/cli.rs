@@ -31,7 +31,7 @@ use {
         stake::{instruction::LockupArgs, state::Lockup},
         transaction::{TransactionError, VersionedTransaction},
     },
-    solana_tpu_client::tpu_connection_cache::DEFAULT_TPU_ENABLE_UDP,
+    solana_tpu_client::tpu_connection_cache::{DEFAULT_TPU_DEFAULT_STAKE, DEFAULT_TPU_ENABLE_UDP},
     solana_vote_program::vote_state::VoteAuthorize,
     std::{collections::HashMap, error, io::stdout, str::FromStr, sync::Arc, time::Duration},
     thiserror::Error,
@@ -509,6 +509,7 @@ pub struct CliConfig<'a> {
     pub confirm_transaction_initial_timeout: Duration,
     pub address_labels: HashMap<String, String>,
     pub use_quic: bool,
+    pub default_stake: Option<u64>,
 }
 
 impl CliConfig<'_> {
@@ -557,6 +558,7 @@ impl Default for CliConfig<'_> {
             ),
             address_labels: HashMap::new(),
             use_quic: !DEFAULT_TPU_ENABLE_UDP,
+            default_stake: DEFAULT_TPU_DEFAULT_STAKE,
         }
     }
 }

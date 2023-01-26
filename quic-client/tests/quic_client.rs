@@ -86,6 +86,7 @@ mod tests {
             10,
             stats,
             DEFAULT_WAIT_FOR_CHUNK_TIMEOUT_MS,
+            None,
         )
         .unwrap();
 
@@ -133,6 +134,7 @@ mod tests {
             10,
             stats,
             1000,
+            None,
         )
         .unwrap();
 
@@ -190,6 +192,7 @@ mod tests {
             10,
             request_recv_stats,
             DEFAULT_WAIT_FOR_CHUNK_TIMEOUT_MS,
+            None,
         )
         .unwrap();
 
@@ -219,6 +222,7 @@ mod tests {
             10,
             response_recv_stats,
             DEFAULT_WAIT_FOR_CHUNK_TIMEOUT_MS,
+            None,
         )
         .unwrap();
 

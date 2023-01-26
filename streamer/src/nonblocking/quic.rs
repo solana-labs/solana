@@ -67,6 +67,7 @@ pub fn spawn_server(
     max_unstaked_connections: usize,
     stats: Arc<StreamStats>,
     wait_for_chunk_timeout_ms: u64,
+    default_stake: Option<u64>,
 ) -> Result<(Endpoint, JoinHandle<()>), QuicServerError> {
     info!("Start quic server on {:?}", sock);
     let (config, _cert) = configure_server(keypair, gossip_host)?;
@@ -86,6 +87,7 @@ pub fn spawn_server(
         max_unstaked_connections,
         stats,
         wait_for_chunk_timeout_ms,
+        default_stake,
     ));
     Ok((endpoint, handle))
 }
@@ -100,6 +102,7 @@ pub async fn run_server(
     max_unstaked_connections: usize,
     stats: Arc<StreamStats>,
     wait_for_chunk_timeout_ms: u64,
+    default_stake: Option<u64>,
 ) {
     debug!("spawn quic server");
     let mut last_datapoint = Instant::now();
@@ -135,6 +138,7 @@ pub async fn run_server(
                 max_unstaked_connections,
                 stats.clone(),
                 wait_for_chunk_timeout_ms,
+                default_stake,
             ));
             sleep(Duration::from_micros(WAIT_BETWEEN_NEW_CONNECTIONS_US)).await;
         } else {
@@ -161,6 +165,7 @@ fn prune_unstaked_connection_table(
 fn get_connection_stake(
     connection: &Connection,
     staked_nodes: Arc<RwLock<StakedNodes>>,
+    default_stake: Option<u64>,
 ) -> Option<(Pubkey, u64, u64, u64, u64)> {
     connection
         .peer_identity()
@@ -175,10 +180,14 @@ fn get_connection_stake(
                     let total_stake = staked_nodes.total_stake;
                     let max_stake = staked_nodes.max_stake;
                     let min_stake = staked_nodes.min_stake;
-                    staked_nodes
-                        .pubkey_stake_map
-                        .get(&pubkey)
-                        .map(|stake| (pubkey, *stake, total_stake, max_stake, min_stake))
+                    let stake = staked_nodes.pubkey_stake_map.get(&pubkey);
+                    if let Some(stake) = stake {
+                        Some((pubkey, *stake, total_stake, max_stake, min_stake))
+                    } else if let Some(default_stake) = default_stake {
+                        Some((pubkey, default_stake, total_stake, max_stake, min_stake))
+                    } else {
+                        None
+                    }
                 })
             } else {
                 None
@@ -422,6 +431,7 @@ async fn setup_connection(
     max_unstaked_connections: usize,
     stats: Arc<StreamStats>,
     wait_for_chunk_timeout_ms: u64,
+    default_stake: Option<u64>,
 ) {
     if let Ok(connecting_result) = timeout(
         Duration::from_millis(QUIC_CONNECTION_HANDSHAKE_TIMEOUT_MS),
@@ -432,23 +442,26 @@ async fn setup_connection(
         if let Ok(new_connection) = connecting_result {
             stats.total_new_connections.fetch_add(1, Ordering::Relaxed);
 
-            let params = get_connection_stake(&new_connection, staked_nodes.clone()).map_or(
-                NewConnectionHandlerParams::new_unstaked(
-                    packet_sender.clone(),
-                    max_connections_per_peer,
-                    stats.clone(),
-                ),
-                |(pubkey, stake, total_stake, max_stake, min_stake)| NewConnectionHandlerParams {
-                    packet_sender,
-                    remote_pubkey: Some(pubkey),
-                    stake,
-                    total_stake,
-                    max_connections_per_peer,
-                    stats: stats.clone(),
-                    max_stake,
-                    min_stake,
-                },
-            );
+            let params = get_connection_stake(&new_connection, staked_nodes.clone(), default_stake)
+                .map_or(
+                    NewConnectionHandlerParams::new_unstaked(
+                        packet_sender.clone(),
+                        max_connections_per_peer,
+                        stats.clone(),
+                    ),
+                    |(pubkey, stake, total_stake, max_stake, min_stake)| {
+                        NewConnectionHandlerParams {
+                            packet_sender,
+                            remote_pubkey: Some(pubkey),
+                            stake,
+                            total_stake,
+                            max_connections_per_peer,
+                            stats: stats.clone(),
+                            max_stake,
+                            min_stake,
+                        }
+                    },
+                );
 
             if params.stake > 0 {
                 let mut connection_table_l = staked_connection_table.lock().unwrap();
@@ -1039,6 +1052,7 @@ pub mod test {
             MAX_UNSTAKED_CONNECTIONS,
             stats.clone(),
             2000,
+            None,
         )
         .unwrap();
         (t, exit, receiver, server_address, stats)
@@ -1406,6 +1420,7 @@ pub mod test {
             0, // Do not allow any connection from unstaked clients/nodes
             stats,
             DEFAULT_WAIT_FOR_CHUNK_TIMEOUT_MS,
+            None,
         )
         .unwrap();
 
@@ -1437,6 +1452,7 @@ pub mod test {
             MAX_UNSTAKED_CONNECTIONS,
             stats.clone(),
             DEFAULT_WAIT_FOR_CHUNK_TIMEOUT_MS,
+            None,
         )
         .unwrap();
 
