@@ -35,7 +35,7 @@ use {
     solana_sdk::{
         commitment_config::CommitmentConfig,
         message::Message,
-        offchain_message::OffchainMessage,
+        offchain_message::{OffchainMessage, Version as OffchainMessageVersion},
         pubkey::Pubkey,
         signature::Signature,
         stake,
@@ -338,9 +338,9 @@ impl WalletSubCommands for App<'_, '_> {
                         .value_name("VERSION")
                         .required(false)
                         .default_value("0")
-                        .validator(|p| match p.parse::<u8>() {
-                            Err(_) => Err(String::from("Must be unsigned integer")),
-                            Ok(_) => Ok(()),
+                        .validator(|p| match p.parse::<OffchainMessageVersion>() {
+                            Err(e) => Err(e.to_string()),
+                            Ok(_) => { Ok(()) }
                         })
                         .help("The off-chain message version"),
                 ),
@@ -371,9 +371,9 @@ impl WalletSubCommands for App<'_, '_> {
                         .value_name("VERSION")
                         .required(false)
                         .default_value("0")
-                        .validator(|p| match p.parse::<u8>() {
-                            Err(_) => Err(String::from("Must be unsigned integer")),
-                            Ok(_) => Ok(()),
+                        .validator(|p| match p.parse::<OffchainMessageVersion>() {
+                            Err(e) => Err(e.to_string()),
+                            Ok(_) => { Ok(()) }
                         })
                         .help("The off-chain message version"),
                 )
@@ -609,11 +609,11 @@ pub fn parse_sign_offchain_message(
     default_signer: &DefaultSigner,
     wallet_manager: &mut Option<Rc<RemoteWalletManager>>,
 ) -> Result<CliCommandInfo, CliError> {
-    let version: u8 = value_of(matches, "version").unwrap();
+    let version: OffchainMessageVersion = value_of(matches, "version").unwrap();
     let message_text: String = value_of(matches, "message")
         .ok_or_else(|| CliError::BadParameter("MESSAGE".to_string()))?;
     let message = OffchainMessage::new(version, message_text.as_str())
-        .map_err(|_| CliError::BadParameter("VERSION or MESSAGE".to_string()))?;
+        .map_err(|_| CliError::BadParameter("MESSAGE".to_string()))?;
 
     Ok(CliCommandInfo {
         command: CliCommand::SignOffchainMessage { message },
@@ -626,11 +626,11 @@ pub fn parse_verify_offchain_signature(
     default_signer: &DefaultSigner,
     wallet_manager: &mut Option<Rc<RemoteWalletManager>>,
 ) -> Result<CliCommandInfo, CliError> {
-    let version: u8 = value_of(matches, "version").unwrap();
+    let version: OffchainMessageVersion = value_of(matches, "version").unwrap();
     let message_text: String = value_of(matches, "message")
         .ok_or_else(|| CliError::BadParameter("MESSAGE".to_string()))?;
     let message = OffchainMessage::new(version, message_text.as_str())
-        .map_err(|_| CliError::BadParameter("VERSION or MESSAGE".to_string()))?;
+        .map_err(|_| CliError::BadParameter("MESSAGE".to_string()))?;
 
     let signer_pubkey = pubkey_of_signer(matches, "signer", wallet_manager)?;
     let signers = if signer_pubkey.is_some() {

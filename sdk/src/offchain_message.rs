@@ -10,6 +10,8 @@ use {
         signature::{Signature, Signer},
     },
     num_enum::{IntoPrimitive, TryFromPrimitive},
+    std::str::FromStr,
+    thiserror::Error,
 };
 
 #[cfg(test)]
@@ -32,6 +34,27 @@ pub enum MessageFormat {
     RestrictedAscii,
     LimitedUtf8,
     ExtendedUtf8,
+}
+
+#[repr(u8)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, TryFromPrimitive, IntoPrimitive)]
+pub enum Version {
+    V0 = 0,
+}
+
+#[derive(Debug, Error, Eq, PartialEq)]
+#[error("invalid value for offchain message version: `{0}`")]
+pub struct VersionFromStrError(String);
+impl FromStr for Version {
+    type Err = VersionFromStrError;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        if let Ok(version) = s.parse::<<Self as TryFromPrimitive>::Primitive>() {
+            if let Ok(version) = Version::try_from_primitive(version) {
+                return Ok(version);
+            }
+        }
+        Err(VersionFromStrError(s.to_string()))
+    }
 }
 
 #[allow(clippy::arithmetic_side_effects)]
@@ -164,10 +187,9 @@ impl OffchainMessage {
     pub const HEADER_LEN: usize = Self::SIGNING_DOMAIN.len() + 1;
 
     /// Construct a new OffchainMessage object from the given version and message
-    pub fn new(version: u8, message: &str) -> Result<Self, SanitizeError> {
+    pub fn new(version: Version, message: &str) -> Result<Self, SanitizeError> {
         match version {
-            0 => Ok(Self::V0(v0::OffchainMessage::new(message)?)),
-            _ => Err(SanitizeError::ValueOutOfBounds),
+            Version::V0 => Ok(Self::V0(v0::OffchainMessage::new(message)?)),
         }
     }
 
@@ -191,11 +213,11 @@ impl OffchainMessage {
         if data.len() <= Self::HEADER_LEN {
             return Err(SanitizeError::ValueOutOfBounds);
         }
-        let version = data[Self::SIGNING_DOMAIN.len()];
+        let version = Version::try_from_primitive(data[Self::SIGNING_DOMAIN.len()])
+            .map_err(|_| SanitizeError::InvalidValue)?;
         let data = &data[Self::SIGNING_DOMAIN.len().saturating_add(1)..];
         match version {
-            0 => Ok(Self::V0(v0::OffchainMessage::deserialize(data)?)),
-            _ => Err(SanitizeError::ValueOutOfBounds),
+            Version::V0 => Ok(Self::V0(v0::OffchainMessage::deserialize(data)?)),
         }
     }
 
@@ -206,9 +228,9 @@ impl OffchainMessage {
         }
     }
 
-    pub fn get_version(&self) -> u8 {
+    pub fn get_version(&self) -> Version {
         match self {
-            Self::V0(_) => 0,
+            Self::V0(_) => Version::V0,
         }
     }
 
@@ -241,8 +263,8 @@ mod tests {
 
     #[test]
     fn test_offchain_message_ascii() {
-        let message = OffchainMessage::new(0, "Test Message").unwrap();
-        assert_eq!(message.get_version(), 0);
+        let message = OffchainMessage::new(Version::V0, "Test Message").unwrap();
+        assert_eq!(message.get_version(), Version::V0);
         assert_eq!(message.get_format(), MessageFormat::RestrictedAscii);
         assert_eq!(message.get_message(), "Test Message");
         assert!(
@@ -260,8 +282,8 @@ mod tests {
 
     #[test]
     fn test_offchain_message_utf8() {
-        let message = OffchainMessage::new(0, "Тестовое сообщение").unwrap();
-        assert_eq!(message.get_version(), 0);
+        let message = OffchainMessage::new(Version::V0, "Тестовое сообщение").unwrap();
+        assert_eq!(message.get_version(), Version::V0);
         assert_eq!(message.get_format(), MessageFormat::LimitedUtf8);
         assert_eq!(message.get_message(), "Тестовое сообщение",);
         assert!(
@@ -281,9 +303,26 @@ mod tests {
 
     #[test]
     fn test_offchain_message_sign_and_verify() {
-        let message = OffchainMessage::new(0, "Test Message").unwrap();
+        let message = OffchainMessage::new(Version::V0, "Test Message").unwrap();
         let keypair = Keypair::new();
         let signature = message.sign(&keypair).unwrap();
         assert!(message.verify(&keypair.pubkey(), &signature).unwrap());
+    }
+
+    #[test]
+    fn test_version_from_str() {
+        assert!(matches!(Version::from_str("0"), Ok(Version::V0)));
+        assert_eq!(
+            Version::from_str(""),
+            Err(VersionFromStrError(String::new()))
+        );
+        assert_eq!(
+            Version::from_str("1"),
+            Err(VersionFromStrError(String::from("1")))
+        );
+        assert_eq!(
+            Version::from_str("~"),
+            Err(VersionFromStrError(String::from("~")))
+        );
     }
 }
