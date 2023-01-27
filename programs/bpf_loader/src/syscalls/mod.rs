@@ -44,7 +44,7 @@ use {
         },
         hash::{Hasher, HASH_BYTES},
         instruction::{
-            AccountMeta, Instruction, InstructionError, ProcessedSiblingInstruction,
+            AccountMeta, InstructionError, ProcessedSiblingInstruction,
             TRANSACTION_LEVEL_STACK_HEIGHT,
         },
         keccak, native_loader,
@@ -1821,6 +1821,7 @@ mod tests {
             bpf_loader,
             fee_calculator::FeeCalculator,
             hash::hashv,
+            instruction::Instruction,
             program::check_type_assumptions,
             sysvar::{clock::Clock, epoch_schedule::EpochSchedule, rent::Rent},
             transaction_context::TransactionContext,

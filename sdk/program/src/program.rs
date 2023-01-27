@@ -10,6 +10,7 @@
 
 use crate::{
     account_info::AccountInfo, entrypoint::ProgramResult, instruction::Instruction, pubkey::Pubkey,
+    stable_layout::stable_instruction::StableInstruction,
 };
 
 /// Invoke a cross-program instruction.
@@ -290,11 +291,14 @@ pub fn invoke_signed_unchecked(
     account_infos: &[AccountInfo],
     signers_seeds: &[&[&[u8]]],
 ) -> ProgramResult {
+    // bprumo TODO: it would be nice to not clone `instruction`... Can this fn take a StableInstruction instead?
+    let instruction = StableInstruction::from(instruction.clone());
+
     #[cfg(target_os = "solana")]
     {
         let result = unsafe {
             crate::syscalls::sol_invoke_signed_rust(
-                instruction as *const _ as *const u8,
+                &instruction as *const _ as *const u8,
                 account_infos as *const _ as *const u8,
                 account_infos.len() as u64,
                 signers_seeds as *const _ as *const u8,
@@ -308,7 +312,7 @@ pub fn invoke_signed_unchecked(
     }
 
     #[cfg(not(target_os = "solana"))]
-    crate::program_stubs::sol_invoke_signed(instruction, account_infos, signers_seeds)
+    crate::program_stubs::sol_invoke_signed(&instruction, account_infos, signers_seeds)
 }
 
 /// Maximum size that can be set using [`set_return_data`].
@@ -432,17 +436,18 @@ pub fn check_type_assumptions() {
             accounts: vec![account_meta1.clone(), account_meta2.clone()],
             data: data.clone(),
         };
+        let instruction = StableInstruction::from(instruction);
         let instruction_addr = &instruction as *const _ as u64;
 
         // program id
-        assert_eq!(offset_of!(Instruction, program_id), 48);
+        assert_eq!(offset_of!(StableInstruction, program_id), 48);
         let pubkey_ptr = (instruction_addr + 48) as *const Pubkey;
         unsafe {
             assert_eq!(*pubkey_ptr, pubkey1);
         }
 
         // accounts
-        assert_eq!(offset_of!(Instruction, accounts), 0);
+        assert_eq!(offset_of!(StableInstruction, accounts), 0);
         let accounts_ptr = (instruction_addr) as *const *const AccountMeta;
         let accounts_cap = (instruction_addr + 8) as *const usize;
         let accounts_len = (instruction_addr + 16) as *const usize;
@@ -455,7 +460,7 @@ pub fn check_type_assumptions() {
         }
 
         // data
-        assert_eq!(offset_of!(Instruction, data), 24);
+        assert_eq!(offset_of!(StableInstruction, data), 24);
         let data_ptr = (instruction_addr + 24) as *const *const [u8; 5];
         let data_cap = (instruction_addr + 24 + 8) as *const usize;
         let data_len = (instruction_addr + 24 + 16) as *const usize;

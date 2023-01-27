@@ -33,13 +33,14 @@ use {
         fee_calculator::{FeeCalculator, FeeRateGovernor, DEFAULT_TARGET_LAMPORTS_PER_SIGNATURE},
         genesis_config::{ClusterType, GenesisConfig},
         hash::Hash,
-        instruction::{Instruction, InstructionError},
+        instruction::InstructionError,
         native_token::sol_to_lamports,
         poh_config::PohConfig,
         program_error::{ProgramError, UNSUPPORTED_SYSVAR},
         pubkey::Pubkey,
         rent::Rent,
         signature::{Keypair, Signer},
+        stable_layout::stable_instruction::StableInstruction,
         sysvar::{Sysvar, SysvarId},
     },
     solana_vote_program::vote_state::{self, VoteState, VoteStateVersions},
@@ -223,7 +224,7 @@ impl solana_sdk::program_stubs::SyscallStubs for SyscallStubs {
 
     fn sol_invoke_signed(
         &self,
-        instruction: &Instruction,
+        instruction: &StableInstruction,
         account_infos: &[AccountInfo],
         signers_seeds: &[&[&[u8]]],
     ) -> ProgramResult {

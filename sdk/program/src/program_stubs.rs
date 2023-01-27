@@ -6,6 +6,7 @@ use {
     crate::{
         account_info::AccountInfo, entrypoint::ProgramResult, instruction::Instruction,
         program_error::UNSUPPORTED_SYSVAR, pubkey::Pubkey,
+        stable_layout::stable_instruction::StableInstruction,
     },
     itertools::Itertools,
     std::sync::{Arc, RwLock},
@@ -31,7 +32,7 @@ pub trait SyscallStubs: Sync + Send {
     }
     fn sol_invoke_signed(
         &self,
-        _instruction: &Instruction,
+        _instruction: &StableInstruction,
         _account_infos: &[AccountInfo],
         _signers_seeds: &[&[&[u8]]],
     ) -> ProgramResult {
@@ -117,7 +118,7 @@ pub(crate) fn sol_log_compute_units() {
 }
 
 pub(crate) fn sol_invoke_signed(
-    instruction: &Instruction,
+    instruction: &StableInstruction,
     account_infos: &[AccountInfo],
     signers_seeds: &[&[&[u8]]],
 ) -> ProgramResult {

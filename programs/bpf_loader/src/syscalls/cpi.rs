@@ -3,6 +3,7 @@ use {
     crate::declare_syscall,
     solana_sdk::{
         feature_set::enable_bpf_loader_set_authority_checked_ix,
+        stable_layout::{stable_instruction::StableInstruction, stable_vec::StableVec},
         syscalls::{
             MAX_CPI_ACCOUNT_INFOS, MAX_CPI_INSTRUCTION_ACCOUNTS, MAX_CPI_INSTRUCTION_DATA_LEN,
         },
@@ -211,7 +212,7 @@ trait SyscallInvokeSigned {
         addr: u64,
         memory_mapping: &mut MemoryMapping,
         invoke_context: &mut InvokeContext,
-    ) -> Result<Instruction, EbpfError>;
+    ) -> Result<StableInstruction, EbpfError>;
     fn translate_accounts<'a>(
         instruction_accounts: &[InstructionAccount],
         program_indices: &[IndexOfAccount],
@@ -258,8 +259,8 @@ impl SyscallInvokeSigned for SyscallInvokeSignedRust {
         addr: u64,
         memory_mapping: &mut MemoryMapping,
         invoke_context: &mut InvokeContext,
-    ) -> Result<Instruction, EbpfError> {
-        let ix = translate_type::<Instruction>(
+    ) -> Result<StableInstruction, EbpfError> {
+        let ix = translate_type::<StableInstruction>(
             memory_mapping,
             addr,
             invoke_context.get_check_aligned(),
@@ -275,6 +276,7 @@ impl SyscallInvokeSigned for SyscallInvokeSignedRust {
             invoke_context.get_check_size(),
         )?
         .to_vec();
+        let accounts = StableVec::from(accounts);
 
         let ix_data_len = ix.data.len() as u64;
         if invoke_context
@@ -296,10 +298,12 @@ impl SyscallInvokeSigned for SyscallInvokeSignedRust {
             invoke_context.get_check_size(),
         )?
         .to_vec();
-        Ok(Instruction {
-            program_id: ix.program_id,
+        let data = StableVec::from(data);
+
+        Ok(StableInstruction {
             accounts,
             data,
+            program_id: ix.program_id,
         })
     }
 
@@ -469,7 +473,7 @@ impl SyscallInvokeSigned for SyscallInvokeSignedC {
         addr: u64,
         memory_mapping: &mut MemoryMapping,
         invoke_context: &mut InvokeContext,
-    ) -> Result<Instruction, EbpfError> {
+    ) -> Result<StableInstruction, EbpfError> {
         let ix_c = translate_type::<SolInstruction>(
             memory_mapping,
             addr,
@@ -514,6 +518,8 @@ impl SyscallInvokeSigned for SyscallInvokeSignedC {
             invoke_context.get_check_size(),
         )?
         .to_vec();
+        let data = StableVec::from(data);
+
         let accounts = meta_cs
             .iter()
             .map(|meta_c| {
@@ -529,11 +535,12 @@ impl SyscallInvokeSigned for SyscallInvokeSignedC {
                 })
             })
             .collect::<Result<Vec<AccountMeta>, EbpfError>>()?;
+        let accounts = StableVec::from(accounts);
 
-        Ok(Instruction {
-            program_id: *program_id,
+        Ok(StableInstruction {
             accounts,
             data,
+            program_id: *program_id,
         })
     }
 
@@ -1128,6 +1135,7 @@ mod tests {
         solana_sdk::{
             account::{Account, AccountSharedData},
             clock::Epoch,
+            instruction::Instruction,
             rent::Rent,
             transaction_context::{TransactionAccount, TransactionContext},
         },
@@ -1220,8 +1228,8 @@ mod tests {
         )
         .unwrap();
         assert_eq!(ins.program_id, program_id);
-        assert_eq!(ins.accounts, accounts);
-        assert_eq!(ins.data, data);
+        assert_eq!(ins.accounts, StableVec::from(accounts));
+        assert_eq!(ins.data, StableVec::from(data));
     }
 
     #[test]
