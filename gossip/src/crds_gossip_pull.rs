@@ -897,7 +897,7 @@ pub(crate) mod tests {
         .take(100)
         .filter(|peer| peer != old)
         .count();
-        assert!(count < 75, "count of peer != old: {}", count);
+        assert!(count < 75, "count of peer != old: {count}");
     }
 
     #[test]
