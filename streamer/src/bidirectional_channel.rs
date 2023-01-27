@@ -3,13 +3,13 @@ use {
     bincode::serialize,
     quinn::SendStream,
     solana_perf::packet::{Packet, PacketBatch},
-    solana_sdk::{pubkey::Pubkey, signature::Signature},
+    solana_sdk::{pubkey::Pubkey, signature::Signature, slot_history::Slot},
     std::{
         collections::HashMap,
         net::SocketAddr,
         str::FromStr,
         sync::{
-            atomic::{AtomicU64, Ordering},
+            atomic::{AtomicBool, AtomicU64, Ordering},
             Arc,
         },
         time::Duration,
@@ -23,7 +23,6 @@ use {
     },
     x509_parser::nom::AsBytes,
 };
-use {solana_sdk::slot_history::Slot, std::sync::atomic::AtomicBool};
 
 // This message size if fixed so that we know we that we have recieved a new message after getting QUIC_REPLY_MESSAGE_SIZE bytes
 #[derive(Clone)]

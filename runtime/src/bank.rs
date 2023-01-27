@@ -3869,7 +3869,6 @@ impl Bank {
         lock_results: &[Result<()>],
         max_age: usize,
         error_counters: &mut TransactionErrorMetrics,
-        bidirectional_channel: QuicBidirectionalReplyService,
     ) -> Vec<TransactionCheckResult> {
         let hash_queue = self.blockhash_queue.read().unwrap();
         let last_blockhash = hash_queue.last_hash();
@@ -3886,10 +3885,6 @@ impl Bank {
                     {
                         (Ok(()), Some(NoncePartial::new(address, account)))
                     } else {
-                        bidirectional_channel.send_message(
-                            tx.signature(),
-                            TransactionError::BlockhashNotFound.to_string(),
-                        );
                         error_counters.blockhash_not_found += 1;
                         (Err(TransactionError::BlockhashNotFound), None)
                     }
@@ -3980,15 +3975,9 @@ impl Bank {
         lock_results: &[Result<()>],
         max_age: usize,
         error_counters: &mut TransactionErrorMetrics,
-        bidirection_reply_service: QuicBidirectionalReplyService,
     ) -> Vec<TransactionCheckResult> {
-        let age_results = self.check_age(
-            sanitized_txs.iter(),
-            lock_results,
-            max_age,
-            error_counters,
-            bidirection_reply_service,
-        );
+        let age_results =
+            self.check_age(sanitized_txs.iter(), lock_results, max_age, error_counters);
         self.check_status_cache(sanitized_txs, age_results, error_counters)
     }
 
@@ -4289,11 +4278,7 @@ impl Bank {
             .enumerate()
             .filter_map(|(index, res)| match res {
                 // following are retryable errors
-                Err(TransactionError::AccountInUse(account)) => {
-                    bidirection_reply_service.send_message(
-                        sanitized_txs[index].signature(),
-                        TransactionError::AccountInUse(*account).to_string(),
-                    );
+                Err(TransactionError::AccountInUse(_)) => {
                     error_counters.account_in_use += 1;
                     Some(index)
                 }
@@ -4315,10 +4300,6 @@ impl Bank {
                 }
                 // following are non-retryable errors
                 Err(TransactionError::TooManyAccountLocks) => {
-                    bidirection_reply_service.send_message(
-                        sanitized_txs[index].signature(),
-                        TransactionError::TooManyAccountLocks.to_string(),
-                    );
                     error_counters.too_many_account_locks += 1;
                     None
                 }
@@ -4333,7 +4314,6 @@ impl Bank {
             batch.lock_results(),
             max_age,
             &mut error_counters,
-            bidirection_reply_service,
         );
         check_time.stop();
 
@@ -4358,7 +4338,10 @@ impl Bank {
             .iter_mut()
             .zip(sanitized_txs.iter())
             .map(|(accs, tx)| match accs {
-                (Err(e), _nonce) => TransactionExecutionResult::NotExecuted(e.clone()),
+                (Err(e), _nonce) => {
+                    bidirection_reply_service.send_message(tx.signature(), e.to_string());
+                    TransactionExecutionResult::NotExecuted(e.clone())
+                }
                 (Ok(loaded_transaction), nonce) => {
                     let mut feature_set_clone_time = Measure::start("feature_set_clone");
                     let feature_set = self.feature_set.clone();
@@ -4394,7 +4377,7 @@ impl Bank {
                         compute_budget
                     };
 
-                    self.execute_loaded_transaction(
+                    let execution_result = self.execute_loaded_transaction(
                         tx,
                         loaded_transaction,
                         compute_budget,
@@ -4405,7 +4388,17 @@ impl Bank {
                         timings,
                         &mut error_counters,
                         log_messages_bytes_limit,
-                    )
+                    );
+                    match &execution_result {
+                        TransactionExecutionResult::Executed { .. } => {
+                            bidirection_reply_service
+                                .send_message(tx.signature(), "executed".to_string());
+                        }
+                        TransactionExecutionResult::NotExecuted(err) => {
+                            bidirection_reply_service.send_message(tx.signature(), err.to_string());
+                        }
+                    }
+                    execution_result
                 }
             })
             .collect();

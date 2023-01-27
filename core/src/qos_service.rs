@@ -152,23 +152,18 @@ impl QosService {
                     debug!("slot {:?}, transaction {:?}, cost {:?}, not fit into current block, '{:?}'", bank.slot(), tx, cost, e);
                     match e {
                         CostTrackerError::WouldExceedBlockMaxLimit => {
-                            self.bidirection_reply_service.send_message(tx.signature(), TransactionError::WouldExceedMaxBlockCostLimit.to_string());
                             Err(TransactionError::WouldExceedMaxBlockCostLimit)
                         }
                         CostTrackerError::WouldExceedVoteMaxLimit => {
-                            self.bidirection_reply_service.send_message(tx.signature(), TransactionError::WouldExceedMaxVoteCostLimit.to_string());
                             Err(TransactionError::WouldExceedMaxVoteCostLimit)
                         }
                         CostTrackerError::WouldExceedAccountMaxLimit => {
-                            self.bidirection_reply_service.send_message(tx.signature(), TransactionError::WouldExceedMaxAccountCostLimit.to_string());
                             Err(TransactionError::WouldExceedMaxAccountCostLimit)
                         }
                         CostTrackerError::WouldExceedAccountDataBlockLimit => {
-                            self.bidirection_reply_service.send_message(tx.signature(), TransactionError::WouldExceedAccountDataBlockLimit.to_string());
                             Err(TransactionError::WouldExceedAccountDataBlockLimit)
                         }
                         CostTrackerError::WouldExceedAccountDataTotalLimit => {
-                            self.bidirection_reply_service.send_message(tx.signature(), TransactionError::WouldExceedAccountDataTotalLimit.to_string());
                             Err(TransactionError::WouldExceedAccountDataTotalLimit)
                         }
                     }
