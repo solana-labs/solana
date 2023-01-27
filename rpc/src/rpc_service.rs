@@ -134,12 +134,13 @@ impl RpcRequestMiddleware {
             return false;
         }
 
-        let Some(path) = Self::strip_leading_slash(path) else {
-            return false;
-        };
-
-        self.full_snapshot_archive_path_regex.is_match(path)
-            || self.incremental_snapshot_archive_path_regex.is_match(path)
+        match Self::strip_leading_slash(path) {
+            None => false,
+            Some(path) => {
+                self.full_snapshot_archive_path_regex.is_match(path)
+                    || self.incremental_snapshot_archive_path_regex.is_match(path)
+            }
+        }
     }
 
     #[cfg(unix)]
