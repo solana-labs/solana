@@ -843,7 +843,7 @@ pub fn create_accounts_run_and_snapshot_dirs(
 ) -> std::io::Result<(PathBuf, PathBuf)> {
     let run_path = account_dir.as_ref().join("run");
     let snapshot_path = account_dir.as_ref().join("snapshot");
-    if run_path.try_exists().is_err() || snapshot_path.try_exists().is_err() {
+    if (!run_path.is_dir()) || (!snapshot_path.is_dir()) {
         // If the "run/" or "snapshot" sub directories do not exist, the directory may be from
         // an older version for which the appendvec files are at this directory.  Clean up
         // them first.
@@ -851,7 +851,7 @@ pub fn create_accounts_run_and_snapshot_dirs(
         // to this new version using run and snapshot directories.
         // The run/ content cleanup will be done at a later point.  The snapshot/ content persists
         // accross the process boot, and will be purged by the account_background_service.
-        move_and_async_delete_path(account_dir.as_ref());
+        fs::remove_dir_all(account_dir.as_ref())?;
         fs::create_dir_all(&run_path)?;
         fs::create_dir_all(&snapshot_path)?;
     }
