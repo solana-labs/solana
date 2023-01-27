@@ -1482,9 +1482,9 @@ impl Executor for BpfExecutor {
 
             trace_bpf(
                 invoke_context
-                    .transaction_context
-                    .get_current_instruction_context()?
-                    .trace_log(),
+                    .trace_log_stack
+                    .last()
+                    .expect("Inconsistent trace log stack"),
                 Arc::clone(&self),
                 bpf_tracer_plugin_manager,
                 &blockhash,
