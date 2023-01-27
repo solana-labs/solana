@@ -1450,7 +1450,7 @@ impl Executor for BpfExecutor {
         let execution_result = {
             let bpf_tracer_plugin_manager = invoke_context.bpf_tracer_plugin_manager.clone();
             let blockhash = invoke_context.blockhash;
-            let transaction_id = *transaction_context.id();
+            let transaction_id = *transaction_context.signature();
             let compute_meter_prev = invoke_context.get_remaining();
             let mut vm = match create_vm(
                 // We dropped the lifetime tracking in the Executor by setting it to 'static,
