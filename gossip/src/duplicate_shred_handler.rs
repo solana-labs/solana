@@ -21,6 +21,9 @@ const MAX_NUM_CHUNKS: u8 = 3;
 // is only 1 person sending out duplicate proofs, 1 person is leader for 4 slots,
 // so we allow 5 here to limit the chunk map size.
 const ALLOWED_SLOTS_PER_PUBKEY: usize = 5;
+// To prevent an attacker inflating this map, we discard any proof which is too
+// far away in the future compared to root.
+const MAX_SLOT_DISTANCE_TO_ROOT: Slot = 100;
 // We limit the pubkey for each slot to be 100 for now.
 const MAX_PUBKEY_PER_SLOT: usize = 100;
 
@@ -61,15 +64,13 @@ pub struct DuplicateShredHandler {
     // pending proofs from each pubkey to ALLOWED_SLOTS_PER_PUBKEY.
     validator_pending_proof_map: HashMap<Pubkey, HashSet<Slot>>,
     // Cache last root to reduce read lock.
-    last_root: Option<Slot>,
+    last_root: Slot,
     // remember the last root slot cleaned, clear anything between last_root and last_root_cleaned.
-    last_root_cleaned: Option<Slot>,
+    last_root_cleaned: Slot,
     blockstore: Arc<Blockstore>,
     leader_schedule_cache: Arc<LeaderScheduleCache>,
     bank_forks: Arc<RwLock<BankForks>>,
-    // Cache information from root bank so we could function correctly without reading roots.
     cached_staked_nodes: Option<Arc<HashMap<Pubkey, u64>>>,
-    cached_slots_in_epoch: u64,
     // Because cleanup could potentially be very expensive, only clean up when clean up
     // count is 0
     cleanup_count: usize,
@@ -100,9 +101,8 @@ impl DuplicateShredHandler {
             chunk_map: HashMap::new(),
             validator_pending_proof_map: HashMap::new(),
             cached_staked_nodes: None,
-            last_root: None,
-            last_root_cleaned: None,
-            cached_slots_in_epoch: 100,
+            last_root: 0,
+            last_root_cleaned: 0,
             blockstore,
             leader_schedule_cache,
             bank_forks,
@@ -112,13 +112,8 @@ impl DuplicateShredHandler {
 
     fn cache_root_info(&mut self) {
         let last_root = self.blockstore.last_root();
-        if Some(last_root) != self.last_root {
-            self.last_root = Some(last_root);
-            if let Ok(bank_forks_result) = self.bank_forks.read() {
-                let root_bank = bank_forks_result.root_bank();
-                self.cached_staked_nodes = Some(root_bank.staked_nodes());
-                self.cached_slots_in_epoch = root_bank.get_epoch_info().slots_in_epoch;
-            }
+        if last_root != self.last_root {
+            self.last_root = last_root;
         }
     }
 
@@ -141,10 +136,9 @@ impl DuplicateShredHandler {
     fn should_insert_chunk(&mut self, data: &DuplicateShred) -> bool {
         let slot = data.slot;
         // Do not insert if this slot is rooted or too far away in the future or has a proof already.
-        if self.last_root.is_some()
-            && (slot <= self.last_root.unwrap()
-                || slot > self.last_root.unwrap() + self.cached_slots_in_epoch
-                || self.blockstore.has_duplicate_shreds_in_slot(slot))
+        if slot <= self.last_root
+            || slot > self.last_root + MAX_SLOT_DISTANCE_TO_ROOT
+            || self.blockstore.has_duplicate_shreds_in_slot(slot)
         {
             return false;
         }
@@ -181,7 +175,19 @@ impl DuplicateShredHandler {
         true
     }
 
+    fn sync_staked_nodes(&mut self) {
+        match self.bank_forks.read() {
+            Ok(bank_forks_result) => {
+                self.cached_staked_nodes = Some(bank_forks_result.root_bank().staked_nodes());
+            }
+            _ => self.cached_staked_nodes = None,
+        }
+    }
+
     fn check_has_enough_stake_and_cleanup(&mut self, slot: &Slot, newkey: &Pubkey) -> bool {
+        if self.cached_staked_nodes.is_none() {
+            self.sync_staked_nodes();
+        }
         match &mut self.cached_staked_nodes {
             Some(cached_staked_nodes) => {
                 let newkey_stake = cached_staked_nodes.get(newkey).copied().unwrap_or_default();
@@ -268,9 +274,7 @@ impl DuplicateShredHandler {
     }
 
     fn verify_and_apply_proof(&self, slot: Slot, chunks: Vec<DuplicateShred>) -> Result<(), Error> {
-        if (self.last_root.is_some() && slot <= self.last_root.unwrap())
-            || self.blockstore.has_duplicate_shreds_in_slot(slot)
-        {
+        if slot <= self.last_root || self.blockstore.has_duplicate_shreds_in_slot(slot) {
             return Ok(());
         }
         let (shred1, shred2) = into_shreds(chunks, |slot| {
@@ -282,14 +286,13 @@ impl DuplicateShredHandler {
     }
 
     fn cleanup_old_slots(&mut self) {
-        if let Some(last_root) = self.last_root {
-            if self.last_root_cleaned != self.last_root {
-                self.chunk_map.retain(|k, _| k > &last_root);
-                for (_, slots_sets) in self.validator_pending_proof_map.iter_mut() {
-                    slots_sets.retain(|k| k > &last_root);
-                }
-                self.last_root_cleaned = self.last_root;
+        if self.last_root_cleaned != self.last_root {
+            self.chunk_map.retain(|k, _| k > &self.last_root);
+            for (_, slots_sets) in self.validator_pending_proof_map.iter_mut() {
+                slots_sets.retain(|k| k > &self.last_root);
             }
+            self.last_root_cleaned = self.last_root;
+            self.cached_staked_nodes = None;
         }
     }
 }
@@ -461,8 +464,7 @@ mod tests {
         assert!(!blockstore.has_duplicate_shreds_in_slot(start_slot));
 
         // This proof will be rejected because the slot is too far away in the future.
-        let future_slot =
-            blockstore.last_root() + duplicate_shred_handler.cached_slots_in_epoch + start_slot;
+        let future_slot = blockstore.last_root() + MAX_SLOT_DISTANCE_TO_ROOT + start_slot;
         let chunks = create_duplicate_proof(
             my_keypair.clone(),
             None,
