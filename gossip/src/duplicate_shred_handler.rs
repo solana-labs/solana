@@ -23,7 +23,7 @@ const MAX_NUM_CHUNKS: u8 = 3;
 // so we allow 5 here to limit the chunk map size.
 const ALLOWED_SLOTS_PER_PUBKEY: usize = 5;
 // We limit the pubkey for each slot to be 100 for now, when this limit is reached,
-// we drop 10% of stakes with lowest stakes.
+// we drop 10% of pubkeys with lowest stakes.
 const MAX_PUBKEY_PER_SLOT: usize = 100;
 
 struct ProofChunkMap {
@@ -125,8 +125,7 @@ impl DuplicateShredHandler {
             {
                 return;
             }
-            let bank_forks_result = self.bank_forks.read().unwrap();
-            let root_bank = bank_forks_result.root_bank();
+            let root_bank = self.bank_forks.read().unwrap().root_bank();
             self.cached_on_slot = root_bank.slot();
             let epoch_info = root_bank.get_epoch_info();
             self.cached_staked_nodes = root_bank.epoch_staked_nodes(epoch_info.epoch);
@@ -171,39 +170,33 @@ impl DuplicateShredHandler {
                 return false;
             }
         }
-        // Also skip frozen slots or slots with an older proof than me.
+        // Also skip frozen slots or slots with a different proof than me.
         match self.chunk_map.get(&slot) {
-            Some(SlotStatus::Frozen) => {
-                return false;
-            }
+            Some(SlotStatus::Frozen) => false,
             Some(SlotStatus::UnfinishedProof(slot_map)) => match slot_map.get(&data.from) {
-                None => {
-                    if slot_map.len() < MAX_PUBKEY_PER_SLOT {
-                        return true;
-                    }
-                    return self.check_has_enough_stake_and_cleanup(&slot, &data.from);
-                }
-                Some(proof_chunkmap) => {
-                    return proof_chunkmap.wallclock >= data.wallclock;
-                }
+                None => self.check_has_enough_stake_and_cleanup(&slot, &data.from),
+                Some(proof_chunkmap) => proof_chunkmap.wallclock == data.wallclock,
             },
-            None => {}
+            None => true,
         }
-        true
     }
 
     fn check_has_enough_stake_and_cleanup(&mut self, slot: &Slot, newkey: &Pubkey) -> bool {
-        match &mut self.cached_staked_nodes {
-            Some(cached_staked_nodes) => {
-                let newkey_stake = cached_staked_nodes.get(newkey).copied().unwrap_or_default();
-                // Ignore new pubkey without any stake.
-                if newkey_stake == 0u64 {
-                    return false;
+        match self.chunk_map.get_mut(slot) {
+            None => true,
+            Some(SlotStatus::Frozen) => false,
+            Some(SlotStatus::UnfinishedProof(chunk_map)) => {
+                if chunk_map.len() < MAX_PUBKEY_PER_SLOT {
+                    return true;
                 }
-                let slot_map = self.chunk_map.get_mut(slot);
-                match slot_map {
-                    None => true,
-                    Some(SlotStatus::UnfinishedProof(chunk_map)) => {
+                match &mut self.cached_staked_nodes {
+                    Some(cached_staked_nodes) => {
+                        let newkey_stake =
+                            cached_staked_nodes.get(newkey).copied().unwrap_or_default();
+                        // Ignore new pubkey without any stake.
+                        if newkey_stake == 0u64 {
+                            return false;
+                        }
                         let mut heap = BinaryHeap::new();
                         // Push new pubkey in first so it's compared with those in the table.
                         heap.push(Reverse::<(u64, Pubkey)>((newkey_stake, *newkey)));
@@ -226,10 +219,9 @@ impl DuplicateShredHandler {
                         // stake is too low, return false in this case.
                         !newkey_popped
                     }
-                    _ => false,
+                    None => false,
                 }
             }
-            _ => false,
         }
     }
 
@@ -485,8 +477,9 @@ mod tests {
         }
         assert!(!blockstore.has_duplicate_shreds_in_slot(future_slot));
 
-        // Send in two proofs, only the proof with older wallclock will be accepted.
-        let chunks = create_duplicate_proof(
+        // Send in two proofs, the first proof showing up will be accepted, the following
+        // proofs will be discarded.
+        let mut chunks = create_duplicate_proof(
             my_keypair.clone(),
             None,
             start_slot,
@@ -494,6 +487,8 @@ mod tests {
             DUPLICATE_SHRED_MAX_PAYLOAD_SIZE,
         )
         .unwrap();
+        // handle chunk 0 of the first proof.
+        duplicate_shred_handler.handle(chunks.next().unwrap());
         let chunks1 = create_duplicate_proof(
             my_keypair.clone(),
             None,
@@ -502,14 +497,15 @@ mod tests {
             DUPLICATE_SHRED_MAX_PAYLOAD_SIZE,
         )
         .unwrap();
-        for (chunk1, chunk2) in chunks1.zip(chunks) {
-            duplicate_shred_handler.handle(chunk1);
-            // The first proof will never succeed because it's replaced in chunkmap by next one
-            // with older wallclock.
-            assert!(!blockstore.has_duplicate_shreds_in_slot(start_slot));
-            duplicate_shred_handler.handle(chunk2);
+        for chunk in chunks1 {
+            duplicate_shred_handler.handle(chunk);
         }
-        // The second proof will succeed.
+        // The second proof will be discarded.
+        assert!(!blockstore.has_duplicate_shreds_in_slot(start_slot));
+        // Now send in the rest of the first proof, it will succeed.
+        for chunk in chunks {
+            duplicate_shred_handler.handle(chunk);
+        }
         assert!(blockstore.has_duplicate_shreds_in_slot(start_slot));
 
         start_slot = 2;
