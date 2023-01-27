@@ -204,16 +204,6 @@ impl TransactionContext {
             .ok_or(InstructionError::CallDepth)
     }
 
-    /// Gets an InstructionContext by its index in the trace (mutable)
-    pub fn get_instruction_context_at_index_in_trace_mut(
-        &mut self,
-        index_in_trace: usize,
-    ) -> Result<&mut InstructionContext, InstructionError> {
-        self.instruction_trace
-            .get_mut(index_in_trace)
-            .ok_or(InstructionError::CallDepth)
-    }
-
     /// Gets an InstructionContext by its nesting level in the stack
     pub fn get_instruction_context_at_nesting_level(
         &self,
@@ -224,21 +214,6 @@ impl TransactionContext {
             .get(nesting_level)
             .ok_or(InstructionError::CallDepth)?;
         let instruction_context = self.get_instruction_context_at_index_in_trace(index_in_trace)?;
-        debug_assert_eq!(instruction_context.nesting_level, nesting_level);
-        Ok(instruction_context)
-    }
-
-    /// Gets an InstructionContext by its nesting level in the stack (mutable)
-    pub fn get_instruction_context_at_nesting_level_mut(
-        &mut self,
-        nesting_level: usize,
-    ) -> Result<&mut InstructionContext, InstructionError> {
-        let index_in_trace = *self
-            .instruction_stack
-            .get(nesting_level)
-            .ok_or(InstructionError::CallDepth)?;
-        let instruction_context =
-            self.get_instruction_context_at_index_in_trace_mut(index_in_trace)?;
         debug_assert_eq!(instruction_context.nesting_level, nesting_level);
         Ok(instruction_context)
     }
@@ -254,25 +229,13 @@ impl TransactionContext {
         self.instruction_stack.len()
     }
 
-    /// Returns the current InstructionContext level
-    pub fn get_current_instruction_context_level(&self) -> Result<usize, InstructionError> {
-        self.get_instruction_context_stack_height()
-            .checked_sub(1)
-            .ok_or(InstructionError::CallDepth)
-    }
-
     /// Returns the current InstructionContext
     pub fn get_current_instruction_context(&self) -> Result<&InstructionContext, InstructionError> {
-        self.get_instruction_context_at_nesting_level(self.get_current_instruction_context_level()?)
-    }
-
-    /// Returns the current InstructionContext (mutable)
-    pub fn get_current_instruction_context_mut(
-        &mut self,
-    ) -> Result<&mut InstructionContext, InstructionError> {
-        self.get_instruction_context_at_nesting_level_mut(
-            self.get_current_instruction_context_level()?,
-        )
+        let level = self
+            .get_instruction_context_stack_height()
+            .checked_sub(1)
+            .ok_or(InstructionError::CallDepth)?;
+        self.get_instruction_context_at_nesting_level(level)
     }
 
     /// Returns the InstructionContext to configure for the next invocation.
@@ -431,8 +394,6 @@ pub struct TransactionReturnData {
     pub data: Vec<u8>,
 }
 
-pub type TraceLogEntry = [u64; 12];
-
 /// Loaded instruction shared between runtime and programs.
 ///
 /// This context is valid for the entire duration of a (possibly cross program) instruction being processed.
@@ -443,7 +404,6 @@ pub struct InstructionContext {
     program_accounts: Vec<IndexOfAccount>,
     instruction_accounts: Vec<InstructionAccount>,
     instruction_data: Vec<u8>,
-    trace_log: Vec<TraceLogEntry>,
 }
 
 impl InstructionContext {
@@ -575,19 +535,6 @@ impl InstructionContext {
     }
 
     /// Gets the key of the last program account of this Instruction
-    pub fn get_last_program<'a, 'b: 'a>(
-        &'a self,
-        transaction_context: &'b TransactionContext,
-    ) -> Result<&'b RefCell<AccountSharedData>, InstructionError> {
-        self.get_index_of_program_account_in_transaction(
-            self.get_number_of_program_accounts().saturating_sub(1),
-        )
-        .and_then(|index_in_transaction| {
-            transaction_context.get_account_at_index(index_in_transaction)
-        })
-    }
-
-    /// Gets the key of the last program account of this Instruction
     pub fn get_last_program_key<'a, 'b: 'a>(
         &'a self,
         transaction_context: &'b TransactionContext,
@@ -704,14 +651,6 @@ impl InstructionContext {
             }
         }
         Ok(result)
-    }
-
-    pub fn trace_log(&self) -> &[TraceLogEntry] {
-        &self.trace_log
-    }
-
-    pub fn log_bpf_state(&mut self, state: TraceLogEntry) {
-        self.trace_log.push(state);
     }
 }
 
