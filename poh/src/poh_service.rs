@@ -5,7 +5,7 @@ use {
     crossbeam_channel::Receiver,
     log::*,
     solana_entry::poh::Poh,
-    solana_measure::{measure, measure::Measure},
+    solana_measure::measure,
     solana_sdk::poh_config::PohConfig,
     std::{
         sync::{
@@ -237,6 +237,37 @@ impl PohService {
         }
     }
 
+    /// Loops to record current record and any newly received records
+    fn record(
+        mut record: Record,
+        poh_recorder_l: &mut PohRecorder,
+        timing: &mut PohTiming,
+        record_receiver: &Receiver<Record>,
+    ) {
+        loop {
+            let res = poh_recorder_l.record(
+                record.slot,
+                record.mixin,
+                std::mem::take(&mut record.transactions),
+            );
+            // what do we do on failure here? Ignore for now.
+            let (_send_res, send_record_result_time) = measure!(record.sender.send(res));
+            timing.total_send_record_result_us += send_record_result_time.as_us();
+            timing.num_hashes += 1; // note: may have also ticked inside record
+
+            let new_record_result = record_receiver.try_recv();
+            match new_record_result {
+                Ok(new_record) => {
+                    // we already have second request to record, so record again while we still have the mutex
+                    record = new_record;
+                }
+                Err(_) => {
+                    break;
+                }
+            }
+        }
+    }
+
     // returns true if we need to tick
     fn record_or_hash(
         next_record: &mut Option<Record>,
@@ -248,36 +279,18 @@ impl PohService {
         target_ns_per_tick: u64,
     ) -> bool {
         match next_record.take() {
-            Some(mut record) => {
+            Some(record) => {
                 // received message to record
                 // so, record for as long as we have queued up record requests
                 let (mut poh_recorder_l, lock_time) = measure!(poh_recorder.write().unwrap());
                 timing.total_lock_time_ns += lock_time.as_ns();
 
-                let mut record_time = Measure::start("record");
-                loop {
-                    let res = poh_recorder_l.record(
-                        record.slot,
-                        record.mixin,
-                        std::mem::take(&mut record.transactions),
-                    );
-                    // what do we do on failure here? Ignore for now.
-                    let (_send_res, send_record_result_time) = measure!(record.sender.send(res));
-                    timing.total_send_record_result_us += send_record_result_time.as_us();
-                    timing.num_hashes += 1; // note: may have also ticked inside record
-
-                    let new_record_result = record_receiver.try_recv();
-                    match new_record_result {
-                        Ok(new_record) => {
-                            // we already have second request to record, so record again while we still have the mutex
-                            record = new_record;
-                        }
-                        Err(_) => {
-                            break;
-                        }
-                    }
-                }
-                record_time.stop();
+                let (_, record_time) = measure!(Self::record(
+                    record,
+                    &mut poh_recorder_l,
+                    timing,
+                    record_receiver
+                ));
                 timing.total_record_time_us += record_time.as_us();
                 // PohRecorder.record would have ticked if it needed to, so should_tick will be false
             }
