@@ -15,7 +15,7 @@ use {
         transaction_batch::TransactionBatch,
         vote_sender_types::ReplayVoteSender,
     },
-    solana_sdk::{saturating_add_assign, transaction::SanitizedTransaction},
+    solana_sdk::saturating_add_assign,
     solana_transaction_status::token_balances::TransactionTokenBalancesSet,
     std::sync::Arc,
 };
@@ -34,7 +34,6 @@ impl Committer {
         batch: &TransactionBatch,
         loaded_transactions: &mut [TransactionLoadResult],
         execution_results: Vec<TransactionExecutionResult>,
-        sanitized_txs: &[SanitizedTransaction],
         starting_transaction_index: Option<usize>,
         bank: &Arc<Bank>,
         pre_balance_info: &mut PreBalanceInfo,
@@ -55,7 +54,7 @@ impl Committer {
             bank.last_blockhash_and_lamports_per_signature();
 
         let (tx_results, commit_time_us) = measure_us!(bank.commit_transactions(
-            sanitized_txs,
+            batch.sanitized_transactions(),
             loaded_transactions,
             execution_results,
             last_blockhash,
@@ -84,7 +83,11 @@ impl Committer {
             .collect();
 
         let (_, find_and_send_votes_us) = measure_us!({
-            bank_utils::find_and_send_votes(sanitized_txs, &tx_results, Some(replay_vote_sender));
+            bank_utils::find_and_send_votes(
+                batch.sanitized_transactions(),
+                &tx_results,
+                Some(replay_vote_sender),
+            );
             Self::collect_balances_and_send_status_batch(
                 transaction_status_sender,
                 tx_results,

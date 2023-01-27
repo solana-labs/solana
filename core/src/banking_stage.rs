@@ -988,13 +988,11 @@ impl BankingStage {
             };
         }
 
-        let sanitized_txs = batch.sanitized_transactions();
         let (commit_time_us, commit_transaction_statuses) = if executed_transactions_count != 0 {
             Committer::commit_transactions(
                 batch,
                 &mut loaded_transactions,
                 execution_results,
-                sanitized_txs,
                 starting_transaction_index,
                 bank,
                 &mut pre_balance_info,
@@ -1021,7 +1019,7 @@ impl BankingStage {
             load_execute_time.as_us(),
             record_time.as_us(),
             commit_time_us,
-            sanitized_txs.len(),
+            batch.sanitized_transactions().len(),
         );
 
         debug!(
