@@ -50,34 +50,36 @@ impl Default for ConnectedFlags {
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize, Eq, PartialEq)]
-// The Meta column family
+/// The Meta column family
 pub struct SlotMeta {
-    // The number of slots above the root (the genesis block). The first
-    // slot has slot 0.
+    /// The number of slots above the root (the genesis block). The first
+    /// slot has slot 0.
     pub slot: Slot,
-    // The total number of consecutive shreds starting from index 0
-    // we have received for this slot.
+    /// The total number of consecutive shreds starting from index 0 we have received for this slot.
+    /// At the same time, it is also an index of the first missing shred for this slot, while the
+    /// slot is incomplete.
     pub consumed: u64,
-    // The index *plus one* of the highest shred received for this slot.  Useful
-    // for checking if the slot has received any shreds yet, and to calculate the
-    // range where there is one or more holes: `(consumed..received)`.
+    /// The index *plus one* of the highest shred received for this slot.  Useful
+    /// for checking if the slot has received any shreds yet, and to calculate the
+    /// range where there is one or more holes: `(consumed..received)`.
     pub received: u64,
-    // The timestamp of the first time a shred was added for this slot
+    /// The timestamp of the first time a shred was added for this slot
     pub first_shred_timestamp: u64,
-    // The index of the shred that is flagged as the last shred for this slot.
-    // None until the shred with LAST_SHRED_IN_SLOT flag is received.
+    /// The index of the shred that is flagged as the last shred for this slot.
+    /// None until the shred with LAST_SHRED_IN_SLOT flag is received.
     #[serde(with = "serde_compat")]
     pub last_index: Option<u64>,
-    // The slot height of the block this one derives from.
-    // The parent slot of the head of a detached chain of slots is None.
+    /// The slot height of the block this one derives from.
+    /// The parent slot of the head of a detached chain of slots is None.
     #[serde(with = "serde_compat")]
     pub parent_slot: Option<Slot>,
-    // The list of slots, each of which contains a block that derives
-    // from this one.
+    /// The list of slots, each of which contains a block that derives
+    /// from this one.
     pub next_slots: Vec<Slot>,
-    // Connected status flags of this slot
+    /// Connected status flags of this slot
     pub connected_flags: ConnectedFlags,
-    // Shreds indices which are marked data complete.
+    /// Shreds indices which are marked data complete.  That is, those that have the
+    /// [`ShredFlags::DATA_COMPLETE_SHRED`][`crate::shred::ShredFlags::DATA_COMPLETE_SHRED`] set.
     pub completed_data_indexes: BTreeSet<u32>,
 }
 

@@ -12,10 +12,10 @@ use {
     itertools::Itertools,
     solana_measure::measure::Measure,
     solana_perf::{
+        deduper::Deduper,
         packet::{Packet, PacketBatch},
         sigverify::{
             count_discarded_packets, count_packets_in_batches, count_valid_packets, shrink_batches,
-            Deduper,
         },
     },
     solana_sdk::timing,

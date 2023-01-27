@@ -13,9 +13,7 @@ use {
         bank::{Bank, BankTestConfig},
         epoch_accounts_hash,
         genesis_utils::{self, activate_all_features, activate_feature},
-        snapshot_utils::{
-            create_tmp_accounts_dir_for_tests, get_storages_to_serialize, ArchiveFormat,
-        },
+        snapshot_utils::{get_storages_to_serialize, ArchiveFormat},
         status_cache::StatusCache,
     },
     bincode::serialize_into,
@@ -176,18 +174,19 @@ fn test_accounts_serialize_style(serde_style: SerdeStyle) {
         AccountShrinkThreshold::default(),
     );
 
+    let slot = 0;
     let mut pubkeys: Vec<Pubkey> = vec![];
-    create_test_accounts(&accounts, &mut pubkeys, 100, 0);
+    create_test_accounts(&accounts, &mut pubkeys, 100, slot);
     check_accounts(&accounts, &pubkeys, 100);
-    accounts.add_root(0);
+    accounts.add_root(slot);
 
     let mut writer = Cursor::new(vec![]);
     accountsdb_to_stream(
         serde_style,
         &mut writer,
         &accounts.accounts_db,
-        0,
-        &get_storages_to_serialize(&accounts.accounts_db.get_snapshot_storages(..=0, None).0),
+        slot,
+        &get_storages_to_serialize(&accounts.accounts_db.get_snapshot_storages(..=slot, None).0),
     )
     .unwrap();
 
@@ -210,10 +209,9 @@ fn test_accounts_serialize_style(serde_style: SerdeStyle) {
         .unwrap(),
     );
     check_accounts(&daccounts, &pubkeys, 100);
-    assert_eq!(
-        accounts.bank_hash_info_at(0).accounts_delta_hash,
-        daccounts.bank_hash_info_at(0).accounts_delta_hash
-    );
+    let accounts_delta_hash = accounts.accounts_db.calculate_accounts_delta_hash(slot);
+    let daccounts_delta_hash = daccounts.accounts_db.calculate_accounts_delta_hash(slot);
+    assert_eq!(accounts_delta_hash, daccounts_delta_hash);
 }
 
 fn test_bank_serialize_style(
@@ -579,7 +577,7 @@ fn test_extra_fields_full_snapshot_archive() {
     // Set extra field
     bank.fee_rate_governor.lamports_per_signature = 7000;
 
-    let (_tmp_dir, accounts_dir) = create_tmp_accounts_dir_for_tests();
+    let accounts_dir = TempDir::new().unwrap();
     let bank_snapshots_dir = TempDir::new().unwrap();
     let full_snapshot_archives_dir = TempDir::new().unwrap();
     let incremental_snapshot_archives_dir = TempDir::new().unwrap();
@@ -599,7 +597,7 @@ fn test_extra_fields_full_snapshot_archive() {
 
     // Deserialize
     let (dbank, _) = snapshot_utils::bank_from_snapshot_archives(
-        &[accounts_dir],
+        &[PathBuf::from(accounts_dir.path())],
         bank_snapshots_dir.path(),
         &snapshot_archive_info,
         None,

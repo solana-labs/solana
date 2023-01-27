@@ -4,7 +4,7 @@ use {
         account_rent_state::{check_rent_state_with_account, RentState},
         accounts_db::{
             AccountShrinkThreshold, AccountsAddRootTiming, AccountsDb, AccountsDbConfig,
-            BankHashInfo, IncludeSlotInHash, LoadHint, LoadedAccount, ScanStorageResult,
+            IncludeSlotInHash, LoadHint, LoadedAccount, ScanStorageResult,
             ACCOUNTS_DB_CONFIG_FOR_BENCHMARKS, ACCOUNTS_DB_CONFIG_FOR_TESTING,
         },
         accounts_index::{
@@ -1065,17 +1065,6 @@ impl Accounts {
         for k in readonly_keys {
             account_locks.unlock_readonly(k);
         }
-    }
-
-    pub fn bank_hash_info_at(&self, slot: Slot) -> BankHashInfo {
-        let accounts_delta_hash = self.accounts_db.calculate_accounts_delta_hash(slot);
-        let bank_hashes = self.accounts_db.bank_hashes.read().unwrap();
-        let mut bank_hash_info = bank_hashes
-            .get(&slot)
-            .expect("No bank hash was found for this bank, that should not be possible")
-            .clone();
-        bank_hash_info.accounts_delta_hash = accounts_delta_hash;
-        bank_hash_info
     }
 
     /// This function will prevent multiple threads from modifying the same account state at the
@@ -2443,7 +2432,6 @@ mod tests {
     }
 
     #[test]
-    #[should_panic]
     fn test_accounts_empty_bank_hash() {
         let accounts = Accounts::new_with_config_for_tests(
             Vec::new(),
@@ -2451,7 +2439,8 @@ mod tests {
             AccountSecondaryIndexes::default(),
             AccountShrinkThreshold::default(),
         );
-        accounts.bank_hash_info_at(1);
+        assert!(accounts.accounts_db.get_bank_hash_info(0).is_some());
+        assert!(accounts.accounts_db.get_bank_hash_info(1).is_none());
     }
 
     #[test]

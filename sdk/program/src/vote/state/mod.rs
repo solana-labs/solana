@@ -82,9 +82,8 @@ impl Lockout {
     // The last slot at which a vote is still locked out. Validators should not
     // vote on a slot in another fork which is less than or equal to this slot
     // to avoid having their stake slashed.
-    #[allow(clippy::integer_arithmetic)]
     pub fn last_locked_out_slot(&self) -> Slot {
-        self.slot + self.lockout()
+        self.slot.saturating_add(self.lockout())
     }
 
     pub fn is_locked_out_at_slot(&self, slot: Slot) -> bool {
@@ -200,22 +199,25 @@ pub struct CircBuf<I> {
 }
 
 impl<I: Default + Copy> Default for CircBuf<I> {
-    #[allow(clippy::integer_arithmetic)]
     fn default() -> Self {
         Self {
             buf: [I::default(); MAX_ITEMS],
-            idx: MAX_ITEMS - 1,
+            idx: MAX_ITEMS
+                .checked_sub(1)
+                .expect("`MAX_ITEMS` should be positive"),
             is_empty: true,
         }
     }
 }
 
 impl<I> CircBuf<I> {
-    #[allow(clippy::integer_arithmetic)]
     pub fn append(&mut self, item: I) {
         // remember prior delegate and when we switched, to support later slashing
-        self.idx += 1;
-        self.idx %= MAX_ITEMS;
+        self.idx = self
+            .idx
+            .checked_add(1)
+            .and_then(|idx| idx.checked_rem(MAX_ITEMS))
+            .expect("`self.idx` should be < `MAX_ITEMS` which should be non-zero");
 
         self.buf[self.idx] = item;
         self.is_empty = false;
@@ -321,7 +323,6 @@ impl VoteState {
     ///
     ///  if commission calculation is 100% one way or other,
     ///   indicate with false for was_split
-    #[allow(clippy::integer_arithmetic)]
     pub fn commission_split(&self, on: u64) -> (u64, u64, bool) {
         match self.commission.min(100) {
             0 => (0, on, false),
@@ -333,8 +334,18 @@ impl VoteState {
                 // This is also to cancel the rewarding if either of the parties
                 // should receive only fractional lamports, resulting in not being rewarded at all.
                 // Thus, note that we intentionally discard any residual fractional lamports.
-                let mine = on * u128::from(split) / 100u128;
-                let theirs = on * u128::from(100 - split) / 100u128;
+                let mine = on
+                    .checked_mul(u128::from(split))
+                    .expect("multiplication of a u64 and u8 should not overflow")
+                    / 100u128;
+                let theirs = on
+                    .checked_mul(u128::from(
+                        100u8
+                            .checked_sub(split)
+                            .expect("commission cannot be greater than 100"),
+                    ))
+                    .expect("multiplication of a u64 and u8 should not overflow")
+                    / 100u128;
 
                 (mine as u64, theirs as u64, true)
             }
@@ -389,7 +400,6 @@ impl VoteState {
     }
 
     /// increment credits, record credits for last epoch if new epoch
-    #[allow(clippy::integer_arithmetic)]
     pub fn increment_credits(&mut self, epoch: Epoch, credits: u64) {
         // increment credits, record by epoch
 
@@ -414,13 +424,17 @@ impl VoteState {
             }
         }
 
-        self.epoch_credits.last_mut().unwrap().1 += credits;
+        self.epoch_credits.last_mut().unwrap().1 =
+            self.epoch_credits.last().unwrap().1.saturating_add(credits);
     }
 
-    #[allow(clippy::integer_arithmetic)]
     pub fn nth_recent_vote(&self, position: usize) -> Option<&Lockout> {
         if position < self.votes.len() {
-            let pos = self.votes.len() - 1 - position;
+            let pos = self
+                .votes
+                .len()
+                .checked_sub(position)
+                .and_then(|pos| pos.checked_sub(1))?;
             self.votes.get(pos)
         } else {
             None
@@ -553,13 +567,12 @@ impl VoteState {
         }
     }
 
-    #[allow(clippy::integer_arithmetic)]
     pub fn double_lockouts(&mut self) {
         let stack_depth = self.votes.len();
         for (i, v) in self.votes.iter_mut().enumerate() {
             // Don't increase the lockout for this vote until we get more confirmations
             // than the max number of confirmations this vote has seen
-            if stack_depth > i + v.confirmation_count() as usize {
+            if stack_depth > i.checked_add(v.confirmation_count() as usize).expect("`confirmation_count` and tower_size should be bounded by `MAX_LOCKOUT_HISTORY`") {
                 v.increase_confirmation_count(1);
             }
         }
@@ -581,12 +594,11 @@ impl VoteState {
         Ok(())
     }
 
-    #[allow(clippy::integer_arithmetic)]
     pub fn is_correct_size_and_initialized(data: &[u8]) -> bool {
         const VERSION_OFFSET: usize = 4;
+        const DEFAULT_PRIOR_VOTERS_END: usize = VERSION_OFFSET + DEFAULT_PRIOR_VOTERS_OFFSET;
         data.len() == VoteState::size_of()
-            && data[VERSION_OFFSET..VERSION_OFFSET + DEFAULT_PRIOR_VOTERS_OFFSET]
-                != [0; DEFAULT_PRIOR_VOTERS_OFFSET]
+            && data[VERSION_OFFSET..DEFAULT_PRIOR_VOTERS_END] != [0; DEFAULT_PRIOR_VOTERS_OFFSET]
     }
 }
 
@@ -1145,19 +1157,21 @@ mod tests {
         }
     }
 
-    #[allow(clippy::integer_arithmetic)]
     fn run_serde_compact_vote_state_update<R: Rng>(rng: &mut R) {
         let lockouts: VecDeque<_> = std::iter::repeat_with(|| {
-            let slot = 149_303_885 + rng.gen_range(0, 10_000);
+            let slot = 149_303_885_u64.saturating_add(rng.gen_range(0, 10_000));
             let confirmation_count = rng.gen_range(0, 33);
             Lockout::new_with_confirmation_count(slot, confirmation_count)
         })
         .take(32)
         .sorted_by_key(|lockout| lockout.slot())
         .collect();
-        let root = rng
-            .gen_ratio(1, 2)
-            .then(|| lockouts[0].slot() - rng.gen_range(0, 1_000));
+        let root = rng.gen_ratio(1, 2).then(|| {
+            lockouts[0]
+                .slot()
+                .checked_sub(rng.gen_range(0, 1_000))
+                .expect("All slots should be greater than 1_000")
+        });
         let timestamp = rng.gen_ratio(1, 2).then(|| rng.gen());
         let hash = Hash::from(rng.gen::<[u8; 32]>());
         let vote_state_update = VoteStateUpdate {

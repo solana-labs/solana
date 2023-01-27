@@ -136,7 +136,7 @@ function Developers() {
               />
 
               <Card
-                to="developing/clients/jsonrpc-api"
+                to="/api"
                 header={{
                   label: "RPC API",
                   translateId: "rpc-api",

@@ -1,5 +1,5 @@
-//! Persistent accounts are stored in below path location:
-//!  <path>/<pid>/data/
+//! Persistent accounts are stored at this path location:
+//!  `<path>/<pid>/data/`
 //!
 //! The persistent store would allow for this mode of operation:
 //!  - Concurrent single thread append with many concurrent readers.
@@ -12,8 +12,8 @@
 //! The only required in memory data structure with a write lock is the index,
 //! which should be fast to update.
 //!
-//! AppendVec's only store accounts for single slots.  To bootstrap the
-//! index from a persistent store of AppendVec's, the entries include
+//! [`AppendVec`]'s only store accounts for single slots.  To bootstrap the
+//! index from a persistent store of [`AppendVec`]'s, the entries include
 //! a "write_version".  A single global atomic `AccountsDb::write_version`
 //! tracks the number of commits to the entire data store. So the latest
 //! commit for each slot entry would be indexed.
@@ -53,7 +53,6 @@ use {
         read_only_accounts_cache::ReadOnlyAccountsCache,
         rent_collector::RentCollector,
         rent_paying_accounts_by_partition::RentPayingAccountsByPartition,
-        snapshot_utils::create_accounts_run_and_snapshot_dirs,
         sorted_storages::SortedStorages,
         storable_accounts::StorableAccounts,
         verify_accounts_hash_in_background::VerifyAccountsHashInBackground,
@@ -1114,14 +1113,7 @@ impl AccountStorageEntry {
 pub fn get_temp_accounts_paths(count: u32) -> IoResult<(Vec<TempDir>, Vec<PathBuf>)> {
     let temp_dirs: IoResult<Vec<TempDir>> = (0..count).map(|_| TempDir::new()).collect();
     let temp_dirs = temp_dirs?;
-
-    let paths: IoResult<Vec<_>> = temp_dirs
-        .iter()
-        .map(|temp_dir| {
-            create_accounts_run_and_snapshot_dirs(temp_dir).map(|(run_dir, _snapshot_dir)| run_dir)
-        })
-        .collect();
-    let paths = paths?;
+    let paths: Vec<PathBuf> = temp_dirs.iter().map(|t| t.path().to_path_buf()).collect();
     Ok((temp_dirs, paths))
 }
 
@@ -7553,6 +7545,11 @@ impl AccountsDb {
             .fetch_add(accumulate.as_us(), Ordering::Relaxed);
         self.stats.delta_hash_num.fetch_add(1, Ordering::Relaxed);
         accounts_delta_hash
+    }
+
+    /// Get the bank hash info for `slot`
+    pub fn get_bank_hash_info(&self, slot: Slot) -> Option<BankHashInfo> {
+        self.bank_hashes.read().unwrap().get(&slot).cloned()
     }
 
     fn update_index<'a, T: ReadableAccount + Sync>(

@@ -38,9 +38,7 @@ use {
         snapshot_archive_info::SnapshotArchiveInfoGetter,
         snapshot_config::SnapshotConfig,
         snapshot_package::SnapshotType,
-        snapshot_utils::{
-            self, create_accounts_run_and_snapshot_dirs, ArchiveFormat, SnapshotVersion,
-        },
+        snapshot_utils::{self, ArchiveFormat, SnapshotVersion},
     },
     solana_sdk::{
         account::AccountSharedData,
@@ -2154,11 +2152,7 @@ fn create_snapshot_to_hard_fork(
     let (bank_forks, ..) = bank_forks_utils::load(
         &genesis_config,
         blockstore,
-        vec![
-            create_accounts_run_and_snapshot_dirs(ledger_path.join("accounts"))
-                .unwrap()
-                .0,
-        ],
+        vec![ledger_path.join("accounts")],
         None,
         snapshot_config.as_ref(),
         process_options,
