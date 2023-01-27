@@ -6776,6 +6776,38 @@ pub(crate) mod tests {
             expired_bank.last_blockhash()
         );
         assert_eq!(tower.last_voted_slot().unwrap(), 1);
+
+        // Create enough banks on the fork so last vote is outside SlotHash, make sure
+        // we now vote at the tip of the fork.
+        let mut new_bank = bank2;
+        let last_voted_slot = tower.last_voted_slot().unwrap();
+        for _ in 0..10000 {
+            let bank = Arc::new(Bank::new_from_parent(
+                &new_bank,
+                &Pubkey::default(),
+                new_bank.slot() + 1,
+            ));
+            bank.fill_bank_with_ticks_for_tests();
+            if !bank.slot_within_slothash(&last_voted_slot) {
+                ReplayStage::refresh_last_vote(
+                    &mut tower,
+                    &bank,
+                    last_voted_slot - 1,
+                    &my_vote_pubkey,
+                    &identity_keypair,
+                    &my_vote_keypair,
+                    &mut voted_signatures,
+                    has_new_vote_been_rooted,
+                    &mut last_vote_refresh_time,
+                    &voting_sender,
+                    None,
+                );
+                assert_eq!(tower.last_voted_slot().unwrap(), bank.slot());
+                break;
+            }
+            new_bank = bank;
+        }
+        assert_ne!(tower.last_voted_slot().unwrap(), 1);
     }
 
     #[test]
