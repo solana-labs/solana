@@ -745,7 +745,7 @@ impl TryFrom<tx_by_addr::TransactionError> for TransactionError {
         }
 
         Ok(match transaction_error.transaction_error {
-            0 => TransactionError::AccountInUse,
+            0 => TransactionError::AccountInUse(Pubkey::default()),
             1 => TransactionError::AccountLoadedTwice,
             2 => TransactionError::AccountNotFound,
             3 => TransactionError::ProgramAccountNotFound,
@@ -783,7 +783,7 @@ impl From<TransactionError> for tx_by_addr::TransactionError {
     fn from(transaction_error: TransactionError) -> Self {
         Self {
             transaction_error: match transaction_error {
-                TransactionError::AccountInUse => tx_by_addr::TransactionErrorType::AccountInUse,
+                TransactionError::AccountInUse(_) => tx_by_addr::TransactionErrorType::AccountInUse,
                 TransactionError::AccountLoadedTwice => {
                     tx_by_addr::TransactionErrorType::AccountLoadedTwice
                 }
@@ -1179,7 +1179,7 @@ mod test {
             tx_by_addr_transaction_error.try_into().unwrap()
         );
 
-        let transaction_error = TransactionError::AccountInUse;
+        let transaction_error = TransactionError::AccountInUse(Pubkey::default());
         let tx_by_addr_transaction_error: tx_by_addr::TransactionError =
             transaction_error.clone().into();
         assert_eq!(

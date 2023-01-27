@@ -369,7 +369,7 @@ impl QosService {
         Self::new(
             Arc::new(RwLock::new(CostModel::default())),
             1,
-            QuicBidirectionalReplyService::new_for_test(),
+            QuicBidirectionalReplyService::disabled(),
         )
     }
 }
@@ -611,7 +611,7 @@ mod tests {
         let qos_service = QosService::new(
             cost_model.clone(),
             1,
-            QuicBidirectionalReplyService::new_for_test(),
+            QuicBidirectionalReplyService::disabled(),
         );
         let txs_costs = qos_service.compute_transaction_costs(txs.iter());
 
@@ -661,8 +661,7 @@ mod tests {
         // make a vec of txs
         let txs = vec![transfer_tx.clone(), vote_tx.clone(), transfer_tx, vote_tx];
 
-        let qos_service =
-            QosService::new(cost_model, 1, QuicBidirectionalReplyService::new_for_test());
+        let qos_service = QosService::new(cost_model, 1, QuicBidirectionalReplyService::disabled());
         let txs_costs = qos_service.compute_transaction_costs(txs.iter());
 
         // set cost tracker limit to fit 1 transfer tx and 1 vote tx
@@ -705,7 +704,7 @@ mod tests {
             let qos_service = QosService::new(
                 Arc::new(RwLock::new(CostModel::default())),
                 1,
-                QuicBidirectionalReplyService::new_for_test(),
+                QuicBidirectionalReplyService::disabled(),
             );
             let txs_costs = qos_service.compute_transaction_costs(txs.iter());
             let total_txs_cost: u64 = txs_costs.iter().map(|cost| cost.sum()).sum();
@@ -762,7 +761,7 @@ mod tests {
             let qos_service = QosService::new(
                 Arc::new(RwLock::new(CostModel::default())),
                 1,
-                QuicBidirectionalReplyService::new_for_test(),
+                QuicBidirectionalReplyService::disabled(),
             );
             let txs_costs = qos_service.compute_transaction_costs(txs.iter());
             let total_txs_cost: u64 = txs_costs.iter().map(|cost| cost.sum()).sum();
@@ -806,7 +805,7 @@ mod tests {
             let qos_service = QosService::new(
                 Arc::new(RwLock::new(CostModel::default())),
                 1,
-                QuicBidirectionalReplyService::new_for_test(),
+                QuicBidirectionalReplyService::disabled(),
             );
             let txs_costs = qos_service.compute_transaction_costs(txs.iter());
             let total_txs_cost: u64 = txs_costs.iter().map(|cost| cost.sum()).sum();

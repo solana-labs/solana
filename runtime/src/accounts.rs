@@ -1080,13 +1080,13 @@ impl Accounts {
         for k in writable_keys.iter() {
             if account_locks.is_locked_write(k) || account_locks.is_locked_readonly(k) {
                 debug!("Writable account in use: {:?}", k);
-                return Err(TransactionError::AccountInUse);
+                return Err(TransactionError::AccountInUse(**k));
             }
         }
         for k in readonly_keys.iter() {
             if account_locks.is_locked_write(k) {
                 debug!("Read-only account in use: {:?}", k);
-                return Err(TransactionError::AccountInUse);
+                return Err(TransactionError::AccountInUse(**k));
             }
         }
 
@@ -1197,7 +1197,7 @@ impl Accounts {
             .zip(results)
             .filter_map(|(tx, res)| match res {
                 Err(TransactionError::AccountLoadedTwice)
-                | Err(TransactionError::AccountInUse)
+                | Err(TransactionError::AccountInUse(_))
                 | Err(TransactionError::SanitizeFailure)
                 | Err(TransactionError::TooManyAccountLocks)
                 | Err(TransactionError::WouldExceedMaxBlockCostLimit)

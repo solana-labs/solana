@@ -526,7 +526,7 @@ mod tests {
                     total_tracer_packets_discarded += 1;
                 }
             },
-            QuicBidirectionalReplyService::new_for_test(),
+            QuicBidirectionalReplyService::disabled(),
         );
         let total_non_discard = count_non_discard(&batches);
         let total_discarded = total_num_packets - total_non_discard;
@@ -568,7 +568,7 @@ mod tests {
             packet_r,
             verifier,
             "test",
-            QuicBidirectionalReplyService::new_for_test(),
+            QuicBidirectionalReplyService::disabled(),
         );
 
         let use_same_tx = true;

@@ -4373,7 +4373,10 @@ mod tests {
 
         let rpc_client = RpcClient::new_mock("account_in_use".to_string());
         let status = rpc_client.get_signature_status(&signature).unwrap();
-        assert_eq!(status, Some(Err(TransactionError::AccountInUse)));
+        assert_eq!(
+            status,
+            Some(Err(TransactionError::AccountInUse(Pubkey::default())))
+        );
     }
 
     #[test]

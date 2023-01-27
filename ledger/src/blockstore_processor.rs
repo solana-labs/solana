@@ -155,7 +155,7 @@ fn execute_batch(
         transaction_status_sender.is_some(),
         timings,
         log_messages_bytes_limit,
-        QuicBidirectionalReplyService::new_for_test(), // No quic bi-directional service for tvu
+        QuicBidirectionalReplyService::disabled(), // No quic bi-directional service for tvu
     );
 
     bank_utils::find_and_send_votes(
@@ -2460,25 +2460,25 @@ pub mod tests {
             first_err(&[
                 Ok(()),
                 Err(TransactionError::AlreadyProcessed),
-                Err(TransactionError::AccountInUse)
+                Err(TransactionError::AccountInUse(Pubkey::default()))
             ]),
             Err(TransactionError::AlreadyProcessed)
         );
         assert_eq!(
             first_err(&[
                 Ok(()),
-                Err(TransactionError::AccountInUse),
+                Err(TransactionError::AccountInUse(Pubkey::default())),
                 Err(TransactionError::AlreadyProcessed)
             ]),
-            Err(TransactionError::AccountInUse)
+            Err(TransactionError::AccountInUse(Pubkey::default()))
         );
         assert_eq!(
             first_err(&[
-                Err(TransactionError::AccountInUse),
+                Err(TransactionError::AccountInUse(Pubkey::default())),
                 Ok(()),
                 Err(TransactionError::AlreadyProcessed)
             ]),
-            Err(TransactionError::AccountInUse)
+            Err(TransactionError::AccountInUse(Pubkey::default()))
         );
     }
 
@@ -3310,7 +3310,7 @@ pub mod tests {
 
         assert_eq!(
             process_entries_for_tests(&bank, vec![entry_1_to_mint], false, None, None),
-            Err(TransactionError::AccountInUse)
+            Err(TransactionError::AccountInUse(Pubkey::default()))
         );
 
         // Should not see duplicate signature error
@@ -3675,7 +3675,7 @@ pub mod tests {
             false,
             &mut ExecuteTimings::default(),
             None,
-            QuicBidirectionalReplyService::new_for_test(),
+            QuicBidirectionalReplyService::disabled(),
         );
         let (err, signature) = get_first_error(&batch, fee_collection_results).unwrap();
         assert_eq!(err.unwrap_err(), TransactionError::AccountNotFound);

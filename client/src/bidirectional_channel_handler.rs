@@ -2,7 +2,9 @@ use {
     crossbeam_channel::{Receiver, Sender},
     log::debug,
     quinn::RecvStream,
-    solana_sdk::{pubkey::Pubkey, signature::Signature, transaction::VersionedTransaction},
+    solana_sdk::{
+        pubkey::Pubkey, signature::Signature, slot_history::Slot, transaction::VersionedTransaction,
+    },
     solana_streamer::bidirectional_channel::{QuicReplyMessage, QUIC_REPLY_MESSAGE_SIZE},
     std::{
         net::SocketAddr,
@@ -22,6 +24,7 @@ pub struct QuicHandlerMessage {
     pub server_identity: Option<Pubkey>,
     pub server_socket: Option<SocketAddr>,
     pub quic_connection_error: bool,
+    pub approximate_slot: Slot,
 }
 
 impl QuicHandlerMessage {
@@ -31,6 +34,10 @@ impl QuicHandlerMessage {
 
     pub fn message(&self) -> String {
         self.message.clone()
+    }
+
+    pub fn approximate_slot(&self) -> Slot {
+        self.approximate_slot
     }
 }
 
@@ -70,6 +77,7 @@ impl BidirectionalChannelHandler {
                     message: error,
                     server_socket: Some(tpu_socket),
                     quic_connection_error: true,
+                    approximate_slot: 0,
                 };
                 let _ = sender.send(message);
             }
@@ -127,6 +135,7 @@ impl BidirectionalChannelHandler {
                                                 message: message.message(),
                                                 server_socket: None,
                                                 quic_connection_error: false,
+                                                approximate_slot: message.approximate_slot(),
                                             };
                                             if let Err(_) = sender.send(message) {
                                                 // crossbeam channel closed

@@ -2531,7 +2531,7 @@ fn test_program_upgradeable_locks() {
             ..
         })
     ));
-    assert_eq!(results1[1], Err(TransactionError::AccountInUse));
+    assert_eq!(results1[1], Err(TransactionError::AccountInUse(Pubkey::default())));
 
     assert!(matches!(
         results2[0],
@@ -2549,7 +2549,7 @@ fn test_program_upgradeable_locks() {
             ..
         })
     ));
-    assert_eq!(results2[1], Err(TransactionError::AccountInUse));
+    assert_eq!(results2[1], Err(TransactionError::AccountInUse(Pubkey::default())));
 }
 
 #[cfg(feature = "bpf_rust")]

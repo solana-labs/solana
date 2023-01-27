@@ -362,7 +362,7 @@ fn main() {
             None,
             Arc::new(connection_cache),
             bank_forks.clone(),
-            QuicBidirectionalReplyService::new_for_test(),
+            QuicBidirectionalReplyService::disabled(),
         );
         poh_recorder.write().unwrap().set_bank(&bank, false);
 

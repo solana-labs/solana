@@ -2297,7 +2297,10 @@ mod tests {
         config.command = CliCommand::Confirm(any_signature);
         assert_eq!(
             process_command(&config).unwrap(),
-            format!("Transaction failed: {}", TransactionError::AccountInUse)
+            format!(
+                "Transaction failed: {}",
+                TransactionError::AccountInUse(Pubkey::default())
+            )
         );
 
         // Failure cases

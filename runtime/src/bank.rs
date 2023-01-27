@@ -3778,7 +3778,7 @@ impl Bank {
             &mut timings,
             Some(&account_overrides),
             None,
-            QuicBidirectionalReplyService::new_for_test(),
+            QuicBidirectionalReplyService::disabled(),
         );
 
         let post_simulation_accounts = loaded_transactions
@@ -4289,10 +4289,10 @@ impl Bank {
             .enumerate()
             .filter_map(|(index, res)| match res {
                 // following are retryable errors
-                Err(TransactionError::AccountInUse) => {
+                Err(TransactionError::AccountInUse(account)) => {
                     bidirection_reply_service.send_message(
                         sanitized_txs[index].signature(),
-                        TransactionError::AccountInUse.to_string(),
+                        TransactionError::AccountInUse(*account).to_string(),
                     );
                     error_counters.account_in_use += 1;
                     Some(index)
@@ -6091,7 +6091,7 @@ impl Bank {
             false,
             &mut ExecuteTimings::default(),
             None,
-            QuicBidirectionalReplyService::new_for_test(),
+            QuicBidirectionalReplyService::disabled(),
         );
         tx.signatures
             .get(0)
@@ -6154,7 +6154,7 @@ impl Bank {
             false,
             &mut ExecuteTimings::default(),
             None,
-            QuicBidirectionalReplyService::new_for_test(),
+            QuicBidirectionalReplyService::disabled(),
         )
         .0
         .fee_collection_results
@@ -10344,7 +10344,10 @@ pub(crate) mod tests {
 
         assert_eq!(res.len(), 2);
         assert_eq!(res[0], Ok(()));
-        assert_eq!(res[1], Err(TransactionError::AccountInUse));
+        assert_eq!(
+            res[1],
+            Err(TransactionError::AccountInUse(Pubkey::default()))
+        );
         assert_eq!(
             bank.get_balance(&mint_keypair.pubkey()),
             sol_to_lamports(1.) - amount
@@ -11139,7 +11142,10 @@ pub(crate) mod tests {
         let results = bank.process_transactions(txs.iter());
         // However, an account may not be locked as read-only and writable at the same time.
         assert_eq!(results[0], Ok(()));
-        assert_eq!(results[1], Err(TransactionError::AccountInUse));
+        assert_eq!(
+            results[1],
+            Err(TransactionError::AccountInUse(Pubkey::default()))
+        );
     }
 
     #[test]
@@ -11169,7 +11175,7 @@ pub(crate) mod tests {
                 false,
                 &mut ExecuteTimings::default(),
                 None,
-                QuicBidirectionalReplyService::new_for_test(),
+                QuicBidirectionalReplyService::disabled(),
             )
             .0
             .fee_collection_results;
@@ -11178,13 +11184,13 @@ pub(crate) mod tests {
         // try executing an interleaved transfer twice
         assert_eq!(
             bank.transfer(amount, &mint_keypair, &bob.pubkey()),
-            Err(TransactionError::AccountInUse)
+            Err(TransactionError::AccountInUse(Pubkey::default()))
         );
         // the second time should fail as well
         // this verifies that `unlock_accounts` doesn't unlock `AccountInUse` accounts
         assert_eq!(
             bank.transfer(amount, &mint_keypair, &bob.pubkey()),
-            Err(TransactionError::AccountInUse)
+            Err(TransactionError::AccountInUse(Pubkey::default()))
         );
 
         drop(lock_result);
@@ -13842,7 +13848,7 @@ pub(crate) mod tests {
                 false,
                 &mut ExecuteTimings::default(),
                 None,
-                QuicBidirectionalReplyService::new_for_test(),
+                QuicBidirectionalReplyService::disabled(),
             );
 
         assert_eq!(transaction_balances_set.pre_balances.len(), 3);
@@ -16615,7 +16621,7 @@ pub(crate) mod tests {
                 false,
                 &mut ExecuteTimings::default(),
                 None,
-                QuicBidirectionalReplyService::new_for_test(),
+                QuicBidirectionalReplyService::disabled(),
             )
             .0
             .execution_results;
@@ -16725,7 +16731,7 @@ pub(crate) mod tests {
                     true,
                     &mut ExecuteTimings::default(),
                     None,
-                    QuicBidirectionalReplyService::new_for_test(),
+                    QuicBidirectionalReplyService::disabled(),
                 )
                 .0
                 .execution_results[0]

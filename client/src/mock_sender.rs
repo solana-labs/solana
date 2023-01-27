@@ -158,7 +158,7 @@ impl RpcSender for MockSender {
             })?,
             "getSignatureStatuses" => {
                 let status: transaction::Result<()> = if self.url == "account_in_use" {
-                    Err(TransactionError::AccountInUse)
+                    Err(TransactionError::AccountInUse(Pubkey::default()))
                 } else if self.url == "instruction_error" {
                     Err(TransactionError::InstructionError(
                         0,

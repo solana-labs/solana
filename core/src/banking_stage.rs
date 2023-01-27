@@ -1,7 +1,6 @@
 //! The `banking_stage` processes Transaction messages. It is intended to be used
 //! to construct a software pipeline. The stage uses all available CPU cores and
 //! can do its processing in parallel with signature verification on the GPU.
-
 use {
     crate::{
         forward_packet_batches_by_accounts::ForwardPacketBatchesByAccounts,
@@ -1056,6 +1055,7 @@ impl BankingStage {
             },
             "make_decision",
         );
+
         slot_metrics_tracker.increment_make_decision_us(make_decision_time.as_us());
 
         match decision {
@@ -1064,7 +1064,10 @@ impl BankingStage {
                 // slot metrics tracker to the next slot) so that we don't count the
                 // packet processing metrics from the next slot towards the metrics
                 // of the previous slot
-                slot_metrics_tracker.apply_action(metrics_action);
+                let reported_slot = slot_metrics_tracker.apply_action(metrics_action);
+                if let Some(slot) = reported_slot {
+                    qos_service.bidirection_reply_service().update_slot(slot)
+                }
                 let (_, consume_buffered_packets_time) = measure!(
                     Self::consume_buffered_packets(
                         my_pubkey,
@@ -1106,7 +1109,10 @@ impl BankingStage {
                 slot_metrics_tracker.increment_forward_us(forward_time.as_us());
                 // Take metrics action after forwarding packets to include forwarded
                 // metrics into current slot
-                slot_metrics_tracker.apply_action(metrics_action);
+                let reported_slot = slot_metrics_tracker.apply_action(metrics_action);
+                if let Some(slot) = reported_slot {
+                    qos_service.bidirection_reply_service().update_slot(slot)
+                }
             }
             BufferedPacketsDecision::ForwardAndHold => {
                 let (_, forward_and_hold_time) = measure!(
@@ -1128,7 +1134,10 @@ impl BankingStage {
                 );
                 slot_metrics_tracker.increment_forward_and_hold_us(forward_and_hold_time.as_us());
                 // Take metrics action after forwarding packets
-                slot_metrics_tracker.apply_action(metrics_action);
+                let reported_slot = slot_metrics_tracker.apply_action(metrics_action);
+                if let Some(slot) = reported_slot {
+                    qos_service.bidirection_reply_service().update_slot(slot)
+                }
             }
             _ => (),
         }
@@ -2403,7 +2412,7 @@ mod tests {
                 None,
                 Arc::new(ConnectionCache::default()),
                 bank_forks,
-                QuicBidirectionalReplyService::new_for_test(),
+                QuicBidirectionalReplyService::disabled(),
             );
             drop(verified_sender);
             drop(gossip_verified_vote_sender);
@@ -2458,7 +2467,7 @@ mod tests {
                 None,
                 Arc::new(ConnectionCache::default()),
                 bank_forks,
-                QuicBidirectionalReplyService::new_for_test(),
+                QuicBidirectionalReplyService::disabled(),
             );
             trace!("sending bank");
             drop(verified_sender);
@@ -2538,7 +2547,7 @@ mod tests {
                 None,
                 Arc::new(ConnectionCache::default()),
                 bank_forks,
-                QuicBidirectionalReplyService::new_for_test(),
+                QuicBidirectionalReplyService::disabled(),
             );
 
             // fund another account so we can send 2 good transactions in a single batch.
@@ -2695,7 +2704,7 @@ mod tests {
                     None,
                     Arc::new(ConnectionCache::default()),
                     bank_forks,
-                    QuicBidirectionalReplyService::new_for_test(),
+                    QuicBidirectionalReplyService::disabled(),
                 );
 
                 // wait for banking_stage to eat the packets
@@ -3052,7 +3061,7 @@ mod tests {
                 &QosService::new(
                     Arc::new(RwLock::new(CostModel::default())),
                     1,
-                    QuicBidirectionalReplyService::new_for_test(),
+                    QuicBidirectionalReplyService::disabled(),
                 ),
                 None,
             );
@@ -3140,7 +3149,7 @@ mod tests {
                 &QosService::new(
                     Arc::new(RwLock::new(CostModel::default())),
                     1,
-                    QuicBidirectionalReplyService::new_for_test(),
+                    QuicBidirectionalReplyService::disabled(),
                 ),
                 None,
             );
@@ -3211,7 +3220,7 @@ mod tests {
             let qos_service = QosService::new(
                 Arc::new(RwLock::new(CostModel::default())),
                 1,
-                QuicBidirectionalReplyService::new_for_test(),
+                QuicBidirectionalReplyService::disabled(),
             );
 
             let get_block_cost = || bank.read_cost_tracker().unwrap().block_cost();
@@ -3377,7 +3386,7 @@ mod tests {
                 &QosService::new(
                     Arc::new(RwLock::new(CostModel::default())),
                     1,
-                    QuicBidirectionalReplyService::new_for_test(),
+                    QuicBidirectionalReplyService::disabled(),
                 ),
                 None,
             );
@@ -3547,7 +3556,7 @@ mod tests {
                 &QosService::new(
                     Arc::new(RwLock::new(CostModel::default())),
                     1,
-                    QuicBidirectionalReplyService::new_for_test(),
+                    QuicBidirectionalReplyService::disabled(),
                 ),
                 None,
             );
@@ -3618,7 +3627,7 @@ mod tests {
             &QosService::new(
                 Arc::new(RwLock::new(CostModel::default())),
                 1,
-                QuicBidirectionalReplyService::new_for_test(),
+                QuicBidirectionalReplyService::disabled(),
             ),
             None,
         );
@@ -3852,7 +3861,7 @@ mod tests {
                 &QosService::new(
                     Arc::new(RwLock::new(CostModel::default())),
                     1,
-                    QuicBidirectionalReplyService::new_for_test(),
+                    QuicBidirectionalReplyService::disabled(),
                 ),
                 None,
             );
@@ -4025,7 +4034,7 @@ mod tests {
                 &QosService::new(
                     Arc::new(RwLock::new(CostModel::default())),
                     1,
-                    QuicBidirectionalReplyService::new_for_test(),
+                    QuicBidirectionalReplyService::disabled(),
                 ),
                 None,
             );
@@ -4151,7 +4160,7 @@ mod tests {
                 &QosService::new(
                     Arc::new(RwLock::new(CostModel::default())),
                     1,
-                    QuicBidirectionalReplyService::new_for_test(),
+                    QuicBidirectionalReplyService::disabled(),
                 ),
                 &mut LeaderSlotMetricsTracker::new(0),
                 None,
@@ -4173,7 +4182,7 @@ mod tests {
                 &QosService::new(
                     Arc::new(RwLock::new(CostModel::default())),
                     1,
-                    QuicBidirectionalReplyService::new_for_test(),
+                    QuicBidirectionalReplyService::disabled(),
                 ),
                 &mut LeaderSlotMetricsTracker::new(0),
                 None,
@@ -4237,7 +4246,7 @@ mod tests {
                         &QosService::new(
                             Arc::new(RwLock::new(CostModel::default())),
                             1,
-                            QuicBidirectionalReplyService::new_for_test(),
+                            QuicBidirectionalReplyService::disabled(),
                         ),
                         &mut LeaderSlotMetricsTracker::new(0),
                         None,

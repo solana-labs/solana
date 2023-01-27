@@ -5,6 +5,7 @@ use {
         sanitize::SanitizeError,
     },
     serde::Serialize,
+    solana_program::pubkey::Pubkey,
     thiserror::Error,
 };
 
@@ -15,8 +16,8 @@ use {
 pub enum TransactionError {
     /// An account is already being processed in another transaction in a way
     /// that does not support parallelism
-    #[error("Account in use")]
-    AccountInUse,
+    #[error("Account in use ({0})")]
+    AccountInUse(Pubkey),
 
     /// A `Pubkey` appears twice in the transaction's `account_keys`.  Instructions can reference
     /// `Pubkey`s more than once but the message must contain a list with no duplicate keys

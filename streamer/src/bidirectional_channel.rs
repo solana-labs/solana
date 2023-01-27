@@ -23,21 +23,30 @@ use {
     },
     x509_parser::nom::AsBytes,
 };
+use {solana_sdk::slot_history::Slot, std::sync::atomic::AtomicBool};
 
+// This message size if fixed so that we know we that we have recieved a new message after getting QUIC_REPLY_MESSAGE_SIZE bytes
 #[derive(Clone)]
 pub struct QuicReplyMessage {
     sender_identity: Pubkey,
     transaction_signature: Signature,
     message: [u8; 128],
+    approximate_slot: Slot, // slot when the validator was leader
 }
 // header + signature + 128 bytes for message
-pub const QUIC_REPLY_MESSAGE_SIZE: usize = 8 + 32 + 64 + 128;
 pub const QUIC_REPLY_MESSAGE_IDENTITY_OFFSET: usize = 8;
 pub const QUIC_REPLY_MESSAGE_SIGNATURE_OFFSET: usize = 8 + 32;
 pub const QUIC_REPLY_MESSAGE_OFFSET: usize = 8 + 32 + 64;
+pub const QUIC_REPLY_SLOT_OFFSET: usize = QUIC_REPLY_MESSAGE_OFFSET + 128;
+pub const QUIC_REPLY_MESSAGE_SIZE: usize = QUIC_REPLY_SLOT_OFFSET + 8;
 
 impl QuicReplyMessage {
-    pub fn new(identity: Pubkey, transaction_signature: Signature, message: String) -> Self {
+    pub fn new(
+        identity: Pubkey,
+        transaction_signature: Signature,
+        message: String,
+        slot: Slot,
+    ) -> Self {
         let message = message.as_bytes();
         let message: [u8; 128] = if message.len() >= 128 {
             message[..128].try_into().unwrap()
@@ -50,6 +59,7 @@ impl QuicReplyMessage {
             sender_identity: identity,
             message: message,
             transaction_signature: transaction_signature,
+            approximate_slot: slot,
         }
     }
 
@@ -81,13 +91,18 @@ impl QuicReplyMessage {
                 &bytes[QUIC_REPLY_MESSAGE_SIGNATURE_OFFSET..QUIC_REPLY_MESSAGE_OFFSET],
             );
             if let Ok(signature) = signature {
-                let message: [u8; 128] = bytes[QUIC_REPLY_MESSAGE_OFFSET..QUIC_REPLY_MESSAGE_SIZE]
+                let message: [u8; 128] = bytes[QUIC_REPLY_MESSAGE_OFFSET..QUIC_REPLY_SLOT_OFFSET]
                     .try_into()
                     .unwrap();
+                let slot_bytes: [u8; 8] = bytes[QUIC_REPLY_SLOT_OFFSET..QUIC_REPLY_MESSAGE_SIZE]
+                    .try_into()
+                    .unwrap();
+                let slot = u64::from_le_bytes(slot_bytes);
                 Some(QuicReplyMessage {
                     sender_identity: identity,
                     transaction_signature: signature,
                     message,
+                    approximate_slot: slot,
                 })
             } else {
                 None
@@ -95,6 +110,10 @@ impl QuicReplyMessage {
         } else {
             None
         }
+    }
+
+    pub fn approximate_slot(&self) -> Slot {
+        self.approximate_slot
     }
 }
 
@@ -115,6 +134,8 @@ impl serde::Serialize for QuicReplyMessage {
         identity_bytes.append(&mut sig_bytes);
         let message = &mut self.message.to_vec();
         identity_bytes.append(message);
+        let mut slot_bytes = self.approximate_slot.to_le_bytes().to_vec();
+        identity_bytes.append(&mut slot_bytes);
         serializer.serialize_bytes(identity_bytes.as_slice())
     }
 }
@@ -173,12 +194,14 @@ impl QuicBidirectionalMetrics {
 
 #[derive(Clone)]
 pub struct QuicBidirectionalReplyService {
-    data: Arc<RwLock<QuicBidirectionalData>>,
-    pub service_sender: UnboundedSender<QuicReplyMessage>,
+    data: Option<Arc<RwLock<QuicBidirectionalData>>>,
+    service_sender: Option<UnboundedSender<QuicReplyMessage>>,
     serving_handle: Option<Arc<std::thread::JoinHandle<()>>>,
+    do_exit: Arc<AtomicBool>,
     pub metrics: QuicBidirectionalMetrics,
     pub identity: Pubkey,
-    pub is_serving: bool,
+    // usually this is updated during banking stage, so it is the slot when validator was a leader
+    pub last_known_slot: Arc<AtomicU64>,
 }
 
 pub fn get_signature_from_packet(packet: &Packet) -> Option<Signature> {
@@ -196,42 +219,53 @@ impl QuicBidirectionalReplyService {
     pub fn new(identity: Pubkey) -> Self {
         let (service_sender, service_reciever) = unbounded_channel();
         let mut instance = Self {
-            service_sender: service_sender,
-            data: Arc::new(RwLock::new(QuicBidirectionalData {
+            service_sender: Some(service_sender),
+            data: Some(Arc::new(RwLock::new(QuicBidirectionalData {
                 transaction_signature_map: HashMap::new(),
                 sender_ids_map: HashMap::new(),
                 sender_socket_address_map: HashMap::new(),
                 last_id: 1,
-            })),
+            }))),
             serving_handle: None,
             metrics: QuicBidirectionalMetrics::new(),
             identity: identity,
-            is_serving: false,
+            do_exit: Arc::new(AtomicBool::new(false)),
+            last_known_slot: Arc::new(AtomicU64::new(0)),
         };
-        if !identity.eq(&Pubkey::default()) {
-            instance.serve(service_reciever);
-            instance.is_serving = true;
-        }
+        instance.serve(service_reciever);
         instance
     }
 
-    pub fn new_for_test() -> Self {
-        Self::new(Pubkey::default())
+    pub fn disabled() -> Self {
+        Self {
+            data: None,
+            service_sender: None,
+            serving_handle: None,
+            do_exit: Arc::new(AtomicBool::new(true)),
+            metrics: QuicBidirectionalMetrics::new(),
+            identity: Pubkey::default(),
+            last_known_slot: Arc::new(AtomicU64::new(0)),
+        }
     }
 
     pub fn send_message(&self, transaction_signature: &Signature, message: String) {
-        if !self.is_serving {
-            return;
-        }
-        let message = QuicReplyMessage::new(self.identity, *transaction_signature, message);
-        match self.service_sender.send(message) {
-            Err(e) => {
-                debug!("send error {}", e);
+        if let Some(sender) = &self.service_sender {
+            let current_slot = self.last_known_slot.load(Ordering::Relaxed);
+            let message =
+                QuicReplyMessage::new(self.identity, *transaction_signature, message, current_slot);
+            match sender.send(message) {
+                Err(e) => {
+                    debug!("send error {}", e);
+                }
+                _ => {
+                    // continue
+                }
             }
-            _ => {
-                // continue
-            }
         }
+    }
+
+    pub fn update_slot(&self, slot: u64) {
+        self.last_known_slot.store(slot, Ordering::Relaxed);
     }
 
     // When we get a bidirectional stream then we add the send stream to the service.
@@ -240,10 +274,14 @@ impl QuicBidirectionalReplyService {
     // This will then destroy the sender of the crossbeam channel putting the reciever_channel in error state starting the clean up sequence for the old channel.
     // So when you add again a new channel for same socket, we will no longer get the messages for old channel.
     pub async fn add_stream(&self, quic_address: SocketAddr, send_stream: SendStream) {
+        if self.data.is_none() {
+            return;
+        }
+        let data = self.data.as_ref().unwrap().clone();
         let (sender_channel, reciever_channel) = unbounded_channel();
         // context for writelocking the data
         let sender_id = {
-            let mut data = self.data.write().await;
+            let mut data = data.write().await;
             let data = &mut *data;
             if let Some(x) = data.sender_socket_address_map.get(&quic_address) {
                 // remove existing channel and replace with new one
@@ -267,8 +305,9 @@ impl QuicBidirectionalReplyService {
         self.metrics
             .connections_added
             .fetch_add(1, Ordering::Relaxed);
-        let subscriptions = self.data.clone();
+        let subscriptions = data.clone();
         let metrics = self.metrics.clone();
+        let do_exit = self.do_exit.clone();
 
         // start listnening to stream specific cross beam channel
         tokio::spawn(async move {
@@ -300,8 +339,14 @@ impl QuicBidirectionalReplyService {
                             true
                         }
                     },
-                    _task = send_stream.stopped() => {
-                        true
+                    task = tokio::time::timeout( Duration::from_millis(100),send_stream.stopped()) => {
+                        if  task.is_err() {
+                            // timeout
+                            do_exit.load(Ordering::Relaxed)
+                        } else {
+                            // client stopped the stream
+                            true
+                        }
                     }
                 };
 
@@ -326,9 +371,14 @@ impl QuicBidirectionalReplyService {
     }
 
     pub async fn add_packets(&self, quic_address: &SocketAddr, packets: &PacketBatch) {
+        if self.data.is_none() {
+            return;
+        }
+        let data = self.data.as_ref().unwrap().clone();
+
         // check if socket is registered;
         let id = {
-            let data = self.data.read().await;
+            let data = data.read().await;
             data.sender_socket_address_map
                 .get(quic_address)
                 .map_or(0, |x| *x)
@@ -338,8 +388,8 @@ impl QuicBidirectionalReplyService {
         if id == 0 {
             return;
         }
-        let mut data = self.data.write().await;
-        let data = &mut *data;
+        let mut data_wl = data.write().await;
+        let data_mut = &mut *data_wl;
         let metrics = self.metrics.clone();
         packets.iter().for_each(|packet| {
             let meta = &packet.meta;
@@ -354,21 +404,20 @@ impl QuicBidirectionalReplyService {
             let signature = get_signature_from_packet(packet);
             metrics.transactions_added.fetch_add(1, Ordering::Relaxed);
             signature.map(|x| {
-                let ids = data.transaction_signature_map.get_mut(&x);
+                let ids = data_mut.transaction_signature_map.get_mut(&x);
                 match ids {
                     Some(ids) => ids.push(id), // push in exisiting ids
                     None => {
-                        data.transaction_signature_map.insert(x, vec![id]); // push a new id vector
+                        data_mut.transaction_signature_map.insert(x, vec![id]); // push a new id vector
 
                         // create a task to clean up Timedout transactions
-                        let me = self.clone();
+                        let data = data.clone();
+                        let metrics = metrics.clone();
                         tokio::spawn(async move {
                             tokio::time::sleep(Duration::from_millis(TRANSACTION_TIMEOUT)).await;
-                            let mut data = me.data.write().await;
+                            let mut data = data.write().await;
                             data.transaction_signature_map.remove(&x);
-                            me.metrics
-                                .transactions_removed
-                                .fetch_add(1, Ordering::Relaxed);
+                            metrics.transactions_removed.fetch_add(1, Ordering::Relaxed);
                         });
                     }
                 }
@@ -381,27 +430,45 @@ impl QuicBidirectionalReplyService {
     // will be dispactched to the appropriate sender channel
     // depending on transcation signature or message hash
     pub fn serve(&mut self, service_reciever: UnboundedReceiver<QuicReplyMessage>) {
-        let subscription_data = self.data.clone();
+        let subscription_data = self.data.as_ref().unwrap().clone();
 
         let runtime = Builder::new_multi_thread()
             .worker_threads(1)
             .enable_all()
             .build()
             .unwrap();
-
+        let do_exit = self.do_exit.clone();
         let handle = std::thread::spawn(move || {
             let mut service_reciever = service_reciever;
             let runtime = runtime;
+
+            let subscription_data = subscription_data.clone();
             loop {
-                let bidirectional_message = runtime.block_on(service_reciever.recv());
+                let do_exit = do_exit.clone();
+                let bidirectional_message = runtime.block_on(async {
+                    let do_exit = do_exit.clone();
+                    loop {
+                        if let Ok(recved) = tokio::time::timeout(
+                            Duration::from_millis(100),
+                            service_reciever.recv(),
+                        )
+                        .await
+                        {
+                            return recved;
+                        } else {
+                            let should_exit = do_exit.load(Ordering::Relaxed);
+                            if should_exit {
+                                return None;
+                            }
+                        }
+                    }
+                });
                 if bidirectional_message.is_none() {
                     // the channel has be closed
                     trace!("quic bidirectional channel is closed");
                     break;
                 }
                 let message = bidirectional_message.unwrap();
-
-                let subscription_data = subscription_data.clone();
 
                 let data = runtime.block_on(subscription_data.read());
                 // if the message has transaction signature then find stream from transaction signature
@@ -517,7 +584,7 @@ pub mod test {
 
     #[tokio::test]
     async fn test_addition_add_packets_without_any_quic_socket_registered() {
-        let bidirectional_replay_service = QuicBidirectionalReplyService::new_for_test();
+        let bidirectional_replay_service = QuicBidirectionalReplyService::disabled();
         let socket = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 20000);
         let batch = create_dummy_packet_batch(5);
         bidirectional_replay_service
@@ -529,12 +596,13 @@ pub mod test {
     fn test_quic_reply_message_serialize_and_deserialize() {
         let k1 = Keypair::new();
         let signature = Signature::new_unique();
-        let message = QuicReplyMessage::new(k1.pubkey(), signature, "toto".to_string());
+        let message = QuicReplyMessage::new(k1.pubkey(), signature, "toto".to_string(), 1234);
         let buffer = bincode::serialize(&message).unwrap();
         let des_message = QuicReplyMessage::deserialize(buffer.as_slice()).unwrap();
         assert_eq!(des_message.identity(), message.identity());
         assert_eq!(des_message.signature(), message.signature());
         assert_eq!(des_message.message(), message.message());
+        assert_eq!(des_message.approximate_slot, 1234);
     }
 
     fn setup_quic_server(
@@ -697,12 +765,6 @@ pub mod test {
         assert_eq!(metrics.connections_added(), 1);
         assert_eq!(metrics.transactions_removed(), nb_packets);
         exit.store(true, std::sync::atomic::Ordering::Relaxed);
-    }
-
-    #[tokio::test]
-    async fn not_serving_test_reply_services() {
-        let test = QuicBidirectionalReplyService::new_for_test();
-        assert_eq!(test.is_serving, false);
     }
 
     #[tokio::test]
