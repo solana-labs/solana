@@ -66,8 +66,8 @@ impl PohTiming {
             let us_per_slot = (elapsed_us * ticks_per_slot) / self.num_ticks;
             datapoint_info!(
                 "poh-service",
-                ("ticks", self.num_ticks as i64, i64),
-                ("hashes", self.num_hashes as i64, i64),
+                ("ticks", self.num_ticks, i64),
+                ("hashes", self.num_hashes, i64),
                 ("elapsed_us", us_per_slot, i64),
                 ("total_sleep_us", self.total_sleep_us, i64),
                 ("total_tick_time_us", self.total_tick_time_ns / 1000, i64),
