@@ -62,10 +62,10 @@ echo "Executing $testName"
 case $testName in
 test-stable)
   if need_to_generate_test_result; then
-    _ "$cargo" stable test --jobs "$JOBS" --all --tests --exclude solana-local-cluster ${V:+--verbose} -- -Z unstable-options --format json --report-time | tee results.json
+    _ cargo test --jobs "$JOBS" --all --tests --exclude solana-local-cluster ${V:+--verbose} -- -Z unstable-options --format json --report-time | tee results.json
     exit_if_error "${PIPESTATUS[0]}"
   else
-    _ "$cargo" stable test --jobs "$JOBS" --all --tests --exclude solana-local-cluster ${V:+--verbose} -- --nocapture
+    _ cargo test --jobs "$JOBS" --all --tests --exclude solana-local-cluster ${V:+--verbose} -- --nocapture
   fi
   ;;
 test-stable-sbf)
@@ -89,12 +89,12 @@ test-stable-sbf)
   # SBF C program system tests
   _ make -C programs/sbf/c tests
   if need_to_generate_test_result; then
-    _ "$cargo" stable test \
+    _ cargo test \
       --manifest-path programs/sbf/Cargo.toml \
       --no-default-features --features=sbf_c,sbf_rust -- -Z unstable-options --format json --report-time | tee results.json
     exit_if_error "${PIPESTATUS[0]}"
   else
-    _ "$cargo" stable test \
+    _ cargo test \
       --manifest-path programs/sbf/Cargo.toml \
       --no-default-features --features=sbf_c,sbf_rust -- --nocapture
   fi
@@ -131,13 +131,13 @@ test-stable-sbf)
   # SBF program instruction count assertion
   sbf_target_path=programs/sbf/target
   if need_to_generate_test_result; then
-    _ "$cargo" stable test \
+    _ cargo test \
       --manifest-path programs/sbf/Cargo.toml \
       --no-default-features --features=sbf_c,sbf_rust assert_instruction_count \
       -- -Z unstable-options --format json --report-time |& tee results.json
     awk '!/{ "type": .* }/' results.json >"${sbf_target_path}"/deploy/instuction_counts.txt
   else
-    _ "$cargo" stable test \
+    _ cargo test \
       --manifest-path programs/sbf/Cargo.toml \
       --no-default-features --features=sbf_c,sbf_rust assert_instruction_count \
       -- --nocapture &> "${sbf_target_path}"/deploy/instuction_counts.txt
@@ -165,52 +165,52 @@ test-stable-perf)
     export SOLANA_CUDA=1
   fi
 
-  _ "$cargo" stable build --bins ${V:+--verbose}
+  _ cargo build --bins ${V:+--verbose}
   if need_to_generate_test_result; then
-    _ "$cargo" stable test --package solana-perf --package solana-ledger --package solana-core --lib ${V:+--verbose} -- -Z unstable-options --format json --report-time | tee results.json
+    _ cargo test --package solana-perf --package solana-ledger --package solana-core --lib ${V:+--verbose} -- -Z unstable-options --format json --report-time | tee results.json
     exit_if_error "${PIPESTATUS[0]}"
   else
-    _ "$cargo" stable test --package solana-perf --package solana-ledger --package solana-core --lib ${V:+--verbose} -- --nocapture
+    _ cargo test --package solana-perf --package solana-ledger --package solana-core --lib ${V:+--verbose} -- --nocapture
   fi
-  _ "$cargo" stable run --manifest-path poh-bench/Cargo.toml ${V:+--verbose} -- --hashes-per-tick 10
+  _ cargo run --manifest-path poh-bench/Cargo.toml ${V:+--verbose} -- --hashes-per-tick 10
   ;;
 test-local-cluster)
-  _ "$cargo" stable build --release --bins ${V:+--verbose}
+  _ cargo build --release --bins ${V:+--verbose}
   if need_to_generate_test_result; then
-    _ "$cargo" stable test --release --package solana-local-cluster --test local_cluster ${V:+--verbose} -- --test-threads=1 -Z unstable-options --format json --report-time | tee results.json
+    _ cargo test --release --package solana-local-cluster --test local_cluster ${V:+--verbose} -- --test-threads=1 -Z unstable-options --format json --report-time | tee results.json
     exit_if_error "${PIPESTATUS[0]}"
   else
-    _ "$cargo" stable test --release --package solana-local-cluster --test local_cluster ${V:+--verbose} -- --nocapture --test-threads=1
+    _ cargo test --release --package solana-local-cluster --test local_cluster ${V:+--verbose} -- --nocapture --test-threads=1
   fi
   exit 0
   ;;
 test-local-cluster-flakey)
-  _ "$cargo" stable build --release --bins ${V:+--verbose}
+  _ cargo build --release --bins ${V:+--verbose}
   if need_to_generate_test_result; then
-    _ "$cargo" stable test --release --package solana-local-cluster --test local_cluster_flakey ${V:+--verbose} -- --test-threads=1 -Z unstable-options --format json --report-time | tee results.json
+    _ cargo test --release --package solana-local-cluster --test local_cluster_flakey ${V:+--verbose} -- --test-threads=1 -Z unstable-options --format json --report-time | tee results.json
     exit_if_error "${PIPESTATUS[0]}"
   else
-    _ "$cargo" stable test --release --package solana-local-cluster --test local_cluster_flakey ${V:+--verbose} -- --nocapture --test-threads=1
+    _ cargo test --release --package solana-local-cluster --test local_cluster_flakey ${V:+--verbose} -- --nocapture --test-threads=1
   fi
   exit 0
   ;;
 test-local-cluster-slow-1)
-  _ "$cargo" stable build --release --bins ${V:+--verbose}
+  _ cargo build --release --bins ${V:+--verbose}
   if need_to_generate_test_result; then
-    _ "$cargo" stable test --release --package solana-local-cluster --test local_cluster_slow_1 ${V:+--verbose} -- --test-threads=1 -Z unstable-options --format json --report-time | tee results.json
+    _ cargo test --release --package solana-local-cluster --test local_cluster_slow_1 ${V:+--verbose} -- --test-threads=1 -Z unstable-options --format json --report-time | tee results.json
     exit_if_error "${PIPESTATUS[0]}"
   else
-    _ "$cargo" stable test --release --package solana-local-cluster --test local_cluster_slow_1 ${V:+--verbose} -- --nocapture --test-threads=1
+    _ cargo test --release --package solana-local-cluster --test local_cluster_slow_1 ${V:+--verbose} -- --nocapture --test-threads=1
   fi
   exit 0
   ;;
 test-local-cluster-slow-2)
-  _ "$cargo" stable build --release --bins ${V:+--verbose}
+  _ cargo build --release --bins ${V:+--verbose}
   if need_to_generate_test_result; then
-    _ "$cargo" stable test --release --package solana-local-cluster --test local_cluster_slow_2 ${V:+--verbose} -- --test-threads=1 -Z unstable-options --format json --report-time | tee results.json
+    _ cargo test --release --package solana-local-cluster --test local_cluster_slow_2 ${V:+--verbose} -- --test-threads=1 -Z unstable-options --format json --report-time | tee results.json
     exit_if_error "${PIPESTATUS[0]}"
   else
-    _ "$cargo" stable test --release --package solana-local-cluster --test local_cluster_slow_2 ${V:+--verbose} -- --nocapture --test-threads=1
+    _ cargo test --release --package solana-local-cluster --test local_cluster_slow_2 ${V:+--verbose} -- --nocapture --test-threads=1
   fi
   exit 0
   ;;
@@ -229,10 +229,10 @@ test-wasm)
   ;;
 test-docs)
   if need_to_generate_test_result; then
-    _ "$cargo" stable test --jobs "$JOBS" --all --doc --exclude solana-local-cluster ${V:+--verbose} -- -Z unstable-options --format json --report-time | tee results.json
+    _ cargo test --jobs "$JOBS" --all --doc --exclude solana-local-cluster ${V:+--verbose} -- -Z unstable-options --format json --report-time | tee results.json
     exit "${PIPESTATUS[0]}"
   else
-    _ "$cargo" stable test --jobs "$JOBS" --all --doc --exclude solana-local-cluster ${V:+--verbose} -- --nocapture
+    _ cargo test --jobs "$JOBS" --all --doc --exclude solana-local-cluster ${V:+--verbose} -- --nocapture
     exit 0
   fi
   ;;

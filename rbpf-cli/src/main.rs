@@ -310,10 +310,10 @@ before execting it in the virtual machine.",
         let trace_log = vm
             .env
             .context_object_pointer
-            .transaction_context
-            .get_current_instruction_context()
-            .unwrap()
-            .trace_log();
+            .trace_log_stack
+            .last()
+            .expect("Inconsistent trace log stack")
+            .as_slice();
         if matches.value_of("trace").unwrap() == "stdout" {
             analysis
                 .analyze()

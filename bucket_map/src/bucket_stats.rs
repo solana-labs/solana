@@ -1,9 +1,12 @@
-use std::sync::{atomic::AtomicU64, Arc, Mutex};
+use std::sync::{
+    atomic::{AtomicU64, Ordering},
+    Arc,
+};
 
 #[derive(Debug, Default)]
 pub struct BucketStats {
     pub resizes: AtomicU64,
-    pub max_size: Mutex<u64>,
+    pub max_size: AtomicU64,
     pub resize_us: AtomicU64,
     pub new_file_us: AtomicU64,
     pub flush_file_us: AtomicU64,
@@ -13,8 +16,7 @@ pub struct BucketStats {
 
 impl BucketStats {
     pub fn update_max_size(&self, size: u64) {
-        let mut max = self.max_size.lock().unwrap();
-        *max = std::cmp::max(*max, size);
+        self.max_size.fetch_max(size, Ordering::Relaxed);
     }
 }
 

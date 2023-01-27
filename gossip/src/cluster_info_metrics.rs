@@ -123,7 +123,6 @@ pub struct GossipStats {
     pub(crate) handle_batch_pull_requests_time: Counter,
     pub(crate) handle_batch_pull_responses_time: Counter,
     pub(crate) handle_batch_push_messages_time: Counter,
-    pub(crate) mark_pull_request: Counter,
     pub(crate) new_pull_requests: Counter,
     pub(crate) new_pull_requests_count: Counter,
     pub(crate) new_pull_requests_pings_count: Counter,
@@ -373,7 +372,6 @@ pub(crate) fn submit_gossip_stats(
         ),
         ("epoch_slots_lookup", stats.epoch_slots_lookup.clear(), i64),
         ("new_pull_requests", stats.new_pull_requests.clear(), i64),
-        ("mark_pull_request", stats.mark_pull_request.clear(), i64),
         (
             "gossip_pull_request_no_budget",
             stats.gossip_pull_request_no_budget.clear(),

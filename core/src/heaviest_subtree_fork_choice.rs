@@ -421,7 +421,7 @@ impl HeaviestSubtreeForkChoice {
     /// Returns the subtree originating from `slot_hash_key`
     pub fn split_off(&mut self, slot_hash_key: &SlotHashKey) -> Self {
         assert_ne!(self.tree_root, *slot_hash_key);
-        let split_tree_root = {
+        let mut split_tree_root = {
             let mut node_to_split_at = self
                 .fork_infos
                 .get_mut(slot_hash_key)
@@ -464,6 +464,7 @@ impl HeaviestSubtreeForkChoice {
 
         // Update the root of the new tree with the proper info, now that we have finished
         // aggregating
+        split_tree_root.parent = None;
         split_tree_fork_infos.insert(*slot_hash_key, split_tree_root);
 
         // Split off the relevant votes to the new tree
@@ -3541,6 +3542,13 @@ mod test {
             stake,
             tree.stake_voted_subtree(&(6, Hash::default())).unwrap()
         );
+
+        assert!(tree
+            .fork_infos
+            .get(&tree.tree_root)
+            .unwrap()
+            .parent
+            .is_none());
     }
 
     #[test]

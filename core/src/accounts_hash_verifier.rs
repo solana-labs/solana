@@ -233,7 +233,6 @@ impl AccountsHashVerifier {
                     epoch_schedule: &accounts_package.epoch_schedule,
                     rent_collector: &accounts_package.rent_collector,
                     store_detailed_debug_info_on_failure: false,
-                    full_snapshot: None,
                 },
                 &sorted_storages,
                 timings,
@@ -255,7 +254,6 @@ impl AccountsHashVerifier {
                         epoch_schedule: &accounts_package.epoch_schedule,
                         rent_collector: &accounts_package.rent_collector,
                         store_detailed_debug_info_on_failure: false,
-                        full_snapshot: None,
                     },
                 );
             info!(
@@ -274,7 +272,6 @@ impl AccountsHashVerifier {
                         rent_collector: &accounts_package.rent_collector,
                         // now that we've failed, store off the failing contents that produced a bad capitalization
                         store_detailed_debug_info_on_failure: true,
-                        full_snapshot: None,
                     },
                     &sorted_storages,
                     HashStats::default(),
@@ -474,25 +471,21 @@ mod tests {
         solana_sdk::{
             hash::hash,
             signature::{Keypair, Signer},
+            timing::timestamp,
         },
         solana_streamer::socket::SocketAddrSpace,
         std::str::FromStr,
     };
 
-    fn new_test_cluster_info(contact_info: ContactInfo) -> ClusterInfo {
-        ClusterInfo::new(
-            contact_info,
-            Arc::new(Keypair::new()),
-            SocketAddrSpace::Unspecified,
-        )
+    fn new_test_cluster_info() -> ClusterInfo {
+        let keypair = Arc::new(Keypair::new());
+        let contact_info = ContactInfo::new_localhost(&keypair.pubkey(), timestamp());
+        ClusterInfo::new(contact_info, keypair, SocketAddrSpace::Unspecified)
     }
 
     #[test]
     fn test_should_halt() {
-        let keypair = Keypair::new();
-
-        let contact_info = ContactInfo::new_localhost(&keypair.pubkey(), 0);
-        let cluster_info = new_test_cluster_info(contact_info);
+        let cluster_info = new_test_cluster_info();
         let cluster_info = Arc::new(cluster_info);
 
         let mut known_validators = HashSet::new();
@@ -523,10 +516,7 @@ mod tests {
     #[test]
     fn test_max_hashes() {
         solana_logger::setup();
-        let keypair = Keypair::new();
-
-        let contact_info = ContactInfo::new_localhost(&keypair.pubkey(), 0);
-        let cluster_info = new_test_cluster_info(contact_info);
+        let cluster_info = new_test_cluster_info();
         let cluster_info = Arc::new(cluster_info);
 
         let known_validators = HashSet::new();
@@ -565,7 +555,7 @@ mod tests {
         }
         cluster_info.flush_push_queue();
         let cluster_hashes = cluster_info
-            .get_accounts_hash_for_node(&keypair.pubkey(), |c| c.clone())
+            .get_accounts_hash_for_node(&cluster_info.id(), |c| c.clone())
             .unwrap();
         info!("{:?}", cluster_hashes);
         assert_eq!(hashes.len(), MAX_SNAPSHOT_HASHES);

@@ -64,6 +64,7 @@ pub fn safe_clone_config(config: &ValidatorConfig) -> ValidatorConfig {
         ledger_column_options: config.ledger_column_options.clone(),
         runtime_config: config.runtime_config.clone(),
         replay_slots_concurrently: config.replay_slots_concurrently,
+        banking_trace_dir_byte_limit: config.banking_trace_dir_byte_limit,
     }
 }
 

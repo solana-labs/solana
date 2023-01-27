@@ -100,6 +100,11 @@ impl StakedNodesUpdaterService {
                     Some((node.tvu.ip(), *stake))
                 })
                 .collect();
+            let my_pubkey = cluster_info.my_contact_info().id;
+            if let Some(stake) = staked_nodes.get(&my_pubkey) {
+                id_to_stake.insert(my_pubkey, *stake);
+                ip_to_stake.insert(cluster_info.my_contact_info().tvu.ip(), *stake);
+            }
             Self::override_stake(
                 cluster_info,
                 total_stake,

@@ -349,7 +349,12 @@ fn network_run_push(
                     Duration::from_millis(node.gossip.pull.crds_timeout),
                 );
                 node.gossip.purge(&node_pubkey, thread_pool, now, &timeouts);
-                (node_pubkey, node.gossip.new_push_messages(vec![], now).0)
+                (
+                    node_pubkey,
+                    node.gossip
+                        .new_push_messages(&node_pubkey, vec![], now, &stakes)
+                        .0,
+                )
             })
             .collect();
         let transfered: Vec<_> = requests
@@ -401,6 +406,7 @@ fn network_run_push(
                                         &prune_keys,
                                         now,
                                         now,
+                                        &stakes,
                                     )
                                     .unwrap()
                             })
@@ -559,7 +565,6 @@ fn network_run_pull(
                 bytes += serialized_size(&rsp).unwrap() as usize;
                 msgs += rsp.len();
                 if let Some(node) = network.get(&from) {
-                    node.gossip.mark_pull_request_creation_time(from, now);
                     let mut stats = ProcessPullStats::default();
                     let (vers, vers_expired_timeout, failed_inserts) = node
                         .gossip
@@ -727,8 +732,8 @@ fn test_prune_errors() {
     let crds_gossip = CrdsGossip::default();
     let keypair = Keypair::new();
     let id = keypair.pubkey();
-    let ci = ContactInfo::new_localhost(&Pubkey::new(&[1; 32]), 0);
-    let prune_pubkey = Pubkey::new(&[2; 32]);
+    let ci = ContactInfo::new_localhost(&Pubkey::from([1; 32]), 0);
+    let prune_pubkey = Pubkey::from([2; 32]);
     crds_gossip
         .crds
         .write()
@@ -750,14 +755,16 @@ fn test_prune_errors() {
         &SocketAddrSpace::Unspecified,
     );
     let now = timestamp();
+    let stakes = HashMap::<Pubkey, u64>::default();
     //incorrect dest
     let mut res = crds_gossip.process_prune_msg(
-        &id,                                   // self_pubkey
-        &ci.id,                                // peer
-        &Pubkey::new(hash(&[1; 32]).as_ref()), // destination
-        &[prune_pubkey],                       // origins
+        &id,                                      // self_pubkey
+        &ci.id,                                   // peer
+        &Pubkey::from(hash(&[1; 32]).to_bytes()), // destination
+        &[prune_pubkey],                          // origins
         now,
         now,
+        &stakes,
     );
     assert_eq!(res.err(), Some(CrdsGossipError::BadPruneDestination));
     //correct dest
@@ -768,6 +775,7 @@ fn test_prune_errors() {
         &[prune_pubkey], // origins
         now,
         now,
+        &stakes,
     );
     res.unwrap();
     //test timeout
@@ -779,6 +787,7 @@ fn test_prune_errors() {
         &[prune_pubkey], // origins
         now,
         timeout,
+        &stakes,
     );
     assert_eq!(res.err(), Some(CrdsGossipError::PruneMessageTimeout));
 }

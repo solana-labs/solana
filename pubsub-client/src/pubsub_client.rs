@@ -244,15 +244,18 @@ where
 
     fn read_message(
         writable_socket: &Arc<RwLock<WebSocket<MaybeTlsStream<TcpStream>>>>,
-    ) -> Result<T, PubsubClientError> {
+    ) -> Result<Option<T>, PubsubClientError> {
         let message = writable_socket.write().unwrap().read_message()?;
+        if message.is_ping() {
+            return Ok(None);
+        }
         let message_text = &message.into_text().unwrap();
         let json_msg: Map<String, Value> = serde_json::from_str(message_text)?;
 
         if let Some(Object(params)) = json_msg.get("params") {
             if let Some(result) = params.get("result") {
                 let x: T = serde_json::from_value::<T>(result.clone()).unwrap();
-                return Ok(x);
+                return Ok(Some(x));
             }
         }
 
@@ -842,7 +845,10 @@ impl PubsubClient {
             }
 
             match PubsubClientSubscription::read_message(socket) {
-                Ok(message) => handler(message),
+                Ok(Some(message)) => handler(message),
+                Ok(None) => {
+                    // Nothing useful, means we received a ping message
+                }
                 Err(err) => {
                     info!("receive error: {:?}", err);
                     break;

@@ -713,9 +713,8 @@ mod tests {
         // Now send some new votes
         for i in 101..201 {
             let slots = std::iter::zip((i - 30)..(i + 1), (1..32).rev())
-                .map(|(slot, confirmation_count)| Lockout {
-                    slot,
-                    confirmation_count,
+                .map(|(slot, confirmation_count)| {
+                    Lockout::new_with_confirmation_count(slot, confirmation_count)
                 })
                 .collect::<VecDeque<Lockout>>();
             let vote = VoteTransaction::from(VoteStateUpdate::new(

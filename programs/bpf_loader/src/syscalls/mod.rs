@@ -29,13 +29,14 @@ use {
             ALT_BN128_ADDITION_OUTPUT_LEN, ALT_BN128_MULTIPLICATION_OUTPUT_LEN,
             ALT_BN128_PAIRING_ELEMENT_LEN, ALT_BN128_PAIRING_OUTPUT_LEN,
         },
+        big_mod_exp::{big_mod_exp, BigModExpParams},
         blake3, bpf_loader, bpf_loader_deprecated, bpf_loader_upgradeable,
         entrypoint::{BPF_ALIGN_OF_U128, MAX_PERMITTED_DATA_INCREASE, SUCCESS},
         feature_set::FeatureSet,
         feature_set::{
             self, blake3_syscall_enabled, check_syscall_outputs_do_not_overlap,
             curve25519_syscall_enabled, disable_cpi_setting_executable_and_rent_epoch,
-            disable_fees_sysvar, enable_alt_bn128_syscall,
+            disable_fees_sysvar, enable_alt_bn128_syscall, enable_big_mod_exp_syscall,
             enable_early_verification_of_account_modifications,
             error_on_syscall_bpf_function_hash_collisions, libsecp256k1_0_5_upgrade_enabled,
             limit_secp256k1_recovery_id, reject_callx_r10,
@@ -186,6 +187,7 @@ pub fn create_loader<'a>(
     };
 
     let enable_alt_bn128_syscall = feature_set.is_active(&enable_alt_bn128_syscall::id());
+    let enable_big_mod_exp_syscall = feature_set.is_active(&enable_big_mod_exp_syscall::id());
     let blake3_syscall_enabled = feature_set.is_active(&blake3_syscall_enabled::id());
     let curve25519_syscall_enabled = feature_set.is_active(&curve25519_syscall_enabled::id());
     let disable_fees_sysvar = feature_set.is_active(&disable_fees_sysvar::id());
@@ -305,6 +307,14 @@ pub fn create_loader<'a>(
             enable_alt_bn128_syscall,
             "sol_alt_bn128_group_op",
             SyscallAltBn128::call,
+        )?;
+
+        // Big_mod_exp
+        register_feature_gated_function!(
+            result,
+            enable_big_mod_exp_syscall,
+            "sol_big_mod_exp",
+            SyscallBigModExp::call,
         )?;
     }
 
@@ -1715,6 +1725,80 @@ declare_syscall!(
 
         call_result.copy_from_slice(&result_point);
         Ok(SUCCESS)
+    }
+);
+
+declare_syscall!(
+    /// Big integer modular exponentiation
+    SyscallBigModExp,
+    fn inner_call(
+        invoke_context: &mut InvokeContext,
+        params: u64,
+        return_value: u64,
+        _arg3: u64,
+        _arg4: u64,
+        _arg5: u64,
+        memory_mapping: &mut MemoryMapping,
+    ) -> Result<u64, EbpfError> {
+        let params = &translate_slice::<BigModExpParams>(
+            memory_mapping,
+            params,
+            1,
+            invoke_context.get_check_aligned(),
+            invoke_context.get_check_size(),
+        )?
+        .get(0)
+        .ok_or(SyscallError::InvalidLength)?;
+
+        let input_len: u64 = std::cmp::max(params.base_len, params.exponent_len);
+        let input_len: u64 = std::cmp::max(input_len, params.modulus_len);
+
+        let budget = invoke_context.get_compute_budget();
+        consume_compute_meter(
+            invoke_context,
+            budget.syscall_base_cost.saturating_add(
+                input_len
+                    .saturating_mul(input_len)
+                    .saturating_div(budget.big_modular_exponentiation_cost),
+            ),
+        )?;
+
+        let base = translate_slice::<u8>(
+            memory_mapping,
+            params.base as *const _ as *const u8 as u64,
+            params.base_len,
+            invoke_context.get_check_aligned(),
+            invoke_context.get_check_size(),
+        )?;
+
+        let exponent = translate_slice::<u8>(
+            memory_mapping,
+            params.exponent as *const _ as *const u8 as u64,
+            params.exponent_len,
+            invoke_context.get_check_aligned(),
+            invoke_context.get_check_size(),
+        )?;
+
+        let modulus = translate_slice::<u8>(
+            memory_mapping,
+            params.modulus as *const _ as *const u8 as u64,
+            params.modulus_len,
+            invoke_context.get_check_aligned(),
+            invoke_context.get_check_size(),
+        )?;
+
+        let value = big_mod_exp(base, exponent, modulus);
+
+        let return_value = translate_slice_mut::<u8>(
+            memory_mapping,
+            return_value,
+            params.modulus_len,
+            invoke_context.get_check_aligned(),
+            invoke_context.get_check_size(),
+        )?;
+        return_value.copy_from_slice(value.as_slice());
+
+        Ok(0)
     }
 );
 

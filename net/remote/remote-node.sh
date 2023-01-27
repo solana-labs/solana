@@ -266,7 +266,7 @@ EOF
       solana-ledger-tool -l config/bootstrap-validator shred-version --max-genesis-archive-unpacked-size 1073741824 | tee config/shred-version
 
       if [[ -n "$maybeWaitForSupermajority" ]]; then
-        bankHash=$(solana-ledger-tool -l config/bootstrap-validator bank-hash)
+        bankHash=$(solana-ledger-tool -l config/bootstrap-validator bank-hash --halt-at-slot 0)
         extraNodeArgs="$extraNodeArgs --expected-bank-hash $bankHash"
         echo "$bankHash" > config/bank-hash
       fi

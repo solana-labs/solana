@@ -322,8 +322,8 @@ fn write_block_time<W: io::Write>(
 ) -> io::Result<()> {
     if let Some(block_time) = block_time {
         let block_time_output = match timezone {
-            CliTimezone::Local => format!("{:?}", Local.timestamp(block_time, 0)),
-            CliTimezone::Utc => format!("{:?}", Utc.timestamp(block_time, 0)),
+            CliTimezone::Local => format!("{:?}", Local.timestamp_opt(block_time, 0).unwrap()),
+            CliTimezone::Utc => format!("{:?}", Utc.timestamp_opt(block_time, 0).unwrap()),
         };
         writeln!(w, "{prefix}Block Time: {block_time_output}",)?;
     }

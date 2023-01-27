@@ -375,6 +375,7 @@ impl RpcSender for MockSender {
                 gossip: Some(SocketAddr::from(([10, 239, 6, 48], 8899))),
                 tpu: Some(SocketAddr::from(([10, 239, 6, 48], 8856))),
                 rpc: Some(SocketAddr::from(([10, 239, 6, 48], 8899))),
+                pubsub: Some(SocketAddr::from(([10, 239, 6, 48], 8900))),
                 version: Some("1.0.0 c375ce1f".to_string()),
                 feature_set: None,
                 shred_version: None,
@@ -416,6 +417,7 @@ impl RpcSender for MockSender {
             "getRecentPerformanceSamples" => serde_json::to_value(vec![RpcPerfSample {
                 slot: 347873,
                 num_transactions: 125,
+                num_non_vote_transactions: Some(1),
                 num_slots: 123,
                 sample_period_secs: 60,
             }])?,
