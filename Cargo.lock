@@ -1216,10 +1216,10 @@ checksum = "a784d2ccaf7c98501746bf0be29b2022ba41fd62a2e622af997a03e9f972859f"
 dependencies = [
  "fnv",
  "ident_case",
- "proc-macro2 1.0.41",
+ "proc-macro2 1.0.49",
  "quote 1.0.18",
  "strsim 0.10.0",
- "syn 1.0.98",
+ "syn 1.0.107",
 ]
 
 [[package]]
@@ -1230,7 +1230,7 @@ checksum = "7618812407e9402654622dd402b0a89dff9ba93badd6540781526117b92aab7e"
 dependencies = [
  "darling_core",
  "quote 1.0.18",
- "syn 1.0.98",
+ "syn 1.0.107",
 ]
 
 [[package]]
@@ -4457,9 +4457,9 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a1966009f3c05f095697c537312f5415d1e3ed31ce0a56942bac4c771c5c335e"
 dependencies = [
  "darling",
- "proc-macro2 1.0.41",
+ "proc-macro2 1.0.49",
  "quote 1.0.18",
- "syn 1.0.98",
+ "syn 1.0.107",
 ]
 
 [[package]]

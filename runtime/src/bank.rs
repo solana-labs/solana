@@ -86,7 +86,6 @@ use {
         ThreadPool, ThreadPoolBuilder,
     },
     solana_bpf_tracer_plugin_interface::BpfTracerPluginManager,
-    solana_measure::{measure, measure::Measure},
     solana_measure::{measure, measure::Measure, measure_us},
     solana_metrics::{inc_new_counter_debug, inc_new_counter_info},
     solana_perf::perf_libs,
