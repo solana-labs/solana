@@ -843,7 +843,7 @@ pub fn create_accounts_run_and_snapshot_dirs(
 ) -> std::io::Result<(PathBuf, PathBuf)> {
     let run_path = account_dir.as_ref().join("run");
     let snapshot_path = account_dir.as_ref().join("snapshot");
-    if fs::metadata(&run_path).is_err() || fs::metadata(&snapshot_path).is_err() {
+    if run_path.try_exists().is_err() || snapshot_path.try_exists().is_err() {
         // If the "run/" or "snapshot" sub directories do not exist, the directory may be from
         // an older version for which the appendvec files are at this directory.  Clean up
         // them first.
