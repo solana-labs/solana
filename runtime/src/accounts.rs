@@ -265,6 +265,7 @@ impl Accounts {
         let message = tx.message();
         // NOTE: this check will never fail because `tx` is sanitized
         if tx.signatures().is_empty() && fee != 0 {
+<<<<<<< HEAD
             Err(TransactionError::MissingSignatureForFee)
         } else {
             // There is no way to predict what program will execute without an error
@@ -281,15 +282,43 @@ impl Accounts {
                 let account = if !message.is_non_loader_key(i) {
                     // Fill in an empty account for the program slots.
                     AccountSharedData::default()
+=======
+            return Err(TransactionError::MissingSignatureForFee);
+        }
+
+        // There is no way to predict what program will execute without an error
+        // If a fee can pay for execution then the program will be scheduled
+        let mut validated_fee_payer = false;
+        let mut tx_rent: TransactionRent = 0;
+        let message = tx.message();
+        let account_keys = message.account_keys();
+        let mut account_found_and_dep_index = Vec::with_capacity(account_keys.len());
+        let mut account_deps = Vec::with_capacity(account_keys.len());
+        let mut rent_debits = RentDebits::default();
+
+        let set_exempt_rent_epoch_max =
+            feature_set.is_active(&solana_sdk::feature_set::set_exempt_rent_epoch_max::id());
+        let mut accounts = account_keys
+            .iter()
+            .enumerate()
+            .map(|(i, key)| {
+                let mut account_found = true;
+                let mut account_dep_index = None;
+                #[allow(clippy::collapsible_else_if)]
+                let account = if solana_sdk::sysvar::instructions::check_id(key) {
+                    Self::construct_instructions_account(
+                        message,
+                        feature_set
+                            .is_active(&feature_set::instructions_sysvar_owned_by_sysvar::id()),
+                    )
+>>>>>>> aa2e3487b (Refactor - Simplify program accounts in transaction loading (#29728))
                 } else {
-                    #[allow(clippy::collapsible_else_if)]
-                    if solana_sdk::sysvar::instructions::check_id(key) {
-                        Self::construct_instructions_account(
-                            message,
-                            feature_set
-                                .is_active(&feature_set::instructions_sysvar_owned_by_sysvar::id()),
-                        )
+                    let (mut account, rent) = if let Some(account_override) =
+                        account_overrides.and_then(|overrides| overrides.get(key))
+                    {
+                        (account_override.clone(), 0)
                     } else {
+<<<<<<< HEAD
                         let (mut account, rent) = if let Some(account_override) =
                             account_overrides.and_then(|overrides| overrides.get(key))
                         {
@@ -331,14 +360,54 @@ impl Accounts {
                             )?;
 
                             validated_fee_payer = true;
+=======
+                        self.accounts_db
+                            .load_with_fixed_root(ancestors, key)
+                            .map(|(mut account, _)| {
+                                if message.is_writable(i) {
+                                    let rent_due = rent_collector
+                                        .collect_from_existing_account(
+                                            key,
+                                            &mut account,
+                                            self.accounts_db.filler_account_suffix.as_ref(),
+                                            set_exempt_rent_epoch_max,
+                                        )
+                                        .rent_amount;
+                                    (account, rent_due)
+                                } else {
+                                    (account, 0)
+                                }
+                            })
+                            .unwrap_or_else(|| {
+                                account_found = false;
+                                let mut default_account = AccountSharedData::default();
+                                if set_exempt_rent_epoch_max {
+                                    // All new accounts must be rent-exempt (enforced in Bank::execute_loaded_transaction).
+                                    // Currently, rent collection sets rent_epoch to u64::MAX, but initializing the account
+                                    // with this field already set would allow us to skip rent collection for these accounts.
+                                    default_account.set_rent_epoch(u64::MAX);
+                                }
+                                (default_account, 0)
+                            })
+                    };
+
+                    if !validated_fee_payer && message.is_non_loader_key(i) {
+                        if i != 0 {
+                            warn!("Payer index should be 0! {:?}", tx);
+>>>>>>> aa2e3487b (Refactor - Simplify program accounts in transaction loading (#29728))
                         }
 
-                        if bpf_loader_upgradeable::check_id(account.owner()) {
-                            if message.is_writable(i) && !message.is_upgradeable_loader_present() {
-                                error_counters.invalid_writable_account += 1;
-                                return Err(TransactionError::InvalidWritableAccount);
-                            }
+                        Self::validate_fee_payer(
+                            key,
+                            &mut account,
+                            i as IndexOfAccount,
+                            error_counters,
+                            rent_collector,
+                            feature_set,
+                            fee,
+                        )?;
 
+<<<<<<< HEAD
                             if account.executable() {
                                 // The upgradeable loader requires the derived ProgramData account
                                 if let Ok(UpgradeableLoaderState::Program {
@@ -364,15 +433,49 @@ impl Accounts {
                                 }
                             }
                         } else if account.executable() && message.is_writable(i) {
+=======
+                        validated_fee_payer = true;
+                    }
+
+                    if bpf_loader_upgradeable::check_id(account.owner()) {
+                        if message.is_writable(i) && !message.is_upgradeable_loader_present() {
+>>>>>>> aa2e3487b (Refactor - Simplify program accounts in transaction loading (#29728))
                             error_counters.invalid_writable_account += 1;
                             return Err(TransactionError::InvalidWritableAccount);
                         }
 
-                        tx_rent += rent;
-                        rent_debits.insert(key, rent, account.lamports());
-
-                        account
+                        if account.executable() {
+                            // The upgradeable loader requires the derived ProgramData account
+                            if let Ok(UpgradeableLoaderState::Program {
+                                programdata_address,
+                            }) = account.state()
+                            {
+                                if let Some((programdata_account, _)) = self
+                                    .accounts_db
+                                    .load_with_fixed_root(ancestors, &programdata_address)
+                                {
+                                    account_dep_index =
+                                        Some(account_keys.len().saturating_add(account_deps.len())
+                                            as IndexOfAccount);
+                                    account_deps.push((programdata_address, programdata_account));
+                                } else {
+                                    error_counters.account_not_found += 1;
+                                    return Err(TransactionError::ProgramAccountNotFound);
+                                }
+                            } else {
+                                error_counters.invalid_program_for_execution += 1;
+                                return Err(TransactionError::InvalidProgramForExecution);
+                            }
+                        }
+                    } else if account.executable() && message.is_writable(i) {
+                        error_counters.invalid_writable_account += 1;
+                        return Err(TransactionError::InvalidWritableAccount);
                     }
+
+                    tx_rent += rent;
+                    rent_debits.insert(key, rent, account.lamports());
+
+                    account
                 };
                 accounts.push((*key, account));
             }
@@ -384,6 +487,7 @@ impl Accounts {
             // accounts.iter().take(message.account_keys.len())
             accounts.append(&mut account_deps);
 
+<<<<<<< HEAD
             if validated_fee_payer {
                 let program_indices = message
                     .instructions()
@@ -410,6 +514,89 @@ impl Accounts {
                 Err(TransactionError::AccountNotFound)
             }
         }
+=======
+                account_found_and_dep_index.push((account_found, account_dep_index));
+                Ok((*key, account))
+            })
+            .collect::<Result<Vec<_>>>()?;
+
+        if !validated_fee_payer {
+            error_counters.account_not_found += 1;
+            return Err(TransactionError::AccountNotFound);
+        }
+
+        // Appends the account_deps at the end of the accounts,
+        // this way they can be accessed in a uniform way.
+        // At places where only the accounts are needed,
+        // the account_deps are truncated using e.g:
+        // accounts.iter().take(message.account_keys.len())
+        accounts.append(&mut account_deps);
+
+        let builtins_start_index = accounts.len();
+        let program_indices = message
+            .instructions()
+            .iter()
+            .map(|instruction| {
+                let mut account_indices = Vec::new();
+                let mut program_index = instruction.program_id_index as usize;
+                for _ in 0..5 {
+                    let (program_id, program_account) = accounts
+                        .get(program_index)
+                        .ok_or(TransactionError::ProgramAccountNotFound)?;
+                    let (account_found, account_dep_index) = account_found_and_dep_index
+                        .get(program_index)
+                        .unwrap_or(&(true, None));
+                    if native_loader::check_id(program_id) {
+                        return Ok(account_indices);
+                    }
+                    if !account_found {
+                        error_counters.account_not_found += 1;
+                        return Err(TransactionError::ProgramAccountNotFound);
+                    }
+                    if !program_account.executable() {
+                        error_counters.invalid_program_for_execution += 1;
+                        return Err(TransactionError::InvalidProgramForExecution);
+                    }
+                    account_indices.insert(0, program_index as IndexOfAccount);
+                    if let Some(account_index) = account_dep_index {
+                        account_indices.insert(0, *account_index);
+                    }
+                    let owner_id = program_account.owner();
+                    if native_loader::check_id(owner_id) {
+                        return Ok(account_indices);
+                    }
+                    program_index = if let Some(owner_index) = accounts
+                        .get(builtins_start_index..)
+                        .ok_or(TransactionError::ProgramAccountNotFound)?
+                        .iter()
+                        .position(|(key, _)| key == owner_id)
+                    {
+                        builtins_start_index.saturating_add(owner_index)
+                    } else {
+                        let owner_index = accounts.len();
+                        if let Some((program_account, _)) =
+                            self.accounts_db.load_with_fixed_root(ancestors, owner_id)
+                        {
+                            accounts.push((*owner_id, program_account));
+                        } else {
+                            error_counters.account_not_found += 1;
+                            return Err(TransactionError::ProgramAccountNotFound);
+                        }
+                        owner_index
+                    };
+                }
+                error_counters.call_chain_too_deep += 1;
+                Err(TransactionError::CallChainTooDeep)
+            })
+            .collect::<Result<Vec<Vec<IndexOfAccount>>>>()?;
+
+        Ok(LoadedTransaction {
+            accounts,
+            program_indices,
+            rent: tx_rent,
+            rent_debits,
+        })
+>>>>>>> aa2e3487b (Refactor - Simplify program accounts in transaction loading (#29728))
     }
 
     fn validate_fee_payer(
@@ -460,6 +647,7 @@ impl Accounts {
         )
     }
 
+<<<<<<< HEAD
     fn load_executable_accounts(
         &self,
         ancestors: &Ancestors,
@@ -541,6 +729,8 @@ impl Accounts {
         Ok(account_indices)
     }
 
+=======
+>>>>>>> aa2e3487b (Refactor - Simplify program accounts in transaction loading (#29728))
     #[allow(clippy::too_many_arguments)]
     pub fn load_accounts(
         &self,
@@ -2042,7 +2232,7 @@ mod tests {
         assert_eq!(loaded_accounts.len(), 1);
         match &loaded_accounts[0] {
             (Ok(loaded_transaction), _nonce) => {
-                assert_eq!(loaded_transaction.accounts.len(), 6);
+                assert_eq!(loaded_transaction.accounts.len(), 4);
                 assert_eq!(loaded_transaction.accounts[0].1, accounts[0].1);
                 assert_eq!(loaded_transaction.program_indices.len(), 2);
                 assert_eq!(loaded_transaction.program_indices[0].len(), 1);
@@ -2474,6 +2664,7 @@ mod tests {
     }
 
     #[test]
+<<<<<<< HEAD
     fn test_accounts_account_not_found() {
         let accounts = Accounts::new_with_config_for_tests(
             Vec::new(),
@@ -2505,6 +2696,8 @@ mod tests {
 
     #[test]
     #[should_panic]
+=======
+>>>>>>> aa2e3487b (Refactor - Simplify program accounts in transaction loading (#29728))
     fn test_accounts_empty_bank_hash() {
         let accounts = Accounts::new_with_config_for_tests(
             Vec::new(),
