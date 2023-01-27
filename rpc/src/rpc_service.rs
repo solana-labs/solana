@@ -136,7 +136,7 @@ impl RpcRequestMiddleware {
         }
 
         let Some(path) = Self::strip_leading_slash(path) else {
-            return false
+            return false;
         };
 
         self.full_snapshot_archive_path_regex.is_match(path)
