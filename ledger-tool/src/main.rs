@@ -3021,7 +3021,7 @@ fn main() {
                             vec![]
                         };
                     if accounts_index_paths.is_empty() {
-                        accounts_index_paths = vec![ledger_path.join("accounts_index")];
+                        accounts_index_paths = vec![ledger_path.join("accounts_index.ledger-tool")];
                     }
                     accounts_index_config.drives = Some(accounts_index_paths);
                 }
