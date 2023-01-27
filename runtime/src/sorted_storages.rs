@@ -9,28 +9,27 @@ use {
     },
 };
 
-/// bprumo TODO: docs, talk about providing contiguous sorted-by-slot access
-/// Provide access to SnapshotStorageOnes by slot
+/// Provide access to snapshot storages by slot, sorted and contiguous
 #[derive(Debug)]
 pub struct SortedStorages<'a> {
     /// range of slots where storages exist (likely sparse)
-    /// bprumo note: could be looked up with .first() and .last() in the array, but the .slot() is an atomic lookup in the appendvec, so just cache it here
     slots: Range<Slot>,
-    /// the actual storages
-    /// A HashMap allows sparse storage and fast lookup of Slot -> Storage.
+    /// the actual storages, sorted by slot
     /// We expect ~432k slots.
-    //storages: HashMap<Slot, &'a Arc<AccountStorageEntry>>,
     storages: Box<[(Slot, &'a Arc<AccountStorageEntry>)]>,
 }
 
 impl<'a> SortedStorages<'a> {
-    /// bprumo TODO: doc
+    // assumption:
+    // source.slot() is unique from all other items in 'source'
     pub fn new(source: &'a [Arc<AccountStorageEntry>]) -> Self {
         let source_with_slots = source.into_iter().map(|storage| (storage.slot(), storage));
         Self::new_with_slots(source_with_slots, None, None)
     }
 
-    /// bprumo TODO: doc
+    /// create [`SortedStorages`] from `source` iterator.
+    /// `source` contains a [`Arc<AccountStorageEntry>`] and its associated slot
+    /// `source` does not have to be sorted in any way, but is assumed to not have duplicate slot #s
     pub fn new_with_slots(
         source: impl IntoIterator<Item = (Slot, &'a Arc<AccountStorageEntry>)>,
         // A slot used as a lower bound, but potentially smaller than the smallest slot in the given 'source' iterator
@@ -42,18 +41,11 @@ impl<'a> SortedStorages<'a> {
         max_slot_inclusive: Option<Slot>,
     ) -> Self {
         let (storages, time) = measure!({
-            let slots = match (min_slot, max_slot_inclusive) {
-                (Some(min), Some(max)) => min..=max,
-                (Some(min), None) => min..=Slot::MAX,
-                (None, Some(max)) => Slot::MIN..=max,
-                (None, None) => Slot::MIN..=Slot::MAX,
-            };
-            let source = source.into_iter().filter(|(slot, _)| slots.contains(slot));
-            let mut storages = Box::from_iter(source);
+            let mut storages = Box::from_iter(source.into_iter());
             storages.sort_unstable_by_key(|(slot, _)| *slot);
             storages
         });
-        error!("bprumo DEBUG: making sorted storages took: {time}");
+        debug!("sorting storages took {time}");
 
         // ensure all slots are unique
         // (since all storages are sorted by slot, we only need to check our neighbor to ensure uniqueness)
@@ -63,18 +55,22 @@ impl<'a> SortedStorages<'a> {
             let b = neighbors[1];
             a.0 != b.0
         };
-        assert!(
-            storages.windows(2).all(neighbors_are_unique),
-            "slots are not unique",
-        );
+        let (all_slots_are_unique, time) = measure!(storages.windows(2).all(neighbors_are_unique));
+        assert!(all_slots_are_unique, "slots are not unique");
+        debug!("ensuring all slots are unique took {time}");
 
         let slots = if storages.is_empty() {
             Range::default()
         } else {
             // SAFETY: We've ensured `storages` is *not* empty, so `first`/`last` will always be `Some`
-            // bprumo TODO: should the input params min/max_slot ALSO change the slots range here?
-            let min_slot = storages.first().unwrap().0;
-            let max_slot = storages.last().unwrap().0;
+            let min_slot_source = storages.first().unwrap().0;
+            let min_slot_param = min_slot.unwrap_or(Slot::MAX);
+            let min_slot = std::cmp::min(min_slot_source, min_slot_param);
+
+            let max_slot_source = storages.last().unwrap().0;
+            let max_slot_param = max_slot_inclusive.unwrap_or(Slot::MIN);
+            let max_slot = std::cmp::max(max_slot_source, max_slot_param);
+
             min_slot..max_slot + 1
         };
 
@@ -105,84 +101,6 @@ impl<'a> SortedStorages<'a> {
     pub fn storage_count(&self) -> usize {
         self.storages.len()
     }
-
-    // assumption:
-    // source.slot() is unique from all other items in 'source'
-    /*
-     * pub fn new(source: &'a [Arc<AccountStorageEntry>]) -> Self {
-     *     let slots = source.iter().map(|storage| {
-     *         storage.slot() // this must be unique. Will be enforced in new_with_slots
-     *     });
-     *     Self::new_with_slots(source.iter().zip(slots.into_iter()), None, None)
-     * }
-     */
-
-    /*
-     * /// create [`SortedStorages`] from `source` iterator.
-     * /// `source` contains a [`Arc<AccountStorageEntry>`] and its associated slot
-     * /// `source` does not have to be sorted in any way, but is assumed to not have duplicate slot #s
-     */
-    /*
-     *     pub fn new_with_slots(
-     *         source: impl Iterator<Item = (&'a Arc<AccountStorageEntry>, Slot)> + Clone,
-     *         // A slot used as a lower bound, but potentially smaller than the smallest slot in the given 'source' iterator
-     *         min_slot: Option<Slot>,
-     *         // highest valid slot. Only matters if source array does not contain a slot >= max_slot_inclusive.
-     *         // An example is a slot that has accounts in the write cache at slots <= 'max_slot_inclusive' but no storages at those slots.
-     *         // None => self.range.end = source.1.max() + 1
-     *         // Some(slot) => self.range.end = std::cmp::max(slot, source.1.max())
-     *         max_slot_inclusive: Option<Slot>,
-     *     ) -> Self {
-     *         let mut min = Slot::MAX;
-     *         let mut max = Slot::MIN;
-     *         let mut adjust_min_max = |slot| {
-     *             min = std::cmp::min(slot, min);
-     *             max = std::cmp::max(slot + 1, max);
-     *         };
-     *         // none, either, or both of min/max could be specified
-     *         if let Some(slot) = min_slot {
-     *             adjust_min_max(slot);
-     *         }
-     *         if let Some(slot) = max_slot_inclusive {
-     *             adjust_min_max(slot);
-     *         }
-     *
-     *         let mut slot_count = 0;
-     *         let mut time = Measure::start("get slot");
-     *         let source_ = source.clone();
-     *         let mut storage_count = 0;
-     *         source_.for_each(|(_, slot)| {
-     *             storage_count += 1;
-     *             slot_count += 1;
-     *             adjust_min_max(slot);
-     *         });
-     *         time.stop();
-     *         let mut time2 = Measure::start("sort");
-     *         let range;
-     *         let mut storages = HashMap::default();
-     *         if min > max {
-     *             range = Range::default();
-     *         } else {
-     *             range = Range {
-     *                 start: min,
-     *                 end: max,
-     *             };
-     *             source.for_each(|(original_storages, slot)| {
-     *                 assert!(
-     *                     storages.insert(slot, original_storages).is_none(),
-     *                     "slots are not unique"
-     *                 ); // we should not encounter the same slot twice
-     *             });
-     *         }
-     *         time2.stop();
-     *         debug!("SortedStorages, times: {}, {}", time.as_us(), time2.as_us());
-     *         Self {
-     *             range,
-     *             storages,
-     *             bprumo_storages: Box::default(),
-     *         }
-     *     }
-     */
 }
 
 /// Iterator over successive slots in 'storages' within 'range'.
@@ -193,14 +111,14 @@ pub struct SortedStoragesIter<'a> {
     /// the data to return per slot
     sorted_storages: &'a SortedStorages<'a>,
 
-    /// range for the iterator to iterate over (start_inclusive..end_exclusive)
+    /// range of slots to iterate over
     slots: Range<Slot>,
     /// the slot to be returned the next time 'Next' is called
     next_slot: Slot,
 
-    /// bprumo TODO: doc
+    /// the indices of `sorted_storages` to iterate over
     indices: Range<usize>,
-    /// bprumo TODO: doc
+    /// the index in `sorted_storages` to lookup when `next()` is called
     next_index: usize,
 }
 
@@ -209,7 +127,7 @@ impl<'a> Iterator for SortedStoragesIter<'a> {
 
     fn next(&mut self) -> Option<Self::Item> {
         if !self.slots.contains(&self.next_slot) {
-            //error!("bprumo DEBUG: SortedStoragesIter::next() done next slot not in slots! next index: {} (range: {:?}), next slot: {} (range: {:?}), ", self.next_index, self.indices, self.next_slot, self.slots);
+            debug!("SortedStoragesIter::next() done! next slot: {}, slots: {:?}, next index: {}, indices: {:?}", self.next_slot, self.slots, self.next_index, self.indices);
             return None;
         }
 
@@ -217,14 +135,20 @@ impl<'a> Iterator for SortedStoragesIter<'a> {
 
         if let Some(&(slot, storage)) = self.sorted_storages.storages.get(self.next_index) {
             if slot == self.next_slot {
-                //error!("bprumo DEBUG: SortedStoragesIter::next() found slot {}! next index: {} (range: {:?}), next slot: {} (range: {:?}), ", slot, self.next_index, self.indices, self.next_slot, self.slots);
+                debug!(
+                    "SortedStoragesIter::next() next slot {} matches at index {}",
+                    self.next_slot, self.next_index
+                );
                 result.1 = Some(storage);
                 self.next_index += 1;
             } else {
-                //error!("bprumo DEBUG: SortedStoragesIter::next() did not find slot {}! next index: {} (range: {:?}), next slot: {} (range: {:?}), ", slot, self.next_index, self.indices, self.next_slot, self.slots);
+                debug!("SortedStoragesIter::next() next slot {} does not match at index {}, slot found: {}", self.next_slot, self.next_index, slot);
             }
         } else {
-            //error!("bprumo DEBUG: SortedStoragesIter::next() done next index not in indices! next index: {} (range: {:?}), next slot: {} (range: {:?}), ", self.next_index, self.indices, self.next_slot, self.slots);
+            debug!(
+                "SortedStoragesIter::next() next index {} is not in storages, next slot: {}",
+                self.next_index, self.next_slot
+            );
         }
 
         self.next_slot += 1;
@@ -237,6 +161,9 @@ impl<'a> SortedStoragesIter<'a> {
         sorted_storages: &'a SortedStorages<'a>,
         range: &R,
     ) -> SortedStoragesIter<'a> {
+        // Note that the range can be outside the range of known storages.
+        // This is because the storages may not be the only source of valid slots.
+        // The write cache is another source of slots that 'storages' knows nothing about.
         let storage_range = sorted_storages.range();
         let slot_start = match range.start_bound() {
             Bound::Unbounded => {
@@ -252,18 +179,6 @@ impl<'a> SortedStoragesIter<'a> {
             Bound::Included(x) => *x + 1, // make exclusive
             Bound::Excluded(x) => *x,
         };
-        // Note that the range can be outside the range of known storages.
-        // This is because the storages may not be the only source of valid slots.
-        // The write cache is another source of slots that 'storages' knows nothing about.
-        // bprumo TODO: remove?
-        let _slots = slot_start..slot_end;
-
-        // bprumo TODO: need to find the index to start iterating from; can binary search
-        // find index with slot >= range.begin
-        //
-        // maybe also find end index too? then next() will be faster
-        //
-        // Oh! get a *slice* into our storages to iterate over!
 
         let index_start = sorted_storages
             .storages
@@ -271,16 +186,19 @@ impl<'a> SortedStoragesIter<'a> {
         let index_end = sorted_storages
             .storages
             .partition_point(|(slot, _)| slot < &slot_end);
-        //let slice_to_iterate = &storages.bprumo_storages[index_begin..index_end];
 
-        //error!("bprumo DEBUG: SortedStoragesIter::new() slot start: {}, slot end: {}, index start: {}, index end: {}, storages slots: {:?}, storages len: {}, storages: {:?}", slot_start, slot_end, index_start, index_end, sorted_storages.slots, sorted_storages.storages.len(), sorted_storages);
-        SortedStoragesIter {
+        let new = SortedStoragesIter {
             sorted_storages,
             slots: slot_start..slot_end,
             next_slot: slot_start,
             indices: index_start..index_end,
             next_index: index_start,
-        }
+        };
+        debug!(
+            "SortedStoragesIter::new() slots: {:?}, indices: {:?}",
+            new.slots, new.indices
+        );
+        new
     }
 }
 
@@ -422,7 +340,7 @@ pub mod tests {
                 Some(66),
             );
             assert_eq!(storages.storages.len(), 2);
-            assert_eq!(storages.slots, 33..45);
+            assert_eq!(storages.slots, 13..67);
         }
         {
             let storages = SortedStorages::new_with_slots(
@@ -430,8 +348,8 @@ pub mod tests {
                 Some(37),
                 Some(66),
             );
-            assert_eq!(storages.storages.len(), 1);
-            assert_eq!(storages.slots, 44..45);
+            assert_eq!(storages.storages.len(), 2);
+            assert_eq!(storages.slots, 33..67);
         }
         {
             let storages = SortedStorages::new_with_slots(
@@ -439,8 +357,8 @@ pub mod tests {
                 Some(13),
                 Some(41),
             );
-            assert_eq!(storages.storages.len(), 1);
-            assert_eq!(storages.slots, 33..34);
+            assert_eq!(storages.storages.len(), 2);
+            assert_eq!(storages.slots, 13..45);
         }
         {
             let storages = SortedStorages::new_with_slots(
@@ -448,8 +366,8 @@ pub mod tests {
                 Some(37),
                 Some(41),
             );
-            assert_eq!(storages.storages.len(), 0);
-            assert_eq!(storages.slots, Range::default());
+            assert_eq!(storages.storages.len(), 2);
+            assert_eq!(storages.slots, 33..45);
         }
     }
 
