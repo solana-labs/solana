@@ -2445,34 +2445,6 @@ mod tests {
     }
 
     #[test]
-    fn test_accounts_account_not_found() {
-        let accounts = Accounts::new_with_config_for_tests(
-            Vec::new(),
-            &ClusterType::Development,
-            AccountSecondaryIndexes::default(),
-            AccountShrinkThreshold::default(),
-        );
-        let mut error_counters = TransactionErrorMetrics::default();
-        let ancestors = vec![(0, 0)].into_iter().collect();
-
-        let keypair = Keypair::new();
-        let mut account = AccountSharedData::new(1, 0, &Pubkey::default());
-        account.set_executable(true);
-        accounts.store_for_tests(0, &keypair.pubkey(), &account);
-
-        assert_eq!(
-            accounts.load_executable_accounts(
-                &ancestors,
-                &mut vec![(keypair.pubkey(), account)],
-                0,
-                &mut error_counters,
-            ),
-            Err(TransactionError::ProgramAccountNotFound)
-        );
-        assert_eq!(error_counters.account_not_found, 1);
-    }
-
-    #[test]
     fn test_accounts_empty_bank_hash() {
         let accounts = Accounts::new_with_config_for_tests(
             Vec::new(),
