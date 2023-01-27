@@ -250,18 +250,19 @@ where
             return Ok(None);
         }
         let message_text = &message.into_text().unwrap();
-        let json_msg: Map<String, Value> = serde_json::from_str(message_text)?;
-
-        if let Some(Object(params)) = json_msg.get("params") {
-            if let Some(result) = params.get("result") {
-                let x: T = serde_json::from_value::<T>(result.clone()).unwrap();
-                return Ok(Some(x));
+        let json_result = serde_json::from_str::<Map<String, Value>>(message_text);
+        if let Ok(json_msg) = json_result {
+            if let Some(Object(params)) = json_msg.get("params") {
+                if let Some(result) = params.get("result") {
+                    let x: T = serde_json::from_value::<T>(result.clone()).unwrap();
+                    return Ok(Some(x));
+                }
             }
         }
 
         // TODO: Add proper JSON RPC response/error handling...
         Err(PubsubClientError::UnexpectedMessageError(format!(
-            "{json_msg:?}"
+            "msg={message_text:?}"
         )))
     }
 
