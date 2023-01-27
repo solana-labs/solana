@@ -464,6 +464,12 @@ impl AbiExample for SocketAddr {
     }
 }
 
+impl AbiExample for IpAddr {
+    fn example() -> Self {
+        IpAddr::V4(Ipv4Addr::UNSPECIFIED)
+    }
+}
+
 // This is a control flow indirection needed for digesting all variants of an enum
 pub trait AbiEnumVisitor: Serialize {
     fn visit_for_abi(&self, digester: &mut AbiDigester) -> DigestResult;

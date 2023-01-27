@@ -159,9 +159,9 @@ impl StakesCache {
 }
 
 /// The generic type T is either Delegation or StakeAccount.
-/// Stake<Delegation> is equivalent to the old code and is used for backward
-/// compatibility in BankFieldsToDeserialize.
-/// But banks cache Stakes<StakeAccount> which includes the entire stake
+/// [`Stakes<Delegation>`] is equivalent to the old code and is used for backward
+/// compatibility in [`crate::bank::BankFieldsToDeserialize`].
+/// But banks cache [`Stakes<StakeAccount>`] which includes the entire stake
 /// account and StakeState deserialized from the account. Doing so, will remove
 /// the need to load the stake account from accounts-db when working with
 /// stake-delegations.
