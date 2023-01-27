@@ -262,8 +262,7 @@ impl PohService {
                         std::mem::take(&mut record.transactions),
                     );
                     // what do we do on failure here? Ignore for now.
-                    let (_send_res, send_record_result_time) =
-                        measure!(record.sender.send(res), "send_record_result");
+                    let (_send_res, send_record_result_time) = measure!(record.sender.send(res));
                     timing.total_send_record_result_us += send_record_result_time.as_us();
                     timing.num_hashes += 1; // note: may have also ticked inside record
 
