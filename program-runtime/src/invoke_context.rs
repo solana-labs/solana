@@ -61,12 +61,7 @@ impl std::fmt::Debug for BuiltinProgram {
 
 impl<'a> ContextObject for InvokeContext<'a> {
     fn trace(&mut self, state: [u64; 12]) {
-        if let Ok(context) = self
-            .transaction_context
-            .get_current_instruction_context_mut()
-        {
-            context.log_bpf_state(state);
-        }
+        self.trace_log.push(state);
     }
 
     fn consume(&mut self, amount: u64) {
@@ -109,6 +104,7 @@ pub struct InvokeContext<'a> {
     pre_accounts: Vec<PreAccount>,
     builtin_programs: &'a [BuiltinProgram],
     pub sysvar_cache: Cow<'a, SysvarCache>,
+    pub trace_log: Vec<[u64; 12]>,
     log_collector: Option<Rc<RefCell<LogCollector>>>,
     compute_budget: ComputeBudget,
     current_compute_budget: ComputeBudget,
@@ -143,6 +139,7 @@ impl<'a> InvokeContext<'a> {
             pre_accounts: Vec::new(),
             builtin_programs,
             sysvar_cache,
+            trace_log: Vec::new(),
             log_collector,
             current_compute_budget: compute_budget,
             compute_budget,

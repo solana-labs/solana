@@ -306,13 +306,7 @@ before execting it in the virtual machine.",
     let (instruction_count, result) = vm.execute_program(matches.value_of("use").unwrap() != "jit");
     let duration = Instant::now() - start_time;
     if matches.occurrences_of("trace") > 0 {
-        let trace_log = vm
-            .env
-            .context_object_pointer
-            .transaction_context
-            .get_current_instruction_context()
-            .unwrap()
-            .trace_log();
+        let trace_log = vm.env.context_object_pointer.trace_log.as_slice();
         if matches.value_of("trace").unwrap() == "stdout" {
             analysis
                 .analyze()
