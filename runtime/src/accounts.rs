@@ -388,57 +388,63 @@ impl Accounts {
         // accounts.iter().take(message.account_keys.len())
         accounts.append(&mut account_deps);
 
-        let mut builtins = Vec::new();
+        let builtins_start_index = accounts.len();
         let program_indices = message
             .instructions()
             .iter()
             .map(|instruction| {
                 let mut account_indices = Vec::new();
-                let (program_id, program_account) = accounts
-                    .get(instruction.program_id_index as usize)
-                    .ok_or(TransactionError::ProgramAccountNotFound)?;
-                let (account_found, account_dep_index) = account_found_and_dep_index
-                    .get(instruction.program_id_index as usize)
-                    .ok_or(TransactionError::ProgramAccountNotFound)?;
-                if native_loader::check_id(program_id) {
-                    return Ok(Vec::new());
-                }
-                if !account_found {
-                    error_counters.account_not_found += 1;
-                    return Err(TransactionError::ProgramAccountNotFound);
-                }
-                if !program_account.executable() {
-                    error_counters.invalid_program_for_execution += 1;
-                    return Err(TransactionError::InvalidProgramForExecution);
-                }
-                let owner_id = program_account.owner();
-                if !native_loader::check_id(owner_id) {
-                    let owner_index = if let Some(owner_index) =
-                        builtins.iter().position(|(key, _)| key == owner_id)
+                let mut program_index = instruction.program_id_index as usize;
+                for _ in 0..5 {
+                    let (program_id, program_account) = accounts
+                        .get(program_index)
+                        .ok_or(TransactionError::ProgramAccountNotFound)?;
+                    let (account_found, account_dep_index) = account_found_and_dep_index
+                        .get(program_index)
+                        .unwrap_or(&(true, None));
+                    if native_loader::check_id(program_id) {
+                        return Ok(account_indices);
+                    }
+                    if !account_found {
+                        error_counters.account_not_found += 1;
+                        return Err(TransactionError::ProgramAccountNotFound);
+                    }
+                    if !program_account.executable() {
+                        error_counters.invalid_program_for_execution += 1;
+                        return Err(TransactionError::InvalidProgramForExecution);
+                    }
+                    account_indices.insert(0, program_index as IndexOfAccount);
+                    if let Some(account_index) = account_dep_index {
+                        account_indices.insert(0, *account_index);
+                    }
+                    let owner_id = program_account.owner();
+                    if native_loader::check_id(owner_id) {
+                        return Ok(account_indices);
+                    }
+                    program_index = if let Some(owner_index) = accounts
+                        .get(builtins_start_index..)
+                        .ok_or(TransactionError::ProgramAccountNotFound)?
+                        .iter()
+                        .position(|(key, _)| key == owner_id)
                     {
-                        accounts.len().saturating_add(owner_index)
+                        builtins_start_index.saturating_add(owner_index)
                     } else {
-                        let owner_index = accounts.len().saturating_add(builtins.len());
+                        let owner_index = accounts.len();
                         if let Some((program_account, _)) =
                             self.accounts_db.load_with_fixed_root(ancestors, owner_id)
                         {
-                            builtins.push((*owner_id, program_account));
+                            accounts.push((*owner_id, program_account));
                         } else {
                             error_counters.account_not_found += 1;
                             return Err(TransactionError::ProgramAccountNotFound);
                         }
                         owner_index
                     };
-                    account_indices.push(owner_index as IndexOfAccount);
                 }
-                if let Some(account_index) = account_dep_index {
-                    account_indices.push(*account_index);
-                }
-                account_indices.push(instruction.program_id_index as IndexOfAccount);
-                Ok(account_indices)
+                error_counters.call_chain_too_deep += 1;
+                Err(TransactionError::CallChainTooDeep)
             })
             .collect::<Result<Vec<Vec<IndexOfAccount>>>>()?;
-        accounts.append(&mut builtins);
 
         Ok(LoadedTransaction {
             accounts,
