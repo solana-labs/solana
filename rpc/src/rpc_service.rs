@@ -122,7 +122,7 @@ impl RpcRequestMiddleware {
             .unwrap()
     }
 
-    fn strip_prefix(path: &str) -> Option<&str> {
+    fn strip_leading_slash(path: &str) -> Option<&str> {
         path.strip_prefix('/')
     }
 
@@ -135,7 +135,7 @@ impl RpcRequestMiddleware {
             return false;
         }
 
-        let Some(path) = Self::strip_prefix(path) else {
+        let Some(path) = Self::strip_leading_slash(path) else {
             return false
         };
 
@@ -191,7 +191,7 @@ impl RpcRequestMiddleware {
 
     fn process_file_get(&self, path: &str) -> RequestMiddlewareAction {
         let filename = {
-            let stem = Self::strip_prefix(path).expect("path already verified");
+            let stem = Self::strip_leading_slash(path).expect("path already verified");
             match path {
                 DEFAULT_GENESIS_DOWNLOAD_PATH => {
                     inc_new_counter_info!("rpc-get_genesis", 1);
@@ -684,22 +684,31 @@ mod tests {
 
     #[test]
     fn test_strip_prefix() {
-        assert_eq!(RpcRequestMiddleware::strip_prefix("/"), Some(""));
-        assert_eq!(RpcRequestMiddleware::strip_prefix("//"), Some("/"));
-        assert_eq!(RpcRequestMiddleware::strip_prefix("/abc"), Some("abc"));
-        assert_eq!(RpcRequestMiddleware::strip_prefix("//abc"), Some("/abc"));
-        assert_eq!(RpcRequestMiddleware::strip_prefix("/./abc"), Some("./abc"));
+        assert_eq!(RpcRequestMiddleware::strip_leading_slash("/"), Some(""));
+        assert_eq!(RpcRequestMiddleware::strip_leading_slash("//"), Some("/"));
         assert_eq!(
-            RpcRequestMiddleware::strip_prefix("/../abc"),
+            RpcRequestMiddleware::strip_leading_slash("/abc"),
+            Some("abc")
+        );
+        assert_eq!(
+            RpcRequestMiddleware::strip_leading_slash("//abc"),
+            Some("/abc")
+        );
+        assert_eq!(
+            RpcRequestMiddleware::strip_leading_slash("/./abc"),
+            Some("./abc")
+        );
+        assert_eq!(
+            RpcRequestMiddleware::strip_leading_slash("/../abc"),
             Some("../abc")
         );
 
-        assert_eq!(RpcRequestMiddleware::strip_prefix(""), None);
-        assert_eq!(RpcRequestMiddleware::strip_prefix("./"), None);
-        assert_eq!(RpcRequestMiddleware::strip_prefix("../"), None);
-        assert_eq!(RpcRequestMiddleware::strip_prefix("."), None);
-        assert_eq!(RpcRequestMiddleware::strip_prefix(".."), None);
-        assert_eq!(RpcRequestMiddleware::strip_prefix("abc"), None);
+        assert_eq!(RpcRequestMiddleware::strip_leading_slash(""), None);
+        assert_eq!(RpcRequestMiddleware::strip_leading_slash("./"), None);
+        assert_eq!(RpcRequestMiddleware::strip_leading_slash("../"), None);
+        assert_eq!(RpcRequestMiddleware::strip_leading_slash("."), None);
+        assert_eq!(RpcRequestMiddleware::strip_leading_slash(".."), None);
+        assert_eq!(RpcRequestMiddleware::strip_leading_slash("abc"), None);
     }
 
     #[test]
