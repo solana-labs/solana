@@ -388,6 +388,8 @@ impl Accounts {
         // accounts.iter().take(message.account_keys.len())
         accounts.append(&mut account_deps);
 
+        let disable_builtin_loader_ownership_chains =
+            feature_set.is_active(&feature_set::disable_builtin_loader_ownership_chains::ID);
         let builtins_start_index = accounts.len();
         let program_indices = message
             .instructions()
@@ -440,6 +442,10 @@ impl Accounts {
                         }
                         owner_index
                     };
+                    if disable_builtin_loader_ownership_chains {
+                        account_indices.insert(0, program_index as IndexOfAccount);
+                        return Ok(account_indices);
+                    }
                 }
                 error_counters.call_chain_too_deep += 1;
                 Err(TransactionError::CallChainTooDeep)
