@@ -103,7 +103,7 @@ impl PohService {
         hashes_per_batch: u64,
         record_receiver: Receiver<Record>,
     ) -> Self {
-        let poh_exit_ = poh_exit.clone();
+        let poh_exit = poh_exit.clone();
         let poh_config = poh_config.clone();
         let tick_producer = Builder::new()
             .name("solPohTickProd".to_string())
@@ -114,14 +114,14 @@ impl PohService {
                         Self::sleepy_tick_producer(
                             poh_recorder,
                             &poh_config,
-                            &poh_exit_,
+                            &poh_exit,
                             record_receiver,
                         );
                     } else {
                         Self::short_lived_sleepy_tick_producer(
                             poh_recorder,
                             &poh_config,
-                            &poh_exit_,
+                            &poh_exit,
                             record_receiver,
                         );
                     }
@@ -134,7 +134,7 @@ impl PohService {
                     }
                     Self::tick_producer(
                         poh_recorder,
-                        &poh_exit_,
+                        &poh_exit,
                         ticks_per_slot,
                         hashes_per_batch,
                         record_receiver,
@@ -144,7 +144,7 @@ impl PohService {
                         ),
                     );
                 }
-                poh_exit_.store(true, Ordering::Relaxed);
+                poh_exit.store(true, Ordering::Relaxed);
             })
             .unwrap();
 
