@@ -1370,6 +1370,7 @@ fn process_loader_instruction(
 
 fn trace_bpf(
     trace_log: &[TraceLogEntry],
+    consumed_bpf_units: &[u64],
     bpf_executor: Arc<BpfExecutor>,
     bpf_tracer_plugin_manager: Option<Arc<RwLock<dyn BpfTracerPluginManager>>>,
     block_hash: &Hash,
@@ -1399,6 +1400,7 @@ fn trace_bpf(
             block_hash,
             transaction_id,
             trace_log,
+            consumed_bpf_units,
             Arc::clone(&bpf_executor) as Arc<dyn bpf_tracer_plugin_interface::ExecutorAdditional>,
         ) {
             error!(
@@ -1485,6 +1487,10 @@ impl Executor for BpfExecutor {
                     .trace_log_stack
                     .last()
                     .expect("Inconsistent trace log stack"),
+                invoke_context
+                    .consumed_bpf_units_stack
+                    .last()
+                    .expect("Inconsistent consumed BPF units stack"),
                 Arc::clone(&self),
                 bpf_tracer_plugin_manager,
                 &blockhash,
