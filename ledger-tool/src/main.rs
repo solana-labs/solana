@@ -2789,10 +2789,8 @@ fn main() {
                     ..ProcessOptions::default()
                 };
                 let print_accounts_stats = arg_matches.is_present("print_accounts_stats");
-                info!(
-                    "genesis hash: {}",
-                    open_genesis_config_by(&ledger_path, arg_matches).hash()
-                );
+                let genesis_config = open_genesis_config_by(&ledger_path, arg_matches);
+                info!("genesis hash: {}", genesis_config.hash());
 
                 let blockstore = open_blockstore(
                     &ledger_path,
@@ -2803,7 +2801,7 @@ fn main() {
                 );
                 let (bank_forks, ..) = load_bank_forks(
                     arg_matches,
-                    &open_genesis_config_by(&ledger_path, arg_matches),
+                    &genesis_config,
                     &blockstore,
                     process_options,
                     snapshot_archive_path,
