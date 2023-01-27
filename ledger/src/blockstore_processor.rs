@@ -30,6 +30,7 @@ use {
         bank_utils,
         commitment::VOTE_THRESHOLD_SIZE,
         cost_model::CostModel,
+        cost_tracker::CostTrackerError,
         epoch_accounts_hash::EpochAccountsHash,
         prioritization_fee_cache::PrioritizationFeeCache,
         runtime_config::RuntimeConfig,
@@ -337,9 +338,40 @@ fn execute_batches(
             let cost = tx_cost.sum();
             minimal_tx_cost = std::cmp::min(minimal_tx_cost, cost);
             total_cost = total_cost.saturating_add(cost);
-            cost
+            tx_cost
         })
         .collect::<Vec<_>>();
+
+    // TAO TODO - accumulate transaction cost to bank's cost_tracker, retunr error if cost limits
+    // would be breached. 
+    // This change needs to be feature gated
+    {
+        let mut cost_tracker = bank.write_cost_tracker().unwrap();
+        for tx_cost in &tx_costs {
+            match cost_tracker.try_add(tx_cost) {
+                Ok(_block_cost) => (),
+                Err(e) => {
+                    match e {
+                        CostTrackerError::WouldExceedBlockMaxLimit => {
+                            return Err(TransactionError::WouldExceedMaxBlockCostLimit);
+                        }
+                        CostTrackerError::WouldExceedVoteMaxLimit => {
+                            return Err(TransactionError::WouldExceedMaxVoteCostLimit);
+                        }
+                        CostTrackerError::WouldExceedAccountMaxLimit => {
+                            return Err(TransactionError::WouldExceedMaxAccountCostLimit);
+                        }
+                        CostTrackerError::WouldExceedAccountDataBlockLimit => {
+                            return Err(TransactionError::WouldExceedAccountDataBlockLimit);
+                        }
+                        CostTrackerError::WouldExceedAccountDataTotalLimit => {
+                            return Err(TransactionError::WouldExceedAccountDataTotalLimit);
+                        }
+                    }
+                }
+            }
+        }
+    }
 
     let target_batch_count = get_thread_count() as u64;
 
@@ -348,23 +380,26 @@ fn execute_batches(
         let target_batch_cost = total_cost / target_batch_count;
         let mut batch_cost: u64 = 0;
         let mut slice_start = 0;
-        tx_costs.into_iter().enumerate().for_each(|(index, cost)| {
-            let next_index = index + 1;
-            batch_cost = batch_cost.saturating_add(cost);
-            if batch_cost >= target_batch_cost || next_index == sanitized_txs.len() {
-                let tx_batch = rebatch_transactions(
-                    &lock_results,
-                    bank,
-                    &sanitized_txs,
-                    slice_start,
-                    index,
-                    &transaction_indexes,
-                );
-                slice_start = next_index;
-                tx_batches.push(tx_batch);
-                batch_cost = 0;
-            }
-        });
+        tx_costs
+            .into_iter()
+            .enumerate()
+            .for_each(|(index, tx_cost)| {
+                let next_index = index + 1;
+                batch_cost = batch_cost.saturating_add(tx_cost.sum());
+                if batch_cost >= target_batch_cost || next_index == sanitized_txs.len() {
+                    let tx_batch = rebatch_transactions(
+                        &lock_results,
+                        bank,
+                        &sanitized_txs,
+                        slice_start,
+                        index,
+                        &transaction_indexes,
+                    );
+                    slice_start = next_index;
+                    tx_batches.push(tx_batch);
+                    batch_cost = 0;
+                }
+            });
         &tx_batches[..]
     } else {
         batches
