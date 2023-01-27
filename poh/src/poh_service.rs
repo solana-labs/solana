@@ -251,10 +251,9 @@ impl PohService {
             Some(mut record) => {
                 // received message to record
                 // so, record for as long as we have queued up record requests
-                let mut lock_time = Measure::start("lock");
-                let mut poh_recorder_l = poh_recorder.write().unwrap();
-                lock_time.stop();
+                let (mut poh_recorder_l, lock_time) = measure!(poh_recorder.write().unwrap());
                 timing.total_lock_time_ns += lock_time.as_ns();
+
                 let mut record_time = Measure::start("record");
                 loop {
                     let res = poh_recorder_l.record(
@@ -285,16 +284,17 @@ impl PohService {
             }
             None => {
                 // did not receive instructions to record, so hash until we notice we've been asked to record (or we need to tick) and then remember what to record
-                let mut lock_time = Measure::start("lock");
-                let mut poh_l = poh.lock().unwrap();
-                lock_time.stop();
+                let (mut poh_l, lock_time) = measure!(poh.lock().unwrap());
                 timing.total_lock_time_ns += lock_time.as_ns();
+
                 loop {
                     timing.num_hashes += hashes_per_batch;
-                    let mut hash_time = Measure::start("hash");
-                    let should_tick = poh_l.hash(hashes_per_batch);
-                    let ideal_time = poh_l.target_poh_time(target_ns_per_tick);
-                    hash_time.stop();
+                    let ((should_tick, ideal_time), hash_time) = measure!({
+                        (
+                            poh_l.hash(hashes_per_batch),
+                            poh_l.target_poh_time(target_ns_per_tick),
+                        )
+                    });
                     timing.total_hash_time_ns += hash_time.as_ns();
                     if should_tick {
                         // nothing else can be done. tick required.
