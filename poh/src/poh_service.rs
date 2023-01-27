@@ -355,13 +355,10 @@ impl PohService {
             if should_tick {
                 // Lock PohRecorder only for the final hash. record_or_hash will lock PohRecorder for record calls but not for hashing.
                 {
-                    let mut lock_time = Measure::start("lock");
-                    let mut poh_recorder_l = poh_recorder.write().unwrap();
-                    lock_time.stop();
+                    let (mut poh_recorder_l, lock_time) = measure!(poh_recorder.write().unwrap());
                     timing.total_lock_time_ns += lock_time.as_ns();
-                    let mut tick_time = Measure::start("tick");
-                    poh_recorder_l.tick();
-                    tick_time.stop();
+
+                    let (_, tick_time) = measure!(poh_recorder_l.tick());
                     timing.total_tick_time_ns += tick_time.as_ns();
                 }
                 timing.num_ticks += 1;
