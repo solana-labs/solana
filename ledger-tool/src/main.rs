@@ -1108,6 +1108,7 @@ fn load_bank_forks(
     };
 
     // For all account_paths, set up the run/ and snapshot/ sub directories.
+    // If the sub directories do not exist, the account_path will be cleaned because older version put account files there
     let account_run_paths: Vec<PathBuf> = account_paths.into_iter().map(
         |account_path| {
             match create_accounts_run_and_snapshot_dirs(&account_path) {

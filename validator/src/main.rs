@@ -1282,6 +1282,7 @@ pub fn main() {
         }).map(
         |account_path| {
             // For all account_paths, set up the run/ and snapshot/ sub directories.
+            // If the sub directories do not exist, the account_path will be cleaned because older version put account files there
             match create_accounts_run_and_snapshot_dirs(&account_path) {
                 Ok((account_run_path, _account_snapshot_path)) => account_run_path,
                 Err(err) => {

@@ -851,7 +851,9 @@ pub fn create_accounts_run_and_snapshot_dirs(
         // to this new version using run and snapshot directories.
         // The run/ content cleanup will be done at a later point.  The snapshot/ content persists
         // accross the process boot, and will be purged by the account_background_service.
-        fs::remove_dir_all(account_dir.as_ref())?;
+        if fs::remove_dir_all(&account_dir).is_err() {
+            delete_contents_of_path(&account_dir);
+        }
         fs::create_dir_all(&run_path)?;
         fs::create_dir_all(&snapshot_path)?;
     }
