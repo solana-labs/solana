@@ -259,7 +259,7 @@ impl ConnectionCache {
             .port()
             .checked_add(port_offset)
             .unwrap_or_else(|| addr.port());
-        let force_use_udp = port == addr.port();
+        let force_use_udp = port == addr.port() && port_offset != 0;
         let addr = SocketAddr::new(addr.ip(), port);
 
         let mut lock_timing_ms = get_connection_map_lock_measure.as_ms();
