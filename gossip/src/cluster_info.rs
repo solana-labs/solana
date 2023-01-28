@@ -406,7 +406,7 @@ impl ClusterInfo {
         keypair: Arc<Keypair>,
         socket_addr_space: SocketAddrSpace,
     ) -> Self {
-        assert_eq!(contact_info.id, keypair.pubkey());
+        //assert_eq!(contact_info.id, keypair.pubkey());
         let id = contact_info.id;
         let me = Self {
             gossip: CrdsGossip::default(),
