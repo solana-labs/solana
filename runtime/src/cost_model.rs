@@ -388,7 +388,12 @@ mod tests {
             &token_transaction,
             &FeatureSet::all_enabled(),
         );
-        assert_eq!(0, tx_cost.builtins_execution_cost);
+        assert_eq!(
+            *BUILT_IN_INSTRUCTION_COSTS
+                .get(&compute_budget::id())
+                .unwrap(),
+            tx_cost.builtins_execution_cost
+        );
         assert_eq!(12_345, tx_cost.bpf_execution_cost);
         assert_eq!(1, tx_cost.data_bytes_cost);
     }
