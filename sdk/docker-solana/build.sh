@@ -32,6 +32,10 @@ cp -f ../../fetch-spl.sh usr/bin/
 
 docker build -t solanalabs/solana:"$CHANNEL_OR_TAG" .
 
+if [[ $CHANNEL_OR_TAG = stable ]] ;then
+  docker tag solanalabs/solana:"$CHANNEL_OR_TAG" solanalabs/solana:latest
+fi
+
 maybeEcho=
 if [[ -z $CI ]]; then
   echo "Not CI, skipping |docker push|"
@@ -44,4 +48,4 @@ else
     fi
   )
 fi
-$maybeEcho docker push solanalabs/solana:"$CHANNEL_OR_TAG"
+$maybeEcho docker push --all-tags solanalabs/solana:"$CHANNEL_OR_TAG"
