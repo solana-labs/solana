@@ -127,10 +127,10 @@ function HoldingsDetailTable({ tokens }: { tokens: TokenInfoWithPubkey[] }) {
           </td>
         )}
         <td>
-          <Address pubkey={tokenAccount.pubkey} link truncate />
+          <Address pubkey={tokenAccount.info.mint} link truncate useMetadata />
         </td>
         <td>
-          <Address pubkey={tokenAccount.info.mint} link truncate />
+          <Address pubkey={tokenAccount.pubkey} link truncate />
         </td>
         <td>
           {tokenAccount.info.tokenAmount.uiAmountString}{" "}
@@ -148,8 +148,8 @@ function HoldingsDetailTable({ tokens }: { tokens: TokenInfoWithPubkey[] }) {
             {showLogos && (
               <th className="text-muted w-1 p-0 text-center">Logo</th>
             )}
-            <th className="text-muted">Account Address</th>
             <th className="text-muted">Mint Address</th>
+            <th className="text-muted">Account Address</th>
             <th className="text-muted">Balance</th>
           </tr>
         </thead>
