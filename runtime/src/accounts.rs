@@ -388,6 +388,8 @@ impl Accounts {
         // accounts.iter().take(message.account_keys.len())
         accounts.append(&mut account_deps);
 
+        let disable_builtin_loader_ownership_chains =
+            feature_set.is_active(&feature_set::disable_builtin_loader_ownership_chains::ID);
         let builtins_start_index = accounts.len();
         let program_indices = message
             .instructions()
@@ -440,6 +442,10 @@ impl Accounts {
                         }
                         owner_index
                     };
+                    if disable_builtin_loader_ownership_chains {
+                        account_indices.insert(0, program_index as IndexOfAccount);
+                        return Ok(account_indices);
+                    }
                 }
                 error_counters.call_chain_too_deep += 1;
                 Err(TransactionError::CallChainTooDeep)
@@ -1739,72 +1745,6 @@ mod tests {
             }
             (Err(e), _nonce) => Err(e).unwrap(),
         }
-    }
-
-    #[test]
-    fn test_load_accounts_max_call_depth() {
-        let mut accounts: Vec<TransactionAccount> = Vec::new();
-        let mut error_counters = TransactionErrorMetrics::default();
-
-        let keypair = Keypair::new();
-        let key0 = keypair.pubkey();
-        let key1 = Pubkey::from([5u8; 32]);
-        let key2 = Pubkey::from([6u8; 32]);
-        let key3 = Pubkey::from([7u8; 32]);
-        let key4 = Pubkey::from([8u8; 32]);
-        let key5 = Pubkey::from([9u8; 32]);
-        let key6 = Pubkey::from([10u8; 32]);
-
-        let account = AccountSharedData::new(1, 0, &Pubkey::default());
-        accounts.push((key0, account));
-
-        let mut account = AccountSharedData::new(40, 1, &Pubkey::default());
-        account.set_executable(true);
-        account.set_owner(native_loader::id());
-        accounts.push((key1, account));
-
-        let mut account = AccountSharedData::new(41, 1, &Pubkey::default());
-        account.set_executable(true);
-        account.set_owner(key1);
-        accounts.push((key2, account));
-
-        let mut account = AccountSharedData::new(42, 1, &Pubkey::default());
-        account.set_executable(true);
-        account.set_owner(key2);
-        accounts.push((key3, account));
-
-        let mut account = AccountSharedData::new(43, 1, &Pubkey::default());
-        account.set_executable(true);
-        account.set_owner(key3);
-        accounts.push((key4, account));
-
-        let mut account = AccountSharedData::new(44, 1, &Pubkey::default());
-        account.set_executable(true);
-        account.set_owner(key4);
-        accounts.push((key5, account));
-
-        let mut account = AccountSharedData::new(45, 1, &Pubkey::default());
-        account.set_executable(true);
-        account.set_owner(key5);
-        accounts.push((key6, account));
-
-        let instructions = vec![CompiledInstruction::new(1, &(), vec![0])];
-        let tx = Transaction::new_with_compiled_instructions(
-            &[&keypair],
-            &[],
-            Hash::default(),
-            vec![key6],
-            instructions,
-        );
-
-        let loaded_accounts = load_accounts(tx, &accounts, &mut error_counters);
-
-        assert_eq!(error_counters.call_chain_too_deep, 1);
-        assert_eq!(loaded_accounts.len(), 1);
-        assert_eq!(
-            loaded_accounts[0],
-            (Err(TransactionError::CallChainTooDeep), None,)
-        );
     }
 
     #[test]
