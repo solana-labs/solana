@@ -195,8 +195,9 @@ mod target_arch {
                 .map_err(AltBn128Error::TryIntoVecError)?,
         )
         .try_into()?;
-        let fr = <BigInteger256 as FromBytes>::read(convert_endianness_64(&input[64..96]).as_ref())
-            .map_err(|_| AltBn128Error::InvalidInputData)?;
+        let fr =
+            <BigInteger256 as FromBytes>::read(convert_endianness_64(&input[64..96]).as_slice())
+                .map_err(|_| AltBn128Error::InvalidInputData)?;
 
         let mut result_point_data = [0; ALT_BN128_MULTIPLICATION_OUTPUT_LEN + 1];
         let result_point: G1 = p.into_projective().mul(&fr).into();
