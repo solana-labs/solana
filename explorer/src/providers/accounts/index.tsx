@@ -438,7 +438,10 @@ const getMetaDataJSON = async (
     if (!uri) return resolve(undefined);
 
     const processJson = (extended: any) => {
-      if (!extended || (!extended.image && extended?.properties?.files?.length === 0)) {
+      if (
+        !extended ||
+        (!extended.image && extended?.properties?.files?.length === 0)
+      ) {
         return;
       }
 
