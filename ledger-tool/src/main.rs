@@ -2746,7 +2746,7 @@ fn main() {
                     ),
                     filler_accounts_config,
                     ancient_append_vec_offset: value_t!(
-                        matches,
+                        arg_matches,
                         "accounts_db_ancient_append_vecs",
                         i64
                     )
@@ -3011,7 +3011,7 @@ fn main() {
 
                 let accounts_db_config = Some(AccountsDbConfig {
                     ancient_append_vec_offset: value_t!(
-                        matches,
+                        arg_matches,
                         "accounts_db_ancient_append_vecs",
                         i64
                     )
