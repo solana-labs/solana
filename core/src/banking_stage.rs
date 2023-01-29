@@ -367,6 +367,21 @@ pub struct FilterForwardingResults {
     pub(crate) total_filter_packets_us: u64,
 }
 
+struct MonotonicIdGenerator {
+    next_task_id: AtomicUsize,
+}
+
+impl MonotonicIdGenerator {
+    fn new() -> Arc<Self> {
+        Arc::new(Self{next_task_id: Default::default()})
+    }
+
+    fn bulk_assign_task_ids(&self, count: usize) -> usize {
+        self.next_task_id
+            .fetch_add(count, Ordering::AcqRel)
+    }
+}
+
 impl BankingStage {
     /// Create the stage using `bank`. Exit when `verified_receiver` is dropped.
     #[allow(clippy::too_many_arguments)]
@@ -423,6 +438,7 @@ impl BankingStage {
         let mut should_split_voting_threads = false;
         info!("should_split_voting_threads: {}", should_split_voting_threads);
         //should_split_voting_threads = false;
+        let id_generator = MonotonicIdGenerator::new();
         // Many banks that process transactions in parallel.
         let bank_thread_hdls: Vec<JoinHandle<()>> = (0..num_threads)
             .map(|i| {
@@ -475,6 +491,7 @@ impl BankingStage {
                 let connection_cache = connection_cache.clone();
                 let bank_forks = bank_forks.clone();
                 let thread_name = format!("solBanknStgTx{i:02}");
+                let id_generator = id_generator.clone();
                 Builder::new()
                     .name(thread_name.clone())
                     .spawn(move || {
@@ -491,6 +508,7 @@ impl BankingStage {
                             connection_cache,
                             &bank_forks,
                             unprocessed_transaction_storage,
+                            id_generator,
                         );
                         info!("banking thread ended: {}!", thread_name);
                     })
@@ -759,6 +777,7 @@ impl BankingStage {
         tracer_packet_stats: &mut TracerPacketStats,
         bank_forks: &Arc<RwLock<BankForks>>,
         packet_deserializer: &mut PacketDeserializer,
+        id_generator: &MonotonicIdGenerator,
     ) {
         if unprocessed_transaction_storage.should_not_process() {
             return;
@@ -820,7 +839,7 @@ impl BankingStage {
                 while let Ok(aaa) = packet_deserializer.packet_batch_receiver.recv_timeout(recv_timeout) {
                     for pp in &aaa.0 {
                         // over-provision
-                        let mut task_id = 3; //banking_tracer.bulk_assign_task_ids(pp.len());
+                        let mut task_id = id_generator.bulk_assign_task_ids(pp.len());
 
                         let indexes = PacketDeserializer::generate_packet_indexes(&pp);
                         for p in PacketDeserializer::deserialize_packets(&pp, &indexes) {
@@ -1012,6 +1031,7 @@ impl BankingStage {
         connection_cache: Arc<ConnectionCache>,
         bank_forks: &Arc<RwLock<BankForks>>,
         mut unprocessed_transaction_storage: UnprocessedTransactionStorage,
+        id_generator: Arc<MonotonicIdGenerator>,
     ) {
         let recorder = poh_recorder.read().unwrap().recorder();
         let socket = UdpSocket::bind("0.0.0.0:0").unwrap();
@@ -1045,6 +1065,7 @@ impl BankingStage {
                         &mut tracer_packet_stats,
                         bank_forks,
                         packet_deserializer,
+                        &id_generator,
                     ),
                     "process_buffered_packets",
                 );

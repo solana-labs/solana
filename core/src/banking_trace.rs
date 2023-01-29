@@ -64,7 +64,6 @@ struct ActiveTracer {
 #[derive(Debug)]
 pub struct BankingTracer {
     active_tracer: Option<ActiveTracer>,
-    next_task_id: AtomicUsize,
 }
 
 // Not all of TracedEvents need to be timed for proper simulation functioning; however, do so for
@@ -206,7 +205,6 @@ impl BankingTracer {
                 Ok((
                     Arc::new(Self {
                         active_tracer: Some(ActiveTracer { trace_sender, exit }),
-                        next_task_id: AtomicUsize::default(),
                     }),
                     Some(tracer_thread),
                 ))
@@ -217,13 +215,7 @@ impl BankingTracer {
     pub fn new_disabled() -> Arc<Self> {
         Arc::new(Self {
             active_tracer: None,
-            next_task_id: AtomicUsize::default(),
         })
-    }
-
-    pub fn bulk_assign_task_ids(&self, count: usize) -> usize {
-        self.next_task_id
-            .fetch_add(count, Ordering::AcqRel)
     }
 
     pub fn is_enabled(&self) -> bool {
