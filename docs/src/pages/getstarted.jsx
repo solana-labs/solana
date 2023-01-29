@@ -23,8 +23,8 @@ function GetStartedPage() {
                 your browser.
               </p>
 
-              <Link to="/getstarted/hello-world">
-                <a className="button">Get Started</a>
+              <Link to="/getstarted/hello-world" className="button">
+                Get Started
               </Link>
             </div>
           </section>

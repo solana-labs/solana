@@ -410,7 +410,7 @@ mod tests {
         fn default() -> Self {
             Self {
                 tpu_udp_socket: Arc::new(
-                    solana_net_utils::bind_with_any_port(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)))
+                    solana_net_utils::bind_with_any_port(IpAddr::V4(Ipv4Addr::UNSPECIFIED))
                         .expect("Unable to bind to UDP socket"),
                 ),
             }
@@ -423,7 +423,7 @@ mod tests {
         fn new() -> Result<Self, String> {
             Ok(Self {
                 tpu_udp_socket: Arc::new(
-                    solana_net_utils::bind_with_any_port(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)))
+                    solana_net_utils::bind_with_any_port(IpAddr::V4(Ipv4Addr::UNSPECIFIED))
                         .map_err(|_| "Unable to bind to UDP socket".to_string())?,
                 ),
             })
@@ -530,7 +530,6 @@ mod tests {
             TpuConnectionCache::<MockUdpPool>::new(DEFAULT_TPU_CONNECTION_POOL_SIZE).unwrap();
         let port_offset = MOCK_PORT_OFFSET;
         let addrs = (0..MAX_CONNECTIONS)
-            .into_iter()
             .map(|_| {
                 let addr = get_addr(&mut rng);
                 connection_cache.get_connection(&addr);
@@ -573,7 +572,7 @@ mod tests {
     fn test_overflow_address() {
         let port = u16::MAX - MOCK_PORT_OFFSET + 1;
         assert!(port.checked_add(MOCK_PORT_OFFSET).is_none());
-        let addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), port);
+        let addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), port);
         let connection_cache = TpuConnectionCache::<MockUdpPool>::new(1).unwrap();
 
         let conn: MockUdpTpuConnection = connection_cache.get_connection(&addr);

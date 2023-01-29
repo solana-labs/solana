@@ -1,3 +1,5 @@
+//! The definition of a Solana network packet.
+
 use {
     bincode::{Options, Result},
     bitflags::bitflags,

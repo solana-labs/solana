@@ -95,10 +95,20 @@ export function parseProgramLogs(
       } else if (log.includes("failed")) {
         const instructionLog = prettyLogs[prettyLogs.length - 1];
         instructionLog.failed = true;
+
+        let currText = `Program returned error: "${log.slice(
+          log.indexOf(": ") + 2
+        )}"`;
+        // failed to verify log of previous program so reset depth and print full log
+        if (log.startsWith("failed")) {
+          depth++;
+          currText = log.charAt(0).toUpperCase() + log.slice(1);
+        }
+
         instructionLog.logs.push({
           prefix: prefixBuilder(depth),
           style: "warning",
-          text: `Program returned error: "${log.slice(log.indexOf(": ") + 2)}"`,
+          text: currText,
         });
         depth--;
       } else {

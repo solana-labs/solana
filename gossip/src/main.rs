@@ -9,7 +9,9 @@ use {
         input_parsers::keypair_of,
         input_validators::{is_keypair_or_ask_keyword, is_port, is_pubkey},
     },
-    solana_gossip::{contact_info::ContactInfo, gossip_service::discover},
+    solana_gossip::{
+        gossip_service::discover, legacy_contact_info::LegacyContactInfo as ContactInfo,
+    },
     solana_sdk::pubkey::Pubkey,
     solana_streamer::socket::SocketAddrSpace,
     std::{
@@ -169,7 +171,7 @@ fn parse_gossip_host(matches: &ArgMatches, entrypoint_addr: Option<SocketAddr>) 
                     exit(1);
                 })
             } else {
-                IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1))
+                IpAddr::V4(Ipv4Addr::LOCALHOST)
             }
         })
 }
@@ -233,7 +235,7 @@ fn process_spy(matches: &ArgMatches, socket_addr_space: SocketAddrSpace) -> std:
         gossip_host,
         value_t!(matches, "gossip_port", u16).unwrap_or_else(|_| {
             solana_net_utils::find_available_port_in_range(
-                IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)),
+                IpAddr::V4(Ipv4Addr::UNSPECIFIED),
                 (0, 1),
             )
             .expect("unable to find an available gossip port")

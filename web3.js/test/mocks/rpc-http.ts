@@ -53,7 +53,7 @@ export const mockRpcBatchResponse = async ({
   });
 
   await mockServer
-    .post('/')
+    .forPost('/')
     .withJsonBodyIncluding(request)
     .thenReply(200, JSON.stringify(response));
 };
@@ -86,7 +86,7 @@ export const mockRpcResponse = async ({
   if (!mockServer) return;
 
   await mockServer
-    .post('/')
+    .forPost('/')
     .withJsonBodyIncluding({
       jsonrpc: '2.0',
       method,
@@ -128,7 +128,7 @@ const latestBlockhash = async ({
   commitment?: Commitment;
 }) => {
   const blockhash = uniqueBlockhash();
-  const params = [];
+  const params: Array<Object> = [];
   if (commitment) {
     params.push({commitment});
   }
@@ -154,7 +154,7 @@ const recentBlockhash = async ({
   commitment?: Commitment;
 }) => {
   const blockhash = uniqueBlockhash();
-  const params = [];
+  const params: Array<Object> = [];
   if (commitment) {
     params.push({commitment});
   }

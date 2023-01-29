@@ -151,16 +151,6 @@ pub enum TransactionError {
     )]
     InsufficientFundsForRent { account_index: u8 },
 
-    /// Transaction exceeded max loaded accounts data size capped by requested compute units
-    #[error(
-        "Transaction exceeded max loaded accounts data size capped by requested compute units"
-    )]
-    MaxLoadedAccountsDataSizeExceeded,
-
-    /// LoadedAccountsDataSizeLimit set for transaction must be greater than 0.
-    #[error("LoadedAccountsDataSizeLimit set for transaction must be greater than 0.")]
-    InvalidLoadedAccountsDataSizeLimit,
-
     //#[error("not commitable to poh")]
     //NotCommitable,
 }

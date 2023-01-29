@@ -7,7 +7,7 @@ use {
         cluster_info_vote_listener::VerifiedVoteReceiver,
         completed_data_sets_service::CompletedDataSetsSender,
         repair_response,
-        repair_service::{OutstandingShredRepairs, RepairInfo, RepairService},
+        repair_service::{DumpedSlotsReceiver, OutstandingShredRepairs, RepairInfo, RepairService},
         result::{Error, Result},
     },
     crossbeam_channel::{unbounded, Receiver, RecvTimeoutError, Sender},
@@ -317,6 +317,7 @@ impl WindowService {
         completed_data_sets_sender: CompletedDataSetsSender,
         duplicate_slots_sender: DuplicateSlotSender,
         ancestor_hashes_replay_update_receiver: AncestorHashesReplayUpdateReceiver,
+        dumped_slots_receiver: DumpedSlotsReceiver,
     ) -> WindowService {
         let outstanding_requests = Arc::<RwLock<OutstandingShredRepairs>>::default();
 
@@ -331,6 +332,7 @@ impl WindowService {
             verified_vote_receiver,
             outstanding_requests.clone(),
             ancestor_hashes_replay_update_receiver,
+            dumped_slots_receiver,
         );
 
         let (duplicate_sender, duplicate_receiver) = unbounded();
@@ -478,7 +480,7 @@ mod test {
     use {
         super::*,
         solana_entry::entry::{create_ticks, Entry},
-        solana_gossip::contact_info::ContactInfo,
+        solana_gossip::legacy_contact_info::LegacyContactInfo as ContactInfo,
         solana_ledger::{
             blockstore::{make_many_slot_entries, Blockstore},
             get_tmp_ledger_path,
@@ -587,7 +589,7 @@ mod test {
             0,   // version
         );
         let mut shreds = vec![shred.clone(), shred.clone(), shred];
-        let _from_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8080);
+        let _from_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 8080);
         let repair_meta = RepairMeta {
             _from_addr,
             nonce: 0,

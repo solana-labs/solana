@@ -481,7 +481,7 @@ mod tests {
             }
         }
 
-        let mock_program_id = Pubkey::new(&[2u8; 32]);
+        let mock_program_id = Pubkey::from([2u8; 32]);
         let rent_collector = RentCollector::default();
         let builtin_programs = &[BuiltinProgram {
             program_id: mock_program_id,

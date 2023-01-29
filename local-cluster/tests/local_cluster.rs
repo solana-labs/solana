@@ -38,7 +38,9 @@ use {
         snapshot_archive_info::SnapshotArchiveInfoGetter,
         snapshot_config::SnapshotConfig,
         snapshot_package::SnapshotType,
-        snapshot_utils::{self, ArchiveFormat, SnapshotVersion},
+        snapshot_utils::{
+            self, create_accounts_run_and_snapshot_dirs, ArchiveFormat, SnapshotVersion,
+        },
     },
     solana_sdk::{
         account::AccountSharedData,
@@ -489,10 +491,6 @@ fn test_snapshot_download() {
         .validator_config
         .snapshot_config
         .full_snapshot_archives_dir;
-    let incremental_snapshot_archives_dir = &leader_snapshot_test_config
-        .validator_config
-        .snapshot_config
-        .incremental_snapshot_archives_dir;
 
     trace!("Waiting for snapshot");
     let full_snapshot_archive_info = cluster.wait_for_next_full_snapshot(
@@ -504,8 +502,14 @@ fn test_snapshot_download() {
     // Download the snapshot, then boot a validator from it.
     download_snapshot_archive(
         &cluster.entry_point_info.rpc,
-        full_snapshot_archives_dir,
-        incremental_snapshot_archives_dir,
+        &validator_snapshot_test_config
+            .validator_config
+            .snapshot_config
+            .full_snapshot_archives_dir,
+        &validator_snapshot_test_config
+            .validator_config
+            .snapshot_config
+            .incremental_snapshot_archives_dir,
         (
             full_snapshot_archive_info.slot(),
             *full_snapshot_archive_info.hash(),
@@ -629,8 +633,14 @@ fn test_incremental_snapshot_download() {
     // Download the snapshots, then boot a validator from them.
     download_snapshot_archive(
         &cluster.entry_point_info.rpc,
-        full_snapshot_archives_dir,
-        incremental_snapshot_archives_dir,
+        &validator_snapshot_test_config
+            .validator_config
+            .snapshot_config
+            .full_snapshot_archives_dir,
+        &validator_snapshot_test_config
+            .validator_config
+            .snapshot_config
+            .incremental_snapshot_archives_dir,
         (
             full_snapshot_archive_info.slot(),
             *full_snapshot_archive_info.hash(),
@@ -651,8 +661,14 @@ fn test_incremental_snapshot_download() {
 
     download_snapshot_archive(
         &cluster.entry_point_info.rpc,
-        full_snapshot_archives_dir,
-        incremental_snapshot_archives_dir,
+        &validator_snapshot_test_config
+            .validator_config
+            .snapshot_config
+            .full_snapshot_archives_dir,
+        &validator_snapshot_test_config
+            .validator_config
+            .snapshot_config
+            .incremental_snapshot_archives_dir,
         (
             incremental_snapshot_archive_info.slot(),
             *incremental_snapshot_archive_info.hash(),
@@ -2138,7 +2154,11 @@ fn create_snapshot_to_hard_fork(
     let (bank_forks, ..) = bank_forks_utils::load(
         &genesis_config,
         blockstore,
-        vec![ledger_path.join("accounts")],
+        vec![
+            create_accounts_run_and_snapshot_dirs(ledger_path.join("accounts"))
+                .unwrap()
+                .0,
+        ],
         None,
         snapshot_config.as_ref(),
         process_options,

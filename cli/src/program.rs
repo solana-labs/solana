@@ -10,7 +10,7 @@ use {
     clap::{App, AppSettings, Arg, ArgMatches, SubCommand},
     log::*,
     solana_account_decoder::{UiAccountEncoding, UiDataSliceConfig},
-    solana_bpf_loader_program::syscalls::register_syscalls,
+    solana_bpf_loader_program::syscalls::create_loader,
     solana_clap_utils::{self, input_parsers::*, input_validators::*, keypair::*},
     solana_cli_output::{
         CliProgram, CliProgramAccountType, CliProgramAuthority, CliProgramBuffer, CliProgramId,
@@ -21,12 +21,8 @@ use {
         connection_cache::ConnectionCache,
         tpu_client::{TpuClient, TpuClientConfig},
     },
-    solana_program_runtime::invoke_context::InvokeContext,
-    solana_rbpf::{
-        elf::Executable,
-        verifier::RequisiteVerifier,
-        vm::{Config, VerifiedExecutable},
-    },
+    solana_program_runtime::{compute_budget::ComputeBudget, invoke_context::InvokeContext},
+    solana_rbpf::{elf::Executable, verifier::RequisiteVerifier, vm::VerifiedExecutable},
     solana_remote_wallet::remote_wallet::RemoteWalletManager,
     solana_rpc_client::rpc_client::RpcClient,
     solana_rpc_client_api::{
@@ -85,7 +81,7 @@ pub enum ProgramCliCommand {
         program_location: String,
         buffer_signer_index: Option<SignerIndex>,
         buffer_pubkey: Option<Pubkey>,
-        buffer_authority_signer_index: Option<SignerIndex>,
+        buffer_authority_signer_index: SignerIndex,
         max_len: Option<usize>,
         skip_fee_check: bool,
     },
@@ -98,6 +94,11 @@ pub enum ProgramCliCommand {
         program_pubkey: Pubkey,
         upgrade_authority_index: Option<SignerIndex>,
         new_upgrade_authority: Option<Pubkey>,
+    },
+    SetUpgradeAuthorityChecked {
+        program_pubkey: Pubkey,
+        upgrade_authority_index: SignerIndex,
+        new_upgrade_authority_index: SignerIndex,
     },
     Show {
         account_pubkey: Option<Pubkey>,
@@ -276,11 +277,13 @@ impl ProgramSubCommands for App<'_, '_> {
                                 .help("Upgrade authority [default: the default configured keypair]")
                         )
                         .arg(
-                            pubkey!(Arg::with_name("new_upgrade_authority")
+                            Arg::with_name("new_upgrade_authority")
                                 .long("new-upgrade-authority")
+                                .value_name("NEW_UPGRADE_AUTHORITY")
                                 .required_unless("final")
-                                .value_name("NEW_UPGRADE_AUTHORITY"),
-                                "Address of the new upgrade authority"),
+                                .takes_value(true)
+                                .help("New upgrade authority (keypair or pubkey). It is strongly recommended to pass in a keypair to prevent mistakes in setting the upgrade authority. You can opt out of this behavior by passing --skip-new-upgrade-authority-signer-check if you are really confident that you are setting the correct authority. Alternatively, If you wish to make the program immutable, you should ignore this arg and pass the --final flag."
+                        )
                         )
                         .arg(
                             Arg::with_name("final")
@@ -288,6 +291,13 @@ impl ProgramSubCommands for App<'_, '_> {
                                 .conflicts_with("new_upgrade_authority")
                                 .help("The program will not be upgradeable")
                         )
+                        .arg(
+                            Arg::with_name("skip_new_upgrade_authority_signer_check")
+                                .long("skip-new-upgrade-authority-signer-check")
+                                .requires("new_upgrade_authority")
+                                .takes_value(false)
+                                .help("Set this flag if you don't want the new authority to sign the set-upgrade-authority transaction."),
+                        ),
                 )
                 .subcommand(
                     SubCommand::with_name("show")
@@ -451,19 +461,9 @@ pub fn parse_program_subcommand(
                 pubkey_of_signer(matches, "program_id", wallet_manager)?
             };
 
-            let upgrade_authority_pubkey =
-                if let Ok((upgrade_authority_signer, Some(upgrade_authority_pubkey))) =
-                    signer_of(matches, "upgrade_authority", wallet_manager)
-                {
-                    bulk_signers.push(upgrade_authority_signer);
-                    Some(upgrade_authority_pubkey)
-                } else {
-                    Some(
-                        default_signer
-                            .signer_from_path(matches, wallet_manager)?
-                            .pubkey(),
-                    )
-                };
+            let (upgrade_authority, upgrade_authority_pubkey) =
+                signer_of(matches, "upgrade_authority", wallet_manager)?;
+            bulk_signers.push(upgrade_authority);
 
             let max_len = value_of(matches, "max_len");
 
@@ -502,19 +502,9 @@ pub fn parse_program_subcommand(
                 pubkey_of_signer(matches, "buffer", wallet_manager)?
             };
 
-            let buffer_authority_pubkey =
-                if let Ok((buffer_authority_signer, Some(buffer_authority_pubkey))) =
-                    signer_of(matches, "buffer_authority", wallet_manager)
-                {
-                    bulk_signers.push(buffer_authority_signer);
-                    Some(buffer_authority_pubkey)
-                } else {
-                    Some(
-                        default_signer
-                            .signer_from_path(matches, wallet_manager)?
-                            .pubkey(),
-                    )
-                };
+            let (buffer_authority, buffer_authority_pubkey) =
+                signer_of(matches, "buffer_authority", wallet_manager)?;
+            bulk_signers.push(buffer_authority);
 
             let max_len = value_of(matches, "max_len");
 
@@ -527,7 +517,8 @@ pub fn parse_program_subcommand(
                     buffer_signer_index: signer_info.index_of_or_none(buffer_pubkey),
                     buffer_pubkey,
                     buffer_authority_signer_index: signer_info
-                        .index_of_or_none(buffer_authority_pubkey),
+                        .index_of(buffer_authority_pubkey)
+                        .unwrap(),
                     max_len,
                     skip_fee_check,
                 }),
@@ -564,28 +555,49 @@ pub fn parse_program_subcommand(
             let (upgrade_authority_signer, upgrade_authority_pubkey) =
                 signer_of(matches, "upgrade_authority", wallet_manager)?;
             let program_pubkey = pubkey_of(matches, "program_id").unwrap();
-            let new_upgrade_authority = if matches.is_present("final") {
+            let is_final = matches.is_present("final");
+            let new_upgrade_authority = if is_final {
                 None
             } else {
                 pubkey_of_signer(matches, "new_upgrade_authority", wallet_manager)?
             };
 
-            let signer_info = default_signer.generate_unique_signers(
-                vec![
-                    Some(default_signer.signer_from_path(matches, wallet_manager)?),
-                    upgrade_authority_signer,
-                ],
-                matches,
-                wallet_manager,
-            )?;
+            let mut signers = vec![
+                Some(default_signer.signer_from_path(matches, wallet_manager)?),
+                upgrade_authority_signer,
+            ];
 
-            CliCommandInfo {
-                command: CliCommand::Program(ProgramCliCommand::SetUpgradeAuthority {
-                    program_pubkey,
-                    upgrade_authority_index: signer_info.index_of(upgrade_authority_pubkey),
-                    new_upgrade_authority,
-                }),
-                signers: signer_info.signers,
+            if !is_final && !matches.is_present("skip_new_upgrade_authority_signer_check") {
+                let (new_upgrade_authority_signer, _) =
+                    signer_of(matches, "new_upgrade_authority", wallet_manager)?;
+                signers.push(new_upgrade_authority_signer);
+            }
+
+            let signer_info =
+                default_signer.generate_unique_signers(signers, matches, wallet_manager)?;
+
+            if matches.is_present("skip_new_upgrade_authority_signer_check") || is_final {
+                CliCommandInfo {
+                    command: CliCommand::Program(ProgramCliCommand::SetUpgradeAuthority {
+                        program_pubkey,
+                        upgrade_authority_index: signer_info.index_of(upgrade_authority_pubkey),
+                        new_upgrade_authority,
+                    }),
+                    signers: signer_info.signers,
+                }
+            } else {
+                CliCommandInfo {
+                    command: CliCommand::Program(ProgramCliCommand::SetUpgradeAuthorityChecked {
+                        program_pubkey,
+                        upgrade_authority_index: signer_info
+                            .index_of(upgrade_authority_pubkey)
+                            .expect("upgrade authority is missing from signers"),
+                        new_upgrade_authority_index: signer_info
+                            .index_of(new_upgrade_authority)
+                            .expect("new upgrade authority is missing from signers"),
+                    }),
+                    signers: signer_info.signers,
+                }
             }
         }
         ("show", Some(matches)) => {
@@ -734,6 +746,17 @@ pub fn process_program_subcommand(
             None,
             *upgrade_authority_index,
             *new_upgrade_authority,
+        ),
+        ProgramCliCommand::SetUpgradeAuthorityChecked {
+            program_pubkey,
+            upgrade_authority_index,
+            new_upgrade_authority_index,
+        } => process_set_authority_checked(
+            &rpc_client,
+            config,
+            *program_pubkey,
+            *upgrade_authority_index,
+            *new_upgrade_authority_index,
         ),
         ProgramCliCommand::Show {
             account_pubkey,
@@ -987,7 +1010,7 @@ fn process_program_deploy(
             Some(&[program_signer.unwrap(), upgrade_authority_signer]),
             buffer_signer,
             &buffer_pubkey,
-            Some(upgrade_authority_signer),
+            upgrade_authority_signer,
             allow_excessive_balance,
             skip_fee_check,
         )
@@ -1025,7 +1048,7 @@ fn process_write_buffer(
     program_location: &str,
     buffer_signer_index: Option<SignerIndex>,
     buffer_pubkey: Option<Pubkey>,
-    buffer_authority_signer_index: Option<SignerIndex>,
+    buffer_authority_signer_index: SignerIndex,
     max_len: Option<usize>,
     skip_fee_check: bool,
 ) -> ProcessResult {
@@ -1041,11 +1064,7 @@ fn process_write_buffer(
             buffer_keypair.pubkey(),
         )
     };
-    let buffer_authority = if let Some(i) = buffer_authority_signer_index {
-        config.signers[i]
-    } else {
-        config.signers[0]
-    };
+    let buffer_authority = config.signers[buffer_authority_signer_index];
 
     if let Some(account) = rpc_client
         .get_account_with_commitment(&buffer_pubkey, config.commitment)?
@@ -1091,7 +1110,7 @@ fn process_write_buffer(
         None,
         buffer_signer,
         &buffer_pubkey,
-        Some(buffer_authority),
+        buffer_authority,
         true,
         skip_fee_check,
     );
@@ -1167,6 +1186,51 @@ fn process_set_authority(
         } else {
             CliProgramAccountType::Buffer
         },
+    };
+    Ok(config.output_format.formatted_string(&authority))
+}
+
+fn process_set_authority_checked(
+    rpc_client: &RpcClient,
+    config: &CliConfig,
+    program_pubkey: Pubkey,
+    authority_index: SignerIndex,
+    new_authority_index: SignerIndex,
+) -> ProcessResult {
+    let authority_signer = config.signers[authority_index];
+    let new_authority_signer = config.signers[new_authority_index];
+
+    trace!("Set a new (checked) authority");
+    let blockhash = rpc_client.get_latest_blockhash()?;
+
+    let mut tx = Transaction::new_unsigned(Message::new(
+        &[bpf_loader_upgradeable::set_upgrade_authority_checked(
+            &program_pubkey,
+            &authority_signer.pubkey(),
+            &new_authority_signer.pubkey(),
+        )],
+        Some(&config.signers[0].pubkey()),
+    ));
+
+    tx.try_sign(
+        &[config.signers[0], authority_signer, new_authority_signer],
+        blockhash,
+    )?;
+    rpc_client
+        .send_and_confirm_transaction_with_spinner_and_config(
+            &tx,
+            config.commitment,
+            RpcSendTransactionConfig {
+                skip_preflight: false,
+                preflight_commitment: Some(config.commitment.commitment),
+                ..RpcSendTransactionConfig::default()
+            },
+        )
+        .map_err(|e| format!("Setting authority failed: {e}"))?;
+
+    let authority = CliProgramAuthority {
+        authority: new_authority_signer.pubkey().to_string(),
+        account_type: CliProgramAccountType::Program,
     };
     Ok(config.output_format.formatted_string(&authority))
 }
@@ -1679,108 +1743,86 @@ fn do_process_program_write_and_deploy(
     program_signers: Option<&[&dyn Signer]>,
     buffer_signer: Option<&dyn Signer>,
     buffer_pubkey: &Pubkey,
-    buffer_authority_signer: Option<&dyn Signer>,
+    buffer_authority_signer: &dyn Signer,
     allow_excessive_balance: bool,
     skip_fee_check: bool,
 ) -> ProcessResult {
-    // Build messages to calculate fees
-    let mut messages: Vec<&Message> = Vec::new();
     let blockhash = rpc_client.get_latest_blockhash()?;
 
     // Initialize buffer account or complete if already partially initialized
-    let (initial_message, write_messages, balance_needed) =
-        if let Some(buffer_authority_signer) = buffer_authority_signer {
-            let (initial_instructions, balance_needed) = if let Some(account) = rpc_client
-                .get_account_with_commitment(buffer_pubkey, config.commitment)?
-                .value
-            {
-                complete_partial_program_init(
-                    loader_id,
-                    &config.signers[0].pubkey(),
-                    buffer_pubkey,
-                    &account,
-                    if loader_id == &bpf_loader_upgradeable::id() {
-                        UpgradeableLoaderState::size_of_buffer(program_len)
-                    } else {
-                        program_len
-                    },
-                    minimum_balance,
-                    allow_excessive_balance,
-                )?
-            } else if loader_id == &bpf_loader_upgradeable::id() {
-                (
-                    bpf_loader_upgradeable::create_buffer(
-                        &config.signers[0].pubkey(),
-                        buffer_pubkey,
-                        &buffer_authority_signer.pubkey(),
-                        minimum_balance,
-                        program_len,
-                    )?,
-                    minimum_balance,
-                )
+    let (initial_instructions, balance_needed) = if let Some(account) = rpc_client
+        .get_account_with_commitment(buffer_pubkey, config.commitment)?
+        .value
+    {
+        complete_partial_program_init(
+            loader_id,
+            &config.signers[0].pubkey(),
+            buffer_pubkey,
+            &account,
+            if loader_id == &bpf_loader_upgradeable::id() {
+                UpgradeableLoaderState::size_of_buffer(program_len)
             } else {
-                (
-                    vec![system_instruction::create_account(
-                        &config.signers[0].pubkey(),
-                        buffer_pubkey,
-                        minimum_balance,
-                        program_len as u64,
-                        loader_id,
-                    )],
-                    minimum_balance,
-                )
-            };
-            let initial_message = if !initial_instructions.is_empty() {
-                Some(Message::new_with_blockhash(
-                    &initial_instructions,
-                    Some(&config.signers[0].pubkey()),
-                    &blockhash,
-                ))
-            } else {
-                None
-            };
+                program_len
+            },
+            minimum_balance,
+            allow_excessive_balance,
+        )?
+    } else if loader_id == &bpf_loader_upgradeable::id() {
+        (
+            bpf_loader_upgradeable::create_buffer(
+                &config.signers[0].pubkey(),
+                buffer_pubkey,
+                &buffer_authority_signer.pubkey(),
+                minimum_balance,
+                program_len,
+            )?,
+            minimum_balance,
+        )
+    } else {
+        (
+            vec![system_instruction::create_account(
+                &config.signers[0].pubkey(),
+                buffer_pubkey,
+                minimum_balance,
+                program_len as u64,
+                loader_id,
+            )],
+            minimum_balance,
+        )
+    };
+    let initial_message = if !initial_instructions.is_empty() {
+        Some(Message::new_with_blockhash(
+            &initial_instructions,
+            Some(&config.signers[0].pubkey()),
+            &blockhash,
+        ))
+    } else {
+        None
+    };
 
-            // Create and add write messages
-
-            let payer_pubkey = config.signers[0].pubkey();
-            let create_msg = |offset: u32, bytes: Vec<u8>| {
-                let instruction = if loader_id == &bpf_loader_upgradeable::id() {
-                    bpf_loader_upgradeable::write(
-                        buffer_pubkey,
-                        &buffer_authority_signer.pubkey(),
-                        offset,
-                        bytes,
-                    )
-                } else {
-                    loader_instruction::write(buffer_pubkey, loader_id, offset, bytes)
-                };
-                Message::new_with_blockhash(&[instruction], Some(&payer_pubkey), &blockhash)
-            };
-
-            let mut write_messages = vec![];
-            let chunk_size = calculate_max_chunk_size(&create_msg);
-            for (chunk, i) in program_data.chunks(chunk_size).zip(0..) {
-                write_messages.push(create_msg((i * chunk_size) as u32, chunk.to_vec()));
-            }
-
-            (initial_message, Some(write_messages), balance_needed)
+    // Create and add write messages
+    let payer_pubkey = config.signers[0].pubkey();
+    let create_msg = |offset: u32, bytes: Vec<u8>| {
+        let instruction = if loader_id == &bpf_loader_upgradeable::id() {
+            bpf_loader_upgradeable::write(
+                buffer_pubkey,
+                &buffer_authority_signer.pubkey(),
+                offset,
+                bytes,
+            )
         } else {
-            (None, None, 0)
+            loader_instruction::write(buffer_pubkey, loader_id, offset, bytes)
         };
+        Message::new_with_blockhash(&[instruction], Some(&payer_pubkey), &blockhash)
+    };
 
-    if let Some(ref initial_message) = initial_message {
-        messages.push(initial_message);
-    }
-    if let Some(ref write_messages) = write_messages {
-        let mut write_message_refs = vec![];
-        for message in write_messages.iter() {
-            write_message_refs.push(message);
-        }
-        messages.append(&mut write_message_refs);
+    let mut write_messages = vec![];
+    let chunk_size = calculate_max_chunk_size(&create_msg);
+    for (chunk, i) in program_data.chunks(chunk_size).zip(0..) {
+        write_messages.push(create_msg((i * chunk_size) as u32, chunk.to_vec()));
     }
 
     // Create and add final message
-
     let final_message = if let Some(program_signers) = program_signers {
         let message = if loader_id == &bpf_loader_upgradeable::id() {
             Message::new_with_blockhash(
@@ -1808,9 +1850,6 @@ fn do_process_program_write_and_deploy(
     } else {
         None
     };
-    if let Some(ref message) = final_message {
-        messages.push(message);
-    }
 
     if !skip_fee_check {
         check_payer(
@@ -1830,7 +1869,7 @@ fn do_process_program_write_and_deploy(
         &write_messages,
         &final_message,
         buffer_signer,
-        buffer_authority_signer,
+        Some(buffer_authority_signer),
         program_signers,
     )?;
 
@@ -1864,7 +1903,6 @@ fn do_process_program_upgrade(
     )?;
 
     // Build messages to calculate fees
-    let mut messages: Vec<&Message> = Vec::new();
     let blockhash = rpc_client.get_latest_blockhash()?;
 
     let (initial_message, write_messages, balance_needed) =
@@ -1926,21 +1964,10 @@ fn do_process_program_upgrade(
                 write_messages.push(create_msg((i * chunk_size) as u32, chunk.to_vec()));
             }
 
-            (initial_message, Some(write_messages), balance_needed)
+            (initial_message, write_messages, balance_needed)
         } else {
-            (None, None, 0)
+            (None, vec![], 0)
         };
-
-    if let Some(ref message) = initial_message {
-        messages.push(message);
-    }
-    if let Some(ref write_messages) = write_messages {
-        let mut write_message_refs = vec![];
-        for message in write_messages.iter() {
-            write_message_refs.push(message);
-        }
-        messages.append(&mut write_message_refs);
-    }
 
     // Create and add final message
     let final_message = Message::new_with_blockhash(
@@ -1953,7 +1980,6 @@ fn do_process_program_upgrade(
         Some(&config.signers[0].pubkey()),
         &blockhash,
     );
-    messages.push(&final_message);
     let final_message = Some(final_message);
 
     if !skip_fee_check {
@@ -1994,15 +2020,16 @@ fn read_and_verify_elf(program_location: &str) -> Result<Vec<u8>, Box<dyn std::e
     let invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
 
     // Verify the program
-    let executable = Executable::<InvokeContext>::from_elf(
-        &program_data,
-        Config {
-            reject_broken_elfs: true,
-            ..Config::default()
-        },
-        register_syscalls(&invoke_context.feature_set, true).unwrap(),
+    let loader = create_loader(
+        &invoke_context.feature_set,
+        &ComputeBudget::default(),
+        true,
+        true,
+        false,
     )
-    .map_err(|err| format!("ELF error: {err}"))?;
+    .unwrap();
+    let executable = Executable::<InvokeContext>::from_elf(&program_data, loader)
+        .map_err(|err| format!("ELF error: {err}"))?;
 
     let _ = VerifiedExecutable::<RequisiteVerifier, InvokeContext>::from_executable(executable)
         .map_err(|err| format!("ELF error: {err}"))?;
@@ -2067,14 +2094,14 @@ fn check_payer(
     config: &CliConfig,
     balance_needed: u64,
     initial_message: &Option<Message>,
-    write_messages: &Option<Vec<Message>>,
+    write_messages: &[Message],
     final_message: &Option<Message>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let mut fee = 0;
     if let Some(message) = initial_message {
         fee += rpc_client.get_fee_for_message(message)?;
     }
-    if let Some(write_messages) = write_messages {
+    if !write_messages.is_empty() {
         // Assume all write messages cost the same
         if let Some(message) = write_messages.get(0) {
             fee += rpc_client.get_fee_for_message(message)? * (write_messages.len() as u64);
@@ -2097,7 +2124,7 @@ fn send_deploy_messages(
     rpc_client: Arc<RpcClient>,
     config: &CliConfig,
     initial_message: &Option<Message>,
-    write_messages: &Option<Vec<Message>>,
+    write_messages: &[Message],
     final_message: &Option<Message>,
     initial_signer: Option<&dyn Signer>,
     write_signer: Option<&dyn Signer>,
@@ -2128,7 +2155,7 @@ fn send_deploy_messages(
         }
     }
 
-    if let Some(write_messages) = write_messages {
+    if !write_messages.is_empty() {
         if let Some(write_signer) = write_signer {
             trace!("Writing program data");
             let connection_cache = if config.use_quic {
@@ -2477,7 +2504,7 @@ mod tests {
                     program_location: "/Users/test/program.so".to_string(),
                     buffer_signer_index: None,
                     buffer_pubkey: None,
-                    buffer_authority_signer_index: Some(0),
+                    buffer_authority_signer_index: 0,
                     max_len: None,
                     skip_fee_check: false,
                 }),
@@ -2501,7 +2528,7 @@ mod tests {
                     program_location: "/Users/test/program.so".to_string(),
                     buffer_signer_index: None,
                     buffer_pubkey: None,
-                    buffer_authority_signer_index: Some(0),
+                    buffer_authority_signer_index: 0,
                     max_len: Some(42),
                     skip_fee_check: false,
                 }),
@@ -2528,7 +2555,7 @@ mod tests {
                     program_location: "/Users/test/program.so".to_string(),
                     buffer_signer_index: Some(1),
                     buffer_pubkey: Some(buffer_keypair.pubkey()),
-                    buffer_authority_signer_index: Some(0),
+                    buffer_authority_signer_index: 0,
                     max_len: None,
                     skip_fee_check: false,
                 }),
@@ -2558,7 +2585,7 @@ mod tests {
                     program_location: "/Users/test/program.so".to_string(),
                     buffer_signer_index: None,
                     buffer_pubkey: None,
-                    buffer_authority_signer_index: Some(1),
+                    buffer_authority_signer_index: 1,
                     max_len: None,
                     skip_fee_check: false,
                 }),
@@ -2593,7 +2620,7 @@ mod tests {
                     program_location: "/Users/test/program.so".to_string(),
                     buffer_signer_index: Some(1),
                     buffer_pubkey: Some(buffer_keypair.pubkey()),
-                    buffer_authority_signer_index: Some(2),
+                    buffer_authority_signer_index: 2,
                     max_len: None,
                     skip_fee_check: false,
                 }),
@@ -2625,6 +2652,7 @@ mod tests {
             &program_pubkey.to_string(),
             "--new-upgrade-authority",
             &new_authority_pubkey.to_string(),
+            "--skip-new-upgrade-authority-signer-check",
         ]);
         assert_eq!(
             parse_command(&test_command, &default_signer, &mut None).unwrap(),
@@ -2649,6 +2677,7 @@ mod tests {
             &program_pubkey.to_string(),
             "--new-upgrade-authority",
             &new_authority_pubkey_file,
+            "--skip-new-upgrade-authority-signer-check",
         ]);
         assert_eq!(
             parse_command(&test_command, &default_signer, &mut None).unwrap(),
@@ -2666,6 +2695,35 @@ mod tests {
         let new_authority_pubkey = Keypair::new();
         let new_authority_pubkey_file = make_tmp_path("authority_keypair_file");
         write_keypair_file(&new_authority_pubkey, &new_authority_pubkey_file).unwrap();
+        let test_command = test_commands.clone().get_matches_from(vec![
+            "test",
+            "program",
+            "set-upgrade-authority",
+            &program_pubkey.to_string(),
+            "--new-upgrade-authority",
+            &new_authority_pubkey_file,
+        ]);
+        assert_eq!(
+            parse_command(&test_command, &default_signer, &mut None).unwrap(),
+            CliCommandInfo {
+                command: CliCommand::Program(ProgramCliCommand::SetUpgradeAuthorityChecked {
+                    program_pubkey,
+                    upgrade_authority_index: 0,
+                    new_upgrade_authority_index: 1,
+                }),
+                signers: vec![
+                    read_keypair_file(&keypair_file).unwrap().into(),
+                    read_keypair_file(&new_authority_pubkey_file)
+                        .unwrap()
+                        .into(),
+                ],
+            }
+        );
+
+        let program_pubkey = Pubkey::new_unique();
+        let new_authority_pubkey = Keypair::new();
+        let new_authority_pubkey_file = make_tmp_path("authority_keypair_file");
+        write_keypair_file(&new_authority_pubkey, new_authority_pubkey_file).unwrap();
         let test_command = test_commands.clone().get_matches_from(vec![
             "test",
             "program",
@@ -3051,7 +3109,7 @@ mod tests {
         let program_keypair_location = program_location.with_file_name("noop-keypair.json");
         std::fs::create_dir_all(deploy_path).unwrap();
         std::fs::copy(pathbuf, program_location.as_os_str()).unwrap();
-        write_keypair_file(&program_pubkey, &program_keypair_location).unwrap();
+        write_keypair_file(&program_pubkey, program_keypair_location).unwrap();
 
         let config = CliConfig {
             rpc_client: Some(Arc::new(RpcClient::new_mock("".to_string()))),

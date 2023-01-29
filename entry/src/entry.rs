@@ -35,6 +35,7 @@ use {
     std::{
         cmp,
         ffi::OsStr,
+        iter::repeat_with,
         sync::{Arc, Mutex, Once},
         thread::{self, JoinHandle},
         time::Instant,
@@ -736,11 +737,10 @@ impl EntrySlice for [Entry] {
         recyclers: VerifyRecyclers,
     ) -> EntryVerificationState {
         let start = Instant::now();
-        let api = perf_libs::api();
-        if api.is_none() {
-            return self.verify_cpu(start_hash);
-        }
-        let api = api.unwrap();
+        let api = match perf_libs::api() {
+            None => return self.verify_cpu(start_hash),
+            Some(api) => api,
+        };
         inc_new_counter_info!("entry_verify-num_entries", self.len());
 
         let genesis = [Entry {
@@ -860,27 +860,19 @@ pub fn next_entry_mut(start: &mut Hash, num_hashes: u64, transactions: Vec<Trans
     entry
 }
 
-#[allow(clippy::same_item_push)]
 pub fn create_ticks(num_ticks: u64, hashes_per_tick: u64, mut hash: Hash) -> Vec<Entry> {
-    let mut ticks = Vec::with_capacity(num_ticks as usize);
-    for _ in 0..num_ticks {
-        let new_tick = next_entry_mut(&mut hash, hashes_per_tick, vec![]);
-        ticks.push(new_tick);
-    }
-
-    ticks
+    repeat_with(|| next_entry_mut(&mut hash, hashes_per_tick, vec![]))
+        .take(num_ticks as usize)
+        .collect()
 }
 
-#[allow(clippy::same_item_push)]
 pub fn create_random_ticks(num_ticks: u64, max_hashes_per_tick: u64, mut hash: Hash) -> Vec<Entry> {
-    let mut ticks = Vec::with_capacity(num_ticks as usize);
-    for _ in 0..num_ticks {
+    repeat_with(|| {
         let hashes_per_tick = thread_rng().gen_range(1, max_hashes_per_tick);
-        let new_tick = next_entry_mut(&mut hash, hashes_per_tick, vec![]);
-        ticks.push(new_tick);
-    }
-
-    ticks
+        next_entry_mut(&mut hash, hashes_per_tick, vec![])
+    })
+    .take(num_ticks as usize)
+    .collect()
 }
 
 /// Creates the next Tick or Transaction Entry `num_hashes` after `start_hash`.

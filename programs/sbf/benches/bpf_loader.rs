@@ -8,85 +8,56 @@ extern crate solana_bpf_loader_program;
 use {
     byteorder::{ByteOrder, LittleEndian, WriteBytesExt},
     solana_bpf_loader_program::{
-        create_vm, serialization::serialize_parameters, syscalls::register_syscalls,
+        create_vm, serialization::serialize_parameters, syscalls::create_loader,
     },
     solana_measure::measure::Measure,
-    solana_program_runtime::invoke_context::{with_mock_invoke_context, InvokeContext},
+    solana_program_runtime::{
+        compute_budget::ComputeBudget,
+        invoke_context::{with_mock_invoke_context, InvokeContext},
+    },
     solana_rbpf::{
         ebpf::MM_INPUT_START,
         elf::Executable,
         memory_region::MemoryRegion,
         verifier::RequisiteVerifier,
-        vm::{Config, ContextObject, SyscallRegistry, VerifiedExecutable},
+        vm::{ContextObject, VerifiedExecutable},
     },
     solana_runtime::{
         bank::Bank,
         bank_client::BankClient,
         genesis_utils::{create_genesis_config, GenesisConfigInfo},
-        loader_utils::load_program,
+        loader_utils::{load_program, load_program_from_file},
     },
     solana_sdk::{
         bpf_loader,
         client::SyncClient,
         entrypoint::SUCCESS,
+        feature_set::FeatureSet,
         instruction::{AccountMeta, Instruction},
         message::Message,
-        pubkey::Pubkey,
-        signature::{Keypair, Signer},
+        signature::Signer,
     },
-    std::{env, fs::File, io::Read, mem, path::PathBuf, sync::Arc},
+    std::{mem, sync::Arc},
     test::Bencher,
 };
-
-/// SBF program file extension
-const PLATFORM_FILE_EXTENSION_SBF: &str = "so";
-/// Create a SBF program file name
-fn create_sbf_path(name: &str) -> PathBuf {
-    let mut pathbuf = {
-        let current_exe = env::current_exe().unwrap();
-        PathBuf::from(current_exe.parent().unwrap().parent().unwrap())
-    };
-    pathbuf.push("sbf/");
-    pathbuf.push(name);
-    pathbuf.set_extension(PLATFORM_FILE_EXTENSION_SBF);
-    pathbuf
-}
-
-fn load_elf(name: &str) -> Result<Vec<u8>, std::io::Error> {
-    let path = create_sbf_path(name);
-    let mut file = File::open(&path).expect(&format!("Unable to open {:?}", path));
-    let mut elf = Vec::new();
-    file.read_to_end(&mut elf).unwrap();
-    Ok(elf)
-}
-
-fn load_sbf_program(
-    bank_client: &BankClient,
-    loader_id: &Pubkey,
-    payer_keypair: &Keypair,
-    name: &str,
-) -> Pubkey {
-    let path = create_sbf_path(name);
-    let mut file = File::open(path).unwrap();
-    let mut elf = Vec::new();
-    file.read_to_end(&mut elf).unwrap();
-    load_program(bank_client, payer_keypair, loader_id, elf)
-}
 
 const ARMSTRONG_LIMIT: u64 = 500;
 const ARMSTRONG_EXPECTED: u64 = 5;
 
 #[bench]
 fn bench_program_create_executable(bencher: &mut Bencher) {
-    let elf = load_elf("bench_alu").unwrap();
+    let elf = load_program_from_file("bench_alu");
 
+    let loader = create_loader(
+        &FeatureSet::default(),
+        &ComputeBudget::default(),
+        true,
+        true,
+        false,
+    )
+    .unwrap();
     bencher.iter(|| {
-        let _ = Executable::<InvokeContext>::from_elf(
-            &elf,
-            Config::default(),
-            SyscallRegistry::default(),
-        )
-        .unwrap();
+        let _ = Executable::<InvokeContext>::from_elf(&elf, loader.clone()).unwrap();
     });
 }
 
@@ -99,15 +70,18 @@ fn bench_program_alu(bencher: &mut Bencher) {
         .write_u64::<LittleEndian>(ARMSTRONG_LIMIT)
         .unwrap();
     inner_iter.write_u64::<LittleEndian>(0).unwrap();
-    let elf = load_elf("bench_alu").unwrap();
+    let elf = load_program_from_file("bench_alu");
     let loader_id = bpf_loader::id();
     with_mock_invoke_context(loader_id, 10000001, false, |invoke_context| {
-        let executable = Executable::<InvokeContext>::from_elf(
-            &elf,
-            Config::default(),
-            register_syscalls(&invoke_context.feature_set, true).unwrap(),
+        let loader = create_loader(
+            &invoke_context.feature_set,
+            &ComputeBudget::default(),
+            true,
+            true,
+            false,
         )
         .unwrap();
+        let executable = Executable::<InvokeContext>::from_elf(&elf, loader).unwrap();
 
         let mut verified_executable =
             VerifiedExecutable::<RequisiteVerifier, InvokeContext>::from_executable(executable)
@@ -123,7 +97,9 @@ fn bench_program_alu(bencher: &mut Bencher) {
         .unwrap();
 
         println!("Interpreted:");
-        vm.context_object.mock_set_remaining(std::i64::MAX as u64);
+        vm.env
+            .context_object_pointer
+            .mock_set_remaining(std::i64::MAX as u64);
         let (instructions, result) = vm.execute_program(true);
         assert_eq!(SUCCESS, result.unwrap());
         assert_eq!(ARMSTRONG_LIMIT, LittleEndian::read_u64(&inner_iter));
@@ -133,7 +109,9 @@ fn bench_program_alu(bencher: &mut Bencher) {
         );
 
         bencher.iter(|| {
-            vm.context_object.mock_set_remaining(std::i64::MAX as u64);
+            vm.env
+                .context_object_pointer
+                .mock_set_remaining(std::i64::MAX as u64);
             vm.execute_program(true).1.unwrap();
         });
         let summary = bencher.bench(|_bencher| Ok(())).unwrap().unwrap();
@@ -153,7 +131,9 @@ fn bench_program_alu(bencher: &mut Bencher) {
         );
 
         bencher.iter(|| {
-            vm.context_object.mock_set_remaining(std::i64::MAX as u64);
+            vm.env
+                .context_object_pointer
+                .mock_set_remaining(std::i64::MAX as u64);
             vm.execute_program(false).1.unwrap();
         });
         let summary = bencher.bench(|_bencher| Ok(())).unwrap().unwrap();
@@ -179,8 +159,7 @@ fn bench_program_execute_noop(bencher: &mut Bencher) {
     let bank = Arc::new(bank);
     let bank_client = BankClient::new_shared(&bank);
 
-    let invoke_program_id =
-        load_sbf_program(&bank_client, &bpf_loader::id(), &mint_keypair, "noop");
+    let invoke_program_id = load_program(&bank_client, &bpf_loader::id(), &mint_keypair, "noop");
 
     let mint_pubkey = mint_keypair.pubkey();
     let account_metas = vec![AccountMeta::new(mint_pubkey, true)];
@@ -203,7 +182,7 @@ fn bench_program_execute_noop(bencher: &mut Bencher) {
 
 #[bench]
 fn bench_create_vm(bencher: &mut Bencher) {
-    let elf = load_elf("noop").unwrap();
+    let elf = load_program_from_file("noop");
     let loader_id = bpf_loader::id();
     with_mock_invoke_context(loader_id, 10000001, false, |invoke_context| {
         const BUDGET: u64 = 200_000;
@@ -220,12 +199,15 @@ fn bench_create_vm(bencher: &mut Bencher) {
         )
         .unwrap();
 
-        let executable = Executable::<InvokeContext>::from_elf(
-            &elf,
-            Config::default(),
-            register_syscalls(&invoke_context.feature_set, true).unwrap(),
+        let loader = create_loader(
+            &invoke_context.feature_set,
+            &ComputeBudget::default(),
+            true,
+            true,
+            false,
         )
         .unwrap();
+        let executable = Executable::<InvokeContext>::from_elf(&elf, loader).unwrap();
 
         let verified_executable =
             VerifiedExecutable::<RequisiteVerifier, InvokeContext>::from_executable(executable)
@@ -245,7 +227,7 @@ fn bench_create_vm(bencher: &mut Bencher) {
 
 #[bench]
 fn bench_instruction_count_tuner(_bencher: &mut Bencher) {
-    let elf = load_elf("tuner").unwrap();
+    let elf = load_program_from_file("tuner");
     let loader_id = bpf_loader::id();
     with_mock_invoke_context(loader_id, 10000001, true, |invoke_context| {
         const BUDGET: u64 = 200_000;
@@ -262,12 +244,15 @@ fn bench_instruction_count_tuner(_bencher: &mut Bencher) {
         )
         .unwrap();
 
-        let executable = Executable::<InvokeContext>::from_elf(
-            &elf,
-            Config::default(),
-            register_syscalls(&invoke_context.feature_set, true).unwrap(),
+        let loader = create_loader(
+            &invoke_context.feature_set,
+            &ComputeBudget::default(),
+            true,
+            true,
+            false,
         )
         .unwrap();
+        let executable = Executable::<InvokeContext>::from_elf(&elf, loader).unwrap();
 
         let verified_executable =
             VerifiedExecutable::<RequisiteVerifier, InvokeContext>::from_executable(executable)
@@ -287,12 +272,12 @@ fn bench_instruction_count_tuner(_bencher: &mut Bencher) {
 
         assert_eq!(
             0,
-            vm.context_object.get_remaining(),
+            vm.env.context_object_pointer.get_remaining(),
             "Tuner must consume the whole budget"
         );
         println!(
             "{:?} compute units took {:?} us ({:?} instructions)",
-            BUDGET - vm.context_object.get_remaining(),
+            BUDGET - vm.env.context_object_pointer.get_remaining(),
             measure.as_us(),
             instructions,
         );

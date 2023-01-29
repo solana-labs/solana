@@ -150,7 +150,10 @@ impl<'a: 'b, 'b, T: ReadableAccount + Sync + 'b, U: StorableAccounts<'a, T>, V: 
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct StoredMeta {
     /// global write version
-    pub write_version: StoredMetaWriteVersion,
+    /// This will be made completely obsolete such that we stop storing it.
+    /// We will not support multiple append vecs per slot anymore, so this concept is no longer necessary.
+    /// Order of stores of an account to an append vec will determine 'latest' account data per pubkey.
+    pub write_version_obsolete: StoredMetaWriteVersion,
     /// key for the account
     pub pubkey: Pubkey,
     pub data_len: u64,
@@ -432,14 +435,17 @@ impl AppendVec {
     }
 
     pub fn new_from_file<P: AsRef<Path>>(path: P, current_len: usize) -> io::Result<(Self, usize)> {
-        let new = Self::new_from_file_unchecked(path, current_len)?;
+        let new = Self::new_from_file_unchecked(&path, current_len)?;
 
         let (sanitized, num_accounts) = new.sanitize_layout_and_length();
         if !sanitized {
-            return Err(std::io::Error::new(
-                std::io::ErrorKind::Other,
-                "incorrect layout/length/data",
-            ));
+            // This info show the failing accountvec file path.  It helps debugging
+            // the appendvec data corrupution issues related to recycling.
+            let err_msg = format!(
+                "incorrect layout/length/data in the appendvec at path {}",
+                path.as_ref().display()
+            );
+            return Err(std::io::Error::new(std::io::ErrorKind::Other, err_msg));
         }
 
         Ok((new, num_accounts))
@@ -656,7 +662,7 @@ impl AppendVec {
                 data_len: account
                     .map(|account| account.data().len())
                     .unwrap_or_default() as u64,
-                write_version: accounts.write_version(i),
+                write_version_obsolete: accounts.write_version(i),
             };
             let meta_ptr = &stored_meta as *const StoredMeta;
             let account_meta_ptr = &account_meta as *const AccountMeta;
@@ -706,6 +712,10 @@ pub mod tests {
     };
 
     impl AppendVec {
+        pub(crate) fn set_current_len_for_tests(&self, len: usize) {
+            self.current_len.store(len, Ordering::Release);
+        }
+
         fn append_account_test(&self, data: &(StoredMeta, AccountSharedData)) -> Option<usize> {
             let slot_ignored = Slot::MAX;
             let accounts = [(&data.0.pubkey, &data.1)];
@@ -716,7 +726,7 @@ pub mod tests {
                 StorableAccountsWithHashesAndWriteVersions::new_with_hashes_and_write_versions(
                     &account_data,
                     vec![&hash],
-                    vec![data.0.write_version],
+                    vec![data.0.write_version_obsolete],
                 );
 
             self.append_accounts(&storable_accounts, 0)
@@ -838,7 +848,7 @@ pub mod tests {
         // for (Slot, &'a [(&'a Pubkey, &'a T)], IncludeSlotInHash)
         let account = AccountSharedData::default();
         let slot = 0 as Slot;
-        let pubkeys = vec![Pubkey::new(&[5; 32]), Pubkey::new(&[6; 32])];
+        let pubkeys = vec![Pubkey::from([5; 32]), Pubkey::from([6; 32])];
         let hashes = vec![Hash::new(&[3; 32]), Hash::new(&[4; 32])];
         let write_versions = vec![42, 43];
         let accounts = vec![(&pubkeys[0], &account), (&pubkeys[1], &account)];
@@ -1146,7 +1156,7 @@ pub mod tests {
         }
 
         let result = AppendVec::new_from_file(path, accounts_len);
-        assert_matches!(result, Err(ref message) if message.to_string() == *"incorrect layout/length/data");
+        assert_matches!(result, Err(ref message) if message.to_string().starts_with("incorrect layout/length/data"));
     }
 
     #[test]
@@ -1174,7 +1184,7 @@ pub mod tests {
         let accounts_len = av.len();
         drop(av);
         let result = AppendVec::new_from_file(path, accounts_len);
-        assert_matches!(result, Err(ref message) if message.to_string() == *"incorrect layout/length/data");
+        assert_matches!(result, Err(ref message) if message.to_string().starts_with("incorrect layout/length/data"));
     }
 
     #[test]
@@ -1200,7 +1210,7 @@ pub mod tests {
         let accounts_len = av.len();
         drop(av);
         let result = AppendVec::new_from_file(path, accounts_len);
-        assert_matches!(result, Err(ref message) if message.to_string() == *"incorrect layout/length/data");
+        assert_matches!(result, Err(ref message) if message.to_string().starts_with("incorrect layout/length/data"));
     }
 
     #[test]
@@ -1262,6 +1272,6 @@ pub mod tests {
         let accounts_len = av.len();
         drop(av);
         let result = AppendVec::new_from_file(path, accounts_len);
-        assert_matches!(result, Err(ref message) if message.to_string() == *"incorrect layout/length/data");
+        assert_matches!(result, Err(ref message) if message.to_string().starts_with("incorrect layout/length/data"));
     }
 }

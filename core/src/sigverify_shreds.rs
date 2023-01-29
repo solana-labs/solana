@@ -1,5 +1,6 @@
 use {
     crossbeam_channel::{Receiver, RecvTimeoutError, SendError, Sender},
+    solana_gossip::cluster_info::ClusterInfo,
     solana_ledger::{
         leader_schedule_cache::LeaderScheduleCache, shred, sigverify_shreds::verify_shreds_gpu,
     },
@@ -25,8 +26,7 @@ enum Error {
 }
 
 pub(crate) fn spawn_shred_sigverify(
-    // TODO: Hot swap will change pubkey.
-    self_pubkey: Pubkey,
+    cluster_info: Arc<ClusterInfo>,
     bank_forks: Arc<RwLock<BankForks>>,
     leader_schedule_cache: Arc<LeaderScheduleCache>,
     shred_fetch_receiver: Receiver<PacketBatch>,
@@ -40,7 +40,9 @@ pub(crate) fn spawn_shred_sigverify(
         .name("solShredVerifr".to_string())
         .spawn(move || loop {
             match run_shred_sigverify(
-                &self_pubkey,
+                // We can't store the pubkey outside the loop
+                // because the identity might be hot swapped.
+                &cluster_info.id(),
                 &bank_forks,
                 &leader_schedule_cache,
                 &recycler_cache,

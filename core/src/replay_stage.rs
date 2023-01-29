@@ -21,7 +21,7 @@ use {
         heaviest_subtree_fork_choice::HeaviestSubtreeForkChoice,
         latest_validator_votes_for_frozen_banks::LatestValidatorVotesForFrozenBanks,
         progress_map::{ForkProgress, ProgressMap, PropagatedStats, ReplaySlotStats},
-        repair_service::DuplicateSlotsResetReceiver,
+        repair_service::{DumpedSlotsSender, DuplicateSlotsResetReceiver},
         rewards_recorder_service::RewardsRecorderSender,
         tower_storage::{SavedTower, SavedTowerVersions, TowerStorage},
         unfrozen_gossip_verified_vote_hashes::UnfrozenGossipVerifiedVoteHashes,
@@ -402,6 +402,7 @@ impl ReplayStage {
         block_metadata_notifier: Option<BlockMetadataNotifierLock>,
         log_messages_bytes_limit: Option<usize>,
         prioritization_fee_cache: Arc<PrioritizationFeeCache>,
+        dumped_slots_sender: DumpedSlotsSender,
         banking_tracer: Arc<BankingTracer>,
     ) -> Result<Self, String> {
         let mut tower = if let Some(process_blockstore) = maybe_process_blockstore {
@@ -921,6 +922,7 @@ impl ReplayStage {
                     &blockstore,
                     poh_bank.map(|bank| bank.slot()),
                     &mut purge_repair_slot_counter,
+                    &dumped_slots_sender,
                 );
                 dump_then_repair_correct_slots_time.stop();
 
@@ -1173,12 +1175,14 @@ impl ReplayStage {
         blockstore: &Blockstore,
         poh_bank_slot: Option<Slot>,
         purge_repair_slot_counter: &mut PurgeRepairSlotCounter,
+        dumped_slots_sender: &DumpedSlotsSender,
     ) {
         if duplicate_slots_to_repair.is_empty() {
             return;
         }
 
         let root_bank = bank_forks.read().unwrap().root_bank();
+        let mut dumped = vec![];
         // TODO: handle if alternate version of descendant also got confirmed after ancestor was
         // confirmed, what happens then? Should probably keep track of purged list and skip things
         // in `duplicate_slots_to_repair` that have already been purged. Add test.
@@ -1241,6 +1245,9 @@ impl ReplayStage {
                         bank_forks,
                         blockstore,
                     );
+
+                    dumped.push((*duplicate_slot, *correct_hash));
+
                     let attempt_no = purge_repair_slot_counter
                         .entry(*duplicate_slot)
                         .and_modify(|x| *x += 1)
@@ -1253,8 +1260,6 @@ impl ReplayStage {
                         *duplicate_slot, *attempt_no,
                     );
                     true
-                // TODO: Send signal to repair to repair the correct version of
-                // `duplicate_slot` with hash == `correct_hash`
                 } else {
                     warn!(
                         "PoH bank for slot {} is building on duplicate slot {}",
@@ -1268,6 +1273,10 @@ impl ReplayStage {
             // If we purged/repaired, then no need to keep the slot in the set of pending work
             !did_purge_repair
         });
+
+        // Notify repair of the dumped slots along with the correct hash
+        trace!("Dumped {} slots", dumped.len());
+        dumped_slots_sender.send(dumped).unwrap();
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -1775,7 +1784,7 @@ impl ReplayStage {
             );
             // make sure parent is frozen for finalized hashes via the above
             // new()-ing of its child bank
-            banking_tracer.hash_event(parent.slot(), parent.last_blockhash(), parent.hash());
+            banking_tracer.hash_event(parent.slot(), &parent.last_blockhash(), &parent.hash());
 
             let tpu_bank = bank_forks.write().unwrap().insert(tpu_bank);
             tpu_bank.resume_banking_commit();
@@ -2615,7 +2624,6 @@ impl ReplayStage {
                     r_replay_stats.execute_timings
                     );
                 did_complete_bank = true;
-                info!("bank frozen: {}", bank.slot());
                 let _ = cluster_slots_update_sender.send(vec![bank_slot]);
                 if let Some(transaction_status_sender) = transaction_status_sender {
                     transaction_status_sender.send_transaction_status_freeze_message(bank);
@@ -2694,6 +2702,7 @@ impl ReplayStage {
                         &bank.rewards,
                         Some(bank.clock().unix_timestamp),
                         Some(bank.block_height()),
+                        bank.executed_transaction_count(),
                     )
                 }
                 bank_complete_time.stop();
@@ -2889,7 +2898,7 @@ impl ReplayStage {
                                         bank_vote_state.root_slot = Some(local_root);
                                         bank_vote_state
                                             .votes
-                                            .retain(|lockout| lockout.slot > local_root);
+                                            .retain(|lockout| lockout.slot() > local_root);
                                         info!(
                                             "Local root is larger than on chain root,
                                             overwrote bank root {:?} and updated votes {:?}",
@@ -2898,7 +2907,7 @@ impl ReplayStage {
 
                                         if let Some(first_vote) = bank_vote_state.votes.front() {
                                             assert!(ancestors
-                                                .get(&first_vote.slot)
+                                                .get(&first_vote.slot())
                                                 .expect(
                                                     "Ancestors map must contain an
                                                         entry for all slots on this fork
@@ -3653,6 +3662,7 @@ pub(crate) mod tests {
             vote_simulator::{self, VoteSimulator},
         },
         crossbeam_channel::unbounded,
+        itertools::Itertools,
         solana_entry::entry::{self, Entry},
         solana_gossip::{cluster_info::Node, crds::Cursor},
         solana_ledger::{
@@ -6097,6 +6107,11 @@ pub(crate) mod tests {
         duplicate_slots_to_repair.insert(1, Hash::new_unique());
         duplicate_slots_to_repair.insert(2, Hash::new_unique());
         let mut purge_repair_slot_counter = PurgeRepairSlotCounter::default();
+        let (dumped_slots_sender, dumped_slots_receiver) = unbounded();
+        let should_be_dumped = duplicate_slots_to_repair
+            .iter()
+            .map(|(&s, &h)| (s, h))
+            .collect_vec();
 
         ReplayStage::dump_then_repair_correct_slots(
             &mut duplicate_slots_to_repair,
@@ -6107,7 +6122,9 @@ pub(crate) mod tests {
             blockstore,
             None,
             &mut purge_repair_slot_counter,
+            &dumped_slots_sender,
         );
+        assert_eq!(should_be_dumped, dumped_slots_receiver.recv().ok().unwrap());
 
         let r_bank_forks = bank_forks.read().unwrap();
         for slot in 0..=2 {
@@ -6213,6 +6230,7 @@ pub(crate) mod tests {
         let mut ancestors = bank_forks.read().unwrap().ancestors();
         let mut descendants = bank_forks.read().unwrap().descendants();
         let old_descendants_of_2 = descendants.get(&2).unwrap().clone();
+        let (dumped_slots_sender, _dumped_slots_receiver) = unbounded();
 
         ReplayStage::dump_then_repair_correct_slots(
             &mut duplicate_slots_to_repair,
@@ -6223,6 +6241,7 @@ pub(crate) mod tests {
             blockstore,
             None,
             &mut PurgeRepairSlotCounter::default(),
+            &dumped_slots_sender,
         );
 
         // Check everything was purged properly

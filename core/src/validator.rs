@@ -36,9 +36,9 @@ use {
             ClusterInfo, Node, DEFAULT_CONTACT_DEBUG_INTERVAL_MILLIS,
             DEFAULT_CONTACT_SAVE_INTERVAL_MILLIS,
         },
-        contact_info::ContactInfo,
         crds_gossip_pull::CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS,
         gossip_service::GossipService,
+        legacy_contact_info::LegacyContactInfo as ContactInfo,
     },
     solana_ledger::{
         bank_forks_utils,
@@ -87,7 +87,7 @@ use {
         snapshot_config::SnapshotConfig,
         snapshot_hash::StartingSnapshotHashes,
         snapshot_package::PendingSnapshotPackage,
-        snapshot_utils,
+        snapshot_utils::{self, move_and_async_delete_path},
     },
     solana_sdk::{
         clock::Slot,
@@ -141,6 +141,7 @@ pub struct ValidatorConfig {
     pub new_hard_forks: Option<Vec<Slot>>,
     pub known_validators: Option<HashSet<Pubkey>>, // None = trust all
     pub repair_validators: Option<HashSet<Pubkey>>, // None = repair from all
+    pub repair_whitelist: Arc<RwLock<HashSet<Pubkey>>>, // Empty = repair with all
     pub gossip_validators: Option<HashSet<Pubkey>>, // None = gossip with all
     pub halt_on_known_validators_accounts_hash_mismatch: bool,
     pub accounts_hash_fault_injection_slots: u64, // 0 = no fault injection
@@ -203,6 +204,7 @@ impl Default for ValidatorConfig {
             new_hard_forks: None,
             known_validators: None,
             repair_validators: None,
+            repair_whitelist: Arc::new(RwLock::new(HashSet::default())),
             gossip_validators: None,
             halt_on_known_validators_accounts_hash_mismatch: false,
             accounts_hash_fault_injection_slots: 0,
@@ -638,7 +640,6 @@ impl Validator {
                 snapshot_request_handler,
                 pruned_banks_request_handler,
             },
-            true, // caching_enabled
             config.accounts_db_test_hash_calculation,
             last_full_snapshot_slot,
         );
@@ -874,7 +875,11 @@ impl Validator {
             Some(stats_reporter_sender.clone()),
             &exit,
         );
-        let serve_repair = ServeRepair::new(cluster_info.clone(), bank_forks.clone());
+        let serve_repair = ServeRepair::new(
+            cluster_info.clone(),
+            bank_forks.clone(),
+            config.repair_whitelist.clone(),
+        );
         let serve_repair_service = ServeRepairService::new(
             serve_repair,
             blockstore.clone(),
@@ -930,11 +935,11 @@ impl Validator {
             exit.clone(),
         );
 
-        let banking_tracer =
-            BankingTracer::new(true.then_some((
-                blockstore.banking_trace_path(),
+        let (banking_tracer, tracer_thread) =
+            BankingTracer::new((config.banking_trace_dir_byte_limit > 0).then_some((
+                &blockstore.banking_trace_path(),
                 exit.clone(),
-                crate::banking_trace::BANKING_TRACE_DIR_DEFAULT_BYTE_LIMIT,
+                config.banking_trace_dir_byte_limit,
             )))
             .map_err(|err| format!("{} [{:?}]", &err, &err))?;
         if banking_tracer.is_enabled() {
@@ -985,6 +990,7 @@ impl Validator {
                 max_ledger_shreds: config.max_ledger_shreds,
                 shred_version: node.info.shred_version,
                 repair_validators: config.repair_validators.clone(),
+                repair_whitelist: config.repair_whitelist.clone(),
                 wait_for_vote_to_start_leader,
                 replay_slots_concurrently: config.replay_slots_concurrently,
             },
@@ -1032,6 +1038,7 @@ impl Validator {
             &staked_nodes,
             config.staked_nodes_overrides.clone(),
             banking_tracer,
+            tracer_thread,
             tpu_enable_udp,
         );
 
@@ -1426,7 +1433,6 @@ fn load_blockstore(
         new_hard_forks: config.new_hard_forks.clone(),
         debug_keys: config.debug_keys.clone(),
         account_indexes: config.account_indexes.clone(),
-        accounts_db_caching_enabled: true,
         accounts_db_config: config.accounts_db_config.clone(),
         shrink_ratio: config.accounts_shrink_ratio,
         accounts_db_test_hash_calculation: config.accounts_db_test_hash_calculation,
@@ -1805,7 +1811,7 @@ fn initialize_rpc_transaction_history_services(
         transaction_status_receiver,
         max_complete_transaction_status_slot.clone(),
         enable_rpc_transaction_history,
-        transaction_notifier.clone(),
+        transaction_notifier,
         blockstore.clone(),
         enable_extended_tx_metadata_storage,
         exit,
@@ -2024,91 +2030,6 @@ fn get_stake_percent_in_gossip(bank: &Bank, cluster_info: &ClusterInfo, log: boo
     }
 
     online_stake_percentage as u64
-}
-
-/// Delete directories/files asynchronously to avoid blocking on it.
-/// Fist, in sync context, rename the original path to *_deleted,
-/// then spawn a thread to delete the renamed path.
-/// If the process is killed and the deleting process is not done,
-/// the leftover path will be deleted in the next process life, so
-/// there is no file space leaking.
-pub fn move_and_async_delete_path(path: impl AsRef<Path> + Copy) {
-    let mut path_delete = PathBuf::new();
-    path_delete.push(path);
-    path_delete.set_file_name(format!(
-        "{}{}",
-        path_delete.file_name().unwrap().to_str().unwrap(),
-        "_to_be_deleted"
-    ));
-
-    if path_delete.exists() {
-        std::fs::remove_dir_all(&path_delete).unwrap();
-    }
-
-    if !path.as_ref().exists() {
-        return;
-    }
-
-    if let Err(err) = std::fs::rename(path, &path_delete) {
-        warn!(
-            "Path renaming failed: {}.  Falling back to rm_dir in sync mode",
-            err.to_string()
-        );
-        delete_contents_of_path(path);
-        return;
-    }
-
-    Builder::new()
-        .name("solDeletePath".to_string())
-        .spawn(move || {
-            std::fs::remove_dir_all(path_delete).unwrap();
-        })
-        .unwrap();
-}
-
-/// Delete the files and subdirectories in a directory.
-/// This is useful if the process does not have permission
-/// to delete the top level directory it might be able to
-/// delete the contents of that directory.
-fn delete_contents_of_path(path: impl AsRef<Path> + Copy) {
-    if let Ok(dir_entries) = std::fs::read_dir(path) {
-        for entry in dir_entries.flatten() {
-            let sub_path = entry.path();
-            let metadata = match entry.metadata() {
-                Ok(metadata) => metadata,
-                Err(err) => {
-                    warn!(
-                        "Failed to get metadata for {}. Error: {}",
-                        sub_path.display(),
-                        err.to_string()
-                    );
-                    break;
-                }
-            };
-            if metadata.is_dir() {
-                if let Err(err) = std::fs::remove_dir_all(&sub_path) {
-                    warn!(
-                        "Failed to remove sub directory {}.  Error: {}",
-                        sub_path.display(),
-                        err.to_string()
-                    );
-                }
-            } else if metadata.is_file() {
-                if let Err(err) = std::fs::remove_file(&sub_path) {
-                    warn!(
-                        "Failed to remove file {}.  Error: {}",
-                        sub_path.display(),
-                        err.to_string()
-                    );
-                }
-            }
-        }
-    } else {
-        warn!(
-            "Failed to read the sub paths of {}",
-            path.as_ref().display()
-        );
-    }
 }
 
 fn cleanup_accounts_paths(config: &ValidatorConfig) {

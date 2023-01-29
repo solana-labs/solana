@@ -1,7 +1,16 @@
 ---
 title: "Rust Program Quickstart"
 description: "This quickstart guide will demonstrate how to quickly setup, build, and deploy your first Rust based Solana program to the blockchain."
-keywords: "rust, cargo, toml, program, tutorial, intro to solana development, blockchain developer, blockchain tutorial, web3 developer"
+keywords:
+  - rust
+  - cargo
+  - toml
+  - program
+  - tutorial
+  - intro to solana development
+  - blockchain developer
+  - blockchain tutorial
+  - web3 developer
 ---
 
 Rust is the most common programming language to write Solana programs with. This quickstart guide will demonstrate how to quickly setup, build, and deploy your first Rust based Solana program to the blockchain.
@@ -43,7 +52,7 @@ solana config set --url localhost
 
 ## Create a new Rust library with Cargo
 
-Solana programs written in Rust are _libraries_ which are compiled to [BPF bytecode](../developing/on-chain-programs/overview#berkeley-packet-filter-bpf) and saved in the `.so` format.
+Solana programs written in Rust are _libraries_ which are compiled to [BPF bytecode](../developing/on-chain-programs/faq.md#berkeley-packet-filter-bpf) and saved in the `.so` format.
 
 Initialize a new Rust library named `hello_world` via the Cargo command line:
 

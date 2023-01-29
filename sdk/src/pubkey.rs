@@ -1,9 +1,11 @@
+//! Solana account addresses.
+
 pub use solana_program::pubkey::*;
 
 /// New random Pubkey for tests and benchmarks.
 #[cfg(feature = "full")]
 pub fn new_rand() -> Pubkey {
-    Pubkey::new(&rand::random::<[u8; PUBKEY_BYTES]>())
+    Pubkey::from(rand::random::<[u8; PUBKEY_BYTES]>())
 }
 
 #[cfg(feature = "full")]

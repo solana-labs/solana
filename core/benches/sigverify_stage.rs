@@ -23,6 +23,7 @@ use {
     },
     solana_sdk::{
         hash::Hash,
+        packet::PacketFlags,
         signature::{Keypair, Signer},
         system_transaction,
         timing::duration_as_ms,
@@ -41,7 +42,6 @@ fn run_bench_packet_discard(num_ips: usize, bencher: &mut Bencher) {
     let mut total = 0;
 
     let ips: Vec<_> = (0..num_ips)
-        .into_iter()
         .map(|_| {
             let mut addr = [0u16; 8];
             thread_rng().fill(&mut addr);
@@ -145,7 +145,16 @@ fn gen_batches(use_same_tx: bool) -> Vec<PacketBatch> {
 }
 
 #[bench]
-fn bench_sigverify_stage(bencher: &mut Bencher) {
+fn bench_sigverify_stage_with_same_tx(bencher: &mut Bencher) {
+    bench_sigverify_stage(bencher, true)
+}
+
+#[bench]
+fn bench_sigverify_stage_without_same_tx(bencher: &mut Bencher) {
+    bench_sigverify_stage(bencher, false)
+}
+
+fn bench_sigverify_stage(bencher: &mut Bencher, use_same_tx: bool) {
     solana_logger::setup();
     trace!("start");
     let (packet_s, packet_r) = unbounded();
@@ -153,10 +162,9 @@ fn bench_sigverify_stage(bencher: &mut Bencher) {
     let verifier = TransactionSigVerifier::new(verified_s);
     let stage = SigVerifyStage::new(packet_r, verifier, "bench");
 
-    let use_same_tx = true;
     bencher.iter(move || {
         let now = Instant::now();
-        let mut batches = gen_batches(use_same_tx);
+        let batches = gen_batches(use_same_tx);
         trace!(
             "starting... generation took: {} ms batches: {}",
             duration_as_ms(&now.elapsed()),
@@ -164,23 +172,25 @@ fn bench_sigverify_stage(bencher: &mut Bencher) {
         );
 
         let mut sent_len = 0;
-        for _ in 0..batches.len() {
-            if let Some(batch) = batches.pop() {
-                sent_len += batch.len();
-                packet_s.send(vec![batch]).unwrap();
-            }
+        for mut batch in batches.into_iter() {
+            sent_len += batch.len();
+            batch
+                .iter_mut()
+                .for_each(|packet| packet.meta_mut().flags |= PacketFlags::TRACER_PACKET);
+            packet_s.send(vec![batch]).unwrap();
         }
         let mut received = 0;
+        let mut total_tracer_packets_received_in_sigverify_stage = 0;
         trace!("sent: {}", sent_len);
         let mut messages = vec![];
         loop {
             if let Ok(message) = verified_r.recv_timeout(Duration::from_millis(10)) {
-                let (verifieds, _) = &*message;
-                for v in verifieds.iter().rev() {
-                    received += v.len();
-                }
-                messages.push(message);
-                if use_same_tx || received >= sent_len {
+                let (verifieds, tracer_packet_stats) = (&message.0, message.1.as_ref().unwrap());
+                received += verifieds.iter().map(|batch| batch.len()).sum::<usize>();
+                total_tracer_packets_received_in_sigverify_stage +=
+                    tracer_packet_stats.total_tracer_packets_received_in_sigverify_stage;
+                test::black_box(message);
+                if total_tracer_packets_received_in_sigverify_stage >= sent_len {
                     break;
                 }
             }

@@ -75,7 +75,7 @@ impl NewTpuConfig for UdpConfig {
     type ClientError = UdpClientError;
 
     fn new() -> Result<Self, UdpClientError> {
-        let socket = solana_net_utils::bind_with_any_port(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)))
+        let socket = solana_net_utils::bind_with_any_port(IpAddr::V4(Ipv4Addr::UNSPECIFIED))
             .map_err(Into::<UdpClientError>::into)?;
         Ok(Self {
             tpu_udp_socket: Arc::new(socket),

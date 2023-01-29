@@ -551,7 +551,7 @@ describe('Subscriptions', () => {
                   });
                 });
                 describe('upon the socket connection reopening', () => {
-                  let fatalPriorUnubscribe;
+                  let fatalPriorUnubscribe: () => void;
                   beforeEach(() => {
                     fatalPriorUnubscribe = fatalUnsubscribe;
                     stubbedSocket.call.resetHistory();
@@ -699,7 +699,7 @@ describe('Subscriptions', () => {
               });
             });
             describe('upon the socket connection reopening', () => {
-              let fatalPriorSubscription;
+              let fatalPriorSubscription: () => void;
               beforeEach(() => {
                 fatalPriorSubscription = fatalSubscription;
                 stubbedSocket.call.resetHistory();

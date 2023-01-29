@@ -1,9 +1,6 @@
 //! trait for abstracting underlying storage of pubkey and account pairs to be written
 use {
-    crate::{
-        accounts_db::{FoundStoredAccount, IncludeSlotInHash},
-        append_vec::StoredAccountMeta,
-    },
+    crate::{accounts_db::IncludeSlotInHash, append_vec::StoredAccountMeta},
     solana_sdk::{account::ReadableAccount, clock::Slot, hash::Hash, pubkey::Pubkey},
 };
 
@@ -154,6 +151,15 @@ impl<'a> StorableAccounts<'a, StoredAccountMeta<'a>>
     fn include_slot_in_hash(&self) -> IncludeSlotInHash {
         self.2
     }
+    fn has_hash_and_write_version(&self) -> bool {
+        true
+    }
+    fn hash(&self, index: usize) -> &Hash {
+        self.1[index].hash
+    }
+    fn write_version(&self, index: usize) -> u64 {
+        self.1[index].meta.write_version_obsolete
+    }
 }
 
 /// this tuple contains a single different source slot that applies to all accounts
@@ -195,52 +201,10 @@ impl<'a> StorableAccounts<'a, StoredAccountMeta<'a>>
         self.1[index].hash
     }
     fn write_version(&self, index: usize) -> u64 {
-        self.1[index].meta.write_version
+        self.1[index].meta.write_version_obsolete
     }
 }
 
-/// this tuple contains a single different source slot that applies to all accounts
-/// accounts are FoundStoredAccount
-impl<'a> StorableAccounts<'a, StoredAccountMeta<'a>>
-    for (
-        Slot,
-        &'a [&'a FoundStoredAccount<'a>],
-        IncludeSlotInHash,
-        Slot,
-    )
-{
-    fn pubkey(&self, index: usize) -> &Pubkey {
-        self.1[index].pubkey()
-    }
-    fn account(&self, index: usize) -> &StoredAccountMeta<'a> {
-        &self.1[index].account
-    }
-    fn slot(&self, _index: usize) -> Slot {
-        // same other slot for all accounts
-        self.3
-    }
-    fn target_slot(&self) -> Slot {
-        self.0
-    }
-    fn len(&self) -> usize {
-        self.1.len()
-    }
-    fn contains_multiple_slots(&self) -> bool {
-        false
-    }
-    fn include_slot_in_hash(&self) -> IncludeSlotInHash {
-        self.2
-    }
-    fn has_hash_and_write_version(&self) -> bool {
-        true
-    }
-    fn hash(&self, index: usize) -> &Hash {
-        self.1[index].account.hash
-    }
-    fn write_version(&self, index: usize) -> u64 {
-        self.1[index].account.meta.write_version
-    }
-}
 #[cfg(test)]
 pub mod tests {
     use {
@@ -266,7 +230,7 @@ pub mod tests {
         assert_eq!(a.target_slot(), b.target_slot());
         assert_eq!(a.len(), b.len());
         assert_eq!(a.is_empty(), b.is_empty());
-        (0..a.len()).into_iter().for_each(|i| {
+        (0..a.len()).for_each(|i| {
             assert_eq!(a.pubkey(i), b.pubkey(i));
             assert!(accounts_equal(a.account(i), b.account(i)));
         })
@@ -274,14 +238,14 @@ pub mod tests {
 
     #[test]
     fn test_contains_multiple_slots() {
-        let pk = Pubkey::new(&[1; 32]);
+        let pk = Pubkey::from([1; 32]);
         let slot = 0;
         let lamports = 1;
         let owner = Pubkey::default();
         let executable = false;
         let rent_epoch = 0;
         let meta = StoredMeta {
-            write_version: 5,
+            write_version_obsolete: 5,
             pubkey: pk,
             data_len: 7,
         };
@@ -324,7 +288,7 @@ pub mod tests {
                     let mut raw = Vec::new();
                     let mut raw2 = Vec::new();
                     for entry in 0..entries {
-                        let pk = Pubkey::new(&[entry; 32]);
+                        let pk = Pubkey::from([entry; 32]);
                         let account = AccountSharedData::create(
                             (entry as u64) * starting_slot,
                             Vec::default(),
@@ -338,7 +302,7 @@ pub mod tests {
                             account.clone(),
                             starting_slot % max_slots,
                             StoredMeta {
-                                write_version: 0, // just something
+                                write_version_obsolete: 0, // just something
                                 pubkey: pk,
                                 data_len: u64::MAX, // just something
                             },

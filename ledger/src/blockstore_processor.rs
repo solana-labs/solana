@@ -28,7 +28,6 @@ use {
         },
         bank_forks::BankForks,
         bank_utils,
-        block_cost_limits::*,
         commitment::VOTE_THRESHOLD_SIZE,
         cost_model::CostModel,
         epoch_accounts_hash::EpochAccountsHash,
@@ -40,7 +39,6 @@ use {
     },
     solana_sdk::{
         clock::{Slot, MAX_PROCESSING_AGE},
-        feature_set,
         genesis_config::GenesisConfig,
         hash::Hash,
         pubkey::Pubkey,
@@ -65,35 +63,6 @@ use {
     },
     thiserror::Error,
 };
-
-// it tracks the block cost available capacity - number of compute-units allowed
-// by max block cost limit.
-#[derive(Debug)]
-pub struct BlockCostCapacityMeter {
-    pub capacity: u64,
-    pub accumulated_cost: u64,
-}
-
-impl Default for BlockCostCapacityMeter {
-    fn default() -> Self {
-        BlockCostCapacityMeter::new(MAX_BLOCK_UNITS)
-    }
-}
-
-impl BlockCostCapacityMeter {
-    pub fn new(capacity_limit: u64) -> Self {
-        Self {
-            capacity: capacity_limit,
-            accumulated_cost: 0_u64,
-        }
-    }
-
-    // return the remaining capacity
-    pub fn accumulate(&mut self, cost: u64) -> u64 {
-        self.accumulated_cost += cost;
-        self.capacity.saturating_sub(self.accumulated_cost)
-    }
-}
 
 struct TransactionBatchWithIndexes<'a, 'b> {
     pub batch: TransactionBatch<'a, 'b>,
@@ -155,19 +124,6 @@ fn get_first_error(
     first_err
 }
 
-fn aggregate_total_execution_units(execute_timings: &ExecuteTimings) -> u64 {
-    let mut execute_cost_units: u64 = 0;
-    for (program_id, timing) in &execute_timings.details.per_program_timings {
-        if timing.count < 1 {
-            continue;
-        }
-        execute_cost_units =
-            execute_cost_units.saturating_add(timing.accumulated_units / timing.count as u64);
-        trace!("aggregated execution cost of {:?} {:?}", program_id, timing);
-    }
-    execute_cost_units
-}
-
 fn execute_batch(
     transactions: &[SanitizedTransaction],
     transaction_indexes: impl Iterator<Item = usize>,
@@ -204,30 +160,6 @@ fn execute_batch(
         timings,
         log_messages_bytes_limit,
     );
-
-    if bank
-        .feature_set
-        .is_active(&feature_set::gate_large_block::id())
-    {
-        let execution_cost_units = aggregate_total_execution_units(timings) - pre_process_units;
-        let remaining_block_cost_cap = cost_capacity_meter
-            .write()
-            .unwrap()
-            .accumulate(execution_cost_units + tx_cost);
-
-        debug!(
-            "bank {} executed a batch, number of transactions {}, total execute cu {}, total additional cu {}, remaining block cost cap {}",
-            bank.slot(),
-            batch.sanitized_transactions().len(),
-            execution_cost_units,
-            tx_cost,
-            remaining_block_cost_cap,
-        );
-
-        if remaining_block_cost_cap == 0_u64 {
-            return Err(TransactionError::WouldExceedMaxBlockCostLimit);
-        }
-    }
 
     bank_utils::find_and_send_votes(
         batch.sanitized_transactions(),
@@ -328,8 +260,6 @@ fn execute_batches(
     transaction_status_sender: Option<&TransactionStatusSender>,
     replay_vote_sender: Option<&ReplayVoteSender>,
     confirmation_timing: &mut ConfirmationTiming,
-    cost_capacity_meter: Arc<RwLock<BlockCostCapacityMeter>>,
-    log_messages_bytes_limit: Option<usize>,
 ) -> Result<()> {
     let execute_batches_internal_metrics =
         execute_batches_internal(bank, transactions, transaction_indexes, entry_callback)?;
@@ -386,7 +316,6 @@ pub fn process_entries_for_tests(
         transaction_status_sender,
         replay_vote_sender,
         &mut confirmation_timing,
-        Arc::new(RwLock::new(BlockCostCapacityMeter::default())),
         None,
         &_ignored_prioritization_fee_cache,
     );
@@ -405,7 +334,6 @@ fn process_entries_with_callback(
     transaction_status_sender: Option<&TransactionStatusSender>,
     replay_vote_sender: Option<&ReplayVoteSender>,
     confirmation_timing: &mut ConfirmationTiming,
-    cost_capacity_meter: Arc<RwLock<BlockCostCapacityMeter>>,
     log_messages_bytes_limit: Option<usize>,
     prioritization_fee_cache: &PrioritizationFeeCache,
 ) -> Result<()> {
@@ -448,8 +376,6 @@ fn process_entries_with_callback(
                     transaction_status_sender,
                     replay_vote_sender,
                     confirmation_timing,
-                    cost_capacity_meter.clone(),
-                    log_messages_bytes_limit,
                 )?;
             }
         }
@@ -503,7 +429,6 @@ pub struct ProcessOptions {
     pub new_hard_forks: Option<Vec<Slot>>,
     pub debug_keys: Option<Arc<HashSet<Pubkey>>>,
     pub account_indexes: AccountSecondaryIndexes,
-    pub accounts_db_caching_enabled: bool,
     pub limit_load_slot_count_from_snapshot: Option<usize>,
     pub allow_dead_slots: bool,
     pub accounts_db_test_hash_calculation: bool,
@@ -602,7 +527,6 @@ pub(crate) fn process_blockstore_for_bank_0(
         opts.debug_keys.clone(),
         Some(&crate::builtins::get(opts.runtime_config.bpf_jit)),
         opts.account_indexes.clone(),
-        opts.accounts_db_caching_enabled,
         opts.shrink_ratio,
         false,
         opts.accounts_db_config.clone(),
@@ -1054,7 +978,6 @@ fn confirm_slot_entries(
             assert!(entries.is_some());
 
             let mut replay_elapsed = Measure::start("replay_elapsed");
-            let cost_capacity_meter = Arc::new(RwLock::new(BlockCostCapacityMeter::default()));
             let mut replay_entries: Vec<_> = entries
                 .unwrap()
                 .into_iter()
@@ -1073,7 +996,6 @@ fn confirm_slot_entries(
                 transaction_status_sender,
                 replay_vote_sender,
                 timing,
-                cost_capacity_meter,
                 log_messages_bytes_limit,
                 prioritization_fee_cache,
             )
@@ -1676,6 +1598,7 @@ pub mod tests {
         solana_sdk::{
             account::{AccountSharedData, WritableAccount},
             epoch_schedule::EpochSchedule,
+            feature_set,
             hash::Hash,
             native_token::LAMPORTS_PER_SOL,
             pubkey::Pubkey,
@@ -3517,7 +3440,6 @@ pub mod tests {
             Arc::<RuntimeConfig>::default(),
             account_paths,
             AccountSecondaryIndexes::default(),
-            false,
             AccountShrinkThreshold::default(),
         );
         *bank.epoch_schedule()
@@ -3626,13 +3548,15 @@ pub mod tests {
         // Create an transaction that references the new blockhash, should still
         // be able to find the blockhash if we process transactions all in the same
         // batch
-        let mut expected_signatures = BTreeSet::new();
+        let mut expected_successful_voter_pubkeys = BTreeSet::new();
         let vote_txs: Vec<_> = validator_keypairs
             .iter()
             .enumerate()
             .map(|(i, validator_keypairs)| {
-                let vote_tx = if i % 3 == 0 {
+                if i % 3 == 0 {
                     // These votes are correct
+                    expected_successful_voter_pubkeys
+                        .insert(validator_keypairs.vote_keypair.pubkey());
                     vote_transaction::new_vote_transaction(
                         vec![0],
                         bank0.hash(),
@@ -3664,20 +3588,18 @@ pub mod tests {
                         &validator_keypairs.vote_keypair,
                         None,
                     )
-                };
-                expected_signatures.insert(vote_tx.signatures[0]);
-                vote_tx
+                }
             })
             .collect();
         let entry = next_entry(&bank_1_blockhash, 1, vote_txs);
         let (replay_vote_sender, replay_vote_receiver) = crossbeam_channel::unbounded();
         let _ =
             process_entries_for_tests(&bank1, vec![entry], true, None, Some(&replay_vote_sender));
-        let signatures: BTreeSet<_> = replay_vote_receiver
+        let successes: BTreeSet<Pubkey> = replay_vote_receiver
             .try_iter()
-            .map(|(.., signature)| signature)
+            .map(|(vote_pubkey, ..)| vote_pubkey)
             .collect();
-        assert_eq!(signatures, expected_signatures);
+        assert_eq!(successes, expected_successful_voter_pubkeys);
     }
 
     fn make_slot_with_vote_tx(

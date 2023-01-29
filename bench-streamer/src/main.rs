@@ -86,7 +86,7 @@ fn main() -> Result<()> {
     let num_producers: u64 = matches.value_of_t("num_producers").unwrap_or(4);
 
     let port = 0;
-    let ip_addr = IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0));
+    let ip_addr = IpAddr::V4(Ipv4Addr::UNSPECIFIED);
     let mut addr = SocketAddr::new(ip_addr, 0);
 
     let exit = Arc::new(AtomicBool::new(false));
@@ -120,7 +120,6 @@ fn main() -> Result<()> {
     }
 
     let producer_threads: Vec<_> = (0..num_producers)
-        .into_iter()
         .map(|_| producer(&addr, exit.clone()))
         .collect();
 

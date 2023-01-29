@@ -31,7 +31,10 @@ use {
     crossbeam_channel::{unbounded, Receiver},
     solana_client::connection_cache::ConnectionCache,
     solana_geyser_plugin_manager::block_metadata_notifier_interface::BlockMetadataNotifierLock,
-    solana_gossip::cluster_info::ClusterInfo,
+    solana_gossip::{
+        cluster_info::ClusterInfo, duplicate_shred_handler::DuplicateShredHandler,
+        duplicate_shred_listener::DuplicateShredListener,
+    },
     solana_ledger::{
         blockstore::Blockstore, blockstore_processor::TransactionStatusSender,
         leader_schedule_cache::LeaderScheduleCache,
@@ -67,6 +70,7 @@ pub struct Tvu {
     voting_service: VotingService,
     warm_quic_cache_service: Option<WarmQuicCacheService>,
     drop_bank_service: DropBankService,
+    duplicate_shred_listener: DuplicateShredListener,
 }
 
 pub struct TvuSockets {
@@ -81,7 +85,10 @@ pub struct TvuSockets {
 pub struct TvuConfig {
     pub max_ledger_shreds: Option<u64>,
     pub shred_version: u16,
+    // Validators from which repairs are requested
     pub repair_validators: Option<HashSet<Pubkey>>,
+    // Validators which should be given priority when serving repairs
+    pub repair_whitelist: Arc<RwLock<HashSet<Pubkey>>>,
     pub wait_for_vote_to_start_leader: bool,
     pub replay_slots_concurrently: bool,
 }
@@ -160,7 +167,7 @@ impl Tvu {
         let (verified_sender, verified_receiver) = unbounded();
         let (retransmit_sender, retransmit_receiver) = unbounded();
         let shred_sigverify = sigverify_shreds::spawn_shred_sigverify(
-            cluster_info.id(),
+            cluster_info.clone(),
             bank_forks.clone(),
             leader_schedule_cache.clone(),
             fetch_receiver,
@@ -184,6 +191,7 @@ impl Tvu {
         let (duplicate_slots_sender, duplicate_slots_receiver) = unbounded();
         let (ancestor_hashes_replay_update_sender, ancestor_hashes_replay_update_receiver) =
             unbounded();
+        let (dumped_slots_sender, dumped_slots_receiver) = unbounded();
         let window_service = {
             let epoch_schedule = *bank_forks.read().unwrap().working_bank().epoch_schedule();
             let repair_info = RepairInfo {
@@ -191,6 +199,7 @@ impl Tvu {
                 epoch_schedule,
                 duplicate_slots_reset_sender,
                 repair_validators: tvu_config.repair_validators,
+                repair_whitelist: tvu_config.repair_whitelist,
                 cluster_info: cluster_info.clone(),
                 cluster_slots: cluster_slots.clone(),
             };
@@ -207,6 +216,7 @@ impl Tvu {
                 completed_data_sets_sender,
                 duplicate_slots_sender,
                 ancestor_hashes_replay_update_receiver,
+                dumped_slots_receiver,
             )
         };
 
@@ -290,6 +300,7 @@ impl Tvu {
             block_metadata_notifier,
             log_messages_bytes_limit,
             prioritization_fee_cache.clone(),
+            dumped_slots_sender,
             banking_tracer,
         )?;
 
@@ -301,6 +312,12 @@ impl Tvu {
                 exit,
             )
         });
+
+        let duplicate_shred_listener = DuplicateShredListener::new(
+            exit.clone(),
+            cluster_info.clone(),
+            DuplicateShredHandler::new(blockstore, leader_schedule_cache.clone()),
+        );
 
         Ok(Tvu {
             fetch_stage,
@@ -314,6 +331,7 @@ impl Tvu {
             voting_service,
             warm_quic_cache_service,
             drop_bank_service,
+            duplicate_shred_listener,
         })
     }
 
@@ -333,6 +351,7 @@ impl Tvu {
             warmup_service.join()?;
         }
         self.drop_bank_service.join()?;
+        self.duplicate_shred_listener.join()?;
         Ok(())
     }
 }

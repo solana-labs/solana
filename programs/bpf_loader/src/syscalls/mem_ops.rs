@@ -22,10 +22,6 @@ declare_syscall!(
     ) -> Result<u64, EbpfError> {
         mem_op_consume(invoke_context, n)?;
 
-        let do_check_physical_overlapping = invoke_context
-            .feature_set
-            .is_active(&check_physical_overlapping::id());
-
         if !is_nonoverlapping(src_addr, n, dst_addr, n) {
             return Err(SyscallError::CopyOverlapping.into());
         }
@@ -46,9 +42,7 @@ declare_syscall!(
             invoke_context.get_check_size(),
         )?
         .as_ptr();
-        if do_check_physical_overlapping
-            && !is_nonoverlapping(src_ptr as usize, n as usize, dst_ptr as usize, n as usize)
-        {
+        if !is_nonoverlapping(src_ptr as usize, n as usize, dst_ptr as usize, n as usize) {
             unsafe {
                 std::ptr::copy(src_ptr, dst_ptr, n as usize);
             }

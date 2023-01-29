@@ -23,7 +23,7 @@ use {
         slot_stats::{ShredSource, SlotsStats},
     },
     assert_matches::debug_assert_matches,
-    bincode::deserialize,
+    bincode::{deserialize, serialize},
     crossbeam_channel::{bounded, Receiver, Sender, TrySendError},
     dashmap::DashSet,
     log::*,
@@ -70,6 +70,7 @@ use {
             atomic::{AtomicBool, Ordering},
             Arc, Mutex, RwLock, RwLockWriteGuard,
         },
+        time::Duration,
     },
     tempfile::{Builder, TempDir},
     thiserror::Error,
@@ -103,8 +104,9 @@ lazy_static! {
 
 pub const MAX_REPLAY_WAKE_UP_SIGNALS: usize = 1;
 pub const MAX_COMPLETED_SLOTS_IN_CHANNEL: usize = 100_000;
-pub const MAX_TURBINE_PROPAGATION_IN_MS: u64 = 100;
-pub const MAX_TURBINE_DELAY_IN_TICKS: u64 = MAX_TURBINE_PROPAGATION_IN_MS / MS_PER_TICK;
+pub const MAX_TURBINE_PROPAGATION: Duration = Duration::from_millis(200);
+pub const MAX_TURBINE_DELAY_IN_TICKS: u64 =
+    MAX_TURBINE_PROPAGATION.as_millis() as u64 / MS_PER_TICK;
 
 // An upper bound on maximum number of data shreds we can handle in a slot
 // 32K shreds would allow ~320K peak TPS
@@ -2719,19 +2721,40 @@ impl Blockstore {
     }
 
     pub fn get_recent_perf_samples(&self, num: usize) -> Result<Vec<(Slot, PerfSample)>> {
-        Ok(self
+        // When reading `PerfSamples`, the database may contain samples with either `PerfSampleV1`
+        // or `PerfSampleV2` encoding.  We expect `PerfSampleV1` to be a prefix of the
+        // `PerfSampleV2` encoding (see [`perf_sample_v1_is_prefix_of_perf_sample_v2`]), so we try
+        // them in order.
+        let samples = self
             .db
             .iter::<cf::PerfSamples>(IteratorMode::End)?
             .take(num)
             .map(|(slot, data)| {
-                let perf_sample = deserialize(&data).unwrap();
-                (slot, perf_sample)
-            })
-            .collect())
+                deserialize::<PerfSampleV2>(&data)
+                    .map(|sample| (slot, sample.into()))
+                    .or_else(|err| {
+                        match &*err {
+                            bincode::ErrorKind::Io(io_err)
+                                if matches!(io_err.kind(), ErrorKind::UnexpectedEof) =>
+                            {
+                                // Not enough bytes to deserialize as `PerfSampleV2`.
+                            }
+                            _ => return Err(err),
+                        }
+
+                        deserialize::<PerfSampleV1>(&data).map(|sample| (slot, sample.into()))
+                    })
+                    .map_err(Into::into)
+            });
+
+        samples.collect()
     }
 
-    pub fn write_perf_sample(&self, index: Slot, perf_sample: &PerfSample) -> Result<()> {
-        self.perf_samples_cf.put(index, perf_sample)
+    pub fn write_perf_sample(&self, index: Slot, perf_sample: &PerfSampleV2) -> Result<()> {
+        // Always write as the current version.
+        let bytes =
+            serialize(&perf_sample).expect("`PerfSampleV2` can be serialized with `bincode`");
+        self.perf_samples_cf.put_bytes(index, &bytes)
     }
 
     pub fn read_program_costs(&self) -> Result<Vec<(Pubkey, u64)>> {
@@ -3360,11 +3383,11 @@ fn update_slot_meta(
     reference_tick: u8,
     received_data_shreds: &ShredIndex,
 ) -> Vec<(u32, u32)> {
-    let maybe_first_insert = slot_meta.received == 0;
+    let first_insert = slot_meta.received == 0;
     // Index is zero-indexed, while the "received" height starts from 1,
     // so received = index + 1 for the same shred.
     slot_meta.received = cmp::max(u64::from(index) + 1, slot_meta.received);
-    if maybe_first_insert && slot_meta.received > 0 {
+    if first_insert {
         // predict the timestamp of what would have been the first shred in this slot
         let slot_time_elapsed = u64::from(reference_tick) * 1000 / DEFAULT_TICKS_PER_SECOND;
         slot_meta.first_shred_timestamp = timestamp() - slot_time_elapsed;
@@ -3901,7 +3924,7 @@ pub fn create_new_ledger(
         blockstore_dir,
     ];
     let output = std::process::Command::new("tar")
-        .args(&args)
+        .args(args)
         .output()
         .unwrap();
     if !output.status.success() {
@@ -5381,49 +5404,29 @@ pub mod tests {
 
     #[test]
     fn test_handle_chaining_missing_slots() {
+        solana_logger::setup();
         let ledger_path = get_tmp_ledger_path_auto_delete!();
         let blockstore = Blockstore::open(ledger_path.path()).unwrap();
 
         let num_slots = 30;
         let entries_per_slot = 5;
+        // Make a bunch of shreds and split by whether slot is even or odd
+        let (shreds, _) = make_many_slot_entries(0, num_slots, entries_per_slot);
+        let shreds_per_slot = shreds.len() as u64 / num_slots;
+        let (even_slots, odd_slots): (Vec<_>, Vec<_>) =
+            shreds.into_iter().partition(|shred| shred.slot() % 2 == 0);
 
-        // Separate every other slot into two separate vectors
-        let mut slots = vec![];
-        let mut missing_slots = vec![];
-        let mut shreds_per_slot = 2;
+        // Write the odd slot shreds
+        blockstore.insert_shreds(odd_slots, None, false).unwrap();
+
         for slot in 0..num_slots {
-            let parent_slot = {
-                if slot == 0 {
-                    0
-                } else {
-                    slot - 1
-                }
-            };
-            let (slot_shreds, _) = make_slot_entries(
-                slot,
-                parent_slot,
-                entries_per_slot,
-                true, // merkle_variant
-            );
-            shreds_per_slot = slot_shreds.len();
-
-            if slot % 2 == 1 {
-                slots.extend(slot_shreds);
-            } else {
-                missing_slots.extend(slot_shreds);
-            }
-        }
-
-        // Write the shreds for every other slot
-        blockstore.insert_shreds(slots, None, false).unwrap();
-
-        // Check metadata
-        for slot in 0..num_slots {
-            // If "i" is the index of a slot we just inserted, then next_slots should be empty
-            // for slot "i" because no slots chain to that slot, because slot i + 1 is missing.
-            // However, if it's a slot we haven't inserted, aka one of the gaps, then one of the
-            // slots we just inserted will chain to that gap, so next_slots for that orphan slot
-            // won't be empty, but the parent slot is unknown so should equal std::u64::MAX.
+            // The slots that were inserted (the odds) will ...
+            // - Know who their parent is (parent encoded in the shreds)
+            // - Have empty next_slots since next_slots would be evens
+            // The slots that were not inserted (the evens) will ...
+            // - Still have a meta since their child linked back to them
+            // - Have next_slots link to child because of the above
+            // - Have an unknown parent since no shreds to indicate
             let meta = blockstore.meta(slot).unwrap().unwrap();
             if slot % 2 == 0 {
                 assert_eq!(meta.next_slots, vec![slot + 1]);
@@ -5433,34 +5436,30 @@ pub mod tests {
                 assert_eq!(meta.parent_slot, Some(slot - 1));
             }
 
-            if slot == 0 {
-                assert!(meta.is_connected());
-            } else {
-                assert!(!meta.is_connected());
-            }
+            // Slot 0 is the only connected slot
+            assert!(!meta.is_connected() || meta.slot == 0);
         }
 
-        // Write the shreds for the other half of the slots that we didn't insert earlier
-        blockstore
-            .insert_shreds(missing_slots, None, false)
-            .unwrap();
+        // Write the even slot shreds that we did not earlier
+        blockstore.insert_shreds(even_slots, None, false).unwrap();
 
         for slot in 0..num_slots {
-            // Check that all the slots chain correctly once the missing slots
-            // have been filled
             let meta = blockstore.meta(slot).unwrap().unwrap();
+            // All slots except the last one should have a slot in next_slots
             if slot != num_slots - 1 {
                 assert_eq!(meta.next_slots, vec![slot + 1]);
             } else {
                 assert!(meta.next_slots.is_empty());
             }
-
+            // All slots should have the link back to their parent
             if slot == 0 {
                 assert_eq!(meta.parent_slot, Some(0));
             } else {
                 assert_eq!(meta.parent_slot, Some(slot - 1));
             }
-            assert_eq!(meta.last_index, Some(shreds_per_slot as u64 - 1));
+            // All inserted slots were full and should be connected
+            assert_eq!(meta.last_index, Some(shreds_per_slot - 1));
+            assert!(meta.is_full());
             assert!(meta.is_connected());
         }
     }
@@ -6987,8 +6986,8 @@ pub mod tests {
                 .write_transaction_status(
                     slot0,
                     Signature::new(&random_bytes),
-                    vec![&Pubkey::new(&random_bytes[0..32])],
-                    vec![&Pubkey::new(&random_bytes[32..])],
+                    vec![&Pubkey::try_from(&random_bytes[..32]).unwrap()],
+                    vec![&Pubkey::try_from(&random_bytes[32..]).unwrap()],
                     TransactionStatusMeta::default(),
                 )
                 .unwrap();
@@ -7053,8 +7052,8 @@ pub mod tests {
                 .write_transaction_status(
                     slot1,
                     Signature::new(&random_bytes),
-                    vec![&Pubkey::new(&random_bytes[0..32])],
-                    vec![&Pubkey::new(&random_bytes[32..])],
+                    vec![&Pubkey::try_from(&random_bytes[..32]).unwrap()],
+                    vec![&Pubkey::try_from(&random_bytes[32..]).unwrap()],
                     TransactionStatusMeta::default(),
                 )
                 .unwrap();
@@ -8428,18 +8427,17 @@ pub mod tests {
     }
 
     #[test]
-    #[allow(clippy::same_item_push)]
     fn test_get_last_hash() {
-        let mut entries: Vec<Entry> = vec![];
+        let entries: Vec<Entry> = vec![];
         let empty_entries_iterator = entries.iter();
         assert!(get_last_hash(empty_entries_iterator).is_none());
 
-        let mut prev_hash = hash::hash(&[42u8]);
-        for _ in 0..10 {
-            let entry = next_entry(&prev_hash, 1, vec![]);
-            prev_hash = entry.hash;
-            entries.push(entry);
-        }
+        let entry = next_entry(&hash::hash(&[42u8]), 1, vec![]);
+        let entries: Vec<Entry> = std::iter::successors(Some(entry), |entry| {
+            Some(next_entry(&entry.hash, 1, vec![]))
+        })
+        .take(10)
+        .collect();
         let entries_iterator = entries.iter();
         assert_eq!(get_last_hash(entries_iterator).unwrap(), entries[9].hash);
     }
@@ -8511,25 +8509,139 @@ pub mod tests {
     }
 
     #[test]
-    fn test_write_get_perf_samples() {
+    fn test_get_recent_perf_samples_v1_only() {
+        let ledger_path = get_tmp_ledger_path_auto_delete!();
+        let blockstore = Blockstore::open(ledger_path.path()).unwrap();
+
+        let num_entries: usize = 10;
+
+        let slot_sample = |i: u64| PerfSampleV1 {
+            num_transactions: 1406 + i,
+            num_slots: 34 + i / 2,
+            sample_period_secs: (40 + i / 5) as u16,
+        };
+
+        let mut perf_samples: Vec<(Slot, PerfSample)> = vec![];
+        for i in 0..num_entries {
+            let slot = (i + 1) as u64 * 50;
+            let sample = slot_sample(i as u64);
+
+            let bytes = serialize(&sample).unwrap();
+            blockstore.perf_samples_cf.put_bytes(slot, &bytes).unwrap();
+            perf_samples.push((slot, sample.into()));
+        }
+
+        for i in 0..num_entries {
+            let mut expected_samples = perf_samples[num_entries - 1 - i..].to_vec();
+            expected_samples.sort_by(|a, b| b.0.cmp(&a.0));
+            assert_eq!(
+                blockstore.get_recent_perf_samples(i + 1).unwrap(),
+                expected_samples
+            );
+        }
+    }
+
+    #[test]
+    fn test_get_recent_perf_samples_v2_only() {
+        let ledger_path = get_tmp_ledger_path_auto_delete!();
+        let blockstore = Blockstore::open(ledger_path.path()).unwrap();
+
+        let num_entries: usize = 10;
+
+        let slot_sample = |i: u64| PerfSampleV2 {
+            num_transactions: 2495 + i,
+            num_slots: 167 + i / 2,
+            sample_period_secs: (37 + i / 5) as u16,
+            num_non_vote_transactions: 1672 + i,
+        };
+
+        let mut perf_samples: Vec<(Slot, PerfSample)> = vec![];
+        for i in 0..num_entries {
+            let slot = (i + 1) as u64 * 50;
+            let sample = slot_sample(i as u64);
+
+            let bytes = serialize(&sample).unwrap();
+            blockstore.perf_samples_cf.put_bytes(slot, &bytes).unwrap();
+            perf_samples.push((slot, sample.into()));
+        }
+
+        for i in 0..num_entries {
+            let mut expected_samples = perf_samples[num_entries - 1 - i..].to_vec();
+            expected_samples.sort_by(|a, b| b.0.cmp(&a.0));
+            assert_eq!(
+                blockstore.get_recent_perf_samples(i + 1).unwrap(),
+                expected_samples
+            );
+        }
+    }
+
+    #[test]
+    fn test_get_recent_perf_samples_v1_and_v2() {
+        let ledger_path = get_tmp_ledger_path_auto_delete!();
+        let blockstore = Blockstore::open(ledger_path.path()).unwrap();
+
+        let num_entries: usize = 10;
+
+        let slot_sample_v1 = |i: u64| PerfSampleV1 {
+            num_transactions: 1599 + i,
+            num_slots: 123 + i / 2,
+            sample_period_secs: (42 + i / 5) as u16,
+        };
+
+        let slot_sample_v2 = |i: u64| PerfSampleV2 {
+            num_transactions: 5809 + i,
+            num_slots: 81 + i / 2,
+            sample_period_secs: (35 + i / 5) as u16,
+            num_non_vote_transactions: 2209 + i,
+        };
+
+        let mut perf_samples: Vec<(Slot, PerfSample)> = vec![];
+        for i in 0..num_entries {
+            let slot = (i + 1) as u64 * 50;
+
+            if i % 3 == 0 {
+                let sample = slot_sample_v1(i as u64);
+                let bytes = serialize(&sample).unwrap();
+                blockstore.perf_samples_cf.put_bytes(slot, &bytes).unwrap();
+                perf_samples.push((slot, sample.into()));
+            } else {
+                let sample = slot_sample_v2(i as u64);
+                let bytes = serialize(&sample).unwrap();
+                blockstore.perf_samples_cf.put_bytes(slot, &bytes).unwrap();
+                perf_samples.push((slot, sample.into()));
+            }
+        }
+
+        for i in 0..num_entries {
+            let mut expected_samples = perf_samples[num_entries - 1 - i..].to_vec();
+            expected_samples.sort_by(|a, b| b.0.cmp(&a.0));
+            assert_eq!(
+                blockstore.get_recent_perf_samples(i + 1).unwrap(),
+                expected_samples
+            );
+        }
+    }
+
+    #[test]
+    fn test_write_perf_samples() {
         let ledger_path = get_tmp_ledger_path_auto_delete!();
         let blockstore = Blockstore::open(ledger_path.path()).unwrap();
 
         let num_entries: usize = 10;
         let mut perf_samples: Vec<(Slot, PerfSample)> = vec![];
         for x in 1..num_entries + 1 {
-            perf_samples.push((
-                x as u64 * 50,
-                PerfSample {
-                    num_transactions: 1000 + x as u64,
-                    num_slots: 50,
-                    sample_period_secs: 20,
-                },
-            ));
+            let slot = x as u64 * 50;
+            let sample = PerfSampleV2 {
+                num_transactions: 1000 + x as u64,
+                num_slots: 50,
+                sample_period_secs: 20,
+                num_non_vote_transactions: 300 + x as u64,
+            };
+
+            blockstore.write_perf_sample(slot, &sample).unwrap();
+            perf_samples.push((slot, PerfSample::V2(sample)));
         }
-        for (slot, sample) in perf_samples.iter() {
-            blockstore.write_perf_sample(*slot, sample).unwrap();
-        }
+
         for x in 0..num_entries {
             let mut expected_samples = perf_samples[num_entries - 1 - x..].to_vec();
             expected_samples.sort_by(|a, b| b.0.cmp(&a.0));
@@ -9148,7 +9260,6 @@ pub mod tests {
 
     fn make_large_tx_entry(num_txs: usize) -> Entry {
         let txs: Vec<_> = (0..num_txs)
-            .into_iter()
             .map(|_| {
                 let keypair0 = Keypair::new();
                 let to = solana_sdk::pubkey::new_rand();

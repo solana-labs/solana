@@ -1,12 +1,12 @@
 use {
     crate::{
-        banking_trace::BankingTracer, leader_slot_banking_stage_timing_metrics::*,
+        leader_slot_banking_stage_timing_metrics::*,
         unprocessed_transaction_storage::InsertPacketBatchSummary,
     },
     solana_poh::poh_recorder::BankStart,
     solana_runtime::transaction_error_metrics::*,
     solana_sdk::{clock::Slot, saturating_add_assign},
-    std::{sync::Arc, time::Instant},
+    std::time::Instant,
 };
 
 /// A summary of what happened to transactions passed to the execution pipeline.
@@ -358,43 +358,14 @@ pub struct LeaderSlotMetricsTracker {
     // otherwise `None`
     leader_slot_metrics: Option<LeaderSlotMetrics>,
     id: u32,
-    banking_tracer: Arc<BankingTracer>,
-    unprocessed_transaction_count: usize,
 }
 
 impl LeaderSlotMetricsTracker {
-    pub fn new(id: u32, banking_tracer: Arc<BankingTracer>) -> Self {
+    pub fn new(id: u32) -> Self {
         Self {
             leader_slot_metrics: None,
             id,
-            banking_tracer,
-            unprocessed_transaction_count: 0,
         }
-    }
-
-    pub fn refresh_unprocessed_transaction_count(&mut self, batch_count: usize) {
-        self.unprocessed_transaction_count = batch_count;
-    }
-
-    pub fn new_for_test() -> Self {
-        Self::new(0, BankingTracer::new_disabled())
-    }
-
-    fn create_new_slot_metrics(&self, bank_start: &BankStart) -> Option<LeaderSlotMetrics> {
-        let metrics = LeaderSlotMetrics::new(
-            self.id,
-            bank_start.working_bank.slot(),
-            &bank_start.bank_creation_time,
-        );
-        self.banking_tracer
-            .bank_start(metrics.slot, self.id, self.unprocessed_transaction_count);
-
-        Some(metrics)
-    }
-
-    pub fn trace_bank_end(&self, metrics_slot: Slot) {
-        self.banking_tracer
-            .bank_end(metrics_slot, self.id, self.unprocessed_transaction_count);
     }
 
     // Check leader slot, return MetricsTrackerAction to be applied by apply_action()
@@ -406,27 +377,28 @@ impl LeaderSlotMetricsTracker {
             (None, None) => MetricsTrackerAction::Noop,
 
             (Some(leader_slot_metrics), None) => {
-                let slot = leader_slot_metrics.slot;
                 leader_slot_metrics.mark_slot_end_detected();
-                self.trace_bank_end(slot);
-
                 MetricsTrackerAction::ReportAndResetTracker
             }
 
             // Our leader slot has begain, time to create a new slot tracker
             (None, Some(bank_start)) => {
-                MetricsTrackerAction::NewTracker(self.create_new_slot_metrics(bank_start))
+                MetricsTrackerAction::NewTracker(Some(LeaderSlotMetrics::new(
+                    self.id,
+                    bank_start.working_bank.slot(),
+                    &bank_start.bank_creation_time,
+                )))
             }
 
             (Some(leader_slot_metrics), Some(bank_start)) => {
                 if leader_slot_metrics.slot != bank_start.working_bank.slot() {
                     // Last slot has ended, new slot has began
-                    let slot = leader_slot_metrics.slot;
                     leader_slot_metrics.mark_slot_end_detected();
-                    self.trace_bank_end(slot);
-                    MetricsTrackerAction::ReportAndNewTracker(
-                        self.create_new_slot_metrics(bank_start),
-                    )
+                    MetricsTrackerAction::ReportAndNewTracker(Some(LeaderSlotMetrics::new(
+                        self.id,
+                        bank_start.working_bank.slot(),
+                        &bank_start.bank_creation_time,
+                    )))
                 } else {
                     MetricsTrackerAction::Noop
                 }
@@ -905,7 +877,8 @@ mod tests {
             bank_creation_time: Arc::new(Instant::now()),
         };
 
-        let leader_slot_metrics_tracker = LeaderSlotMetricsTracker::new_for_test();
+        let banking_stage_thread_id = 0;
+        let leader_slot_metrics_tracker = LeaderSlotMetricsTracker::new(banking_stage_thread_id);
 
         TestSlotBoundaryComponents {
             first_bank,

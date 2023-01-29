@@ -40,7 +40,7 @@ fn append_account(
         StorableAccountsWithHashesAndWriteVersions::new_with_hashes_and_write_versions(
             &accounts,
             vec![&hash],
-            vec![storage_meta.write_version],
+            vec![storage_meta.write_version_obsolete],
         );
     let res = vec.append_accounts(&storable_accounts, 0);
     res.and_then(|res| res.first().cloned())

@@ -1,17 +1,20 @@
 #![allow(clippy::integer_arithmetic)]
 use {
+    crate::snapshot_utils::create_tmp_accounts_dir_for_tests,
     log::*,
     solana_core::{
         accounts_hash_verifier::AccountsHashVerifier,
         snapshot_packager_service::SnapshotPackagerService,
     },
-    solana_gossip::{cluster_info::ClusterInfo, contact_info::ContactInfo},
+    solana_gossip::{
+        cluster_info::ClusterInfo, legacy_contact_info::LegacyContactInfo as ContactInfo,
+    },
     solana_runtime::{
         accounts_background_service::{
             AbsRequestHandlers, AbsRequestSender, AccountsBackgroundService, DroppedSlotsReceiver,
             PrunedBanksRequestHandler, SnapshotRequestHandler,
         },
-        accounts_db::AccountShrinkThreshold,
+        accounts_db::{AccountShrinkThreshold, CalcAccountsHashDataSource},
         accounts_hash::CalcAccountsHashConfig,
         accounts_index::AccountSecondaryIndexes,
         bank::{Bank, BankTestConfig},
@@ -221,7 +224,6 @@ impl BackgroundServices {
                 snapshot_request_handler,
                 pruned_banks_request_handler,
             },
-            true,
             false,
             None,
         );
@@ -322,7 +324,6 @@ fn test_epoch_accounts_hash_basic(test_environment: TestEnvironment) {
                         epoch_schedule: bank.epoch_schedule(),
                         rent_collector: bank.rent_collector(),
                         store_detailed_debug_info_on_failure: false,
-                        full_snapshot: None,
                     },
                 )
                 .unwrap();
@@ -442,9 +443,9 @@ fn test_snapshots_have_expected_epoch_accounts_hash() {
                 std::thread::sleep(Duration::from_secs(1));
             };
 
-            let accounts_dir = TempDir::new().unwrap();
+            let (_tmp_dir, accounts_dir) = create_tmp_accounts_dir_for_tests();
             let deserialized_bank = snapshot_utils::bank_from_snapshot_archives(
-                &[accounts_dir.into_path()],
+                &[accounts_dir.as_path().to_path_buf()],
                 &snapshot_config.bank_snapshots_dir,
                 &full_snapshot_archive_info,
                 None,
@@ -590,11 +591,17 @@ fn test_epoch_accounts_hash_and_warping() {
             .accounts_background_request_sender,
         None,
     );
+    // flush the write cache so warping can calculate the accounts hash from storages
+    bank_forks
+        .read()
+        .unwrap()
+        .working_bank()
+        .force_flush_accounts_cache();
     let bank = bank_forks.write().unwrap().insert(Bank::warp_from_parent(
         &bank,
         &Pubkey::default(),
         eah_stop_slot_in_next_epoch,
-        solana_runtime::accounts_db::CalcAccountsHashDataSource::IndexForTests,
+        CalcAccountsHashDataSource::Storages,
     ));
     let bank = bank_forks.write().unwrap().insert(Bank::new_from_parent(
         &bank,
@@ -626,7 +633,7 @@ fn test_epoch_accounts_hash_and_warping() {
         &bank,
         &Pubkey::default(),
         eah_start_slot_in_next_epoch,
-        solana_runtime::accounts_db::CalcAccountsHashDataSource::Storages,
+        CalcAccountsHashDataSource::Storages,
     ));
     let bank = bank_forks.write().unwrap().insert(Bank::new_from_parent(
         &bank,

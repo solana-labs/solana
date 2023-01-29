@@ -478,6 +478,7 @@ pub mod account_info;
 pub mod address_lookup_table_account;
 pub mod alt_bn128;
 pub(crate) mod atomic_u64;
+pub mod big_mod_exp;
 pub mod blake3;
 pub mod borsh;
 pub mod bpf_loader;
@@ -546,7 +547,7 @@ pub mod config {
     }
 }
 
-/// A vector of Solana SDK IDs
+/// A vector of Solana SDK IDs.
 pub mod sdk_ids {
     use {
         crate::{

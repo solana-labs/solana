@@ -25,7 +25,7 @@ use {
         accounts_db::AccountsDbConfig, accounts_index::AccountsIndexConfig, bank_forks::BankForks,
         genesis_utils::create_genesis_config_with_leader_ex,
         hardened_unpack::MAX_GENESIS_ARCHIVE_UNPACKED_SIZE, runtime_config::RuntimeConfig,
-        snapshot_config::SnapshotConfig,
+        snapshot_config::SnapshotConfig, snapshot_utils::create_accounts_run_and_snapshot_dirs,
     },
     solana_sdk::{
         account::{Account, AccountSharedData},
@@ -87,7 +87,7 @@ impl Default for TestValidatorNodeConfig {
         const MIN_PORT_RANGE: u16 = 1024;
         const MAX_PORT_RANGE: u16 = 65535;
 
-        let bind_ip_addr = IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0));
+        let bind_ip_addr = IpAddr::V4(Ipv4Addr::UNSPECIFIED);
         let port_range = (MIN_PORT_RANGE, MAX_PORT_RANGE);
 
         Self {
@@ -120,7 +120,6 @@ pub struct TestValidatorGenesis {
     pub max_ledger_shreds: Option<u64>,
     pub max_genesis_archive_unpacked_size: Option<u64>,
     pub geyser_plugin_config_files: Option<Vec<PathBuf>>,
-    pub accounts_db_caching_enabled: bool,
     deactivate_feature_set: HashSet<Pubkey>,
     compute_unit_limit: Option<u64>,
     pub log_messages_bytes_limit: Option<usize>,
@@ -152,7 +151,6 @@ impl Default for TestValidatorGenesis {
             max_ledger_shreds: Option::<u64>::default(),
             max_genesis_archive_unpacked_size: Option::<u64>::default(),
             geyser_plugin_config_files: Option::<Vec<PathBuf>>::default(),
-            accounts_db_caching_enabled: true,
             deactivate_feature_set: HashSet::<Pubkey>::default(),
             compute_unit_limit: Option::<u64>::default(),
             log_messages_bytes_limit: Option::<usize>::default(),
@@ -796,16 +794,20 @@ impl TestValidator {
         let mut validator_config = ValidatorConfig {
             geyser_plugin_config_files: config.geyser_plugin_config_files.clone(),
             rpc_addrs: Some((
-                SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), node.info.rpc.port()),
+                SocketAddr::new(IpAddr::V4(Ipv4Addr::UNSPECIFIED), node.info.rpc.port()),
                 SocketAddr::new(
-                    IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)),
+                    IpAddr::V4(Ipv4Addr::UNSPECIFIED),
                     node.info.rpc_pubsub.port(),
                 ),
             )),
             rpc_config: config.rpc_config.clone(),
             pubsub_config: config.pubsub_config.clone(),
             accounts_hash_interval_slots: 100,
-            account_paths: vec![ledger_path.join("accounts")],
+            account_paths: vec![
+                create_accounts_run_and_snapshot_dirs(ledger_path.join("accounts"))
+                    .unwrap()
+                    .0,
+            ],
             poh_verify: false, // Skip PoH verification of ledger on startup for speed
             snapshot_config: SnapshotConfig {
                 full_snapshot_archive_interval_slots: 100,
@@ -976,6 +978,10 @@ impl TestValidator {
 
     pub fn bank_forks(&self) -> Arc<RwLock<BankForks>> {
         self.validator.as_ref().unwrap().bank_forks.clone()
+    }
+
+    pub fn repair_whitelist(&self) -> Arc<RwLock<HashSet<Pubkey>>> {
+        Arc::new(RwLock::new(HashSet::default()))
     }
 }
 

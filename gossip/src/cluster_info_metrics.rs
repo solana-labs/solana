@@ -123,7 +123,6 @@ pub struct GossipStats {
     pub(crate) handle_batch_pull_requests_time: Counter,
     pub(crate) handle_batch_pull_responses_time: Counter,
     pub(crate) handle_batch_push_messages_time: Counter,
-    pub(crate) mark_pull_request: Counter,
     pub(crate) new_pull_requests: Counter,
     pub(crate) new_pull_requests_count: Counter,
     pub(crate) new_pull_requests_pings_count: Counter,
@@ -156,7 +155,6 @@ pub struct GossipStats {
     pub(crate) process_pull_response_success: Counter,
     pub(crate) process_pull_response_timeout: Counter,
     pub(crate) process_push_message: Counter,
-    pub(crate) process_push_success: Counter,
     pub(crate) prune_message_count: Counter,
     pub(crate) prune_message_len: Counter,
     pub(crate) prune_message_timeout: Counter,
@@ -235,11 +233,6 @@ pub(crate) fn submit_gossip_stats(
         ("repair_peers", stats.repair_peers.clear(), i64),
         ("new_push_requests", stats.new_push_requests.clear(), i64),
         ("new_push_requests2", stats.new_push_requests2.clear(), i64),
-        (
-            "process_push_success",
-            stats.process_push_success.clear(),
-            i64
-        ),
         ("purge", stats.purge.clear(), i64),
         ("purge_count", stats.purge_count.clear(), i64),
         (
@@ -379,7 +372,6 @@ pub(crate) fn submit_gossip_stats(
         ),
         ("epoch_slots_lookup", stats.epoch_slots_lookup.clear(), i64),
         ("new_pull_requests", stats.new_pull_requests.clear(), i64),
-        ("mark_pull_request", stats.mark_pull_request.clear(), i64),
         (
             "gossip_pull_request_no_budget",
             stats.gossip_pull_request_no_budget.clear(),
@@ -619,8 +611,8 @@ pub(crate) fn submit_gossip_stats(
     );
     datapoint_info!(
         "cluster_info_crds_stats",
-        ("ContactInfo-push", crds_stats.push.counts[0], i64),
-        ("ContactInfo-pull", crds_stats.pull.counts[0], i64),
+        ("LegacyContactInfo-push", crds_stats.push.counts[0], i64),
+        ("LegacyContactInfo-pull", crds_stats.pull.counts[0], i64),
         ("Vote-push", crds_stats.push.counts[1], i64),
         ("Vote-pull", crds_stats.pull.counts[1], i64),
         ("LowestSlot-push", crds_stats.push.counts[2], i64),
@@ -662,8 +654,8 @@ pub(crate) fn submit_gossip_stats(
     );
     datapoint_info!(
         "cluster_info_crds_stats_fails",
-        ("ContactInfo-push", crds_stats.push.fails[0], i64),
-        ("ContactInfo-pull", crds_stats.pull.fails[0], i64),
+        ("LegacyContactInfo-push", crds_stats.push.fails[0], i64),
+        ("LegacyContactInfo-pull", crds_stats.pull.fails[0], i64),
         ("Vote-push", crds_stats.push.fails[1], i64),
         ("Vote-pull", crds_stats.pull.fails[1], i64),
         ("LowestSlot-push", crds_stats.push.fails[2], i64),

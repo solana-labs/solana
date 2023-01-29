@@ -1536,8 +1536,8 @@ pub struct CliLockout {
 impl From<&Lockout> for CliLockout {
     fn from(lockout: &Lockout) -> Self {
         Self {
-            slot: lockout.slot,
-            confirmation_count: lockout.confirmation_count,
+            slot: lockout.slot(),
+            confirmation_count: lockout.confirmation_count(),
         }
     }
 }
@@ -2412,7 +2412,11 @@ impl fmt::Display for CliBlock {
             self.encoded_confirmed_block.previous_blockhash
         )?;
         if let Some(block_time) = self.encoded_confirmed_block.block_time {
-            writeln!(f, "Block Time: {:?}", Local.timestamp(block_time, 0))?;
+            writeln!(
+                f,
+                "Block Time: {:?}",
+                Local.timestamp_opt(block_time, 0).unwrap()
+            )?;
         }
         if let Some(block_height) = self.encoded_confirmed_block.block_height {
             writeln!(f, "Block Height: {block_height:?}")?;
@@ -2594,6 +2598,8 @@ pub struct CliGossipNode {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub rpc_host: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub pubsub_host: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub version: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub feature_set: Option<u32>,
@@ -2608,6 +2614,7 @@ impl CliGossipNode {
             gossip_port: info.gossip.map(|addr| addr.port()),
             tpu_port: info.tpu.map(|addr| addr.port()),
             rpc_host: info.rpc.map(|addr| addr.to_string()),
+            pubsub_host: info.pubsub.map(|addr| addr.to_string()),
             version: info.version,
             feature_set: info.feature_set,
         }
@@ -2919,10 +2926,10 @@ mod tests {
         }
 
         let present: Box<dyn Signer> = Box::new(keypair_from_seed(&[2u8; 32]).unwrap());
-        let absent: Box<dyn Signer> = Box::new(NullSigner::new(&Pubkey::new(&[3u8; 32])));
-        let bad: Box<dyn Signer> = Box::new(BadSigner::new(Pubkey::new(&[4u8; 32])));
-        let to = Pubkey::new(&[5u8; 32]);
-        let nonce = Pubkey::new(&[6u8; 32]);
+        let absent: Box<dyn Signer> = Box::new(NullSigner::new(&Pubkey::from([3u8; 32])));
+        let bad: Box<dyn Signer> = Box::new(BadSigner::new(Pubkey::from([4u8; 32])));
+        let to = Pubkey::from([5u8; 32]);
+        let nonce = Pubkey::from([6u8; 32]);
         let from = present.pubkey();
         let fee_payer = absent.pubkey();
         let nonce_auth = bad.pubkey();

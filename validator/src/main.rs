@@ -15,7 +15,7 @@ use {
         tpu::DEFAULT_TPU_COALESCE_MS,
         validator::{is_snapshot_config_valid, Validator, ValidatorConfig, ValidatorStartProgress},
     },
-    solana_gossip::{cluster_info::Node, contact_info::ContactInfo},
+    solana_gossip::{cluster_info::Node, legacy_contact_info::LegacyContactInfo as ContactInfo},
     solana_ledger::blockstore_options::{
         BlockstoreCompressionType, BlockstoreRecoveryMode, LedgerColumnOptions, ShredStorageType,
     },
@@ -28,14 +28,16 @@ use {
     solana_rpc_client::rpc_client::RpcClient,
     solana_rpc_client_api::config::RpcLeaderScheduleConfig,
     solana_runtime::{
-        accounts_db::{AccountShrinkThreshold, AccountsDbConfig, FillerAccountsConfig},
+        accounts_db::{AccountShrinkThreshold, AccountsDb, AccountsDbConfig, FillerAccountsConfig},
         accounts_index::{
             AccountIndex, AccountSecondaryIndexes, AccountSecondaryIndexesIncludeExclude,
             AccountsIndexConfig, IndexLimitMb,
         },
         runtime_config::RuntimeConfig,
         snapshot_config::{SnapshotConfig, SnapshotUsage},
-        snapshot_utils::{self, ArchiveFormat, SnapshotVersion},
+        snapshot_utils::{
+            self, create_accounts_run_and_snapshot_dirs, ArchiveFormat, SnapshotVersion,
+        },
     },
     solana_sdk::{
         clock::{Slot, DEFAULT_S_PER_SLOT},
@@ -60,7 +62,7 @@ use {
         collections::{HashSet, VecDeque},
         env,
         fs::{self, File},
-        net::{IpAddr, SocketAddr},
+        net::{IpAddr, Ipv4Addr, SocketAddr},
         path::{Path, PathBuf},
         process::exit,
         str::FromStr,
@@ -342,6 +344,22 @@ fn wait_for_restart_window(
     }
     drop(progress_bar);
     println!("{}", style("Ready to restart").green());
+    Ok(())
+}
+
+fn set_repair_whitelist(
+    ledger_path: &Path,
+    whitelist: Vec<Pubkey>,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let admin_client = admin_rpc_service::connect(ledger_path);
+    admin_rpc_service::runtime()
+        .block_on(async move { admin_client.await?.set_repair_whitelist(whitelist).await })
+        .map_err(|err| {
+            std::io::Error::new(
+                std::io::ErrorKind::Other,
+                format!("setRepairWhitelist request failed: {err}"),
+            )
+        })?;
     Ok(())
 }
 
@@ -683,6 +701,59 @@ pub fn main() {
             });
             return;
         }
+        ("repair-whitelist", Some(repair_whitelist_subcommand_matches)) => {
+            match repair_whitelist_subcommand_matches.subcommand() {
+                ("get", Some(subcommand_matches)) => {
+                    let output_mode = subcommand_matches.value_of("output");
+                    let admin_client = admin_rpc_service::connect(&ledger_path);
+                    let repair_whitelist = admin_rpc_service::runtime()
+                        .block_on(async move { admin_client.await?.repair_whitelist().await })
+                        .unwrap_or_else(|err| {
+                            eprintln!("Repair whitelist query failed: {err}");
+                            exit(1);
+                        });
+                    if let Some(mode) = output_mode {
+                        match mode {
+                            "json" => println!(
+                                "{}",
+                                serde_json::to_string_pretty(&repair_whitelist).unwrap()
+                            ),
+                            "json-compact" => {
+                                print!("{}", serde_json::to_string(&repair_whitelist).unwrap())
+                            }
+                            _ => unreachable!(),
+                        }
+                    } else {
+                        print!("{repair_whitelist}");
+                    }
+                    return;
+                }
+                ("set", Some(subcommand_matches)) => {
+                    let whitelist = if subcommand_matches.is_present("whitelist") {
+                        let validators_set: HashSet<_> =
+                            values_t_or_exit!(subcommand_matches, "whitelist", Pubkey)
+                                .into_iter()
+                                .collect();
+                        validators_set.into_iter().collect::<Vec<_>>()
+                    } else {
+                        return;
+                    };
+                    set_repair_whitelist(&ledger_path, whitelist).unwrap_or_else(|err| {
+                        eprintln!("{err}");
+                        exit(1);
+                    });
+                    return;
+                }
+                ("remove-all", _) => {
+                    set_repair_whitelist(&ledger_path, Vec::default()).unwrap_or_else(|err| {
+                        eprintln!("{err}");
+                        exit(1);
+                    });
+                    return;
+                }
+                _ => unreachable!(),
+            }
+        }
         _ => unreachable!(),
     };
 
@@ -802,6 +873,13 @@ pub fn main() {
         "repair_validators",
         "--repair-validator",
     );
+    let repair_whitelist = validators_set(
+        &identity_keypair.pubkey(),
+        &matches,
+        "repair_whitelist",
+        "--repair-whitelist",
+    );
+    let repair_whitelist = Arc::new(RwLock::new(repair_whitelist.unwrap_or_default()));
     let gossip_validators = validators_set(
         &identity_keypair.pubkey(),
         &matches,
@@ -961,13 +1039,12 @@ pub fn main() {
 
     let accounts_db_config = AccountsDbConfig {
         index: Some(accounts_index_config),
-        accounts_hash_cache_path: Some(ledger_path.clone()),
+        accounts_hash_cache_path: Some(ledger_path.join(AccountsDb::ACCOUNTS_HASH_CACHE_DIR)),
         filler_accounts_config,
         write_cache_limit_bytes: value_t!(matches, "accounts_db_cache_limit_mb", u64)
             .ok()
             .map(|mb| mb * MB as u64),
-        skip_rewrites: matches.is_present("accounts_db_skip_rewrites"),
-        ancient_append_vec_offset: value_t!(matches, "accounts_db_ancient_append_vecs", u64).ok(),
+        ancient_append_vec_offset: value_t!(matches, "accounts_db_ancient_append_vecs", i64).ok(),
         exhaustively_verify_refcounts: matches.is_present("accounts_db_verify_refcounts"),
         ..AccountsDbConfig::default()
     };
@@ -1110,6 +1187,7 @@ pub fn main() {
         wait_for_supermajority: value_t!(matches, "wait_for_supermajority", Slot).ok(),
         known_validators,
         repair_validators,
+        repair_whitelist: repair_whitelist.clone(),
         gossip_validators,
         wal_recovery_mode,
         poh_verify: !matches.is_present("skip_poh_verify"),
@@ -1191,7 +1269,7 @@ pub fn main() {
             .ok();
 
     // Create and canonicalize account paths to avoid issues with symlink creation
-    validator_config.account_paths = account_paths
+    let account_run_paths: Vec<PathBuf> = account_paths
         .into_iter()
         .map(|account_path| {
             match fs::create_dir_all(&account_path).and_then(|_| fs::canonicalize(&account_path)) {
@@ -1201,8 +1279,20 @@ pub fn main() {
                     exit(1);
                 }
             }
-        })
-        .collect();
+        }).map(
+        |account_path| {
+            // For all account_paths, set up the run/ and snapshot/ sub directories.
+            match create_accounts_run_and_snapshot_dirs(&account_path) {
+                Ok((account_run_path, _account_snapshot_path)) => account_run_path,
+                Err(err) => {
+                    eprintln!("Unable to create account run and snapshot sub directories: {}, err: {err:?}", account_path.display());
+                    exit(1);
+                }
+            }
+        }).collect();
+
+    // From now on, use run/ paths in the same way as the previous account_paths.
+    validator_config.account_paths = account_run_paths;
 
     validator_config.account_shrink_paths = account_shrink_paths.map(|paths| {
         paths
@@ -1464,7 +1554,7 @@ pub fn main() {
                     exit(1);
                 })
             } else {
-                std::net::IpAddr::V4(std::net::Ipv4Addr::new(127, 0, 0, 1))
+                IpAddr::V4(Ipv4Addr::LOCALHOST)
             }
         });
 
@@ -1501,7 +1591,7 @@ pub fn main() {
     );
 
     if restricted_repair_only_mode {
-        let any = SocketAddr::new(std::net::IpAddr::V4(std::net::Ipv4Addr::new(0, 0, 0, 0)), 0);
+        let any = SocketAddr::new(IpAddr::V4(Ipv4Addr::UNSPECIFIED), 0);
         // When in --restricted_repair_only_mode is enabled only the gossip and repair ports
         // need to be reachable by the entrypoint to respond to gossip pull requests and repair
         // requests initiated by the node.  All other ports are unused.
@@ -1536,7 +1626,7 @@ pub fn main() {
 
     let identity_keypair = Arc::new(identity_keypair);
 
-    let should_check_duplicate_instance = !matches.is_present("no_duplicate_instance_check");
+    let should_check_duplicate_instance = true;
     if !cluster_entrypoints.is_empty() {
         bootstrap::rpc_bootstrap(
             &node,
@@ -1590,6 +1680,7 @@ pub fn main() {
             bank_forks: validator.bank_forks.clone(),
             cluster_info: validator.cluster_info.clone(),
             vote_account,
+            repair_whitelist,
         });
 
     if let Some(filename) = init_complete_file {

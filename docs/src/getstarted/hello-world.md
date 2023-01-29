@@ -1,7 +1,17 @@
 ---
 title: "Hello World Quickstart Guide"
 description: 'This "hello world" quickstart guide will demonstrate how to setup, build, and deploy your first Solana program in your browser with Solana Playground.'
-keywords: "playground, solana pg, on chain, rust, native program, tutorial, intro to solana development, blockchain developer, blockchain tutorial, web3 developer"
+keywords:
+  - playground
+  - solana pg
+  - on chain
+  - rust
+  - native program
+  - tutorial
+  - intro to solana development
+  - blockchain developer
+  - blockchain tutorial
+  - web3 developer
 ---
 
 For this "hello world" quickstart guide, we will use [Solana Playground](https://beta.solpg.io), a browser based IDE to develop and deploy our Solana program. To use it, you do **NOT** have to install any software on your computer. Simply open Solana Playground in your browser of choice, and you are ready to write and deploy Solana programs.
@@ -104,6 +114,7 @@ After each deployment, you will see your Playground Wallet balance change. By de
 
 > Note:
 > If you need more SOL, you can airdrop more by typing airdrop command in the playground terminal:
+
 ```sh
 solana airdrop 2
 ```
@@ -161,7 +172,7 @@ transaction.add(
   new web3.TransactionInstruction({
     keys: [],
     programId: new web3.PublicKey(pg.PROGRAM_ID),
-  })
+  }),
 );
 ```
 
@@ -175,7 +186,7 @@ console.log("Sending transaction...");
 const txHash = await web3.sendAndConfirmTransaction(
   pg.connection,
   transaction,
-  [pg.wallet.keypair]
+  [pg.wallet.keypair],
 );
 console.log("Transaction sent with hash:", txHash);
 ```

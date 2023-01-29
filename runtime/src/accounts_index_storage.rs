@@ -64,7 +64,6 @@ impl BgThreads {
         let local_exit = Arc::new(AtomicBool::default());
         let handles = Some(
             (0..threads)
-                .into_iter()
                 .map(|idx| {
                     // the first thread we start is special
                     let can_advance_age = can_advance_age && idx == 0;
@@ -164,7 +163,6 @@ impl<T: IndexValue> AccountsIndexStorage<T> {
         let storage = Arc::new(BucketMapHolder::new(bins, config, threads));
 
         let in_mem = (0..bins)
-            .into_iter()
             .map(|bin| Arc::new(InMemAccountsIndex::new(&storage, bin)))
             .collect::<Vec<_>>();
 

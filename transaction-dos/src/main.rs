@@ -27,7 +27,7 @@ use {
     },
     solana_streamer::socket::SocketAddrSpace,
     std::{
-        net::SocketAddr,
+        net::{Ipv4Addr, SocketAddr},
         process::exit,
         sync::{
             atomic::{AtomicBool, Ordering},
@@ -125,7 +125,6 @@ fn make_dos_message(
     account_metas: &[AccountMeta],
 ) -> Message {
     let instructions: Vec<_> = (0..num_instructions)
-        .into_iter()
         .map(|_| {
             let data = [num_program_iterations, thread_rng().gen_range(0, 255)];
             Instruction::new_with_bytes(program_id, &data, account_metas.to_vec())
@@ -539,14 +538,14 @@ fn main() {
     let just_calculate_fees = matches.is_present("just_calculate_fees");
 
     let port = if skip_gossip { DEFAULT_RPC_PORT } else { 8001 };
-    let mut entrypoint_addr = SocketAddr::from(([127, 0, 0, 1], port));
+    let mut entrypoint_addr = SocketAddr::from((Ipv4Addr::LOCALHOST, port));
     if let Some(addr) = matches.value_of("entrypoint") {
         entrypoint_addr = solana_net_utils::parse_host_port(addr).unwrap_or_else(|e| {
             eprintln!("failed to parse entrypoint address: {e}");
             exit(1)
         });
     }
-    let mut faucet_addr = SocketAddr::from(([127, 0, 0, 1], FAUCET_PORT));
+    let mut faucet_addr = SocketAddr::from((Ipv4Addr::LOCALHOST, FAUCET_PORT));
     if let Some(addr) = matches.value_of("faucet_addr") {
         faucet_addr = solana_net_utils::parse_host_port(addr).unwrap_or_else(|e| {
             eprintln!("failed to parse entrypoint address: {e}");
@@ -654,7 +653,6 @@ pub mod test {
         let num_accounts = 17;
 
         let account_metas: Vec<_> = (0..num_accounts)
-            .into_iter()
             .map(|_| AccountMeta::new(Pubkey::new_unique(), false))
             .collect();
         let num_program_iterations = 10;
@@ -688,7 +686,7 @@ pub mod test {
             ..ClusterConfig::default()
         };
 
-        let faucet_addr = SocketAddr::from(([127, 0, 0, 1], 9900));
+        let faucet_addr = SocketAddr::from((Ipv4Addr::LOCALHOST, 9900));
         let cluster = LocalCluster::new(&mut config, SocketAddrSpace::Unspecified);
 
         let program_keypair = Keypair::new();
@@ -705,10 +703,7 @@ pub mod test {
         let num_instructions = 70;
         let num_program_iterations = 10;
         let num_accounts = 7;
-        let account_keypairs: Vec<_> = (0..num_accounts)
-            .into_iter()
-            .map(|_| Keypair::new())
-            .collect();
+        let account_keypairs: Vec<_> = (0..num_accounts).map(|_| Keypair::new()).collect();
         let account_keypair_refs: Vec<_> = account_keypairs.iter().collect();
         let mut start = Measure::start("total accounts run");
         run_transactions_dos(

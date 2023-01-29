@@ -11,7 +11,7 @@ use {
         keypair::SKIP_SEED_PHRASE_VALIDATION_ARG,
     },
     solana_core::banking_trace::{DirByteLimit, BANKING_TRACE_DIR_DEFAULT_BYTE_LIMIT},
-    solana_faucet::faucet::FAUCET_PORT,
+    solana_faucet::faucet::{self, FAUCET_PORT},
     solana_net_utils::{MINIMUM_VALIDATOR_PORT_RANGE_WIDTH, VALIDATOR_PORT_RANGE},
     solana_rpc::{rpc::MAX_REQUEST_BODY_SIZE, rpc_pubsub_service::PubSubConfig},
     solana_rpc_client_api::request::MAX_MULTIPLE_ACCOUNTS,
@@ -716,6 +716,18 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                        request from validators outside this set [default: all validators]")
         )
         .arg(
+            Arg::with_name("repair_whitelist")
+                .hidden(true)
+                .long("repair-whitelist")
+                .validator(is_pubkey)
+                .value_name("VALIDATOR IDENTITY")
+                .multiple(true)
+                .takes_value(true)
+                .help("A list of validators to prioritize repairs from. If specified, repair requests \
+                       from validators in the list will be prioritized over requests from other validators. \
+                       [default: all validators]")
+        )
+        .arg(
             Arg::with_name("gossip_validators")
                 .long("gossip-validator")
                 .validator(is_pubkey)
@@ -1171,17 +1183,10 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                       This option is for use during testing."),
         )
         .arg(
-            Arg::with_name("accounts_db_skip_rewrites")
-                .long("accounts-db-skip-rewrites")
-                .help("Accounts that are rent exempt and have no changes are not rewritten. \
-                      This produces snapshots that older versions cannot read.")
-                .hidden(true),
-        )
-        .arg(
             Arg::with_name("accounts_db_ancient_append_vecs")
                 .long("accounts-db-ancient-append-vecs")
                 .value_name("SLOT-OFFSET")
-                .validator(is_parsable::<u64>)
+                .validator(is_parsable::<i64>)
                 .takes_value(true)
                 .help("AppendVecs that are older than (slots_per_epoch - SLOT-OFFSET) are squashed together.")
                 .hidden(true),
@@ -1277,13 +1282,6 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                        total bytes used. If the account's shrink ratio is less than this ratio \
                        it becomes a candidate for shrinking. The value must between 0. and 1.0 \
                        inclusive."),
-        )
-        .arg(
-            Arg::with_name("no_duplicate_instance_check")
-                .long("no-duplicate-instance-check")
-                .takes_value(false)
-                .help("Disables duplicate instance check")
-                .hidden(true),
         )
         .arg(
             Arg::with_name("allow_private_addr")
@@ -1404,6 +1402,46 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                         .value_name("MODE")
                         .possible_values(&["json", "json-compact"])
                         .help("Output display mode")
+                )
+        )
+        .subcommand(
+            SubCommand::with_name("repair-whitelist")
+                .about("Manage the validator's repair protocol whitelist")
+                .setting(AppSettings::SubcommandRequiredElseHelp)
+                .setting(AppSettings::InferSubcommands)
+                .subcommand(
+                    SubCommand::with_name("get")
+                        .about("Display the validator's repair protocol whitelist")
+                        .arg(
+                            Arg::with_name("output")
+                                .long("output")
+                                .takes_value(true)
+                                .value_name("MODE")
+                                .possible_values(&["json", "json-compact"])
+                                .help("Output display mode")
+                        )
+                )
+                .subcommand(
+                    SubCommand::with_name("set")
+                        .about("Set the validator's repair protocol whitelist")
+                        .setting(AppSettings::ArgRequiredElseHelp)
+                        .arg(
+                            Arg::with_name("whitelist")
+                            .long("whitelist")
+                            .validator(is_pubkey)
+                            .value_name("VALIDATOR IDENTITY")
+                            .multiple(true)
+                            .takes_value(true)
+                            .help("Set the validator's repair protocol whitelist")
+                        )
+                        .after_help("Note: repair protocol whitelist changes only apply to the currently \
+                                    running validator instance")
+                )
+                .subcommand(
+                    SubCommand::with_name("remove-all")
+                        .about("Clear the validator's repair protocol whitelist")
+                        .after_help("Note: repair protocol whitelist changes only apply to the currently \
+                                    running validator instance")
                 )
         )
         .subcommand(
@@ -2149,6 +2187,38 @@ pub fn test_app<'a>(version: &'a str, default_args: &'a DefaultTestArgs) -> App<
                 ),
         )
         .arg(
+            Arg::with_name("faucet_time_slice_secs")
+                .long("faucet-time-slice-secs")
+                .takes_value(true)
+                .value_name("SECS")
+                .default_value(default_args.faucet_time_slice_secs.as_str())
+                .help(
+                    "Time slice (in secs) over which to limit faucet requests",
+                ),
+        )
+        .arg(
+            Arg::with_name("faucet_per_time_sol_cap")
+                .long("faucet-per-time-sol-cap")
+                .takes_value(true)
+                .value_name("SOL")
+                .min_values(0)
+                .max_values(1)
+                .help(
+                    "Per-time slice limit for faucet requests, in SOL",
+                ),
+        )
+        .arg(
+            Arg::with_name("faucet_per_request_sol_cap")
+                .long("faucet-per-request-sol-cap")
+                .takes_value(true)
+                .value_name("SOL")
+                .min_values(0)
+                .max_values(1)
+                .help(
+                    "Per-request limit for faucet requests, in SOL",
+                ),
+        )
+        .arg(
             Arg::with_name("geyser_plugin_config")
                 .long("geyser-plugin-config")
                 .alias("accountsdb-plugin-config")
@@ -2198,6 +2268,7 @@ pub struct DefaultTestArgs {
     pub faucet_port: String,
     pub limit_ledger_size: String,
     pub faucet_sol: String,
+    pub faucet_time_slice_secs: String,
 }
 
 impl DefaultTestArgs {
@@ -2211,6 +2282,7 @@ impl DefaultTestArgs {
              */
             limit_ledger_size: 10_000.to_string(),
             faucet_sol: (1_000_000.).to_string(),
+            faucet_time_slice_secs: (faucet::TIME_SLICE).to_string(),
         }
     }
 }

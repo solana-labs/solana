@@ -1,5 +1,5 @@
 use {
-    solana_ledger::{blockstore::Blockstore, blockstore_meta::PerfSample},
+    solana_ledger::{blockstore::Blockstore, blockstore_meta::PerfSampleV2},
     solana_runtime::bank_forks::BankForks,
     std::{
         sync::{
@@ -16,7 +16,8 @@ const SLEEP_INTERVAL: u64 = 500;
 
 pub struct SamplePerformanceSnapshot {
     pub num_transactions: u64,
-    pub num_slots: u64,
+    pub num_non_vote_transactions: u64,
+    pub highest_slot: u64,
 }
 
 pub struct SamplePerformanceService {
@@ -50,14 +51,15 @@ impl SamplePerformanceService {
         blockstore: &Arc<Blockstore>,
         exit: Arc<AtomicBool>,
     ) {
-        let forks = bank_forks.read().unwrap();
-        let bank = forks.root_bank();
-        let highest_slot = forks.highest_slot();
-        drop(forks);
+        let (bank, highest_slot) = {
+            let forks = bank_forks.read().unwrap();
+            (forks.root_bank(), forks.highest_slot())
+        };
 
-        let mut sample_snapshot = SamplePerformanceSnapshot {
+        let mut snapshot = SamplePerformanceSnapshot {
             num_transactions: bank.transaction_count(),
-            num_slots: highest_slot,
+            num_non_vote_transactions: bank.non_vote_transaction_count_since_restart(),
+            highest_slot,
         };
 
         let mut now = Instant::now();
@@ -70,19 +72,23 @@ impl SamplePerformanceService {
 
             if elapsed.as_secs() >= SAMPLE_INTERVAL {
                 now = Instant::now();
-                let bank_forks = bank_forks.read().unwrap();
-                let bank = bank_forks.root_bank().clone();
-                let highest_slot = bank_forks.highest_slot();
-                drop(bank_forks);
+                let (bank, highest_slot) = {
+                    let bank_forks = bank_forks.read().unwrap();
+                    (bank_forks.root_bank(), bank_forks.highest_slot())
+                };
 
-                let perf_sample = PerfSample {
-                    num_slots: highest_slot
-                        .checked_sub(sample_snapshot.num_slots)
-                        .unwrap_or_default(),
-                    num_transactions: bank
-                        .transaction_count()
-                        .checked_sub(sample_snapshot.num_transactions)
-                        .unwrap_or_default(),
+                let num_slots = highest_slot.saturating_sub(snapshot.highest_slot);
+                let num_transactions = bank
+                    .transaction_count()
+                    .saturating_sub(snapshot.num_transactions);
+                let num_non_vote_transactions = bank
+                    .non_vote_transaction_count_since_restart()
+                    .saturating_sub(snapshot.num_non_vote_transactions);
+
+                let perf_sample = PerfSampleV2 {
+                    num_slots,
+                    num_transactions,
+                    num_non_vote_transactions,
                     sample_period_secs: elapsed.as_secs() as u16,
                 };
 
@@ -90,9 +96,10 @@ impl SamplePerformanceService {
                     error!("write_perf_sample failed: slot {:?} {:?}", highest_slot, e);
                 }
 
-                sample_snapshot = SamplePerformanceSnapshot {
-                    num_transactions: bank.transaction_count(),
-                    num_slots: highest_slot,
+                snapshot = SamplePerformanceSnapshot {
+                    num_transactions,
+                    num_non_vote_transactions,
+                    highest_slot,
                 };
             }
 

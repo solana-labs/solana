@@ -69,7 +69,7 @@ const ROOT_CF: &str = "root";
 /// Column family for indexes
 const INDEX_CF: &str = "index";
 /// Column family for Data Shreds
-const DATA_SHRED_CF: &str = "data_shred";
+pub const DATA_SHRED_CF: &str = "data_shred";
 /// Column family for Code Shreds
 const CODE_SHRED_CF: &str = "code_shred";
 /// Column family for Transaction Status
@@ -641,7 +641,7 @@ pub trait ProtobufColumn: Column {
 /// essentially Slot (or more generally speaking, has a 1:1 mapping to Slot).
 ///
 /// The clean-up of any LedgerColumn that implements SlotColumn is managed by
-/// [`LedgerCleanupService`], which will periodically deprecate and purge
+/// `LedgerCleanupService`, which will periodically deprecate and purge
 /// oldest entries that are older than the latest root in order to maintain the
 /// configured --limit-ledger-size under the validator argument.
 pub trait SlotColumn<Index = u64> {}
@@ -729,7 +729,7 @@ impl Column for columns::AddressSignatures {
 
     fn index(key: &[u8]) -> (u64, Pubkey, Slot, Signature) {
         let index = BigEndian::read_u64(&key[0..8]);
-        let pubkey = Pubkey::new(&key[8..40]);
+        let pubkey = Pubkey::try_from(&key[8..40]).unwrap();
         let slot = BigEndian::read_u64(&key[40..48]);
         let signature = Signature::new(&key[48..112]);
         (index, pubkey, slot, signature)
@@ -832,9 +832,6 @@ impl SlotColumn for columns::PerfSamples {}
 impl ColumnName for columns::PerfSamples {
     const NAME: &'static str = PERF_SAMPLES_CF;
 }
-impl TypedColumn for columns::PerfSamples {
-    type Type = blockstore_meta::PerfSample;
-}
 
 impl SlotColumn for columns::BlockHeight {}
 impl ColumnName for columns::BlockHeight {
@@ -860,7 +857,7 @@ impl Column for columns::ProgramCosts {
     }
 
     fn index(key: &[u8]) -> Self::Index {
-        Pubkey::new(&key[0..32])
+        Pubkey::try_from(&key[..32]).unwrap()
     }
 
     fn primary_index(_index: Self::Index) -> u64 {
@@ -1574,12 +1571,12 @@ where
 impl<'a> WriteBatch<'a> {
     pub fn put_bytes<C: Column + ColumnName>(&mut self, key: C::Index, bytes: &[u8]) -> Result<()> {
         self.write_batch
-            .put_cf(self.get_cf::<C>(), &C::key(key), bytes);
+            .put_cf(self.get_cf::<C>(), C::key(key), bytes);
         Ok(())
     }
 
     pub fn delete<C: Column + ColumnName>(&mut self, key: C::Index) -> Result<()> {
-        self.write_batch.delete_cf(self.get_cf::<C>(), &C::key(key));
+        self.write_batch.delete_cf(self.get_cf::<C>(), C::key(key));
         Ok(())
     }
 
@@ -1590,7 +1587,7 @@ impl<'a> WriteBatch<'a> {
     ) -> Result<()> {
         let serialized_value = serialize(&value)?;
         self.write_batch
-            .put_cf(self.get_cf::<C>(), &C::key(key), &serialized_value);
+            .put_cf(self.get_cf::<C>(), C::key(key), serialized_value);
         Ok(())
     }
 

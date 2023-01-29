@@ -6,7 +6,7 @@
 //! if perf-libs are available
 
 use {
-    crate::{find_packet_sender_stake_stage, sigverify},
+    crate::{find_packet_sender_stake_stage::FindPacketSenderStakeReceiver, sigverify},
     core::time::Duration,
     crossbeam_channel::{RecvTimeoutError, SendError},
     itertools::Itertools,
@@ -235,7 +235,7 @@ impl SigVerifier for DisabledSigVerifier {
 impl SigVerifyStage {
     #[allow(clippy::new_ret_no_self)]
     pub fn new<T: SigVerifier + 'static + Send>(
-        packet_receiver: find_packet_sender_stake_stage::FindPacketSenderStakeReceiver,
+        packet_receiver: FindPacketSenderStakeReceiver,
         verifier: T,
         name: &'static str,
     ) -> Self {
@@ -291,7 +291,7 @@ impl SigVerifyStage {
 
     fn verifier<T: SigVerifier>(
         deduper: &Deduper,
-        recvr: &find_packet_sender_stake_stage::FindPacketSenderStakeReceiver,
+        recvr: &FindPacketSenderStakeReceiver,
         verifier: &mut T,
         stats: &mut SigVerifierStats,
     ) -> Result<(), T::SendType> {
@@ -403,7 +403,7 @@ impl SigVerifyStage {
     }
 
     fn verifier_service<T: SigVerifier + 'static + Send>(
-        packet_receiver: find_packet_sender_stake_stage::FindPacketSenderStakeReceiver,
+        packet_receiver: FindPacketSenderStakeReceiver,
         mut verifier: T,
         name: &'static str,
     ) -> JoinHandle<()> {
@@ -444,7 +444,7 @@ impl SigVerifyStage {
     }
 
     fn verifier_services<T: SigVerifier + 'static + Send>(
-        packet_receiver: find_packet_sender_stake_stage::FindPacketSenderStakeReceiver,
+        packet_receiver: FindPacketSenderStakeReceiver,
         verifier: T,
         name: &'static str,
     ) -> JoinHandle<()> {
@@ -531,7 +531,16 @@ mod tests {
     }
 
     #[test]
-    fn test_sigverify_stage() {
+    fn test_sigverify_stage_with_same_tx() {
+        test_sigverify_stage(true)
+    }
+
+    #[test]
+    fn test_sigverify_stage_without_same_tx() {
+        test_sigverify_stage(false)
+    }
+
+    fn test_sigverify_stage(use_same_tx: bool) {
         solana_logger::setup();
         trace!("start");
         let (packet_s, packet_r) = unbounded();
@@ -539,14 +548,13 @@ mod tests {
         let verifier = TransactionSigVerifier::new(verified_s);
         let stage = SigVerifyStage::new(packet_r, verifier, "test");
 
-        let use_same_tx = true;
         let now = Instant::now();
         let packets_per_batch = 128;
         let total_packets = 1920;
         // This is important so that we don't discard any packets and fail asserts below about
         // `total_excess_tracer_packets`
         assert!(total_packets < MAX_SIGVERIFY_BATCH);
-        let mut batches = gen_batches(use_same_tx, packets_per_batch, total_packets);
+        let batches = gen_batches(use_same_tx, packets_per_batch, total_packets);
         trace!(
             "starting... generation took: {} ms batches: {}",
             duration_as_ms(&now.elapsed()),
@@ -554,23 +562,20 @@ mod tests {
         );
 
         let mut sent_len = 0;
-        for _ in 0..batches.len() {
-            if let Some(mut batch) = batches.pop() {
-                sent_len += batch.len();
-                batch
-                    .iter_mut()
-                    .for_each(|packet| packet.meta_mut().flags |= PacketFlags::TRACER_PACKET);
-                assert_eq!(batch.len(), packets_per_batch);
-                packet_s.send(vec![batch]).unwrap();
-            }
+        for mut batch in batches.into_iter() {
+            sent_len += batch.len();
+            batch
+                .iter_mut()
+                .for_each(|packet| packet.meta_mut().flags |= PacketFlags::TRACER_PACKET);
+            assert_eq!(batch.len(), packets_per_batch);
+            packet_s.send(vec![batch]).unwrap();
         }
         let mut received = 0;
         let mut total_tracer_packets_received_in_sigverify_stage = 0;
         trace!("sent: {}", sent_len);
         loop {
             if let Ok(message) = verified_r.recv() {
-                let (verifieds, tracer_packet_stats_option) = (&message.0, message.1.clone());
-                let tracer_packet_stats = tracer_packet_stats_option.unwrap();
+                let (verifieds, tracer_packet_stats) = (&message.0, message.1.as_ref().unwrap());
                 total_tracer_packets_received_in_sigverify_stage +=
                     tracer_packet_stats.total_tracer_packets_received_in_sigverify_stage;
                 assert_eq!(
@@ -607,10 +612,7 @@ mod tests {
                     );
                 }
                 assert_eq!(tracer_packet_stats.total_excess_tracer_packets, 0);
-                for v in verifieds.iter().rev() {
-                    received += v.len();
-                    batches.push(v.clone());
-                }
+                received += verifieds.iter().map(|batch| batch.len()).sum::<usize>();
             }
 
             if total_tracer_packets_received_in_sigverify_stage >= sent_len {
