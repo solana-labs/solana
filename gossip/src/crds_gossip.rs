@@ -184,14 +184,12 @@ impl CrdsGossip {
         pings: &mut Vec<(SocketAddr, Ping)>,
         socket_addr_space: &SocketAddrSpace,
     ) {
-        let network_size = self.crds.read().unwrap().num_nodes();
         self.push.refresh_push_active_set(
             &self.crds,
             stakes,
             gossip_validators,
             self_keypair,
             self_shred_version,
-            network_size,
             ping_cache,
             pings,
             socket_addr_space,
