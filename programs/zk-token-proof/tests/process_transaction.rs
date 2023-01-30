@@ -1,4 +1,5 @@
 use {
+    bytemuck::Pod,
     solana_program_test::*,
     solana_sdk::{
         instruction::InstructionError,
@@ -8,73 +9,348 @@ use {
         transaction::{Transaction, TransactionError},
     },
     solana_zk_token_sdk::{
-        encryption::elgamal::ElGamalKeypair, instruction::*,
-        zk_token_proof_instruction::*, zk_token_proof_program,
+        encryption::elgamal::ElGamalKeypair, instruction::*, zk_token_proof_instruction::*,
+        zk_token_proof_program, zk_token_proof_state::ProofContextState,
     },
 };
 
-fn close_account_test_data() -> (ProofType, usize, CloseAccountData, CloseAccountData) {
+#[tokio::test]
+async fn test_close_account() {
     let elgamal_keypair = ElGamalKeypair::new_rand();
 
     let zero_ciphertext = elgamal_keypair.public.encrypt(0_u64);
-    let success_data = CloseAccountData::new(&elgamal_keypair, &zero_ciphertext).unwrap();
+    let success_proof_data = CloseAccountData::new(&elgamal_keypair, &zero_ciphertext).unwrap();
 
-    let non_zero_ciphertext = elgamal_keypair.public.encrypt(1_u64);
-    let fail_data = CloseAccountData::new(&elgamal_keypair, &non_zero_ciphertext).unwrap();
+    let incorrect_keypair = ElGamalKeypair {
+        public: ElGamalKeypair::new_rand().public,
+        secret: ElGamalKeypair::new_rand().secret,
+    };
+    let fail_proof_data = CloseAccountData::new(&incorrect_keypair, &zero_ciphertext).unwrap();
 
-    (ProofType::CloseAccount, ProofContextState::<CloseAccountProofContext>::size(), success_data, fail_data)
+    test_verify_proof_without_context(
+        ProofType::CloseAccount,
+        &success_proof_data,
+        &fail_proof_data,
+    )
+    .await;
+
+    test_verify_proof_with_context(
+        ProofType::CloseAccount,
+        ProofContextState::<CloseAccountProofContext>::size(),
+        &success_proof_data,
+        &fail_proof_data,
+    )
+    .await;
+
+    test_close_context_state(
+        ProofType::CloseAccount,
+        ProofContextState::<CloseAccountProofContext>::size(),
+        &success_proof_data,
+    )
+    .await;
 }
 
 #[tokio::test]
-async fn test_verify_proof_without_context() {
+async fn test_withdraw_withheld_tokens() {
+    let elgamal_keypair = ElGamalKeypair::new_rand();
+    let destination_keypair = ElGamalKeypair::new_rand();
+
+    let amount: u64 = 0;
+    let withdraw_withheld_authority_ciphertext =
+        elgamal_keypair.public.encrypt(amount);
+
+    let success_proof_data = WithdrawWithheldTokensData::new(
+        &elgamal_keypair,
+        &destination_keypair.public,
+        &withdraw_withheld_authority_ciphertext,
+        amount,
+    )
+    .unwrap();
+
+    let incorrect_keypair = ElGamalKeypair {
+        public: ElGamalKeypair::new_rand().public,
+        secret: ElGamalKeypair::new_rand().secret,
+    };
+    let fail_proof_data = WithdrawWithheldTokensData::new(
+        &incorrect_keypair,
+        &destination_keypair.public,
+        &withdraw_withheld_authority_ciphertext,
+        amount,
+    )
+    .unwrap();
+
+    // test_verify_proof_without_context(
+    //     ProofType::WithdrawWithheldTokens,
+    //     &success_proof_data,
+    //     &fail_proof_data,
+    // ).await;
+
+    test_verify_proof_with_context(
+        ProofType::WithdrawWithheldTokens,
+        ProofContextState::<WithdrawWithheldTokensProofContext>::size(),
+        &success_proof_data,
+        &fail_proof_data,
+    )
+    .await;
+
+    // test_close_context_state(
+    //     ProofType::WithdrawWithheldTokens,
+    //     ProofContextState::<WithdrawWithheldTokensProofContext>::size(),
+    //     &success_proof_data,
+    // )
+    // .await;
+}
+
+#[tokio::test]
+async fn test_transfer() {
+    let source_keypair = ElGamalKeypair::new_rand();
+    let dest_pubkey = ElGamalKeypair::new_rand().public;
+    let auditor_pubkey = ElGamalKeypair::new_rand().public;
+
+    let spendable_balance: u64 = 0;
+    let spendable_ciphertext = source_keypair.public.encrypt(spendable_balance);
+
+    let transfer_amount: u64 = 0;
+
+    let success_proof_data = TransferData::new(
+        transfer_amount,
+        (spendable_balance, &spendable_ciphertext),
+        &source_keypair,
+        (&dest_pubkey, &auditor_pubkey),
+    ).unwrap();
+
+
+    let incorrect_keypair = ElGamalKeypair {
+        public: ElGamalKeypair::new_rand().public,
+        secret: ElGamalKeypair::new_rand().secret,
+    };
+
+    let fail_proof_data = TransferData::new(
+        transfer_amount,
+        (spendable_balance, &spendable_ciphertext),
+        &incorrect_keypair,
+        (&dest_pubkey, &auditor_pubkey),
+    ).unwrap();
+
+    test_verify_proof_without_context(
+        ProofType::Transfer,
+        &success_proof_data,
+        &fail_proof_data,
+    )
+    .await;
+
+    test_verify_proof_with_context(
+        ProofType::Transfer,
+        ProofContextState::<TransferProofContext>::size(),
+        &success_proof_data,
+        &fail_proof_data,
+    )
+    .await;
+
+    test_close_context_state(
+        ProofType::Transfer,
+        ProofContextState::<TransferProofContext>::size(),
+        &success_proof_data,
+    )
+    .await;
+}
+
+#[tokio::test]
+async fn test_transfer_with_fee() {
+    let source_keypair = ElGamalKeypair::new_rand();
+    let destination_pubkey = ElGamalKeypair::new_rand().public;
+    let auditor_pubkey = ElGamalKeypair::new_rand().public;
+    let withdraw_withheld_authority_pubkey = ElGamalKeypair::new_rand().public;
+
+    let spendable_balance: u64 = 120;
+    let spendable_ciphertext = source_keypair.public.encrypt(spendable_balance);
+
+    let transfer_amount: u64 = 0;
+
+    let fee_parameters = FeeParameters {
+        fee_rate_basis_points: 400,
+        maximum_fee: 3,
+    };
+
+    let success_proof_data = TransferWithFeeData::new(
+        transfer_amount,
+        (spendable_balance, &spendable_ciphertext),
+        &source_keypair,
+        (&destination_pubkey, &auditor_pubkey),
+        fee_parameters,
+        &withdraw_withheld_authority_pubkey,
+    )
+    .unwrap();
+
+    let incorrect_keypair = ElGamalKeypair {
+        public: ElGamalKeypair::new_rand().public,
+        secret: ElGamalKeypair::new_rand().secret,
+    };
+
+    let fail_proof_data = TransferWithFeeData::new(
+        transfer_amount,
+        (spendable_balance, &spendable_ciphertext),
+        &incorrect_keypair,
+        (&destination_pubkey, &auditor_pubkey),
+        fee_parameters,
+        &withdraw_withheld_authority_pubkey,
+    )
+    .unwrap();
+
+    test_verify_proof_without_context(
+        ProofType::TransferWithFee,
+        &success_proof_data,
+        &fail_proof_data,
+    )
+    .await;
+
+    test_verify_proof_with_context(
+        ProofType::TransferWithFee,
+        ProofContextState::<TransferWithFeeProofContext>::size(),
+        &success_proof_data,
+        &fail_proof_data,
+    )
+    .await;
+
+    test_close_context_state(
+        ProofType::TransferWithFee,
+        ProofContextState::<TransferWithFeeProofContext>::size(),
+        &success_proof_data,
+    )
+    .await;
+}
+
+#[tokio::test]
+async fn test_withdraw() {
+    let elgamal_keypair = ElGamalKeypair::new_rand();
+
+    let current_balance: u64 = 77;
+    let current_ciphertext = elgamal_keypair.public.encrypt(current_balance);
+    let withdraw_amount: u64 = 55;
+
+    let success_proof_data = WithdrawData::new(
+        withdraw_amount,
+        &elgamal_keypair,
+        current_balance,
+        &current_ciphertext
+    ).unwrap();
+
+    let incorrect_keypair = ElGamalKeypair {
+        public: ElGamalKeypair::new_rand().public,
+        secret: ElGamalKeypair::new_rand().secret,
+    };
+    let fail_proof_data = WithdrawData::new(
+        withdraw_amount,
+        &incorrect_keypair,
+        current_balance,
+        &current_ciphertext
+    ).unwrap();
+
+    test_verify_proof_without_context(
+        ProofType::Withdraw,
+        &success_proof_data,
+        &fail_proof_data,
+    )
+    .await;
+
+    test_verify_proof_with_context(
+        ProofType::Withdraw,
+        ProofContextState::<WithdrawProofContext>::size(),
+        &success_proof_data,
+        &fail_proof_data,
+    )
+    .await;
+
+    test_close_context_state(
+        ProofType::Withdraw,
+        ProofContextState::<WithdrawProofContext>::size(),
+        &success_proof_data,
+    )
+    .await;
+}
+
+#[tokio::test]
+async fn test_pubkey_validity() {
+    let elgamal_keypair = ElGamalKeypair::new_rand();
+
+    let success_proof_data = PubkeyValidityData::new(&elgamal_keypair).unwrap();
+
+    let incorrect_keypair = ElGamalKeypair {
+        public: ElGamalKeypair::new_rand().public,
+        secret: ElGamalKeypair::new_rand().secret,
+    };
+
+    let fail_proof_data = PubkeyValidityData::new(&incorrect_keypair).unwrap();
+
+    test_verify_proof_without_context(
+        ProofType::PubkeyValidity,
+        &success_proof_data,
+        &fail_proof_data,
+    )
+    .await;
+
+    test_verify_proof_with_context(
+        ProofType::PubkeyValidity,
+        ProofContextState::<PubkeyValidityProofContext>::size(),
+        &success_proof_data,
+        &fail_proof_data,
+    )
+    .await;
+
+    test_close_context_state(
+        ProofType::PubkeyValidity,
+        ProofContextState::<PubkeyValidityProofContext>::size(),
+        &success_proof_data,
+    )
+    .await;
+}
+
+async fn test_verify_proof_without_context<T: Pod + ZkProofData>(
+    proof_type: ProofType,
+    success_proof_data: &T,
+    fail_proof_data: &T,
+) {
     let mut context = ProgramTest::default().start_with_context().await;
 
     let client = &mut context.banks_client;
     let payer = &context.payer;
     let recent_blockhash = context.last_blockhash;
 
-    let test_proof_data = vec![
-        close_account_test_data(),
-    ];
+    // verify a valid proof (wihtout creating a context account)
+    let instructions = vec![verify_proof(proof_type, None, success_proof_data)];
+    let transaction = Transaction::new_signed_with_payer(
+        &instructions,
+        Some(&payer.pubkey()),
+        &[payer],
+        recent_blockhash,
+    );
+    client.process_transaction(transaction).await.unwrap();
 
-    for (proof_type, _, success_data, fail_data) in test_proof_data {
-        // verify a valid proof (wihtout creating a context account)
-        let instructions = vec![
-            verify_proof(
-                proof_type,
-                None,
-                &success_data,
-            )
-        ];
-        let transaction = Transaction::new_signed_with_payer(
-            &instructions,
-            Some(&payer.pubkey()),
-            &[payer],
-            recent_blockhash,
-        );
-        client.process_transaction(transaction).await.unwrap();
-
-        // try to verify an invalid proof (without creating a context account)
-        let instructions = vec![
-            verify_proof(
-                proof_type,
-                None,
-                &fail_data,
-            )
-        ];
-        let transaction = Transaction::new_signed_with_payer(
-            &instructions,
-            Some(&payer.pubkey()),
-            &[payer],
-            recent_blockhash,
-        );
-        let err = client.process_transaction(transaction).await.unwrap_err().unwrap();
-        assert_eq!(err, TransactionError::InstructionError(0, InstructionError::InvalidInstructionData));
-    }
+    // try to verify an invalid proof (without creating a context account)
+    let instructions = vec![verify_proof(proof_type, None, fail_proof_data)];
+    let transaction = Transaction::new_signed_with_payer(
+        &instructions,
+        Some(&payer.pubkey()),
+        &[payer],
+        recent_blockhash,
+    );
+    let err = client
+        .process_transaction(transaction)
+        .await
+        .unwrap_err()
+        .unwrap();
+    assert_eq!(
+        err,
+        TransactionError::InstructionError(0, InstructionError::InvalidInstructionData)
+    );
 }
 
-#[tokio::test]
-async fn test_verify_proof_with_context() {
+async fn test_verify_proof_with_context<T: Pod + ZkProofData>(
+    proof_type: ProofType,
+    space: usize,
+    success_proof_data: &T,
+    fail_proof_data: &T,
+) {
     let mut context = ProgramTest::default().start_with_context().await;
     let rent = context.banks_client.get_rent().await.unwrap();
 
@@ -90,110 +366,112 @@ async fn test_verify_proof_with_context() {
         context_state_authority: &context_state_authority.pubkey(),
     };
 
-    let test_proof_data = vec![
-        close_account_test_data(),
+    // try to create proof context state with an invalid proof
+    let instructions = vec![
+        system_instruction::create_account(
+            &payer.pubkey(),
+            &context_state_account.pubkey(),
+            rent.minimum_balance(space),
+            space as u64,
+            &zk_token_proof_program::id(),
+        ),
+        verify_proof(proof_type, Some(context_state_info), fail_proof_data),
     ];
+    let transaction = Transaction::new_signed_with_payer(
+        &instructions,
+        Some(&payer.pubkey()),
+        &[payer, &context_state_account],
+        recent_blockhash,
+    );
+    let err = client
+        .process_transaction(transaction)
+        .await
+        .unwrap_err()
+        .unwrap();
+    assert_eq!(
+        err,
+        TransactionError::InstructionError(1, InstructionError::InvalidInstructionData)
+    );
 
-    for (proof_type, space, success_data, fail_data) in test_proof_data {
-        // try to create proof context state with an invalid proof
-        let instructions = vec![
-            system_instruction::create_account(
-                &payer.pubkey(),
-                &context_state_account.pubkey(),
-                rent.minimum_balance(space),
-                space as u64,
-                &zk_token_proof_program::id(),
-            ),
-            verify_proof(
-                proof_type,
-                Some(context_state_info),
-                &fail_data,
-            ),
-        ];
-        let transaction = Transaction::new_signed_with_payer(
-            &instructions,
-            Some(&payer.pubkey()),
-            &[payer, &context_state_account],
-            recent_blockhash,
-        );
-        let err = client.process_transaction(transaction).await.unwrap_err().unwrap();
-        assert_eq!(err, TransactionError::InstructionError(1, InstructionError::InvalidInstructionData));
+    // try to create proof context state with incorrect account data length
+    let instructions = vec![
+        system_instruction::create_account(
+            &payer.pubkey(),
+            &context_state_account.pubkey(),
+            rent.minimum_balance(space),
+            (space - 1) as u64,
+            &zk_token_proof_program::id(),
+        ),
+        verify_proof(proof_type, Some(context_state_info), success_proof_data),
+    ];
+    let transaction = Transaction::new_signed_with_payer(
+        &instructions,
+        Some(&payer.pubkey()),
+        &[payer, &context_state_account],
+        recent_blockhash,
+    );
+    let err = client
+        .process_transaction(transaction)
+        .await
+        .unwrap_err()
+        .unwrap();
+    assert_eq!(
+        err,
+        TransactionError::InstructionError(1, InstructionError::InvalidAccountData)
+    );
 
-        // try to create proof context state with incorrect account data length
-        let instructions = vec![
-            system_instruction::create_account(
-                &payer.pubkey(),
-                &context_state_account.pubkey(),
-                rent.minimum_balance(space),
-                (space-1) as u64,
-                &zk_token_proof_program::id(),
-            ),
-            verify_proof(
-                proof_type,
-                Some(context_state_info),
-                &success_data,
-            ),
-        ];
-        let transaction = Transaction::new_signed_with_payer(
-            &instructions,
-            Some(&payer.pubkey()),
-            &[payer, &context_state_account],
-            recent_blockhash,
-        );
-        let err = client.process_transaction(transaction).await.unwrap_err().unwrap();
-        assert_eq!(err, TransactionError::InstructionError(1, InstructionError::InvalidAccountData));
+    // try to create proof context state with insufficient rent
+    let instructions = vec![
+        system_instruction::create_account(
+            &payer.pubkey(),
+            &context_state_account.pubkey(),
+            rent.minimum_balance(space) - 1,
+            space as u64,
+            &zk_token_proof_program::id(),
+        ),
+        verify_proof(proof_type, Some(context_state_info), success_proof_data),
+    ];
+    let transaction = Transaction::new_signed_with_payer(
+        &instructions,
+        Some(&payer.pubkey()),
+        &[payer, &context_state_account],
+        recent_blockhash,
+    );
+    let err = client
+        .process_transaction(transaction)
+        .await
+        .unwrap_err()
+        .unwrap();
+    assert_eq!(
+        err,
+        TransactionError::InstructionError(1, InstructionError::InsufficientFunds)
+    );
 
-        // try to create proof context state with insufficient rent
-        let instructions = vec![
-            system_instruction::create_account(
-                &payer.pubkey(),
-                &context_state_account.pubkey(),
-                rent.minimum_balance(space) - 1,
-                space as u64,
-                &zk_token_proof_program::id(),
-            ),
-            verify_proof(
-                proof_type,
-                Some(context_state_info),
-                &success_data,
-            ),
-        ];
-        let transaction = Transaction::new_signed_with_payer(
-            &instructions,
-            Some(&payer.pubkey()),
-            &[payer, &context_state_account],
-            recent_blockhash,
-        );
-        let err = client.process_transaction(transaction).await.unwrap_err().unwrap();
-        assert_eq!(err, TransactionError::InstructionError(1, InstructionError::InsufficientFunds));
-
-        // successfully create a proof context state
-        let instructions = vec![
-            system_instruction::create_account(
-                &payer.pubkey(),
-                &context_state_account.pubkey(),
-                rent.minimum_balance(space),
-                space as u64,
-                &zk_token_proof_program::id(),
-            ),
-            verify_proof(
-                proof_type,
-                Some(context_state_info),
-                &success_data,
-            ),
-        ];
-        let transaction = Transaction::new_signed_with_payer(
-            &instructions,
-            Some(&payer.pubkey()),
-            &[payer, &context_state_account],
-            recent_blockhash,
-        );
-        client.process_transaction(transaction).await.unwrap();
-    }
+    // successfully create a proof context state
+    let instructions = vec![
+        system_instruction::create_account(
+            &payer.pubkey(),
+            &context_state_account.pubkey(),
+            rent.minimum_balance(space),
+            space as u64,
+            &zk_token_proof_program::id(),
+        ),
+        verify_proof(proof_type, Some(context_state_info), success_proof_data),
+    ];
+    let transaction = Transaction::new_signed_with_payer(
+        &instructions,
+        Some(&payer.pubkey()),
+        &[payer, &context_state_account],
+        recent_blockhash,
+    );
+    client.process_transaction(transaction).await.unwrap();
 }
 
-#[tokio::test]
-async fn test_close_context_state() {
+async fn test_close_context_state<T: Pod + ZkProofData>(
+    proof_type: ProofType,
+    space: usize,
+    success_proof_data: &T,
+) {
     let mut context = ProgramTest::default().start_with_context().await;
     let rent = context.banks_client.get_rent().await.unwrap();
 
@@ -211,65 +489,61 @@ async fn test_close_context_state() {
 
     let destination_account = Keypair::new();
 
-    let test_proof_data = vec![
-        close_account_test_data(),
+    // create a proof context state
+    let instructions = vec![
+        system_instruction::create_account(
+            &payer.pubkey(),
+            &context_state_account.pubkey(),
+            rent.minimum_balance(space),
+            space as u64,
+            &zk_token_proof_program::id(),
+        ),
+        verify_proof(proof_type, Some(context_state_info), success_proof_data),
     ];
+    let transaction = Transaction::new_signed_with_payer(
+        &instructions,
+        Some(&payer.pubkey()),
+        &[payer, &context_state_account],
+        recent_blockhash,
+    );
+    client.process_transaction(transaction).await.unwrap();
 
-    for (proof_type, space, success_data, _) in test_proof_data {
-        // create a proof context state
-        let instructions = vec![
-            system_instruction::create_account(
-                &payer.pubkey(),
-                &context_state_account.pubkey(),
-                rent.minimum_balance(space),
-                space as u64,
-                &zk_token_proof_program::id(),
-            ),
-            verify_proof(
-                proof_type,
-                Some(context_state_info),
-                &success_data,
-            ),
-        ];
-        let transaction = Transaction::new_signed_with_payer(
-            &instructions,
-            Some(&payer.pubkey()),
-            &[payer, &context_state_account],
-            recent_blockhash,
-        );
-        client.process_transaction(transaction).await.unwrap();
+    // try to close context state with incorrect authority
+    let incorrect_authority = Keypair::new();
+    let instruction = close_context_state(
+        &context_state_account.pubkey(),
+        &destination_account.pubkey(),
+        &incorrect_authority.pubkey(),
+        proof_type,
+    );
+    let transaction = Transaction::new_signed_with_payer(
+        &[instruction],
+        Some(&payer.pubkey()),
+        &[payer, &incorrect_authority],
+        recent_blockhash,
+    );
+    let err = client
+        .process_transaction(transaction)
+        .await
+        .unwrap_err()
+        .unwrap();
+    assert_eq!(
+        err,
+        TransactionError::InstructionError(0, InstructionError::InvalidAccountOwner)
+    );
 
-        // try to close context state with incorrect authority
-        let incorrect_authority = Keypair::new();
-        let instruction = close_context_state(
-            &context_state_account.pubkey(), 
-            &destination_account.pubkey(), 
-            &incorrect_authority.pubkey(),
-            proof_type,
-        );
-        let transaction = Transaction::new_signed_with_payer(
-            &[instruction],
-            Some(&payer.pubkey()),
-            &[payer, &incorrect_authority],
-            recent_blockhash,
-        );
-        let err = client.process_transaction(transaction).await.unwrap_err().unwrap();
-        assert_eq!(err, TransactionError::InstructionError(0, InstructionError::InvalidAccountOwner));
-
-        // successfully close proof context state
-        let instruction = close_context_state(
-            &context_state_account.pubkey(), 
-            &destination_account.pubkey(), 
-            &context_state_authority.pubkey(),
-            proof_type,
-        );
-        let transaction = Transaction::new_signed_with_payer(
-            &[instruction.clone()],
-            Some(&payer.pubkey()),
-            &[payer, &context_state_authority],
-            recent_blockhash,
-        );
-        client.process_transaction(transaction).await.unwrap();
-    }
+    // successfully close proof context state
+    let instruction = close_context_state(
+        &context_state_account.pubkey(),
+        &destination_account.pubkey(),
+        &context_state_authority.pubkey(),
+        proof_type,
+    );
+    let transaction = Transaction::new_signed_with_payer(
+        &[instruction.clone()],
+        Some(&payer.pubkey()),
+        &[payer, &context_state_authority],
+        recent_blockhash,
+    );
+    client.process_transaction(transaction).await.unwrap();
 }
-
