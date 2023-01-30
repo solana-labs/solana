@@ -45,13 +45,13 @@ fn recv_send_quic(
     _socket_addr_space: &SocketAddrSpace,
     stats: &mut Option<StreamerSendStats>,
 ) -> Result<()> {
-    info!("enter recv_send_quic");
+    //info!("enter recv_send_quic");
     let timer = Duration::new(1, 0);
     let packet_batch = r.recv_timeout(timer)?;
     if let Some(stats) = stats {
         packet_batch.iter().for_each(|p| stats.record(p));
     }
-    info!("recv_send_quic packet batch length: {}", packet_batch.len());
+    //info!("recv_send_quic packet batch length: {}", packet_batch.len());
     let packets = packet_batch.iter().filter_map(|pkt| {
         let addr = pkt.meta().socket_addr();
         let data = pkt.data(..)?;
@@ -72,10 +72,10 @@ fn recv_send_quic(
     }
     for packet_set in hashmap.into_iter() {
         let conn = connection_cache.get_connection(&packet_set.0);
-	    info!("recv_send_quic connection remote address: {}", conn.tpu_addr());
-        info!("recv_send_quic connection batch len: {}", packet_set.1.len());        
-	    let res = conn.send_wire_transaction_batch_async(packet_set.1);
-	    info!("recv_send_quic send result: {:?}", res);    
+	    //info!("recv_send_quic connection remote address: {}", conn.tpu_addr());
+        //info!("recv_send_quic connection batch len: {}", packet_set.1.len());        
+	    let _ = conn.send_wire_transaction_batch_async(packet_set.1);
+	    //info!("recv_send_quic send result: {:?}", res);    
     }
     Ok(())
 }
