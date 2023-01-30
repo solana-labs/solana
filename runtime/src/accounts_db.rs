@@ -287,7 +287,7 @@ impl CurrentAncientAppendVec {
         slot: Slot,
         db: &'a AccountsDb,
     ) -> ShrinkInProgress<'a> {
-        let shrink_in_progress = db.create_ancient_append_vec(slot);
+        let shrink_in_progress = db.get_store_for_shrink(slot, get_ancient_append_vec_capacity());
         *self = Self::new(slot, Arc::clone(shrink_in_progress.new_storage()));
         shrink_in_progress
     }
@@ -4201,18 +4201,6 @@ impl AccountsDb {
             self.get_sorted_potential_ancient_slots(),
             can_randomly_shrink,
         );
-    }
-
-    /// create and return new ancient append vec
-    fn create_ancient_append_vec(&self, slot: Slot) -> ShrinkInProgress<'_> {
-        let shrink_in_progress = self.get_store_for_shrink(slot, get_ancient_append_vec_capacity());
-        info!(
-            "ancient_append_vec: creating initial ancient append vec: {}, size: {}, id: {}",
-            slot,
-            get_ancient_append_vec_capacity(),
-            shrink_in_progress.new_storage().append_vec_id(),
-        );
-        shrink_in_progress
     }
 
     #[cfg(test)]
@@ -16419,16 +16407,17 @@ pub mod tests {
             let _existing_append_vec = db.create_and_insert_store(slot1_ancient, 1000, "test");
 
             let ancient = db
-                .create_ancient_append_vec(slot1_ancient)
+                .get_store_for_shrink(slot1_ancient, get_ancient_append_vec_capacity())
                 .new_storage()
                 .clone();
             let _existing_append_vec = db.create_and_insert_store(slot1_plus_ancient, 1000, "test");
             let ancient_1_plus = db
-                .create_ancient_append_vec(slot1_plus_ancient)
+                .get_store_for_shrink(slot1_plus_ancient, get_ancient_append_vec_capacity())
                 .new_storage()
                 .clone();
             let _existing_append_vec = db.create_and_insert_store(slot3_ancient, 1000, "test");
-            let ancient3 = db.create_ancient_append_vec(slot3_ancient);
+            let ancient3 =
+                db.get_store_for_shrink(slot3_ancient, get_ancient_append_vec_capacity());
             let temp_dir = TempDir::new().unwrap();
             let path = temp_dir.path();
             let id = 1;
@@ -17394,7 +17383,7 @@ pub mod tests {
         // there has to be an existing append vec at this slot for a new current ancient at the slot to make sense
         let _existing_append_vec = db.create_and_insert_store(slot1_ancient, 1000, "test");
         let ancient1 = db
-            .create_ancient_append_vec(slot1_ancient)
+            .get_store_for_shrink(slot1_ancient, get_ancient_append_vec_capacity())
             .new_storage()
             .clone();
         let should_move = db.should_move_to_ancient_append_vec(
@@ -17415,7 +17404,7 @@ pub mod tests {
         // there has to be an existing append vec at this slot for a new current ancient at the slot to make sense
         let _existing_append_vec = db.create_and_insert_store(slot2_ancient, 1000, "test");
         let ancient2 = db
-            .create_ancient_append_vec(slot2_ancient)
+            .get_store_for_shrink(slot2_ancient, get_ancient_append_vec_capacity())
             .new_storage()
             .clone();
         let should_move = db.should_move_to_ancient_append_vec(
@@ -17511,7 +17500,7 @@ pub mod tests {
     }
 
     fn make_full_ancient_append_vec(db: &AccountsDb, slot: Slot) -> ShrinkInProgress<'_> {
-        let full = db.create_ancient_append_vec(slot);
+        let full = db.get_store_for_shrink(slot, get_ancient_append_vec_capacity());
         make_ancient_append_vec_full(full.new_storage());
         full
     }
