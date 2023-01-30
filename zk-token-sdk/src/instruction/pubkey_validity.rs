@@ -1,13 +1,13 @@
 use {
-    crate::zk_token_elgamal::{pod, pod::PodBool},
-    bytemuck::{bytes_of, Pod, Zeroable},
+    crate::zk_token_elgamal::pod,
+    bytemuck::{Pod, Zeroable},
 };
 #[cfg(not(target_os = "solana"))]
 use {
     crate::{
         encryption::elgamal::{ElGamalKeypair, ElGamalPubkey},
         errors::ProofError,
-        instruction::ZkProofData,
+        instruction::{ZkProofContext, ZkProofData},
         sigma_proofs::pubkey_proof::PubkeySigmaProof,
         transcript::TranscriptProtocol,
     },
@@ -24,9 +24,6 @@ use {
 #[derive(Clone, Copy, Pod, Zeroable)]
 #[repr(C)]
 pub struct PubkeyValidityData {
-    /// Initialize a proof context account
-    pub create_context_state: PodBool,
-
     /// The context data for the public key validity proof
     pub context: PubkeyValidityProofContext,
 
@@ -38,12 +35,12 @@ pub struct PubkeyValidityData {
 #[repr(C)]
 pub struct PubkeyValidityProofContext {
     /// The public key to be proved
-    pub pubkey: pod::ElGamalPubkey,
+    pub pubkey: pod::ElGamalPubkey, // 32 bytes
 }
 
 #[cfg(not(target_os = "solana"))]
 impl PubkeyValidityData {
-    pub fn new(keypair: &ElGamalKeypair, create_context_state: bool) -> Result<Self, ProofError> {
+    pub fn new(keypair: &ElGamalKeypair) -> Result<Self, ProofError> {
         let pod_pubkey = pod::ElGamalPubkey(keypair.public.to_bytes());
 
         let context = PubkeyValidityProofContext { pubkey: pod_pubkey };
@@ -51,11 +48,7 @@ impl PubkeyValidityData {
         let mut transcript = PubkeyValidityProof::transcript_new(&pod_pubkey);
         let proof = PubkeyValidityProof::new(keypair, &mut transcript);
 
-        Ok(PubkeyValidityData {
-            create_context_state: create_context_state.into(),
-            context,
-            proof,
-        })
+        Ok(PubkeyValidityData { context, proof })
     }
 }
 
@@ -63,12 +56,8 @@ impl PubkeyValidityData {
 impl ZkProofData for PubkeyValidityData {
     type ProofContext = PubkeyValidityProofContext;
 
-    fn create_context_state(&self) -> bool {
-        self.create_context_state.into()
-    }
-
-    fn context_data(&self) -> &[u8] {
-        bytes_of(&self.context)
+    fn context_data(&self) -> &PubkeyValidityProofContext {
+        &self.context
     }
 
     fn verify_proof(&self) -> Result<(), ProofError> {
@@ -76,6 +65,11 @@ impl ZkProofData for PubkeyValidityData {
         let pubkey = self.context.pubkey.try_into()?;
         self.proof.verify(&pubkey, &mut transcript)
     }
+}
+
+#[cfg(not(target_os = "solana"))]
+impl ZkProofContext for PubkeyValidityProofContext {
+    const LEN: usize = 32;
 }
 
 #[derive(Clone, Copy, Pod, Zeroable)]
@@ -121,7 +115,7 @@ mod test {
     fn test_pubkey_validity_correctness() {
         let keypair = ElGamalKeypair::new_rand();
 
-        let pubkey_validity_data = PubkeyValidityData::new(&keypair, false).unwrap();
+        let pubkey_validity_data = PubkeyValidityData::new(&keypair).unwrap();
         assert!(pubkey_validity_data.verify().is_ok());
     }
 }

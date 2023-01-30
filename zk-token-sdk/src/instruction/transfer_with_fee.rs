@@ -1,6 +1,6 @@
 use {
-    crate::zk_token_elgamal::{pod, pod::PodBool},
-    bytemuck::{bytes_of, Pod, Zeroable},
+    crate::zk_token_elgamal::pod,
+    bytemuck::{Pod, Zeroable},
 };
 #[cfg(not(target_os = "solana"))]
 use {
@@ -14,7 +14,8 @@ use {
         errors::ProofError,
         instruction::{
             combine_lo_hi_ciphertexts, combine_lo_hi_commitments, combine_lo_hi_openings,
-            combine_lo_hi_u64, split_u64, transfer::TransferAmountEncryption, Role, ZkProofData,
+            combine_lo_hi_u64, split_u64, transfer::TransferAmountEncryption, Role, ZkProofContext,
+            ZkProofData,
         },
         range_proof::RangeProof,
         sigma_proofs::{
@@ -61,9 +62,6 @@ lazy_static::lazy_static! {
 #[derive(Clone, Copy, Pod, Zeroable)]
 #[repr(C)]
 pub struct TransferWithFeeData {
-    /// Initialize a proof context account
-    pub create_context_state: PodBool,
-
     /// The context data for the transfer with fee proof
     pub context: TransferWithFeeProofContext,
 
@@ -75,25 +73,25 @@ pub struct TransferWithFeeData {
 #[repr(C)]
 pub struct TransferWithFeeProofContext {
     /// Group encryption of the low 16 bites of the transfer amount
-    pub ciphertext_lo: pod::TransferAmountEncryption,
+    pub ciphertext_lo: pod::TransferAmountEncryption, // 128 bytes
 
     /// Group encryption of the high 48 bits of the transfer amount
-    pub ciphertext_hi: pod::TransferAmountEncryption,
+    pub ciphertext_hi: pod::TransferAmountEncryption, // 128 bytes
 
     /// The public encryption keys associated with the transfer: source, dest, and auditor
-    pub transfer_with_fee_pubkeys: pod::TransferWithFeePubkeys,
+    pub transfer_with_fee_pubkeys: pod::TransferWithFeePubkeys, // 128 bytes
 
     /// The final spendable ciphertext after the transfer,
-    pub new_source_ciphertext: pod::ElGamalCiphertext,
+    pub new_source_ciphertext: pod::ElGamalCiphertext, // 64 bytes
 
     // transfer fee encryption of the low 16 bits of the transfer fee amount
-    pub fee_ciphertext_lo: pod::FeeEncryption,
+    pub fee_ciphertext_lo: pod::FeeEncryption, // 96 bytes
 
     // transfer fee encryption of the hi 32 bits of the transfer fee amount
-    pub fee_ciphertext_hi: pod::FeeEncryption,
+    pub fee_ciphertext_hi: pod::FeeEncryption, // 96 bytes
 
     // fee parameters
-    pub fee_parameters: pod::FeeParameters,
+    pub fee_parameters: pod::FeeParameters, // 10 bytes
 }
 
 #[cfg(not(target_os = "solana"))]
@@ -105,7 +103,6 @@ impl TransferWithFeeData {
         (destination_pubkey, auditor_pubkey): (&ElGamalPubkey, &ElGamalPubkey),
         fee_parameters: FeeParameters,
         withdraw_withheld_authority_pubkey: &ElGamalPubkey,
-        create_context_state: bool,
     ) -> Result<Self, ProofError> {
         // split and encrypt transfer amount
         let (amount_lo, amount_hi) = split_u64(transfer_amount, TRANSFER_AMOUNT_LO_BITS);
@@ -217,11 +214,7 @@ impl TransferWithFeeData {
             &mut transcript,
         );
 
-        Ok(Self {
-            create_context_state: create_context_state.into(),
-            context,
-            proof,
-        })
+        Ok(Self { context, proof })
     }
 
     /// Extracts the lo ciphertexts associated with a transfer-with-fee data
@@ -349,12 +342,8 @@ impl TransferWithFeeData {
 impl ZkProofData for TransferWithFeeData {
     type ProofContext = TransferWithFeeProofContext;
 
-    fn create_context_state(&self) -> bool {
-        self.create_context_state.into()
-    }
-
-    fn context_data(&self) -> &[u8] {
-        bytes_of(&self.context)
+    fn context_data(&self) -> &TransferWithFeeProofContext {
+        &self.context
     }
 
     fn verify_proof(&self) -> Result<(), ProofError> {
@@ -387,6 +376,11 @@ impl ZkProofData for TransferWithFeeData {
             &mut transcript,
         )
     }
+}
+
+#[cfg(not(target_os = "solana"))]
+impl ZkProofContext for TransferWithFeeProofContext {
+    const LEN: usize = 650;
 }
 
 // #[derive(Clone, Copy, Pod, Zeroable)]
@@ -909,7 +903,6 @@ mod test {
             (&destination_pubkey, &auditor_pubkey),
             fee_parameters,
             &withdraw_withheld_authority_pubkey,
-            false,
         )
         .unwrap();
 
@@ -934,7 +927,6 @@ mod test {
             (&destination_pubkey, &auditor_pubkey),
             fee_parameters,
             &withdraw_withheld_authority_pubkey,
-            false,
         )
         .unwrap();
 
@@ -958,7 +950,6 @@ mod test {
             (&destination_pubkey, &auditor_pubkey),
             fee_parameters,
             &withdraw_withheld_authority_pubkey,
-            false,
         )
         .unwrap();
 
@@ -987,7 +978,6 @@ mod test {
             (&destination_pubkey, &auditor_pubkey),
             fee_parameters,
             &withdraw_withheld_authority_pubkey,
-            false,
         )
         .unwrap();
 
@@ -1005,7 +995,6 @@ mod test {
             (&destination_pubkey, &auditor_pubkey),
             fee_parameters,
             &withdraw_withheld_authority_pubkey,
-            false,
         )
         .unwrap();
 
@@ -1023,7 +1012,6 @@ mod test {
             (&destination_pubkey, &auditor_pubkey),
             fee_parameters,
             &withdraw_withheld_authority_pubkey,
-            false,
         )
         .unwrap();
 

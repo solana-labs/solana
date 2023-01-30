@@ -5,41 +5,47 @@ use {
     solana_program_runtime::{
         ic_msg, invoke_context::InvokeContext, sysvar_cache::get_sysvar_with_account_check,
     },
-    solana_sdk::instruction::{InstructionError, TRANSACTION_LEVEL_STACK_HEIGHT},
+    solana_sdk::{
+        instruction::{InstructionError, TRANSACTION_LEVEL_STACK_HEIGHT},
+        program_memory, system_program,
+    },
     solana_zk_token_sdk::{zk_token_proof_instruction::*, zk_token_proof_program::id},
     std::result::Result,
 };
 
-fn verify<T: Pod + ZkProofData>(
+fn process_verify_proof<T: Pod + ZkProofData>(
     invoke_context: &mut InvokeContext,
 ) -> Result<(), InstructionError> {
     let transaction_context = &invoke_context.transaction_context;
     let instruction_context = transaction_context.get_current_instruction_context()?;
     let instruction_data = instruction_context.get_instruction_data();
-    let instruction = ProofInstruction::decode_data::<T>(instruction_data);
 
-    let proof_data = instruction.ok_or_else(|| {
-        ic_msg!(invoke_context, "invalid proof data");
+    let verify_proof_data = VerifyProofData::<T>::try_from_bytes(&instruction_data[1..])?;
+
+    verify_proof_data.proof_data.verify_proof().map_err(|err| {
+        ic_msg!(invoke_context, "proof_verification failed: {:?}", err);
         InstructionError::InvalidInstructionData
     })?;
 
-    proof_data.verify_proof().map_err(|err| {
-        ic_msg!(invoke_context, "proof verification failed: {:?}", err);
-        InstructionError::InvalidInstructionData
-    })?;
-
-    if proof_data.create_context_state() {
+    if let Some(context_state_authority) = verify_proof_data.create_context_state_with_authority {
         let mut proof_context_account =
             instruction_context.try_borrow_instruction_account(transaction_context, 0)?;
+
         if *proof_context_account.get_owner() != id() {
             return Err(InstructionError::InvalidAccountOwner);
         }
-        if proof_context_account.get_data().len() != proof_data.context_data().len() {
+
+        let context_state_data = ProofContextState::encode(
+            verify_proof_data.proof_type,
+            &context_state_authority,
+            verify_proof_data.proof_data.context_data(),
+        );
+
+        if proof_context_account.get_data().len() != context_state_data.len() {
             return Err(InstructionError::InvalidAccountData);
         }
 
         let rent = get_sysvar_with_account_check::rent(invoke_context, instruction_context, 1)?;
-
         if !rent.is_exempt(
             proof_context_account.get_lamports(),
             proof_context_account.get_data().len(),
@@ -47,8 +53,43 @@ fn verify<T: Pod + ZkProofData>(
             return Err(InstructionError::InsufficientFunds);
         }
 
-        proof_context_account.set_data_from_slice(proof_data.context_data())?;
+        proof_context_account.set_data(context_state_data)?;
     }
+
+    Ok(())
+}
+
+fn process_close_proof_context<T: Pod + ZkProofContext>(
+    invoke_context: &mut InvokeContext,
+) -> Result<(), InstructionError> {
+    let transaction_context = &invoke_context.transaction_context;
+    let instruction_context = transaction_context.get_current_instruction_context()?;
+    let mut proof_context_account =
+        instruction_context.try_borrow_instruction_account(transaction_context, 0)?;
+    let proof_context_state =
+        ProofContextState::<T>::try_from_bytes(proof_context_account.get_data())?;
+
+    let mut destination_account =
+        instruction_context.try_borrow_instruction_account(transaction_context, 1)?;
+    let owner_account =
+        instruction_context.try_borrow_instruction_account(transaction_context, 2)?;
+
+    if !owner_account.is_signer() {
+        return Err(InstructionError::MissingRequiredSignature);
+    }
+
+    let expected_owner_pubkey = proof_context_state.context_state_authority;
+    if *owner_account.get_key() != expected_owner_pubkey {
+        return Err(InstructionError::InvalidAccountOwner);
+    }
+
+    destination_account.checked_add_lamports(proof_context_account.get_lamports())?;
+    proof_context_account.set_lamports(0)?;
+
+    let account_data = proof_context_account.get_data_mut()?;
+    let data_len = account_data.len();
+    program_memory::sol_memset(account_data, 0, data_len);
+    proof_context_account.set_owner(system_program::id().as_ref())?;
 
     Ok(())
 }
@@ -68,163 +109,63 @@ pub fn process_instruction(invoke_context: &mut InvokeContext) -> Result<(), Ins
     let transaction_context = &invoke_context.transaction_context;
     let instruction_context = transaction_context.get_current_instruction_context()?;
     let instruction_data = instruction_context.get_instruction_data();
-    let instruction = ProofInstruction::decode_type(instruction_data);
+    let instruction = ProofInstruction::instruction_type(instruction_data)
+        .ok_or(InstructionError::InvalidInstructionData)?;
+    let proof_type = ProofInstruction::proof_type(instruction_data)
+        .ok_or(InstructionError::InvalidInstructionData)?;
 
-    match instruction.ok_or(InstructionError::InvalidInstructionData)? {
-        ProofInstruction::VerifyCloseAccount => {
-            ic_msg!(invoke_context, "VerifyCloseAccount");
-            verify::<CloseAccountData>(invoke_context)
-        }
-        ProofInstruction::VerifyWithdraw => {
-            ic_msg!(invoke_context, "VerifyWithdraw");
-            verify::<WithdrawData>(invoke_context)
-        }
-        ProofInstruction::VerifyWithdrawWithheldTokens => {
-            ic_msg!(invoke_context, "VerifyWithdrawWithheldTokens");
-            verify::<WithdrawWithheldTokensData>(invoke_context)
-        }
-        ProofInstruction::VerifyTransfer => {
-            ic_msg!(invoke_context, "VerifyTransfer");
-            verify::<TransferData>(invoke_context)
-        }
-        ProofInstruction::VerifyTransferWithFee => {
-            ic_msg!(invoke_context, "VerifyTransferWithFee");
-            verify::<TransferWithFeeData>(invoke_context)
-        }
-        ProofInstruction::VerifyPubkeyValidity => {
-            ic_msg!(invoke_context, "VerifyPubkeyValidity");
-            verify::<PubkeyValidityData>(invoke_context)
-        }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use {
-        super::*,
-        solana_program_runtime::invoke_context::mock_process_instruction,
-        solana_sdk::{
-            account::{self, AccountSharedData},
-            instruction::AccountMeta,
-            pubkey::Pubkey,
-            rent::Rent,
-            sysvar,
+    match instruction {
+        ProofInstruction::VerifyProof => match proof_type {
+            ProofType::CloseAccount => {
+                ic_msg!(invoke_context, "VerifyProof CloseAccount");
+                process_verify_proof::<CloseAccountData>(invoke_context)
+            }
+            ProofType::Withdraw => {
+                ic_msg!(invoke_context, "VerifyProof Withdraw");
+                process_verify_proof::<WithdrawData>(invoke_context)
+            }
+            ProofType::WithdrawWithheldTokens => {
+                ic_msg!(invoke_context, "VerifyProof WithdrawWithheldTokens");
+                process_verify_proof::<WithdrawWithheldTokensData>(invoke_context)
+            }
+            ProofType::Transfer => {
+                ic_msg!(invoke_context, "VerifyProof Transfer");
+                process_verify_proof::<TransferData>(invoke_context)
+            }
+            ProofType::TransferWithFee => {
+                ic_msg!(invoke_context, "VerifyProof TransferWithFee");
+                process_verify_proof::<TransferWithFeeData>(invoke_context)
+            }
+            ProofType::PubkeyValidity => {
+                ic_msg!(invoke_context, "VerifyProof PubkeyValidity");
+                process_verify_proof::<PubkeyValidityData>(invoke_context)
+            }
         },
-        solana_zk_token_sdk::{encryption::elgamal::ElGamalKeypair, instruction::CloseAccountData},
-    };
-
-    fn process_instruction(
-        instruction_data: &[u8],
-        transaction_accounts: Vec<(Pubkey, AccountSharedData)>,
-        instruction_accounts: Vec<AccountMeta>,
-        expected_result: Result<(), InstructionError>,
-    ) -> Vec<AccountSharedData> {
-        mock_process_instruction(
-            &id(),
-            Vec::new(),
-            instruction_data,
-            transaction_accounts,
-            instruction_accounts,
-            None,
-            None,
-            expected_result,
-            super::process_instruction,
-        )
-    }
-
-    fn create_default_rent_account() -> AccountSharedData {
-        account::create_account_shared_data_for_test(&Rent::default())
-    }
-
-    #[test]
-    fn test_close_account() {
-        // success case: do not create proof context
-        let elgamal_keypair = ElGamalKeypair::new_rand();
-        let ciphertext = elgamal_keypair.public.encrypt(0_u64);
-        let close_account_data =
-            CloseAccountData::new(&elgamal_keypair, &ciphertext, false).unwrap(); // no context
-
-        let instruction_data = ProofInstruction::VerifyCloseAccount
-            .encode(&close_account_data, None)
-            .data;
-
-        process_instruction(&instruction_data, vec![], vec![], Ok(()));
-
-        // success case: create proof context
-        let close_account_data =
-            CloseAccountData::new(&elgamal_keypair, &ciphertext, true).unwrap(); // create context
-        let proof_context_length = close_account_data.context_data().len();
-        let rent = Rent::default();
-        let rent_exempt_reserve = rent.minimum_balance(proof_context_length);
-        let proof_context_address = solana_sdk::pubkey::new_rand();
-        let proof_context_account =
-            AccountSharedData::new(rent_exempt_reserve, proof_context_length, &id());
-
-        let instruction_accounts = vec![
-            AccountMeta {
-                pubkey: proof_context_address,
-                is_signer: false,
-                is_writable: true,
-            },
-            AccountMeta {
-                pubkey: sysvar::rent::id(),
-                is_signer: false,
-                is_writable: false,
-            },
-        ];
-
-        let instruction_data = ProofInstruction::VerifyCloseAccount
-            .encode(&close_account_data, Some(&proof_context_address))
-            .data;
-
-        process_instruction(
-            &instruction_data,
-            vec![
-                (proof_context_address, proof_context_account.clone()),
-                (sysvar::rent::id(), create_default_rent_account()),
-            ],
-            instruction_accounts.clone(),
-            Ok(()),
-        );
-
-        // create proof context, but do not provide account info
-        process_instruction(
-            &instruction_data,
-            vec![],
-            vec![],
-            Err(InstructionError::NotEnoughAccountKeys),
-        );
-
-        // insufficient rent
-        let proof_context_account =
-            AccountSharedData::new(rent_exempt_reserve - 1, proof_context_length, &id());
-
-        process_instruction(
-            &instruction_data,
-            vec![
-                (proof_context_address, proof_context_account.clone()),
-                (sysvar::rent::id(), create_default_rent_account()),
-            ],
-            instruction_accounts.clone(),
-            Err(InstructionError::InsufficientFunds),
-        );
-
-        // invalid proof
-        let ciphertext = elgamal_keypair.public.encrypt(1_u64); // non-zero amount
-        let close_account_data =
-            CloseAccountData::new(&elgamal_keypair, &ciphertext, true).unwrap();
-        let instruction_data = ProofInstruction::VerifyCloseAccount
-            .encode(&close_account_data, Some(&proof_context_address))
-            .data;
-
-        process_instruction(
-            &instruction_data,
-            vec![
-                (proof_context_address, proof_context_account.clone()),
-                (sysvar::rent::id(), create_default_rent_account()),
-            ],
-            instruction_accounts.clone(),
-            Err(InstructionError::InvalidInstructionData),
-        );
+        ProofInstruction::CloseContextState => match proof_type {
+            ProofType::CloseAccount => {
+                ic_msg!(invoke_context, "CloseContextState CloseAccount");
+                process_close_proof_context::<CloseAccountProofContext>(invoke_context)
+            }
+            ProofType::Withdraw => {
+                ic_msg!(invoke_context, "CloseContextState Withdraw");
+                process_close_proof_context::<WithdrawProofContext>(invoke_context)
+            }
+            ProofType::WithdrawWithheldTokens => {
+                ic_msg!(invoke_context, "CloseContextState WithdrawWithheldTokens");
+                process_close_proof_context::<WithdrawWithheldTokensProofContext>(invoke_context)
+            }
+            ProofType::Transfer => {
+                ic_msg!(invoke_context, "CloseContextState Transfer");
+                process_close_proof_context::<TransferProofContext>(invoke_context)
+            }
+            ProofType::TransferWithFee => {
+                ic_msg!(invoke_context, "CloseContextState TransferWithFee");
+                process_close_proof_context::<TransferWithFeeProofContext>(invoke_context)
+            }
+            ProofType::PubkeyValidity => {
+                ic_msg!(invoke_context, "CloseContextState PubkeyValidity");
+                process_close_proof_context::<PubkeyValidityProofContext>(invoke_context)
+            }
+        },
     }
 }

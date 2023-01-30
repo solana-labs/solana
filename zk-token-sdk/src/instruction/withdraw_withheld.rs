@@ -1,6 +1,6 @@
 use {
-    crate::zk_token_elgamal::{pod, pod::PodBool},
-    bytemuck::{bytes_of, Pod, Zeroable},
+    crate::zk_token_elgamal::pod,
+    bytemuck::{Pod, Zeroable},
 };
 #[cfg(not(target_os = "solana"))]
 use {
@@ -10,7 +10,7 @@ use {
             pedersen::PedersenOpening,
         },
         errors::ProofError,
-        instruction::ZkProofData,
+        instruction::{ZkProofContext, ZkProofData},
         sigma_proofs::equality_proof::CtxtCtxtEqualityProof,
         transcript::TranscriptProtocol,
     },
@@ -28,8 +28,6 @@ use {
 #[derive(Clone, Copy, Pod, Zeroable)]
 #[repr(C)]
 pub struct WithdrawWithheldTokensData {
-    pub create_context_state: PodBool,
-
     pub context: WithdrawWithheldTokensProofContext,
 
     pub proof: WithdrawWithheldTokensProof,
@@ -38,13 +36,13 @@ pub struct WithdrawWithheldTokensData {
 #[derive(Clone, Copy, Pod, Zeroable)]
 #[repr(C)]
 pub struct WithdrawWithheldTokensProofContext {
-    pub withdraw_withheld_authority_pubkey: pod::ElGamalPubkey,
+    pub withdraw_withheld_authority_pubkey: pod::ElGamalPubkey, // 32 bytes
 
-    pub destination_pubkey: pod::ElGamalPubkey,
+    pub destination_pubkey: pod::ElGamalPubkey, // 32 bytes
 
-    pub withdraw_withheld_authority_ciphertext: pod::ElGamalCiphertext,
+    pub withdraw_withheld_authority_ciphertext: pod::ElGamalCiphertext, // 32 bytes
 
-    pub destination_ciphertext: pod::ElGamalCiphertext,
+    pub destination_ciphertext: pod::ElGamalCiphertext, // 32 bytes
 }
 
 #[cfg(not(target_os = "solana"))]
@@ -54,7 +52,6 @@ impl WithdrawWithheldTokensData {
         destination_pubkey: &ElGamalPubkey,
         withdraw_withheld_authority_ciphertext: &ElGamalCiphertext,
         amount: u64,
-        create_context_state: bool,
     ) -> Result<Self, ProofError> {
         // encrypt withdraw amount under destination public key
         let destination_opening = PedersenOpening::new_rand();
@@ -90,11 +87,7 @@ impl WithdrawWithheldTokensData {
             &mut transcript,
         );
 
-        Ok(Self {
-            create_context_state: create_context_state.into(),
-            context,
-            proof,
-        })
+        Ok(Self { context, proof })
     }
 }
 
@@ -102,12 +95,8 @@ impl WithdrawWithheldTokensData {
 impl ZkProofData for WithdrawWithheldTokensData {
     type ProofContext = WithdrawWithheldTokensProofContext;
 
-    fn create_context_state(&self) -> bool {
-        self.create_context_state.into()
-    }
-
-    fn context_data(&self) -> &[u8] {
-        bytes_of(&self.context)
+    fn context_data(&self) -> &WithdrawWithheldTokensProofContext {
+        &self.context
     }
 
     fn verify_proof(&self) -> Result<(), ProofError> {
@@ -135,6 +124,11 @@ impl ZkProofData for WithdrawWithheldTokensData {
             &mut transcript,
         )
     }
+}
+
+#[cfg(not(target_os = "solana"))]
+impl ZkProofContext for WithdrawWithheldTokensProofContext {
+    const LEN: usize = 128;
 }
 
 /// This struct represents the cryptographic proof component that certifies the account's solvency
@@ -233,7 +227,6 @@ mod test {
             &dest_keypair.public,
             &withdraw_withheld_authority_ciphertext,
             amount,
-            false,
         )
         .unwrap();
 
@@ -248,7 +241,6 @@ mod test {
             &dest_keypair.public,
             &withdraw_withheld_authority_ciphertext,
             amount,
-            false,
         )
         .unwrap();
 
@@ -263,7 +255,6 @@ mod test {
             &dest_keypair.public,
             &withdraw_withheld_authority_ciphertext,
             amount,
-            false,
         )
         .unwrap();
 

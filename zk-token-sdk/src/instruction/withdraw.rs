@@ -1,6 +1,6 @@
 use {
-    crate::zk_token_elgamal::{pod, pod::PodBool},
-    bytemuck::{bytes_of, Pod, Zeroable},
+    crate::zk_token_elgamal::pod,
+    bytemuck::{Pod, Zeroable},
 };
 #[cfg(not(target_os = "solana"))]
 use {
@@ -10,7 +10,7 @@ use {
             pedersen::{Pedersen, PedersenCommitment},
         },
         errors::ProofError,
-        instruction::ZkProofData,
+        instruction::{ZkProofContext, ZkProofData},
         range_proof::RangeProof,
         sigma_proofs::equality_proof::CtxtCommEqualityProof,
         transcript::TranscriptProtocol,
@@ -32,11 +32,8 @@ const WITHDRAW_AMOUNT_BIT_LENGTH: usize = 64;
 #[derive(Clone, Copy, Pod, Zeroable)]
 #[repr(C)]
 pub struct WithdrawData {
-    /// Initialize a proof context account
-    pub create_context_state: PodBool,
-
     /// The context data for the withdraw proof
-    pub context: WithdrawProofContext,
+    pub context: WithdrawProofContext, // 128 bytes
 
     /// Range proof
     pub proof: WithdrawProof, // 736 bytes
@@ -60,7 +57,6 @@ impl WithdrawData {
         keypair: &ElGamalKeypair,
         current_balance: u64,
         current_ciphertext: &ElGamalCiphertext,
-        create_context_state: bool,
     ) -> Result<Self, ProofError> {
         // subtract withdraw amount from current balance
         //
@@ -84,11 +80,7 @@ impl WithdrawData {
         let mut transcript = WithdrawProof::transcript_new(&pod_pubkey, &pod_final_ciphertext);
         let proof = WithdrawProof::new(keypair, final_balance, &final_ciphertext, &mut transcript);
 
-        Ok(Self {
-            create_context_state: create_context_state.into(),
-            context,
-            proof,
-        })
+        Ok(Self { context, proof })
     }
 }
 
@@ -96,12 +88,8 @@ impl WithdrawData {
 impl ZkProofData for WithdrawData {
     type ProofContext = WithdrawProofContext;
 
-    fn create_context_state(&self) -> bool {
-        self.create_context_state.into()
-    }
-
-    fn context_data(&self) -> &[u8] {
-        bytes_of(&self.context)
+    fn context_data(&self) -> &WithdrawProofContext {
+        &self.context
     }
 
     fn verify_proof(&self) -> Result<(), ProofError> {
@@ -113,6 +101,11 @@ impl ZkProofData for WithdrawData {
         self.proof
             .verify(&elgamal_pubkey, &final_balance_ciphertext, &mut transcript)
     }
+}
+
+#[cfg(not(target_os = "solana"))]
+impl ZkProofContext for WithdrawProofContext {
+    const LEN: usize = 96;
 }
 
 /// This struct represents the cryptographic proof component that certifies the account's solvency
@@ -226,7 +219,6 @@ mod test {
             &keypair,
             current_balance,
             &current_ciphertext,
-            false,
         )
         .unwrap();
         assert!(data.verify().is_ok());
@@ -238,7 +230,6 @@ mod test {
             &keypair,
             wrong_balance,
             &current_ciphertext,
-            false,
         )
         .unwrap();
         assert!(data.verify().is_err());

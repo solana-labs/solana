@@ -1,13 +1,13 @@
 use {
-    crate::zk_token_elgamal::{pod, pod::PodBool},
-    bytemuck::{bytes_of, Pod, Zeroable},
+    crate::zk_token_elgamal::pod,
+    bytemuck::{Pod, Zeroable},
 };
 #[cfg(not(target_os = "solana"))]
 use {
     crate::{
         encryption::elgamal::{ElGamalCiphertext, ElGamalKeypair, ElGamalPubkey},
         errors::ProofError,
-        instruction::ZkProofData,
+        instruction::{ZkProofContext, ZkProofData},
         sigma_proofs::zero_balance_proof::ZeroBalanceProof,
         transcript::TranscriptProtocol,
     },
@@ -25,9 +25,6 @@ use {
 #[derive(Clone, Copy, Pod, Zeroable)]
 #[repr(C)]
 pub struct CloseAccountData {
-    /// Initialize a proof context account
-    pub create_context_state: PodBool,
-
     /// The context data for the close account proof
     pub context: CloseAccountProofContext,
 
@@ -50,7 +47,6 @@ impl CloseAccountData {
     pub fn new(
         keypair: &ElGamalKeypair,
         ciphertext: &ElGamalCiphertext,
-        create_context_state: bool,
     ) -> Result<Self, ProofError> {
         let pod_pubkey = pod::ElGamalPubkey(keypair.public.to_bytes());
         let pod_ciphertext = pod::ElGamalCiphertext(ciphertext.to_bytes());
@@ -63,11 +59,7 @@ impl CloseAccountData {
         let mut transcript = CloseAccountProof::transcript_new(&pod_pubkey, &pod_ciphertext);
         let proof = CloseAccountProof::new(keypair, ciphertext, &mut transcript);
 
-        Ok(CloseAccountData {
-            create_context_state: create_context_state.into(),
-            context,
-            proof,
-        })
+        Ok(CloseAccountData { context, proof })
     }
 }
 
@@ -75,12 +67,8 @@ impl CloseAccountData {
 impl ZkProofData for CloseAccountData {
     type ProofContext = CloseAccountProofContext;
 
-    fn create_context_state(&self) -> bool {
-        self.create_context_state.into()
-    }
-
-    fn context_data(&self) -> &[u8] {
-        bytes_of(&self.context)
+    fn context_data(&self) -> &CloseAccountProofContext {
+        &self.context
     }
 
     fn verify_proof(&self) -> Result<(), ProofError> {
@@ -91,6 +79,11 @@ impl ZkProofData for CloseAccountData {
         let ciphertext = self.context.ciphertext.try_into()?;
         self.proof.verify(&pubkey, &ciphertext, &mut transcript)
     }
+}
+
+#[cfg(not(target_os = "solana"))]
+impl ZkProofContext for CloseAccountProofContext {
+    const LEN: usize = 96;
 }
 
 /// This struct represents the cryptographic proof component that certifies that the encrypted
@@ -152,12 +145,12 @@ mod test {
 
         // general case: encryption of 0
         let ciphertext = keypair.public.encrypt(0_u64);
-        let close_account_data = CloseAccountData::new(&keypair, &ciphertext, false).unwrap();
+        let close_account_data = CloseAccountData::new(&keypair, &ciphertext).unwrap();
         assert!(close_account_data.verify().is_ok());
 
         // general case: encryption of > 0
         let ciphertext = keypair.public.encrypt(1_u64);
-        let close_account_data = CloseAccountData::new(&keypair, &ciphertext, false).unwrap();
+        let close_account_data = CloseAccountData::new(&keypair, &ciphertext).unwrap();
         assert!(close_account_data.verify().is_err());
     }
 }

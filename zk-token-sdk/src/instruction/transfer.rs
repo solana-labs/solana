@@ -1,6 +1,6 @@
 use {
-    crate::zk_token_elgamal::{pod, pod::PodBool},
-    bytemuck::{bytes_of, Pod, Zeroable},
+    crate::zk_token_elgamal::pod,
+    bytemuck::{Pod, Zeroable},
 };
 #[cfg(not(target_os = "solana"))]
 use {
@@ -12,7 +12,7 @@ use {
             pedersen::{Pedersen, PedersenCommitment, PedersenOpening},
         },
         errors::ProofError,
-        instruction::{combine_lo_hi_ciphertexts, split_u64, Role, ZkProofData},
+        instruction::{combine_lo_hi_ciphertexts, split_u64, Role, ZkProofContext, ZkProofData},
         range_proof::RangeProof,
         sigma_proofs::{
             equality_proof::CtxtCommEqualityProof, validity_proof::AggregatedValidityProof,
@@ -42,9 +42,6 @@ lazy_static::lazy_static! {
 #[derive(Clone, Copy, Pod, Zeroable)]
 #[repr(C)]
 pub struct TransferData {
-    /// Initialize a proof context account
-    pub create_context_state: PodBool,
-
     /// The context data for the transfer proof
     pub context: TransferProofContext,
 
@@ -56,16 +53,16 @@ pub struct TransferData {
 #[repr(C)]
 pub struct TransferProofContext {
     /// Group encryption of the low 16 bits of the transfer amount
-    pub ciphertext_lo: pod::TransferAmountEncryption,
+    pub ciphertext_lo: pod::TransferAmountEncryption, // 128 bytes
 
     /// Group encryption of the high 48 bits of the transfer amount
-    pub ciphertext_hi: pod::TransferAmountEncryption,
+    pub ciphertext_hi: pod::TransferAmountEncryption, // 128 bytes
 
     /// The public encryption keys associated with the transfer: source, dest, and auditor
-    pub transfer_pubkeys: pod::TransferPubkeys,
+    pub transfer_pubkeys: pod::TransferPubkeys, // 96 bytes
 
     /// The final spendable ciphertext after the transfer
-    pub new_source_ciphertext: pod::ElGamalCiphertext,
+    pub new_source_ciphertext: pod::ElGamalCiphertext, // 64 bytes
 }
 
 #[cfg(not(target_os = "solana"))]
@@ -76,7 +73,6 @@ impl TransferData {
         (spendable_balance, ciphertext_old_source): (u64, &ElGamalCiphertext),
         source_keypair: &ElGamalKeypair,
         (destination_pubkey, auditor_pubkey): (&ElGamalPubkey, &ElGamalPubkey),
-        create_context_state: bool,
     ) -> Result<Self, ProofError> {
         // split and encrypt transfer amount
         let (amount_lo, amount_hi) = split_u64(transfer_amount, TRANSFER_AMOUNT_LO_BITS);
@@ -151,11 +147,7 @@ impl TransferData {
             &mut transcript,
         );
 
-        Ok(Self {
-            create_context_state: create_context_state.into(),
-            context,
-            proof,
-        })
+        Ok(Self { context, proof })
     }
 
     /// Extracts the lo ciphertexts associated with a transfer data
@@ -221,12 +213,8 @@ impl TransferData {
 impl ZkProofData for TransferData {
     type ProofContext = TransferProofContext;
 
-    fn create_context_state(&self) -> bool {
-        self.create_context_state.into()
-    }
-
-    fn context_data(&self) -> &[u8] {
-        bytes_of(&self.context)
+    fn context_data(&self) -> &TransferProofContext {
+        &self.context
     }
 
     fn verify_proof(&self) -> Result<(), ProofError> {
@@ -251,6 +239,11 @@ impl ZkProofData for TransferData {
             &mut transcript,
         )
     }
+}
+
+#[cfg(not(target_os = "solana"))]
+impl ZkProofContext for TransferProofContext {
+    const LEN: usize = 416;
 }
 
 #[allow(non_snake_case)]
@@ -560,7 +553,6 @@ mod test {
             (spendable_balance, &spendable_ciphertext),
             &source_keypair,
             (&dest_pk, &auditor_pk),
-            false,
         )
         .unwrap();
 
@@ -582,7 +574,6 @@ mod test {
             (spendable_balance, &spendable_ciphertext),
             &source_keypair,
             (&dest_pk, &auditor_pk),
-            false,
         )
         .unwrap();
 
@@ -603,7 +594,6 @@ mod test {
             (spendable_balance, &spendable_ciphertext),
             &source_keypair,
             (&dest_pk, &auditor_pk),
-            false,
         )
         .unwrap();
 
@@ -624,7 +614,6 @@ mod test {
             (spendable_balance, &spendable_ciphertext),
             &source_keypair,
             (&dest_pk, &auditor_pk),
-            false,
         )
         .unwrap();
 
@@ -639,7 +628,6 @@ mod test {
             (spendable_balance, &spendable_ciphertext),
             &source_keypair,
             (&dest_pk, &auditor_pk),
-            false,
         )
         .unwrap();
 
@@ -674,7 +662,6 @@ mod test {
             (spendable_balance, &spendable_ciphertext),
             &source_keypair,
             (&dest_pk, &auditor_pk),
-            false,
         )
         .unwrap();
 
