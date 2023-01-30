@@ -3929,7 +3929,7 @@ impl AccountsDb {
             Measure::start("ignored"), // find_alive_elapsed
             create_and_insert_store_elapsed_us,
             store_accounts_timing,
-            rewrite_elapsed,
+            rewrite_elapsed.as_us(),
             remove_old_stores_shrink_us,
         );
         self.shrink_stats.report();
@@ -3941,7 +3941,7 @@ impl AccountsDb {
         find_alive_elapsed: Measure,
         create_and_insert_store_elapsed_us: u64,
         store_accounts_timing: StoreAccountsTiming,
-        rewrite_elapsed: Measure,
+        rewrite_elapsed_us: u64,
         remove_old_stores_shrink_us: u64,
     ) {
         shrink_stats
@@ -3970,7 +3970,7 @@ impl AccountsDb {
             .fetch_add(remove_old_stores_shrink_us, Ordering::Relaxed);
         shrink_stats
             .rewrite_elapsed
-            .fetch_add(rewrite_elapsed.as_us(), Ordering::Relaxed);
+            .fetch_add(rewrite_elapsed_us, Ordering::Relaxed);
     }
 
     /// get stores for 'slot'
@@ -4505,7 +4505,7 @@ impl AccountsDb {
             find_alive_elapsed,
             create_and_insert_store_elapsed_us,
             store_accounts_timing,
-            rewrite_elapsed,
+            rewrite_elapsed.as_us(),
             remove_old_stores_shrink.as_us(),
         );
     }
