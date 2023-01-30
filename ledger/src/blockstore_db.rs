@@ -133,6 +133,11 @@ pub enum IteratorMode<Index> {
 }
 
 pub mod columns {
+    // This avoids relatively obvious `super::` qualifications required for all non-trivial type
+    // references in the column doc-comments.
+    #[cfg(doc)]
+    use super::{blockstore_meta, generated, Pubkey, Signature, Slot, SlotColumn, UnixTimestamp};
+
     #[derive(Debug)]
     /// The slot metadata column.
     ///
@@ -140,8 +145,8 @@ pub mod columns {
     /// given slot.  Tracking the progress as the slot fills up allows us to
     /// know if the slot (or pieces of the slot) are ready to be replayed.
     ///
-    /// index type: u64 (see `SlotColumn`)
-    /// value type: `blockstore_meta::SlotMeta`
+    /// * index type: `u64` (see [`SlotColumn`])
+    /// * value type: [`blockstore_meta::SlotMeta`]
     pub struct SlotMeta;
 
     #[derive(Debug)]
@@ -152,8 +157,8 @@ pub mod columns {
     /// this column family with true value.  Once an orphan slot has a parent,
     /// its entry in this column will be deleted.
     ///
-    /// index type: u64 (see `SlotColumn`)
-    /// value type: bool
+    /// * index type: `u64` (see [`SlotColumn`])
+    /// * value type: `bool`
     pub struct Orphans;
 
     #[derive(Debug)]
@@ -168,15 +173,15 @@ pub mod columns {
     /// If a slot has been mistakenly marked as dead, the ledger-tool's
     /// --remove-dead-slot can unmark a dead slot.
     ///
-    /// index type: u64 (see `SlotColumn`)
-    /// value type: bool
+    /// * index type: `u64` (see [`SlotColumn`])
+    /// * value type: `bool`
     pub struct DeadSlots;
 
     #[derive(Debug)]
     /// The duplicate slots column
     ///
-    /// index type: u64 (see `SlotColumn`)
-    /// value type: `blockstore_meta::DuplicateSlotProof`
+    /// * index type: `u64` (see [`SlotColumn`])
+    /// * value type: [`blockstore_meta::DuplicateSlotProof`]
     pub struct DuplicateSlots;
 
     #[derive(Debug)]
@@ -186,11 +191,11 @@ pub mod columns {
     /// dropped network packets (or erasures) that can be used to recover
     /// missing data shreds.
     ///
-    /// Its index type is ErasureSetId, which consists of a Slot ID
+    /// Its index type is `crate::shred::ErasureSetId`, which consists of a Slot ID
     /// and a FEC (Forward Error Correction) set index.
     ///
-    /// index type: `ErasureSetId` (Slot, fec_set_index: u64)
-    /// value type: `blockstore_meta::ErasureMeta`
+    /// * index type: `crate::shred::ErasureSetId` `(Slot, fec_set_index: u64)`
+    /// * value type: [`blockstore_meta::ErasureMeta`]
     pub struct ErasureMeta;
 
     #[derive(Debug)]
@@ -204,8 +209,8 @@ pub mod columns {
     /// A bank hash of a slot essentially represents all the account states at
     /// that slot.
     ///
-    /// index type: u64 (see `SlotColumn`)
-    /// value type: `blockstore_meta::FrozenHashVersioned`
+    /// * index type: `u64` (see [`SlotColumn`])
+    /// * value type: [`blockstore_meta::FrozenHashVersioned`]
     pub struct BankHash;
 
     #[derive(Debug)]
@@ -214,99 +219,99 @@ pub mod columns {
     /// This column family persists whether a slot is a root.  Slots on the
     /// main fork will be inserted into this column when they are finalized.
     ///
-    /// index type: u64 (see `SlotColumn`)
-    /// value type: bool
+    /// * index type: `u64` (see [`SlotColumn`])
+    /// * value type: `bool`
     pub struct Root;
 
     #[derive(Debug)]
     /// The index column
     ///
-    /// index type: u64 (see `SlotColumn`)
-    /// value type: `blockstore_meta::Index`
+    /// * index type: `u64` (see [`SlotColumn`])
+    /// * value type: [`blockstore_meta::Index`]
     pub struct Index;
 
     #[derive(Debug)]
     /// The shred data column
     ///
-    /// index type: (u64, u64)
-    /// value type: [`Vec<u8>`]
+    /// * index type: `(u64, u64)`
+    /// * value type: [`Vec<u8>`]
     pub struct ShredData;
 
     #[derive(Debug)]
     /// The shred erasure code column
     ///
-    /// index type: (u64, u64)
-    /// value type: [`Vec<u8>`]
+    /// * index type: `(u64, u64)`
+    /// * value type: [`Vec<u8>`]
     pub struct ShredCode;
 
     #[derive(Debug)]
     /// The transaction status column
     ///
-    /// index type: (u64, Signature, Slot)
-    /// value type: `generated::TransactionStatusMeta`
+    /// * index type: `(u64, `[`Signature`]`, `[`Slot`])`
+    /// * value type: [`generated::TransactionStatusMeta`]
     pub struct TransactionStatus;
 
     #[derive(Debug)]
     /// The address signatures column
     ///
-    /// index type: (u64, Pubkey, Slot, Signature)
-    /// value type: `blockstore_meta::AddressSignatureMeta`
+    /// * index type: `(u64, `[`Pubkey`]`, `[`Slot`]`, `[`Signature`]`)`
+    /// * value type: [`blockstore_meta::AddressSignatureMeta`]
     pub struct AddressSignatures;
 
     #[derive(Debug)]
     /// The transaction memos column
     ///
-    /// index type: Signature
-    /// value type: String
+    /// * index type: [`Signature`]
+    /// * value type: [`String`]
     pub struct TransactionMemos;
 
     #[derive(Debug)]
     /// The transaction status index column.
     ///
-    /// index type: u64 (see `SlotColumn`)
-    /// value type: `blockstore_meta::TransactionStatusIndexMeta`
+    /// * index type: `u64` (see [`SlotColumn`])
+    /// * value type: [`blockstore_meta::TransactionStatusIndexMeta`]
     pub struct TransactionStatusIndex;
 
     #[derive(Debug)]
     /// The rewards column
     ///
-    /// index type: u64 (see `SlotColumn`)
-    /// value type: `generated::Rewards`
+    /// * index type: `u64` (see [`SlotColumn`])
+    /// * value type: [`generated::Rewards`]
     pub struct Rewards;
 
     #[derive(Debug)]
     /// The blocktime column
     ///
-    /// index type: u64 (see `SlotColumn`)
-    /// value type: `UnixTimestamp`
+    /// * index type: `u64` (see [`SlotColumn`])
+    /// * value type: [`UnixTimestamp`]
     pub struct Blocktime;
 
     #[derive(Debug)]
     /// The performance samples column
     ///
-    /// index type: u64 (see `SlotColumn`)
-    /// value type: `blockstore_meta::PerfSample`
+    /// * index type: `u64` (see [`SlotColumn`])
+    /// * value type: [`blockstore_meta::PerfSample`]
     pub struct PerfSamples;
 
     #[derive(Debug)]
     /// The block height column
     ///
-    /// index type: u64 (see `SlotColumn`)
-    /// value type: u64
+    /// * index type: `u64` (see [`SlotColumn`])
+    /// * value type: `u64`
     pub struct BlockHeight;
 
     #[derive(Debug)]
     /// The program costs column
     ///
-    /// index type: `Pubkey`
-    /// value type: `blockstore_meta::ProgramCost`
+    /// * index type: [`Pubkey`]
+    /// * value type: [`blockstore_meta::ProgramCost`]
     pub struct ProgramCosts;
 
     #[derive(Debug)]
     /// The optimistic slot column
     ///
-    /// index type: u64 (see `SlotColumn`)
-    /// value type: `blockstore_meta::OptimisticSlotMetaVersioned`
+    /// * index type: `u64` (see [`SlotColumn`])
+    /// * value type: [`blockstore_meta::OptimisticSlotMetaVersioned`]
     pub struct OptimisticSlots;
 
     // When adding a new column ...
@@ -606,7 +611,6 @@ pub trait Column {
     fn index(key: &[u8]) -> Self::Index;
     // this return Slot or some u64
     fn primary_index(index: Self::Index) -> u64;
-    #[allow(clippy::wrong_self_convention)]
     fn as_index(slot: Slot) -> Self::Index;
     fn slot(index: Self::Index) -> Slot {
         Self::primary_index(index)
@@ -666,7 +670,6 @@ impl<T: SlotColumn> Column for T {
         index
     }
 
-    #[allow(clippy::wrong_self_convention)]
     /// Converts a Slot to its u64 Index.
     fn as_index(slot: Slot) -> u64 {
         slot
@@ -703,7 +706,6 @@ impl Column for columns::TransactionStatus {
         index.2
     }
 
-    #[allow(clippy::wrong_self_convention)]
     fn as_index(index: u64) -> Self::Index {
         (index, Signature::default(), 0)
     }
@@ -743,7 +745,6 @@ impl Column for columns::AddressSignatures {
         index.2
     }
 
-    #[allow(clippy::wrong_self_convention)]
     fn as_index(index: u64) -> Self::Index {
         (index, Pubkey::default(), 0, Signature::default())
     }
@@ -773,7 +774,6 @@ impl Column for columns::TransactionMemos {
         unimplemented!()
     }
 
-    #[allow(clippy::wrong_self_convention)]
     fn as_index(_index: u64) -> Self::Index {
         Signature::default()
     }
@@ -803,7 +803,6 @@ impl Column for columns::TransactionStatusIndex {
         unimplemented!()
     }
 
-    #[allow(clippy::wrong_self_convention)]
     fn as_index(slot: u64) -> u64 {
         slot
     }
@@ -868,7 +867,6 @@ impl Column for columns::ProgramCosts {
         unimplemented!()
     }
 
-    #[allow(clippy::wrong_self_convention)]
     fn as_index(_index: u64) -> Self::Index {
         Pubkey::default()
     }
@@ -889,7 +887,6 @@ impl Column for columns::ShredCode {
         index.0
     }
 
-    #[allow(clippy::wrong_self_convention)]
     fn as_index(slot: Slot) -> Self::Index {
         (slot, 0)
     }
@@ -918,7 +915,6 @@ impl Column for columns::ShredData {
         index.0
     }
 
-    #[allow(clippy::wrong_self_convention)]
     fn as_index(slot: Slot) -> Self::Index {
         (slot, 0)
     }
@@ -1004,7 +1000,6 @@ impl Column for columns::ErasureMeta {
         index.0
     }
 
-    #[allow(clippy::wrong_self_convention)]
     fn as_index(slot: Slot) -> Self::Index {
         (slot, 0)
     }

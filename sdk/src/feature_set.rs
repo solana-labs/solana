@@ -590,6 +590,10 @@ pub mod enable_big_mod_exp_syscall {
     solana_sdk::declare_id!("EBq48m8irRKuE7ZnMTLvLg2UuGSqhe8s8oMqnmja1fJw");
 }
 
+pub mod disable_builtin_loader_ownership_chains {
+    solana_sdk::declare_id!("4UDcAfQ6EcA6bdcadkeHpkarkhZGJ7Bpq7wTAiRMjkoi");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -732,6 +736,7 @@ lazy_static! {
         (move_serialized_len_ptr_in_cpi::id(), "cpi ignore serialized_len_ptr #29592"),
         (update_hashes_per_tick::id(), "Update desired hashes per tick on epoch boundary"),
         (enable_big_mod_exp_syscall::id(), "add big_mod_exp syscall #28503"),
+        (disable_builtin_loader_ownership_chains::id(), "disable builtin loader ownership chains #29956"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()

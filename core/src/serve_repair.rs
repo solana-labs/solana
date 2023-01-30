@@ -176,6 +176,7 @@ struct ServeRepairStats {
     ping_cache_check_failed: usize,
     pings_sent: usize,
     decode_time_us: u64,
+    handle_requests_time_us: u64,
     err_time_skew: usize,
     err_malformed: usize,
     err_sig_verify: usize,
@@ -560,7 +561,8 @@ impl ServeRepair {
             decoded_requests.truncate(MAX_REQUESTS_PER_ITERATION);
         }
 
-        self.handle_packets(
+        let handle_requests_start = Instant::now();
+        self.handle_requests(
             ping_cache,
             recycler,
             blockstore,
@@ -570,6 +572,7 @@ impl ServeRepair {
             data_budget,
             cluster_type,
         );
+        stats.handle_requests_time_us += handle_requests_start.elapsed().as_micros() as u64;
 
         Ok(())
     }
@@ -647,6 +650,11 @@ impl ServeRepair {
             ),
             ("pings_sent", stats.pings_sent, i64),
             ("decode_time_us", stats.decode_time_us, i64),
+            (
+                "handle_requests_time_us",
+                stats.handle_requests_time_us,
+                i64
+            ),
             ("err_time_skew", stats.err_time_skew, i64),
             ("err_malformed", stats.err_malformed, i64),
             ("err_sig_verify", stats.err_sig_verify, i64),
@@ -812,7 +820,7 @@ impl ServeRepair {
         (check, ping_pkt)
     }
 
-    fn handle_packets(
+    fn handle_requests(
         &self,
         ping_cache: &mut PingCache,
         recycler: &PacketBatchRecycler,

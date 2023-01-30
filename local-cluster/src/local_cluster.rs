@@ -22,6 +22,7 @@ use {
             ValidatorVoteKeypairs,
         },
         snapshot_config::SnapshotConfig,
+        snapshot_utils::create_accounts_run_and_snapshot_dirs,
     },
     solana_sdk::{
         account::{Account, AccountSharedData},
@@ -147,7 +148,11 @@ impl LocalCluster {
         config: &mut ValidatorConfig,
         ledger_path: &Path,
     ) {
-        config.account_paths = vec![ledger_path.join("accounts")];
+        config.account_paths = vec![
+            create_accounts_run_and_snapshot_dirs(ledger_path.join("accounts"))
+                .unwrap()
+                .0,
+        ];
         config.tower_storage = Arc::new(FileTowerStorage::new(ledger_path.to_path_buf()));
 
         let snapshot_config = &mut config.snapshot_config;

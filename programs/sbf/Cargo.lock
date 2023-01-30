@@ -4807,6 +4807,7 @@ dependencies = [
  "solana-tpu-client",
  "solana-version",
  "solana-vote-program",
+ "static_assertions",
  "thiserror",
 ]
 

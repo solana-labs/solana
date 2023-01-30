@@ -1,4 +1,6 @@
 module.exports = {
+  // load the API specific sidebars file
+  ...require("./sidebars/api.js"),
   introductionSidebar: [
     {
       type: "category",
@@ -195,8 +197,8 @@ module.exports = {
       label: "Clients",
       items: [
         {
-          type: "doc",
-          id: "developing/clients/jsonrpc-api",
+          type: "link",
+          href: "/api",
           label: "JSON RPC API",
         },
         {

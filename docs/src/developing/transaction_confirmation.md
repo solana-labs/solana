@@ -114,7 +114,7 @@ One minute is not a lot of time considering that a client needs to fetch a recen
 
 Given the short expiration time frame, it’s imperative that clients help users create transactions with blockhash that is as recent as possible.
 
-When fetching blockhashes, the current recommended RPC API is called [`getLatestBlockhash`](./clients/jsonrpc-api#getlatestblockhash). By default, this API uses the `"finalized"` commitment level to return the most recently finalized block’s blockhash. However, you can override this behavior by [setting the `commitment` parameter](./clients/jsonrpc-api#configuring-state-commitment) to a different commitment level.
+When fetching blockhashes, the current recommended RPC API is called [`getLatestBlockhash`](/api/http#getlatestblockhash). By default, this API uses the `"finalized"` commitment level to return the most recently finalized block’s blockhash. However, you can override this behavior by [setting the `commitment` parameter](/api/http#configuring-state-commitment) to a different commitment level.
 
 **Recommendation**
 
@@ -145,7 +145,7 @@ When your application uses an RPC pool service or when the RPC endpoint differs 
 
 For `sendTransaction` requests, clients should keep resending a transaction to a RPC node on a frequent interval so that if an RPC node is slightly lagging behind the cluster, it will eventually catch up and detect your transaction’s expiration properly.
 
-For `simulateTransaction` requests, clients should use the [`replaceRecentBlockhash`](./clients/jsonrpc-api#simulatetransaction) parameter to tell the RPC node to replace the simulated transaction’s blockhash with a blockhash that will always be valid for simulation.
+For `simulateTransaction` requests, clients should use the [`replaceRecentBlockhash`](/api/http#simulatetransaction) parameter to tell the RPC node to replace the simulated transaction’s blockhash with a blockhash that will always be valid for simulation.
 
 ### Avoid reusing stale blockhashes
 
@@ -169,16 +169,16 @@ Lagging RPC nodes can therefore respond to blockhash requests with blockhashes t
 
 Monitor the health of your RPC nodes to ensure that they have an up-to-date view of the cluster state with one of the following methods:
 
-1. Fetch your RPC node’s highest processed slot by using the [`getSlot`](./clients/jsonrpc-api#getslot) RPC API with the `"processed"` commitment level and then call the [`getMaxShredInsertSlot](./clients/jsonrpc-api#getmaxshredinsertslot) RPC API to get the highest slot that your RPC node has received a “shred” of a block for. If the difference between these responses is very large, the cluster is producing blocks far ahead of what the RPC node has processed.
-2. Call the `getLatestBlockhash` RPC API with the `"confirmed"` commitment level on a few different RPC API nodes and use the blockhash from the node that returns the highest slot for its [context slot](./clients/jsonrpc-api#rpcresponse-structure).
+1. Fetch your RPC node’s highest processed slot by using the [`getSlot`](/api/http#getslot) RPC API with the `"processed"` commitment level and then call the [`getMaxShredInsertSlot](/api/http#getmaxshredinsertslot) RPC API to get the highest slot that your RPC node has received a “shred” of a block for. If the difference between these responses is very large, the cluster is producing blocks far ahead of what the RPC node has processed.
+2. Call the `getLatestBlockhash` RPC API with the `"confirmed"` commitment level on a few different RPC API nodes and use the blockhash from the node that returns the highest slot for its [context slot](/api/http#rpcresponse-structure).
 
 ### Wait long enough for expiration
 
 **Recommendation**
 
-When calling [`getLatestBlockhash`](./clients/jsonrpc-api#getlatestblockhash) RPC API to get a recent blockhash for your transaction, take note of the `"lastValidBlockHeight"` in the response.
+When calling [`getLatestBlockhash`](/api/http#getlatestblockhash) RPC API to get a recent blockhash for your transaction, take note of the `"lastValidBlockHeight"` in the response.
 
-Then, poll the [`getBlockHeight`](./clients/jsonrpc-api#getblockheight) RPC API with the “confirmed” commitment level until it returns a block height greater than the previously returned last valid block height.
+Then, poll the [`getBlockHeight`](/api/http#getblockheight) RPC API with the “confirmed” commitment level until it returns a block height greater than the previously returned last valid block height.
 
 ### Consider using “durable” transactions
 
