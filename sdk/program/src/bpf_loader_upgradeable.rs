@@ -344,6 +344,7 @@ pub fn close_any(
     }
     if let Some(program_address) = program_address {
         metas.push(AccountMeta::new(*program_address, false));
+        metas.push(AccountMeta::new_readonly(sysvar::clock::id(), false));
     }
     Instruction::new_with_bincode(id(), &UpgradeableLoaderInstruction::Close, metas)
 }

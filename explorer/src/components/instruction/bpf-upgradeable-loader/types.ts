@@ -54,6 +54,7 @@ export const CloseInfo = type({
   recipient: PublicKeyFromString,
   authority: PublicKeyFromString,
   programAccount: optional(PublicKeyFromString),
+  clockSysvar: optional(PublicKeyFromString),
 });
 
 export type ExtendProgramInfo = Infer<typeof ExtendProgramInfo>;

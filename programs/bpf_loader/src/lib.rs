@@ -1079,7 +1079,7 @@ fn process_loader_upgradeable_instruction(
                     ic_logger_msg!(log_collector, "Closed Buffer {}", close_key);
                 }
                 UpgradeableLoaderState::ProgramData {
-                    slot: _,
+                    slot,
                     upgrade_authority_address: authority_address,
                 } => {
                     instruction_context.check_number_of_instruction_accounts(4)?;
@@ -1095,6 +1095,23 @@ fn process_loader_upgradeable_instruction(
                     if program_account.get_owner() != program_id {
                         ic_logger_msg!(log_collector, "Program account not owned by loader");
                         return Err(InstructionError::IncorrectProgramId);
+                    }
+                    if invoke_context
+                        .feature_set
+                        .is_active(&enable_program_redeployment_cooldown::id())
+                    {
+                        let clock = get_sysvar_with_account_check::clock(
+                            invoke_context,
+                            instruction_context,
+                            4,
+                        )?;
+                        if clock.slot == slot {
+                            ic_logger_msg!(
+                                log_collector,
+                                "Program was deployed in this block already"
+                            );
+                            return Err(InstructionError::InvalidArgument);
+                        }
                     }
 
                     match program_account.get_state()? {
@@ -3574,6 +3591,10 @@ mod tests {
                 programdata_address,
             })
             .unwrap();
+        let clock_account = create_account_for_test(&Clock {
+            slot: 1,
+            ..Clock::default()
+        });
         let transaction_accounts = vec![
             (buffer_address, buffer_account.clone()),
             (recipient_address, recipient_account.clone()),
@@ -3592,6 +3613,11 @@ mod tests {
         let authority_meta = AccountMeta {
             pubkey: authority_address,
             is_signer: true,
+            is_writable: false,
+        };
+        let clock_meta = AccountMeta {
+            pubkey: sysvar::clock::id(),
+            is_signer: false,
             is_writable: false,
         };
 
@@ -3679,6 +3705,7 @@ mod tests {
                 (recipient_address, recipient_account.clone()),
                 (authority_address, authority_account.clone()),
                 (program_address, program_account.clone()),
+                (sysvar::clock::id(), clock_account.clone()),
             ],
             vec![
                 AccountMeta {
@@ -3693,6 +3720,7 @@ mod tests {
                     is_signer: false,
                     is_writable: true,
                 },
+                clock_meta.clone(),
             ],
             Ok(()),
         );
@@ -3737,10 +3765,7 @@ mod tests {
                     sysvar::rent::id(),
                     create_account_for_test(&Rent::default()),
                 ),
-                (
-                    sysvar::clock::id(),
-                    create_account_for_test(&Clock::default()),
-                ),
+                (sysvar::clock::id(), clock_account),
                 (
                     system_program::id(),
                     AccountSharedData::new(0, 0, &system_program::id()),
@@ -3773,11 +3798,7 @@ mod tests {
                     is_signer: false,
                     is_writable: false,
                 },
-                AccountMeta {
-                    pubkey: sysvar::clock::id(),
-                    is_signer: false,
-                    is_writable: false,
-                },
+                clock_meta,
                 AccountMeta {
                     pubkey: system_program::id(),
                     is_signer: false,

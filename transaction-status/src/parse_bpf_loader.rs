@@ -162,7 +162,12 @@ pub fn parse_bpf_upgradeable_loader(
                         Some(account_keys[instruction.accounts[3] as usize].to_string())
                     } else {
                         None
-                    }
+                    },
+                    "clockSysvar": if instruction.accounts.len() > 4 {
+                        Some(account_keys[instruction.accounts[4] as usize].to_string())
+                    } else {
+                        None
+                    },
                 }),
             })
         }
@@ -717,7 +722,8 @@ mod test {
                     "account": close_address.to_string(),
                     "recipient": recipient_address.to_string(),
                     "authority": authority_address.to_string(),
-                    "programAccount": Value::Null
+                    "programAccount": Value::Null,
+                    "clockSysvar": Value::Null,
                 }),
             }
         );
@@ -760,7 +766,8 @@ mod test {
                     "account": close_address.to_string(),
                     "recipient": recipient_address.to_string(),
                     "authority": authority_address.to_string(),
-                    "programAccount": program_address.to_string()
+                    "programAccount": program_address.to_string(),
+                    "clockSysvar": sysvar::clock::ID.to_string(),
                 }),
             }
         );
@@ -770,6 +777,7 @@ mod test {
         )
         .is_err());
         let keys = message.account_keys.clone();
+        message.instructions[0].accounts.pop();
         message.instructions[0].accounts.pop();
         message.instructions[0].accounts.pop();
         assert!(parse_bpf_upgradeable_loader(
