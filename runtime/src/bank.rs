@@ -999,7 +999,9 @@ impl SchedulerPool<ExecuteTimings> {
 static SCHEDULER_POOL: std::sync::Mutex<SchedulerPool<ExecuteTimings>> =
     std::sync::Mutex::new(SchedulerPool::new());
 
-pub static POH: std::sync::RwLock<Option<Box<dyn Fn(&Bank, Vec<VersionedTransaction>, solana_sdk::hash::Hash) -> std::result::Result<(), ()> + Send + Sync>>> = std::sync::RwLock::new(None);
+pub static POH: std::sync::RwLock<Option<Box<dyn Fn(&Bank, Vec<VersionedTransaction>, solana_sdk::hash::Hash) -> std::result::Result<Option<usize>, ()> + Send + Sync>>> = std::sync::RwLock::new(None);
+use solana_transaction_status::TransactionTokenBalance;
+pub static STATUS_SENDER_CALLBACK: std::sync::RwLock<Option<(Option<usize>, Box<dyn Fn(Option<(Vec<Vec<u64>>, Vec<Vec<TransactionTokenBalance>>)>, &Arc<Bank>, &TransactionBatch, &mut HashMap<Pubkey, u8>, Option<TransactionResults>, Option<usize>) -> std::option::Option<(Vec<Vec<u64>>, Vec<Vec<TransactionTokenBalance>>)> + Send + Sync>)>> = std::sync::RwLock::new(None);
 
 pub mod commit_mode {
     use std::result::Result; // restore shadowing for not fully qualified macro expansion in atomic_enum...
@@ -1153,6 +1155,8 @@ impl Scheduler<ExecuteTimings> {
             let commit_status = commit_status.clone();
 
             std::thread::Builder::new().name(format!("solScExLane{:02}", thx)).spawn(move || {
+            let mut mint_decimals: HashMap<Pubkey, u8> = HashMap::new();
+
             let started = (cpu_time::ThreadTime::now(), std::time::Instant::now());
             if max_thread_priority {
                 thread_priority::set_current_thread_priority(thread_priority::ThreadPriority::Max).unwrap();
@@ -1188,6 +1192,10 @@ impl Scheduler<ExecuteTimings> {
                 let mut batch =
                     TransactionBatch::new(vec![lock_result], &bank, Cow::Owned(vec![ee.task.tx.0.clone()]));
                 batch.set_needs_unlock(false);
+                let status_sender_callback = STATUS_SENDER_CALLBACK.read().unwrap();
+                let bb = status_sender_callback.as_ref().map(|(_, status_sender_callback)|
+                    status_sender_callback(None, bank, &batch, &mut mint_decimals, None, None)
+                );
 
                 let LoadAndExecuteTransactionsOutput {
                     mut loaded_transactions,
@@ -1200,22 +1208,23 @@ impl Scheduler<ExecuteTimings> {
                 } = bank.load_and_execute_transactions(
                     &batch,
                     MAX_PROCESSING_AGE,
-                    false,
-                    false,
-                    false,
+                    bb.is_some(),
+                    bb.is_some(),
+                    bb.is_some(),
                     &mut timings,
                     None,
-                    None,
+                    status_sender_callback.as_ref().map(|a| a.0).flatten(),
                 );
 
                 let (last_blockhash, lamports_per_signature) =
                     bank.last_blockhash_and_lamports_per_signature();
 
                 let commit_mode = bank.commit_mode();
-                match commit_mode {
+                let commited_first_transaction_index = match commit_mode {
                     CommitMode::Replaying => {
                         //info!("replaying commit! {slot}");
-                    },
+                        Some(ee.task.transaction_index() as usize)
+                   },
                     CommitMode::Banking => {
                         //info!("banking commit! {slot}");
                         let executed_transactions: Vec<_> = execution_results
@@ -1232,14 +1241,20 @@ impl Scheduler<ExecuteTimings> {
                         if !executed_transactions.is_empty() {
                             let hash = solana_entry::entry::hash_transactions(&executed_transactions);
                             let poh = POH.read().unwrap();
-                            if let Err(e) = poh.as_ref().unwrap()(bank.as_ref(), executed_transactions, hash) {
-                                let current_thread_name = std::thread::current().name().unwrap().to_string();
+                            let res = poh.as_ref().unwrap()(bank.as_ref(), executed_transactions, hash);
+                            match res {
+                                Ok(aa) => aa,
+                                Err(e) => {
+                                    let current_thread_name = std::thread::current().name().unwrap().to_string();
 
-                                trace!("{current_thread_name} pausing due to poh error until resumed...: {:?}", e);
-                                // this is needed so that we don't enter busy loop
-                                commit_status.notify_as_paused();
-                                continue 'retry;
+                                    trace!("{current_thread_name} pausing due to poh error until resumed...: {:?}", e);
+                                    // this is needed so that we don't enter busy loop
+                                    commit_status.notify_as_paused();
+                                    continue 'retry;
+                                },
                             }
+                        } else {
+                            None
                         }
                     },
                 };
@@ -1261,18 +1276,13 @@ impl Scheduler<ExecuteTimings> {
                     &mut timings,
                 );
 
-                drop(bank);
-                drop(batch);
-                drop(weak_bank);
-                drop(ro_bank);
-
                 let TransactionResults {
                     fee_collection_results,
                     execution_results,
                     ..
-                } = tx_results;
+                } = &tx_results;
 
-                let tx_result = fee_collection_results.into_iter().collect::<Result<_>>();
+                let tx_result = fee_collection_results.clone().into_iter().collect::<Result<_>>();
                 if tx_result.is_ok() {
                     let details = execution_results[0].details().unwrap();
                     ee.cu = details.executed_units;
@@ -1295,6 +1305,17 @@ impl Scheduler<ExecuteTimings> {
                 // make wall time is longer than cpu time, always
                 wall_time.stop();
                 ee.execution_us = wall_time.as_us();
+
+                if let Some(commited_first_transaction_index) = commited_first_transaction_index {
+                    if let Some(bb) = bb {
+                        assert!(status_sender_callback.as_ref().unwrap().1(bb, bank, &batch, &mut mint_decimals, Some(tx_results), Some(commited_first_transaction_index)).is_none());
+                    }
+                }
+
+                drop(bank);
+                drop(batch);
+                drop(weak_bank);
+                drop(ro_bank);
 
                 //ee.reindex_with_address_book();
                 processed_ee_sender.send(solana_scheduler::UnlockablePayload(ee, timings)).unwrap();

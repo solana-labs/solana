@@ -6559,6 +6559,7 @@ dependencies = [
  "solana-scheduler",
  "solana-sdk 1.15.0",
  "solana-stake-program",
+ "solana-transaction-status",
  "solana-vote-program",
  "solana-zk-token-proof-program",
  "solana-zk-token-sdk 1.15.0",

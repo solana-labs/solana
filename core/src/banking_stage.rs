@@ -1835,14 +1835,14 @@ pub fn initialize_poh_callback(poh_recorder: &Arc<RwLock<PohRecorder>>) {
         let recorder = poh_recorder.recorder();
         drop(poh_recorder);
 
-        Box::new(move |bank: &Bank, transactions, hash| -> Result<(), ()> {
+        Box::new(move |bank: &Bank, transactions, hash| -> Result<_, ()> {
             //let current_thread_name = std::thread::current().name().unwrap().to_string();
             //info!("scEx: {current_thread_name} committing.. {} txes", transactions.len());
             let res = recorder.record(bank.slot(), hash, transactions);
 
             //info!("scEx: {current_thread_name} recorded {:?}", res);
 
-            res.map(|_| ()).map_err(|_| ())
+            res.map_err(|_| ())
         })
     });
 }
