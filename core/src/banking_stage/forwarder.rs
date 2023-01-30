@@ -22,7 +22,7 @@ use {
     },
 };
 
-pub struct Forwarder {
+pub(crate) struct Forwarder {
     poh_recorder: Arc<RwLock<PohRecorder>>,
     bank_forks: Arc<RwLock<BankForks>>,
     socket: UdpSocket,
@@ -32,7 +32,7 @@ pub struct Forwarder {
 }
 
 impl Forwarder {
-    pub fn new(
+    pub(crate) fn new(
         poh_recorder: Arc<RwLock<PohRecorder>>,
         bank_forks: Arc<RwLock<BankForks>>,
         socket: UdpSocket,
@@ -50,7 +50,7 @@ impl Forwarder {
         }
     }
 
-    pub fn handle_forwarding(
+    pub(crate) fn handle_forwarding(
         &self,
         unprocessed_transaction_storage: &mut UnprocessedTransactionStorage,
         hold: bool,
