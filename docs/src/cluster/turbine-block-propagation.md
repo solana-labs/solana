@@ -2,23 +2,23 @@
 title: Turbine Block Propagation
 ---
 
-A Solana cluster uses a multi-layer block propagation mechanism called _Turbine_ to broadcast transaction shreds to all nodes with minimal amount of duplicate messages. The cluster divides itself into small collections of nodes, called _neighborhoods_. Each node is responsible for propagating any data it receives on to a small set of nodes in downstream neighborhoods and possibly sharing data with the other nodes in its neighborhood. This way each node only has to communicate with a small number of nodes.
-
-## Neighborhood Assignment - Weighted Selection
-
-In order for data plane fanout to work, the entire cluster must agree on how the cluster is divided into neighborhoods. To achieve this, all the recognized validator nodes \(the TVU peers\) are sorted by stake and stored in a list. This list is then indexed in different ways to figure out neighborhood boundaries and retransmit peers. For example, the leader will simply select the first `DATA_PLANE_FANOUT` nodes to make up layer 1. These will automatically be the highest stake holders, allowing the heaviest votes to come back to the leader first. Layer 1 and lower-layer nodes use the same logic to find their neighbors and next layer peers.
-
-To reduce the possibility of attack vectors, each shred is transmitted over a random tree of neighborhoods. Each node uses the same set of nodes representing the cluster. A random tree is generated from the set for each shred using a seed derived from the slot leader id, slot, shred index, and shred type.
+A Solana cluster uses a multi-layer block propagation mechanism called _Turbine_ to broadcast transaction shreds to all nodes with minimal amount of duplicate messages. The cluster divides itself into small collections of nodes, called _neighborhoods_. Each node is responsible for propagating any data it receives on to a small set of nodes in downstream neighborhoods. This way each node only has to communicate with a small number of nodes.
 
 ## Layer and Neighborhood Structure
 
-The leader can be thought of as layer 0 and communicates with layer 1, which is made up of at most `DATA_PLANE_FANOUT` nodes. If this layer 1 is smaller than the number of nodes in the cluster, then the data plane fanout mechanism adds layers below. Subsequent layers follow these constraints to determine layer-capacity: Each neighborhood contains `DATA_PLANE_FANOUT` nodes. Layer 1 starts with 1 neighborhood. The number of nodes in each additional neighborhood/layer grows by a factor of `DATA_PLANE_FANOUT`.
+The leader communicates with a special root node. The root can be thought of as layer 0 and communicates with layer 1, which is made up of at most `DATA_PLANE_FANOUT` nodes. If this layer 1 is smaller than the number of nodes in the cluster, then the data plane fanout mechanism adds layers below. Subsequent layers follow these constraints to determine layer-capacity: Each neighborhood contains `DATA_PLANE_FANOUT` nodes. Layer 1 starts with 1 neighborhood. The number of nodes in each additional neighborhood/layer grows by a factor of `DATA_PLANE_FANOUT`.
 
 A good way to think about this is, layer 1 starts with 1 neighborhood with fanout nodes, layer 2 adds fanout neighborhoods, each with fanout nodes and layer 3 will have `fanout * number of nodes in layer 2` and so on.
 
 The following diagram shows a three layer cluster with a fanout of 2.
 
-![Two layer cluster with a Fanout of 2](/img/data-plane.svg)
+![Three layer cluster with a Fanout of 2](/img/data-plane.svg)
+
+### Neighborhood Assignment - Weighted Selection
+
+In order for data plane fanout to work, the entire cluster must agree on how the cluster is divided into layers and neighborhoods. To achieve this, all the recognized validator nodes \(the TVU peers\) are sorted by stake and stored in a list. This list is then indexed in different ways to figure out neighborhood boundaries and retransmit peers. For example, the leader selects the first node to be the root node, and the root node selects the next `DATA_PLANE_FANOUT` nodes to make up layer 1. These will automatically be the highest stake holders, allowing the heaviest votes to come back to the leader first. Layer 2 and lower-layer nodes use the same logic to find their neighbors and next layer peers.
+
+To reduce the possibility of attack vectors, each shred is transmitted over a random tree of neighborhoods. Each node uses the same set of nodes representing the cluster. A random tree is generated from the set for each shred using a seed derived from the slot leader id, slot, shred index, and shred type.
 
 ### Configuration Values
 
@@ -28,23 +28,13 @@ Currently, configuration is set when the cluster is launched. In the future, the
 
 ## Shred Propagation Flow
 
-During its slot, the leader node \(layer 0\) makes its initial broadcasts to a special root node sitting atop the turbine tree. This root node is rotated every shred. The root shares data within its neighborhood \(layer 1\). Nodes in this neighborhood then retransmit shreds to one node in some neighborhoods in the next layer \(layer 2\). In general, the layer-1 root/anchor node (first node in the neighborhood, rotated on every shred) shares their data with their neighborhood peers, and every node in layer-1 retransmits to nodes in the next layer, etc, until all nodes in the cluster have received all the shreds.
+During its slot, the leader node makes its initial broadcasts to a special root node \(layer 0\) sitting atop the turbine tree. This root node is rotated every shred. The root shares data with neighborhood 0 \(layer 1\). Nodes in this neighborhood then retransmit shreds to one node in some neighborhoods in the next layer \(layer 2\). In general, every node in layer-1 retransmits to a unique subset of nodes in the next layer, etc, until all nodes in the cluster have received all the shreds.
 
-As mentioned above, each node in a layer only has to broadcast its shreds to exactly 1 node in some next-layer neighborhoods (and to its neighbors if it is the anchor node), instead of to every TVU peer in the cluster. In this way, each node only has to communicate with a maximum of `2 * DATA_PLANE_FANOUT - 1` nodes if it is the anchor node and `DATA_PLANE_FANOUT` if it is not the anchor node.
+As mentioned above, each node in a layer only has to broadcast its shreds to exactly 1 node in some next-layer neighborhoods instead of to every TVU peer in the cluster. In this way, each node only has to communicate with a maximum of `DATA_PLANE_FANOUT` nodes.
 
-The following diagram shows how the leader sends shreds with a fanout of 2 to the root from Neighborhood 0 in Layer 1 and how the root from Neighborhood 0 shares its data with its neighbors.
+The following diagram shows how shreds propagate through a cluster with 15 nodes and a fanout of 3.
 
-![Leader sends shreds to Neighborhood 0 in Layer 1](/img/data-plane-seeding.svg)
-
-The following diagram shows how Neighborhood 0 fans out to Neighborhoods 1 and 2.
-
-![Neighborhood 0 Fanout to Neighborhood 1 and 2](/img/data-plane-fanout.svg)
-
-### Neighborhood Interaction
-
-The following diagram shows how two neighborhoods in different layers interact. To cripple a neighborhood, enough nodes \(erasure codes +1\) from the neighborhood above need to fail. Since each neighborhood receives shreds from multiple nodes in a neighborhood in the upper layer, we'd need a big network failure in the upper layers to end up with incomplete data.
-
-![Inner workings of a neighborhood](/img/data-plane-neighborhood.svg)
+![Shred propagation through 15 node cluster with fanout of 3](/img/data-plane-propagation.png)
 
 ## Calculating the required FEC rate
 
