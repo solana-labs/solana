@@ -4,31 +4,29 @@ use {
         elf::Executable,
         error::EbpfError,
         verifier::RequisiteVerifier,
-        vm::{BuiltInProgram, ContextObject, VerifiedExecutable},
+        vm::{BuiltInProgram, VerifiedExecutable},
     },
     solana_sdk::{
-        bpf_loader, bpf_loader_deprecated, bpf_loader_upgradeable, clock::Slot,
-        instruction::InstructionError, pubkey::Pubkey, transaction::TransactionError,
+        bpf_loader, bpf_loader_deprecated, bpf_loader_upgradeable, clock::Slot, pubkey::Pubkey,
     },
     std::{
         collections::HashMap,
-        sync::{
-            atomic::{AtomicU64, Ordering},
-            Arc,
-        },
+        sync::{atomic::AtomicU64, Arc},
     },
 };
 
 /// Relationship between two fork IDs
 pub enum BlockRelation {
-    /// The fork is an ancestor of the other fork
+    /// The slot is on the same fork and is an ancestor of the other slot
     Ancestor,
-    /// The two fork IDs are same or point to the same fork
+    /// The two slots are same and are on the same fork
     Equal,
-    /// The fork is a descendant of the other fork
+    /// The slot is on the same fork and is a descendant of the other slot
     Descendant,
-    /// These are two parallel forks, which only have a common ancestor
+    /// The slots are on two different forks and may have had a common ancestor at some point
     Unrelated,
+    /// Either or both of the slots are either older than the latest root, or are in future
+    Unknown,
 }
 
 /// Maps relationship between two ForkIds.
@@ -48,7 +46,7 @@ pub enum LoadedProgramType {
 
 pub struct LoadedProgram {
     /// The program of this entry
-    program: LoadedProgramType,
+    pub program: LoadedProgramType,
     /// Slot in which the program was (re)deployed
     pub deployment_slot: Slot,
     /// Slot in which this entry will become active (can be in the future)
@@ -180,7 +178,7 @@ impl LoadedPrograms {
     }
 
     /// Removes the entries at the given keys, if they exist
-    pub fn remove_entries(&mut self, key: impl Iterator<Item = Pubkey>) {
+    pub fn remove_entries(&mut self, _key: impl Iterator<Item = Pubkey>) {
         // TODO: Remove at primary index level
     }
 }

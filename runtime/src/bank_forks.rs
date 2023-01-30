@@ -632,20 +632,32 @@ impl BankForks {
 
 impl ForkGraph for BankForks {
     fn relationship(&self, a: Slot, b: Slot) -> BlockRelation {
-        let block_relation = BlockRelation::Unrelated;
-        if a == b { return BlockRelation::Equal; }
-        if let Some(x) = self.descendants().get(&b).map(|x| x.contains(&a)) {
-            if x { return BlockRelation::Descendant; }
-        }
-        if let Some(x) = self.ancestors().get(&b).map(|x| x.contains(&a)) {
-            if x { return BlockRelation::Ancestor; }
-        }
-        block_relation
+        let known_slot_range = self.root()..=self.highest_slot();
+        (known_slot_range.contains(&a) && known_slot_range.contains(&b))
+            .then(|| {
+                (a == b)
+                    .then_some(BlockRelation::Equal)
+                    .or_else(|| {
+                        self.banks.get(&b).and_then(|bank| {
+                            bank.ancestors
+                                .contains_key(&a)
+                                .then_some(BlockRelation::Ancestor)
+                        })
+                    })
+                    .or_else(|| {
+                        self.descendants.get(&b).and_then(|slots| {
+                            slots.contains(&a).then_some(BlockRelation::Descendant)
+                        })
+                    })
+                    .unwrap_or(BlockRelation::Unrelated)
+            })
+            .unwrap_or(BlockRelation::Unknown)
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use crate::contains::Contains;
     use {
         super::*,
         crate::{
@@ -976,5 +988,140 @@ mod tests {
                 (6, vec![])
             ])
         );
+    }
+
+    #[test]
+    fn test_fork_graph() {
+        let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(10_000);
+        let bank = Bank::new_for_tests(&genesis_config);
+        let mut bank_forks = BankForks::new(bank);
+
+        let bank = Bank::new_from_parent(&bank_forks[0], &Pubkey::default(), 1);
+        bank_forks.insert(bank);
+        let bank = Bank::new_from_parent(&bank_forks[1], &Pubkey::default(), 3);
+        bank_forks.insert(bank);
+        let bank = Bank::new_from_parent(&bank_forks[3], &Pubkey::default(), 8);
+        bank_forks.insert(bank);
+
+        let bank = Bank::new_from_parent(&bank_forks[0], &Pubkey::default(), 2);
+        bank_forks.insert(bank);
+        let bank = Bank::new_from_parent(&bank_forks[2], &Pubkey::default(), 4);
+        bank_forks.insert(bank);
+        let bank = Bank::new_from_parent(&bank_forks[4], &Pubkey::default(), 5);
+        bank_forks.insert(bank);
+        let bank = Bank::new_from_parent(&bank_forks[5], &Pubkey::default(), 10);
+        bank_forks.insert(bank);
+
+        let bank = Bank::new_from_parent(&bank_forks[4], &Pubkey::default(), 6);
+        bank_forks.insert(bank);
+        let bank = Bank::new_from_parent(&bank_forks[6], &Pubkey::default(), 12);
+        bank_forks.insert(bank);
+
+        // Fork graph created for the test
+        //                   0
+        //                 /   \
+        //                1     2
+        //                |     |
+        //                3     4
+        //                |     | \
+        //                8     5  6
+        //                      |   |
+        //                      10  12
+
+        assert!(matches!(
+            bank_forks.relationship(0, 3),
+            BlockRelation::Ancestor
+        ));
+        assert!(matches!(
+            bank_forks.relationship(0, 10),
+            BlockRelation::Ancestor
+        ));
+        assert!(matches!(
+            bank_forks.relationship(0, 12),
+            BlockRelation::Ancestor
+        ));
+        assert!(matches!(
+            bank_forks.relationship(1, 3),
+            BlockRelation::Ancestor
+        ));
+        assert!(matches!(
+            bank_forks.relationship(2, 10),
+            BlockRelation::Ancestor
+        ));
+        assert!(matches!(
+            bank_forks.relationship(2, 12),
+            BlockRelation::Ancestor
+        ));
+        assert!(matches!(
+            bank_forks.relationship(4, 10),
+            BlockRelation::Ancestor
+        ));
+        assert!(matches!(
+            bank_forks.relationship(4, 12),
+            BlockRelation::Ancestor
+        ));
+        assert!(matches!(
+            bank_forks.relationship(6, 10),
+            BlockRelation::Unrelated
+        ));
+        assert!(matches!(
+            bank_forks.relationship(5, 12),
+            BlockRelation::Unrelated
+        ));
+        assert!(matches!(
+            bank_forks.relationship(6, 12),
+            BlockRelation::Ancestor
+        ));
+
+        assert!(matches!(
+            bank_forks.relationship(6, 2),
+            BlockRelation::Descendant
+        ));
+        assert!(matches!(
+            bank_forks.relationship(10, 2),
+            BlockRelation::Descendant
+        ));
+        assert!(matches!(
+            bank_forks.relationship(8, 3),
+            BlockRelation::Descendant
+        ));
+        assert!(matches!(
+            bank_forks.relationship(6, 3),
+            BlockRelation::Unrelated
+        ));
+        assert!(matches!(
+            bank_forks.relationship(12, 2),
+            BlockRelation::Descendant
+        ));
+        assert!(matches!(
+            bank_forks.relationship(12, 1),
+            BlockRelation::Unrelated
+        ));
+        assert!(matches!(
+            bank_forks.relationship(1, 2),
+            BlockRelation::Unrelated
+        ));
+
+        assert!(matches!(
+            bank_forks.relationship(1, 13),
+            BlockRelation::Unknown
+        ));
+        assert!(matches!(
+            bank_forks.relationship(13, 2),
+            BlockRelation::Unknown
+        ));
+        bank_forks.set_root(
+            2,
+            &AbsRequestSender::default(),
+            Some(1), // highest confirmed root
+        );
+        assert!(matches!(
+            bank_forks.relationship(1, 2),
+            BlockRelation::Unknown
+        ));
+        assert!(matches!(
+            bank_forks.relationship(2, 0),
+            BlockRelation::Unknown
+        ));
     }
 }
