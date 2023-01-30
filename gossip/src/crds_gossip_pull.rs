@@ -54,6 +54,8 @@ pub const CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS: u64 = 15000;
 pub const CRDS_GOSSIP_PULL_MSG_TIMEOUT_MS: u64 = 60000;
 // Retention period of hashes of received outdated values.
 const FAILED_INSERTS_RETENTION_MS: u64 = 20_000;
+// Maximum number of pull requests to send out each time around.
+const MAX_NUM_PULL_REQUESTS: usize = 1024;
 pub const FALSE_RATE: f64 = 0.1f64;
 pub const KEYS: f64 = 8f64;
 
@@ -159,10 +161,14 @@ impl CrdsFilterSet {
     }
 
     fn add(&self, hash_value: Hash) {
-        let index = CrdsFilter::hash_as_u64(&hash_value)
-            .checked_shr(64 - self.mask_bits)
-            .unwrap_or(0);
-        self.filters[index as usize].add(&hash_value);
+        let shift = u64::BITS.checked_sub(self.mask_bits).unwrap();
+        let index = usize::try_from(
+            CrdsFilter::hash_as_u64(&hash_value)
+                .checked_shr(shift)
+                .unwrap_or_default(),
+        )
+        .unwrap();
+        self.filters[index].add(&hash_value);
     }
 }
 
@@ -266,8 +272,15 @@ impl CrdsGossipPull {
         if nodes.is_empty() {
             return Err(CrdsGossipError::NoPeers);
         }
+        let mut filters = self.build_crds_filters(thread_pool, crds, bloom_size);
+        if filters.len() > MAX_NUM_PULL_REQUESTS {
+            for i in 0..MAX_NUM_PULL_REQUESTS {
+                let j = rng.gen_range(i, filters.len());
+                filters.swap(i, j);
+            }
+            filters.truncate(MAX_NUM_PULL_REQUESTS);
+        }
         // Associate each pull-request filter with a randomly selected peer.
-        let filters = self.build_crds_filters(thread_pool, crds, bloom_size);
         let dist = WeightedIndex::new(&weights).unwrap();
         let nodes = repeat_with(|| nodes[dist.sample(&mut rng)].clone());
         Ok(nodes.zip(filters).into_group_map())
