@@ -1331,7 +1331,7 @@ pub struct AccountsDb {
 
     pub thread_pool_clean: ThreadPool,
 
-    pub bank_hashes: RwLock<HashMap<Slot, BankHashInfo>>,
+    bank_hashes: RwLock<HashMap<Slot, BankHashInfo>>,
 
     pub stats: AccountsStats,
 
