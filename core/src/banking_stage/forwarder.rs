@@ -35,7 +35,6 @@ impl Forwarder {
     pub(crate) fn new(
         poh_recorder: Arc<RwLock<PohRecorder>>,
         bank_forks: Arc<RwLock<BankForks>>,
-        socket: UdpSocket,
         cluster_info: Arc<ClusterInfo>,
         connection_cache: Arc<ConnectionCache>,
         data_budget: Arc<DataBudget>,
@@ -43,7 +42,7 @@ impl Forwarder {
         Self {
             poh_recorder,
             bank_forks,
-            socket,
+            socket: UdpSocket::bind("0.0.0.0:0").unwrap(),
             cluster_info,
             connection_cache,
             data_budget,
@@ -303,7 +302,6 @@ mod tests {
                 let forwarder = Forwarder::new(
                     poh_recorder.clone(),
                     bank_forks.clone(),
-                    UdpSocket::bind("0.0.0.0:0").unwrap(),
                     cluster_info.clone(),
                     Arc::new(ConnectionCache::default()),
                     Arc::new(data_budget),
@@ -408,7 +406,6 @@ mod tests {
             let forwarder = Forwarder::new(
                 poh_recorder,
                 bank_forks,
-                UdpSocket::bind("0.0.0.0:0").unwrap(),
                 Arc::new(cluster_info),
                 Arc::new(connection_cache),
                 Arc::new(DataBudget::default()),

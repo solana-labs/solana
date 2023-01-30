@@ -59,7 +59,6 @@ use {
         cmp,
         collections::HashMap,
         env,
-        net::UdpSocket,
         sync::{
             atomic::{AtomicU64, AtomicUsize, Ordering},
             Arc, RwLock,
@@ -724,7 +723,6 @@ impl BankingStage {
         let forwarder = Forwarder::new(
             poh_recorder.clone(),
             bank_forks.clone(),
-            UdpSocket::bind("0.0.0.0:0").unwrap(),
             cluster_info,
             connection_cache,
             data_budget,
