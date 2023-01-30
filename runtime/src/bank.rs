@@ -1357,7 +1357,7 @@ impl Scheduler<ExecuteTimings> {
                             cumulative_timings.accumulate(&timings);
                             last_slot = Some(ee.task.slot);
 
-                            if send_metrics {
+                            if send_metrics && ee.finish_time.is_some() {
                                 let sig = ee.task.tx.0.signature().to_string();
 
                                 datapoint_info_at!(
