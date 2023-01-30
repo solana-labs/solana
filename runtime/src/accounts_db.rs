@@ -3707,26 +3707,32 @@ impl AccountsDb {
         }
     }
 
+    fn get_unique_accounts_from_storage_for_shrink<'a>(
+        &self,
+        store: &'a Arc<AccountStorageEntry>,
+        stats: &ShrinkStats,
+    ) -> GetUniqueAccountsResult<'a> {
+        let (result, storage_read_elapsed) = measure!(self.get_unique_accounts_from_storage(store));
+        stats
+            .storage_read_elapsed
+            .fetch_add(storage_read_elapsed.as_us(), Ordering::Relaxed);
+        result
+    }
+
     /// shared code for shrinking normal slots and combining into ancient append vecs
     /// note 'stored_accounts' is passed by ref so we can return references to data within it, avoiding self-references
     fn shrink_collect<'a: 'b, 'b, T: ShrinkCollectRefs<'b>>(
         &'a self,
         store: &'a Arc<AccountStorageEntry>,
-        stored_accounts: &'b mut Vec<StoredAccountMeta<'b>>,
+        unique_accounts: &'b GetUniqueAccountsResult<'b>,
         stats: &ShrinkStats,
     ) -> ShrinkCollect<'b, T> {
-        let (
-            GetUniqueAccountsResult {
-                stored_accounts: stored_accounts_temp,
-                original_bytes,
-            },
-            storage_read_elapsed,
-        ) = measure!(self.get_unique_accounts_from_storage(store));
         let slot = store.slot();
-        stats
-            .storage_read_elapsed
-            .fetch_add(storage_read_elapsed.as_us(), Ordering::Relaxed);
-        *stored_accounts = stored_accounts_temp;
+
+        let GetUniqueAccountsResult {
+            stored_accounts,
+            original_bytes,
+        } = unique_accounts;
 
         let mut index_read_elapsed = Measure::start("index_read_elapsed");
 
@@ -3786,7 +3792,7 @@ impl AccountsDb {
             .fetch_add(aligned_total_bytes, Ordering::Relaxed);
 
         ShrinkCollect {
-            original_bytes,
+            original_bytes: *original_bytes,
             aligned_total_bytes,
             unrefed_pubkeys,
             alive_accounts,
@@ -3839,13 +3845,11 @@ impl AccountsDb {
             // It is 'correct' to ignore calls to shrink when a slot is still in the write cache.
             return;
         }
-        let mut stored_accounts = Vec::default();
+        let unique_accounts =
+            self.get_unique_accounts_from_storage_for_shrink(store, &self.shrink_stats);
         debug!("do_shrink_slot_store: slot: {}", slot);
-        let shrink_collect = self.shrink_collect::<AliveAccounts<'_>>(
-            store,
-            &mut stored_accounts,
-            &self.shrink_stats,
-        );
+        let shrink_collect =
+            self.shrink_collect::<AliveAccounts<'_>>(store, &unique_accounts, &self.shrink_stats);
 
         // This shouldn't happen if alive_bytes/approx_stored_count are accurate
         if Self::should_not_shrink(
@@ -4413,10 +4417,13 @@ impl AccountsDb {
         ancient_slot_pubkeys: &mut AncientSlotPubkeys,
         dropped_roots: &mut Vec<Slot>,
     ) {
-        let mut stored_accounts = Vec::default();
+        let unique_accounts = self.get_unique_accounts_from_storage_for_shrink(
+            old_storage,
+            &self.shrink_ancient_stats.shrink_stats,
+        );
         let shrink_collect = self.shrink_collect::<AliveAccounts<'_>>(
             old_storage,
-            &mut stored_accounts,
+            &unique_accounts,
             &self.shrink_ancient_stats.shrink_stats,
         );
 
@@ -16762,10 +16769,15 @@ pub mod tests {
                                 });
 
                                 let storage = db.get_storage_for_slot(slot5).unwrap();
-                                let mut stored_accounts = Vec::default();
+                                let unique_accounts = db
+                                    .get_unique_accounts_from_storage_for_shrink(
+                                        &storage,
+                                        &ShrinkStats::default(),
+                                    );
+
                                 let shrink_collect = db.shrink_collect::<AliveAccounts<'_>>(
                                     &storage,
-                                    &mut stored_accounts,
+                                    &unique_accounts,
                                     &ShrinkStats::default(),
                                 );
                                 let expect_single_opposite_alive_account =
