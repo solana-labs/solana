@@ -718,11 +718,7 @@ where
     );
 
     // Process deserialized data, set necessary fields in self
-    accounts_db
-        .bank_hashes
-        .write()
-        .unwrap()
-        .insert(snapshot_slot, snapshot_bank_hash_info);
+    accounts_db.set_bank_hash_info_from_snapshot(snapshot_slot, snapshot_bank_hash_info);
     accounts_db.storage.initialize(storage);
     accounts_db
         .next_id
