@@ -1,11 +1,13 @@
 use {
     crate::{
-        heaviest_subtree_fork_choice::HeaviestSubtreeForkChoice, repair_service::RepairService,
-        serve_repair::ShredRepairType, tree_diff::TreeDiff,
+        heaviest_subtree_fork_choice::HeaviestSubtreeForkChoice,
+        repair_service::{RepairService, RepairStats},
+        serve_repair::ShredRepairType,
+        tree_diff::TreeDiff,
     },
     solana_ledger::{blockstore::Blockstore, blockstore_meta::SlotMeta},
     solana_runtime::contains::Contains,
-    solana_sdk::{clock::Slot, hash::Hash},
+    solana_sdk::{clock::Slot, genesis_config::ClusterType, hash::Hash},
     std::collections::{HashMap, HashSet},
 };
 
@@ -80,6 +82,8 @@ pub fn get_best_repair_shreds<'a>(
     repairs: &mut Vec<ShredRepairType>,
     max_new_shreds: usize,
     ignore_slots: &impl Contains<'a, Slot>,
+    stats: &mut RepairStats,
+    cluster_type: ClusterType,
 ) {
     let initial_len = repairs.len();
     let max_repairs = initial_len + max_new_shreds;
@@ -106,6 +110,8 @@ pub fn get_best_repair_shreds<'a>(
                             slot,
                             slot_meta,
                             max_repairs - repairs.len(),
+                            stats,
+                            cluster_type,
                         );
                         repairs.extend(new_repairs);
                     }
@@ -127,6 +133,8 @@ pub fn get_best_repair_shreds<'a>(
                                 max_repairs,
                                 *new_child_slot,
                                 ignore_slots,
+                                stats,
+                                cluster_type,
                             );
                         }
                         visited_set.insert(*new_child_slot);
@@ -232,6 +240,8 @@ pub mod test {
             &mut repairs,
             6,
             &HashSet::default(),
+            &mut RepairStats::default(),
+            ClusterType::Development,
         );
         assert_eq!(
             repairs,
@@ -261,6 +271,8 @@ pub mod test {
             &mut repairs,
             6,
             &HashSet::default(),
+            &mut RepairStats::default(),
+            ClusterType::Development,
         );
         assert_eq!(
             repairs,
@@ -301,6 +313,8 @@ pub mod test {
             &mut repairs,
             4,
             &HashSet::default(),
+            &mut RepairStats::default(),
+            ClusterType::Development,
         );
         assert_eq!(
             repairs,
@@ -322,6 +336,8 @@ pub mod test {
             &mut repairs,
             4,
             &HashSet::default(),
+            &mut RepairStats::default(),
+            ClusterType::Development,
         );
         assert_eq!(
             repairs,
@@ -347,6 +363,8 @@ pub mod test {
             &mut repairs,
             std::usize::MAX,
             &HashSet::default(),
+            &mut RepairStats::default(),
+            ClusterType::Development,
         );
         let last_shred = blockstore.meta(0).unwrap().unwrap().received;
         assert_eq!(
@@ -375,6 +393,8 @@ pub mod test {
             &mut repairs,
             std::usize::MAX,
             &ignore_set,
+            &mut RepairStats::default(),
+            ClusterType::Development,
         );
         assert_eq!(
             repairs,
@@ -397,6 +417,8 @@ pub mod test {
             &mut repairs,
             std::usize::MAX,
             &ignore_set,
+            &mut RepairStats::default(),
+            ClusterType::Development,
         );
         assert_eq!(
             repairs,
@@ -418,6 +440,8 @@ pub mod test {
             &mut repairs,
             std::usize::MAX,
             &ignore_set,
+            &mut RepairStats::default(),
+            ClusterType::Development,
         );
         assert_eq!(
             repairs,

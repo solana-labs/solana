@@ -1,10 +1,12 @@
 use {
     crate::{
-        heaviest_subtree_fork_choice::HeaviestSubtreeForkChoice, repair_service::RepairService,
-        serve_repair::ShredRepairType, tree_diff::TreeDiff,
+        heaviest_subtree_fork_choice::HeaviestSubtreeForkChoice,
+        repair_service::{RepairService, RepairStats},
+        serve_repair::ShredRepairType,
+        tree_diff::TreeDiff,
     },
     solana_ledger::{blockstore::Blockstore, blockstore_meta::SlotMeta},
-    solana_sdk::{clock::Slot, hash::Hash},
+    solana_sdk::{clock::Slot, genesis_config::ClusterType, hash::Hash},
     std::collections::{HashMap, HashSet},
 };
 
@@ -114,6 +116,8 @@ pub fn get_closest_completion(
     slot_meta_cache: &mut HashMap<Slot, Option<SlotMeta>>,
     processed_slots: &mut HashSet<Slot>,
     limit: usize,
+    stats: &mut RepairStats,
+    cluster_type: ClusterType,
 ) -> Vec<ShredRepairType> {
     let mut v: Vec<(Slot, u64)> = Vec::default();
     let iter = GenericTraversal::new(tree);
@@ -187,6 +191,8 @@ pub fn get_closest_completion(
                 slot,
                 slot_meta,
                 limit - repairs.len(),
+                stats,
+                cluster_type,
             );
             repairs.extend(new_repairs);
         }
@@ -241,6 +247,8 @@ pub mod test {
             &mut slot_meta_cache,
             &mut processed_slots,
             10,
+            &mut RepairStats::default(),
+            ClusterType::Development,
         );
         assert_eq!(repairs, []);
 
@@ -265,6 +273,8 @@ pub mod test {
             &mut slot_meta_cache,
             &mut processed_slots,
             2,
+            &mut RepairStats::default(),
+            ClusterType::Development,
         );
         assert_eq!(
             repairs,

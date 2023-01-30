@@ -2,7 +2,7 @@ use {
     crate::{
         heaviest_subtree_fork_choice::HeaviestSubtreeForkChoice,
         repair_generic_traversal::{get_closest_completion, get_unknown_last_index},
-        repair_service::{BestRepairsStats, RepairTiming},
+        repair_service::{BestRepairsStats, RepairStats, RepairTiming},
         repair_weighted_traversal,
         serve_repair::ShredRepairType,
         tree_diff::TreeDiff,
@@ -15,6 +15,7 @@ use {
     solana_sdk::{
         clock::Slot,
         epoch_schedule::{Epoch, EpochSchedule},
+        genesis_config::ClusterType,
         hash::Hash,
         pubkey::Pubkey,
     },
@@ -157,8 +158,10 @@ impl RepairWeight {
         max_unknown_last_index_repairs: usize,
         max_closest_completion_repairs: usize,
         ignore_slots: &impl Contains<'a, Slot>,
-        repair_timing: Option<&mut RepairTiming>,
-        stats: Option<&mut BestRepairsStats>,
+        repair_timing: &mut RepairTiming,
+        best_repair_stats: &mut BestRepairsStats,
+        repair_stats: &mut RepairStats,
+        cluster_type: ClusterType,
     ) -> Vec<ShredRepairType> {
         let mut repairs = vec![];
         let mut processed_slots: HashSet<Slot> = vec![self.root].into_iter().collect();
@@ -187,6 +190,8 @@ impl RepairWeight {
             &mut best_shreds_repairs,
             max_new_shreds,
             ignore_slots,
+            repair_stats,
+            cluster_type,
         );
         let num_best_shreds_repairs = best_shreds_repairs.len();
         let repair_slots_set: HashSet<Slot> =
@@ -221,30 +226,29 @@ impl RepairWeight {
             &mut slot_meta_cache,
             &mut processed_slots,
             max_closest_completion_repairs,
+            repair_stats,
+            cluster_type,
         );
         let num_closest_completion_repairs = closest_completion_repairs.len();
         let num_closest_completion_slots = processed_slots.len() - pre_num_slots;
         repairs.extend(closest_completion_repairs);
         get_closest_completion_elapsed.stop();
 
-        if let Some(stats) = stats {
-            stats.update(
-                num_orphan_slots as u64,
-                num_orphan_repairs as u64,
-                num_best_shreds_slots as u64,
-                num_best_shreds_repairs as u64,
-                num_unknown_last_index_slots as u64,
-                num_unknown_last_index_repairs as u64,
-                num_closest_completion_slots as u64,
-                num_closest_completion_repairs as u64,
-            );
-        }
-        if let Some(repair_timing) = repair_timing {
-            repair_timing.get_best_orphans_elapsed += get_best_orphans_elapsed.as_us();
-            repair_timing.get_best_shreds_elapsed += get_best_shreds_elapsed.as_us();
-            repair_timing.get_unknown_last_index_elapsed += get_unknown_last_index_elapsed.as_us();
-            repair_timing.get_closest_completion_elapsed += get_closest_completion_elapsed.as_us();
-        }
+        best_repair_stats.update(
+            num_orphan_slots as u64,
+            num_orphan_repairs as u64,
+            num_best_shreds_slots as u64,
+            num_best_shreds_repairs as u64,
+            num_unknown_last_index_slots as u64,
+            num_unknown_last_index_repairs as u64,
+            num_closest_completion_slots as u64,
+            num_closest_completion_repairs as u64,
+        );
+        repair_timing.get_best_orphans_elapsed += get_best_orphans_elapsed.as_us();
+        repair_timing.get_best_shreds_elapsed += get_best_shreds_elapsed.as_us();
+        repair_timing.get_unknown_last_index_elapsed += get_unknown_last_index_elapsed.as_us();
+        repair_timing.get_closest_completion_elapsed += get_closest_completion_elapsed.as_us();
+
         repairs
     }
 
@@ -353,6 +357,8 @@ impl RepairWeight {
         repairs: &mut Vec<ShredRepairType>,
         max_new_shreds: usize,
         ignore_slots: &impl Contains<'a, Slot>,
+        stats: &mut RepairStats,
+        cluster_type: ClusterType,
     ) {
         let root_tree = self.trees.get(&self.root).expect("Root tree must exist");
         repair_weighted_traversal::get_best_repair_shreds(
@@ -362,6 +368,8 @@ impl RepairWeight {
             repairs,
             max_new_shreds,
             ignore_slots,
+            stats,
+            cluster_type,
         );
     }
 
@@ -470,6 +478,8 @@ impl RepairWeight {
         slot_meta_cache: &mut HashMap<Slot, Option<SlotMeta>>,
         processed_slots: &mut HashSet<Slot>,
         max_new_repairs: usize,
+        stats: &mut RepairStats,
+        cluster_type: ClusterType,
     ) -> Vec<ShredRepairType> {
         let mut repairs = Vec::default();
         for (_slot, tree) in self.trees.iter() {
@@ -482,6 +492,8 @@ impl RepairWeight {
                 slot_meta_cache,
                 processed_slots,
                 max_new_repairs - repairs.len(),
+                stats,
+                cluster_type,
             );
             repairs.extend(new_repairs);
         }

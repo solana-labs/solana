@@ -1,5 +1,7 @@
 //! The `repair_service` module implements the tools necessary to generate a thread which
 //! regularly finds missing shreds in the ledger and sends repair requests for those shreds
+#[cfg(test)]
+use solana_ledger::shred::Nonce;
 use {
     crate::{
         ancestor_hashes_service::{AncestorHashesReplayUpdateReceiver, AncestorHashesService},
@@ -17,8 +19,8 @@ use {
     solana_measure::measure::Measure,
     solana_runtime::{bank_forks::BankForks, contains::Contains},
     solana_sdk::{
-        clock::Slot, epoch_schedule::EpochSchedule, hash::Hash, pubkey::Pubkey,
-        signer::keypair::Keypair,
+        clock::Slot, epoch_schedule::EpochSchedule, genesis_config::ClusterType, hash::Hash,
+        pubkey::Pubkey, signer::keypair::Keypair, timing::timestamp,
     },
     solana_streamer::sendmmsg::{batch_send, SendPktsError},
     std::{
@@ -33,8 +35,6 @@ use {
         time::{Duration, Instant},
     },
 };
-#[cfg(test)]
-use {solana_ledger::shred::Nonce, solana_sdk::timing::timestamp};
 
 pub type DuplicateSlotsResetSender = CrossbeamSender<Vec<(Slot, Hash)>>;
 pub type DuplicateSlotsResetReceiver = CrossbeamReceiver<Vec<(Slot, Hash)>>;
@@ -89,6 +89,10 @@ pub struct RepairStats {
     pub orphan: RepairStatsGroup,
     pub get_best_orphans_us: u64,
     pub get_best_shreds_us: u64,
+    pub deferred_repairs: usize,
+    pub post_deferred_repairs: usize,
+    pub deferred_slots: HashSet<Slot>,
+    pub post_deferred_slots: HashSet<Slot>,
 }
 
 #[derive(Default, Debug)]
@@ -342,8 +346,10 @@ impl RepairService {
                     MAX_UNKNOWN_LAST_INDEX_REPAIRS,
                     MAX_CLOSEST_COMPLETION_REPAIRS,
                     &duplicate_slot_repair_statuses,
-                    Some(&mut repair_timing),
-                    Some(&mut best_repairs_stats),
+                    &mut repair_timing,
+                    &mut best_repairs_stats,
+                    &mut repair_stats,
+                    root_bank.cluster_type(),
                 );
 
                 repairs
@@ -423,6 +429,18 @@ impl RepairService {
                         ("orphan-count", repair_stats.orphan.count, i64),
                         ("repair-highest-slot", repair_stats.highest_shred.max, i64),
                         ("repair-orphan", repair_stats.orphan.max, i64),
+                        ("deferred_repairs", repair_stats.deferred_repairs, i64),
+                        (
+                            "post_deferred_repairs",
+                            repair_stats.post_deferred_repairs,
+                            i64
+                        ),
+                        ("deferred_slots", repair_stats.deferred_slots.len(), i64),
+                        (
+                            "post_deferred_slots",
+                            repair_stats.post_deferred_slots.len(),
+                            i64
+                        ),
                     );
                 }
                 datapoint_info!(
@@ -518,10 +536,34 @@ impl RepairService {
         slot: Slot,
         slot_meta: &SlotMeta,
         max_repairs: usize,
+        stats: &mut RepairStats,
+        _cluster_type: ClusterType,
     ) -> Vec<ShredRepairType> {
+        const DEFER_REPAIR_THRESHOLD_MS: u64 = 300;
+        let time_delta_ms = timestamp() - slot_meta.first_shred_timestamp;
+
         if max_repairs == 0 || slot_meta.is_full() {
-            vec![]
-        } else if slot_meta.consumed == slot_meta.received {
+            return vec![];
+        }
+
+        let blockstore_highest_slot = blockstore.highest_slot().unwrap_or_default();
+        let use_time_threshold = blockstore_highest_slot
+            .map(|highest| slot >= highest.saturating_sub(1))
+            .unwrap_or_default();
+
+        error!(
+            ">>> use_time_threshold={} slot={} blockstore_highest={:?}",
+            use_time_threshold, slot, &blockstore_highest_slot
+        );
+
+        //if cluster_type == ClusterType::Testnet && time_delta_ms < DEFER_REPAIR_THRESHOLD_MS {
+        if use_time_threshold && time_delta_ms < DEFER_REPAIR_THRESHOLD_MS {
+            stats.deferred_slots.insert(slot);
+            stats.deferred_repairs += 1;
+            return vec![];
+        }
+
+        if slot_meta.consumed == slot_meta.received {
             vec![ShredRepairType::HighestShred(slot, slot_meta.received)]
         } else {
             let reqs = blockstore.find_missing_data_indexes(
@@ -531,6 +573,10 @@ impl RepairService {
                 slot_meta.received,
                 max_repairs,
             );
+            if !reqs.is_empty() && stats.deferred_slots.contains(&slot) {
+                stats.post_deferred_repairs += reqs.len();
+                stats.post_deferred_slots.insert(slot);
+            }
             reqs.into_iter()
                 .map(|i| ShredRepairType::Shred(slot, i))
                 .collect()
@@ -544,6 +590,8 @@ impl RepairService {
         max_repairs: usize,
         slot: Slot,
         duplicate_slot_repair_statuses: &impl Contains<'a, Slot>,
+        stats: &mut RepairStats,
+        cluster_type: ClusterType,
     ) {
         let mut pending_slots = vec![slot];
         while repairs.len() < max_repairs && !pending_slots.is_empty() {
@@ -558,6 +606,8 @@ impl RepairService {
                     slot,
                     &slot_meta,
                     max_repairs - repairs.len(),
+                    stats,
+                    cluster_type,
                 );
                 repairs.extend(new_repairs);
                 let next_slots = slot_meta.next_slots;
@@ -595,6 +645,8 @@ impl RepairService {
                 slot,
                 &meta,
                 max_repairs - repairs.len(),
+                &mut RepairStats::default(),
+                ClusterType::Development,
             );
             repairs.extend(new_repairs);
         }
@@ -617,6 +669,8 @@ impl RepairService {
                     slot,
                     &slot_meta,
                     MAX_REPAIR_PER_DUPLICATE,
+                    &mut RepairStats::default(),
+                    ClusterType::Development,
                 ))
             }
         } else {
@@ -808,8 +862,10 @@ mod test {
                     MAX_UNKNOWN_LAST_INDEX_REPAIRS,
                     MAX_CLOSEST_COMPLETION_REPAIRS,
                     &HashSet::default(),
-                    None,
-                    None,
+                    &mut RepairTiming::default(),
+                    &mut BestRepairsStats::default(),
+                    &mut RepairStats::default(),
+                    ClusterType::Development,
                 ),
                 vec![
                     ShredRepairType::Orphan(2),
@@ -845,8 +901,10 @@ mod test {
                     MAX_UNKNOWN_LAST_INDEX_REPAIRS,
                     MAX_CLOSEST_COMPLETION_REPAIRS,
                     &HashSet::default(),
-                    None,
-                    None,
+                    &mut RepairTiming::default(),
+                    &mut BestRepairsStats::default(),
+                    &mut RepairStats::default(),
+                    ClusterType::Development,
                 ),
                 vec![ShredRepairType::HighestShred(0, 0)]
             );
@@ -907,8 +965,10 @@ mod test {
                     MAX_UNKNOWN_LAST_INDEX_REPAIRS,
                     MAX_CLOSEST_COMPLETION_REPAIRS,
                     &HashSet::default(),
-                    None,
-                    None,
+                    &mut RepairTiming::default(),
+                    &mut BestRepairsStats::default(),
+                    &mut RepairStats::default(),
+                    ClusterType::Development,
                 ),
                 expected
             );
@@ -923,8 +983,10 @@ mod test {
                     MAX_UNKNOWN_LAST_INDEX_REPAIRS,
                     MAX_CLOSEST_COMPLETION_REPAIRS,
                     &HashSet::default(),
-                    None,
-                    None,
+                    &mut RepairTiming::default(),
+                    &mut BestRepairsStats::default(),
+                    &mut RepairStats::default(),
+                    ClusterType::Development,
                 )[..],
                 expected[0..expected.len() - 2]
             );
@@ -969,8 +1031,10 @@ mod test {
                     MAX_UNKNOWN_LAST_INDEX_REPAIRS,
                     MAX_CLOSEST_COMPLETION_REPAIRS,
                     &HashSet::default(),
-                    None,
-                    None,
+                    &mut RepairTiming::default(),
+                    &mut BestRepairsStats::default(),
+                    &mut RepairStats::default(),
+                    ClusterType::Development,
                 ),
                 expected
             );
