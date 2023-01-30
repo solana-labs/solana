@@ -461,11 +461,15 @@ impl BankingStage {
                 let data_budget = data_budget.clone();
                 let connection_cache = connection_cache.clone();
                 let bank_forks = bank_forks.clone();
+
+                let decision_maker = DecisionMaker::new(cluster_info.id(), poh_recorder.clone());
+
                 Builder::new()
                     .name(format!("solBanknStgTx{i:02}"))
                     .spawn(move || {
                         Self::process_loop(
                             &mut packet_deserializer,
+                            &decision_maker,
                             &poh_recorder,
                             &cluster_info,
                             &mut recv_start,
@@ -730,6 +734,7 @@ impl BankingStage {
     #[allow(clippy::too_many_arguments)]
     fn process_loop(
         packet_deserializer: &mut PacketDeserializer,
+        decision_maker: &DecisionMaker,
         poh_recorder: &Arc<RwLock<PohRecorder>>,
         cluster_info: &ClusterInfo,
         recv_start: &mut Instant,
@@ -748,8 +753,6 @@ impl BankingStage {
         let mut tracer_packet_stats = TracerPacketStats::new(id);
         let qos_service = QosService::new(id);
 
-        let decision_maker = DecisionMaker::new(cluster_info.id(), poh_recorder.clone());
-
         let mut slot_metrics_tracker = LeaderSlotMetricsTracker::new(id);
         let mut last_metrics_update = Instant::now();
 
@@ -759,7 +762,7 @@ impl BankingStage {
             {
                 let (_, process_buffered_packets_time) = measure!(
                     Self::process_buffered_packets(
-                        &decision_maker,
+                        decision_maker,
                         &socket,
                         poh_recorder,
                         cluster_info,
