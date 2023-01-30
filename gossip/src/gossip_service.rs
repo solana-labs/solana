@@ -58,23 +58,23 @@ fn recv_send_quic(
         //_socket_addr_space.check(&addr).then_some((data, addr))
         Some((data, addr))
     });
-    //todo: bench this
-    let mut hashmap : HashMap<SocketAddr, Vec<&[u8]>> = HashMap::new();
+    //todo: bench this and find a way to avoid the copy
+    let mut hashmap : HashMap<SocketAddr, Vec<Vec<u8>>> = HashMap::new();
     for p in packets {
         match hashmap.get_mut(&p.1) {
             Some(packet_set) => {
-                packet_set.push(p.0);
+                packet_set.push(p.0.to_vec());
             },
             None => {
-                hashmap.insert(p.1, vec![p.0]);
+                hashmap.insert(p.1, vec![p.0.to_vec()]);
             }
         }
     }
-    for packet_set in hashmap.iter() {
-        let conn = connection_cache.get_connection(packet_set.0);
+    for packet_set in hashmap.into_iter() {
+        let conn = connection_cache.get_connection(&packet_set.0);
 	    info!("recv_send_quic connection remote address: {}", conn.tpu_addr());
         info!("recv_send_quic connection batch len: {}", packet_set.1.len());        
-	    let res = conn.send_wire_transaction_batch(packet_set.1);
+	    let res = conn.send_wire_transaction_batch_async(packet_set.1);
 	    info!("recv_send_quic send result: {:?}", res);    
     }
     Ok(())
