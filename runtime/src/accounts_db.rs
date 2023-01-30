@@ -3720,7 +3720,7 @@ impl AccountsDb {
     }
 
     /// shared code for shrinking normal slots and combining into ancient append vecs
-    /// note 'stored_accounts' is passed by ref so we can return references to data within it, avoiding self-references
+    /// note 'unique_accounts' is passed by ref so we can return references to data within it, avoiding self-references
     fn shrink_collect<'a: 'b, 'b, T: ShrinkCollectRefs<'b>>(
         &'a self,
         store: &'a Arc<AccountStorageEntry>,
