@@ -446,6 +446,7 @@ impl ReplayStage {
             if max_thread_priority {
                 thread_priority::set_current_thread_priority(thread_priority::ThreadPriority::Max).unwrap();
             }
+            let ledger_signal_timeout = Duration::from_millis(std::env::var("REPLAY_LEDGER_SIGNAL_TIMEOUT").ok().and_then(|x| x.parse::<u64>().ok()).unwrap_or(100));
             let verify_recyclers = VerifyRecyclers::default();
             let _exit = Finalizer::new(exit.clone());
             let mut identity_keypair = cluster_info.keypair().clone();
@@ -970,7 +971,7 @@ impl ReplayStage {
                 if !did_complete_bank {
                     // only wait for the signal if we did not just process a bank; maybe there are more slots available
 
-                    let timer = Duration::from_millis(100);
+                    let timer = ledger_signal_timeout;
                     let result = ledger_signal_receiver.recv_timeout(timer);
                     match result {
                         Err(RecvTimeoutError::Timeout) => (),
