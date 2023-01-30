@@ -1619,9 +1619,9 @@ impl ClusterInfo {
                 "run_gossip",
                 &reqs,
             );
-            for p in packet_batch.iter() {
+            /*for p in packet_batch.iter() {
                 info!("run_gossip to addr {}:{}", p.meta().addr, p.meta().port);
-            }
+            }*/
             self.stats
                 .packets_sent_gossip_requests_count
                 .add_relaxed(packet_batch.len() as u64);
