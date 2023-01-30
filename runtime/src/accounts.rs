@@ -46,6 +46,7 @@ use {
             State as NonceState,
         },
         pubkey::Pubkey,
+        saturating_add_assign,
         signature::Signature,
         slot_hashes::SlotHashes,
         system_program,
@@ -239,17 +240,18 @@ impl Accounts {
     }
 
     /// If feature `cap_transaction_accounts_data_size` is active, total accounts data a
-    /// transaction can load is limited to 64MiB to not break anyone in Mainnet today.
-    /// (It will be set by compute_bodget instruction in the future to more reasonable level).
+    /// transaction can load is limited to 64MiB to not break anyone in Mainnet-beta today.
+    /// (It will be set by compute_budget instruction in the future to more reasonable level).
     fn get_requested_loaded_accounts_data_size_limit(
         feature_set: &FeatureSet,
     ) -> Option<NonZeroUsize> {
-        if feature_set.is_active(&feature_set::cap_transaction_accounts_data_size::id()) {
-            const REQUESTED_LOADED_ACCOUNTS_DATA_SIZE: usize = 64 * 1024 * 1024;
-            NonZeroUsize::new(REQUESTED_LOADED_ACCOUNTS_DATA_SIZE)
-        } else {
-            None
-        }
+        feature_set
+            .is_active(&feature_set::cap_transaction_accounts_data_size::id())
+            .then(|| {
+                const REQUESTED_LOADED_ACCOUNTS_DATA_SIZE: usize = 64 * 1024 * 1024;
+                NonZeroUsize::new(REQUESTED_LOADED_ACCOUNTS_DATA_SIZE)
+                    .expect("requested loaded accounts data size is greater than 0")
+            })
     }
 
     /// Accumulate loaded account data size into `accumulated_accounts_data_size`.
@@ -264,8 +266,7 @@ impl Accounts {
     ) -> Result<()> {
         if let Some(requested_loaded_accounts_data_size) = requested_loaded_accounts_data_size_limit
         {
-            *accumulated_loaded_accounts_data_size =
-                accumulated_loaded_accounts_data_size.saturating_add(account_data_size);
+            saturating_add_assign!(*accumulated_loaded_accounts_data_size, account_data_size);
             if *accumulated_loaded_accounts_data_size > requested_loaded_accounts_data_size.get() {
                 error_counters.max_loaded_accounts_data_size_exceeded += 1;
                 Err(TransactionError::MaxLoadedAccountsDataSizeExceeded)
