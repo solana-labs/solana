@@ -463,7 +463,7 @@ export class Transaction {
         sensitivity: 'variant',
         ignorePunctuation: false,
         numeric: false,
-        caseFirst: 'upper',
+        caseFirst: 'lower',
       };
       return x.pubkey
         .toBase58()
