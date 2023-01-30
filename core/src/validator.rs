@@ -398,7 +398,7 @@ impl Validator {
         tpu_enable_udp: bool,
     ) -> Result<Self, String> {
         let id = identity_keypair.pubkey();
-        assert_eq!(id, node.info.id);
+        assert_eq!(&id, node.info.pubkey());
 
         warn!("identity: {}", id);
         warn!("vote account: {}", vote_account);
@@ -555,8 +555,8 @@ impl Validator {
             Some(poh_timing_point_sender.clone()),
         )?;
 
-        node.info.wallclock = timestamp();
-        node.info.shred_version = compute_shred_version(
+        node.info.set_wallclock(timestamp());
+        node.info.set_shred_version(compute_shred_version(
             &genesis_config.hash(),
             Some(
                 &bank_forks
@@ -567,15 +567,16 @@ impl Validator {
                     .read()
                     .unwrap(),
             ),
-        );
+        ));
 
         Self::print_node_info(&node);
 
         if let Some(expected_shred_version) = config.expected_shred_version {
-            if expected_shred_version != node.info.shred_version {
+            if expected_shred_version != node.info.shred_version() {
                 return Err(format!(
                     "shred version mismatch: expected {} found: {}",
-                    expected_shred_version, node.info.shred_version,
+                    expected_shred_version,
+                    node.info.shred_version(),
                 ));
             }
         }
@@ -762,7 +763,13 @@ impl Validator {
                 let connection_cache = ConnectionCache::new_with_client_options(
                     tpu_connection_pool_size,
                     None,
-                    Some((&identity_keypair, node.info.tpu.ip())),
+                    Some((
+                        &identity_keypair,
+                        node.info
+                            .tpu()
+                            .expect("Operator must spin up node with valid TPU address")
+                            .ip(),
+                    )),
                     Some((&staked_nodes, &identity_keypair.pubkey())),
                 );
                 Arc::new(connection_cache)
@@ -781,18 +788,16 @@ impl Validator {
             optimistically_confirmed_bank_tracker,
             bank_notification_sender,
         ) = if let Some((rpc_addr, rpc_pubsub_addr)) = config.rpc_addrs {
-            if ContactInfo::is_valid_address(&node.info.rpc, &socket_addr_space) {
-                assert!(ContactInfo::is_valid_address(
-                    &node.info.rpc_pubsub,
-                    &socket_addr_space
-                ));
-            } else {
-                assert!(!ContactInfo::is_valid_address(
-                    &node.info.rpc_pubsub,
-                    &socket_addr_space
-                ));
-            }
-
+            assert_eq!(
+                node.info
+                    .rpc()
+                    .map(|addr| socket_addr_space.check(&addr))
+                    .ok(),
+                node.info
+                    .rpc_pubsub()
+                    .map(|addr| socket_addr_space.check(&addr))
+                    .ok()
+            );
             let (bank_notification_sender, bank_notification_receiver) = unbounded();
             let confirmed_bank_subscribers = if !bank_notification_senders.is_empty() {
                 Some(Arc::new(RwLock::new(bank_notification_senders)))
@@ -873,7 +878,7 @@ impl Validator {
             None => None,
             Some(tcp_listener) => Some(solana_net_utils::ip_echo_server(
                 tcp_listener,
-                Some(node.info.shred_version),
+                Some(node.info.shred_version()),
             )),
         };
 
@@ -1002,7 +1007,7 @@ impl Validator {
             cluster_confirmed_slot_receiver,
             TvuConfig {
                 max_ledger_shreds: config.max_ledger_shreds,
-                shred_version: node.info.shred_version,
+                shred_version: node.info.shred_version(),
                 repair_validators: config.repair_validators.clone(),
                 repair_whitelist: config.repair_whitelist.clone(),
                 wait_for_vote_to_start_leader,
@@ -1036,7 +1041,7 @@ impl Validator {
             &blockstore,
             &config.broadcast_stage_type,
             &exit,
-            node.info.shred_version,
+            node.info.shred_version(),
             vote_tracker,
             bank_forks.clone(),
             verified_vote_sender,
@@ -2088,6 +2093,7 @@ mod tests {
     use {
         super::*,
         crossbeam_channel::{bounded, RecvTimeoutError},
+        solana_gossip::contact_info::{ContactInfo, LegacyContactInfo},
         solana_ledger::{create_new_tmp_ledger, genesis_utils::create_genesis_config_with_leader},
         solana_sdk::{genesis_config::create_genesis_config, poh_config::PohConfig},
         solana_tpu_client::tpu_client::{
@@ -2111,7 +2117,10 @@ mod tests {
 
         let voting_keypair = Arc::new(Keypair::new());
         let config = ValidatorConfig {
-            rpc_addrs: Some((validator_node.info.rpc, validator_node.info.rpc_pubsub)),
+            rpc_addrs: Some((
+                validator_node.info.rpc().unwrap(),
+                validator_node.info.rpc_pubsub().unwrap(),
+            )),
             ..ValidatorConfig::default_for_test()
         };
         let start_progress = Arc::new(RwLock::new(ValidatorStartProgress::default()));
@@ -2121,7 +2130,7 @@ mod tests {
             &validator_ledger_path,
             &voting_keypair.pubkey(),
             Arc::new(RwLock::new(vec![voting_keypair.clone()])),
-            vec![leader_node.info],
+            vec![LegacyContactInfo::try_from(&leader_node.info).unwrap()],
             &config,
             true, // should_check_duplicate_instance
             start_progress.clone(),
@@ -2204,7 +2213,10 @@ mod tests {
                 ledger_paths.push(validator_ledger_path.clone());
                 let vote_account_keypair = Keypair::new();
                 let config = ValidatorConfig {
-                    rpc_addrs: Some((validator_node.info.rpc, validator_node.info.rpc_pubsub)),
+                    rpc_addrs: Some((
+                        validator_node.info.rpc().unwrap(),
+                        validator_node.info.rpc_pubsub().unwrap(),
+                    )),
                     ..ValidatorConfig::default_for_test()
                 };
                 Validator::new(
@@ -2213,7 +2225,7 @@ mod tests {
                     &validator_ledger_path,
                     &vote_account_keypair.pubkey(),
                     Arc::new(RwLock::new(vec![Arc::new(vote_account_keypair)])),
-                    vec![leader_node.info.clone()],
+                    vec![LegacyContactInfo::try_from(&leader_node.info).unwrap()],
                     &config,
                     true, // should_check_duplicate_instance
                     Arc::new(RwLock::new(ValidatorStartProgress::default())),

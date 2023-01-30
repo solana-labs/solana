@@ -343,7 +343,7 @@ pub fn run_cluster_partition<C>(
     );
 
     let cluster_nodes = discover_cluster(
-        &cluster.entry_point_info.gossip,
+        &cluster.entry_point_info.gossip().unwrap(),
         num_nodes,
         SocketAddrSpace::Unspecified,
     )

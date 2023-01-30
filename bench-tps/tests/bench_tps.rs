@@ -80,8 +80,8 @@ fn test_bench_tps_local_cluster(config: Config) {
     cluster.transfer(&cluster.funding_keypair, &faucet_pubkey, 100_000_000);
 
     let client = Arc::new(ThinClient::new(
-        cluster.entry_point_info.rpc,
-        cluster.entry_point_info.tpu,
+        cluster.entry_point_info.rpc().unwrap(),
+        cluster.entry_point_info.tpu().unwrap(),
         cluster.connection_cache.clone(),
     ));
 

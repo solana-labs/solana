@@ -1599,27 +1599,39 @@ pub fn main() {
     );
 
     if restricted_repair_only_mode {
-        let any = SocketAddr::new(IpAddr::V4(Ipv4Addr::UNSPECIFIED), 0);
         // When in --restricted_repair_only_mode is enabled only the gossip and repair ports
         // need to be reachable by the entrypoint to respond to gossip pull requests and repair
         // requests initiated by the node.  All other ports are unused.
-        node.info.tpu = any;
-        node.info.tpu_forwards = any;
-        node.info.tvu = any;
-        node.info.tvu_forwards = any;
-        node.info.serve_repair = any;
+        node.info.remove_tpu();
+        node.info.remove_tpu_forwards();
+        node.info.remove_tvu();
+        node.info.remove_tvu_forwards();
+        node.info.remove_serve_repair();
 
         // A node in this configuration shouldn't be an entrypoint to other nodes
         node.sockets.ip_echo = None;
     }
 
     if !private_rpc {
+        macro_rules! set_socket {
+            ($method:ident, $addr:expr, $name:literal) => {
+                node.info.$method($addr).expect(&format!(
+                    "Operator must spin up node with valid {} address",
+                    $name
+                ))
+            };
+        }
         if let Some(public_rpc_addr) = public_rpc_addr {
-            node.info.rpc = public_rpc_addr;
-            node.info.rpc_pubsub = public_rpc_addr;
+            set_socket!(set_rpc, public_rpc_addr, "RPC");
+            set_socket!(set_rpc_pubsub, public_rpc_addr, "RPC-pubsub");
         } else if let Some((rpc_addr, rpc_pubsub_addr)) = validator_config.rpc_addrs {
-            node.info.rpc = SocketAddr::new(node.info.gossip.ip(), rpc_addr.port());
-            node.info.rpc_pubsub = SocketAddr::new(node.info.gossip.ip(), rpc_pubsub_addr.port());
+            let addr = node
+                .info
+                .gossip()
+                .expect("Operator must spin up node with valid gossip address")
+                .ip();
+            set_socket!(set_rpc, (addr, rpc_addr.port()), "RPC");
+            set_socket!(set_rpc_pubsub, (addr, rpc_pubsub_addr.port()), "RPC-pubsub");
         }
     }
 
