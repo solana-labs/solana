@@ -2506,7 +2506,7 @@ impl ClusterInfo {
         let mut counts = [0u64; 7];
         count_packets_received(&packets, &mut counts);
         let packets = Vec::from(packets);
-        info!("run_socket_consume unverified packets.len: {}", packets.len());
+        //info!("run_socket_consume unverified packets.len: {}", packets.len());
         let mut packets = VecDeque::from(packets);
         for packet_batch in receiver.try_iter() {
             count_packets_received(&packet_batch, &mut counts);
@@ -2556,7 +2556,7 @@ impl ClusterInfo {
         self.stats
             .packets_received_verified_count
             .add_relaxed(packets.len() as u64);
-        info!("run_socket_consume verified packets.len: {}", packets.len());
+        //info!("run_socket_consume verified packets.len: {}", packets.len());
         Ok(sender.send(packets)?)
     }
 
