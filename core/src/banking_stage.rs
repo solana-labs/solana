@@ -461,6 +461,13 @@ impl BankingStage {
                 let bank_forks = bank_forks.clone();
 
                 let decision_maker = DecisionMaker::new(cluster_info.id(), poh_recorder.clone());
+                let forwarder = Forwarder::new(
+                    poh_recorder.clone(),
+                    bank_forks,
+                    cluster_info,
+                    connection_cache,
+                    data_budget,
+                );
 
                 Builder::new()
                     .name(format!("solBanknStgTx{i:02}"))
@@ -468,15 +475,12 @@ impl BankingStage {
                         Self::process_loop(
                             &mut packet_deserializer,
                             &decision_maker,
+                            &forwarder,
                             &poh_recorder,
-                            cluster_info,
                             i,
                             transaction_status_sender,
                             replay_vote_sender,
-                            data_budget,
                             log_messages_bytes_limit,
-                            connection_cache,
-                            &bank_forks,
                             unprocessed_transaction_storage,
                         );
                     })
@@ -709,25 +713,14 @@ impl BankingStage {
     fn process_loop(
         packet_deserializer: &mut PacketDeserializer,
         decision_maker: &DecisionMaker,
+        forwarder: &Forwarder,
         poh_recorder: &Arc<RwLock<PohRecorder>>,
-        cluster_info: Arc<ClusterInfo>,
         id: u32,
         transaction_status_sender: Option<TransactionStatusSender>,
         replay_vote_sender: ReplayVoteSender,
-        data_budget: Arc<DataBudget>,
         log_messages_bytes_limit: Option<usize>,
-        connection_cache: Arc<ConnectionCache>,
-        bank_forks: &Arc<RwLock<BankForks>>,
         mut unprocessed_transaction_storage: UnprocessedTransactionStorage,
     ) {
-        let forwarder = Forwarder::new(
-            poh_recorder.clone(),
-            bank_forks.clone(),
-            cluster_info,
-            connection_cache,
-            data_budget,
-        );
-
         let recorder = poh_recorder.read().unwrap().recorder();
         let mut banking_stage_stats = BankingStageStats::new(id);
         let mut tracer_packet_stats = TracerPacketStats::new(id);
@@ -743,7 +736,7 @@ impl BankingStage {
                 let (_, process_buffered_packets_time) = measure!(
                     Self::process_buffered_packets(
                         decision_maker,
-                        &forwarder,
+                        forwarder,
                         &mut unprocessed_transaction_storage,
                         &transaction_status_sender,
                         &replay_vote_sender,
