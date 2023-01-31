@@ -13,6 +13,7 @@ import InitMappingDetailsCard from "./InitMappingDetailsCard";
 import AddMappingDetailsCard from "./AddMappingDetailsCard";
 import AggregatePriceDetailsCard from "./AggregatePriceDetailsCard";
 import InitPriceDetailsCard from "./InitPriceDetailsCard";
+import SetMinPublishersDetailsCard from "./SetMinPublishersDetailsCard";
 
 export function PythDetailsCard(props: {
   ix: TransactionInstruction;
@@ -106,6 +107,13 @@ export function PythDetailsCard(props: {
         return (
           <InitPriceDetailsCard
             info={PythInstruction.decodeInitPrice(ix)}
+            {...props}
+          />
+        );
+      case "SetMinPublishers":
+        return (
+          <SetMinPublishersDetailsCard
+            info={PythInstruction.decodeSetMinPublishers(ix)}
             {...props}
           />
         );

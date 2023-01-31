@@ -402,7 +402,7 @@ export class PythInstruction {
     return {
       signerPubkey: instruction.keys[0].pubkey,
       pricePubkey: instruction.keys[1].pubkey,
-      publisherPubkey: PublicKey.decode(publisherPubkey),
+      publisherPubkey: new PublicKey(publisherPubkey),
     };
   }
 
@@ -420,7 +420,7 @@ export class PythInstruction {
     return {
       signerPubkey: instruction.keys[0].pubkey,
       pricePubkey: instruction.keys[1].pubkey,
-      publisherPubkey: PublicKey.decode(publisherPubkey),
+      publisherPubkey: new PublicKey(publisherPubkey),
     };
   }
 
