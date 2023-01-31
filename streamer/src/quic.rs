@@ -25,7 +25,7 @@ use {
     tokio::runtime::{Builder, Runtime},
 };
 
-pub const MAX_STAKED_CONNECTIONS: usize = 20000;
+pub const MAX_STAKED_CONNECTIONS: usize = 2000;
 pub const MAX_UNSTAKED_CONNECTIONS: usize = 500;
 const NUM_QUIC_STREAMER_WORKER_THREADS: usize = 1;
 
