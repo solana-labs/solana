@@ -7,11 +7,9 @@ license = "Apache-2.0"
 edition = "2021"
 publish = false
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
 [dev-dependencies]
 bytemuck = { version = "1.11.0", features = ["derive"] }
 solana-program-runtime = { path = "../../program-runtime", version = "=1.15.0" }
+solana-program-test = { path = "../../program-test", version = "=1.15.0" }
 solana-sdk = { path = "../../sdk", version = "=1.15.0" }
 solana-zk-token-sdk = { path = "../../zk-token-sdk", version = "=1.15.0" }
-solana-program-test = { path = "../../program-test", version = "=1.15.0" }
