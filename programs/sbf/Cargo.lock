@@ -3313,12 +3313,12 @@ dependencies = [
 
 [[package]]
 name = "prost"
-version = "0.11.0"
+version = "0.11.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "399c3c31cdec40583bb68f0b18403400d01ec4289c383aa047560439952c4dd7"
+checksum = "21dc42e00223fc37204bd4aa177e69420c604ca4a183209a8f9de30c6d934698"
 dependencies = [
  "bytes",
- "prost-derive 0.11.0",
+ "prost-derive 0.11.6",
 ]
 
 [[package]]
@@ -3343,9 +3343,9 @@ dependencies = [
 
 [[package]]
 name = "prost-build"
-version = "0.11.0"
+version = "0.11.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d49d928704208aba2cb1fb022ce1a319bdedcb03caf51ddf82734fa903407762"
+checksum = "276470f7f281b0ed53d2ae42dd52b4a8d08853a3c70e7fe95882acbb98a6ae94"
 dependencies = [
  "bytes",
  "heck 0.4.0",
@@ -3354,9 +3354,11 @@ dependencies = [
  "log",
  "multimap",
  "petgraph",
- "prost 0.11.0",
- "prost-types 0.11.1",
+ "prettyplease",
+ "prost 0.11.6",
+ "prost-types 0.11.6",
  "regex",
+ "syn 1.0.98",
  "tempfile",
  "which",
 ]
@@ -3376,9 +3378,9 @@ dependencies = [
 
 [[package]]
 name = "prost-derive"
-version = "0.11.0"
+version = "0.11.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7345d5f0e08c0536d7ac7229952590239e77abf0a0100a1b1d890add6ea96364"
+checksum = "8bda8c0881ea9f722eb9629376db3d0b903b462477c1aafcb0566610ac28ac5d"
 dependencies = [
  "anyhow",
  "itertools",
@@ -3399,12 +3401,12 @@ dependencies = [
 
 [[package]]
 name = "prost-types"
-version = "0.11.1"
+version = "0.11.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4dfaa718ad76a44b3415e6c4d53b17c8f99160dcb3a99b10470fce8ad43f6e3e"
+checksum = "a5e0526209433e96d83d750dd81a99118edbc55739e7e61a46764fd2ad537788"
 dependencies = [
  "bytes",
- "prost 0.11.0",
+ "prost 0.11.6",
 ]
 
 [[package]]
@@ -4841,7 +4843,7 @@ dependencies = [
  "lru",
  "num_cpus",
  "num_enum",
- "prost 0.11.0",
+ "prost 0.11.6",
  "rand 0.7.3",
  "rand_chacha 0.2.2",
  "rayon",
@@ -5939,8 +5941,8 @@ dependencies = [
  "hyper-proxy",
  "log",
  "openssl",
- "prost 0.11.0",
- "prost-types 0.11.1",
+ "prost 0.11.6",
+ "prost-types 0.11.6",
  "serde",
  "serde_derive",
  "smpl_jwt",
@@ -5960,13 +5962,13 @@ version = "1.15.0"
 dependencies = [
  "bincode",
  "bs58",
- "prost 0.11.0",
+ "prost 0.11.6",
  "protobuf-src",
  "serde",
  "solana-account-decoder",
  "solana-sdk 1.15.0",
  "solana-transaction-status",
- "tonic-build 0.8.0",
+ "tonic-build 0.8.4",
 ]
 
 [[package]]
@@ -6918,8 +6920,8 @@ dependencies = [
  "hyper-timeout",
  "percent-encoding 2.1.0",
  "pin-project",
- "prost 0.11.0",
- "prost-derive 0.11.0",
+ "prost 0.11.6",
+ "prost-derive 0.11.6",
  "rustls-pemfile 1.0.0",
  "tokio",
  "tokio-rustls 0.23.2",
@@ -6946,13 +6948,13 @@ dependencies = [
 
 [[package]]
 name = "tonic-build"
-version = "0.8.0"
+version = "0.8.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2fbcd2800e34e743b9ae795867d5f77b535d3a3be69fd731e39145719752df8c"
+checksum = "5bf5e9b9c0f7e0a7c027dcfaba7b2c60816c7049171f679d99ee2ff65d0de8c4"
 dependencies = [
  "prettyplease",
  "proc-macro2 1.0.41",
- "prost-build 0.11.0",
+ "prost-build 0.11.4",
  "quote 1.0.18",
  "syn 1.0.98",
 ]
