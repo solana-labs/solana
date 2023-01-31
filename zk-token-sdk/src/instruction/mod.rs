@@ -18,13 +18,12 @@ use {
     curve25519_dalek::scalar::Scalar,
 };
 pub use {
-    close_account::CloseAccountData, close_account::CloseAccountProofContext,
-    pubkey_validity::PubkeyValidityData, pubkey_validity::PubkeyValidityProofContext,
-    transfer::TransferData, transfer::TransferProofContext, transfer_with_fee::FeeParameters,
-    transfer_with_fee::TransferWithFeeData, transfer_with_fee::TransferWithFeeProofContext,
-    withdraw::WithdrawData, withdraw::WithdrawProofContext,
-    withdraw_withheld::WithdrawWithheldTokensData,
-    withdraw_withheld::WithdrawWithheldTokensProofContext,
+    close_account::{CloseAccountData, CloseAccountProofContext},
+    pubkey_validity::{PubkeyValidityData, PubkeyValidityProofContext},
+    transfer::{TransferData, TransferProofContext},
+    transfer_with_fee::{FeeParameters, TransferWithFeeData, TransferWithFeeProofContext},
+    withdraw::{WithdrawData, WithdrawProofContext},
+    withdraw_withheld::{WithdrawWithheldTokensData, WithdrawWithheldTokensProofContext},
 };
 
 #[cfg(not(target_os = "solana"))]

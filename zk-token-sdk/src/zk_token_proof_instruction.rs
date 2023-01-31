@@ -7,7 +7,7 @@ use {
     solana_program::{
         instruction::{
             AccountMeta, Instruction,
-            {InstructionError, InstructionError::InvalidInstructionData},
+            InstructionError::{self, InvalidInstructionData},
         },
         pubkey::{Pubkey, PUBKEY_BYTES},
         sysvar,
