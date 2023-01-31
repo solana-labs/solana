@@ -1,6 +1,6 @@
 [package]
 name = "solana-merkle-tree"
-version = "1.15.0"
+version = "1.16.0"
 description = "Solana Merkle Tree"
 authors = ["Solana Labs Maintainers <maintainers@solanalabs.com>"]
 repository = "https://github.com/solana-labs/solana"
@@ -11,7 +11,7 @@ edition = "2021"
 
 [dependencies]
 fast-math = "0.1"
-solana-program = { path = "../sdk/program", version = "=1.15.0" }
+solana-program = { path = "../sdk/program", version = "=1.16.0" }
 
 # This can go once the SBF toolchain target Rust 1.42.0+
 [target.bpfel-unknown-unknown.dependencies]
