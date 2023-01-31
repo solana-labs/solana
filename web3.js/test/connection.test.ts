@@ -58,7 +58,7 @@ import {
   stubRpcWebSocket,
   restoreRpcWebSocket,
   mockRpcMessage,
-} from './mocks/rpc-websockets';
+} from './mocks/rpc-websocket';
 import {
   NonceInformation,
   TransactionInstruction,

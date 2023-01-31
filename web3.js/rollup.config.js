@@ -110,6 +110,10 @@ function generateConfig(configType, format) {
       'jayson/lib/client/browser',
       'node-fetch',
       'rpc-websockets',
+      'rpc-websockets/dist/lib/client',
+      'rpc-websockets/dist/lib/client/client.types',
+      'rpc-websockets/dist/lib/client/websocket',
+      'rpc-websockets/dist/lib/client/websocket.browser',
       'superstruct',
     ];
   }
@@ -179,6 +183,10 @@ function generateConfig(configType, format) {
             'node-fetch',
             'react-native-url-polyfill',
             'rpc-websockets',
+            'rpc-websockets/dist/lib/client',
+            'rpc-websockets/dist/lib/client/client.types',
+            'rpc-websockets/dist/lib/client/websocket',
+            'rpc-websockets/dist/lib/client/websocket.browser',
             'superstruct',
           ];
 
