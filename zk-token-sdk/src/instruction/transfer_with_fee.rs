@@ -1,7 +1,3 @@
-use {
-    crate::zk_token_elgamal::pod,
-    bytemuck::{Pod, Zeroable},
-};
 #[cfg(not(target_os = "solana"))]
 use {
     crate::{
@@ -14,8 +10,7 @@ use {
         errors::ProofError,
         instruction::{
             combine_lo_hi_ciphertexts, combine_lo_hi_commitments, combine_lo_hi_openings,
-            combine_lo_hi_u64, split_u64, transfer::TransferAmountEncryption, Role, ZkProofContext,
-            ZkProofData,
+            combine_lo_hi_u64, split_u64, transfer::TransferAmountEncryption, Role,
         },
         range_proof::RangeProof,
         sigma_proofs::{
@@ -29,6 +24,13 @@ use {
     merlin::Transcript,
     std::convert::TryInto,
     subtle::{ConditionallySelectable, ConstantTimeGreater},
+};
+use {
+    crate::{
+        instruction::{ZkProofContext, ZkProofData},
+        zk_token_elgamal::pod,
+    },
+    bytemuck::{Pod, Zeroable},
 };
 
 #[cfg(not(target_os = "solana"))]
@@ -338,7 +340,6 @@ impl TransferWithFeeData {
     }
 }
 
-#[cfg(not(target_os = "solana"))]
 impl ZkProofData for TransferWithFeeData {
     type ProofContext = TransferWithFeeProofContext;
 
@@ -346,6 +347,7 @@ impl ZkProofData for TransferWithFeeData {
         &self.context
     }
 
+    #[cfg(not(target_os = "solana"))]
     fn verify_proof(&self) -> Result<(), ProofError> {
         let mut transcript = TransferWithFeeProof::transcript_new(
             &self.context.transfer_with_fee_pubkeys,
@@ -378,7 +380,6 @@ impl ZkProofData for TransferWithFeeData {
     }
 }
 
-#[cfg(not(target_os = "solana"))]
 impl ZkProofContext for TransferWithFeeProofContext {
     const LEN: usize = 650;
 }

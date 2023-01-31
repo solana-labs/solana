@@ -1,7 +1,3 @@
-use {
-    crate::zk_token_elgamal::pod,
-    bytemuck::{Pod, Zeroable},
-};
 #[cfg(not(target_os = "solana"))]
 use {
     crate::{
@@ -12,7 +8,7 @@ use {
             pedersen::{Pedersen, PedersenCommitment, PedersenOpening},
         },
         errors::ProofError,
-        instruction::{combine_lo_hi_ciphertexts, split_u64, Role, ZkProofContext, ZkProofData},
+        instruction::{combine_lo_hi_ciphertexts, split_u64, Role},
         range_proof::RangeProof,
         sigma_proofs::{
             equality_proof::CtxtCommEqualityProof, validity_proof::AggregatedValidityProof,
@@ -22,6 +18,13 @@ use {
     arrayref::{array_ref, array_refs},
     merlin::Transcript,
     std::convert::TryInto,
+};
+use {
+    crate::{
+        instruction::{ZkProofContext, ZkProofData},
+        zk_token_elgamal::pod,
+    },
+    bytemuck::{Pod, Zeroable},
 };
 
 #[cfg(not(target_os = "solana"))]
@@ -209,7 +212,6 @@ impl TransferData {
     }
 }
 
-#[cfg(not(target_os = "solana"))]
 impl ZkProofData for TransferData {
     type ProofContext = TransferProofContext;
 
@@ -217,6 +219,7 @@ impl ZkProofData for TransferData {
         &self.context
     }
 
+    #[cfg(not(target_os = "solana"))]
     fn verify_proof(&self) -> Result<(), ProofError> {
         // generate transcript and append all public inputs
         let mut transcript = TransferProof::transcript_new(
@@ -241,7 +244,6 @@ impl ZkProofData for TransferData {
     }
 }
 
-#[cfg(not(target_os = "solana"))]
 impl ZkProofContext for TransferProofContext {
     const LEN: usize = 416;
 }

@@ -1,18 +1,20 @@
-use {
-    crate::zk_token_elgamal::pod,
-    bytemuck::{Pod, Zeroable},
-};
 #[cfg(not(target_os = "solana"))]
 use {
     crate::{
         encryption::elgamal::{ElGamalCiphertext, ElGamalKeypair, ElGamalPubkey},
         errors::ProofError,
-        instruction::{ZkProofContext, ZkProofData},
         sigma_proofs::zero_balance_proof::ZeroBalanceProof,
         transcript::TranscriptProtocol,
     },
     merlin::Transcript,
     std::convert::TryInto,
+};
+use {
+    crate::{
+        instruction::{ZkProofContext, ZkProofData},
+        zk_token_elgamal::pod,
+    },
+    bytemuck::{Pod, Zeroable},
 };
 
 /// This struct includes the cryptographic proof *and* the account data information needed to verify
@@ -63,7 +65,6 @@ impl CloseAccountData {
     }
 }
 
-#[cfg(not(target_os = "solana"))]
 impl ZkProofData for CloseAccountData {
     type ProofContext = CloseAccountProofContext;
 
@@ -71,6 +72,7 @@ impl ZkProofData for CloseAccountData {
         &self.context
     }
 
+    #[cfg(not(target_os = "solana"))]
     fn verify_proof(&self) -> Result<(), ProofError> {
         let mut transcript =
             CloseAccountProof::transcript_new(&self.context.pubkey, &self.context.ciphertext);
@@ -81,7 +83,6 @@ impl ZkProofData for CloseAccountData {
     }
 }
 
-#[cfg(not(target_os = "solana"))]
 impl ZkProofContext for CloseAccountProofContext {
     const LEN: usize = 96;
 }

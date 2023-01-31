@@ -1,7 +1,3 @@
-use {
-    crate::zk_token_elgamal::pod,
-    bytemuck::{Pod, Zeroable},
-};
 #[cfg(not(target_os = "solana"))]
 use {
     crate::{
@@ -10,13 +6,19 @@ use {
             pedersen::{Pedersen, PedersenCommitment},
         },
         errors::ProofError,
-        instruction::{ZkProofContext, ZkProofData},
         range_proof::RangeProof,
         sigma_proofs::equality_proof::CtxtCommEqualityProof,
         transcript::TranscriptProtocol,
     },
     merlin::Transcript,
     std::convert::TryInto,
+};
+use {
+    crate::{
+        instruction::{ZkProofContext, ZkProofData},
+        zk_token_elgamal::pod,
+    },
+    bytemuck::{Pod, Zeroable},
 };
 
 #[cfg(not(target_os = "solana"))]
@@ -84,7 +86,6 @@ impl WithdrawData {
     }
 }
 
-#[cfg(not(target_os = "solana"))]
 impl ZkProofData for WithdrawData {
     type ProofContext = WithdrawProofContext;
 
@@ -92,6 +93,7 @@ impl ZkProofData for WithdrawData {
         &self.context
     }
 
+    #[cfg(not(target_os = "solana"))]
     fn verify_proof(&self) -> Result<(), ProofError> {
         let mut transcript =
             WithdrawProof::transcript_new(&self.context.pubkey, &self.context.final_ciphertext);
@@ -103,7 +105,6 @@ impl ZkProofData for WithdrawData {
     }
 }
 
-#[cfg(not(target_os = "solana"))]
 impl ZkProofContext for WithdrawProofContext {
     const LEN: usize = 96;
 }

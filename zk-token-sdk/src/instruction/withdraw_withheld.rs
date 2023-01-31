@@ -1,7 +1,3 @@
-use {
-    crate::zk_token_elgamal::pod,
-    bytemuck::{Pod, Zeroable},
-};
 #[cfg(not(target_os = "solana"))]
 use {
     crate::{
@@ -10,12 +6,18 @@ use {
             pedersen::PedersenOpening,
         },
         errors::ProofError,
-        instruction::{ZkProofContext, ZkProofData},
         sigma_proofs::equality_proof::CtxtCtxtEqualityProof,
         transcript::TranscriptProtocol,
     },
     merlin::Transcript,
     std::convert::TryInto,
+};
+use {
+    crate::{
+        instruction::{ZkProofContext, ZkProofData},
+        zk_token_elgamal::pod,
+    },
+    bytemuck::{Pod, Zeroable},
 };
 
 /// This struct includes the cryptographic proof *and* the account data information needed to verify
@@ -91,7 +93,6 @@ impl WithdrawWithheldTokensData {
     }
 }
 
-#[cfg(not(target_os = "solana"))]
 impl ZkProofData for WithdrawWithheldTokensData {
     type ProofContext = WithdrawWithheldTokensProofContext;
 
@@ -99,6 +100,7 @@ impl ZkProofData for WithdrawWithheldTokensData {
         &self.context
     }
 
+    #[cfg(not(target_os = "solana"))]
     fn verify_proof(&self) -> Result<(), ProofError> {
         let mut transcript = WithdrawWithheldTokensProof::transcript_new(
             &self.context.withdraw_withheld_authority_pubkey,
@@ -126,7 +128,6 @@ impl ZkProofData for WithdrawWithheldTokensData {
     }
 }
 
-#[cfg(not(target_os = "solana"))]
 impl ZkProofContext for WithdrawWithheldTokensProofContext {
     const LEN: usize = 192;
 }

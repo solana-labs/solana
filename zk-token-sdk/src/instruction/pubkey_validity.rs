@@ -1,18 +1,20 @@
-use {
-    crate::zk_token_elgamal::pod,
-    bytemuck::{Pod, Zeroable},
-};
 #[cfg(not(target_os = "solana"))]
 use {
     crate::{
         encryption::elgamal::{ElGamalKeypair, ElGamalPubkey},
         errors::ProofError,
-        instruction::{ZkProofContext, ZkProofData},
         sigma_proofs::pubkey_proof::PubkeySigmaProof,
         transcript::TranscriptProtocol,
     },
     merlin::Transcript,
     std::convert::TryInto,
+};
+use {
+    crate::{
+        instruction::{ZkProofContext, ZkProofData},
+        zk_token_elgamal::pod,
+    },
+    bytemuck::{Pod, Zeroable},
 };
 
 /// This struct includes the cryptographic proof *and* the account data information needed to
@@ -52,7 +54,6 @@ impl PubkeyValidityData {
     }
 }
 
-#[cfg(not(target_os = "solana"))]
 impl ZkProofData for PubkeyValidityData {
     type ProofContext = PubkeyValidityProofContext;
 
@@ -60,6 +61,7 @@ impl ZkProofData for PubkeyValidityData {
         &self.context
     }
 
+    #[cfg(not(target_os = "solana"))]
     fn verify_proof(&self) -> Result<(), ProofError> {
         let mut transcript = PubkeyValidityProof::transcript_new(&self.context.pubkey);
         let pubkey = self.context.pubkey.try_into()?;
@@ -67,7 +69,6 @@ impl ZkProofData for PubkeyValidityData {
     }
 }
 
-#[cfg(not(target_os = "solana"))]
 impl ZkProofContext for PubkeyValidityProofContext {
     const LEN: usize = 32;
 }

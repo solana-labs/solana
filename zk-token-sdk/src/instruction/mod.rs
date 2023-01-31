@@ -14,10 +14,10 @@ use {
         },
         errors::ProofError,
     },
-    bytemuck::Pod,
     curve25519_dalek::scalar::Scalar,
 };
 pub use {
+    bytemuck::Pod,
     close_account::{CloseAccountData, CloseAccountProofContext},
     pubkey_validity::{PubkeyValidityData, PubkeyValidityProofContext},
     transfer::{TransferData, TransferProofContext},
@@ -26,15 +26,15 @@ pub use {
     withdraw_withheld::{WithdrawWithheldTokensData, WithdrawWithheldTokensProofContext},
 };
 
-#[cfg(not(target_os = "solana"))]
 pub trait ZkProofData {
     type ProofContext: ZkProofContext;
 
     fn context_data(&self) -> &Self::ProofContext;
+
+    #[cfg(not(target_os = "solana"))]
     fn verify_proof(&self) -> Result<(), ProofError>;
 }
 
-#[cfg(not(target_os = "solana"))]
 pub trait ZkProofContext: Pod {
     const LEN: usize;
 }
