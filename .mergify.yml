@@ -71,37 +71,15 @@ pull_request_rules:
     actions:
       dismiss_reviews:
         changes_requested: true
-  - name: v1.13 feature-gate backport
-    conditions:
-      - label=v1.13
-      - label=feature-gate
-    actions:
-      backport:
-        assignees: &BackportAssignee
-          - "{{ merged_by|replace('mergify[bot]', label|select('equalto', 'community')|first|default(author)|replace('community', '@solana-labs/community-pr-s
-ubscribers')) }}"
-        ignore_conflicts: true
-        labels:
-          - feature-gate
-        branches:
-          - v1.13
-  - name: v1.13 non-feature-gate backport
-    conditions:
-      - label=v1.13
-      - label!=feature-gate
-    actions:
-      backport:
-        assignees: *BackportAssignee
-        ignore_conflicts: true
-        branches:
-          - v1.13
   - name: v1.14 feature-gate backport
     conditions:
       - label=v1.14
       - label=feature-gate
     actions:
       backport:
-        assignees: *BackportAssignee
+        assignees: &BackportAssignee
+          - "{{ merged_by|replace('mergify[bot]', label|select('equalto', 'community')|first|default(author)|replace('community', '@solana-labs/community-pr-s
+ubscribers')) }}"
         ignore_conflicts: true
         labels:
           - feature-gate
@@ -117,6 +95,29 @@ ubscribers')) }}"
         ignore_conflicts: true
         branches:
           - v1.14
+  - name: v1.15 feature-gate backport
+    conditions:
+      - label=v1.15
+      - label=feature-gate
+    actions:
+      backport:
+        assignees: *BackportAssignee
+        ignore_conflicts: true
+        labels:
+          - feature-gate
+        branches:
+          - v1.15
+  - name: v1.15 non-feature-gate backport
+    conditions:
+      - label=v1.15
+      - label!=feature-gate
+    actions:
+      backport:
+        assignees: *BackportAssignee
+        ignore_conflicts: true
+        branches:
+          - v1.15
+
 
 commands_restrictions:
   # The author of copied PRs is the Mergify user.
