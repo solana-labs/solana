@@ -1,6 +1,6 @@
 [package]
 name = "solana-memory-management"
-version = "1.15.0"
+version = "1.16.0"
 description = "Solana memory management"
 authors = ["Solana Labs Maintainers <maintainers@solanalabs.com>"]
 repository = "https://github.com/solana-labs/solana"

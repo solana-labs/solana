@@ -1,6 +1,6 @@
 [package]
 name = "solana-sbf-rust-128bit-dep"
-version = "1.15.0"
+version = "1.16.0"
 description = "Solana SBF test program written in Rust"
 authors = ["Solana Labs Maintainers <maintainers@solanalabs.com>"]
 repository = "https://github.com/solana-labs/solana"
@@ -10,7 +10,7 @@ documentation = "https://docs.rs/solana-sbf-rust-128bit-dep"
 edition = "2021"
 
 [dependencies]
-solana-program = { path = "../../../../sdk/program", version = "=1.15.0" }
+solana-program = { path = "../../../../sdk/program", version = "=1.16.0" }
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
