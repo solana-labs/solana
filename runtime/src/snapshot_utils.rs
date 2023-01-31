@@ -136,8 +136,6 @@ impl SnapshotVersion {
 pub struct BankSnapshotInfo {
     /// Slot of the bank
     pub slot: Slot,
-    /// Path to the snapshot file
-    pub snapshot_path: PathBuf,
     /// Type of the snapshot
     pub snapshot_type: BankSnapshotType,
     /// Path to the bank snapshot directory
@@ -157,6 +155,51 @@ impl Ord for BankSnapshotInfo {
     }
 }
 
+impl BankSnapshotInfo {
+    pub fn new_from_dir(
+        bank_snapshots_dir: impl AsRef<Path>,
+        slot: u64,
+    ) -> Option<BankSnapshotInfo> {
+        // check this directory to see if there is a BankSnapshotPre and/or
+        // BankSnapshotPost file
+        let bank_snapshot_dir = get_bank_snapshots_dir(&bank_snapshots_dir, slot);
+        let bank_snapshot_post_path = bank_snapshot_dir.join(get_snapshot_file_name(slot));
+        let mut bank_snapshot_pre_path = bank_snapshot_post_path.clone();
+        bank_snapshot_pre_path.set_extension(BANK_SNAPSHOT_PRE_FILENAME_EXTENSION);
+
+        if bank_snapshot_pre_path.is_file() {
+            return Some(BankSnapshotInfo {
+                slot,
+                snapshot_type: BankSnapshotType::Pre,
+                bank_snapshot_dir,
+            });
+        }
+
+        if bank_snapshot_post_path.is_file() {
+            return Some(BankSnapshotInfo {
+                slot,
+                snapshot_type: BankSnapshotType::Post,
+                bank_snapshot_dir,
+            });
+        }
+
+        None
+    }
+
+    pub fn snapshot_path(&self) -> PathBuf {
+        let mut bank_snapshot_path = self
+            .bank_snapshot_dir
+            .join(get_snapshot_file_name(self.slot));
+
+        let ext = match self.snapshot_type {
+            BankSnapshotType::Pre => BANK_SNAPSHOT_PRE_FILENAME_EXTENSION,
+            BankSnapshotType::Post => "",
+        };
+        bank_snapshot_path.set_extension(ext);
+
+        bank_snapshot_path
+    }
+}
 /// Bank snapshots traditionally had their accounts hash calculated prior to serialization.  Since
 /// the hash calculation takes a long time, an optimization has been put in to offload the accounts
 /// hash calculation.  The bank serialization format has not changed, so we need another way to
@@ -587,30 +630,10 @@ pub fn get_bank_snapshots(bank_snapshots_dir: impl AsRef<Path>) -> Vec<BankSnaps
                     })
             })
             .for_each(|slot| {
-                // check this directory to see if there is a BankSnapshotPre and/or
-                // BankSnapshotPost file
-                let bank_snapshot_outer_dir = get_bank_snapshots_dir(&bank_snapshots_dir, slot);
-                let bank_snapshot_post_path =
-                    bank_snapshot_outer_dir.join(get_snapshot_file_name(slot));
-                let mut bank_snapshot_pre_path = bank_snapshot_post_path.clone();
-                bank_snapshot_pre_path.set_extension(BANK_SNAPSHOT_PRE_FILENAME_EXTENSION);
-
-                if bank_snapshot_pre_path.is_file() {
-                    bank_snapshots.push(BankSnapshotInfo {
-                        slot,
-                        snapshot_path: bank_snapshot_pre_path,
-                        snapshot_type: BankSnapshotType::Pre,
-                        bank_snapshot_dir: bank_snapshot_outer_dir.clone(),
-                    });
-                }
-
-                if bank_snapshot_post_path.is_file() {
-                    bank_snapshots.push(BankSnapshotInfo {
-                        slot,
-                        snapshot_path: bank_snapshot_post_path,
-                        snapshot_type: BankSnapshotType::Post,
-                        bank_snapshot_dir: bank_snapshot_outer_dir,
-                    });
+                if let Some(snapshot_info) =
+                    BankSnapshotInfo::new_from_dir(&bank_snapshots_dir, slot)
+                {
+                    bank_snapshots.push(snapshot_info);
                 }
             }),
     }
@@ -925,7 +948,6 @@ pub fn add_bank_snapshot(
 
     Ok(BankSnapshotInfo {
         slot,
-        snapshot_path: bank_snapshot_path,
         snapshot_type: BankSnapshotType::Pre,
         bank_snapshot_dir,
     })
@@ -1883,16 +1905,16 @@ fn bank_fields_from_snapshots(
         };
     info!(
         "Loading bank from full snapshot {} and incremental snapshot {:?}",
-        full_snapshot_root_paths.snapshot_path.display(),
+        full_snapshot_root_paths.snapshot_path().display(),
         incremental_snapshot_root_paths
             .as_ref()
-            .map(|paths| paths.snapshot_path.display()),
+            .map(|paths| paths.snapshot_path()),
     );
 
     let snapshot_root_paths = SnapshotRootPaths {
-        full_snapshot_root_file_path: full_snapshot_root_paths.snapshot_path,
+        full_snapshot_root_file_path: full_snapshot_root_paths.snapshot_path(),
         incremental_snapshot_root_file_path: incremental_snapshot_root_paths
-            .map(|root_paths| root_paths.snapshot_path),
+            .map(|root_paths| root_paths.snapshot_path()),
     };
 
     deserialize_snapshot_data_files(&snapshot_root_paths, |snapshot_streams| {
@@ -1942,16 +1964,16 @@ fn rebuild_bank_from_snapshots(
         };
     info!(
         "Loading bank from full snapshot {} and incremental snapshot {:?}",
-        full_snapshot_root_paths.snapshot_path.display(),
+        full_snapshot_root_paths.snapshot_path().display(),
         incremental_snapshot_root_paths
             .as_ref()
-            .map(|paths| paths.snapshot_path.display()),
+            .map(|paths| paths.snapshot_path()),
     );
 
     let snapshot_root_paths = SnapshotRootPaths {
-        full_snapshot_root_file_path: full_snapshot_root_paths.snapshot_path,
+        full_snapshot_root_file_path: full_snapshot_root_paths.snapshot_path(),
         incremental_snapshot_root_file_path: incremental_snapshot_root_paths
-            .map(|root_paths| root_paths.snapshot_path),
+            .map(|root_paths| root_paths.snapshot_path()),
     };
 
     let bank = deserialize_snapshot_data_files(&snapshot_root_paths, |snapshot_streams| {
@@ -2215,7 +2237,7 @@ pub fn purge_old_bank_snapshots(bank_snapshots_dir: impl AsRef<Path>) {
                 if r.is_err() {
                     warn!(
                         "Couldn't remove bank snapshot at: {}",
-                        bank_snapshot.snapshot_path.display()
+                        bank_snapshot.bank_snapshot_dir.display()
                     );
                 }
             })

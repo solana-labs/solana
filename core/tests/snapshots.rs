@@ -2,7 +2,6 @@
 
 use {
     crate::snapshot_utils::create_tmp_accounts_dir_for_tests,
-    bincode::serialize_into,
     crossbeam_channel::unbounded,
     fs_extra::dir::CopyOptions,
     itertools::Itertools,
