@@ -394,7 +394,7 @@ async fn test_verify_proof_with_context<T: Pod + ZkProofData>(
             &payer.pubkey(),
             &context_state_account.pubkey(),
             rent.minimum_balance(space),
-            (space - 1) as u64,
+            (space.checked_sub(1).unwrap()) as u64,
             &zk_token_proof_program::id(),
         ),
         verify_proof(proof_type, Some(context_state_info), success_proof_data),
@@ -420,7 +420,7 @@ async fn test_verify_proof_with_context<T: Pod + ZkProofData>(
         system_instruction::create_account(
             &payer.pubkey(),
             &context_state_account.pubkey(),
-            rent.minimum_balance(space) - 1,
+            rent.minimum_balance(space).checked_sub(1).unwrap(),
             space as u64,
             &zk_token_proof_program::id(),
         ),
