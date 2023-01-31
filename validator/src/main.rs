@@ -1046,6 +1046,8 @@ pub fn main() {
             .map(|mb| mb * MB as u64),
         ancient_append_vec_offset: value_t!(matches, "accounts_db_ancient_append_vecs", i64).ok(),
         exhaustively_verify_refcounts: matches.is_present("accounts_db_verify_refcounts"),
+        create_ancient_storage_packed: matches
+            .is_present("accounts_db_create_ancient_storage_packed"),
         ..AccountsDbConfig::default()
     };
 

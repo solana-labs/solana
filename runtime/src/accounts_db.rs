@@ -566,6 +566,7 @@ pub const ACCOUNTS_DB_CONFIG_FOR_TESTING: AccountsDbConfig = AccountsDbConfig {
     skip_initial_hash_calc: false,
     exhaustively_verify_refcounts: false,
     assert_stakes_cache_consistency: true,
+    create_ancient_storage_packed: false,
 };
 pub const ACCOUNTS_DB_CONFIG_FOR_BENCHMARKS: AccountsDbConfig = AccountsDbConfig {
     index: Some(ACCOUNTS_INDEX_CONFIG_FOR_BENCHMARKS),
@@ -576,6 +577,7 @@ pub const ACCOUNTS_DB_CONFIG_FOR_BENCHMARKS: AccountsDbConfig = AccountsDbConfig
     skip_initial_hash_calc: false,
     exhaustively_verify_refcounts: false,
     assert_stakes_cache_consistency: false,
+    create_ancient_storage_packed: false,
 };
 
 pub type BinnedHashData = Vec<Vec<CalculateHashIntermediate>>;
@@ -635,6 +637,8 @@ pub struct AccountsDbConfig {
     pub exhaustively_verify_refcounts: bool,
     /// when stakes cache consistency check occurs, assert that cached accounts match accounts db
     pub assert_stakes_cache_consistency: bool,
+    /// when creating ancient storages, pack them all at once
+    pub create_ancient_storage_packed: bool,
 }
 
 #[cfg(not(test))]
@@ -1428,7 +1432,11 @@ pub struct AccountsDb {
 
     pub(crate) storage: AccountStorage,
 
+    /// from AccountsDbConfig
     pub(crate) assert_stakes_cache_consistency: bool,
+
+    /// from AccountsDbConfig
+    create_ancient_storage_packed: bool,
 
     pub accounts_cache: AccountsCache,
 
@@ -2447,6 +2455,7 @@ impl AccountsDb {
 
         AccountsDb {
             assert_stakes_cache_consistency: false,
+            create_ancient_storage_packed: false,
             verify_accounts_hash_in_bg: VerifyAccountsHashInBackground::default(),
             filler_accounts_per_slot: AtomicU64::default(),
             filler_account_slots_remaining: AtomicU64::default(),
@@ -2570,6 +2579,11 @@ impl AccountsDb {
             .map(|config| config.assert_stakes_cache_consistency)
             .unwrap_or_default();
 
+        let create_ancient_storage_packed = accounts_db_config
+            .as_ref()
+            .map(|config| config.create_ancient_storage_packed)
+            .unwrap_or_default();
+
         let filler_account_suffix = if filler_accounts_config.count > 0 {
             Some(solana_sdk::pubkey::new_rand())
         } else {
@@ -2587,6 +2601,7 @@ impl AccountsDb {
             filler_accounts_config,
             filler_account_suffix,
             assert_stakes_cache_consistency,
+            create_ancient_storage_packed,
             write_cache_limit_bytes: accounts_db_config
                 .as_ref()
                 .and_then(|x| x.write_cache_limit_bytes),
@@ -4352,10 +4367,17 @@ impl AccountsDb {
         }
 
         let can_randomly_shrink = true;
-        self.combine_ancient_slots(
-            self.get_sorted_potential_ancient_slots(),
-            can_randomly_shrink,
-        );
+        if self.create_ancient_storage_packed {
+            self.combine_ancient_slots_new(
+                self.get_sorted_potential_ancient_slots(),
+                can_randomly_shrink,
+            );
+        } else {
+            self.combine_ancient_slots(
+                self.get_sorted_potential_ancient_slots(),
+                can_randomly_shrink,
+            );
+        }
     }
 
     #[cfg(test)]
