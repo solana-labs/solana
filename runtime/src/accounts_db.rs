@@ -414,6 +414,7 @@ impl AncientSlotPubkeys {
 }
 
 pub(crate) struct ShrinkCollect<'a, T: ShrinkCollectRefs<'a>> {
+    pub(crate) slot: Slot,
     pub(crate) original_bytes: u64,
     pub(crate) aligned_total_bytes: u64,
     pub(crate) unrefed_pubkeys: Vec<&'a Pubkey>,
@@ -3834,6 +3835,7 @@ impl AccountsDb {
             .fetch_add(aligned_total_bytes, Ordering::Relaxed);
 
         ShrinkCollect {
+            slot,
             original_bytes: *original_bytes,
             aligned_total_bytes,
             unrefed_pubkeys,
@@ -3849,13 +3851,13 @@ impl AccountsDb {
     pub(crate) fn remove_old_stores_shrink<'a, T: ShrinkCollectRefs<'a>>(
         &self,
         shrink_collect: &ShrinkCollect<'a, T>,
-        slot: Slot,
         stats: &ShrinkStats,
         shrink_in_progress: Option<ShrinkInProgress>,
     ) {
+        let mut time = Measure::start("remove_old_stores_shrink");
         // Purge old, overwritten storage entries
         let dead_storages = self.mark_dirty_dead_stores(
-            slot,
+            shrink_collect.slot,
             // If all accounts are zero lamports, then we want to mark the entire OLD append vec as dirty.
             // otherwise, we'll call 'add_uncleaned_pubkeys_after_shrink' just on the unref'd keys below.
             shrink_collect.all_are_zero_lamports,
@@ -3864,12 +3866,17 @@ impl AccountsDb {
 
         if !shrink_collect.all_are_zero_lamports {
             self.add_uncleaned_pubkeys_after_shrink(
-                slot,
+                shrink_collect.slot,
                 shrink_collect.unrefed_pubkeys.iter().cloned().cloned(),
             );
         }
 
         self.drop_or_recycle_stores(dead_storages, stats);
+        time.stop();
+
+        stats
+            .remove_old_stores_shrink_us
+            .fetch_add(time.as_us(), Ordering::Relaxed);
     }
 
     fn do_shrink_slot_store(&self, slot: Slot, store: &Arc<AccountStorageEntry>) {
@@ -3922,7 +3929,6 @@ impl AccountsDb {
 
         let mut rewrite_elapsed = Measure::start("rewrite_elapsed");
         let mut create_and_insert_store_elapsed_us = 0;
-        let mut remove_old_stores_shrink_us = 0;
         let mut store_accounts_timing = StoreAccountsTiming::default();
         if shrink_collect.aligned_total_bytes > 0 {
             let (shrink_in_progress, time_us) =
@@ -3953,14 +3959,11 @@ impl AccountsDb {
             // those here
             self.shrink_candidate_slots.lock().unwrap().remove(&slot);
 
-            let (_, local_remove_old_stores_shrink_us) = measure_us!(self
-                .remove_old_stores_shrink(
-                    &shrink_collect,
-                    slot,
-                    &self.shrink_stats,
-                    Some(shrink_in_progress)
-                ));
-            remove_old_stores_shrink_us = local_remove_old_stores_shrink_us;
+            self.remove_old_stores_shrink(
+                &shrink_collect,
+                &self.shrink_stats,
+                Some(shrink_in_progress),
+            );
         }
 
         Self::update_shrink_stats(
@@ -3969,7 +3972,6 @@ impl AccountsDb {
             create_and_insert_store_elapsed_us,
             store_accounts_timing,
             rewrite_elapsed.as_us(),
-            remove_old_stores_shrink_us,
         );
         self.shrink_stats.report();
     }
@@ -3981,7 +3983,6 @@ impl AccountsDb {
         create_and_insert_store_elapsed_us: u64,
         store_accounts_timing: StoreAccountsTiming,
         rewrite_elapsed_us: u64,
-        remove_old_stores_shrink_us: u64,
     ) {
         shrink_stats
             .num_slots_shrunk
@@ -4004,9 +4005,6 @@ impl AccountsDb {
             store_accounts_timing.handle_reclaims_elapsed,
             Ordering::Relaxed,
         );
-        shrink_stats
-            .remove_old_stores_shrink_us
-            .fetch_add(remove_old_stores_shrink_us, Ordering::Relaxed);
         shrink_stats
             .rewrite_elapsed
             .fetch_add(rewrite_elapsed_us, Ordering::Relaxed);
@@ -4531,13 +4529,11 @@ impl AccountsDb {
             dropped_roots.push(slot);
         }
 
-        let (_remaining_stores, remove_old_stores_shrink_us) = measure_us!(self
-            .remove_old_stores_shrink(
-                &shrink_collect,
-                slot,
-                &self.shrink_ancient_stats.shrink_stats,
-                shrink_in_progress,
-            ));
+        self.remove_old_stores_shrink(
+            &shrink_collect,
+            &self.shrink_ancient_stats.shrink_stats,
+            shrink_in_progress,
+        );
 
         // we should not try to shrink any of the stores from this slot anymore. All shrinking for this slot is now handled by ancient append vec code.
         self.shrink_candidate_slots.lock().unwrap().remove(&slot);
@@ -4548,7 +4544,6 @@ impl AccountsDb {
             create_and_insert_store_elapsed_us,
             store_accounts_timing,
             rewrite_elapsed.as_us(),
-            remove_old_stores_shrink_us,
         );
     }
 
