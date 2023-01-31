@@ -971,7 +971,7 @@ dependencies = [
  "cfg-if 1.0.0",
  "crossbeam-utils",
  "lazy_static",
- "memoffset",
+ "memoffset 0.6.4",
  "scopeguard",
 ]
 
@@ -2539,6 +2539,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "memoffset"
+version = "0.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d61c719bcfbcf5d62b3a09efa6088de8c54bc0bfcd3ea7ae39fcc186108b8de1"
+dependencies = [
+ "autocfg",
+]
+
+[[package]]
 name = "merlin"
 version = "3.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2665,7 +2674,7 @@ dependencies = [
  "bitflags",
  "cfg-if 1.0.0",
  "libc",
- "memoffset",
+ "memoffset 0.6.4",
  "pin-utils",
 ]
 
@@ -5006,7 +5015,7 @@ dependencies = [
  "libc",
  "libsecp256k1 0.6.0",
  "log",
- "memoffset",
+ "memoffset 0.6.4",
  "num-derive",
  "num-traits",
  "parking_lot 0.12.1",
@@ -5057,7 +5066,7 @@ dependencies = [
  "libc",
  "libsecp256k1 0.6.0",
  "log",
- "memoffset",
+ "memoffset 0.8.0",
  "num-bigint 0.4.3",
  "num-derive",
  "num-traits",
