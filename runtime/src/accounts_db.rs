@@ -53,7 +53,6 @@ use {
         read_only_accounts_cache::ReadOnlyAccountsCache,
         rent_collector::RentCollector,
         rent_paying_accounts_by_partition::RentPayingAccountsByPartition,
-        snapshot_utils::create_accounts_run_and_snapshot_dirs,
         sorted_storages::SortedStorages,
         storable_accounts::StorableAccounts,
         verify_accounts_hash_in_background::VerifyAccountsHashInBackground,
@@ -1114,14 +1113,7 @@ impl AccountStorageEntry {
 pub fn get_temp_accounts_paths(count: u32) -> IoResult<(Vec<TempDir>, Vec<PathBuf>)> {
     let temp_dirs: IoResult<Vec<TempDir>> = (0..count).map(|_| TempDir::new()).collect();
     let temp_dirs = temp_dirs?;
-
-    let paths: IoResult<Vec<_>> = temp_dirs
-        .iter()
-        .map(|temp_dir| {
-            create_accounts_run_and_snapshot_dirs(temp_dir).map(|(run_dir, _snapshot_dir)| run_dir)
-        })
-        .collect();
-    let paths = paths?;
+    let paths: Vec<PathBuf> = temp_dirs.iter().map(|t| t.path().to_path_buf()).collect();
     Ok((temp_dirs, paths))
 }
 
