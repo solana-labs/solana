@@ -257,6 +257,10 @@ fn test_bank_serialize_style(
     bank2.freeze();
     bank2.squash();
     bank2.force_flush_accounts_cache();
+    bank2
+        .accounts()
+        .accounts_db
+        .set_accounts_hash_for_tests(bank2.slot(), AccountsHash(Hash::new(&[0; 32])));
 
     let snapshot_storages = bank2.get_snapshot_storages(None);
     let mut buf = vec![];
@@ -285,16 +289,13 @@ fn test_bank_serialize_style(
     )
     .unwrap();
 
-    let accounts_hash = if update_accounts_hash {
-        let accounts_hash = AccountsHash(Hash::new(&[1; 32]));
+    if update_accounts_hash {
         bank2
             .accounts()
             .accounts_db
-            .set_accounts_hash(bank2.slot(), accounts_hash);
-        accounts_hash
-    } else {
-        bank2.get_accounts_hash()
-    };
+            .set_accounts_hash_for_tests(bank2.slot(), AccountsHash(Hash::new(&[1; 32])));
+    }
+    let accounts_hash = bank2.get_accounts_hash().unwrap();
 
     let slot = bank2.slot();
     let incremental =
@@ -406,7 +407,7 @@ fn test_bank_serialize_style(
     assert_eq!(dbank.get_balance(&key1.pubkey()), 0);
     assert_eq!(dbank.get_balance(&key2.pubkey()), 10);
     assert_eq!(dbank.get_balance(&key3.pubkey()), 0);
-    assert_eq!(dbank.get_accounts_hash(), accounts_hash);
+    assert_eq!(dbank.get_accounts_hash(), Some(accounts_hash));
     assert!(bank2 == dbank);
     assert_eq!(dbank.incremental_snapshot_persistence, incremental);
     assert_eq!(dbank.get_epoch_accounts_hash_to_serialize().map(|epoch_accounts_hash| *epoch_accounts_hash.as_ref()), expected_epoch_accounts_hash,

@@ -281,7 +281,7 @@ fn run_bank_forks_snapshot_n<F>(
         None,
     )
     .unwrap();
-    let accounts_hash = last_bank.get_accounts_hash();
+    let accounts_hash = last_bank.get_accounts_hash().unwrap();
     solana_runtime::serde_snapshot::reserialize_bank_with_new_accounts_hash(
         accounts_package.snapshot_links_dir(),
         accounts_package.slot,
