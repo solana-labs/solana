@@ -663,7 +663,7 @@ mod tests {
                     minimized_account_set.insert(*pubkey);
                 }
             }
-            accounts.get_accounts_delta_hash(current_slot);
+            accounts.calculate_accounts_delta_hash(current_slot);
             accounts.add_root_and_flush_write_cache(current_slot);
         }
 

@@ -370,7 +370,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         .arg(
             Arg::with_name("bpf_program")
                 .long("bpf-program")
-                .value_name("ADDRESS BPF_PROGRAM.SO")
+                .value_name("ADDRESS LOADER BPF_PROGRAM.SO")
                 .takes_value(true)
                 .number_of_values(3)
                 .multiple(true)

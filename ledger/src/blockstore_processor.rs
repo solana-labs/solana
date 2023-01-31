@@ -327,21 +327,17 @@ fn execute_batches(
 
     let mut minimal_tx_cost = u64::MAX;
     let mut total_cost: u64 = 0;
-    let mut total_cost_without_bpf: u64 = 0;
     // Allowing collect here, since it also computes the minimal tx cost, and aggregate cost.
     // These two values are later used for checking if the tx_costs vector needs to be iterated over.
-    // The collection is a pair of (full cost, cost without estimated-bpf-code-costs).
     #[allow(clippy::needless_collect)]
     let tx_costs = sanitized_txs
         .iter()
         .map(|tx| {
             let tx_cost = CostModel::calculate_cost(tx, &bank.feature_set);
             let cost = tx_cost.sum();
-            let cost_without_bpf = tx_cost.sum_without_bpf();
             minimal_tx_cost = std::cmp::min(minimal_tx_cost, cost);
             total_cost = total_cost.saturating_add(cost);
-            total_cost_without_bpf = total_cost_without_bpf.saturating_add(cost_without_bpf);
-            (cost, cost_without_bpf)
+            cost
         })
         .collect::<Vec<_>>();
 
@@ -351,30 +347,24 @@ fn execute_batches(
     let rebatched_txs = if total_cost > target_batch_count.saturating_mul(minimal_tx_cost) {
         let target_batch_cost = total_cost / target_batch_count;
         let mut batch_cost: u64 = 0;
-        let mut batch_cost_without_bpf: u64 = 0;
         let mut slice_start = 0;
-        tx_costs
-            .into_iter()
-            .enumerate()
-            .for_each(|(index, cost_pair)| {
-                let next_index = index + 1;
-                batch_cost = batch_cost.saturating_add(cost_pair.0);
-                batch_cost_without_bpf = batch_cost_without_bpf.saturating_add(cost_pair.1);
-                if batch_cost >= target_batch_cost || next_index == sanitized_txs.len() {
-                    let tx_batch = rebatch_transactions(
-                        &lock_results,
-                        bank,
-                        &sanitized_txs,
-                        slice_start,
-                        index,
-                        &transaction_indexes,
-                    );
-                    slice_start = next_index;
-                    tx_batches.push(tx_batch);
-                    batch_cost = 0;
-                    batch_cost_without_bpf = 0;
-                }
-            });
+        tx_costs.into_iter().enumerate().for_each(|(index, cost)| {
+            let next_index = index + 1;
+            batch_cost = batch_cost.saturating_add(cost);
+            if batch_cost >= target_batch_cost || next_index == sanitized_txs.len() {
+                let tx_batch = rebatch_transactions(
+                    &lock_results,
+                    bank,
+                    &sanitized_txs,
+                    slice_start,
+                    index,
+                    &transaction_indexes,
+                );
+                slice_start = next_index;
+                tx_batches.push(tx_batch);
+                batch_cost = 0;
+            }
+        });
         &tx_batches[..]
     } else {
         batches

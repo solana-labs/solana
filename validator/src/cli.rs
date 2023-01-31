@@ -10,6 +10,7 @@ use {
         },
         keypair::SKIP_SEED_PHRASE_VALIDATION_ARG,
     },
+    solana_core::banking_trace::{DirByteLimit, BANKING_TRACE_DIR_DEFAULT_BYTE_LIMIT},
     solana_faucet::faucet::{self, FAUCET_PORT},
     solana_net_utils::{MINIMUM_VALIDATOR_PORT_RANGE_WIDTH, VALIDATOR_PORT_RANGE},
     solana_rpc::{rpc::MAX_REQUEST_BODY_SIZE, rpc_pubsub_service::PubSubConfig},
@@ -1302,6 +1303,24 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                 .long("replay-slots-concurrently")
                 .help("Allow concurrent replay of slots on different forks")
         )
+        .arg(
+            Arg::with_name("banking_trace_dir_byte_limit")
+                // expose friendly alternative name to cli than internal
+                // implementation-oriented one
+                .long("enable-banking-trace")
+                .value_name("BYTES")
+                .validator(is_parsable::<DirByteLimit>)
+                .takes_value(true)
+                // Firstly, zero limit value causes tracer to be disabled
+                // altogether, intuitively. On the other hand, this non-zero
+                // default doesn't enable banking tracer unless this flag is
+                // explicitly given, similar to --limit-ledger-size.
+                // see configure_banking_trace_dir_byte_limit() for this.
+                .default_value(&default_args.banking_trace_dir_byte_limit)
+                .help("Write trace files for simulate-leader-blocks, retaining \
+                       up to the default or specified total bytes in the \
+                       ledger")
+        )
         .args(&get_deprecated_arguments())
         .after_help("The default subcommand is run")
         .subcommand(
@@ -1683,6 +1702,8 @@ pub struct DefaultArgs {
     // Wait subcommand
     pub wait_for_restart_window_min_idle_time: String,
     pub wait_for_restart_window_max_delinquent_stake: String,
+
+    pub banking_trace_dir_byte_limit: String,
 }
 
 impl DefaultArgs {
@@ -1761,6 +1782,7 @@ impl DefaultArgs {
             exit_max_delinquent_stake: "5".to_string(),
             wait_for_restart_window_min_idle_time: "10".to_string(),
             wait_for_restart_window_max_delinquent_stake: "5".to_string(),
+            banking_trace_dir_byte_limit: BANKING_TRACE_DIR_DEFAULT_BYTE_LIMIT.to_string(),
         }
     }
 }

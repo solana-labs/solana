@@ -23,6 +23,8 @@ impl BlockMetadataNotifier for BlockMetadataNotifierImpl {
     /// Notify the block metadata
     fn notify_block_metadata(
         &self,
+        parent_slot: u64,
+        parent_blockhash: &str,
         slot: u64,
         blockhash: &str,
         rewards: &RwLock<Vec<(Pubkey, RewardInfo)>>,
@@ -39,6 +41,8 @@ impl BlockMetadataNotifier for BlockMetadataNotifierImpl {
         for plugin in plugin_manager.plugins.iter_mut() {
             let mut measure = Measure::start("geyser-plugin-update-slot");
             let block_info = Self::build_replica_block_info(
+                parent_slot,
+                parent_blockhash,
                 slot,
                 blockhash,
                 &rewards,
@@ -91,6 +95,8 @@ impl BlockMetadataNotifierImpl {
     }
 
     fn build_replica_block_info<'a>(
+        parent_slot: u64,
+        parent_blockhash: &'a str,
         slot: u64,
         blockhash: &'a str,
         rewards: &'a [Reward],
@@ -99,6 +105,8 @@ impl BlockMetadataNotifierImpl {
         executed_transaction_count: u64,
     ) -> ReplicaBlockInfoV2<'a> {
         ReplicaBlockInfoV2 {
+            parent_slot,
+            parent_blockhash,
             slot,
             blockhash,
             rewards,

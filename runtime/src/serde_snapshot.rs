@@ -281,14 +281,8 @@ pub(crate) fn fields_from_streams<R: Read>(
         .as_mut()
         .map(|stream| fields_from_stream(serde_style, stream))
         .transpose()?;
-
-    // Option::unzip() not stabilized yet
     let (incremental_snapshot_bank_fields, incremental_snapshot_accounts_db_fields) =
-        if let Some((bank_fields, accounts_fields)) = incremental_fields {
-            (Some(bank_fields), Some(accounts_fields))
-        } else {
-            (None, None)
-        };
+        incremental_fields.unzip();
 
     let snapshot_accounts_db_fields = SnapshotAccountsDbFields {
         full_snapshot_accounts_db_fields,
@@ -724,11 +718,7 @@ where
     );
 
     // Process deserialized data, set necessary fields in self
-    accounts_db
-        .bank_hashes
-        .write()
-        .unwrap()
-        .insert(snapshot_slot, snapshot_bank_hash_info);
+    accounts_db.set_bank_hash_info_from_snapshot(snapshot_slot, snapshot_bank_hash_info);
     accounts_db.storage.initialize(storage);
     accounts_db
         .next_id

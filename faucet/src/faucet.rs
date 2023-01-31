@@ -173,7 +173,7 @@ impl Faucet {
     /// Checks per-request and per-time-ip limits; if both pass, this method returns a signed
     /// SystemProgram::Transfer transaction from the faucet keypair to the requested recipient. If
     /// the request exceeds this per-request limit, this method returns a signed SPL Memo
-    /// transaction with the memo: "request too large; req: <REQUEST> SOL cap: <CAP> SOL"
+    /// transaction with the memo: `"request too large; req: <REQUEST> SOL cap: <CAP> SOL"`
     pub fn build_airdrop_transaction(
         &mut self,
         req: FaucetRequest,

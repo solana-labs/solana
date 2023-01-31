@@ -148,10 +148,23 @@ fn run_program(name: &str) -> u64 {
                 }
                 instruction_count = compute_units_consumed;
                 if i == 0 {
-                    trace_log = Some(vm.env.context_object_pointer.trace_log.clone());
+                    trace_log = Some(
+                        vm.env
+                            .context_object_pointer
+                            .trace_log_stack
+                            .last()
+                            .expect("Inconsistent trace log stack")
+                            .clone(),
+                    );
                 } else {
                     let interpreter = trace_log.as_ref().unwrap().as_slice();
-                    let mut jit = vm.env.context_object_pointer.trace_log.as_slice();
+                    let mut jit = vm
+                        .env
+                        .context_object_pointer
+                        .trace_log_stack
+                        .last()
+                        .expect("Inconsistent trace log stack")
+                        .as_slice();
                     if jit.len() > interpreter.len() {
                         jit = &jit[0..interpreter.len()];
                     }
