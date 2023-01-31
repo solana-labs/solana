@@ -5509,6 +5509,7 @@ name = "solana-genesis"
 version = "1.15.0"
 dependencies = [
  "base64 0.13.0",
+ "bincode",
  "clap 2.33.3",
  "serde",
  "serde_json",
