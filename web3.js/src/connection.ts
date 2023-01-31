@@ -4452,7 +4452,7 @@ export class Connection {
   async getFeeForMessage(
     message: VersionedMessage,
     commitment?: Commitment,
-  ): Promise<RpcResponseAndContext<number>> {
+  ): Promise<RpcResponseAndContext<number | null>> {
     const wireMessage = toBuffer(message.serialize()).toString('base64');
     const args = this._buildArgs([wireMessage], commitment);
     const unsafeRes = await this._rpcRequest('getFeeForMessage', args);
@@ -4464,7 +4464,7 @@ export class Connection {
     if (res.result === null) {
       throw new Error('invalid blockhash');
     }
-    return res.result as unknown as RpcResponseAndContext<number>;
+    return res.result;
   }
 
   /**
