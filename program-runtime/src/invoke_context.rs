@@ -68,6 +68,7 @@ impl<'a> ContextObject for InvokeContext<'a> {
     }
 
     fn consume(&mut self, amount: u64) {
+        self.log_consumed_bpf_units(amount);
         // 1 to 1 instruction to compute unit mapping
         // ignore overflow, Ebpf will bail if exceeded
         let mut compute_meter = self.compute_meter.borrow_mut();
@@ -108,6 +109,7 @@ pub struct InvokeContext<'a> {
     builtin_programs: &'a [BuiltinProgram],
     pub sysvar_cache: Cow<'a, SysvarCache>,
     pub trace_log_stack: Vec<Vec<[u64; 12]>>,
+    pub consumed_bpf_units_stack: RefCell<Vec<Vec<(usize, u64)>>>,
     log_collector: Option<Rc<RefCell<LogCollector>>>,
     compute_budget: ComputeBudget,
     current_compute_budget: ComputeBudget,
@@ -143,6 +145,7 @@ impl<'a> InvokeContext<'a> {
             builtin_programs,
             sysvar_cache,
             trace_log_stack: vec![Vec::new()],
+            consumed_bpf_units_stack: RefCell::new(vec![Vec::new()]),
             log_collector,
             current_compute_budget: compute_budget,
             compute_budget,
@@ -275,6 +278,7 @@ impl<'a> InvokeContext<'a> {
         }
 
         self.trace_log_stack.push(Vec::new());
+        self.consumed_bpf_units_stack.borrow_mut().push(Vec::new());
         self.syscall_context.push(None);
         self.transaction_context.push()
     }
@@ -282,6 +286,7 @@ impl<'a> InvokeContext<'a> {
     /// Pop a stack frame from the invocation stack
     pub fn pop(&mut self) -> Result<(), InstructionError> {
         self.trace_log_stack.pop();
+        self.consumed_bpf_units_stack.borrow_mut().pop();
         self.syscall_context.pop();
         self.transaction_context.pop()
     }
@@ -781,6 +786,7 @@ impl<'a> InvokeContext<'a> {
 
     /// Consume compute units
     pub fn consume_checked(&self, amount: u64) -> Result<(), InstructionError> {
+        self.log_consumed_bpf_units(amount);
         let mut compute_meter = self.compute_meter.borrow_mut();
         let exceeded = *compute_meter < amount;
         *compute_meter = compute_meter.saturating_sub(amount);
@@ -866,6 +872,24 @@ impl<'a> InvokeContext<'a> {
             .and_then(|context| context.as_ref())
             .map(|context| context.allocator.clone())
             .ok_or(InstructionError::CallDepth)
+    }
+
+    fn log_consumed_bpf_units(&self, amount: u64) {
+        if amount != 0 {
+            self.consumed_bpf_units_stack
+                .borrow_mut()
+                .last_mut()
+                .expect("Inconsistent consumed BPF units stack")
+                .push((
+                    self.trace_log_stack
+                        .last()
+                        .expect("Inconsistent trace log stack")
+                        .len()
+                        .checked_sub(1)
+                        .expect("Inconsistent trace log stack"),
+                    amount,
+                ));
+        }
     }
 }
 
