@@ -1343,7 +1343,7 @@ impl<T: IndexValue> AccountsIndex<T> {
     ///   apply 'avoid_callback_result' if specified.
     ///   otherwise, call `callback`
     pub(crate) fn scan<'a, F, I>(
-        &'a self,
+        &self,
         pubkeys: I,
         mut callback: F,
         avoid_callback_result: Option<AccountsIndexScanResult>,

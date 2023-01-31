@@ -162,6 +162,71 @@ impl<'a> StorableAccounts<'a, StoredAccountMeta<'a>>
     }
 }
 
+fn find_internal_index<'a>(
+    data: &'a [(Slot, &[&'a StoredAccountMeta<'a>])],
+    mut index: usize,
+) -> (usize, usize) {
+    for (outer_index, inner_data) in data.iter().enumerate() {
+        let this_len = inner_data.1.len();
+        if this_len > index {
+            // this is the correct inner data
+            return (outer_index, index);
+        }
+        index = index.saturating_add(this_len);
+    }
+    panic!("failed");
+}
+
+/// The last parameter exists until this feature is activated:
+///  ignore slot when calculating an account hash #28420
+impl<'a> StorableAccounts<'a, StoredAccountMeta<'a>>
+    for &(
+        Slot,
+        &'a [(Slot, &[&'a StoredAccountMeta<'a>])],
+        IncludeSlotInHash,
+    )
+{
+    fn pubkey(&self, index: usize) -> &Pubkey {
+        let indexes = find_internal_index(self.1, index);
+        self.1[indexes.0].1[indexes.1].pubkey()
+    }
+    fn account(&self, index: usize) -> &StoredAccountMeta<'a> {
+        let indexes = find_internal_index(self.1, index);
+        self.1[indexes.0].1[indexes.1]
+    }
+    fn slot(&self, index: usize) -> Slot {
+        let indexes = find_internal_index(self.1, index);
+        self.1[indexes.0].0
+    }
+    fn target_slot(&self) -> Slot {
+        self.0
+    }
+    fn len(&self) -> usize {
+        let mut len = 0;
+        for inner_data in self.1 {
+            len += inner_data.1.len();
+        }
+        len
+    }
+    fn contains_multiple_slots(&self) -> bool {
+        false
+    }
+    fn include_slot_in_hash(&self) -> IncludeSlotInHash {
+        self.2
+    }
+    fn has_hash_and_write_version(&self) -> bool {
+        true
+    }
+    fn hash(&self, index: usize) -> &Hash {
+        let indexes = find_internal_index(self.1, index);
+        self.1[indexes.0].1[indexes.1].hash
+    }
+    fn write_version(&self, index: usize) -> u64 {
+        let indexes = find_internal_index(self.1, index);
+        self.1[indexes.0].1[indexes.1].meta.write_version_obsolete
+    }
+}
+
 /// this tuple contains a single different source slot that applies to all accounts
 /// accounts are StoredAccountMeta
 impl<'a> StorableAccounts<'a, StoredAccountMeta<'a>>
