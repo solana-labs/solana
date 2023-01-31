@@ -1100,11 +1100,7 @@ fn process_loader_upgradeable_instruction(
                         .feature_set
                         .is_active(&enable_program_redeployment_cooldown::id())
                     {
-                        let clock = get_sysvar_with_account_check::clock(
-                            invoke_context,
-                            instruction_context,
-                            4,
-                        )?;
+                        let clock = invoke_context.get_sysvar_cache().get_clock()?;
                         if clock.slot == slot {
                             ic_logger_msg!(
                                 log_collector,
@@ -3615,11 +3611,6 @@ mod tests {
             is_signer: true,
             is_writable: false,
         };
-        let clock_meta = AccountMeta {
-            pubkey: sysvar::clock::id(),
-            is_signer: false,
-            is_writable: false,
-        };
 
         // Case: close a buffer account
         let accounts = process_instruction(
@@ -3720,7 +3711,6 @@ mod tests {
                     is_signer: false,
                     is_writable: true,
                 },
-                clock_meta.clone(),
             ],
             Ok(()),
         );
@@ -3798,7 +3788,11 @@ mod tests {
                     is_signer: false,
                     is_writable: false,
                 },
-                clock_meta,
+                AccountMeta {
+                    pubkey: sysvar::clock::id(),
+                    is_signer: false,
+                    is_writable: false,
+                },
                 AccountMeta {
                     pubkey: system_program::id(),
                     is_signer: false,
