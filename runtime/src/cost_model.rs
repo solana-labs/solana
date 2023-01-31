@@ -12,7 +12,6 @@ use {
         ComputeBudget, DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT,
     },
     solana_sdk::{
-        compute_budget,
         feature_set::{
             remove_deprecated_request_unit_ix, use_default_units_in_fee_calculation, FeatureSet,
         },
@@ -134,7 +133,7 @@ impl CostModel {
             // to keep the same behavior, look for builtin first
             if let Some(builtin_cost) = BUILT_IN_INSTRUCTION_COSTS.get(program_id) {
                 builtin_costs = builtin_costs.saturating_add(*builtin_cost);
-            } else if !compute_budget::check_id(program_id) {
+            } else {
                 bpf_costs = bpf_costs.saturating_add(DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT.into());
             }
             data_bytes_len_total =
