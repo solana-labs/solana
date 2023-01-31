@@ -1183,9 +1183,9 @@
   integrity sha512-LeAxFK0+181zQOhOUuKE8Jnd3duzYhDNd3iCLxpmzA5K+e4I1FdbrK3Ot0ZHBwZMeRD/6EojyUfTbpHZ+hkQHg==
 
 "@noble/hashes@^1.1.2":
-  version "1.1.2"
-  resolved "https://registry.npmjs.org/@noble/hashes/-/hashes-1.1.2.tgz"
-  integrity sha512-KYRCASVTv6aeUi1tsF8/vpyR7zpfs3FUzy2Jqm+MU+LmUKhQ0y2FpfwqkCcxSg2ua4GALJd8k2R76WxwZGbQpA==
+  version "1.1.5"
+  resolved "https://registry.yarnpkg.com/@noble/hashes/-/hashes-1.1.5.tgz#1a0377f3b9020efe2fae03290bd2a12140c95c11"
+  integrity sha512-LTMZiiLc+V4v1Yi16TD6aX2gmtKszNye0pQgbaLqkvhIqP7nVsSaJsWloGQjJfJ8offaoP5GtX3yY5swbcJxxQ==
 
 "@noble/secp256k1@^1.6.3":
   version "1.7.1"
