@@ -89,7 +89,7 @@ pub trait BpfTracerPlugin: Any + Send + Sync + std::fmt::Debug {
         block_hash: &Hash,
         transaction_id: &[u8],
         trace: &[TraceLogEntry],
-        consumed_bpf_units: &[u64],
+        consumed_bpf_units: &[(usize, u64)],
         executor: Arc<dyn ExecutorAdditional>,
     ) -> Result<()>;
 }
