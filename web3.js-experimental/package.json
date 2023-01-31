@@ -49,7 +49,7 @@
         "test:treeshakability:native": "agadoo dist/index.node.js",
         "test:treeshakability:node": "agadoo dist/index.native.js"
     },
-    "author": "Solana Maintainers <maintainers@solana.com>",
+    "author": "Solana Labs Maintainers <maintainers@solanalabs.com>",
     "license": "MIT",
     "repository": {
         "type": "git",

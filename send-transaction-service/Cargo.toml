@@ -2,7 +2,7 @@
 name = "solana-send-transaction-service"
 version = "1.15.0"
 description = "Solana send transaction service"
-authors = ["Solana Maintainers <maintainers@solana.foundation>"]
+authors = ["Solana Labs Maintainers <maintainers@solanalabs.com>"]
 repository = "https://github.com/solana-labs/solana"
 homepage = "https://solana.com/"
 documentation = "https://docs.rs/solana-send-transaction-service"

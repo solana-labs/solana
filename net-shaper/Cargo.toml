@@ -1,5 +1,5 @@
 [package]
-authors = ["Solana Maintainers <maintainers@solana.foundation>"]
+authors = ["Solana Labs Maintainers <maintainers@solanalabs.com>"]
 edition = "2021"
 name = "solana-net-shaper"
 description = "The solana cluster network shaping tool"

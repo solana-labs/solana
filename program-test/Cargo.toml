@@ -1,5 +1,5 @@
 [package]
-authors = ["Solana Maintainers <maintainers@solana.foundation>"]
+authors = ["Solana Labs Maintainers <maintainers@solanalabs.com>"]
 description = "Solana Program Test Framework"
 edition = "2021"
 license = "Apache-2.0"

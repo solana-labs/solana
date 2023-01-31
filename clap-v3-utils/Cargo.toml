@@ -2,7 +2,7 @@
 name = "solana-clap-v3-utils"
 version = "1.15.0"
 description = "Solana utilities for the clap v3"
-authors = ["Solana Maintainers <maintainers@solana.foundation>"]
+authors = ["Solana Labs Maintainers <maintainers@solanalabs.com>"]
 repository = "https://github.com/solana-labs/solana"
 license = "Apache-2.0"
 homepage = "https://solana.com/"
