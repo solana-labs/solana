@@ -4426,8 +4426,8 @@ mod tests {
         assert!(remove_bank_snapshot(bank.slot(), bank_snapshots_dir).is_ok());
 
         // When the bank snapshot is removed, all the snapshot hardlink directories should be removed.
-        for hardlink_dir in hardlink_dirs {
+        hardlink_dirs.iter().all(|dir| {
             assert!(fs::metadata(hardlink_dir).is_err());
-        }
+        });
     }
 }
