@@ -7070,19 +7070,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "solana-zk-token-proof-program"
-version = "1.16.0"
-dependencies = [
- "bytemuck",
- "getrandom 0.1.16",
- "num-derive",
- "num-traits",
- "solana-program-runtime",
- "solana-sdk 1.16.0",
- "solana-zk-token-sdk 1.16.0",
-]
-
-[[package]]
 name = "solana-zk-token-sdk"
 version = "1.15.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
