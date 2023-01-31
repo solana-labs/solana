@@ -68,7 +68,7 @@ use {
     rand::{thread_rng, Rng},
     rayon::{prelude::*, ThreadPool},
     serde::{Deserialize, Serialize},
-    solana_measure::{measure, measure::Measure},
+    solana_measure::{measure, measure::Measure, measure_us},
     solana_rayon_threadlimit::get_thread_count,
     solana_sdk::{
         account::{Account, AccountSharedData, ReadableAccount, WritableAccount},
@@ -3720,10 +3720,11 @@ impl AccountsDb {
         store: &'a Arc<AccountStorageEntry>,
         stats: &ShrinkStats,
     ) -> GetUniqueAccountsResult<'a> {
-        let (result, storage_read_elapsed) = measure!(self.get_unique_accounts_from_storage(store));
+        let (result, storage_read_elapsed_us) =
+            measure_us!(self.get_unique_accounts_from_storage(store));
         stats
             .storage_read_elapsed
-            .fetch_add(storage_read_elapsed.as_us(), Ordering::Relaxed);
+            .fetch_add(storage_read_elapsed_us, Ordering::Relaxed);
         result
     }
 
@@ -3891,9 +3892,9 @@ impl AccountsDb {
         let mut remove_old_stores_shrink_us = 0;
         let mut store_accounts_timing = StoreAccountsTiming::default();
         if shrink_collect.aligned_total_bytes > 0 {
-            let (shrink_in_progress, time) =
-                measure!(self.get_store_for_shrink(slot, shrink_collect.aligned_total_bytes));
-            create_and_insert_store_elapsed_us = time.as_us();
+            let (shrink_in_progress, time_us) =
+                measure_us!(self.get_store_for_shrink(slot, shrink_collect.aligned_total_bytes));
+            create_and_insert_store_elapsed_us = time_us;
 
             // here, we're writing back alive_accounts. That should be an atomic operation
             // without use of rather wide locks in this whole function, because we're
@@ -3919,18 +3920,19 @@ impl AccountsDb {
             // those here
             self.shrink_candidate_slots.lock().unwrap().remove(&slot);
 
-            let (_, remove_old_stores_shrink) = measure!(self.remove_old_stores_shrink(
-                &shrink_collect,
-                slot,
-                &self.shrink_stats,
-                Some(shrink_in_progress)
-            ));
-            remove_old_stores_shrink_us = remove_old_stores_shrink.as_us();
+            let (_, local_remove_old_stores_shrink_us) = measure_us!(self
+                .remove_old_stores_shrink(
+                    &shrink_collect,
+                    slot,
+                    &self.shrink_stats,
+                    Some(shrink_in_progress)
+                ));
+            remove_old_stores_shrink_us = local_remove_old_stores_shrink_us;
         }
 
         Self::update_shrink_stats(
             &self.shrink_stats,
-            Measure::start("ignored"), // find_alive_elapsed
+            0, // find_alive_elapsed
             create_and_insert_store_elapsed_us,
             store_accounts_timing,
             rewrite_elapsed.as_us(),
@@ -3942,7 +3944,7 @@ impl AccountsDb {
     #[allow(clippy::too_many_arguments)]
     fn update_shrink_stats(
         shrink_stats: &ShrinkStats,
-        find_alive_elapsed: Measure,
+        find_alive_elapsed_us: u64,
         create_and_insert_store_elapsed_us: u64,
         store_accounts_timing: StoreAccountsTiming,
         rewrite_elapsed_us: u64,
@@ -3953,7 +3955,7 @@ impl AccountsDb {
             .fetch_add(1, Ordering::Relaxed);
         shrink_stats
             .find_alive_elapsed
-            .fetch_add(find_alive_elapsed.as_us(), Ordering::Relaxed);
+            .fetch_add(find_alive_elapsed_us, Ordering::Relaxed);
         shrink_stats
             .create_and_insert_store_elapsed
             .fetch_add(create_and_insert_store_elapsed_us, Ordering::Relaxed);
@@ -4428,14 +4430,13 @@ impl AccountsDb {
             return; // skipping slot with no useful accounts to write
         }
 
-        let (mut shrink_in_progress, time) =
-            measure!(current_ancient.create_if_necessary(slot, self));
-        let mut create_and_insert_store_elapsed_us = time.as_us();
+        let (mut shrink_in_progress, mut create_and_insert_store_elapsed_us) =
+            measure_us!(current_ancient.create_if_necessary(slot, self));
         let available_bytes = current_ancient.append_vec().accounts.remaining_bytes();
         // split accounts in 'slot' into:
         // 'Primary', which can fit in 'current_ancient'
         // 'Overflow', which will have to go into a new ancient append vec at 'slot'
-        let (to_store, find_alive_elapsed) = measure!(AccountsToStore::new(
+        let (to_store, find_alive_elapsed_us) = measure_us!(AccountsToStore::new(
             available_bytes,
             shrink_collect.alive_accounts.alive_accounts(),
             shrink_collect.alive_total_bytes,
@@ -4460,9 +4461,9 @@ impl AccountsDb {
             // Assert: it cannot be the case that we already had an ancient append vec at this slot and
             // yet that ancient append vec does not have room for the accounts stored at this slot currently
             assert_ne!(slot, current_ancient.slot());
-            let (shrink_in_progress_overflow, time) =
-                measure!(current_ancient.create_ancient_append_vec(slot, self));
-            create_and_insert_store_elapsed_us += time.as_us();
+            let (shrink_in_progress_overflow, time_us) =
+                measure_us!(current_ancient.create_ancient_append_vec(slot, self));
+            create_and_insert_store_elapsed_us += time_us;
             // We cannot possibly be shrinking the original slot that created an ancient append vec
             // AND not have enough room in the ancient append vec at that slot
             // to hold all the contents of that slot.
@@ -4484,7 +4485,7 @@ impl AccountsDb {
             dropped_roots.push(slot);
         }
 
-        let (_remaining_stores, remove_old_stores_shrink) = measure!(self
+        let (_remaining_stores, remove_old_stores_shrink_us) = measure_us!(self
             .remove_old_stores_shrink(
                 &shrink_collect,
                 slot,
@@ -4497,11 +4498,11 @@ impl AccountsDb {
 
         Self::update_shrink_stats(
             &self.shrink_ancient_stats.shrink_stats,
-            find_alive_elapsed,
+            find_alive_elapsed_us,
             create_and_insert_store_elapsed_us,
             store_accounts_timing,
             rewrite_elapsed.as_us(),
-            remove_old_stores_shrink.as_us(),
+            remove_old_stores_shrink_us,
         );
     }
 
@@ -7001,7 +7002,7 @@ impl AccountsDb {
                 // load from cache failed, so create the cache file for this chunk
                 for (slot, storage) in snapshot_storages.iter_range(&range_this_chunk) {
                     let mut ancient = false;
-                    let (_, scan) = measure!(if let Some(storage) = storage {
+                    let (_, scan_us) = measure_us!(if let Some(storage) = storage {
                         ancient = is_ancient(&storage.accounts);
                         if init_accum {
                             let range = bin_range.end - bin_range.start;
@@ -7015,11 +7016,11 @@ impl AccountsDb {
                     if ancient {
                         stats
                             .sum_ancient_scans_us
-                            .fetch_add(scan.as_us(), Ordering::Relaxed);
+                            .fetch_add(scan_us, Ordering::Relaxed);
                         stats.count_ancient_scans.fetch_add(1, Ordering::Relaxed);
                         stats
                             .longest_ancient_scan_us
-                            .fetch_max(scan.as_us(), Ordering::Relaxed);
+                            .fetch_max(scan_us, Ordering::Relaxed);
                     }
                 }
                 (!init_accum)
