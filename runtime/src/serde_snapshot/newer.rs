@@ -270,14 +270,10 @@ impl<'a> TypeContext<'a> for Context {
                 )
             }));
         let slot = serializable_db.slot;
-        let bank_hash_info: BankHashInfo = serializable_db
+        let bank_hash_info = serializable_db
             .accounts_db
-            .bank_hashes
-            .read()
-            .unwrap()
-            .get(&serializable_db.slot)
-            .unwrap_or_else(|| panic!("No bank_hashes entry for slot {}", serializable_db.slot))
-            .clone();
+            .get_bank_hash_info(serializable_db.slot)
+            .unwrap_or_else(|| panic!("No bank_hashes entry for slot {}", serializable_db.slot));
 
         let historical_roots = serializable_db
             .accounts_db

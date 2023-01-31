@@ -7568,6 +7568,28 @@ impl AccountsDb {
         self.bank_hashes.read().unwrap().get(&slot).cloned()
     }
 
+    /// When reconstructing AccountsDb from a snapshot, insert the `bank_hash_info` into the
+    /// internal bank hashses map.
+    ///
+    /// This fn is only called when loading from a snapshot, which means AccountsDb is new and its
+    /// bank hashes is unpopulated.  Therefore, a bank hash must not already exist at `slot` [^1].
+    ///
+    /// [^1] Slot 0 is a special case, however.  When a new AccountsDb is created--like when
+    /// loading from a snapshot--the bank hashes map is populated with a default entry at slot 0.
+    /// It is valid to have a snapshot at slot 0, so it must be handled accordingly.
+    pub fn set_bank_hash_info_from_snapshot(&self, slot: Slot, bank_hash_info: BankHashInfo) {
+        let old_bank_hash_info = self
+            .bank_hashes
+            .write()
+            .unwrap()
+            .insert(slot, bank_hash_info);
+        assert!(
+            old_bank_hash_info.is_none()
+                || (slot == 0 && old_bank_hash_info == Some(BankHashInfo::default())),
+            "There should not already be a BankHashInfo at slot {slot}: {old_bank_hash_info:?}",
+        );
+    }
+
     fn update_index<'a, T: ReadableAccount + Sync>(
         &self,
         infos: Vec<AccountInfo>,
