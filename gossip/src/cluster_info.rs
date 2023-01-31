@@ -267,7 +267,7 @@ pub fn make_accounts_hashes_message(
 pub(crate) type Ping = ping_pong::Ping<[u8; GOSSIP_PING_TOKEN_SIZE]>;
 
 // TODO These messages should go through the gpu pipeline for spam filtering
-#[frozen_abi(digest = "Aui5aMV3SK41tRQN14sgCMK3qp6r9dboLXNAHEBKFzii")]
+#[frozen_abi(digest = "avtjwK4ZjdAVfR8ZqqJkxbbe7SXSvhX5Cv7hnNjbZ7g")]
 #[derive(Serialize, Deserialize, Debug, AbiEnumVisitor, AbiExample)]
 #[allow(clippy::large_enum_variant)]
 pub(crate) enum Protocol {
@@ -377,6 +377,7 @@ impl Sanitize for Protocol {
 fn retain_staked(values: &mut Vec<CrdsValue>, stakes: &HashMap<Pubkey, u64>) {
     values.retain(|value| {
         match value.data {
+            CrdsData::ContactInfo(_) => true,
             CrdsData::LegacyContactInfo(_) => true,
             // May Impact new validators starting up without any stake yet.
             CrdsData::Vote(_, _) => true,
@@ -406,6 +407,7 @@ impl ClusterInfo {
         keypair: Arc<Keypair>,
         socket_addr_space: SocketAddrSpace,
     ) -> Self {
+        assert_eq!(contact_info.id, keypair.pubkey());
         let id = contact_info.id;
         let me = Self {
             gossip: CrdsGossip::default(),
@@ -622,7 +624,7 @@ impl ClusterInfo {
     }
 
     pub fn id(&self) -> Pubkey {
-        self.my_contact_info.read().unwrap().id
+        self.keypair.read().unwrap().pubkey()
     }
 
     pub fn keypair(&self) -> RwLockReadGuard<Arc<Keypair>> {
@@ -1881,8 +1883,9 @@ impl ClusterInfo {
 
     fn update_data_budget(&self, num_staked: usize) -> usize {
         const INTERVAL_MS: u64 = 100;
-        // allow 50kBps per staked validator, epoch slots + votes ~= 1.5kB/slot ~= 4kB/s
-        const BYTES_PER_INTERVAL: usize = 5000;
+        // epoch slots + votes ~= 1.5kB/slot ~= 4kB/s
+        // Allow 10kB/s per staked validator.
+        const BYTES_PER_INTERVAL: usize = 1024;
         const MAX_BUDGET_MULTIPLE: usize = 5; // allow budget build-up to 5x the interval default
         let num_staked = num_staked.max(2);
         self.outbound_budget.update(INTERVAL_MS, |bytes| {
@@ -2678,7 +2681,7 @@ impl ClusterInfo {
         gossip_addr: &SocketAddr,
         shred_version: u16,
     ) -> (ContactInfo, UdpSocket, Option<TcpListener>) {
-        let bind_ip_addr = IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0));
+        let bind_ip_addr = IpAddr::V4(Ipv4Addr::UNSPECIFIED);
         let (port, (gossip_socket, ip_echo)) =
             Node::get_gossip_port(gossip_addr, VALIDATOR_PORT_RANGE, bind_ip_addr);
         let contact_info =
@@ -2692,7 +2695,7 @@ impl ClusterInfo {
         id: Pubkey,
         shred_version: u16,
     ) -> (ContactInfo, UdpSocket, Option<TcpListener>) {
-        let bind_ip_addr = IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0));
+        let bind_ip_addr = IpAddr::V4(Ipv4Addr::UNSPECIFIED);
         let (_, gossip_socket) = bind_in_range(bind_ip_addr, VALIDATOR_PORT_RANGE).unwrap();
         let contact_info = Self::gossip_contact_info(id, socketaddr_any!(), shred_version);
 
@@ -2781,13 +2784,13 @@ impl Node {
         Self::new_localhost_with_pubkey(&pubkey)
     }
     pub fn new_localhost_with_pubkey(pubkey: &Pubkey) -> Self {
-        let bind_ip_addr = IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1));
+        let bind_ip_addr = IpAddr::V4(Ipv4Addr::LOCALHOST);
         let port_range = (1024, 65535);
         let ((_tpu_port, tpu), (_tpu_quic_port, tpu_quic)) =
             bind_two_in_range_with_offset(bind_ip_addr, port_range, QUIC_PORT_OFFSET).unwrap();
         let (gossip_port, (gossip, ip_echo)) =
             bind_common_in_range(bind_ip_addr, port_range).unwrap();
-        let gossip_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), gossip_port);
+        let gossip_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), gossip_port);
         let tvu = UdpSocket::bind("127.0.0.1:0").unwrap();
         let tvu_forwards = UdpSocket::bind("127.0.0.1:0").unwrap();
         let ((_tpu_forwards_port, tpu_forwards), (_tpu_forwards_quic_port, tpu_forwards_quic)) =
@@ -2795,10 +2798,9 @@ impl Node {
         let tpu_vote = UdpSocket::bind("127.0.0.1:0").unwrap();
         let repair = UdpSocket::bind("127.0.0.1:0").unwrap();
         let rpc_port = find_available_port_in_range(bind_ip_addr, port_range).unwrap();
-        let rpc_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), rpc_port);
+        let rpc_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), rpc_port);
         let rpc_pubsub_port = find_available_port_in_range(bind_ip_addr, port_range).unwrap();
-        let rpc_pubsub_addr =
-            SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), rpc_pubsub_port);
+        let rpc_pubsub_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), rpc_pubsub_port);
 
         let broadcast = vec![UdpSocket::bind("0.0.0.0:0").unwrap()];
         let retransmit_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
@@ -3149,20 +3151,20 @@ mod tests {
         let keypair = Keypair::from_base58_string("3jATNWfbii1btv6nCpToAXAJz6a4km5HsLSWiwLfNvHNQAmvksLFVAKGUz286bXb9N4ivXx8nuwkn91PFDTyoFEp");
 
         let node = {
-            let tpu = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8900);
-            let _tpu_quic = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8901);
+            let tpu = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 8900);
+            let _tpu_quic = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 8901);
 
-            let gossip = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8888);
-            let tvu = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8902);
-            let tvu_forwards = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8903);
-            let tpu_forwards = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8904);
+            let gossip = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 8888);
+            let tvu = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 8902);
+            let tvu_forwards = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 8903);
+            let tpu_forwards = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 8904);
 
-            let tpu_vote = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8906);
-            let repair = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8907);
-            let rpc = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8908);
-            let rpc_pubsub = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8909);
+            let tpu_vote = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 8906);
+            let repair = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 8907);
+            let rpc = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 8908);
+            let rpc_pubsub = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 8909);
 
-            let serve_repair = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8910);
+            let serve_repair = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 8910);
 
             let info = ContactInfo {
                 id: keypair.pubkey(),
@@ -3231,13 +3233,11 @@ RPC Enabled Nodes: 1"#;
     #[test]
     fn test_handle_pull() {
         solana_logger::setup();
-        let node = Node::new_localhost();
-        let cluster_info = Arc::new(ClusterInfo::new(
-            node.info,
-            Arc::new(Keypair::new()),
-            SocketAddrSpace::Unspecified,
-        ));
-
+        let cluster_info = Arc::new({
+            let keypair = Arc::new(Keypair::new());
+            let node = Node::new_localhost_with_pubkey(&keypair.pubkey());
+            ClusterInfo::new(node.info, keypair, SocketAddrSpace::Unspecified)
+        });
         let entrypoint_pubkey = solana_sdk::pubkey::new_rand();
         let data = test_crds_values(entrypoint_pubkey);
         let timeouts = HashMap::new();
@@ -3543,13 +3543,12 @@ RPC Enabled Nodes: 1"#;
     fn test_cluster_spy_gossip() {
         let thread_pool = ThreadPoolBuilder::new().build().unwrap();
         //check that gossip doesn't try to push to invalid addresses
-        let node = Node::new_localhost();
         let (spy, _, _) = ClusterInfo::spy_node(solana_sdk::pubkey::new_rand(), 0);
-        let cluster_info = Arc::new(ClusterInfo::new(
-            node.info,
-            Arc::new(Keypair::new()),
-            SocketAddrSpace::Unspecified,
-        ));
+        let cluster_info = Arc::new({
+            let keypair = Arc::new(Keypair::new());
+            let node = Node::new_localhost_with_pubkey(&keypair.pubkey());
+            ClusterInfo::new(node.info, keypair, SocketAddrSpace::Unspecified)
+        });
         cluster_info.insert_info(spy);
         cluster_info.gossip.refresh_push_active_set(
             &cluster_info.keypair(),
@@ -3576,20 +3575,17 @@ RPC Enabled Nodes: 1"#;
 
     #[test]
     fn test_cluster_info_new() {
-        let d = ContactInfo::new_localhost(&solana_sdk::pubkey::new_rand(), timestamp());
-        let cluster_info = ClusterInfo::new(
-            d.clone(),
-            Arc::new(Keypair::new()),
-            SocketAddrSpace::Unspecified,
-        );
+        let keypair = Arc::new(Keypair::new());
+        let d = ContactInfo::new_localhost(&keypair.pubkey(), timestamp());
+        let cluster_info = ClusterInfo::new(d.clone(), keypair, SocketAddrSpace::Unspecified);
         assert_eq!(d.id, cluster_info.id());
     }
 
     #[test]
     fn insert_info_test() {
-        let d = ContactInfo::new_localhost(&solana_sdk::pubkey::new_rand(), timestamp());
-        let cluster_info =
-            ClusterInfo::new(d, Arc::new(Keypair::new()), SocketAddrSpace::Unspecified);
+        let keypair = Arc::new(Keypair::new());
+        let d = ContactInfo::new_localhost(&keypair.pubkey(), timestamp());
+        let cluster_info = ClusterInfo::new(d, keypair, SocketAddrSpace::Unspecified);
         let d = ContactInfo::new_localhost(&solana_sdk::pubkey::new_rand(), timestamp());
         let label = CrdsValueLabel::LegacyContactInfo(d.id);
         cluster_info.insert_info(d);
@@ -3728,13 +3724,9 @@ RPC Enabled Nodes: 1"#;
 
     #[test]
     fn test_refresh_vote() {
-        let keys = Keypair::new();
-        let contact_info = ContactInfo::new_localhost(&keys.pubkey(), 0);
-        let cluster_info = ClusterInfo::new(
-            contact_info,
-            Arc::new(Keypair::new()),
-            SocketAddrSpace::Unspecified,
-        );
+        let keypair = Arc::new(Keypair::new());
+        let contact_info = ContactInfo::new_localhost(&keypair.pubkey(), 0);
+        let cluster_info = ClusterInfo::new(contact_info, keypair, SocketAddrSpace::Unspecified);
 
         // Construct and push a vote for some other slot
         let unrefresh_slot = 5;
@@ -3821,13 +3813,10 @@ RPC Enabled Nodes: 1"#;
     #[test]
     fn test_push_vote() {
         let mut rng = rand::thread_rng();
-        let keys = Keypair::new();
-        let contact_info = ContactInfo::new_localhost(&keys.pubkey(), 0);
-        let cluster_info = ClusterInfo::new(
-            contact_info,
-            Arc::new(Keypair::new()),
-            SocketAddrSpace::Unspecified,
-        );
+        let keypair = Arc::new(Keypair::new());
+        let contact_info = ContactInfo::new_localhost(&keypair.pubkey(), 0);
+        let cluster_info =
+            ClusterInfo::new(contact_info, keypair.clone(), SocketAddrSpace::Unspecified);
 
         // make sure empty crds is handled correctly
         let mut cursor = Cursor::default();
@@ -3856,7 +3845,7 @@ RPC Enabled Nodes: 1"#;
         assert_eq!(labels.len(), 1);
         match labels[0] {
             CrdsValueLabel::Vote(_, pubkey) => {
-                assert_eq!(pubkey, keys.pubkey());
+                assert_eq!(pubkey, keypair.pubkey());
             }
 
             _ => panic!("Bad match"),
@@ -3896,13 +3885,9 @@ RPC Enabled Nodes: 1"#;
             vote_slots.into_iter().collect()
         };
         let mut rng = rand::thread_rng();
-        let keys = Keypair::new();
-        let contact_info = ContactInfo::new_localhost(&keys.pubkey(), 0);
-        let cluster_info = ClusterInfo::new(
-            contact_info,
-            Arc::new(Keypair::new()),
-            SocketAddrSpace::Unspecified,
-        );
+        let keypair = Arc::new(Keypair::new());
+        let contact_info = ContactInfo::new_localhost(&keypair.pubkey(), 0);
+        let cluster_info = ClusterInfo::new(contact_info, keypair, SocketAddrSpace::Unspecified);
         let mut tower = Vec::new();
         for k in 0..MAX_LOCKOUT_HISTORY {
             let slot = k as Slot;
@@ -3949,13 +3934,9 @@ RPC Enabled Nodes: 1"#;
 
     #[test]
     fn test_push_epoch_slots() {
-        let keys = Keypair::new();
-        let contact_info = ContactInfo::new_localhost(&keys.pubkey(), 0);
-        let cluster_info = ClusterInfo::new(
-            contact_info,
-            Arc::new(Keypair::new()),
-            SocketAddrSpace::Unspecified,
-        );
+        let keypair = Arc::new(Keypair::new());
+        let contact_info = ContactInfo::new_localhost(&keypair.pubkey(), 0);
+        let cluster_info = ClusterInfo::new(contact_info, keypair, SocketAddrSpace::Unspecified);
         let slots = cluster_info.get_epoch_slots(&mut Cursor::default());
         assert!(slots.is_empty());
         cluster_info.push_epoch_slots(&[0]);
@@ -4161,12 +4142,9 @@ RPC Enabled Nodes: 1"#;
 
     #[test]
     fn test_tvu_peers_and_stakes() {
-        let d = ContactInfo::new_localhost(&Pubkey::from([0; 32]), timestamp());
-        let cluster_info = ClusterInfo::new(
-            d.clone(),
-            Arc::new(Keypair::new()),
-            SocketAddrSpace::Unspecified,
-        );
+        let keypair = Arc::new(Keypair::new());
+        let d = ContactInfo::new_localhost(&keypair.pubkey(), timestamp());
+        let cluster_info = ClusterInfo::new(d.clone(), keypair, SocketAddrSpace::Unspecified);
         let mut stakes = HashMap::new();
 
         // no stake
@@ -4685,8 +4663,8 @@ RPC Enabled Nodes: 1"#;
 
     #[test]
     fn test_get_duplicate_shreds() {
-        let node = Node::new_localhost();
         let host1_key = Arc::new(Keypair::new());
+        let node = Node::new_localhost_with_pubkey(&host1_key.pubkey());
         let cluster_info = Arc::new(ClusterInfo::new(
             node.info,
             host1_key.clone(),

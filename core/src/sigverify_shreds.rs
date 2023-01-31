@@ -6,7 +6,7 @@ use {
     },
     solana_perf::{self, packet::PacketBatch, recycler_cache::RecyclerCache},
     solana_runtime::{bank::Bank, bank_forks::BankForks},
-    solana_sdk::{clock::Slot, pubkey::Pubkey, signature::Signer},
+    solana_sdk::{clock::Slot, pubkey::Pubkey},
     std::{
         collections::HashMap,
         sync::{
@@ -39,11 +39,10 @@ pub(crate) fn spawn_shred_sigverify(
     Builder::new()
         .name("solShredVerifr".to_string())
         .spawn(move || loop {
-            // We can't store the pubkey outside the loop
-            // because the identity might be hot swapped.
-            let self_pubkey = cluster_info.keypair().pubkey();
             match run_shred_sigverify(
-                &self_pubkey,
+                // We can't store the pubkey outside the loop
+                // because the identity might be hot swapped.
+                &cluster_info.id(),
                 &bank_forks,
                 &leader_schedule_cache,
                 &recycler_cache,

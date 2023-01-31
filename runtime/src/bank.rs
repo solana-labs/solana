@@ -2494,6 +2494,11 @@ impl Bank {
                         }
                     };
                     if cached_stake_account.account() != &stake_account {
+                        if self.rc.accounts.accounts_db.assert_stakes_cache_consistency {
+                            panic!(
+                                "stakes cache accounts mismatch {cached_stake_account:?} {stake_account:?}"
+                            );
+                        }
                         invalid_cached_stake_accounts.fetch_add(1, Relaxed);
                         let cached_stake_account = cached_stake_account.account();
                         if cached_stake_account.lamports() == stake_account.lamports()
@@ -4563,22 +4568,8 @@ impl Bank {
 
     /// Load the accounts data size, in bytes
     pub fn load_accounts_data_size(&self) -> u64 {
-        // Mixed integer ops currently not stable, so copying the impl.
-        // Copied from: https://github.com/a1phyr/rust/blob/47edde1086412b36e9efd6098b191ec15a2a760a/library/core/src/num/uint_macros.rs#L1039-L1048
-        fn saturating_add_signed(lhs: u64, rhs: i64) -> u64 {
-            let (res, overflow) = lhs.overflowing_add(rhs as u64);
-            if overflow == (rhs < 0) {
-                res
-            } else if overflow {
-                u64::MAX
-            } else {
-                u64::MIN
-            }
-        }
-        saturating_add_signed(
-            self.accounts_data_size_initial,
-            self.load_accounts_data_size_delta(),
-        )
+        self.accounts_data_size_initial
+            .saturating_add_signed(self.load_accounts_data_size_delta())
     }
 
     /// Load the change in accounts data size in this Bank, in bytes
@@ -6609,14 +6600,19 @@ impl Bank {
     /// Hash the `accounts` HashMap. This represents a validator's interpretation
     ///  of the delta of the ledger since the last vote and up to now
     fn hash_internal_state(&self) -> Hash {
-        // If there are no accounts, return the hash of the previous state and the latest blockhash
-        let bank_hash_info = self.rc.accounts.bank_hash_info_at(self.slot());
+        let slot = self.slot();
+        let accounts_delta_hash = self
+            .rc
+            .accounts
+            .accounts_db
+            .calculate_accounts_delta_hash(slot);
+
         let mut signature_count_buf = [0u8; 8];
         LittleEndian::write_u64(&mut signature_count_buf[..], self.signature_count());
 
         let mut hash = hashv(&[
             self.parent_hash.as_ref(),
-            bank_hash_info.accounts_delta_hash.0.as_ref(),
+            accounts_delta_hash.0.as_ref(),
             &signature_count_buf,
             self.last_blockhash().as_ref(),
         ]);
@@ -6631,24 +6627,23 @@ impl Bank {
             .hard_forks
             .read()
             .unwrap()
-            .get_hash_data(self.slot(), self.parent_slot());
+            .get_hash_data(slot, self.parent_slot());
         if let Some(buf) = buf {
             let hard_forked_hash = extend_and_hash(&hash, &buf);
-            warn!(
-                "hard fork at slot {} by hashing {:?}: {} => {}",
-                self.slot(),
-                buf,
-                hash,
-                hard_forked_hash
-            );
+            warn!("hard fork at slot {slot} by hashing {buf:?}: {hash} => {hard_forked_hash}");
             hash = hard_forked_hash;
         }
 
+        let bank_hash_stats = self
+            .rc
+            .accounts
+            .accounts_db
+            .get_bank_hash_info(slot)
+            .expect("No bank hash was found for this bank, that should not be possible")
+            .stats;
         info!(
-            "bank frozen: {} hash: {} accounts_delta: {} signature_count: {} last_blockhash: {} capitalization: {}{}",
-            self.slot(),
-            hash,
-            bank_hash_info.accounts_delta_hash.0,
+            "bank frozen: {slot} hash: {hash} accounts_delta: {} signature_count: {} last_blockhash: {} capitalization: {}{}, stats: {bank_hash_stats:?}",
+            accounts_delta_hash.0,
             self.signature_count(),
             self.last_blockhash(),
             self.capitalization(),
@@ -6657,12 +6652,6 @@ impl Bank {
             } else {
                 "".to_string()
             }
-        );
-
-        info!(
-            "accounts hash slot: {} stats: {:?}",
-            self.slot(),
-            bank_hash_info.stats,
         );
         hash
     }
@@ -6809,6 +6798,14 @@ impl Bank {
             .accounts_db
             .verify_accounts_hash_in_bg
             .check_complete()
+    }
+
+    pub fn wait_for_initial_accounts_hash_verification_completed_for_tests(&self) {
+        self.rc
+            .accounts
+            .accounts_db
+            .verify_accounts_hash_in_bg
+            .wait_for_complete()
     }
 
     /// Get this bank's storages to use for snapshots.
@@ -7924,6 +7921,7 @@ pub(crate) mod tests {
                 genesis_sysvar_and_builtin_program_lamports, GenesisConfigInfo,
                 ValidatorVoteKeypairs,
             },
+            rent_collector::RENT_EXEMPT_RENT_EPOCH,
             rent_paying_accounts_by_partition::RentPayingAccountsByPartition,
             status_cache::MAX_CACHE_ENTRIES,
         },
@@ -7977,6 +7975,7 @@ pub(crate) mod tests {
             fs::File, io::Read, result, str::FromStr, sync::atomic::Ordering::Release,
             thread::Builder, time::Duration,
         },
+        test_case::test_case,
         test_utils::goto_end_of_slot,
     };
 
@@ -10244,8 +10243,10 @@ pub(crate) mod tests {
         let vote_id = solana_sdk::pubkey::new_rand();
         let mut vote_account =
             vote_state::create_account(&vote_id, &solana_sdk::pubkey::new_rand(), 0, 100);
-        let (stake_id1, stake_account1) = crate::stakes::tests::create_stake_account(123, &vote_id);
-        let (stake_id2, stake_account2) = crate::stakes::tests::create_stake_account(456, &vote_id);
+        let stake_id1 = solana_sdk::pubkey::new_rand();
+        let stake_account1 = crate::stakes::tests::create_stake_account(123, &vote_id, &stake_id1);
+        let stake_id2 = solana_sdk::pubkey::new_rand();
+        let stake_account2 = crate::stakes::tests::create_stake_account(456, &vote_id, &stake_id2);
 
         // set up accounts
         bank.store_account_and_update_capitalization(&stake_id1, &stake_account1);
@@ -17431,7 +17432,23 @@ pub(crate) mod tests {
             &validator_keypairs,
             vec![LAMPORTS_PER_SOL; 2],
         );
-        let bank = Arc::new(Bank::new_for_tests(&genesis_config));
+        let bank = Arc::new(Bank::new_with_paths(
+            &genesis_config,
+            Arc::<RuntimeConfig>::default(),
+            Vec::new(),
+            None,
+            None,
+            AccountSecondaryIndexes::default(),
+            AccountShrinkThreshold::default(),
+            false,
+            Some(AccountsDbConfig {
+                // at least one tests hit this assert, so disable it
+                assert_stakes_cache_consistency: false,
+                ..ACCOUNTS_DB_CONFIG_FOR_TESTING
+            }),
+            None,
+            &Arc::default(),
+        ));
         let vote_and_stake_accounts =
             load_vote_and_stake_accounts(&bank).vote_with_stake_delegations_map;
         assert_eq!(vote_and_stake_accounts.len(), 2);
@@ -20158,5 +20175,88 @@ pub(crate) mod tests {
         // Activate feature "again"
         bank.apply_feature_activations(ApplyFeatureActivationsCaller::NewFromParent, false);
         assert_eq!(bank.hashes_per_tick, Some(DEFAULT_HASHES_PER_TICK));
+    }
+
+    #[test_case(true)]
+    #[test_case(false)]
+    fn test_stake_account_consistency_with_rent_epoch_max_feature(
+        rent_epoch_max_enabled_initially: bool,
+    ) {
+        // this test can be removed once set_exempt_rent_epoch_max gets activated
+        solana_logger::setup();
+        let (mut genesis_config, _mint_keypair) = create_genesis_config(100 * LAMPORTS_PER_SOL);
+        genesis_config.rent = Rent::default();
+        let mut bank = Bank::new_for_tests(&genesis_config);
+        let expected_initial_rent_epoch = if rent_epoch_max_enabled_initially {
+            bank.activate_feature(&solana_sdk::feature_set::set_exempt_rent_epoch_max::id());
+            RENT_EXEMPT_RENT_EPOCH
+        } else {
+            Epoch::default()
+        };
+
+        assert!(bank.rc.accounts.accounts_db.assert_stakes_cache_consistency);
+        let mut pubkey_bytes_early = [0u8; 32];
+        pubkey_bytes_early[31] = 2;
+        let stake_id1 = Pubkey::from(pubkey_bytes_early);
+        let vote_id = solana_sdk::pubkey::new_rand();
+        let stake_account1 =
+            crate::stakes::tests::create_stake_account(12300000, &vote_id, &stake_id1);
+
+        // set up accounts
+        bank.store_account_and_update_capitalization(&stake_id1, &stake_account1);
+
+        // create banks at a few slots
+        assert_eq!(
+            bank.load_slow(&bank.ancestors, &stake_id1)
+                .unwrap()
+                .0
+                .rent_epoch(),
+            0 // manually created, so default is 0
+        );
+        let slot = 1;
+        let slots_per_epoch = bank.epoch_schedule().get_slots_in_epoch(0);
+        let mut bank = Bank::new_from_parent(&Arc::new(bank), &Pubkey::default(), slot);
+        if !rent_epoch_max_enabled_initially {
+            bank.activate_feature(&solana_sdk::feature_set::set_exempt_rent_epoch_max::id());
+        }
+        let bank = Arc::new(bank);
+
+        let slot = slots_per_epoch - 1;
+        assert_eq!(
+            bank.load_slow(&bank.ancestors, &stake_id1)
+                .unwrap()
+                .0
+                .rent_epoch(),
+            // rent has been collected, so if rent epoch is max is activated, this will be max by now
+            expected_initial_rent_epoch
+        );
+        let mut bank = Arc::new(Bank::new_from_parent(&bank, &Pubkey::default(), slot));
+
+        let last_slot_in_epoch = bank.epoch_schedule().get_last_slot_in_epoch(1);
+        let slot = last_slot_in_epoch - 2;
+        assert_eq!(
+            bank.load_slow(&bank.ancestors, &stake_id1)
+                .unwrap()
+                .0
+                .rent_epoch(),
+            expected_initial_rent_epoch
+        );
+        bank = Arc::new(Bank::new_from_parent(&bank, &Pubkey::default(), slot));
+        assert_eq!(
+            bank.load_slow(&bank.ancestors, &stake_id1)
+                .unwrap()
+                .0
+                .rent_epoch(),
+            expected_initial_rent_epoch
+        );
+        let slot = last_slot_in_epoch - 1;
+        bank = Arc::new(Bank::new_from_parent(&bank, &Pubkey::default(), slot));
+        assert_eq!(
+            bank.load_slow(&bank.ancestors, &stake_id1)
+                .unwrap()
+                .0
+                .rent_epoch(),
+            RENT_EXEMPT_RENT_EPOCH
+        );
     }
 }

@@ -177,7 +177,7 @@ fn main() {
     });
     let compute_unit_limit = value_t!(matches, "compute_unit_limit", u64).ok();
 
-    let faucet_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), faucet_port);
+    let faucet_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::UNSPECIFIED), faucet_port);
 
     let mut programs_to_load = vec![];
     if let Some(values) = matches.values_of("bpf_program") {
@@ -352,10 +352,7 @@ fn main() {
     admin_rpc_service::run(
         &ledger_path,
         admin_rpc_service::AdminRpcRequestMetadata {
-            rpc_addr: Some(SocketAddr::new(
-                IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)),
-                rpc_port,
-            )),
+            rpc_addr: Some(SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), rpc_port)),
             start_progress: genesis.start_progress.clone(),
             start_time: std::time::SystemTime::now(),
             validator_exit: genesis.validator_exit.clone(),

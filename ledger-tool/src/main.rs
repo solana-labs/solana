@@ -62,8 +62,8 @@ use {
         snapshot_hash::StartingSnapshotHashes,
         snapshot_minimizer::SnapshotMinimizer,
         snapshot_utils::{
-            self, move_and_async_delete_path, ArchiveFormat, SnapshotVersion,
-            DEFAULT_ARCHIVE_COMPRESSION, SUPPORTED_ARCHIVE_COMPRESSION,
+            self, create_accounts_run_and_snapshot_dirs, move_and_async_delete_path, ArchiveFormat,
+            SnapshotVersion, DEFAULT_ARCHIVE_COMPRESSION, SUPPORTED_ARCHIVE_COMPRESSION,
         },
     },
     solana_sdk::{
@@ -1021,6 +1021,52 @@ fn hardforks_of(matches: &ArgMatches<'_>, name: &str) -> Option<Vec<Slot>> {
     }
 }
 
+// Build an `AccountsDbConfig` from subcommand arguments. All of the arguments
+// matched by this functional are either optional or have a default value.
+// Thus, a subcommand need not support all of the arguments that are matched
+// by this function.
+fn get_accounts_db_config(ledger_path: &Path, arg_matches: &ArgMatches<'_>) -> AccountsDbConfig {
+    let accounts_index_bins = value_t!(arg_matches, "accounts_index_bins", usize).ok();
+    let accounts_index_index_limit_mb =
+        if let Some(limit) = value_t!(arg_matches, "accounts_index_memory_limit_mb", usize).ok() {
+            IndexLimitMb::Limit(limit)
+        } else if arg_matches.is_present("disable_accounts_disk_index") {
+            IndexLimitMb::InMemOnly
+        } else {
+            IndexLimitMb::Unspecified
+        };
+    let accounts_index_drives: Vec<PathBuf> = if arg_matches.is_present("accounts_index_path") {
+        values_t_or_exit!(arg_matches, "accounts_index_path", String)
+            .into_iter()
+            .map(PathBuf::from)
+            .collect()
+    } else {
+        vec![ledger_path.join("accounts_index.ledger-tool")]
+    };
+    let accounts_index_config = AccountsIndexConfig {
+        bins: accounts_index_bins,
+        index_limit_mb: accounts_index_index_limit_mb,
+        drives: Some(accounts_index_drives),
+        ..AccountsIndexConfig::default()
+    };
+
+    let filler_accounts_config = FillerAccountsConfig {
+        count: value_t!(arg_matches, "accounts_filler_count", usize).unwrap_or(0),
+        size: value_t!(arg_matches, "accounts_filler_size", usize).unwrap_or(0),
+    };
+
+    AccountsDbConfig {
+        index: Some(accounts_index_config),
+        accounts_hash_cache_path: Some(ledger_path.join(AccountsDb::ACCOUNTS_HASH_CACHE_DIR)),
+        filler_accounts_config,
+        ancient_append_vec_offset: value_t!(arg_matches, "accounts_db_ancient_append_vecs", i64)
+            .ok(),
+        exhaustively_verify_refcounts: arg_matches.is_present("accounts_db_verify_refcounts"),
+        skip_initial_hash_calc: arg_matches.is_present("accounts_db_skip_initial_hash_calculation"),
+        ..AccountsDbConfig::default()
+    }
+}
+
 fn load_bank_forks(
     arg_matches: &ArgMatches,
     genesis_config: &GenesisConfig,
@@ -1065,12 +1111,26 @@ fn load_bank_forks(
         })
     };
 
-    if let Some(halt_slot) = process_options.halt_at_slot {
-        // Check if we have the slot data necessary to replay from starting_slot to >= halt_slot.
-        //  - This will not catch the case when loading from genesis without a full slot 0.
-        if !blockstore.slot_range_connected(starting_slot, halt_slot) {
-            eprintln!("Unable to load bank forks at slot {halt_slot} due to disconnected blocks.",);
-            exit(1);
+    match process_options.halt_at_slot {
+        // Skip the following checks for sentinel values of Some(0) and None.
+        // For Some(0), no slots will be be replayed after starting_slot.
+        // For None, all available children of starting_slot will be replayed.
+        None | Some(0) => {}
+        Some(halt_slot) => {
+            if halt_slot < starting_slot {
+                eprintln!(
+                "Unable to load bank forks at slot {halt_slot} because it is less than the starting slot {starting_slot}. \
+                The starting slot will be the latest snapshot slot, or genesis if --no-snapshot flag specified or no snapshots found."
+            );
+                exit(1);
+            }
+            // Check if we have the slot data necessary to replay from starting_slot to >= halt_slot.
+            if !blockstore.slot_range_connected(starting_slot, halt_slot) {
+                eprintln!(
+                    "Unable to load bank forks at slot {halt_slot} due to disconnected blocks.",
+                );
+                exit(1);
+            }
         }
     }
 
@@ -1092,6 +1152,23 @@ fn load_bank_forks(
         );
         vec![non_primary_accounts_path]
     };
+
+    // For all account_paths, set up the run/ and snapshot/ sub directories.
+    // If the sub directories do not exist, the account_path will be cleaned because older version put account files there
+    let account_run_paths: Vec<PathBuf> = account_paths.into_iter().map(
+        |account_path| {
+            match create_accounts_run_and_snapshot_dirs(&account_path) {
+                Ok((account_run_path, _account_snapshot_path)) => account_run_path,
+                Err(err) => {
+                    eprintln!("Unable to create account run and snapshot sub directories: {}, err: {err:?}", account_path.display());
+                    exit(1);
+                }
+            }
+        }).collect();
+
+    // From now on, use run/ paths in the same way as the previous account_paths.
+    let account_paths = account_run_paths;
+
     info!("Cleaning contents of account paths: {:?}", account_paths);
     let mut measure = Measure::start("clean_accounts_paths");
     account_paths.iter().for_each(|path| {
@@ -1737,6 +1814,7 @@ fn main() {
             SubCommand::with_name("bank-hash")
             .about("Prints the hash of the working bank after reading the ledger")
             .arg(&max_genesis_archive_unpacked_size_arg)
+            .arg(&halt_at_slot_arg)
         )
         .subcommand(
             SubCommand::with_name("bounds")
@@ -2473,7 +2551,7 @@ fn main() {
             ("bank-hash", Some(arg_matches)) => {
                 let process_options = ProcessOptions {
                     new_hard_forks: hardforks_of(arg_matches, "hard_forks"),
-                    halt_at_slot: Some(0),
+                    halt_at_slot: value_t!(arg_matches, "halt_at_slot", Slot).ok(),
                     poh_verify: false,
                     ..ProcessOptions::default()
                 };
@@ -2674,13 +2752,7 @@ fn main() {
                 }
             }
             ("verify", Some(arg_matches)) => {
-                let mut accounts_index_config = AccountsIndexConfig::default();
-                if let Some(bins) = value_t!(arg_matches, "accounts_index_bins", usize).ok() {
-                    accounts_index_config.bins = Some(bins);
-                }
-
                 let exit_signal = Arc::new(AtomicBool::new(false));
-
                 let no_os_memory_stats_reporting =
                     arg_matches.is_present("no_os_memory_stats_reporting");
                 let system_monitor_service = SystemMonitorService::new(
@@ -2692,56 +2764,6 @@ fn main() {
                         report_os_disk_stats: false,
                     },
                 );
-
-                accounts_index_config.index_limit_mb = if let Some(limit) =
-                    value_t!(arg_matches, "accounts_index_memory_limit_mb", usize).ok()
-                {
-                    IndexLimitMb::Limit(limit)
-                } else if arg_matches.is_present("disable_accounts_disk_index") {
-                    IndexLimitMb::InMemOnly
-                } else {
-                    IndexLimitMb::Unspecified
-                };
-
-                {
-                    let mut accounts_index_paths: Vec<PathBuf> =
-                        if arg_matches.is_present("accounts_index_path") {
-                            values_t_or_exit!(arg_matches, "accounts_index_path", String)
-                                .into_iter()
-                                .map(PathBuf::from)
-                                .collect()
-                        } else {
-                            vec![]
-                        };
-                    if accounts_index_paths.is_empty() {
-                        accounts_index_paths = vec![ledger_path.join("accounts_index")];
-                    }
-                    accounts_index_config.drives = Some(accounts_index_paths);
-                }
-
-                let filler_accounts_config = FillerAccountsConfig {
-                    count: value_t_or_exit!(arg_matches, "accounts_filler_count", usize),
-                    size: value_t_or_exit!(arg_matches, "accounts_filler_size", usize),
-                };
-
-                let accounts_db_config = Some(AccountsDbConfig {
-                    index: Some(accounts_index_config),
-                    accounts_hash_cache_path: Some(
-                        ledger_path.join(AccountsDb::ACCOUNTS_HASH_CACHE_DIR),
-                    ),
-                    filler_accounts_config,
-                    ancient_append_vec_offset: value_t!(
-                        matches,
-                        "accounts_db_ancient_append_vecs",
-                        i64
-                    )
-                    .ok(),
-                    exhaustively_verify_refcounts: arg_matches
-                        .is_present("accounts_db_verify_refcounts"),
-                    skip_initial_hash_calc: arg_matches
-                        .is_present("accounts_db_skip_initial_hash_calculation"),
-                    ..AccountsDbConfig::default()
-                });
 
                 let debug_keys = pubkeys_of(arg_matches, "debug_key")
                     .map(|pubkeys| Arc::new(pubkeys.into_iter().collect::<HashSet<_>>()));
@@ -2761,7 +2783,7 @@ fn main() {
                         usize
                     )
                     .ok(),
-                    accounts_db_config,
+                    accounts_db_config: Some(get_accounts_db_config(&ledger_path, arg_matches)),
                     verify_index: arg_matches.is_present("verify_accounts_index"),
                     allow_dead_slots: arg_matches.is_present("allow_dead_slots"),
                     accounts_db_test_hash_calculation: arg_matches
@@ -2774,10 +2796,8 @@ fn main() {
                     ..ProcessOptions::default()
                 };
                 let print_accounts_stats = arg_matches.is_present("print_accounts_stats");
-                info!(
-                    "genesis hash: {}",
-                    open_genesis_config_by(&ledger_path, arg_matches).hash()
-                );
+                let genesis_config = open_genesis_config_by(&ledger_path, arg_matches);
+                info!("genesis hash: {}", genesis_config.hash());
 
                 let blockstore = open_blockstore(
                     &ledger_path,
@@ -2788,7 +2808,7 @@ fn main() {
                 );
                 let (bank_forks, ..) = load_bank_forks(
                     arg_matches,
-                    &open_genesis_config_by(&ledger_path, arg_matches),
+                    &genesis_config,
                     &blockstore,
                     process_options,
                     snapshot_archive_path,
@@ -2996,18 +3016,6 @@ fn main() {
                     output_directory.display()
                 );
 
-                let accounts_db_config = Some(AccountsDbConfig {
-                    ancient_append_vec_offset: value_t!(
-                        matches,
-                        "accounts_db_ancient_append_vecs",
-                        i64
-                    )
-                    .ok(),
-                    skip_initial_hash_calc: arg_matches
-                        .is_present("accounts_db_skip_initial_hash_calculation"),
-                    ..AccountsDbConfig::default()
-                });
-
                 match load_bank_forks(
                     arg_matches,
                     &genesis_config,
@@ -3016,7 +3024,7 @@ fn main() {
                         new_hard_forks,
                         halt_at_slot: Some(snapshot_slot),
                         poh_verify: false,
-                        accounts_db_config,
+                        accounts_db_config: Some(get_accounts_db_config(&ledger_path, arg_matches)),
                         ..ProcessOptions::default()
                     },
                     snapshot_archive_path,

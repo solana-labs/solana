@@ -678,9 +678,9 @@ mod tests {
 
     #[test]
     fn test_bind() {
-        let ip_addr = IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0));
+        let ip_addr = IpAddr::V4(Ipv4Addr::UNSPECIFIED);
         assert_eq!(bind_in_range(ip_addr, (2000, 2001)).unwrap().0, 2000);
-        let ip_addr = IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0));
+        let ip_addr = IpAddr::V4(Ipv4Addr::UNSPECIFIED);
         let x = bind_to(ip_addr, 2002, true).unwrap();
         let y = bind_to(ip_addr, 2002, true).unwrap();
         assert_eq!(
@@ -698,7 +698,7 @@ mod tests {
 
     #[test]
     fn test_bind_with_any_port() {
-        let ip_addr = IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0));
+        let ip_addr = IpAddr::V4(Ipv4Addr::UNSPECIFIED);
         let x = bind_with_any_port(ip_addr).unwrap();
         let y = bind_with_any_port(ip_addr).unwrap();
         assert_ne!(
@@ -709,14 +709,14 @@ mod tests {
 
     #[test]
     fn test_bind_in_range_nil() {
-        let ip_addr = IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0));
+        let ip_addr = IpAddr::V4(Ipv4Addr::UNSPECIFIED);
         bind_in_range(ip_addr, (2000, 2000)).unwrap_err();
         bind_in_range(ip_addr, (2000, 1999)).unwrap_err();
     }
 
     #[test]
     fn test_find_available_port_in_range() {
-        let ip_addr = IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0));
+        let ip_addr = IpAddr::V4(Ipv4Addr::UNSPECIFIED);
         assert_eq!(
             find_available_port_in_range(ip_addr, (3000, 3001)).unwrap(),
             3000
@@ -730,7 +730,7 @@ mod tests {
 
     #[test]
     fn test_bind_common_in_range() {
-        let ip_addr = IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0));
+        let ip_addr = IpAddr::V4(Ipv4Addr::UNSPECIFIED);
         let (port, _sockets) = bind_common_in_range(ip_addr, (3100, 3150)).unwrap();
         assert!((3100..3150).contains(&port));
 
@@ -740,7 +740,7 @@ mod tests {
     #[test]
     fn test_get_public_ip_addr_none() {
         solana_logger::setup();
-        let ip_addr = IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0));
+        let ip_addr = IpAddr::V4(Ipv4Addr::UNSPECIFIED);
         let (_server_port, (server_udp_socket, server_tcp_listener)) =
             bind_common_in_range(ip_addr, (3200, 3250)).unwrap();
 
@@ -758,7 +758,7 @@ mod tests {
     #[test]
     fn test_get_public_ip_addr_reachable() {
         solana_logger::setup();
-        let ip_addr = IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0));
+        let ip_addr = IpAddr::V4(Ipv4Addr::UNSPECIFIED);
         let (_server_port, (server_udp_socket, server_tcp_listener)) =
             bind_common_in_range(ip_addr, (3200, 3250)).unwrap();
         let (client_port, (client_udp_socket, client_tcp_listener)) =
@@ -782,7 +782,7 @@ mod tests {
     #[test]
     fn test_get_public_ip_addr_tcp_unreachable() {
         solana_logger::setup();
-        let ip_addr = IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0));
+        let ip_addr = IpAddr::V4(Ipv4Addr::UNSPECIFIED);
         let (_server_port, (server_udp_socket, _server_tcp_listener)) =
             bind_common_in_range(ip_addr, (3200, 3250)).unwrap();
 
@@ -805,7 +805,7 @@ mod tests {
     #[test]
     fn test_get_public_ip_addr_udp_unreachable() {
         solana_logger::setup();
-        let ip_addr = IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0));
+        let ip_addr = IpAddr::V4(Ipv4Addr::UNSPECIFIED);
         let (_server_port, (server_udp_socket, _server_tcp_listener)) =
             bind_common_in_range(ip_addr, (3200, 3250)).unwrap();
 
@@ -828,7 +828,7 @@ mod tests {
     #[test]
     fn test_bind_two_in_range_with_offset() {
         solana_logger::setup();
-        let ip_addr = IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0));
+        let ip_addr = IpAddr::V4(Ipv4Addr::UNSPECIFIED);
         let offset = 6;
         if let Ok(((port1, _), (port2, _))) =
             bind_two_in_range_with_offset(ip_addr, (1024, 65535), offset)

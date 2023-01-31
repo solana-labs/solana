@@ -72,7 +72,7 @@ mod tests {
         let keypair = Keypair::new();
 
         if let Ok((cert, _)) =
-            new_self_signed_tls_certificate(&keypair, IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)))
+            new_self_signed_tls_certificate(&keypair, IpAddr::V4(Ipv4Addr::LOCALHOST))
         {
             if let Some(pubkey) = get_pubkey_from_tls_certificate(&cert) {
                 assert_eq!(pubkey, keypair.pubkey());

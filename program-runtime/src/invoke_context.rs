@@ -61,7 +61,10 @@ impl std::fmt::Debug for BuiltinProgram {
 
 impl<'a> ContextObject for InvokeContext<'a> {
     fn trace(&mut self, state: [u64; 12]) {
-        self.trace_log.push(state);
+        self.trace_log_stack
+            .last_mut()
+            .expect("Inconsistent trace log stack")
+            .push(state);
     }
 
     fn consume(&mut self, amount: u64) {
@@ -104,7 +107,7 @@ pub struct InvokeContext<'a> {
     pre_accounts: Vec<PreAccount>,
     builtin_programs: &'a [BuiltinProgram],
     pub sysvar_cache: Cow<'a, SysvarCache>,
-    pub trace_log: Vec<[u64; 12]>,
+    pub trace_log_stack: Vec<Vec<[u64; 12]>>,
     log_collector: Option<Rc<RefCell<LogCollector>>>,
     compute_budget: ComputeBudget,
     current_compute_budget: ComputeBudget,
@@ -139,7 +142,7 @@ impl<'a> InvokeContext<'a> {
             pre_accounts: Vec::new(),
             builtin_programs,
             sysvar_cache,
-            trace_log: Vec::new(),
+            trace_log_stack: vec![Vec::new()],
             log_collector,
             current_compute_budget: compute_budget,
             compute_budget,
@@ -271,12 +274,14 @@ impl<'a> InvokeContext<'a> {
             }
         }
 
+        self.trace_log_stack.push(Vec::new());
         self.syscall_context.push(None);
         self.transaction_context.push()
     }
 
     /// Pop a stack frame from the invocation stack
     pub fn pop(&mut self) -> Result<(), InstructionError> {
+        self.trace_log_stack.pop();
         self.syscall_context.pop();
         self.transaction_context.pop()
     }

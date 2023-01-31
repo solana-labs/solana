@@ -106,7 +106,7 @@ impl QuicLazyInitializedEndpoint {
             endpoint.clone()
         } else {
             let client_socket = solana_net_utils::bind_in_range(
-                IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)),
+                IpAddr::V4(Ipv4Addr::UNSPECIFIED),
                 VALIDATOR_PORT_RANGE,
             )
             .expect("QuicLazyInitializedEndpoint::create_endpoint bind_in_range")
@@ -166,7 +166,7 @@ impl QuicLazyInitializedEndpoint {
 impl Default for QuicLazyInitializedEndpoint {
     fn default() -> Self {
         let (cert, priv_key) =
-            new_self_signed_tls_certificate(&Keypair::new(), IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)))
+            new_self_signed_tls_certificate(&Keypair::new(), IpAddr::V4(Ipv4Addr::UNSPECIFIED))
                 .expect("Failed to create QUIC client certificate");
         Self::new(
             Arc::new(QuicClientCertificate {

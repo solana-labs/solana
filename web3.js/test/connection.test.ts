@@ -319,7 +319,7 @@ describe('Connection', function () {
         lamports: LAMPORTS_PER_SOL,
         data: ['', 'base64'],
         executable: false,
-        rentEpoch: 0,
+        rentEpoch: Math.pow(2, 64) - 1,
         space: 0,
       },
       {
@@ -327,7 +327,7 @@ describe('Connection', function () {
         lamports: LAMPORTS_PER_SOL,
         data: ['', 'base64'],
         executable: false,
-        rentEpoch: 0,
+        rentEpoch: Math.pow(2, 64) - 1,
         space: 0,
       },
     ];
@@ -353,7 +353,7 @@ describe('Connection', function () {
         lamports: LAMPORTS_PER_SOL,
         data: Buffer.from([]),
         executable: false,
-        rentEpoch: 0,
+        rentEpoch: Math.pow(2, 64) - 1,
         space: 0,
       },
       {
@@ -361,7 +361,7 @@ describe('Connection', function () {
         lamports: LAMPORTS_PER_SOL,
         data: Buffer.from([]),
         executable: false,
-        rentEpoch: 0,
+        rentEpoch: Math.pow(2, 64) - 1,
         space: 0,
       },
     ];
@@ -5189,7 +5189,7 @@ describe('Connection', function () {
           executable: false,
           lamports: LAMPORTS_PER_SOL - 5000,
           owner: SystemProgram.programId.toBase58(),
-          rentEpoch: 0,
+          rentEpoch: Math.pow(2, 64) - 1,
           space: 0,
         },
       ]);

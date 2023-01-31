@@ -449,7 +449,6 @@ pub mod test {
         solana_runtime::bank::Bank,
         solana_sdk::{
             hash::Hash,
-            pubkey::Pubkey,
             signature::{Keypair, Signer},
         },
         std::{
@@ -577,7 +576,7 @@ pub mod test {
     }
 
     fn setup_dummy_broadcast_service(
-        leader_pubkey: &Pubkey,
+        leader_keypair: Arc<Keypair>,
         ledger_path: &Path,
         entry_receiver: Receiver<WorkingBankEntry>,
         retransmit_slots_receiver: RetransmitSlotsReceiver,
@@ -586,7 +585,7 @@ pub mod test {
         let blockstore = Arc::new(Blockstore::open(ledger_path).unwrap());
 
         // Make the leader node and scheduler
-        let leader_info = Node::new_localhost_with_pubkey(leader_pubkey);
+        let leader_info = Node::new_localhost_with_pubkey(&leader_keypair.pubkey());
 
         // Make a node to broadcast to
         let buddy_keypair = Keypair::new();
@@ -595,7 +594,7 @@ pub mod test {
         // Fill the cluster_info with the buddy's info
         let cluster_info = ClusterInfo::new(
             leader_info.info.clone(),
-            Arc::new(Keypair::new()),
+            leader_keypair,
             SocketAddrSpace::Unspecified,
         );
         cluster_info.insert_info(broadcast_buddy.info);
@@ -634,12 +633,12 @@ pub mod test {
 
         {
             // Create the leader scheduler
-            let leader_keypair = Keypair::new();
+            let leader_keypair = Arc::new(Keypair::new());
 
             let (entry_sender, entry_receiver) = unbounded();
             let (retransmit_slots_sender, retransmit_slots_receiver) = unbounded();
             let broadcast_service = setup_dummy_broadcast_service(
-                &leader_keypair.pubkey(),
+                leader_keypair,
                 &ledger_path,
                 entry_receiver,
                 retransmit_slots_receiver,
