@@ -1,33 +1,5 @@
 pub use bytemuck::{Pod, Zeroable};
-use {crate::errors::ProofError, solana_program::pubkey::Pubkey, std::fmt};
-
-#[derive(Clone, Copy, Debug, Default, PartialEq, Pod, Zeroable)]
-#[repr(transparent)]
-pub struct OptionalNonZeroPubkey(Pubkey);
-impl TryFrom<Option<Pubkey>> for OptionalNonZeroPubkey {
-    type Error = ProofError;
-    fn try_from(p: Option<Pubkey>) -> Result<Self, Self::Error> {
-        match p {
-            None => Ok(Self(Pubkey::default())),
-            Some(pubkey) => {
-                if pubkey == Pubkey::default() {
-                    Err(ProofError::PubkeyDeserialization)
-                } else {
-                    Ok(Self(pubkey))
-                }
-            }
-        }
-    }
-}
-impl From<OptionalNonZeroPubkey> for Option<Pubkey> {
-    fn from(p: OptionalNonZeroPubkey) -> Self {
-        if p.0 == Pubkey::default() {
-            None
-        } else {
-            Some(p.0)
-        }
-    }
-}
+use std::fmt;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Pod, Zeroable)]
 #[repr(transparent)]
