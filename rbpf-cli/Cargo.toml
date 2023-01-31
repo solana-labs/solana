@@ -2,7 +2,7 @@
 name = "rbpf-cli"
 version = "1.15.0"
 description = "CLI to test and analyze SBF programs"
-authors = ["Solana Maintainers <maintainers@solana.foundation>"]
+authors = ["Solana Labs Maintainers <maintainers@solanalabs.com>"]
 repository = "https://github.com/solana-labs/rbpf"
 homepage = "https://solana.com/"
 keywords = ["SBF", "interpreter", "JIT"]
