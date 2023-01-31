@@ -8,7 +8,7 @@ use {
     },
 };
 
-// TODO
+/// The proof context account state
 #[derive(Clone, Copy, Debug, PartialEq)]
 #[repr(C)]
 pub struct ProofContextState<T: Pod + ZkProofContext> {

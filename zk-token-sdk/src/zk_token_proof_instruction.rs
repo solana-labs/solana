@@ -210,28 +210,3 @@ impl ProofInstruction {
             .and_then(|proof_type| FromPrimitive::from_u8(*proof_type))
     }
 }
-
-// These functions are needed for downstream projects.
-pub fn verify_close_account(proof_data: &CloseAccountData) -> Instruction {
-    verify_proof(ProofType::CloseAccount, None, proof_data)
-}
-
-pub fn verify_withdraw(proof_data: &WithdrawData) -> Instruction {
-    verify_proof(ProofType::Withdraw, None, proof_data)
-}
-
-pub fn verify_withdraw_withheld_tokens(proof_data: &WithdrawWithheldTokensData) -> Instruction {
-    verify_proof(ProofType::WithdrawWithheldTokens, None, proof_data)
-}
-
-pub fn verify_transfer(proof_data: &TransferData) -> Instruction {
-    verify_proof(ProofType::Transfer, None, proof_data)
-}
-
-pub fn verify_transfer_with_fee(proof_data: &TransferWithFeeData) -> Instruction {
-    verify_proof(ProofType::TransferWithFee, None, proof_data)
-}
-
-pub fn verify_pubkey_validity(proof_data: &PubkeyValidityData) -> Instruction {
-    verify_proof(ProofType::PubkeyValidity, None, proof_data)
-}
