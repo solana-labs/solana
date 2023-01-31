@@ -9,7 +9,10 @@ use {
         instruction::{InstructionError, TRANSACTION_LEVEL_STACK_HEIGHT},
         program_memory, system_program,
     },
-    solana_zk_token_sdk::{zk_token_proof_instruction::*, zk_token_proof_program::id},
+    solana_zk_token_sdk::{
+        zk_token_proof_instruction::*, zk_token_proof_program::id,
+        zk_token_proof_state::ProofContextState,
+    },
     std::result::Result,
 };
 

@@ -56,8 +56,7 @@ async fn test_withdraw_withheld_tokens() {
     let destination_keypair = ElGamalKeypair::new_rand();
 
     let amount: u64 = 0;
-    let withdraw_withheld_authority_ciphertext =
-        elgamal_keypair.public.encrypt(amount);
+    let withdraw_withheld_authority_ciphertext = elgamal_keypair.public.encrypt(amount);
 
     let success_proof_data = WithdrawWithheldTokensData::new(
         &elgamal_keypair,
@@ -79,11 +78,12 @@ async fn test_withdraw_withheld_tokens() {
     )
     .unwrap();
 
-    // test_verify_proof_without_context(
-    //     ProofType::WithdrawWithheldTokens,
-    //     &success_proof_data,
-    //     &fail_proof_data,
-    // ).await;
+    test_verify_proof_without_context(
+        ProofType::WithdrawWithheldTokens,
+        &success_proof_data,
+        &fail_proof_data,
+    )
+    .await;
 
     test_verify_proof_with_context(
         ProofType::WithdrawWithheldTokens,
@@ -93,12 +93,12 @@ async fn test_withdraw_withheld_tokens() {
     )
     .await;
 
-    // test_close_context_state(
-    //     ProofType::WithdrawWithheldTokens,
-    //     ProofContextState::<WithdrawWithheldTokensProofContext>::size(),
-    //     &success_proof_data,
-    // )
-    // .await;
+    test_close_context_state(
+        ProofType::WithdrawWithheldTokens,
+        ProofContextState::<WithdrawWithheldTokensProofContext>::size(),
+        &success_proof_data,
+    )
+    .await;
 }
 
 #[tokio::test]
@@ -117,8 +117,8 @@ async fn test_transfer() {
         (spendable_balance, &spendable_ciphertext),
         &source_keypair,
         (&dest_pubkey, &auditor_pubkey),
-    ).unwrap();
-
+    )
+    .unwrap();
 
     let incorrect_keypair = ElGamalKeypair {
         public: ElGamalKeypair::new_rand().public,
@@ -130,14 +130,11 @@ async fn test_transfer() {
         (spendable_balance, &spendable_ciphertext),
         &incorrect_keypair,
         (&dest_pubkey, &auditor_pubkey),
-    ).unwrap();
-
-    test_verify_proof_without_context(
-        ProofType::Transfer,
-        &success_proof_data,
-        &fail_proof_data,
     )
-    .await;
+    .unwrap();
+
+    test_verify_proof_without_context(ProofType::Transfer, &success_proof_data, &fail_proof_data)
+        .await;
 
     test_verify_proof_with_context(
         ProofType::Transfer,
@@ -232,8 +229,9 @@ async fn test_withdraw() {
         withdraw_amount,
         &elgamal_keypair,
         current_balance,
-        &current_ciphertext
-    ).unwrap();
+        &current_ciphertext,
+    )
+    .unwrap();
 
     let incorrect_keypair = ElGamalKeypair {
         public: ElGamalKeypair::new_rand().public,
@@ -243,15 +241,12 @@ async fn test_withdraw() {
         withdraw_amount,
         &incorrect_keypair,
         current_balance,
-        &current_ciphertext
-    ).unwrap();
-
-    test_verify_proof_without_context(
-        ProofType::Withdraw,
-        &success_proof_data,
-        &fail_proof_data,
+        &current_ciphertext,
     )
-    .await;
+    .unwrap();
+
+    test_verify_proof_without_context(ProofType::Withdraw, &success_proof_data, &fail_proof_data)
+        .await;
 
     test_verify_proof_with_context(
         ProofType::Withdraw,
@@ -511,9 +506,11 @@ async fn test_close_context_state<T: Pod + ZkProofData>(
     // try to close context state with incorrect authority
     let incorrect_authority = Keypair::new();
     let instruction = close_context_state(
-        &context_state_account.pubkey(),
+        ContextStateInfo {
+            context_state_account: &context_state_account.pubkey(),
+            context_state_authority: &incorrect_authority.pubkey(),
+        },
         &destination_account.pubkey(),
-        &incorrect_authority.pubkey(),
         proof_type,
     );
     let transaction = Transaction::new_signed_with_payer(
@@ -534,9 +531,11 @@ async fn test_close_context_state<T: Pod + ZkProofData>(
 
     // successfully close proof context state
     let instruction = close_context_state(
-        &context_state_account.pubkey(),
+        ContextStateInfo {
+            context_state_account: &context_state_account.pubkey(),
+            context_state_authority: &context_state_authority.pubkey(),
+        },
         &destination_account.pubkey(),
-        &context_state_authority.pubkey(),
         proof_type,
     );
     let transaction = Transaction::new_signed_with_payer(

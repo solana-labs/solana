@@ -7,10 +7,7 @@ use {
     solana_program::{
         instruction::{
             AccountMeta, Instruction,
-            {
-                InstructionError,
-                InstructionError::{InvalidAccountData, InvalidInstructionData},
-            },
+            {InstructionError, InstructionError::InvalidInstructionData},
         },
         pubkey::{Pubkey, PUBKEY_BYTES},
         sysvar,
@@ -31,7 +28,9 @@ pub enum ProofType {
 #[derive(Clone, Copy, Debug, FromPrimitive, ToPrimitive, PartialEq, Eq)]
 #[repr(u8)]
 pub enum ProofInstruction {
-    /// Verify a zero-knowledge proof data
+    /// Verify a zero-knowledge proof data.
+    ///
+    /// This instruction can be configured to optionally create a proof context state account.
     ///
     /// Accounts expected by this instruction:
     ///
@@ -47,7 +46,7 @@ pub enum ProofInstruction {
     ///
     VerifyProof,
 
-    /// Close a zero-knowledge proof context state
+    /// Close a zero-knowledge proof context state.
     ///
     /// Accounts expected by this instruction:
     ///   0. `[writable]` The proof context account to close
@@ -60,10 +59,11 @@ pub enum ProofInstruction {
     CloseContextState,
 }
 
+/// Data expected by `ProofInstruction::VerifyProof`.
 #[derive(Clone, Copy, Debug, PartialEq)]
 #[repr(C)]
 pub struct VerifyProofData<T: Pod + ZkProofData> {
-    /// The zero-knowledge proof type
+    /// The zero-knowledge proof type to verify
     pub proof_type: ProofType,
     /// If `Some`, initialize a proof context state with an authority pubkey
     pub create_context_state_with_authority: Option<Pubkey>,
@@ -72,9 +72,11 @@ pub struct VerifyProofData<T: Pod + ZkProofData> {
 }
 
 impl<T: Pod + ZkProofData> VerifyProofData<T> {
-    // A `VerifyProofData::encode(&self)` syntax could require the caller to make unnecessary
-    // copy of `T: ZkProofData`, which can be quite large. This syntax takes in references to the
-    // individual `VerifyProofData` components to provide flexibility to the caller.
+    /// Serializes `VerifyProofData`.
+    ///
+    /// A `VerifyProofData::encode(&self)` syntax could force the caller to make unnecessary copy of
+    /// `T: ZkProofData`, which can be quite large. This syntax takes in references to the
+    /// individual `VerifyProofData` components to provide flexibility to the caller.
     pub fn encode(
         proof_type: ProofType,
         create_context_state_with_authority: Option<&Pubkey>,
@@ -91,9 +93,10 @@ impl<T: Pod + ZkProofData> VerifyProofData<T> {
         buf
     }
 
+    /// Deserializes `VerifyProofData`.
     pub fn try_from_bytes(input: &[u8]) -> Result<Self, InstructionError> {
-        let (proof_type, rest) = decode_proof_type(input)?;
-        let (create_context_state_with_authority, proof_data) = decode_optional_pubkey(rest)?;
+        let (proof_type, rest) = Self::decode_proof_type(input)?;
+        let (create_context_state_with_authority, proof_data) = Self::decode_optional_pubkey(rest)?;
         let proof_data =
             bytemuck::try_from_bytes::<T>(proof_data).map_err(|_| InvalidInstructionData)?;
 
@@ -103,55 +106,42 @@ impl<T: Pod + ZkProofData> VerifyProofData<T> {
             proof_data: *proof_data,
         })
     }
-}
 
-#[derive(Clone, Copy, Debug, PartialEq)]
-#[repr(C)]
-pub struct ProofContextState<T: Pod + ZkProofContext> {
-    /// The zero-knowledge proof type
-    pub proof_type: ProofType,
-    /// The proof context authority that can close the account
-    pub context_state_authority: Pubkey,
-    /// The proof context data
-    pub proof_context: T,
-}
-
-impl<T: Pod + ZkProofContext> ProofContextState<T> {
-    pub fn encode(
-        proof_type: ProofType,
-        context_state_authority: &Pubkey,
-        proof_context: &T,
-    ) -> Vec<u8> {
-        let mut buf = vec![ToPrimitive::to_u8(&proof_type).unwrap()];
-        buf.extend_from_slice(&context_state_authority.to_bytes());
-        buf.extend_from_slice(bytes_of(proof_context));
-        buf
+    fn decode_proof_type(input: &[u8]) -> Result<(ProofType, &[u8]), InstructionError> {
+        let proof_type = input
+            .first()
+            .and_then(|b| FromPrimitive::from_u8(*b))
+            .ok_or(InvalidInstructionData)?;
+        Ok((proof_type, &input[1..]))
     }
 
-    pub fn try_from_bytes(input: &[u8]) -> Result<Self, InstructionError> {
-        let (proof_type, rest) = decode_proof_type(input)?;
-        let (context_state_authority, proof_context) = decode_pubkey(rest)?;
-        let proof_context =
-            bytemuck::try_from_bytes::<T>(proof_context).map_err(|_| InvalidAccountData)?;
-
-        Ok(Self {
-            proof_type,
-            context_state_authority,
-            proof_context: *proof_context,
-        })
-    }
-
-    pub fn size() -> usize {
-        T::LEN.saturating_add(1).saturating_add(PUBKEY_BYTES)
+    fn decode_optional_pubkey(input: &[u8]) -> Result<(Option<Pubkey>, &[u8]), InstructionError> {
+        let create_context_state = input
+            .first()
+            .map(|b| *b == 1)
+            .ok_or(InvalidInstructionData)?;
+        if create_context_state {
+            let pubkey_bytes = input
+                .get(1..PUBKEY_BYTES + 1)
+                .ok_or(InvalidInstructionData)?;
+            Ok((
+                Pubkey::try_from(pubkey_bytes).ok(),
+                &input[PUBKEY_BYTES + 1..],
+            ))
+        } else {
+            Ok((None, &input[1..]))
+        }
     }
 }
 
+/// Pubkeys associated with a context state account to be used as parameters to functions.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct ContextStateInfo<'a> {
     pub context_state_account: &'a Pubkey,
     pub context_state_authority: &'a Pubkey,
 }
 
+// Create a `VerifyProof` instruction.
 pub fn verify_proof<T: Pod + ZkProofData>(
     proof_type: ProofType,
     context_state_info: Option<ContextStateInfo>,
@@ -183,16 +173,16 @@ pub fn verify_proof<T: Pod + ZkProofData>(
     }
 }
 
+// Create a `CloseContextState` instruction.
 pub fn close_context_state(
-    context_account: &Pubkey,
+    context_state_info: ContextStateInfo,
     destination_account: &Pubkey,
-    account_owner: &Pubkey,
     proof_type: ProofType,
 ) -> Instruction {
     let accounts = vec![
-        AccountMeta::new(*context_account, false),
+        AccountMeta::new(*context_state_info.context_state_account, false),
         AccountMeta::new(*destination_account, false),
-        AccountMeta::new_readonly(*account_owner, true),
+        AccountMeta::new_readonly(*context_state_info.context_state_authority, true),
     ];
 
     let data = vec![
@@ -221,6 +211,7 @@ impl ProofInstruction {
     }
 }
 
+// These functions are needed for downstream projects.
 pub fn verify_close_account(proof_data: &CloseAccountData) -> Instruction {
     verify_proof(ProofType::CloseAccount, None, proof_data)
 }
@@ -243,38 +234,4 @@ pub fn verify_transfer_with_fee(proof_data: &TransferWithFeeData) -> Instruction
 
 pub fn verify_pubkey_validity(proof_data: &PubkeyValidityData) -> Instruction {
     verify_proof(ProofType::PubkeyValidity, None, proof_data)
-}
-
-fn decode_proof_type(input: &[u8]) -> Result<(ProofType, &[u8]), InstructionError> {
-    let proof_type = input
-        .first()
-        .and_then(|b| FromPrimitive::from_u8(*b))
-        .ok_or(InvalidInstructionData)?;
-    Ok((proof_type, &input[1..]))
-}
-
-fn decode_pubkey(input: &[u8]) -> Result<(Pubkey, &[u8]), InstructionError> {
-    let pubkey = input
-        .get(..PUBKEY_BYTES)
-        .and_then(|pubkey| Pubkey::try_from(pubkey).ok())
-        .ok_or(InvalidInstructionData)?;
-    Ok((pubkey, &input[PUBKEY_BYTES..]))
-}
-
-fn decode_optional_pubkey(input: &[u8]) -> Result<(Option<Pubkey>, &[u8]), InstructionError> {
-    let create_context_state = input
-        .first()
-        .map(|b| *b == 1)
-        .ok_or(InvalidInstructionData)?;
-    if create_context_state {
-        let pubkey_bytes = input
-            .get(1..PUBKEY_BYTES + 1)
-            .ok_or(InvalidInstructionData)?;
-        Ok((
-            Pubkey::try_from(pubkey_bytes).ok(),
-            &input[PUBKEY_BYTES + 1..],
-        ))
-    } else {
-        Ok((None, &input[1..]))
-    }
 }

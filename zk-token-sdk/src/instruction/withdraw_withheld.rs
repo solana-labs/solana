@@ -40,9 +40,9 @@ pub struct WithdrawWithheldTokensProofContext {
 
     pub destination_pubkey: pod::ElGamalPubkey, // 32 bytes
 
-    pub withdraw_withheld_authority_ciphertext: pod::ElGamalCiphertext, // 32 bytes
+    pub withdraw_withheld_authority_ciphertext: pod::ElGamalCiphertext, // 64 bytes
 
-    pub destination_ciphertext: pod::ElGamalCiphertext, // 32 bytes
+    pub destination_ciphertext: pod::ElGamalCiphertext, // 64 bytes
 }
 
 #[cfg(not(target_os = "solana"))]
@@ -128,7 +128,7 @@ impl ZkProofData for WithdrawWithheldTokensData {
 
 #[cfg(not(target_os = "solana"))]
 impl ZkProofContext for WithdrawWithheldTokensProofContext {
-    const LEN: usize = 128;
+    const LEN: usize = 192;
 }
 
 /// This struct represents the cryptographic proof component that certifies the account's solvency
