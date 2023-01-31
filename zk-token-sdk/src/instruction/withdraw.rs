@@ -221,7 +221,7 @@ mod test {
             &current_ciphertext,
         )
         .unwrap();
-        assert!(data.verify().is_ok());
+        assert!(data.verify_proof().is_ok());
 
         // generate and verify proof with wrong balance
         let wrong_balance: u64 = 99;
@@ -232,6 +232,6 @@ mod test {
             &current_ciphertext,
         )
         .unwrap();
-        assert!(data.verify().is_err());
+        assert!(data.verify_proof().is_err());
     }
 }

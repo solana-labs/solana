@@ -230,7 +230,7 @@ mod test {
         )
         .unwrap();
 
-        assert!(withdraw_withheld_tokens_data.verify().is_ok());
+        assert!(withdraw_withheld_tokens_data.verify_proof().is_ok());
 
         let amount: u64 = 55;
         let withdraw_withheld_authority_ciphertext =
@@ -244,7 +244,7 @@ mod test {
         )
         .unwrap();
 
-        assert!(withdraw_withheld_tokens_data.verify().is_ok());
+        assert!(withdraw_withheld_tokens_data.verify_proof().is_ok());
 
         let amount = u64::max_value();
         let withdraw_withheld_authority_ciphertext =
@@ -258,6 +258,6 @@ mod test {
         )
         .unwrap();
 
-        assert!(withdraw_withheld_tokens_data.verify().is_ok());
+        assert!(withdraw_withheld_tokens_data.verify_proof().is_ok());
     }
 }

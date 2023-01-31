@@ -116,6 +116,6 @@ mod test {
         let keypair = ElGamalKeypair::new_rand();
 
         let pubkey_validity_data = PubkeyValidityData::new(&keypair).unwrap();
-        assert!(pubkey_validity_data.verify().is_ok());
+        assert!(pubkey_validity_data.verify_proof().is_ok());
     }
 }

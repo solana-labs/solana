@@ -906,7 +906,7 @@ mod test {
         )
         .unwrap();
 
-        assert!(fee_data.verify().is_ok());
+        assert!(fee_data.verify_proof().is_ok());
 
         // Case 2: transfer max amount
         let spendable_balance: u64 = u64::max_value();
@@ -930,7 +930,7 @@ mod test {
         )
         .unwrap();
 
-        assert!(fee_data.verify().is_ok());
+        assert!(fee_data.verify_proof().is_ok());
 
         // Case 3: general success case
         let spendable_balance: u64 = 120;
@@ -953,7 +953,7 @@ mod test {
         )
         .unwrap();
 
-        assert!(fee_data.verify().is_ok());
+        assert!(fee_data.verify_proof().is_ok());
 
         // Case 4: invalid destination, auditor, or withdraw authority pubkeys
         let spendable_balance: u64 = 120;
@@ -981,7 +981,7 @@ mod test {
         )
         .unwrap();
 
-        assert!(fee_data.verify().is_err());
+        assert!(fee_data.verify_proof().is_err());
 
         // auditor pubkey invalid
         let destination_pubkey: ElGamalPubkey = ElGamalKeypair::new_rand().public;
@@ -998,7 +998,7 @@ mod test {
         )
         .unwrap();
 
-        assert!(fee_data.verify().is_err());
+        assert!(fee_data.verify_proof().is_err());
 
         // withdraw authority invalid
         let destination_pubkey: ElGamalPubkey = ElGamalKeypair::new_rand().public;
@@ -1015,6 +1015,6 @@ mod test {
         )
         .unwrap();
 
-        assert!(fee_data.verify().is_err());
+        assert!(fee_data.verify_proof().is_err());
     }
 }

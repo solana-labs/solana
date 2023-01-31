@@ -146,11 +146,11 @@ mod test {
         // general case: encryption of 0
         let ciphertext = keypair.public.encrypt(0_u64);
         let close_account_data = CloseAccountData::new(&keypair, &ciphertext).unwrap();
-        assert!(close_account_data.verify().is_ok());
+        assert!(close_account_data.verify_proof().is_ok());
 
         // general case: encryption of > 0
         let ciphertext = keypair.public.encrypt(1_u64);
         let close_account_data = CloseAccountData::new(&keypair, &ciphertext).unwrap();
-        assert!(close_account_data.verify().is_err());
+        assert!(close_account_data.verify_proof().is_err());
     }
 }

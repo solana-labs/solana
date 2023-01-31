@@ -556,7 +556,7 @@ mod test {
         )
         .unwrap();
 
-        assert!(transfer_data.verify().is_ok());
+        assert!(transfer_data.verify_proof().is_ok());
 
         // Case 2: transfer max amount
 
@@ -577,7 +577,7 @@ mod test {
         )
         .unwrap();
 
-        assert!(transfer_data.verify().is_ok());
+        assert!(transfer_data.verify_proof().is_ok());
 
         // Case 3: general success case
 
@@ -597,7 +597,7 @@ mod test {
         )
         .unwrap();
 
-        assert!(transfer_data.verify().is_ok());
+        assert!(transfer_data.verify_proof().is_ok());
 
         // Case 4: invalid destination or auditor pubkey
         let spendable_balance: u64 = 0;
@@ -617,7 +617,7 @@ mod test {
         )
         .unwrap();
 
-        assert!(transfer_data.verify().is_err());
+        assert!(transfer_data.verify_proof().is_err());
 
         // auditor pubkey invalid
         let dest_pk = ElGamalKeypair::new_rand().public;
@@ -631,7 +631,7 @@ mod test {
         )
         .unwrap();
 
-        assert!(transfer_data.verify().is_err());
+        assert!(transfer_data.verify_proof().is_err());
     }
 
     #[test]
