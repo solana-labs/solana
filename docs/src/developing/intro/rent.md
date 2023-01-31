@@ -1,7 +1,6 @@
 ---
 title: What is rent?
 description: "Rent: the small fee Solana accounts incur to store data on the blockchain. Accounts with >2 years of rent are rent exempt and do not pay the periodic fee."
-keywords: ""
 ---
 
 The fee every Solana Account to store data on the blockchain is called "_rent_". This _time and space_ based fee is required to keep an account, and its therefore its data, alive on the blockchain since [clusters](../../cluster/overview.md) must actively maintain this data.
@@ -22,7 +21,7 @@ Currently, the rent rate is a static amount and stored in the the [Rent sysvar](
 
 Accounts that maintain a minimum LAMPORT balance greater than 2 years worth of rent payments are considered "_rent exempt_" and will not incur a rent collection.
 
-> At the time of writing this, new Accounts and Programs **are required** to be initialized with enough LAMPORTS to become rent-exempt. The RPC endpoints have the ability to calculate this [estimated rent exempt balance](../clients/jsonrpc-api.md#getminimumbalanceforrentexemption) and is recommended to be used.
+> At the time of writing this, new Accounts and Programs **are required** to be initialized with enough LAMPORTS to become rent-exempt. The RPC endpoints have the ability to calculate this [estimated rent exempt balance](../../api/http#getminimumbalanceforrentexemption) and is recommended to be used.
 
 Every time an account's balance is reduced, a check is performed to see if the account is still rent exempt. Transactions that would cause an account's balance to drop below the rent exempt threshold will fail.
 

@@ -49,8 +49,8 @@ use {
     solana_core::serve_repair::{RepairProtocol, RepairRequestHeader, ServeRepair},
     solana_dos::cli::*,
     solana_gossip::{
-        contact_info::ContactInfo,
         gossip_service::{discover, get_multi_client},
+        legacy_contact_info::LegacyContactInfo as ContactInfo,
     },
     solana_measure::measure::Measure,
     solana_rpc_client::rpc_client::RpcClient,

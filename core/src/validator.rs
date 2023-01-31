@@ -4,6 +4,7 @@ pub use solana_perf::report_target_features;
 use {
     crate::{
         accounts_hash_verifier::AccountsHashVerifier,
+        banking_trace::{self, BankingTracer},
         broadcast_stage::BroadcastStageType,
         cache_block_meta_service::{CacheBlockMetaSender, CacheBlockMetaService},
         cluster_info_vote_listener::VoteTracker,
@@ -35,9 +36,9 @@ use {
             ClusterInfo, Node, DEFAULT_CONTACT_DEBUG_INTERVAL_MILLIS,
             DEFAULT_CONTACT_SAVE_INTERVAL_MILLIS,
         },
-        contact_info::ContactInfo,
         crds_gossip_pull::CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS,
         gossip_service::GossipService,
+        legacy_contact_info::LegacyContactInfo as ContactInfo,
     },
     solana_ledger::{
         bank_forks_utils,
@@ -176,6 +177,7 @@ pub struct ValidatorConfig {
     pub ledger_column_options: LedgerColumnOptions,
     pub runtime_config: RuntimeConfig,
     pub replay_slots_concurrently: bool,
+    pub banking_trace_dir_byte_limit: banking_trace::DirByteLimit,
 }
 
 impl Default for ValidatorConfig {
@@ -238,6 +240,7 @@ impl Default for ValidatorConfig {
             ledger_column_options: LedgerColumnOptions::default(),
             runtime_config: RuntimeConfig::default(),
             replay_slots_concurrently: false,
+            banking_trace_dir_byte_limit: 0,
         }
     }
 }
@@ -932,6 +935,22 @@ impl Validator {
             exit.clone(),
         );
 
+        let (banking_tracer, tracer_thread) =
+            BankingTracer::new((config.banking_trace_dir_byte_limit > 0).then_some((
+                &blockstore.banking_trace_path(),
+                exit.clone(),
+                config.banking_trace_dir_byte_limit,
+            )))
+            .map_err(|err| format!("{} [{:?}]", &err, &err))?;
+        if banking_tracer.is_enabled() {
+            info!(
+                "Enabled banking tracer (dir_byte_limit: {})",
+                config.banking_trace_dir_byte_limit
+            );
+        } else {
+            info!("Disabled banking tracer");
+        }
+
         let (replay_vote_sender, replay_vote_receiver) = unbounded();
         let tvu = Tvu::new(
             vote_account,
@@ -981,6 +1000,7 @@ impl Validator {
             config.runtime_config.log_messages_bytes_limit,
             &connection_cache,
             &prioritization_fee_cache,
+            banking_tracer.clone(),
         )?;
 
         let tpu = Tpu::new(
@@ -1016,6 +1036,8 @@ impl Validator {
             config.runtime_config.log_messages_bytes_limit,
             &staked_nodes,
             config.staked_nodes_overrides.clone(),
+            banking_tracer,
+            tracer_thread,
             tpu_enable_udp,
         );
 
@@ -1788,7 +1810,7 @@ fn initialize_rpc_transaction_history_services(
         transaction_status_receiver,
         max_complete_transaction_status_slot.clone(),
         enable_rpc_transaction_history,
-        transaction_notifier.clone(),
+        transaction_notifier,
         blockstore.clone(),
         enable_extended_tx_metadata_storage,
         exit,

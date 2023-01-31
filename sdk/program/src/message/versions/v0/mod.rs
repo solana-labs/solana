@@ -15,8 +15,9 @@ use crate::{
     hash::Hash,
     instruction::{CompiledInstruction, Instruction},
     message::{
-        compiled_keys::CompileError, legacy::is_builtin_key_or_sysvar, AccountKeys, CompiledKeys,
-        MessageHeader, MESSAGE_VERSION_PREFIX,
+        compiled_keys::{CompileError, CompiledKeys},
+        legacy::is_builtin_key_or_sysvar,
+        AccountKeys, MessageHeader, MESSAGE_VERSION_PREFIX,
     },
     pubkey::Pubkey,
     sanitize::SanitizeError,
@@ -129,6 +130,8 @@ impl Message {
 
         // the combined number of static and dynamic account keys must be <= 256
         // since account indices are encoded as `u8`
+        // Note that this is different from the per-transaction account load cap
+        // as defined in `Bank::get_transaction_account_lock_limit`
         let total_account_keys = num_static_account_keys.saturating_add(num_dynamic_account_keys);
         if total_account_keys > 256 {
             return Err(SanitizeError::IndexOutOfBounds);

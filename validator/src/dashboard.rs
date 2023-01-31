@@ -112,6 +112,9 @@ impl Dashboard {
                 if let Some(rpc) = contact_info.rpc {
                     println_name_value("JSON RPC URL:", &format!("http://{rpc}"));
                 }
+                if let Some(pubsub) = contact_info.pubsub {
+                    println_name_value("WebSocket PubSub URL:", &format!("ws://{pubsub}"));
+                }
             }
 
             let progress_bar = new_spinner_progress_bar();

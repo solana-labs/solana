@@ -123,7 +123,6 @@ pub struct GossipStats {
     pub(crate) handle_batch_pull_requests_time: Counter,
     pub(crate) handle_batch_pull_responses_time: Counter,
     pub(crate) handle_batch_push_messages_time: Counter,
-    pub(crate) mark_pull_request: Counter,
     pub(crate) new_pull_requests: Counter,
     pub(crate) new_pull_requests_count: Counter,
     pub(crate) new_pull_requests_pings_count: Counter,
@@ -373,7 +372,6 @@ pub(crate) fn submit_gossip_stats(
         ),
         ("epoch_slots_lookup", stats.epoch_slots_lookup.clear(), i64),
         ("new_pull_requests", stats.new_pull_requests.clear(), i64),
-        ("mark_pull_request", stats.mark_pull_request.clear(), i64),
         (
             "gossip_pull_request_no_budget",
             stats.gossip_pull_request_no_budget.clear(),
@@ -613,8 +611,8 @@ pub(crate) fn submit_gossip_stats(
     );
     datapoint_info!(
         "cluster_info_crds_stats",
-        ("ContactInfo-push", crds_stats.push.counts[0], i64),
-        ("ContactInfo-pull", crds_stats.pull.counts[0], i64),
+        ("LegacyContactInfo-push", crds_stats.push.counts[0], i64),
+        ("LegacyContactInfo-pull", crds_stats.pull.counts[0], i64),
         ("Vote-push", crds_stats.push.counts[1], i64),
         ("Vote-pull", crds_stats.pull.counts[1], i64),
         ("LowestSlot-push", crds_stats.push.counts[2], i64),
@@ -643,6 +641,8 @@ pub(crate) fn submit_gossip_stats(
             crds_stats.pull.counts[10],
             i64
         ),
+        ("ContactInfo-push", crds_stats.push.counts[11], i64),
+        ("ContactInfo-pull", crds_stats.pull.counts[11], i64),
         (
             "all-push",
             crds_stats.push.counts.iter().sum::<usize>(),
@@ -656,8 +656,8 @@ pub(crate) fn submit_gossip_stats(
     );
     datapoint_info!(
         "cluster_info_crds_stats_fails",
-        ("ContactInfo-push", crds_stats.push.fails[0], i64),
-        ("ContactInfo-pull", crds_stats.pull.fails[0], i64),
+        ("LegacyContactInfo-push", crds_stats.push.fails[0], i64),
+        ("LegacyContactInfo-pull", crds_stats.pull.fails[0], i64),
         ("Vote-push", crds_stats.push.fails[1], i64),
         ("Vote-pull", crds_stats.pull.fails[1], i64),
         ("LowestSlot-push", crds_stats.push.fails[2], i64),
@@ -686,6 +686,8 @@ pub(crate) fn submit_gossip_stats(
             crds_stats.pull.fails[10],
             i64
         ),
+        ("ContactInfo-push", crds_stats.push.fails[11], i64),
+        ("ContactInfo-pull", crds_stats.pull.fails[11], i64),
         ("all-push", crds_stats.push.fails.iter().sum::<usize>(), i64),
         ("all-pull", crds_stats.pull.fails.iter().sum::<usize>(), i64),
     );

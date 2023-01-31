@@ -11,6 +11,7 @@
 pub mod accounts_hash_verifier;
 pub mod ancestor_hashes_service;
 pub mod banking_stage;
+pub mod banking_trace;
 pub mod broadcast_stage;
 pub mod cache_block_meta_service;
 pub mod cluster_info_vote_listener;
@@ -38,6 +39,7 @@ pub mod leader_slot_banking_stage_timing_metrics;
 pub mod ledger_cleanup_service;
 pub mod ledger_metric_report_service;
 pub mod multi_iterator_scanner;
+pub mod next_leader;
 pub mod optimistic_confirmation_verifier;
 pub mod outstanding_requests;
 pub mod packet_deserializer;

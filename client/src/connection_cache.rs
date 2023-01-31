@@ -18,7 +18,7 @@ use {
     solana_streamer::{
         nonblocking::quic::{compute_max_allowed_uni_streams, ConnectionPeerType},
         streamer::StakedNodes,
-        tls_certificates::new_self_signed_tls_certificate_chain,
+        tls_certificates::new_self_signed_tls_certificate,
     },
     solana_tpu_client::{
         connection_cache_stats::{ConnectionCacheStats, CONNECTION_STAT_SUBMISSION_INTERVAL},
@@ -98,9 +98,9 @@ impl ConnectionCache {
         keypair: &Keypair,
         ipaddr: IpAddr,
     ) -> Result<(), Box<dyn Error>> {
-        let (certs, priv_key) = new_self_signed_tls_certificate_chain(keypair, ipaddr)?;
+        let (cert, priv_key) = new_self_signed_tls_certificate(keypair, ipaddr)?;
         self.client_certificate = Arc::new(QuicClientCertificate {
-            certificates: certs,
+            certificate: cert,
             key: priv_key,
         });
         Ok(())
@@ -371,22 +371,20 @@ impl ConnectionCache {
 
 impl Default for ConnectionCache {
     fn default() -> Self {
-        let (certs, priv_key) = new_self_signed_tls_certificate_chain(
-            &Keypair::new(),
-            IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)),
-        )
-        .expect("Failed to initialize QUIC client certificates");
+        let (cert, priv_key) =
+            new_self_signed_tls_certificate(&Keypair::new(), IpAddr::V4(Ipv4Addr::UNSPECIFIED))
+                .expect("Failed to initialize QUIC client certificates");
         Self {
             map: RwLock::new(IndexMap::with_capacity(MAX_CONNECTIONS)),
             stats: Arc::new(ConnectionCacheStats::default()),
             last_stats: AtomicInterval::default(),
             connection_pool_size: DEFAULT_TPU_CONNECTION_POOL_SIZE,
             tpu_udp_socket: Arc::new(
-                solana_net_utils::bind_with_any_port(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)))
+                solana_net_utils::bind_with_any_port(IpAddr::V4(Ipv4Addr::UNSPECIFIED))
                     .expect("Unable to bind to UDP socket"),
             ),
             client_certificate: Arc::new(QuicClientCertificate {
-                certificates: certs,
+                certificate: cert,
                 key: priv_key,
             }),
             use_quic: DEFAULT_TPU_USE_QUIC,
@@ -472,7 +470,10 @@ mod tests {
             },
             signature::Keypair,
         },
-        solana_streamer::{quic::StreamStats, streamer::StakedNodes},
+        solana_streamer::{
+            nonblocking::quic::DEFAULT_WAIT_FOR_CHUNK_TIMEOUT_MS, quic::StreamStats,
+            streamer::StakedNodes,
+        },
         std::{
             net::{IpAddr, Ipv4Addr, SocketAddr, UdpSocket},
             sync::{
@@ -531,7 +532,6 @@ mod tests {
             0
         };
         let addrs = (0..MAX_CONNECTIONS)
-            .into_iter()
             .map(|_| {
                 let addr = get_addr(&mut rng);
                 connection_cache.get_connection(&addr);
@@ -627,7 +627,7 @@ mod tests {
     fn test_overflow_address() {
         let port = u16::MAX - QUIC_PORT_OFFSET + 1;
         assert!(port.checked_add(QUIC_PORT_OFFSET).is_none());
-        let addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), port);
+        let addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), port);
         let connection_cache = ConnectionCache::new(1);
 
         let conn = connection_cache.get_connection(&addr);
@@ -666,7 +666,7 @@ mod tests {
             10,
             10,
             response_recv_stats,
-            1000,
+            DEFAULT_WAIT_FOR_CHUNK_TIMEOUT_MS,
         )
         .unwrap();
 
@@ -674,13 +674,13 @@ mod tests {
 
         // server port 1:
         let port1 = 9001;
-        let addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), port1);
+        let addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), port1);
         let conn = connection_cache.get_connection(&addr);
         assert_eq!(conn.tpu_addr().port(), port1 + QUIC_PORT_OFFSET);
 
         // server port 2:
         let port2 = 9002;
-        let addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), port2);
+        let addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), port2);
         let conn = connection_cache.get_connection(&addr);
         assert_eq!(conn.tpu_addr().port(), port2 + QUIC_PORT_OFFSET);
 

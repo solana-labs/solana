@@ -1,6 +1,8 @@
 //! Data shared between program runtime and built-in programs as well as SBF programs.
 #![deny(clippy::indexing_slicing)]
 
+#[cfg(all(not(target_os = "solana"), debug_assertions))]
+use crate::signature::Signature;
 #[cfg(not(target_os = "solana"))]
 use crate::{
     account::WritableAccount,
@@ -68,6 +70,9 @@ pub struct TransactionContext {
     rent: Option<Rent>,
     #[cfg(not(target_os = "solana"))]
     is_cap_accounts_data_allocations_per_transaction_enabled: bool,
+    /// Useful for debugging to filter by or to look it up on the explorer
+    #[cfg(all(not(target_os = "solana"), debug_assertions))]
+    signature: Signature,
 }
 
 impl TransactionContext {
@@ -97,6 +102,8 @@ impl TransactionContext {
             accounts_resize_delta: RefCell::new(0),
             rent,
             is_cap_accounts_data_allocations_per_transaction_enabled: false,
+            #[cfg(all(not(target_os = "solana"), debug_assertions))]
+            signature: Signature::default(),
         }
     }
 
@@ -116,6 +123,18 @@ impl TransactionContext {
     #[cfg(not(target_os = "solana"))]
     pub fn is_early_verification_of_account_modifications_enabled(&self) -> bool {
         self.rent.is_some()
+    }
+
+    /// Stores the signature of the current transaction
+    #[cfg(all(not(target_os = "solana"), debug_assertions))]
+    pub fn set_signature(&mut self, signature: &Signature) {
+        self.signature = *signature;
+    }
+
+    /// Returns the signature of the current transaction
+    #[cfg(all(not(target_os = "solana"), debug_assertions))]
+    pub fn get_signature(&self) -> &Signature {
+        &self.signature
     }
 
     /// Returns the total number of accounts loaded in this Transaction
@@ -771,7 +790,7 @@ impl<'a> BorrowedAccount<'a> {
     /// Call this when you have an owned buffer and want to replace the account
     /// data with it.
     ///
-    /// If you have a slice, use set_data_from_slice().
+    /// If you have a slice, use [`Self::set_data_from_slice()`].
     #[cfg(not(target_os = "solana"))]
     pub fn set_data(&mut self, data: Vec<u8>) -> Result<(), InstructionError> {
         self.can_data_be_resized(data.len())?;
@@ -788,7 +807,7 @@ impl<'a> BorrowedAccount<'a> {
     /// Call this when you have a slice of data you do not own and want to
     /// replace the account data with it.
     ///
-    /// If you have an owned buffer (eg Vec<u8>), use set_data().
+    /// If you have an owned buffer (eg [`Vec<u8>`]), use [`Self::set_data()`].
     #[cfg(not(target_os = "solana"))]
     pub fn set_data_from_slice(&mut self, data: &[u8]) -> Result<(), InstructionError> {
         self.can_data_be_resized(data.len())?;

@@ -1,7 +1,8 @@
 use {
     itertools::Itertools,
     solana_gossip::{
-        cluster_info::ClusterInfo, contact_info::ContactInfo, crds::Cursor, epoch_slots::EpochSlots,
+        cluster_info::ClusterInfo, crds::Cursor, epoch_slots::EpochSlots,
+        legacy_contact_info::LegacyContactInfo as ContactInfo,
     },
     solana_runtime::{bank::Bank, epoch_stakes::NodeIdToVoteAccounts},
     solana_sdk::{
@@ -194,7 +195,7 @@ impl ClusterSlots {
             .iter()
             .map(|peer| slot_peers.get(&peer.id).cloned().unwrap_or(0))
             .zip(stakes)
-            .map(|(a, b)| a + b)
+            .map(|(a, b)| (a / 2 + b / 2).max(1u64))
             .collect()
     }
 
@@ -203,16 +204,16 @@ impl ClusterSlots {
         slot: Slot,
         repair_peers: &[ContactInfo],
     ) -> Vec<(u64, usize)> {
-        let slot_peers = self.lookup(slot);
-        repair_peers
-            .iter()
-            .enumerate()
-            .filter_map(|(i, x)| {
-                slot_peers
-                    .as_ref()
-                    .and_then(|v| v.read().unwrap().get(&x.id).map(|stake| (*stake + 1, i)))
+        self.lookup(slot)
+            .map(|slot_peers| {
+                let slot_peers = slot_peers.read().unwrap();
+                repair_peers
+                    .iter()
+                    .enumerate()
+                    .filter_map(|(i, ci)| Some((slot_peers.get(&ci.id)? + 1, i)))
+                    .collect()
             })
-            .collect()
+            .unwrap_or_default()
     }
 }
 
@@ -292,10 +293,7 @@ mod tests {
             .insert(0, Arc::new(RwLock::new(map)));
         c1.id = k1;
         c2.id = k2;
-        assert_eq!(
-            cs.compute_weights(0, &[c1, c2]),
-            vec![std::u64::MAX / 2 + 1, 1]
-        );
+        assert_eq!(cs.compute_weights(0, &[c1, c2]), vec![std::u64::MAX / 4, 1]);
     }
 
     #[test]
@@ -326,7 +324,7 @@ mod tests {
         c2.id = k2;
         assert_eq!(
             cs.compute_weights(0, &[c1, c2]),
-            vec![std::u64::MAX / 2 + 1, 1]
+            vec![std::u64::MAX / 4 + 1, 1]
         );
     }
 

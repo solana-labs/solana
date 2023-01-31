@@ -70,7 +70,7 @@ impl Keypair {
     /// Note that the `Clone` trait is intentionally unimplemented because making a
     /// second copy of sensitive secret keys in memory is usually a bad idea.
     ///
-    /// Only use this in tests or when strictly required. Consider using Arc<Keypair>
+    /// Only use this in tests or when strictly required. Consider using [`std::sync::Arc<Keypair>`]
     /// instead.
     pub fn insecure_clone(&self) -> Self {
         Self(ed25519_dalek::Keypair {
@@ -82,8 +82,9 @@ impl Keypair {
 }
 
 impl Signer for Keypair {
+    #[inline]
     fn pubkey(&self) -> Pubkey {
-        Pubkey::new(self.0.public.as_ref())
+        Pubkey::from(self.0.public.to_bytes())
     }
 
     fn try_pubkey(&self) -> Result<Pubkey, SignerError> {

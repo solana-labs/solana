@@ -12,7 +12,7 @@ publish = false
 [dependencies]
 cargo_metadata = "0.15.0"
 clap = { version = "3.1.5", features = ["cargo", "env"] }
-log = { version = "0.4.14", features = ["std"] }
+log = { version = "0.4.17", features = ["std"] }
 solana-logger = { path = "../../logger", version = "=1.15.0" }
 solana-sdk = { path = "..", version = "=1.15.0" }
 

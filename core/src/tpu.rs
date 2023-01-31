@@ -4,6 +4,7 @@
 use {
     crate::{
         banking_stage::BankingStage,
+        banking_trace::{BankingTracer, TracerThread},
         broadcast_stage::{BroadcastStage, BroadcastStageType, RetransmitSlotsReceiver},
         cluster_info_vote_listener::{
             ClusterInfoVoteListener, GossipDuplicateConfirmedSlotsSender,
@@ -68,6 +69,7 @@ pub struct Tpu {
     find_packet_sender_stake_stage: FindPacketSenderStakeStage,
     vote_find_packet_sender_stake_stage: FindPacketSenderStakeStage,
     staked_nodes_updater_service: StakedNodesUpdaterService,
+    tracer_thread_hdl: TracerThread,
 }
 
 impl Tpu {
@@ -98,6 +100,8 @@ impl Tpu {
         log_messages_bytes_limit: Option<usize>,
         staked_nodes: &Arc<RwLock<StakedNodes>>,
         shared_staked_nodes_overrides: Arc<RwLock<HashMap<Pubkey, u64>>>,
+        banking_tracer: Arc<BankingTracer>,
+        tracer_thread_hdl: TracerThread,
         tpu_enable_udp: bool,
     ) -> Self {
         let TpuSockets {
@@ -154,7 +158,7 @@ impl Tpu {
             "Vote",
         );
 
-        let (verified_sender, verified_receiver) = unbounded();
+        let (non_vote_sender, non_vote_receiver) = banking_tracer.create_channel_non_vote();
 
         let stats = Arc::new(StreamStats::default());
         let (_, tpu_quic_t) = spawn_server(
@@ -188,15 +192,14 @@ impl Tpu {
         .unwrap();
 
         let sigverify_stage = {
-            let verifier = TransactionSigVerifier::new(verified_sender);
+            let verifier = TransactionSigVerifier::new(non_vote_sender);
             SigVerifyStage::new(find_packet_sender_stake_receiver, verifier, "tpu-verifier")
         };
 
-        let (verified_tpu_vote_packets_sender, verified_tpu_vote_packets_receiver) = unbounded();
+        let (tpu_vote_sender, tpu_vote_receiver) = banking_tracer.create_channel_tpu_vote();
 
         let vote_sigverify_stage = {
-            let verifier =
-                TransactionSigVerifier::new_reject_non_vote(verified_tpu_vote_packets_sender);
+            let verifier = TransactionSigVerifier::new_reject_non_vote(tpu_vote_sender);
             SigVerifyStage::new(
                 vote_find_packet_sender_stake_receiver,
                 verifier,
@@ -204,12 +207,12 @@ impl Tpu {
             )
         };
 
-        let (verified_gossip_vote_packets_sender, verified_gossip_vote_packets_receiver) =
-            unbounded();
+        let (gossip_vote_sender, gossip_vote_receiver) =
+            banking_tracer.create_channel_gossip_vote();
         let cluster_info_vote_listener = ClusterInfoVoteListener::new(
             exit.clone(),
             cluster_info.clone(),
-            verified_gossip_vote_packets_sender,
+            gossip_vote_sender,
             poh_recorder.clone(),
             vote_tracker,
             bank_forks.clone(),
@@ -225,9 +228,9 @@ impl Tpu {
         let banking_stage = BankingStage::new(
             cluster_info,
             poh_recorder,
-            verified_receiver,
-            verified_tpu_vote_packets_receiver,
-            verified_gossip_vote_packets_receiver,
+            non_vote_receiver,
+            tpu_vote_receiver,
+            gossip_vote_receiver,
             transaction_status_sender,
             replay_vote_sender,
             log_messages_bytes_limit,
@@ -258,6 +261,7 @@ impl Tpu {
             find_packet_sender_stake_stage,
             vote_find_packet_sender_stake_stage,
             staked_nodes_updater_service,
+            tracer_thread_hdl,
         }
     }
 
@@ -279,6 +283,14 @@ impl Tpu {
             result?;
         }
         let _ = broadcast_result?;
+        if let Some(tracer_thread_hdl) = self.tracer_thread_hdl {
+            if let Err(tracer_result) = tracer_thread_hdl.join()? {
+                error!(
+                    "banking tracer thread returned error after successful thread join: {:?}",
+                    tracer_result
+                );
+            }
+        }
         Ok(())
     }
 }

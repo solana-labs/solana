@@ -198,7 +198,7 @@ mod test {
             }
         );
 
-        let non_parsable_program_id = Pubkey::new(&[1; 32]);
+        let non_parsable_program_id = Pubkey::from([1; 32]);
         assert!(parse(&non_parsable_program_id, &memo_instruction, &no_keys, None).is_err());
     }
 

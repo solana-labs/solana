@@ -257,7 +257,9 @@ impl fmt::Display for GenesisConfig {
              Native instruction processors: {:#?}\n\
              Rewards pool: {:#?}\n\
              ",
-            Utc.timestamp(self.creation_time, 0).to_rfc3339(),
+            Utc.timestamp_opt(self.creation_time, 0)
+                .unwrap()
+                .to_rfc3339(),
             self.cluster_type,
             self.hash(),
             compute_shred_version(&self.hash(), None),

@@ -142,7 +142,7 @@ impl CacheHashDataFile {
 
 pub type PreExistingCacheFiles = HashSet<PathBuf>;
 pub struct CacheHashData {
-    cache_folder: PathBuf,
+    cache_dir: PathBuf,
     pre_existing_cache_files: Arc<Mutex<PreExistingCacheFiles>>,
     pub stats: Arc<Mutex<CacheHashDataStats>>,
 }
@@ -155,14 +155,13 @@ impl Drop for CacheHashData {
 }
 
 impl CacheHashData {
-    pub fn new(parent_folder: impl AsRef<Path>) -> CacheHashData {
-        let cache_folder = Self::get_cache_root_path(parent_folder);
-
-        std::fs::create_dir_all(&cache_folder)
-            .unwrap_or_else(|_| panic!("error creating cache dir: {}", cache_folder.display()));
+    pub fn new(cache_dir: PathBuf) -> CacheHashData {
+        std::fs::create_dir_all(&cache_dir).unwrap_or_else(|err| {
+            panic!("error creating cache dir {}: {err}", cache_dir.display())
+        });
 
         let result = CacheHashData {
-            cache_folder,
+            cache_dir,
             pre_existing_cache_files: Arc::new(Mutex::new(PreExistingCacheFiles::default())),
             stats: Arc::new(Mutex::new(CacheHashDataStats::default())),
         };
@@ -175,14 +174,14 @@ impl CacheHashData {
         if !pre_existing_cache_files.is_empty() {
             self.stats.lock().unwrap().unused_cache_files += pre_existing_cache_files.len();
             for file_name in pre_existing_cache_files.iter() {
-                let result = self.cache_folder.join(file_name);
+                let result = self.cache_dir.join(file_name);
                 let _ = fs::remove_file(result);
             }
         }
     }
     fn get_cache_files(&self) {
-        if self.cache_folder.is_dir() {
-            let dir = fs::read_dir(&self.cache_folder);
+        if self.cache_dir.is_dir() {
+            let dir = fs::read_dir(&self.cache_dir);
             if let Ok(dir) = dir {
                 let mut pre_existing = self.pre_existing_cache_files.lock().unwrap();
                 for entry in dir.flatten() {
@@ -193,10 +192,6 @@ impl CacheHashData {
                 self.stats.lock().unwrap().cache_file_count += pre_existing.len();
             }
         }
-    }
-
-    fn get_cache_root_path(parent_folder: impl AsRef<Path>) -> PathBuf {
-        parent_folder.as_ref().join("calculate_accounts_hash_cache")
     }
 
     #[cfg(test)]
@@ -234,7 +229,7 @@ impl CacheHashData {
         file_name: impl AsRef<Path>,
         stats: &mut CacheHashDataStats,
     ) -> Result<CacheHashDataFile, std::io::Error> {
-        let path = self.cache_folder.join(&file_name);
+        let path = self.cache_dir.join(&file_name);
         let file_len = std::fs::metadata(&path)?.len();
         let mut m1 = Measure::start("read_file");
         let mmap = CacheHashDataFile::load_map(&path)?;
@@ -305,7 +300,7 @@ impl CacheHashData {
         stats: &mut CacheHashDataStats,
     ) -> Result<(), std::io::Error> {
         let mut m = Measure::start("save");
-        let cache_path = self.cache_folder.join(file_name);
+        let cache_path = self.cache_dir.join(file_name);
         // overwrite any existing file at this path
         let _ignored = remove_file(&cache_path);
         let cell_size = std::mem::size_of::<EntryType>() as u64;
@@ -363,7 +358,8 @@ pub mod tests {
         // compare
         use tempfile::TempDir;
         let tmpdir = TempDir::new().unwrap();
-        std::fs::create_dir_all(&tmpdir).unwrap();
+        let cache_dir = tmpdir.path().to_path_buf();
+        std::fs::create_dir_all(&cache_dir).unwrap();
 
         for bins in [1, 2, 4] {
             let bin_calculator = PubkeyBinCalculator24::new(bins);
@@ -390,7 +386,7 @@ pub mod tests {
                                 data_this_pass.push(this_bin_data);
                             }
                         }
-                        let cache = CacheHashData::new(&tmpdir);
+                        let cache = CacheHashData::new(cache_dir.clone());
                         let file_name = PathBuf::from("test");
                         cache.save(&file_name, &data_this_pass).unwrap();
                         cache.get_cache_files();
@@ -403,7 +399,7 @@ pub mod tests {
                                 .collect::<Vec<_>>(),
                             vec![&file_name],
                         );
-                        let mut accum = (0..bins_per_pass).into_iter().map(|_| vec![]).collect();
+                        let mut accum = (0..bins_per_pass).map(|_| vec![]).collect();
                         cache
                             .load(&file_name, &mut accum, start_bin_this_pass, &bin_calculator)
                             .unwrap();
@@ -431,9 +427,9 @@ pub mod tests {
         bins: usize,
         start_bin: usize,
     ) {
-        let mut accum: SavedType = (0..bins).into_iter().map(|_| vec![]).collect();
-        data.drain(..).into_iter().for_each(|mut x| {
-            x.drain(..).into_iter().for_each(|item| {
+        let mut accum: SavedType = (0..bins).map(|_| vec![]).collect();
+        data.drain(..).for_each(|mut x| {
+            x.drain(..).for_each(|item| {
                 let bin = bin_calculator.bin_from_pubkey(&item.pubkey);
                 accum[bin - start_bin].push(item);
             })
@@ -450,12 +446,10 @@ pub mod tests {
         let mut ct = 0;
         (
             (0..bins)
-                .into_iter()
                 .map(|bin| {
                     let rnd = rng.gen::<u64>() % (bins as u64);
                     if rnd < count as u64 {
                         (0..std::cmp::max(1, count / bins))
-                            .into_iter()
                             .map(|_| {
                                 ct += 1;
                                 let mut pk;

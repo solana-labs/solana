@@ -452,9 +452,9 @@ impl RpcClient {
     /// # Examples
     ///
     /// ```
-    /// # use std::net::SocketAddr;
+    /// # use std::net::{Ipv4Addr, SocketAddr};
     /// # use solana_rpc_client::nonblocking::rpc_client::RpcClient;
-    /// let addr = SocketAddr::from(([127, 0, 0, 1], 8899));
+    /// let addr = SocketAddr::from((Ipv4Addr::LOCALHOST, 8899));
     /// let client = RpcClient::new_socket(addr);
     /// ```
     pub fn new_socket(addr: SocketAddr) -> Self {
@@ -471,10 +471,10 @@ impl RpcClient {
     /// # Examples
     ///
     /// ```
-    /// # use std::net::SocketAddr;
+    /// # use std::net::{Ipv4Addr, SocketAddr};
     /// # use solana_rpc_client::nonblocking::rpc_client::RpcClient;
     /// # use solana_sdk::commitment_config::CommitmentConfig;
-    /// let addr = SocketAddr::from(([127, 0, 0, 1], 8899));
+    /// let addr = SocketAddr::from((Ipv4Addr::LOCALHOST, 8899));
     /// let commitment_config = CommitmentConfig::processed();
     /// let client = RpcClient::new_socket_with_commitment(
     ///     addr,
@@ -497,10 +497,10 @@ impl RpcClient {
     /// # Examples
     ///
     /// ```
-    /// # use std::net::SocketAddr;
+    /// # use std::net::{Ipv4Addr, SocketAddr};
     /// # use std::time::Duration;
     /// # use solana_rpc_client::nonblocking::rpc_client::RpcClient;
-    /// let addr = SocketAddr::from(([127, 0, 0, 1], 8899));
+    /// let addr = SocketAddr::from((Ipv4Addr::LOCALHOST, 8899));
     /// let timeout = Duration::from_secs(1);
     /// let client = RpcClient::new_socket_with_timeout(addr, timeout);
     /// ```
@@ -512,6 +512,12 @@ impl RpcClient {
     /// Get the configured url of the client's sender
     pub fn url(&self) -> String {
         self.sender.url()
+    }
+
+    pub async fn set_node_version(&self, version: semver::Version) -> Result<(), ()> {
+        let mut w_node_version = self.node_version.write().await;
+        *w_node_version = Some(version);
+        Ok(())
     }
 
     async fn get_node_version(&self) -> Result<semver::Version, RpcError> {
@@ -3535,6 +3541,49 @@ impl RpcClient {
             .await
     }
 
+    /// Returns a list of minimum prioritization fees from recent blocks.
+    /// Takes an optional vector of addresses; if any addresses are provided, the response will
+    /// reflect the minimum prioritization fee to land a transaction locking all of the provided
+    /// accounts as writable.
+    ///
+    /// Currently, a node's prioritization-fee cache stores data from up to 150 blocks.
+    ///
+    /// # RPC Reference
+    ///
+    /// This method corresponds directly to the [`getRecentPrioritizationFees`] RPC method.
+    ///
+    /// [`getRecentPrioritizationFees`]: https://docs.solana.com/developing/clients/jsonrpc-api#getrecentprioritizationfees
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use solana_rpc_client_api::client_error::Error;
+    /// # use solana_rpc_client::nonblocking::rpc_client::RpcClient;
+    /// # use solana_sdk::signature::{Keypair, Signer};
+    /// # futures::executor::block_on(async {
+    /// #     let rpc_client = RpcClient::new_mock("succeeds".to_string());
+    /// #     let alice = Keypair::new();
+    /// #     let bob = Keypair::new();
+    /// let addresses = vec![alice.pubkey(), bob.pubkey()];
+    /// let prioritization_fees = rpc_client.get_recent_prioritization_fees(
+    ///     &addresses,
+    /// ).await?;
+    /// #     Ok::<(), Error>(())
+    /// # })?;
+    /// # Ok::<(), Error>(())
+    /// ```
+    pub async fn get_recent_prioritization_fees(
+        &self,
+        addresses: &[Pubkey],
+    ) -> ClientResult<Vec<RpcPrioritizationFee>> {
+        let addresses: Vec<_> = addresses
+            .iter()
+            .map(|address| address.to_string())
+            .collect();
+        self.send(RpcRequest::GetRecentPrioritizationFees, json!([addresses]))
+            .await
+    }
+
     /// Returns the identity pubkey for the current node.
     ///
     /// # RPC Reference
@@ -4372,11 +4421,10 @@ impl RpcClient {
     /// #         AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\
     /// #         AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\
     /// #         AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=";
-    /// let memcmp = RpcFilterType::Memcmp(Memcmp {
-    ///     offset: 0,
-    ///     bytes: MemcmpEncodedBytes::Base64(base64_bytes.to_string()),
-    ///     encoding: None,
-    /// });
+    /// let memcmp = RpcFilterType::Memcmp(Memcmp::new(
+    ///     0,                                                    // offset
+    ///     MemcmpEncodedBytes::Base64(base64_bytes.to_string()), // encoded bytes
+    /// ));
     /// let config = RpcProgramAccountsConfig {
     ///     filters: Some(vec![
     ///         RpcFilterType::DataSize(128),

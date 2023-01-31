@@ -5,13 +5,9 @@ use {
         tls_certificates::get_pubkey_from_tls_certificate,
     },
     crossbeam_channel::Sender,
-    futures_util::stream::StreamExt,
     indexmap::map::{Entry, IndexMap},
     percentage::Percentage,
-    quinn::{
-        Connecting, Connection, Endpoint, EndpointConfig, Incoming, IncomingUniStreams,
-        NewConnection, VarInt,
-    },
+    quinn::{Connecting, Connection, Endpoint, EndpointConfig, TokioRuntime, VarInt},
     quinn_proto::VarIntBoundsExceeded,
     rand::{thread_rng, Rng},
     solana_perf::packet::PacketBatch,
@@ -75,13 +71,13 @@ pub fn spawn_server(
     info!("Start quic server on {:?}", sock);
     let (config, _cert) = configure_server(keypair, gossip_host)?;
 
-    let (endpoint, incoming) = {
-        Endpoint::new(EndpointConfig::default(), Some(config), sock)
+    let endpoint = {
+        Endpoint::new(EndpointConfig::default(), Some(config), sock, TokioRuntime)
             .map_err(|_e| QuicServerError::EndpointFailed)?
     };
 
     let handle = tokio::spawn(run_server(
-        incoming,
+        endpoint.clone(),
         packet_sender,
         exit,
         max_connections_per_peer,
@@ -95,7 +91,7 @@ pub fn spawn_server(
 }
 
 pub async fn run_server(
-    mut incoming: Incoming,
+    incoming: Endpoint,
     packet_sender: Sender<PacketBatch>,
     exit: Arc<AtomicBool>,
     max_connections_per_peer: usize,
@@ -117,7 +113,7 @@ pub async fn run_server(
         const WAIT_BETWEEN_NEW_CONNECTIONS_US: u64 = 1000;
         let timeout_connection = timeout(
             Duration::from_millis(WAIT_FOR_CONNECTION_TIMEOUT_MS),
-            incoming.next(),
+            incoming.accept(),
         )
         .await;
 
@@ -142,7 +138,7 @@ pub async fn run_server(
             ));
             sleep(Duration::from_micros(WAIT_BETWEEN_NEW_CONNECTIONS_US)).await;
         } else {
-            info!("Timed out waiting for connection");
+            debug!("accept(): Timed out waiting for connection");
         }
     }
 }
@@ -170,18 +166,23 @@ fn get_connection_stake(
         .peer_identity()
         .and_then(|der_cert_any| der_cert_any.downcast::<Vec<rustls::Certificate>>().ok())
         .and_then(|der_certs| {
-            get_pubkey_from_tls_certificate(&der_certs).and_then(|pubkey| {
-                debug!("Peer public key is {:?}", pubkey);
+            if der_certs.len() == 1 {
+                // Use the client cert only if it is self signed and the chain length is 1
+                get_pubkey_from_tls_certificate(&der_certs[0]).and_then(|pubkey| {
+                    debug!("Peer public key is {:?}", pubkey);
 
-                let staked_nodes = staked_nodes.read().unwrap();
-                let total_stake = staked_nodes.total_stake;
-                let max_stake = staked_nodes.max_stake;
-                let min_stake = staked_nodes.min_stake;
-                staked_nodes
-                    .pubkey_stake_map
-                    .get(&pubkey)
-                    .map(|stake| (pubkey, *stake, total_stake, max_stake, min_stake))
-            })
+                    let staked_nodes = staked_nodes.read().unwrap();
+                    let total_stake = staked_nodes.total_stake;
+                    let max_stake = staked_nodes.max_stake;
+                    let min_stake = staked_nodes.min_stake;
+                    staked_nodes
+                        .pubkey_stake_map
+                        .get(&pubkey)
+                        .map(|stake| (pubkey, *stake, total_stake, max_stake, min_stake))
+                })
+            } else {
+                None
+            }
         })
 }
 
@@ -258,18 +259,12 @@ impl NewConnectionHandlerParams {
 }
 
 fn handle_and_cache_new_connection(
-    new_connection: NewConnection,
+    connection: Connection,
     mut connection_table_l: MutexGuard<ConnectionTable>,
     connection_table: Arc<Mutex<ConnectionTable>>,
     params: &NewConnectionHandlerParams,
     wait_for_chunk_timeout_ms: u64,
 ) -> Result<(), ConnectionHandlerError> {
-    let NewConnection {
-        connection,
-        uni_streams,
-        ..
-    } = new_connection;
-
     if let Ok(max_uni_streams) = VarInt::from_u64(compute_max_allowed_uni_streams(
         connection_table_l.peer_type,
         params.stake,
@@ -303,7 +298,7 @@ fn handle_and_cache_new_connection(
         if let Some((last_update, stream_exit)) = connection_table_l.try_add_connection(
             ConnectionTableKey::new(remote_addr.ip(), params.remote_pubkey),
             remote_addr.port(),
-            Some(connection),
+            Some(connection.clone()),
             params.stake,
             timing::timestamp(),
             params.max_connections_per_peer,
@@ -311,7 +306,7 @@ fn handle_and_cache_new_connection(
             let peer_type = connection_table_l.peer_type;
             drop(connection_table_l);
             tokio::spawn(handle_connection(
-                uni_streams,
+                connection,
                 params.packet_sender.clone(),
                 remote_addr,
                 params.remote_pubkey,
@@ -345,7 +340,7 @@ fn handle_and_cache_new_connection(
 }
 
 fn prune_unstaked_connections_and_add_new_connection(
-    new_connection: NewConnection,
+    connection: Connection,
     mut connection_table_l: MutexGuard<ConnectionTable>,
     connection_table: Arc<Mutex<ConnectionTable>>,
     max_connections: usize,
@@ -356,14 +351,14 @@ fn prune_unstaked_connections_and_add_new_connection(
     if max_connections > 0 {
         prune_unstaked_connection_table(&mut connection_table_l, max_connections, stats);
         handle_and_cache_new_connection(
-            new_connection,
+            connection,
             connection_table_l,
             connection_table,
             params,
             wait_for_chunk_timeout_ms,
         )
     } else {
-        new_connection.connection.close(
+        connection.close(
             CONNECTION_CLOSE_CODE_DISALLOWED.into(),
             CONNECTION_CLOSE_REASON_DISALLOWED,
         );
@@ -437,26 +432,23 @@ async fn setup_connection(
         if let Ok(new_connection) = connecting_result {
             stats.total_new_connections.fetch_add(1, Ordering::Relaxed);
 
-            let params = get_connection_stake(&new_connection.connection, staked_nodes.clone())
-                .map_or(
-                    NewConnectionHandlerParams::new_unstaked(
-                        packet_sender.clone(),
-                        max_connections_per_peer,
-                        stats.clone(),
-                    ),
-                    |(pubkey, stake, total_stake, max_stake, min_stake)| {
-                        NewConnectionHandlerParams {
-                            packet_sender,
-                            remote_pubkey: Some(pubkey),
-                            stake,
-                            total_stake,
-                            max_connections_per_peer,
-                            stats: stats.clone(),
-                            max_stake,
-                            min_stake,
-                        }
-                    },
-                );
+            let params = get_connection_stake(&new_connection, staked_nodes.clone()).map_or(
+                NewConnectionHandlerParams::new_unstaked(
+                    packet_sender.clone(),
+                    max_connections_per_peer,
+                    stats.clone(),
+                ),
+                |(pubkey, stake, total_stake, max_stake, min_stake)| NewConnectionHandlerParams {
+                    packet_sender,
+                    remote_pubkey: Some(pubkey),
+                    stake,
+                    total_stake,
+                    max_connections_per_peer,
+                    stats: stats.clone(),
+                    max_stake,
+                    min_stake,
+                },
+            );
 
             if params.stake > 0 {
                 let mut connection_table_l = staked_connection_table.lock().unwrap();
@@ -529,7 +521,7 @@ async fn setup_connection(
 
 #[allow(clippy::too_many_arguments)]
 async fn handle_connection(
-    mut uni_streams: IncomingUniStreams,
+    connection: Connection,
     packet_sender: Sender<PacketBatch>,
     remote_addr: SocketAddr,
     remote_pubkey: Option<Pubkey>,
@@ -547,84 +539,83 @@ async fn handle_connection(
         stats.total_streams.load(Ordering::Relaxed),
         stats.total_connections.load(Ordering::Relaxed),
     );
+    let stable_id = connection.stable_id();
     stats.total_connections.fetch_add(1, Ordering::Relaxed);
     while !stream_exit.load(Ordering::Relaxed) {
         if let Ok(stream) = tokio::time::timeout(
             Duration::from_millis(WAIT_FOR_STREAM_TIMEOUT_MS),
-            uni_streams.next(),
+            connection.accept_uni(),
         )
         .await
         {
             match stream {
-                Some(stream_result) => match stream_result {
-                    Ok(mut stream) => {
-                        stats.total_streams.fetch_add(1, Ordering::Relaxed);
-                        stats.total_new_streams.fetch_add(1, Ordering::Relaxed);
-                        let stream_exit = stream_exit.clone();
-                        let stats = stats.clone();
-                        let packet_sender = packet_sender.clone();
-                        let last_update = last_update.clone();
-                        tokio::spawn(async move {
-                            let mut maybe_batch = None;
-                            // The min is to guard against a value too small which can wake up unnecessarily
-                            // frequently and wasting CPU cycles. The max guard against waiting for too long
-                            // which delay exit and cause some test failures when the timeout value is large.
-                            // Within this value, the heuristic is to wake up 10 times to check for exit
-                            // for the set timeout if there are no data.
-                            let exit_check_interval =
-                                (wait_for_chunk_timeout_ms / 10).clamp(10, 1000);
-                            let mut start = Instant::now();
-                            while !stream_exit.load(Ordering::Relaxed) {
-                                if let Ok(chunk) = tokio::time::timeout(
-                                    Duration::from_millis(exit_check_interval),
-                                    stream.read_chunk(PACKET_DATA_SIZE, false),
-                                )
-                                .await
-                                {
-                                    if handle_chunk(
-                                        &chunk,
-                                        &mut maybe_batch,
-                                        &remote_addr,
-                                        &packet_sender,
-                                        stats.clone(),
-                                        stake,
-                                        peer_type,
-                                    ) {
-                                        last_update.store(timing::timestamp(), Ordering::Relaxed);
-                                        break;
-                                    }
-                                    start = Instant::now();
-                                } else {
-                                    let elapse = Instant::now() - start;
-                                    if elapse.as_millis() as u64 > wait_for_chunk_timeout_ms {
-                                        debug!("Timeout in receiving on stream");
-                                        stats
-                                            .total_stream_read_timeouts
-                                            .fetch_add(1, Ordering::Relaxed);
-                                        break;
-                                    }
+                Ok(mut stream) => {
+                    stats.total_streams.fetch_add(1, Ordering::Relaxed);
+                    stats.total_new_streams.fetch_add(1, Ordering::Relaxed);
+                    let stream_exit = stream_exit.clone();
+                    let stats = stats.clone();
+                    let packet_sender = packet_sender.clone();
+                    let last_update = last_update.clone();
+                    tokio::spawn(async move {
+                        let mut maybe_batch = None;
+                        // The min is to guard against a value too small which can wake up unnecessarily
+                        // frequently and wasting CPU cycles. The max guard against waiting for too long
+                        // which delay exit and cause some test failures when the timeout value is large.
+                        // Within this value, the heuristic is to wake up 10 times to check for exit
+                        // for the set timeout if there are no data.
+                        let exit_check_interval = (wait_for_chunk_timeout_ms / 10).clamp(10, 1000);
+                        let mut start = Instant::now();
+                        while !stream_exit.load(Ordering::Relaxed) {
+                            if let Ok(chunk) = tokio::time::timeout(
+                                Duration::from_millis(exit_check_interval),
+                                stream.read_chunk(PACKET_DATA_SIZE, false),
+                            )
+                            .await
+                            {
+                                if handle_chunk(
+                                    &chunk,
+                                    &mut maybe_batch,
+                                    &remote_addr,
+                                    &packet_sender,
+                                    stats.clone(),
+                                    stake,
+                                    peer_type,
+                                ) {
+                                    last_update.store(timing::timestamp(), Ordering::Relaxed);
+                                    break;
+                                }
+                                start = Instant::now();
+                            } else {
+                                let elapse = Instant::now() - start;
+                                if elapse.as_millis() as u64 > wait_for_chunk_timeout_ms {
+                                    debug!("Timeout in receiving on stream");
+                                    stats
+                                        .total_stream_read_timeouts
+                                        .fetch_add(1, Ordering::Relaxed);
+                                    break;
                                 }
                             }
-                            stats.total_streams.fetch_sub(1, Ordering::Relaxed);
-                        });
-                    }
-                    Err(e) => {
-                        debug!("stream error: {:?}", e);
-                        break;
-                    }
-                },
-                None => {
+                        }
+                        stats.total_streams.fetch_sub(1, Ordering::Relaxed);
+                    });
+                }
+                Err(e) => {
+                    debug!("stream error: {:?}", e);
                     break;
                 }
             }
         }
     }
 
-    if connection_table.lock().unwrap().remove_connection(
+    let removed_connection_count = connection_table.lock().unwrap().remove_connection(
         ConnectionTableKey::new(remote_addr.ip(), remote_pubkey),
         remote_addr.port(),
-    ) {
-        stats.connection_removed.fetch_add(1, Ordering::Relaxed);
+        stable_id,
+    );
+    if removed_connection_count > 0 {
+        stats
+            .connection_removed
+            .fetch_add(removed_connection_count, Ordering::Relaxed);
     } else {
         stats
             .connection_remove_failed
@@ -919,21 +910,34 @@ impl ConnectionTable {
         }
     }
 
-    fn remove_connection(&mut self, key: ConnectionTableKey, port: u16) -> bool {
+    // Returns number of connections that were removed
+    fn remove_connection(&mut self, key: ConnectionTableKey, port: u16, stable_id: usize) -> usize {
         if let Entry::Occupied(mut e) = self.table.entry(key) {
             let e_ref = e.get_mut();
             let old_size = e_ref.len();
-            e_ref.retain(|connection| connection.port != port);
+
+            e_ref.retain(|connection_entry| {
+                // Retain the connection entry if the port is different, or if the connection's
+                // stable_id doesn't match the provided stable_id.
+                // (Some unit tests do not fill in a valid connection in the table. To support that,
+                // if the connection is none, the stable_id check is ignored. i.e. if the port matches,
+                // the connection gets removed)
+                connection_entry.port != port
+                    || connection_entry
+                        .connection
+                        .as_ref()
+                        .and_then(|connection| (connection.stable_id() != stable_id).then_some(0))
+                        .is_some()
+            });
             let new_size = e_ref.len();
             if e_ref.is_empty() {
                 e.remove_entry();
             }
-            self.total_size = self
-                .total_size
-                .saturating_sub(old_size.saturating_sub(new_size));
-            true
+            let connections_removed = old_size.saturating_sub(new_size);
+            self.total_size = self.total_size.saturating_sub(connections_removed);
+            connections_removed
         } else {
-            false
+            0
         }
     }
 }
@@ -945,10 +949,10 @@ pub mod test {
         crate::{
             nonblocking::quic::compute_max_allowed_uni_streams,
             quic::{MAX_STAKED_CONNECTIONS, MAX_UNSTAKED_CONNECTIONS},
-            tls_certificates::new_self_signed_tls_certificate_chain,
+            tls_certificates::new_self_signed_tls_certificate,
         },
         crossbeam_channel::{unbounded, Receiver},
-        quinn::{ClientConfig, IdleTimeout, VarInt},
+        quinn::{ClientConfig, IdleTimeout, TransportConfig, VarInt},
         solana_sdk::{
             quic::{QUIC_KEEP_ALIVE_MS, QUIC_MAX_TIMEOUT_MS},
             signature::Keypair,
@@ -981,14 +985,14 @@ pub mod test {
     }
 
     pub fn get_client_config(keypair: &Keypair) -> ClientConfig {
-        let ipaddr = IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1));
-        let (certs, key) = new_self_signed_tls_certificate_chain(keypair, ipaddr)
+        let ipaddr = IpAddr::V4(Ipv4Addr::LOCALHOST);
+        let (cert, key) = new_self_signed_tls_certificate(keypair, ipaddr)
             .expect("Failed to generate client certificate");
 
         let mut crypto = rustls::ClientConfig::builder()
             .with_safe_defaults()
             .with_custom_certificate_verifier(SkipServerVerification::new())
-            .with_single_cert(certs, key)
+            .with_single_cert(vec![cert], key)
             .expect("Failed to use client certificate");
 
         crypto.enable_early_data = true;
@@ -996,16 +1000,18 @@ pub mod test {
 
         let mut config = ClientConfig::new(Arc::new(crypto));
 
-        let transport_config = Arc::get_mut(&mut config.transport).unwrap();
+        let mut transport_config = TransportConfig::default();
         let timeout = IdleTimeout::from(VarInt::from_u32(QUIC_MAX_TIMEOUT_MS));
         transport_config.max_idle_timeout(Some(timeout));
         transport_config.keep_alive_interval(Some(Duration::from_millis(QUIC_KEEP_ALIVE_MS)));
+        config.transport_config(Arc::new(transport_config));
 
         config
     }
 
     fn setup_quic_server(
         option_staked_nodes: Option<StakedNodes>,
+        max_connections_per_peer: usize,
     ) -> (
         JoinHandle<()>,
         Arc<AtomicBool>,
@@ -1027,7 +1033,7 @@ pub mod test {
             ip,
             sender,
             exit.clone(),
-            1,
+            max_connections_per_peer,
             staked_nodes,
             MAX_STAKED_CONNECTIONS,
             MAX_UNSTAKED_CONNECTIONS,
@@ -1041,11 +1047,11 @@ pub mod test {
     pub async fn make_client_endpoint(
         addr: &SocketAddr,
         client_keypair: Option<&Keypair>,
-    ) -> NewConnection {
+    ) -> Connection {
         let client_socket = UdpSocket::bind("127.0.0.1:0").unwrap();
-        let mut endpoint = quinn::Endpoint::new(EndpointConfig::default(), None, client_socket)
-            .unwrap()
-            .0;
+        let mut endpoint =
+            quinn::Endpoint::new(EndpointConfig::default(), None, client_socket, TokioRuntime)
+                .unwrap();
         let default_keypair = Keypair::new();
         endpoint.set_default_client_config(get_client_config(
             client_keypair.unwrap_or(&default_keypair),
@@ -1061,7 +1067,7 @@ pub mod test {
         let conn1 = make_client_endpoint(&server_address, None).await;
         let total = 30;
         for i in 0..total {
-            let mut s1 = conn1.connection.open_uni().await.unwrap();
+            let mut s1 = conn1.open_uni().await.unwrap();
             s1.write_all(&[0u8]).await.unwrap();
             s1.finish().await.unwrap();
             info!("done {}", i);
@@ -1082,8 +1088,8 @@ pub mod test {
     pub async fn check_block_multiple_connections(server_address: SocketAddr) {
         let conn1 = make_client_endpoint(&server_address, None).await;
         let conn2 = make_client_endpoint(&server_address, None).await;
-        let mut s1 = conn1.connection.open_uni().await.unwrap();
-        let mut s2 = conn2.connection.open_uni().await.unwrap();
+        let mut s1 = conn1.open_uni().await.unwrap();
+        let mut s2 = conn2.open_uni().await.unwrap();
         s1.write_all(&[0u8]).await.unwrap();
         s1.finish().await.unwrap();
         // Send enough data to create more than 1 chunks.
@@ -1109,8 +1115,8 @@ pub mod test {
             info!("sending: {}", i);
             let c1 = conn1.clone();
             let c2 = conn2.clone();
-            let mut s1 = c1.connection.open_uni().await.unwrap();
-            let mut s2 = c2.connection.open_uni().await.unwrap();
+            let mut s1 = c1.open_uni().await.unwrap();
+            let mut s2 = c2.open_uni().await.unwrap();
             s1.write_all(&[0u8]).await.unwrap();
             s1.finish().await.unwrap();
             s2.write_all(&[0u8]).await.unwrap();
@@ -1148,7 +1154,7 @@ pub mod test {
         // Send a full size packet with single byte writes.
         let num_bytes = PACKET_DATA_SIZE;
         let num_expected_packets = 1;
-        let mut s1 = conn1.connection.open_uni().await.unwrap();
+        let mut s1 = conn1.open_uni().await.unwrap();
         for _ in 0..num_bytes {
             s1.write_all(&[0u8]).await.unwrap();
         }
@@ -1178,7 +1184,7 @@ pub mod test {
         let conn1 = Arc::new(make_client_endpoint(&server_address, None).await);
 
         // Send a full size packet with single byte writes.
-        if let Ok(mut s1) = conn1.connection.open_uni().await {
+        if let Ok(mut s1) = conn1.open_uni().await {
             for _ in 0..PACKET_DATA_SIZE {
                 // Ignoring any errors here. s1.finish() will test the error condition
                 s1.write_all(&[0u8]).await.unwrap_or_default();
@@ -1189,7 +1195,7 @@ pub mod test {
 
     #[tokio::test]
     async fn test_quic_server_exit() {
-        let (t, exit, _receiver, _server_address, _stats) = setup_quic_server(None);
+        let (t, exit, _receiver, _server_address, _stats) = setup_quic_server(None, 1);
         exit.store(true, Ordering::Relaxed);
         t.await.unwrap();
     }
@@ -1197,7 +1203,7 @@ pub mod test {
     #[tokio::test]
     async fn test_quic_timeout() {
         solana_logger::setup();
-        let (t, exit, receiver, server_address, _stats) = setup_quic_server(None);
+        let (t, exit, receiver, server_address, _stats) = setup_quic_server(None, 1);
         check_timeout(receiver, server_address).await;
         exit.store(true, Ordering::Relaxed);
         t.await.unwrap();
@@ -1206,14 +1212,14 @@ pub mod test {
     #[tokio::test]
     async fn test_quic_stream_timeout() {
         solana_logger::setup();
-        let (t, exit, _receiver, server_address, stats) = setup_quic_server(None);
+        let (t, exit, _receiver, server_address, stats) = setup_quic_server(None, 1);
 
         let conn1 = make_client_endpoint(&server_address, None).await;
         assert_eq!(stats.total_streams.load(Ordering::Relaxed), 0);
         assert_eq!(stats.total_stream_read_timeouts.load(Ordering::Relaxed), 0);
 
         // Send one byte to start the stream
-        let mut s1 = conn1.connection.open_uni().await.unwrap();
+        let mut s1 = conn1.open_uni().await.unwrap();
         s1.write_all(&[0u8]).await.unwrap_or_default();
 
         // Wait long enough for the stream to timeout in receiving chunks
@@ -1236,8 +1242,63 @@ pub mod test {
     #[tokio::test]
     async fn test_quic_server_block_multiple_connections() {
         solana_logger::setup();
-        let (t, exit, _receiver, server_address, _stats) = setup_quic_server(None);
+        let (t, exit, _receiver, server_address, _stats) = setup_quic_server(None, 1);
         check_block_multiple_connections(server_address).await;
+        exit.store(true, Ordering::Relaxed);
+        t.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_quic_server_multiple_connections_on_single_client_endpoint() {
+        solana_logger::setup();
+        let (t, exit, _receiver, server_address, stats) = setup_quic_server(None, 2);
+
+        let client_socket = UdpSocket::bind("127.0.0.1:0").unwrap();
+        let mut endpoint =
+            quinn::Endpoint::new(EndpointConfig::default(), None, client_socket, TokioRuntime)
+                .unwrap();
+        let default_keypair = Keypair::new();
+        endpoint.set_default_client_config(get_client_config(&default_keypair));
+        let conn1 = endpoint
+            .connect(server_address, "localhost")
+            .expect("Failed in connecting")
+            .await
+            .expect("Failed in waiting");
+
+        let conn2 = endpoint
+            .connect(server_address, "localhost")
+            .expect("Failed in connecting")
+            .await
+            .expect("Failed in waiting");
+
+        let mut s1 = conn1.open_uni().await.unwrap();
+        s1.write_all(&[0u8]).await.unwrap();
+        s1.finish().await.unwrap();
+
+        let mut s2 = conn2.open_uni().await.unwrap();
+        conn1.close(
+            CONNECTION_CLOSE_CODE_DROPPED_ENTRY.into(),
+            CONNECTION_CLOSE_REASON_DROPPED_ENTRY,
+        );
+        // Wait long enough for the stream to timeout in receiving chunks
+        let sleep_time = (WAIT_FOR_STREAM_TIMEOUT_MS * 1000).min(1000);
+        sleep(Duration::from_millis(sleep_time)).await;
+
+        assert_eq!(stats.connection_removed.load(Ordering::Relaxed), 1);
+
+        s2.write_all(&[0u8]).await.unwrap();
+        s2.finish().await.unwrap();
+
+        conn2.close(
+            CONNECTION_CLOSE_CODE_DROPPED_ENTRY.into(),
+            CONNECTION_CLOSE_REASON_DROPPED_ENTRY,
+        );
+        // Wait long enough for the stream to timeout in receiving chunks
+        let sleep_time = (WAIT_FOR_STREAM_TIMEOUT_MS * 1000).min(1000);
+        sleep(Duration::from_millis(sleep_time)).await;
+
+        assert_eq!(stats.connection_removed.load(Ordering::Relaxed), 2);
+
         exit.store(true, Ordering::Relaxed);
         t.await.unwrap();
     }
@@ -1245,7 +1306,7 @@ pub mod test {
     #[tokio::test]
     async fn test_quic_server_multiple_writes() {
         solana_logger::setup();
-        let (t, exit, receiver, server_address, _stats) = setup_quic_server(None);
+        let (t, exit, receiver, server_address, _stats) = setup_quic_server(None, 1);
         check_multiple_writes(receiver, server_address, None).await;
         exit.store(true, Ordering::Relaxed);
         t.await.unwrap();
@@ -1262,7 +1323,7 @@ pub mod test {
             .insert(client_keypair.pubkey(), 100000);
         staked_nodes.total_stake = 100000;
 
-        let (t, exit, receiver, server_address, stats) = setup_quic_server(Some(staked_nodes));
+        let (t, exit, receiver, server_address, stats) = setup_quic_server(Some(staked_nodes), 1);
         check_multiple_writes(receiver, server_address, Some(&client_keypair)).await;
         exit.store(true, Ordering::Relaxed);
         t.await.unwrap();
@@ -1289,7 +1350,7 @@ pub mod test {
             .insert(client_keypair.pubkey(), 0);
         staked_nodes.total_stake = 0;
 
-        let (t, exit, receiver, server_address, stats) = setup_quic_server(Some(staked_nodes));
+        let (t, exit, receiver, server_address, stats) = setup_quic_server(Some(staked_nodes), 1);
         check_multiple_writes(receiver, server_address, Some(&client_keypair)).await;
         exit.store(true, Ordering::Relaxed);
         t.await.unwrap();
@@ -1307,7 +1368,7 @@ pub mod test {
     #[tokio::test]
     async fn test_quic_server_unstaked_connection_removal() {
         solana_logger::setup();
-        let (t, exit, receiver, server_address, stats) = setup_quic_server(None);
+        let (t, exit, receiver, server_address, stats) = setup_quic_server(None, 1);
         check_multiple_writes(receiver, server_address, None).await;
         exit.store(true, Ordering::Relaxed);
         t.await.unwrap();
@@ -1398,7 +1459,6 @@ pub mod test {
         let mut num_entries = 5;
         let max_connections_per_peer = 10;
         let sockets: Vec<_> = (0..num_entries)
-            .into_iter()
             .map(|i| SocketAddr::new(IpAddr::V4(Ipv4Addr::new(i, 0, 0, 0)), 0))
             .collect();
         for (i, socket) in sockets.iter().enumerate() {
@@ -1436,7 +1496,7 @@ pub mod test {
         assert_eq!(table.table.len(), new_size);
         assert_eq!(table.total_size, new_size);
         for socket in sockets.iter().take(num_entries as usize).skip(new_size - 1) {
-            table.remove_connection(ConnectionTableKey::IP(socket.ip()), socket.port());
+            table.remove_connection(ConnectionTableKey::IP(socket.ip()), socket.port(), 0);
         }
         assert_eq!(table.total_size, 0);
     }
@@ -1451,10 +1511,7 @@ pub mod test {
         let num_entries = 15;
         let max_connections_per_peer = 10;
 
-        let pubkeys: Vec<_> = (0..num_entries)
-            .into_iter()
-            .map(|_| Pubkey::new_unique())
-            .collect();
+        let pubkeys: Vec<_> = (0..num_entries).map(|_| Pubkey::new_unique()).collect();
         for (i, pubkey) in pubkeys.iter().enumerate() {
             table
                 .try_add_connection(
@@ -1474,7 +1531,7 @@ pub mod test {
         assert_eq!(table.table.len(), new_size);
         assert_eq!(table.total_size, new_size);
         for pubkey in pubkeys.iter().take(num_entries as usize).skip(new_size - 1) {
-            table.remove_connection(ConnectionTableKey::Pubkey(*pubkey), 0);
+            table.remove_connection(ConnectionTableKey::Pubkey(*pubkey), 0, 0);
         }
         assert_eq!(table.total_size, 0);
     }
@@ -1534,7 +1591,7 @@ pub mod test {
         assert!(table.table.len() <= new_max_size);
         assert!(table.total_size <= new_max_size);
 
-        table.remove_connection(ConnectionTableKey::Pubkey(pubkey2), 0);
+        table.remove_connection(ConnectionTableKey::Pubkey(pubkey2), 0, 0);
         assert_eq!(table.total_size, 0);
     }
 
@@ -1546,7 +1603,6 @@ pub mod test {
         let num_entries = 5;
         let max_connections_per_peer = 10;
         let sockets: Vec<_> = (0..num_entries)
-            .into_iter()
             .map(|i| SocketAddr::new(IpAddr::V4(Ipv4Addr::new(i, 0, 0, 0)), 0))
             .collect();
         for (i, socket) in sockets.iter().enumerate() {
@@ -1581,7 +1637,6 @@ pub mod test {
         let num_ips = 5;
         let max_connections_per_peer = 10;
         let mut sockets: Vec<_> = (0..num_ips)
-            .into_iter()
             .map(|i| SocketAddr::new(IpAddr::V4(Ipv4Addr::new(i, 0, 0, 0)), 0))
             .collect();
         for (i, socket) in sockets.iter().enumerate() {
@@ -1628,7 +1683,7 @@ pub mod test {
         sockets.push(zero_connection_addr);
 
         for socket in sockets.iter() {
-            table.remove_connection(ConnectionTableKey::IP(socket.ip()), socket.port());
+            table.remove_connection(ConnectionTableKey::IP(socket.ip()), socket.port(), 0);
         }
         assert_eq!(table.total_size, 0);
     }

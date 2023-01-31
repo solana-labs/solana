@@ -55,7 +55,7 @@ static NEXT_RPC_PUBSUB_PORT: AtomicU16 = AtomicU16::new(rpc_port::DEFAULT_RPC_PU
 
 fn pubsub_addr() -> SocketAddr {
     SocketAddr::new(
-        IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)),
+        IpAddr::V4(Ipv4Addr::UNSPECIFIED),
         NEXT_RPC_PUBSUB_PORT.fetch_add(1, Ordering::Relaxed),
     )
 }
@@ -194,7 +194,7 @@ fn test_account_subscription() {
             "lamports": 100,
             "data": "",
             "executable": false,
-            "rentEpoch": 0,
+            "rentEpoch": u64::MAX,
             "space": 0,
         },
     });

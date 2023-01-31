@@ -3,7 +3,7 @@
 use {
     super::{get_io_error, snapshot_version_from_file, SnapshotError, SnapshotVersion},
     crate::{
-        account_storage::AccountStorageMap,
+        account_storage::{AccountStorageMap, AccountStorageReference},
         accounts_db::{AccountStorageEntry, AppendVecId, AtomicAppendVecId},
         serde_snapshot::{
             self, remap_and_reconstruct_single_storage, snapshot_storage_lengths_from_fields,
@@ -31,6 +31,14 @@ use {
         time::Instant,
     },
 };
+
+lazy_static! {
+    static ref VERSION_FILE_REGEX: Regex = Regex::new(r"^version$").unwrap();
+    static ref BANK_FIELDS_FILE_REGEX: Regex = Regex::new(r"^[0-9]+(\.pre)?$").unwrap();
+    static ref STORAGE_FILE_REGEX: Regex =
+        Regex::new(r"^(?P<slot>[0-9]+)\.(?P<id>[0-9]+)$").unwrap();
+}
+
 /// Convenient wrapper for snapshot version and rebuilt storages
 pub(crate) struct RebuiltSnapshotStorage {
     /// Snapshot version
@@ -284,7 +292,7 @@ impl SnapshotStorageRebuilder {
         let slot_storage_paths = self.storage_paths.get(&slot).unwrap();
         let lock = slot_storage_paths.lock().unwrap();
 
-        let slot_stores = lock
+        let mut slot_stores = lock
             .iter()
             .map(|path| {
                 let filename = path.file_name().unwrap().to_str().unwrap();
@@ -309,9 +317,10 @@ impl SnapshotStorageRebuilder {
             })
             .collect::<Result<HashMap<AppendVecId, Arc<AccountStorageEntry>>, std::io::Error>>()?;
 
-        let slot_entry = self.storage.entry(slot).or_default();
-        let mut storage_lock = slot_entry.write().unwrap();
-        *storage_lock = slot_stores;
+        assert_eq!(slot_stores.len(), 1);
+        let (id, storage) = slot_stores.drain().next().unwrap();
+        self.storage
+            .insert(slot, AccountStorageReference { id, storage });
         Ok(())
     }
 
@@ -367,12 +376,6 @@ enum SnapshotFileKind {
 
 /// Determines `SnapshotFileKind` for `filename` if any
 fn get_snapshot_file_kind(filename: &str) -> Option<SnapshotFileKind> {
-    lazy_static! {
-        static ref VERSION_FILE_REGEX: Regex = Regex::new(r"^version$").unwrap();
-        static ref BANK_FIELDS_FILE_REGEX: Regex = Regex::new(r"^[0-9]+$").unwrap();
-        static ref STORAGE_FILE_REGEX: Regex = Regex::new(r"^[0-9]+\.[0-9]+$").unwrap();
-    };
-
     if VERSION_FILE_REGEX.is_match(filename) {
         Some(SnapshotFileKind::Version)
     } else if BANK_FIELDS_FILE_REGEX.is_match(filename) {
@@ -385,13 +388,17 @@ fn get_snapshot_file_kind(filename: &str) -> Option<SnapshotFileKind> {
 }
 
 /// Get the slot and append vec id from the filename
-fn get_slot_and_append_vec_id(filename: &str) -> (Slot, usize) {
-    let mut split = filename.split('.');
-    let slot = split.next().unwrap().parse().unwrap();
-    let append_vec_id = split.next().unwrap().parse().unwrap();
-    assert!(split.next().is_none());
-
-    (slot, append_vec_id)
+pub(crate) fn get_slot_and_append_vec_id(filename: &str) -> (Slot, usize) {
+    STORAGE_FILE_REGEX
+        .captures(filename)
+        .map(|cap| {
+            let slot_str = cap.name("slot").map(|m| m.as_str()).unwrap();
+            let id_str = cap.name("id").map(|m| m.as_str()).unwrap();
+            let slot = slot_str.parse().unwrap();
+            let id = id_str.parse().unwrap();
+            (slot, id)
+        })
+        .unwrap()
 }
 
 #[cfg(test)]

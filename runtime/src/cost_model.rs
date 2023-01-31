@@ -6,7 +6,7 @@
 //!
 
 use {
-    crate::{bank::Bank, block_cost_limits::*},
+    crate::block_cost_limits::*,
     log::*,
     solana_program_runtime::compute_budget::{
         ComputeBudget, DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT,
@@ -14,8 +14,7 @@ use {
     solana_sdk::{
         compute_budget,
         feature_set::{
-            cap_transaction_accounts_data_size, remove_deprecated_request_unit_ix,
-            use_default_units_in_fee_calculation, FeatureSet,
+            remove_deprecated_request_unit_ix, use_default_units_in_fee_calculation, FeatureSet,
         },
         instruction::CompiledInstruction,
         program_utils::limited_deserialize,
@@ -75,15 +74,11 @@ impl TransactionCost {
     }
 
     pub fn sum(&self) -> u64 {
-        self.sum_without_bpf()
-            .saturating_add(self.bpf_execution_cost)
-    }
-
-    pub fn sum_without_bpf(&self) -> u64 {
         self.signature_cost
             .saturating_add(self.write_lock_cost)
             .saturating_add(self.data_bytes_cost)
             .saturating_add(self.builtins_execution_cost)
+            .saturating_add(self.bpf_execution_cost)
     }
 }
 
@@ -152,8 +147,6 @@ impl CostModel {
             transaction.message().program_instructions_iter(),
             feature_set.is_active(&use_default_units_in_fee_calculation::id()),
             !feature_set.is_active(&remove_deprecated_request_unit_ix::id()),
-            feature_set.is_active(&cap_transaction_accounts_data_size::id()),
-            Bank::get_loaded_accounts_data_limit_type(feature_set),
         );
 
         // if tx contained user-space instructions and a more accurate estimate available correct it
@@ -391,7 +384,12 @@ mod tests {
             &token_transaction,
             &FeatureSet::all_enabled(),
         );
-        assert_eq!(0, tx_cost.builtins_execution_cost);
+        assert_eq!(
+            *BUILT_IN_INSTRUCTION_COSTS
+                .get(&compute_budget::id())
+                .unwrap(),
+            tx_cost.builtins_execution_cost
+        );
         assert_eq!(12_345, tx_cost.bpf_execution_cost);
         assert_eq!(1, tx_cost.data_bytes_cost);
     }

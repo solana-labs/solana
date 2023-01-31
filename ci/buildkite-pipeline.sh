@@ -9,7 +9,13 @@ cd "$(dirname "$0")"/..
 output_file=${1:-/dev/stderr}
 
 if [[ -n $CI_PULL_REQUEST ]]; then
-  IFS=':' read -ra affected_files <<< "$(buildkite-agent meta-data get affected_files)"
+  # filter pr number from ci branch.
+  [[ $CI_BRANCH =~ pull/([0-9]+)/head ]]
+  pr_number=${BASH_REMATCH[1]}
+  echo "get affected files from PR: $pr_number"
+
+  # get affected files
+  readarray -t affected_files < <(gh pr diff --name-only "$pr_number")
   if [[ ${#affected_files[*]} -eq 0 ]]; then
     echo "Unable to determine the files affected by this PR"
     exit 1
@@ -216,7 +222,7 @@ EOF
     cat >> "$output_file" <<"EOF"
   - command: "ci/test-stable-perf.sh"
     name: "stable-perf"
-    timeout_in_minutes: 20
+    timeout_in_minutes: 35
     artifact_paths: "log-*.txt"
     agents:
       queue: "cuda"
@@ -309,6 +315,29 @@ pull_or_push_steps() {
   if affects .sh$; then
     command_step shellcheck "ci/shellcheck.sh" 5
     wait_step
+  fi
+
+  # Version bump PRs are an edge case that can skip most of the CI steps
+  if affects .toml$ && affects .lock$ && ! affects_other_than .toml$ .lock$; then
+    optional_old_version_number=$(git diff "$BUILDKITE_PULL_REQUEST_BASE_BRANCH"..HEAD validator/Cargo.toml | \
+      grep -e "^-version" | sed  's/-version = "\(.*\)"/\1/')
+    echo "optional_old_version_number: ->$optional_old_version_number<-"
+    new_version_number=$(grep -e  "^version = " validator/Cargo.toml | sed 's/version = "\(.*\)"/\1/')
+    echo "new_version_number: ->$new_version_number<-"
+
+    # Every line in a version bump diff will match one of these patterns. Since we're using grep -v the output is the
+    # lines that don't match. Any diff that produces output here is not a version bump.
+    # | cat is a no-op. If this pull request is a version bump then grep will output no lines and have an exit code of 1.
+    # Piping the output to cat prevents that non-zero exit code from exiting this script
+    diff_other_than_version_bump=$(git diff "$BUILDKITE_PULL_REQUEST_BASE_BRANCH"..HEAD | \
+      grep -vE "^ |^@@ |^--- |^\+\+\+ |^index |^diff |^-( \")?solana.*$optional_old_version_number|^\+( \")?solana.*$new_version_number|^-version|^\+version"|cat)
+    echo "diff_other_than_version_bump: ->$diff_other_than_version_bump<-"
+
+    if [ -z "$diff_other_than_version_bump" ]; then
+      echo "Diff only contains version bump."
+      command_step checks ". ci/rust-version.sh; ci/docker-run.sh \$\$rust_nightly_docker_image ci/test-checks.sh" 20
+      exit 0
+    fi
   fi
 
   # Run the full test suite by default, skipping only if modifications are local

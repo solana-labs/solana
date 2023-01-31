@@ -225,7 +225,6 @@ pub struct PohRecorder {
     id: Pubkey,
     blockstore: Arc<Blockstore>,
     leader_schedule_cache: Arc<LeaderScheduleCache>,
-    poh_config: PohConfig,
     ticks_per_slot: u64,
     target_ns_per_tick: u64,
     record_lock_contention_us: u64,
@@ -460,13 +459,11 @@ impl PohRecorder {
             ))
     }
 
-    // synchronize PoH with a bank
-    pub fn reset(&mut self, reset_bank: Arc<Bank>, next_leader_slot: Option<(Slot, Slot)>) {
-        self.clear_bank();
+    fn reset_poh(&mut self, reset_bank: Arc<Bank>, reset_start_bank: bool) {
         let blockhash = reset_bank.last_blockhash();
         let poh_hash = {
             let mut poh = self.poh.lock().unwrap();
-            poh.reset(blockhash, self.poh_config.hashes_per_tick);
+            poh.reset(blockhash, *reset_bank.hashes_per_tick());
             poh.hash
         };
         info!(
@@ -479,9 +476,17 @@ impl PohRecorder {
         );
 
         self.tick_cache = vec![];
-        self.start_bank = reset_bank;
+        if reset_start_bank {
+            self.start_bank = reset_bank;
+        }
         self.tick_height = (self.start_slot() + 1) * self.ticks_per_slot;
         self.start_tick_height = self.tick_height + 1;
+    }
+
+    // synchronize PoH with a bank
+    pub fn reset(&mut self, reset_bank: Arc<Bank>, next_leader_slot: Option<(Slot, Slot)>) {
+        self.clear_bank();
+        self.reset_poh(reset_bank, true);
 
         if let Some(ref sender) = self.poh_timing_point_sender {
             // start_slot() is the parent slot. current slot is start_slot() + 1.
@@ -513,6 +518,19 @@ impl PohRecorder {
         };
         trace!("new working bank");
         assert_eq!(working_bank.bank.ticks_per_slot(), self.ticks_per_slot());
+        if let Some(hashes_per_tick) = *working_bank.bank.hashes_per_tick() {
+            if self.poh.lock().unwrap().hashes_per_tick() != hashes_per_tick {
+                // We must clear/reset poh when changing hashes per tick because it's
+                // possible there are ticks in the cache created with the old hashes per
+                // tick value that would get flushed later. This would corrupt the leader's
+                // block and it would be disregarded by the network.
+                info!(
+                    "resetting poh due to hashes per tick change detected at {}",
+                    working_bank.bank.slot()
+                );
+                self.reset_poh(working_bank.clone().bank, false);
+            }
+        }
         self.working_bank = Some(working_bank);
 
         // send poh slot start timing point
@@ -865,7 +883,6 @@ impl PohRecorder {
                 leader_schedule_cache: leader_schedule_cache.clone(),
                 ticks_per_slot,
                 target_ns_per_tick,
-                poh_config: poh_config.clone(),
                 record_lock_contention_us: 0,
                 flush_cache_tick_us: 0,
                 flush_cache_no_tick_us: 0,

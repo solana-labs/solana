@@ -11,10 +11,10 @@ use {
     solana_entry::entry::{Entry, EntrySlice},
     solana_gossip::{
         cluster_info,
-        contact_info::ContactInfo,
         crds_value::{self, CrdsData, CrdsValue},
         gossip_error::GossipError,
         gossip_service::discover_cluster,
+        legacy_contact_info::LegacyContactInfo as ContactInfo,
     },
     solana_ledger::blockstore::Blockstore,
     solana_sdk::{
@@ -47,7 +47,7 @@ pub fn get_client_facing_addr(contact_info: &ContactInfo) -> (SocketAddr, Socket
     let (rpc, mut tpu) = contact_info.client_facing_addr();
     // QUIC certificate authentication requires the IP Address to match. ContactInfo might have
     // 0.0.0.0 as the IP instead of 127.0.0.1.
-    tpu.set_ip(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)));
+    tpu.set_ip(IpAddr::V4(Ipv4Addr::LOCALHOST));
     (rpc, tpu)
 }
 

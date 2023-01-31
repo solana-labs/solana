@@ -50,7 +50,7 @@ fn test_transfer() {
     config.signers = vec![&default_signer];
 
     let sender_pubkey = config.signers[0].pubkey();
-    let recipient_pubkey = Pubkey::new(&[1u8; 32]);
+    let recipient_pubkey = Pubkey::from([1u8; 32]);
 
     request_and_confirm_airdrop(&rpc_client, &config, &sender_pubkey, sol_to_lamports(5.0))
         .unwrap();
@@ -336,7 +336,7 @@ fn test_transfer_multisession_signing() {
         SocketAddrSpace::Unspecified,
     );
 
-    let to_pubkey = Pubkey::new(&[1u8; 32]);
+    let to_pubkey = Pubkey::from([1u8; 32]);
     let offline_from_signer = keypair_from_seed(&[2u8; 32]).unwrap();
     let offline_fee_payer_signer = keypair_from_seed(&[3u8; 32]).unwrap();
     let from_null_signer = NullSigner::new(&offline_from_signer.pubkey());
@@ -498,7 +498,7 @@ fn test_transfer_all() {
     config.signers = vec![&default_signer];
 
     let sender_pubkey = config.signers[0].pubkey();
-    let recipient_pubkey = Pubkey::new(&[1u8; 32]);
+    let recipient_pubkey = Pubkey::from([1u8; 32]);
 
     request_and_confirm_airdrop(&rpc_client, &config, &sender_pubkey, 500_000).unwrap();
     check_balance!(500_000, &rpc_client, &sender_pubkey);
@@ -552,7 +552,7 @@ fn test_transfer_unfunded_recipient() {
     config.signers = vec![&default_signer];
 
     let sender_pubkey = config.signers[0].pubkey();
-    let recipient_pubkey = Pubkey::new(&[1u8; 32]);
+    let recipient_pubkey = Pubkey::from([1u8; 32]);
 
     request_and_confirm_airdrop(&rpc_client, &config, &sender_pubkey, 50_000).unwrap();
     check_balance!(50_000, &rpc_client, &sender_pubkey);
@@ -607,7 +607,7 @@ fn test_transfer_with_seed() {
     config.signers = vec![&default_signer];
 
     let sender_pubkey = config.signers[0].pubkey();
-    let recipient_pubkey = Pubkey::new(&[1u8; 32]);
+    let recipient_pubkey = Pubkey::from([1u8; 32]);
     let derived_address_seed = "seed".to_string();
     let derived_address_program_id = stake::program::id();
     let derived_address = Pubkey::create_with_seed(

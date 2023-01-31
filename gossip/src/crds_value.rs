@@ -5,6 +5,7 @@ use {
         deprecated,
         duplicate_shred::{DuplicateShred, DuplicateShredIndex, MAX_DUPLICATE_SHREDS},
         epoch_slots::EpochSlots,
+        legacy_contact_info::LegacyContactInfo,
     },
     bincode::{serialize, serialized_size},
     rand::{CryptoRng, Rng},
@@ -81,7 +82,7 @@ impl Signable for CrdsValue {
 #[allow(clippy::large_enum_variant)]
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, AbiExample, AbiEnumVisitor)]
 pub enum CrdsData {
-    ContactInfo(ContactInfo),
+    LegacyContactInfo(LegacyContactInfo),
     Vote(VoteIndex, Vote),
     LowestSlot(/*DEPRECATED:*/ u8, LowestSlot),
     SnapshotHashes(SnapshotHashes),
@@ -92,12 +93,13 @@ pub enum CrdsData {
     NodeInstance(NodeInstance),
     DuplicateShred(DuplicateShredIndex, DuplicateShred),
     IncrementalSnapshotHashes(IncrementalSnapshotHashes),
+    ContactInfo(ContactInfo),
 }
 
 impl Sanitize for CrdsData {
     fn sanitize(&self) -> Result<(), SanitizeError> {
         match self {
-            CrdsData::ContactInfo(val) => val.sanitize(),
+            CrdsData::LegacyContactInfo(val) => val.sanitize(),
             CrdsData::Vote(ix, val) => {
                 if *ix >= MAX_VOTES {
                     return Err(SanitizeError::ValueOutOfBounds);
@@ -129,6 +131,7 @@ impl Sanitize for CrdsData {
                 }
             }
             CrdsData::IncrementalSnapshotHashes(val) => val.sanitize(),
+            CrdsData::ContactInfo(node) => node.sanitize(),
         }
     }
 }
@@ -147,7 +150,7 @@ impl CrdsData {
         // TODO: Assign ranges to each arm proportional to their frequency in
         // the mainnet crds table.
         match kind {
-            0 => CrdsData::ContactInfo(ContactInfo::new_rand(rng, pubkey)),
+            0 => CrdsData::LegacyContactInfo(LegacyContactInfo::new_rand(rng, pubkey)),
             // Index for LowestSlot is deprecated and should be zero.
             1 => CrdsData::LowestSlot(0, LowestSlot::new_rand(rng, pubkey)),
             2 => CrdsData::SnapshotHashes(SnapshotHashes::new_rand(rng, pubkey)),
@@ -359,7 +362,7 @@ impl<'de> Deserialize<'de> for Vote {
 pub struct LegacyVersion {
     pub from: Pubkey,
     pub wallclock: u64,
-    pub version: solana_version::LegacyVersion,
+    pub version: solana_version::LegacyVersion1,
 }
 
 impl Sanitize for LegacyVersion {
@@ -374,7 +377,7 @@ impl Sanitize for LegacyVersion {
 pub struct Version {
     pub from: Pubkey,
     pub wallclock: u64,
-    pub version: solana_version::Version,
+    pub version: solana_version::LegacyVersion2,
 }
 
 impl Sanitize for Version {
@@ -390,7 +393,7 @@ impl Version {
         Self {
             from,
             wallclock: timestamp(),
-            version: solana_version::Version::default(),
+            version: solana_version::LegacyVersion2::default(),
         }
     }
 
@@ -399,7 +402,7 @@ impl Version {
         Self {
             from: pubkey.unwrap_or_else(pubkey::new_rand),
             wallclock: new_rand_timestamp(rng),
-            version: solana_version::Version {
+            version: solana_version::LegacyVersion2 {
                 major: rng.gen(),
                 minor: rng.gen(),
                 patch: rng.gen(),
@@ -481,7 +484,7 @@ impl Sanitize for NodeInstance {
 /// These are labels for values in a record that is associated with `Pubkey`
 #[derive(PartialEq, Hash, Eq, Clone, Debug)]
 pub enum CrdsValueLabel {
-    ContactInfo(Pubkey),
+    LegacyContactInfo(Pubkey),
     Vote(VoteIndex, Pubkey),
     LowestSlot(Pubkey),
     SnapshotHashes(Pubkey),
@@ -492,12 +495,15 @@ pub enum CrdsValueLabel {
     NodeInstance(Pubkey),
     DuplicateShred(DuplicateShredIndex, Pubkey),
     IncrementalSnapshotHashes(Pubkey),
+    ContactInfo(Pubkey),
 }
 
 impl fmt::Display for CrdsValueLabel {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            CrdsValueLabel::ContactInfo(_) => write!(f, "ContactInfo({})", self.pubkey()),
+            CrdsValueLabel::LegacyContactInfo(_) => {
+                write!(f, "LegacyContactInfo({})", self.pubkey())
+            }
             CrdsValueLabel::Vote(ix, _) => write!(f, "Vote({}, {})", ix, self.pubkey()),
             CrdsValueLabel::LowestSlot(_) => write!(f, "LowestSlot({})", self.pubkey()),
             CrdsValueLabel::SnapshotHashes(_) => write!(f, "SnapshotHashes({})", self.pubkey()),
@@ -510,6 +516,7 @@ impl fmt::Display for CrdsValueLabel {
             CrdsValueLabel::IncrementalSnapshotHashes(_) => {
                 write!(f, "IncrementalSnapshotHashes({})", self.pubkey())
             }
+            CrdsValueLabel::ContactInfo(_) => write!(f, "ContactInfo({})", self.pubkey()),
         }
     }
 }
@@ -517,7 +524,7 @@ impl fmt::Display for CrdsValueLabel {
 impl CrdsValueLabel {
     pub fn pubkey(&self) -> Pubkey {
         match self {
-            CrdsValueLabel::ContactInfo(p) => *p,
+            CrdsValueLabel::LegacyContactInfo(p) => *p,
             CrdsValueLabel::Vote(_, p) => *p,
             CrdsValueLabel::LowestSlot(p) => *p,
             CrdsValueLabel::SnapshotHashes(p) => *p,
@@ -528,6 +535,7 @@ impl CrdsValueLabel {
             CrdsValueLabel::NodeInstance(p) => *p,
             CrdsValueLabel::DuplicateShred(_, p) => *p,
             CrdsValueLabel::IncrementalSnapshotHashes(p) => *p,
+            CrdsValueLabel::ContactInfo(pubkey) => *pubkey,
         }
     }
 }
@@ -566,7 +574,7 @@ impl CrdsValue {
     /// This is used to time out push messages.
     pub fn wallclock(&self) -> u64 {
         match &self.data {
-            CrdsData::ContactInfo(contact_info) => contact_info.wallclock,
+            CrdsData::LegacyContactInfo(contact_info) => contact_info.wallclock,
             CrdsData::Vote(_, vote) => vote.wallclock,
             CrdsData::LowestSlot(_, obj) => obj.wallclock,
             CrdsData::SnapshotHashes(hash) => hash.wallclock,
@@ -577,11 +585,12 @@ impl CrdsValue {
             CrdsData::NodeInstance(node) => node.wallclock,
             CrdsData::DuplicateShred(_, shred) => shred.wallclock,
             CrdsData::IncrementalSnapshotHashes(hash) => hash.wallclock,
+            CrdsData::ContactInfo(node) => node.wallclock(),
         }
     }
     pub fn pubkey(&self) -> Pubkey {
         match &self.data {
-            CrdsData::ContactInfo(contact_info) => contact_info.id,
+            CrdsData::LegacyContactInfo(contact_info) => contact_info.id,
             CrdsData::Vote(_, vote) => vote.from,
             CrdsData::LowestSlot(_, slots) => slots.from,
             CrdsData::SnapshotHashes(hash) => hash.from,
@@ -592,11 +601,12 @@ impl CrdsValue {
             CrdsData::NodeInstance(node) => node.from,
             CrdsData::DuplicateShred(_, shred) => shred.from,
             CrdsData::IncrementalSnapshotHashes(hash) => hash.from,
+            CrdsData::ContactInfo(node) => *node.pubkey(),
         }
     }
     pub fn label(&self) -> CrdsValueLabel {
         match &self.data {
-            CrdsData::ContactInfo(_) => CrdsValueLabel::ContactInfo(self.pubkey()),
+            CrdsData::LegacyContactInfo(_) => CrdsValueLabel::LegacyContactInfo(self.pubkey()),
             CrdsData::Vote(ix, _) => CrdsValueLabel::Vote(*ix, self.pubkey()),
             CrdsData::LowestSlot(_, _) => CrdsValueLabel::LowestSlot(self.pubkey()),
             CrdsData::SnapshotHashes(_) => CrdsValueLabel::SnapshotHashes(self.pubkey()),
@@ -609,11 +619,12 @@ impl CrdsValue {
             CrdsData::IncrementalSnapshotHashes(_) => {
                 CrdsValueLabel::IncrementalSnapshotHashes(self.pubkey())
             }
+            CrdsData::ContactInfo(node) => CrdsValueLabel::ContactInfo(*node.pubkey()),
         }
     }
-    pub fn contact_info(&self) -> Option<&ContactInfo> {
+    pub fn contact_info(&self) -> Option<&LegacyContactInfo> {
         match &self.data {
-            CrdsData::ContactInfo(contact_info) => Some(contact_info),
+            CrdsData::LegacyContactInfo(contact_info) => Some(contact_info),
             _ => None,
         }
     }
@@ -683,7 +694,6 @@ pub(crate) fn sanitize_wallclock(wallclock: u64) -> Result<(), SanitizeError> {
 mod test {
     use {
         super::*,
-        crate::contact_info::ContactInfo,
         bincode::{deserialize, Options},
         rand::SeedableRng,
         rand_chacha::ChaChaRng,
@@ -699,10 +709,10 @@ mod test {
     #[test]
     fn test_keys_and_values() {
         let mut rng = rand::thread_rng();
-        let v = CrdsValue::new_unsigned(CrdsData::ContactInfo(ContactInfo::default()));
+        let v = CrdsValue::new_unsigned(CrdsData::LegacyContactInfo(LegacyContactInfo::default()));
         assert_eq!(v.wallclock(), 0);
         let key = v.contact_info().unwrap().id;
-        assert_eq!(v.label(), CrdsValueLabel::ContactInfo(key));
+        assert_eq!(v.label(), CrdsValueLabel::LegacyContactInfo(key));
 
         let v = Vote::new(Pubkey::default(), new_test_vote_tx(&mut rng), 0).unwrap();
         let v = CrdsValue::new_unsigned(CrdsData::Vote(0, v));
@@ -756,10 +766,9 @@ mod test {
         let mut rng = rand::thread_rng();
         let keypair = Keypair::new();
         let wrong_keypair = Keypair::new();
-        let mut v = CrdsValue::new_unsigned(CrdsData::ContactInfo(ContactInfo::new_localhost(
-            &keypair.pubkey(),
-            timestamp(),
-        )));
+        let mut v = CrdsValue::new_unsigned(CrdsData::LegacyContactInfo(
+            LegacyContactInfo::new_localhost(&keypair.pubkey(), timestamp()),
+        ));
         verify_signatures(&mut v, &keypair, &wrong_keypair);
         let v = Vote::new(keypair.pubkey(), new_test_vote_tx(&mut rng), timestamp()).unwrap();
         let mut v = CrdsValue::new_unsigned(CrdsData::Vote(0, v));
@@ -1035,8 +1044,8 @@ mod test {
         assert_eq!(node.overrides(&other_crds), None);
         assert_eq!(other.overrides(&node_crds), None);
         // Differnt crds value is not a duplicate.
-        let other = ContactInfo::new_rand(&mut rng, Some(pubkey));
-        let other = CrdsValue::new_unsigned(CrdsData::ContactInfo(other));
+        let other = LegacyContactInfo::new_rand(&mut rng, Some(pubkey));
+        let other = CrdsValue::new_unsigned(CrdsData::LegacyContactInfo(other));
         assert!(!node.check_duplicate(&other));
         assert_eq!(node.overrides(&other), None);
     }
@@ -1045,13 +1054,10 @@ mod test {
     fn test_should_force_push() {
         let mut rng = rand::thread_rng();
         let pubkey = Pubkey::new_unique();
-        assert!(
-            !CrdsValue::new_unsigned(CrdsData::ContactInfo(ContactInfo::new_rand(
-                &mut rng,
-                Some(pubkey),
-            )))
-            .should_force_push(&pubkey)
-        );
+        assert!(!CrdsValue::new_unsigned(CrdsData::LegacyContactInfo(
+            LegacyContactInfo::new_rand(&mut rng, Some(pubkey))
+        ))
+        .should_force_push(&pubkey));
         let node = CrdsValue::new_unsigned(CrdsData::NodeInstance(NodeInstance::new(
             &mut rng,
             pubkey,

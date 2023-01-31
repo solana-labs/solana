@@ -1,10 +1,18 @@
 ---
 title: Transaction Fees
 description: "Transaction fees are the small fees paid to process instructions on the network. These fees are based on computation and an optional prioritization fee."
-keywords: "instruction fee, processing fee, storage fee, low fee blockchain, gas, gwei, cheap network, affordable blockchain"
+keywords:
+  - instruction fee
+  - processing fee
+  - storage fee
+  - low fee blockchain
+  - gas
+  - gwei
+  - cheap network
+  - affordable blockchain
 ---
 
-The small fees paid to process [instructions](./terminology.md#instruction) on the Solana blockchain are known as "_transaction fees_".
+The small fees paid to process [instructions](./../../terminology.md#instruction) on the Solana blockchain are known as "_transaction fees_".
 
 As each transaction (which contains one or more instructions) is sent through the network, it gets processed by the current leader validation-client. Once confirmed as a global state transaction, this _transaction fee_ is paid to the network to help support the economic design of the Solana blockchain.
 
@@ -84,4 +92,4 @@ Note that adding a `RequestUnits` compute budget instruction will take up 39 ext
 
 ### Calculate transaction fees with RPC API
 
-In order to simplify fee calculation for developers, a new `getFeeForMessage` RPC API is planned to be released in v1.9 of the Solana protocol. This new method accepts a blockhash along with an encoded transaction message and will return the amount of fees that would be deducted if the transaction message is signed, sent, and processed by the cluster. Full documentation can be found on the "edge" version of the Solana docs here: [https://edge.docs.solana.com/developing/clients/jsonrpc-api#getfeeformessage](https://edge.docs.solana.com/developing/clients/jsonrpc-api#getfeeformessage)
+In order to simplify fee calculation for developers, a new [`getFeeForMessage`](/api/http#getfeeformessage) RPC API is planned to be released in v1.9 of the Solana protocol. This new method accepts a blockhash along with an encoded transaction message and will return the amount of fees that would be deducted if the transaction message is signed, sent, and processed by the cluster.

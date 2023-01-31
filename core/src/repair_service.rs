@@ -760,7 +760,9 @@ impl RepairService {
 mod test {
     use {
         super::*,
-        solana_gossip::{cluster_info::Node, contact_info::ContactInfo},
+        solana_gossip::{
+            cluster_info::Node, legacy_contact_info::LegacyContactInfo as ContactInfo,
+        },
         solana_ledger::{
             blockstore::{
                 make_chaining_slot_entries, make_many_slot_entries, make_slot_entries, Blockstore,
@@ -770,17 +772,18 @@ mod test {
             shred::max_ticks_per_n_shreds,
         },
         solana_runtime::bank::Bank,
-        solana_sdk::signature::Keypair,
+        solana_sdk::{
+            signature::{Keypair, Signer},
+            timing::timestamp,
+        },
         solana_streamer::socket::SocketAddrSpace,
         std::collections::HashSet,
     };
 
-    fn new_test_cluster_info(contact_info: ContactInfo) -> ClusterInfo {
-        ClusterInfo::new(
-            contact_info,
-            Arc::new(Keypair::new()),
-            SocketAddrSpace::Unspecified,
-        )
+    fn new_test_cluster_info() -> ClusterInfo {
+        let keypair = Arc::new(Keypair::new());
+        let contact_info = ContactInfo::new_localhost(&keypair.pubkey(), timestamp());
+        ClusterInfo::new(contact_info, keypair, SocketAddrSpace::Unspecified)
     }
 
     #[test]
@@ -1114,7 +1117,7 @@ mod test {
         let blockstore_path = get_tmp_ledger_path!();
         let blockstore = Blockstore::open(&blockstore_path).unwrap();
         let cluster_slots = ClusterSlots::default();
-        let cluster_info = Arc::new(new_test_cluster_info(Node::new_localhost().info));
+        let cluster_info = Arc::new(new_test_cluster_info());
         let identity_keypair = cluster_info.keypair().clone();
         let serve_repair = ServeRepair::new(
             cluster_info,
@@ -1214,7 +1217,7 @@ mod test {
             Pubkey::default(),
             UdpSocket::bind("0.0.0.0:0").unwrap().local_addr().unwrap(),
         ));
-        let cluster_info = Arc::new(new_test_cluster_info(Node::new_localhost().info));
+        let cluster_info = Arc::new(new_test_cluster_info());
         let serve_repair = ServeRepair::new(
             cluster_info.clone(),
             bank_forks,
