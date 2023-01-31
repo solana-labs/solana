@@ -614,6 +614,10 @@ pub mod delay_visibility_of_program_deployment {
     solana_sdk::declare_id!("GmuBvtFb2aHfSfMXpuFeWZGHyDeCLPS79s48fmCWCfM5");
 }
 
+pub mod apply_cost_tracker_during_replay {
+    solana_sdk::declare_id!("2ry7ygxiYURULZCrypHhveanvP5tzZ4toRwVp89oCNSj");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -762,6 +766,7 @@ lazy_static! {
         (enable_request_heap_frame_ix::id(), "Enable transaction to request heap frame using compute budget instruction #30076"),
         (prevent_rent_paying_rent_recipients::id(), "prevent recipients of rent rewards from ending in rent-paying state #30151"),
         (delay_visibility_of_program_deployment::id(), "delay visibility of program upgrades #30085"),
+        (apply_cost_tracker_during_replay::id(), "apply cost tracker to blocks during replay #29595"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()

@@ -30,7 +30,6 @@ use {
         bank_utils,
         commitment::VOTE_THRESHOLD_SIZE,
         cost_model::CostModel,
-        cost_tracker::CostTrackerError,
         epoch_accounts_hash::EpochAccountsHash,
         prioritization_fee_cache::PrioritizationFeeCache,
         runtime_config::RuntimeConfig,
@@ -40,6 +39,7 @@ use {
     },
     solana_sdk::{
         clock::{Slot, MAX_PROCESSING_AGE},
+        feature_set,
         genesis_config::GenesisConfig,
         hash::Hash,
         pubkey::Pubkey,
@@ -342,34 +342,15 @@ fn execute_batches(
         })
         .collect::<Vec<_>>();
 
-    // TAO TODO - accumulate transaction cost to bank's cost_tracker, retunr error if cost limits
-    // would be breached. 
-    // This change needs to be feature gated
+    if bank
+        .feature_set
+        .is_active(&feature_set::apply_cost_tracker_during_replay::id())
     {
         let mut cost_tracker = bank.write_cost_tracker().unwrap();
         for tx_cost in &tx_costs {
-            match cost_tracker.try_add(tx_cost) {
-                Ok(_block_cost) => (),
-                Err(e) => {
-                    match e {
-                        CostTrackerError::WouldExceedBlockMaxLimit => {
-                            return Err(TransactionError::WouldExceedMaxBlockCostLimit);
-                        }
-                        CostTrackerError::WouldExceedVoteMaxLimit => {
-                            return Err(TransactionError::WouldExceedMaxVoteCostLimit);
-                        }
-                        CostTrackerError::WouldExceedAccountMaxLimit => {
-                            return Err(TransactionError::WouldExceedMaxAccountCostLimit);
-                        }
-                        CostTrackerError::WouldExceedAccountDataBlockLimit => {
-                            return Err(TransactionError::WouldExceedAccountDataBlockLimit);
-                        }
-                        CostTrackerError::WouldExceedAccountDataTotalLimit => {
-                            return Err(TransactionError::WouldExceedAccountDataTotalLimit);
-                        }
-                    }
-                }
-            }
+            cost_tracker
+                .try_add(tx_cost)
+                .map_err(TransactionError::from)?;
         }
     }
 
@@ -1802,7 +1783,6 @@ pub mod tests {
         solana_sdk::{
             account::{AccountSharedData, WritableAccount},
             epoch_schedule::EpochSchedule,
-            feature_set,
             hash::Hash,
             native_token::LAMPORTS_PER_SOL,
             pubkey::Pubkey,
