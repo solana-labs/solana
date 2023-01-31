@@ -26,7 +26,6 @@ import {
   any,
 } from 'superstruct';
 import type {Struct} from 'superstruct';
-import {Client as RpcWebSocketClient} from 'rpc-websockets';
 import RpcClient from 'jayson/lib/client/browser';
 import {JSONRPCError} from 'jayson';
 
@@ -36,6 +35,7 @@ import fetchImpl, {Response} from './fetch-impl';
 import {DurableNonce, NonceAccount} from './nonce-account';
 import {PublicKey} from './publickey';
 import {Signer} from './keypair';
+import RpcWebSocketClient from './rpc-websocket';
 import {MS_PER_SLOT} from './timing';
 import {
   Transaction,
@@ -5803,7 +5803,12 @@ export class Connection {
     this._rpcWebSocketConnected = true;
     this._rpcWebSocketHeartbeat = setInterval(() => {
       // Ping server every 5s to prevent idle timeouts
-      this._rpcWebSocket.notify('ping').catch(() => {});
+      (async () => {
+        try {
+          await this._rpcWebSocket.notify('ping');
+          // eslint-disable-next-line no-empty
+        } catch {}
+      })();
     }, 5000);
     this._updateSubscriptions();
   }

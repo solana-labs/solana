@@ -1,5 +1,4 @@
 import chai from 'chai';
-import {Client} from 'rpc-websockets';
 import {stub, SinonStubbedInstance, SinonSpy, spy} from 'sinon';
 import sinonChai from 'sinon-chai';
 
@@ -15,6 +14,7 @@ import {
   SlotChangeCallback,
   SlotUpdateCallback,
 } from '../src';
+import type Client from '../src/rpc-websocket';
 import {url} from './url';
 
 chai.use(sinonChai);

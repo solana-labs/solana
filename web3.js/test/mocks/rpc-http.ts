@@ -2,7 +2,7 @@ import bs58 from 'bs58';
 import BN from 'bn.js';
 import * as mockttp from 'mockttp';
 
-import {mockRpcMessage} from './rpc-websockets';
+import {mockRpcMessage} from './rpc-websocket';
 import {Connection, PublicKey, Transaction, Signer} from '../../src';
 import invariant from '../../src/utils/assert';
 import type {Commitment, HttpHeaders, RpcParams} from '../../src/connection';

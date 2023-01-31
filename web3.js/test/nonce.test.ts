@@ -12,7 +12,7 @@ import {
 import {NONCE_ACCOUNT_LENGTH} from '../src/nonce-account';
 import {MOCK_PORT, url} from './url';
 import {helpers, mockRpcResponse, mockServer} from './mocks/rpc-http';
-import {stubRpcWebSocket, restoreRpcWebSocket} from './mocks/rpc-websockets';
+import {stubRpcWebSocket, restoreRpcWebSocket} from './mocks/rpc-websocket';
 
 const expectedData = (authorizedPubkey: PublicKey): [string, string] => {
   const expectedData = Buffer.alloc(NONCE_ACCOUNT_LENGTH);
