@@ -28,7 +28,10 @@ use {
     solana_rpc_client::rpc_client::RpcClient,
     solana_rpc_client_api::config::RpcLeaderScheduleConfig,
     solana_runtime::{
-        accounts_db::{AccountShrinkThreshold, AccountsDb, AccountsDbConfig, FillerAccountsConfig},
+        accounts_db::{
+            AccountShrinkThreshold, AccountsDb, AccountsDbConfig, CreateAncientStorage,
+            FillerAccountsConfig,
+        },
         accounts_index::{
             AccountIndex, AccountSecondaryIndexes, AccountSecondaryIndexesIncludeExclude,
             AccountsIndexConfig, IndexLimitMb,
@@ -1046,6 +1049,10 @@ pub fn main() {
             .map(|mb| mb * MB as u64),
         ancient_append_vec_offset: value_t!(matches, "accounts_db_ancient_append_vecs", i64).ok(),
         exhaustively_verify_refcounts: matches.is_present("accounts_db_verify_refcounts"),
+        create_ancient_storage: matches
+            .is_present("accounts_db_create_ancient_storage_packed")
+            .then_some(CreateAncientStorage::Pack)
+            .unwrap_or_default(),
         ..AccountsDbConfig::default()
     };
 

@@ -152,6 +152,15 @@ pub enum IncludeSlotInHash {
     IrrelevantAssertOnUse,
 }
 
+#[derive(Debug, Default, Clone, Copy)]
+pub enum CreateAncientStorage {
+    /// ancient storages are created by appending
+    #[default]
+    Append,
+    /// ancient storages are created by 1-shot write to pack multiple accounts together more efficiently with new formats
+    Pack,
+}
+
 #[derive(Default)]
 /// hold alive accounts and bytes used by those accounts
 /// alive means in the accounts index
@@ -425,6 +434,7 @@ pub const ACCOUNTS_DB_CONFIG_FOR_TESTING: AccountsDbConfig = AccountsDbConfig {
     skip_initial_hash_calc: false,
     exhaustively_verify_refcounts: false,
     assert_stakes_cache_consistency: true,
+    create_ancient_storage: CreateAncientStorage::Append,
 };
 pub const ACCOUNTS_DB_CONFIG_FOR_BENCHMARKS: AccountsDbConfig = AccountsDbConfig {
     index: Some(ACCOUNTS_INDEX_CONFIG_FOR_BENCHMARKS),
@@ -435,6 +445,7 @@ pub const ACCOUNTS_DB_CONFIG_FOR_BENCHMARKS: AccountsDbConfig = AccountsDbConfig
     skip_initial_hash_calc: false,
     exhaustively_verify_refcounts: false,
     assert_stakes_cache_consistency: false,
+    create_ancient_storage: CreateAncientStorage::Append,
 };
 
 pub type BinnedHashData = Vec<Vec<CalculateHashIntermediate>>;
@@ -494,6 +505,8 @@ pub struct AccountsDbConfig {
     pub exhaustively_verify_refcounts: bool,
     /// when stakes cache consistency check occurs, assert that cached accounts match accounts db
     pub assert_stakes_cache_consistency: bool,
+    /// how to create ancient storages
+    pub create_ancient_storage: CreateAncientStorage,
 }
 
 #[cfg(not(test))]
@@ -1287,7 +1300,12 @@ pub struct AccountsDb {
 
     pub(crate) storage: AccountStorage,
 
+    /// from AccountsDbConfig
     pub(crate) assert_stakes_cache_consistency: bool,
+
+    #[allow(dead_code)]
+    /// from AccountsDbConfig
+    create_ancient_storage: CreateAncientStorage,
 
     pub accounts_cache: AccountsCache,
 
@@ -2306,6 +2324,7 @@ impl AccountsDb {
 
         AccountsDb {
             assert_stakes_cache_consistency: false,
+            create_ancient_storage: CreateAncientStorage::Append,
             verify_accounts_hash_in_bg: VerifyAccountsHashInBackground::default(),
             filler_accounts_per_slot: AtomicU64::default(),
             filler_account_slots_remaining: AtomicU64::default(),
@@ -2429,6 +2448,11 @@ impl AccountsDb {
             .map(|config| config.assert_stakes_cache_consistency)
             .unwrap_or_default();
 
+        let create_ancient_storage = accounts_db_config
+            .as_ref()
+            .map(|config| config.create_ancient_storage)
+            .unwrap_or(CreateAncientStorage::Append);
+
         let filler_account_suffix = if filler_accounts_config.count > 0 {
             Some(solana_sdk::pubkey::new_rand())
         } else {
@@ -2446,6 +2470,7 @@ impl AccountsDb {
             filler_accounts_config,
             filler_account_suffix,
             assert_stakes_cache_consistency,
+            create_ancient_storage,
             write_cache_limit_bytes: accounts_db_config
                 .as_ref()
                 .and_then(|x| x.write_cache_limit_bytes),
