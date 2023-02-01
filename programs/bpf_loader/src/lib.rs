@@ -680,13 +680,19 @@ fn process_loader_upgradeable_instruction(
                             ..programdata_data_offset.saturating_add(buffer_data_len),
                     )
                     .ok_or(InstructionError::AccountDataTooSmall)?;
-                let buffer =
+                let mut buffer =
                     instruction_context.try_borrow_instruction_account(transaction_context, 3)?;
                 let src_slice = buffer
                     .get_data()
                     .get(buffer_data_offset..)
                     .ok_or(InstructionError::AccountDataTooSmall)?;
                 dst_slice.copy_from_slice(src_slice);
+                if invoke_context
+                    .feature_set
+                    .is_active(&enable_program_redeployment_cooldown::id())
+                {
+                    buffer.set_data_length(UpgradeableLoaderState::size_of_buffer(0))?;
+                }
             }
 
             // Update the Program account
@@ -895,6 +901,12 @@ fn process_loader_upgradeable_instruction(
             )?;
             buffer.set_lamports(0)?;
             programdata.set_lamports(programdata_balance_required)?;
+            if invoke_context
+                .feature_set
+                .is_active(&enable_program_redeployment_cooldown::id())
+            {
+                buffer.set_data_length(UpgradeableLoaderState::size_of_buffer(0))?;
+            }
 
             ic_logger_msg!(log_collector, "Upgraded program {:?}", new_program_id);
         }
