@@ -12,6 +12,7 @@ use {
     solana_streamer::streamer::StakedNodes,
     solana_udp_client::UdpConnectionManager,
     std::{
+        error::Error,
         net::{IpAddr, Ipv4Addr, SocketAddr},
         sync::{Arc, RwLock},
     },
@@ -61,6 +62,23 @@ impl ConnectionCache {
         Self { cache }
     }
 
+    #[deprecated(since="1.15.0", note="This method does not do anything. Please use `new_with_client_options` instead.")]
+    pub fn update_client_certificate(
+        &mut self,
+        _keypair: &Keypair,
+        _ipaddr: IpAddr,
+    ) -> Result<(), Box<dyn Error>> {
+        Ok(())
+    }
+
+    #[deprecated(since="1.15.0", note="This method does not do anything. Please use `new_with_client_options` instead.")]
+    pub fn set_staked_nodes(
+        &mut self,
+        _staked_nodes: &Arc<RwLock<StakedNodes>>,
+        _client_pubkey: &Pubkey,
+    ) {
+    }
+    
     pub fn with_udp(connection_pool_size: usize) -> Self {
         // The minimum pool size is 1.
         let connection_pool_size = 1.max(connection_pool_size);
