@@ -6639,7 +6639,7 @@ impl Bank {
             .accounts
             .accounts_db
             .get_bank_hash_stats(slot)
-            .expect("No bank hash stats was found for this bank, that should not be possible");
+            .expect("No bank hash stats were found for this bank, that should not be possible");
         info!(
             "bank frozen: {slot} hash: {hash} accounts_delta: {} signature_count: {} last_blockhash: {} capitalization: {}{}, stats: {bank_hash_stats:?}",
             accounts_delta_hash.0,
