@@ -37,7 +37,7 @@ solana-sdk-macro = { path = "../macro", version = "=1.16.0" }
 thiserror = "1.0"
 
 [target.'cfg(not(target_os = "solana"))'.dependencies]
-ark-bn254 = "0.3.0"
+ark-bn254 = "0.4.0"
 ark-ec = "0.3.0"
 ark-ff = "0.3.0"
 array-bytes = "=1.4.1"
