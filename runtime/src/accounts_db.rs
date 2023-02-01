@@ -4887,28 +4887,16 @@ impl AccountsDb {
         }
     }
 
-    /// Insert a new bank hash for `slot`
+    /// Insert a default bank hash stats for `slot`
     ///
-    /// The new bank hash is empty/default except for the slot.  This fn is called when creating a
-    /// new bank from parent.  The bank hash for this slot is updated with real values later.
-    pub fn insert_default_bank_hash(&self, slot: Slot, parent_slot: Slot) {
+    /// This fn is called when creating a new bank from parent.
+    pub fn insert_default_bank_hash_stats(&self, slot: Slot, parent_slot: Slot) {
         let mut bank_hash_stats = self.bank_hash_stats.lock().unwrap();
         if bank_hash_stats.get(&slot).is_some() {
-            error!(
-                "set_hash: already exists; multiple forks with shared slot {} as child (parent: {})!?",
-                slot, parent_slot,
-            );
+            error!( "set_hash: already exists; multiple forks with shared slot {slot} as child (parent: {parent_slot})!?");
             return;
         }
         bank_hash_stats.insert(slot, BankHashStats::default());
-        drop(bank_hash_stats);
-
-        let old_accounts_delta_hash =
-            self.set_accounts_delta_hash(slot, AccountsDeltaHash::default());
-        assert!(old_accounts_delta_hash.is_none());
-
-        let old_accounts_hash = self.set_accounts_hash(slot, AccountsHash::default());
-        assert!(old_accounts_hash.is_none());
     }
 
     pub fn load(
@@ -11911,13 +11899,13 @@ pub mod tests {
         accounts.add_root(0);
 
         let mut current_slot = 1;
-        accounts.insert_default_bank_hash(current_slot, current_slot - 1);
+        accounts.insert_default_bank_hash_stats(current_slot, current_slot - 1);
         accounts.store_for_tests(current_slot, &[(&pubkey, &account)]);
         accounts.calculate_accounts_delta_hash(current_slot);
         accounts.add_root_and_flush_write_cache(current_slot);
 
         current_slot += 1;
-        accounts.insert_default_bank_hash(current_slot, current_slot - 1);
+        accounts.insert_default_bank_hash_stats(current_slot, current_slot - 1);
         accounts.store_for_tests(current_slot, &[(&pubkey, &zero_lamport_account)]);
         accounts.calculate_accounts_delta_hash(current_slot);
         accounts.add_root_and_flush_write_cache(current_slot);
@@ -11926,7 +11914,7 @@ pub mod tests {
 
         // Otherwise slot 2 will not be removed
         current_slot += 1;
-        accounts.insert_default_bank_hash(current_slot, current_slot - 1);
+        accounts.insert_default_bank_hash_stats(current_slot, current_slot - 1);
         accounts.calculate_accounts_delta_hash(current_slot);
         accounts.add_root_and_flush_write_cache(current_slot);
 
