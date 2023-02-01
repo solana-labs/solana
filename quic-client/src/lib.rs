@@ -71,10 +71,7 @@ impl ConnectionPool for QuicPool {
         config: &dyn NewConnectionConfig,
         addr: &SocketAddr,
     ) -> Arc<dyn BaseClientConnection> {
-        let config: &QuicConfig = match config.as_any().downcast_ref::<QuicConfig>() {
-            Some(b) => b,
-            None => panic!("Expecting a QuicConfig!"),
-        };
+        let config = QuicConfig::downcast_ref(config);
         Arc::new(Quic(Arc::new(QuicClient::new(
             self.endpoint.clone(),
             *addr,
@@ -169,6 +166,14 @@ impl QuicConfig {
     pub fn update_client_endpoint(&mut self, client_endpoint: Endpoint) {
         self.client_endpoint = Some(client_endpoint);
     }
+
+    /// Convenient function to downcast a generic NewConnectionConfig reference to QuicConfig
+    pub fn downcast_ref(config: &dyn NewConnectionConfig) -> &Self {
+        match config.as_any().downcast_ref::<QuicConfig>() {
+            Some(config) => config,
+            None => panic!("Expecting a QuicConfig!"),
+        }
+    }
 }
 
 pub struct Quic(Arc<QuicClient>);
@@ -208,11 +213,7 @@ impl ConnectionManager for QuicConnectionManager {
             endpoint: Arc::new(self.connection_config.as_ref().map_or(
                 QuicLazyInitializedEndpoint::default(),
                 |config| {
-                    let config: &QuicConfig = match config.as_any().downcast_ref::<QuicConfig>() {
-                        Some(b) => b,
-                        None => panic!("Expecting a QuicConfig!"),
-                    };
-
+                    let config = QuicConfig::downcast_ref(config.as_ref());
                     config.create_endpoint()
                 },
             )),
@@ -243,9 +244,6 @@ impl QuicConnectionManager {
 mod tests {
     use {
         super::*,
-        solana_connection_cache::connection_cache::{
-            ConnectionCache, DEFAULT_CONNECTION_POOL_SIZE,
-        },
         solana_sdk::quic::{
             QUIC_MAX_UNSTAKED_CONCURRENT_STREAMS, QUIC_MIN_STAKED_CONCURRENT_STREAMS,
             QUIC_TOTAL_STAKED_CONCURRENT_STREAMS,
@@ -255,17 +253,8 @@ mod tests {
     #[test]
     fn test_connection_cache_max_parallel_chunks() {
         solana_logger::setup();
-        let connection_manager = Box::<QuicConnectionManager>::default();
-        let connection_cache =
-            ConnectionCache::new(connection_manager, DEFAULT_CONNECTION_POOL_SIZE).unwrap();
-        let mut connection_config = connection_cache.connection_config;
 
-        let connection_config: &mut QuicConfig =
-            match connection_config.as_mut_any().downcast_mut::<QuicConfig>() {
-                Some(b) => b,
-                None => panic!("Expecting a QuicConfig!"),
-            };
-
+        let mut connection_config = QuicConfig::new().unwrap();
         assert_eq!(
             connection_config.compute_max_parallel_streams(),
             QUIC_MAX_UNSTAKED_CONCURRENT_STREAMS

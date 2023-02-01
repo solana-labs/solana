@@ -62,7 +62,10 @@ impl ConnectionCache {
         Self { cache }
     }
 
-    #[deprecated(since="1.15.0", note="This method does not do anything. Please use `new_with_client_options` instead.")]
+    #[deprecated(
+        since = "1.15.0",
+        note = "This method does not do anything. Please use `new_with_client_options` instead."
+    )]
     pub fn update_client_certificate(
         &mut self,
         _keypair: &Keypair,
@@ -71,14 +74,17 @@ impl ConnectionCache {
         Ok(())
     }
 
-    #[deprecated(since="1.15.0", note="This method does not do anything. Please use `new_with_client_options` instead.")]
+    #[deprecated(
+        since = "1.15.0",
+        note = "This method does not do anything. Please use `new_with_client_options` instead."
+    )]
     pub fn set_staked_nodes(
         &mut self,
         _staked_nodes: &Arc<RwLock<StakedNodes>>,
         _client_pubkey: &Pubkey,
     ) {
     }
-    
+
     pub fn with_udp(connection_pool_size: usize) -> Self {
         // The minimum pool size is 1.
         let connection_pool_size = 1.max(connection_pool_size);

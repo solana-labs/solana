@@ -75,7 +75,7 @@ lazy_static! {
         .unwrap();
 }
 
-pub async fn send_data_async(
+async fn send_data_async(
     connection: Arc<NonblockingQuicConnection>,
     buffer: Vec<u8>,
 ) -> TransportResult<()> {
@@ -88,7 +88,7 @@ pub async fn send_data_async(
     handle_send_result(result, connection)
 }
 
-pub async fn send_data_batch_async(
+async fn send_data_batch_async(
     connection: Arc<NonblockingQuicConnection>,
     buffers: Vec<Vec<u8>>,
 ) -> TransportResult<()> {
@@ -104,7 +104,7 @@ pub async fn send_data_batch_async(
 }
 
 /// Check the send result and update stats if timedout. Returns the checked result.
-pub fn handle_send_result(
+fn handle_send_result(
     result: Result<Result<(), TransportError>, tokio::time::error::Elapsed>,
     connection: Arc<NonblockingQuicConnection>,
 ) -> Result<(), TransportError> {
