@@ -120,7 +120,8 @@ use {
         feature,
         feature_set::{
             self, disable_fee_calculator, enable_early_verification_of_account_modifications,
-            remove_deprecated_request_unit_ix, use_default_units_in_fee_calculation, FeatureSet,
+            remove_congestion_multiplier_from_fee_calculation, remove_deprecated_request_unit_ix,
+            use_default_units_in_fee_calculation, FeatureSet,
         },
         fee::FeeStructure,
         fee_calculator::{FeeCalculator, FeeRateGovernor},
@@ -3440,6 +3441,8 @@ impl Bank {
             !self
                 .feature_set
                 .is_active(&remove_deprecated_request_unit_ix::id()),
+            self.feature_set
+                .is_active(&remove_congestion_multiplier_from_fee_calculation::id()),
         ))
     }
 
@@ -3484,6 +3487,8 @@ impl Bank {
             !self
                 .feature_set
                 .is_active(&remove_deprecated_request_unit_ix::id()),
+            self.feature_set
+                .is_active(&remove_congestion_multiplier_from_fee_calculation::id()),
         )
     }
 
@@ -4668,13 +4673,16 @@ impl Bank {
         fee_structure: &FeeStructure,
         use_default_units_per_instruction: bool,
         support_request_units_deprecated: bool,
+        remove_congestion_multiplier: bool,
     ) -> u64 {
         // Fee based on compute units and signatures
-        const BASE_CONGESTION: f64 = 5_000.0;
-        let current_congestion = BASE_CONGESTION.max(lamports_per_signature as f64);
         let congestion_multiplier = if lamports_per_signature == 0 {
             0.0 // test only
+        } else if remove_congestion_multiplier {
+            1.0 // multiplier that has no effect
         } else {
+            const BASE_CONGESTION: f64 = 5_000.0;
+            let current_congestion = BASE_CONGESTION.max(lamports_per_signature as f64);
             BASE_CONGESTION / current_congestion
         };
 
@@ -4752,6 +4760,8 @@ impl Bank {
                     !self
                         .feature_set
                         .is_active(&remove_deprecated_request_unit_ix::id()),
+                    self.feature_set
+                        .is_active(&remove_congestion_multiplier_from_fee_calculation::id()),
                 );
 
                 // In case of instruction error, even though no accounts
@@ -10877,6 +10887,7 @@ pub(crate) mod tests {
             &FeeStructure::default(),
             true,
             false,
+            true,
         );
 
         let (expected_fee_collected, expected_fee_burned) =
@@ -11058,6 +11069,7 @@ pub(crate) mod tests {
             &FeeStructure::default(),
             true,
             false,
+            true,
         );
         assert_eq!(
             bank.get_balance(&mint_keypair.pubkey()),
@@ -11076,6 +11088,7 @@ pub(crate) mod tests {
             &FeeStructure::default(),
             true,
             false,
+            true,
         );
         assert_eq!(
             bank.get_balance(&mint_keypair.pubkey()),
@@ -11192,6 +11205,7 @@ pub(crate) mod tests {
                             &FeeStructure::default(),
                             true,
                             false,
+                            true,
                         ) * 2
                     )
                     .0
@@ -18393,6 +18407,7 @@ pub(crate) mod tests {
                 },
                 true,
                 false,
+                true,
             ),
             0
         );
@@ -18408,6 +18423,7 @@ pub(crate) mod tests {
                 },
                 true,
                 false,
+                true,
             ),
             1
         );
@@ -18428,6 +18444,7 @@ pub(crate) mod tests {
                 },
                 true,
                 false,
+                true,
             ),
             4
         );
@@ -18447,7 +18464,7 @@ pub(crate) mod tests {
         let message =
             SanitizedMessage::try_from(Message::new(&[], Some(&Pubkey::new_unique()))).unwrap();
         assert_eq!(
-            Bank::calculate_fee(&message, 1, &fee_structure, true, false),
+            Bank::calculate_fee(&message, 1, &fee_structure, true, false, true),
             max_fee + lamports_per_signature
         );
 
@@ -18459,7 +18476,7 @@ pub(crate) mod tests {
             SanitizedMessage::try_from(Message::new(&[ix0, ix1], Some(&Pubkey::new_unique())))
                 .unwrap();
         assert_eq!(
-            Bank::calculate_fee(&message, 1, &fee_structure, true, false),
+            Bank::calculate_fee(&message, 1, &fee_structure, true, false, true),
             max_fee + 3 * lamports_per_signature
         );
 
@@ -18492,7 +18509,7 @@ pub(crate) mod tests {
                 Some(&Pubkey::new_unique()),
             ))
             .unwrap();
-            let fee = Bank::calculate_fee(&message, 1, &fee_structure, true, false);
+            let fee = Bank::calculate_fee(&message, 1, &fee_structure, true, false, true);
             assert_eq!(
                 fee,
                 lamports_per_signature + prioritization_fee_details.get_fee()
@@ -18531,7 +18548,7 @@ pub(crate) mod tests {
         ))
         .unwrap();
         assert_eq!(
-            Bank::calculate_fee(&message, 1, &fee_structure, true, false),
+            Bank::calculate_fee(&message, 1, &fee_structure, true, false, true),
             2
         );
 
@@ -18543,7 +18560,7 @@ pub(crate) mod tests {
         ))
         .unwrap();
         assert_eq!(
-            Bank::calculate_fee(&message, 1, &fee_structure, true, false),
+            Bank::calculate_fee(&message, 1, &fee_structure, true, false, true),
             11
         );
     }
@@ -20256,5 +20273,64 @@ pub(crate) mod tests {
                 .rent_epoch(),
             RENT_EXEMPT_RENT_EPOCH
         );
+    }
+
+    #[test]
+    fn test_calculate_fee_with_congestion_multiplier() {
+        let lamports_scale: u64 = 5;
+        let base_lamports_per_signature: u64 = 5_000;
+        let cheap_lamports_per_signature: u64 = base_lamports_per_signature / lamports_scale;
+        let expensive_lamports_per_signature: u64 = base_lamports_per_signature * lamports_scale;
+        let signature_count: u64 = 2;
+        let signature_fee: u64 = 10;
+        let fee_structure = FeeStructure {
+            lamports_per_signature: signature_fee,
+            ..FeeStructure::default()
+        };
+
+        // Two signatures, double the fee.
+        let key0 = Pubkey::new_unique();
+        let key1 = Pubkey::new_unique();
+        let ix0 = system_instruction::transfer(&key0, &key1, 1);
+        let ix1 = system_instruction::transfer(&key1, &key0, 1);
+        let message = SanitizedMessage::try_from(Message::new(&[ix0, ix1], Some(&key0))).unwrap();
+
+        // assert when lamports_per_signature is less than BASE_LAMPORTS, turnning on/off
+        // congestion_multiplier has no effect on fee.
+        for remove_congestion_multiplier in [true, false] {
+            assert_eq!(
+                Bank::calculate_fee(
+                    &message,
+                    cheap_lamports_per_signature,
+                    &fee_structure,
+                    true,
+                    false,
+                    remove_congestion_multiplier,
+                ),
+                signature_fee * signature_count
+            );
+        }
+
+        // assert when lamports_per_signature is more than BASE_LAMPORTS, turnning on/off
+        // congestion_multiplier will change calculated fee.
+        for remove_congestion_multiplier in [true, false] {
+            let denominator: u64 = if remove_congestion_multiplier {
+                1
+            } else {
+                lamports_scale
+            };
+
+            assert_eq!(
+                Bank::calculate_fee(
+                    &message,
+                    expensive_lamports_per_signature,
+                    &fee_structure,
+                    true,
+                    false,
+                    remove_congestion_multiplier,
+                ),
+                signature_fee * signature_count / denominator
+            );
+        }
     }
 }
