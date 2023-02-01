@@ -3690,7 +3690,7 @@ impl AccountsDb {
     /// unref and optionally store a reference to all pubkeys that are in the index, but dead in `unrefed_pubkeys`
     /// return sum of account size for all alive accounts
     fn load_accounts_index_for_shrink<'a, T: ShrinkCollectRefs<'a>>(
-        &'a self,
+        &self,
         accounts: &'a [StoredAccountMeta<'a>],
         stats: &ShrinkStats,
         slot_to_shrink: Slot,
@@ -3781,7 +3781,7 @@ impl AccountsDb {
     /// shared code for shrinking normal slots and combining into ancient append vecs
     /// note 'unique_accounts' is passed by ref so we can return references to data within it, avoiding self-references
     pub(crate) fn shrink_collect<'a: 'b, 'b, T: ShrinkCollectRefs<'b>>(
-        &'a self,
+        &self,
         store: &'a Arc<AccountStorageEntry>,
         unique_accounts: &'b GetUniqueAccountsResult<'b>,
         stats: &ShrinkStats,
