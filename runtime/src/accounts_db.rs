@@ -9536,9 +9536,6 @@ pub mod tests {
         fn len(&self) -> usize {
             self.1.len()
         }
-        fn contains_multiple_slots(&self) -> bool {
-            false
-        }
         fn include_slot_in_hash(&self) -> IncludeSlotInHash {
             INCLUDE_SLOT_IN_HASH_TESTS
         }

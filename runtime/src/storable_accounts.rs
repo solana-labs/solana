@@ -31,7 +31,9 @@ pub trait StorableAccounts<'a, T: ReadableAccount + Sync>: Sync {
     fn len(&self) -> usize;
     /// are there accounts from multiple slots
     /// only used for an assert
-    fn contains_multiple_slots(&self) -> bool;
+    fn contains_multiple_slots(&self) -> bool {
+        false
+    }
     /// true iff hashing these accounts should include the slot
     fn include_slot_in_hash(&self) -> IncludeSlotInHash;
 
@@ -87,9 +89,6 @@ impl<'a, T: ReadableAccount + Sync> StorableAccounts<'a, T> for StorableAccounts
     fn len(&self) -> usize {
         self.accounts.len()
     }
-    fn contains_multiple_slots(&self) -> bool {
-        false
-    }
     fn include_slot_in_hash(&self) -> IncludeSlotInHash {
         self.include_slot_in_hash
     }
@@ -116,9 +115,6 @@ impl<'a, T: ReadableAccount + Sync> StorableAccounts<'a, T>
     fn len(&self) -> usize {
         self.1.len()
     }
-    fn contains_multiple_slots(&self) -> bool {
-        false
-    }
     fn include_slot_in_hash(&self) -> IncludeSlotInHash {
         self.2
     }
@@ -144,9 +140,6 @@ impl<'a> StorableAccounts<'a, StoredAccountMeta<'a>>
     }
     fn len(&self) -> usize {
         self.1.len()
-    }
-    fn contains_multiple_slots(&self) -> bool {
-        false
     }
     fn include_slot_in_hash(&self) -> IncludeSlotInHash {
         self.2
@@ -291,9 +284,6 @@ impl<'a> StorableAccounts<'a, StoredAccountMeta<'a>>
     }
     fn len(&self) -> usize {
         self.1.len()
-    }
-    fn contains_multiple_slots(&self) -> bool {
-        false
     }
     fn include_slot_in_hash(&self) -> IncludeSlotInHash {
         self.2
