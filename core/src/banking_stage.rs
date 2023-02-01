@@ -453,20 +453,16 @@ impl BankingStage {
 
                 let mut packet_deserializer = PacketDeserializer::new(packet_receiver);
                 let poh_recorder = poh_recorder.clone();
-                let cluster_info = cluster_info.clone();
                 let transaction_status_sender = transaction_status_sender.clone();
                 let replay_vote_sender = replay_vote_sender.clone();
-                let data_budget = data_budget.clone();
-                let connection_cache = connection_cache.clone();
-                let bank_forks = bank_forks.clone();
 
                 let decision_maker = DecisionMaker::new(cluster_info.id(), poh_recorder.clone());
                 let forwarder = Forwarder::new(
                     poh_recorder.clone(),
-                    bank_forks,
-                    cluster_info,
-                    connection_cache,
-                    data_budget,
+                    bank_forks.clone(),
+                    cluster_info.clone(),
+                    connection_cache.clone(),
+                    data_budget.clone(),
                 );
 
                 Builder::new()
