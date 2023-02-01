@@ -164,18 +164,18 @@ pub enum CreateAncientStorage {
 #[derive(Default)]
 /// hold alive accounts and bytes used by those accounts
 /// alive means in the accounts index
-struct AliveAccounts<'a> {
-    accounts: Vec<&'a StoredAccountMeta<'a>>,
-    bytes: usize,
+pub(crate) struct AliveAccounts<'a> {
+    pub(crate) accounts: Vec<&'a StoredAccountMeta<'a>>,
+    pub(crate) bytes: usize,
 }
 
 /// separate pubkeys into those with a single refcount and those with > 1 refcount
-struct ShrinkCollectAliveSeparatedByRefs<'a> {
-    one_ref: AliveAccounts<'a>,
-    many_refs: AliveAccounts<'a>,
+pub(crate) struct ShrinkCollectAliveSeparatedByRefs<'a> {
+    pub(crate) one_ref: AliveAccounts<'a>,
+    pub(crate) many_refs: AliveAccounts<'a>,
 }
 
-trait ShrinkCollectRefs<'a>: Sync + Send {
+pub(crate) trait ShrinkCollectRefs<'a>: Sync + Send {
     fn with_capacity(capacity: usize) -> Self;
     fn collect(&mut self, other: Self);
     fn add(&mut self, ref_count: u64, account: &'a StoredAccountMeta<'a>);
@@ -413,16 +413,16 @@ impl AncientSlotPubkeys {
     }
 }
 
-struct ShrinkCollect<'a, T: ShrinkCollectRefs<'a>> {
-    original_bytes: u64,
-    aligned_total_bytes: u64,
-    unrefed_pubkeys: Vec<&'a Pubkey>,
-    alive_accounts: T,
+pub(crate) struct ShrinkCollect<'a, T: ShrinkCollectRefs<'a>> {
+    pub(crate) original_bytes: u64,
+    pub(crate) aligned_total_bytes: u64,
+    pub(crate) unrefed_pubkeys: Vec<&'a Pubkey>,
+    pub(crate) alive_accounts: T,
     /// total size in storage of all alive accounts
-    alive_total_bytes: usize,
-    total_starting_accounts: usize,
+    pub(crate) alive_total_bytes: usize,
+    pub(crate) total_starting_accounts: usize,
     /// true if all alive accounts are zero lamports
-    all_are_zero_lamports: bool,
+    pub(crate) all_are_zero_lamports: bool,
 }
 
 pub const ACCOUNTS_DB_CONFIG_FOR_TESTING: AccountsDbConfig = AccountsDbConfig {
@@ -1185,7 +1185,7 @@ pub struct BankHashInfo {
     pub stats: BankHashStats,
 }
 
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct StoreAccountsTiming {
     store_accounts_elapsed: u64,
     update_index_elapsed: u64,
@@ -1360,7 +1360,7 @@ pub struct AccountsDb {
 
     pub(crate) shrink_stats: ShrinkStats,
 
-    shrink_ancient_stats: ShrinkAncientStats,
+    pub(crate) shrink_ancient_stats: ShrinkAncientStats,
 
     pub cluster_type: Option<ClusterType>,
 
@@ -1402,7 +1402,7 @@ pub struct AccountsDb {
     filler_accounts_config: FillerAccountsConfig,
     pub filler_account_suffix: Option<Pubkey>,
 
-    active_stats: ActiveStats,
+    pub(crate) active_stats: ActiveStats,
 
     /// number of filler accounts to add for each slot
     pub filler_accounts_per_slot: AtomicU64,
@@ -1854,13 +1854,13 @@ impl CleanAccountsStats {
 }
 
 #[derive(Debug, Default)]
-struct ShrinkAncientStats {
-    shrink_stats: ShrinkStats,
-    ancient_append_vecs_shrunk: AtomicU64,
-    total_us: AtomicU64,
-    random_shrink: AtomicU64,
-    slots_considered: AtomicU64,
-    ancient_scanned: AtomicU64,
+pub(crate) struct ShrinkAncientStats {
+    pub(crate) shrink_stats: ShrinkStats,
+    pub(crate) ancient_append_vecs_shrunk: AtomicU64,
+    pub(crate) total_us: AtomicU64,
+    pub(crate) random_shrink: AtomicU64,
+    pub(crate) slots_considered: AtomicU64,
+    pub(crate) ancient_scanned: AtomicU64,
 }
 
 #[derive(Debug, Default)]
@@ -1989,7 +1989,7 @@ impl ShrinkStats {
 }
 
 impl ShrinkAncientStats {
-    fn report(&self) {
+    pub(crate) fn report(&self) {
         if self.shrink_stats.last_report.should_update(1000) {
             datapoint_info!(
                 "shrink_ancient_stats",
@@ -3748,7 +3748,7 @@ impl AccountsDb {
         }
     }
 
-    fn get_unique_accounts_from_storage_for_shrink<'a>(
+    pub(crate) fn get_unique_accounts_from_storage_for_shrink<'a>(
         &self,
         store: &'a Arc<AccountStorageEntry>,
         stats: &ShrinkStats,
@@ -3763,7 +3763,7 @@ impl AccountsDb {
 
     /// shared code for shrinking normal slots and combining into ancient append vecs
     /// note 'unique_accounts' is passed by ref so we can return references to data within it, avoiding self-references
-    fn shrink_collect<'a: 'b, 'b, T: ShrinkCollectRefs<'b>>(
+    pub(crate) fn shrink_collect<'a: 'b, 'b, T: ShrinkCollectRefs<'b>>(
         &'a self,
         store: &'a Arc<AccountStorageEntry>,
         unique_accounts: &'b GetUniqueAccountsResult<'b>,
@@ -3846,7 +3846,7 @@ impl AccountsDb {
 
     /// common code from shrink and combine_ancient_slots
     /// get rid of all original store_ids in the slot
-    fn remove_old_stores_shrink<'a, T: ShrinkCollectRefs<'a>>(
+    pub(crate) fn remove_old_stores_shrink<'a, T: ShrinkCollectRefs<'a>>(
         &self,
         shrink_collect: &ShrinkCollect<'a, T>,
         slot: Slot,
@@ -3975,7 +3975,7 @@ impl AccountsDb {
     }
 
     #[allow(clippy::too_many_arguments)]
-    fn update_shrink_stats(
+    pub(crate) fn update_shrink_stats(
         shrink_stats: &ShrinkStats,
         find_alive_elapsed_us: u64,
         create_and_insert_store_elapsed_us: u64,
@@ -4554,7 +4554,7 @@ impl AccountsDb {
 
     /// each slot in 'dropped_roots' has been combined into an ancient append vec.
     /// We are done with the slot now forever.
-    fn handle_dropped_roots_for_ancient(&self, dropped_roots: Vec<Slot>) {
+    pub(crate) fn handle_dropped_roots_for_ancient(&self, dropped_roots: Vec<Slot>) {
         if !dropped_roots.is_empty() {
             dropped_roots.iter().for_each(|slot| {
                 self.accounts_index
