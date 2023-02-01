@@ -63,8 +63,8 @@ impl ConnectionCache {
     }
 
     #[deprecated(
-        since = "1.15.0",
-        note = "This method does not do anything. Please use `new_with_client_options` instead."
+        since = "1.16.0",
+        note = "This method does not do anything. Please use `new_with_client_options` instead to set the client certificate."
     )]
     pub fn update_client_certificate(
         &mut self,
@@ -75,8 +75,8 @@ impl ConnectionCache {
     }
 
     #[deprecated(
-        since = "1.15.0",
-        note = "This method does not do anything. Please use `new_with_client_options` instead."
+        since = "1.16.0",
+        note = "This method does not do anything. Please use `new_with_client_options` instead to set staked nodes information."
     )]
     pub fn set_staked_nodes(
         &mut self,

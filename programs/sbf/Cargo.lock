@@ -4535,7 +4535,7 @@ dependencies = [
 
 [[package]]
 name = "solana-connection-cache"
-version = "1.15.0"
+version = "1.16.0"
 dependencies = [
  "async-trait",
  "bincode",
@@ -4547,7 +4547,7 @@ dependencies = [
  "solana-measure",
  "solana-metrics",
  "solana-net-utils",
- "solana-sdk 1.15.0",
+ "solana-sdk 1.16.0",
  "thiserror",
  "tokio",
 ]
@@ -5207,6 +5207,7 @@ dependencies = [
  "solana-rpc-client-api",
  "solana-sdk 1.16.0",
  "solana-streamer",
+ "solana-tpu-client",
  "thiserror",
  "tokio",
 ]
@@ -6132,6 +6133,7 @@ dependencies = [
  "solana-net-utils",
  "solana-sdk 1.16.0",
  "solana-streamer",
+ "solana-tpu-client",
  "thiserror",
  "tokio",
 ]
