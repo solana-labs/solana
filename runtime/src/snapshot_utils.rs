@@ -2347,7 +2347,9 @@ pub fn package_and_archive_full_snapshot(
         None,
     )?;
 
-    let accounts_hash = bank.get_accounts_hash();
+    let accounts_hash = bank
+        .get_accounts_hash()
+        .expect("accounts hash is required for snapshot");
     crate::serde_snapshot::reserialize_bank_with_new_accounts_hash(
         accounts_package.snapshot_links_dir(),
         accounts_package.slot,
@@ -2401,7 +2403,9 @@ pub fn package_and_archive_incremental_snapshot(
         None,
     )?;
 
-    let accounts_hash = bank.get_accounts_hash();
+    let accounts_hash = bank
+        .get_accounts_hash()
+        .expect("accounts hash is required for snapshot");
     crate::serde_snapshot::reserialize_bank_with_new_accounts_hash(
         accounts_package.snapshot_links_dir(),
         accounts_package.slot,

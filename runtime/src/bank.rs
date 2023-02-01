@@ -6638,9 +6638,8 @@ impl Bank {
             .rc
             .accounts
             .accounts_db
-            .get_bank_hash_info(slot)
-            .expect("No bank hash was found for this bank, that should not be possible")
-            .stats;
+            .get_bank_hash_stats(slot)
+            .expect("No bank hash stats were found for this bank, that should not be possible");
         info!(
             "bank frozen: {slot} hash: {hash} accounts_delta: {} signature_count: {} last_blockhash: {} capitalization: {}{}, stats: {bank_hash_stats:?}",
             accounts_delta_hash.0,
@@ -6933,12 +6932,14 @@ impl Bank {
         old
     }
 
-    pub fn get_accounts_hash(&self) -> AccountsHash {
-        self.rc.accounts.accounts_db.get_accounts_hash(self.slot)
+    pub fn get_accounts_hash(&self) -> Option<AccountsHash> {
+        self.rc.accounts.accounts_db.get_accounts_hash(self.slot())
     }
 
     pub fn get_snapshot_hash(&self) -> SnapshotHash {
-        let accounts_hash = self.get_accounts_hash();
+        let accounts_hash = self
+            .get_accounts_hash()
+            .expect("accounts hash is required to get snapshot hash");
         let epoch_accounts_hash = self.get_epoch_accounts_hash_to_serialize();
         SnapshotHash::new(&accounts_hash, epoch_accounts_hash.as_ref())
     }
@@ -12903,12 +12904,12 @@ pub(crate) mod tests {
 
             // Re-adding builtin programs should be no-op
             bank.update_accounts_hash_for_tests();
-            let old_hash = bank.get_accounts_hash();
+            let old_hash = bank.get_accounts_hash().unwrap();
             bank.add_builtin("mock_program1", &vote_id, mock_ix_processor);
             bank.add_builtin("mock_program2", &stake_id, mock_ix_processor);
             add_root_and_flush_write_cache(&bank);
             bank.update_accounts_hash_for_tests();
-            let new_hash = bank.get_accounts_hash();
+            let new_hash = bank.get_accounts_hash().unwrap();
             assert_eq!(old_hash, new_hash);
             {
                 let stakes = bank.stakes_cache.stakes();

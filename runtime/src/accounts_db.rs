@@ -1349,7 +1349,9 @@ pub struct AccountsDb {
 
     pub thread_pool_clean: ThreadPool,
 
-    bank_hashes: RwLock<HashMap<Slot, BankHashInfo>>,
+    accounts_delta_hashes: Mutex<HashMap<Slot, AccountsDeltaHash>>,
+    accounts_hashes: Mutex<HashMap<Slot, AccountsHash>>,
+    bank_hash_stats: Mutex<HashMap<Slot, BankHashStats>>,
 
     pub stats: AccountsStats,
 
@@ -2315,8 +2317,12 @@ impl AccountsDb {
                 .to_path_buf()
         });
 
-        let mut bank_hashes = HashMap::new();
-        bank_hashes.insert(0, BankHashInfo::default());
+        let mut accounts_delta_hashes = HashMap::new();
+        accounts_delta_hashes.insert(0, AccountsDeltaHash::default());
+        let mut accounts_hashes = HashMap::new();
+        accounts_hashes.insert(0, AccountsHash::default());
+        let mut bank_hash_stats = HashMap::new();
+        bank_hash_stats.insert(0, BankHashStats::default());
 
         // Increase the stack for accounts threads
         // rayon needs a lot of stack
@@ -2357,7 +2363,9 @@ impl AccountsDb {
                 .build()
                 .unwrap(),
             thread_pool_clean: make_min_priority_thread_pool(),
-            bank_hashes: RwLock::new(bank_hashes),
+            accounts_delta_hashes: Mutex::new(accounts_delta_hashes),
+            accounts_hashes: Mutex::new(accounts_hashes),
+            bank_hash_stats: Mutex::new(bank_hash_stats),
             external_purge_slots_stats: PurgeStats::default(),
             clean_accounts_stats: CleanAccountsStats::default(),
             shrink_stats: ShrinkStats::default(),
@@ -4559,7 +4567,7 @@ impl AccountsDb {
             dropped_roots.iter().for_each(|slot| {
                 self.accounts_index
                     .clean_dead_slot(*slot, &mut AccountsIndexRootsStats::default());
-                self.bank_hashes.write().unwrap().remove(slot);
+                self.remove_bank_hash_info(slot);
                 // the storage has been removed from this slot and recycled or dropped
                 assert!(self.storage.remove(slot).is_none());
             });
@@ -4881,17 +4889,23 @@ impl AccountsDb {
     /// The new bank hash is empty/default except for the slot.  This fn is called when creating a
     /// new bank from parent.  The bank hash for this slot is updated with real values later.
     pub fn insert_default_bank_hash(&self, slot: Slot, parent_slot: Slot) {
-        let mut bank_hashes = self.bank_hashes.write().unwrap();
-        if bank_hashes.get(&slot).is_some() {
+        let mut bank_hash_stats = self.bank_hash_stats.lock().unwrap();
+        if bank_hash_stats.get(&slot).is_some() {
             error!(
                 "set_hash: already exists; multiple forks with shared slot {} as child (parent: {})!?",
                 slot, parent_slot,
             );
             return;
         }
+        bank_hash_stats.insert(slot, BankHashStats::default());
+        drop(bank_hash_stats);
 
-        let new_hash_info = BankHashInfo::default();
-        bank_hashes.insert(slot, new_hash_info);
+        let old_accounts_delta_hash =
+            self.set_accounts_delta_hash(slot, AccountsDeltaHash::default());
+        assert!(old_accounts_delta_hash.is_none());
+
+        let old_accounts_hash = self.set_accounts_hash(slot, AccountsHash::default());
+        assert!(old_accounts_hash.is_none());
     }
 
     pub fn load(
@@ -6850,12 +6864,6 @@ impl AccountsDb {
         Ok((accounts_hash, total_lamports))
     }
 
-    pub fn get_accounts_hash(&self, slot: Slot) -> AccountsHash {
-        let bank_hashes = self.bank_hashes.read().unwrap();
-        let bank_hash_info = bank_hashes.get(&slot).unwrap();
-        bank_hash_info.accounts_hash
-    }
-
     pub fn update_accounts_hash_for_tests(
         &self,
         slot: Slot,
@@ -7223,11 +7231,19 @@ impl AccountsDb {
         (accounts_hash, total_lamports)
     }
 
-    /// update hash for this slot in the 'bank_hashes' map
-    pub(crate) fn set_accounts_hash(&self, slot: Slot, accounts_hash: AccountsHash) {
-        let mut bank_hashes = self.bank_hashes.write().unwrap();
-        let mut bank_hash_info = bank_hashes.get_mut(&slot).unwrap();
-        bank_hash_info.accounts_hash = accounts_hash;
+    /// Set the accounts hash for `slot` in the `accounts_hashes` map
+    ///
+    /// returns the previous accounts hash for `slot`
+    fn set_accounts_hash(&self, slot: Slot, accounts_hash: AccountsHash) -> Option<AccountsHash> {
+        self.accounts_hashes
+            .lock()
+            .unwrap()
+            .insert(slot, accounts_hash)
+    }
+
+    /// Get the accounts hash for `slot` in the `accounts_hashes` map
+    pub fn get_accounts_hash(&self, slot: Slot) -> Option<AccountsHash> {
+        self.accounts_hashes.lock().unwrap().get(&slot).cloned()
     }
 
     /// scan 'storages', return a vec of 'CacheHashDataFile', one per pass
@@ -7532,21 +7548,18 @@ impl AccountsDb {
 
         if ignore_mismatch {
             Ok(())
-        } else {
-            let bank_hashes = self.bank_hashes.read().unwrap();
-            if let Some(found_hash_info) = bank_hashes.get(&slot) {
-                if calculated_accounts_hash == found_hash_info.accounts_hash {
-                    Ok(())
-                } else {
-                    warn!(
-                        "mismatched bank hash for slot {}: {:?} (calculated) != {:?} (expected)",
-                        slot, calculated_accounts_hash, found_hash_info.accounts_hash,
-                    );
-                    Err(MismatchedBankHash)
-                }
+        } else if let Some(found_accounts_hash) = self.get_accounts_hash(slot) {
+            if calculated_accounts_hash == found_accounts_hash {
+                Ok(())
             } else {
-                Err(MissingBankHash)
+                warn!(
+                    "mismatched bank hash for slot {}: {:?} (calculated) != {:?} (expected)",
+                    slot, calculated_accounts_hash, found_accounts_hash,
+                );
+                Err(MismatchedBankHash)
             }
+        } else {
+            Err(MissingBankHash)
         }
     }
 
@@ -7601,10 +7614,12 @@ impl AccountsDb {
         let mut uncleaned_time = Measure::start("uncleaned_index");
         self.uncleaned_pubkeys.insert(slot, dirty_keys);
         uncleaned_time.stop();
+
+        self.set_accounts_delta_hash(slot, accounts_delta_hash);
+
         self.stats
             .store_uncleaned_update
             .fetch_add(uncleaned_time.as_us(), Ordering::Relaxed);
-
         self.stats
             .delta_hash_scan_time_total_us
             .fetch_add(scan_us, Ordering::Relaxed);
@@ -7615,13 +7630,76 @@ impl AccountsDb {
         accounts_delta_hash
     }
 
-    /// Get the bank hash info for `slot`
-    pub fn get_bank_hash_info(&self, slot: Slot) -> Option<BankHashInfo> {
-        self.bank_hashes.read().unwrap().get(&slot).cloned()
+    /// Set the accounts delta hash for `slot` in the `accounts_delta_hashes` map
+    ///
+    /// returns the previous accounts delta hash for `slot`
+    fn set_accounts_delta_hash(
+        &self,
+        slot: Slot,
+        accounts_delta_hash: AccountsDeltaHash,
+    ) -> Option<AccountsDeltaHash> {
+        self.accounts_delta_hashes
+            .lock()
+            .unwrap()
+            .insert(slot, accounts_delta_hash)
+    }
+
+    /// Get the accounts delta hash for `slot` in the `accounts_delta_hashes` map
+    pub fn get_accounts_delta_hash(&self, slot: Slot) -> Option<AccountsDeltaHash> {
+        self.accounts_delta_hashes
+            .lock()
+            .unwrap()
+            .get(&slot)
+            .cloned()
+    }
+
+    /// Set the bank hash stats for `slot` in the `bank_hash_stats` map
+    ///
+    /// returns the previous bank hash stats for `slot`
+    fn set_bank_hash_stats(
+        &self,
+        slot: Slot,
+        bank_hash_stats: BankHashStats,
+    ) -> Option<BankHashStats> {
+        self.bank_hash_stats
+            .lock()
+            .unwrap()
+            .insert(slot, bank_hash_stats)
+    }
+
+    /// Get the bank hash stats for `slot` in the `bank_hash_stats` map
+    pub fn get_bank_hash_stats(&self, slot: Slot) -> Option<BankHashStats> {
+        self.bank_hash_stats.lock().unwrap().get(&slot).cloned()
+    }
+
+    /// Set the "bank hash info" for `slot`
+    ///
+    /// Internally this sets the accounts delta hash, the accounts hash, and the bank hash stats
+    /// from `bank_hash_info` for `slot` in their respective maps.
+    ///
+    /// returns the previous accounts delta hash, accounts hash, and bank hash stats for `slot`
+    fn set_bank_hash_info(
+        &self,
+        slot: Slot,
+        bank_hash_info: BankHashInfo,
+    ) -> (
+        Option<AccountsDeltaHash>,
+        Option<AccountsHash>,
+        Option<BankHashStats>,
+    ) {
+        let BankHashInfo {
+            accounts_delta_hash,
+            accounts_hash,
+            stats,
+        } = bank_hash_info;
+        let old_accounts_delta_hash = self.set_accounts_delta_hash(slot, accounts_delta_hash);
+        let old_accounts_hash = self.set_accounts_hash(slot, accounts_hash);
+        let old_stats = self.set_bank_hash_stats(slot, stats);
+        (old_accounts_delta_hash, old_accounts_hash, old_stats)
     }
 
     /// When reconstructing AccountsDb from a snapshot, insert the `bank_hash_info` into the
-    /// internal bank hashses map.
+    /// internal bank hash info maps.
     ///
     /// This fn is only called when loading from a snapshot, which means AccountsDb is new and its
     /// bank hashes is unpopulated.  Therefore, a bank hash must not already exist at `slot` [^1].
@@ -7630,16 +7708,74 @@ impl AccountsDb {
     /// loading from a snapshot--the bank hashes map is populated with a default entry at slot 0.
     /// It is valid to have a snapshot at slot 0, so it must be handled accordingly.
     pub fn set_bank_hash_info_from_snapshot(&self, slot: Slot, bank_hash_info: BankHashInfo) {
-        let old_bank_hash_info = self
-            .bank_hashes
-            .write()
-            .unwrap()
-            .insert(slot, bank_hash_info);
+        let (old_accounts_delta_hash, old_accounts_hash, old_stats) =
+            self.set_bank_hash_info(slot, bank_hash_info);
+
         assert!(
-            old_bank_hash_info.is_none()
-                || (slot == 0 && old_bank_hash_info == Some(BankHashInfo::default())),
-            "There should not already be a BankHashInfo at slot {slot}: {old_bank_hash_info:?}",
+            old_accounts_delta_hash.is_none()
+                || (slot == 0 && old_accounts_delta_hash == Some(AccountsDeltaHash(Hash::default()))),
+            "There should not already be an AccountsDeltaHash at slot {slot}: {old_accounts_delta_hash:?}",
         );
+        assert!(
+            old_accounts_hash.is_none()
+                || (slot == 0 && old_accounts_hash == Some(AccountsHash(Hash::default()))),
+            "There should not already be an AccountsHash at slot {slot}: {old_accounts_hash:?}",
+        );
+        assert!(
+            old_stats.is_none() || (slot == 0 && old_stats == Some(BankHashStats::default())),
+            "There should not already be a BankHashStats at slot {slot}: {old_stats:?}",
+        );
+    }
+
+    /// Remove "bank hash info" for `slot`
+    ///
+    /// This fn removes the accounts delta hash, accounts hash, and bank hash stats for `slot` from
+    /// their respective maps.
+    fn remove_bank_hash_info(&self, slot: &Slot) {
+        self.remove_bank_hash_infos(std::iter::once(slot));
+    }
+
+    /// Remove "bank hash info" for `slots`
+    ///
+    /// This fn removes the accounts delta hash, accounts hash, and bank hash stats for `slots` from
+    /// their respective maps.
+    fn remove_bank_hash_infos<'s>(&self, slots: impl IntoIterator<Item = &'s Slot>) {
+        let mut accounts_delta_hashes = self.accounts_delta_hashes.lock().unwrap();
+        let mut accounts_hashes = self.accounts_hashes.lock().unwrap();
+        let mut bank_hash_stats = self.bank_hash_stats.lock().unwrap();
+
+        for slot in slots.into_iter() {
+            accounts_delta_hashes.remove(slot);
+            accounts_hashes.remove(slot);
+            bank_hash_stats.remove(slot);
+        }
+    }
+
+    /// Get the "bank hash info" for `slot`
+    ///
+    /// Internally this gets the accounts delta hash, the accounts hash, and the bank hash stats
+    /// for `slot` from their respective maps.
+    ///
+    /// Only called by tests or serde_snapshot when serializing accounts db fields
+    pub fn get_bank_hash_info(&self, slot: Slot) -> Option<BankHashInfo> {
+        let Some(stats) = self.get_bank_hash_stats(slot) else {
+            return None;
+        };
+
+        // If there is a bank hash stats at this slot, then we'll return a `Some` regardless.  Use
+        // default values for accounts hash and accounts delta hash if not found.
+        let accounts_hash = self
+            .get_accounts_hash(slot)
+            .unwrap_or_else(|| AccountsHash(Hash::default()));
+        let accounts_delta_hash = self
+            .get_accounts_delta_hash(slot)
+            .unwrap_or_else(|| AccountsDeltaHash(Hash::default()));
+
+        Some(BankHashInfo {
+            accounts_hash,
+            accounts_delta_hash,
+            stats,
+        })
     }
 
     fn update_index<'a, T: ReadableAccount + Sync>(
@@ -7859,12 +7995,7 @@ impl AccountsDb {
             purged_stored_account_slots,
             pubkeys_removed_from_accounts_index,
         );
-        {
-            let mut bank_hashes = self.bank_hashes.write().unwrap();
-            for slot in dead_slots_iter {
-                bank_hashes.remove(slot);
-            }
-        }
+        self.remove_bank_hash_infos(dead_slots_iter);
         measure.stop();
         inc_new_counter_info!("remove_dead_slots_metadata-ms", measure.as_ms() as usize);
     }
@@ -8072,12 +8203,13 @@ impl AccountsDb {
             .fetch_add(total_data as u64, Ordering::Relaxed);
 
         {
-            // we need to drop bank_hashes to prevent deadlocks
-            let mut bank_hashes = self.bank_hashes.write().unwrap();
-            let slot_info = bank_hashes
+            // we need to drop the bank_hash_stats lock to prevent deadlocks
+            self.bank_hash_stats
+                .lock()
+                .unwrap()
                 .entry(accounts.target_slot())
-                .or_insert_with(BankHashInfo::default);
-            slot_info.stats.accumulate(&stats);
+                .or_insert_with(BankHashStats::default)
+                .accumulate(&stats);
         }
 
         // we use default hashes for now since the same account may be stored to the cache multiple times
@@ -9363,6 +9495,11 @@ pub mod tests {
 
         fn get_storage_for_slot(&self, slot: Slot) -> Option<Arc<AccountStorageEntry>> {
             self.storage.get_slot_storage_entry(slot)
+        }
+
+        // used by serde_snapshot tests
+        pub fn set_accounts_hash_for_tests(&self, slot: Slot, accounts_hash: AccountsHash) {
+            self.set_accounts_hash(slot, accounts_hash);
         }
     }
 
@@ -10683,10 +10820,7 @@ pub mod tests {
         } else {
             db.store_for_tests(unrooted_slot, &[(&key, &account0)]);
         }
-        db.bank_hashes
-            .write()
-            .unwrap()
-            .insert(unrooted_slot, BankHashInfo::default());
+        db.set_bank_hash_info(unrooted_slot, BankHashInfo::default());
         assert!(db
             .accounts_index
             .get(&key, Some(&ancestors), None)
@@ -10696,7 +10830,9 @@ pub mod tests {
         // Purge the slot
         db.remove_unrooted_slots(&[(unrooted_slot, unrooted_bank_id)]);
         assert!(db.load_without_fixed_root(&ancestors, &key).is_none());
-        assert!(db.bank_hashes.read().unwrap().get(&unrooted_slot).is_none());
+        assert!(db.get_accounts_hash(unrooted_slot).is_none());
+        assert!(db.get_accounts_delta_hash(unrooted_slot).is_none());
+        assert!(db.get_bank_hash_stats(unrooted_slot).is_none());
         assert!(db.accounts_cache.slot_cache(unrooted_slot).is_none());
         assert!(db.storage.get_slot_storage_entry(unrooted_slot).is_none());
         assert!(db.accounts_index.get_account_read_entry(&key).is_none());
@@ -11591,6 +11727,9 @@ pub mod tests {
             accounts.add_root_and_flush_write_cache(latest_slot);
             check_storage(&accounts, 2, 31);
 
+            let ancestors = linear_ancestors(latest_slot);
+            accounts.update_accounts_hash_for_tests(latest_slot, &ancestors, false, false);
+
             accounts.clean_accounts_for_tests();
             // The first 20 accounts of slot 0 have been updated in slot 2, as well as
             // accounts 30 and  31 (overwritten with zero-lamport accounts in slot 1 and
@@ -11608,12 +11747,17 @@ pub mod tests {
                 accounts.write_version.load(Ordering::Acquire)
             );
 
-            // Get the hash for the latest slot, which should be the only hash in the
-            // bank_hashes map on the deserialized AccountsDb
-            assert_eq!(daccounts.bank_hashes.read().unwrap().len(), 2);
+            // Get the hashes for the latest slot, which should be the only hashes in the
+            // map on the deserialized AccountsDb (other than slot 0)
+            assert_eq!(daccounts.accounts_delta_hashes.lock().unwrap().len(), 2);
+            assert_eq!(daccounts.accounts_hashes.lock().unwrap().len(), 2);
             assert_eq!(
-                daccounts.bank_hashes.read().unwrap().get(&latest_slot),
-                accounts.bank_hashes.read().unwrap().get(&latest_slot)
+                daccounts.get_accounts_delta_hash(latest_slot).unwrap(),
+                accounts.get_accounts_delta_hash(latest_slot).unwrap(),
+            );
+            assert_eq!(
+                daccounts.get_accounts_hash(latest_slot).unwrap(),
+                accounts.get_accounts_hash(latest_slot).unwrap(),
             );
 
             daccounts.print_count_and_status("daccounts");
@@ -11625,7 +11769,6 @@ pub mod tests {
             check_storage(&daccounts, 1, 21);
             check_storage(&daccounts, 2, 31);
 
-            let ancestors = linear_ancestors(latest_slot);
             assert_eq!(
                 daccounts.update_accounts_hash_for_tests(latest_slot, &ancestors, false, false,),
                 accounts.update_accounts_hash_for_tests(latest_slot, &ancestors, false, false,)
@@ -12208,13 +12351,12 @@ pub mod tests {
         db.store_for_tests(some_slot, &[(&key, &account)]);
         db.add_root(some_slot);
 
-        let bank_hashes = db.bank_hashes.read().unwrap();
-        let bank_hash = bank_hashes.get(&some_slot).unwrap();
-        assert_eq!(bank_hash.stats.num_updated_accounts, 1);
-        assert_eq!(bank_hash.stats.num_removed_accounts, 1);
-        assert_eq!(bank_hash.stats.num_lamports_stored, 1);
-        assert_eq!(bank_hash.stats.total_data_len, 2 * some_data_len as u64);
-        assert_eq!(bank_hash.stats.num_executable_accounts, 1);
+        let stats = db.get_bank_hash_stats(some_slot).unwrap();
+        assert_eq!(stats.num_updated_accounts, 1);
+        assert_eq!(stats.num_removed_accounts, 1);
+        assert_eq!(stats.num_lamports_stored, 1);
+        assert_eq!(stats.total_data_len, 2 * some_data_len as u64);
+        assert_eq!(stats.num_executable_accounts, 1);
     }
 
     // this test tests check_hash=true, which is unsupported behavior at the moment. It cannot be enabled by anything but these tests.
@@ -12352,7 +12494,7 @@ pub mod tests {
             Ok(_)
         );
 
-        db.bank_hashes.write().unwrap().remove(&some_slot).unwrap();
+        db.remove_bank_hash_info(&some_slot);
         assert_matches!(
             db.verify_bank_hash_and_lamports(
                 some_slot,
@@ -12373,10 +12515,7 @@ pub mod tests {
             accounts_hash: AccountsHash(Hash::new(&[0xca; HASH_BYTES])),
             stats: BankHashStats::default(),
         };
-        db.bank_hashes
-            .write()
-            .unwrap()
-            .insert(some_slot, bank_hash_info);
+        db.set_bank_hash_info(some_slot, bank_hash_info);
         assert_matches!(
             db.verify_bank_hash_and_lamports(
                 some_slot,
@@ -12467,10 +12606,7 @@ pub mod tests {
         let some_slot: Slot = 0;
         let ancestors = vec![(some_slot, 0)].into_iter().collect();
 
-        db.bank_hashes
-            .write()
-            .unwrap()
-            .insert(some_slot, BankHashInfo::default());
+        db.set_bank_hash_info(some_slot, BankHashInfo::default());
         db.add_root(some_slot);
         db.update_accounts_hash_for_tests(some_slot, &ancestors, true, true);
         assert_matches!(
@@ -12502,13 +12638,8 @@ pub mod tests {
         let ancestors = vec![(some_slot, 0)].into_iter().collect();
 
         let accounts = &[(&key, &account)][..];
-        // update AccountsDb's bank hash
-        {
-            let mut bank_hashes = db.bank_hashes.write().unwrap();
-            bank_hashes
-                .entry(some_slot)
-                .or_insert_with(BankHashInfo::default);
-        }
+        db.update_accounts_hash_for_tests(some_slot, &ancestors, false, false);
+
         // provide bogus account hashes
         let some_hash = Hash::new(&[0xca; HASH_BYTES]);
         db.store_accounts_unfrozen(
@@ -17427,17 +17558,14 @@ pub mod tests {
         db.handle_dropped_roots_for_ancient(Vec::default());
         let slot0 = 0;
         let dropped_roots = vec![slot0];
-        db.bank_hashes
-            .write()
-            .unwrap()
-            .insert(slot0, BankHashInfo::default());
-        assert!(!db.bank_hashes.read().unwrap().is_empty());
+        db.set_bank_hash_info(slot0, BankHashInfo::default());
+        assert!(db.get_bank_hash_info(slot0).is_some());
         db.accounts_index.add_root(slot0);
         db.accounts_index.add_uncleaned_roots([slot0].into_iter());
         assert!(db.accounts_index.is_uncleaned_root(slot0));
         assert!(db.accounts_index.is_alive_root(slot0));
         db.handle_dropped_roots_for_ancient(dropped_roots);
-        assert!(db.bank_hashes.read().unwrap().is_empty());
+        assert!(db.get_bank_hash_info(slot0).is_none());
         assert!(!db.accounts_index.is_uncleaned_root(slot0));
         assert!(!db.accounts_index.is_alive_root(slot0));
     }
@@ -17461,10 +17589,7 @@ pub mod tests {
         let db = AccountsDb::new_single_for_tests();
         let slot0 = 0;
         let dropped_roots = vec![slot0];
-        db.bank_hashes
-            .write()
-            .unwrap()
-            .insert(slot0, BankHashInfo::default());
+        db.set_bank_hash_info(slot0, BankHashInfo::default());
         insert_store(&db, entry);
         db.handle_dropped_roots_for_ancient(dropped_roots);
     }
