@@ -117,6 +117,28 @@ ubscribers')) }}"
         ignore_conflicts: true
         branches:
           - v1.14
+  - name: v1.15 feature-gate backport
+    conditions:
+      - label=v1.15
+      - label=feature-gate
+    actions:
+      backport:
+        assignees: *BackportAssignee
+        ignore_conflicts: true
+        labels:
+          - feature-gate
+        branches:
+          - v1.15
+  - name: v1.15 non-feature-gate backport
+    conditions:
+      - label=v1.15
+      - label!=feature-gate
+    actions:
+      backport:
+        assignees: *BackportAssignee
+        ignore_conflicts: true
+        branches:
+          - v1.15
 
 commands_restrictions:
   # The author of copied PRs is the Mergify user.
