@@ -4765,7 +4765,7 @@ pub mod tests {
             let validator_exit = create_validator_exit(&exit);
             let cluster_info = Arc::new(new_test_cluster_info());
             let identity = cluster_info.id();
-            cluster_info.insert_info(ContactInfo::new_with_pubkey_socketaddr(
+            cluster_info.insert_info(ContactInfo::new_with_socketaddr(
                 &leader_pubkey,
                 &socketaddr!("127.0.0.1:1234"),
             ));
@@ -6384,11 +6384,8 @@ pub mod tests {
         io.extend_with(rpc_full::FullImpl.to_delegate());
         let cluster_info = Arc::new({
             let keypair = Arc::new(Keypair::new());
-            let contact_info = ContactInfo::new_with_socketaddr(&socketaddr!("127.0.0.1:1234"));
-            let contact_info = ContactInfo {
-                id: keypair.pubkey(),
-                ..contact_info
-            };
+            let contact_info =
+                ContactInfo::new_with_socketaddr(&keypair.pubkey(), &socketaddr!("127.0.0.1:1234"));
             ClusterInfo::new(contact_info, keypair, SocketAddrSpace::Unspecified)
         });
         let tpu_address = cluster_info.my_contact_info().tpu;
