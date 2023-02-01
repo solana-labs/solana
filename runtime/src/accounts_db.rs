@@ -161,21 +161,29 @@ pub enum CreateAncientStorage {
     Pack,
 }
 
+#[derive(Copy, Clone, Eq, PartialEq, Debug)]
+enum StoreTo {
+    /// write to cache
+    Cache,
+    /// write to storage
+    Storage,
+}
+
 #[derive(Default)]
 /// hold alive accounts and bytes used by those accounts
 /// alive means in the accounts index
-struct AliveAccounts<'a> {
-    accounts: Vec<&'a StoredAccountMeta<'a>>,
-    bytes: usize,
+pub(crate) struct AliveAccounts<'a> {
+    pub(crate) accounts: Vec<&'a StoredAccountMeta<'a>>,
+    pub(crate) bytes: usize,
 }
 
 /// separate pubkeys into those with a single refcount and those with > 1 refcount
-struct ShrinkCollectAliveSeparatedByRefs<'a> {
-    one_ref: AliveAccounts<'a>,
-    many_refs: AliveAccounts<'a>,
+pub(crate) struct ShrinkCollectAliveSeparatedByRefs<'a> {
+    pub(crate) one_ref: AliveAccounts<'a>,
+    pub(crate) many_refs: AliveAccounts<'a>,
 }
 
-trait ShrinkCollectRefs<'a>: Sync + Send {
+pub(crate) trait ShrinkCollectRefs<'a>: Sync + Send {
     fn with_capacity(capacity: usize) -> Self;
     fn collect(&mut self, other: Self);
     fn add(&mut self, ref_count: u64, account: &'a StoredAccountMeta<'a>);
@@ -413,16 +421,17 @@ impl AncientSlotPubkeys {
     }
 }
 
-struct ShrinkCollect<'a, T: ShrinkCollectRefs<'a>> {
-    original_bytes: u64,
-    aligned_total_bytes: u64,
-    unrefed_pubkeys: Vec<&'a Pubkey>,
-    alive_accounts: T,
+pub(crate) struct ShrinkCollect<'a, T: ShrinkCollectRefs<'a>> {
+    pub(crate) slot: Slot,
+    pub(crate) original_bytes: u64,
+    pub(crate) aligned_total_bytes: u64,
+    pub(crate) unrefed_pubkeys: Vec<&'a Pubkey>,
+    pub(crate) alive_accounts: T,
     /// total size in storage of all alive accounts
-    alive_total_bytes: usize,
-    total_starting_accounts: usize,
+    pub(crate) alive_total_bytes: usize,
+    pub(crate) total_starting_accounts: usize,
     /// true if all alive accounts are zero lamports
-    all_are_zero_lamports: bool,
+    pub(crate) all_are_zero_lamports: bool,
 }
 
 pub const ACCOUNTS_DB_CONFIG_FOR_TESTING: AccountsDbConfig = AccountsDbConfig {
@@ -1185,7 +1194,7 @@ pub struct BankHashInfo {
     pub stats: BankHashStats,
 }
 
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct StoreAccountsTiming {
     store_accounts_elapsed: u64,
     update_index_elapsed: u64,
@@ -1349,7 +1358,9 @@ pub struct AccountsDb {
 
     pub thread_pool_clean: ThreadPool,
 
-    bank_hashes: RwLock<HashMap<Slot, BankHashInfo>>,
+    accounts_delta_hashes: Mutex<HashMap<Slot, AccountsDeltaHash>>,
+    accounts_hashes: Mutex<HashMap<Slot, AccountsHash>>,
+    bank_hash_stats: Mutex<HashMap<Slot, BankHashStats>>,
 
     pub stats: AccountsStats,
 
@@ -1360,7 +1371,7 @@ pub struct AccountsDb {
 
     pub(crate) shrink_stats: ShrinkStats,
 
-    shrink_ancient_stats: ShrinkAncientStats,
+    pub(crate) shrink_ancient_stats: ShrinkAncientStats,
 
     pub cluster_type: Option<ClusterType>,
 
@@ -1402,7 +1413,7 @@ pub struct AccountsDb {
     filler_accounts_config: FillerAccountsConfig,
     pub filler_account_suffix: Option<Pubkey>,
 
-    active_stats: ActiveStats,
+    pub(crate) active_stats: ActiveStats,
 
     /// number of filler accounts to add for each slot
     pub filler_accounts_per_slot: AtomicU64,
@@ -1854,13 +1865,13 @@ impl CleanAccountsStats {
 }
 
 #[derive(Debug, Default)]
-struct ShrinkAncientStats {
-    shrink_stats: ShrinkStats,
-    ancient_append_vecs_shrunk: AtomicU64,
-    total_us: AtomicU64,
-    random_shrink: AtomicU64,
-    slots_considered: AtomicU64,
-    ancient_scanned: AtomicU64,
+pub(crate) struct ShrinkAncientStats {
+    pub(crate) shrink_stats: ShrinkStats,
+    pub(crate) ancient_append_vecs_shrunk: AtomicU64,
+    pub(crate) total_us: AtomicU64,
+    pub(crate) random_shrink: AtomicU64,
+    pub(crate) slots_considered: AtomicU64,
+    pub(crate) ancient_scanned: AtomicU64,
 }
 
 #[derive(Debug, Default)]
@@ -1989,7 +2000,7 @@ impl ShrinkStats {
 }
 
 impl ShrinkAncientStats {
-    fn report(&self) {
+    pub(crate) fn report(&self) {
         if self.shrink_stats.last_report.should_update(1000) {
             datapoint_info!(
                 "shrink_ancient_stats",
@@ -2315,8 +2326,12 @@ impl AccountsDb {
                 .to_path_buf()
         });
 
-        let mut bank_hashes = HashMap::new();
-        bank_hashes.insert(0, BankHashInfo::default());
+        let mut accounts_delta_hashes = HashMap::new();
+        accounts_delta_hashes.insert(0, AccountsDeltaHash::default());
+        let mut accounts_hashes = HashMap::new();
+        accounts_hashes.insert(0, AccountsHash::default());
+        let mut bank_hash_stats = HashMap::new();
+        bank_hash_stats.insert(0, BankHashStats::default());
 
         // Increase the stack for accounts threads
         // rayon needs a lot of stack
@@ -2357,7 +2372,9 @@ impl AccountsDb {
                 .build()
                 .unwrap(),
             thread_pool_clean: make_min_priority_thread_pool(),
-            bank_hashes: RwLock::new(bank_hashes),
+            accounts_delta_hashes: Mutex::new(accounts_delta_hashes),
+            accounts_hashes: Mutex::new(accounts_hashes),
+            bank_hash_stats: Mutex::new(bank_hash_stats),
             external_purge_slots_stats: PurgeStats::default(),
             clean_accounts_stats: CleanAccountsStats::default(),
             shrink_stats: ShrinkStats::default(),
@@ -3673,7 +3690,7 @@ impl AccountsDb {
     /// unref and optionally store a reference to all pubkeys that are in the index, but dead in `unrefed_pubkeys`
     /// return sum of account size for all alive accounts
     fn load_accounts_index_for_shrink<'a, T: ShrinkCollectRefs<'a>>(
-        &'a self,
+        &self,
         accounts: &'a [StoredAccountMeta<'a>],
         stats: &ShrinkStats,
         slot_to_shrink: Slot,
@@ -3748,7 +3765,7 @@ impl AccountsDb {
         }
     }
 
-    fn get_unique_accounts_from_storage_for_shrink<'a>(
+    pub(crate) fn get_unique_accounts_from_storage_for_shrink<'a>(
         &self,
         store: &'a Arc<AccountStorageEntry>,
         stats: &ShrinkStats,
@@ -3763,8 +3780,8 @@ impl AccountsDb {
 
     /// shared code for shrinking normal slots and combining into ancient append vecs
     /// note 'unique_accounts' is passed by ref so we can return references to data within it, avoiding self-references
-    fn shrink_collect<'a: 'b, 'b, T: ShrinkCollectRefs<'b>>(
-        &'a self,
+    pub(crate) fn shrink_collect<'a: 'b, 'b, T: ShrinkCollectRefs<'b>>(
+        &self,
         store: &'a Arc<AccountStorageEntry>,
         unique_accounts: &'b GetUniqueAccountsResult<'b>,
         stats: &ShrinkStats,
@@ -3834,6 +3851,7 @@ impl AccountsDb {
             .fetch_add(aligned_total_bytes, Ordering::Relaxed);
 
         ShrinkCollect {
+            slot,
             original_bytes: *original_bytes,
             aligned_total_bytes,
             unrefed_pubkeys,
@@ -3846,16 +3864,16 @@ impl AccountsDb {
 
     /// common code from shrink and combine_ancient_slots
     /// get rid of all original store_ids in the slot
-    fn remove_old_stores_shrink<'a, T: ShrinkCollectRefs<'a>>(
+    pub(crate) fn remove_old_stores_shrink<'a, T: ShrinkCollectRefs<'a>>(
         &self,
         shrink_collect: &ShrinkCollect<'a, T>,
-        slot: Slot,
         stats: &ShrinkStats,
         shrink_in_progress: Option<ShrinkInProgress>,
     ) {
+        let mut time = Measure::start("remove_old_stores_shrink");
         // Purge old, overwritten storage entries
         let dead_storages = self.mark_dirty_dead_stores(
-            slot,
+            shrink_collect.slot,
             // If all accounts are zero lamports, then we want to mark the entire OLD append vec as dirty.
             // otherwise, we'll call 'add_uncleaned_pubkeys_after_shrink' just on the unref'd keys below.
             shrink_collect.all_are_zero_lamports,
@@ -3864,12 +3882,17 @@ impl AccountsDb {
 
         if !shrink_collect.all_are_zero_lamports {
             self.add_uncleaned_pubkeys_after_shrink(
-                slot,
+                shrink_collect.slot,
                 shrink_collect.unrefed_pubkeys.iter().cloned().cloned(),
             );
         }
 
         self.drop_or_recycle_stores(dead_storages, stats);
+        time.stop();
+
+        stats
+            .remove_old_stores_shrink_us
+            .fetch_add(time.as_us(), Ordering::Relaxed);
     }
 
     fn do_shrink_slot_store(&self, slot: Slot, store: &Arc<AccountStorageEntry>) {
@@ -3922,7 +3945,6 @@ impl AccountsDb {
 
         let mut rewrite_elapsed = Measure::start("rewrite_elapsed");
         let mut create_and_insert_store_elapsed_us = 0;
-        let mut remove_old_stores_shrink_us = 0;
         let mut store_accounts_timing = StoreAccountsTiming::default();
         if shrink_collect.aligned_total_bytes > 0 {
             let (shrink_in_progress, time_us) =
@@ -3953,14 +3975,11 @@ impl AccountsDb {
             // those here
             self.shrink_candidate_slots.lock().unwrap().remove(&slot);
 
-            let (_, local_remove_old_stores_shrink_us) = measure_us!(self
-                .remove_old_stores_shrink(
-                    &shrink_collect,
-                    slot,
-                    &self.shrink_stats,
-                    Some(shrink_in_progress)
-                ));
-            remove_old_stores_shrink_us = local_remove_old_stores_shrink_us;
+            self.remove_old_stores_shrink(
+                &shrink_collect,
+                &self.shrink_stats,
+                Some(shrink_in_progress),
+            );
         }
 
         Self::update_shrink_stats(
@@ -3969,19 +3988,17 @@ impl AccountsDb {
             create_and_insert_store_elapsed_us,
             store_accounts_timing,
             rewrite_elapsed.as_us(),
-            remove_old_stores_shrink_us,
         );
         self.shrink_stats.report();
     }
 
     #[allow(clippy::too_many_arguments)]
-    fn update_shrink_stats(
+    pub(crate) fn update_shrink_stats(
         shrink_stats: &ShrinkStats,
         find_alive_elapsed_us: u64,
         create_and_insert_store_elapsed_us: u64,
         store_accounts_timing: StoreAccountsTiming,
         rewrite_elapsed_us: u64,
-        remove_old_stores_shrink_us: u64,
     ) {
         shrink_stats
             .num_slots_shrunk
@@ -4004,9 +4021,6 @@ impl AccountsDb {
             store_accounts_timing.handle_reclaims_elapsed,
             Ordering::Relaxed,
         );
-        shrink_stats
-            .remove_old_stores_shrink_us
-            .fetch_add(remove_old_stores_shrink_us, Ordering::Relaxed);
         shrink_stats
             .rewrite_elapsed
             .fetch_add(rewrite_elapsed_us, Ordering::Relaxed);
@@ -4531,13 +4545,11 @@ impl AccountsDb {
             dropped_roots.push(slot);
         }
 
-        let (_remaining_stores, remove_old_stores_shrink_us) = measure_us!(self
-            .remove_old_stores_shrink(
-                &shrink_collect,
-                slot,
-                &self.shrink_ancient_stats.shrink_stats,
-                shrink_in_progress,
-            ));
+        self.remove_old_stores_shrink(
+            &shrink_collect,
+            &self.shrink_ancient_stats.shrink_stats,
+            shrink_in_progress,
+        );
 
         // we should not try to shrink any of the stores from this slot anymore. All shrinking for this slot is now handled by ancient append vec code.
         self.shrink_candidate_slots.lock().unwrap().remove(&slot);
@@ -4548,18 +4560,17 @@ impl AccountsDb {
             create_and_insert_store_elapsed_us,
             store_accounts_timing,
             rewrite_elapsed.as_us(),
-            remove_old_stores_shrink_us,
         );
     }
 
     /// each slot in 'dropped_roots' has been combined into an ancient append vec.
     /// We are done with the slot now forever.
-    fn handle_dropped_roots_for_ancient(&self, dropped_roots: Vec<Slot>) {
+    pub(crate) fn handle_dropped_roots_for_ancient(&self, dropped_roots: Vec<Slot>) {
         if !dropped_roots.is_empty() {
             dropped_roots.iter().for_each(|slot| {
                 self.accounts_index
                     .clean_dead_slot(*slot, &mut AccountsIndexRootsStats::default());
-                self.bank_hashes.write().unwrap().remove(slot);
+                self.remove_bank_hash_info(slot);
                 // the storage has been removed from this slot and recycled or dropped
                 assert!(self.storage.remove(slot).is_none());
             });
@@ -4876,22 +4887,16 @@ impl AccountsDb {
         }
     }
 
-    /// Insert a new bank hash for `slot`
+    /// Insert a default bank hash stats for `slot`
     ///
-    /// The new bank hash is empty/default except for the slot.  This fn is called when creating a
-    /// new bank from parent.  The bank hash for this slot is updated with real values later.
-    pub fn insert_default_bank_hash(&self, slot: Slot, parent_slot: Slot) {
-        let mut bank_hashes = self.bank_hashes.write().unwrap();
-        if bank_hashes.get(&slot).is_some() {
-            error!(
-                "set_hash: already exists; multiple forks with shared slot {} as child (parent: {})!?",
-                slot, parent_slot,
-            );
+    /// This fn is called when creating a new bank from parent.
+    pub fn insert_default_bank_hash_stats(&self, slot: Slot, parent_slot: Slot) {
+        let mut bank_hash_stats = self.bank_hash_stats.lock().unwrap();
+        if bank_hash_stats.get(&slot).is_some() {
+            error!( "set_hash: already exists; multiple forks with shared slot {slot} as child (parent: {parent_slot})!?");
             return;
         }
-
-        let new_hash_info = BankHashInfo::default();
-        bank_hashes.insert(slot, new_hash_info);
+        bank_hash_stats.insert(slot, BankHashStats::default());
     }
 
     pub fn load(
@@ -6561,7 +6566,7 @@ impl AccountsDb {
         hashes: Option<Vec<impl Borrow<Hash>>>,
         storage_finder: F,
         mut write_version_producer: P,
-        is_cached_store: bool,
+        store_to: StoreTo,
         txn_signatures: Option<&[Option<&'a Signature>]>,
     ) -> Vec<AccountInfo> {
         let mut calc_stored_meta_time = Measure::start("calc_stored_meta");
@@ -6575,7 +6580,7 @@ impl AccountsDb {
             .calc_stored_meta
             .fetch_add(calc_stored_meta_time.as_us(), Ordering::Relaxed);
 
-        if is_cached_store {
+        if store_to == StoreTo::Cache {
             let signature_iter: Box<dyn std::iter::Iterator<Item = &Option<&Signature>>> =
                 match txn_signatures {
                     Some(txn_signatures) => {
@@ -6848,12 +6853,6 @@ impl AccountsDb {
 
         let accounts_hash = AccountsHash(accumulated_hash);
         Ok((accounts_hash, total_lamports))
-    }
-
-    pub fn get_accounts_hash(&self, slot: Slot) -> AccountsHash {
-        let bank_hashes = self.bank_hashes.read().unwrap();
-        let bank_hash_info = bank_hashes.get(&slot).unwrap();
-        bank_hash_info.accounts_hash
     }
 
     pub fn update_accounts_hash_for_tests(
@@ -7223,11 +7222,19 @@ impl AccountsDb {
         (accounts_hash, total_lamports)
     }
 
-    /// update hash for this slot in the 'bank_hashes' map
-    pub(crate) fn set_accounts_hash(&self, slot: Slot, accounts_hash: AccountsHash) {
-        let mut bank_hashes = self.bank_hashes.write().unwrap();
-        let mut bank_hash_info = bank_hashes.get_mut(&slot).unwrap();
-        bank_hash_info.accounts_hash = accounts_hash;
+    /// Set the accounts hash for `slot` in the `accounts_hashes` map
+    ///
+    /// returns the previous accounts hash for `slot`
+    fn set_accounts_hash(&self, slot: Slot, accounts_hash: AccountsHash) -> Option<AccountsHash> {
+        self.accounts_hashes
+            .lock()
+            .unwrap()
+            .insert(slot, accounts_hash)
+    }
+
+    /// Get the accounts hash for `slot` in the `accounts_hashes` map
+    pub fn get_accounts_hash(&self, slot: Slot) -> Option<AccountsHash> {
+        self.accounts_hashes.lock().unwrap().get(&slot).cloned()
     }
 
     /// scan 'storages', return a vec of 'CacheHashDataFile', one per pass
@@ -7532,21 +7539,18 @@ impl AccountsDb {
 
         if ignore_mismatch {
             Ok(())
-        } else {
-            let bank_hashes = self.bank_hashes.read().unwrap();
-            if let Some(found_hash_info) = bank_hashes.get(&slot) {
-                if calculated_accounts_hash == found_hash_info.accounts_hash {
-                    Ok(())
-                } else {
-                    warn!(
-                        "mismatched bank hash for slot {}: {:?} (calculated) != {:?} (expected)",
-                        slot, calculated_accounts_hash, found_hash_info.accounts_hash,
-                    );
-                    Err(MismatchedBankHash)
-                }
+        } else if let Some(found_accounts_hash) = self.get_accounts_hash(slot) {
+            if calculated_accounts_hash == found_accounts_hash {
+                Ok(())
             } else {
-                Err(MissingBankHash)
+                warn!(
+                    "mismatched bank hash for slot {}: {:?} (calculated) != {:?} (expected)",
+                    slot, calculated_accounts_hash, found_accounts_hash,
+                );
+                Err(MismatchedBankHash)
             }
+        } else {
+            Err(MissingBankHash)
         }
     }
 
@@ -7601,10 +7605,12 @@ impl AccountsDb {
         let mut uncleaned_time = Measure::start("uncleaned_index");
         self.uncleaned_pubkeys.insert(slot, dirty_keys);
         uncleaned_time.stop();
+
+        self.set_accounts_delta_hash(slot, accounts_delta_hash);
+
         self.stats
             .store_uncleaned_update
             .fetch_add(uncleaned_time.as_us(), Ordering::Relaxed);
-
         self.stats
             .delta_hash_scan_time_total_us
             .fetch_add(scan_us, Ordering::Relaxed);
@@ -7615,13 +7621,76 @@ impl AccountsDb {
         accounts_delta_hash
     }
 
-    /// Get the bank hash info for `slot`
-    pub fn get_bank_hash_info(&self, slot: Slot) -> Option<BankHashInfo> {
-        self.bank_hashes.read().unwrap().get(&slot).cloned()
+    /// Set the accounts delta hash for `slot` in the `accounts_delta_hashes` map
+    ///
+    /// returns the previous accounts delta hash for `slot`
+    fn set_accounts_delta_hash(
+        &self,
+        slot: Slot,
+        accounts_delta_hash: AccountsDeltaHash,
+    ) -> Option<AccountsDeltaHash> {
+        self.accounts_delta_hashes
+            .lock()
+            .unwrap()
+            .insert(slot, accounts_delta_hash)
+    }
+
+    /// Get the accounts delta hash for `slot` in the `accounts_delta_hashes` map
+    pub fn get_accounts_delta_hash(&self, slot: Slot) -> Option<AccountsDeltaHash> {
+        self.accounts_delta_hashes
+            .lock()
+            .unwrap()
+            .get(&slot)
+            .cloned()
+    }
+
+    /// Set the bank hash stats for `slot` in the `bank_hash_stats` map
+    ///
+    /// returns the previous bank hash stats for `slot`
+    fn set_bank_hash_stats(
+        &self,
+        slot: Slot,
+        bank_hash_stats: BankHashStats,
+    ) -> Option<BankHashStats> {
+        self.bank_hash_stats
+            .lock()
+            .unwrap()
+            .insert(slot, bank_hash_stats)
+    }
+
+    /// Get the bank hash stats for `slot` in the `bank_hash_stats` map
+    pub fn get_bank_hash_stats(&self, slot: Slot) -> Option<BankHashStats> {
+        self.bank_hash_stats.lock().unwrap().get(&slot).cloned()
+    }
+
+    /// Set the "bank hash info" for `slot`
+    ///
+    /// Internally this sets the accounts delta hash, the accounts hash, and the bank hash stats
+    /// from `bank_hash_info` for `slot` in their respective maps.
+    ///
+    /// returns the previous accounts delta hash, accounts hash, and bank hash stats for `slot`
+    fn set_bank_hash_info(
+        &self,
+        slot: Slot,
+        bank_hash_info: BankHashInfo,
+    ) -> (
+        Option<AccountsDeltaHash>,
+        Option<AccountsHash>,
+        Option<BankHashStats>,
+    ) {
+        let BankHashInfo {
+            accounts_delta_hash,
+            accounts_hash,
+            stats,
+        } = bank_hash_info;
+        let old_accounts_delta_hash = self.set_accounts_delta_hash(slot, accounts_delta_hash);
+        let old_accounts_hash = self.set_accounts_hash(slot, accounts_hash);
+        let old_stats = self.set_bank_hash_stats(slot, stats);
+        (old_accounts_delta_hash, old_accounts_hash, old_stats)
     }
 
     /// When reconstructing AccountsDb from a snapshot, insert the `bank_hash_info` into the
-    /// internal bank hashses map.
+    /// internal bank hash info maps.
     ///
     /// This fn is only called when loading from a snapshot, which means AccountsDb is new and its
     /// bank hashes is unpopulated.  Therefore, a bank hash must not already exist at `slot` [^1].
@@ -7630,16 +7699,74 @@ impl AccountsDb {
     /// loading from a snapshot--the bank hashes map is populated with a default entry at slot 0.
     /// It is valid to have a snapshot at slot 0, so it must be handled accordingly.
     pub fn set_bank_hash_info_from_snapshot(&self, slot: Slot, bank_hash_info: BankHashInfo) {
-        let old_bank_hash_info = self
-            .bank_hashes
-            .write()
-            .unwrap()
-            .insert(slot, bank_hash_info);
+        let (old_accounts_delta_hash, old_accounts_hash, old_stats) =
+            self.set_bank_hash_info(slot, bank_hash_info);
+
         assert!(
-            old_bank_hash_info.is_none()
-                || (slot == 0 && old_bank_hash_info == Some(BankHashInfo::default())),
-            "There should not already be a BankHashInfo at slot {slot}: {old_bank_hash_info:?}",
+            old_accounts_delta_hash.is_none()
+                || (slot == 0 && old_accounts_delta_hash == Some(AccountsDeltaHash(Hash::default()))),
+            "There should not already be an AccountsDeltaHash at slot {slot}: {old_accounts_delta_hash:?}",
         );
+        assert!(
+            old_accounts_hash.is_none()
+                || (slot == 0 && old_accounts_hash == Some(AccountsHash(Hash::default()))),
+            "There should not already be an AccountsHash at slot {slot}: {old_accounts_hash:?}",
+        );
+        assert!(
+            old_stats.is_none() || (slot == 0 && old_stats == Some(BankHashStats::default())),
+            "There should not already be a BankHashStats at slot {slot}: {old_stats:?}",
+        );
+    }
+
+    /// Remove "bank hash info" for `slot`
+    ///
+    /// This fn removes the accounts delta hash, accounts hash, and bank hash stats for `slot` from
+    /// their respective maps.
+    fn remove_bank_hash_info(&self, slot: &Slot) {
+        self.remove_bank_hash_infos(std::iter::once(slot));
+    }
+
+    /// Remove "bank hash info" for `slots`
+    ///
+    /// This fn removes the accounts delta hash, accounts hash, and bank hash stats for `slots` from
+    /// their respective maps.
+    fn remove_bank_hash_infos<'s>(&self, slots: impl IntoIterator<Item = &'s Slot>) {
+        let mut accounts_delta_hashes = self.accounts_delta_hashes.lock().unwrap();
+        let mut accounts_hashes = self.accounts_hashes.lock().unwrap();
+        let mut bank_hash_stats = self.bank_hash_stats.lock().unwrap();
+
+        for slot in slots.into_iter() {
+            accounts_delta_hashes.remove(slot);
+            accounts_hashes.remove(slot);
+            bank_hash_stats.remove(slot);
+        }
+    }
+
+    /// Get the "bank hash info" for `slot`
+    ///
+    /// Internally this gets the accounts delta hash, the accounts hash, and the bank hash stats
+    /// for `slot` from their respective maps.
+    ///
+    /// Only called by tests or serde_snapshot when serializing accounts db fields
+    pub fn get_bank_hash_info(&self, slot: Slot) -> Option<BankHashInfo> {
+        let Some(stats) = self.get_bank_hash_stats(slot) else {
+            return None;
+        };
+
+        // If there is a bank hash stats at this slot, then we'll return a `Some` regardless.  Use
+        // default values for accounts hash and accounts delta hash if not found.
+        let accounts_hash = self
+            .get_accounts_hash(slot)
+            .unwrap_or_else(|| AccountsHash(Hash::default()));
+        let accounts_delta_hash = self
+            .get_accounts_delta_hash(slot)
+            .unwrap_or_else(|| AccountsDeltaHash(Hash::default()));
+
+        Some(BankHashInfo {
+            accounts_hash,
+            accounts_delta_hash,
+            stats,
+        })
     }
 
     fn update_index<'a, T: ReadableAccount + Sync>(
@@ -7859,12 +7986,7 @@ impl AccountsDb {
             purged_stored_account_slots,
             pubkeys_removed_from_accounts_index,
         );
-        {
-            let mut bank_hashes = self.bank_hashes.write().unwrap();
-            for slot in dead_slots_iter {
-                bank_hashes.remove(slot);
-            }
-        }
+        self.remove_bank_hash_infos(dead_slots_iter);
         measure.stop();
         inc_new_counter_info!("remove_dead_slots_metadata-ms", measure.as_ms() as usize);
     }
@@ -8032,7 +8154,12 @@ impl AccountsDb {
         accounts: impl StorableAccounts<'a, T>,
         txn_signatures: Option<&'a [Option<&'a Signature>]>,
     ) {
-        self.store(accounts, true, txn_signatures, StoreReclaims::Default);
+        self.store(
+            accounts,
+            StoreTo::Cache,
+            txn_signatures,
+            StoreReclaims::Default,
+        );
     }
 
     /// Store the account update.
@@ -8040,7 +8167,7 @@ impl AccountsDb {
     pub fn store_uncached(&self, slot: Slot, accounts: &[(&Pubkey, &AccountSharedData)]) {
         self.store(
             (slot, accounts, INCLUDE_SLOT_IN_HASH_TESTS),
-            false,
+            StoreTo::Storage,
             None,
             StoreReclaims::Default,
         );
@@ -8049,7 +8176,7 @@ impl AccountsDb {
     fn store<'a, T: ReadableAccount + Sync + ZeroLamport + 'a>(
         &self,
         accounts: impl StorableAccounts<'a, T>,
-        is_cached_store: bool,
+        store_to: StoreTo,
         txn_signatures: Option<&'a [Option<&'a Signature>]>,
         reclaim: StoreReclaims,
     ) {
@@ -8072,19 +8199,20 @@ impl AccountsDb {
             .fetch_add(total_data as u64, Ordering::Relaxed);
 
         {
-            // we need to drop bank_hashes to prevent deadlocks
-            let mut bank_hashes = self.bank_hashes.write().unwrap();
-            let slot_info = bank_hashes
+            // we need to drop the bank_hash_stats lock to prevent deadlocks
+            self.bank_hash_stats
+                .lock()
+                .unwrap()
                 .entry(accounts.target_slot())
-                .or_insert_with(BankHashInfo::default);
-            slot_info.stats.accumulate(&stats);
+                .or_insert_with(BankHashStats::default)
+                .accumulate(&stats);
         }
 
         // we use default hashes for now since the same account may be stored to the cache multiple times
         self.store_accounts_unfrozen(
             accounts,
             None::<Vec<Hash>>,
-            is_cached_store,
+            store_to,
             txn_signatures,
             reclaim,
         );
@@ -8218,7 +8346,7 @@ impl AccountsDb {
         &self,
         accounts: impl StorableAccounts<'a, T>,
         hashes: Option<Vec<impl Borrow<Hash>>>,
-        is_cached_store: bool,
+        store_to: StoreTo,
         txn_signatures: Option<&'a [Option<&'a Signature>]>,
         reclaim: StoreReclaims,
     ) {
@@ -8235,7 +8363,7 @@ impl AccountsDb {
             hashes,
             None,
             None::<Box<dyn Iterator<Item = u64>>>,
-            is_cached_store,
+            store_to,
             reset_accounts,
             txn_signatures,
             reclaim,
@@ -8254,13 +8382,12 @@ impl AccountsDb {
         // the append vec so that hashing could happen on the store
         // and accounts in the append_vec can be unrefed correctly
         let reset_accounts = false;
-        let is_cached_store = false;
         self.store_accounts_custom(
             accounts,
             hashes,
             storage,
             write_version_producer,
-            is_cached_store,
+            StoreTo::Storage,
             reset_accounts,
             None,
             reclaim,
@@ -8273,7 +8400,7 @@ impl AccountsDb {
         hashes: Option<Vec<impl Borrow<Hash>>>,
         storage: Option<&Arc<AccountStorageEntry>>,
         write_version_producer: Option<Box<dyn Iterator<Item = u64>>>,
-        is_cached_store: bool,
+        store_to: StoreTo,
         reset_accounts: bool,
         txn_signatures: Option<&[Option<&Signature>]>,
         reclaim: StoreReclaims,
@@ -8303,7 +8430,7 @@ impl AccountsDb {
             hashes,
             storage_finder,
             write_version_producer,
-            is_cached_store,
+            store_to,
             txn_signatures,
         );
         store_accounts_time.stop();
@@ -8314,7 +8441,7 @@ impl AccountsDb {
 
         let reclaim = if matches!(reclaim, StoreReclaims::Ignore) {
             UpsertReclaim::IgnoreReclaims
-        } else if is_cached_store {
+        } else if store_to == StoreTo::Cache {
             UpsertReclaim::PreviousSlotEntryWasCached
         } else {
             UpsertReclaim::PopulateReclaims
@@ -8337,7 +8464,7 @@ impl AccountsDb {
         // entries
         reclaims.retain(|(_, r)| !r.is_cached());
 
-        if is_cached_store {
+        if store_to == StoreTo::Cache {
             assert!(reclaims.is_empty());
         }
 
@@ -9364,6 +9491,11 @@ pub mod tests {
         fn get_storage_for_slot(&self, slot: Slot) -> Option<Arc<AccountStorageEntry>> {
             self.storage.get_slot_storage_entry(slot)
         }
+
+        // used by serde_snapshot tests
+        pub fn set_accounts_hash_for_tests(&self, slot: Slot, accounts_hash: AccountsHash) {
+            self.set_accounts_hash(slot, accounts_hash);
+        }
     }
 
     /// This impl exists until this feature is activated:
@@ -9386,9 +9518,6 @@ pub mod tests {
         }
         fn len(&self) -> usize {
             self.1.len()
-        }
-        fn contains_multiple_slots(&self) -> bool {
-            false
         }
         fn include_slot_in_hash(&self) -> IncludeSlotInHash {
             INCLUDE_SLOT_IN_HASH_TESTS
@@ -10683,10 +10812,7 @@ pub mod tests {
         } else {
             db.store_for_tests(unrooted_slot, &[(&key, &account0)]);
         }
-        db.bank_hashes
-            .write()
-            .unwrap()
-            .insert(unrooted_slot, BankHashInfo::default());
+        db.set_bank_hash_info(unrooted_slot, BankHashInfo::default());
         assert!(db
             .accounts_index
             .get(&key, Some(&ancestors), None)
@@ -10696,7 +10822,9 @@ pub mod tests {
         // Purge the slot
         db.remove_unrooted_slots(&[(unrooted_slot, unrooted_bank_id)]);
         assert!(db.load_without_fixed_root(&ancestors, &key).is_none());
-        assert!(db.bank_hashes.read().unwrap().get(&unrooted_slot).is_none());
+        assert!(db.get_accounts_hash(unrooted_slot).is_none());
+        assert!(db.get_accounts_delta_hash(unrooted_slot).is_none());
+        assert!(db.get_bank_hash_stats(unrooted_slot).is_none());
         assert!(db.accounts_cache.slot_cache(unrooted_slot).is_none());
         assert!(db.storage.get_slot_storage_entry(unrooted_slot).is_none());
         assert!(db.accounts_index.get_account_read_entry(&key).is_none());
@@ -11591,6 +11719,9 @@ pub mod tests {
             accounts.add_root_and_flush_write_cache(latest_slot);
             check_storage(&accounts, 2, 31);
 
+            let ancestors = linear_ancestors(latest_slot);
+            accounts.update_accounts_hash_for_tests(latest_slot, &ancestors, false, false);
+
             accounts.clean_accounts_for_tests();
             // The first 20 accounts of slot 0 have been updated in slot 2, as well as
             // accounts 30 and  31 (overwritten with zero-lamport accounts in slot 1 and
@@ -11608,12 +11739,17 @@ pub mod tests {
                 accounts.write_version.load(Ordering::Acquire)
             );
 
-            // Get the hash for the latest slot, which should be the only hash in the
-            // bank_hashes map on the deserialized AccountsDb
-            assert_eq!(daccounts.bank_hashes.read().unwrap().len(), 2);
+            // Get the hashes for the latest slot, which should be the only hashes in the
+            // map on the deserialized AccountsDb (other than slot 0)
+            assert_eq!(daccounts.accounts_delta_hashes.lock().unwrap().len(), 2);
+            assert_eq!(daccounts.accounts_hashes.lock().unwrap().len(), 2);
             assert_eq!(
-                daccounts.bank_hashes.read().unwrap().get(&latest_slot),
-                accounts.bank_hashes.read().unwrap().get(&latest_slot)
+                daccounts.get_accounts_delta_hash(latest_slot).unwrap(),
+                accounts.get_accounts_delta_hash(latest_slot).unwrap(),
+            );
+            assert_eq!(
+                daccounts.get_accounts_hash(latest_slot).unwrap(),
+                accounts.get_accounts_hash(latest_slot).unwrap(),
             );
 
             daccounts.print_count_and_status("daccounts");
@@ -11625,7 +11761,6 @@ pub mod tests {
             check_storage(&daccounts, 1, 21);
             check_storage(&daccounts, 2, 31);
 
-            let ancestors = linear_ancestors(latest_slot);
             assert_eq!(
                 daccounts.update_accounts_hash_for_tests(latest_slot, &ancestors, false, false,),
                 accounts.update_accounts_hash_for_tests(latest_slot, &ancestors, false, false,)
@@ -11764,13 +11899,13 @@ pub mod tests {
         accounts.add_root(0);
 
         let mut current_slot = 1;
-        accounts.insert_default_bank_hash(current_slot, current_slot - 1);
+        accounts.insert_default_bank_hash_stats(current_slot, current_slot - 1);
         accounts.store_for_tests(current_slot, &[(&pubkey, &account)]);
         accounts.calculate_accounts_delta_hash(current_slot);
         accounts.add_root_and_flush_write_cache(current_slot);
 
         current_slot += 1;
-        accounts.insert_default_bank_hash(current_slot, current_slot - 1);
+        accounts.insert_default_bank_hash_stats(current_slot, current_slot - 1);
         accounts.store_for_tests(current_slot, &[(&pubkey, &zero_lamport_account)]);
         accounts.calculate_accounts_delta_hash(current_slot);
         accounts.add_root_and_flush_write_cache(current_slot);
@@ -11779,7 +11914,7 @@ pub mod tests {
 
         // Otherwise slot 2 will not be removed
         current_slot += 1;
-        accounts.insert_default_bank_hash(current_slot, current_slot - 1);
+        accounts.insert_default_bank_hash_stats(current_slot, current_slot - 1);
         accounts.calculate_accounts_delta_hash(current_slot);
         accounts.add_root_and_flush_write_cache(current_slot);
 
@@ -12208,13 +12343,12 @@ pub mod tests {
         db.store_for_tests(some_slot, &[(&key, &account)]);
         db.add_root(some_slot);
 
-        let bank_hashes = db.bank_hashes.read().unwrap();
-        let bank_hash = bank_hashes.get(&some_slot).unwrap();
-        assert_eq!(bank_hash.stats.num_updated_accounts, 1);
-        assert_eq!(bank_hash.stats.num_removed_accounts, 1);
-        assert_eq!(bank_hash.stats.num_lamports_stored, 1);
-        assert_eq!(bank_hash.stats.total_data_len, 2 * some_data_len as u64);
-        assert_eq!(bank_hash.stats.num_executable_accounts, 1);
+        let stats = db.get_bank_hash_stats(some_slot).unwrap();
+        assert_eq!(stats.num_updated_accounts, 1);
+        assert_eq!(stats.num_removed_accounts, 1);
+        assert_eq!(stats.num_lamports_stored, 1);
+        assert_eq!(stats.total_data_len, 2 * some_data_len as u64);
+        assert_eq!(stats.num_executable_accounts, 1);
     }
 
     // this test tests check_hash=true, which is unsupported behavior at the moment. It cannot be enabled by anything but these tests.
@@ -12235,7 +12369,7 @@ pub mod tests {
         db.store_accounts_unfrozen(
             (some_slot, &[(&key, &account)][..]),
             Some(vec![&Hash::default()]),
-            false,
+            StoreTo::Storage,
             None,
             StoreReclaims::Default,
         );
@@ -12352,7 +12486,7 @@ pub mod tests {
             Ok(_)
         );
 
-        db.bank_hashes.write().unwrap().remove(&some_slot).unwrap();
+        db.remove_bank_hash_info(&some_slot);
         assert_matches!(
             db.verify_bank_hash_and_lamports(
                 some_slot,
@@ -12373,10 +12507,7 @@ pub mod tests {
             accounts_hash: AccountsHash(Hash::new(&[0xca; HASH_BYTES])),
             stats: BankHashStats::default(),
         };
-        db.bank_hashes
-            .write()
-            .unwrap()
-            .insert(some_slot, bank_hash_info);
+        db.set_bank_hash_info(some_slot, bank_hash_info);
         assert_matches!(
             db.verify_bank_hash_and_lamports(
                 some_slot,
@@ -12467,10 +12598,7 @@ pub mod tests {
         let some_slot: Slot = 0;
         let ancestors = vec![(some_slot, 0)].into_iter().collect();
 
-        db.bank_hashes
-            .write()
-            .unwrap()
-            .insert(some_slot, BankHashInfo::default());
+        db.set_bank_hash_info(some_slot, BankHashInfo::default());
         db.add_root(some_slot);
         db.update_accounts_hash_for_tests(some_slot, &ancestors, true, true);
         assert_matches!(
@@ -12502,19 +12630,14 @@ pub mod tests {
         let ancestors = vec![(some_slot, 0)].into_iter().collect();
 
         let accounts = &[(&key, &account)][..];
-        // update AccountsDb's bank hash
-        {
-            let mut bank_hashes = db.bank_hashes.write().unwrap();
-            bank_hashes
-                .entry(some_slot)
-                .or_insert_with(BankHashInfo::default);
-        }
+        db.update_accounts_hash_for_tests(some_slot, &ancestors, false, false);
+
         // provide bogus account hashes
         let some_hash = Hash::new(&[0xca; HASH_BYTES]);
         db.store_accounts_unfrozen(
             (some_slot, accounts),
             Some(vec![&some_hash]),
-            false,
+            StoreTo::Storage,
             None,
             StoreReclaims::Default,
         );
@@ -15935,7 +16058,7 @@ pub mod tests {
         pub fn store_for_tests(&self, slot: Slot, accounts: &[(&Pubkey, &AccountSharedData)]) {
             self.store(
                 (slot, accounts, INCLUDE_SLOT_IN_HASH_TESTS),
-                true,
+                StoreTo::Cache,
                 None,
                 StoreReclaims::Default,
             );
@@ -17427,17 +17550,14 @@ pub mod tests {
         db.handle_dropped_roots_for_ancient(Vec::default());
         let slot0 = 0;
         let dropped_roots = vec![slot0];
-        db.bank_hashes
-            .write()
-            .unwrap()
-            .insert(slot0, BankHashInfo::default());
-        assert!(!db.bank_hashes.read().unwrap().is_empty());
+        db.set_bank_hash_info(slot0, BankHashInfo::default());
+        assert!(db.get_bank_hash_info(slot0).is_some());
         db.accounts_index.add_root(slot0);
         db.accounts_index.add_uncleaned_roots([slot0].into_iter());
         assert!(db.accounts_index.is_uncleaned_root(slot0));
         assert!(db.accounts_index.is_alive_root(slot0));
         db.handle_dropped_roots_for_ancient(dropped_roots);
-        assert!(db.bank_hashes.read().unwrap().is_empty());
+        assert!(db.get_bank_hash_info(slot0).is_none());
         assert!(!db.accounts_index.is_uncleaned_root(slot0));
         assert!(!db.accounts_index.is_alive_root(slot0));
     }
@@ -17461,10 +17581,7 @@ pub mod tests {
         let db = AccountsDb::new_single_for_tests();
         let slot0 = 0;
         let dropped_roots = vec![slot0];
-        db.bank_hashes
-            .write()
-            .unwrap()
-            .insert(slot0, BankHashInfo::default());
+        db.set_bank_hash_info(slot0, BankHashInfo::default());
         insert_store(&db, entry);
         db.handle_dropped_roots_for_ancient(dropped_roots);
     }

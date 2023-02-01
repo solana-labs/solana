@@ -2312,8 +2312,7 @@ fn main() {
 
     info!("{} {}", crate_name!(), solana_version::version!());
 
-    let ledger_path = parse_ledger_path(&matches, "ledger_path");
-
+    let ledger_path = PathBuf::from(value_t_or_exit!(matches, "ledger_path", String));
     let snapshot_archive_path = value_t!(matches, "snapshot_archive_path", String)
         .ok()
         .map(PathBuf::from);
