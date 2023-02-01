@@ -6736,6 +6736,7 @@ dependencies = [
  "solana-rpc-client",
  "solana-rpc-client-api",
  "solana-sdk 1.15.0",
+ "solana-streamer",
  "thiserror",
  "tokio",
 ]

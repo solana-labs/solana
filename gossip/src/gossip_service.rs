@@ -4,7 +4,7 @@ use {
     crate::{cluster_info::ClusterInfo, legacy_contact_info::LegacyContactInfo as ContactInfo},
     crossbeam_channel::{unbounded, Sender},
     rand::{thread_rng, Rng},
-    solana_client::{connection_cache::ConnectionCache, thin_client::ThinClient, tpu_connection::TpuConnection},
+    solana_client::{connection_cache::ConnectionCache, thin_client::ThinClient, tpu_connection::{TpuConnection}},
     solana_perf::recycler::Recycler,
     solana_runtime::bank_forks::BankForks,
     crossbeam_channel::RecvTimeoutError,
@@ -42,7 +42,7 @@ pub struct GossipService {
 fn recv_send_quic(
     connection_cache: &ConnectionCache,
     r: &PacketBatchReceiver,
-    _socket_addr_space: &SocketAddrSpace,
+    socket_addr_space: &SocketAddrSpace,
     stats: &mut Option<StreamerSendStats>,
 ) -> Result<()> {
     //info!("enter recv_send_quic");
@@ -52,29 +52,29 @@ fn recv_send_quic(
         packet_batch.iter().for_each(|p| stats.record(p));
     }
     //info!("recv_send_quic packet batch length: {}", packet_batch.len());
-    let packets = packet_batch.iter().filter_map(|pkt| {
+    let packets = packet_batch.iter().enumerate().filter_map(|(i, pkt)| {
         let addr = pkt.meta().socket_addr();
-        let data = pkt.data(..)?;
-        //_socket_addr_space.check(&addr).then_some((data, addr))
-        Some((data, addr))
+        let _ = pkt.data(..)?;
+        socket_addr_space.check(&addr).then_some((i, addr))
     });
     //todo: bench this and find a way to avoid the copy
-    let mut hashmap : HashMap<SocketAddr, Vec<Vec<u8>>> = HashMap::new();
+    let mut hashmap : HashMap<SocketAddr, Vec<usize>> = HashMap::new();
     for p in packets {
         match hashmap.get_mut(&p.1) {
             Some(packet_set) => {
-                packet_set.push(p.0.to_vec());
+                packet_set.push(p.0);
             },
             None => {
-                hashmap.insert(p.1, vec![p.0.to_vec()]);
+                hashmap.insert(p.1, vec![p.0]);
             }
         }
     }
+    let packet_batch = Arc::new(packet_batch);
     for packet_set in hashmap.into_iter() {
         let conn = connection_cache.get_connection(&packet_set.0);
 	    //info!("recv_send_quic connection remote address: {}", conn.tpu_addr());
-        //info!("recv_send_quic connection batch len: {}", packet_set.1.len());        
-	    let _ = conn.send_wire_transaction_batch_async(packet_set.1);
+        //info!("recv_send_quic connection batch len: {}", packet_set.1.len());     
+	    let _ = conn.send_some_wire_transaction_batch_async(packet_set.1, packet_batch.clone());
 	    //info!("recv_send_quic send result: {:?}", res);    
     }
     Ok(())

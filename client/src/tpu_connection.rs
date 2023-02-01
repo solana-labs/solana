@@ -1,11 +1,12 @@
-pub use solana_tpu_client::tpu_connection::ClientStats;
+use solana_streamer::packet::PacketBatch;
+pub use solana_tpu_client::tpu_connection::{ClientStats};
 use {
     enum_dispatch::enum_dispatch,
     rayon::iter::{IntoParallelIterator, ParallelIterator},
-    solana_quic_client::quic_client::QuicTpuConnection,
+    solana_quic_client::{quic_client::{QuicTpuConnection}},
     solana_sdk::{transaction::VersionedTransaction, transport::Result as TransportResult},
     solana_udp_client::udp_client::UdpTpuConnection,
-    std::net::SocketAddr,
+    std::{net::SocketAddr, sync::Arc},
 };
 
 #[enum_dispatch]
@@ -53,4 +54,6 @@ pub trait TpuConnection {
         T: AsRef<[u8]> + Send + Sync;
 
     fn send_wire_transaction_batch_async(&self, buffers: Vec<Vec<u8>>) -> TransportResult<()>;
+
+    fn send_some_wire_transaction_batch_async(&self, buffers: Vec<usize>, data: Arc<PacketBatch>) -> TransportResult<()>;
 }

@@ -2,7 +2,7 @@ use {
     rayon::iter::{IntoParallelIterator, ParallelIterator},
     solana_metrics::MovingStat,
     solana_sdk::{transaction::VersionedTransaction, transport::Result as TransportResult},
-    std::{net::SocketAddr, sync::atomic::AtomicU64},
+    std::{net::SocketAddr, sync::{atomic::AtomicU64}},
 };
 
 #[derive(Default)]

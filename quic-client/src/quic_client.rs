@@ -13,6 +13,7 @@ use {
         nonblocking::tpu_connection::TpuConnection as NonblockingTpuConnection,
         tpu_connection::{ClientStats, TpuConnection},
     },
+    solana_streamer::packet::PacketBatch,
     std::{
         net::SocketAddr,
         sync::{atomic::Ordering, Arc, Condvar, Mutex, MutexGuard},
@@ -20,6 +21,7 @@ use {
     },
     tokio::{runtime::Runtime, time::timeout},
 };
+
 
 pub mod temporary_pub {
     use super::*;
@@ -100,6 +102,23 @@ pub mod temporary_pub {
         let result = timeout(
             Duration::from_millis(time_out),
             connection.send_wire_transaction_batch(&buffers),
+        )
+        .await;
+        ASYNC_TASK_SEMAPHORE.release();
+        handle_send_result(result, connection)
+    }
+
+    pub async fn send_some_wire_transaction_batch_async<'a>(
+        connection: Arc<NonblockingQuicTpuConnection>,
+        buffers: Vec<usize>, data: Arc<PacketBatch>
+    ) -> TransportResult<()> {
+        let time_out = SEND_TRANSACTION_TIMEOUT_MS * buffers.len() as u64;
+
+        let send_buffs: Vec<_> = buffers.into_iter().map(|i| data[i].data(..).unwrap()).collect();
+
+        let result = timeout(
+            Duration::from_millis(time_out),
+            connection.send_wire_transaction_batch(&send_buffs),
         )
         .await;
         ASYNC_TASK_SEMAPHORE.release();

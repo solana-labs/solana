@@ -5,7 +5,8 @@ pub use solana_udp_client::udp_client::UdpTpuConnection;
 use {
     crate::tpu_connection::TpuConnection, core::iter::repeat,
     solana_sdk::transport::Result as TransportResult, solana_streamer::sendmmsg::batch_send,
-    std::net::SocketAddr,
+    solana_streamer::packet::PacketBatch,
+    std::{net::SocketAddr, sync::Arc},
 };
 
 impl TpuConnection for UdpTpuConnection {
@@ -31,5 +32,10 @@ impl TpuConnection for UdpTpuConnection {
         let pkts: Vec<_> = buffers.into_iter().zip(repeat(self.tpu_addr())).collect();
         batch_send(&self.socket, &pkts)?;
         Ok(())
+    }
+
+    fn send_some_wire_transaction_batch_async(&self, buffers: Vec<usize>, data: Arc<PacketBatch>) -> TransportResult<()> {
+        let send_buffs: Vec<_> = buffers.into_iter().map(|i| data[i].data(..).unwrap()).collect();
+        self.send_wire_transaction_batch(&send_buffs)
     }
 }
