@@ -964,7 +964,7 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                 .value_name("MILLISECS")
                 .hidden(true)
                 .takes_value(true)
-                .validator(|s| is_within_range(s, 1, MAX_BATCH_SEND_RATE_MS))
+                .validator(|s| is_within_range(s, 1..=MAX_BATCH_SEND_RATE_MS))
                 .default_value(&default_args.rpc_send_transaction_batch_ms)
                 .help("The rate at which transactions sent via rpc service are sent in batch."),
         )
@@ -1000,7 +1000,7 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                 .value_name("NUMBER")
                 .hidden(true)
                 .takes_value(true)
-                .validator(|s| is_within_range(s, 1, MAX_TRANSACTION_BATCH_SIZE))
+                .validator(|s| is_within_range(s, 1..=MAX_TRANSACTION_BATCH_SIZE))
                 .default_value(&default_args.rpc_send_transaction_batch_size)
                 .help("The size of transactions to be sent in batch."),
         )

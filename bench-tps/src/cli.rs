@@ -352,7 +352,7 @@ pub fn build_args<'a>(version: &'_ str) -> App<'a, '_> {
             Arg::with_name("num_conflict_groups")
                 .long("num-conflict-groups")
                 .takes_value(true)
-                .validator(|arg| is_within_range(arg, 1, usize::MAX - 1))
+                .validator(|arg| is_within_range(arg, 1..))
                 .help("The number of unique destination accounts per transactions 'chunk'. Lower values will result in more transaction conflicts.")
         )
 }
