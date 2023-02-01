@@ -195,7 +195,7 @@ mod builtin_programs;
 mod metrics;
 mod sysvar_cache;
 #[cfg(test)]
-pub(crate) mod tests;
+mod tests;
 mod transaction_account_state_info;
 
 pub const SECONDS_PER_YEAR: f64 = 365.25 * 24.0 * 60.0 * 60.0;
@@ -7899,7 +7899,11 @@ impl Drop for Bank {
 
 /// utility function used for testing and benchmarking.
 pub mod test_utils {
-    use {super::Bank, solana_sdk::hash::hashv};
+    use {
+        super::Bank,
+        solana_sdk::{hash::hashv, pubkey::Pubkey},
+        solana_vote_program::vote_state::{self, BlockTimestamp, VoteStateVersions},
+    };
     pub fn goto_end_of_slot(bank: &mut Bank) {
         let mut tick_hash = bank.last_blockhash();
         loop {
@@ -7910,5 +7914,18 @@ pub mod test_utils {
                 return;
             }
         }
+    }
+
+    pub fn update_vote_account_timestamp(
+        timestamp: BlockTimestamp,
+        bank: &Bank,
+        vote_pubkey: &Pubkey,
+    ) {
+        let mut vote_account = bank.get_account(vote_pubkey).unwrap_or_default();
+        let mut vote_state = vote_state::from(&vote_account).unwrap_or_default();
+        vote_state.last_timestamp = timestamp;
+        let versioned = VoteStateVersions::new_current(vote_state);
+        vote_state::to(&versioned, &mut vote_account).unwrap();
+        bank.store_account(vote_pubkey, &vote_account);
     }
 }
