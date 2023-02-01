@@ -1,8 +1,3 @@
-# Validate your changes with:
-#
-#   $ curl -F 'data=@.mergify.yml' https://gh.mergify.io/validate/
-#
-# https://doc.mergify.io/
 pull_request_rules:
   - name: label changes from community
     conditions:
