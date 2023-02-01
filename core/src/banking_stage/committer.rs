@@ -82,7 +82,7 @@ impl Committer {
             })
             .collect();
 
-        let (_, find_and_send_votes_us) = measure_us!({
+        let ((), find_and_send_votes_us) = measure_us!({
             bank_utils::find_and_send_votes(
                 batch.sanitized_transactions(),
                 &tx_results,
