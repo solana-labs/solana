@@ -540,6 +540,25 @@ pub mod move_serialized_len_ptr_in_cpi {
     solana_sdk::declare_id!("74CoWuBmt3rUVUrCb2JiSTvh6nXyBWUsK4SaMj3CtE3T");
 }
 
+<<<<<<< HEAD
+=======
+pub mod update_hashes_per_tick {
+    solana_sdk::declare_id!("3uFHb9oKdGfgZGJK9EHaAXN4USvnQtAFC13Fh5gGFS5B");
+}
+
+pub mod enable_big_mod_exp_syscall {
+    solana_sdk::declare_id!("EBq48m8irRKuE7ZnMTLvLg2UuGSqhe8s8oMqnmja1fJw");
+}
+
+pub mod disable_builtin_loader_ownership_chains {
+    solana_sdk::declare_id!("4UDcAfQ6EcA6bdcadkeHpkarkhZGJ7Bpq7wTAiRMjkoi");
+}
+
+pub mod cap_transaction_accounts_data_size {
+    solana_sdk::declare_id!("DdLwVYuvDz26JohmgSbA7mjpJFgX5zP2dkp8qsF2C33V");
+}
+
+>>>>>>> a5af54669 (Limit loaded data per transaction to a fixed cap (#29743))
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -669,6 +688,13 @@ lazy_static! {
         (drop_merkle_shreds::id(), "drop merkle shreds #29711"),
         (keep_merkle_shreds::id(), "keep merkle shreds #29711"),
         (move_serialized_len_ptr_in_cpi::id(), "cpi ignore serialized_len_ptr #29592"),
+<<<<<<< HEAD
+=======
+        (update_hashes_per_tick::id(), "Update desired hashes per tick on epoch boundary"),
+        (enable_big_mod_exp_syscall::id(), "add big_mod_exp syscall #28503"),
+        (disable_builtin_loader_ownership_chains::id(), "disable builtin loader ownership chains #29956"),
+        (cap_transaction_accounts_data_size::id(), "cap transaction accounts data size up to a limit #27839"),
+>>>>>>> a5af54669 (Limit loaded data per transaction to a fixed cap (#29743))
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()

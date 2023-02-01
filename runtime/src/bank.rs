@@ -282,7 +282,11 @@ impl RentDebits {
 }
 
 pub type BankStatusCache = StatusCache<Result<()>>;
+<<<<<<< HEAD
 #[frozen_abi(digest = "HEJXoycXvGT2pwMuKcUKzzbeemnqbfrUC4jHZx1ncaWv")]
+=======
+#[frozen_abi(digest = "AwRx17Bgesvvu9NZVwAoqofq7MU52gkwvjLvjVQpW64S")]
+>>>>>>> a5af54669 (Limit loaded data per transaction to a fixed cap (#29743))
 pub type BankSlotDelta = SlotDelta<Result<()>>;
 
 // Eager rent collection repeats in cyclic manner.
