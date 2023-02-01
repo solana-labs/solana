@@ -680,13 +680,19 @@ fn process_loader_upgradeable_instruction(
                             ..programdata_data_offset.saturating_add(buffer_data_len),
                     )
                     .ok_or(InstructionError::AccountDataTooSmall)?;
-                let buffer =
+                let mut buffer =
                     instruction_context.try_borrow_instruction_account(transaction_context, 3)?;
                 let src_slice = buffer
                     .get_data()
                     .get(buffer_data_offset..)
                     .ok_or(InstructionError::AccountDataTooSmall)?;
                 dst_slice.copy_from_slice(src_slice);
+                if invoke_context
+                    .feature_set
+                    .is_active(&enable_program_redeployment_cooldown::id())
+                {
+                    buffer.set_data_length(UpgradeableLoaderState::size_of_buffer(0))?;
+                }
             }
 
             // Update the Program account
@@ -895,6 +901,12 @@ fn process_loader_upgradeable_instruction(
             )?;
             buffer.set_lamports(0)?;
             programdata.set_lamports(programdata_balance_required)?;
+            if invoke_context
+                .feature_set
+                .is_active(&enable_program_redeployment_cooldown::id())
+            {
+                buffer.set_data_length(UpgradeableLoaderState::size_of_buffer(0))?;
+            }
 
             ic_logger_msg!(log_collector, "Upgraded program {:?}", new_program_id);
         }
@@ -1079,7 +1091,7 @@ fn process_loader_upgradeable_instruction(
                     ic_logger_msg!(log_collector, "Closed Buffer {}", close_key);
                 }
                 UpgradeableLoaderState::ProgramData {
-                    slot: _,
+                    slot,
                     upgrade_authority_address: authority_address,
                 } => {
                     instruction_context.check_number_of_instruction_accounts(4)?;
@@ -1095,6 +1107,19 @@ fn process_loader_upgradeable_instruction(
                     if program_account.get_owner() != program_id {
                         ic_logger_msg!(log_collector, "Program account not owned by loader");
                         return Err(InstructionError::IncorrectProgramId);
+                    }
+                    if invoke_context
+                        .feature_set
+                        .is_active(&enable_program_redeployment_cooldown::id())
+                    {
+                        let clock = invoke_context.get_sysvar_cache().get_clock()?;
+                        if clock.slot == slot {
+                            ic_logger_msg!(
+                                log_collector,
+                                "Program was deployed in this block already"
+                            );
+                            return Err(InstructionError::InvalidArgument);
+                        }
                     }
 
                     match program_account.get_state()? {
@@ -3574,6 +3599,10 @@ mod tests {
                 programdata_address,
             })
             .unwrap();
+        let clock_account = create_account_for_test(&Clock {
+            slot: 1,
+            ..Clock::default()
+        });
         let transaction_accounts = vec![
             (buffer_address, buffer_account.clone()),
             (recipient_address, recipient_account.clone()),
@@ -3679,6 +3708,7 @@ mod tests {
                 (recipient_address, recipient_account.clone()),
                 (authority_address, authority_account.clone()),
                 (program_address, program_account.clone()),
+                (sysvar::clock::id(), clock_account.clone()),
             ],
             vec![
                 AccountMeta {
@@ -3737,10 +3767,7 @@ mod tests {
                     sysvar::rent::id(),
                     create_account_for_test(&Rent::default()),
                 ),
-                (
-                    sysvar::clock::id(),
-                    create_account_for_test(&Clock::default()),
-                ),
+                (sysvar::clock::id(), clock_account),
                 (
                     system_program::id(),
                     AccountSharedData::new(0, 0, &system_program::id()),
