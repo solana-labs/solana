@@ -139,7 +139,7 @@ pub struct BankSnapshotInfo {
     /// Type of the snapshot
     pub snapshot_type: BankSnapshotType,
     /// Path to the bank snapshot directory
-    pub bank_snapshot_dir: PathBuf,
+    pub snapshot_dir: PathBuf,
 }
 
 impl PartialOrd for BankSnapshotInfo {
@@ -158,7 +158,7 @@ impl Ord for BankSnapshotInfo {
 impl BankSnapshotInfo {
     pub fn new_from_dir(
         bank_snapshots_dir: impl AsRef<Path>,
-        slot: u64,
+        slot: Slot,
     ) -> Option<BankSnapshotInfo> {
         // check this directory to see if there is a BankSnapshotPre and/or
         // BankSnapshotPost file
@@ -171,7 +171,7 @@ impl BankSnapshotInfo {
             return Some(BankSnapshotInfo {
                 slot,
                 snapshot_type: BankSnapshotType::Pre,
-                bank_snapshot_dir,
+                snapshot_dir: bank_snapshot_dir,
             });
         }
 
@@ -179,7 +179,7 @@ impl BankSnapshotInfo {
             return Some(BankSnapshotInfo {
                 slot,
                 snapshot_type: BankSnapshotType::Post,
-                bank_snapshot_dir,
+                snapshot_dir: bank_snapshot_dir,
             });
         }
 
@@ -187,9 +187,7 @@ impl BankSnapshotInfo {
     }
 
     pub fn snapshot_path(&self) -> PathBuf {
-        let mut bank_snapshot_path = self
-            .bank_snapshot_dir
-            .join(get_snapshot_file_name(self.slot));
+        let mut bank_snapshot_path = self.snapshot_dir.join(get_snapshot_file_name(self.slot));
 
         let ext = match self.snapshot_type {
             BankSnapshotType::Pre => BANK_SNAPSHOT_PRE_FILENAME_EXTENSION,
@@ -949,7 +947,7 @@ pub fn add_bank_snapshot(
     Ok(BankSnapshotInfo {
         slot,
         snapshot_type: BankSnapshotType::Pre,
-        bank_snapshot_dir,
+        snapshot_dir: bank_snapshot_dir,
     })
 }
 
@@ -2237,7 +2235,7 @@ pub fn purge_old_bank_snapshots(bank_snapshots_dir: impl AsRef<Path>) {
                 if r.is_err() {
                     warn!(
                         "Couldn't remove bank snapshot at: {}",
-                        bank_snapshot.bank_snapshot_dir.display()
+                        bank_snapshot.snapshot_dir.display()
                     );
                 }
             })

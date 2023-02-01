@@ -93,12 +93,9 @@ impl AccountsPackage {
             fs::create_dir_all(&snapshot_hardlink_dir)?;
             let snapshot_path = bank_snapshot_info.snapshot_path();
             let file_name = snapshot_utils::path_to_file_name_str(&snapshot_path)?;
-            fs::hard_link(
-                bank_snapshot_info.snapshot_path(),
-                snapshot_hardlink_dir.join(file_name),
-            )?;
+            fs::hard_link(&snapshot_path, snapshot_hardlink_dir.join(file_name))?;
             let status_cache_path = bank_snapshot_info
-                .bank_snapshot_dir
+                .snapshot_dir
                 .join(SNAPSHOT_STATUS_CACHE_FILENAME);
             let status_cache_file_name = snapshot_utils::path_to_file_name_str(&status_cache_path)?;
             fs::hard_link(
