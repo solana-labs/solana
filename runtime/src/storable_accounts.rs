@@ -130,7 +130,7 @@ impl<'a> StorableAccounts<'a, StoredAccountMeta<'a>>
     for (Slot, &'a [&'a StoredAccountMeta<'a>], IncludeSlotInHash)
 {
     fn pubkey(&self, index: usize) -> &Pubkey {
-        self.1[index].pubkey()
+        self.account(index).pubkey()
     }
     fn account(&self, index: usize) -> &StoredAccountMeta<'a> {
         self.1[index]
@@ -155,10 +155,10 @@ impl<'a> StorableAccounts<'a, StoredAccountMeta<'a>>
         true
     }
     fn hash(&self, index: usize) -> &Hash {
-        self.1[index].hash
+        self.account(index).hash
     }
     fn write_version(&self, index: usize) -> u64 {
-        self.1[index].meta.write_version_obsolete
+        self.account(index).meta.write_version_obsolete
     }
 }
 
@@ -173,7 +173,7 @@ impl<'a> StorableAccounts<'a, StoredAccountMeta<'a>>
     )
 {
     fn pubkey(&self, index: usize) -> &Pubkey {
-        self.1[index].pubkey()
+        self.account(index).pubkey()
     }
     fn account(&self, index: usize) -> &StoredAccountMeta<'a> {
         self.1[index]
@@ -198,10 +198,10 @@ impl<'a> StorableAccounts<'a, StoredAccountMeta<'a>>
         true
     }
     fn hash(&self, index: usize) -> &Hash {
-        self.1[index].hash
+        self.account(index).hash
     }
     fn write_version(&self, index: usize) -> u64 {
-        self.1[index].meta.write_version_obsolete
+        self.account(index).meta.write_version_obsolete
     }
 }
 
