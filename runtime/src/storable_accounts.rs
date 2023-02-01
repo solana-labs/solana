@@ -174,7 +174,9 @@ pub struct StorableAccountsBySlot<'a> {
     /// starting_offsets[0] is the starting offset of slots_and_accounts[1]
     /// The starting offset of slots_and_accounts[0] is always 0
     starting_offsets: Vec<usize>,
+    /// true if there is more than 1 slot represented in slots_and_accounts
     contains_multiple_slots: bool,
+    /// total len of all accounts, across all slots_and_accounts
     len: usize,
 }
 
@@ -231,8 +233,7 @@ impl<'a> StorableAccountsBySlot<'a> {
 ///  ignore slot when calculating an account hash #28420
 impl<'a> StorableAccounts<'a, StoredAccountMeta<'a>> for StorableAccountsBySlot<'a> {
     fn pubkey(&self, index: usize) -> &Pubkey {
-        let indexes = self.find_internal_index(index);
-        self.slots_and_accounts[indexes.0].1[indexes.1].pubkey()
+        self.account(index).pubkey()
     }
     fn account(&self, index: usize) -> &StoredAccountMeta<'a> {
         let indexes = self.find_internal_index(index);
@@ -258,14 +259,10 @@ impl<'a> StorableAccounts<'a, StoredAccountMeta<'a>> for StorableAccountsBySlot<
         true
     }
     fn hash(&self, index: usize) -> &Hash {
-        let indexes = self.find_internal_index(index);
-        self.slots_and_accounts[indexes.0].1[indexes.1].hash
+        self.account(index).hash
     }
     fn write_version(&self, index: usize) -> u64 {
-        let indexes = self.find_internal_index(index);
-        self.slots_and_accounts[indexes.0].1[indexes.1]
-            .meta
-            .write_version_obsolete
+        self.account(index).meta.write_version_obsolete
     }
 }
 
@@ -502,12 +499,9 @@ pub mod tests {
                     false,
                     0,
                 );
-                let starting_slot = 0;
-                let max_slots = 100;
                 raw.push((
                     pk,
                     account.clone(),
-                    starting_slot % max_slots,
                     StoredMeta {
                         write_version_obsolete: 500 + (entry * 3) as u64, // just something
                         pubkey: pk,
@@ -525,8 +519,8 @@ pub mod tests {
                 let offset = 99;
                 let stored_size = 101;
                 raw2.push(StoredAccountMeta {
-                    meta: &raw[entry as usize].3,
-                    account_meta: &raw[entry as usize].4,
+                    meta: &raw[entry as usize].2,
+                    account_meta: &raw[entry as usize].3,
                     data: &data,
                     offset,
                     stored_size,
