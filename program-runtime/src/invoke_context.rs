@@ -898,8 +898,7 @@ impl<'a> InvokeContext<'a> {
                         .last()
                         .expect("Inconsistent trace log stack")
                         .len()
-                        .checked_sub(1)
-                        .expect("Inconsistent trace log stack"),
+                        .saturating_sub(1),
                     amount,
                 ));
         }
