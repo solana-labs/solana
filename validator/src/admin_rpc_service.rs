@@ -212,6 +212,14 @@ pub trait AdminRpc {
         meta: Self::Metadata,
         pubkey_str: String,
     ) -> Result<HashMap<RpcAccountIndex, usize>>;
+
+    #[rpc(meta, name = "getLargestIndexKeys")]
+    fn get_largest_index_keys(
+        &self,
+        meta: Self::Metadata,
+        secondary_index: RpcAccountIndex,
+        max_entries: usize,
+    ) -> Result<Vec<(String, usize)>>;
 }
 
 pub struct AdminRpcImpl;
@@ -431,6 +439,34 @@ impl AdminRpc for AdminRpcImpl {
             Ok(found_sizes)
         })
     }
+
+    fn get_largest_index_keys(
+        &self,
+        meta: Self::Metadata,
+        secondary_index: RpcAccountIndex,
+        max_entries: usize,
+    ) -> Result<Vec<(String, usize)>> {
+        debug!(
+            "get_largest_index_keys rpc request received: {:?}",
+            max_entries
+        );
+        let secondary_index = account_index_from_rpc_account_index(&secondary_index);
+        meta.with_post_init(|post_init| {
+            let bank = post_init.bank_forks.read().unwrap().root_bank();
+            let enabled_account_indexes = &bank.accounts().accounts_db.account_indexes;
+            if enabled_account_indexes.is_empty() {
+                debug!("get_secondary_index_key_size: secondary index not enabled.");
+                return Ok(Vec::new());
+            };
+            let accounts_index = &bank.accounts().accounts_db.accounts_index;
+            let largest_keys = accounts_index
+                .get_largest_keys(&secondary_index, max_entries)
+                .iter()
+                .map(|&(x, y)| (y.to_string(), x))
+                .collect::<Vec<_>>();
+            Ok(largest_keys)
+        })
+    }
 }
 
 impl AdminRpcImpl {
@@ -485,6 +521,14 @@ fn rpc_account_index_from_account_index(account_index: &AccountIndex) -> RpcAcco
         AccountIndex::ProgramId => RpcAccountIndex::ProgramId,
         AccountIndex::SplTokenOwner => RpcAccountIndex::SplTokenOwner,
         AccountIndex::SplTokenMint => RpcAccountIndex::SplTokenMint,
+    }
+}
+
+fn account_index_from_rpc_account_index(rpc_account_index: &RpcAccountIndex) -> AccountIndex {
+    match rpc_account_index {
+        RpcAccountIndex::ProgramId => AccountIndex::ProgramId,
+        RpcAccountIndex::SplTokenOwner => AccountIndex::SplTokenOwner,
+        RpcAccountIndex::SplTokenMint => AccountIndex::SplTokenMint,
     }
 }
 
@@ -605,6 +649,7 @@ pub fn load_staked_nodes_overrides(
 mod tests {
     use {
         super::*,
+        rand::{distributions::Uniform, thread_rng, Rng},
         serde_json::Value,
         solana_account_decoder::parse_token::spl_token_pubkey,
         solana_core::tower_storage::NullTowerStorage,
@@ -614,9 +659,11 @@ mod tests {
             accounts_index::AccountSecondaryIndexes,
             bank::{Bank, BankTestConfig},
             inline_spl_token,
+            secondary_index::MAX_NUM_LARGEST_INDEX_KEYS_RETURNED,
         },
         solana_sdk::{
             account::{Account, AccountSharedData},
+            pubkey::Pubkey,
             system_program,
         },
         solana_streamer::socket::SocketAddrSpace,
@@ -624,7 +671,7 @@ mod tests {
             solana_program::{program_option::COption, program_pack::Pack},
             state::{Account as TokenAccount, AccountState as TokenAccountState, Mint},
         },
-        std::{collections::HashSet, sync::atomic::AtomicBool},
+        std::{collections::HashSet, str::FromStr, sync::atomic::AtomicBool},
     };
 
     #[derive(Default)]
@@ -1009,6 +1056,185 @@ mod tests {
                 let sizes: HashMap<RpcAccountIndex, usize> =
                     serde_json::from_value(result["result"].clone()).unwrap();
                 assert!(sizes.is_empty());
+            }
+        }
+    }
+
+    #[test]
+    fn test_get_largest_index_keys() {
+        // Constants
+        const NUM_DUMMY_ACCOUNTS: usize = 50;
+        const MAX_CHILD_ACCOUNTS: usize = 5; // Set low because it induces lots of same key size entries in the ProgramID list
+        const MAX_MINT_ACCOUNTS: usize = 50;
+        const MAX_TOKEN_ACCOUNTS: usize = 100;
+
+        // Set secondary indexes
+        let account_indexes = AccountSecondaryIndexes {
+            keys: None,
+            indexes: HashSet::from([
+                AccountIndex::ProgramId,
+                AccountIndex::SplTokenMint,
+                AccountIndex::SplTokenOwner,
+            ]),
+        };
+
+        // RPC & Bank Setup
+        let rpc = RpcHandler::start_with_config(TestConfig { account_indexes });
+
+        let bank = rpc.root_bank();
+        let RpcHandler { io, meta, .. } = rpc;
+
+        // Add some basic system owned account
+        let mut dummy_account_pubkeys = Vec::with_capacity(NUM_DUMMY_ACCOUNTS);
+        let mut num_generator = thread_rng();
+        let key_size_range = Uniform::new_inclusive(0, MAX_CHILD_ACCOUNTS);
+        for _i in 1..=NUM_DUMMY_ACCOUNTS {
+            let pubkey = Pubkey::new_unique();
+            dummy_account_pubkeys.push(pubkey);
+            let account = AccountSharedData::from(Account {
+                lamports: 11111111,
+                owner: system_program::id(),
+                ..Account::default()
+            });
+            bank.store_account(&pubkey, &account);
+        }
+
+        // Now add a random number of accounts each owned by one of the newely
+        // created dummy accounts
+        for dummy_account in &dummy_account_pubkeys {
+            // Add child accounts to each dummy account
+            let num_children = (&mut num_generator).sample_iter(key_size_range).next();
+            for _j in 0..num_children.unwrap_or(0) {
+                let child_pubkey = Pubkey::new_unique();
+                let child_account = AccountSharedData::from(Account {
+                    lamports: bank.get_minimum_balance_for_rent_exemption(0),
+                    owner: *dummy_account,
+                    ..Account::default()
+                });
+                bank.store_account(&child_pubkey, &child_account);
+            }
+        }
+
+        let num_token_accounts_range = Uniform::new_inclusive(1, MAX_TOKEN_ACCOUNTS);
+        let num_mint_accounts_range = Uniform::new_inclusive(NUM_DUMMY_ACCOUNTS, MAX_MINT_ACCOUNTS);
+        let dummy_account_pubkey_index_range = Uniform::new(0, NUM_DUMMY_ACCOUNTS);
+
+        let num_token_accounts = (&mut num_generator)
+            .sample_iter(num_token_accounts_range)
+            .next();
+        let num_mint_accounts = (&mut num_generator)
+            .sample_iter(num_mint_accounts_range)
+            .next();
+
+        let mut account_data = vec![0; TokenAccount::get_packed_len()];
+        let mut mint_data = vec![0; Mint::get_packed_len()];
+
+        // Make a bunch of SPL Tokens each with some random number of SPL Token Accounts that have the token in them
+        for _i in 0..num_mint_accounts.unwrap_or(NUM_DUMMY_ACCOUNTS) {
+            let mint_pubkey = Pubkey::new_unique();
+            for _j in 0..num_token_accounts.unwrap_or(1) {
+                let owner_pubkey = dummy_account_pubkeys[(&mut num_generator)
+                    .sample_iter(dummy_account_pubkey_index_range)
+                    .next()
+                    .unwrap()];
+                let delagate_pubkey = dummy_account_pubkeys[(&mut num_generator)
+                    .sample_iter(dummy_account_pubkey_index_range)
+                    .next()
+                    .unwrap()];
+                let account_pubkey = Pubkey::new_unique();
+                // Add a token account
+                let token_state = TokenAccount {
+                    mint: spl_token_pubkey(&mint_pubkey),
+                    owner: spl_token_pubkey(&owner_pubkey),
+                    delegate: COption::Some(spl_token_pubkey(&delagate_pubkey)),
+                    amount: 100,
+                    state: TokenAccountState::Initialized,
+                    is_native: COption::None,
+                    delegated_amount: 10,
+                    close_authority: COption::Some(spl_token_pubkey(&owner_pubkey)),
+                };
+                TokenAccount::pack(token_state, &mut account_data).unwrap();
+                let token_account = AccountSharedData::from(Account {
+                    lamports: 22222222,
+                    data: account_data.to_vec(),
+                    owner: inline_spl_token::id(),
+                    ..Account::default()
+                });
+                bank.store_account(&account_pubkey, &token_account);
+            }
+            // Add the mint
+            let mint_authority_pubkey = dummy_account_pubkeys[(&mut num_generator)
+                .sample_iter(dummy_account_pubkey_index_range)
+                .next()
+                .unwrap()];
+            let mint_state = Mint {
+                mint_authority: COption::Some(spl_token_pubkey(&mint_authority_pubkey)),
+                supply: 100 * (num_token_accounts.unwrap_or(1) as u64),
+                decimals: 2,
+                is_initialized: true,
+                freeze_authority: COption::Some(spl_token_pubkey(&mint_authority_pubkey)),
+            };
+            Mint::pack(mint_state, &mut mint_data).unwrap();
+            let mint_account = AccountSharedData::from(Account {
+                lamports: 33333333,
+                data: mint_data.to_vec(),
+                owner: inline_spl_token::id(),
+                ..Account::default()
+            });
+            bank.store_account(&mint_pubkey, &mint_account);
+        }
+
+        // Collect largest key list for ProgramIDs
+        let req = format!(
+            r#"{{"jsonrpc":"2.0","id":1,"method":"getLargestIndexKeys","params":["{}", {}]}}"#,
+            "programId", MAX_NUM_LARGEST_INDEX_KEYS_RETURNED,
+        );
+        let res = io.handle_request_sync(&req, meta.clone());
+        let result: Value = serde_json::from_str(&res.expect("actual response"))
+            .expect("actual response deserialization");
+        let largest_program_id_keys: Vec<(String, usize)> =
+            serde_json::from_value(result["result"].clone()).unwrap();
+        // Collect largest key list for SPLTokenOwners
+        let req = format!(
+            r#"{{"jsonrpc":"2.0","id":1,"method":"getLargestIndexKeys","params":["{}", {}]}}"#,
+            "splTokenOwner", MAX_NUM_LARGEST_INDEX_KEYS_RETURNED,
+        );
+        let res = io.handle_request_sync(&req, meta.clone());
+        let result: Value = serde_json::from_str(&res.expect("actual response"))
+            .expect("actual response deserialization");
+        let largest_spl_token_owner_keys: Vec<(String, usize)> =
+            serde_json::from_value(result["result"].clone()).unwrap();
+        // Collect largest key list for SPLTokenMints
+        let req = format!(
+            r#"{{"jsonrpc":"2.0","id":1,"method":"getLargestIndexKeys","params":["{}", {}]}}"#,
+            "splTokenMint", MAX_NUM_LARGEST_INDEX_KEYS_RETURNED,
+        );
+        let res = io.handle_request_sync(&req, meta);
+        let result: Value = serde_json::from_str(&res.expect("actual response"))
+            .expect("actual response deserialization");
+        let largest_spl_token_mint_keys: Vec<(String, usize)> =
+            serde_json::from_value(result["result"].clone()).unwrap();
+
+        let largest_keys = vec![
+            largest_program_id_keys,
+            largest_spl_token_owner_keys,
+            largest_spl_token_mint_keys,
+        ];
+
+        // Make sure key lists conform to expected output
+        for key_list in largest_keys {
+            // No longer than the max
+            assert!(key_list.len() <= MAX_NUM_LARGEST_INDEX_KEYS_RETURNED);
+            let key_list_pubkeys = key_list
+                .iter()
+                .map(|(k, _)| Pubkey::from_str(k).unwrap())
+                .collect::<Vec<Pubkey>>();
+            // In sorted order: Descending key size, where ties are sorted by descending pubkey
+            for i in 0..key_list.len() - 1 {
+                assert!(key_list[i].1 >= key_list[i + 1].1);
+                if key_list[i].1 == key_list[i + 1].1 {
+                    assert!(key_list_pubkeys[i] >= key_list_pubkeys[i + 1]);
+                }
             }
         }
     }
