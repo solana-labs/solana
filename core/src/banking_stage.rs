@@ -461,11 +461,15 @@ impl BankingStage {
                 let data_budget = data_budget.clone();
                 let connection_cache = connection_cache.clone();
                 let bank_forks = bank_forks.clone();
+
+                let decision_maker = DecisionMaker::new(cluster_info.id(), poh_recorder.clone());
+
                 Builder::new()
                     .name(format!("solBanknStgTx{i:02}"))
                     .spawn(move || {
                         Self::process_loop(
                             &mut packet_deserializer,
+                            &decision_maker,
                             &poh_recorder,
                             &cluster_info,
                             &mut recv_start,
@@ -631,7 +635,7 @@ impl BankingStage {
 
     #[allow(clippy::too_many_arguments)]
     fn process_buffered_packets(
-        my_pubkey: &Pubkey,
+        decision_maker: &DecisionMaker,
         socket: &UdpSocket,
         poh_recorder: &Arc<RwLock<PohRecorder>>,
         cluster_info: &ClusterInfo,
@@ -652,11 +656,7 @@ impl BankingStage {
             return;
         }
         let ((metrics_action, decision), make_decision_time) =
-            measure!(DecisionMaker::make_consume_or_forward_decision(
-                my_pubkey,
-                poh_recorder,
-                slot_metrics_tracker
-            ));
+            measure!(decision_maker.make_consume_or_forward_decision(slot_metrics_tracker));
         slot_metrics_tracker.increment_make_decision_us(make_decision_time.as_us());
 
         match decision {
@@ -734,6 +734,7 @@ impl BankingStage {
     #[allow(clippy::too_many_arguments)]
     fn process_loop(
         packet_deserializer: &mut PacketDeserializer,
+        decision_maker: &DecisionMaker,
         poh_recorder: &Arc<RwLock<PohRecorder>>,
         cluster_info: &ClusterInfo,
         recv_start: &mut Instant,
@@ -756,13 +757,12 @@ impl BankingStage {
         let mut last_metrics_update = Instant::now();
 
         loop {
-            let my_pubkey = cluster_info.id();
             if !unprocessed_transaction_storage.is_empty()
                 || last_metrics_update.elapsed() >= SLOT_BOUNDARY_CHECK_PERIOD
             {
                 let (_, process_buffered_packets_time) = measure!(
                     Self::process_buffered_packets(
-                        &my_pubkey,
+                        decision_maker,
                         &socket,
                         poh_recorder,
                         cluster_info,
