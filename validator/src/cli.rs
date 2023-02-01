@@ -1183,6 +1183,12 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                       This option is for use during testing."),
         )
         .arg(
+            Arg::with_name("accounts_db_create_ancient_storage_packed")
+                .long("accounts-db-create-ancient-storage-packed")
+                .help("Create ancient storages in one shot instead of appending.")
+                .hidden(true),
+            )
+        .arg(
             Arg::with_name("accounts_db_ancient_append_vecs")
                 .long("accounts-db-ancient-append-vecs")
                 .value_name("SLOT-OFFSET")
