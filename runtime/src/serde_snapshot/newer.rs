@@ -5,7 +5,6 @@ use {
         *,
     },
     crate::{
-        accounts_db::BankHashInfo,
         accounts_hash::AccountsHash,
         ancestors::AncestorsForSerialization,
         stakes::{serde_stakes_enum_compat, StakesEnum},

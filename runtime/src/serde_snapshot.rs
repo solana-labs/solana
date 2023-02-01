@@ -3,9 +3,9 @@ use {
         accounts::Accounts,
         accounts_db::{
             AccountShrinkThreshold, AccountStorageEntry, AccountsDb, AccountsDbConfig, AppendVecId,
-            AtomicAppendVecId, BankHashInfo, IndexGenerationInfo,
+            AtomicAppendVecId, BankHashStats, IndexGenerationInfo,
         },
-        accounts_hash::AccountsHash,
+        accounts_hash::{AccountsDeltaHash, AccountsHash},
         accounts_index::AccountSecondaryIndexes,
         accounts_update_notifier_interface::AccountsUpdateNotifier,
         append_vec::{AppendVec, StoredMetaWriteVersion},
@@ -79,6 +79,13 @@ pub struct AccountsDbFields<T>(
     #[serde(deserialize_with = "default_on_eof")]
     Vec<(Slot, Hash)>,
 );
+
+#[derive(Clone, Default, Debug, Serialize, Deserialize, PartialEq, Eq, AbiExample)]
+struct BankHashInfo {
+    accounts_delta_hash: AccountsDeltaHash,
+    accounts_hash: AccountsHash,
+    stats: BankHashStats,
+}
 
 /// Helper type to wrap BufReader streams when deserializing and reconstructing from either just a
 /// full snapshot, or both a full and incremental snapshot
