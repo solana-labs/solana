@@ -40,6 +40,36 @@ use {
 /// Number of signatures for all transactions in ~1 week at ~100K TPS
 pub const NUM_SIGNATURES_FOR_TXS: u64 = 100_000 * 60 * 60 * 24 * 7;
 
+fn create_connection_cache(
+    tpu_connection_pool_size: usize,
+    use_quic: bool,
+    bind_address: IpAddr,
+    client_node_id: &Keypair,
+    stake: u64,
+    total_stake: u64,
+) -> Arc<ConnectionCache> {
+    match use_quic {
+        true => {
+            let mut connection_cache = ConnectionCache::new(tpu_connection_pool_size);
+            connection_cache
+                .update_client_certificate(client_node_id, bind_address)
+                .expect("Failed to update QUIC client certificates");
+
+            let staked_nodes = Arc::new(RwLock::new(StakedNodes::default()));
+            connection_cache.set_staked_nodes(&staked_nodes, &client_node_id.pubkey());
+            staked_nodes.write().unwrap().total_stake = total_stake;
+
+            staked_nodes
+                .write()
+                .unwrap()
+                .pubkey_stake_map
+                .insert(client_node_id.pubkey(), stake);
+            Arc::new(connection_cache)
+        }
+        false => Arc::new(ConnectionCache::with_udp(tpu_connection_pool_size)),
+    }
+}
+
 #[allow(clippy::too_many_arguments)]
 fn create_client(
     external_client_type: &ExternalClientType,
@@ -47,13 +77,10 @@ fn create_client(
     json_rpc_url: &str,
     websocket_url: &str,
     multi_client: bool,
-    use_quic: bool,
-    tpu_connection_pool_size: usize,
     rpc_tpu_sockets: Option<(SocketAddr, SocketAddr)>,
     num_nodes: usize,
     target_node: Option<Pubkey>,
-    bind_address: IpAddr,
-    client_node_id: &Keypair,
+    connection_cache: Arc<ConnectionCache>,
 ) -> Arc<dyn BenchTpsClient + Send + Sync> {
     match external_client_type {
         ExternalClientType::RpcClient => Arc::new(RpcClient::new_with_commitment(
@@ -61,20 +88,6 @@ fn create_client(
             CommitmentConfig::confirmed(),
         )),
         ExternalClientType::ThinClient => {
-            let connection_cache = match use_quic {
-                true => {
-                    let mut connection_cache = ConnectionCache::new(tpu_connection_pool_size);
-                    connection_cache
-                        .update_client_certificate(client_node_id, bind_address)
-                        .expect("Failed to update QUIC client certificates");
-
-                    let staked_nodes = Arc::new(RwLock::new(StakedNodes::default()));
-                    connection_cache.set_staked_nodes(&staked_nodes, &client_node_id.pubkey());
-                    Arc::new(connection_cache)
-                }
-                false => Arc::new(ConnectionCache::with_udp(tpu_connection_pool_size)),
-            };
-
             if let Some((rpc, tpu)) = rpc_tpu_sockets {
                 Arc::new(ThinClient::new(rpc, tpu, connection_cache))
             } else {
@@ -125,10 +138,6 @@ fn create_client(
                 json_rpc_url.to_string(),
                 CommitmentConfig::confirmed(),
             ));
-            let connection_cache = match use_quic {
-                true => ConnectionCache::new(tpu_connection_pool_size),
-                false => ConnectionCache::with_udp(tpu_connection_pool_size),
-            };
             match connection_cache {
                 ConnectionCache::Udp(cache) => Arc::new(
                     TpuClient::new_with_connection_cache(
@@ -189,6 +198,8 @@ fn main() {
         instruction_padding_config,
         bind_address,
         client_node_id,
+        client_node_stake,
+        client_node_total_stake,
         ..
     } = &cli_config;
 
@@ -246,19 +257,24 @@ fn main() {
             None
         };
 
+    let connection_cache = create_connection_cache(
+        *tpu_connection_pool_size,
+        *use_quic,
+        *bind_address,
+        client_node_id,
+        *client_node_stake,
+        *client_node_total_stake,
+    );
     let client = create_client(
         external_client_type,
         entrypoint_addr,
         json_rpc_url,
         websocket_url,
         *multi_client,
-        *use_quic,
-        *tpu_connection_pool_size,
         rpc_tpu_sockets,
         *num_nodes,
         *target_node,
-        *bind_address,
-        client_node_id,
+        connection_cache,
     );
     if let Some(instruction_padding_config) = instruction_padding_config {
         info!(
