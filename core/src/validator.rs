@@ -729,12 +729,14 @@ impl Validator {
         let max_slots = Arc::new(MaxSlots::default());
         let (completed_data_sets_sender, completed_data_sets_receiver) =
             bounded(MAX_COMPLETED_DATA_SETS_IN_CHANNEL);
-        let completed_data_sets_service = CompletedDataSetsService::new(
+        let completed_data_sets_service = CompletedDataSetsService::run(
+            exit.clone(),
             completed_data_sets_receiver,
             blockstore.clone(),
-            rpc_subscriptions.clone(),
-            &exit,
-            max_slots.clone(),
+            CompletedDataSetsService::construct_handlers(
+                rpc_subscriptions.clone(),
+                max_slots.clone(),
+            ),
         );
 
         let startup_verification_complete;

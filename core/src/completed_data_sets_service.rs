@@ -5,12 +5,14 @@
 //! provided to the [`CompletedDataSetsService`].
 
 use {
+    self::{max_slot::MaxSlot, notify_rpc_subscriptions::NotifyRpcSubscriptions},
     crossbeam_channel::{Receiver, RecvTimeoutError, Sender},
     solana_entry::entry::Entry,
     solana_ledger::blockstore::{Blockstore, CompletedDataSetInfo},
     solana_rpc::{max_slots::MaxSlots, rpc_subscriptions::RpcSubscriptions},
-    solana_sdk::signature::Signature,
+    solana_sdk::clock::Slot,
     std::{
+        iter::once,
         sync::{
             atomic::{AtomicBool, Ordering},
             Arc,
@@ -20,85 +22,60 @@ use {
     },
 };
 
+pub mod max_slot;
+pub mod notify_rpc_subscriptions;
+
 pub type CompletedDataSetsReceiver = Receiver<Vec<CompletedDataSetInfo>>;
 pub type CompletedDataSetsSender = Sender<Vec<CompletedDataSetInfo>>;
+
+/// Holds a [`Vec<Entry>`] deserialized from a given [`CompletedDataSetInfo`].
+pub struct SlotEntries<'entries> {
+    pub slot: Slot,
+    pub entries: &'entries [Entry],
+}
+
+pub type CompletedDataSetHandler = Box<dyn Fn(SlotEntries) + Send>;
 
 pub struct CompletedDataSetsService {
     thread_hdl: JoinHandle<()>,
 }
 
 impl CompletedDataSetsService {
-    pub fn new(
-        completed_sets_receiver: CompletedDataSetsReceiver,
+    /// Starts a thread that is running a `CompletedDataSetsService` instance, sending received
+    /// [`Entry`]es into the provided set of `handlers`.
+    pub fn run(
+        exit: Arc<AtomicBool>,
+        receiver: CompletedDataSetsReceiver,
         blockstore: Arc<Blockstore>,
-        rpc_subscriptions: Arc<RpcSubscriptions>,
-        exit: &Arc<AtomicBool>,
-        max_slots: Arc<MaxSlots>,
+        handlers: Vec<CompletedDataSetHandler>,
     ) -> Self {
-        let exit = exit.clone();
+        let process = move || loop {
+            if exit.load(Ordering::Relaxed) {
+                break;
+            }
+
+            match forward_completed(&receiver, &blockstore, &handlers) {
+                Ok(()) => (),
+                Err(_) => break,
+            }
+        };
+
         let thread_hdl = Builder::new()
             .name("solComplDataSet".to_string())
-            .spawn(move || loop {
-                if exit.load(Ordering::Relaxed) {
-                    break;
-                }
-                if let Err(RecvTimeoutError::Disconnected) = Self::recv_completed_data_sets(
-                    &completed_sets_receiver,
-                    &blockstore,
-                    &rpc_subscriptions,
-                    &max_slots,
-                ) {
-                    break;
-                }
-            })
+            .spawn(process)
             .unwrap();
         Self { thread_hdl }
     }
 
-    fn recv_completed_data_sets(
-        completed_sets_receiver: &CompletedDataSetsReceiver,
-        blockstore: &Blockstore,
-        rpc_subscriptions: &RpcSubscriptions,
-        max_slots: &Arc<MaxSlots>,
-    ) -> Result<(), RecvTimeoutError> {
-        let completed_data_sets = completed_sets_receiver.recv_timeout(Duration::from_secs(1))?;
-        let mut max_slot = 0;
-        for completed_set_info in std::iter::once(completed_data_sets)
-            .chain(completed_sets_receiver.try_iter())
-            .flatten()
-        {
-            let CompletedDataSetInfo {
-                slot,
-                start_index,
-                end_index,
-            } = completed_set_info;
-            max_slot = max_slot.max(slot);
-            match blockstore.get_entries_in_data_block(slot, start_index, end_index, None) {
-                Ok(entries) => {
-                    let transactions = Self::get_transaction_signatures(entries);
-                    if !transactions.is_empty() {
-                        rpc_subscriptions.notify_signatures_received((slot, transactions));
-                    }
-                }
-                Err(e) => warn!("completed-data-set-service deserialize error: {:?}", e),
-            }
-        }
-        max_slots
-            .shred_insert
-            .fetch_max(max_slot, Ordering::Relaxed);
-
-        Ok(())
-    }
-
-    fn get_transaction_signatures(entries: Vec<Entry>) -> Vec<Signature> {
-        entries
-            .into_iter()
-            .flat_map(|e| {
-                e.transactions
-                    .into_iter()
-                    .filter_map(|mut t| t.signatures.drain(..).next())
-            })
-            .collect::<Vec<Signature>>()
+    /// Constructs a list with all handlers defined in submodules of this module.
+    pub fn construct_handlers(
+        rpc_subscriptions: Arc<RpcSubscriptions>,
+        max_slots: Arc<MaxSlots>,
+    ) -> Vec<CompletedDataSetHandler> {
+        vec![
+            NotifyRpcSubscriptions::handler(rpc_subscriptions),
+            MaxSlot::handler(max_slots),
+        ]
     }
 
     pub fn join(self) -> thread::Result<()> {
@@ -106,39 +83,46 @@ impl CompletedDataSetsService {
     }
 }
 
-#[cfg(test)]
-pub mod test {
-    use {
-        super::*,
-        solana_sdk::{
-            hash::Hash,
-            signature::{Keypair, Signer},
-            transaction::Transaction,
-        },
-    };
-
-    #[test]
-    fn test_zero_signatures() {
-        let tx = Transaction::new_with_payer(&[], None);
-        let entries = vec![Entry::new(&Hash::default(), 1, vec![tx])];
-        let signatures = CompletedDataSetsService::get_transaction_signatures(entries);
-        assert!(signatures.is_empty());
+fn forward_completed(
+    receiver: &CompletedDataSetsReceiver,
+    blockstore: &Blockstore,
+    handlers: &[CompletedDataSetHandler],
+) -> Result<(), RecvTimeoutError> {
+    for CompletedDataSetInfo {
+        slot,
+        start_index,
+        end_index,
+    } in once(receiver.recv_timeout(Duration::from_secs(1))?)
+        .chain(receiver.try_iter())
+        .flatten()
+    {
+        match blockstore.get_entries_in_data_block(slot, start_index, end_index, None) {
+            Ok(entries) if !entries.is_empty() => {
+                for handler in handlers.iter() {
+                    handler(SlotEntries {
+                        slot,
+                        entries: &entries,
+                    });
+                }
+            }
+            Ok(_) => (),
+            Err(err) => {
+                warn!(
+                    "completed-data-set-service deserialize error:\n\
+                     slot: {slot}, shreds: {start_index}..={end_index}\n\
+                     {err:?}",
+                );
+                datapoint_error!(
+                    "completed_data_set_service_deserialize_error",
+                    (
+                        "error",
+                        format!("slot: {slot}, shreds: {start_index}..={end_index}: {err:?}"),
+                        String
+                    )
+                );
+            }
+        }
     }
 
-    #[test]
-    fn test_multi_signatures() {
-        let kp = Keypair::new();
-        let tx =
-            Transaction::new_signed_with_payer(&[], Some(&kp.pubkey()), &[&kp], Hash::default());
-        let entries = vec![Entry::new(&Hash::default(), 1, vec![tx.clone()])];
-        let signatures = CompletedDataSetsService::get_transaction_signatures(entries);
-        assert_eq!(signatures.len(), 1);
-
-        let entries = vec![
-            Entry::new(&Hash::default(), 1, vec![tx.clone(), tx.clone()]),
-            Entry::new(&Hash::default(), 1, vec![tx]),
-        ];
-        let signatures = CompletedDataSetsService::get_transaction_signatures(entries);
-        assert_eq!(signatures.len(), 3);
-    }
+    Ok(())
 }
