@@ -1189,9 +1189,6 @@ impl<'a> StorableAccounts<'a, AccountSharedData> for (Slot, &'a [StakeReward], I
     fn len(&self) -> usize {
         self.1.len()
     }
-    fn contains_multiple_slots(&self) -> bool {
-        false
-    }
     fn include_slot_in_hash(&self) -> IncludeSlotInHash {
         self.2
     }
