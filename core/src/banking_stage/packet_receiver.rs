@@ -28,27 +28,27 @@ impl PacketReceiver {
         let (result, recv_time_us) = measure_us!({
             let recv_timeout = Self::get_receive_timeout(unprocessed_transaction_storage);
             let mut recv_and_buffer_measure = Measure::start("recv_and_buffer");
-            let receive_packet_results = packet_deserializer.receive_packets(
-                recv_timeout,
-                unprocessed_transaction_storage.max_receive_size(),
-            )?;
+            packet_deserializer
+                .receive_packets(
+                    recv_timeout,
+                    unprocessed_transaction_storage.max_receive_size(),
+                )
+                .map(|receive_packet_results| {
+                    Self::buffer_packets(
+                        receive_packet_results,
+                        id,
+                        unprocessed_transaction_storage,
+                        banking_stage_stats,
+                        tracer_packet_stats,
+                        slot_metrics_tracker,
+                    );
+                    recv_and_buffer_measure.stop();
 
-            Self::buffer_packets(
-                receive_packet_results,
-                id,
-                unprocessed_transaction_storage,
-                banking_stage_stats,
-                tracer_packet_stats,
-                slot_metrics_tracker,
-            );
-            recv_and_buffer_measure.stop();
-
-            // Only incremented if packets are received
-            banking_stage_stats
-                .receive_and_buffer_packets_elapsed
-                .fetch_add(recv_and_buffer_measure.as_us(), Ordering::Relaxed);
-
-            Ok(())
+                    // Only incremented if packets are received
+                    banking_stage_stats
+                        .receive_and_buffer_packets_elapsed
+                        .fetch_add(recv_and_buffer_measure.as_us(), Ordering::Relaxed);
+                })
         });
 
         slot_metrics_tracker.increment_receive_and_buffer_packets_us(recv_time_us);
