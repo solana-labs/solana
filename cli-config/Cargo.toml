@@ -12,7 +12,7 @@ documentation = "https://docs.rs/solana-cli-config"
 [dependencies]
 dirs-next = "2.0.0"
 lazy_static = "1.4.0"
-serde = "1.0.144"
+serde = "1.0.152"
 serde_derive = "1.0.103"
 serde_yaml = "0.9.13"
 solana-clap-utils = { path = "../clap-utils", version = "=1.16.0" }

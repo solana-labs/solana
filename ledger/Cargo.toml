@@ -32,7 +32,7 @@ rand = "0.7.0"
 rand_chacha = "0.2.2"
 rayon = "1.5.3"
 reed-solomon-erasure = { version = "6.0.0", features = ["simd-accel"] }
-serde = "1.0.144"
+serde = "1.0.152"
 serde_bytes = "0.11.8"
 sha2 = "0.10.5"
 solana-account-decoder = { path = "../account-decoder", version = "=1.16.0" }
