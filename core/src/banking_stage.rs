@@ -681,7 +681,7 @@ impl BankingStage {
                     .increment_consume_buffered_packets_us(consume_buffered_packets_time.as_us());
             }
             BufferedPacketsDecision::Forward => {
-                let (_, forward_us) = measure_us!(forwarder.handle_forwarding(
+                let ((), forward_us) = measure_us!(forwarder.handle_forwarding(
                     unprocessed_transaction_storage,
                     false,
                     slot_metrics_tracker,
@@ -694,7 +694,7 @@ impl BankingStage {
                 slot_metrics_tracker.apply_action(metrics_action);
             }
             BufferedPacketsDecision::ForwardAndHold => {
-                let (_, forward_and_hold_us) = measure_us!(forwarder.handle_forwarding(
+                let ((), forward_and_hold_us) = measure_us!(forwarder.handle_forwarding(
                     unprocessed_transaction_storage,
                     true,
                     slot_metrics_tracker,
