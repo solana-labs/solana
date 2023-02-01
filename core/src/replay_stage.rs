@@ -688,6 +688,8 @@ impl ReplayStage {
                     &bank_forks,
                 );
 
+                let mut last_vote_unable_to_land = false;
+
                 if let Some(heaviest_bank_on_same_voted_fork) =
                     heaviest_bank_on_same_voted_fork.as_ref()
                 {
@@ -706,6 +708,7 @@ impl ReplayStage {
                             &mut last_vote_refresh_time,
                             &voting_sender,
                             wait_to_vote_slot,
+                            &mut last_vote_unable_to_land,
                         );
                     }
                 }
@@ -725,6 +728,7 @@ impl ReplayStage {
                     &mut tower,
                     &latest_validator_votes_for_frozen_banks,
                     &heaviest_subtree_fork_choice,
+                    last_vote_unable_to_land,
                 );
                 select_vote_and_reset_forks_time.stop();
 
@@ -2147,6 +2151,7 @@ impl ReplayStage {
         last_vote_refresh_time: &mut LastVoteRefreshTime,
         voting_sender: &Sender<VoteOp>,
         wait_to_vote_slot: Option<Slot>,
+        last_vote_unable_to_land: &mut bool,
     ) {
         let last_voted_slot = tower.last_voted_slot();
         if last_voted_slot.is_none() {
@@ -2188,9 +2193,8 @@ impl ReplayStage {
         if last_voted_slot < heaviest_bank_on_same_fork.slot()
             && !heaviest_bank_on_same_fork.slot_within_slothash(&last_voted_slot)
         {
-            let new_root = tower.record_bank_vote(heaviest_bank_on_same_fork, vote_account_pubkey);
-            // Because the last vote is too old, new_root should be none.
-            assert!(new_root.is_none());
+            *last_vote_unable_to_land = true;
+            return;
         }
 
         // TODO: check the timestamp in this vote is correct, i.e. it shouldn't
@@ -3028,6 +3032,7 @@ impl ReplayStage {
         tower: &mut Tower,
         latest_validator_votes_for_frozen_banks: &LatestValidatorVotesForFrozenBanks,
         fork_choice: &HeaviestSubtreeForkChoice,
+        last_vote_unable_to_land: bool,
     ) -> SelectVoteAndResetForkResult {
         // Try to vote on the actual heaviest fork. If the heaviest bank is
         // locked out or fails the threshold check, the validator will:
@@ -3060,43 +3065,54 @@ impl ReplayStage {
             match switch_fork_decision {
                 SwitchForkDecision::FailedSwitchThreshold(switch_proof_stake, total_stake) => {
                     let reset_bank = heaviest_bank_on_same_voted_fork;
-                    // If we can't switch and our last vote was on a non-duplicate/confirmed slot, then
-                    // reset to the the next votable bank on the same fork as our last vote,
-                    // but don't vote.
+                    if last_vote_unable_to_land && reset_bank.is_some() {
+                        // If we can't switch, our last vote was on a non-duplicate/confirmed slot, but it is
+                        // now outside slothash, it means we haven't voted for a while, and there was no hope
+                        // of this last vote ever landing again.
 
-                    // We don't just reset to the heaviest fork when switch threshold fails because
-                    // a situation like this can occur:
+                        // We still do not want to reset to the heaviest fork per reason below, but we do want
+                        // to register our vote on the current fork, so we choose to vote at the tip of current
+                        // fork instead. This means longer lockout, but it might be enough to get majority vote.
+                        reset_bank.map(|b| (b, SwitchForkDecision::SameFork))
+                    } else {
+                        // If we can't switch and our last vote was on a non-duplicate/confirmed slot, then
+                        // reset to the the next votable bank on the same fork as our last vote,
+                        // but don't vote.
 
-                    /* Figure 1:
-                                  slot 0
-                                    |
-                                  slot 1
-                                /        \
-                    slot 2 (last vote)     |
-                                |      slot 8 (10%)
-                        slot 4 (9%)
-                    */
+                        // We don't just reset to the heaviest fork when switch threshold fails because
+                        // a situation like this can occur:
 
-                    // Imagine 90% of validators voted on slot 4, but only 9% landed. If everybody that fails
-                    // the switch threshold abandons slot 4 to build on slot 8 (because it's *currently* heavier),
-                    // then there will be no blocks to include the votes for slot 4, and the network halts
-                    // because 90% of validators can't vote
-                    info!(
-                        "Waiting to switch vote to {},
-                        resetting to slot {:?} for now,
-                        switch proof stake: {},
-                        threshold stake: {},
-                        total stake: {}",
-                        heaviest_bank.slot(),
-                        reset_bank.as_ref().map(|b| b.slot()),
-                        switch_proof_stake,
-                        total_stake as f64 * SWITCH_FORK_THRESHOLD,
-                        total_stake
-                    );
-                    failure_reasons.push(HeaviestForkFailures::FailedSwitchThreshold(
-                        heaviest_bank.slot(),
-                    ));
-                    reset_bank.map(|b| (b, switch_fork_decision))
+                        /* Figure 1:
+                                    slot 0
+                                        |
+                                    slot 1
+                                    /        \
+                        slot 2 (last vote)     |
+                                    |      slot 8 (10%)
+                            slot 4 (9%)
+                        */
+
+                        // Imagine 90% of validators voted on slot 4, but only 9% landed. If everybody that fails
+                        // the switch threshold abandons slot 4 to build on slot 8 (because it's *currently* heavier),
+                        // then there will be no blocks to include the votes for slot 4, and the network halts
+                        // because 90% of validators can't vote
+                        info!(
+                            "Waiting to switch vote to {},
+                            resetting to slot {:?} for now,
+                            switch proof stake: {},
+                            threshold stake: {},
+                            total stake: {}",
+                            heaviest_bank.slot(),
+                            reset_bank.as_ref().map(|b| b.slot()),
+                            switch_proof_stake,
+                            total_stake as f64 * SWITCH_FORK_THRESHOLD,
+                            total_stake
+                        );
+                        failure_reasons.push(HeaviestForkFailures::FailedSwitchThreshold(
+                            heaviest_bank.slot(),
+                        ));
+                        reset_bank.map(|b| (b, switch_fork_decision))
+                    }
                 }
                 SwitchForkDecision::FailedSwitchDuplicateRollback(latest_duplicate_ancestor) => {
                     // If we can't switch and our last vote was on an unconfirmed, duplicate slot,
@@ -6276,6 +6292,7 @@ pub(crate) mod tests {
             &mut tower,
             &latest_validator_votes_for_frozen_banks,
             &heaviest_subtree_fork_choice,
+            false,
         )
     }
 
@@ -6399,6 +6416,7 @@ pub(crate) mod tests {
             &mut tower,
             &latest_validator_votes_for_frozen_banks,
             &heaviest_subtree_fork_choice,
+            false,
         )
     }
 
@@ -6576,6 +6594,7 @@ pub(crate) mod tests {
         bank1.process_transaction(vote_tx).unwrap();
         bank1.freeze();
 
+        let mut last_vote_unable_to_land = false;
         // Trying to refresh the vote for bank 0 in bank 1 or bank 2 won't succeed because
         // the last vote has landed already
         let bank2 = Arc::new(Bank::new_from_parent(&bank1, &Pubkey::default(), 2));
@@ -6594,7 +6613,9 @@ pub(crate) mod tests {
                 &mut last_vote_refresh_time,
                 &voting_sender,
                 None,
+                &mut last_vote_unable_to_land,
             );
+            assert!(!last_vote_unable_to_land);
 
             // No new votes have been submitted to gossip
             let votes = cluster_info.get_votes(&mut cursor);
@@ -6651,7 +6672,9 @@ pub(crate) mod tests {
             &mut last_vote_refresh_time,
             &voting_sender,
             None,
+            &mut last_vote_unable_to_land,
         );
+        assert!(!last_vote_unable_to_land);
 
         // No new votes have been submitted to gossip
         let votes = cluster_info.get_votes(&mut cursor);
@@ -6695,7 +6718,9 @@ pub(crate) mod tests {
             &mut last_vote_refresh_time,
             &voting_sender,
             None,
+            &mut last_vote_unable_to_land,
         );
+        assert!(!last_vote_unable_to_land);
         let vote_info = voting_receiver
             .recv_timeout(Duration::from_secs(1))
             .unwrap();
@@ -6763,7 +6788,9 @@ pub(crate) mod tests {
             &mut last_vote_refresh_time,
             &voting_sender,
             None,
+            &mut last_vote_unable_to_land,
         );
+        assert!(!last_vote_unable_to_land);
 
         let votes = cluster_info.get_votes(&mut cursor);
         assert!(votes.is_empty());
@@ -6801,13 +6828,13 @@ pub(crate) mod tests {
                     &mut last_vote_refresh_time,
                     &voting_sender,
                     None,
+                    &mut last_vote_unable_to_land,
                 );
-                assert_eq!(tower.last_voted_slot().unwrap(), bank.slot());
+                assert!(last_vote_unable_to_land);
                 break;
             }
             new_bank = bank;
         }
-        assert_ne!(tower.last_voted_slot().unwrap(), 1);
     }
 
     #[test]
@@ -7116,6 +7143,7 @@ pub(crate) mod tests {
             tower,
             latest_validator_votes_for_frozen_banks,
             heaviest_subtree_fork_choice,
+            false,
         );
         (
             vote_bank.map(|(b, _)| b.slot()),
