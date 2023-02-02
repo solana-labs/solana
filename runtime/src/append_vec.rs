@@ -110,17 +110,16 @@ impl<'a: 'b, 'b, T: ReadableAccount + Sync + 'b, U: StorableAccounts<'a, T>, V: 
     pub fn get(&self, index: usize) -> (Option<&T>, &Pubkey, &Hash, StoredMetaWriteVersion) {
         let account = self.accounts.account_default_if_zero_lamport(index);
         let pubkey = self.accounts.pubkey(index);
-        if self.accounts.has_hash_and_write_version() {
+        let (hash, write_version) = if self.accounts.has_hash_and_write_version() {
             (
-                account,
-                pubkey,
                 self.accounts.hash(index),
                 self.accounts.write_version(index),
             )
         } else {
             let item = self.hashes_and_write_versions.as_ref().unwrap();
-            (account, pubkey, item.0[index].borrow(), item.1[index])
-        }
+            (item.0[index].borrow(), item.1[index])
+        };
+        (account, pubkey, hash, write_version)
     }
 
     /// None if account at index has lamports == 0
