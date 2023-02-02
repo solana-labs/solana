@@ -6476,6 +6476,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "solana-sbpf-loader-program"
+version = "1.16.0"
+dependencies = [
+ "log",
+ "rand 0.8.5",
+ "solana-measure",
+ "solana-program-runtime",
+ "solana-sdk 1.16.0",
+ "solana_rbpf",
+]
+
+[[package]]
 name = "solana-sdk"
 version = "1.14.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"

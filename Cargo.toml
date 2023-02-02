@@ -59,6 +59,7 @@ members = [
     "programs/compute-budget",
     "programs/config",
     "programs/ed25519-tests",
+    "programs/sbpf-loader",
     "programs/stake",
     "programs/vote",
     "programs/zk-token-proof",
