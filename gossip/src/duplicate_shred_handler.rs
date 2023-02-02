@@ -11,8 +11,7 @@ use {
         pubkey::Pubkey,
     },
     std::{
-        cmp::Reverse,
-        collections::{BinaryHeap, HashMap, HashSet},
+        collections::{HashMap, HashSet},
         sync::{Arc, RwLock},
     },
 };
@@ -25,9 +24,10 @@ const MAX_NUM_CHUNKS: u8 = 3;
 // is only 1 person sending out duplicate proofs, 1 person is leader for 4 slots,
 // so we allow 5 here to limit the chunk map size.
 const ALLOWED_SLOTS_PER_PUBKEY: usize = 5;
-// We limit the pubkey for each slot to be 100 for now, when this limit is reached,
-// we drop 50% of pubkeys with lowest stakes.
-const MAX_PUBKEY_PER_SLOT: usize = 100;
+// We limit the pubkey for each slot to be 300 for now, when this limit is reached,
+// we drop 50% of pubkeys with lowest stakes. It is kept at 300 because we want
+// number of pubkeys after pruning to have roughly 2/3 of stake.
+const MAX_PUBKEY_PER_SLOT: usize = 300;
 
 struct ProofChunkMap {
     num_chunks: u8,
@@ -184,18 +184,16 @@ impl DuplicateShredHandler {
     }
 
     fn dump_pubkeys_with_low_stakes(
-        cached_staked_nodes: Arc<HashMap<Pubkey, u64>>,
+        cached_staked_nodes: &HashMap<Pubkey, u64>,
         slot_chunk_map: &mut SlotChunkMap,
     ) {
-        let mut heap = BinaryHeap::new();
-        for oldkey in slot_chunk_map.keys() {
-            let oldkey_stake = cached_staked_nodes.get(oldkey).copied().unwrap_or_default();
-            heap.push(Reverse::<(u64, Pubkey)>((oldkey_stake, *oldkey)));
-        }
-        for _ in 0..(MAX_PUBKEY_PER_SLOT / 2) {
-            if let Some(Reverse::<(u64, Pubkey)>((_, key))) = heap.pop() {
-                slot_chunk_map.remove(&key);
-            }
+        let mut stakes_and_keys: Vec<(u64, Pubkey)> = slot_chunk_map
+            .keys()
+            .map(|k| (cached_staked_nodes.get(k).copied().unwrap_or_default(), *k))
+            .collect();
+        stakes_and_keys.select_nth_unstable(MAX_PUBKEY_PER_SLOT / 2);
+        for (_, key) in stakes_and_keys {
+            slot_chunk_map.remove(&key);
         }
     }
 
@@ -232,10 +230,7 @@ impl DuplicateShredHandler {
                     }
                     return Ok(Some(result));
                 } else if slot_chunk_map.len() > MAX_PUBKEY_PER_SLOT {
-                    Self::dump_pubkeys_with_low_stakes(
-                        self.cached_staked_nodes.clone(),
-                        slot_chunk_map,
-                    );
+                    Self::dump_pubkeys_with_low_stakes(&self.cached_staked_nodes, slot_chunk_map);
                 }
             }
             self.validator_pending_proof_map
