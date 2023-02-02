@@ -1094,7 +1094,7 @@ fn test_incremental_snapshot_download_with_crossing_full_snapshot_interval_at_st
     info!("Stop the test validator.");
     let validator_info = cluster.exit_node(&validator_identity.pubkey());
 
-    info!("Purge the valitor bank snapshots.");
+    info!("Purge the test validator bank snapshots.");
     purge_old_bank_snapshots(validator_snapshot_test_config.bank_snapshots_dir, 0);
 
     info!(
