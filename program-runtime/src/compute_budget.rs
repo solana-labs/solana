@@ -564,7 +564,7 @@ mod tests {
             false
         );
 
-        // assert requesting heap frame when feature is disable will result instruction error 
+        // assert requesting heap frame when feature is disable will result instruction error
         test!(
             &[
                 ComputeBudgetInstruction::request_heap_frame(40 * 1024),
@@ -637,6 +637,5 @@ mod tests {
             },
             false
         );
-
     }
 }
