@@ -4904,6 +4904,7 @@ dependencies = [
  "solana-clap-utils",
  "solana-cli-config",
  "solana-client",
+ "solana-connection-cache",
  "solana-core",
  "solana-faucet",
  "solana-genesis",

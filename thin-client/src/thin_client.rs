@@ -6,7 +6,12 @@
 use {
     log::*,
     rayon::iter::{IntoParallelIterator, ParallelIterator},
-    solana_connection_cache::connection_cache::ConnectionCache,
+    solana_connection_cache::{
+        client_connection::ClientConnection,
+        connection_cache::{
+            ConnectionCache, ConnectionManager, ConnectionPool, NewConnectionConfig,
+        },
+    },
     solana_rpc_client::rpc_client::RpcClient,
     solana_rpc_client_api::{config::RpcProgramAccountsConfig, response::Response},
     solana_sdk::{
@@ -111,21 +116,30 @@ pub mod temporary_pub {
 use temporary_pub::*;
 
 /// An object for querying and sending transactions to the network.
-pub struct ThinClient {
+pub struct ThinClient<
+    R, // ConnectionPool
+    S, // ConnectionManager
+    T, // NewConnectionConfig
+> {
     rpc_clients: Vec<RpcClient>,
     tpu_addrs: Vec<SocketAddr>,
     optimizer: ClientOptimizer,
-    connection_cache: Arc<ConnectionCache>,
+    connection_cache: Arc<ConnectionCache<R, S, T>>,
 }
 
-impl ThinClient {
+impl<R, S, T> ThinClient<R, S, T>
+where
+    R: ConnectionPool<NewConnectionConfig = T>,
+    S: ConnectionManager<ConnectionPool = R, NewConnectionConfig = T>,
+    T: NewConnectionConfig,
+{
     /// Create a new ThinClient that will interface with the Rpc at `rpc_addr` using TCP
     /// and the Tpu at `tpu_addr` over `transactions_socket` using Quic or UDP
     /// (currently hardcoded to UDP)
     pub fn new(
         rpc_addr: SocketAddr,
         tpu_addr: SocketAddr,
-        connection_cache: Arc<ConnectionCache>,
+        connection_cache: Arc<ConnectionCache<R, S, T>>,
     ) -> Self {
         Self::new_from_client(RpcClient::new_socket(rpc_addr), tpu_addr, connection_cache)
     }
@@ -134,7 +148,7 @@ impl ThinClient {
         rpc_addr: SocketAddr,
         tpu_addr: SocketAddr,
         timeout: Duration,
-        connection_cache: Arc<ConnectionCache>,
+        connection_cache: Arc<ConnectionCache<R, S, T>>,
     ) -> Self {
         let rpc_client = RpcClient::new_socket_with_timeout(rpc_addr, timeout);
         Self::new_from_client(rpc_client, tpu_addr, connection_cache)
@@ -143,7 +157,7 @@ impl ThinClient {
     fn new_from_client(
         rpc_client: RpcClient,
         tpu_addr: SocketAddr,
-        connection_cache: Arc<ConnectionCache>,
+        connection_cache: Arc<ConnectionCache<R, S, T>>,
     ) -> Self {
         Self {
             rpc_clients: vec![rpc_client],
@@ -156,7 +170,7 @@ impl ThinClient {
     pub fn new_from_addrs(
         rpc_addrs: Vec<SocketAddr>,
         tpu_addrs: Vec<SocketAddr>,
-        connection_cache: Arc<ConnectionCache>,
+        connection_cache: Arc<ConnectionCache<R, S, T>>,
     ) -> Self {
         assert!(!rpc_addrs.is_empty());
         assert_eq!(rpc_addrs.len(), tpu_addrs.len());
@@ -200,9 +214,9 @@ impl ThinClient {
         self.send_and_confirm_transaction(&[keypair], transaction, tries, 0)
     }
 
-    pub fn send_and_confirm_transaction<T: Signers>(
+    pub fn send_and_confirm_transaction<K: Signers>(
         &self,
-        keypairs: &T,
+        keypairs: &K,
         transaction: &mut Transaction,
         tries: usize,
         pending_confirmations: usize,
@@ -314,16 +328,26 @@ impl ThinClient {
     }
 }
 
-impl Client for ThinClient {
+impl<R, S, T> Client for ThinClient<R, S, T>
+where
+    R: ConnectionPool<NewConnectionConfig = T>,
+    S: ConnectionManager<ConnectionPool = R, NewConnectionConfig = T>,
+    T: NewConnectionConfig,
+{
     fn tpu_addr(&self) -> String {
         self.tpu_addr().to_string()
     }
 }
 
-impl SyncClient for ThinClient {
-    fn send_and_confirm_message<T: Signers>(
+impl<R, S, T> SyncClient for ThinClient<R, S, T>
+where
+    R: ConnectionPool<NewConnectionConfig = T>,
+    S: ConnectionManager<ConnectionPool = R, NewConnectionConfig = T>,
+    T: NewConnectionConfig,
+{
+    fn send_and_confirm_message<K: Signers>(
         &self,
-        keypairs: &T,
+        keypairs: &K,
         message: Message,
     ) -> TransportResult<Signature> {
         let blockhash = self.get_latest_blockhash()?;
@@ -600,7 +624,12 @@ impl SyncClient for ThinClient {
     }
 }
 
-impl AsyncClient for ThinClient {
+impl<R, S, T> AsyncClient for ThinClient<R, S, T>
+where
+    R: ConnectionPool<NewConnectionConfig = T>,
+    S: ConnectionManager<ConnectionPool = R, NewConnectionConfig = T>,
+    T: NewConnectionConfig,
+{
     fn async_send_versioned_transaction(
         &self,
         transaction: VersionedTransaction,

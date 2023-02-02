@@ -110,19 +110,32 @@ fn create_client(
                 true => ConnectionCache::new(tpu_connection_pool_size),
                 false => ConnectionCache::with_udp(tpu_connection_pool_size),
             };
-
-            Arc::new(
-                TpuClient::new_with_connection_cache(
-                    rpc_client,
-                    websocket_url,
-                    TpuClientConfig::default(),
-                    Arc::new(connection_cache.into()),
-                )
-                .unwrap_or_else(|err| {
-                    eprintln!("Could not create TpuClient {err:?}");
-                    exit(1);
-                }),
-            )
+            match connection_cache {
+                ConnectionCache::Udp(cache) => Arc::new(
+                    TpuClient::new_with_connection_cache(
+                        rpc_client,
+                        websocket_url,
+                        TpuClientConfig::default(),
+                        Arc::new(cache),
+                    )
+                    .unwrap_or_else(|err| {
+                        eprintln!("Could not create TpuClient {err:?}");
+                        exit(1);
+                    }),
+                ),
+                ConnectionCache::Quic(cache) => Arc::new(
+                    TpuClient::new_with_connection_cache(
+                        rpc_client,
+                        websocket_url,
+                        TpuClientConfig::default(),
+                        Arc::new(cache),
+                    )
+                    .unwrap_or_else(|err| {
+                        eprintln!("Could not create TpuClient {err:?}");
+                        exit(1);
+                    }),
+                ),
+            }
         }
     }
 }

@@ -1,13 +1,21 @@
 use {
     crate::bench_tps_client::{BenchTpsClient, BenchTpsError, Result},
     solana_client::tpu_client::TpuClient,
+    solana_connection_cache::connection_cache::{
+        ConnectionManager, ConnectionPool, NewConnectionConfig,
+    },
     solana_sdk::{
         account::Account, commitment_config::CommitmentConfig, epoch_info::EpochInfo, hash::Hash,
         message::Message, pubkey::Pubkey, signature::Signature, transaction::Transaction,
     },
 };
 
-impl BenchTpsClient for TpuClient {
+impl<R, S, T> BenchTpsClient for TpuClient<R, S, T>
+where
+    R: ConnectionPool<NewConnectionConfig = T>,
+    S: ConnectionManager<ConnectionPool = R, NewConnectionConfig = T>,
+    T: NewConnectionConfig,
+{
     fn send_transaction(&self, transaction: Transaction) -> Result<Signature> {
         let signature = transaction.signatures[0];
         self.try_send_transaction(&transaction)?;

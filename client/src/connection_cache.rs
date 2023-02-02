@@ -1,16 +1,16 @@
 use {
     quinn::Endpoint,
     solana_connection_cache::{
-        client_connection::ClientConnection as BlockingClientConnection,
+        client_connection::ClientConnection,
         connection_cache::{
-            ConnectionCache as BackendConnectionCache, NewConnectionConfig, ProtocolType,
+            BaseClientConnection, ConnectionCache as BackendConnectionCache, ConnectionPool,
+            NewConnectionConfig,
         },
-        nonblocking::client_connection::ClientConnection as NonblockingClientConnection,
     },
-    solana_quic_client::{QuicConfig, QuicConnectionManager},
-    solana_sdk::{pubkey::Pubkey, signature::Keypair},
+    solana_quic_client::{QuicConfig, QuicConnectionManager, QuicPool},
+    solana_sdk::{pubkey::Pubkey, signature::Keypair, transport::Result as TransportResult},
     solana_streamer::streamer::StakedNodes,
-    solana_udp_client::UdpConnectionManager,
+    solana_udp_client::{UdpConfig, UdpConnectionManager, UdpPool},
     std::{
         error::Error,
         net::{IpAddr, Ipv4Addr, SocketAddr},
@@ -18,15 +18,28 @@ use {
     },
 };
 
-pub const DEFAULT_CONNECTION_POOL_SIZE: usize = 4;
-pub const DEFAULT_CONNECTION_CACHE_USE_QUIC: bool = true;
-pub const MAX_CONNECTIONS: usize = 1024;
+const DEFAULT_CONNECTION_POOL_SIZE: usize = 4;
+const DEFAULT_CONNECTION_CACHE_USE_QUIC: bool = true;
 
 /// A thin wrapper over connection-cache/ConnectionCache to ease
 /// construction of the ConnectionCache for code dealing both with udp and quic.
 /// For the scenario only using udp or quic, use connection-cache/ConnectionCache directly.
-pub struct ConnectionCache {
-    cache: BackendConnectionCache,
+pub enum ConnectionCache {
+    Quic(BackendConnectionCache<QuicPool, QuicConnectionManager, QuicConfig>),
+    Udp(BackendConnectionCache<UdpPool, UdpConnectionManager, UdpConfig>),
+}
+
+type QuicBaseClientConnection = <QuicPool as ConnectionPool>::BaseClientConnection;
+type UdpBaseClientConnection = <UdpPool as ConnectionPool>::BaseClientConnection;
+
+pub enum BlockingClientConnection {
+    Quic(Arc<<QuicBaseClientConnection as BaseClientConnection>::BlockingClientConnection>),
+    Udp(Arc<<UdpBaseClientConnection as BaseClientConnection>::BlockingClientConnection>),
+}
+
+pub enum NonblockingClientConnection {
+    Quic(Arc<<QuicBaseClientConnection as BaseClientConnection>::NonblockingClientConnection>),
+    Udp(Arc<<UdpBaseClientConnection as BaseClientConnection>::NonblockingClientConnection>),
 }
 
 impl ConnectionCache {
@@ -56,10 +69,9 @@ impl ConnectionCache {
         if let Some(stake_info) = stake_info {
             config.set_staked_nodes(stake_info.0, stake_info.1);
         }
-        let connection_manager =
-            Box::new(QuicConnectionManager::new_with_connection_config(config));
+        let connection_manager = QuicConnectionManager::new_with_connection_config(config);
         let cache = BackendConnectionCache::new(connection_manager, connection_pool_size).unwrap();
-        Self { cache }
+        Self::Quic(cache)
     }
 
     #[deprecated(
@@ -88,30 +100,31 @@ impl ConnectionCache {
     pub fn with_udp(connection_pool_size: usize) -> Self {
         // The minimum pool size is 1.
         let connection_pool_size = 1.max(connection_pool_size);
-        let connection_manager = Box::<UdpConnectionManager>::default();
+        let connection_manager = UdpConnectionManager::default();
         let cache = BackendConnectionCache::new(connection_manager, connection_pool_size).unwrap();
-        Self { cache }
+        Self::Udp(cache)
     }
 
     pub fn use_quic(&self) -> bool {
-        matches!(self.cache.get_protocol_type(), ProtocolType::QUIC)
+        matches!(self, Self::Quic(_))
     }
 
-    pub fn get_connection(&self, addr: &SocketAddr) -> Arc<dyn BlockingClientConnection> {
-        self.cache.get_connection(addr)
+    pub fn get_connection(&self, addr: &SocketAddr) -> BlockingClientConnection {
+        match self {
+            Self::Quic(cache) => BlockingClientConnection::Quic(cache.get_connection(addr)),
+            Self::Udp(cache) => BlockingClientConnection::Udp(cache.get_connection(addr)),
+        }
     }
 
-    pub fn get_nonblocking_connection(
-        &self,
-        addr: &SocketAddr,
-    ) -> Arc<dyn NonblockingClientConnection> {
-        self.cache.get_nonblocking_connection(addr)
-    }
-}
-
-impl From<ConnectionCache> for BackendConnectionCache {
-    fn from(cache: ConnectionCache) -> Self {
-        cache.cache
+    pub fn get_nonblocking_connection(&self, addr: &SocketAddr) -> NonblockingClientConnection {
+        match self {
+            Self::Quic(cache) => {
+                NonblockingClientConnection::Quic(cache.get_nonblocking_connection(addr))
+            }
+            Self::Udp(cache) => {
+                NonblockingClientConnection::Udp(cache.get_nonblocking_connection(addr))
+            }
+        }
     }
 }
 
@@ -131,9 +144,51 @@ impl Default for ConnectionCache {
     }
 }
 
+macro_rules! dispatch {
+    ($vis:vis fn $name:ident(&self $(, $arg:ident : $ty:ty)?) $(-> $out:ty)?) => {
+        #[inline]
+        $vis fn $name(&self $(, $arg:$ty)?) $(-> $out)? {
+            match self {
+                Self::Quic(this) => this.$name($($arg, )?),
+                Self::Udp(this) => this.$name($($arg, )?),
+            }
+        }
+    };
+}
+
+impl ClientConnection for BlockingClientConnection {
+    dispatch!(fn server_addr(&self) -> &SocketAddr);
+    dispatch!(fn send_data(&self, buffer: &[u8]) -> TransportResult<()>);
+    dispatch!(fn send_data_async(&self, buffer: Vec<u8>) -> TransportResult<()>);
+    dispatch!(fn send_data_batch(&self, buffers: &[Vec<u8>]) -> TransportResult<()>);
+    dispatch!(fn send_data_batch_async(&self, buffers: Vec<Vec<u8>>) -> TransportResult<()>);
+}
+
+#[async_trait::async_trait]
+impl solana_connection_cache::nonblocking::client_connection::ClientConnection
+    for NonblockingClientConnection
+{
+    dispatch!(fn server_addr(&self) -> &SocketAddr);
+
+    async fn send_data(&self, buffer: &[u8]) -> TransportResult<()> {
+        match self {
+            Self::Quic(cache) => Ok(cache.send_data(buffer).await?),
+            Self::Udp(cache) => Ok(cache.send_data(buffer).await?),
+        }
+    }
+
+    async fn send_data_batch(&self, buffers: &[Vec<u8>]) -> TransportResult<()> {
+        match self {
+            Self::Quic(cache) => Ok(cache.send_data_batch(buffers).await?),
+            Self::Udp(cache) => Ok(cache.send_data_batch(buffers).await?),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use {
+        super::*,
         crate::connection_cache::ConnectionCache,
         crossbeam_channel::unbounded,
         solana_sdk::{quic::QUIC_PORT_OFFSET, signature::Keypair},
