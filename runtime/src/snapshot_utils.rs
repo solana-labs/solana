@@ -7,6 +7,7 @@ use {
         },
         accounts_index::AccountSecondaryIndexes,
         accounts_update_notifier_interface::AccountsUpdateNotifier,
+        append_vec::AppendVec,
         bank::{Bank, BankFieldsToDeserialize, BankSlotDelta},
         builtins::Builtins,
         hardened_unpack::{
@@ -945,8 +946,10 @@ fn hard_link_storages_to_snapshot(
             &mut account_paths,
             &accounts_hardlinks_dir,
         )?;
-        let storage_filename = storage_path.file_name().unwrap();
-        let hard_link_path = snapshot_hardlink_dir.join(storage_filename);
+        // The appendvec could be recycled, so its filename may not be consistent to the slot and id.
+        // Use the storage slot and id to compose a consistent file name for the hard-link file.
+        let hardlink_filename = AppendVec::file_name(storage.slot(), storage.append_vec_id());
+        let hard_link_path = snapshot_hardlink_dir.join(hardlink_filename);
         fs::hard_link(&storage_path, &hard_link_path).map_err(|e| {
             let err_msg = format!(
                 "hard-link appendvec file {} to {} failed.  Error: {}",

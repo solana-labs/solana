@@ -145,7 +145,7 @@ pub struct SnapshotRequestHandler {
 type AccountStorages = Vec<Arc<AccountStorageEntry>>;
 
 impl SnapshotRequestHandler {
-    // Returns the latest requested snapshot slot, if one exists
+    // Returns the latest requested snapshot block height and storages
     pub fn handle_snapshot_requests(
         &self,
         test_hash_calculation: bool,
