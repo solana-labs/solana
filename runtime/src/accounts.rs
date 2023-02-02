@@ -2379,15 +2379,15 @@ mod tests {
     }
 
     #[test]
-    fn test_accounts_empty_bank_hash() {
+    fn test_accounts_empty_bank_hash_stats() {
         let accounts = Accounts::new_with_config_for_tests(
             Vec::new(),
             &ClusterType::Development,
             AccountSecondaryIndexes::default(),
             AccountShrinkThreshold::default(),
         );
-        assert!(accounts.accounts_db.get_bank_hash_info(0).is_some());
-        assert!(accounts.accounts_db.get_bank_hash_info(1).is_none());
+        assert!(accounts.accounts_db.get_bank_hash_stats(0).is_some());
+        assert!(accounts.accounts_db.get_bank_hash_stats(1).is_none());
     }
 
     #[test]

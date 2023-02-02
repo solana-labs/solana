@@ -7244,6 +7244,14 @@ impl AccountsDb {
             .insert(slot, accounts_hash)
     }
 
+    pub fn set_accounts_hash_from_snapshot(
+        &self,
+        slot: Slot,
+        accounts_hash: AccountsHash,
+    ) -> Option<AccountsHash> {
+        self.set_accounts_hash(slot, accounts_hash)
+    }
+
     /// Get the accounts hash for `slot` in the `accounts_hashes` map
     pub fn get_accounts_hash(&self, slot: Slot) -> Option<AccountsHash> {
         self.accounts_hashes.lock().unwrap().get(&slot).cloned()
@@ -7647,6 +7655,14 @@ impl AccountsDb {
             .insert(slot, accounts_delta_hash)
     }
 
+    pub fn set_accounts_delta_hash_from_snapshot(
+        &self,
+        slot: Slot,
+        accounts_delta_hash: AccountsDeltaHash,
+    ) -> Option<AccountsDeltaHash> {
+        self.set_accounts_delta_hash(slot, accounts_delta_hash)
+    }
+
     /// Get the accounts delta hash for `slot` in the `accounts_delta_hashes` map
     pub fn get_accounts_delta_hash(&self, slot: Slot) -> Option<AccountsDeltaHash> {
         self.accounts_delta_hashes
@@ -7656,77 +7672,28 @@ impl AccountsDb {
             .cloned()
     }
 
-    /// Set the bank hash stats for `slot` in the `bank_hash_stats` map
+    /// When reconstructing AccountsDb from a snapshot, insert the `bank_hash_stats` into the
+    /// internal bank hash stats map.
     ///
-    /// returns the previous bank hash stats for `slot`
-    fn set_bank_hash_stats(
+    /// This fn is only called when loading from a snapshot, which means AccountsDb is new and its
+    /// bank hash stats map is unpopulated.  Except for slot 0.
+    ///
+    /// Slot 0 is a special case.  When a new AccountsDb is created--like when loading from a
+    /// snapshot--the bank hash stats map is populated with a default entry at slot 0.  Remove the
+    /// default entry at slot 0, and then insert the new value at `slot`.
+    pub fn update_bank_hash_stats_from_snapshot(
         &self,
         slot: Slot,
-        bank_hash_stats: BankHashStats,
+        stats: BankHashStats,
     ) -> Option<BankHashStats> {
-        self.bank_hash_stats
-            .lock()
-            .unwrap()
-            .insert(slot, bank_hash_stats)
+        let mut bank_hash_stats = self.bank_hash_stats.lock().unwrap();
+        bank_hash_stats.remove(&0);
+        bank_hash_stats.insert(slot, stats)
     }
 
     /// Get the bank hash stats for `slot` in the `bank_hash_stats` map
     pub fn get_bank_hash_stats(&self, slot: Slot) -> Option<BankHashStats> {
         self.bank_hash_stats.lock().unwrap().get(&slot).cloned()
-    }
-
-    /// Set the "bank hash info" for `slot`
-    ///
-    /// Internally this sets the accounts delta hash, the accounts hash, and the bank hash stats
-    /// from `bank_hash_info` for `slot` in their respective maps.
-    ///
-    /// returns the previous accounts delta hash, accounts hash, and bank hash stats for `slot`
-    fn set_bank_hash_info(
-        &self,
-        slot: Slot,
-        bank_hash_info: BankHashInfo,
-    ) -> (
-        Option<AccountsDeltaHash>,
-        Option<AccountsHash>,
-        Option<BankHashStats>,
-    ) {
-        let BankHashInfo {
-            accounts_delta_hash,
-            accounts_hash,
-            stats,
-        } = bank_hash_info;
-        let old_accounts_delta_hash = self.set_accounts_delta_hash(slot, accounts_delta_hash);
-        let old_accounts_hash = self.set_accounts_hash(slot, accounts_hash);
-        let old_stats = self.set_bank_hash_stats(slot, stats);
-        (old_accounts_delta_hash, old_accounts_hash, old_stats)
-    }
-
-    /// When reconstructing AccountsDb from a snapshot, insert the `bank_hash_info` into the
-    /// internal bank hash info maps.
-    ///
-    /// This fn is only called when loading from a snapshot, which means AccountsDb is new and its
-    /// bank hash info maps are unpopulated.  Therefore, a bank hash info must not already exist at
-    /// `slot` [^1].
-    ///
-    /// [^1] Slot 0 is a special case, however.  When a new AccountsDb is created--like when
-    /// loading from a snapshot--the bank hash stats map is populated with a default entry at slot 0.
-    /// It is valid to have a snapshot at slot 0, so it must be handled accordingly.
-    pub fn set_bank_hash_info_from_snapshot(&self, slot: Slot, bank_hash_info: BankHashInfo) {
-        let (old_accounts_delta_hash, old_accounts_hash, old_stats) =
-            self.set_bank_hash_info(slot, bank_hash_info);
-
-        assert!(
-            old_accounts_delta_hash.is_none(),
-            "There should not already be an AccountsDeltaHash at slot {slot}: {old_accounts_delta_hash:?}",
-        );
-        assert!(
-            old_accounts_hash.is_none(),
-            "There should not already be an AccountsHash at slot {slot}: {old_accounts_hash:?}",
-        );
-        assert!(
-            old_stats.is_none() || (slot == 0 && old_stats == Some(BankHashStats::default())),
-            "There should not already be a BankHashStats at slot {slot}: {old_stats:?}",
-        );
     }
 
     /// Remove "bank hash info" for `slot`
@@ -7751,33 +7718,6 @@ impl AccountsDb {
             accounts_hashes.remove(slot);
             bank_hash_stats.remove(slot);
         }
-    }
-
-    /// Get the "bank hash info" for `slot`
-    ///
-    /// Internally this gets the accounts delta hash, the accounts hash, and the bank hash stats
-    /// for `slot` from their respective maps.
-    ///
-    /// Only called by tests or serde_snapshot when serializing accounts db fields
-    pub fn get_bank_hash_info(&self, slot: Slot) -> Option<BankHashInfo> {
-        let Some(stats) = self.get_bank_hash_stats(slot) else {
-            return None;
-        };
-
-        // If there is a bank hash stats at this slot, then we'll return a `Some` regardless.  Use
-        // default values for accounts hash and accounts delta hash if not found.
-        let accounts_hash = self
-            .get_accounts_hash(slot)
-            .unwrap_or_else(|| AccountsHash(Hash::default()));
-        let accounts_delta_hash = self
-            .get_accounts_delta_hash(slot)
-            .unwrap_or_else(|| AccountsDeltaHash(Hash::default()));
-
-        Some(BankHashInfo {
-            accounts_hash,
-            accounts_delta_hash,
-            stats,
-        })
     }
 
     fn update_index<'a, T: ReadableAccount + Sync>(
@@ -9507,6 +9447,71 @@ pub mod tests {
         pub fn set_accounts_hash_for_tests(&self, slot: Slot, accounts_hash: AccountsHash) {
             self.set_accounts_hash(slot, accounts_hash);
         }
+
+        /// Set the bank hash stats for `slot` in the `bank_hash_stats` map
+        ///
+        /// returns the previous bank hash stats for `slot`
+        fn set_bank_hash_stats(
+            &self,
+            slot: Slot,
+            bank_hash_stats: BankHashStats,
+        ) -> Option<BankHashStats> {
+            self.bank_hash_stats
+                .lock()
+                .unwrap()
+                .insert(slot, bank_hash_stats)
+        }
+
+        /// Set the "bank hash info" for `slot`
+        ///
+        /// Internally this sets the accounts delta hash, the accounts hash, and the bank hash stats
+        /// from `bank_hash_info` for `slot` in their respective maps.
+        ///
+        /// returns the previous accounts delta hash, accounts hash, and bank hash stats for `slot`
+        fn set_bank_hash_info(
+            &self,
+            slot: Slot,
+            bank_hash_info: BankHashInfo,
+        ) -> (
+            Option<AccountsDeltaHash>,
+            Option<AccountsHash>,
+            Option<BankHashStats>,
+        ) {
+            let BankHashInfo {
+                accounts_delta_hash,
+                accounts_hash,
+                stats,
+            } = bank_hash_info;
+            let old_accounts_delta_hash = self.set_accounts_delta_hash(slot, accounts_delta_hash);
+            let old_accounts_hash = self.set_accounts_hash(slot, accounts_hash);
+            let old_stats = self.set_bank_hash_stats(slot, stats);
+            (old_accounts_delta_hash, old_accounts_hash, old_stats)
+        }
+
+        /// Get the "bank hash info" for `slot`
+        ///
+        /// Internally this gets the accounts delta hash, the accounts hash, and the bank hash stats
+        /// for `slot` from their respective maps.
+        fn get_bank_hash_info(&self, slot: Slot) -> Option<BankHashInfo> {
+            let Some(stats) = self.get_bank_hash_stats(slot) else {
+                return None;
+            };
+
+            // If there is a bank hash stats at this slot, then we'll return a `Some` regardless.  Use
+            // default values for accounts hash and accounts delta hash if not found.
+            let accounts_hash = self
+                .get_accounts_hash(slot)
+                .unwrap_or_else(|| AccountsHash(Hash::default()));
+            let accounts_delta_hash = self
+                .get_accounts_delta_hash(slot)
+                .unwrap_or_else(|| AccountsDeltaHash(Hash::default()));
+
+            Some(BankHashInfo {
+                accounts_hash,
+                accounts_delta_hash,
+                stats,
+            })
+        }
     }
 
     /// This impl exists until this feature is activated:
@@ -10886,6 +10891,9 @@ pub mod tests {
         db.store_for_tests(new_root, &[(&key2, &account0)]);
         db.add_root_and_flush_write_cache(new_root);
 
+        db.calculate_accounts_delta_hash(new_root);
+        db.update_accounts_hash_for_tests(new_root, &linear_ancestors(new_root), false, false);
+
         // Simulate reconstruction from snapshot
         let db = reconstruct_accounts_db_via_serialization(&db, new_root);
 
@@ -12006,6 +12014,14 @@ pub mod tests {
         accounts.clean_accounts_for_tests();
 
         accounts.print_accounts_stats("accounts_post_purge");
+
+        accounts.calculate_accounts_delta_hash(current_slot);
+        accounts.update_accounts_hash_for_tests(
+            current_slot,
+            &linear_ancestors(current_slot),
+            false,
+            false,
+        );
         let accounts = reconstruct_accounts_db_via_serialization(&accounts, current_slot);
 
         accounts.print_accounts_stats("reconstructed");
@@ -12056,6 +12072,7 @@ pub mod tests {
         accounts.add_root_and_flush_write_cache(current_slot);
 
         accounts.print_accounts_stats("pre_f");
+        accounts.calculate_accounts_delta_hash(current_slot);
         accounts.update_accounts_hash_for_tests(4, &Ancestors::default(), false, false);
 
         let accounts = f(accounts, current_slot);
@@ -12854,6 +12871,13 @@ pub mod tests {
         accounts.add_root_and_flush_write_cache(current_slot);
 
         accounts.print_count_and_status("before reconstruct");
+        accounts.calculate_accounts_delta_hash(current_slot);
+        accounts.update_accounts_hash_for_tests(
+            current_slot,
+            &linear_ancestors(current_slot),
+            false,
+            false,
+        );
         let accounts = reconstruct_accounts_db_via_serialization(&accounts, current_slot);
         accounts.print_count_and_status("before purge zero");
         accounts.clean_accounts_for_tests();
@@ -13087,6 +13111,12 @@ pub mod tests {
         // So, prevent that from happening by introducing refcount
         ((current_slot - 1)..=current_slot).for_each(|slot| accounts.flush_root_write_cache(slot));
         accounts.clean_accounts_for_tests();
+        accounts.update_accounts_hash_for_tests(
+            current_slot,
+            &linear_ancestors(current_slot),
+            false,
+            false,
+        );
         let accounts = reconstruct_accounts_db_via_serialization(&accounts, current_slot);
         accounts.clean_accounts_for_tests();
 

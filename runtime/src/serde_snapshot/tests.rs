@@ -8,7 +8,7 @@ use {
         accounts_db::{
             get_temp_accounts_paths, test_utils::create_test_accounts, AccountShrinkThreshold,
         },
-        accounts_hash::AccountsHash,
+        accounts_hash::{AccountsDeltaHash, AccountsHash},
         append_vec::AppendVec,
         bank::{Bank, BankTestConfig},
         epoch_accounts_hash,
@@ -25,6 +25,7 @@ use {
         clock::Slot,
         feature_set::{self, disable_fee_calculator},
         genesis_config::{create_genesis_config, ClusterType},
+        hash::Hash,
         pubkey::Pubkey,
         signature::{Keypair, Signer},
     },
@@ -181,6 +182,11 @@ fn test_accounts_serialize_style(serde_style: SerdeStyle) {
     create_test_accounts(&accounts, &mut pubkeys, 100, slot);
     check_accounts(&accounts, &pubkeys, 100);
     accounts.add_root(slot);
+    let accounts_delta_hash = accounts.accounts_db.calculate_accounts_delta_hash(slot);
+    let accounts_hash = AccountsHash(Hash::new_unique());
+    accounts
+        .accounts_db
+        .set_accounts_hash_from_snapshot(slot, accounts_hash);
 
     let mut writer = Cursor::new(vec![]);
     accountsdb_to_stream(
@@ -211,9 +217,10 @@ fn test_accounts_serialize_style(serde_style: SerdeStyle) {
         .unwrap(),
     );
     check_accounts(&daccounts, &pubkeys, 100);
-    let accounts_delta_hash = accounts.accounts_db.calculate_accounts_delta_hash(slot);
     let daccounts_delta_hash = daccounts.accounts_db.calculate_accounts_delta_hash(slot);
     assert_eq!(accounts_delta_hash, daccounts_delta_hash);
+    let daccounts_hash = daccounts.accounts_db.get_accounts_hash(slot);
+    assert_eq!(Some(accounts_hash), daccounts_hash);
 }
 
 fn test_bank_serialize_style(
@@ -510,6 +517,15 @@ fn test_extra_fields_eof() {
     let mut bank = Bank::new_from_parent(&bank0, &Pubkey::default(), 1);
 
     add_root_and_flush_write_cache(&bank0);
+    bank.rc
+        .accounts
+        .accounts_db
+        .set_accounts_delta_hash_from_snapshot(bank.slot(), AccountsDeltaHash(Hash::new_unique()));
+    bank.rc
+        .accounts
+        .accounts_db
+        .set_accounts_hash_from_snapshot(bank.slot(), AccountsHash(Hash::new_unique()));
+
     // Set extra fields
     bank.fee_rate_governor.lamports_per_signature = 7000;
 
@@ -637,6 +653,14 @@ fn test_blank_extra_fields() {
     bank0.squash();
     let mut bank = Bank::new_from_parent(&bank0, &Pubkey::default(), 1);
     add_root_and_flush_write_cache(&bank0);
+    bank.rc
+        .accounts
+        .accounts_db
+        .set_accounts_delta_hash_from_snapshot(bank.slot(), AccountsDeltaHash(Hash::new_unique()));
+    bank.rc
+        .accounts
+        .accounts_db
+        .set_accounts_hash_from_snapshot(bank.slot(), AccountsHash(Hash::new_unique()));
 
     // Set extra fields
     bank.fee_rate_governor.lamports_per_signature = 7000;
@@ -705,6 +729,17 @@ mod test_bank_serialize {
     where
         S: serde::Serializer,
     {
+        bank.rc
+            .accounts
+            .accounts_db
+            .set_accounts_delta_hash_from_snapshot(
+                bank.slot(),
+                AccountsDeltaHash(Hash::new_unique()),
+            );
+        bank.rc
+            .accounts
+            .accounts_db
+            .set_accounts_hash_from_snapshot(bank.slot(), AccountsHash(Hash::new_unique()));
         let snapshot_storages = bank
             .rc
             .accounts
