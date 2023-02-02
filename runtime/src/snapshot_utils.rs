@@ -4630,7 +4630,7 @@ mod tests {
             let snapshot_storages = bank.get_snapshot_storages(None);
             let slot_deltas = bank.status_cache.read().unwrap().root_slot_deltas();
             add_bank_snapshot(
-                &bank_snapshots_dir,
+                bank_snapshots_dir,
                 &bank,
                 &snapshot_storages,
                 snapshot_version,
@@ -4638,10 +4638,10 @@ mod tests {
             )
             .unwrap();
 
-            slot = slot + 1;
+            slot += 1;
         }
 
-        let (slot, _path) = get_highest_full_snapshot_slot_and_path(&bank_snapshots_dir).unwrap();
+        let (slot, _path) = get_highest_full_snapshot_slot_and_path(bank_snapshots_dir).unwrap();
 
         assert_eq!(slot, 3);
 
@@ -4650,7 +4650,7 @@ mod tests {
             .join("state_complete");
         fs::remove_file(complete_flag_file).unwrap();
 
-        let (slot, _path) = get_highest_full_snapshot_slot_and_path(&bank_snapshots_dir).unwrap();
+        let (slot, _path) = get_highest_full_snapshot_slot_and_path(bank_snapshots_dir).unwrap();
 
         assert_eq!(slot, 2);
 
