@@ -4302,7 +4302,7 @@ impl Bank {
     // A cluster specific feature gate, when not activated it keeps v1.13 behavior in mainnet-beta;
     // once activated for v1.14+, it allows compute_budget::request_heap_frame and
     // compute_budget::set_compute_unit_price co-exist in same transaction.
-    pub(crate) fn enable_request_heap_frame_ix(&self) -> bool {
+    fn enable_request_heap_frame_ix(&self) -> bool {
         self.feature_set
             .is_active(&enable_request_heap_frame_ix::id())
             || self.cluster_type() != ClusterType::MainnetBeta
@@ -7983,7 +7983,7 @@ pub mod test_utils {
             signature_fee + request_cu * lamports_per_cu
         );
 
-        // assert when enable_request_heap_frame_ix is disabled (an v1.13 behavior), prioritization fee will inot be counted
+        // assert when enable_request_heap_frame_ix is disabled (an v1.13 behavior), prioritization fee will not be counted
         // into transaction fee
         enable_request_heap_frame_ix = false;
         assert_eq!(
