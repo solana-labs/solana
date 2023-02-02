@@ -17,6 +17,7 @@ pull_request_rules:
       label:
         add:
           - community
+          - need:merge-assist
   - name: request review for community changes
     conditions:
       - author≠@core-contributors
