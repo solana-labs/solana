@@ -7943,4 +7943,60 @@ pub mod test_utils {
         vote_state::to(&versioned, &mut vote_account).unwrap();
         bank.store_account(vote_pubkey, &vote_account);
     }
+
+    #[test]
+    fn test_calculate_fee_with_request_heap_frame_flag() {
+        let key0 = Pubkey::new_unique();
+        let key1 = Pubkey::new_unique();
+        let lamports_per_signature: u64 = 5_000;
+        let signature_fee: u64 = 10;
+        let request_cu: u64 = 1;
+        let lamports_per_cu: u64 = 5;
+        let fee_structure = FeeStructure {
+            lamports_per_signature: signature_fee,
+            ..FeeStructure::default()
+        };
+        let message = SanitizedMessage::try_from(Message::new(
+            &[
+                system_instruction::transfer(&key0, &key1, 1),
+                ComputeBudgetInstruction::set_compute_unit_limit(request_cu as u32),
+                ComputeBudgetInstruction::request_heap_frame(40 * 1024),
+                ComputeBudgetInstruction::set_compute_unit_price(lamports_per_cu * 1_000_000),
+            ],
+            Some(&key0),
+        ))
+        .unwrap();
+
+        // assert when enable_request_heap_frame_ix is enabled, prioritization fee will be counted
+        // into transaction fee
+        let mut enable_request_heap_frame_ix = true;
+        assert_eq!(
+            Bank::calculate_fee(
+                &message,
+                lamports_per_signature,
+                &fee_structure,
+                true,
+                false,
+                true,
+                enable_request_heap_frame_ix,
+            ),
+            signature_fee + request_cu * lamports_per_cu
+        );
+
+        // assert when enable_request_heap_frame_ix is disabled (an v1.13 behavior), prioritization fee will inot be counted
+        // into transaction fee
+        enable_request_heap_frame_ix = false;
+        assert_eq!(
+            Bank::calculate_fee(
+                &message,
+                lamports_per_signature,
+                &fee_structure,
+                true,
+                false,
+                true,
+                enable_request_heap_frame_ix,
+            ),
+            signature_fee
+        );
+    }
 }
