@@ -165,8 +165,8 @@ impl BankSnapshotInfo {
         // BankSnapshotPost file
         let bank_snapshot_dir = get_bank_snapshots_dir(&bank_snapshots_dir, slot);
         let bank_snapshot_post_path = bank_snapshot_dir.join(get_snapshot_file_name(slot));
-        let mut bank_snapshot_pre_path = bank_snapshot_post_path.clone();
-        bank_snapshot_pre_path.set_extension(BANK_SNAPSHOT_PRE_FILENAME_EXTENSION);
+        let bank_snapshot_pre_path =
+            bank_snapshot_post_path.with_extension(BANK_SNAPSHOT_PRE_FILENAME_EXTENSION);
 
         if bank_snapshot_pre_path.is_file() {
             return Some(BankSnapshotInfo {
@@ -991,8 +991,9 @@ pub fn add_bank_snapshot(
     fs::create_dir_all(&bank_snapshot_dir)?;
 
     // the bank snapshot is stored as bank_snapshots_dir/slot/slot.BANK_SNAPSHOT_PRE_FILENAME_EXTENSION
-    let mut bank_snapshot_path = bank_snapshot_dir.join(get_snapshot_file_name(slot));
-    bank_snapshot_path.set_extension(BANK_SNAPSHOT_PRE_FILENAME_EXTENSION);
+    let bank_snapshot_path = bank_snapshot_dir
+        .join(get_snapshot_file_name(slot))
+        .with_extension(BANK_SNAPSHOT_PRE_FILENAME_EXTENSION);
 
     info!(
         "Creating bank snapshot for slot {}, path: {}",
@@ -2318,29 +2319,15 @@ pub fn verify_snapshot_archive<P, Q, R>(
         )
         .unwrap();
 
-        // Bank snapshots may contain an accounts directory of hard linked append vecs,
-        // which must be removed in order for the directory comparison with the snapshot
-        // archive (below) to succeed.
-
         let accounts_hardlinks_dir = snapshot_slot_dir.join("accounts_hardlinks");
         if accounts_hardlinks_dir.is_dir() {
-            // This directory contain symlinks to all accounts snapshot directories.
+            // This directory contain symlinks to all <account_path>/snapshot/<slot> directories.
             // They should all be removed.
             for entry in fs::read_dir(&accounts_hardlinks_dir).unwrap() {
                 let dst_path = fs::read_link(entry.unwrap().path()).unwrap();
                 fs::remove_dir_all(dst_path).unwrap();
             }
             std::fs::remove_dir_all(accounts_hardlinks_dir).unwrap();
-        }
-
-        // Remove the new accounts/ to be consistent with the
-        // old archive structure.
-        let accounts_path = snapshot_slot_dir.join("accounts");
-        if accounts_path.is_dir() {
-            // Do not use the async move_and_async_delete_path because the assert below
-            // requires the job to be done.
-            // This is for test only, so the performance is not an issue.
-            std::fs::remove_dir_all(accounts_path).unwrap();
         }
     }
 
