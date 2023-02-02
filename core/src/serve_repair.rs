@@ -29,9 +29,10 @@ use {
         data_budget::DataBudget,
         packet::{Packet, PacketBatch, PacketBatchRecycler},
     },
-    solana_runtime::bank_forks::BankForks,
+    solana_runtime::{bank::Bank, bank_forks::BankForks},
     solana_sdk::{
         clock::Slot,
+        feature_set,
         genesis_config::ClusterType,
         hash::{Hash, HASH_BYTES},
         packet::PACKET_DATA_SIZE,
@@ -85,6 +86,14 @@ const SIGNED_REPAIR_TIME_WINDOW: Duration = Duration::from_secs(60 * 10); // 10 
 
 #[cfg(test)]
 static_assertions::const_assert_eq!(MAX_ANCESTOR_RESPONSES, 30);
+
+fn repair_peer_selection_experiments_enabled(bank: &Bank) -> bool {
+    bank.feature_set
+        .is_active(&feature_set::enable_repair_peer_selection_experiments::id())
+        && !bank
+            .feature_set
+            .is_active(&feature_set::disable_repair_peer_selection_experiments::id())
+}
 
 #[derive(Error, Debug)]
 pub enum RepairVerifyError {
@@ -200,6 +209,9 @@ struct ServeRepairStats {
     err_sig_verify: usize,
     err_unsigned: usize,
     err_id_mismatch: usize,
+    stake_similar_1_slot_requests: usize,
+    stake_similar_2_slot_requests: usize,
+    standard_slot_requests: usize,
 }
 
 #[derive(Debug, AbiExample, Deserialize, Serialize)]
@@ -297,6 +309,23 @@ impl RepairProtocol {
             | Self::AncestorHashes { .. } => true,
         }
     }
+
+    fn slot(&self) -> Option<Slot> {
+        match self {
+            Self::LegacyWindowIndex(_, slot, _) => Some(*slot),
+            Self::LegacyHighestWindowIndex(_, slot, _) => Some(*slot),
+            Self::LegacyOrphan(_, slot) => Some(*slot),
+            Self::LegacyWindowIndexWithNonce(_, slot, _, _) => Some(*slot),
+            Self::LegacyHighestWindowIndexWithNonce(_, slot, _, _) => Some(*slot),
+            Self::LegacyOrphanWithNonce(_, slot, _) => Some(*slot),
+            Self::LegacyAncestorHashes(_, slot, _) => Some(*slot),
+            Self::Pong(_) => None,
+            Self::WindowIndex { slot, .. } => Some(*slot),
+            Self::HighestWindowIndex { slot, .. } => Some(*slot),
+            Self::Orphan { slot, .. } => Some(*slot),
+            Self::AncestorHashes { slot, .. } => Some(*slot),
+        }
+    }
 }
 
 #[derive(Clone)]
@@ -306,22 +335,69 @@ pub struct ServeRepair {
     repair_whitelist: Arc<RwLock<HashSet<Pubkey>>>,
 }
 
+enum WeightedIndexVariant<T> {
+    Standard {
+        standard_weights: T,
+    },
+    StakeSimilar1 {
+        stake_similar_weights: T,
+    },
+    StakeSimilar2 {
+        standard_weights: T,
+        stake_similar_weights: T,
+    },
+}
+
 // Cache entry for repair peers for a slot.
 pub(crate) struct RepairPeers {
     asof: Instant,
     peers: Vec<(Pubkey, /*ContactInfo.serve_repair:*/ SocketAddr)>,
-    weighted_index: WeightedIndex<u64>,
+    weighted_index: WeightedIndexVariant<WeightedIndex<u64>>,
 }
 
 impl RepairPeers {
-    fn new(asof: Instant, peers: &[ContactInfo], weights: &[u64]) -> Result<Self> {
+    fn new(
+        asof: Instant,
+        peers: &[ContactInfo],
+        weights: WeightedIndexVariant<Vec<u64>>,
+    ) -> Result<Self> {
         if peers.is_empty() {
             return Err(Error::from(ClusterInfoError::NoPeers));
         }
-        if peers.len() != weights.len() {
-            return Err(Error::from(WeightedError::InvalidWeight));
-        }
-        let weighted_index = WeightedIndex::new(weights)?;
+        let weighted_index = match weights {
+            WeightedIndexVariant::Standard { standard_weights } => {
+                if peers.len() != standard_weights.len() {
+                    return Err(Error::from(WeightedError::InvalidWeight));
+                }
+                WeightedIndexVariant::Standard {
+                    standard_weights: WeightedIndex::new(&standard_weights)?,
+                }
+            }
+            WeightedIndexVariant::StakeSimilar1 {
+                stake_similar_weights,
+            } => {
+                if peers.len() != stake_similar_weights.len() {
+                    return Err(Error::from(WeightedError::InvalidWeight));
+                }
+                WeightedIndexVariant::StakeSimilar1 {
+                    stake_similar_weights: WeightedIndex::new(&stake_similar_weights)?,
+                }
+            }
+            WeightedIndexVariant::StakeSimilar2 {
+                standard_weights,
+                stake_similar_weights,
+            } => {
+                if peers.len() != standard_weights.len()
+                    || peers.len() != stake_similar_weights.len()
+                {
+                    return Err(Error::from(WeightedError::InvalidWeight));
+                }
+                WeightedIndexVariant::StakeSimilar2 {
+                    standard_weights: WeightedIndex::new(&standard_weights)?,
+                    stake_similar_weights: WeightedIndex::new(&stake_similar_weights)?,
+                }
+            }
+        };
         let peers = peers
             .iter()
             .map(|peer| (peer.id, peer.serve_repair))
@@ -334,7 +410,22 @@ impl RepairPeers {
     }
 
     fn sample<R: Rng>(&self, rng: &mut R) -> (Pubkey, SocketAddr) {
-        let index = self.weighted_index.sample(rng);
+        let index = match &self.weighted_index {
+            WeightedIndexVariant::Standard { standard_weights } => standard_weights.sample(rng),
+            WeightedIndexVariant::StakeSimilar1 {
+                stake_similar_weights,
+            } => stake_similar_weights.sample(rng),
+            WeightedIndexVariant::StakeSimilar2 {
+                standard_weights,
+                stake_similar_weights,
+            } => {
+                if rng.gen_range(0, 4) == 0 {
+                    standard_weights.sample(rng)
+                } else {
+                    stake_similar_weights.sample(rng)
+                }
+            }
+        };
         self.peers[index]
     }
 }
@@ -654,6 +745,7 @@ impl ServeRepair {
             stats,
             data_budget,
             cluster_type,
+            &root_bank,
         );
         stats.handle_requests_time_us += handle_requests_start.elapsed().as_micros() as u64;
 
@@ -743,6 +835,17 @@ impl ServeRepair {
             ("err_sig_verify", stats.err_sig_verify, i64),
             ("err_unsigned", stats.err_unsigned, i64),
             ("err_id_mismatch", stats.err_id_mismatch, i64),
+            (
+                "stake_similar_1_slot_requests",
+                stats.stake_similar_1_slot_requests,
+                i64
+            ),
+            (
+                "stake_similar_2_slot_requests",
+                stats.stake_similar_2_slot_requests,
+                i64
+            ),
+            ("standard_slot_requests", stats.standard_slot_requests, i64),
         );
 
         *stats = ServeRepairStats::default();
@@ -902,6 +1005,7 @@ impl ServeRepair {
         (check, ping_pkt)
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn handle_requests(
         &self,
         ping_cache: &mut PingCache,
@@ -912,6 +1016,7 @@ impl ServeRepair {
         stats: &mut ServeRepairStats,
         data_budget: &DataBudget,
         cluster_type: ClusterType,
+        root_bank: &Bank,
     ) {
         let identity_keypair = self.cluster_info.keypair().clone();
         let mut pending_pings = Vec::default();
@@ -941,6 +1046,23 @@ impl ServeRepair {
                     }
                 }
             }
+
+            if repair_peer_selection_experiments_enabled(root_bank) {
+                if let Some(slot) = request.slot() {
+                    match slot % 101 {
+                        11 => {
+                            stats.stake_similar_1_slot_requests += 1;
+                        }
+                        23 => {
+                            stats.stake_similar_2_slot_requests += 1;
+                        }
+                        _ => {
+                            stats.standard_slot_requests += 1;
+                        }
+                    }
+                }
+            }
+
             stats.processed += 1;
             let rsp = match Self::handle_repair(
                 recycler, &from_addr, blockstore, request, stats, ping_cache,
@@ -1000,6 +1122,7 @@ impl ServeRepair {
         repair_validators: &Option<HashSet<Pubkey>>,
         outstanding_requests: &mut OutstandingShredRepairs,
         identity_keypair: &Keypair,
+        root_bank: &Bank,
     ) -> Result<(SocketAddr, Vec<u8>)> {
         // find a peer that appears to be accepting replication and has the desired slot, as indicated
         // by a valid tvu port location
@@ -1009,8 +1132,36 @@ impl ServeRepair {
             _ => {
                 peers_cache.pop(&slot);
                 let repair_peers = self.repair_peers(repair_validators, slot);
-                let weights = cluster_slots.compute_weights(slot, &repair_peers);
-                let repair_peers = RepairPeers::new(Instant::now(), &repair_peers, &weights)?;
+                let weights = if repair_peer_selection_experiments_enabled(root_bank) {
+                    match slot % 101 {
+                        11 => {
+                            let stake_similar_weights = cluster_slots
+                                .compute_weights_target_distance(&repair_peers, &self.my_id());
+                            WeightedIndexVariant::StakeSimilar1 {
+                                stake_similar_weights,
+                            }
+                        }
+                        23 => {
+                            let standard_weights =
+                                cluster_slots.compute_weights(slot, &repair_peers);
+                            let stake_similar_weights = cluster_slots
+                                .compute_weights_target_distance(&repair_peers, &self.my_id());
+                            WeightedIndexVariant::StakeSimilar2 {
+                                standard_weights,
+                                stake_similar_weights,
+                            }
+                        }
+                        _ => {
+                            let standard_weights =
+                                cluster_slots.compute_weights(slot, &repair_peers);
+                            WeightedIndexVariant::Standard { standard_weights }
+                        }
+                    }
+                } else {
+                    let standard_weights = cluster_slots.compute_weights(slot, &repair_peers);
+                    WeightedIndexVariant::Standard { standard_weights }
+                };
+                let repair_peers = RepairPeers::new(Instant::now(), &repair_peers, weights)?;
                 peers_cache.put(slot, repair_peers);
                 peers_cache.get(&slot).unwrap()
             }
@@ -1789,6 +1940,7 @@ mod tests {
         let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(10_000);
         let bank = Bank::new_for_tests(&genesis_config);
         let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
+        let root_bank = bank_forks.read().unwrap().root_bank();
         let cluster_slots = ClusterSlots::default();
         let cluster_info = Arc::new(new_test_cluster_info());
         let serve_repair = ServeRepair::new(
@@ -1806,6 +1958,7 @@ mod tests {
             &None,
             &mut outstanding_requests,
             &identity_keypair,
+            &root_bank,
         );
         assert_matches!(rv, Err(Error::ClusterInfo(ClusterInfoError::NoPeers)));
 
@@ -1835,6 +1988,7 @@ mod tests {
                 &None,
                 &mut outstanding_requests,
                 &identity_keypair,
+                &root_bank,
             )
             .unwrap();
         assert_eq!(nxt.serve_repair, serve_repair_addr);
@@ -1870,6 +2024,7 @@ mod tests {
                     &None,
                     &mut outstanding_requests,
                     &identity_keypair,
+                    &root_bank,
                 )
                 .unwrap();
             if rv.0 == serve_repair_addr {
@@ -2114,6 +2269,7 @@ mod tests {
         let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(10_000);
         let bank = Bank::new_for_tests(&genesis_config);
         let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
+        let root_bank = bank_forks.read().unwrap().root_bank();
         let cluster_slots = ClusterSlots::default();
         let cluster_info = Arc::new(new_test_cluster_info());
         let me = cluster_info.my_contact_info();
@@ -2148,6 +2304,7 @@ mod tests {
                     &known_validators,
                     &mut OutstandingShredRepairs::default(),
                     &identity_keypair,
+                    &root_bank,
                 )
                 .is_err());
         }
@@ -2166,6 +2323,7 @@ mod tests {
                 &known_validators,
                 &mut OutstandingShredRepairs::default(),
                 &identity_keypair,
+                &root_bank,
             )
             .is_ok());
 
@@ -2188,6 +2346,7 @@ mod tests {
                 &None,
                 &mut OutstandingShredRepairs::default(),
                 &identity_keypair,
+                &root_bank,
             )
             .is_ok());
     }

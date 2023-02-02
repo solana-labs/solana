@@ -602,6 +602,14 @@ pub mod remove_congestion_multiplier_from_fee_calculation {
     solana_sdk::declare_id!("A8xyMHZovGXFkorFqEmVH2PKGLiBip5JD7jt4zsUWo4H");
 }
 
+pub mod enable_repair_peer_selection_experiments {
+    solana_sdk::declare_id!("24MCz1eioJq1cDRTNtrEDnVtA9ZJkYX3BG1Apc3fkzze");
+}
+
+pub mod disable_repair_peer_selection_experiments {
+    solana_sdk::declare_id!("FiawZN6swobGq9EMozks57FhwBN8s24pQQQv9rdC3FyX");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -747,6 +755,8 @@ lazy_static! {
         (disable_builtin_loader_ownership_chains::id(), "disable builtin loader ownership chains #29956"),
         (cap_transaction_accounts_data_size::id(), "cap transaction accounts data size up to a limit #27839"),
         (remove_congestion_multiplier_from_fee_calculation::id(), "Remove congestion multiplier from transaction fee calculation #29881"),
+        (enable_repair_peer_selection_experiments::id(), "enable repair peer selection experiments #TODO"),
+        (disable_repair_peer_selection_experiments::id(), "disable repair peer selection experiments #TODO"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()
