@@ -11,6 +11,7 @@ use {
     solana_client::connection_cache::ConnectionCache,
     solana_core::{
         banking_stage::{BankingStage, BankingStageStats},
+        banking_trace::{BankingPacketBatch, BankingTracer},
         leader_slot_banking_stage_metrics::LeaderSlotMetricsTracker,
         qos_service::QosService,
         unprocessed_packet_batches::*,
@@ -197,9 +198,10 @@ fn bench_banking(bencher: &mut Bencher, tx_type: TransactionType) {
     // during the benchmark
     genesis_config.ticks_per_slot = 10_000;
 
-    let (non_vote_sender, non_vote_receiver) = unbounded();
-    let (tpu_vote_sender, tpu_vote_receiver) = unbounded();
-    let (gossip_vote_sender, gossip_vote_receiver) = unbounded();
+    let banking_tracer = BankingTracer::new_disabled();
+    let (non_vote_sender, non_vote_receiver) = banking_tracer.create_channel_non_vote();
+    let (tpu_vote_sender, tpu_vote_receiver) = banking_tracer.create_channel_tpu_vote();
+    let (gossip_vote_sender, gossip_vote_receiver) = banking_tracer.create_channel_gossip_vote();
 
     let mut bank = Bank::new_for_benches(&genesis_config);
     // Allow arbitrary transaction processing time for the purposes of this bench
@@ -304,10 +306,16 @@ fn bench_banking(bencher: &mut Bencher, tx_type: TransactionType) {
             let mut sent = 0;
             if let Some(vote_packets) = &vote_packets {
                 tpu_vote_sender
-                    .send((vote_packets[start..start + chunk_len].to_vec(), None))
+                    .send(BankingPacketBatch::new((
+                        vote_packets[start..start + chunk_len].to_vec(),
+                        None,
+                    )))
                     .unwrap();
                 gossip_vote_sender
-                    .send((vote_packets[start..start + chunk_len].to_vec(), None))
+                    .send(BankingPacketBatch::new((
+                        vote_packets[start..start + chunk_len].to_vec(),
+                        None,
+                    )))
                     .unwrap();
             }
             for v in verified[start..start + chunk_len].chunks(chunk_len / num_threads) {
@@ -321,7 +329,9 @@ fn bench_banking(bencher: &mut Bencher, tx_type: TransactionType) {
                 for xv in v {
                     sent += xv.len();
                 }
-                non_vote_sender.send((v.to_vec(), None)).unwrap();
+                non_vote_sender
+                    .send(BankingPacketBatch::new((v.to_vec(), None)))
+                    .unwrap();
             }
 
             check_txs(&signal_receiver2, txes / CHUNKS);

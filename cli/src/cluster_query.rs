@@ -2087,6 +2087,10 @@ pub fn process_transaction_history(
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct CliRentCalculation {
+    // lamports_per_* fields are deprecated since all accounts must be rent
+    // exempt; however, they are kept here for the sake of compatibility.
+    pub lamports_per_byte_year: u64,
+    pub lamports_per_epoch: u64,
     pub rent_exempt_minimum_lamports: u64,
     #[serde(skip)]
     pub use_lamports_unit: bool,
@@ -2159,6 +2163,8 @@ pub fn process_calculate_rent(
     let rent: Rent = rent_account.deserialize_data()?;
     let rent_exempt_minimum_lamports = rent.minimum_balance(data_length);
     let cli_rent_calculation = CliRentCalculation {
+        lamports_per_byte_year: 0,
+        lamports_per_epoch: 0,
         rent_exempt_minimum_lamports,
         use_lamports_unit,
     };

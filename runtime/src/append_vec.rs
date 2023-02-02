@@ -148,29 +148,31 @@ impl<'a: 'b, 'b, T: ReadableAccount + Sync + 'b, U: StorableAccounts<'a, T>, V: 
 /// This struct will be backed by mmaped and snapshotted data files.
 /// So the data layout must be stable and consistent across the entire cluster!
 #[derive(Clone, PartialEq, Eq, Debug)]
+#[repr(C)]
 pub struct StoredMeta {
     /// global write version
     /// This will be made completely obsolete such that we stop storing it.
     /// We will not support multiple append vecs per slot anymore, so this concept is no longer necessary.
     /// Order of stores of an account to an append vec will determine 'latest' account data per pubkey.
     pub write_version_obsolete: StoredMetaWriteVersion,
+    pub data_len: u64,
     /// key for the account
     pub pubkey: Pubkey,
-    pub data_len: u64,
 }
 
 /// This struct will be backed by mmaped and snapshotted data files.
 /// So the data layout must be stable and consistent across the entire cluster!
 #[derive(Serialize, Deserialize, Clone, Debug, Default, Eq, PartialEq)]
+#[repr(C)]
 pub struct AccountMeta {
     /// lamports in the account
     pub lamports: u64,
+    /// the epoch at which this account will next owe rent
+    pub rent_epoch: Epoch,
     /// the program that owns this account. If executable, the program that loads this account.
     pub owner: Pubkey,
     /// this account's data contains a loaded program (and is now read-only)
     pub executable: bool,
-    /// the epoch at which this account will next owe rent
-    pub rent_epoch: Epoch,
 }
 
 impl<'a, T: ReadableAccount> From<&'a T> for AccountMeta {
@@ -703,6 +705,7 @@ pub mod tests {
         super::{test_utils::*, *},
         crate::accounts_db::INCLUDE_SLOT_IN_HASH_TESTS,
         assert_matches::assert_matches,
+        memoffset::offset_of,
         rand::{thread_rng, Rng},
         solana_sdk::{
             account::{accounts_equal, WritableAccount},
@@ -1273,5 +1276,19 @@ pub mod tests {
         drop(av);
         let result = AppendVec::new_from_file(path, accounts_len);
         assert_matches!(result, Err(ref message) if message.to_string().starts_with("incorrect layout/length/data"));
+    }
+
+    #[test]
+    fn test_type_layout() {
+        assert_eq!(offset_of!(StoredMeta, write_version_obsolete), 0x00);
+        assert_eq!(offset_of!(StoredMeta, data_len), 0x08);
+        assert_eq!(offset_of!(StoredMeta, pubkey), 0x10);
+        assert_eq!(mem::size_of::<StoredMeta>(), 0x30);
+
+        assert_eq!(offset_of!(AccountMeta, lamports), 0x00);
+        assert_eq!(offset_of!(AccountMeta, rent_epoch), 0x08);
+        assert_eq!(offset_of!(AccountMeta, owner), 0x10);
+        assert_eq!(offset_of!(AccountMeta, executable), 0x30);
+        assert_eq!(mem::size_of::<AccountMeta>(), 0x38);
     }
 }

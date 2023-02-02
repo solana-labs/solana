@@ -1,0 +1,53 @@
+import {
+  DocBlock,
+  DocSideBySide,
+  CodeParams,
+  Parameter,
+  Field,
+  Values,
+  CodeSnippets,
+} from "../../../components/CodeDocBlock";
+
+<DocBlock>
+
+## blockUnsubscribe
+
+Unsubscribe from block notifications
+
+<DocSideBySide>
+<CodeParams>
+
+### Parameters:
+
+<Parameter type={"integer"} required={true}>
+  subscription id to cancel
+</Parameter>
+
+### Result:
+
+`<bool>` - unsubscribe success message
+
+</CodeParams>
+
+<CodeSnippets>
+
+### Code sample:
+
+```json
+{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "method": "blockUnsubscribe",
+  "params": [0]
+}
+```
+
+### Response:
+
+```json
+{ "jsonrpc": "2.0", "result": true, "id": 1 }
+```
+
+</CodeSnippets>
+</DocSideBySide>
+</DocBlock>

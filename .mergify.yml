@@ -38,7 +38,6 @@ pull_request_rules:
         - status-success=ci-gate
         - label=automerge
         - label!=no-automerge
-        - author≠@dont-squash-my-commits
         - or:
           # only require docs checks if docs files changed
           - -files~=^docs/
@@ -47,39 +46,9 @@ pull_request_rules:
           # only require explorer checks if explorer files changed
           - status-success=check-explorer
           - -files~=^explorer/
-        - or:
-          - and:
-            - status-success=all-web3-checks
-            - status-success=web3-commit-lint
-          # only require web3 checks if web3.js files changed
-          - -files~=^web3.js/
     actions:
       merge:
         method: squash
-  # Join the dont-squash-my-commits group if you won't like your commits squashed
-  - name: automatic merge (rebase) on CI success
-    conditions:
-      - and:
-        - status-success=buildkite/solana
-        - status-success=ci-gate
-        - label=automerge
-        - label!=no-automerge
-        - author=@dont-squash-my-commits
-        - or:
-          # only require docs checks if docs files changed
-          - -files~=^docs/
-          - status-success=build & deploy docs
-        - or:
-          # only require explorer checks if explorer files changed
-          - status-success=check-explorer
-          - -files~=^explorer/
-        - or:
-          # only require web3 checks if web3.js files changed
-          - status-success=all-web3-checks
-          - -files~=^web3.js/
-    actions:
-      merge:
-        method: rebase
   - name: remove automerge label on CI failure
     conditions:
       - label=automerge
@@ -142,6 +111,28 @@ ubscribers')) }}"
         ignore_conflicts: true
         branches:
           - v1.14
+  - name: v1.15 feature-gate backport
+    conditions:
+      - label=v1.15
+      - label=feature-gate
+    actions:
+      backport:
+        assignees: *BackportAssignee
+        ignore_conflicts: true
+        labels:
+          - feature-gate
+        branches:
+          - v1.15
+  - name: v1.15 non-feature-gate backport
+    conditions:
+      - label=v1.15
+      - label!=feature-gate
+    actions:
+      backport:
+        assignees: *BackportAssignee
+        ignore_conflicts: true
+        branches:
+          - v1.15
 
 commands_restrictions:
   # The author of copied PRs is the Mergify user.

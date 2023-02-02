@@ -240,11 +240,18 @@ fn check_update_vote_state_slots_are_valid(
         };
         if root_to_check.is_none()
             && vote_state_update_index > 0
-            && proposed_vote_slot <= vote_state_update.lockouts[vote_state_update_index - 1].slot()
+            && proposed_vote_slot
+                <= vote_state_update.lockouts[vote_state_update_index.checked_sub(1).expect(
+                    "`vote_state_update_index` is positive when checking `SlotsNotOrdered`",
+                )]
+                .slot()
         {
             return Err(VoteError::SlotsNotOrdered);
         }
-        let ancestor_slot = slot_hashes[slot_hashes_index - 1].0;
+        let ancestor_slot = slot_hashes[slot_hashes_index
+            .checked_sub(1)
+            .expect("`slot_hashes_index` is positive when computing `ancestor_slot`")]
+        .0;
 
         // Find if this slot in the proposed vote state exists in the SlotHashes history
         // to confirm if it was a valid ancestor on this fork
@@ -280,7 +287,9 @@ fn check_update_vote_state_slots_are_valid(
                         }
                         root_to_check = None;
                     } else {
-                        vote_state_update_index += 1;
+                        vote_state_update_index = vote_state_update_index.checked_add(1).expect(
+                            "`vote_state_update_index` is bounded by `MAX_LOCKOUT_HISTORY` when `proposed_vote_slot` is too old to be in SlotHashes history",
+                        );
                     }
                     continue;
                 } else {
@@ -296,7 +305,9 @@ fn check_update_vote_state_slots_are_valid(
             }
             Ordering::Greater => {
                 // Decrement `slot_hashes_index` to find newer slots in the SlotHashes history
-                slot_hashes_index -= 1;
+                slot_hashes_index = slot_hashes_index
+                    .checked_sub(1)
+                    .expect("`slot_hashes_index` is positive when finding newer slots in SlotHashes history");
                 continue;
             }
             Ordering::Equal => {
@@ -306,8 +317,12 @@ fn check_update_vote_state_slots_are_valid(
                 if root_to_check.is_some() {
                     root_to_check = None;
                 } else {
-                    vote_state_update_index += 1;
-                    slot_hashes_index -= 1;
+                    vote_state_update_index = vote_state_update_index
+                        .checked_add(1)
+                        .expect("`vote_state_update_index` is bounded by `MAX_LOCKOUT_HISTORY` when match is found in SlotHashes history");
+                    slot_hashes_index = slot_hashes_index.checked_sub(1).expect(
+                        "`slot_hashes_index` is positive when match is found in SlotHashes history",
+                    );
                 }
             }
         }
@@ -368,13 +383,15 @@ fn check_update_vote_state_slots_are_valid(
             true
         } else if vote_state_update_index == vote_state_update_indexes_to_filter[filter_votes_index]
         {
-            filter_votes_index += 1;
+            filter_votes_index = filter_votes_index.checked_add(1).unwrap();
             false
         } else {
             true
         };
 
-        vote_state_update_index += 1;
+        vote_state_update_index = vote_state_update_index
+            .checked_add(1)
+            .expect("`vote_state_update_index` is bounded by `MAX_LOCKOUT_HISTORY` when filtering out irrelevant votes");
         should_retain
     });
 
@@ -410,21 +427,29 @@ fn check_slots_are_valid(
             .last_voted_slot()
             .map_or(false, |last_voted_slot| vote_slots[i] <= last_voted_slot)
         {
-            i += 1;
+            i = i
+                .checked_add(1)
+                .expect("`i` is bounded by `MAX_LOCKOUT_HISTORY` when finding larger slots");
             continue;
         }
 
         // 2) Find the hash for this slot `s`.
-        if vote_slots[i] != slot_hashes[j - 1].0 {
+        if vote_slots[i] != slot_hashes[j.checked_sub(1).expect("`j` is positive")].0 {
             // Decrement `j` to find newer slots
-            j -= 1;
+            j = j
+                .checked_sub(1)
+                .expect("`j` is positive when finding newer slots");
             continue;
         }
 
         // 3) Once the hash for `s` is found, bump `s` to the next slot
         // in `vote_slots` and continue.
-        i += 1;
-        j -= 1;
+        i = i
+            .checked_add(1)
+            .expect("`i` is bounded by `MAX_LOCKOUT_HISTORY` when hash is found");
+        j = j
+            .checked_sub(1)
+            .expect("`j` is positive when hash is found");
     }
 
     if j == slot_hashes.len() {
@@ -561,7 +586,7 @@ pub fn process_new_vote_state(
 
     // Find the first vote in the current vote state for a slot greater
     // than the new proposed root
-    let mut current_vote_state_index = 0;
+    let mut current_vote_state_index: usize = 0;
     let mut new_vote_state_index = 0;
 
     // Count the number of slots at and before the new root within the current vote state lockouts.  Start with 1
@@ -577,9 +602,13 @@ pub fn process_new_vote_state(
             // Find the first vote in the current vote state for a slot greater
             // than the new proposed root
             if current_vote.slot() <= new_root {
-                current_vote_state_index += 1;
+                current_vote_state_index = current_vote_state_index
+                    .checked_add(1)
+                    .expect("`current_vote_state_index` is bounded by `MAX_LOCKOUT_HISTORY` when processing new root");
                 if current_vote.slot() != new_root {
-                    finalized_slot_count += 1;
+                    finalized_slot_count = finalized_slot_count
+                        .checked_add(1)
+                        .expect("`finalized_slot_count` is bounded by `MAX_LOCKOUT_HISTORY` when processing new root");
                 }
                 continue;
             }
@@ -604,7 +633,9 @@ pub fn process_new_vote_state(
                 if current_vote.last_locked_out_slot() >= new_vote.slot() {
                     return Err(VoteError::LockoutConflict);
                 }
-                current_vote_state_index += 1;
+                current_vote_state_index = current_vote_state_index
+                    .checked_add(1)
+                    .expect("`current_vote_state_index` is bounded by `MAX_LOCKOUT_HISTORY` when slot is less than proposed");
             }
             Ordering::Equal => {
                 // The new vote state should never have less lockout than
@@ -613,11 +644,17 @@ pub fn process_new_vote_state(
                     return Err(VoteError::ConfirmationRollBack);
                 }
 
-                current_vote_state_index += 1;
-                new_vote_state_index += 1;
+                current_vote_state_index = current_vote_state_index
+                    .checked_add(1)
+                    .expect("`current_vote_state_index` is bounded by `MAX_LOCKOUT_HISTORY` when slot is equal to proposed");
+                new_vote_state_index = new_vote_state_index
+                    .checked_add(1)
+                    .expect("`new_vote_state_index` is bounded by `MAX_LOCKOUT_HISTORY` when slot is equal to proposed");
             }
             Ordering::Greater => {
-                new_vote_state_index += 1;
+                new_vote_state_index = new_vote_state_index
+                    .checked_add(1)
+                    .expect("`new_vote_state_index` is bounded by `MAX_LOCKOUT_HISTORY` when slot is greater than proposed");
             }
         }
     }
@@ -738,7 +775,10 @@ pub fn authorize<S: std::hash::BuildHasher>(
             vote_state.set_new_authorized_voter(
                 authorized,
                 clock.epoch,
-                clock.leader_schedule_epoch + 1,
+                clock
+                    .leader_schedule_epoch
+                    .checked_add(1)
+                    .expect("epoch should be much less than u64::MAX"),
                 |epoch_authorized_voter| {
                     // current authorized withdrawer or authorized voter must say "yay"
                     if authorized_withdrawer_signer {
@@ -1215,7 +1255,11 @@ mod tests {
 
     fn check_lockouts(vote_state: &VoteState) {
         for (i, vote) in vote_state.votes.iter().enumerate() {
-            let num_votes = vote_state.votes.len() - i;
+            let num_votes = vote_state
+                .votes
+                .len()
+                .checked_sub(i)
+                .expect("`i` is less than `vote_state.votes.len()`");
             assert_eq!(vote.lockout(), INITIAL_LOCKOUT.pow(num_votes as u32) as u64);
         }
     }
@@ -2833,8 +2877,8 @@ mod tests {
 
     #[test_case(0, true; "first slot")]
     #[test_case(DEFAULT_SLOTS_PER_EPOCH / 2, true; "halfway through epoch")]
-    #[test_case(DEFAULT_SLOTS_PER_EPOCH / 2 + 1, false; "halfway through epoch plus one")]
-    #[test_case(DEFAULT_SLOTS_PER_EPOCH - 1, false; "last slot in epoch")]
+    #[test_case((DEFAULT_SLOTS_PER_EPOCH / 2).saturating_add(1), false; "halfway through epoch plus one")]
+    #[test_case(DEFAULT_SLOTS_PER_EPOCH.saturating_sub(1), false; "last slot in epoch")]
     #[test_case(DEFAULT_SLOTS_PER_EPOCH, true; "first slot in second epoch")]
     fn test_epoch_half_check(slot: Slot, expected_allowed: bool) {
         let epoch_schedule = EpochSchedule::without_warmup();
@@ -2860,14 +2904,14 @@ mod tests {
 
     #[test_case(0, true; "first slot")]
     #[test_case(DEFAULT_SLOTS_PER_EPOCH / 2, true; "halfway through epoch")]
-    #[test_case(DEFAULT_SLOTS_PER_EPOCH / 2 + 1, false; "halfway through epoch plus one")]
-    #[test_case(DEFAULT_SLOTS_PER_EPOCH - 1, false; "last slot in epoch")]
+    #[test_case((DEFAULT_SLOTS_PER_EPOCH / 2).saturating_add(1), false; "halfway through epoch plus one")]
+    #[test_case(DEFAULT_SLOTS_PER_EPOCH.saturating_sub(1), false; "last slot in epoch")]
     #[test_case(DEFAULT_SLOTS_PER_EPOCH, true; "first slot in second epoch")]
     fn test_epoch_half_check_with_warmup(slot: Slot, expected_allowed: bool) {
         let epoch_schedule = EpochSchedule::default();
         let first_normal_slot = epoch_schedule.first_normal_slot;
         assert_eq!(
-            is_commission_update_allowed(first_normal_slot + slot, &epoch_schedule),
+            is_commission_update_allowed(first_normal_slot.saturating_add(slot), &epoch_schedule),
             expected_allowed
         );
     }
