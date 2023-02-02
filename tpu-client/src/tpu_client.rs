@@ -1,10 +1,8 @@
 pub use crate::nonblocking::tpu_client::TpuSenderError;
 use {
-    crate::{
-        nonblocking::tpu_client::TpuClient as NonblockingTpuClient,
-        tpu_connection_cache::{ConnectionPool, TpuConnectionCache},
-    },
+    crate::nonblocking::tpu_client::TpuClient as NonblockingTpuClient,
     rayon::iter::{IntoParallelIterator, ParallelIterator},
+    solana_connection_cache::connection_cache::{ConnectionCache, ConnectionManager},
     solana_rpc_client::rpc_client::RpcClient,
     solana_sdk::{clock::Slot, transaction::Transaction, transport::Result as TransportResult},
     std::{
@@ -18,6 +16,10 @@ use {
     solana_sdk::{message::Message, signers::Signers, transaction::TransactionError},
     tokio::time::Duration,
 };
+
+pub const DEFAULT_TPU_ENABLE_UDP: bool = false;
+pub const DEFAULT_TPU_USE_QUIC: bool = true;
+pub const DEFAULT_TPU_CONNECTION_POOL_SIZE: usize = 4;
 
 pub mod temporary_pub {
     use super::*;
@@ -57,14 +59,14 @@ impl Default for TpuClientConfig {
 
 /// Client which sends transactions directly to the current leader's TPU port over UDP.
 /// The client uses RPC to determine the current leader and fetch node contact info
-pub struct TpuClient<P: ConnectionPool> {
+pub struct TpuClient {
     _deprecated: UdpSocket, // TpuClient now uses the connection_cache to choose a send_socket
     //todo: get rid of this field
     rpc_client: Arc<RpcClient>,
-    tpu_client: Arc<NonblockingTpuClient<P>>,
+    tpu_client: Arc<NonblockingTpuClient>,
 }
 
-impl<P: ConnectionPool> TpuClient<P> {
+impl TpuClient {
     /// Serialize and send transaction to the current and upcoming leader TPUs according to fanout
     /// size
     pub fn send_transaction(&self, transaction: &Transaction) -> bool {
@@ -108,9 +110,14 @@ impl<P: ConnectionPool> TpuClient<P> {
         rpc_client: Arc<RpcClient>,
         websocket_url: &str,
         config: TpuClientConfig,
+        connection_manager: Box<dyn ConnectionManager>,
     ) -> Result<Self> {
-        let create_tpu_client =
-            NonblockingTpuClient::new(rpc_client.get_inner_client().clone(), websocket_url, config);
+        let create_tpu_client = NonblockingTpuClient::new(
+            rpc_client.get_inner_client().clone(),
+            websocket_url,
+            config,
+            connection_manager,
+        );
         let tpu_client =
             tokio::task::block_in_place(|| rpc_client.runtime().block_on(create_tpu_client))?;
 
@@ -126,7 +133,7 @@ impl<P: ConnectionPool> TpuClient<P> {
         rpc_client: Arc<RpcClient>,
         websocket_url: &str,
         config: TpuClientConfig,
-        connection_cache: Arc<TpuConnectionCache<P>>,
+        connection_cache: Arc<ConnectionCache>,
     ) -> Result<Self> {
         let create_tpu_client = NonblockingTpuClient::new_with_connection_cache(
             rpc_client.get_inner_client().clone(),

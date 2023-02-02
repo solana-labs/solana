@@ -5181,6 +5181,7 @@ dependencies = [
  "rand 0.7.3",
  "rand_chacha 0.2.2",
  "rayon",
+ "solana-connection-cache",
  "solana-logger 1.16.0",
  "solana-measure",
  "solana-metrics",
@@ -5246,6 +5247,28 @@ dependencies = [
  "solana-logger 1.16.0",
  "solana-program-runtime",
  "solana-sdk 1.16.0",
+]
+
+[[package]]
+name = "solana-connection-cache"
+version = "1.16.0"
+dependencies = [
+ "async-trait",
+ "bincode",
+ "futures-util",
+ "indexmap",
+ "indicatif",
+ "log",
+ "rand 0.7.3",
+ "rand_chacha 0.2.2",
+ "rayon",
+ "solana-logger 1.16.0",
+ "solana-measure",
+ "solana-metrics",
+ "solana-net-utils",
+ "solana-sdk 1.16.0",
+ "thiserror",
+ "tokio",
 ]
 
 [[package]]
@@ -6190,6 +6213,7 @@ dependencies = [
  "quinn-proto",
  "quinn-udp",
  "rustls 0.20.6",
+ "solana-connection-cache",
  "solana-logger 1.16.0",
  "solana-measure",
  "solana-metrics",
@@ -6765,6 +6789,7 @@ dependencies = [
  "bincode",
  "log",
  "rayon",
+ "solana-connection-cache",
  "solana-logger 1.16.0",
  "solana-rpc-client",
  "solana-rpc-client-api",
@@ -6817,6 +6842,7 @@ dependencies = [
  "rand 0.7.3",
  "rand_chacha 0.2.2",
  "rayon",
+ "solana-connection-cache",
  "solana-logger 1.16.0",
  "solana-measure",
  "solana-metrics",
@@ -6885,6 +6911,7 @@ name = "solana-udp-client"
 version = "1.16.0"
 dependencies = [
  "async-trait",
+ "solana-connection-cache",
  "solana-net-utils",
  "solana-sdk 1.16.0",
  "solana-streamer",

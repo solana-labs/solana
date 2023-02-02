@@ -1,5 +1,5 @@
 //! Simple nonblocking client that connects to a given UDP port with the QUIC protocol
-//! and provides an interface for sending transactions which is restricted by the
+//! and provides an interface for sending data which is restricted by the
 //! server's flow control.
 use {
     async_mutex::Mutex,
@@ -10,6 +10,10 @@ use {
     quinn::{
         ClientConfig, ConnectError, Connection, ConnectionError, Endpoint, EndpointConfig,
         IdleTimeout, TokioRuntime, TransportConfig, VarInt, WriteError,
+    },
+    solana_connection_cache::{
+        client_connection::ClientStats, connection_cache_stats::ConnectionCacheStats,
+        nonblocking::client_connection::ClientConnection,
     },
     solana_measure::measure::Measure,
     solana_net_utils::VALIDATOR_PORT_RANGE,
@@ -24,10 +28,6 @@ use {
     },
     solana_streamer::{
         nonblocking::quic::ALPN_TPU_PROTOCOL_ID, tls_certificates::new_self_signed_tls_certificate,
-    },
-    solana_tpu_client::{
-        connection_cache_stats::ConnectionCacheStats, nonblocking::tpu_connection::TpuConnection,
-        tpu_connection::ClientStats,
     },
     std::{
         net::{IpAddr, Ipv4Addr, SocketAddr, UdpSocket},
@@ -397,21 +397,21 @@ impl QuicClient {
 
             connection_stats
                 .total_client_stats
-                .tx_streams_blocked_uni
+                .streams_blocked_uni
                 .update_stat(
-                    &self.stats.tx_streams_blocked_uni,
+                    &self.stats.streams_blocked_uni,
                     new_stats.frame_tx.streams_blocked_uni,
                 );
 
             connection_stats
                 .total_client_stats
-                .tx_data_blocked
-                .update_stat(&self.stats.tx_data_blocked, new_stats.frame_tx.data_blocked);
+                .data_blocked
+                .update_stat(&self.stats.data_blocked, new_stats.frame_tx.data_blocked);
 
             connection_stats
                 .total_client_stats
-                .tx_acks
-                .update_stat(&self.stats.tx_acks, new_stats.frame_tx.acks);
+                .acks
+                .update_stat(&self.stats.acks, new_stats.frame_tx.acks);
 
             last_connection_id = connection.stable_id();
             match Self::_send_buffer_using_conn(data, &connection).await {
@@ -438,7 +438,7 @@ impl QuicClient {
 
         // if we come here, that means we have exhausted maximum retries, return the error
         info!(
-            "Ran into an error sending transactions {:?}, exhausted retries to {}",
+            "Ran into an error sending data {:?}, exhausted retries to {}",
             last_error, self.addr
         );
         // If we get here but last_error is None, then we have a logic error
@@ -470,12 +470,12 @@ impl QuicClient {
     where
         T: AsRef<[u8]>,
     {
-        // Start off by "testing" the connection by sending the first transaction
+        // Start off by "testing" the connection by sending the first buffer
         // This will also connect to the server if not already connected
         // and reconnect and retry if the first send attempt failed
         // (for example due to a timed out connection), returning an error
-        // or the connection that was used to successfully send the transaction.
-        // We will use the returned connection to send the rest of the transactions in the batch
+        // or the connection that was used to successfully send the buffer.
+        // We will use the returned connection to send the rest of the buffers in the batch
         // to avoid touching the mutex in self, and not bother reconnecting if we fail along the way
         // since testing even in the ideal GCE environment has found no cases
         // where reconnecting and retrying in the middle of a batch send
@@ -515,7 +515,7 @@ impl QuicClient {
         Ok(())
     }
 
-    pub fn tpu_addr(&self) -> &SocketAddr {
+    pub fn server_addr(&self) -> &SocketAddr {
         &self.addr
     }
 
@@ -524,12 +524,12 @@ impl QuicClient {
     }
 }
 
-pub struct QuicTpuConnection {
+pub struct QuicClientConnection {
     pub client: Arc<QuicClient>,
     pub connection_stats: Arc<ConnectionCacheStats>,
 }
 
-impl QuicTpuConnection {
+impl QuicClientConnection {
     pub fn base_stats(&self) -> Arc<ClientStats> {
         self.client.stats()
     }
@@ -563,15 +563,12 @@ impl QuicTpuConnection {
 }
 
 #[async_trait]
-impl TpuConnection for QuicTpuConnection {
-    fn tpu_addr(&self) -> &SocketAddr {
-        self.client.tpu_addr()
+impl ClientConnection for QuicClientConnection {
+    fn server_addr(&self) -> &SocketAddr {
+        self.client.server_addr()
     }
 
-    async fn send_wire_transaction_batch<T>(&self, buffers: &[T]) -> TransportResult<()>
-    where
-        T: AsRef<[u8]> + Send + Sync,
-    {
+    async fn send_data_batch(&self, buffers: &[Vec<u8>]) -> TransportResult<()> {
         let stats = ClientStats::default();
         let len = buffers.len();
         let res = self
@@ -584,18 +581,15 @@ impl TpuConnection for QuicTpuConnection {
         Ok(())
     }
 
-    async fn send_wire_transaction<T>(&self, wire_transaction: T) -> TransportResult<()>
-    where
-        T: AsRef<[u8]> + Send + Sync,
-    {
+    async fn send_data(&self, data: &[u8]) -> TransportResult<()> {
         let stats = Arc::new(ClientStats::default());
-        let send_buffer =
-            self.client
-                .send_buffer(wire_transaction, &stats, self.connection_stats.clone());
+        let send_buffer = self
+            .client
+            .send_buffer(data, &stats, self.connection_stats.clone());
         if let Err(e) = send_buffer.await {
             warn!(
-                "Failed to send transaction async to {}, error: {:?} ",
-                self.tpu_addr(),
+                "Failed to send data async to {}, error: {:?} ",
+                self.server_addr(),
                 e
             );
             datapoint_warn!("send-wire-async", ("failure", 1, i64),);
