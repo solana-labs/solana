@@ -7,7 +7,7 @@ use {
         timing::timestamp,
     },
     solana_streamer::socket::SocketAddrSpace,
-    std::net::{IpAddr, SocketAddr},
+    std::net::{IpAddr, Ipv4Addr, SocketAddr},
 };
 
 /// Structure representing a node on the network
@@ -60,10 +60,11 @@ macro_rules! socketaddr {
         $str.parse::<std::net::SocketAddr>().unwrap()
     }};
 }
+
 #[macro_export]
 macro_rules! socketaddr_any {
     () => {
-        socketaddr!(0, 0)
+        socketaddr!(std::net::Ipv4Addr::UNSPECIFIED, 0)
     };
 }
 
@@ -91,16 +92,16 @@ impl LegacyContactInfo {
     pub fn new_localhost(id: &Pubkey, now: u64) -> Self {
         Self {
             id: *id,
-            gossip: socketaddr!("127.0.0.1:1234"),
-            tvu: socketaddr!("127.0.0.1:1235"),
-            tvu_forwards: socketaddr!("127.0.0.1:1236"),
-            repair: socketaddr!("127.0.0.1:1237"),
-            tpu: socketaddr!("127.0.0.1:1238"),
-            tpu_forwards: socketaddr!("127.0.0.1:1239"),
-            tpu_vote: socketaddr!("127.0.0.1:1240"),
-            rpc: socketaddr!("127.0.0.1:1241"),
-            rpc_pubsub: socketaddr!("127.0.0.1:1242"),
-            serve_repair: socketaddr!("127.0.0.1:1243"),
+            gossip: socketaddr!(Ipv4Addr::LOCALHOST, 1234),
+            tvu: socketaddr!(Ipv4Addr::LOCALHOST, 1235),
+            tvu_forwards: socketaddr!(Ipv4Addr::LOCALHOST, 1236),
+            repair: socketaddr!(Ipv4Addr::LOCALHOST, 1237),
+            tpu: socketaddr!(Ipv4Addr::LOCALHOST, 1238),
+            tpu_forwards: socketaddr!(Ipv4Addr::LOCALHOST, 1239),
+            tpu_vote: socketaddr!(Ipv4Addr::LOCALHOST, 1240),
+            rpc: socketaddr!(Ipv4Addr::LOCALHOST, 1241),
+            rpc_pubsub: socketaddr!(Ipv4Addr::LOCALHOST, 1242),
+            serve_repair: socketaddr!(Ipv4Addr::LOCALHOST, 1243),
             wallclock: now,
             shred_version: 0,
         }
@@ -202,12 +203,12 @@ mod tests {
 
     #[test]
     fn test_is_valid_address() {
-        let bad_address_port = socketaddr!("127.0.0.1:0");
+        let bad_address_port = socketaddr!(Ipv4Addr::LOCALHOST, 0);
         assert!(!LegacyContactInfo::is_valid_address(
             &bad_address_port,
             &SocketAddrSpace::Unspecified
         ));
-        let bad_address_unspecified = socketaddr!(0, 1234);
+        let bad_address_unspecified = socketaddr!(Ipv4Addr::UNSPECIFIED, 1234);
         assert!(!LegacyContactInfo::is_valid_address(
             &bad_address_unspecified,
             &SocketAddrSpace::Unspecified
@@ -217,7 +218,7 @@ mod tests {
             &bad_address_multicast,
             &SocketAddrSpace::Unspecified
         ));
-        let loopback = socketaddr!("127.0.0.1:1234");
+        let loopback = socketaddr!(Ipv4Addr::LOCALHOST, 1234);
         assert!(LegacyContactInfo::is_valid_address(
             &loopback,
             &SocketAddrSpace::Unspecified
@@ -240,7 +241,7 @@ mod tests {
 
     #[test]
     fn test_entry_point() {
-        let addr = socketaddr!("127.0.0.1:10");
+        let addr = socketaddr!(Ipv4Addr::LOCALHOST, 10);
         let ci = LegacyContactInfo::new_gossip_entry_point(&addr);
         assert_eq!(ci.gossip, addr);
         assert!(ci.tvu.ip().is_unspecified());
@@ -253,7 +254,7 @@ mod tests {
     }
     #[test]
     fn test_socketaddr() {
-        let addr = socketaddr!("127.0.0.1:10");
+        let addr = socketaddr!(Ipv4Addr::LOCALHOST, 10);
         let ci = LegacyContactInfo::new_with_socketaddr(&Keypair::new().pubkey(), &addr);
         assert_eq!(ci.tpu, addr);
         assert_eq!(ci.tpu_vote.port(), 17);
@@ -270,25 +271,25 @@ mod tests {
         let keypair = Keypair::new();
         let d1 = LegacyContactInfo::new_with_socketaddr(
             &keypair.pubkey(),
-            &socketaddr!("127.0.0.1:1234"),
+            &socketaddr!(Ipv4Addr::LOCALHOST, 1234),
         );
         assert_eq!(d1.id, keypair.pubkey());
-        assert_eq!(d1.gossip, socketaddr!("127.0.0.1:1235"));
-        assert_eq!(d1.tvu, socketaddr!("127.0.0.1:1236"));
-        assert_eq!(d1.tpu_forwards, socketaddr!("127.0.0.1:1237"));
-        assert_eq!(d1.tpu, socketaddr!("127.0.0.1:1234"));
+        assert_eq!(d1.gossip, socketaddr!(Ipv4Addr::LOCALHOST, 1235));
+        assert_eq!(d1.tvu, socketaddr!(Ipv4Addr::LOCALHOST, 1236));
+        assert_eq!(d1.tpu_forwards, socketaddr!(Ipv4Addr::LOCALHOST, 1237));
+        assert_eq!(d1.tpu, socketaddr!(Ipv4Addr::LOCALHOST, 1234));
         assert_eq!(
             d1.rpc,
-            socketaddr!(format!("127.0.0.1:{}", rpc_port::DEFAULT_RPC_PORT))
+            socketaddr!(Ipv4Addr::LOCALHOST, rpc_port::DEFAULT_RPC_PORT)
         );
         assert_eq!(
             d1.rpc_pubsub,
-            socketaddr!(format!("127.0.0.1:{}", rpc_port::DEFAULT_RPC_PUBSUB_PORT))
+            socketaddr!(Ipv4Addr::LOCALHOST, rpc_port::DEFAULT_RPC_PUBSUB_PORT)
         );
-        assert_eq!(d1.tvu_forwards, socketaddr!("127.0.0.1:1238"));
-        assert_eq!(d1.repair, socketaddr!("127.0.0.1:1239"));
-        assert_eq!(d1.serve_repair, socketaddr!("127.0.0.1:1240"));
-        assert_eq!(d1.tpu_vote, socketaddr!("127.0.0.1:1241"));
+        assert_eq!(d1.tvu_forwards, socketaddr!(Ipv4Addr::LOCALHOST, 1238));
+        assert_eq!(d1.repair, socketaddr!(Ipv4Addr::LOCALHOST, 1239));
+        assert_eq!(d1.serve_repair, socketaddr!(Ipv4Addr::LOCALHOST, 1240));
+        assert_eq!(d1.tpu_vote, socketaddr!(Ipv4Addr::LOCALHOST, 1241));
     }
 
     #[test]
@@ -298,12 +299,12 @@ mod tests {
             ci.valid_client_facing_addr(&SocketAddrSpace::Unspecified),
             None
         );
-        ci.tpu = socketaddr!("127.0.0.1:123");
+        ci.tpu = socketaddr!(Ipv4Addr::LOCALHOST, 123);
         assert_eq!(
             ci.valid_client_facing_addr(&SocketAddrSpace::Unspecified),
             None
         );
-        ci.rpc = socketaddr!("127.0.0.1:234");
+        ci.rpc = socketaddr!(Ipv4Addr::LOCALHOST, 234);
         assert!(ci
             .valid_client_facing_addr(&SocketAddrSpace::Unspecified)
             .is_some());

@@ -3623,7 +3623,7 @@ RPC Enabled Nodes: 1"#;
 
     #[test]
     fn new_with_external_ip_test_random() {
-        let ip = Ipv4Addr::from(0);
+        let ip = Ipv4Addr::UNSPECIFIED;
         let node = Node::new_with_external_ip(
             &solana_sdk::pubkey::new_rand(),
             &socketaddr!(ip, 0),
@@ -3644,11 +3644,11 @@ RPC Enabled Nodes: 1"#;
             VALIDATOR_PORT_RANGE.1 + (2 * MINIMUM_VALIDATOR_PORT_RANGE_WIDTH),
         );
 
-        let ip = IpAddr::V4(Ipv4Addr::from(0));
+        let ip = IpAddr::V4(Ipv4Addr::UNSPECIFIED);
         let port = bind_in_range(ip, port_range).expect("Failed to bind").0;
         let node = Node::new_with_external_ip(
             &solana_sdk::pubkey::new_rand(),
-            &socketaddr!(0, port),
+            &socketaddr!(Ipv4Addr::UNSPECIFIED, port),
             port_range,
             ip,
             None,
