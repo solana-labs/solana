@@ -7686,23 +7686,22 @@ impl AccountsDb {
     /// internal bank hash info maps.
     ///
     /// This fn is only called when loading from a snapshot, which means AccountsDb is new and its
-    /// bank hashes is unpopulated.  Therefore, a bank hash must not already exist at `slot` [^1].
+    /// bank hash info maps are unpopulated.  Therefore, a bank hash info must not already exist at
+    /// `slot` [^1].
     ///
     /// [^1] Slot 0 is a special case, however.  When a new AccountsDb is created--like when
-    /// loading from a snapshot--the bank hashes map is populated with a default entry at slot 0.
+    /// loading from a snapshot--the bank hash stats map is populated with a default entry at slot 0.
     /// It is valid to have a snapshot at slot 0, so it must be handled accordingly.
     pub fn set_bank_hash_info_from_snapshot(&self, slot: Slot, bank_hash_info: BankHashInfo) {
         let (old_accounts_delta_hash, old_accounts_hash, old_stats) =
             self.set_bank_hash_info(slot, bank_hash_info);
 
         assert!(
-            old_accounts_delta_hash.is_none()
-                || (slot == 0 && old_accounts_delta_hash == Some(AccountsDeltaHash(Hash::default()))),
+            old_accounts_delta_hash.is_none(),
             "There should not already be an AccountsDeltaHash at slot {slot}: {old_accounts_delta_hash:?}",
         );
         assert!(
-            old_accounts_hash.is_none()
-                || (slot == 0 && old_accounts_hash == Some(AccountsHash(Hash::default()))),
+            old_accounts_hash.is_none(),
             "There should not already be an AccountsHash at slot {slot}: {old_accounts_hash:?}",
         );
         assert!(
