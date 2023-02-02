@@ -78,6 +78,7 @@ use {
         hash::Hash,
         pubkey::Pubkey,
         rent::Rent,
+        saturating_add_assign,
         signature::Signature,
         timing::AtomicInterval,
     },
@@ -1872,6 +1873,26 @@ pub(crate) struct ShrinkAncientStats {
     pub(crate) random_shrink: AtomicU64,
     pub(crate) slots_considered: AtomicU64,
     pub(crate) ancient_scanned: AtomicU64,
+}
+
+#[derive(Debug, Default)]
+pub(crate) struct ShrinkStatsSub {
+    store_accounts_timing: StoreAccountsTiming,
+    rewrite_elapsed_us: u64,
+    create_and_insert_store_elapsed_us: u64,
+}
+
+impl ShrinkStatsSub {
+    #[allow(dead_code)]
+    pub(crate) fn accumulate(&mut self, other: &Self) {
+        self.store_accounts_timing
+            .accumulate(&other.store_accounts_timing);
+        saturating_add_assign!(self.rewrite_elapsed_us, other.rewrite_elapsed_us);
+        saturating_add_assign!(
+            self.create_and_insert_store_elapsed_us,
+            other.create_and_insert_store_elapsed_us
+        );
+    }
 }
 
 #[derive(Debug, Default)]
@@ -3936,18 +3957,17 @@ impl AccountsDb {
             shrink_collect.capacity,
         );
 
+        let mut stats_sub = ShrinkStatsSub::default();
         let mut rewrite_elapsed = Measure::start("rewrite_elapsed");
-        let mut create_and_insert_store_elapsed_us = 0;
-        let mut store_accounts_timing = StoreAccountsTiming::default();
         if shrink_collect.aligned_total_bytes > 0 {
             let (shrink_in_progress, time_us) =
                 measure_us!(self.get_store_for_shrink(slot, shrink_collect.aligned_total_bytes));
-            create_and_insert_store_elapsed_us = time_us;
+            stats_sub.create_and_insert_store_elapsed_us = time_us;
 
             // here, we're writing back alive_accounts. That should be an atomic operation
             // without use of rather wide locks in this whole function, because we're
             // mutating rooted slots; There should be no writers to them.
-            store_accounts_timing = self.store_accounts_frozen(
+            stats_sub.store_accounts_timing = self.store_accounts_frozen(
                 (
                     slot,
                     &shrink_collect.alive_accounts.alive_accounts()[..],
@@ -3960,6 +3980,7 @@ impl AccountsDb {
             );
 
             rewrite_elapsed.stop();
+            stats_sub.rewrite_elapsed_us = rewrite_elapsed.as_us();
 
             // `store_accounts_frozen()` above may have purged accounts from some
             // other storage entries (the ones that were just overwritten by this
@@ -3978,9 +3999,7 @@ impl AccountsDb {
         Self::update_shrink_stats(
             &self.shrink_stats,
             0, // find_alive_elapsed
-            create_and_insert_store_elapsed_us,
-            store_accounts_timing,
-            rewrite_elapsed.as_us(),
+            stats_sub,
         );
         self.shrink_stats.report();
     }
@@ -3989,9 +4008,7 @@ impl AccountsDb {
     pub(crate) fn update_shrink_stats(
         shrink_stats: &ShrinkStats,
         find_alive_elapsed_us: u64,
-        create_and_insert_store_elapsed_us: u64,
-        store_accounts_timing: StoreAccountsTiming,
-        rewrite_elapsed_us: u64,
+        stats_sub: ShrinkStatsSub,
     ) {
         shrink_stats
             .num_slots_shrunk
@@ -3999,24 +4016,25 @@ impl AccountsDb {
         shrink_stats
             .find_alive_elapsed
             .fetch_add(find_alive_elapsed_us, Ordering::Relaxed);
-        shrink_stats
-            .create_and_insert_store_elapsed
-            .fetch_add(create_and_insert_store_elapsed_us, Ordering::Relaxed);
+        shrink_stats.create_and_insert_store_elapsed.fetch_add(
+            stats_sub.create_and_insert_store_elapsed_us,
+            Ordering::Relaxed,
+        );
         shrink_stats.store_accounts_elapsed.fetch_add(
-            store_accounts_timing.store_accounts_elapsed,
+            stats_sub.store_accounts_timing.store_accounts_elapsed,
             Ordering::Relaxed,
         );
         shrink_stats.update_index_elapsed.fetch_add(
-            store_accounts_timing.update_index_elapsed,
+            stats_sub.store_accounts_timing.update_index_elapsed,
             Ordering::Relaxed,
         );
         shrink_stats.handle_reclaims_elapsed.fetch_add(
-            store_accounts_timing.handle_reclaims_elapsed,
+            stats_sub.store_accounts_timing.handle_reclaims_elapsed,
             Ordering::Relaxed,
         );
         shrink_stats
             .rewrite_elapsed
-            .fetch_add(rewrite_elapsed_us, Ordering::Relaxed);
+            .fetch_add(stats_sub.rewrite_elapsed_us, Ordering::Relaxed);
     }
 
     /// get stores for 'slot'
@@ -4483,8 +4501,10 @@ impl AccountsDb {
             return; // skipping slot with no useful accounts to write
         }
 
-        let (mut shrink_in_progress, mut create_and_insert_store_elapsed_us) =
+        let mut stats_sub = ShrinkStatsSub::default();
+        let (mut shrink_in_progress, create_and_insert_store_elapsed_us) =
             measure_us!(current_ancient.create_if_necessary(slot, self));
+        stats_sub.create_and_insert_store_elapsed_us = create_and_insert_store_elapsed_us;
         let available_bytes = current_ancient.append_vec().accounts.remaining_bytes();
         // split accounts in 'slot' into:
         // 'Primary', which can fit in 'current_ancient'
@@ -4505,7 +4525,7 @@ impl AccountsDb {
 
         let mut rewrite_elapsed = Measure::start("rewrite_elapsed");
         // write what we can to the current ancient storage
-        let mut store_accounts_timing =
+        stats_sub.store_accounts_timing =
             current_ancient.store_ancient_accounts(self, &to_store, StorageSelector::Primary);
 
         // handle accounts from 'slot' which did not fit into the current ancient append vec
@@ -4516,7 +4536,7 @@ impl AccountsDb {
             assert_ne!(slot, current_ancient.slot());
             let (shrink_in_progress_overflow, time_us) =
                 measure_us!(current_ancient.create_ancient_append_vec(slot, self));
-            create_and_insert_store_elapsed_us += time_us;
+            stats_sub.create_and_insert_store_elapsed_us += time_us;
             // We cannot possibly be shrinking the original slot that created an ancient append vec
             // AND not have enough room in the ancient append vec at that slot
             // to hold all the contents of that slot.
@@ -4529,9 +4549,10 @@ impl AccountsDb {
             // write the overflow accounts to the next ancient storage
             let timing =
                 current_ancient.store_ancient_accounts(self, &to_store, StorageSelector::Overflow);
-            store_accounts_timing.accumulate(&timing);
+            stats_sub.store_accounts_timing.accumulate(&timing);
         }
         rewrite_elapsed.stop();
+        stats_sub.rewrite_elapsed_us = rewrite_elapsed.as_us();
 
         if slot != current_ancient.slot() {
             // all append vecs in this slot have been combined into an ancient append vec
@@ -4550,9 +4571,7 @@ impl AccountsDb {
         Self::update_shrink_stats(
             &self.shrink_ancient_stats.shrink_stats,
             find_alive_elapsed_us,
-            create_and_insert_store_elapsed_us,
-            store_accounts_timing,
-            rewrite_elapsed.as_us(),
+            stats_sub,
         );
     }
 
