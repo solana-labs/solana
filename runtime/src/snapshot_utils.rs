@@ -294,6 +294,15 @@ pub enum SnapshotError {
 
     #[error("invalid AppendVec path: {}", .0.display())]
     InvalidAppendVecPath(PathBuf),
+
+    #[error("no snapshot slot directory")]
+    NoSnapshotSlotDir,
+
+    #[error("unknown snapshot file")]
+    UnknownSnapshotFile,
+
+    #[error("missing status cache file")]
+    MissingStatusCacheFile,
 }
 pub type Result<T> = std::result::Result<T, SnapshotError>;
 
@@ -430,6 +439,14 @@ pub fn remove_tmp_snapshot_archives(snapshot_archives_dir: impl AsRef<Path>) {
     }
 }
 
+pub fn snapshot_write_version_file(version_file: PathBuf, version: SnapshotVersion) -> Result<()> {
+    let mut f = fs::File::create(version_file)
+        .map_err(|e| SnapshotError::IoWithSource(e, "create version file"))?;
+    f.write_all(version.as_str().as_bytes())
+        .map_err(|e| SnapshotError::IoWithSource(e, "write version file"))?;
+    Ok(())
+}
+
 /// Make a snapshot archive out of the snapshot package
 pub fn archive_snapshot_package(
     snapshot_package: &SnapshotPackage,
@@ -499,13 +516,7 @@ pub fn archive_snapshot_package(
     }
 
     // Write version file
-    {
-        let mut f = fs::File::create(&staging_version_file).map_err(|e| {
-            SnapshotError::IoWithSourceAndFile(e, "create version file", staging_version_file)
-        })?;
-        f.write_all(snapshot_package.snapshot_version.as_str().as_bytes())
-            .map_err(|e| SnapshotError::IoWithSource(e, "write version file"))?;
-    }
+    snapshot_write_version_file(staging_version_file, snapshot_package.snapshot_version)?;
 
     // Tar the staging directory into the archive at `archive_path`
     let archive_path = tar_dir.join(format!(
@@ -1044,6 +1055,13 @@ pub fn add_bank_snapshot(
 
     let status_cache_path = bank_snapshot_dir.join(SNAPSHOT_STATUS_CACHE_FILENAME);
     serialize_status_cache(slot, &slot_deltas, &status_cache_path)?;
+
+    let version_path = bank_snapshot_dir.join("version");
+    snapshot_write_version_file(version_path, SnapshotVersion::default()).unwrap();
+
+    // Mark this directory complete so it can be used.  Check this flag first before selecting for deserialization.
+    let state_complete_path = bank_snapshot_dir.join("state_complete");
+    fs::File::create(state_complete_path)?;
 
     // Monitor sizes because they're capped to MAX_SNAPSHOT_DATA_FILE_SIZE
     datapoint_info!(
@@ -1804,6 +1822,111 @@ pub fn get_highest_incremental_snapshot_archive_slot(
     .map(|incremental_snapshot_archive_info| incremental_snapshot_archive_info.slot())
 }
 
+/// There is a time window from the slot directory being created, and the content being completely
+/// filled.  Check the completion to avoid using a highest found slot directory with missing content.
+pub fn snapshot_slot_dir_check_complete(path: &Path) -> bool {
+    let completion_flag_file = path.to_path_buf().join("state_complete");
+    fs::metadata(completion_flag_file).is_ok()
+}
+
+pub fn snapshot_slot_dir_check_version(path: &Path) -> bool {
+    let version_path = path.to_path_buf().join("version");
+    if let Ok(content) = fs::read_to_string(version_path) {
+        content.eq(SnapshotVersion::default().as_str())
+    } else {
+        false
+    }
+}
+
+pub(crate) fn parse_snapshot_filename(filename: &str) -> Option<(Slot, BankSnapshotType)> {
+    lazy_static! {
+        static ref SNAPSHOT_FILE_REGEX: Regex =
+            Regex::new(r"^(?P<slot>[0-9]+)\.(?P<type>(pre|post))$").unwrap();
+    };
+
+    SNAPSHOT_FILE_REGEX.captures(filename).map(|cap| {
+        let slot_str = cap.name("slot").map(|m| m.as_str());
+        let type_str = cap.name("type").map(|m| m.as_str());
+        let slot: Slot = slot_str.unwrap().parse::<u64>().unwrap();
+        let snapshot_type = if type_str.unwrap() == "pre" {
+            BankSnapshotType::Pre
+        } else {
+            BankSnapshotType::Post
+        };
+        (slot, snapshot_type)
+    })
+}
+
+/// Get the path (and metadata) for the full snapshot archive with the highest slot in a directory
+pub fn get_highest_full_snapshot_slot_and_path(
+    snapshot_dir: impl AsRef<Path>,
+) -> Result<(Slot, PathBuf)> {
+    lazy_static! {
+        static ref RE_SLOT_DIR: Regex = Regex::new(r"^\d+$").unwrap();
+    }
+    // Under snapshot/, find the slot directories (for example, 100/, 200/, 300, ...)
+    let mut snapshot_slot_dirs: Vec<_> = std::fs::read_dir(&snapshot_dir)
+        .unwrap()
+        .filter(|r| r.is_ok())
+        .map(|r| r.unwrap().path())
+        .filter(|r| {
+            r.is_dir()
+                && RE_SLOT_DIR.is_match(r.file_name().unwrap().to_str().unwrap())
+                && snapshot_slot_dir_check_complete(r)
+                && snapshot_slot_dir_check_version(r)
+        })
+        .map(|r| r.file_name().unwrap().to_os_string())
+        .collect();
+    if snapshot_slot_dirs.is_empty() {
+        info!(
+            "shapshot_dir {} is empty, expecting slots sub directories.",
+            snapshot_dir.as_ref().display()
+        );
+        return Err(SnapshotError::NoSnapshotSlotDir);
+    }
+    // Find the highest slot directory
+    snapshot_slot_dirs.sort();
+    let highest_dir_name = snapshot_slot_dirs.into_iter().rev().next().unwrap();
+
+    let slot: Slot = match highest_dir_name.to_string_lossy().parse::<u64>() {
+        Ok(slot) => slot,
+        Err(e) => {
+            info!(
+                "Error: {e}.  Expect snapshot file directory name as <slot>, found {:?}",
+                highest_dir_name
+            );
+            return Err(SnapshotError::UnknownSnapshotFile);
+        }
+    };
+
+    let highest_dir_path = snapshot_dir.as_ref().join(highest_dir_name);
+
+    // Get the snapshot file from the directory.  Could be 600/600 or 600/600.pre
+    let snapshot_files_in_slot_dir: Vec<_> = std::fs::read_dir(&highest_dir_path)?
+        .into_iter()
+        .filter(|r| r.is_ok())
+        .map(|f| f.unwrap().path())
+        .filter(|f| {
+            parse_snapshot_filename(&f.file_name().unwrap().to_os_string().into_string().unwrap())
+                .is_some()
+        })
+        .collect();
+    if snapshot_files_in_slot_dir.len() != 1 {
+        // We expect there is only one file here.  If the files structure is changed to something unexpected,
+        // bail out here.
+        info!(
+            "highest_dir_path {}, snapshot_files_in_slot_dir: {:?}",
+            highest_dir_path.display(),
+            snapshot_files_in_slot_dir
+        );
+        error!("The number of snapshot files should be 1 in the slot directory");
+        return Err(SnapshotError::UnknownSnapshotFile);
+    }
+
+    let snapshot_file = &snapshot_files_in_slot_dir[0];
+    Ok((slot, snapshot_file.to_path_buf()))
+}
+
 /// Get the path (and metadata) for the full snapshot archive with the highest slot in a directory
 pub fn get_highest_full_snapshot_archive_info(
     full_snapshot_archives_dir: impl AsRef<Path>,
@@ -2345,6 +2468,15 @@ pub fn verify_snapshot_archive<P, Q, R>(
                 fs::remove_dir_all(dst_path).unwrap();
             }
             std::fs::remove_dir_all(accounts_hardlinks_dir).unwrap();
+
+        let version_path = snapshot_slot_dir.join("version");
+        if version_path.is_file() {
+            std::fs::remove_file(version_path).unwrap();
+        }
+
+        let state_complete_path = snapshot_slot_dir.join("state_complete");
+        if state_complete_path.is_file() {
+            std::fs::remove_file(state_complete_path).unwrap();
         }
     }
 
