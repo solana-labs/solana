@@ -54,10 +54,10 @@ fn recv_send_quic(
     //info!("recv_send_quic packet batch length: {}", packet_batch.len());
     let packets = packet_batch.iter().enumerate().filter_map(|(i, pkt)| {
         let addr = pkt.meta().socket_addr();
-        let _ = pkt.data(..)?;
+        pkt.data(..)?;
         socket_addr_space.check(&addr).then_some((i, addr))
     });
-    //todo: bench this and find a way to avoid the copy
+    //todo: bench this
     let mut hashmap : HashMap<SocketAddr, Vec<usize>> = HashMap::new();
     for p in packets {
         match hashmap.get_mut(&p.1) {
@@ -102,7 +102,9 @@ fn quic_responder(
             loop {
                 if let Err(e) = recv_send_quic(&connection_cache, &r, &socket_addr_space, &mut stats) {
                     match e {
-                        StreamerError::RecvTimeout(RecvTimeoutError::Disconnected) => break,
+                        StreamerError::RecvTimeout(RecvTimeoutError::Disconnected) => {
+                            info!("quic_responder: recv_send_quic channel disconnected!");
+                            break},
                         StreamerError::RecvTimeout(RecvTimeoutError::Timeout) => {
                             info!("quic_responder: recv_send_quic timed out");
                         },
