@@ -423,7 +423,7 @@ impl AncientSlotPubkeys {
 
 pub(crate) struct ShrinkCollect<'a, T: ShrinkCollectRefs<'a>> {
     pub(crate) slot: Slot,
-    pub(crate) original_bytes: u64,
+    pub(crate) capacity: u64,
     pub(crate) aligned_total_bytes: u64,
     pub(crate) unrefed_pubkeys: Vec<&'a Pubkey>,
     pub(crate) alive_accounts: T,
@@ -470,7 +470,7 @@ struct LoadAccountsIndexForShrink<'a, T: ShrinkCollectRefs<'a>> {
 
 pub struct GetUniqueAccountsResult<'a> {
     pub stored_accounts: Vec<StoredAccountMeta<'a>>,
-    pub original_bytes: u64,
+    pub capacity: u64,
 }
 
 pub struct AccountsAddRootTiming {
@@ -3750,7 +3750,7 @@ impl AccountsDb {
         store: &'a Arc<AccountStorageEntry>,
     ) -> GetUniqueAccountsResult<'a> {
         let mut stored_accounts: HashMap<Pubkey, StoredAccountMeta> = HashMap::new();
-        let original_bytes = store.total_bytes();
+        let capacity = store.total_bytes();
         store.accounts.account_iter().for_each(|account| {
             stored_accounts.insert(*account.pubkey(), account);
         });
@@ -3761,7 +3761,7 @@ impl AccountsDb {
 
         GetUniqueAccountsResult {
             stored_accounts,
-            original_bytes,
+            capacity,
         }
     }
 
@@ -3790,7 +3790,7 @@ impl AccountsDb {
 
         let GetUniqueAccountsResult {
             stored_accounts,
-            original_bytes,
+            capacity,
         } = unique_accounts;
 
         let mut index_read_elapsed = Measure::start("index_read_elapsed");
@@ -3843,7 +3843,7 @@ impl AccountsDb {
             .accounts_removed
             .fetch_add(len - alive_accounts.len(), Ordering::Relaxed);
         stats.bytes_removed.fetch_add(
-            original_bytes.saturating_sub(aligned_total_bytes),
+            capacity.saturating_sub(aligned_total_bytes),
             Ordering::Relaxed,
         );
         stats
@@ -3852,7 +3852,7 @@ impl AccountsDb {
 
         ShrinkCollect {
             slot,
-            original_bytes: *original_bytes,
+            capacity: *capacity,
             aligned_total_bytes,
             unrefed_pubkeys,
             alive_accounts,
@@ -3917,10 +3917,7 @@ impl AccountsDb {
             self.shrink_collect::<AliveAccounts<'_>>(store, &unique_accounts, &self.shrink_stats);
 
         // This shouldn't happen if alive_bytes/approx_stored_count are accurate
-        if Self::should_not_shrink(
-            shrink_collect.aligned_total_bytes,
-            shrink_collect.original_bytes,
-        ) {
+        if Self::should_not_shrink(shrink_collect.aligned_total_bytes, shrink_collect.capacity) {
             self.shrink_stats
                 .skipped_shrink
                 .fetch_add(1, Ordering::Relaxed);
@@ -3940,7 +3937,7 @@ impl AccountsDb {
             total_accounts_after_shrink,
             shrink_collect.alive_total_bytes,
             shrink_collect.aligned_total_bytes,
-            shrink_collect.original_bytes,
+            shrink_collect.capacity,
         );
 
         let mut rewrite_elapsed = Measure::start("rewrite_elapsed");
@@ -17103,14 +17100,14 @@ pub mod tests {
                                 // They are determined by what size append vec gets created when the write cache is flushed to an append vec.
                                 // Thus, they are dependent on the # of accounts that are written. They were identified by hitting the asserts and noting the value
                                 // for shrink_collect.original_bytes at each account_count and then encoding it here.
-                                let expected_original_bytes = if account_count >= 100 {
+                                let expected_capacity = if account_count >= 100 {
                                     16384
                                 } else if account_count >= 50 {
                                     8192
                                 } else {
                                     4096
                                 };
-                                assert_eq!(shrink_collect.original_bytes, expected_original_bytes);
+                                assert_eq!(shrink_collect.capacity, expected_capacity);
                                 assert_eq!(shrink_collect.total_starting_accounts, account_count);
                                 let mut expected_all_are_zero_lamports = lamports == 0;
                                 if !append_opposite_alive_account {
@@ -17529,12 +17526,12 @@ pub mod tests {
         let after_store = db.get_storage_for_slot(slot1).unwrap();
         let GetUniqueAccountsResult {
             stored_accounts: after_stored_accounts,
-            original_bytes: after_original_bytes,
+            capacity: after_capacity,
         } = db.get_unique_accounts_from_storage(&after_store);
         if alive {
-            assert_ne!(created_accounts.original_bytes, after_original_bytes);
+            assert_ne!(created_accounts.capacity, after_capacity);
         } else {
-            assert_eq!(created_accounts.original_bytes, after_original_bytes);
+            assert_eq!(created_accounts.capacity, after_capacity);
         }
         assert_eq!(created_accounts.stored_accounts.len(), 1);
         // always 1 account: either we leave the append vec alone if it is all dead
