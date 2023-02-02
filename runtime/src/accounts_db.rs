@@ -10397,10 +10397,11 @@ pub mod tests {
                 vec![&hash],
                 vec![write_version],
             );
+        let old_written = storage.written_bytes();
         storage.accounts.append_accounts(&storable_accounts, 0);
         if mark_alive {
-            // updates 'alive_bytes'
-            storage.add_account(storage.accounts.len());
+            // updates 'alive_bytes' on the storage
+            storage.add_account((storage.written_bytes() - old_written) as usize);
         }
     }
 
