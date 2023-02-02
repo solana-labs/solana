@@ -4,6 +4,7 @@ pub use solana_perf::report_target_features;
 use {
     crate::{
         accounts_hash_verifier::AccountsHashVerifier,
+        banking_trace::{self, BankingTracer},
         broadcast_stage::BroadcastStageType,
         cache_block_meta_service::{CacheBlockMetaSender, CacheBlockMetaService},
         cluster_info_vote_listener::VoteTracker,
@@ -176,6 +177,7 @@ pub struct ValidatorConfig {
     pub ledger_column_options: LedgerColumnOptions,
     pub runtime_config: RuntimeConfig,
     pub replay_slots_concurrently: bool,
+    pub banking_trace_dir_byte_limit: banking_trace::DirByteLimit,
 }
 
 impl Default for ValidatorConfig {
@@ -238,6 +240,7 @@ impl Default for ValidatorConfig {
             ledger_column_options: LedgerColumnOptions::default(),
             runtime_config: RuntimeConfig::default(),
             replay_slots_concurrently: false,
+            banking_trace_dir_byte_limit: 0,
         }
     }
 }
@@ -249,6 +252,20 @@ impl ValidatorConfig {
             rpc_config: JsonRpcConfig::default_for_test(),
             ..Self::default()
         }
+    }
+
+    pub fn enable_default_rpc_block_subscribe(&mut self) {
+        let pubsub_config = PubSubConfig {
+            enable_block_subscription: true,
+            ..PubSubConfig::default()
+        };
+        let rpc_config = JsonRpcConfig {
+            enable_rpc_transaction_history: true,
+            ..JsonRpcConfig::default_for_test()
+        };
+
+        self.pubsub_config = pubsub_config;
+        self.rpc_config = rpc_config;
     }
 }
 
@@ -742,11 +759,12 @@ impl Validator {
 
         let connection_cache = match use_quic {
             true => {
-                let mut connection_cache = ConnectionCache::new(tpu_connection_pool_size);
-                connection_cache
-                    .update_client_certificate(&identity_keypair, node.info.gossip.ip())
-                    .expect("Failed to update QUIC client certificates");
-                connection_cache.set_staked_nodes(&staked_nodes, &identity_keypair.pubkey());
+                let connection_cache = ConnectionCache::new_with_client_options(
+                    tpu_connection_pool_size,
+                    None,
+                    Some((&identity_keypair, node.info.gossip.ip())),
+                    Some((&staked_nodes, &identity_keypair.pubkey())),
+                );
                 Arc::new(connection_cache)
             }
             false => Arc::new(ConnectionCache::with_udp(tpu_connection_pool_size)),
@@ -932,6 +950,22 @@ impl Validator {
             exit.clone(),
         );
 
+        let (banking_tracer, tracer_thread) =
+            BankingTracer::new((config.banking_trace_dir_byte_limit > 0).then_some((
+                &blockstore.banking_trace_path(),
+                exit.clone(),
+                config.banking_trace_dir_byte_limit,
+            )))
+            .map_err(|err| format!("{} [{:?}]", &err, &err))?;
+        if banking_tracer.is_enabled() {
+            info!(
+                "Enabled banking tracer (dir_byte_limit: {})",
+                config.banking_trace_dir_byte_limit
+            );
+        } else {
+            info!("Disabled banking tracer");
+        }
+
         let (replay_vote_sender, replay_vote_receiver) = unbounded();
         let tvu = Tvu::new(
             vote_account,
@@ -981,6 +1015,7 @@ impl Validator {
             config.runtime_config.log_messages_bytes_limit,
             &connection_cache,
             &prioritization_fee_cache,
+            banking_tracer.clone(),
         )?;
 
         let tpu = Tpu::new(
@@ -1016,6 +1051,8 @@ impl Validator {
             config.runtime_config.log_messages_bytes_limit,
             &staked_nodes,
             config.staked_nodes_overrides.clone(),
+            banking_tracer,
+            tracer_thread,
             tpu_enable_udp,
         );
 
@@ -2053,7 +2090,7 @@ mod tests {
         crossbeam_channel::{bounded, RecvTimeoutError},
         solana_ledger::{create_new_tmp_ledger, genesis_utils::create_genesis_config_with_leader},
         solana_sdk::{genesis_config::create_genesis_config, poh_config::PohConfig},
-        solana_tpu_client::tpu_connection_cache::{
+        solana_tpu_client::tpu_client::{
             DEFAULT_TPU_CONNECTION_POOL_SIZE, DEFAULT_TPU_ENABLE_UDP, DEFAULT_TPU_USE_QUIC,
         },
         std::{fs::remove_dir_all, thread, time::Duration},

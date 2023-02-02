@@ -9,6 +9,8 @@ pub trait BlockMetadataNotifier {
     /// Notify the block metadata
     fn notify_block_metadata(
         &self,
+        parent_slot: u64,
+        parent_blockhash: &str,
         slot: u64,
         blockhash: &str,
         rewards: &RwLock<Vec<(Pubkey, RewardInfo)>>,

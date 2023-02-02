@@ -342,8 +342,8 @@ impl RepairService {
                     MAX_UNKNOWN_LAST_INDEX_REPAIRS,
                     MAX_CLOSEST_COMPLETION_REPAIRS,
                     &duplicate_slot_repair_statuses,
-                    Some(&mut repair_timing),
-                    Some(&mut best_repairs_stats),
+                    &mut repair_timing,
+                    &mut best_repairs_stats,
                 );
 
                 repairs
@@ -808,8 +808,8 @@ mod test {
                     MAX_UNKNOWN_LAST_INDEX_REPAIRS,
                     MAX_CLOSEST_COMPLETION_REPAIRS,
                     &HashSet::default(),
-                    None,
-                    None,
+                    &mut RepairTiming::default(),
+                    &mut BestRepairsStats::default(),
                 ),
                 vec![
                     ShredRepairType::Orphan(2),
@@ -845,8 +845,8 @@ mod test {
                     MAX_UNKNOWN_LAST_INDEX_REPAIRS,
                     MAX_CLOSEST_COMPLETION_REPAIRS,
                     &HashSet::default(),
-                    None,
-                    None,
+                    &mut RepairTiming::default(),
+                    &mut BestRepairsStats::default(),
                 ),
                 vec![ShredRepairType::HighestShred(0, 0)]
             );
@@ -907,8 +907,8 @@ mod test {
                     MAX_UNKNOWN_LAST_INDEX_REPAIRS,
                     MAX_CLOSEST_COMPLETION_REPAIRS,
                     &HashSet::default(),
-                    None,
-                    None,
+                    &mut RepairTiming::default(),
+                    &mut BestRepairsStats::default(),
                 ),
                 expected
             );
@@ -923,8 +923,8 @@ mod test {
                     MAX_UNKNOWN_LAST_INDEX_REPAIRS,
                     MAX_CLOSEST_COMPLETION_REPAIRS,
                     &HashSet::default(),
-                    None,
-                    None,
+                    &mut RepairTiming::default(),
+                    &mut BestRepairsStats::default(),
                 )[..],
                 expected[0..expected.len() - 2]
             );
@@ -969,8 +969,8 @@ mod test {
                     MAX_UNKNOWN_LAST_INDEX_REPAIRS,
                     MAX_CLOSEST_COMPLETION_REPAIRS,
                     &HashSet::default(),
-                    None,
-                    None,
+                    &mut RepairTiming::default(),
+                    &mut BestRepairsStats::default(),
                 ),
                 expected
             );

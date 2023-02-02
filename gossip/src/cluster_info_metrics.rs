@@ -641,6 +641,8 @@ pub(crate) fn submit_gossip_stats(
             crds_stats.pull.counts[10],
             i64
         ),
+        ("ContactInfo-push", crds_stats.push.counts[11], i64),
+        ("ContactInfo-pull", crds_stats.pull.counts[11], i64),
         (
             "all-push",
             crds_stats.push.counts.iter().sum::<usize>(),
@@ -684,6 +686,8 @@ pub(crate) fn submit_gossip_stats(
             crds_stats.pull.fails[10],
             i64
         ),
+        ("ContactInfo-push", crds_stats.push.fails[11], i64),
+        ("ContactInfo-pull", crds_stats.pull.fails[11], i64),
         ("all-push", crds_stats.push.fails.iter().sum::<usize>(), i64),
         ("all-pull", crds_stats.pull.fails.iter().sum::<usize>(), i64),
     );

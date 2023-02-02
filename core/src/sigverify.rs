@@ -9,15 +9,14 @@ pub use solana_perf::sigverify::{
 };
 use {
     crate::{
-        banking_stage::BankingPacketBatch,
+        banking_trace::{BankingPacketBatch, BankingPacketSender},
         sigverify_stage::{SigVerifier, SigVerifyServiceError},
     },
-    crossbeam_channel::Sender,
     solana_perf::{cuda_runtime::PinnedVec, packet::PacketBatch, recycler::Recycler, sigverify},
     solana_sdk::{packet::Packet, saturating_add_assign},
 };
 
-#[derive(Debug, Default, Clone, PartialEq, Eq)]
+#[derive(Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SigverifyTracerPacketStats {
     pub total_removed_before_sigverify_stage: usize,
     pub total_tracer_packets_received_in_sigverify_stage: usize,
@@ -55,9 +54,8 @@ impl SigverifyTracerPacketStats {
     }
 }
 
-#[derive(Clone)]
 pub struct TransactionSigVerifier {
-    packet_sender: Sender<<Self as SigVerifier>::SendType>,
+    packet_sender: BankingPacketSender,
     tracer_packet_stats: SigverifyTracerPacketStats,
     recycler: Recycler<TxOffset>,
     recycler_out: Recycler<PinnedVec<u8>>,
@@ -65,13 +63,13 @@ pub struct TransactionSigVerifier {
 }
 
 impl TransactionSigVerifier {
-    pub fn new_reject_non_vote(packet_sender: Sender<<Self as SigVerifier>::SendType>) -> Self {
+    pub fn new_reject_non_vote(packet_sender: BankingPacketSender) -> Self {
         let mut new_self = Self::new(packet_sender);
         new_self.reject_non_vote = true;
         new_self
     }
 
-    pub fn new(packet_sender: Sender<<Self as SigVerifier>::SendType>) -> Self {
+    pub fn new(packet_sender: BankingPacketSender) -> Self {
         init();
         Self {
             packet_sender,
@@ -128,8 +126,10 @@ impl SigVerifier for TransactionSigVerifier {
         packet_batches: Vec<PacketBatch>,
     ) -> Result<(), SigVerifyServiceError<Self::SendType>> {
         let tracer_packet_stats_to_send = std::mem::take(&mut self.tracer_packet_stats);
-        self.packet_sender
-            .send((packet_batches, Some(tracer_packet_stats_to_send)))?;
+        self.packet_sender.send(BankingPacketBatch::new((
+            packet_batches,
+            Some(tracer_packet_stats_to_send),
+        )))?;
         Ok(())
     }
 

@@ -5,6 +5,8 @@
 
 use {
     log::*,
+    rayon::iter::{IntoParallelIterator, ParallelIterator},
+    solana_connection_cache::connection_cache::ConnectionCache,
     solana_rpc_client::rpc_client::RpcClient,
     solana_rpc_client_api::{config::RpcProgramAccountsConfig, response::Response},
     solana_sdk::{
@@ -24,10 +26,6 @@ use {
         timing::duration_as_ms,
         transaction::{self, Transaction, VersionedTransaction},
         transport::Result as TransportResult,
-    },
-    solana_tpu_client::{
-        tpu_connection::TpuConnection,
-        tpu_connection_cache::{ConnectionPool, TpuConnectionCache},
     },
     std::{
         io,
@@ -113,21 +111,21 @@ pub mod temporary_pub {
 use temporary_pub::*;
 
 /// An object for querying and sending transactions to the network.
-pub struct ThinClient<P: ConnectionPool> {
+pub struct ThinClient {
     rpc_clients: Vec<RpcClient>,
     tpu_addrs: Vec<SocketAddr>,
     optimizer: ClientOptimizer,
-    connection_cache: Arc<TpuConnectionCache<P>>,
+    connection_cache: Arc<ConnectionCache>,
 }
 
-impl<P: ConnectionPool> ThinClient<P> {
+impl ThinClient {
     /// Create a new ThinClient that will interface with the Rpc at `rpc_addr` using TCP
     /// and the Tpu at `tpu_addr` over `transactions_socket` using Quic or UDP
     /// (currently hardcoded to UDP)
     pub fn new(
         rpc_addr: SocketAddr,
         tpu_addr: SocketAddr,
-        connection_cache: Arc<TpuConnectionCache<P>>,
+        connection_cache: Arc<ConnectionCache>,
     ) -> Self {
         Self::new_from_client(RpcClient::new_socket(rpc_addr), tpu_addr, connection_cache)
     }
@@ -136,7 +134,7 @@ impl<P: ConnectionPool> ThinClient<P> {
         rpc_addr: SocketAddr,
         tpu_addr: SocketAddr,
         timeout: Duration,
-        connection_cache: Arc<TpuConnectionCache<P>>,
+        connection_cache: Arc<ConnectionCache>,
     ) -> Self {
         let rpc_client = RpcClient::new_socket_with_timeout(rpc_addr, timeout);
         Self::new_from_client(rpc_client, tpu_addr, connection_cache)
@@ -145,7 +143,7 @@ impl<P: ConnectionPool> ThinClient<P> {
     fn new_from_client(
         rpc_client: RpcClient,
         tpu_addr: SocketAddr,
-        connection_cache: Arc<TpuConnectionCache<P>>,
+        connection_cache: Arc<ConnectionCache>,
     ) -> Self {
         Self {
             rpc_clients: vec![rpc_client],
@@ -158,7 +156,7 @@ impl<P: ConnectionPool> ThinClient<P> {
     pub fn new_from_addrs(
         rpc_addrs: Vec<SocketAddr>,
         tpu_addrs: Vec<SocketAddr>,
-        connection_cache: Arc<TpuConnectionCache<P>>,
+        connection_cache: Arc<ConnectionCache>,
     ) -> Self {
         assert!(!rpc_addrs.is_empty());
         assert_eq!(rpc_addrs.len(), tpu_addrs.len());
@@ -221,7 +219,7 @@ impl<P: ConnectionPool> ThinClient<P> {
                     let conn = self.connection_cache.get_connection(self.tpu_addr());
                     // Send the transaction if there has been no confirmation (e.g. the first time)
                     #[allow(clippy::needless_borrow)]
-                    conn.send_wire_transaction(&wire_transaction)?;
+                    conn.send_data(&wire_transaction)?;
                 }
 
                 if let Ok(confirmed_blocks) = self.poll_for_signature_confirmation(
@@ -316,13 +314,13 @@ impl<P: ConnectionPool> ThinClient<P> {
     }
 }
 
-impl<P: ConnectionPool> Client for ThinClient<P> {
+impl Client for ThinClient {
     fn tpu_addr(&self) -> String {
         self.tpu_addr().to_string()
     }
 }
 
-impl<P: ConnectionPool> SyncClient for ThinClient<P> {
+impl SyncClient for ThinClient {
     fn send_and_confirm_message<T: Signers>(
         &self,
         keypairs: &T,
@@ -602,13 +600,15 @@ impl<P: ConnectionPool> SyncClient for ThinClient<P> {
     }
 }
 
-impl<P: ConnectionPool> AsyncClient for ThinClient<P> {
+impl AsyncClient for ThinClient {
     fn async_send_versioned_transaction(
         &self,
         transaction: VersionedTransaction,
     ) -> TransportResult<Signature> {
         let conn = self.connection_cache.get_connection(self.tpu_addr());
-        conn.serialize_and_send_transaction(&transaction)?;
+        let wire_transaction =
+            bincode::serialize(&transaction).expect("serialize Transaction in send_batch");
+        conn.send_data(&wire_transaction)?;
         Ok(transaction.signatures[0])
     }
 
@@ -617,7 +617,11 @@ impl<P: ConnectionPool> AsyncClient for ThinClient<P> {
         batch: Vec<VersionedTransaction>,
     ) -> TransportResult<()> {
         let conn = self.connection_cache.get_connection(self.tpu_addr());
-        conn.par_serialize_and_send_transaction_batch(&batch[..])?;
+        let buffers = batch
+            .into_par_iter()
+            .map(|tx| bincode::serialize(&tx).expect("serialize Transaction in send_batch"))
+            .collect::<Vec<_>>();
+        conn.send_data_batch(&buffers)?;
         Ok(())
     }
 }
@@ -636,7 +640,7 @@ fn min_index(array: &[u64]) -> (u64, usize) {
 
 #[cfg(test)]
 mod tests {
-    use {super::*, rayon::prelude::*};
+    use super::*;
 
     #[test]
     fn test_client_optimizer() {

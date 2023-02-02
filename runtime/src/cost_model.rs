@@ -12,7 +12,6 @@ use {
         ComputeBudget, DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT,
     },
     solana_sdk::{
-        compute_budget,
         feature_set::{
             remove_deprecated_request_unit_ix, use_default_units_in_fee_calculation, FeatureSet,
         },
@@ -74,15 +73,11 @@ impl TransactionCost {
     }
 
     pub fn sum(&self) -> u64 {
-        self.sum_without_bpf()
-            .saturating_add(self.bpf_execution_cost)
-    }
-
-    pub fn sum_without_bpf(&self) -> u64 {
         self.signature_cost
             .saturating_add(self.write_lock_cost)
             .saturating_add(self.data_bytes_cost)
             .saturating_add(self.builtins_execution_cost)
+            .saturating_add(self.bpf_execution_cost)
     }
 }
 
@@ -138,7 +133,7 @@ impl CostModel {
             // to keep the same behavior, look for builtin first
             if let Some(builtin_cost) = BUILT_IN_INSTRUCTION_COSTS.get(program_id) {
                 builtin_costs = builtin_costs.saturating_add(*builtin_cost);
-            } else if !compute_budget::check_id(program_id) {
+            } else {
                 bpf_costs = bpf_costs.saturating_add(DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT.into());
             }
             data_bytes_len_total =
@@ -388,7 +383,12 @@ mod tests {
             &token_transaction,
             &FeatureSet::all_enabled(),
         );
-        assert_eq!(0, tx_cost.builtins_execution_cost);
+        assert_eq!(
+            *BUILT_IN_INSTRUCTION_COSTS
+                .get(&compute_budget::id())
+                .unwrap(),
+            tx_cost.builtins_execution_cost
+        );
         assert_eq!(12_345, tx_cost.bpf_execution_cost);
         assert_eq!(1, tx_cost.data_bytes_cost);
     }

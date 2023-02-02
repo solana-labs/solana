@@ -136,6 +136,8 @@ pub struct ReplicaBlockInfo<'a> {
 /// Extending ReplicaBlockInfo by sending the transaction_entries_count.
 #[derive(Clone, Debug)]
 pub struct ReplicaBlockInfoV2<'a> {
+    pub parent_slot: u64,
+    pub parent_blockhash: &'a str,
     pub slot: u64,
     pub blockhash: &'a str,
     pub rewards: &'a [Reward],
