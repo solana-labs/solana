@@ -6,6 +6,7 @@ use {
     gag::BufferRedirect,
     log::*,
     serial_test::serial,
+    snapshot_utils::purge_old_bank_snapshots,
     solana_client::thin_client::ThinClient,
     solana_core::{
         broadcast_stage::BroadcastStageType,
@@ -1090,10 +1091,15 @@ fn test_incremental_snapshot_download_with_crossing_full_snapshot_interval_at_st
         )
         .unwrap();
 
+    info!("Stop the test validator.");
+    let validator_info = cluster.exit_node(&validator_identity.pubkey());
+
+    info!("Purge the valitor bank snapshots.");
+    purge_old_bank_snapshots(validator_snapshot_test_config.bank_snapshots_dir, 0);
+
     info!(
         "Restarting the validator with full snapshot {validator_full_snapshot_slot_at_startup}..."
     );
-    let validator_info = cluster.exit_node(&validator_identity.pubkey());
     cluster.restart_node(
         &validator_identity.pubkey(),
         validator_info,

@@ -978,13 +978,12 @@ pub fn add_bank_snapshot(
     let slot = bank.slot();
     // bank_snapshots_dir/slot
     let bank_snapshot_dir = get_bank_snapshots_dir(&bank_snapshots_dir, slot);
-    if fs::metadata(&bank_snapshot_dir).is_ok() {
+    if bank_snapshot_dir.is_dir() {
         // There is a time window from when a snapshot directory is created to when its content
         // is fully filled to become a full state good to construct a bank from.  At the init time,
         // the system may not be booted from the latest snapshot directory, but an older and complete
         // directory.  Then, when adding new snapshots, the newer incomplete snapshot directory could
         // be found.  If so, it should be removed.
-        //TBD move_and_async_delete_path(&bank_snapshot_dir);
         remove_bank_snapshot(slot, &bank_snapshots_dir)?;
     }
     fs::create_dir_all(&bank_snapshot_dir)?;
@@ -2354,13 +2353,13 @@ pub fn verify_snapshot_archive<P, Q, R>(
 }
 
 /// Remove outdated bank snapshots
-pub fn purge_old_bank_snapshots(bank_snapshots_dir: impl AsRef<Path>) {
+pub fn purge_old_bank_snapshots(bank_snapshots_dir: impl AsRef<Path>, num_retain: usize) {
     let do_purge = |mut bank_snapshots: Vec<BankSnapshotInfo>| {
         bank_snapshots.sort_unstable();
         bank_snapshots
             .into_iter()
             .rev()
-            .skip(MAX_BANK_SNAPSHOTS_TO_RETAIN)
+            .skip(num_retain)
             .for_each(|bank_snapshot| {
                 let r = remove_bank_snapshot(bank_snapshot.slot, &bank_snapshots_dir);
                 if r.is_err() {
