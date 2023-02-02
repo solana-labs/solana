@@ -705,7 +705,6 @@ impl BankingStage {
         }
     }
 
-    #[allow(clippy::too_many_arguments)]
     fn process_loop(
         packet_deserializer: &mut PacketDeserializer,
         decision_maker: &DecisionMaker,
