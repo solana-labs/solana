@@ -373,7 +373,6 @@ fn test_concurrent_snapshot_packaging(
         &storages,
         snapshot_version,
         slot_deltas,
-        false,
     )
     .unwrap();
 
@@ -426,7 +425,6 @@ fn test_concurrent_snapshot_packaging(
             &snapshot_storages,
             snapshot_config.snapshot_version,
             slot_deltas,
-            false,
         )
         .unwrap();
         let accounts_package = AccountsPackage::new_for_snapshot(

@@ -975,7 +975,6 @@ pub fn add_bank_snapshot(
     snapshot_storages: &[Arc<AccountStorageEntry>],
     snapshot_version: SnapshotVersion,
     slot_deltas: Vec<BankSlotDelta>,
-    dir_full_state: bool,
 ) -> Result<BankSnapshotInfo> {
     let mut add_snapshot_time = Measure::start("add-snapshot-ms");
     let slot = bank.slot();
@@ -2333,16 +2332,18 @@ pub fn verify_snapshot_archive<P, Q, R>(
             }
             std::fs::remove_dir_all(accounts_hardlinks_dir).unwrap();
         }
+
+        // Remove the new accounts/ to be consistent with the
+        // old archive structure.
+        let accounts_path = snapshot_slot_dir.join("accounts");
+        if accounts_path.is_dir() {
+            // Do not use the async move_and_async_delete_path because the assert below
+            // requires the job to be done.
+            // This is for test only, so the performance is not an issue.
+            std::fs::remove_dir_all(accounts_path).unwrap();
+        }
     }
-    // Remove the new accounts/ to be consistent with the
-    // old archive structure.
-    let accounts_path = snapshot_slot_dir.join("accounts");
-    if accounts_path.is_dir() {
-        // Do not use the async move_and_async_delete_path because the assert below
-        // requires the job to be done.
-        // This is for test only, so the performance is not an issue.
-        std::fs::remove_dir_all(accounts_path).unwrap();
-    }
+
     assert!(!dir_diff::is_different(&snapshots_to_verify, unpacked_snapshots).unwrap());
 
     // In the unarchiving case, there is an extra empty "accounts" directory. The account
@@ -2429,7 +2430,6 @@ pub fn bank_to_full_snapshot_archive(
         &snapshot_storages,
         snapshot_version,
         slot_deltas,
-        false,
     )?;
 
     package_and_archive_full_snapshot(
@@ -2483,7 +2483,6 @@ pub fn bank_to_incremental_snapshot_archive(
         &snapshot_storages,
         snapshot_version,
         slot_deltas,
-        false,
     )?;
 
     package_and_archive_incremental_snapshot(
@@ -4402,12 +4401,13 @@ mod tests {
 
         let snapshot_version = SnapshotVersion::default();
         let snapshot_storages = bank.get_snapshot_storages(None);
-
+        let slot_deltas = bank.status_cache.read().unwrap().root_slot_deltas();
         add_bank_snapshot(
             &bank_snapshots_dir,
             &bank,
             &snapshot_storages,
             snapshot_version,
+            slot_deltas,
         )
         .unwrap();
 
