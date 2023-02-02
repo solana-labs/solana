@@ -4608,4 +4608,52 @@ mod tests {
 
         assert!(matches!(ret, Err(SnapshotError::InvalidAppendVecPath(_))));
     }
+
+    fn test_get_highest_full_snapshot_slot_and_path() {
+        solana_logger::setup();
+        let genesis_config = GenesisConfig::default();
+        let bank0 = Bank::new_for_tests(&genesis_config);
+
+        let tmp_dir = tempfile::TempDir::new().unwrap();
+        let bank_snapshots_dir = tmp_dir.path();
+        let collecter_id = Pubkey::new_unique();
+
+        let snapshot_version = SnapshotVersion::default();
+
+        let bank = Arc::new(bank0);
+
+        let mut slot = 1;
+
+        while slot < 4 {
+            let bank = Arc::new(Bank::new_from_parent(&bank, &collecter_id, slot));
+
+            let snapshot_storages = bank.get_snapshot_storages(None);
+            let slot_deltas = bank.status_cache.read().unwrap().root_slot_deltas();
+            add_bank_snapshot(
+                &bank_snapshots_dir,
+                &bank,
+                &snapshot_storages,
+                snapshot_version,
+                slot_deltas,
+            )
+            .unwrap();
+
+            slot = slot + 1;
+        }
+
+        let (slot, _path) = get_highest_full_snapshot_slot_and_path(&bank_snapshots_dir).unwrap();
+
+        assert_eq!(slot, 3);
+
+        let complete_flag_file = bank_snapshots_dir
+            .join(slot.to_string())
+            .join("state_complete");
+        fs::remove_file(complete_flag_file).unwrap();
+
+        let (slot, _path) = get_highest_full_snapshot_slot_and_path(&bank_snapshots_dir).unwrap();
+
+        assert_eq!(slot, 2);
+
+        info!("done");
+    }
 }
