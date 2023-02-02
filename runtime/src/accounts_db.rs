@@ -2326,10 +2326,6 @@ impl AccountsDb {
                 .to_path_buf()
         });
 
-        let mut accounts_delta_hashes = HashMap::new();
-        accounts_delta_hashes.insert(0, AccountsDeltaHash::default());
-        let mut accounts_hashes = HashMap::new();
-        accounts_hashes.insert(0, AccountsHash::default());
         let mut bank_hash_stats = HashMap::new();
         bank_hash_stats.insert(0, BankHashStats::default());
 
@@ -2372,8 +2368,8 @@ impl AccountsDb {
                 .build()
                 .unwrap(),
             thread_pool_clean: make_min_priority_thread_pool(),
-            accounts_delta_hashes: Mutex::new(accounts_delta_hashes),
-            accounts_hashes: Mutex::new(accounts_hashes),
+            accounts_delta_hashes: Mutex::new(HashMap::new()),
+            accounts_hashes: Mutex::new(HashMap::new()),
             bank_hash_stats: Mutex::new(bank_hash_stats),
             external_purge_slots_stats: PurgeStats::default(),
             clean_accounts_stats: CleanAccountsStats::default(),
@@ -11737,9 +11733,9 @@ pub mod tests {
             );
 
             // Get the hashes for the latest slot, which should be the only hashes in the
-            // map on the deserialized AccountsDb (other than slot 0)
-            assert_eq!(daccounts.accounts_delta_hashes.lock().unwrap().len(), 2);
-            assert_eq!(daccounts.accounts_hashes.lock().unwrap().len(), 2);
+            // map on the deserialized AccountsDb
+            assert_eq!(daccounts.accounts_delta_hashes.lock().unwrap().len(), 1);
+            assert_eq!(daccounts.accounts_hashes.lock().unwrap().len(), 1);
             assert_eq!(
                 daccounts.get_accounts_delta_hash(latest_slot).unwrap(),
                 accounts.get_accounts_delta_hash(latest_slot).unwrap(),
