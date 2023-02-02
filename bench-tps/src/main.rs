@@ -50,20 +50,21 @@ fn create_connection_cache(
 ) -> Arc<ConnectionCache> {
     match use_quic {
         true => {
-            let mut connection_cache = ConnectionCache::new(tpu_connection_pool_size);
-            connection_cache
-                .update_client_certificate(client_node_id, bind_address)
-                .expect("Failed to update QUIC client certificates");
-
             let staked_nodes = Arc::new(RwLock::new(StakedNodes::default()));
-            connection_cache.set_staked_nodes(&staked_nodes, &client_node_id.pubkey());
             staked_nodes.write().unwrap().total_stake = total_stake;
-
             staked_nodes
                 .write()
                 .unwrap()
                 .pubkey_stake_map
                 .insert(client_node_id.pubkey(), stake);
+
+            let connection_cache = ConnectionCache::new_with_client_options(
+                tpu_connection_pool_size,
+                None,
+                Some((client_node_id, bind_address)),
+                Some((&staked_nodes, &client_node_id.pubkey())),
+            );
+
             Arc::new(connection_cache)
         }
         false => Arc::new(ConnectionCache::with_udp(tpu_connection_pool_size)),
