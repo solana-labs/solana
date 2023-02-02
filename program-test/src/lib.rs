@@ -136,7 +136,7 @@ pub fn builtin_process_instruction(
     // Execute the program
     process_instruction(program_id, &account_infos, instruction_data).map_err(|err| {
         let err = u64::from(err);
-        stable_log::program_failure(&log_collector, program_id, &err.into());
+        stable_log::program_failure::<InstructionError>(&log_collector, program_id, &err.into());
         err
     })?;
     stable_log::program_success(&log_collector, program_id);
