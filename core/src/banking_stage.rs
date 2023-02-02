@@ -455,7 +455,6 @@ impl BankingStage {
                 let mut packet_deserializer = PacketDeserializer::new(packet_receiver);
                 let poh_recorder = poh_recorder.clone();
                 let cluster_info = cluster_info.clone();
-                let mut recv_start = Instant::now();
                 let transaction_status_sender = transaction_status_sender.clone();
                 let replay_vote_sender = replay_vote_sender.clone();
                 let data_budget = data_budget.clone();
@@ -472,7 +471,6 @@ impl BankingStage {
                             &decision_maker,
                             &poh_recorder,
                             &cluster_info,
-                            &mut recv_start,
                             i,
                             transaction_status_sender,
                             replay_vote_sender,
@@ -737,7 +735,6 @@ impl BankingStage {
         decision_maker: &DecisionMaker,
         poh_recorder: &Arc<RwLock<PohRecorder>>,
         cluster_info: &ClusterInfo,
-        recv_start: &mut Instant,
         id: u32,
         transaction_status_sender: Option<TransactionStatusSender>,
         replay_vote_sender: ReplayVoteSender,
@@ -788,35 +785,14 @@ impl BankingStage {
 
             tracer_packet_stats.report(1000);
 
-            // Gossip thread will almost always not wait because the transaction storage will most likely not be empty
-            let recv_timeout = if !unprocessed_transaction_storage.is_empty() {
-                // If there are buffered packets, run the equivalent of try_recv to try reading more
-                // packets. This prevents starving BankingStage::consume_buffered_packets due to
-                // buffered_packet_batches containing transactions that exceed the cost model for
-                // the current bank.
-                Duration::from_millis(0)
-            } else {
-                // Default wait time
-                Duration::from_millis(100)
-            };
-
-            let (res, receive_and_buffer_packets_time) = measure!(
-                PacketReceiver::receive_and_buffer_packets(
-                    packet_deserializer,
-                    recv_start,
-                    recv_timeout,
-                    id,
-                    &mut unprocessed_transaction_storage,
-                    &mut banking_stage_stats,
-                    &mut tracer_packet_stats,
-                    &mut slot_metrics_tracker,
-                ),
-                "receive_and_buffer_packets",
-            );
-            slot_metrics_tracker
-                .increment_receive_and_buffer_packets_us(receive_and_buffer_packets_time.as_us());
-
-            match res {
+            match PacketReceiver::receive_and_buffer_packets(
+                packet_deserializer,
+                id,
+                &mut unprocessed_transaction_storage,
+                &mut banking_stage_stats,
+                &mut tracer_packet_stats,
+                &mut slot_metrics_tracker,
+            ) {
                 Ok(()) | Err(RecvTimeoutError::Timeout) => (),
                 Err(RecvTimeoutError::Disconnected) => break,
             }
