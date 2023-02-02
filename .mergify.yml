@@ -7,6 +7,9 @@ pull_request_rules:
   - name: label changes from community
     conditions:
       - author≠@core-contributors
+      - author≠@monorepo-maintainers
+      - author≠@monorepo-write
+      - author≠@monorepo-triage
       - author≠mergify[bot]
       - author≠dependabot[bot]
       - author≠github-actions[bot]
@@ -17,6 +20,9 @@ pull_request_rules:
   - name: request review for community changes
     conditions:
       - author≠@core-contributors
+      - author≠@monorepo-maintainers
+      - author≠@monorepo-write
+      - author≠@monorepo-triage
       - author≠mergify[bot]
       - author≠dependabot[bot]
       - author≠github-actions[bot]
