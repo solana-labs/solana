@@ -1050,7 +1050,7 @@ impl AccountStorageEntry {
         self.accounts.len() as u64
     }
 
-    pub fn total_bytes(&self) -> u64 {
+    pub fn capacity(&self) -> u64 {
         self.accounts.capacity()
     }
 
@@ -1222,7 +1222,7 @@ pub const EXPIRATION_TTL_SECONDS: u64 = 1800;
 
 impl RecycleStores {
     fn add_entry(&mut self, new_entry: Arc<AccountStorageEntry>) {
-        self.total_bytes += new_entry.total_bytes();
+        self.total_bytes += new_entry.capacity();
         self.entries.push((Instant::now(), new_entry))
     }
 
@@ -1233,7 +1233,7 @@ impl RecycleStores {
     fn add_entries(&mut self, new_entries: Vec<Arc<AccountStorageEntry>>) {
         let now = Instant::now();
         for new_entry in new_entries {
-            self.total_bytes += new_entry.total_bytes();
+            self.total_bytes += new_entry.capacity();
             self.entries.push((now, new_entry));
         }
     }
@@ -1251,7 +1251,7 @@ impl RecycleStores {
                         entry.slot(),
                     );
                 }
-                expired_bytes += entry.total_bytes();
+                expired_bytes += entry.capacity();
                 expired.push(entry.clone());
                 false
             } else {
@@ -1266,7 +1266,7 @@ impl RecycleStores {
 
     fn remove_entry(&mut self, index: usize) -> Arc<AccountStorageEntry> {
         let (_added_time, removed_entry) = self.entries.swap_remove(index);
-        self.total_bytes -= removed_entry.total_bytes();
+        self.total_bytes -= removed_entry.capacity();
         removed_entry
     }
 
@@ -3746,7 +3746,7 @@ impl AccountsDb {
         store: &'a Arc<AccountStorageEntry>,
     ) -> GetUniqueAccountsResult<'a> {
         let mut stored_accounts: HashMap<Pubkey, StoredAccountMeta> = HashMap::new();
-        let capacity = store.total_bytes();
+        let capacity = store.capacity();
         store.accounts.account_iter().for_each(|account| {
             stored_accounts.insert(*account.pubkey(), account);
         });
@@ -4150,9 +4150,9 @@ impl AccountsDb {
             }
             candidates_count += 1;
             total_alive_bytes += Self::page_align(store.alive_bytes() as u64);
-            total_bytes += store.total_bytes();
+            total_bytes += store.capacity();
             let alive_ratio =
-                Self::page_align(store.alive_bytes() as u64) as f64 / store.total_bytes() as f64;
+                Self::page_align(store.alive_bytes() as u64) as f64 / store.capacity() as f64;
             store_usage.push(StoreUsageInfo {
                 slot: *slot,
                 alive_ratio,
@@ -4188,7 +4188,7 @@ impl AccountsDb {
                     break;
                 }
             } else {
-                let current_store_size = store.total_bytes();
+                let current_store_size = store.capacity();
                 let after_shrink_size = Self::page_align(store.alive_bytes() as u64);
                 let bytes_saved = current_store_size.saturating_sub(after_shrink_size);
                 total_bytes -= bytes_saved;
@@ -6653,7 +6653,7 @@ impl AccountsDb {
             oldest_slot = std::cmp::min(oldest_slot, slot);
 
             total_alive_bytes += Self::page_align(store.alive_bytes() as u64);
-            total_bytes += store.total_bytes();
+            total_bytes += store.capacity();
         }
         info!(
             "total_stores: {total_count}, newest_slot: {newest_slot}, oldest_slot: {oldest_slot}"
@@ -6887,7 +6887,7 @@ impl AccountsDb {
             if is_ancient(&storage.accounts) {
                 ancients += 1;
             }
-            let sizes = storage.total_bytes();
+            let sizes = storage.capacity();
             stats
                 .append_vec_sizes_older_than_epoch
                 .fetch_add(sizes as usize, Ordering::Relaxed);
@@ -7819,7 +7819,7 @@ impl AccountsDb {
         let alive_count = store.count();
         let stored_count = store.approx_stored_count();
         let alive_bytes = store.alive_bytes();
-        let total_bytes = store.total_bytes();
+        let total_bytes = store.capacity();
 
         let aligned_bytes = Self::page_align(alive_bytes as u64);
         if Self::should_not_shrink(aligned_bytes, total_bytes) {
@@ -7850,7 +7850,7 @@ impl AccountsDb {
 
             store.written_bytes()
         } else {
-            store.total_bytes()
+            store.capacity()
         };
         match self.shrink_ratio {
             AccountShrinkThreshold::TotalSpace { shrink_ratio: _ } => {
@@ -7940,7 +7940,7 @@ impl AccountsDb {
                 store.approx_stored_count(),
                 store.count(),
                 store.alive_bytes(),
-                store.total_bytes()
+                store.capacity()
             );
 
             shrink_candidate_slots.insert(slot, store);
@@ -17736,7 +17736,7 @@ pub mod tests {
             append_sample_data_to_storage(ancient, &Pubkey::default(), 0, mark_alive);
         }
         // since we're not adding to the index, this is how we specify that all these accounts are alive
-        adjust_alive_bytes(ancient, ancient.total_bytes() as usize);
+        adjust_alive_bytes(ancient, ancient.capacity() as usize);
     }
 
     fn make_full_ancient_append_vec(
