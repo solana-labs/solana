@@ -5178,12 +5178,8 @@ dependencies = [
  "rand 0.7.3",
  "rand_chacha 0.2.2",
  "rayon",
-<<<<<<< HEAD
- "solana-logger 1.15.0",
-=======
  "solana-connection-cache",
- "solana-logger 1.16.0",
->>>>>>> ada6136a6 (Refactor connection cache to support generic msgs (#29774))
+ "solana-logger 1.15.0",
  "solana-measure",
  "solana-metrics",
  "solana-net-utils",
@@ -5252,7 +5248,7 @@ dependencies = [
 
 [[package]]
 name = "solana-connection-cache"
-version = "1.16.0"
+version = "1.15.0"
 dependencies = [
  "async-trait",
  "bincode",
@@ -5263,11 +5259,11 @@ dependencies = [
  "rand 0.7.3",
  "rand_chacha 0.2.2",
  "rayon",
- "solana-logger 1.16.0",
+ "solana-logger 1.15.0",
  "solana-measure",
  "solana-metrics",
  "solana-net-utils",
- "solana-sdk 1.16.0",
+ "solana-sdk 1.15.0",
  "thiserror",
  "tokio",
 ]
@@ -6214,12 +6210,8 @@ dependencies = [
  "quinn-proto",
  "quinn-udp",
  "rustls 0.20.6",
-<<<<<<< HEAD
- "solana-logger 1.15.0",
-=======
  "solana-connection-cache",
- "solana-logger 1.16.0",
->>>>>>> ada6136a6 (Refactor connection cache to support generic msgs (#29774))
+ "solana-logger 1.15.0",
  "solana-measure",
  "solana-metrics",
  "solana-net-utils",
@@ -6794,12 +6786,8 @@ dependencies = [
  "bincode",
  "log",
  "rayon",
-<<<<<<< HEAD
- "solana-logger 1.15.0",
-=======
  "solana-connection-cache",
- "solana-logger 1.16.0",
->>>>>>> ada6136a6 (Refactor connection cache to support generic msgs (#29774))
+ "solana-logger 1.15.0",
  "solana-rpc-client",
  "solana-rpc-client-api",
  "solana-sdk 1.15.0",
@@ -6851,12 +6839,8 @@ dependencies = [
  "rand 0.7.3",
  "rand_chacha 0.2.2",
  "rayon",
-<<<<<<< HEAD
- "solana-logger 1.15.0",
-=======
  "solana-connection-cache",
- "solana-logger 1.16.0",
->>>>>>> ada6136a6 (Refactor connection cache to support generic msgs (#29774))
+ "solana-logger 1.15.0",
  "solana-measure",
  "solana-metrics",
  "solana-net-utils",
