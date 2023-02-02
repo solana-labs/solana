@@ -16,7 +16,7 @@ proc-macro = true
 bs58 = "0.4.0"
 proc-macro2 = "1.0.19"
 quote = "1.0"
-rustversion = "1.0.7"
+rustversion = "1.0.11"
 syn = { version = "1.0", features = ["full", "extra-traits"] }
 
 [package.metadata.docs.rs]

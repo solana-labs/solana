@@ -106,32 +106,27 @@ impl<'a: 'b, 'b, T: ReadableAccount + Sync + 'b, U: StorableAccounts<'a, T>, V: 
         }
     }
 
-    /// hash for the account at 'index'
-    pub fn hash(&self, index: usize) -> &Hash {
-        if self.accounts.has_hash_and_write_version() {
-            self.accounts.hash(index)
+    /// get all account fields at 'index'
+    pub fn get(&self, index: usize) -> (Option<&T>, &Pubkey, &Hash, StoredMetaWriteVersion) {
+        let account = self.accounts.account_default_if_zero_lamport(index);
+        let pubkey = self.accounts.pubkey(index);
+        let (hash, write_version) = if self.accounts.has_hash_and_write_version() {
+            (
+                self.accounts.hash(index),
+                self.accounts.write_version(index),
+            )
         } else {
-            self.hashes_and_write_versions.as_ref().unwrap().0[index].borrow()
-        }
+            let item = self.hashes_and_write_versions.as_ref().unwrap();
+            (item.0[index].borrow(), item.1[index])
+        };
+        (account, pubkey, hash, write_version)
     }
-    /// write_version for the account at 'index'
-    pub fn write_version(&self, index: usize) -> u64 {
-        if self.accounts.has_hash_and_write_version() {
-            self.accounts.write_version(index)
-        } else {
-            self.hashes_and_write_versions.as_ref().unwrap().1[index]
-        }
-    }
+
     /// None if account at index has lamports == 0
     /// Otherwise, Some(account)
     /// This is the only way to access the account.
     pub fn account(&self, index: usize) -> Option<&T> {
         self.accounts.account_default_if_zero_lamport(index)
-    }
-
-    /// pubkey at 'index'
-    pub fn pubkey(&self, index: usize) -> &Pubkey {
-        self.accounts.pubkey(index)
     }
 
     /// # accounts to write
@@ -646,10 +641,10 @@ impl AppendVec {
         let _lock = self.append_lock.lock().unwrap();
         let mut offset = self.len();
 
-        let mut rv = Vec::with_capacity(accounts.accounts.len());
         let len = accounts.accounts.len();
+        let mut rv = Vec::with_capacity(len);
         for i in skip..len {
-            let account = accounts.account(i);
+            let (account, pubkey, hash, write_version_obsolete) = accounts.get(i);
             let account_meta = account
                 .map(|account| AccountMeta {
                     lamports: account.lamports(),
@@ -660,11 +655,11 @@ impl AppendVec {
                 .unwrap_or_default();
 
             let stored_meta = StoredMeta {
-                pubkey: *accounts.pubkey(i),
+                pubkey: *pubkey,
                 data_len: account
                     .map(|account| account.data().len())
                     .unwrap_or_default() as u64,
-                write_version_obsolete: accounts.write_version(i),
+                write_version_obsolete,
             };
             let meta_ptr = &stored_meta as *const StoredMeta;
             let account_meta_ptr = &account_meta as *const AccountMeta;
@@ -673,7 +668,7 @@ impl AppendVec {
                 .map(|account| account.data())
                 .unwrap_or_default()
                 .as_ptr();
-            let hash_ptr = accounts.hash(i).as_ref().as_ptr();
+            let hash_ptr = hash.as_ref().as_ptr();
             let ptrs = [
                 (meta_ptr as *const u8, mem::size_of::<StoredMeta>()),
                 (account_meta_ptr as *const u8, mem::size_of::<AccountMeta>()),
@@ -865,9 +860,10 @@ pub mod tests {
         assert_eq!(storable.len(), pubkeys.len());
         assert!(!storable.is_empty());
         (0..2).for_each(|i| {
-            assert_eq!(storable.hash(i), &hashes[i]);
-            assert_eq!(&storable.write_version(i), &write_versions[i]);
-            assert_eq!(storable.pubkey(i), &pubkeys[i]);
+            let (_, pubkey, hash, write_version) = storable.get(i);
+            assert_eq!(hash, &hashes[i]);
+            assert_eq!(write_version, write_versions[i]);
+            assert_eq!(pubkey, &pubkeys[i]);
         });
     }
 

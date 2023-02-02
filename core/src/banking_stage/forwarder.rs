@@ -22,28 +22,46 @@ use {
     },
 };
 
-pub struct Forwarder;
+pub(crate) struct Forwarder {
+    poh_recorder: Arc<RwLock<PohRecorder>>,
+    bank_forks: Arc<RwLock<BankForks>>,
+    socket: UdpSocket,
+    cluster_info: Arc<ClusterInfo>,
+    connection_cache: Arc<ConnectionCache>,
+    data_budget: Arc<DataBudget>,
+}
 
 impl Forwarder {
-    #[allow(clippy::too_many_arguments)]
-    pub fn handle_forwarding(
-        cluster_info: &ClusterInfo,
+    pub(crate) fn new(
+        poh_recorder: Arc<RwLock<PohRecorder>>,
+        bank_forks: Arc<RwLock<BankForks>>,
+        cluster_info: Arc<ClusterInfo>,
+        connection_cache: Arc<ConnectionCache>,
+        data_budget: Arc<DataBudget>,
+    ) -> Self {
+        Self {
+            poh_recorder,
+            bank_forks,
+            socket: UdpSocket::bind("0.0.0.0:0").unwrap(),
+            cluster_info,
+            connection_cache,
+            data_budget,
+        }
+    }
+
+    pub(crate) fn handle_forwarding(
+        &self,
         unprocessed_transaction_storage: &mut UnprocessedTransactionStorage,
-        poh_recorder: &Arc<RwLock<PohRecorder>>,
-        socket: &UdpSocket,
         hold: bool,
-        data_budget: &DataBudget,
         slot_metrics_tracker: &mut LeaderSlotMetricsTracker,
         banking_stage_stats: &BankingStageStats,
-        connection_cache: &ConnectionCache,
         tracer_packet_stats: &mut TracerPacketStats,
-        bank_forks: &Arc<RwLock<BankForks>>,
     ) {
         let forward_option = unprocessed_transaction_storage.forward_option();
 
         // get current root bank from bank_forks, use it to sanitize transaction and
         // load all accounts from address loader;
-        let current_bank = bank_forks.read().unwrap().root_bank();
+        let current_bank = self.bank_forks.read().unwrap().root_bank();
 
         let mut forward_packet_batches_by_accounts =
             ForwardPacketBatchesByAccounts::new_with_default_batch_limits();
@@ -76,15 +94,10 @@ impl Forwarder {
                 slot_metrics_tracker.increment_forwardable_batches_count(1);
 
                 let batched_forwardable_packets_count = forward_batch.len();
-                let (_forward_result, sucessful_forwarded_packets_count, leader_pubkey) =
-                    Self::forward_buffered_packets(
-                        connection_cache,
+                let (_forward_result, sucessful_forwarded_packets_count, leader_pubkey) = self
+                    .forward_buffered_packets(
                         &forward_option,
-                        cluster_info,
-                        poh_recorder,
-                        socket,
                         forward_batch.get_forwardable_packets(),
-                        data_budget,
                         banking_stage_stats,
                     );
 
@@ -125,13 +138,9 @@ impl Forwarder {
     /// Forwards all valid, unprocessed packets in the buffer, up to a rate limit. Returns
     /// the number of successfully forwarded packets in second part of tuple
     fn forward_buffered_packets<'a>(
-        connection_cache: &ConnectionCache,
+        &self,
         forward_option: &ForwardOption,
-        cluster_info: &ClusterInfo,
-        poh_recorder: &Arc<RwLock<PohRecorder>>,
-        socket: &UdpSocket,
         forwardable_packets: impl Iterator<Item = &'a Packet>,
-        data_budget: &DataBudget,
         banking_stage_stats: &BankingStageStats,
     ) -> (
         std::result::Result<(), TransportError>,
@@ -141,10 +150,12 @@ impl Forwarder {
         let leader_and_addr = match forward_option {
             ForwardOption::NotForward => return (Ok(()), 0, None),
             ForwardOption::ForwardTransaction => {
-                next_leader_tpu_forwards(cluster_info, poh_recorder)
+                next_leader_tpu_forwards(&self.cluster_info, &self.poh_recorder)
             }
 
-            ForwardOption::ForwardTpuVote => next_leader_tpu_vote(cluster_info, poh_recorder),
+            ForwardOption::ForwardTpuVote => {
+                next_leader_tpu_vote(&self.cluster_info, &self.poh_recorder)
+            }
         };
         let (leader_pubkey, addr) = match leader_and_addr {
             Some(leader_and_addr) => leader_and_addr,
@@ -156,7 +167,7 @@ impl Forwarder {
         const MAX_BYTES_PER_SECOND: usize = 12_000_000;
         const MAX_BYTES_PER_INTERVAL: usize = MAX_BYTES_PER_SECOND * INTERVAL_MS as usize / 1000;
         const MAX_BYTES_BUDGET: usize = MAX_BYTES_PER_INTERVAL * 5;
-        data_budget.update(INTERVAL_MS, |bytes| {
+        self.data_budget.update(INTERVAL_MS, |bytes| {
             std::cmp::min(
                 bytes.saturating_add(MAX_BYTES_PER_INTERVAL),
                 MAX_BYTES_BUDGET,
@@ -165,7 +176,7 @@ impl Forwarder {
 
         let packet_vec: Vec<_> = forwardable_packets
             .filter_map(|p| {
-                if !p.meta().forwarded() && data_budget.take(p.meta().size) {
+                if !p.meta().forwarded() && self.data_budget.take(p.meta().size) {
                     Some(p.data(..)?.to_vec())
                 } else {
                     None
@@ -189,14 +200,14 @@ impl Forwarder {
                     .forwarded_vote_count
                     .fetch_add(packet_vec_len, Ordering::Relaxed);
                 let pkts: Vec<_> = packet_vec.into_iter().zip(repeat(addr)).collect();
-                batch_send(socket, &pkts).map_err(|err| err.into())
+                batch_send(&self.socket, &pkts).map_err(|err| err.into())
             } else {
                 // All other transactions can be forwarded using QUIC, get_connection() will use
                 // system wide setting to pick the correct connection object.
                 banking_stage_stats
                     .forwarded_transaction_count
                     .fetch_add(packet_vec_len, Ordering::Relaxed);
-                let conn = connection_cache.get_connection(&addr);
+                let conn = self.connection_cache.get_connection(&addr);
                 conn.send_data_batch_async(packet_vec)
             };
 
@@ -280,37 +291,36 @@ mod tests {
                 create_test_recorder(&bank, &blockstore, Some(poh_config), None);
 
             let (local_node, cluster_info) = new_test_cluster_info(Some(validator_keypair));
+            let cluster_info = Arc::new(cluster_info);
             let recv_socket = &local_node.sockets.tpu_forwards[0];
 
             let test_cases = vec![
                 ("budget-restricted", DataBudget::restricted(), 0),
                 ("budget-available", DataBudget::default(), 1),
             ];
-
-            let connection_cache = ConnectionCache::default();
-            let socket = UdpSocket::bind("0.0.0.0:0").unwrap();
             for (name, data_budget, expected_num_forwarded) in test_cases {
+                let forwarder = Forwarder::new(
+                    poh_recorder.clone(),
+                    bank_forks.clone(),
+                    cluster_info.clone(),
+                    Arc::new(ConnectionCache::default()),
+                    Arc::new(data_budget),
+                );
                 let unprocessed_packet_batches: UnprocessedPacketBatches =
                     UnprocessedPacketBatches::from_iter(
                         vec![deserialized_packet.clone()].into_iter(),
                         1,
                     );
                 let stats = BankingStageStats::default();
-                Forwarder::handle_forwarding(
-                    &cluster_info,
+                forwarder.handle_forwarding(
                     &mut UnprocessedTransactionStorage::new_transaction_storage(
                         unprocessed_packet_batches,
                         ThreadType::Transactions,
                     ),
-                    &poh_recorder,
-                    &socket,
                     true,
-                    &data_budget,
                     &mut LeaderSlotMetricsTracker::new(0),
                     &stats,
-                    &connection_cache,
                     &mut TracerPacketStats::new(0),
-                    &bank_forks,
                 );
 
                 recv_socket
@@ -393,21 +403,21 @@ mod tests {
                 ("fwd-no-hold", false, vec![], 0),
             ];
 
-            let socket = UdpSocket::bind("0.0.0.0:0").unwrap();
+            let forwarder = Forwarder::new(
+                poh_recorder,
+                bank_forks,
+                Arc::new(cluster_info),
+                Arc::new(connection_cache),
+                Arc::new(DataBudget::default()),
+            );
             for (name, hold, expected_ids, expected_num_unprocessed) in test_cases {
                 let stats = BankingStageStats::default();
-                Forwarder::handle_forwarding(
-                    &cluster_info,
+                forwarder.handle_forwarding(
                     &mut unprocessed_packet_batches,
-                    &poh_recorder,
-                    &socket,
                     hold,
-                    &DataBudget::default(),
                     &mut LeaderSlotMetricsTracker::new(0),
                     &stats,
-                    &connection_cache,
                     &mut TracerPacketStats::new(0),
-                    &bank_forks,
                 );
 
                 recv_socket
