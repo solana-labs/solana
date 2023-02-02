@@ -26,6 +26,7 @@ pub mod consensus;
 pub mod cost_update_service;
 pub mod drop_bank_service;
 pub mod duplicate_repair_status;
+pub mod entry_verification_service;
 pub mod fetch_stage;
 pub mod find_packet_sender_stake_stage;
 pub mod fork_choice;

@@ -167,6 +167,7 @@ ctrlc = "3.2.3"
 curve25519-dalek = "3.2.1"
 dashmap = "4.0.2"
 derivation-path = { version = "0.2.0", default-features = false }
+derive_more = { version = "0.99.17" }
 dialoguer = "0.10.2"
 digest = "0.10.1"
 dir-diff = "0.3.2"
@@ -248,6 +249,7 @@ pickledb = { version = "0.5.1", default-features = false }
 pkcs8 = "0.8.0"
 predicates = "2.1"
 pretty-hex = "0.3.0"
+pretty_assertions_sorted = "1.2.1"
 proc-macro2 = "1.0.19"
 proptest = "1.0"
 prost = "0.11.6"

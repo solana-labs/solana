@@ -21,6 +21,7 @@ bs58 = { workspace = true }
 chrono = { workspace = true, features = ["default", "serde"] }
 crossbeam-channel = { workspace = true }
 dashmap = { workspace = true, features = ["rayon", "raw-api"] }
+derive_more = { workspace = true }
 eager = { workspace = true }
 etcd-client = { workspace = true, features = ["tls"] }
 fs_extra = { workspace = true }
@@ -31,6 +32,7 @@ log = { workspace = true }
 lru = { workspace = true }
 min-max-heap = { workspace = true }
 num_enum = { workspace = true }
+parking_lot = { workspace = true }
 rand = { workspace = true }
 rand_chacha = { workspace = true }
 rayon = { workspace = true }
@@ -71,6 +73,7 @@ trees = { workspace = true }
 
 [dev-dependencies]
 matches = { workspace = true }
+pretty_assertions_sorted = { workspace = true }
 raptorq = { workspace = true }
 serde_json = { workspace = true }
 serial_test = { workspace = true }
