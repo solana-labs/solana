@@ -1,5 +1,5 @@
 use {
-    crate::tpu_connection::ClientStats,
+    crate::client_connection::ClientStats,
     std::sync::atomic::{AtomicU64, Ordering},
 };
 
@@ -161,22 +161,16 @@ impl ConnectionCacheStats {
                 i64
             ),
             (
-                "tx_streams_blocked_uni",
-                self.total_client_stats
-                    .tx_streams_blocked_uni
-                    .load_and_reset(),
+                "streams_blocked_uni",
+                self.total_client_stats.streams_blocked_uni.load_and_reset(),
                 i64
             ),
             (
-                "tx_data_blocked",
-                self.total_client_stats.tx_data_blocked.load_and_reset(),
+                "data_blocked",
+                self.total_client_stats.data_blocked.load_and_reset(),
                 i64
             ),
-            (
-                "tx_acks",
-                self.total_client_stats.tx_acks.load_and_reset(),
-                i64
-            ),
+            ("acks", self.total_client_stats.acks.load_and_reset(), i64),
             (
                 "num_packets",
                 self.sent_packets.swap(0, Ordering::Relaxed),

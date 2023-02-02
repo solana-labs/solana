@@ -44,7 +44,7 @@ use {
     },
     solana_stake_program::{config::create_account as create_stake_config_account, stake_state},
     solana_streamer::socket::SocketAddrSpace,
-    solana_tpu_client::tpu_connection_cache::{
+    solana_tpu_client::tpu_client::{
         DEFAULT_TPU_CONNECTION_POOL_SIZE, DEFAULT_TPU_ENABLE_UDP, DEFAULT_TPU_USE_QUIC,
     },
     solana_vote_program::{

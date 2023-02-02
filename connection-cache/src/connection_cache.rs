@@ -1,14 +1,15 @@
 use {
     crate::{
+        client_connection::ClientConnection as BlockingClientConnection,
         connection_cache_stats::{ConnectionCacheStats, CONNECTION_STAT_SUBMISSION_INTERVAL},
-        nonblocking::tpu_connection::TpuConnection as NonblockingTpuConnection,
-        tpu_connection::TpuConnection as BlockingTpuConnection,
+        nonblocking::client_connection::ClientConnection as NonblockingClientConnection,
     },
     indexmap::map::IndexMap,
     rand::{thread_rng, Rng},
     solana_measure::measure::Measure,
     solana_sdk::timing::AtomicInterval,
     std::{
+        any::Any,
         net::SocketAddr,
         sync::{atomic::Ordering, Arc, RwLock},
     },
@@ -18,38 +19,56 @@ use {
 // Should be non-zero
 pub static MAX_CONNECTIONS: usize = 1024;
 
-/// Used to decide whether the TPU and underlying connection cache should use
-/// QUIC connections.
-pub const DEFAULT_TPU_USE_QUIC: bool = true;
+/// Default connection pool size per remote address
+pub const DEFAULT_CONNECTION_POOL_SIZE: usize = 4;
 
-/// Default TPU connection pool size per remote address
-pub const DEFAULT_TPU_CONNECTION_POOL_SIZE: usize = 4;
+/// Defines the protocol types of an implementation supports.
+pub enum ProtocolType {
+    UDP,
+    QUIC,
+}
 
-pub const DEFAULT_TPU_ENABLE_UDP: bool = false;
+pub trait ConnectionManager: Sync + Send {
+    fn new_connection_pool(&self) -> Box<dyn ConnectionPool>;
+    fn new_connection_config(&self) -> Box<dyn NewConnectionConfig>;
+    fn get_port_offset(&self) -> u16;
+    fn get_protocol_type(&self) -> ProtocolType;
+}
 
-pub struct TpuConnectionCache<P: ConnectionPool> {
-    pub map: RwLock<IndexMap<SocketAddr, P>>,
+pub struct ConnectionCache {
+    pub map: RwLock<IndexMap<SocketAddr, Box<dyn ConnectionPool>>>,
+    pub connection_manager: Box<dyn ConnectionManager>,
     pub stats: Arc<ConnectionCacheStats>,
     pub last_stats: AtomicInterval,
     pub connection_pool_size: usize,
-    pub tpu_config: P::TpuConfig,
+    pub connection_config: Box<dyn NewConnectionConfig>,
 }
 
-impl<P: ConnectionPool> TpuConnectionCache<P> {
+impl ConnectionCache {
     pub fn new(
+        connection_manager: Box<dyn ConnectionManager>,
         connection_pool_size: usize,
-    ) -> Result<Self, <P::TpuConfig as NewTpuConfig>::ClientError> {
-        let config = P::TpuConfig::new()?;
-        Ok(Self::new_with_config(connection_pool_size, config))
+    ) -> Result<Self, ClientError> {
+        let config = connection_manager.new_connection_config();
+        Ok(Self::new_with_config(
+            connection_pool_size,
+            config,
+            connection_manager,
+        ))
     }
 
-    pub fn new_with_config(connection_pool_size: usize, tpu_config: P::TpuConfig) -> Self {
+    pub fn new_with_config(
+        connection_pool_size: usize,
+        connection_config: Box<dyn NewConnectionConfig>,
+        connection_manager: Box<dyn ConnectionManager>,
+    ) -> Self {
         Self {
             map: RwLock::new(IndexMap::with_capacity(MAX_CONNECTIONS)),
             stats: Arc::new(ConnectionCacheStats::default()),
+            connection_manager,
             last_stats: AtomicInterval::default(),
             connection_pool_size: 1.max(connection_pool_size), // The minimum pool size is 1.
-            tpu_config,
+            connection_config,
         }
     }
 
@@ -60,7 +79,7 @@ impl<P: ConnectionPool> TpuConnectionCache<P> {
         &self,
         lock_timing_ms: &mut u64,
         addr: &SocketAddr,
-    ) -> CreateConnectionResult<P::PoolTpuConnection> {
+    ) -> CreateConnectionResult {
         let mut get_connection_map_lock_measure = Measure::start("get_connection_map_lock_measure");
         let mut map = self.map.write().unwrap();
         get_connection_map_lock_measure.stop();
@@ -94,10 +113,13 @@ impl<P: ConnectionPool> TpuConnectionCache<P> {
 
             map.entry(*addr)
                 .and_modify(|pool| {
-                    pool.add_connection(&self.tpu_config, addr);
+                    pool.add_connection(&*self.connection_config, addr);
                 })
-                .or_insert_with(|| P::new_with_connection(&self.tpu_config, addr));
-
+                .or_insert_with(|| {
+                    let mut pool = self.connection_manager.new_connection_pool();
+                    pool.add_connection(&*self.connection_config, addr);
+                    pool
+                });
             (
                 false,
                 num_evictions,
@@ -119,15 +141,12 @@ impl<P: ConnectionPool> TpuConnectionCache<P> {
         }
     }
 
-    fn get_or_add_connection(
-        &self,
-        addr: &SocketAddr,
-    ) -> GetConnectionResult<P::PoolTpuConnection> {
+    fn get_or_add_connection(&self, addr: &SocketAddr) -> GetConnectionResult {
         let mut get_connection_map_lock_measure = Measure::start("get_connection_map_lock_measure");
         let map = self.map.read().unwrap();
         get_connection_map_lock_measure.stop();
 
-        let port_offset = P::PORT_OFFSET;
+        let port_offset = self.connection_manager.get_port_offset();
 
         let port = addr
             .port()
@@ -188,7 +207,7 @@ impl<P: ConnectionPool> TpuConnectionCache<P> {
     fn get_connection_and_log_stats(
         &self,
         addr: &SocketAddr,
-    ) -> (Arc<P::PoolTpuConnection>, Arc<ConnectionCacheStats>) {
+    ) -> (Arc<dyn BaseClientConnection>, Arc<ConnectionCacheStats>) {
         let mut get_connection_measure = Measure::start("get_connection_measure");
         let GetConnectionResult {
             connection,
@@ -238,10 +257,7 @@ impl<P: ConnectionPool> TpuConnectionCache<P> {
         (connection, connection_cache_stats)
     }
 
-    pub fn get_connection(
-        &self,
-        addr: &SocketAddr,
-    ) -> <P::PoolTpuConnection as BaseTpuConnection>::BlockingConnectionType {
+    pub fn get_connection(&self, addr: &SocketAddr) -> Arc<dyn BlockingClientConnection> {
         let (connection, connection_cache_stats) = self.get_connection_and_log_stats(addr);
         connection.new_blocking_connection(*addr, connection_cache_stats)
     }
@@ -249,9 +265,13 @@ impl<P: ConnectionPool> TpuConnectionCache<P> {
     pub fn get_nonblocking_connection(
         &self,
         addr: &SocketAddr,
-    ) -> <P::PoolTpuConnection as BaseTpuConnection>::NonblockingConnectionType {
+    ) -> Arc<dyn NonblockingClientConnection> {
         let (connection, connection_cache_stats) = self.get_connection_and_log_stats(addr);
         connection.new_nonblocking_connection(*addr, connection_cache_stats)
+    }
+
+    pub fn get_protocol_type(&self) -> ProtocolType {
+        self.connection_manager.get_protocol_type()
     }
 }
 
@@ -261,33 +281,37 @@ pub enum ConnectionPoolError {
     IndexOutOfRange,
 }
 
-pub trait NewTpuConfig {
-    type ClientError: std::fmt::Debug;
-    fn new() -> Result<Self, Self::ClientError>
-    where
-        Self: Sized;
+#[derive(Error, Debug)]
+pub enum ClientError {
+    #[error("Certificate error: {0}")]
+    CertificateError(String),
+
+    #[error("IO error: {0:?}")]
+    IoError(#[from] std::io::Error),
 }
 
-pub trait ConnectionPool {
-    type PoolTpuConnection: BaseTpuConnection;
-    type TpuConfig: NewTpuConfig;
-    const PORT_OFFSET: u16 = 0;
+pub trait NewConnectionConfig: Sync + Send {
+    fn new() -> Result<Self, ClientError>
+    where
+        Self: Sized;
+    fn as_any(&self) -> &dyn Any;
 
-    /// Create a new connection pool based on protocol-specific configuration
-    fn new_with_connection(config: &Self::TpuConfig, addr: &SocketAddr) -> Self;
+    fn as_mut_any(&mut self) -> &mut dyn Any;
+}
 
+pub trait ConnectionPool: Sync + Send {
     /// Add a connection to the pool
-    fn add_connection(&mut self, config: &Self::TpuConfig, addr: &SocketAddr);
+    fn add_connection(&mut self, config: &dyn NewConnectionConfig, addr: &SocketAddr);
 
     /// Get the number of current connections in the pool
     fn num_connections(&self) -> usize;
 
     /// Get a connection based on its index in the pool, without checking if the
-    fn get(&self, index: usize) -> Result<Arc<Self::PoolTpuConnection>, ConnectionPoolError>;
+    fn get(&self, index: usize) -> Result<Arc<dyn BaseClientConnection>, ConnectionPoolError>;
 
     /// Get a connection from the pool. It must have at least one connection in the pool.
     /// This randomly picks a connection in the pool.
-    fn borrow_connection(&self) -> Arc<Self::PoolTpuConnection> {
+    fn borrow_connection(&self) -> Arc<dyn BaseClientConnection> {
         let mut rng = thread_rng();
         let n = rng.gen_range(0, self.num_connections());
         self.get(n).expect("index is within num_connections")
@@ -300,30 +324,27 @@ pub trait ConnectionPool {
 
     fn create_pool_entry(
         &self,
-        config: &Self::TpuConfig,
+        config: &dyn NewConnectionConfig,
         addr: &SocketAddr,
-    ) -> Self::PoolTpuConnection;
+    ) -> Arc<dyn BaseClientConnection>;
 }
 
-pub trait BaseTpuConnection {
-    type BlockingConnectionType: BlockingTpuConnection;
-    type NonblockingConnectionType: NonblockingTpuConnection;
-
+pub trait BaseClientConnection: Sync + Send {
     fn new_blocking_connection(
         &self,
         addr: SocketAddr,
         stats: Arc<ConnectionCacheStats>,
-    ) -> Self::BlockingConnectionType;
+    ) -> Arc<dyn BlockingClientConnection>;
 
     fn new_nonblocking_connection(
         &self,
         addr: SocketAddr,
         stats: Arc<ConnectionCacheStats>,
-    ) -> Self::NonblockingConnectionType;
+    ) -> Arc<dyn NonblockingClientConnection>;
 }
 
-struct GetConnectionResult<T: BaseTpuConnection> {
-    connection: Arc<T>,
+struct GetConnectionResult {
+    connection: Arc<dyn BaseClientConnection>,
     cache_hit: bool,
     report_stats: bool,
     map_timing_ms: u64,
@@ -333,8 +354,8 @@ struct GetConnectionResult<T: BaseTpuConnection> {
     eviction_timing_ms: u64,
 }
 
-struct CreateConnectionResult<T: BaseTpuConnection> {
-    connection: Arc<T>,
+struct CreateConnectionResult {
+    connection: Arc<dyn BaseClientConnection>,
     cache_hit: bool,
     connection_cache_stats: Arc<ConnectionCacheStats>,
     num_evictions: u64,
@@ -346,8 +367,8 @@ mod tests {
     use {
         super::*,
         crate::{
-            nonblocking::tpu_connection::TpuConnection as NonblockingTpuConnection,
-            tpu_connection::TpuConnection as BlockingTpuConnection,
+            client_connection::ClientConnection as BlockingClientConnection,
+            nonblocking::client_connection::ClientConnection as NonblockingClientConnection,
         },
         async_trait::async_trait,
         rand::{Rng, SeedableRng},
@@ -362,23 +383,11 @@ mod tests {
     const MOCK_PORT_OFFSET: u16 = 42;
 
     pub struct MockUdpPool {
-        connections: Vec<Arc<MockUdp>>,
+        connections: Vec<Arc<dyn BaseClientConnection>>,
     }
     impl ConnectionPool for MockUdpPool {
-        type PoolTpuConnection = MockUdp;
-        type TpuConfig = MockUdpConfig;
-        const PORT_OFFSET: u16 = MOCK_PORT_OFFSET;
-
-        fn new_with_connection(config: &Self::TpuConfig, addr: &SocketAddr) -> Self {
-            let mut pool = Self {
-                connections: vec![],
-            };
-            pool.add_connection(config, addr);
-            pool
-        }
-
-        fn add_connection(&mut self, config: &Self::TpuConfig, addr: &SocketAddr) {
-            let connection = Arc::new(self.create_pool_entry(config, addr));
+        fn add_connection(&mut self, config: &dyn NewConnectionConfig, addr: &SocketAddr) {
+            let connection = self.create_pool_entry(config, addr);
             self.connections.push(connection);
         }
 
@@ -386,7 +395,7 @@ mod tests {
             self.connections.len()
         }
 
-        fn get(&self, index: usize) -> Result<Arc<Self::PoolTpuConnection>, ConnectionPoolError> {
+        fn get(&self, index: usize) -> Result<Arc<dyn BaseClientConnection>, ConnectionPoolError> {
             self.connections
                 .get(index)
                 .cloned()
@@ -395,21 +404,26 @@ mod tests {
 
         fn create_pool_entry(
             &self,
-            config: &Self::TpuConfig,
+            config: &dyn NewConnectionConfig,
             _addr: &SocketAddr,
-        ) -> Self::PoolTpuConnection {
-            MockUdp(config.tpu_udp_socket.clone())
+        ) -> Arc<dyn BaseClientConnection> {
+            let config: &MockUdpConfig = match config.as_any().downcast_ref::<MockUdpConfig>() {
+                Some(b) => b,
+                None => panic!("Expecting a MockUdpConfig!"),
+            };
+
+            Arc::new(MockUdp(config.udp_socket.clone()))
         }
     }
 
     pub struct MockUdpConfig {
-        tpu_udp_socket: Arc<UdpSocket>,
+        udp_socket: Arc<UdpSocket>,
     }
 
     impl Default for MockUdpConfig {
         fn default() -> Self {
             Self {
-                tpu_udp_socket: Arc::new(
+                udp_socket: Arc::new(
                     solana_net_utils::bind_with_any_port(IpAddr::V4(Ipv4Addr::UNSPECIFIED))
                         .expect("Unable to bind to UDP socket"),
                 ),
@@ -417,85 +431,105 @@ mod tests {
         }
     }
 
-    impl NewTpuConfig for MockUdpConfig {
-        type ClientError = String;
-
-        fn new() -> Result<Self, String> {
+    impl NewConnectionConfig for MockUdpConfig {
+        fn new() -> Result<Self, ClientError> {
             Ok(Self {
-                tpu_udp_socket: Arc::new(
+                udp_socket: Arc::new(
                     solana_net_utils::bind_with_any_port(IpAddr::V4(Ipv4Addr::UNSPECIFIED))
-                        .map_err(|_| "Unable to bind to UDP socket".to_string())?,
+                        .map_err(Into::<ClientError>::into)?,
                 ),
             })
+        }
+
+        fn as_any(&self) -> &dyn Any {
+            self
+        }
+
+        fn as_mut_any(&mut self) -> &mut dyn Any {
+            self
         }
     }
 
     pub struct MockUdp(Arc<UdpSocket>);
-    impl BaseTpuConnection for MockUdp {
-        type BlockingConnectionType = MockUdpTpuConnection;
-        type NonblockingConnectionType = MockUdpTpuConnection;
-
+    impl BaseClientConnection for MockUdp {
         fn new_blocking_connection(
             &self,
             addr: SocketAddr,
             _stats: Arc<ConnectionCacheStats>,
-        ) -> MockUdpTpuConnection {
-            MockUdpTpuConnection {
+        ) -> Arc<dyn BlockingClientConnection> {
+            Arc::new(MockUdpConnection {
                 _socket: self.0.clone(),
                 addr,
-            }
+            })
         }
 
         fn new_nonblocking_connection(
             &self,
             addr: SocketAddr,
             _stats: Arc<ConnectionCacheStats>,
-        ) -> MockUdpTpuConnection {
-            MockUdpTpuConnection {
+        ) -> Arc<dyn NonblockingClientConnection> {
+            Arc::new(MockUdpConnection {
                 _socket: self.0.clone(),
                 addr,
-            }
+            })
         }
     }
 
-    pub struct MockUdpTpuConnection {
+    pub struct MockUdpConnection {
         _socket: Arc<UdpSocket>,
         addr: SocketAddr,
     }
 
-    impl BlockingTpuConnection for MockUdpTpuConnection {
-        fn tpu_addr(&self) -> &SocketAddr {
+    #[derive(Default)]
+    pub struct MockConnectionManager {}
+
+    impl ConnectionManager for MockConnectionManager {
+        fn new_connection_pool(&self) -> Box<dyn ConnectionPool> {
+            Box::new(MockUdpPool {
+                connections: Vec::default(),
+            })
+        }
+
+        fn new_connection_config(&self) -> Box<dyn NewConnectionConfig> {
+            Box::new(MockUdpConfig::new().unwrap())
+        }
+
+        fn get_port_offset(&self) -> u16 {
+            MOCK_PORT_OFFSET
+        }
+
+        fn get_protocol_type(&self) -> ProtocolType {
+            ProtocolType::UDP
+        }
+    }
+
+    impl BlockingClientConnection for MockUdpConnection {
+        fn server_addr(&self) -> &SocketAddr {
             &self.addr
         }
-        fn send_wire_transaction_async(&self, _wire_transaction: Vec<u8>) -> TransportResult<()> {
+        fn send_data(&self, _buffer: &[u8]) -> TransportResult<()> {
             unimplemented!()
         }
-        fn send_wire_transaction_batch<T>(&self, _buffers: &[T]) -> TransportResult<()>
-        where
-            T: AsRef<[u8]> + Send + Sync,
-        {
+        fn send_data_async(&self, _data: Vec<u8>) -> TransportResult<()> {
             unimplemented!()
         }
-        fn send_wire_transaction_batch_async(&self, _buffers: Vec<Vec<u8>>) -> TransportResult<()> {
+        fn send_data_batch(&self, _buffers: &[Vec<u8>]) -> TransportResult<()> {
+            unimplemented!()
+        }
+        fn send_data_batch_async(&self, _buffers: Vec<Vec<u8>>) -> TransportResult<()> {
             unimplemented!()
         }
     }
 
     #[async_trait]
-    impl NonblockingTpuConnection for MockUdpTpuConnection {
-        fn tpu_addr(&self) -> &SocketAddr {
+    impl NonblockingClientConnection for MockUdpConnection {
+        fn server_addr(&self) -> &SocketAddr {
             &self.addr
         }
-        async fn send_wire_transaction<T>(&self, _wire_transaction: T) -> TransportResult<()>
-        where
-            T: AsRef<[u8]> + Send + Sync,
-        {
+        async fn send_data(&self, _data: &[u8]) -> TransportResult<()> {
             unimplemented!()
         }
-        async fn send_wire_transaction_batch<T>(&self, _buffers: &[T]) -> TransportResult<()>
-        where
-            T: AsRef<[u8]> + Send + Sync,
-        {
+        async fn send_data_batch(&self, _buffers: &[Vec<u8>]) -> TransportResult<()> {
             unimplemented!()
         }
     }
@@ -512,7 +546,7 @@ mod tests {
     }
 
     #[test]
-    fn test_tpu_connection_cache() {
+    fn test_connection_cache() {
         solana_logger::setup();
         // Allow the test to run deterministically
         // with the same pseudorandom sequence between runs
@@ -521,13 +555,14 @@ mod tests {
         // to get the same pseudorandom sequence on different platforms
         let mut rng = ChaChaRng::seed_from_u64(42);
 
-        // Generate a bunch of random addresses and create TPUConnections to them
-        // Since TPUConnection::new is infallible, it should't matter whether or not
-        // we can actually connect to those addresses - TPUConnection implementations should either
+        // Generate a bunch of random addresses and create connections to them
+        // Since ClientConnection::new is infallible, it should't matter whether or not
+        // we can actually connect to those addresses - ClientConnection implementations should either
         // be lazy and not connect until first use or handle connection errors somehow
         // (without crashing, as would be required in a real practical validator)
+        let connection_manager = Box::<MockConnectionManager>::default();
         let connection_cache =
-            TpuConnectionCache::<MockUdpPool>::new(DEFAULT_TPU_CONNECTION_POOL_SIZE).unwrap();
+            ConnectionCache::new(connection_manager, DEFAULT_CONNECTION_POOL_SIZE).unwrap();
         let port_offset = MOCK_PORT_OFFSET;
         let addrs = (0..MAX_CONNECTIONS)
             .map(|_| {
@@ -546,9 +581,9 @@ mod tests {
                     .unwrap_or_else(|| a.port());
                 let addr = &SocketAddr::new(a.ip(), port);
 
-                let conn = &map.get(addr).expect("Address not found").connections[0];
+                let conn = &map.get(addr).expect("Address not found").get(0).unwrap();
                 let conn = conn.new_blocking_connection(*addr, connection_cache.stats.clone());
-                assert!(addr.ip() == BlockingTpuConnection::tpu_addr(&conn).ip());
+                assert!(addr.ip() == conn.server_addr().ip());
             });
         }
 
@@ -573,13 +608,14 @@ mod tests {
         let port = u16::MAX - MOCK_PORT_OFFSET + 1;
         assert!(port.checked_add(MOCK_PORT_OFFSET).is_none());
         let addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), port);
-        let connection_cache = TpuConnectionCache::<MockUdpPool>::new(1).unwrap();
+        let connection_manager = Box::<MockConnectionManager>::default();
+        let connection_cache = ConnectionCache::new(connection_manager, 1).unwrap();
 
-        let conn: MockUdpTpuConnection = connection_cache.get_connection(&addr);
+        let conn = connection_cache.get_connection(&addr);
         // We (intentionally) don't have an interface that allows us to distinguish between
         // UDP and Quic connections, so check instead that the port is valid (non-zero)
         // and is the same as the input port (falling back on UDP)
-        assert!(BlockingTpuConnection::tpu_addr(&conn).port() != 0);
-        assert!(BlockingTpuConnection::tpu_addr(&conn).port() == port);
+        assert!(conn.server_addr().port() != 0);
+        assert!(conn.server_addr().port() == port);
     }
 }

@@ -7,16 +7,13 @@ use {
     solana_sdk::{message::Message, signers::Signers, transaction::TransactionError},
 };
 use {
-    crate::{
-        nonblocking::tpu_connection::TpuConnection,
-        tpu_client::{RecentLeaderSlots, TpuClientConfig, MAX_FANOUT_SLOTS},
-        tpu_connection_cache::{
-            ConnectionPool, TpuConnectionCache, DEFAULT_TPU_CONNECTION_POOL_SIZE,
-        },
-    },
+    crate::tpu_client::{RecentLeaderSlots, TpuClientConfig, MAX_FANOUT_SLOTS},
     bincode::serialize,
     futures_util::{future::join_all, stream::StreamExt},
     log::*,
+    solana_connection_cache::connection_cache::{
+        ConnectionCache, ConnectionManager, DEFAULT_CONNECTION_POOL_SIZE,
+    },
     solana_pubsub_client::nonblocking::pubsub_client::{PubsubClient, PubsubClientError},
     solana_rpc_client::nonblocking::rpc_client::RpcClient,
     solana_rpc_client_api::{
@@ -253,33 +250,33 @@ impl LeaderTpuCache {
 
 /// Client which sends transactions directly to the current leader's TPU port over UDP.
 /// The client uses RPC to determine the current leader and fetch node contact info
-pub struct TpuClient<P: ConnectionPool> {
+pub struct TpuClient {
     fanout_slots: u64,
     leader_tpu_service: LeaderTpuService,
     exit: Arc<AtomicBool>,
     rpc_client: Arc<RpcClient>,
-    connection_cache: Arc<TpuConnectionCache<P>>,
+    connection_cache: Arc<ConnectionCache>,
 }
 
-async fn send_wire_transaction_to_addr<P: ConnectionPool>(
-    connection_cache: &TpuConnectionCache<P>,
+async fn send_wire_transaction_to_addr(
+    connection_cache: &ConnectionCache,
     addr: &SocketAddr,
     wire_transaction: Vec<u8>,
 ) -> TransportResult<()> {
     let conn = connection_cache.get_nonblocking_connection(addr);
-    conn.send_wire_transaction(wire_transaction.clone()).await
+    conn.send_data(&wire_transaction).await
 }
 
-async fn send_wire_transaction_batch_to_addr<P: ConnectionPool>(
-    connection_cache: &TpuConnectionCache<P>,
+async fn send_wire_transaction_batch_to_addr(
+    connection_cache: &ConnectionCache,
     addr: &SocketAddr,
     wire_transactions: &[Vec<u8>],
 ) -> TransportResult<()> {
     let conn = connection_cache.get_nonblocking_connection(addr);
-    conn.send_wire_transaction_batch(wire_transactions).await
+    conn.send_data_batch(wire_transactions).await
 }
 
-impl<P: ConnectionPool> TpuClient<P> {
+impl TpuClient {
     /// Serialize and send transaction to the current and upcoming leader TPUs according to fanout
     /// size
     pub async fn send_transaction(&self, transaction: &Transaction) -> bool {
@@ -394,9 +391,11 @@ impl<P: ConnectionPool> TpuClient<P> {
         rpc_client: Arc<RpcClient>,
         websocket_url: &str,
         config: TpuClientConfig,
+        connection_manager: Box<dyn ConnectionManager>,
     ) -> Result<Self> {
-        let connection_cache =
-            Arc::new(TpuConnectionCache::new(DEFAULT_TPU_CONNECTION_POOL_SIZE).unwrap()); // TODO: Handle error properly, as the TpuConnectionCache ctor is now fallible.
+        let connection_cache = Arc::new(
+            ConnectionCache::new(connection_manager, DEFAULT_CONNECTION_POOL_SIZE).unwrap(),
+        ); // TODO: Handle error properly, as the ConnectionCache ctor is now fallible.
         Self::new_with_connection_cache(rpc_client, websocket_url, config, connection_cache).await
     }
 
@@ -405,7 +404,7 @@ impl<P: ConnectionPool> TpuClient<P> {
         rpc_client: Arc<RpcClient>,
         websocket_url: &str,
         config: TpuClientConfig,
-        connection_cache: Arc<TpuConnectionCache<P>>,
+        connection_cache: Arc<ConnectionCache>,
     ) -> Result<Self> {
         let exit = Arc::new(AtomicBool::new(false));
         let leader_tpu_service =
@@ -554,7 +553,7 @@ impl<P: ConnectionPool> TpuClient<P> {
     }
 }
 
-impl<P: ConnectionPool> Drop for TpuClient<P> {
+impl Drop for TpuClient {
     fn drop(&mut self) {
         self.exit.store(true, Ordering::Relaxed);
     }
