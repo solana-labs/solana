@@ -33,6 +33,7 @@ impl PacketReceiver {
                     recv_timeout,
                     unprocessed_transaction_storage.max_receive_size(),
                 )
+                // Consumes results if Ok, otherwise we keep the Err
                 .map(|receive_packet_results| {
                     Self::buffer_packets(
                         receive_packet_results,
