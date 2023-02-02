@@ -2440,7 +2440,7 @@ impl AccountsDb {
             new.temp_paths = Some(temp_dirs);
         };
 
-        //new.start_background_hasher();
+        new.start_background_hasher();
         {
             for path in new.paths.iter() {
                 std::fs::create_dir_all(path).expect("Create directory failed.");
@@ -2703,7 +2703,6 @@ impl AccountsDb {
         }
     }
 
-    /*
     fn start_background_hasher(&mut self) {
         let (sender, receiver) = unbounded();
         Builder::new()
@@ -2714,7 +2713,6 @@ impl AccountsDb {
             .unwrap();
         self.sender_bg_hasher = Some(sender);
     }
-    */
 
     #[must_use]
     pub(crate) fn purge_keys_exact<'a, C: 'a>(
@@ -4123,6 +4121,19 @@ impl AccountsDb {
             }
         }
         measure.stop();
+        inc_new_counter_debug!(
+            "shrink_select_top_sparse_storage_entries-ms",
+            measure.as_ms() as usize
+        );
+        inc_new_counter_debug!(
+            "shrink_select_top_sparse_storage_entries-seeds",
+            candidates_count
+        );
+        inc_new_counter_debug!(
+            "shrink_total_preliminary_candidate_stores",
+            total_candidate_stores
+        );
+
         (shrink_slots, shrink_slots_next_batch)
     }
 
@@ -4565,10 +4576,15 @@ impl AccountsDb {
                     let mut measure = Measure::start("shrink_candidate_slots-ms");
                     self.do_shrink_slot_store(slot, &slot_shrink_candidate);
                     measure.stop();
-                    //inc_new_counter_info!("shrink_candidate_slots-ms", measure.as_ms() as usize);
+                    inc_new_counter_info!("shrink_candidate_slots-ms", measure.as_ms() as usize);
                 });
         });
         measure_shrink_all_candidates.stop();
+        inc_new_counter_info!(
+            "shrink_all_candidate_slots-ms",
+            measure_shrink_all_candidates.as_ms() as usize
+        );
+        inc_new_counter_info!("shrink_all_candidate_slots-count", shrink_candidates_count);
         let mut pended_counts: usize = 0;
         if let Some(shrink_slots_next_batch) = shrink_slots_next_batch {
             let mut shrink_slots = self.shrink_candidate_slots.lock().unwrap();
@@ -4577,6 +4593,7 @@ impl AccountsDb {
                 shrink_slots.insert(slot, store);
             }
         }
+        inc_new_counter_info!("shrink_pended_stores-count", pended_counts);
 
         num_candidates
     }
@@ -7562,7 +7579,21 @@ impl AccountsDb {
             });
             reclaims
         };
-        update(0, len)
+        if len > threshold {
+            let chunk_size = std::cmp::max(1, len / quarter_thread_count()); // # pubkeys/thread
+            let batches = 1 + len / chunk_size;
+            (0..batches)
+                .into_par_iter()
+                .map(|batch| {
+                    let start = batch * chunk_size;
+                    let end = std::cmp::min(start + chunk_size, len);
+                    update(start, end)
+                })
+                .flatten()
+                .collect::<Vec<_>>()
+        } else {
+            update(0, len)
+        }
     }
 
     fn should_not_shrink(aligned_bytes: u64, total_bytes: u64) -> bool {
@@ -7740,6 +7771,7 @@ impl AccountsDb {
             }
         }
         measure.stop();
+        inc_new_counter_info!("remove_dead_slots_metadata-ms", measure.as_ms() as usize);
     }
 
     /// lookup each pubkey in 'pubkeys' and unref it in the accounts index
@@ -7894,6 +7926,7 @@ impl AccountsDb {
             pubkeys_removed_from_accounts_index,
         );
         measure.stop();
+        inc_new_counter_info!("clean_stored_dead_slots-ms", measure.as_ms() as usize);
         self.clean_accounts_stats
             .clean_stored_dead_slots_us
             .fetch_add(measure.as_us(), Ordering::Relaxed);
