@@ -165,6 +165,7 @@ impl ComputeBudget {
         instructions: impl Iterator<Item = (&'a Pubkey, &'a CompiledInstruction)>,
         default_units_per_instruction: bool,
         support_request_units_deprecated: bool,
+        enable_request_heap_frame_ix: bool,
     ) -> Result<PrioritizationFeeDetails, TransactionError> {
         let mut num_non_compute_budget_instructions: usize = 0;
         let mut updated_compute_unit_limit = None;
@@ -223,7 +224,8 @@ impl ComputeBudget {
         }
 
         if let Some((bytes, i)) = requested_heap_size {
-            if bytes > MAX_HEAP_FRAME_BYTES
+            if !enable_request_heap_frame_ix
+                || bytes > MAX_HEAP_FRAME_BYTES
                 || bytes < MIN_HEAP_FRAME_BYTES as u32
                 || bytes % 1024 != 0
             {
@@ -282,6 +284,7 @@ mod tests {
                 tx.message().program_instructions_iter(),
                 true,
                 false, /*not support request_units_deprecated*/
+                true,  // enabled request_heap_frame ix
             );
             assert_eq!($expected_result, result);
             assert_eq!(compute_budget, $expected_budget);

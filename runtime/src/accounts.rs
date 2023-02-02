@@ -31,7 +31,7 @@ use {
         bpf_loader_upgradeable::{self, UpgradeableLoaderState},
         clock::{BankId, Slot},
         feature_set::{
-            self, remove_congestion_multiplier_from_fee_calculation,
+            self, enable_request_heap_frame_ix, remove_congestion_multiplier_from_fee_calculation,
             remove_deprecated_request_unit_ix, use_default_units_in_fee_calculation, FeatureSet,
         },
         fee::FeeStructure,
@@ -601,6 +601,7 @@ impl Accounts {
                             feature_set.is_active(&use_default_units_in_fee_calculation::id()),
                             !feature_set.is_active(&remove_deprecated_request_unit_ix::id()),
                             feature_set.is_active(&remove_congestion_multiplier_from_fee_calculation::id()),
+                            feature_set.is_active(&enable_request_heap_frame_ix::id()) || self.accounts_db.expected_cluster_type() != ClusterType::MainnetBeta,
                         )
                     } else {
                         return (Err(TransactionError::BlockhashNotFound), None);
@@ -1640,6 +1641,7 @@ mod tests {
             &FeeStructure::default(),
             true,
             false,
+            true,
             true,
         );
         assert_eq!(fee, lamports_per_signature);

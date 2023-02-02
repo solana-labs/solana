@@ -142,10 +142,14 @@ impl CostModel {
 
         // calculate bpf cost based on compute budget instructions
         let mut budget = ComputeBudget::default();
+        // for the purpose of getting requested compute unit for cost model, it is safe to enable
+        // request_heap_frame_ix regardless feature gate status
+        let enable_request_heap_frame_ix = true;
         let result = budget.process_instructions(
             transaction.message().program_instructions_iter(),
             feature_set.is_active(&use_default_units_in_fee_calculation::id()),
             !feature_set.is_active(&remove_deprecated_request_unit_ix::id()),
+            enable_request_heap_frame_ix,
         );
 
         // if tx contained user-space instructions and a more accurate estimate available correct it
