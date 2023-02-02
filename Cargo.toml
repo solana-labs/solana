@@ -18,6 +18,7 @@ members = [
     "cli-output",
     "client",
     "client-test",
+    "connection-cache",
     "core",
     "dos",
     "download-utils",

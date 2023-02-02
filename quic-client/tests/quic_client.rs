@@ -3,6 +3,7 @@ mod tests {
     use {
         crossbeam_channel::{unbounded, Receiver},
         log::*,
+        solana_connection_cache::connection_cache_stats::ConnectionCacheStats,
         solana_perf::packet::PacketBatch,
         solana_quic_client::nonblocking::quic_client::{
             QuicClientCertificate, QuicLazyInitializedEndpoint,
@@ -12,7 +13,6 @@ mod tests {
             nonblocking::quic::DEFAULT_WAIT_FOR_CHUNK_TIMEOUT_MS, quic::StreamStats,
             streamer::StakedNodes, tls_certificates::new_self_signed_tls_certificate,
         },
-        solana_tpu_client::connection_cache_stats::ConnectionCacheStats,
         std::{
             net::{IpAddr, Ipv4Addr, SocketAddr, UdpSocket},
             sync::{
@@ -67,8 +67,8 @@ mod tests {
     #[test]
     fn test_quic_client_multiple_writes() {
         use {
-            solana_quic_client::quic_client::QuicTpuConnection,
-            solana_tpu_client::tpu_connection::TpuConnection,
+            solana_connection_cache::client_connection::ClientConnection,
+            solana_quic_client::quic_client::QuicClientConnection,
         };
         solana_logger::setup();
         let (sender, receiver) = unbounded();
@@ -93,7 +93,7 @@ mod tests {
         let port = s.local_addr().unwrap().port();
         let tpu_addr = SocketAddr::new(addr, port);
         let connection_cache_stats = Arc::new(ConnectionCacheStats::default());
-        let client = QuicTpuConnection::new(
+        let client = QuicClientConnection::new(
             Arc::new(QuicLazyInitializedEndpoint::default()),
             tpu_addr,
             connection_cache_stats,
@@ -104,7 +104,7 @@ mod tests {
         let num_expected_packets: usize = 3000;
         let packets = vec![vec![0u8; PACKET_DATA_SIZE]; num_expected_packets];
 
-        assert!(client.send_wire_transaction_batch_async(packets).is_ok());
+        assert!(client.send_data_batch_async(packets).is_ok());
 
         check_packets(receiver, num_bytes, num_expected_packets);
         exit.store(true, Ordering::Relaxed);
@@ -114,8 +114,8 @@ mod tests {
     #[tokio::test]
     async fn test_nonblocking_quic_client_multiple_writes() {
         use {
-            solana_quic_client::nonblocking::quic_client::QuicTpuConnection,
-            solana_tpu_client::nonblocking::tpu_connection::TpuConnection,
+            solana_connection_cache::nonblocking::client_connection::ClientConnection,
+            solana_quic_client::nonblocking::quic_client::QuicClientConnection,
         };
         solana_logger::setup();
         let (sender, receiver) = unbounded();
@@ -140,7 +140,7 @@ mod tests {
         let port = s.local_addr().unwrap().port();
         let tpu_addr = SocketAddr::new(addr, port);
         let connection_cache_stats = Arc::new(ConnectionCacheStats::default());
-        let client = QuicTpuConnection::new(
+        let client = QuicClientConnection::new(
             Arc::new(QuicLazyInitializedEndpoint::default()),
             tpu_addr,
             connection_cache_stats,
@@ -150,8 +150,7 @@ mod tests {
         let num_bytes = PACKET_DATA_SIZE;
         let num_expected_packets: usize = 3000;
         let packets = vec![vec![0u8; PACKET_DATA_SIZE]; num_expected_packets];
-
-        assert!(client.send_wire_transaction_batch(&packets).await.is_ok());
+        assert!(client.send_data_batch(&packets).await.is_ok());
 
         check_packets(receiver, num_bytes, num_expected_packets);
         exit.store(true, Ordering::Relaxed);
@@ -168,8 +167,8 @@ mod tests {
         /// In this we demonstrate that the request sender and the response receiver use the
         /// same quic Endpoint, and the same UDP socket.
         use {
-            solana_quic_client::quic_client::QuicTpuConnection,
-            solana_tpu_client::tpu_connection::TpuConnection,
+            solana_connection_cache::client_connection::ClientConnection,
+            solana_quic_client::quic_client::QuicClientConnection,
         };
         solana_logger::setup();
 
@@ -239,15 +238,13 @@ mod tests {
         let endpoint =
             QuicLazyInitializedEndpoint::new(client_certificate, Some(response_recv_endpoint));
         let request_sender =
-            QuicTpuConnection::new(Arc::new(endpoint), tpu_addr, connection_cache_stats);
+            QuicClientConnection::new(Arc::new(endpoint), tpu_addr, connection_cache_stats);
         // Send a full size packet with single byte writes as a request.
         let num_bytes = PACKET_DATA_SIZE;
         let num_expected_packets: usize = 3000;
         let packets = vec![vec![0u8; PACKET_DATA_SIZE]; num_expected_packets];
 
-        assert!(request_sender
-            .send_wire_transaction_batch_async(packets)
-            .is_ok());
+        assert!(request_sender.send_data_batch_async(packets).is_ok());
         check_packets(receiver, num_bytes, num_expected_packets);
         info!("Received requests!");
 
@@ -264,16 +261,14 @@ mod tests {
         let endpoint2 = QuicLazyInitializedEndpoint::new(client_certificate2, None);
         let connection_cache_stats2 = Arc::new(ConnectionCacheStats::default());
         let response_sender =
-            QuicTpuConnection::new(Arc::new(endpoint2), server_addr, connection_cache_stats2);
+            QuicClientConnection::new(Arc::new(endpoint2), server_addr, connection_cache_stats2);
 
         // Send a full size packet with single byte writes.
         let num_bytes = PACKET_DATA_SIZE;
         let num_expected_packets: usize = 3000;
         let packets = vec![vec![0u8; PACKET_DATA_SIZE]; num_expected_packets];
 
-        assert!(response_sender
-            .send_wire_transaction_batch_async(packets)
-            .is_ok());
+        assert!(response_sender.send_data_batch_async(packets).is_ok());
         check_packets(receiver2, num_bytes, num_expected_packets);
         info!("Received responses!");
 
