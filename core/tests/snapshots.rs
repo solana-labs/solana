@@ -2,7 +2,6 @@
 
 use {
     crate::snapshot_utils::create_tmp_accounts_dir_for_tests,
-    bincode::serialize_into,
     crossbeam_channel::unbounded,
     fs_extra::dir::CopyOptions,
     itertools::Itertools,
@@ -22,7 +21,7 @@ use {
         accounts_db::{self, ACCOUNTS_DB_CONFIG_FOR_TESTING},
         accounts_hash::AccountsHash,
         accounts_index::AccountSecondaryIndexes,
-        bank::{Bank, BankSlotDelta},
+        bank::Bank,
         bank_forks::BankForks,
         epoch_accounts_hash::EpochAccountsHash,
         genesis_utils::{create_genesis_config_with_leader, GenesisConfigInfo},
@@ -266,13 +265,11 @@ fn run_bank_forks_snapshot_n<F>(
     let bank_snapshots_dir = &snapshot_config.bank_snapshots_dir;
     let last_bank_snapshot_info = snapshot_utils::get_highest_bank_snapshot_pre(bank_snapshots_dir)
         .expect("no bank snapshots found in path");
-    let slot_deltas = last_bank.status_cache.read().unwrap().root_slot_deltas();
     let accounts_package = AccountsPackage::new_for_snapshot(
         AccountsPackageType::Snapshot(SnapshotType::FullSnapshot),
         &last_bank,
         &last_bank_snapshot_info,
         bank_snapshots_dir,
-        slot_deltas,
         &snapshot_config.full_snapshot_archives_dir,
         &snapshot_config.incremental_snapshot_archives_dir,
         last_bank.get_snapshot_storages(None),
@@ -371,8 +368,15 @@ fn test_concurrent_snapshot_packaging(
     // Take snapshot of zeroth bank
     let bank0 = bank_forks.get(0).unwrap();
     let storages = bank0.get_snapshot_storages(None);
-    snapshot_utils::add_bank_snapshot(bank_snapshots_dir, &bank0, &storages, snapshot_version)
-        .unwrap();
+    let slot_deltas = bank0.status_cache.read().unwrap().root_slot_deltas();
+    snapshot_utils::add_bank_snapshot(
+        bank_snapshots_dir,
+        &bank0,
+        &storages,
+        snapshot_version,
+        slot_deltas,
+    )
+    .unwrap();
 
     // Set up snapshotting channels
     let (real_accounts_package_sender, real_accounts_package_receiver) =
@@ -416,11 +420,13 @@ fn test_concurrent_snapshot_packaging(
         };
 
         let snapshot_storages = bank.get_snapshot_storages(None);
+        let slot_deltas = bank.status_cache.read().unwrap().root_slot_deltas();
         let bank_snapshot_info = snapshot_utils::add_bank_snapshot(
             bank_snapshots_dir,
             &bank,
             &snapshot_storages,
             snapshot_config.snapshot_version,
+            slot_deltas,
         )
         .unwrap();
         let accounts_package = AccountsPackage::new_for_snapshot(
@@ -428,7 +434,6 @@ fn test_concurrent_snapshot_packaging(
             &bank,
             &bank_snapshot_info,
             bank_snapshots_dir,
-            vec![],
             full_snapshot_archives_dir,
             incremental_snapshot_archives_dir,
             snapshot_storages,
@@ -560,20 +565,6 @@ fn test_concurrent_snapshot_packaging(
         .expect("SnapshotPackagerService exited with error");
 
     // Check the archive we cached the state for earlier was generated correctly
-
-    // before we compare, stick an empty status_cache in this dir so that the package comparison works
-    // This is needed since the status_cache is added by the packager and is not collected from
-    // the source dir for snapshots
-    snapshot_utils::serialize_snapshot_data_file(
-        &saved_snapshots_dir
-            .path()
-            .join(snapshot_utils::SNAPSHOT_STATUS_CACHE_FILENAME),
-        |stream| {
-            serialize_into(stream, &[] as &[BankSlotDelta])?;
-            Ok(())
-        },
-    )
-    .unwrap();
 
     // files were saved off before we reserialized the bank in the hacked up accounts_hash_verifier stand-in.
     solana_runtime::serde_snapshot::reserialize_bank_with_new_accounts_hash(
