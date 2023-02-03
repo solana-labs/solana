@@ -9447,71 +9447,6 @@ pub mod tests {
         pub fn set_accounts_hash_for_tests(&self, slot: Slot, accounts_hash: AccountsHash) {
             self.set_accounts_hash(slot, accounts_hash);
         }
-
-        /// Set the bank hash stats for `slot` in the `bank_hash_stats` map
-        ///
-        /// returns the previous bank hash stats for `slot`
-        fn set_bank_hash_stats(
-            &self,
-            slot: Slot,
-            bank_hash_stats: BankHashStats,
-        ) -> Option<BankHashStats> {
-            self.bank_hash_stats
-                .lock()
-                .unwrap()
-                .insert(slot, bank_hash_stats)
-        }
-
-        /// Set the "bank hash info" for `slot`
-        ///
-        /// Internally this sets the accounts delta hash, the accounts hash, and the bank hash stats
-        /// from `bank_hash_info` for `slot` in their respective maps.
-        ///
-        /// returns the previous accounts delta hash, accounts hash, and bank hash stats for `slot`
-        fn set_bank_hash_info(
-            &self,
-            slot: Slot,
-            bank_hash_info: BankHashInfo,
-        ) -> (
-            Option<AccountsDeltaHash>,
-            Option<AccountsHash>,
-            Option<BankHashStats>,
-        ) {
-            let BankHashInfo {
-                accounts_delta_hash,
-                accounts_hash,
-                stats,
-            } = bank_hash_info;
-            let old_accounts_delta_hash = self.set_accounts_delta_hash(slot, accounts_delta_hash);
-            let old_accounts_hash = self.set_accounts_hash(slot, accounts_hash);
-            let old_stats = self.set_bank_hash_stats(slot, stats);
-            (old_accounts_delta_hash, old_accounts_hash, old_stats)
-        }
-
-        /// Get the "bank hash info" for `slot`
-        ///
-        /// Internally this gets the accounts delta hash, the accounts hash, and the bank hash stats
-        /// for `slot` from their respective maps.
-        fn get_bank_hash_info(&self, slot: Slot) -> Option<BankHashInfo> {
-            let Some(stats) = self.get_bank_hash_stats(slot) else {
-                return None;
-            };
-
-            // If there is a bank hash stats at this slot, then we'll return a `Some` regardless.  Use
-            // default values for accounts hash and accounts delta hash if not found.
-            let accounts_hash = self
-                .get_accounts_hash(slot)
-                .unwrap_or_else(|| AccountsHash(Hash::default()));
-            let accounts_delta_hash = self
-                .get_accounts_delta_hash(slot)
-                .unwrap_or_else(|| AccountsDeltaHash(Hash::default()));
-
-            Some(BankHashInfo {
-                accounts_hash,
-                accounts_delta_hash,
-                stats,
-            })
-        }
     }
 
     /// This impl exists until this feature is activated:
@@ -10835,7 +10770,7 @@ pub mod tests {
         } else {
             db.store_for_tests(unrooted_slot, &[(&key, &account0)]);
         }
-        db.set_bank_hash_info(unrooted_slot, BankHashInfo::default());
+        assert!(db.get_bank_hash_stats(unrooted_slot).is_some());
         assert!(db
             .accounts_index
             .get(&key, Some(&ancestors), None)
@@ -10845,8 +10780,6 @@ pub mod tests {
         // Purge the slot
         db.remove_unrooted_slots(&[(unrooted_slot, unrooted_bank_id)]);
         assert!(db.load_without_fixed_root(&ancestors, &key).is_none());
-        assert!(db.get_accounts_hash(unrooted_slot).is_none());
-        assert!(db.get_accounts_delta_hash(unrooted_slot).is_none());
         assert!(db.get_bank_hash_stats(unrooted_slot).is_none());
         assert!(db.accounts_cache.slot_cache(unrooted_slot).is_none());
         assert!(db.storage.get_slot_storage_entry(unrooted_slot).is_none());
@@ -12537,12 +12470,7 @@ pub mod tests {
             Err(MissingBankHash)
         );
 
-        let bank_hash_info = BankHashInfo {
-            accounts_delta_hash: AccountsDeltaHash(Hash::new(&[0xca; HASH_BYTES])),
-            accounts_hash: AccountsHash(Hash::new(&[0xca; HASH_BYTES])),
-            stats: BankHashStats::default(),
-        };
-        db.set_bank_hash_info(some_slot, bank_hash_info);
+        db.set_accounts_hash(some_slot, AccountsHash(Hash::new(&[0xca; HASH_BYTES])));
         assert_matches!(
             db.verify_bank_hash_and_lamports(
                 some_slot,
@@ -12633,7 +12561,6 @@ pub mod tests {
         let some_slot: Slot = 0;
         let ancestors = vec![(some_slot, 0)].into_iter().collect();
 
-        db.set_bank_hash_info(some_slot, BankHashInfo::default());
         db.add_root(some_slot);
         db.update_accounts_hash_for_tests(some_slot, &ancestors, true, true);
         assert_matches!(
@@ -17615,14 +17542,13 @@ pub mod tests {
         db.handle_dropped_roots_for_ancient(Vec::default());
         let slot0 = 0;
         let dropped_roots = vec![slot0];
-        db.set_bank_hash_info(slot0, BankHashInfo::default());
-        assert!(db.get_bank_hash_info(slot0).is_some());
+        assert!(db.get_bank_hash_stats(slot0).is_some());
         db.accounts_index.add_root(slot0);
         db.accounts_index.add_uncleaned_roots([slot0].into_iter());
         assert!(db.accounts_index.is_uncleaned_root(slot0));
         assert!(db.accounts_index.is_alive_root(slot0));
         db.handle_dropped_roots_for_ancient(dropped_roots);
-        assert!(db.get_bank_hash_info(slot0).is_none());
+        assert!(db.get_bank_hash_stats(slot0).is_none());
         assert!(!db.accounts_index.is_uncleaned_root(slot0));
         assert!(!db.accounts_index.is_alive_root(slot0));
     }
@@ -17646,7 +17572,6 @@ pub mod tests {
         let db = AccountsDb::new_single_for_tests();
         let slot0 = 0;
         let dropped_roots = vec![slot0];
-        db.set_bank_hash_info(slot0, BankHashInfo::default());
         insert_store(&db, entry);
         db.handle_dropped_roots_for_ancient(dropped_roots);
     }
