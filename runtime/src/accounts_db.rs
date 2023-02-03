@@ -1188,13 +1188,6 @@ impl BankHashStats {
     }
 }
 
-#[derive(Clone, Default, Debug, Serialize, Deserialize, PartialEq, Eq, AbiExample)]
-pub struct BankHashInfo {
-    pub accounts_delta_hash: AccountsDeltaHash,
-    pub accounts_hash: AccountsHash,
-    pub stats: BankHashStats,
-}
-
 #[derive(Default, Debug)]
 pub struct StoreAccountsTiming {
     store_accounts_elapsed: u64,
