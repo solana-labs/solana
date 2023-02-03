@@ -786,7 +786,7 @@ impl Validator {
             true => {
                 let mut connection_cache = ConnectionCache::new(tpu_connection_pool_size);
                 connection_cache
-                    .update_client_certificate(&identity_keypair, node.info.gossip.ip())
+                    .update_client_certificate(&identity_keypair, node.info.tpu.ip())
                     .expect("Failed to update QUIC client certificates");
                 connection_cache.set_staked_nodes(&staked_nodes, &identity_keypair.pubkey());
                 Arc::new(connection_cache)
