@@ -137,7 +137,16 @@ pub struct Entry {
     /// The number of hashes since the previous Entry ID.
     pub num_hashes: u64,
 
-    /// The SHA-256 hash `num_hashes` after the previous Entry ID.
+    /// When `transactions` is empty, this is a SHA-256 hash applied `num_hashes` times to the
+    /// `hash` field of the previous `Entry`.
+    ///
+    /// When `transactions` is non-empty, first SHA-256 hash is applied `num_hashes - 1` times to
+    /// the `hash` field of the previous `Entry`. Resulting hash is is concatenated with the root
+    /// of a [`MerkleTree`] containing all all signatures in all `transactions`, and hashed with
+    /// SHA-256 once again.
+    ///
+    /// [`next_hash()`] implements this computation.
+    /// [`hash_transactions`] constructs the root of a [`MerkleTree`] from the signatures.
     pub hash: Hash,
 
     /// An unordered list of transactions that were observed before the Entry ID was
