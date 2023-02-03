@@ -39,6 +39,7 @@ pub use solana_sdk::reward_type::RewardType;
 use {
     crate::{
         account_overrides::AccountOverrides,
+        account_rent_state::RentState,
         accounts::{
             AccountAddressFilter, Accounts, LoadedTransaction, PubkeyAccountSlot,
             TransactionLoadResult,
@@ -5032,9 +5033,15 @@ impl Bank {
                     let mut account = self
                         .get_account_with_fixed_root(&pubkey)
                         .unwrap_or_default();
+                    let rent = self.rent_collector().rent;
+                    let recipient_pre_rent_state = RentState::from_account(&account, &rent);
                     let distribution = account.checked_add_lamports(rent_to_be_paid);
-                    if distribution.is_err() {
-                        // overflow adding lamports
+                    let recipient_post_rent_state = RentState::from_account(&account, &rent);
+                    if distribution.is_err()
+                        || (!recipient_post_rent_state
+                            .transition_allowed_from(&recipient_pre_rent_state))
+                    {
+                        // overflow adding lamports or resulting account is not rent-exempt
                         self.capitalization.fetch_sub(rent_to_be_paid, Relaxed);
                         error!(
                             "Burned {} rent lamports instead of sending to {}",
