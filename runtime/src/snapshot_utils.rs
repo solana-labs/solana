@@ -2771,7 +2771,10 @@ pub fn create_tmp_accounts_dir_for_tests() -> (TempDir, PathBuf) {
 mod tests {
     use {
         super::*,
-        crate::{accounts_db::ACCOUNTS_DB_CONFIG_FOR_TESTING, status_cache::Status},
+        crate::{
+            accounts_db::ACCOUNTS_DB_CONFIG_FOR_TESTING, bank_forks::BankForks,
+            status_cache::Status,
+        },
         assert_matches::assert_matches,
         bincode::{deserialize_from, serialize_into},
         solana_sdk::{
@@ -4613,6 +4616,7 @@ mod tests {
         solana_logger::setup();
         let genesis_config = GenesisConfig::default();
         let bank0 = Bank::new_for_tests(&genesis_config);
+        let mut bank_forks = BankForks::new(bank0);
 
         let tmp_dir = tempfile::TempDir::new().unwrap();
         let bank_snapshots_dir = tmp_dir.path();
@@ -4620,17 +4624,10 @@ mod tests {
 
         let snapshot_version = SnapshotVersion::default();
 
-        let bank = Arc::new(bank0);
-
-        let mut slot = 1;
-
-        while slot < 4 {
-            let bank = Arc::new(Bank::new_from_parent(&bank, &collecter_id, slot));
-
-            while !bank.is_complete() {
-                bank.fill_bank_with_ticks_for_tests();
-            }
-
+        for slot in 0..4 {
+            let parent_bank = bank_forks.get(slot).unwrap();
+            let bank = Bank::new_from_parent(&parent_bank, &collecter_id, slot + 1);
+            bank.fill_bank_with_ticks_for_tests();
             bank.squash();
             bank.force_flush_accounts_cache();
 
@@ -4645,12 +4642,12 @@ mod tests {
             )
             .unwrap();
 
-            slot += 1;
+            bank_forks.insert(bank);
         }
 
         let (slot, _path) = get_highest_full_snapshot_slot_and_path(bank_snapshots_dir).unwrap();
 
-        assert_eq!(slot, 3);
+        assert_eq!(slot, 4);
 
         let complete_flag_file = bank_snapshots_dir
             .join(slot.to_string())
@@ -4659,7 +4656,7 @@ mod tests {
 
         let (slot, _path) = get_highest_full_snapshot_slot_and_path(bank_snapshots_dir).unwrap();
 
-        assert_eq!(slot, 2);
+        assert_eq!(slot, 3);
 
         info!("done");
     }
