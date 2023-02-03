@@ -1192,15 +1192,15 @@ impl BankingStage {
         Self::filter_valid_transaction_indexes(&results)
     }
 
-    fn process_packets_transactions<'a>(
-        bank: &'a Arc<Bank>,
+    fn process_packets_transactions(
+        bank: &Arc<Bank>,
         bank_creation_time: &Instant,
-        committer: &'a Committer,
-        poh: &'a TransactionRecorder,
+        committer: &Committer,
+        poh: &TransactionRecorder,
         sanitized_transactions: &[SanitizedTransaction],
-        banking_stage_stats: &'a BankingStageStats,
-        qos_service: &'a QosService,
-        slot_metrics_tracker: &'a mut LeaderSlotMetricsTracker,
+        banking_stage_stats: &BankingStageStats,
+        qos_service: &QosService,
+        slot_metrics_tracker: &mut LeaderSlotMetricsTracker,
         log_messages_bytes_limit: Option<usize>,
     ) -> ProcessTransactionsSummary {
         // Process transactions
