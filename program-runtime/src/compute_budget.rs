@@ -368,7 +368,7 @@ mod tests {
                 ..ComputeBudget::default()
             },
             false,
-            true,
+            true
         );
 
         // Prioritization fee
@@ -383,7 +383,7 @@ mod tests {
                 ..ComputeBudget::default()
             },
             false,
-            true,
+            true
         );
 
         test!(
@@ -412,7 +412,7 @@ mod tests {
                 ..ComputeBudget::default()
             },
             false,
-            true,
+            true
         );
 
         // HeapFrame
@@ -545,7 +545,7 @@ mod tests {
             )),
             ComputeBudget::default(),
             false,
-            true,
+            true
         );
 
         test!(
@@ -582,7 +582,7 @@ mod tests {
                 ..ComputeBudget::default()
             },
             false,
-            true,
+            true
         );
 
         // Duplicates
