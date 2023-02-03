@@ -13,6 +13,7 @@ use {
     solana_sdk::clock::Slot,
     std::{
         iter::once,
+        ops::RangeInclusive,
         sync::{
             atomic::{AtomicBool, Ordering},
             Arc,
@@ -31,6 +32,8 @@ pub type CompletedDataSetsSender = Sender<Vec<CompletedDataSetInfo>>;
 /// Holds a [`Vec<Entry>`] deserialized from a given [`CompletedDataSetInfo`].
 pub struct SlotEntries<'entries> {
     pub slot: Slot,
+    /// Shards in `slot` that represent `entries`.
+    pub shard_indices: RangeInclusive<u32>,
     pub entries: &'entries [Entry],
 }
 
@@ -101,6 +104,7 @@ fn forward_completed(
                 for handler in handlers.iter() {
                     handler(SlotEntries {
                         slot,
+                        shard_indices: start_index..=end_index,
                         entries: &entries,
                     });
                 }
