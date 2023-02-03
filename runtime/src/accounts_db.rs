@@ -17430,6 +17430,14 @@ pub mod tests {
         })
     }
 
+    pub(crate) fn remove_account_for_tests(
+        storage: &Arc<AccountStorageEntry>,
+        num_bytes: usize,
+        reset_accounts: bool,
+    ) {
+        storage.remove_account(num_bytes, reset_accounts);
+    }
+
     pub(crate) fn create_storages_and_update_index(
         db: &AccountsDb,
         tf: Option<&TempFile>,
