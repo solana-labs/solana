@@ -5038,8 +5038,9 @@ impl Bank {
                     let distribution = account.checked_add_lamports(rent_to_be_paid);
                     let recipient_post_rent_state = RentState::from_account(&account, &rent);
                     if distribution.is_err()
-                        || (!recipient_post_rent_state
-                            .transition_allowed_from(&recipient_pre_rent_state))
+                        || (self.prevent_rent_paying_rent_recipients()
+                            && !recipient_post_rent_state
+                                .transition_allowed_from(&recipient_pre_rent_state))
                     {
                         // overflow adding lamports or resulting account is not rent-exempt
                         self.capitalization.fetch_sub(rent_to_be_paid, Relaxed);
@@ -7369,6 +7370,11 @@ impl Bank {
     pub fn no_overflow_rent_distribution_enabled(&self) -> bool {
         self.feature_set
             .is_active(&feature_set::no_overflow_rent_distribution::id())
+    }
+
+    pub fn prevent_rent_paying_rent_recipients(&self) -> bool {
+        self.feature_set
+            .is_active(&feature_set::prevent_rent_paying_rent_recipients::id())
     }
 
     pub fn versioned_tx_message_enabled(&self) -> bool {
