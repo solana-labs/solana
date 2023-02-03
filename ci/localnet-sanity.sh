@@ -74,10 +74,12 @@ source multinode-demo/common.sh --prebuild
 
 nodes=(
   "multinode-demo/bootstrap-validator.sh \
+    --allow-private-addr \
     --no-restart \
     --init-complete-file init-complete-node0.log \
     --dynamic-port-range 8000-8050"
   "multinode-demo/validator.sh \
+    --allow-private-addr \
     --no-restart \
     --dynamic-port-range 8050-8100
     --init-complete-file init-complete-node1.log \
@@ -90,6 +92,7 @@ if [[ extraNodes -gt 0 ]]; then
     portEnd=$((portStart + 49))
     nodes+=(
       "multinode-demo/validator.sh \
+        --allow-private-addr \
         --no-restart \
         --dynamic-port-range $portStart-$portEnd
         --label dyn$i \
@@ -317,7 +320,7 @@ while [[ $iteration -le $iterations ]]; do
     set -x
     client_keypair=/tmp/client-id.json-$$
     $solana_keygen new --no-passphrase -fso $client_keypair || exit $?
-    $solana_gossip spy -n 127.0.0.1:8001 --num-nodes-exactly $numNodes || exit $?
+    $solana_gossip --allow-private-addr spy -n 127.0.0.1:8001 --num-nodes-exactly $numNodes || exit $?
     rm -rf $client_keypair
   ) || flag_error
 
