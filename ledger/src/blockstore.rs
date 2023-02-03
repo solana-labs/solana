@@ -156,6 +156,10 @@ pub struct CompletedDataSetInfo {
     /// Index of the last [`Shred`] in the range of shreds that belong to this set.
     /// Range is inclusive, `start_index..=end_index`.
     pub end_index: u32,
+
+    /// Is set if this data set is the last in `slot`.  Can be retrieved from the shard flags,
+    /// checking chard `end_index`.
+    pub last_in_slot: bool,
 }
 
 pub struct BlockstoreSignals {
@@ -1596,6 +1600,12 @@ impl Blockstore {
             slot,
             start_index,
             end_index,
+            // It is possible for a data set to be completed due to an insertion of a shred that
+            // does not belong to this data set.  So we can no realy on the `last_in_slot` value.
+            last_in_slot: slot_meta
+                .last_index
+                .map(|last_index| last_index == u64::from(end_index))
+                .unwrap_or(false),
         })
         .collect();
 
@@ -5151,7 +5161,8 @@ pub mod tests {
             vec![CompletedDataSetInfo {
                 slot,
                 start_index: 0,
-                end_index: num_shreds as u32 - 1
+                end_index: num_shreds as u32 - 1,
+                last_in_slot: true,
             }]
         );
         // Inserting shreds again doesn't trigger notification

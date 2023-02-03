@@ -34,6 +34,7 @@ pub struct SlotEntries<'entries> {
     pub slot: Slot,
     /// Shards in `slot` that represent `entries`.
     pub shard_indices: RangeInclusive<u32>,
+    pub last_in_slot: bool,
     pub entries: &'entries [Entry],
 }
 
@@ -95,6 +96,7 @@ fn forward_completed(
         slot,
         start_index,
         end_index,
+        last_in_slot,
     } in once(receiver.recv_timeout(Duration::from_secs(1))?)
         .chain(receiver.try_iter())
         .flatten()
@@ -105,6 +107,7 @@ fn forward_completed(
                     handler(SlotEntries {
                         slot,
                         shard_indices: start_index..=end_index,
+                        last_in_slot,
                         entries: &entries,
                     });
                 }
