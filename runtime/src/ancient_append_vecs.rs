@@ -80,12 +80,12 @@ impl AncientSlotInfos {
     // sort 'shrink_indexes' by most bytes saved, highest to lowest
     #[allow(dead_code)]
     fn sort_shrink_indexes_by_bytes_saved(&mut self) {
-        self.shrink_indexes.sort_by(|l, r| {
-            let sort_value = |index: &usize| {
+        self.shrink_indexes.sort_unstable_by(|l, r| {
+            let amount_shrunk = |index: &usize| {
                 let item = &self.all_infos[*index];
                 item.capacity - item.alive_bytes
             };
-            sort_value(r).cmp(&sort_value(l))
+            amount_shrunk(r).cmp(&amount_shrunk(l))
         });
     }
 }
@@ -560,8 +560,10 @@ pub mod tests {
     fn test_sort_shrink_indexes_by_bytes_saved() {
         let (db, slot1) = create_db_with_storages_and_index(true /*alive*/, 1, None);
         let storage = db.storage.get_slot_storage_entry(slot1).unwrap();
-        let slot = 0; // ignored
-                      // info1 is first, equal, last
+        // ignored
+        let slot = 0;
+
+        // info1 is first, equal, last
         for info1_capacity in [0, 1, 2] {
             let info1 = SlotInfo {
                 storage: storage.clone(),
