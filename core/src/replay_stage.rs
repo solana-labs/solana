@@ -1090,20 +1090,27 @@ impl ReplayStage {
         progress: &mut ProgressMap,
     ) {
         let start_slot = poh_recorder.read().unwrap().start_slot();
-
-        if let (false, Some(latest_leader_slot)) =
-            progress.get_leader_propagation_slot_must_exist(start_slot)
+        if let Some(latest_leader_slot) =
+            progress.get_propagated_stats(start_slot).and_then(|stats| {
+                if stats.is_leader_slot {
+                    Some(start_slot)
+                } else {
+                    stats.prev_leader_slot
+                }
+            })
         {
-            debug!(
-                "Slot not propagated: start_slot={} latest_leader_slot={}",
-                start_slot, latest_leader_slot
-            );
-            Self::maybe_retransmit_unpropagated_slots(
-                "replay_stage-retransmit-timing-based",
-                retransmit_slots_sender,
-                progress,
-                latest_leader_slot,
-            );
+            if !progress.is_propagated(latest_leader_slot).unwrap_or(true) {
+                debug!(
+                    "Slot not propagated: start_slot={} latest_leader_slot={}",
+                    start_slot, latest_leader_slot
+                );
+                Self::maybe_retransmit_unpropagated_slots(
+                    "replay_stage-retransmit-timing-based",
+                    retransmit_slots_sender,
+                    progress,
+                    latest_leader_slot,
+                );
+            }
         }
     }
 
