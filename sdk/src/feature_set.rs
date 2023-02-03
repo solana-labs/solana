@@ -602,6 +602,10 @@ pub mod remove_congestion_multiplier_from_fee_calculation {
     solana_sdk::declare_id!("A8xyMHZovGXFkorFqEmVH2PKGLiBip5JD7jt4zsUWo4H");
 }
 
+pub mod enable_request_heap_frame_ix {
+    solana_sdk::declare_id!("Hr1nUA9b7NJ6eChS26o7Vi8gYYDDwWD3YeBfzJkTbU86");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -747,6 +751,7 @@ lazy_static! {
         (disable_builtin_loader_ownership_chains::id(), "disable builtin loader ownership chains #29956"),
         (cap_transaction_accounts_data_size::id(), "cap transaction accounts data size up to a limit #27839"),
         (remove_congestion_multiplier_from_fee_calculation::id(), "Remove congestion multiplier from transaction fee calculation #29881"),
+        (enable_request_heap_frame_ix::id(), "Enable transaction to request heap frame using compute budget instruction #30076"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()

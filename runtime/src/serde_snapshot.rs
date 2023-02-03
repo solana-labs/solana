@@ -718,7 +718,26 @@ where
     );
 
     // Process deserialized data, set necessary fields in self
-    accounts_db.set_bank_hash_info_from_snapshot(snapshot_slot, snapshot_bank_hash_info);
+    let old_accounts_delta_hash = accounts_db.set_accounts_delta_hash_from_snapshot(
+        snapshot_slot,
+        snapshot_bank_hash_info.accounts_delta_hash,
+    );
+    assert!(
+        old_accounts_delta_hash.is_none(),
+        "There should not already be an AccountsDeltaHash at slot {snapshot_slot}: {old_accounts_delta_hash:?}",
+        );
+    let old_accounts_hash = accounts_db
+        .set_accounts_hash_from_snapshot(snapshot_slot, snapshot_bank_hash_info.accounts_hash);
+    assert!(
+        old_accounts_hash.is_none(),
+        "There should not already be an AccountsHash at slot {snapshot_slot}: {old_accounts_hash:?}",
+    );
+    let old_stats = accounts_db
+        .update_bank_hash_stats_from_snapshot(snapshot_slot, snapshot_bank_hash_info.stats);
+    assert!(
+        old_stats.is_none(),
+        "There should not already be a BankHashStats at slot {snapshot_slot}: {old_stats:?}",
+    );
     accounts_db.storage.initialize(storage);
     accounts_db
         .next_id

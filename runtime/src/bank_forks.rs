@@ -634,7 +634,7 @@ mod tests {
     use {
         super::*,
         crate::{
-            bank::tests::update_vote_account_timestamp,
+            bank::test_utils::update_vote_account_timestamp,
             epoch_accounts_hash::EpochAccountsHash,
             genesis_utils::{
                 create_genesis_config, create_genesis_config_with_leader, GenesisConfigInfo,

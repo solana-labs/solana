@@ -762,7 +762,7 @@ impl Validator {
                 let connection_cache = ConnectionCache::new_with_client_options(
                     tpu_connection_pool_size,
                     None,
-                    Some((&identity_keypair, node.info.gossip.ip())),
+                    Some((&identity_keypair, node.info.tpu.ip())),
                     Some((&staked_nodes, &identity_keypair.pubkey())),
                 );
                 Arc::new(connection_cache)
