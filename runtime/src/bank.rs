@@ -106,9 +106,15 @@ use {
         epoch_schedule::EpochSchedule,
         feature,
         feature_set::{
+<<<<<<< HEAD
             self, add_set_compute_unit_price_ix, default_units_per_instruction,
             disable_fee_calculator, enable_early_verification_of_account_modifications,
             use_default_units_in_fee_calculation, FeatureSet,
+=======
+            self, disable_fee_calculator, enable_early_verification_of_account_modifications,
+            enable_request_heap_frame_ix, remove_congestion_multiplier_from_fee_calculation,
+            remove_deprecated_request_unit_ix, use_default_units_in_fee_calculation, FeatureSet,
+>>>>>>> 4293f11cf (feature gate to enable compute_budget::request_heap_frame on mainnetBeta (#30077))
         },
         fee::FeeStructure,
         fee_calculator::{FeeCalculator, FeeRateGovernor},
@@ -3473,7 +3479,12 @@ impl Bank {
             self.feature_set
                 .is_active(&add_set_compute_unit_price_ix::id()),
             self.feature_set
+<<<<<<< HEAD
                 .is_active(&use_default_units_in_fee_calculation::id()),
+=======
+                .is_active(&remove_congestion_multiplier_from_fee_calculation::id()),
+            self.enable_request_heap_frame_ix(),
+>>>>>>> 4293f11cf (feature gate to enable compute_budget::request_heap_frame on mainnetBeta (#30077))
         ))
     }
 
@@ -3516,7 +3527,12 @@ impl Bank {
             self.feature_set
                 .is_active(&add_set_compute_unit_price_ix::id()),
             self.feature_set
+<<<<<<< HEAD
                 .is_active(&use_default_units_in_fee_calculation::id()),
+=======
+                .is_active(&remove_congestion_multiplier_from_fee_calculation::id()),
+            self.enable_request_heap_frame_ix(),
+>>>>>>> 4293f11cf (feature gate to enable compute_budget::request_heap_frame on mainnetBeta (#30077))
         )
     }
 
@@ -4252,6 +4268,15 @@ impl Bank {
         }
     }
 
+    // A cluster specific feature gate, when not activated it keeps v1.13 behavior in mainnet-beta;
+    // once activated for v1.14+, it allows compute_budget::request_heap_frame and
+    // compute_budget::set_compute_unit_price co-exist in same transaction.
+    fn enable_request_heap_frame_ix(&self) -> bool {
+        self.feature_set
+            .is_active(&enable_request_heap_frame_ix::id())
+            || self.cluster_type() != ClusterType::MainnetBeta
+    }
+
     #[allow(clippy::type_complexity)]
     pub fn load_and_execute_transactions(
         &self,
@@ -4345,6 +4370,7 @@ impl Bank {
                         feature_set_clone_time.as_us()
                     );
 
+<<<<<<< HEAD
                     let compute_budget = if let Some(compute_budget) = self.compute_budget {
                         compute_budget
                     } else {
@@ -4370,6 +4396,30 @@ impl Bank {
                         }
                         compute_budget
                     };
+=======
+                            let mut compute_budget_process_transaction_time =
+                                Measure::start("compute_budget_process_transaction_time");
+                            let process_transaction_result = compute_budget.process_instructions(
+                                tx.message().program_instructions_iter(),
+                                true,
+                                !self
+                                    .feature_set
+                                    .is_active(&remove_deprecated_request_unit_ix::id()),
+                                true, // don't reject txs that use request heap size ix
+                            );
+                            compute_budget_process_transaction_time.stop();
+                            saturating_add_assign!(
+                                timings
+                                    .execute_accessories
+                                    .compute_budget_process_transaction_us,
+                                compute_budget_process_transaction_time.as_us()
+                            );
+                            if let Err(err) = process_transaction_result {
+                                return TransactionExecutionResult::NotExecuted(err);
+                            }
+                            compute_budget
+                        };
+>>>>>>> 4293f11cf (feature gate to enable compute_budget::request_heap_frame on mainnetBeta (#30077))
 
                     self.execute_loaded_transaction(
                         tx,
@@ -4643,6 +4693,12 @@ impl Bank {
         fee_structure: &FeeStructure,
         support_set_compute_unit_price_ix: bool,
         use_default_units_per_instruction: bool,
+<<<<<<< HEAD
+=======
+        support_request_units_deprecated: bool,
+        remove_congestion_multiplier: bool,
+        enable_request_heap_frame_ix: bool,
+>>>>>>> 4293f11cf (feature gate to enable compute_budget::request_heap_frame on mainnetBeta (#30077))
     ) -> u64 {
         // Fee based on compute units and signatures
         const BASE_CONGESTION: f64 = 5_000.0;
@@ -4658,7 +4714,12 @@ impl Bank {
             .process_instructions(
                 message.program_instructions_iter(),
                 use_default_units_per_instruction,
+<<<<<<< HEAD
                 support_set_compute_unit_price_ix,
+=======
+                support_request_units_deprecated,
+                enable_request_heap_frame_ix,
+>>>>>>> 4293f11cf (feature gate to enable compute_budget::request_heap_frame on mainnetBeta (#30077))
             )
             .unwrap_or_default();
         let prioritization_fee = prioritization_fee_details.get_fee();
@@ -4725,7 +4786,12 @@ impl Bank {
                     self.feature_set
                         .is_active(&add_set_compute_unit_price_ix::id()),
                     self.feature_set
+<<<<<<< HEAD
                         .is_active(&use_default_units_in_fee_calculation::id()),
+=======
+                        .is_active(&remove_congestion_multiplier_from_fee_calculation::id()),
+                    self.enable_request_heap_frame_ix(),
+>>>>>>> 4293f11cf (feature gate to enable compute_budget::request_heap_frame on mainnetBeta (#30077))
                 );
 
                 // In case of instruction error, even though no accounts
