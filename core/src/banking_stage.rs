@@ -552,7 +552,6 @@ impl BankingStage {
         Some(retryable_transaction_indexes)
     }
 
-    #[allow(clippy::too_many_arguments)]
     pub fn consume_buffered_packets(
         bank_start: &BankStart,
         unprocessed_transaction_storage: &mut UnprocessedTransactionStorage,
@@ -1193,7 +1192,6 @@ impl BankingStage {
         Self::filter_valid_transaction_indexes(&results)
     }
 
-    #[allow(clippy::too_many_arguments)]
     fn process_packets_transactions<'a>(
         bank: &'a Arc<Bank>,
         bank_creation_time: &Instant,
