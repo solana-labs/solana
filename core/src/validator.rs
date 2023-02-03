@@ -784,11 +784,20 @@ impl Validator {
 
         let connection_cache = match use_quic {
             true => {
+<<<<<<< HEAD
                 let mut connection_cache = ConnectionCache::new(tpu_connection_pool_size);
                 connection_cache
                     .update_client_certificate(&identity_keypair, node.info.gossip.ip())
                     .expect("Failed to update QUIC client certificates");
                 connection_cache.set_staked_nodes(&staked_nodes, &identity_keypair.pubkey());
+=======
+                let connection_cache = ConnectionCache::new_with_client_options(
+                    tpu_connection_pool_size,
+                    None,
+                    Some((&identity_keypair, node.info.tpu.ip())),
+                    Some((&staked_nodes, &identity_keypair.pubkey())),
+                );
+>>>>>>> be8e463a5 (Use TPU IP instead of gossip for QUIC client certificate info (#30105))
                 Arc::new(connection_cache)
             }
             false => Arc::new(ConnectionCache::with_udp(tpu_connection_pool_size)),
