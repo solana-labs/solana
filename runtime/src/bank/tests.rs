@@ -60,7 +60,7 @@ use {
         fee::FeeStructure,
         fee_calculator::FeeRateGovernor,
         genesis_config::{create_genesis_config, ClusterType, GenesisConfig},
-        hash::{self, hash, Hash},
+        hash::{self, Hash},
         incinerator,
         instruction::{AccountMeta, CompiledInstruction, Instruction, InstructionError},
         loader_upgradeable_instruction::UpgradeableLoaderInstruction,
@@ -120,41 +120,6 @@ use {
     },
     test_case::test_case,
 };
-
-#[test]
-fn test_race_register_tick_freeze() {
-    solana_logger::setup();
-
-    let (mut genesis_config, _) = create_genesis_config(50);
-    genesis_config.ticks_per_slot = 1;
-    let p = solana_sdk::pubkey::new_rand();
-    let hash = hash(p.as_ref());
-
-    for _ in 0..1000 {
-        let bank0 = Arc::new(Bank::new_for_tests(&genesis_config));
-        let bank0_ = bank0.clone();
-        let freeze_thread = Builder::new()
-            .name("freeze".to_string())
-            .spawn(move || loop {
-                if bank0_.is_complete() {
-                    assert_eq!(bank0_.last_blockhash(), hash);
-                    break;
-                }
-            })
-            .unwrap();
-
-        let bank0_ = bank0.clone();
-        let register_tick_thread = Builder::new()
-            .name("register_tick".to_string())
-            .spawn(move || {
-                bank0_.register_tick(&hash);
-            })
-            .unwrap();
-
-        register_tick_thread.join().unwrap();
-        freeze_thread.join().unwrap();
-    }
-}
 
 fn new_sanitized_message(instructions: &[Instruction], payer: Option<&Pubkey>) -> SanitizedMessage {
     Message::new(instructions, payer).try_into().unwrap()
@@ -2233,7 +2198,7 @@ fn test_bank_update_vote_stake_rewards() {
         bank.load_vote_and_stake_accounts(&thread_pool, null_tracer())
     });
 }
-#[cfg(test)]
+
 fn check_bank_update_vote_stake_rewards<F>(load_vote_and_stake_accounts: F)
 where
     F: Fn(&Bank) -> LoadVoteAndStakeAccountsResult,
@@ -3035,7 +3000,6 @@ fn test_bank_tx_compute_unit_fee() {
         &FeeStructure::default(),
         true,
         false,
-        true,
     );
 
     let (expected_fee_collected, expected_fee_burned) =
@@ -3217,7 +3181,6 @@ fn test_bank_blockhash_compute_unit_fee_structure() {
         &FeeStructure::default(),
         true,
         false,
-        true,
     );
     assert_eq!(
         bank.get_balance(&mint_keypair.pubkey()),
@@ -3236,7 +3199,6 @@ fn test_bank_blockhash_compute_unit_fee_structure() {
         &FeeStructure::default(),
         true,
         false,
-        true,
     );
     assert_eq!(
         bank.get_balance(&mint_keypair.pubkey()),
@@ -3350,7 +3312,6 @@ fn test_filter_program_errors_and_collect_compute_unit_fee() {
                         &FeeStructure::default(),
                         true,
                         false,
-                        true,
                     ) * 2
                 )
                 .0
@@ -5042,12 +5003,12 @@ fn test_add_instruction_processor_for_existing_unrelated_accounts() {
 
         // Re-adding builtin programs should be no-op
         bank.update_accounts_hash_for_tests();
-        let old_hash = bank.get_accounts_hash().unwrap();
+        let old_hash = bank.get_accounts_hash();
         bank.add_builtin("mock_program1", &vote_id, mock_ix_processor);
         bank.add_builtin("mock_program2", &stake_id, mock_ix_processor);
         add_root_and_flush_write_cache(&bank);
         bank.update_accounts_hash_for_tests();
-        let new_hash = bank.get_accounts_hash().unwrap();
+        let new_hash = bank.get_accounts_hash();
         assert_eq!(old_hash, new_hash);
         {
             let stakes = bank.stakes_cache.stakes();
@@ -7245,8 +7206,8 @@ fn test_add_builtin_account_squatted_while_not_replacing() {
 #[test]
 #[should_panic(
     expected = "Can't change frozen bank by adding not-existing new builtin \
-                program (mock_program, CiXgo2KHKSDmDnV1F6B69eWFgNAPiSBjjYvfB4cvRNre). \
-                Maybe, inconsistent program activation is detected on snapshot restore?"
+               program (mock_program, CiXgo2KHKSDmDnV1F6B69eWFgNAPiSBjjYvfB4cvRNre). \
+               Maybe, inconsistent program activation is detected on snapshot restore?"
 )]
 fn test_add_builtin_account_after_frozen() {
     let slot = 123;
@@ -7397,8 +7358,8 @@ fn test_add_precompiled_account_squatted_while_not_replacing() {
 #[test]
 #[should_panic(
     expected = "Can't change frozen bank by adding not-existing new precompiled \
-                program (CiXgo2KHKSDmDnV1F6B69eWFgNAPiSBjjYvfB4cvRNre). \
-                Maybe, inconsistent program activation is detected on snapshot restore?"
+               program (CiXgo2KHKSDmDnV1F6B69eWFgNAPiSBjjYvfB4cvRNre). \
+               Maybe, inconsistent program activation is detected on snapshot restore?"
 )]
 fn test_add_precompiled_account_after_frozen() {
     let slot = 123;
@@ -10495,7 +10456,6 @@ fn test_calculate_fee() {
             },
             true,
             false,
-            true,
         ),
         0
     );
@@ -10511,7 +10471,6 @@ fn test_calculate_fee() {
             },
             true,
             false,
-            true,
         ),
         1
     );
@@ -10532,7 +10491,6 @@ fn test_calculate_fee() {
             },
             true,
             false,
-            true,
         ),
         4
     );
@@ -10552,7 +10510,7 @@ fn test_calculate_fee_compute_units() {
     let message =
         SanitizedMessage::try_from(Message::new(&[], Some(&Pubkey::new_unique()))).unwrap();
     assert_eq!(
-        Bank::calculate_fee(&message, 1, &fee_structure, true, false, true),
+        Bank::calculate_fee(&message, 1, &fee_structure, true, false),
         max_fee + lamports_per_signature
     );
 
@@ -10563,7 +10521,7 @@ fn test_calculate_fee_compute_units() {
     let message =
         SanitizedMessage::try_from(Message::new(&[ix0, ix1], Some(&Pubkey::new_unique()))).unwrap();
     assert_eq!(
-        Bank::calculate_fee(&message, 1, &fee_structure, true, false, true),
+        Bank::calculate_fee(&message, 1, &fee_structure, true, false),
         max_fee + 3 * lamports_per_signature
     );
 
@@ -10596,7 +10554,7 @@ fn test_calculate_fee_compute_units() {
             Some(&Pubkey::new_unique()),
         ))
         .unwrap();
-        let fee = Bank::calculate_fee(&message, 1, &fee_structure, true, false, true);
+        let fee = Bank::calculate_fee(&message, 1, &fee_structure, true, false);
         assert_eq!(
             fee,
             lamports_per_signature + prioritization_fee_details.get_fee()
@@ -10635,7 +10593,7 @@ fn test_calculate_fee_secp256k1() {
     ))
     .unwrap();
     assert_eq!(
-        Bank::calculate_fee(&message, 1, &fee_structure, true, false, true),
+        Bank::calculate_fee(&message, 1, &fee_structure, true, false),
         2
     );
 
@@ -10647,7 +10605,7 @@ fn test_calculate_fee_secp256k1() {
     ))
     .unwrap();
     assert_eq!(
-        Bank::calculate_fee(&message, 1, &fee_structure, true, false, true),
+        Bank::calculate_fee(&message, 1, &fee_structure, true, false),
         11
     );
 }
@@ -12345,63 +12303,4 @@ fn test_stake_account_consistency_with_rent_epoch_max_feature(
             .rent_epoch(),
         RENT_EXEMPT_RENT_EPOCH
     );
-}
-
-#[test]
-fn test_calculate_fee_with_congestion_multiplier() {
-    let lamports_scale: u64 = 5;
-    let base_lamports_per_signature: u64 = 5_000;
-    let cheap_lamports_per_signature: u64 = base_lamports_per_signature / lamports_scale;
-    let expensive_lamports_per_signature: u64 = base_lamports_per_signature * lamports_scale;
-    let signature_count: u64 = 2;
-    let signature_fee: u64 = 10;
-    let fee_structure = FeeStructure {
-        lamports_per_signature: signature_fee,
-        ..FeeStructure::default()
-    };
-
-    // Two signatures, double the fee.
-    let key0 = Pubkey::new_unique();
-    let key1 = Pubkey::new_unique();
-    let ix0 = system_instruction::transfer(&key0, &key1, 1);
-    let ix1 = system_instruction::transfer(&key1, &key0, 1);
-    let message = SanitizedMessage::try_from(Message::new(&[ix0, ix1], Some(&key0))).unwrap();
-
-    // assert when lamports_per_signature is less than BASE_LAMPORTS, turnning on/off
-    // congestion_multiplier has no effect on fee.
-    for remove_congestion_multiplier in [true, false] {
-        assert_eq!(
-            Bank::calculate_fee(
-                &message,
-                cheap_lamports_per_signature,
-                &fee_structure,
-                true,
-                false,
-                remove_congestion_multiplier,
-            ),
-            signature_fee * signature_count
-        );
-    }
-
-    // assert when lamports_per_signature is more than BASE_LAMPORTS, turnning on/off
-    // congestion_multiplier will change calculated fee.
-    for remove_congestion_multiplier in [true, false] {
-        let denominator: u64 = if remove_congestion_multiplier {
-            1
-        } else {
-            lamports_scale
-        };
-
-        assert_eq!(
-            Bank::calculate_fee(
-                &message,
-                expensive_lamports_per_signature,
-                &fee_structure,
-                true,
-                false,
-                remove_congestion_multiplier,
-            ),
-            signature_fee * signature_count / denominator
-        );
-    }
 }
