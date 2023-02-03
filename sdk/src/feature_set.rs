@@ -540,33 +540,10 @@ pub mod move_serialized_len_ptr_in_cpi {
     solana_sdk::declare_id!("74CoWuBmt3rUVUrCb2JiSTvh6nXyBWUsK4SaMj3CtE3T");
 }
 
-<<<<<<< HEAD
-=======
-pub mod update_hashes_per_tick {
-    solana_sdk::declare_id!("3uFHb9oKdGfgZGJK9EHaAXN4USvnQtAFC13Fh5gGFS5B");
-}
-
-pub mod enable_big_mod_exp_syscall {
-    solana_sdk::declare_id!("EBq48m8irRKuE7ZnMTLvLg2UuGSqhe8s8oMqnmja1fJw");
-}
-
-pub mod disable_builtin_loader_ownership_chains {
-    solana_sdk::declare_id!("4UDcAfQ6EcA6bdcadkeHpkarkhZGJ7Bpq7wTAiRMjkoi");
-}
-
-pub mod cap_transaction_accounts_data_size {
-    solana_sdk::declare_id!("DdLwVYuvDz26JohmgSbA7mjpJFgX5zP2dkp8qsF2C33V");
-}
-
-pub mod remove_congestion_multiplier_from_fee_calculation {
-    solana_sdk::declare_id!("A8xyMHZovGXFkorFqEmVH2PKGLiBip5JD7jt4zsUWo4H");
-}
-
 pub mod enable_request_heap_frame_ix {
     solana_sdk::declare_id!("Hr1nUA9b7NJ6eChS26o7Vi8gYYDDwWD3YeBfzJkTbU86");
 }
 
->>>>>>> 4293f11cf (feature gate to enable compute_budget::request_heap_frame on mainnetBeta (#30077))
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -696,15 +673,7 @@ lazy_static! {
         (drop_merkle_shreds::id(), "drop merkle shreds #29711"),
         (keep_merkle_shreds::id(), "keep merkle shreds #29711"),
         (move_serialized_len_ptr_in_cpi::id(), "cpi ignore serialized_len_ptr #29592"),
-<<<<<<< HEAD
-=======
-        (update_hashes_per_tick::id(), "Update desired hashes per tick on epoch boundary"),
-        (enable_big_mod_exp_syscall::id(), "add big_mod_exp syscall #28503"),
-        (disable_builtin_loader_ownership_chains::id(), "disable builtin loader ownership chains #29956"),
-        (cap_transaction_accounts_data_size::id(), "cap transaction accounts data size up to a limit #27839"),
-        (remove_congestion_multiplier_from_fee_calculation::id(), "Remove congestion multiplier from transaction fee calculation #29881"),
         (enable_request_heap_frame_ix::id(), "Enable transaction to request heap frame using compute budget instruction #30076"),
->>>>>>> 4293f11cf (feature gate to enable compute_budget::request_heap_frame on mainnetBeta (#30077))
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()

@@ -178,32 +178,6 @@ impl CostModel {
             data_bytes_len_total =
                 data_bytes_len_total.saturating_add(instruction.data.len() as u64);
         }
-<<<<<<< HEAD
-=======
-
-        // calculate bpf cost based on compute budget instructions
-        let mut budget = ComputeBudget::default();
-
-        // Starting from v1.14, cost model uses compute_budget.set_compute_unit_limit to
-        // measure bpf_costs (code below), vs earlier versions that use estimated
-        // bpf instruction costs. The calculated transaction costs are used by leaders
-        // during block packing, different costs for same transaction due to different versions
-        // will not impact consensus. So for v1.14+, should call compute budget with
-        // the feature gate `enable_request_heap_frame_ix` enabled.
-        let enable_request_heap_frame_ix = true;
-        let result = budget.process_instructions(
-            transaction.message().program_instructions_iter(),
-            feature_set.is_active(&use_default_units_in_fee_calculation::id()),
-            !feature_set.is_active(&remove_deprecated_request_unit_ix::id()),
-            enable_request_heap_frame_ix,
-        );
-
-        // if tx contained user-space instructions and a more accurate estimate available correct it
-        if bpf_costs > 0 && result.is_ok() {
-            bpf_costs = budget.compute_unit_limit
-        }
-
->>>>>>> 4293f11cf (feature gate to enable compute_budget::request_heap_frame on mainnetBeta (#30077))
         tx_cost.builtins_execution_cost = builtin_costs;
         tx_cost.bpf_execution_cost = bpf_costs;
         tx_cost.data_bytes_cost = data_bytes_len_total / DATA_BYTES_UNITS;

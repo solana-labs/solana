@@ -23,14 +23,9 @@ pub trait GetTransactionPriorityDetails {
         let prioritization_fee_details = compute_budget
             .process_instructions(
                 instructions,
-<<<<<<< HEAD
                 true, // use default units per instruction
                 true, // don't reject txs that use set compute unit price ix
-=======
-                true,  // use default units per instruction
-                false, // stop supporting prioritization by request_units_deprecated instruction
-                true,  // enable request heap frame instruction
->>>>>>> 4293f11cf (feature gate to enable compute_budget::request_heap_frame on mainnetBeta (#30077))
+                true, // supports request heap frame instruction
             )
             .ok()?;
         Some(TransactionPriorityDetails {

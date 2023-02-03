@@ -35,13 +35,9 @@ use {
         bpf_loader_upgradeable::{self, UpgradeableLoaderState},
         clock::{BankId, Slot, INITIAL_RENT_EPOCH},
         feature_set::{
-<<<<<<< HEAD
-            self, add_set_compute_unit_price_ix, return_none_for_zero_lamport_accounts,
-            use_default_units_in_fee_calculation, FeatureSet,
-=======
-            self, enable_request_heap_frame_ix, remove_congestion_multiplier_from_fee_calculation,
-            remove_deprecated_request_unit_ix, use_default_units_in_fee_calculation, FeatureSet,
->>>>>>> 4293f11cf (feature gate to enable compute_budget::request_heap_frame on mainnetBeta (#30077))
+            self, add_set_compute_unit_price_ix, enable_request_heap_frame_ix,
+            return_none_for_zero_lamport_accounts, use_default_units_in_fee_calculation,
+            FeatureSet,
         },
         fee::FeeStructure,
         genesis_config::ClusterType,
@@ -576,12 +572,9 @@ impl Accounts {
                             fee_structure,
                             feature_set.is_active(&add_set_compute_unit_price_ix::id()),
                             feature_set.is_active(&use_default_units_in_fee_calculation::id()),
-<<<<<<< HEAD
-=======
-                            !feature_set.is_active(&remove_deprecated_request_unit_ix::id()),
-                            feature_set.is_active(&remove_congestion_multiplier_from_fee_calculation::id()),
-                            feature_set.is_active(&enable_request_heap_frame_ix::id()) || self.accounts_db.expected_cluster_type() != ClusterType::MainnetBeta,
->>>>>>> 4293f11cf (feature gate to enable compute_budget::request_heap_frame on mainnetBeta (#30077))
+                            feature_set.is_active(&enable_request_heap_frame_ix::id())
+                                || self.accounts_db.expected_cluster_type()
+                                    != ClusterType::MainnetBeta,
                         )
                     } else {
                         return (Err(TransactionError::BlockhashNotFound), None);

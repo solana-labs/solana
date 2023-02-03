@@ -106,15 +106,9 @@ use {
         epoch_schedule::EpochSchedule,
         feature,
         feature_set::{
-<<<<<<< HEAD
             self, add_set_compute_unit_price_ix, default_units_per_instruction,
             disable_fee_calculator, enable_early_verification_of_account_modifications,
-            use_default_units_in_fee_calculation, FeatureSet,
-=======
-            self, disable_fee_calculator, enable_early_verification_of_account_modifications,
-            enable_request_heap_frame_ix, remove_congestion_multiplier_from_fee_calculation,
-            remove_deprecated_request_unit_ix, use_default_units_in_fee_calculation, FeatureSet,
->>>>>>> 4293f11cf (feature gate to enable compute_budget::request_heap_frame on mainnetBeta (#30077))
+            enable_request_heap_frame_ix, use_default_units_in_fee_calculation, FeatureSet,
         },
         fee::FeeStructure,
         fee_calculator::{FeeCalculator, FeeRateGovernor},
@@ -3479,12 +3473,8 @@ impl Bank {
             self.feature_set
                 .is_active(&add_set_compute_unit_price_ix::id()),
             self.feature_set
-<<<<<<< HEAD
                 .is_active(&use_default_units_in_fee_calculation::id()),
-=======
-                .is_active(&remove_congestion_multiplier_from_fee_calculation::id()),
             self.enable_request_heap_frame_ix(),
->>>>>>> 4293f11cf (feature gate to enable compute_budget::request_heap_frame on mainnetBeta (#30077))
         ))
     }
 
@@ -3527,12 +3517,8 @@ impl Bank {
             self.feature_set
                 .is_active(&add_set_compute_unit_price_ix::id()),
             self.feature_set
-<<<<<<< HEAD
                 .is_active(&use_default_units_in_fee_calculation::id()),
-=======
-                .is_active(&remove_congestion_multiplier_from_fee_calculation::id()),
             self.enable_request_heap_frame_ix(),
->>>>>>> 4293f11cf (feature gate to enable compute_budget::request_heap_frame on mainnetBeta (#30077))
         )
     }
 
@@ -4370,7 +4356,6 @@ impl Bank {
                         feature_set_clone_time.as_us()
                     );
 
-<<<<<<< HEAD
                     let compute_budget = if let Some(compute_budget) = self.compute_budget {
                         compute_budget
                     } else {
@@ -4383,6 +4368,7 @@ impl Bank {
                             tx.message().program_instructions_iter(),
                             feature_set.is_active(&default_units_per_instruction::id()),
                             feature_set.is_active(&add_set_compute_unit_price_ix::id()),
+                            true, // don't reject txs that use request heap size ix
                         );
                         compute_budget_process_transaction_time.stop();
                         saturating_add_assign!(
@@ -4396,30 +4382,6 @@ impl Bank {
                         }
                         compute_budget
                     };
-=======
-                            let mut compute_budget_process_transaction_time =
-                                Measure::start("compute_budget_process_transaction_time");
-                            let process_transaction_result = compute_budget.process_instructions(
-                                tx.message().program_instructions_iter(),
-                                true,
-                                !self
-                                    .feature_set
-                                    .is_active(&remove_deprecated_request_unit_ix::id()),
-                                true, // don't reject txs that use request heap size ix
-                            );
-                            compute_budget_process_transaction_time.stop();
-                            saturating_add_assign!(
-                                timings
-                                    .execute_accessories
-                                    .compute_budget_process_transaction_us,
-                                compute_budget_process_transaction_time.as_us()
-                            );
-                            if let Err(err) = process_transaction_result {
-                                return TransactionExecutionResult::NotExecuted(err);
-                            }
-                            compute_budget
-                        };
->>>>>>> 4293f11cf (feature gate to enable compute_budget::request_heap_frame on mainnetBeta (#30077))
 
                     self.execute_loaded_transaction(
                         tx,
@@ -4693,12 +4655,7 @@ impl Bank {
         fee_structure: &FeeStructure,
         support_set_compute_unit_price_ix: bool,
         use_default_units_per_instruction: bool,
-<<<<<<< HEAD
-=======
-        support_request_units_deprecated: bool,
-        remove_congestion_multiplier: bool,
         enable_request_heap_frame_ix: bool,
->>>>>>> 4293f11cf (feature gate to enable compute_budget::request_heap_frame on mainnetBeta (#30077))
     ) -> u64 {
         // Fee based on compute units and signatures
         const BASE_CONGESTION: f64 = 5_000.0;
@@ -4714,12 +4671,8 @@ impl Bank {
             .process_instructions(
                 message.program_instructions_iter(),
                 use_default_units_per_instruction,
-<<<<<<< HEAD
                 support_set_compute_unit_price_ix,
-=======
-                support_request_units_deprecated,
                 enable_request_heap_frame_ix,
->>>>>>> 4293f11cf (feature gate to enable compute_budget::request_heap_frame on mainnetBeta (#30077))
             )
             .unwrap_or_default();
         let prioritization_fee = prioritization_fee_details.get_fee();
@@ -4786,12 +4739,8 @@ impl Bank {
                     self.feature_set
                         .is_active(&add_set_compute_unit_price_ix::id()),
                     self.feature_set
-<<<<<<< HEAD
                         .is_active(&use_default_units_in_fee_calculation::id()),
-=======
-                        .is_active(&remove_congestion_multiplier_from_fee_calculation::id()),
                     self.enable_request_heap_frame_ix(),
->>>>>>> 4293f11cf (feature gate to enable compute_budget::request_heap_frame on mainnetBeta (#30077))
                 );
 
                 // In case of instruction error, even though no accounts
@@ -10756,6 +10705,7 @@ pub(crate) mod tests {
             &FeeStructure::default(),
             true,
             true,
+            true,
         );
 
         let (expected_fee_collected, expected_fee_burned) =
@@ -10938,6 +10888,7 @@ pub(crate) mod tests {
             &FeeStructure::default(),
             true,
             true,
+            true,
         );
         assert_eq!(
             bank.get_balance(&mint_keypair.pubkey()),
@@ -10954,6 +10905,7 @@ pub(crate) mod tests {
             &SanitizedMessage::try_from(Message::new(&[], Some(&Pubkey::new_unique()))).unwrap(),
             expensive_lamports_per_signature,
             &FeeStructure::default(),
+            true,
             true,
             true,
         );
@@ -11070,6 +11022,7 @@ pub(crate) mod tests {
                                 .create_fee_calculator()
                                 .lamports_per_signature,
                             &FeeStructure::default(),
+                            true,
                             true,
                             true,
                         ) * 2
@@ -17435,6 +17388,7 @@ pub(crate) mod tests {
                 },
                 true,
                 true,
+                true,
             ),
             0
         );
@@ -17448,6 +17402,7 @@ pub(crate) mod tests {
                     lamports_per_signature: 1,
                     ..FeeStructure::default()
                 },
+                true,
                 true,
                 true,
             ),
@@ -17470,6 +17425,7 @@ pub(crate) mod tests {
                 },
                 true,
                 true,
+                true,
             ),
             4
         );
@@ -17489,7 +17445,7 @@ pub(crate) mod tests {
         let message =
             SanitizedMessage::try_from(Message::new(&[], Some(&Pubkey::new_unique()))).unwrap();
         assert_eq!(
-            Bank::calculate_fee(&message, 1, &fee_structure, true, true,),
+            Bank::calculate_fee(&message, 1, &fee_structure, true, true, true),
             max_fee + lamports_per_signature
         );
 
@@ -17501,7 +17457,7 @@ pub(crate) mod tests {
             SanitizedMessage::try_from(Message::new(&[ix0, ix1], Some(&Pubkey::new_unique())))
                 .unwrap();
         assert_eq!(
-            Bank::calculate_fee(&message, 1, &fee_structure, true, true,),
+            Bank::calculate_fee(&message, 1, &fee_structure, true, true, true),
             max_fee + 3 * lamports_per_signature
         );
 
@@ -17534,7 +17490,7 @@ pub(crate) mod tests {
                 Some(&Pubkey::new_unique()),
             ))
             .unwrap();
-            let fee = Bank::calculate_fee(&message, 1, &fee_structure, true, true);
+            let fee = Bank::calculate_fee(&message, 1, &fee_structure, true, true, true);
             assert_eq!(
                 fee,
                 lamports_per_signature + prioritization_fee_details.get_fee()
@@ -17573,7 +17529,7 @@ pub(crate) mod tests {
         ))
         .unwrap();
         assert_eq!(
-            Bank::calculate_fee(&message, 1, &fee_structure, true, true,),
+            Bank::calculate_fee(&message, 1, &fee_structure, true, true, true),
             2
         );
 
@@ -17585,7 +17541,7 @@ pub(crate) mod tests {
         ))
         .unwrap();
         assert_eq!(
-            Bank::calculate_fee(&message, 1, &fee_structure, true, true,),
+            Bank::calculate_fee(&message, 1, &fee_structure, true, true, true),
             11
         );
     }
@@ -19228,5 +19184,59 @@ pub(crate) mod tests {
                 bank.get_total_accounts_stats().unwrap().data_len,
             );
         }
+    }
+
+    #[test]
+    fn test_calculate_fee_with_request_heap_frame_flag() {
+        let key0 = Pubkey::new_unique();
+        let key1 = Pubkey::new_unique();
+        let lamports_per_signature: u64 = 5_000;
+        let signature_fee: u64 = 10;
+        let request_cu: u64 = 1;
+        let lamports_per_cu: u64 = 5;
+        let fee_structure = FeeStructure {
+            lamports_per_signature: signature_fee,
+            ..FeeStructure::default()
+        };
+        let message = SanitizedMessage::try_from(Message::new(
+            &[
+                system_instruction::transfer(&key0, &key1, 1),
+                ComputeBudgetInstruction::set_compute_unit_limit(request_cu as u32),
+                ComputeBudgetInstruction::request_heap_frame(40 * 1024),
+                ComputeBudgetInstruction::set_compute_unit_price(lamports_per_cu * 1_000_000),
+            ],
+            Some(&key0),
+        ))
+        .unwrap();
+
+        // assert when enable_request_heap_frame_ix is enabled, prioritization fee will be counted
+        // into transaction fee
+        let mut enable_request_heap_frame_ix = true;
+        assert_eq!(
+            Bank::calculate_fee(
+                &message,
+                lamports_per_signature,
+                &fee_structure,
+                true,
+                true,
+                enable_request_heap_frame_ix,
+            ),
+            signature_fee + request_cu * lamports_per_cu
+        );
+
+        // assert when enable_request_heap_frame_ix is disabled (an v1.13 behavior), prioritization fee will not be counted
+        // into transaction fee
+        enable_request_heap_frame_ix = false;
+        assert_eq!(
+            Bank::calculate_fee(
+                &message,
+                lamports_per_signature,
+                &fee_structure,
+                true,
+                true,
+                enable_request_heap_frame_ix,
+            ),
+            signature_fee
+        );
     }
 }

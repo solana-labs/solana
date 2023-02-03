@@ -127,12 +127,8 @@ impl ComputeBudget {
         &mut self,
         instructions: impl Iterator<Item = (&'a Pubkey, &'a CompiledInstruction)>,
         default_units_per_instruction: bool,
-<<<<<<< HEAD
         support_set_compute_unit_price_ix: bool,
-=======
-        support_request_units_deprecated: bool,
         enable_request_heap_frame_ix: bool,
->>>>>>> 4293f11cf (feature gate to enable compute_budget::request_heap_frame on mainnetBeta (#30077))
     ) -> Result<PrioritizationFeeDetails, TransactionError> {
         let mut num_non_compute_budget_instructions: usize = 0;
         let mut updated_compute_unit_limit = None;
@@ -273,11 +269,7 @@ mod tests {
     }
 
     macro_rules! test {
-<<<<<<< HEAD
-        ( $instructions: expr, $expected_result: expr, $expected_budget: expr, $type_change: expr  ) => {
-=======
-        ( $instructions: expr, $expected_result: expr, $expected_budget: expr, $enable_request_heap_frame_ix: expr ) => {
->>>>>>> 4293f11cf (feature gate to enable compute_budget::request_heap_frame on mainnetBeta (#30077))
+        ( $instructions: expr, $expected_result: expr, $expected_budget: expr, $type_change: expr, $enable_request_heap_frame_ix: expr) => {
             let payer_keypair = Keypair::new();
             let tx = SanitizedTransaction::from_transaction_for_tests(Transaction::new(
                 &[&payer_keypair],
@@ -288,18 +280,20 @@ mod tests {
             let result = compute_budget.process_instructions(
                 tx.message().program_instructions_iter(),
                 true,
-<<<<<<< HEAD
                 $type_change,
-=======
-                false, /*not support request_units_deprecated*/
                 $enable_request_heap_frame_ix,
->>>>>>> 4293f11cf (feature gate to enable compute_budget::request_heap_frame on mainnetBeta (#30077))
             );
             assert_eq!($expected_result, result);
             assert_eq!(compute_budget, $expected_budget);
         };
         ( $instructions: expr, $expected_result: expr, $expected_budget: expr) => {
-            test!($instructions, $expected_result, $expected_budget, true);
+            test!(
+                $instructions,
+                $expected_result,
+                $expected_budget,
+                true,
+                true
+            );
         };
     }
 
@@ -373,7 +367,8 @@ mod tests {
                 compute_unit_limit: DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT as u64 * 3,
                 ..ComputeBudget::default()
             },
-            false
+            false,
+            true,
         );
 
         // Prioritization fee
@@ -387,7 +382,8 @@ mod tests {
                 compute_unit_limit: 1,
                 ..ComputeBudget::default()
             },
-            false
+            false,
+            true,
         );
 
         test!(
@@ -415,7 +411,8 @@ mod tests {
                 compute_unit_limit: 1,
                 ..ComputeBudget::default()
             },
-            false
+            false,
+            true,
         );
 
         // HeapFrame
@@ -547,7 +544,8 @@ mod tests {
                 InstructionError::InvalidInstructionData,
             )),
             ComputeBudget::default(),
-            false
+            false,
+            true,
         );
 
         test!(
@@ -583,7 +581,8 @@ mod tests {
                 heap_size: Some(MIN_HEAP_FRAME_BYTES as usize),
                 ..ComputeBudget::default()
             },
-            false
+            false,
+            true,
         );
 
         // Duplicates
@@ -628,6 +627,7 @@ mod tests {
                 compute_unit_limit: 0,
                 ..ComputeBudget::default()
             },
+            true,
             false
         );
 
@@ -642,6 +642,7 @@ mod tests {
                 InstructionError::InvalidInstructionData
             )),
             ComputeBudget::default(),
+            true,
             false
         );
         test!(
@@ -654,6 +655,7 @@ mod tests {
                 InstructionError::InvalidInstructionData,
             )),
             ComputeBudget::default(),
+            true,
             false
         );
         test!(
@@ -668,6 +670,7 @@ mod tests {
                 InstructionError::InvalidInstructionData,
             )),
             ComputeBudget::default(),
+            true,
             false
         );
         test!(
@@ -682,6 +685,7 @@ mod tests {
                 InstructionError::InvalidInstructionData,
             )),
             ComputeBudget::default(),
+            true,
             false
         );
 
@@ -702,6 +706,7 @@ mod tests {
                 compute_unit_limit: DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT as u64 * 7,
                 ..ComputeBudget::default()
             },
+            true,
             false
         );
     }
