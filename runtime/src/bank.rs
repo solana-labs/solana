@@ -4408,7 +4408,7 @@ impl Bank {
                                 !self
                                     .feature_set
                                     .is_active(&remove_deprecated_request_unit_ix::id()),
-                                self.enable_request_heap_frame_ix(),
+                                true, // don't reject txs that use request heap size ix
                             );
                             compute_budget_process_transaction_time.stop();
                             saturating_add_assign!(
