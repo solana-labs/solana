@@ -5032,7 +5032,8 @@ impl Bank {
                     let mut account = self
                         .get_account_with_fixed_root(&pubkey)
                         .unwrap_or_default();
-                    if account.checked_add_lamports(rent_to_be_paid).is_err() {
+                    let distribution = account.checked_add_lamports(rent_to_be_paid);
+                    if distribution.is_err() {
                         // overflow adding lamports
                         self.capitalization.fetch_sub(rent_to_be_paid, Relaxed);
                         error!(
