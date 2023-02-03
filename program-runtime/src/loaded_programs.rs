@@ -1,3 +1,4 @@
+use std::fmt::{Debug, Formatter};
 use {
     crate::invoke_context::InvokeContext,
     solana_rbpf::{
@@ -29,10 +30,19 @@ pub enum BlockRelation {
     Unknown,
 }
 
-/// Maps relationship between two ForkIds.
+/// Maps relationship between two slots.
 pub trait ForkGraph {
     /// Returns the BlockRelation of A to B
     fn relationship(&self, a: Slot, b: Slot) -> BlockRelation;
+}
+
+/// Provides information about current working slot, and its ancestors
+pub trait WorkingSlot {
+    /// Returns the current slot value
+    fn current_slot(&self) -> Slot;
+
+    /// Returns true if the `other` slot is an ancestor of self, false otherwise
+    fn is_ancestor(&self, other: Slot) -> bool;
 }
 
 pub enum LoadedProgramType {
@@ -94,11 +104,18 @@ impl LoadedProgram {
     }
 }
 
+#[derive(Default)]
 pub struct LoadedPrograms {
     /// A two level index:
     ///
     /// Pubkey is the address of a program, multiple versions can coexists simultaneously under the same address (in different slots).
     entries: HashMap<Pubkey, Vec<Arc<LoadedProgram>>>,
+}
+
+impl Debug for LoadedPrograms {
+    fn fmt(&self, _f: &mut Formatter<'_>) -> std::fmt::Result {
+        todo!()
+    }
 }
 
 impl LoadedPrograms {
@@ -145,10 +162,9 @@ impl LoadedPrograms {
 
     /// Extracts a subset of the programs relevant to a transaction batch
     /// and returns which program accounts the accounts DB needs to load.
-    pub fn extract<F: ForkGraph>(
+    pub fn extract<S: WorkingSlot>(
         &self,
-        fork_graph: &F,
-        current_slot: Slot,
+        working_slot: &S,
         keys: impl Iterator<Item = Pubkey>,
     ) -> (HashMap<Pubkey, Arc<LoadedProgram>>, Vec<Pubkey>) {
         let mut missing = Vec::new();
@@ -156,10 +172,7 @@ impl LoadedPrograms {
             .filter_map(|key| {
                 if let Some(second_level) = self.entries.get(&key) {
                     for entry in second_level.iter().rev() {
-                        if matches!(
-                            fork_graph.relationship(entry.deployment_slot, current_slot),
-                            BlockRelation::Ancestor
-                        ) {
+                        if working_slot.is_ancestor(entry.deployment_slot) {
                             return Some((key, entry.clone()));
                         }
                     }

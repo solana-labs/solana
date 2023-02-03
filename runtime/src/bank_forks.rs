@@ -9,7 +9,7 @@ use {
     },
     log::*,
     solana_measure::measure::Measure,
-    solana_program_runtime::loaded_programs::{BlockRelation, ForkGraph},
+    solana_program_runtime::loaded_programs::{BlockRelation, ForkGraph, WorkingSlot},
     solana_sdk::{clock::Slot, feature_set, hash::Hash, timing},
     std::{
         collections::{hash_map::Entry, HashMap, HashSet},
@@ -423,6 +423,16 @@ impl BankForks {
         accounts_background_request_sender: &AbsRequestSender,
         highest_confirmed_root: Option<Slot>,
     ) -> Vec<Arc<Bank>> {
+        let program_cache_prune_start = Instant::now();
+        let root_bank = self
+            .banks
+            .get(&root)
+            .expect("root bank didn't exist in bank_forks");
+        root_bank
+            .loaded_programs_cache
+            .write()
+            .unwrap()
+            .prune(self, root);
         let set_root_start = Instant::now();
         let (removed_banks, set_root_metrics) = self.do_set_root_return_metrics(
             root,
@@ -492,6 +502,11 @@ impl BankForks {
             (
                 "prune_remove_ms",
                 set_root_metrics.timings.prune_remove_ms,
+                i64
+            ),
+            (
+                "program_cache_prune_ms",
+                timing::duration_as_ms(&program_cache_prune_start.elapsed()) as usize,
                 i64
             ),
             ("dropped_banks_len", set_root_metrics.dropped_banks_len, i64),
@@ -638,11 +653,9 @@ impl ForkGraph for BankForks {
                 (a == b)
                     .then_some(BlockRelation::Equal)
                     .or_else(|| {
-                        self.banks.get(&b).and_then(|bank| {
-                            bank.ancestors
-                                .contains_key(&a)
-                                .then_some(BlockRelation::Ancestor)
-                        })
+                        self.banks
+                            .get(&b)
+                            .and_then(|bank| bank.is_ancestor(a).then_some(BlockRelation::Ancestor))
                     })
                     .or_else(|| {
                         self.descendants.get(&b).and_then(|slots| {
