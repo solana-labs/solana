@@ -4627,15 +4627,21 @@ mod tests {
         while slot < 4 {
             let bank = Arc::new(Bank::new_from_parent(&bank, &collecter_id, slot));
 
+            while !bank.is_complete() {
+                bank.fill_bank_with_ticks_for_tests();
+            }
+
+            bank.squash();
+            bank.force_flush_accounts_cache();
+
             let snapshot_storages = bank.get_snapshot_storages(None);
-            // this slot_deltas assignment causes panic  at 'Missing accounts delta hash entry for slot 1'
-            // let slot_deltas = bank.status_cache.read().unwrap().root_slot_deltas();
+            let slot_deltas = bank.status_cache.read().unwrap().root_slot_deltas();
             add_bank_snapshot(
                 bank_snapshots_dir,
                 &bank,
                 &snapshot_storages,
                 snapshot_version,
-                vec![], // slot_deltas,
+                slot_deltas,
             )
             .unwrap();
 
