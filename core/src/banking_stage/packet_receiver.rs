@@ -1,6 +1,7 @@
 use {
     super::BankingStageStats,
     crate::{
+        banking_trace::BankingPacketReceiver,
         immutable_deserialized_packet::ImmutableDeserializedPacket,
         leader_slot_banking_stage_metrics::LeaderSlotMetricsTracker,
         packet_deserializer::{PacketDeserializer, ReceivePacketResults},
@@ -13,13 +14,22 @@ use {
     std::{sync::atomic::Ordering, time::Duration},
 };
 
-pub struct PacketReceiver;
+pub struct PacketReceiver {
+    id: u32,
+    packet_deserializer: PacketDeserializer,
+}
 
 impl PacketReceiver {
+    pub fn new(id: u32, banking_packet_receiver: BankingPacketReceiver) -> Self {
+        Self {
+            id,
+            packet_deserializer: PacketDeserializer::new(banking_packet_receiver),
+        }
+    }
+
     /// Receive incoming packets, push into unprocessed buffer with packet indexes
     pub fn receive_and_buffer_packets(
-        packet_deserializer: &mut PacketDeserializer,
-        id: u32,
+        &mut self,
         unprocessed_transaction_storage: &mut UnprocessedTransactionStorage,
         banking_stage_stats: &mut BankingStageStats,
         tracer_packet_stats: &mut TracerPacketStats,
@@ -28,15 +38,14 @@ impl PacketReceiver {
         let (result, recv_time_us) = measure_us!({
             let recv_timeout = Self::get_receive_timeout(unprocessed_transaction_storage);
             let mut recv_and_buffer_measure = Measure::start("recv_and_buffer");
-            packet_deserializer
+            self.packet_deserializer
                 .receive_packets(
                     recv_timeout,
                     unprocessed_transaction_storage.max_receive_size(),
                 )
                 .map(|receive_packet_results| {
-                    Self::buffer_packets(
+                    self.buffer_packets(
                         receive_packet_results,
-                        id,
                         unprocessed_transaction_storage,
                         banking_stage_stats,
                         tracer_packet_stats,
@@ -73,20 +82,20 @@ impl PacketReceiver {
     }
 
     fn buffer_packets(
+        &self,
         ReceivePacketResults {
             deserialized_packets,
             new_tracer_stats_option,
             passed_sigverify_count,
             failed_sigverify_count,
         }: ReceivePacketResults,
-        id: u32,
         unprocessed_transaction_storage: &mut UnprocessedTransactionStorage,
         banking_stage_stats: &mut BankingStageStats,
         tracer_packet_stats: &mut TracerPacketStats,
         slot_metrics_tracker: &mut LeaderSlotMetricsTracker,
     ) {
         let packet_count = deserialized_packets.len();
-        debug!("@{:?} txs: {} id: {}", timestamp(), packet_count, id);
+        debug!("@{:?} txs: {} id: {}", timestamp(), packet_count, self.id);
 
         if let Some(new_sigverify_stats) = &new_tracer_stats_option {
             tracer_packet_stats.aggregate_sigverify_tracer_packet_stats(new_sigverify_stats);

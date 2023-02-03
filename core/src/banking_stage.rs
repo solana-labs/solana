@@ -18,7 +18,6 @@ use {
         leader_slot_banking_stage_timing_metrics::{
             LeaderExecuteAndCommitTimings, RecordTransactionsTimings,
         },
-        packet_deserializer::PacketDeserializer,
         qos_service::QosService,
         tracer_packet_stats::TracerPacketStats,
         unprocessed_packet_batches::*,
@@ -411,9 +410,9 @@ impl BankingStage {
             .unwrap_or(false);
         // Many banks that process transactions in parallel.
         let bank_thread_hdls: Vec<JoinHandle<()>> = (0..num_threads)
-            .map(|i| {
+            .map(|id| {
                 let (packet_receiver, unprocessed_transaction_storage) =
-                    match (i, should_split_voting_threads) {
+                    match (id, should_split_voting_threads) {
                         (0, false) => (
                             gossip_vote_receiver.clone(),
                             UnprocessedTransactionStorage::new_transaction_storage(
@@ -451,7 +450,7 @@ impl BankingStage {
                         ),
                     };
 
-                let mut packet_deserializer = PacketDeserializer::new(packet_receiver);
+                let mut packet_receiver = PacketReceiver::new(id, packet_receiver);
                 let poh_recorder = poh_recorder.clone();
                 let transaction_status_sender = transaction_status_sender.clone();
                 let replay_vote_sender = replay_vote_sender.clone();
@@ -466,14 +465,14 @@ impl BankingStage {
                 );
 
                 Builder::new()
-                    .name(format!("solBanknStgTx{i:02}"))
+                    .name(format!("solBanknStgTx{id:02}"))
                     .spawn(move || {
                         Self::process_loop(
-                            &mut packet_deserializer,
+                            &mut packet_receiver,
                             &decision_maker,
                             &forwarder,
                             &poh_recorder,
-                            i,
+                            id,
                             transaction_status_sender,
                             replay_vote_sender,
                             log_messages_bytes_limit,
@@ -707,7 +706,7 @@ impl BankingStage {
 
     #[allow(clippy::too_many_arguments)]
     fn process_loop(
-        packet_deserializer: &mut PacketDeserializer,
+        packet_receiver: &mut PacketReceiver,
         decision_maker: &DecisionMaker,
         forwarder: &Forwarder,
         poh_recorder: &Arc<RwLock<PohRecorder>>,
@@ -752,9 +751,7 @@ impl BankingStage {
 
             tracer_packet_stats.report(1000);
 
-            match PacketReceiver::receive_and_buffer_packets(
-                packet_deserializer,
-                id,
+            match packet_receiver.receive_and_buffer_packets(
                 &mut unprocessed_transaction_storage,
                 &mut banking_stage_stats,
                 &mut tracer_packet_stats,
