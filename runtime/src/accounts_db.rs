@@ -17334,9 +17334,8 @@ pub mod tests {
         );
 
         // create a 2nd ancient append vec at 'next_slot'
-        let tf = crate::append_vec::test_utils::get_append_vec_path("test_shrink_ancient");
         let next_slot = max_slot_inclusive + 1;
-        create_storages_and_update_index(&db, &tf, next_slot, num_normal_slots, true, None);
+        create_storages_and_update_index(&db, None, next_slot, num_normal_slots, true, None);
         let max_slot_inclusive = next_slot + (num_normal_slots as Slot);
 
         let initial_accounts = get_all_accounts(&db, ancient_slot..(max_slot_inclusive + 1));
@@ -17513,7 +17512,7 @@ pub mod tests {
 
     pub(crate) fn create_storages_and_update_index(
         db: &AccountsDb,
-        tf: &TempFile,
+        tf: Option<&TempFile>,
         starting_slot: Slot,
         num_slots: usize,
         alive: bool,
@@ -17522,8 +17521,19 @@ pub mod tests {
         if num_slots == 0 {
             return;
         }
+
+        let local_tf = (tf.is_none()).then(|| {
+            crate::append_vec::test_utils::get_append_vec_path("create_storages_and_update_index")
+        });
+        let tf = tf.unwrap_or_else(|| local_tf.as_ref().unwrap());
+
         let write_version1 = 0;
-        let starting_id = 999;
+        let starting_id = db
+            .storage
+            .iter()
+            .map(|storage| storage.1.append_vec_id())
+            .max()
+            .unwrap_or(999);
         for i in 0..num_slots {
             let id = starting_id + (i as AppendVecId);
             let pubkey1 = solana_sdk::pubkey::new_rand();
@@ -17563,10 +17573,7 @@ pub mod tests {
         // verify we create an ancient appendvec that has alive accounts and does not have dead accounts
 
         let slot1 = 1;
-        let tf = crate::append_vec::test_utils::get_append_vec_path(
-            "get_one_ancient_append_vec_and_others",
-        );
-        create_storages_and_update_index(&db, &tf, slot1, num_slots, alive, account_data_size);
+        create_storages_and_update_index(&db, None, slot1, num_slots, alive, account_data_size);
 
         let slot1 = slot1 as Slot;
         (db, slot1)
