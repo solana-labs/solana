@@ -193,6 +193,8 @@ mod address_lookup_table;
 mod builtin_programs;
 mod metrics;
 mod sysvar_cache;
+#[cfg(test)]
+mod tests;
 mod transaction_account_state_info;
 
 pub const SECONDS_PER_YEAR: f64 = 365.25 * 24.0 * 60.0 * 60.0;
@@ -7889,7 +7891,11 @@ impl Drop for Bank {
 
 /// utility function used for testing and benchmarking.
 pub mod test_utils {
-    use {super::Bank, solana_sdk::hash::hashv};
+    use {
+        super::Bank,
+        solana_sdk::{hash::hashv, pubkey::Pubkey},
+        solana_vote_program::vote_state::{self, BlockTimestamp, VoteStateVersions},
+    };
     pub fn goto_end_of_slot(bank: &mut Bank) {
         let mut tick_hash = bank.last_blockhash();
         loop {
@@ -7901,6 +7907,7 @@ pub mod test_utils {
             }
         }
     }
+<<<<<<< HEAD
 }
 
 #[cfg(test)]
@@ -16334,6 +16341,8 @@ pub(crate) mod tests {
         // Lamports in the old token account were burnt
         assert_eq!(bank.capitalization(), original_capitalization - 100);
     }
+=======
+>>>>>>> 8312141f8 (Move bank tests to separate file (#29912))
 
     pub fn update_vote_account_timestamp(
         timestamp: BlockTimestamp,
@@ -16347,6 +16356,7 @@ pub(crate) mod tests {
         vote_state::to(&versioned, &mut vote_account).unwrap();
         bank.store_account(vote_pubkey, &vote_account);
     }
+<<<<<<< HEAD
 
     fn min_rent_exempt_balance_for_sysvars(bank: &Bank, sysvar_ids: &[Pubkey]) -> u64 {
         sysvar_ids
@@ -20259,4 +20269,6 @@ pub(crate) mod tests {
             RENT_EXEMPT_RENT_EPOCH
         );
     }
+=======
+>>>>>>> 8312141f8 (Move bank tests to separate file (#29912))
 }
