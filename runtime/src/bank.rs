@@ -120,8 +120,8 @@ use {
         feature,
         feature_set::{
             self, disable_fee_calculator, enable_early_verification_of_account_modifications,
-            remove_congestion_multiplier_from_fee_calculation, remove_deprecated_request_unit_ix,
-            use_default_units_in_fee_calculation, FeatureSet,
+            enable_request_heap_frame_ix, remove_congestion_multiplier_from_fee_calculation,
+            remove_deprecated_request_unit_ix, use_default_units_in_fee_calculation, FeatureSet,
         },
         fee::FeeStructure,
         fee_calculator::{FeeCalculator, FeeRateGovernor},
@@ -3445,6 +3445,7 @@ impl Bank {
                 .is_active(&remove_deprecated_request_unit_ix::id()),
             self.feature_set
                 .is_active(&remove_congestion_multiplier_from_fee_calculation::id()),
+            self.enable_request_heap_frame_ix(),
         ))
     }
 
@@ -3491,6 +3492,7 @@ impl Bank {
                 .is_active(&remove_deprecated_request_unit_ix::id()),
             self.feature_set
                 .is_active(&remove_congestion_multiplier_from_fee_calculation::id()),
+            self.enable_request_heap_frame_ix(),
         )
     }
 
@@ -4297,6 +4299,15 @@ impl Bank {
         }
     }
 
+    // A cluster specific feature gate, when not activated it keeps v1.13 behavior in mainnet-beta;
+    // once activated for v1.14+, it allows compute_budget::request_heap_frame and
+    // compute_budget::set_compute_unit_price co-exist in same transaction.
+    fn enable_request_heap_frame_ix(&self) -> bool {
+        self.feature_set
+            .is_active(&enable_request_heap_frame_ix::id())
+            || self.cluster_type() != ClusterType::MainnetBeta
+    }
+
     #[allow(clippy::type_complexity)]
     pub fn load_and_execute_transactions(
         &self,
@@ -4397,6 +4408,7 @@ impl Bank {
                                 !self
                                     .feature_set
                                     .is_active(&remove_deprecated_request_unit_ix::id()),
+                                true, // don't reject txs that use request heap size ix
                             );
                             compute_budget_process_transaction_time.stop();
                             saturating_add_assign!(
@@ -4676,6 +4688,7 @@ impl Bank {
         use_default_units_per_instruction: bool,
         support_request_units_deprecated: bool,
         remove_congestion_multiplier: bool,
+        enable_request_heap_frame_ix: bool,
     ) -> u64 {
         // Fee based on compute units and signatures
         let congestion_multiplier = if lamports_per_signature == 0 {
@@ -4694,6 +4707,7 @@ impl Bank {
                 message.program_instructions_iter(),
                 use_default_units_per_instruction,
                 support_request_units_deprecated,
+                enable_request_heap_frame_ix,
             )
             .unwrap_or_default();
         let prioritization_fee = prioritization_fee_details.get_fee();
@@ -4764,6 +4778,7 @@ impl Bank {
                         .is_active(&remove_deprecated_request_unit_ix::id()),
                     self.feature_set
                         .is_active(&remove_congestion_multiplier_from_fee_calculation::id()),
+                    self.enable_request_heap_frame_ix(),
                 );
 
                 // In case of instruction error, even though no accounts

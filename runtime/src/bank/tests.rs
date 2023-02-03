@@ -3036,6 +3036,7 @@ fn test_bank_tx_compute_unit_fee() {
         true,
         false,
         true,
+        true,
     );
 
     let (expected_fee_collected, expected_fee_burned) =
@@ -3218,6 +3219,7 @@ fn test_bank_blockhash_compute_unit_fee_structure() {
         true,
         false,
         true,
+        true,
     );
     assert_eq!(
         bank.get_balance(&mint_keypair.pubkey()),
@@ -3236,6 +3238,7 @@ fn test_bank_blockhash_compute_unit_fee_structure() {
         &FeeStructure::default(),
         true,
         false,
+        true,
         true,
     );
     assert_eq!(
@@ -3350,6 +3353,7 @@ fn test_filter_program_errors_and_collect_compute_unit_fee() {
                         &FeeStructure::default(),
                         true,
                         false,
+                        true,
                         true,
                     ) * 2
                 )
@@ -10496,6 +10500,7 @@ fn test_calculate_fee() {
             true,
             false,
             true,
+            true,
         ),
         0
     );
@@ -10511,6 +10516,7 @@ fn test_calculate_fee() {
             },
             true,
             false,
+            true,
             true,
         ),
         1
@@ -10533,6 +10539,7 @@ fn test_calculate_fee() {
             true,
             false,
             true,
+            true,
         ),
         4
     );
@@ -10552,7 +10559,7 @@ fn test_calculate_fee_compute_units() {
     let message =
         SanitizedMessage::try_from(Message::new(&[], Some(&Pubkey::new_unique()))).unwrap();
     assert_eq!(
-        Bank::calculate_fee(&message, 1, &fee_structure, true, false, true),
+        Bank::calculate_fee(&message, 1, &fee_structure, true, false, true, true),
         max_fee + lamports_per_signature
     );
 
@@ -10563,7 +10570,7 @@ fn test_calculate_fee_compute_units() {
     let message =
         SanitizedMessage::try_from(Message::new(&[ix0, ix1], Some(&Pubkey::new_unique()))).unwrap();
     assert_eq!(
-        Bank::calculate_fee(&message, 1, &fee_structure, true, false, true),
+        Bank::calculate_fee(&message, 1, &fee_structure, true, false, true, true),
         max_fee + 3 * lamports_per_signature
     );
 
@@ -10596,7 +10603,7 @@ fn test_calculate_fee_compute_units() {
             Some(&Pubkey::new_unique()),
         ))
         .unwrap();
-        let fee = Bank::calculate_fee(&message, 1, &fee_structure, true, false, true);
+        let fee = Bank::calculate_fee(&message, 1, &fee_structure, true, false, true, true);
         assert_eq!(
             fee,
             lamports_per_signature + prioritization_fee_details.get_fee()
@@ -10635,7 +10642,7 @@ fn test_calculate_fee_secp256k1() {
     ))
     .unwrap();
     assert_eq!(
-        Bank::calculate_fee(&message, 1, &fee_structure, true, false, true),
+        Bank::calculate_fee(&message, 1, &fee_structure, true, false, true, true),
         2
     );
 
@@ -10647,7 +10654,7 @@ fn test_calculate_fee_secp256k1() {
     ))
     .unwrap();
     assert_eq!(
-        Bank::calculate_fee(&message, 1, &fee_structure, true, false, true),
+        Bank::calculate_fee(&message, 1, &fee_structure, true, false, true, true),
         11
     );
 }
@@ -12378,6 +12385,7 @@ fn test_calculate_fee_with_congestion_multiplier() {
                 true,
                 false,
                 remove_congestion_multiplier,
+                true,
             ),
             signature_fee * signature_count
         );
@@ -12400,8 +12408,65 @@ fn test_calculate_fee_with_congestion_multiplier() {
                 true,
                 false,
                 remove_congestion_multiplier,
+                true,
             ),
             signature_fee * signature_count / denominator
         );
     }
+}
+
+#[test]
+fn test_calculate_fee_with_request_heap_frame_flag() {
+    let key0 = Pubkey::new_unique();
+    let key1 = Pubkey::new_unique();
+    let lamports_per_signature: u64 = 5_000;
+    let signature_fee: u64 = 10;
+    let request_cu: u64 = 1;
+    let lamports_per_cu: u64 = 5;
+    let fee_structure = FeeStructure {
+        lamports_per_signature: signature_fee,
+        ..FeeStructure::default()
+    };
+    let message = SanitizedMessage::try_from(Message::new(
+        &[
+            system_instruction::transfer(&key0, &key1, 1),
+            ComputeBudgetInstruction::set_compute_unit_limit(request_cu as u32),
+            ComputeBudgetInstruction::request_heap_frame(40 * 1024),
+            ComputeBudgetInstruction::set_compute_unit_price(lamports_per_cu * 1_000_000),
+        ],
+        Some(&key0),
+    ))
+    .unwrap();
+
+    // assert when enable_request_heap_frame_ix is enabled, prioritization fee will be counted
+    // into transaction fee
+    let mut enable_request_heap_frame_ix = true;
+    assert_eq!(
+        Bank::calculate_fee(
+            &message,
+            lamports_per_signature,
+            &fee_structure,
+            true,
+            false,
+            true,
+            enable_request_heap_frame_ix,
+        ),
+        signature_fee + request_cu * lamports_per_cu
+    );
+
+    // assert when enable_request_heap_frame_ix is disabled (an v1.13 behavior), prioritization fee will not be counted
+    // into transaction fee
+    enable_request_heap_frame_ix = false;
+    assert_eq!(
+        Bank::calculate_fee(
+            &message,
+            lamports_per_signature,
+            &fee_structure,
+            true,
+            false,
+            true,
+            enable_request_heap_frame_ix,
+        ),
+        signature_fee
+    );
 }
