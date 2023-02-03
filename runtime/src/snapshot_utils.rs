@@ -4614,6 +4614,7 @@ mod tests {
 
     fn test_get_highest_full_snapshot_slot_and_path() {
         solana_logger::setup();
+
         let genesis_config = GenesisConfig::default();
         let bank0 = Bank::new_for_tests(&genesis_config);
         let mut bank_forks = BankForks::new(bank0);
@@ -4621,16 +4622,17 @@ mod tests {
         let tmp_dir = tempfile::TempDir::new().unwrap();
         let bank_snapshots_dir = tmp_dir.path();
         let collecter_id = Pubkey::new_unique();
-
         let snapshot_version = SnapshotVersion::default();
 
         for slot in 0..4 {
+            // prepare the bank
             let parent_bank = bank_forks.get(slot).unwrap();
             let bank = Bank::new_from_parent(&parent_bank, &collecter_id, slot + 1);
             bank.fill_bank_with_ticks_for_tests();
             bank.squash();
             bank.force_flush_accounts_cache();
 
+            // generate the bank snapshot directory for slot+1
             let snapshot_storages = bank.get_snapshot_storages(None);
             let slot_deltas = bank.status_cache.read().unwrap().root_slot_deltas();
             add_bank_snapshot(
@@ -4657,7 +4659,5 @@ mod tests {
         let (slot, _path) = get_highest_full_snapshot_slot_and_path(bank_snapshots_dir).unwrap();
 
         assert_eq!(slot, 3);
-
-        info!("done");
     }
 }
