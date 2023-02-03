@@ -92,8 +92,14 @@ impl AccountStorage {
 
     /// remove the append vec at 'slot'
     /// returns the current contents
-    pub(crate) fn remove(&self, slot: &Slot) -> Option<Arc<AccountStorageEntry>> {
-        assert!(self.shrink_in_progress_map.is_empty());
+    pub(crate) fn remove(
+        &self,
+        slot: &Slot,
+        shrink_can_be_active: bool,
+    ) -> Option<Arc<AccountStorageEntry>> {
+        if !shrink_can_be_active {
+            assert!(self.shrink_in_progress_map.is_empty());
+        }
         self.map.remove(slot).map(|(_, entry)| entry.storage)
     }
 
@@ -206,6 +212,7 @@ impl<'a> Iterator for AccountStorageIter<'a> {
 
 /// exists while there is a shrink in progress
 /// keeps track of the 'new_store' being created and the 'old_store' being replaced.
+#[derive(Debug)]
 pub(crate) struct ShrinkInProgress<'a> {
     storage: &'a AccountStorage,
     /// old store which will be shrunk and replaced
@@ -373,7 +380,7 @@ pub(crate) mod tests {
         storage
             .shrink_in_progress_map
             .insert(0, storage.get_test_storage());
-        storage.remove(&0);
+        storage.remove(&0, false);
     }
 
     #[test]

@@ -153,12 +153,12 @@ pub enum IncludeSlotInHash {
     IrrelevantAssertOnUse,
 }
 
-#[derive(Debug, Default, Clone, Copy)]
+#[derive(Debug, Default, Clone, Copy, Eq, PartialEq)]
 pub enum CreateAncientStorage {
     /// ancient storages are created by appending
-    #[default]
     Append,
     /// ancient storages are created by 1-shot write to pack multiple accounts together more efficiently with new formats
+    #[default] // temporary
     Pack,
 }
 
@@ -500,7 +500,7 @@ impl Default for FillerAccountsConfig {
     }
 }
 
-const ANCIENT_APPEND_VEC_DEFAULT_OFFSET: Option<i64> = Some(-10_000);
+const ANCIENT_APPEND_VEC_DEFAULT_OFFSET: Option<i64> = Some(100_000);
 
 #[derive(Debug, Default, Clone)]
 pub struct AccountsDbConfig {
@@ -1098,7 +1098,7 @@ impl AccountStorageEntry {
         self.accounts.accounts(0)
     }
 
-    fn remove_account(&self, num_bytes: usize, reset_accounts: bool) -> usize {
+    pub(crate) fn remove_account(&self, num_bytes: usize, reset_accounts: bool) -> usize {
         let mut count_and_status = self.count_and_status.write().unwrap();
         let (mut count, mut status) = *count_and_status;
 
@@ -1313,7 +1313,6 @@ pub struct AccountsDb {
     /// from AccountsDbConfig
     pub(crate) assert_stakes_cache_consistency: bool,
 
-    #[allow(dead_code)]
     /// from AccountsDbConfig
     create_ancient_storage: CreateAncientStorage,
 
@@ -1877,13 +1876,12 @@ pub(crate) struct ShrinkAncientStats {
 
 #[derive(Debug, Default)]
 pub(crate) struct ShrinkStatsSub {
-    store_accounts_timing: StoreAccountsTiming,
-    rewrite_elapsed_us: u64,
-    create_and_insert_store_elapsed_us: u64,
+    pub(crate) store_accounts_timing: StoreAccountsTiming,
+    pub(crate) rewrite_elapsed_us: u64,
+    pub(crate) create_and_insert_store_elapsed_us: u64,
 }
 
 impl ShrinkStatsSub {
-    #[allow(dead_code)]
     pub(crate) fn accumulate(&mut self, other: &Self) {
         self.store_accounts_timing
             .accumulate(&other.store_accounts_timing);
@@ -3891,6 +3889,7 @@ impl AccountsDb {
         // Purge old, overwritten storage entries
         let dead_storages = self.mark_dirty_dead_stores(
             shrink_collect.slot,
+            // should this be new?
             // If all accounts are zero lamports, then we want to mark the entire OLD append vec as dirty.
             // otherwise, we'll call 'add_uncleaned_pubkeys_after_shrink' just on the unref'd keys below.
             shrink_collect.all_are_zero_lamports,
@@ -4061,7 +4060,7 @@ impl AccountsDb {
             // shrink is in progress, so 1 new append vec to keep, 1 old one to throw away
             not_retaining_store(shrink_in_progress.old_storage());
             // dropping 'shrink_in_progress' removes the old append vec that was being shrunk from db's storage
-        } else if let Some(store) = self.storage.remove(&slot) {
+        } else if let Some(store) = self.storage.remove(&slot, true) {
             // no shrink in progress, so all append vecs in this slot are dead
             not_retaining_store(&store);
         }
@@ -4274,10 +4273,17 @@ impl AccountsDb {
         }
 
         let can_randomly_shrink = true;
-        self.combine_ancient_slots(
-            self.get_sorted_potential_ancient_slots(),
-            can_randomly_shrink,
-        );
+        if self.create_ancient_storage == CreateAncientStorage::Pack {
+            self.combine_ancient_slots_new(
+                self.get_sorted_potential_ancient_slots(),
+                can_randomly_shrink,
+            );
+        } else {
+            self.combine_ancient_slots(
+                self.get_sorted_potential_ancient_slots(),
+                can_randomly_shrink,
+            );
+        }
     }
 
     #[cfg(test)]
@@ -4463,7 +4469,7 @@ impl AccountsDb {
             );
         }
 
-        self.handle_dropped_roots_for_ancient(dropped_roots);
+        self.handle_dropped_roots_for_ancient(dropped_roots.into_iter());
 
         total.stop();
         self.shrink_ancient_stats
@@ -4577,16 +4583,17 @@ impl AccountsDb {
 
     /// each slot in 'dropped_roots' has been combined into an ancient append vec.
     /// We are done with the slot now forever.
-    pub(crate) fn handle_dropped_roots_for_ancient(&self, dropped_roots: Vec<Slot>) {
-        if !dropped_roots.is_empty() {
-            dropped_roots.iter().for_each(|slot| {
-                self.accounts_index
-                    .clean_dead_slot(*slot, &mut AccountsIndexRootsStats::default());
-                self.remove_bank_hash_info(slot);
-                // the storage has been removed from this slot and recycled or dropped
-                assert!(self.storage.remove(slot).is_none());
-            });
-        }
+    pub(crate) fn handle_dropped_roots_for_ancient(
+        &self,
+        dropped_roots: impl Iterator<Item = Slot>,
+    ) {
+        dropped_roots.for_each(|slot| {
+            self.accounts_index
+                .clean_dead_slot(slot, &mut AccountsIndexRootsStats::default());
+            self.remove_bank_hash_info(&slot);
+            // the storage has been removed from this slot and recycled or dropped
+            assert!(self.storage.remove(&slot, false).is_none());
+        });
     }
 
     /// add all 'pubkeys' into the set of pubkeys that are 'uncleaned', associated with 'slot'
@@ -5720,7 +5727,7 @@ impl AccountsDb {
         let mut remove_storage_entries_elapsed = Measure::start("remove_storage_entries_elapsed");
         for remove_slot in removed_slots {
             // Remove the storage entries and collect some metrics
-            if let Some(store) = self.storage.remove(remove_slot) {
+            if let Some(store) = self.storage.remove(remove_slot, false) {
                 {
                     total_removed_storage_entries += 1;
                     total_removed_stored_bytes += store.accounts.capacity();
@@ -9439,7 +9446,7 @@ pub mod tests {
             )
         }
 
-        fn get_storage_for_slot(&self, slot: Slot) -> Option<Arc<AccountStorageEntry>> {
+        pub(crate) fn get_storage_for_slot(&self, slot: Slot) -> Option<Arc<AccountStorageEntry>> {
             self.storage.get_slot_storage_entry(slot)
         }
 
@@ -12670,7 +12677,7 @@ pub mod tests {
             db.store_for_tests(base_slot, &[(&key, &account)]);
             if pass == 0 {
                 db.add_root_and_flush_write_cache(base_slot);
-                db.storage.remove(&base_slot);
+                db.storage.remove(&base_slot, false);
                 assert!(db.get_snapshot_storages(..=after_slot, None).0.is_empty());
                 continue;
             }
@@ -17108,7 +17115,7 @@ pub mod tests {
         }
     }
 
-    const CAN_RANDOMLY_SHRINK_FALSE: bool = false;
+    pub(crate) const CAN_RANDOMLY_SHRINK_FALSE: bool = false;
 
     #[test]
     fn test_combine_ancient_slots_empty() {
@@ -17125,7 +17132,10 @@ pub mod tests {
         }
     }
 
-    fn get_all_accounts(db: &AccountsDb, slots: Range<Slot>) -> Vec<(Pubkey, AccountSharedData)> {
+    pub(crate) fn get_all_accounts(
+        db: &AccountsDb,
+        slots: Range<Slot>,
+    ) -> Vec<(Pubkey, AccountSharedData)> {
         slots
             .filter_map(|slot| {
                 let storage = db.storage.get_slot_storage_entry(slot);
@@ -17141,7 +17151,7 @@ pub mod tests {
             .collect::<Vec<_>>()
     }
 
-    fn compare_all_accounts(
+    pub(crate) fn compare_all_accounts(
         one: &[(Pubkey, AccountSharedData)],
         two: &[(Pubkey, AccountSharedData)],
     ) {
@@ -17297,7 +17307,7 @@ pub mod tests {
         assert!(db.storage.is_empty_entry(next_slot));
         // this removes the storages entry completely from the hashmap for 'next_slot'.
         // Otherwise, we have a zero length vec in that hashmap
-        db.handle_dropped_roots_for_ancient(dropped_roots);
+        db.handle_dropped_roots_for_ancient(dropped_roots.into_iter());
         assert!(db.storage.get_slot_storage_entry(next_slot).is_none());
 
         // include all the slots we put into the ancient append vec - they should contain nothing
@@ -17539,7 +17549,7 @@ pub mod tests {
     fn test_handle_dropped_roots_for_ancient() {
         solana_logger::setup();
         let db = AccountsDb::new_single_for_tests();
-        db.handle_dropped_roots_for_ancient(Vec::default());
+        db.handle_dropped_roots_for_ancient(Vec::default().into_iter());
         let slot0 = 0;
         let dropped_roots = vec![slot0];
         assert!(db.get_bank_hash_stats(slot0).is_some());
@@ -17547,7 +17557,7 @@ pub mod tests {
         db.accounts_index.add_uncleaned_roots([slot0].into_iter());
         assert!(db.accounts_index.is_uncleaned_root(slot0));
         assert!(db.accounts_index.is_alive_root(slot0));
-        db.handle_dropped_roots_for_ancient(dropped_roots);
+        db.handle_dropped_roots_for_ancient(dropped_roots.into_iter());
         assert!(db.get_bank_hash_stats(slot0).is_none());
         assert!(!db.accounts_index.is_uncleaned_root(slot0));
         assert!(!db.accounts_index.is_alive_root(slot0));
@@ -17573,7 +17583,7 @@ pub mod tests {
         let slot0 = 0;
         let dropped_roots = vec![slot0];
         insert_store(&db, entry);
-        db.handle_dropped_roots_for_ancient(dropped_roots);
+        db.handle_dropped_roots_for_ancient(dropped_roots.into_iter());
     }
 
     #[test]
