@@ -8,14 +8,12 @@ use {
         transaction::{Transaction, TransactionError},
         transport::Result as TransportResult,
     },
-    solana_tpu_client::tpu_client::temporary_pub::Result,
+    solana_tpu_client::tpu_client::{temporary_pub::Result, TpuClient as BackendTpuClient},
     std::sync::Arc,
 };
 pub use {
     crate::nonblocking::tpu_client::TpuSenderError,
-    solana_tpu_client::tpu_client::{
-        TpuClient as BackendTpuClient, TpuClientConfig, DEFAULT_FANOUT_SLOTS, MAX_FANOUT_SLOTS,
-    },
+    solana_tpu_client::tpu_client::{TpuClientConfig, DEFAULT_FANOUT_SLOTS, MAX_FANOUT_SLOTS},
 };
 
 /// Client which sends transactions directly to the current leader's TPU port over UDP.
