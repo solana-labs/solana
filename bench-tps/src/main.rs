@@ -116,7 +116,7 @@ fn create_client(
                     rpc_client,
                     websocket_url,
                     TpuClientConfig::default(),
-                    Arc::new(connection_cache),
+                    Arc::new(connection_cache.into()),
                 )
                 .unwrap_or_else(|err| {
                     eprintln!("Could not create TpuClient {err:?}");
