@@ -108,7 +108,7 @@ use {
         feature_set::{
             self, add_set_compute_unit_price_ix, default_units_per_instruction,
             disable_fee_calculator, enable_early_verification_of_account_modifications,
-            use_default_units_in_fee_calculation, FeatureSet,
+            enable_request_heap_frame_ix, use_default_units_in_fee_calculation, FeatureSet,
         },
         fee::FeeStructure,
         fee_calculator::{FeeCalculator, FeeRateGovernor},
@@ -3474,6 +3474,7 @@ impl Bank {
                 .is_active(&add_set_compute_unit_price_ix::id()),
             self.feature_set
                 .is_active(&use_default_units_in_fee_calculation::id()),
+            self.enable_request_heap_frame_ix(),
         ))
     }
 
@@ -3517,6 +3518,7 @@ impl Bank {
                 .is_active(&add_set_compute_unit_price_ix::id()),
             self.feature_set
                 .is_active(&use_default_units_in_fee_calculation::id()),
+            self.enable_request_heap_frame_ix(),
         )
     }
 
@@ -4252,6 +4254,15 @@ impl Bank {
         }
     }
 
+    // A cluster specific feature gate, when not activated it keeps v1.13 behavior in mainnet-beta;
+    // once activated for v1.14+, it allows compute_budget::request_heap_frame and
+    // compute_budget::set_compute_unit_price co-exist in same transaction.
+    fn enable_request_heap_frame_ix(&self) -> bool {
+        self.feature_set
+            .is_active(&enable_request_heap_frame_ix::id())
+            || self.cluster_type() != ClusterType::MainnetBeta
+    }
+
     #[allow(clippy::type_complexity)]
     pub fn load_and_execute_transactions(
         &self,
@@ -4357,6 +4368,7 @@ impl Bank {
                             tx.message().program_instructions_iter(),
                             feature_set.is_active(&default_units_per_instruction::id()),
                             feature_set.is_active(&add_set_compute_unit_price_ix::id()),
+                            true, // don't reject txs that use request heap size ix
                         );
                         compute_budget_process_transaction_time.stop();
                         saturating_add_assign!(
@@ -4643,6 +4655,7 @@ impl Bank {
         fee_structure: &FeeStructure,
         support_set_compute_unit_price_ix: bool,
         use_default_units_per_instruction: bool,
+        enable_request_heap_frame_ix: bool,
     ) -> u64 {
         // Fee based on compute units and signatures
         const BASE_CONGESTION: f64 = 5_000.0;
@@ -4659,6 +4672,7 @@ impl Bank {
                 message.program_instructions_iter(),
                 use_default_units_per_instruction,
                 support_set_compute_unit_price_ix,
+                enable_request_heap_frame_ix,
             )
             .unwrap_or_default();
         let prioritization_fee = prioritization_fee_details.get_fee();
@@ -4726,6 +4740,7 @@ impl Bank {
                         .is_active(&add_set_compute_unit_price_ix::id()),
                     self.feature_set
                         .is_active(&use_default_units_in_fee_calculation::id()),
+                    self.enable_request_heap_frame_ix(),
                 );
 
                 // In case of instruction error, even though no accounts
@@ -10690,6 +10705,7 @@ pub(crate) mod tests {
             &FeeStructure::default(),
             true,
             true,
+            true,
         );
 
         let (expected_fee_collected, expected_fee_burned) =
@@ -10872,6 +10888,7 @@ pub(crate) mod tests {
             &FeeStructure::default(),
             true,
             true,
+            true,
         );
         assert_eq!(
             bank.get_balance(&mint_keypair.pubkey()),
@@ -10888,6 +10905,7 @@ pub(crate) mod tests {
             &SanitizedMessage::try_from(Message::new(&[], Some(&Pubkey::new_unique()))).unwrap(),
             expensive_lamports_per_signature,
             &FeeStructure::default(),
+            true,
             true,
             true,
         );
@@ -11004,6 +11022,7 @@ pub(crate) mod tests {
                                 .create_fee_calculator()
                                 .lamports_per_signature,
                             &FeeStructure::default(),
+                            true,
                             true,
                             true,
                         ) * 2
@@ -17369,6 +17388,7 @@ pub(crate) mod tests {
                 },
                 true,
                 true,
+                true,
             ),
             0
         );
@@ -17382,6 +17402,7 @@ pub(crate) mod tests {
                     lamports_per_signature: 1,
                     ..FeeStructure::default()
                 },
+                true,
                 true,
                 true,
             ),
@@ -17404,6 +17425,7 @@ pub(crate) mod tests {
                 },
                 true,
                 true,
+                true,
             ),
             4
         );
@@ -17423,7 +17445,7 @@ pub(crate) mod tests {
         let message =
             SanitizedMessage::try_from(Message::new(&[], Some(&Pubkey::new_unique()))).unwrap();
         assert_eq!(
-            Bank::calculate_fee(&message, 1, &fee_structure, true, true,),
+            Bank::calculate_fee(&message, 1, &fee_structure, true, true, true),
             max_fee + lamports_per_signature
         );
 
@@ -17435,7 +17457,7 @@ pub(crate) mod tests {
             SanitizedMessage::try_from(Message::new(&[ix0, ix1], Some(&Pubkey::new_unique())))
                 .unwrap();
         assert_eq!(
-            Bank::calculate_fee(&message, 1, &fee_structure, true, true,),
+            Bank::calculate_fee(&message, 1, &fee_structure, true, true, true),
             max_fee + 3 * lamports_per_signature
         );
 
@@ -17468,7 +17490,7 @@ pub(crate) mod tests {
                 Some(&Pubkey::new_unique()),
             ))
             .unwrap();
-            let fee = Bank::calculate_fee(&message, 1, &fee_structure, true, true);
+            let fee = Bank::calculate_fee(&message, 1, &fee_structure, true, true, true);
             assert_eq!(
                 fee,
                 lamports_per_signature + prioritization_fee_details.get_fee()
@@ -17507,7 +17529,7 @@ pub(crate) mod tests {
         ))
         .unwrap();
         assert_eq!(
-            Bank::calculate_fee(&message, 1, &fee_structure, true, true,),
+            Bank::calculate_fee(&message, 1, &fee_structure, true, true, true),
             2
         );
 
@@ -17519,7 +17541,7 @@ pub(crate) mod tests {
         ))
         .unwrap();
         assert_eq!(
-            Bank::calculate_fee(&message, 1, &fee_structure, true, true,),
+            Bank::calculate_fee(&message, 1, &fee_structure, true, true, true),
             11
         );
     }
@@ -19162,5 +19184,59 @@ pub(crate) mod tests {
                 bank.get_total_accounts_stats().unwrap().data_len,
             );
         }
+    }
+
+    #[test]
+    fn test_calculate_fee_with_request_heap_frame_flag() {
+        let key0 = Pubkey::new_unique();
+        let key1 = Pubkey::new_unique();
+        let lamports_per_signature: u64 = 5_000;
+        let signature_fee: u64 = 10;
+        let request_cu: u64 = 1;
+        let lamports_per_cu: u64 = 5;
+        let fee_structure = FeeStructure {
+            lamports_per_signature: signature_fee,
+            ..FeeStructure::default()
+        };
+        let message = SanitizedMessage::try_from(Message::new(
+            &[
+                system_instruction::transfer(&key0, &key1, 1),
+                ComputeBudgetInstruction::set_compute_unit_limit(request_cu as u32),
+                ComputeBudgetInstruction::request_heap_frame(40 * 1024),
+                ComputeBudgetInstruction::set_compute_unit_price(lamports_per_cu * 1_000_000),
+            ],
+            Some(&key0),
+        ))
+        .unwrap();
+
+        // assert when enable_request_heap_frame_ix is enabled, prioritization fee will be counted
+        // into transaction fee
+        let mut enable_request_heap_frame_ix = true;
+        assert_eq!(
+            Bank::calculate_fee(
+                &message,
+                lamports_per_signature,
+                &fee_structure,
+                true,
+                true,
+                enable_request_heap_frame_ix,
+            ),
+            signature_fee + request_cu * lamports_per_cu
+        );
+
+        // assert when enable_request_heap_frame_ix is disabled (an v1.13 behavior), prioritization fee will not be counted
+        // into transaction fee
+        enable_request_heap_frame_ix = false;
+        assert_eq!(
+            Bank::calculate_fee(
+                &message,
+                lamports_per_signature,
+                &fee_structure,
+                true,
+                true,
+                enable_request_heap_frame_ix,
+            ),
+            signature_fee
+        );
     }
 }
