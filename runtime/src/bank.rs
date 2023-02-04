@@ -5037,10 +5037,21 @@ impl Bank {
                     let recipient_pre_rent_state = RentState::from_account(&account, &rent);
                     let distribution = account.checked_add_lamports(rent_to_be_paid);
                     let recipient_post_rent_state = RentState::from_account(&account, &rent);
+                    let rent_state_transition_allowed = recipient_post_rent_state
+                        .transition_allowed_from(&recipient_pre_rent_state);
+                    if !rent_state_transition_allowed {
+                        warn!(
+                            "Rent distribution of {rent_to_be_paid} to {pubkey} results in \
+                            invalid RentState: {recipient_post_rent_state:?}"
+                        );
+                        inc_new_counter_warn!(
+                            "rent-distribution-rent-paying",
+                            rent_to_be_paid as usize
+                        );
+                    }
                     if distribution.is_err()
                         || (self.prevent_rent_paying_rent_recipients()
-                            && !recipient_post_rent_state
-                                .transition_allowed_from(&recipient_pre_rent_state))
+                            && !rent_state_transition_allowed)
                     {
                         // overflow adding lamports or resulting account is not rent-exempt
                         self.capitalization.fetch_sub(rent_to_be_paid, Relaxed);
