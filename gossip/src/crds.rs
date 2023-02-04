@@ -723,7 +723,7 @@ mod tests {
             signature::{Keypair, Signer},
             timing::timestamp,
         },
-        std::{collections::HashSet, iter::repeat_with},
+        std::{collections::HashSet, iter::repeat_with, net::Ipv4Addr},
     };
 
     #[test]
@@ -1376,7 +1376,7 @@ mod tests {
         let v2 = VersionedCrdsValue::new(
             {
                 let mut contact_info = ContactInfo::new_localhost(&Pubkey::default(), 0);
-                contact_info.rpc = socketaddr!("0.0.0.0:0");
+                contact_info.rpc = socketaddr!(Ipv4Addr::UNSPECIFIED, 0);
                 CrdsValue::new_unsigned(CrdsData::LegacyContactInfo(contact_info))
             },
             Cursor::default(),

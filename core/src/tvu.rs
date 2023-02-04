@@ -316,7 +316,11 @@ impl Tvu {
         let duplicate_shred_listener = DuplicateShredListener::new(
             exit.clone(),
             cluster_info.clone(),
-            DuplicateShredHandler::new(blockstore, leader_schedule_cache.clone()),
+            DuplicateShredHandler::new(
+                blockstore,
+                leader_schedule_cache.clone(),
+                bank_forks.clone(),
+            ),
         );
 
         Ok(Tvu {

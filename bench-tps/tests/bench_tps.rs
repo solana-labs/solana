@@ -131,14 +131,14 @@ fn test_bench_tps_test_validator(config: Config) {
         CommitmentConfig::processed(),
     ));
     let websocket_url = test_validator.rpc_pubsub_url();
-    let connection_cache = Arc::new(ConnectionCache::default());
+    let connection_cache = ConnectionCache::default();
 
     let client = Arc::new(
         TpuClient::new_with_connection_cache(
             rpc_client,
             &websocket_url,
             TpuClientConfig::default(),
-            connection_cache,
+            Arc::new(connection_cache.into()),
         )
         .unwrap(),
     );

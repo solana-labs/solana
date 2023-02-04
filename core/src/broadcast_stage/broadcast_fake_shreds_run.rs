@@ -172,23 +172,12 @@ mod tests {
             let contact_info = ContactInfo::new_localhost(&keypair.pubkey(), 0);
             ClusterInfo::new(contact_info, keypair, SocketAddrSpace::Unspecified)
         };
-        cluster.insert_info(ContactInfo::new_with_socketaddr(&SocketAddr::new(
-            IpAddr::V4(Ipv4Addr::new(192, 168, 1, 1)),
-            8080,
-        )));
-        cluster.insert_info(ContactInfo::new_with_socketaddr(&SocketAddr::new(
-            IpAddr::V4(Ipv4Addr::new(192, 168, 1, 2)),
-            8080,
-        )));
-        cluster.insert_info(ContactInfo::new_with_socketaddr(&SocketAddr::new(
-            IpAddr::V4(Ipv4Addr::new(192, 168, 1, 3)),
-            8080,
-        )));
-        cluster.insert_info(ContactInfo::new_with_socketaddr(&SocketAddr::new(
-            IpAddr::V4(Ipv4Addr::new(192, 168, 1, 4)),
-            8080,
-        )));
-
+        for k in 1..5 {
+            cluster.insert_info(ContactInfo::new_with_socketaddr(
+                &Keypair::new().pubkey(),
+                &SocketAddr::new(IpAddr::V4(Ipv4Addr::new(192, 168, 1, k)), 8080),
+            ));
+        }
         let tvu_peers1 = cluster.tvu_peers();
         (0..5).for_each(|_| {
             cluster

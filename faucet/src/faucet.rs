@@ -53,7 +53,6 @@ const ERROR_RESPONSE: [u8; 2] = 0u16.to_le_bytes();
 
 pub const TIME_SLICE: u64 = 60;
 pub const FAUCET_PORT: u16 = 9900;
-pub const FAUCET_PORT_STR: &str = "9900";
 
 #[derive(Error, Debug)]
 pub enum FaucetError {
@@ -336,7 +335,7 @@ pub fn run_local_faucet_with_port(
     port: u16, // 0 => auto assign
 ) {
     thread::spawn(move || {
-        let faucet_addr = socketaddr!(0, port);
+        let faucet_addr = socketaddr!(Ipv4Addr::UNSPECIFIED, port);
         let faucet = Arc::new(Mutex::new(Faucet::new(
             faucet_keypair,
             time_input,
