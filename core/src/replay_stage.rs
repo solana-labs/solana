@@ -3211,6 +3211,11 @@ impl ReplayStage {
                 break;
             }
 
+            let prior_retransmit_info = progress
+                .get_retransmit_info(current_leader_slot.unwrap())
+                .filter(|info| info.retry_time.is_some())
+                .copied();
+
             let leader_propagated_stats = progress
                 .get_propagated_stats_mut(current_leader_slot.unwrap())
                 .expect("current_leader_slot >= root, so must exist in the progress map");
@@ -3239,13 +3244,30 @@ impl ReplayStage {
                 .expect("Entry in progress map must exist in BankForks")
                 .clone();
 
-            did_newly_reach_threshold = Self::update_slot_propagated_threshold_from_votes(
+            let propagation_updated = Self::update_slot_propagated_threshold_from_votes(
                 &mut newly_voted_pubkeys,
                 &mut cluster_slot_pubkeys,
                 &leader_bank,
                 leader_propagated_stats,
                 did_newly_reach_threshold,
-            ) || did_newly_reach_threshold;
+            );
+            if propagation_updated {
+                if let Some(info) = prior_retransmit_info {
+                    datapoint_info!(
+                        "replay_stage-retransmitted-propagated",
+                        ("slot", current_leader_slot.unwrap(), i64),
+                        ("retry_iteration", info.retry_iteration, i64),
+                        (
+                            "last_retry_elapsed_ms",
+                            info.retry_time
+                                .map(|t| t.elapsed().as_millis())
+                                .unwrap_or_default(),
+                            i64
+                        ),
+                    );
+                }
+            }
+            did_newly_reach_threshold = propagation_updated || did_newly_reach_threshold;
 
             // Now jump to process the previous leader slot
             current_leader_slot = leader_propagated_stats.prev_leader_slot;

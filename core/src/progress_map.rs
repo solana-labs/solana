@@ -163,7 +163,7 @@ impl ValidatorStakeInfo {
 pub const RETRANSMIT_BASE_DELAY_MS: u64 = 5_000;
 pub const RETRANSMIT_BACKOFF_CAP: u32 = 6;
 
-#[derive(Debug, Default)]
+#[derive(Clone, Copy, Debug, Default)]
 pub struct RetransmitInfo {
     pub retry_time: Option<Instant>,
     pub retry_iteration: u32,
