@@ -19,7 +19,7 @@ use {
 const CLEANUP_EVERY_N_LOOPS: usize = 10;
 // Normally num_chunks is 3, because there are two shreds (each is one packet)
 // and meta data. So we discard anything larger than 3 chunks.
-const MAX_NUM_CHUNKS: u8 = 3;
+const MAX_NUM_CHUNKS: usize = 3;
 // We only allow each pubkey to send proofs for 5 slots, because normally there
 // is only 1 person sending out duplicate proofs, 1 person is leader for 4 slots,
 // so we allow 5 here to limit the chunk map size.
@@ -32,14 +32,14 @@ const MAX_PUBKEY_PER_SLOT: usize = 300;
 struct ProofChunkMap {
     num_chunks: u8,
     wallclock: u64,
-    chunks: HashMap<u8, DuplicateShred>,
+    chunks: [Option<DuplicateShred>; MAX_NUM_CHUNKS],
 }
 
 impl ProofChunkMap {
     fn new(num_chunks: u8, wallclock: u64) -> Self {
         Self {
             num_chunks,
-            chunks: HashMap::new(),
+            chunks: <[Option<DuplicateShred>; MAX_NUM_CHUNKS]>::default(),
             wallclock,
         }
     }
@@ -139,14 +139,10 @@ impl DuplicateShredHandler {
     fn handle_shred_data(&mut self, data: DuplicateShred) -> Result<(), Error> {
         if self.should_insert_chunk(&data) {
             let slot = data.slot;
-            match self.insert_chunk(data) {
-                Err(error) => return Err(error),
-                Ok(Some(chunks)) => {
-                    self.verify_and_apply_proof(slot, chunks)?;
-                    // We stored the duplicate proof in this slot, no need to accept any future proof.
-                    self.mark_slot_proof_received(slot);
-                }
-                _ => (),
+            if let Some(chunks) = self.insert_chunk(data) {
+                self.verify_and_apply_proof(slot, chunks)?;
+                // We stored the duplicate proof in this slot, no need to accept any future proof.
+                self.mark_slot_proof_received(slot);
             }
         }
         Ok(())
@@ -161,7 +157,7 @@ impl DuplicateShredHandler {
             return false;
         }
         // Discard all proofs with abnormal num_chunks.
-        if data.num_chunks() == 0 || data.num_chunks() > MAX_NUM_CHUNKS {
+        if data.num_chunks() == 0 || usize::from(data.num_chunks()) > MAX_NUM_CHUNKS {
             return false;
         }
         // Only allow limited unfinished proofs per pubkey to reject attackers.
@@ -204,41 +200,50 @@ impl DuplicateShredHandler {
         }
     }
 
-    fn insert_chunk(&mut self, data: DuplicateShred) -> Result<Option<Vec<DuplicateShred>>, Error> {
-        if let SlotStatus::UnfinishedProof(slot_chunk_map) = self
+    fn insert_chunk(&mut self, data: DuplicateShred) -> Option<Vec<DuplicateShred>> {
+        let chunk_map_entry = self
             .chunk_map
             .entry(data.slot)
-            .or_insert_with(|| SlotStatus::UnfinishedProof(HashMap::new()))
+            .or_insert_with(|| SlotStatus::UnfinishedProof(HashMap::new()));
+        let slot_chunk_map = match chunk_map_entry {
+            SlotStatus::Frozen => return None,
+            SlotStatus::UnfinishedProof(slot_chunk_map) => slot_chunk_map,
+        };
+        let proof_chunk_map = slot_chunk_map
+            .entry(data.from)
+            .or_insert_with(|| ProofChunkMap::new(data.num_chunks(), data.wallclock));
+        if data.num_chunks() != proof_chunk_map.num_chunks
+            || data.chunk_index() >= proof_chunk_map.num_chunks
         {
-            let proof_chunk_map = slot_chunk_map
-                .entry(data.from)
-                .or_insert_with(|| ProofChunkMap::new(data.num_chunks(), data.wallclock));
-
-            let num_chunks = data.num_chunks();
-            let chunk_index = data.chunk_index();
-            let slot = data.slot;
-            let from = data.from;
-            if num_chunks == proof_chunk_map.num_chunks
-                && chunk_index < num_chunks
-                && !proof_chunk_map.chunks.contains_key(&chunk_index)
-            {
-                proof_chunk_map.chunks.insert(chunk_index, data);
-                if proof_chunk_map.chunks.len() >= proof_chunk_map.num_chunks.into() {
-                    let mut result: Vec<DuplicateShred> = Vec::new();
-                    for i in 0..num_chunks {
-                        result.push(proof_chunk_map.chunks.remove(&i).unwrap())
-                    }
-                    return Ok(Some(result));
-                } else if slot_chunk_map.len() > MAX_PUBKEY_PER_SLOT {
-                    Self::dump_pubkeys_with_low_stakes(&self.cached_staked_nodes, slot_chunk_map);
-                }
-            }
-            self.validator_pending_proof_map
-                .entry(from)
-                .or_default()
-                .insert(slot);
+            return None;
         }
-        Ok(None)
+        let slot = data.slot;
+        let from = data.from;
+        match proof_chunk_map
+            .chunks
+            .get_mut(usize::from(data.chunk_index()))
+        {
+            None => return None,
+            Some(entry) if entry.is_some() => return None,
+            Some(entry) => *entry = Some(data),
+        };
+        let num_chunks = proof_chunk_map.chunks.iter().flatten().count();
+        if num_chunks >= usize::from(proof_chunk_map.num_chunks) {
+            return Some(
+                std::mem::take(&mut proof_chunk_map.chunks)
+                    .into_iter()
+                    .flatten()
+                    .collect(),
+            );
+        }
+        if slot_chunk_map.len() > MAX_PUBKEY_PER_SLOT {
+            Self::dump_pubkeys_with_low_stakes(&self.cached_staked_nodes, slot_chunk_map);
+        }
+        self.validator_pending_proof_map
+            .entry(from)
+            .or_default()
+            .insert(slot);
+        None
     }
 
     fn verify_and_apply_proof(&self, slot: Slot, chunks: Vec<DuplicateShred>) -> Result<(), Error> {
@@ -292,7 +297,7 @@ mod tests {
         slot: u64,
         expected_error: Option<Error>,
         chunk_size: usize,
-    ) -> Result<Box<dyn Iterator<Item = DuplicateShred>>, Error> {
+    ) -> Result<impl Iterator<Item = DuplicateShred>, Error> {
         let my_keypair = match expected_error {
             Some(Error::InvalidSignature) => Arc::new(Keypair::new()),
             _ => keypair,
@@ -324,7 +329,7 @@ mod tests {
             timestamp(), // wallclock
             chunk_size,  // max_size
         )?;
-        Ok(Box::new(chunks))
+        Ok(chunks)
     }
 
     #[test]
