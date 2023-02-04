@@ -688,31 +688,6 @@ impl ReplayStage {
                     &bank_forks,
                 );
 
-                let mut last_vote_unable_to_land = false;
-
-                if let Some(heaviest_bank_on_same_voted_fork) =
-                    heaviest_bank_on_same_voted_fork.as_ref()
-                {
-                    if let Some(my_latest_landed_vote) =
-                        progress.my_latest_landed_vote(heaviest_bank_on_same_voted_fork.slot())
-                    {
-                        Self::refresh_last_vote(
-                            &mut tower,
-                            heaviest_bank_on_same_voted_fork,
-                            my_latest_landed_vote,
-                            &vote_account,
-                            &identity_keypair,
-                            &authorized_voter_keypairs.read().unwrap(),
-                            &mut voted_signatures,
-                            has_new_vote_been_rooted,
-                            &mut last_vote_refresh_time,
-                            &voting_sender,
-                            wait_to_vote_slot,
-                            &mut last_vote_unable_to_land,
-                        );
-                    }
-                }
-
                 let mut select_vote_and_reset_forks_time =
                     Measure::start("select_vote_and_reset_forks");
                 let SelectVoteAndResetForkResult {
@@ -728,9 +703,32 @@ impl ReplayStage {
                     &mut tower,
                     &latest_validator_votes_for_frozen_banks,
                     &heaviest_subtree_fork_choice,
-                    last_vote_unable_to_land,
                 );
                 select_vote_and_reset_forks_time.stop();
+
+                if vote_bank.is_none() {
+                    if let Some(heaviest_bank_on_same_voted_fork) =
+                        heaviest_bank_on_same_voted_fork.as_ref()
+                    {
+                        if let Some(my_latest_landed_vote) =
+                            progress.my_latest_landed_vote(heaviest_bank_on_same_voted_fork.slot())
+                        {
+                            Self::refresh_last_vote(
+                                &mut tower,
+                                heaviest_bank_on_same_voted_fork,
+                                my_latest_landed_vote,
+                                &vote_account,
+                                &identity_keypair,
+                                &authorized_voter_keypairs.read().unwrap(),
+                                &mut voted_signatures,
+                                has_new_vote_been_rooted,
+                                &mut last_vote_refresh_time,
+                                &voting_sender,
+                                wait_to_vote_slot,
+                            );
+                        }
+                    }
+                }
 
                 let mut heaviest_fork_failures_time = Measure::start("heaviest_fork_failures_time");
                 if tower.is_recent(heaviest_bank.slot()) && !heaviest_fork_failures.is_empty() {
@@ -2151,7 +2149,6 @@ impl ReplayStage {
         last_vote_refresh_time: &mut LastVoteRefreshTime,
         voting_sender: &Sender<VoteOp>,
         wait_to_vote_slot: Option<Slot>,
-        last_vote_unable_to_land: &mut bool,
     ) {
         let last_voted_slot = tower.last_voted_slot();
         if last_voted_slot.is_none() {
@@ -2185,15 +2182,6 @@ impl ReplayStage {
                     < MAX_VOTE_REFRESH_INTERVAL_MILLIS as u128
             }
         {
-            return;
-        }
-
-        // Check if the slot is inside SlotHash of the tip of the fork. If not, then
-        // this vote will not do anything, we should vote on the tip of the fork instead.
-        if last_voted_slot < heaviest_bank_on_same_fork.slot()
-            && !heaviest_bank_on_same_fork.slot_within_slothash(&last_voted_slot)
-        {
-            *last_vote_unable_to_land = true;
             return;
         }
 
@@ -3032,7 +3020,6 @@ impl ReplayStage {
         tower: &mut Tower,
         latest_validator_votes_for_frozen_banks: &LatestValidatorVotesForFrozenBanks,
         fork_choice: &HeaviestSubtreeForkChoice,
-        last_vote_unable_to_land: bool,
     ) -> SelectVoteAndResetForkResult {
         // Try to vote on the actual heaviest fork. If the heaviest bank is
         // locked out or fails the threshold check, the validator will:
@@ -3062,9 +3049,25 @@ impl ReplayStage {
                 fork_choice,
             );
 
+            let mut last_vote_unable_to_land = false;
+            if let Some(heaviest_bank_on_same_voted_fork) = heaviest_bank_on_same_voted_fork {
+                if let Some(last_voted_slot) = tower.last_voted_slot() {
+                    if let Some(my_latest_landed_vote) =
+                        progress.my_latest_landed_vote(heaviest_bank_on_same_voted_fork.slot())
+                    {
+                        last_vote_unable_to_land = my_latest_landed_vote < last_voted_slot
+                            && last_voted_slot < heaviest_bank_on_same_voted_fork.slot()
+                            && !heaviest_bank_on_same_voted_fork
+                                .is_in_slot_hashes_history(&last_voted_slot)
+                    }
+                }
+            }
+
             match switch_fork_decision {
                 SwitchForkDecision::FailedSwitchThreshold(switch_proof_stake, total_stake) => {
                     let reset_bank = heaviest_bank_on_same_voted_fork;
+                    // Check if the slot is inside SlotHashes history of the tip of the fork. If not, then
+                    // this vote will not do anything, we should vote on the tip of the fork instead.
                     if last_vote_unable_to_land && reset_bank.is_some() {
                         // If we can't switch, our last vote was on a non-duplicate/confirmed slot, but it is
                         // now outside slothash, it means we haven't voted for a while, and there was no hope
@@ -6292,7 +6295,6 @@ pub(crate) mod tests {
             &mut tower,
             &latest_validator_votes_for_frozen_banks,
             &heaviest_subtree_fork_choice,
-            false,
         )
     }
 
@@ -6416,7 +6418,6 @@ pub(crate) mod tests {
             &mut tower,
             &latest_validator_votes_for_frozen_banks,
             &heaviest_subtree_fork_choice,
-            false,
         )
     }
 
@@ -6594,7 +6595,6 @@ pub(crate) mod tests {
         bank1.process_transaction(vote_tx).unwrap();
         bank1.freeze();
 
-        let mut last_vote_unable_to_land = false;
         // Trying to refresh the vote for bank 0 in bank 1 or bank 2 won't succeed because
         // the last vote has landed already
         let bank2 = Arc::new(Bank::new_from_parent(&bank1, &Pubkey::default(), 2));
@@ -6613,9 +6613,7 @@ pub(crate) mod tests {
                 &mut last_vote_refresh_time,
                 &voting_sender,
                 None,
-                &mut last_vote_unable_to_land,
             );
-            assert!(!last_vote_unable_to_land);
 
             // No new votes have been submitted to gossip
             let votes = cluster_info.get_votes(&mut cursor);
@@ -6672,9 +6670,7 @@ pub(crate) mod tests {
             &mut last_vote_refresh_time,
             &voting_sender,
             None,
-            &mut last_vote_unable_to_land,
         );
-        assert!(!last_vote_unable_to_land);
 
         // No new votes have been submitted to gossip
         let votes = cluster_info.get_votes(&mut cursor);
@@ -6718,9 +6714,7 @@ pub(crate) mod tests {
             &mut last_vote_refresh_time,
             &voting_sender,
             None,
-            &mut last_vote_unable_to_land,
         );
-        assert!(!last_vote_unable_to_land);
         let vote_info = voting_receiver
             .recv_timeout(Duration::from_secs(1))
             .unwrap();
@@ -6788,9 +6782,7 @@ pub(crate) mod tests {
             &mut last_vote_refresh_time,
             &voting_sender,
             None,
-            &mut last_vote_unable_to_land,
         );
-        assert!(!last_vote_unable_to_land);
 
         let votes = cluster_info.get_votes(&mut cursor);
         assert!(votes.is_empty());
@@ -6815,7 +6807,7 @@ pub(crate) mod tests {
                 new_bank.slot() + 1,
             ));
             bank.fill_bank_with_ticks_for_tests();
-            if !bank.slot_within_slothash(&last_voted_slot) {
+            if !bank.is_in_slot_hashes_history(&last_voted_slot) {
                 ReplayStage::refresh_last_vote(
                     &mut tower,
                     &bank,
@@ -6828,9 +6820,7 @@ pub(crate) mod tests {
                     &mut last_vote_refresh_time,
                     &voting_sender,
                     None,
-                    &mut last_vote_unable_to_land,
                 );
-                assert!(last_vote_unable_to_land);
                 break;
             }
             new_bank = bank;
@@ -7143,7 +7133,6 @@ pub(crate) mod tests {
             tower,
             latest_validator_votes_for_frozen_banks,
             heaviest_subtree_fork_choice,
-            false,
         );
         (
             vote_bank.map(|(b, _)| b.slot()),

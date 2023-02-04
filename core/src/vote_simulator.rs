@@ -187,7 +187,6 @@ impl VoteSimulator {
             tower,
             &self.latest_validator_votes_for_frozen_banks,
             &self.heaviest_subtree_fork_choice,
-            false,
         );
 
         // Make sure this slot isn't locked out or failing threshold
