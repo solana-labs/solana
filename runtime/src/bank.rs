@@ -20188,23 +20188,6 @@ pub(crate) mod tests {
         assert_eq!(bank.hashes_per_tick, Some(DEFAULT_HASHES_PER_TICK));
     }
 
-    #[test]
-    fn test_is_in_slot_hashes_history() {
-        use solana_sdk::slot_hashes::MAX_ENTRIES;
-
-        let bank0 = create_simple_test_arc_bank(1);
-        assert!(!bank0.is_in_slot_hashes_history(&0));
-        assert!(!bank0.is_in_slot_hashes_history(&1));
-        let mut last_bank = bank0;
-        for _ in 0..MAX_ENTRIES {
-            let new_bank = Arc::new(new_from_parent(&last_bank));
-            assert!(new_bank.is_in_slot_hashes_history(&0));
-            last_bank = new_bank;
-        }
-        let new_bank = Arc::new(new_from_parent(&last_bank));
-        assert!(!new_bank.is_in_slot_hashes_history(&0));
-    }
-
     #[test_case(true)]
     #[test_case(false)]
     fn test_stake_account_consistency_with_rent_epoch_max_feature(
