@@ -461,14 +461,14 @@ fn run_tpu_send_transaction(tpu_use_quic: bool) {
         CommitmentConfig::processed(),
     ));
     let connection_cache = match tpu_use_quic {
-        true => Arc::new(ConnectionCache::new(DEFAULT_TPU_CONNECTION_POOL_SIZE)),
-        false => Arc::new(ConnectionCache::with_udp(DEFAULT_TPU_CONNECTION_POOL_SIZE)),
+        true => ConnectionCache::new(DEFAULT_TPU_CONNECTION_POOL_SIZE),
+        false => ConnectionCache::with_udp(DEFAULT_TPU_CONNECTION_POOL_SIZE),
     };
     let tpu_client = TpuClient::new_with_connection_cache(
         rpc_client.clone(),
         &test_validator.rpc_pubsub_url(),
         TpuClientConfig::default(),
-        connection_cache,
+        Arc::new(connection_cache.into()),
     )
     .unwrap();
 

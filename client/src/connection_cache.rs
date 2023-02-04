@@ -109,6 +109,12 @@ impl ConnectionCache {
     }
 }
 
+impl From<ConnectionCache> for BackendConnectionCache {
+    fn from(cache: ConnectionCache) -> Self {
+        cache.cache
+    }
+}
+
 impl Default for ConnectionCache {
     fn default() -> Self {
         if DEFAULT_CONNECTION_CACHE_USE_QUIC {
