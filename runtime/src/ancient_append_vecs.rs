@@ -76,6 +76,18 @@ impl AncientSlotInfos {
             self.total_alive_bytes += alive_bytes;
         }
     }
+
+    // sort 'shrink_indexes' by most bytes saved, highest to lowest
+    #[allow(dead_code)]
+    fn sort_shrink_indexes_by_bytes_saved(&mut self) {
+        self.shrink_indexes.sort_unstable_by(|l, r| {
+            let amount_shrunk = |index: &usize| {
+                let item = &self.all_infos[*index];
+                item.capacity - item.alive_bytes
+            };
+            amount_shrunk(r).cmp(&amount_shrunk(l))
+        });
+    }
 }
 
 impl AccountsDb {
@@ -536,6 +548,43 @@ pub mod tests {
             );
             assert_eq!(infos.total_alive_bytes, alive_bytes_expected);
             assert_eq!(infos.total_alive_bytes_shrink, dead_bytes);
+        }
+    }
+
+    #[test]
+    fn test_sort_shrink_indexes_by_bytes_saved() {
+        let (db, slot1) = create_db_with_storages_and_index(true /*alive*/, 1, None);
+        let storage = db.storage.get_slot_storage_entry(slot1).unwrap();
+        // ignored
+        let slot = 0;
+
+        // info1 is first, equal, last
+        for info1_capacity in [0, 1, 2] {
+            let info1 = SlotInfo {
+                storage: storage.clone(),
+                slot,
+                capacity: info1_capacity,
+                alive_bytes: 0,
+                should_shrink: false,
+            };
+            let info2 = SlotInfo {
+                storage: storage.clone(),
+                slot,
+                capacity: 2,
+                alive_bytes: 1,
+                should_shrink: false,
+            };
+            let mut infos = AncientSlotInfos {
+                all_infos: vec![info1, info2],
+                shrink_indexes: vec![0, 1],
+                ..AncientSlotInfos::default()
+            };
+            infos.sort_shrink_indexes_by_bytes_saved();
+            let first = &infos.all_infos[infos.shrink_indexes[0]];
+            let second = &infos.all_infos[infos.shrink_indexes[1]];
+            let first_capacity = first.capacity - first.alive_bytes;
+            let second_capacity = second.capacity - second.alive_bytes;
+            assert!(first_capacity >= second_capacity);
         }
     }
 }
