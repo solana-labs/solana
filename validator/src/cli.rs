@@ -10,7 +10,8 @@ use {
         },
         keypair::SKIP_SEED_PHRASE_VALIDATION_ARG,
     },
-    solana_faucet::faucet::FAUCET_PORT,
+    solana_core::banking_trace::{DirByteLimit, BANKING_TRACE_DIR_DEFAULT_BYTE_LIMIT},
+    solana_faucet::faucet::{self, FAUCET_PORT},
     solana_net_utils::{MINIMUM_VALIDATOR_PORT_RANGE_WIDTH, VALIDATOR_PORT_RANGE},
     solana_rpc::{rpc::MAX_REQUEST_BODY_SIZE, rpc_pubsub_service::PubSubConfig},
     solana_rpc_client_api::request::MAX_MULTIPLE_ACCOUNTS,
@@ -34,7 +35,7 @@ use {
     solana_send_transaction_service::send_transaction_service::{
         self, MAX_BATCH_SEND_RATE_MS, MAX_TRANSACTION_BATCH_SIZE,
     },
-    solana_tpu_client::tpu_connection_cache::DEFAULT_TPU_CONNECTION_POOL_SIZE,
+    solana_tpu_client::tpu_client::DEFAULT_TPU_CONNECTION_POOL_SIZE,
     std::{path::PathBuf, str::FromStr},
 };
 
@@ -963,7 +964,7 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                 .value_name("MILLISECS")
                 .hidden(true)
                 .takes_value(true)
-                .validator(|s| is_within_range(s, 1, MAX_BATCH_SEND_RATE_MS))
+                .validator(|s| is_within_range(s, 1..=MAX_BATCH_SEND_RATE_MS))
                 .default_value(&default_args.rpc_send_transaction_batch_ms)
                 .help("The rate at which transactions sent via rpc service are sent in batch."),
         )
@@ -999,7 +1000,7 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                 .value_name("NUMBER")
                 .hidden(true)
                 .takes_value(true)
-                .validator(|s| is_within_range(s, 1, MAX_TRANSACTION_BATCH_SIZE))
+                .validator(|s| is_within_range(s, 1..=MAX_TRANSACTION_BATCH_SIZE))
                 .default_value(&default_args.rpc_send_transaction_batch_size)
                 .help("The size of transactions to be sent in batch."),
         )
@@ -1182,6 +1183,12 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                       This option is for use during testing."),
         )
         .arg(
+            Arg::with_name("accounts_db_create_ancient_storage_packed")
+                .long("accounts-db-create-ancient-storage-packed")
+                .help("Create ancient storages in one shot instead of appending.")
+                .hidden(true),
+            )
+        .arg(
             Arg::with_name("accounts_db_ancient_append_vecs")
                 .long("accounts-db-ancient-append-vecs")
                 .value_name("SLOT-OFFSET")
@@ -1283,13 +1290,6 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                        inclusive."),
         )
         .arg(
-            Arg::with_name("no_duplicate_instance_check")
-                .long("no-duplicate-instance-check")
-                .takes_value(false)
-                .help("Disables duplicate instance check")
-                .hidden(true),
-        )
-        .arg(
             Arg::with_name("allow_private_addr")
                 .long("allow-private-addr")
                 .takes_value(false)
@@ -1308,6 +1308,24 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
             Arg::with_name("replay_slots_concurrently")
                 .long("replay-slots-concurrently")
                 .help("Allow concurrent replay of slots on different forks")
+        )
+        .arg(
+            Arg::with_name("banking_trace_dir_byte_limit")
+                // expose friendly alternative name to cli than internal
+                // implementation-oriented one
+                .long("enable-banking-trace")
+                .value_name("BYTES")
+                .validator(is_parsable::<DirByteLimit>)
+                .takes_value(true)
+                // Firstly, zero limit value causes tracer to be disabled
+                // altogether, intuitively. On the other hand, this non-zero
+                // default doesn't enable banking tracer unless this flag is
+                // explicitly given, similar to --limit-ledger-size.
+                // see configure_banking_trace_dir_byte_limit() for this.
+                .default_value(&default_args.banking_trace_dir_byte_limit)
+                .help("Write trace files for simulate-leader-blocks, retaining \
+                       up to the default or specified total bytes in the \
+                       ledger")
         )
         .args(&get_deprecated_arguments())
         .after_help("The default subcommand is run")
@@ -1690,6 +1708,8 @@ pub struct DefaultArgs {
     // Wait subcommand
     pub wait_for_restart_window_min_idle_time: String,
     pub wait_for_restart_window_max_delinquent_stake: String,
+
+    pub banking_trace_dir_byte_limit: String,
 }
 
 impl DefaultArgs {
@@ -1768,6 +1788,7 @@ impl DefaultArgs {
             exit_max_delinquent_stake: "5".to_string(),
             wait_for_restart_window_min_idle_time: "10".to_string(),
             wait_for_restart_window_max_delinquent_stake: "5".to_string(),
+            banking_trace_dir_byte_limit: BANKING_TRACE_DIR_DEFAULT_BYTE_LIMIT.to_string(),
         }
     }
 }
@@ -2172,6 +2193,38 @@ pub fn test_app<'a>(version: &'a str, default_args: &'a DefaultTestArgs) -> App<
                 ),
         )
         .arg(
+            Arg::with_name("faucet_time_slice_secs")
+                .long("faucet-time-slice-secs")
+                .takes_value(true)
+                .value_name("SECS")
+                .default_value(default_args.faucet_time_slice_secs.as_str())
+                .help(
+                    "Time slice (in secs) over which to limit faucet requests",
+                ),
+        )
+        .arg(
+            Arg::with_name("faucet_per_time_sol_cap")
+                .long("faucet-per-time-sol-cap")
+                .takes_value(true)
+                .value_name("SOL")
+                .min_values(0)
+                .max_values(1)
+                .help(
+                    "Per-time slice limit for faucet requests, in SOL",
+                ),
+        )
+        .arg(
+            Arg::with_name("faucet_per_request_sol_cap")
+                .long("faucet-per-request-sol-cap")
+                .takes_value(true)
+                .value_name("SOL")
+                .min_values(0)
+                .max_values(1)
+                .help(
+                    "Per-request limit for faucet requests, in SOL",
+                ),
+        )
+        .arg(
             Arg::with_name("geyser_plugin_config")
                 .long("geyser-plugin-config")
                 .alias("accountsdb-plugin-config")
@@ -2221,6 +2274,7 @@ pub struct DefaultTestArgs {
     pub faucet_port: String,
     pub limit_ledger_size: String,
     pub faucet_sol: String,
+    pub faucet_time_slice_secs: String,
 }
 
 impl DefaultTestArgs {
@@ -2234,6 +2288,7 @@ impl DefaultTestArgs {
              */
             limit_ledger_size: 10_000.to_string(),
             faucet_sol: (1_000_000.).to_string(),
+            faucet_time_slice_secs: (faucet::TIME_SLICE).to_string(),
         }
     }
 }

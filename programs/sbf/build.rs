@@ -61,6 +61,7 @@ fn main() {
             "128bit",
             "alloc",
             "alt_bn128",
+            "big_mod_exp",
             "call_depth",
             "caller_access",
             "curve25519",

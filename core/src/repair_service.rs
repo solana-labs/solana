@@ -342,8 +342,8 @@ impl RepairService {
                     MAX_UNKNOWN_LAST_INDEX_REPAIRS,
                     MAX_CLOSEST_COMPLETION_REPAIRS,
                     &duplicate_slot_repair_statuses,
-                    Some(&mut repair_timing),
-                    Some(&mut best_repairs_stats),
+                    &mut repair_timing,
+                    &mut best_repairs_stats,
                 );
 
                 repairs
@@ -772,17 +772,18 @@ mod test {
             shred::max_ticks_per_n_shreds,
         },
         solana_runtime::bank::Bank,
-        solana_sdk::signature::Keypair,
+        solana_sdk::{
+            signature::{Keypair, Signer},
+            timing::timestamp,
+        },
         solana_streamer::socket::SocketAddrSpace,
         std::collections::HashSet,
     };
 
-    fn new_test_cluster_info(contact_info: ContactInfo) -> ClusterInfo {
-        ClusterInfo::new(
-            contact_info,
-            Arc::new(Keypair::new()),
-            SocketAddrSpace::Unspecified,
-        )
+    fn new_test_cluster_info() -> ClusterInfo {
+        let keypair = Arc::new(Keypair::new());
+        let contact_info = ContactInfo::new_localhost(&keypair.pubkey(), timestamp());
+        ClusterInfo::new(contact_info, keypair, SocketAddrSpace::Unspecified)
     }
 
     #[test]
@@ -807,8 +808,8 @@ mod test {
                     MAX_UNKNOWN_LAST_INDEX_REPAIRS,
                     MAX_CLOSEST_COMPLETION_REPAIRS,
                     &HashSet::default(),
-                    None,
-                    None,
+                    &mut RepairTiming::default(),
+                    &mut BestRepairsStats::default(),
                 ),
                 vec![
                     ShredRepairType::Orphan(2),
@@ -844,8 +845,8 @@ mod test {
                     MAX_UNKNOWN_LAST_INDEX_REPAIRS,
                     MAX_CLOSEST_COMPLETION_REPAIRS,
                     &HashSet::default(),
-                    None,
-                    None,
+                    &mut RepairTiming::default(),
+                    &mut BestRepairsStats::default(),
                 ),
                 vec![ShredRepairType::HighestShred(0, 0)]
             );
@@ -906,8 +907,8 @@ mod test {
                     MAX_UNKNOWN_LAST_INDEX_REPAIRS,
                     MAX_CLOSEST_COMPLETION_REPAIRS,
                     &HashSet::default(),
-                    None,
-                    None,
+                    &mut RepairTiming::default(),
+                    &mut BestRepairsStats::default(),
                 ),
                 expected
             );
@@ -922,8 +923,8 @@ mod test {
                     MAX_UNKNOWN_LAST_INDEX_REPAIRS,
                     MAX_CLOSEST_COMPLETION_REPAIRS,
                     &HashSet::default(),
-                    None,
-                    None,
+                    &mut RepairTiming::default(),
+                    &mut BestRepairsStats::default(),
                 )[..],
                 expected[0..expected.len() - 2]
             );
@@ -968,8 +969,8 @@ mod test {
                     MAX_UNKNOWN_LAST_INDEX_REPAIRS,
                     MAX_CLOSEST_COMPLETION_REPAIRS,
                     &HashSet::default(),
-                    None,
-                    None,
+                    &mut RepairTiming::default(),
+                    &mut BestRepairsStats::default(),
                 ),
                 expected
             );
@@ -1116,7 +1117,7 @@ mod test {
         let blockstore_path = get_tmp_ledger_path!();
         let blockstore = Blockstore::open(&blockstore_path).unwrap();
         let cluster_slots = ClusterSlots::default();
-        let cluster_info = Arc::new(new_test_cluster_info(Node::new_localhost().info));
+        let cluster_info = Arc::new(new_test_cluster_info());
         let identity_keypair = cluster_info.keypair().clone();
         let serve_repair = ServeRepair::new(
             cluster_info,
@@ -1216,7 +1217,7 @@ mod test {
             Pubkey::default(),
             UdpSocket::bind("0.0.0.0:0").unwrap().local_addr().unwrap(),
         ));
-        let cluster_info = Arc::new(new_test_cluster_info(Node::new_localhost().info));
+        let cluster_info = Arc::new(new_test_cluster_info());
         let serve_repair = ServeRepair::new(
             cluster_info.clone(),
             bank_forks,

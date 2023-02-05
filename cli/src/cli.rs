@@ -31,7 +31,7 @@ use {
         stake::{instruction::LockupArgs, state::Lockup},
         transaction::{TransactionError, VersionedTransaction},
     },
-    solana_tpu_client::tpu_connection_cache::DEFAULT_TPU_ENABLE_UDP,
+    solana_tpu_client::tpu_client::DEFAULT_TPU_ENABLE_UDP,
     solana_vote_program::vote_state::VoteAuthorize,
     std::{collections::HashMap, error, io::stdout, str::FromStr, sync::Arc, time::Duration},
     thiserror::Error,
@@ -2563,7 +2563,7 @@ mod tests {
         );
 
         //Test Transfer Subcommand, with nonce
-        let nonce_address = Pubkey::new(&[1u8; 32]);
+        let nonce_address = Pubkey::from([1u8; 32]);
         let nonce_address_string = nonce_address.to_string();
         let nonce_authority = keypair_from_seed(&[2u8; 32]).unwrap();
         let nonce_authority_file = make_tmp_path("nonce_authority_file");

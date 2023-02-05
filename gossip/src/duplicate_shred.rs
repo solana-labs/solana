@@ -2,6 +2,7 @@ use {
     crate::crds_value::sanitize_wallclock,
     itertools::Itertools,
     solana_ledger::{
+        blockstore::BlockstoreError,
         blockstore_meta::DuplicateSlotProof,
         shred::{self, Shred, ShredType},
     },
@@ -41,8 +42,19 @@ pub struct DuplicateShred {
     chunk: Vec<u8>,
 }
 
+impl DuplicateShred {
+    pub(crate) fn num_chunks(&self) -> u8 {
+        self.num_chunks
+    }
+    pub(crate) fn chunk_index(&self) -> u8 {
+        self.chunk_index
+    }
+}
+
 #[derive(Debug, Error)]
 pub enum Error {
+    #[error("block store save error")]
+    BlockstoreInsertFailed(#[from] BlockstoreError),
     #[error("data chunk mismatch")]
     DataChunkMismatch,
     #[error("invalid chunk index")]

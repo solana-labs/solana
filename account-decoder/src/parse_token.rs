@@ -282,11 +282,9 @@ pub struct UiMultisig {
 }
 
 pub fn get_token_account_mint(data: &[u8]) -> Option<Pubkey> {
-    if Account::valid_account_data(data) {
-        Some(Pubkey::new(&data[0..32]))
-    } else {
-        None
-    }
+    Account::valid_account_data(data)
+        .then(|| Pubkey::try_from(data.get(..32)?).ok())
+        .flatten()
 }
 
 #[cfg(test)]
@@ -402,7 +400,7 @@ mod test {
         account.state = AccountState::Initialized;
         Account::pack(account, &mut account_data).unwrap();
 
-        let expected_mint_pubkey = Pubkey::new(&[2; 32]);
+        let expected_mint_pubkey = Pubkey::from([2; 32]);
         assert_eq!(
             get_token_account_mint(&account_data),
             Some(expected_mint_pubkey)

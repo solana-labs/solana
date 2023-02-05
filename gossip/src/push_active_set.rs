@@ -13,6 +13,7 @@ const NUM_PUSH_ACTIVE_SET_ENTRIES: usize = 25;
 //     min stake of { this node, crds value owner }
 // The entry represents set of gossip nodes to actively
 // push to for crds values belonging to the bucket.
+#[derive(Default)]
 pub(crate) struct PushActiveSet([PushActiveSetEntry; NUM_PUSH_ACTIVE_SET_ENTRIES]);
 
 // Keys are gossip nodes to push messages to.
@@ -101,19 +102,6 @@ impl PushActiveSet {
     fn get_entry(&self, stake: Option<&u64>) -> &PushActiveSetEntry {
         &self.0[get_stake_bucket(stake)]
     }
-
-    // Only for tests and simulations.
-    pub(crate) fn mock_clone(&self) -> Self {
-        Self(std::array::from_fn(|k| {
-            PushActiveSetEntry(
-                self.0[k]
-                    .0
-                    .iter()
-                    .map(|(&node, filter)| (node, filter.mock_clone()))
-                    .collect(),
-            )
-        }))
-    }
 }
 
 impl PushActiveSetEntry {
@@ -175,12 +163,6 @@ impl PushActiveSetEntry {
         while self.0.len() > size {
             self.0.shift_remove_index(0);
         }
-    }
-}
-
-impl Default for PushActiveSet {
-    fn default() -> Self {
-        Self(std::array::from_fn(|_| PushActiveSetEntry::default()))
     }
 }
 

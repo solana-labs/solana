@@ -157,8 +157,8 @@ impl RepairWeight {
         max_unknown_last_index_repairs: usize,
         max_closest_completion_repairs: usize,
         ignore_slots: &impl Contains<'a, Slot>,
-        repair_timing: Option<&mut RepairTiming>,
-        stats: Option<&mut BestRepairsStats>,
+        repair_timing: &mut RepairTiming,
+        stats: &mut BestRepairsStats,
     ) -> Vec<ShredRepairType> {
         let mut repairs = vec![];
         let mut processed_slots: HashSet<Slot> = vec![self.root].into_iter().collect();
@@ -227,24 +227,21 @@ impl RepairWeight {
         repairs.extend(closest_completion_repairs);
         get_closest_completion_elapsed.stop();
 
-        if let Some(stats) = stats {
-            stats.update(
-                num_orphan_slots as u64,
-                num_orphan_repairs as u64,
-                num_best_shreds_slots as u64,
-                num_best_shreds_repairs as u64,
-                num_unknown_last_index_slots as u64,
-                num_unknown_last_index_repairs as u64,
-                num_closest_completion_slots as u64,
-                num_closest_completion_repairs as u64,
-            );
-        }
-        if let Some(repair_timing) = repair_timing {
-            repair_timing.get_best_orphans_elapsed += get_best_orphans_elapsed.as_us();
-            repair_timing.get_best_shreds_elapsed += get_best_shreds_elapsed.as_us();
-            repair_timing.get_unknown_last_index_elapsed += get_unknown_last_index_elapsed.as_us();
-            repair_timing.get_closest_completion_elapsed += get_closest_completion_elapsed.as_us();
-        }
+        stats.update(
+            num_orphan_slots as u64,
+            num_orphan_repairs as u64,
+            num_best_shreds_slots as u64,
+            num_best_shreds_repairs as u64,
+            num_unknown_last_index_slots as u64,
+            num_unknown_last_index_repairs as u64,
+            num_closest_completion_slots as u64,
+            num_closest_completion_repairs as u64,
+        );
+        repair_timing.get_best_orphans_elapsed += get_best_orphans_elapsed.as_us();
+        repair_timing.get_best_shreds_elapsed += get_best_shreds_elapsed.as_us();
+        repair_timing.get_unknown_last_index_elapsed += get_unknown_last_index_elapsed.as_us();
+        repair_timing.get_closest_completion_elapsed += get_closest_completion_elapsed.as_us();
+
         repairs
     }
 
@@ -691,7 +688,10 @@ mod test {
     use {
         super::*,
         itertools::Itertools,
-        solana_ledger::{blockstore::Blockstore, get_tmp_ledger_path},
+        solana_ledger::{
+            blockstore::{make_chaining_slot_entries, Blockstore},
+            get_tmp_ledger_path,
+        },
         solana_runtime::{bank::Bank, bank_utils},
         solana_sdk::hash::Hash,
         trees::tr,
@@ -1427,7 +1427,7 @@ mod test {
     }
 
     #[test]
-    fn test_orphan_slot_copy_weight() {
+    fn test_split_off_copy_weight() {
         let (blockstore, _, mut repair_weight) = setup_orphan_repair_weight();
         let stake = 100;
         let (bank, vote_pubkeys) = bank_utils::setup_bank_and_vote_pubkeys_for_tests(1, stake);
@@ -1494,6 +1494,72 @@ mod test {
         assert_eq!(repairs[1].slot(), 20);
         assert_eq!(repairs[2].slot(), 3);
         assert_eq!(repairs[3].slot(), 8);
+    }
+
+    #[test]
+    fn test_split_off_multi_dump_repair() {
+        let blockstore = setup_forks();
+        let stake = 100;
+        let (bank, vote_pubkeys) = bank_utils::setup_bank_and_vote_pubkeys_for_tests(1, stake);
+        let mut repair_weight = RepairWeight::new(0);
+        repair_weight.add_votes(
+            &blockstore,
+            vec![(6, vote_pubkeys)].into_iter(),
+            bank.epoch_stakes_map(),
+            bank.epoch_schedule(),
+        );
+
+        // Simulate multiple dumps (whole branch is duplicate) from replay
+        blockstore.clear_unconfirmed_slot(3);
+        repair_weight.split_off(3);
+        blockstore.clear_unconfirmed_slot(5);
+        repair_weight.split_off(5);
+        blockstore.clear_unconfirmed_slot(6);
+        repair_weight.split_off(6);
+
+        // Verify orphans
+        let mut orphans = repair_weight.trees.keys().copied().collect_vec();
+        orphans.sort();
+        assert_eq!(vec![0, 3, 5, 6], orphans);
+
+        // Get best orphans works as usual
+        let mut repairs = vec![];
+        let mut processed_slots = vec![repair_weight.root].into_iter().collect();
+        repair_weight.get_best_orphans(
+            &blockstore,
+            &mut processed_slots,
+            &mut repairs,
+            bank.epoch_stakes_map(),
+            bank.epoch_schedule(),
+            4,
+        );
+        assert_eq!(repairs.len(), 3);
+        assert_eq!(repairs[0].slot(), 6);
+        assert_eq!(repairs[1].slot(), 3);
+        assert_eq!(repairs[2].slot(), 5);
+
+        // Simulate repair on 6 and 5
+        for (shreds, _) in make_chaining_slot_entries(&[5, 6], 100) {
+            blockstore.insert_shreds(shreds, None, true).unwrap();
+        }
+
+        // Verify orphans properly updated and chained
+        let mut repairs = vec![];
+        let mut processed_slots = vec![repair_weight.root].into_iter().collect();
+        repair_weight.get_best_orphans(
+            &blockstore,
+            &mut processed_slots,
+            &mut repairs,
+            bank.epoch_stakes_map(),
+            bank.epoch_schedule(),
+            4,
+        );
+        assert_eq!(repairs.len(), 1);
+        assert_eq!(repairs[0].slot(), 3);
+
+        let mut orphans = repair_weight.trees.keys().copied().collect_vec();
+        orphans.sort();
+        assert_eq!(orphans, vec![0, 3]);
     }
 
     fn setup_orphan_repair_weight() -> (Blockstore, Bank, RepairWeight) {

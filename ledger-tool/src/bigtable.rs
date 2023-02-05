@@ -17,9 +17,8 @@ use {
         OutputFormat,
     },
     solana_ledger::{
-        bigtable_upload::ConfirmedBlockUploadConfig,
-        blockstore::Blockstore,
-        blockstore_options::{AccessType, ShredStorageType},
+        bigtable_upload::ConfirmedBlockUploadConfig, blockstore::Blockstore,
+        blockstore_options::AccessType,
     },
     solana_sdk::{clock::Slot, pubkey::Pubkey, signature::Signature},
     solana_storage_bigtable::CredentialType,
@@ -985,11 +984,7 @@ fn get_global_subcommand_arg<T: FromStr>(
     }
 }
 
-pub fn bigtable_process_command(
-    ledger_path: &Path,
-    matches: &ArgMatches<'_>,
-    shred_storage_type: &ShredStorageType,
-) {
+pub fn bigtable_process_command(ledger_path: &Path, matches: &ArgMatches<'_>) {
     let runtime = tokio::runtime::Runtime::new().unwrap();
 
     let verbose = matches.is_present("verbose");
@@ -1019,7 +1014,6 @@ pub fn bigtable_process_command(
                 &canonicalize_ledger_path(ledger_path),
                 AccessType::Secondary,
                 None,
-                shred_storage_type,
                 force_update_to_open,
             );
             let config = solana_storage_bigtable::LedgerStorageConfig {

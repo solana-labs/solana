@@ -184,14 +184,12 @@ impl CrdsGossip {
         pings: &mut Vec<(SocketAddr, Ping)>,
         socket_addr_space: &SocketAddrSpace,
     ) {
-        let network_size = self.crds.read().unwrap().num_nodes();
         self.push.refresh_push_active_set(
             &self.crds,
             stakes,
             gossip_validators,
             self_keypair,
             self_shred_version,
-            network_size,
             ping_cache,
             pings,
             socket_addr_space,
@@ -320,16 +318,6 @@ impl CrdsGossip {
         self.pull.purge_failed_inserts(now);
         rv
     }
-
-    // Only for tests and simulations.
-    pub(crate) fn mock_clone(&self) -> Self {
-        let crds = self.crds.read().unwrap().mock_clone();
-        Self {
-            crds: RwLock::new(crds),
-            push: self.push.mock_clone(),
-            pull: self.pull.mock_clone(),
-        }
-    }
 }
 
 // Returns active and valid cluster nodes to gossip with.
@@ -435,8 +423,8 @@ mod test {
         let crds_gossip = CrdsGossip::default();
         let keypair = Keypair::new();
         let id = keypair.pubkey();
-        let ci = ContactInfo::new_localhost(&Pubkey::new(&[1; 32]), 0);
-        let prune_pubkey = Pubkey::new(&[2; 32]);
+        let ci = ContactInfo::new_localhost(&Pubkey::from([1; 32]), 0);
+        let prune_pubkey = Pubkey::from([2; 32]);
         crds_gossip
             .crds
             .write()
@@ -467,7 +455,7 @@ mod test {
         let mut res = crds_gossip.process_prune_msg(
             &id,
             &ci.id,
-            &Pubkey::new(hash(&[1; 32]).as_ref()),
+            &Pubkey::from(hash(&[1; 32]).to_bytes()),
             &[prune_pubkey],
             now,
             now,

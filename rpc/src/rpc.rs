@@ -346,11 +346,14 @@ impl JsonRpcRequestProcessor {
         )));
         let blockstore = Arc::new(Blockstore::open(&get_tmp_ledger_path!()).unwrap());
         let exit = Arc::new(AtomicBool::new(false));
-        let cluster_info = Arc::new(ClusterInfo::new(
-            ContactInfo::default(),
-            Arc::new(Keypair::new()),
-            socket_addr_space,
-        ));
+        let cluster_info = Arc::new({
+            let keypair = Arc::new(Keypair::new());
+            let contact_info = ContactInfo {
+                id: keypair.pubkey(),
+                ..ContactInfo::default()
+            };
+            ClusterInfo::new(contact_info, keypair, socket_addr_space)
+        });
         let tpu_address = cluster_info.my_contact_info().tpu;
         let (sender, receiver) = unbounded();
         SendTransactionService::new::<NullTpuInfo>(
@@ -936,7 +939,7 @@ impl JsonRpcRequestProcessor {
                 let vote_state = account.vote_state();
                 let vote_state = vote_state.as_ref().unwrap_or(&default_vote_state);
                 let last_vote = if let Some(vote) = vote_state.votes.iter().last() {
-                    vote.slot
+                    vote.slot()
                 } else {
                     0
                 };
@@ -2171,20 +2174,9 @@ impl JsonRpcRequestProcessor {
 fn optimize_filters(filters: &mut [RpcFilterType]) {
     filters.iter_mut().for_each(|filter_type| {
         if let RpcFilterType::Memcmp(compare) = filter_type {
-            use MemcmpEncodedBytes::*;
-            match &compare.bytes {
-                #[allow(deprecated)]
-                Binary(bytes) | Base58(bytes) => {
-                    if let Ok(bytes) = bs58::decode(bytes).into_vec() {
-                        compare.bytes = Bytes(bytes);
-                    }
-                }
-                Base64(bytes) => {
-                    if let Ok(bytes) = base64::decode(bytes) {
-                        compare.bytes = Bytes(bytes);
-                    }
-                }
-                _ => {}
+            if let Err(err) = compare.convert_to_raw_bytes() {
+                // All filters should have been previously verified
+                warn!("Invalid filter: bytes could not be decoded, {err}");
             }
         }
     })
@@ -2335,6 +2327,7 @@ fn get_spl_token_owner_filter(program_id: &Pubkey, filters: &[RpcFilterType]) ->
     for filter in filters {
         match filter {
             RpcFilterType::DataSize(size) => data_size_filter = Some(*size),
+            #[allow(deprecated)]
             RpcFilterType::Memcmp(Memcmp {
                 offset,
                 bytes: MemcmpEncodedBytes::Bytes(bytes),
@@ -2342,13 +2335,14 @@ fn get_spl_token_owner_filter(program_id: &Pubkey, filters: &[RpcFilterType]) ->
             }) if *offset == account_packed_len && *program_id == inline_spl_token_2022::id() => {
                 memcmp_filter = Some(bytes)
             }
+            #[allow(deprecated)]
             RpcFilterType::Memcmp(Memcmp {
                 offset,
                 bytes: MemcmpEncodedBytes::Bytes(bytes),
                 ..
             }) if *offset == SPL_TOKEN_ACCOUNT_OWNER_OFFSET => {
                 if bytes.len() == PUBKEY_BYTES {
-                    owner_key = Some(Pubkey::new(bytes));
+                    owner_key = Pubkey::try_from(&bytes[..]).ok();
                 } else {
                     incorrect_owner_len = Some(bytes.len());
                 }
@@ -2391,6 +2385,7 @@ fn get_spl_token_mint_filter(program_id: &Pubkey, filters: &[RpcFilterType]) -> 
     for filter in filters {
         match filter {
             RpcFilterType::DataSize(size) => data_size_filter = Some(*size),
+            #[allow(deprecated)]
             RpcFilterType::Memcmp(Memcmp {
                 offset,
                 bytes: MemcmpEncodedBytes::Bytes(bytes),
@@ -2398,13 +2393,14 @@ fn get_spl_token_mint_filter(program_id: &Pubkey, filters: &[RpcFilterType]) -> 
             }) if *offset == account_packed_len && *program_id == inline_spl_token_2022::id() => {
                 memcmp_filter = Some(bytes)
             }
+            #[allow(deprecated)]
             RpcFilterType::Memcmp(Memcmp {
                 offset,
                 bytes: MemcmpEncodedBytes::Bytes(bytes),
                 ..
             }) if *offset == SPL_TOKEN_ACCOUNT_MINT_OFFSET => {
                 if bytes.len() == PUBKEY_BYTES {
-                    mint = Some(Pubkey::new(bytes));
+                    mint = Pubkey::try_from(&bytes[..]).ok();
                 } else {
                     incorrect_mint_len = Some(bytes.len());
                 }
@@ -4681,12 +4677,21 @@ pub mod tests {
             solana_program::{program_option::COption, pubkey::Pubkey as SplTokenPubkey},
             state::{AccountState as TokenAccountState, Mint},
         },
-        std::{borrow::Cow, collections::HashMap},
+        std::{borrow::Cow, collections::HashMap, net::Ipv4Addr},
     };
 
     const TEST_MINT_LAMPORTS: u64 = 1_000_000_000;
     const TEST_SIGNATURE_FEE: u64 = 5_000;
     const TEST_SLOTS_PER_EPOCH: u64 = DELINQUENT_VALIDATOR_SLOT_DISTANCE + 1;
+
+    pub(crate) fn new_test_cluster_info() -> ClusterInfo {
+        let keypair = Arc::new(Keypair::new());
+        let contact_info = ContactInfo {
+            id: keypair.pubkey(),
+            ..ContactInfo::default()
+        };
+        ClusterInfo::new(contact_info, keypair, SocketAddrSpace::Unspecified)
+    }
 
     fn create_test_request(method: &str, params: Option<serde_json::Value>) -> serde_json::Value {
         json!({
@@ -4754,22 +4759,15 @@ pub mod tests {
             let blockstore = Arc::new(Blockstore::open(&ledger_path).unwrap());
             let bank = bank_forks.read().unwrap().working_bank();
 
-            let identity = Pubkey::new_unique();
             let leader_pubkey = *bank.collector_id();
             let block_commitment_cache = Arc::new(RwLock::new(BlockCommitmentCache::default()));
             let exit = Arc::new(AtomicBool::new(false));
             let validator_exit = create_validator_exit(&exit);
-            let cluster_info = Arc::new(ClusterInfo::new(
-                ContactInfo {
-                    id: identity,
-                    ..ContactInfo::default()
-                },
-                Arc::new(Keypair::new()),
-                SocketAddrSpace::Unspecified,
-            ));
-            cluster_info.insert_info(ContactInfo::new_with_pubkey_socketaddr(
+            let cluster_info = Arc::new(new_test_cluster_info());
+            let identity = cluster_info.id();
+            cluster_info.insert_info(ContactInfo::new_with_socketaddr(
                 &leader_pubkey,
-                &socketaddr!("127.0.0.1:1234"),
+                &socketaddr!(Ipv4Addr::LOCALHOST, 1234),
             ));
             let max_slots = Arc::new(MaxSlots::default());
             // note that this means that slot 0 will always be considered complete
@@ -6384,11 +6382,14 @@ pub mod tests {
 
         let mut io = MetaIoHandler::default();
         io.extend_with(rpc_full::FullImpl.to_delegate());
-        let cluster_info = Arc::new(ClusterInfo::new(
-            ContactInfo::new_with_socketaddr(&socketaddr!("127.0.0.1:1234")),
-            Arc::new(Keypair::new()),
-            SocketAddrSpace::Unspecified,
-        ));
+        let cluster_info = Arc::new({
+            let keypair = Arc::new(Keypair::new());
+            let contact_info = ContactInfo::new_with_socketaddr(
+                &keypair.pubkey(),
+                &socketaddr!(Ipv4Addr::LOCALHOST, 1234),
+            );
+            ClusterInfo::new(contact_info, keypair, SocketAddrSpace::Unspecified)
+        });
         let tpu_address = cluster_info.my_contact_info().tpu;
         let (meta, receiver) = JsonRpcRequestProcessor::new(
             JsonRpcConfig::default(),
@@ -6522,22 +6523,16 @@ pub mod tests {
 
     #[test]
     fn test_rpc_verify_filter() {
-        #[allow(deprecated)]
-        let filter = RpcFilterType::Memcmp(Memcmp {
-            offset: 0,
-            bytes: MemcmpEncodedBytes::Base58(
-                "13LeFbG6m2EP1fqCj9k66fcXsoTHMMtgr7c78AivUrYD".to_string(),
-            ),
-            encoding: None,
-        });
+        let filter = RpcFilterType::Memcmp(Memcmp::new(
+            0,                                                                                      // offset
+            MemcmpEncodedBytes::Base58("13LeFbG6m2EP1fqCj9k66fcXsoTHMMtgr7c78AivUrYD".to_string()), // encoded bytes
+        ));
         assert_eq!(verify_filter(&filter), Ok(()));
         // Invalid base-58
-        #[allow(deprecated)]
-        let filter = RpcFilterType::Memcmp(Memcmp {
-            offset: 0,
-            bytes: MemcmpEncodedBytes::Base58("III".to_string()),
-            encoding: None,
-        });
+        let filter = RpcFilterType::Memcmp(Memcmp::new(
+            0,                                             // offset
+            MemcmpEncodedBytes::Base58("III".to_string()), // encoded bytes
+        ));
         assert!(verify_filter(&filter).is_err());
     }
 
@@ -6661,11 +6656,7 @@ pub mod tests {
             CommitmentSlots::new_from_slot(bank_forks.read().unwrap().highest_slot()),
         )));
 
-        let cluster_info = Arc::new(ClusterInfo::new(
-            ContactInfo::default(),
-            Arc::new(Keypair::new()),
-            SocketAddrSpace::Unspecified,
-        ));
+        let cluster_info = Arc::new(new_test_cluster_info());
         let tpu_address = cluster_info.my_contact_info().tpu;
         let (request_processor, receiver) = JsonRpcRequestProcessor::new(
             JsonRpcConfig::default(),
@@ -8259,11 +8250,7 @@ pub mod tests {
         let ledger_path = get_tmp_ledger_path!();
         let blockstore = Arc::new(Blockstore::open(&ledger_path).unwrap());
         let block_commitment_cache = Arc::new(RwLock::new(BlockCommitmentCache::default()));
-        let cluster_info = Arc::new(ClusterInfo::new(
-            ContactInfo::default(),
-            Arc::new(Keypair::new()),
-            SocketAddrSpace::Unspecified,
-        ));
+        let cluster_info = Arc::new(new_test_cluster_info());
         let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(100);
         let bank = Bank::new_for_tests(&genesis_config);
 

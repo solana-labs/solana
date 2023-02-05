@@ -1,7 +1,0 @@
-{
-  "compilerOptions": {
-    "declaration": false
-  },
-  "extends": "./tsconfig.shared.json",
-  "include": ["test"]
-}

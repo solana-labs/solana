@@ -686,7 +686,7 @@ impl StakeSubCommands for App<'_, '_> {
                         .long("num-rewards-epochs")
                         .takes_value(true)
                         .value_name("NUM")
-                        .validator(|s| is_within_range(s, 1, 10))
+                        .validator(|s| is_within_range(s, 1..=10))
                         .default_value_if("with_rewards", None, "1")
                         .requires("with_rewards")
                         .help("Display rewards for NUM recent epochs, max 10 [default: latest epoch only]"),
@@ -2686,9 +2686,9 @@ mod tests {
 
         // stake-authorize subcommand
         let stake_account_string = stake_account_pubkey.to_string();
-        let new_stake_authority = Pubkey::new(&[1u8; 32]);
+        let new_stake_authority = Pubkey::from([1u8; 32]);
         let new_stake_string = new_stake_authority.to_string();
-        let new_withdraw_authority = Pubkey::new(&[2u8; 32]);
+        let new_withdraw_authority = Pubkey::from([2u8; 32]);
         let new_withdraw_string = new_withdraw_authority.to_string();
         let test_stake_authorize = test_commands.clone().get_matches_from(vec![
             "test",
@@ -3537,7 +3537,7 @@ mod tests {
         let pubkey2 = keypair2.pubkey();
         let sig2 = keypair.sign_message(&[0u8]);
         let signer2 = format!("{}={}", keypair2.pubkey(), sig2);
-        let nonce_account = Pubkey::new(&[1u8; 32]);
+        let nonce_account = Pubkey::from([1u8; 32]);
         let test_authorize = test_commands.clone().get_matches_from(vec![
             "test",
             "stake-authorize",
@@ -3914,7 +3914,7 @@ mod tests {
         assert!(parse_command(&test_create_stake_account, &default_signer, &mut None).is_err());
 
         // CreateStakeAccount offline and nonce
-        let nonce_account = Pubkey::new(&[1u8; 32]);
+        let nonce_account = Pubkey::from([1u8; 32]);
         let nonce_account_string = nonce_account.to_string();
         let offline = keypair_from_seed(&[2u8; 32]).unwrap();
         let offline_pubkey = offline.pubkey();
@@ -4829,7 +4829,7 @@ mod tests {
         );
 
         // Split stake offline nonced submission
-        let nonce_account = Pubkey::new(&[1u8; 32]);
+        let nonce_account = Pubkey::from([1u8; 32]);
         let nonce_account_string = nonce_account.to_string();
         let nonce_auth = keypair_from_seed(&[2u8; 32]).unwrap();
         let nonce_auth_pubkey = nonce_auth.pubkey();

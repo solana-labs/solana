@@ -16,7 +16,7 @@ use {
         cluster_info::{Ping, CRDS_UNIQUE_PUBKEY_CAPACITY},
         crds::{Crds, CrdsError, Cursor, GossipRoute},
         crds_gossip,
-        crds_value::CrdsValue,
+        crds_value::{CrdsData, CrdsValue},
         ping_pong::PingCache,
         push_active_set::PushActiveSet,
         received_cache::ReceivedCache,
@@ -49,7 +49,8 @@ const CRDS_GOSSIP_PUSH_FANOUT: usize = 6;
 pub const CRDS_GOSSIP_PUSH_MSG_TIMEOUT_MS: u64 = 30000;
 const CRDS_GOSSIP_PRUNE_MSG_TIMEOUT_MS: u64 = 500;
 const CRDS_GOSSIP_PRUNE_STAKE_THRESHOLD_PCT: f64 = 0.15;
-const CRDS_GOSSIP_PRUNE_MIN_INGRESS_NODES: usize = 3;
+const CRDS_GOSSIP_PRUNE_MIN_INGRESS_NODES: usize = 2;
+const CRDS_GOSSIP_PUSH_ACTIVE_SET_SIZE: usize = CRDS_GOSSIP_PUSH_FANOUT * 2;
 
 pub struct CrdsGossipPush {
     /// Max bytes per message
@@ -152,7 +153,8 @@ impl CrdsGossipPush {
                         received_cache.record(origin, from, usize::from(num_dups));
                         self.num_old.fetch_add(1, Ordering::Relaxed);
                     }
-                    Err(_) => {
+                    Err(CrdsError::InsertFailed | CrdsError::UnknownStakes) => {
+                        received_cache.record(origin, from, /*num_dups:*/ usize::MAX);
                         self.num_old.fetch_add(1, Ordering::Relaxed);
                     }
                 }
@@ -189,6 +191,11 @@ impl CrdsGossipPush {
         let crds = crds.read().unwrap();
         let entries = crds
             .get_entries(crds_cursor.deref_mut())
+            .filter(|entry| {
+                // Exclude the new ContactInfo from outgoing push messages
+                // until the cluster has upgraded.
+                !matches!(&entry.value.data, CrdsData::ContactInfo(_))
+            })
             .map(|entry| &entry.value)
             .filter(|value| wallclock_window.contains(&value.wallclock()));
         for value in entries {
@@ -238,7 +245,6 @@ impl CrdsGossipPush {
         gossip_validators: Option<&HashSet<Pubkey>>,
         self_keypair: &Keypair,
         self_shred_version: u16,
-        network_size: usize,
         ping_cache: &Mutex<PingCache>,
         pings: &mut Vec<(SocketAddr, Ping)>,
         socket_addr_space: &SocketAddrSpace,
@@ -271,24 +277,15 @@ impl CrdsGossipPush {
         if nodes.is_empty() {
             return;
         }
+        let cluster_size = crds.read().unwrap().num_pubkeys().max(stakes.len());
         let mut active_set = self.active_set.write().unwrap();
-        active_set.rotate(&mut rng, self.push_fanout * 3, network_size, &nodes, stakes)
-    }
-
-    // Only for tests and simulations.
-    pub(crate) fn mock_clone(&self) -> Self {
-        let active_set = self.active_set.read().unwrap().mock_clone();
-        let received_cache = self.received_cache.lock().unwrap().mock_clone();
-        let crds_cursor = *self.crds_cursor.lock().unwrap();
-        Self {
-            active_set: RwLock::new(active_set),
-            received_cache: Mutex::new(received_cache),
-            crds_cursor: Mutex::new(crds_cursor),
-            num_total: AtomicUsize::new(self.num_total.load(Ordering::Relaxed)),
-            num_old: AtomicUsize::new(self.num_old.load(Ordering::Relaxed)),
-            num_pushes: AtomicUsize::new(self.num_pushes.load(Ordering::Relaxed)),
-            ..*self
-        }
+        active_set.rotate(
+            &mut rng,
+            CRDS_GOSSIP_PUSH_ACTIVE_SET_SIZE,
+            cluster_size,
+            &nodes,
+            stakes,
+        )
     }
 }
 
@@ -415,7 +412,6 @@ mod tests {
             None,            // gossip_validtors
             &Keypair::new(),
             0, // self_shred_version
-            1, // network_size
             &ping_cache,
             &mut Vec::new(), // pings
             &SocketAddrSpace::Unspecified,
@@ -483,7 +479,6 @@ mod tests {
             None,            // gossip_validators
             &Keypair::new(),
             0, // self_shred_version
-            1, // network_size
             &ping_cache,
             &mut Vec::new(),
             &SocketAddrSpace::Unspecified,
@@ -527,7 +522,6 @@ mod tests {
             None,            // gossip_validators
             &Keypair::new(),
             0, // self_shred_version
-            1, // network_size
             &ping_cache,
             &mut Vec::new(), // pings
             &SocketAddrSpace::Unspecified,
@@ -575,7 +569,6 @@ mod tests {
             None,            // gossip_validators
             &Keypair::new(),
             0, // self_shred_version
-            1, // network_size
             &ping_cache,
             &mut Vec::new(), // pings
             &SocketAddrSpace::Unspecified,

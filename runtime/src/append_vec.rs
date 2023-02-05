@@ -106,32 +106,27 @@ impl<'a: 'b, 'b, T: ReadableAccount + Sync + 'b, U: StorableAccounts<'a, T>, V: 
         }
     }
 
-    /// hash for the account at 'index'
-    pub fn hash(&self, index: usize) -> &Hash {
-        if self.accounts.has_hash_and_write_version() {
-            self.accounts.hash(index)
+    /// get all account fields at 'index'
+    pub fn get(&self, index: usize) -> (Option<&T>, &Pubkey, &Hash, StoredMetaWriteVersion) {
+        let account = self.accounts.account_default_if_zero_lamport(index);
+        let pubkey = self.accounts.pubkey(index);
+        let (hash, write_version) = if self.accounts.has_hash_and_write_version() {
+            (
+                self.accounts.hash(index),
+                self.accounts.write_version(index),
+            )
         } else {
-            self.hashes_and_write_versions.as_ref().unwrap().0[index].borrow()
-        }
+            let item = self.hashes_and_write_versions.as_ref().unwrap();
+            (item.0[index].borrow(), item.1[index])
+        };
+        (account, pubkey, hash, write_version)
     }
-    /// write_version for the account at 'index'
-    pub fn write_version(&self, index: usize) -> u64 {
-        if self.accounts.has_hash_and_write_version() {
-            self.accounts.write_version(index)
-        } else {
-            self.hashes_and_write_versions.as_ref().unwrap().1[index]
-        }
-    }
+
     /// None if account at index has lamports == 0
     /// Otherwise, Some(account)
     /// This is the only way to access the account.
     pub fn account(&self, index: usize) -> Option<&T> {
         self.accounts.account_default_if_zero_lamport(index)
-    }
-
-    /// pubkey at 'index'
-    pub fn pubkey(&self, index: usize) -> &Pubkey {
-        self.accounts.pubkey(index)
     }
 
     /// # accounts to write
@@ -148,29 +143,31 @@ impl<'a: 'b, 'b, T: ReadableAccount + Sync + 'b, U: StorableAccounts<'a, T>, V: 
 /// This struct will be backed by mmaped and snapshotted data files.
 /// So the data layout must be stable and consistent across the entire cluster!
 #[derive(Clone, PartialEq, Eq, Debug)]
+#[repr(C)]
 pub struct StoredMeta {
     /// global write version
     /// This will be made completely obsolete such that we stop storing it.
     /// We will not support multiple append vecs per slot anymore, so this concept is no longer necessary.
     /// Order of stores of an account to an append vec will determine 'latest' account data per pubkey.
     pub write_version_obsolete: StoredMetaWriteVersion,
+    pub data_len: u64,
     /// key for the account
     pub pubkey: Pubkey,
-    pub data_len: u64,
 }
 
 /// This struct will be backed by mmaped and snapshotted data files.
 /// So the data layout must be stable and consistent across the entire cluster!
 #[derive(Serialize, Deserialize, Clone, Debug, Default, Eq, PartialEq)]
+#[repr(C)]
 pub struct AccountMeta {
     /// lamports in the account
     pub lamports: u64,
+    /// the epoch at which this account will next owe rent
+    pub rent_epoch: Epoch,
     /// the program that owns this account. If executable, the program that loads this account.
     pub owner: Pubkey,
     /// this account's data contains a loaded program (and is now read-only)
     pub executable: bool,
-    /// the epoch at which this account will next owe rent
-    pub rent_epoch: Epoch,
 }
 
 impl<'a, T: ReadableAccount> From<&'a T> for AccountMeta {
@@ -644,10 +641,10 @@ impl AppendVec {
         let _lock = self.append_lock.lock().unwrap();
         let mut offset = self.len();
 
-        let mut rv = Vec::with_capacity(accounts.accounts.len());
         let len = accounts.accounts.len();
+        let mut rv = Vec::with_capacity(len);
         for i in skip..len {
-            let account = accounts.account(i);
+            let (account, pubkey, hash, write_version_obsolete) = accounts.get(i);
             let account_meta = account
                 .map(|account| AccountMeta {
                     lamports: account.lamports(),
@@ -658,11 +655,11 @@ impl AppendVec {
                 .unwrap_or_default();
 
             let stored_meta = StoredMeta {
-                pubkey: *accounts.pubkey(i),
+                pubkey: *pubkey,
                 data_len: account
                     .map(|account| account.data().len())
                     .unwrap_or_default() as u64,
-                write_version_obsolete: accounts.write_version(i),
+                write_version_obsolete,
             };
             let meta_ptr = &stored_meta as *const StoredMeta;
             let account_meta_ptr = &account_meta as *const AccountMeta;
@@ -671,7 +668,7 @@ impl AppendVec {
                 .map(|account| account.data())
                 .unwrap_or_default()
                 .as_ptr();
-            let hash_ptr = accounts.hash(i).as_ref().as_ptr();
+            let hash_ptr = hash.as_ref().as_ptr();
             let ptrs = [
                 (meta_ptr as *const u8, mem::size_of::<StoredMeta>()),
                 (account_meta_ptr as *const u8, mem::size_of::<AccountMeta>()),
@@ -703,6 +700,7 @@ pub mod tests {
         super::{test_utils::*, *},
         crate::accounts_db::INCLUDE_SLOT_IN_HASH_TESTS,
         assert_matches::assert_matches,
+        memoffset::offset_of,
         rand::{thread_rng, Rng},
         solana_sdk::{
             account::{accounts_equal, WritableAccount},
@@ -848,7 +846,7 @@ pub mod tests {
         // for (Slot, &'a [(&'a Pubkey, &'a T)], IncludeSlotInHash)
         let account = AccountSharedData::default();
         let slot = 0 as Slot;
-        let pubkeys = vec![Pubkey::new(&[5; 32]), Pubkey::new(&[6; 32])];
+        let pubkeys = vec![Pubkey::from([5; 32]), Pubkey::from([6; 32])];
         let hashes = vec![Hash::new(&[3; 32]), Hash::new(&[4; 32])];
         let write_versions = vec![42, 43];
         let accounts = vec![(&pubkeys[0], &account), (&pubkeys[1], &account)];
@@ -862,9 +860,10 @@ pub mod tests {
         assert_eq!(storable.len(), pubkeys.len());
         assert!(!storable.is_empty());
         (0..2).for_each(|i| {
-            assert_eq!(storable.hash(i), &hashes[i]);
-            assert_eq!(&storable.write_version(i), &write_versions[i]);
-            assert_eq!(storable.pubkey(i), &pubkeys[i]);
+            let (_, pubkey, hash, write_version) = storable.get(i);
+            assert_eq!(hash, &hashes[i]);
+            assert_eq!(write_version, write_versions[i]);
+            assert_eq!(pubkey, &pubkeys[i]);
         });
     }
 
@@ -1273,5 +1272,19 @@ pub mod tests {
         drop(av);
         let result = AppendVec::new_from_file(path, accounts_len);
         assert_matches!(result, Err(ref message) if message.to_string().starts_with("incorrect layout/length/data"));
+    }
+
+    #[test]
+    fn test_type_layout() {
+        assert_eq!(offset_of!(StoredMeta, write_version_obsolete), 0x00);
+        assert_eq!(offset_of!(StoredMeta, data_len), 0x08);
+        assert_eq!(offset_of!(StoredMeta, pubkey), 0x10);
+        assert_eq!(mem::size_of::<StoredMeta>(), 0x30);
+
+        assert_eq!(offset_of!(AccountMeta, lamports), 0x00);
+        assert_eq!(offset_of!(AccountMeta, rent_epoch), 0x08);
+        assert_eq!(offset_of!(AccountMeta, owner), 0x10);
+        assert_eq!(offset_of!(AccountMeta, executable), 0x30);
+        assert_eq!(mem::size_of::<AccountMeta>(), 0x38);
     }
 }

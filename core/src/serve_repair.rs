@@ -42,11 +42,12 @@ use {
     },
     solana_streamer::{
         sendmmsg::{batch_send, SendPktsError},
+        socket::SocketAddrSpace,
         streamer::{PacketBatchReceiver, PacketBatchSender},
     },
     std::{
         cmp::Reverse,
-        collections::HashSet,
+        collections::{HashMap, HashSet},
         net::{SocketAddr, UdpSocket},
         sync::{
             atomic::{AtomicBool, Ordering},
@@ -55,6 +56,7 @@ use {
         thread::{Builder, JoinHandle},
         time::{Duration, Instant},
     },
+    thiserror::Error,
 };
 
 type SlotHash = (Slot, Hash);
@@ -83,6 +85,22 @@ const SIGNED_REPAIR_TIME_WINDOW: Duration = Duration::from_secs(60 * 10); // 10 
 
 #[cfg(test)]
 static_assertions::const_assert_eq!(MAX_ANCESTOR_RESPONSES, 30);
+
+#[derive(Error, Debug)]
+pub enum RepairVerifyError {
+    #[error("IdMismatch")]
+    IdMismatch,
+    #[error("Malformed")]
+    Malformed,
+    #[error("SelfRepair")]
+    SelfRepair,
+    #[error("SigVerify")]
+    SigVerify,
+    #[error("TimeSkew")]
+    TimeSkew,
+    #[error("Unsigned")]
+    Unsigned,
+}
 
 #[derive(Serialize, Deserialize, Debug, Clone, Copy, Hash, PartialEq, Eq)]
 pub enum ShredRepairType {
@@ -133,7 +151,8 @@ impl AncestorHashesRepairType {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, AbiEnumVisitor, AbiExample, Deserialize, Serialize)]
+#[frozen_abi(digest = "AKpurCovzn6rsji4aQrP3hUdEHxjtXUfT7AatZXN7Rpz")]
 pub enum AncestorHashesResponse {
     Hashes(Vec<SlotHash>),
     Ping(Ping),
@@ -163,10 +182,7 @@ struct ServeRepairStats {
     total_response_packets: usize,
     total_response_bytes_staked: usize,
     total_response_bytes_unstaked: usize,
-    handle_requests_staked: usize,
-    handle_requests_unstaked: usize,
     processed: usize,
-    self_repair: usize,
     window_index: usize,
     highest_window_index: usize,
     orphan: usize,
@@ -175,6 +191,10 @@ struct ServeRepairStats {
     ping_cache_check_failed: usize,
     pings_sent: usize,
     decode_time_us: u64,
+    handle_requests_time_us: u64,
+    handle_requests_staked: usize,
+    handle_requests_unstaked: usize,
+    err_self_repair: usize,
     err_time_skew: usize,
     err_malformed: usize,
     err_sig_verify: usize,
@@ -182,7 +202,7 @@ struct ServeRepairStats {
     err_id_mismatch: usize,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, AbiExample, Deserialize, Serialize)]
 pub struct RepairRequestHeader {
     signature: Signature,
     sender: Pubkey,
@@ -206,7 +226,8 @@ impl RepairRequestHeader {
 pub(crate) type Ping = ping_pong::Ping<[u8; REPAIR_PING_TOKEN_SIZE]>;
 
 /// Window protocol messages
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Debug, AbiEnumVisitor, AbiExample, Deserialize, Serialize)]
+#[frozen_abi(digest = "3bgE3sYHRqetvpo4fcDL6PTV3z2LMAtY6H8BoLFSjCwf")]
 pub enum RepairProtocol {
     LegacyWindowIndex(LegacyContactInfo, Slot, u64),
     LegacyHighestWindowIndex(LegacyContactInfo, Slot, u64),
@@ -236,7 +257,8 @@ pub enum RepairProtocol {
     },
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Debug, AbiEnumVisitor, AbiExample, Deserialize, Serialize)]
+#[frozen_abi(digest = "CkffjyMPCwuJgk9NiCMELXLCecAnTPZqpKEnUCb3VyVf")]
 pub(crate) enum RepairResponse {
     Ping(Ping),
 }
@@ -445,6 +467,117 @@ impl ServeRepair {
         }
     }
 
+    fn decode_request(
+        packet: &Packet,
+        epoch_staked_nodes: &Option<Arc<HashMap<Pubkey, u64>>>,
+        whitelist: &HashSet<Pubkey>,
+        my_id: &Pubkey,
+        socket_addr_space: &SocketAddrSpace,
+        stats: &mut ServeRepairStats,
+        cluster_type: ClusterType,
+    ) -> Result<RepairRequestWithMeta> {
+        let request: RepairProtocol = match packet.deserialize_slice(..) {
+            Ok(request) => request,
+            Err(_) => {
+                return Err(Error::from(RepairVerifyError::Malformed));
+            }
+        };
+        let from_addr = packet.meta().socket_addr();
+        if !ContactInfo::is_valid_address(&from_addr, socket_addr_space) {
+            return Err(Error::from(RepairVerifyError::Malformed));
+        }
+        match Self::verify_signed_packet(my_id, packet, &request) {
+            Ok(()) => (),
+            Err(Error::RepairVerify(RepairVerifyError::Unsigned)) => match cluster_type {
+                ClusterType::Testnet | ClusterType::Development => {
+                    return Err(Error::from(RepairVerifyError::Unsigned));
+                }
+                ClusterType::MainnetBeta | ClusterType::Devnet => {
+                    stats.err_unsigned += 1;
+                }
+            },
+            Err(e) => return Err(e),
+        }
+        if request.sender() == my_id {
+            return Err(Error::from(RepairVerifyError::SelfRepair));
+        }
+        let stake = *epoch_staked_nodes
+            .as_ref()
+            .and_then(|stakes| stakes.get(request.sender()))
+            .unwrap_or(&0);
+
+        let whitelisted = whitelist.contains(request.sender());
+
+        Ok(RepairRequestWithMeta {
+            request,
+            from_addr,
+            stake,
+            whitelisted,
+        })
+    }
+
+    fn record_request_decode_error(error: &Error, stats: &mut ServeRepairStats) {
+        match error {
+            Error::RepairVerify(RepairVerifyError::IdMismatch) => {
+                stats.err_id_mismatch += 1;
+            }
+            Error::RepairVerify(RepairVerifyError::Malformed) => {
+                stats.err_malformed += 1;
+            }
+            Error::RepairVerify(RepairVerifyError::SelfRepair) => {
+                stats.err_self_repair += 1;
+            }
+            Error::RepairVerify(RepairVerifyError::SigVerify) => {
+                stats.err_sig_verify += 1;
+            }
+            Error::RepairVerify(RepairVerifyError::TimeSkew) => {
+                stats.err_time_skew += 1;
+            }
+            Error::RepairVerify(RepairVerifyError::Unsigned) => {
+                stats.err_unsigned += 1;
+            }
+            _ => {
+                debug_assert!(false, "unhandled error {:?}", error);
+            }
+        }
+    }
+
+    fn decode_requests(
+        reqs_v: Vec<PacketBatch>,
+        epoch_staked_nodes: &Option<Arc<HashMap<Pubkey, u64>>>,
+        whitelist: &HashSet<Pubkey>,
+        my_id: &Pubkey,
+        socket_addr_space: &SocketAddrSpace,
+        stats: &mut ServeRepairStats,
+        cluster_type: ClusterType,
+    ) -> Vec<RepairRequestWithMeta> {
+        let decode_packet = |packet| {
+            let result = Self::decode_request(
+                packet,
+                epoch_staked_nodes,
+                whitelist,
+                my_id,
+                socket_addr_space,
+                stats,
+                cluster_type,
+            );
+            match &result {
+                Ok(req) => {
+                    if req.stake == 0 {
+                        stats.handle_requests_unstaked += 1;
+                    } else {
+                        stats.handle_requests_staked += 1;
+                    }
+                }
+                Err(e) => {
+                    Self::record_request_decode_error(e, stats);
+                }
+            }
+            result.ok()
+        };
+        reqs_v.iter().flatten().filter_map(decode_packet).collect()
+    }
+
     /// Process messages from the network
     fn run_listen(
         &self,
@@ -489,65 +622,19 @@ impl ServeRepair {
         stats.total_requests += total_requests;
 
         let decode_start = Instant::now();
-        let mut decoded_requests = Vec::default();
-        let mut whitelisted_request_count: usize = 0;
-        {
+        let mut decoded_requests = {
             let whitelist = self.repair_whitelist.read().unwrap();
-            for packet in reqs_v.iter().flatten() {
-                let request: RepairProtocol = match packet.deserialize_slice(..) {
-                    Ok(request) => request,
-                    Err(_) => {
-                        stats.err_malformed += 1;
-                        continue;
-                    }
-                };
-
-                let from_addr = packet.meta().socket_addr();
-                if !ContactInfo::is_valid_address(&from_addr, &socket_addr_space) {
-                    stats.err_malformed += 1;
-                    continue;
-                }
-
-                match cluster_type {
-                    ClusterType::Testnet | ClusterType::Development => {
-                        if !Self::verify_signed_packet(&my_id, packet, &request, stats) {
-                            continue;
-                        }
-                    }
-                    ClusterType::MainnetBeta | ClusterType::Devnet => {
-                        // collect stats for signature verification
-                        let _ = Self::verify_signed_packet(&my_id, packet, &request, stats);
-                    }
-                }
-
-                if request.sender() == &my_id {
-                    stats.self_repair += 1;
-                    continue;
-                }
-
-                let stake = epoch_staked_nodes
-                    .as_ref()
-                    .and_then(|stakes| stakes.get(request.sender()))
-                    .unwrap_or(&0);
-                if *stake == 0 {
-                    stats.handle_requests_unstaked += 1;
-                } else {
-                    stats.handle_requests_staked += 1;
-                }
-
-                let whitelisted = whitelist.contains(request.sender());
-                if whitelisted {
-                    whitelisted_request_count += 1;
-                }
-
-                decoded_requests.push(RepairRequestWithMeta {
-                    request,
-                    from_addr,
-                    stake: *stake,
-                    whitelisted,
-                });
-            }
-        }
+            Self::decode_requests(
+                reqs_v,
+                &epoch_staked_nodes,
+                &whitelist,
+                &my_id,
+                &socket_addr_space,
+                stats,
+                cluster_type,
+            )
+        };
+        let whitelisted_request_count = decoded_requests.iter().filter(|r| r.whitelisted).count();
         stats.decode_time_us += decode_start.elapsed().as_micros() as u64;
         stats.whitelisted_requests += whitelisted_request_count.min(MAX_REQUESTS_PER_ITERATION);
 
@@ -557,7 +644,8 @@ impl ServeRepair {
             decoded_requests.truncate(MAX_REQUESTS_PER_ITERATION);
         }
 
-        self.handle_packets(
+        let handle_requests_start = Instant::now();
+        self.handle_requests(
             ping_cache,
             recycler,
             blockstore,
@@ -567,18 +655,19 @@ impl ServeRepair {
             data_budget,
             cluster_type,
         );
+        stats.handle_requests_time_us += handle_requests_start.elapsed().as_micros() as u64;
 
         Ok(())
     }
 
     fn report_reset_stats(&self, stats: &mut ServeRepairStats) {
-        if stats.self_repair > 0 {
+        if stats.err_self_repair > 0 {
             let my_id = self.cluster_info.id();
             warn!(
                 "{}: Ignored received repair requests from ME: {}",
-                my_id, stats.self_repair,
+                my_id, stats.err_self_repair,
             );
-            inc_new_counter_debug!("serve_repair-handle-repair--eq", stats.self_repair);
+            inc_new_counter_debug!("serve_repair-handle-repair--eq", stats.err_self_repair);
         }
 
         datapoint_info!(
@@ -623,7 +712,7 @@ impl ServeRepair {
                 stats.total_response_bytes_unstaked,
                 i64
             ),
-            ("self_repair", stats.self_repair, i64),
+            ("self_repair", stats.err_self_repair, i64),
             ("window_index", stats.window_index, i64),
             (
                 "request-highest-window-index",
@@ -644,6 +733,11 @@ impl ServeRepair {
             ),
             ("pings_sent", stats.pings_sent, i64),
             ("decode_time_us", stats.decode_time_us, i64),
+            (
+                "handle_requests_time_us",
+                stats.handle_requests_time_us,
+                i64
+            ),
             ("err_time_skew", stats.err_time_skew, i64),
             ("err_malformed", stats.err_malformed, i64),
             ("err_sig_verify", stats.err_sig_verify, i64),
@@ -708,13 +802,11 @@ impl ServeRepair {
             .unwrap()
     }
 
-    #[must_use]
     fn verify_signed_packet(
         my_id: &Pubkey,
         packet: &Packet,
         request: &RepairProtocol,
-        stats: &mut ServeRepairStats,
-    ) -> bool {
+    ) -> Result<()> {
         match request {
             RepairProtocol::LegacyWindowIndex(_, _, _)
             | RepairProtocol::LegacyHighestWindowIndex(_, _, _)
@@ -723,13 +815,11 @@ impl ServeRepair {
             | RepairProtocol::LegacyHighestWindowIndexWithNonce(_, _, _, _)
             | RepairProtocol::LegacyOrphanWithNonce(_, _, _)
             | RepairProtocol::LegacyAncestorHashes(_, _, _) => {
-                stats.err_unsigned += 1;
-                return false;
+                return Err(Error::from(RepairVerifyError::Unsigned));
             }
             RepairProtocol::Pong(pong) => {
                 if !pong.verify() {
-                    stats.err_sig_verify += 1;
-                    return false;
+                    return Err(Error::from(RepairVerifyError::SigVerify));
                 }
             }
             RepairProtocol::WindowIndex { header, .. }
@@ -737,39 +827,42 @@ impl ServeRepair {
             | RepairProtocol::Orphan { header, .. }
             | RepairProtocol::AncestorHashes { header, .. } => {
                 if &header.recipient != my_id {
-                    stats.err_id_mismatch += 1;
-                    return false;
+                    return Err(Error::from(RepairVerifyError::IdMismatch));
                 }
                 let time_diff_ms = timestamp().abs_diff(header.timestamp);
                 if u128::from(time_diff_ms) > SIGNED_REPAIR_TIME_WINDOW.as_millis() {
-                    stats.err_time_skew += 1;
-                    return false;
+                    return Err(Error::from(RepairVerifyError::TimeSkew));
                 }
                 let leading_buf = match packet.data(..4) {
                     Some(buf) => buf,
                     None => {
-                        debug_assert!(false); // should have failed deserialize
-                        stats.err_malformed += 1;
-                        return false;
+                        debug_assert!(
+                            false,
+                            "request should have failed deserialization: {:?}",
+                            request
+                        );
+                        return Err(Error::from(RepairVerifyError::Malformed));
                     }
                 };
                 let trailing_buf = match packet.data(4 + SIGNATURE_BYTES..) {
                     Some(buf) => buf,
                     None => {
-                        debug_assert!(false); // should have failed deserialize
-                        stats.err_malformed += 1;
-                        return false;
+                        debug_assert!(
+                            false,
+                            "request should have failed deserialization: {:?}",
+                            request
+                        );
+                        return Err(Error::from(RepairVerifyError::Malformed));
                     }
                 };
                 let from_id = request.sender();
                 let signed_data = [leading_buf, trailing_buf].concat();
                 if !header.signature.verify(from_id.as_ref(), &signed_data) {
-                    stats.err_sig_verify += 1;
-                    return false;
+                    return Err(Error::from(RepairVerifyError::SigVerify));
                 }
             }
         }
-        true
+        Ok(())
     }
 
     fn check_ping_cache(
@@ -809,7 +902,7 @@ impl ServeRepair {
         (check, ping_pkt)
     }
 
-    fn handle_packets(
+    fn handle_requests(
         &self,
         ping_cache: &mut PingCache,
         recycler: &PacketBatchRecycler,
@@ -1254,7 +1347,7 @@ mod tests {
             timing::timestamp,
         },
         solana_streamer::socket::SocketAddrSpace,
-        std::io::Cursor,
+        std::{io::Cursor, net::Ipv4Addr},
     };
 
     #[test]
@@ -1298,8 +1391,7 @@ mod tests {
         let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(10_000);
         let bank = Bank::new_for_tests(&genesis_config);
         let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
-        let me = ContactInfo::new_localhost(&solana_sdk::pubkey::new_rand(), timestamp());
-        let cluster_info = Arc::new(new_test_cluster_info(me));
+        let cluster_info = Arc::new(new_test_cluster_info());
         let serve_repair = ServeRepair::new(
             cluster_info.clone(),
             bank_forks,
@@ -1341,8 +1433,7 @@ mod tests {
     fn test_serialize_deserialize_ancestor_hashes_request() {
         let slot: Slot = 50;
         let nonce = 70;
-        let me = ContactInfo::new_localhost(&solana_sdk::pubkey::new_rand(), timestamp());
-        let cluster_info = Arc::new(new_test_cluster_info(me));
+        let cluster_info = Arc::new(new_test_cluster_info());
         let repair_peer_id = solana_sdk::pubkey::new_rand();
         let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(10_000);
         let keypair = cluster_info.keypair().clone();
@@ -1386,8 +1477,7 @@ mod tests {
         let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(10_000);
         let bank = Bank::new_for_tests(&genesis_config);
         let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
-        let me = ContactInfo::new_localhost(&solana_sdk::pubkey::new_rand(), timestamp());
-        let cluster_info = Arc::new(new_test_cluster_info(me));
+        let cluster_info = Arc::new(new_test_cluster_info());
         let serve_repair = ServeRepair::new(
             cluster_info.clone(),
             bank_forks,
@@ -1499,12 +1589,9 @@ mod tests {
             packet
         };
         let request: RepairProtocol = packet.deserialize_slice(..).unwrap();
-        assert!(ServeRepair::verify_signed_packet(
-            &other_keypair.pubkey(),
-            &packet,
-            &request,
-            &mut ServeRepairStats::default(),
-        ));
+        assert!(
+            ServeRepair::verify_signed_packet(&other_keypair.pubkey(), &packet, &request).is_ok()
+        );
 
         // recipient mismatch
         let packet = {
@@ -1521,14 +1608,10 @@ mod tests {
             packet
         };
         let request: RepairProtocol = packet.deserialize_slice(..).unwrap();
-        let mut stats = ServeRepairStats::default();
-        assert!(!ServeRepair::verify_signed_packet(
-            &my_keypair.pubkey(),
-            &packet,
-            &request,
-            &mut stats,
+        assert!(matches!(
+            ServeRepair::verify_signed_packet(&my_keypair.pubkey(), &packet, &request),
+            Err(Error::RepairVerify(RepairVerifyError::IdMismatch))
         ));
-        assert_eq!(stats.err_id_mismatch, 1);
 
         // outside time window
         let packet = {
@@ -1547,14 +1630,10 @@ mod tests {
             packet
         };
         let request: RepairProtocol = packet.deserialize_slice(..).unwrap();
-        let mut stats = ServeRepairStats::default();
-        assert!(!ServeRepair::verify_signed_packet(
-            &other_keypair.pubkey(),
-            &packet,
-            &request,
-            &mut stats,
+        assert!(matches!(
+            ServeRepair::verify_signed_packet(&other_keypair.pubkey(), &packet, &request),
+            Err(Error::RepairVerify(RepairVerifyError::TimeSkew))
         ));
-        assert_eq!(stats.err_time_skew, 1);
 
         // bad signature
         let packet = {
@@ -1571,14 +1650,10 @@ mod tests {
             packet
         };
         let request: RepairProtocol = packet.deserialize_slice(..).unwrap();
-        let mut stats = ServeRepairStats::default();
-        assert!(!ServeRepair::verify_signed_packet(
-            &other_keypair.pubkey(),
-            &packet,
-            &request,
-            &mut stats,
+        assert!(matches!(
+            ServeRepair::verify_signed_packet(&other_keypair.pubkey(), &packet, &request),
+            Err(Error::RepairVerify(RepairVerifyError::SigVerify))
         ));
-        assert_eq!(stats.err_sig_verify, 1);
     }
 
     #[test]
@@ -1703,12 +1778,10 @@ mod tests {
         Blockstore::destroy(&ledger_path).expect("Expected successful database destruction");
     }
 
-    fn new_test_cluster_info(contact_info: ContactInfo) -> ClusterInfo {
-        ClusterInfo::new(
-            contact_info,
-            Arc::new(Keypair::new()),
-            SocketAddrSpace::Unspecified,
-        )
+    fn new_test_cluster_info() -> ClusterInfo {
+        let keypair = Arc::new(Keypair::new());
+        let contact_info = ContactInfo::new_localhost(&keypair.pubkey(), timestamp());
+        ClusterInfo::new(contact_info, keypair, SocketAddrSpace::Unspecified)
     }
 
     #[test]
@@ -1717,8 +1790,7 @@ mod tests {
         let bank = Bank::new_for_tests(&genesis_config);
         let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
         let cluster_slots = ClusterSlots::default();
-        let me = ContactInfo::new_localhost(&solana_sdk::pubkey::new_rand(), timestamp());
-        let cluster_info = Arc::new(new_test_cluster_info(me));
+        let cluster_info = Arc::new(new_test_cluster_info());
         let serve_repair = ServeRepair::new(
             cluster_info.clone(),
             bank_forks,
@@ -1737,18 +1809,18 @@ mod tests {
         );
         assert_matches!(rv, Err(Error::ClusterInfo(ClusterInfoError::NoPeers)));
 
-        let serve_repair_addr = socketaddr!([127, 0, 0, 1], 1243);
+        let serve_repair_addr = socketaddr!(Ipv4Addr::LOCALHOST, 1243);
         let nxt = ContactInfo {
             id: solana_sdk::pubkey::new_rand(),
-            gossip: socketaddr!([127, 0, 0, 1], 1234),
-            tvu: socketaddr!([127, 0, 0, 1], 1235),
-            tvu_forwards: socketaddr!([127, 0, 0, 1], 1236),
-            repair: socketaddr!([127, 0, 0, 1], 1237),
-            tpu: socketaddr!([127, 0, 0, 1], 1238),
-            tpu_forwards: socketaddr!([127, 0, 0, 1], 1239),
-            tpu_vote: socketaddr!([127, 0, 0, 1], 1240),
-            rpc: socketaddr!([127, 0, 0, 1], 1241),
-            rpc_pubsub: socketaddr!([127, 0, 0, 1], 1242),
+            gossip: socketaddr!(Ipv4Addr::LOCALHOST, 1234),
+            tvu: socketaddr!(Ipv4Addr::LOCALHOST, 1235),
+            tvu_forwards: socketaddr!(Ipv4Addr::LOCALHOST, 1236),
+            repair: socketaddr!(Ipv4Addr::LOCALHOST, 1237),
+            tpu: socketaddr!(Ipv4Addr::LOCALHOST, 1238),
+            tpu_forwards: socketaddr!(Ipv4Addr::LOCALHOST, 1239),
+            tpu_vote: socketaddr!(Ipv4Addr::LOCALHOST, 1240),
+            rpc: socketaddr!(Ipv4Addr::LOCALHOST, 1241),
+            rpc_pubsub: socketaddr!(Ipv4Addr::LOCALHOST, 1242),
             serve_repair: serve_repair_addr,
             wallclock: 0,
             shred_version: 0,
@@ -1771,15 +1843,15 @@ mod tests {
         let serve_repair_addr2 = socketaddr!([127, 0, 0, 2], 1243);
         let nxt = ContactInfo {
             id: solana_sdk::pubkey::new_rand(),
-            gossip: socketaddr!([127, 0, 0, 1], 1234),
-            tvu: socketaddr!([127, 0, 0, 1], 1235),
-            tvu_forwards: socketaddr!([127, 0, 0, 1], 1236),
-            repair: socketaddr!([127, 0, 0, 1], 1237),
-            tpu: socketaddr!([127, 0, 0, 1], 1238),
-            tpu_forwards: socketaddr!([127, 0, 0, 1], 1239),
-            tpu_vote: socketaddr!([127, 0, 0, 1], 1240),
-            rpc: socketaddr!([127, 0, 0, 1], 1241),
-            rpc_pubsub: socketaddr!([127, 0, 0, 1], 1242),
+            gossip: socketaddr!(Ipv4Addr::LOCALHOST, 1234),
+            tvu: socketaddr!(Ipv4Addr::LOCALHOST, 1235),
+            tvu_forwards: socketaddr!(Ipv4Addr::LOCALHOST, 1236),
+            repair: socketaddr!(Ipv4Addr::LOCALHOST, 1237),
+            tpu: socketaddr!(Ipv4Addr::LOCALHOST, 1238),
+            tpu_forwards: socketaddr!(Ipv4Addr::LOCALHOST, 1239),
+            tpu_vote: socketaddr!(Ipv4Addr::LOCALHOST, 1240),
+            rpc: socketaddr!(Ipv4Addr::LOCALHOST, 1241),
+            rpc_pubsub: socketaddr!(Ipv4Addr::LOCALHOST, 1242),
             serve_repair: serve_repair_addr2,
             wallclock: 0,
             shred_version: 0,
@@ -2043,8 +2115,8 @@ mod tests {
         let bank = Bank::new_for_tests(&genesis_config);
         let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
         let cluster_slots = ClusterSlots::default();
-        let me = ContactInfo::new_localhost(&solana_sdk::pubkey::new_rand(), timestamp());
-        let cluster_info = Arc::new(new_test_cluster_info(me.clone()));
+        let cluster_info = Arc::new(new_test_cluster_info());
+        let me = cluster_info.my_contact_info();
 
         // Insert two peers on the network
         let contact_info2 =

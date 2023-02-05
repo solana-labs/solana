@@ -8,6 +8,7 @@ use {
     rand::{seq::SliceRandom, thread_rng},
     solana_clap_utils::input_parsers::{keypair_of, keypairs_of, pubkey_of, value_of},
     solana_core::{
+        banking_trace::DISABLED_BAKING_TRACE_DIR,
         ledger_cleanup_service::{DEFAULT_MAX_LEDGER_SHREDS, DEFAULT_MIN_MAX_LEDGER_SHREDS},
         system_monitor_service::SystemMonitorService,
         tower_storage,
@@ -27,14 +28,19 @@ use {
     solana_rpc_client::rpc_client::RpcClient,
     solana_rpc_client_api::config::RpcLeaderScheduleConfig,
     solana_runtime::{
-        accounts_db::{AccountShrinkThreshold, AccountsDb, AccountsDbConfig, FillerAccountsConfig},
+        accounts_db::{
+            AccountShrinkThreshold, AccountsDb, AccountsDbConfig, CreateAncientStorage,
+            FillerAccountsConfig,
+        },
         accounts_index::{
             AccountIndex, AccountSecondaryIndexes, AccountSecondaryIndexesIncludeExclude,
             AccountsIndexConfig, IndexLimitMb,
         },
         runtime_config::RuntimeConfig,
         snapshot_config::{SnapshotConfig, SnapshotUsage},
-        snapshot_utils::{self, ArchiveFormat, SnapshotVersion},
+        snapshot_utils::{
+            self, create_accounts_run_and_snapshot_dirs, ArchiveFormat, SnapshotVersion,
+        },
     },
     solana_sdk::{
         clock::{Slot, DEFAULT_S_PER_SLOT},
@@ -45,7 +51,7 @@ use {
     },
     solana_send_transaction_service::send_transaction_service::{self},
     solana_streamer::socket::SocketAddrSpace,
-    solana_tpu_client::tpu_connection_cache::DEFAULT_TPU_ENABLE_UDP,
+    solana_tpu_client::tpu_client::DEFAULT_TPU_ENABLE_UDP,
     solana_validator::{
         admin_rpc_service,
         admin_rpc_service::{load_staked_nodes_overrides, StakedNodesOverrides},
@@ -59,7 +65,7 @@ use {
         collections::{HashSet, VecDeque},
         env,
         fs::{self, File},
-        net::{IpAddr, SocketAddr},
+        net::{IpAddr, Ipv4Addr, SocketAddr},
         path::{Path, PathBuf},
         process::exit,
         str::FromStr,
@@ -425,6 +431,21 @@ fn get_cluster_shred_version(entrypoints: &[SocketAddr]) -> Option<u16> {
     None
 }
 
+fn configure_banking_trace_dir_byte_limit(
+    validator_config: &mut ValidatorConfig,
+    matches: &ArgMatches,
+) {
+    validator_config.banking_trace_dir_byte_limit =
+        if matches.occurrences_of("banking_trace_dir_byte_limit") == 0 {
+            // disable with no explicit flag; then, this effectively becomes `opt-in` even if we're
+            // specifying a default value in clap configuration.
+            DISABLED_BAKING_TRACE_DIR
+        } else {
+            // BANKING_TRACE_DIR_DEFAULT_BYTE_LIMIT or user-supplied override value
+            value_t_or_exit!(matches, "banking_trace_dir_byte_limit", u64)
+        };
+}
+
 pub fn main() {
     let default_args = DefaultArgs::new();
     let solana_version = solana_version::version!();
@@ -763,7 +784,7 @@ pub fn main() {
     let use_progress_bar = logfile.is_none();
     let _logger_thread = redirect_stderr_to_file(logfile);
 
-    info!("{} {}", crate_name!(), solana_version::version!());
+    info!("{} {}", crate_name!(), solana_version);
     info!("Starting validator with: {:#?}", std::env::args_os());
 
     let cuda = matches.is_present("cuda");
@@ -1028,6 +1049,10 @@ pub fn main() {
             .map(|mb| mb * MB as u64),
         ancient_append_vec_offset: value_t!(matches, "accounts_db_ancient_append_vecs", i64).ok(),
         exhaustively_verify_refcounts: matches.is_present("accounts_db_verify_refcounts"),
+        create_ancient_storage: matches
+            .is_present("accounts_db_create_ancient_storage_packed")
+            .then_some(CreateAncientStorage::Pack)
+            .unwrap_or_default(),
         ..AccountsDbConfig::default()
     };
 
@@ -1251,7 +1276,7 @@ pub fn main() {
             .ok();
 
     // Create and canonicalize account paths to avoid issues with symlink creation
-    validator_config.account_paths = account_paths
+    let account_run_paths: Vec<PathBuf> = account_paths
         .into_iter()
         .map(|account_path| {
             match fs::create_dir_all(&account_path).and_then(|_| fs::canonicalize(&account_path)) {
@@ -1261,8 +1286,21 @@ pub fn main() {
                     exit(1);
                 }
             }
-        })
-        .collect();
+        }).map(
+        |account_path| {
+            // For all account_paths, set up the run/ and snapshot/ sub directories.
+            // If the sub directories do not exist, the account_path will be cleaned because older version put account files there
+            match create_accounts_run_and_snapshot_dirs(&account_path) {
+                Ok((account_run_path, _account_snapshot_path)) => account_run_path,
+                Err(err) => {
+                    eprintln!("Unable to create account run and snapshot sub directories: {}, err: {err:?}", account_path.display());
+                    exit(1);
+                }
+            }
+        }).collect();
+
+    // From now on, use run/ paths in the same way as the previous account_paths.
+    validator_config.account_paths = account_run_paths;
 
     validator_config.account_shrink_paths = account_shrink_paths.map(|paths| {
         paths
@@ -1413,6 +1451,8 @@ pub fn main() {
         validator_config.max_ledger_shreds = Some(limit_ledger_size);
     }
 
+    configure_banking_trace_dir_byte_limit(&mut validator_config, &matches);
+
     validator_config.ledger_column_options = LedgerColumnOptions {
         compression_type: match matches.value_of("rocksdb_ledger_compression") {
             None => BlockstoreCompressionType::default(),
@@ -1522,7 +1562,7 @@ pub fn main() {
                     exit(1);
                 })
             } else {
-                std::net::IpAddr::V4(std::net::Ipv4Addr::new(127, 0, 0, 1))
+                IpAddr::V4(Ipv4Addr::LOCALHOST)
             }
         });
 
@@ -1559,7 +1599,7 @@ pub fn main() {
     );
 
     if restricted_repair_only_mode {
-        let any = SocketAddr::new(std::net::IpAddr::V4(std::net::Ipv4Addr::new(0, 0, 0, 0)), 0);
+        let any = SocketAddr::new(IpAddr::V4(Ipv4Addr::UNSPECIFIED), 0);
         // When in --restricted_repair_only_mode is enabled only the gossip and repair ports
         // need to be reachable by the entrypoint to respond to gossip pull requests and repair
         // requests initiated by the node.  All other ports are unused.
@@ -1584,17 +1624,14 @@ pub fn main() {
     }
 
     solana_metrics::set_host_id(identity_keypair.pubkey().to_string());
-    solana_metrics::set_panic_hook("validator", {
-        let version = format!("{solana_version:?}");
-        Some(version)
-    });
+    solana_metrics::set_panic_hook("validator", Some(String::from(solana_version)));
     solana_entry::entry::init_poh();
     snapshot_utils::remove_tmp_snapshot_archives(&full_snapshot_archives_dir);
     snapshot_utils::remove_tmp_snapshot_archives(&incremental_snapshot_archives_dir);
 
     let identity_keypair = Arc::new(identity_keypair);
 
-    let should_check_duplicate_instance = !matches.is_present("no_duplicate_instance_check");
+    let should_check_duplicate_instance = true;
     if !cluster_entrypoints.is_empty() {
         bootstrap::rpc_bootstrap(
             &node,

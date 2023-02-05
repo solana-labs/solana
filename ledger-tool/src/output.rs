@@ -40,10 +40,10 @@ impl Display for SlotBounds<'_> {
                 )?;
 
                 if let Some(all_slots) = self.all_slots {
-                    writeln!(f, "Non-empty slots: {:?}", all_slots)?;
+                    writeln!(f, "Non-empty slots: {all_slots:?}")?;
                 }
             } else {
-                writeln!(f, "Ledger has data for slot {:?}", first)?;
+                writeln!(f, "Ledger has data for slot {first:?}")?;
             }
 
             if self.roots.total > 0 {
@@ -56,11 +56,7 @@ impl Display for SlotBounds<'_> {
                     self.roots.total, first_rooted, last_rooted
                 )?;
 
-                writeln!(
-                    f,
-                    "  and {:?} slots past the last root",
-                    num_after_last_root
-                )?;
+                writeln!(f, "  and {num_after_last_root:?} slots past the last root")?;
             } else {
                 writeln!(f, "  with no rooted slots")?;
             }

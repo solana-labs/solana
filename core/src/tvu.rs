@@ -3,6 +3,7 @@
 
 use {
     crate::{
+        banking_trace::BankingTracer,
         broadcast_stage::RetransmitSlotsSender,
         cache_block_meta_service::CacheBlockMetaSender,
         cluster_info_vote_listener::{
@@ -30,7 +31,10 @@ use {
     crossbeam_channel::{unbounded, Receiver},
     solana_client::connection_cache::ConnectionCache,
     solana_geyser_plugin_manager::block_metadata_notifier_interface::BlockMetadataNotifierLock,
-    solana_gossip::cluster_info::ClusterInfo,
+    solana_gossip::{
+        cluster_info::ClusterInfo, duplicate_shred_handler::DuplicateShredHandler,
+        duplicate_shred_listener::DuplicateShredListener,
+    },
     solana_ledger::{
         blockstore::Blockstore, blockstore_processor::TransactionStatusSender,
         leader_schedule_cache::LeaderScheduleCache,
@@ -66,6 +70,7 @@ pub struct Tvu {
     voting_service: VotingService,
     warm_quic_cache_service: Option<WarmQuicCacheService>,
     drop_bank_service: DropBankService,
+    duplicate_shred_listener: DuplicateShredListener,
 }
 
 pub struct TvuSockets {
@@ -131,6 +136,7 @@ impl Tvu {
         log_messages_bytes_limit: Option<usize>,
         connection_cache: &Arc<ConnectionCache>,
         prioritization_fee_cache: &Arc<PrioritizationFeeCache>,
+        banking_tracer: Arc<BankingTracer>,
     ) -> Result<Self, String> {
         let TvuSockets {
             repair: repair_socket,
@@ -161,7 +167,7 @@ impl Tvu {
         let (verified_sender, verified_receiver) = unbounded();
         let (retransmit_sender, retransmit_receiver) = unbounded();
         let shred_sigverify = sigverify_shreds::spawn_shred_sigverify(
-            cluster_info.id(),
+            cluster_info.clone(),
             bank_forks.clone(),
             leader_schedule_cache.clone(),
             fetch_receiver,
@@ -295,6 +301,7 @@ impl Tvu {
             log_messages_bytes_limit,
             prioritization_fee_cache.clone(),
             dumped_slots_sender,
+            banking_tracer,
         )?;
 
         let ledger_cleanup_service = tvu_config.max_ledger_shreds.map(|max_ledger_shreds| {
@@ -305,6 +312,16 @@ impl Tvu {
                 exit,
             )
         });
+
+        let duplicate_shred_listener = DuplicateShredListener::new(
+            exit.clone(),
+            cluster_info.clone(),
+            DuplicateShredHandler::new(
+                blockstore,
+                leader_schedule_cache.clone(),
+                bank_forks.clone(),
+            ),
+        );
 
         Ok(Tvu {
             fetch_stage,
@@ -318,6 +335,7 @@ impl Tvu {
             voting_service,
             warm_quic_cache_service,
             drop_bank_service,
+            duplicate_shred_listener,
         })
     }
 
@@ -337,6 +355,7 @@ impl Tvu {
             warmup_service.join()?;
         }
         self.drop_bank_service.join()?;
+        self.duplicate_shred_listener.join()?;
         Ok(())
     }
 }
@@ -456,6 +475,7 @@ pub mod tests {
             None,
             &Arc::new(ConnectionCache::default()),
             &_ignored_prioritization_fee_cache,
+            BankingTracer::new_disabled(),
         )
         .expect("assume success");
         exit.store(true, Ordering::Relaxed);

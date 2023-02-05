@@ -94,7 +94,7 @@ pub enum GossipRoute {
     PushMessage,
 }
 
-type CrdsCountsArray = [usize; 11];
+type CrdsCountsArray = [usize; 12];
 
 pub(crate) struct CrdsDataStats {
     pub(crate) counts: CrdsCountsArray,
@@ -642,24 +642,6 @@ impl Crds {
     pub(crate) fn take_stats(&self) -> CrdsStats {
         std::mem::take(&mut self.stats.lock().unwrap())
     }
-
-    // Only for tests and simulations.
-    pub(crate) fn mock_clone(&self) -> Self {
-        Self {
-            table: self.table.clone(),
-            cursor: self.cursor,
-            shards: self.shards.clone(),
-            nodes: self.nodes.clone(),
-            votes: self.votes.clone(),
-            epoch_slots: self.epoch_slots.clone(),
-            duplicate_shreds: self.duplicate_shreds.clone(),
-            records: self.records.clone(),
-            entries: self.entries.clone(),
-            purged: self.purged.clone(),
-            shred_versions: self.shred_versions.clone(),
-            stats: Mutex::<CrdsStats>::default(),
-        }
-    }
 }
 
 impl Default for CrdsDataStats {
@@ -700,6 +682,8 @@ impl CrdsDataStats {
             CrdsData::NodeInstance(_) => 8,
             CrdsData::DuplicateShred(_, _) => 9,
             CrdsData::IncrementalSnapshotHashes(_) => 10,
+            CrdsData::ContactInfo(_) => 11,
+            // Update CrdsCountsArray if new items are added here.
         }
     }
 }
@@ -739,7 +723,7 @@ mod tests {
             signature::{Keypair, Signer},
             timing::timestamp,
         },
-        std::{collections::HashSet, iter::repeat_with},
+        std::{collections::HashSet, iter::repeat_with, net::Ipv4Addr},
     };
 
     #[test]
@@ -1392,7 +1376,7 @@ mod tests {
         let v2 = VersionedCrdsValue::new(
             {
                 let mut contact_info = ContactInfo::new_localhost(&Pubkey::default(), 0);
-                contact_info.rpc = socketaddr!("0.0.0.0:0");
+                contact_info.rpc = socketaddr!(Ipv4Addr::UNSPECIFIED, 0);
                 CrdsValue::new_unsigned(CrdsData::LegacyContactInfo(contact_info))
             },
             Cursor::default(),

@@ -9,7 +9,13 @@ cd "$(dirname "$0")"/..
 output_file=${1:-/dev/stderr}
 
 if [[ -n $CI_PULL_REQUEST ]]; then
-  IFS=':' read -ra affected_files <<< "$(buildkite-agent meta-data get affected_files)"
+  # filter pr number from ci branch.
+  [[ $CI_BRANCH =~ pull/([0-9]+)/head ]]
+  pr_number=${BASH_REMATCH[1]}
+  echo "get affected files from PR: $pr_number"
+
+  # get affected files
+  readarray -t affected_files < <(gh pr diff --name-only "$pr_number")
   if [[ ${#affected_files[*]} -eq 0 ]]; then
     echo "Unable to determine the files affected by this PR"
     exit 1
@@ -336,11 +342,11 @@ pull_or_push_steps() {
 
   # Run the full test suite by default, skipping only if modifications are local
   # to some particular areas of the tree
-  if affects_other_than ^.buildkite ^.mergify .md$ ^docs/ ^web3.js/ ^explorer/ ^.gitbook; then
+  if affects_other_than ^.buildkite ^.mergify .md$ ^docs/ ^explorer/ ^.gitbook; then
     all_test_steps
   fi
 
-  # web3.js, explorer and docs changes run on Travis or Github actions...
+  # explorer and docs changes run on Travis or Github actions...
 }
 
 

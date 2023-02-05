@@ -2,7 +2,6 @@ pub use solana_tpu_client::nonblocking::tpu_client::{LeaderTpuService, TpuSender
 use {
     crate::{
         connection_cache::ConnectionCache,
-        nonblocking::tpu_connection::TpuConnection,
         tpu_client::{TpuClientConfig, MAX_FANOUT_SLOTS},
     },
     bincode::serialize,
@@ -46,7 +45,7 @@ async fn send_wire_transaction_to_addr(
     wire_transaction: Vec<u8>,
 ) -> TransportResult<()> {
     let conn = connection_cache.get_nonblocking_connection(addr);
-    conn.send_wire_transaction(wire_transaction.clone()).await
+    conn.send_data(&wire_transaction).await
 }
 
 async fn send_wire_transaction_batch_to_addr(
@@ -55,7 +54,7 @@ async fn send_wire_transaction_batch_to_addr(
     wire_transactions: &[Vec<u8>],
 ) -> TransportResult<()> {
     let conn = connection_cache.get_nonblocking_connection(addr);
-    conn.send_wire_transaction_batch(wire_transactions).await
+    conn.send_data_batch(wire_transactions).await
 }
 
 impl TpuClient {
