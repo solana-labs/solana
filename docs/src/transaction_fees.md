@@ -109,6 +109,7 @@ and return an error. This results in a failed transaction.
 ## Prioritization fee
 
 A Solana transaction can include an **optional** fee to prioritize itself
+<<<<<<< HEAD
 against others known as a
 "_[prioritization fee](./terminology.md#prioritization-fee)_". Paying this
 additional fee helps boost how a transaction is prioritized against others,
@@ -118,6 +119,16 @@ resulting in faster execution times.
 
 A transaction's [prioritization fee](./terminology.md#prioritization-fee) is
 calculated by multiplying the maximum number of **_compute units_** by the
+=======
+against others known as a "_[prioritization fee](./terminology.md#prioritization-fee)_".
+Paying this additional fee helps boost how a transaction is prioritized against
+others, resulting in faster execution times.
+
+### How the prioritization fee is calculated
+
+A transaction's [prioritization fee](./terminology.md#prioritization-fee)
+is calculated by multiplying the maximum number of **_compute units_** by the
+>>>>>>> b80f49b775 (docs: updated prioritization fees docs)
 **_compute unit price_** (measured in _micro-lamports_).
 
 Each transaction can set the maximum number of compute units it is allowed to
@@ -125,6 +136,7 @@ consume and the compute unit price by including a `SetComputeUnitLimit` and
 `SetComputeUnitPrice` compute budget instruction respectively.
 
 :::info
+<<<<<<< HEAD
 [Compute Budget instructions](https://github.com/solana-labs/solana/blob/master/sdk/src/compute_budget.rs)
 do **not** require any accounts. :::
 
@@ -135,11 +147,24 @@ the default per-instruction units, which is currently
 
 If no `SetComputeUnitPrice` instruction is provided, the transaction will
 default to no additional elevated fee and the lowest priority.
+=======
+[Compute Budget instructions](https://github.com/solana-labs/solana/blob/db32549c00a1b5370fcaf128981ad3323bbd9570/sdk/src/compute_budget.rs#L22) do **not** require any accounts and do **not**
+consume any compute units to process.
+:::
+
+If no `SetComputeUnitLimit` instruction is provided, the limit will be
+calculated as the product of the number of instructions in the transaction and
+the default per-instruction units, which is currently [200k](https://github.com/solana-labs/solana/blob/4293f11cf13fc1e83f1baa2ca3bb2f8ea8f9a000/program-runtime/src/compute_budget.rs#L13).
+
+If no `SetComputeUnitPrice` instruction is provided, the transaction will
+effectively have a default priority.
+>>>>>>> b80f49b775 (docs: updated prioritization fees docs)
 
 ### How to set the prioritization fee
 
 A transaction's prioritization fee is set by including a `SetComputeUnitPrice`
 instruction, and optionally a `SetComputeUnitLimit` instruction. The runtime
+<<<<<<< HEAD
 will use these values to calculate the prioritization fee, which will be used to
 prioritize the given transaction within the block.
 
@@ -152,13 +177,30 @@ and sent to the cluster like normal. See also the
 instruction. Duplicate types will result in an
 [`TransactionError::DuplicateInstruction`](https://github.com/solana-labs/solana/blob/master/sdk/src/transaction/error.rs#L144-145)
 error, and ultimately transaction failure. :::
+=======
+will use these values to calculate the prioritization fee, which will be used
+to prioritize the given transaction within the block.
+
+You can craft each of these instructions via their `rust` or `@solana/web3.js`
+functions. Each of these instructions can then be included in the transaction
+and sent to the cluster like normal. See also the [best practices](#prioritization-fee-best-practices) below.
+
+:::caution
+Transactions can only contain **one of each type** of compute budget instruction.
+Duplicate types will result in an error, and ultimately transaction failure.
+:::
+>>>>>>> b80f49b775 (docs: updated prioritization fees docs)
 
 #### Rust
 
 The rust `solana-sdk` crate includes functions within
 [`ComputeBudgetInstruction`](https://docs.rs/solana-sdk/latest/solana_sdk/compute_budget/enum.ComputeBudgetInstruction.html)
+<<<<<<< HEAD
 to craft instructions for setting the _compute unit limit_ and _compute unit
 price_:
+=======
+to craft instructions for setting the _compute unit limit_ and _compute unit price_:
+>>>>>>> b80f49b775 (docs: updated prioritization fees docs)
 
 ```rust
 let instruction = ComputeBudgetInstruction::set_compute_unit_limit(300_000);
@@ -172,8 +214,12 @@ let instruction = ComputeBudgetInstruction::set_compute_unit_price(1);
 
 The `@solana/web3.js` library includes functions within the
 [`ComputeBudgetProgram`](https://solana-labs.github.io/solana-web3.js/classes/ComputeBudgetProgram.html)
+<<<<<<< HEAD
 class to craft instructions for setting the _compute unit limit_ and _compute
 unit price_:
+=======
+class to craft instructions for setting the _compute unit limit_ and _compute unit price_:
+>>>>>>> b80f49b775 (docs: updated prioritization fees docs)
 
 ```js
 const instruction = ComputeBudgetProgram.setComputeUnitLimit({
@@ -192,9 +238,15 @@ const instruction = ComputeBudgetProgram.setComputeUnitPrice({
 #### Request the minimum compute units
 
 Transactions should request the minimum amount of compute units required for
+<<<<<<< HEAD
 execution to minimize fees. Also note that fees are not adjusted when the number
 of requested compute units exceeds the number of compute units actually consumed
 by an executed transaction.
+=======
+execution to minimize fees. Also note that fees are not adjusted when the
+number of requested compute units exceeds the number of compute units actually
+consumed by an executed transaction.
+>>>>>>> b80f49b775 (docs: updated prioritization fees docs)
 
 #### Get recent prioritization fees
 
@@ -204,8 +256,13 @@ method to get a list of the recent paid prioritization fees within the recent
 blocks processed by the node.
 
 You could then use this data to estimate an appropriate prioritization fee for
+<<<<<<< HEAD
 your transaction to both (a) better ensure it gets processed by the cluster and
 (b) minimize the fees paid.
+=======
+your transaction to both (a) better ensure it gets processed by the cluster
+and (b) minimize the fees paid.
+>>>>>>> b80f49b775 (docs: updated prioritization fees docs)
 
 ## Fee Collection
 
