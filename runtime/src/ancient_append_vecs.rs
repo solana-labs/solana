@@ -303,11 +303,7 @@ pub mod tests {
         }
     }
 
-    fn assert_storage_info(
-        info: &SlotInfo,
-        storage: &Arc<AccountStorageEntry>,
-        should_shrink: bool,
-    ) {
+    fn assert_storage_info(info: &SlotInfo, storage: &AccountStorageEntry, should_shrink: bool) {
         assert_eq!(storage.append_vec_id(), info.storage.append_vec_id());
         assert_eq!(storage.slot(), info.slot);
         assert_eq!(storage.capacity(), info.capacity);
@@ -356,7 +352,6 @@ pub mod tests {
         let alive = false;
         let slots = 1;
         for call_add in [false, true] {
-            // 1_040_000 is big enough relative to page size to cause shrink ratio to be triggered
             let (db, slot1) = create_db_with_storages_and_index(alive, slots, None);
             let mut infos = AncientSlotInfos::default();
             let storage = db.storage.get_slot_storage_entry(slot1).unwrap();

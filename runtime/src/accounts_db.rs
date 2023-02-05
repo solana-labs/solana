@@ -17431,7 +17431,7 @@ pub mod tests {
     }
 
     pub(crate) fn remove_account_for_tests(
-        storage: &Arc<AccountStorageEntry>,
+        storage: &AccountStorageEntry,
         num_bytes: usize,
         reset_accounts: bool,
     ) {
