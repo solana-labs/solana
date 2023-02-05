@@ -150,6 +150,9 @@ pub enum TransactionError {
         "Transaction results in an account ({account_index}) with insufficient funds for rent"
     )]
     InsufficientFundsForRent { account_index: u8 },
+    /// Transaction exceeded max loaded accounts data size cap
+    #[error("Transaction exceeded max loaded accounts data size cap")]
+    MaxLoadedAccountsDataSizeExceeded,
 
     //#[error("not commitable to poh")]
     //NotCommitable,

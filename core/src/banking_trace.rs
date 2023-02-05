@@ -789,7 +789,7 @@ impl BankingSimulator {
             solana_ledger::leader_schedule_cache::LeaderScheduleCache,
             solana_poh::poh_recorder::create_test_recorder, solana_runtime::bank::Bank,
             solana_sdk::signature::Keypair, solana_streamer::socket::SocketAddrSpace,
-            solana_tpu_client::tpu_connection_cache::DEFAULT_TPU_CONNECTION_POOL_SIZE,
+            solana_tpu_client::tpu_client::DEFAULT_TPU_CONNECTION_POOL_SIZE,
         };
 
         let mut bank = bank_forks.read().unwrap().working_bank();

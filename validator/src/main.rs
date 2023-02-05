@@ -28,14 +28,19 @@ use {
     solana_rpc_client::rpc_client::RpcClient,
     solana_rpc_client_api::config::RpcLeaderScheduleConfig,
     solana_runtime::{
-        accounts_db::{AccountShrinkThreshold, AccountsDb, AccountsDbConfig, FillerAccountsConfig},
+        accounts_db::{
+            AccountShrinkThreshold, AccountsDb, AccountsDbConfig, CreateAncientStorage,
+            FillerAccountsConfig,
+        },
         accounts_index::{
             AccountIndex, AccountSecondaryIndexes, AccountSecondaryIndexesIncludeExclude,
             AccountsIndexConfig, IndexLimitMb,
         },
         runtime_config::RuntimeConfig,
         snapshot_config::{SnapshotConfig, SnapshotUsage},
-        snapshot_utils::{self, ArchiveFormat, SnapshotVersion},
+        snapshot_utils::{
+            self, create_accounts_run_and_snapshot_dirs, ArchiveFormat, SnapshotVersion,
+        },
     },
     solana_sdk::{
         clock::{Slot, DEFAULT_S_PER_SLOT},
@@ -46,7 +51,7 @@ use {
     },
     solana_send_transaction_service::send_transaction_service::{self},
     solana_streamer::socket::SocketAddrSpace,
-    solana_tpu_client::tpu_connection_cache::DEFAULT_TPU_ENABLE_UDP,
+    solana_tpu_client::tpu_client::DEFAULT_TPU_ENABLE_UDP,
     solana_validator::{
         admin_rpc_service,
         admin_rpc_service::{load_staked_nodes_overrides, StakedNodesOverrides},
@@ -779,7 +784,7 @@ pub fn main() {
     let use_progress_bar = logfile.is_none();
     let _logger_thread = redirect_stderr_to_file(logfile);
 
-    info!("{} {}", crate_name!(), solana_version::version!());
+    info!("{} {}", crate_name!(), solana_version);
     info!("Starting validator with: {:#?}", std::env::args_os());
 
     let cuda = matches.is_present("cuda");
@@ -1044,6 +1049,10 @@ pub fn main() {
             .map(|mb| mb * MB as u64),
         ancient_append_vec_offset: value_t!(matches, "accounts_db_ancient_append_vecs", i64).ok(),
         exhaustively_verify_refcounts: matches.is_present("accounts_db_verify_refcounts"),
+        create_ancient_storage: matches
+            .is_present("accounts_db_create_ancient_storage_packed")
+            .then_some(CreateAncientStorage::Pack)
+            .unwrap_or_default(),
         ..AccountsDbConfig::default()
     };
 
@@ -1267,7 +1276,7 @@ pub fn main() {
             .ok();
 
     // Create and canonicalize account paths to avoid issues with symlink creation
-    validator_config.account_paths = account_paths
+    let account_run_paths: Vec<PathBuf> = account_paths
         .into_iter()
         .map(|account_path| {
             match fs::create_dir_all(&account_path).and_then(|_| fs::canonicalize(&account_path)) {
@@ -1277,8 +1286,21 @@ pub fn main() {
                     exit(1);
                 }
             }
-        })
-        .collect();
+        }).map(
+        |account_path| {
+            // For all account_paths, set up the run/ and snapshot/ sub directories.
+            // If the sub directories do not exist, the account_path will be cleaned because older version put account files there
+            match create_accounts_run_and_snapshot_dirs(&account_path) {
+                Ok((account_run_path, _account_snapshot_path)) => account_run_path,
+                Err(err) => {
+                    eprintln!("Unable to create account run and snapshot sub directories: {}, err: {err:?}", account_path.display());
+                    exit(1);
+                }
+            }
+        }).collect();
+
+    // From now on, use run/ paths in the same way as the previous account_paths.
+    validator_config.account_paths = account_run_paths;
 
     validator_config.account_shrink_paths = account_shrink_paths.map(|paths| {
         paths
@@ -1602,10 +1624,7 @@ pub fn main() {
     }
 
     solana_metrics::set_host_id(identity_keypair.pubkey().to_string());
-    solana_metrics::set_panic_hook("validator", {
-        let version = format!("{solana_version:?}");
-        Some(version)
-    });
+    solana_metrics::set_panic_hook("validator", Some(String::from(solana_version)));
     solana_entry::entry::init_poh();
     snapshot_utils::remove_tmp_snapshot_archives(&full_snapshot_archives_dir);
     snapshot_utils::remove_tmp_snapshot_archives(&incremental_snapshot_archives_dir);

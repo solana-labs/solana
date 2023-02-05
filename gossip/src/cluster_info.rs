@@ -267,7 +267,7 @@ pub fn make_accounts_hashes_message(
 pub(crate) type Ping = ping_pong::Ping<[u8; GOSSIP_PING_TOKEN_SIZE]>;
 
 // TODO These messages should go through the gpu pipeline for spam filtering
-#[frozen_abi(digest = "Aui5aMV3SK41tRQN14sgCMK3qp6r9dboLXNAHEBKFzii")]
+#[frozen_abi(digest = "avtjwK4ZjdAVfR8ZqqJkxbbe7SXSvhX5Cv7hnNjbZ7g")]
 #[derive(Serialize, Deserialize, Debug, AbiEnumVisitor, AbiExample)]
 #[allow(clippy::large_enum_variant)]
 pub(crate) enum Protocol {
@@ -377,6 +377,7 @@ impl Sanitize for Protocol {
 fn retain_staked(values: &mut Vec<CrdsValue>, stakes: &HashMap<Pubkey, u64>) {
     values.retain(|value| {
         match value.data {
+            CrdsData::ContactInfo(_) => true,
             CrdsData::LegacyContactInfo(_) => true,
             // May Impact new validators starting up without any stake yet.
             CrdsData::Vote(_, _) => true,
@@ -1882,8 +1883,9 @@ impl ClusterInfo {
 
     fn update_data_budget(&self, num_staked: usize) -> usize {
         const INTERVAL_MS: u64 = 100;
-        // allow 50kBps per staked validator, epoch slots + votes ~= 1.5kB/slot ~= 4kB/s
-        const BYTES_PER_INTERVAL: usize = 5000;
+        // epoch slots + votes ~= 1.5kB/slot ~= 4kB/s
+        // Allow 10kB/s per staked validator.
+        const BYTES_PER_INTERVAL: usize = 1024;
         const MAX_BUDGET_MULTIPLE: usize = 5; // allow budget build-up to 5x the interval default
         let num_staked = num_staked.max(2);
         self.outbound_budget.update(INTERVAL_MS, |bytes| {
@@ -3621,7 +3623,7 @@ RPC Enabled Nodes: 1"#;
 
     #[test]
     fn new_with_external_ip_test_random() {
-        let ip = Ipv4Addr::from(0);
+        let ip = Ipv4Addr::UNSPECIFIED;
         let node = Node::new_with_external_ip(
             &solana_sdk::pubkey::new_rand(),
             &socketaddr!(ip, 0),
@@ -3642,11 +3644,11 @@ RPC Enabled Nodes: 1"#;
             VALIDATOR_PORT_RANGE.1 + (2 * MINIMUM_VALIDATOR_PORT_RANGE_WIDTH),
         );
 
-        let ip = IpAddr::V4(Ipv4Addr::from(0));
+        let ip = IpAddr::V4(Ipv4Addr::UNSPECIFIED);
         let port = bind_in_range(ip, port_range).expect("Failed to bind").0;
         let node = Node::new_with_external_ip(
             &solana_sdk::pubkey::new_rand(),
-            &socketaddr!(0, port),
+            &socketaddr!(Ipv4Addr::UNSPECIFIED, port),
             port_range,
             ip,
             None,

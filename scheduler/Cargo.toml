@@ -3,7 +3,7 @@ authors = ["Solana Maintainers <maintainers@solana.foundation>"]
 edition = "2021"
 name = "solana-scheduler"
 description = "The solana scheduler"
-version = "1.15.0"
+version = "1.16.0"
 repository = "https://github.com/solana-labs/solana"
 license = "Apache-2.0"
 homepage = "https://solana.com/"
@@ -17,11 +17,11 @@ crossbeam-channel = "0.5.5"
 enum_dispatch = "0.3.9"
 dashmap = { version = "4.0.2" }
 log = "0.4.17"
-solana-sdk = { path = "../sdk", version = "=1.15.0" }
-solana-logger = { path = "../logger", version = "=1.15.0" }
-solana-version = { path = "../version", version = "=1.15.0" }
-solana-metrics = { path = "../metrics", version = "=1.15.0" }
-solana-measure = { path = "../measure", version = "=1.15.0" }
+solana-sdk = { path = "../sdk", version = "=1.16.0" }
+solana-logger = { path = "../logger", version = "=1.16.0" }
+solana-version = { path = "../version", version = "=1.16.0" }
+solana-metrics = { path = "../metrics", version = "=1.16.0" }
+solana-measure = { path = "../measure", version = "=1.16.0" }
 sha2 = { version = "0.10.2" }
 triomphe = "0.1.7"
 rand = "0.7.0"

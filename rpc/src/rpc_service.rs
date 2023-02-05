@@ -122,6 +122,10 @@ impl RpcRequestMiddleware {
             .unwrap()
     }
 
+    fn strip_leading_slash(path: &str) -> Option<&str> {
+        path.strip_prefix('/')
+    }
+
     fn is_file_get_path(&self, path: &str) -> bool {
         if path == DEFAULT_GENESIS_DOWNLOAD_PATH {
             return true;
@@ -131,12 +135,9 @@ impl RpcRequestMiddleware {
             return false;
         }
 
-        let starting_character = '/';
-        if !path.starts_with(starting_character) {
+        let Some(path) = Self::strip_leading_slash(path) else {
             return false;
-        }
-
-        let path = path.trim_start_matches(starting_character);
+        };
 
         self.full_snapshot_archive_path_regex.is_match(path)
             || self.incremental_snapshot_archive_path_regex.is_match(path)
@@ -189,8 +190,8 @@ impl RpcRequestMiddleware {
     }
 
     fn process_file_get(&self, path: &str) -> RequestMiddlewareAction {
-        let stem = path.split_at(1).1; // Drop leading '/' from path
         let filename = {
+            let stem = Self::strip_leading_slash(path).expect("path already verified");
             match path {
                 DEFAULT_GENESIS_DOWNLOAD_PATH => {
                     inc_new_counter_info!("rpc-get_genesis", 1);
@@ -682,6 +683,35 @@ mod tests {
     }
 
     #[test]
+    fn test_strip_prefix() {
+        assert_eq!(RpcRequestMiddleware::strip_leading_slash("/"), Some(""));
+        assert_eq!(RpcRequestMiddleware::strip_leading_slash("//"), Some("/"));
+        assert_eq!(
+            RpcRequestMiddleware::strip_leading_slash("/abc"),
+            Some("abc")
+        );
+        assert_eq!(
+            RpcRequestMiddleware::strip_leading_slash("//abc"),
+            Some("/abc")
+        );
+        assert_eq!(
+            RpcRequestMiddleware::strip_leading_slash("/./abc"),
+            Some("./abc")
+        );
+        assert_eq!(
+            RpcRequestMiddleware::strip_leading_slash("/../abc"),
+            Some("../abc")
+        );
+
+        assert_eq!(RpcRequestMiddleware::strip_leading_slash(""), None);
+        assert_eq!(RpcRequestMiddleware::strip_leading_slash("./"), None);
+        assert_eq!(RpcRequestMiddleware::strip_leading_slash("../"), None);
+        assert_eq!(RpcRequestMiddleware::strip_leading_slash("."), None);
+        assert_eq!(RpcRequestMiddleware::strip_leading_slash(".."), None);
+        assert_eq!(RpcRequestMiddleware::strip_leading_slash("abc"), None);
+    }
+
+    #[test]
     fn test_is_file_get_path() {
         let bank_forks = create_bank_forks();
         let rrm = RpcRequestMiddleware::new(
@@ -699,6 +729,8 @@ mod tests {
 
         assert!(rrm.is_file_get_path(DEFAULT_GENESIS_DOWNLOAD_PATH));
         assert!(!rrm.is_file_get_path(DEFAULT_GENESIS_ARCHIVE));
+        assert!(!rrm.is_file_get_path("//genesis.tar.bz2"));
+        assert!(!rrm.is_file_get_path("/../genesis.tar.bz2"));
 
         assert!(!rrm.is_file_get_path("/snapshot.tar.bz2")); // This is a redirect
 
@@ -748,8 +780,34 @@ mod tests {
             .is_file_get_path("../../../test/incremental-snapshot-123-456-xxx.tar"));
 
         assert!(!rrm.is_file_get_path("/"));
+        assert!(!rrm.is_file_get_path("//"));
+        assert!(!rrm.is_file_get_path("/."));
+        assert!(!rrm.is_file_get_path("/./"));
+        assert!(!rrm.is_file_get_path("/.."));
+        assert!(!rrm.is_file_get_path("/../"));
+        assert!(!rrm.is_file_get_path("."));
+        assert!(!rrm.is_file_get_path("./"));
+        assert!(!rrm.is_file_get_path(".//"));
         assert!(!rrm.is_file_get_path(".."));
+        assert!(!rrm.is_file_get_path("../"));
+        assert!(!rrm.is_file_get_path("..//"));
         assert!(!rrm.is_file_get_path("🎣"));
+
+        assert!(!rrm_with_snapshot_config
+            .is_file_get_path("//snapshot-100-AvFf9oS8A8U78HdjT9YG2sTTThLHJZmhaMn2g8vkWYnr.tar"));
+        assert!(!rrm_with_snapshot_config
+            .is_file_get_path("/./snapshot-100-AvFf9oS8A8U78HdjT9YG2sTTThLHJZmhaMn2g8vkWYnr.tar"));
+        assert!(!rrm_with_snapshot_config
+            .is_file_get_path("/../snapshot-100-AvFf9oS8A8U78HdjT9YG2sTTThLHJZmhaMn2g8vkWYnr.tar"));
+        assert!(!rrm_with_snapshot_config.is_file_get_path(
+            "//incremental-snapshot-100-200-AvFf9oS8A8U78HdjT9YG2sTTThLHJZmhaMn2g8vkWYnr.tar"
+        ));
+        assert!(!rrm_with_snapshot_config.is_file_get_path(
+            "/./incremental-snapshot-100-200-AvFf9oS8A8U78HdjT9YG2sTTThLHJZmhaMn2g8vkWYnr.tar"
+        ));
+        assert!(!rrm_with_snapshot_config.is_file_get_path(
+            "/../incremental-snapshot-100-200-AvFf9oS8A8U78HdjT9YG2sTTThLHJZmhaMn2g8vkWYnr.tar"
+        ));
     }
 
     #[test]

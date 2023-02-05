@@ -25,7 +25,7 @@ use {
         accounts_db::AccountsDbConfig, accounts_index::AccountsIndexConfig, bank_forks::BankForks,
         genesis_utils::create_genesis_config_with_leader_ex,
         hardened_unpack::MAX_GENESIS_ARCHIVE_UNPACKED_SIZE, runtime_config::RuntimeConfig,
-        snapshot_config::SnapshotConfig,
+        snapshot_config::SnapshotConfig, snapshot_utils::create_accounts_run_and_snapshot_dirs,
     },
     solana_sdk::{
         account::{Account, AccountSharedData},
@@ -44,7 +44,7 @@ use {
         signature::{read_keypair_file, write_keypair_file, Keypair, Signer},
     },
     solana_streamer::socket::SocketAddrSpace,
-    solana_tpu_client::tpu_connection_cache::{
+    solana_tpu_client::tpu_client::{
         DEFAULT_TPU_CONNECTION_POOL_SIZE, DEFAULT_TPU_ENABLE_UDP, DEFAULT_TPU_USE_QUIC,
     },
     std::{
@@ -91,7 +91,7 @@ impl Default for TestValidatorNodeConfig {
         let port_range = (MIN_PORT_RANGE, MAX_PORT_RANGE);
 
         Self {
-            gossip_addr: socketaddr!("127.0.0.1:0"),
+            gossip_addr: socketaddr!(Ipv4Addr::LOCALHOST, 0),
             port_range,
             bind_ip_addr,
         }
@@ -803,7 +803,11 @@ impl TestValidator {
             rpc_config: config.rpc_config.clone(),
             pubsub_config: config.pubsub_config.clone(),
             accounts_hash_interval_slots: 100,
-            account_paths: vec![ledger_path.join("accounts")],
+            account_paths: vec![
+                create_accounts_run_and_snapshot_dirs(ledger_path.join("accounts"))
+                    .unwrap()
+                    .0,
+            ],
             poh_verify: false, // Skip PoH verification of ledger on startup for speed
             snapshot_config: SnapshotConfig {
                 full_snapshot_archive_interval_slots: 100,

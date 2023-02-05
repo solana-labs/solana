@@ -253,6 +253,20 @@ impl ValidatorConfig {
             ..Self::default()
         }
     }
+
+    pub fn enable_default_rpc_block_subscribe(&mut self) {
+        let pubsub_config = PubSubConfig {
+            enable_block_subscription: true,
+            ..PubSubConfig::default()
+        };
+        let rpc_config = JsonRpcConfig {
+            enable_rpc_transaction_history: true,
+            ..JsonRpcConfig::default_for_test()
+        };
+
+        self.pubsub_config = pubsub_config;
+        self.rpc_config = rpc_config;
+    }
 }
 
 // `ValidatorStartProgress` contains status information that is surfaced to the node operator over
@@ -745,11 +759,12 @@ impl Validator {
 
         let connection_cache = match use_quic {
             true => {
-                let mut connection_cache = ConnectionCache::new(tpu_connection_pool_size);
-                connection_cache
-                    .update_client_certificate(&identity_keypair, node.info.gossip.ip())
-                    .expect("Failed to update QUIC client certificates");
-                connection_cache.set_staked_nodes(&staked_nodes, &identity_keypair.pubkey());
+                let connection_cache = ConnectionCache::new_with_client_options(
+                    tpu_connection_pool_size,
+                    None,
+                    Some((&identity_keypair, node.info.tpu.ip())),
+                    Some((&staked_nodes, &identity_keypair.pubkey())),
+                );
                 Arc::new(connection_cache)
             }
             false => Arc::new(ConnectionCache::with_udp(tpu_connection_pool_size)),
@@ -2081,7 +2096,7 @@ mod tests {
         crossbeam_channel::{bounded, RecvTimeoutError},
         solana_ledger::{create_new_tmp_ledger, genesis_utils::create_genesis_config_with_leader},
         solana_sdk::{genesis_config::create_genesis_config, poh_config::PohConfig},
-        solana_tpu_client::tpu_connection_cache::{
+        solana_tpu_client::tpu_client::{
             DEFAULT_TPU_CONNECTION_POOL_SIZE, DEFAULT_TPU_ENABLE_UDP, DEFAULT_TPU_USE_QUIC,
         },
         std::{fs::remove_dir_all, thread, time::Duration},

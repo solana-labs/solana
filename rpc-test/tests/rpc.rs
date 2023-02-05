@@ -7,7 +7,7 @@ use {
     serde_json::{json, Value},
     solana_account_decoder::UiAccount,
     solana_client::{
-        connection_cache::{ConnectionCache, DEFAULT_TPU_CONNECTION_POOL_SIZE},
+        connection_cache::ConnectionCache,
         tpu_client::{TpuClient, TpuClientConfig},
     },
     solana_pubsub_client::nonblocking::pubsub_client::PubsubClient,
@@ -29,6 +29,7 @@ use {
     },
     solana_streamer::socket::SocketAddrSpace,
     solana_test_validator::TestValidator,
+    solana_tpu_client::tpu_client::DEFAULT_TPU_CONNECTION_POOL_SIZE,
     solana_transaction_status::TransactionStatus,
     std::{
         collections::HashSet,
