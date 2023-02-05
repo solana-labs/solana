@@ -102,7 +102,7 @@ impl TpuClient {
     }
 
     pub fn rpc_client(&self) -> &RpcClient {
-        &self.tpu_client.rpc_client()
+        self.tpu_client.rpc_client()
     }
 
     pub async fn shutdown(&mut self) {
