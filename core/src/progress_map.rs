@@ -397,6 +397,12 @@ impl ProgressMap {
             .map(|fork_progress| &mut fork_progress.propagated_stats)
     }
 
+    pub fn has_attempted_retransmit(&self, slot: Slot) -> Option<bool> {
+        self.progress_map
+            .get(&slot)
+            .map(|fork_progress| fork_progress.retransmit_info.retry_iteration > 0)
+    }
+
     pub fn get_propagated_stats_must_exist(&self, slot: Slot) -> &PropagatedStats {
         self.get_propagated_stats(slot)
             .unwrap_or_else(|| panic!("slot={slot} must exist in ProgressMap"))

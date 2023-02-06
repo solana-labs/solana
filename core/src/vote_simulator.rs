@@ -10,7 +10,7 @@ use {
         heaviest_subtree_fork_choice::HeaviestSubtreeForkChoice,
         latest_validator_votes_for_frozen_banks::LatestValidatorVotesForFrozenBanks,
         progress_map::{ForkProgress, ProgressMap},
-        replay_stage::{HeaviestForkFailures, ReplayStage},
+        replay_stage::{HeaviestForkFailures, ReplayStage, RetransmittedSlotsMetrics},
         unfrozen_gossip_verified_vote_hashes::UnfrozenGossipVerifiedVoteHashes,
     },
     crossbeam_channel::unbounded,
@@ -164,6 +164,7 @@ impl VoteSimulator {
             &self.bank_forks,
             &mut self.heaviest_subtree_fork_choice,
             &mut self.latest_validator_votes_for_frozen_banks,
+            &mut RetransmittedSlotsMetrics::default(),
         );
 
         let vote_bank = self

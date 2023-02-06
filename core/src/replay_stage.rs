@@ -149,6 +149,32 @@ struct SkippedSlotsInfo {
     last_skipped_slot: u64,
 }
 
+#[derive(Default)]
+pub struct RetransmittedSlotsMetrics {
+    retransmitted_slots_confirmed: u64,
+    retransmit_slots: u64,
+    retransmit_iterations: u64,
+    last_update_time: u64,
+}
+
+impl RetransmittedSlotsMetrics {
+    fn update(&mut self) {
+        if self.last_update_time < timestamp() - 5_000 {
+            datapoint_info!(
+                "retransmitted-slot-metrics",
+                (
+                    "retransmitted_slots_confirmed",
+                    self.retransmitted_slots_confirmed,
+                    i64
+                ),
+                ("retransmit_slots", self.retransmit_slots, i64),
+                ("retransmit_iterations", self.retransmit_iterations, i64),
+            );
+            self.last_update_time = timestamp();
+        }
+    }
+}
+
 pub struct ReplayStageConfig {
     pub vote_account: Pubkey,
     pub authorized_voter_keypairs: Arc<RwLock<Vec<Arc<Keypair>>>>,
@@ -456,6 +482,7 @@ impl ReplayStage {
             let mut last_reset = Hash::default();
             let mut partition_exists = false;
             let mut skipped_slots_info = SkippedSlotsInfo::default();
+            let mut retransmitted_slots_metrics = RetransmittedSlotsMetrics::default();
             let mut replay_timing = ReplayTiming::default();
             let mut duplicate_slots_tracker = DuplicateSlotsTracker::default();
             let mut gossip_duplicate_confirmed_slots: GossipDuplicateConfirmedSlots =
@@ -505,6 +532,7 @@ impl ReplayStage {
                     &rpc_subscriptions,
                     &mut progress,
                     &mut replay_timing,
+                    &mut retransmitted_slots_metrics,
                 );
                 generate_new_bank_forks_time.stop();
 
@@ -641,6 +669,7 @@ impl ReplayStage {
                     &bank_forks,
                     &mut heaviest_subtree_fork_choice,
                     &mut latest_validator_votes_for_frozen_banks,
+                    &mut retransmitted_slots_metrics,
                 );
                 compute_bank_stats_time.stop();
 
@@ -928,6 +957,7 @@ impl ReplayStage {
                     &poh_recorder,
                     &retransmit_slots_sender,
                     &mut progress,
+                    &mut retransmitted_slots_metrics,
                 );
                 retransmit_not_propagated_time.stop();
 
@@ -948,6 +978,7 @@ impl ReplayStage {
                         &banking_tracer,
                         has_new_vote_been_rooted,
                         transaction_status_sender.is_some(),
+                        &mut retransmitted_slots_metrics,
                     );
 
                     let poh_bank = poh_recorder.read().unwrap().bank();
@@ -976,6 +1007,7 @@ impl ReplayStage {
                 }
                 wait_receive_time.stop();
 
+                retransmitted_slots_metrics.update();
                 replay_timing.update(
                     collect_frozen_banks_time.as_us(),
                     compute_bank_stats_time.as_us(),
@@ -1049,6 +1081,7 @@ impl ReplayStage {
         retransmit_slots_sender: &RetransmitSlotsSender,
         progress: &mut ProgressMap,
         latest_leader_slot: Slot,
+        retransmitted_slots_metrics: &mut RetransmittedSlotsMetrics,
     ) {
         let first_leader_group_slot = first_of_consecutive_leader_slots(latest_leader_slot);
 
@@ -1072,6 +1105,10 @@ impl ReplayStage {
                             ("retry_iteration", retransmit_info.retry_iteration, i64),
                         );
                         let _ = retransmit_slots_sender.send(slot);
+                        if retransmit_info.retry_iteration == 0 {
+                            retransmitted_slots_metrics.retransmit_slots += 1;
+                        }
+                        retransmitted_slots_metrics.retransmit_iterations += 1;
                         retransmit_info.increment_retry_iteration();
                     } else {
                         debug!(
@@ -1088,6 +1125,7 @@ impl ReplayStage {
         poh_recorder: &Arc<RwLock<PohRecorder>>,
         retransmit_slots_sender: &RetransmitSlotsSender,
         progress: &mut ProgressMap,
+        retransmitted_slots_metrics: &mut RetransmittedSlotsMetrics,
     ) {
         let start_slot = poh_recorder.read().unwrap().start_slot();
 
@@ -1103,6 +1141,7 @@ impl ReplayStage {
                 retransmit_slots_sender,
                 progress,
                 latest_leader_slot,
+                retransmitted_slots_metrics,
             );
         }
     }
@@ -1660,6 +1699,7 @@ impl ReplayStage {
         banking_tracer: &Arc<BankingTracer>,
         has_new_vote_been_rooted: bool,
         track_transaction_indexes: bool,
+        retransmitted_slots_metrics: &mut RetransmittedSlotsMetrics,
     ) {
         // all the individual calls to poh_recorder.read() are designed to
         // increase granularity, decrease contention
@@ -1750,6 +1790,7 @@ impl ReplayStage {
                         retransmit_slots_sender,
                         progress_map,
                         latest_unconfirmed_leader_slot,
+                        retransmitted_slots_metrics,
                     );
                 }
                 return;
@@ -2796,6 +2837,7 @@ impl ReplayStage {
         bank_forks: &RwLock<BankForks>,
         heaviest_subtree_fork_choice: &mut HeaviestSubtreeForkChoice,
         latest_validator_votes_for_frozen_banks: &mut LatestValidatorVotesForFrozenBanks,
+        retransmitted_slots_metrics: &mut RetransmittedSlotsMetrics,
     ) -> Vec<Slot> {
         frozen_banks.sort_by_key(|bank| bank.slot());
         let mut new_stats = vec![];
@@ -2929,6 +2971,7 @@ impl ReplayStage {
                 bank_forks,
                 vote_tracker,
                 cluster_slots,
+                retransmitted_slots_metrics,
             );
 
             let stats = progress
@@ -2955,6 +2998,7 @@ impl ReplayStage {
         bank_forks: &RwLock<BankForks>,
         vote_tracker: &VoteTracker,
         cluster_slots: &ClusterSlots,
+        retransmitted_slots_metrics: &mut RetransmittedSlotsMetrics,
     ) {
         // If propagation has already been confirmed, return
         if progress.get_leader_propagation_slot_must_exist(slot).0 {
@@ -2993,6 +3037,7 @@ impl ReplayStage {
             cluster_slot_pubkeys,
             slot,
             &bank_forks.read().unwrap(),
+            retransmitted_slots_metrics,
         );
     }
 
@@ -3200,6 +3245,7 @@ impl ReplayStage {
         mut cluster_slot_pubkeys: Vec<Pubkey>,
         fork_tip: Slot,
         bank_forks: &BankForks,
+        retransmitted_slots_metrics: &mut RetransmittedSlotsMetrics,
     ) {
         let mut current_leader_slot = progress.get_latest_leader_slot_must_exist(fork_tip);
         let mut did_newly_reach_threshold = false;
@@ -3211,6 +3257,9 @@ impl ReplayStage {
                 break;
             }
 
+            let attempted_retransmit = progress
+                .has_attempted_retransmit(current_leader_slot.unwrap())
+                .expect("current_leader_slot >= root, so must exist in the progress map");
             let leader_propagated_stats = progress
                 .get_propagated_stats_mut(current_leader_slot.unwrap())
                 .expect("current_leader_slot >= root, so must exist in the progress map");
@@ -3246,6 +3295,10 @@ impl ReplayStage {
                 leader_propagated_stats,
                 did_newly_reach_threshold,
             ) || did_newly_reach_threshold;
+
+            if did_newly_reach_threshold && attempted_retransmit {
+                retransmitted_slots_metrics.retransmitted_slots_confirmed += 1;
+            }
 
             // Now jump to process the previous leader slot
             current_leader_slot = leader_propagated_stats.prev_leader_slot;
@@ -3465,6 +3518,7 @@ impl ReplayStage {
         rpc_subscriptions: &Arc<RpcSubscriptions>,
         progress: &mut ProgressMap,
         replay_timing: &mut ReplayTiming,
+        retransmitted_slots_metrics: &mut RetransmittedSlotsMetrics,
     ) {
         // Find the next slot that chains to the old slot
         let mut generate_new_bank_forks_read_lock =
@@ -3527,6 +3581,7 @@ impl ReplayStage {
                     vec![leader],
                     parent_bank.slot(),
                     &forks,
+                    retransmitted_slots_metrics,
                 );
                 new_banks.insert(child_slot, child_bank);
             }
@@ -3841,6 +3896,7 @@ pub(crate) mod tests {
             &rpc_subscriptions,
             &mut progress,
             &mut replay_timing,
+            &mut RetransmittedSlotsMetrics::default(),
         );
         assert!(bank_forks
             .read()
@@ -3869,6 +3925,7 @@ pub(crate) mod tests {
             &rpc_subscriptions,
             &mut progress,
             &mut replay_timing,
+            &mut RetransmittedSlotsMetrics::default(),
         );
         assert!(bank_forks
             .read()
@@ -4604,6 +4661,7 @@ pub(crate) mod tests {
             &bank_forks,
             &mut heaviest_subtree_fork_choice,
             &mut latest_validator_votes_for_frozen_banks,
+            &mut RetransmittedSlotsMetrics::default(),
         );
 
         // bank 0 has no votes, should not send any votes on the channel
@@ -4648,6 +4706,7 @@ pub(crate) mod tests {
             &bank_forks,
             &mut heaviest_subtree_fork_choice,
             &mut latest_validator_votes_for_frozen_banks,
+            &mut RetransmittedSlotsMetrics::default(),
         );
 
         // Bank 1 had one vote
@@ -4684,6 +4743,7 @@ pub(crate) mod tests {
             &bank_forks,
             &mut heaviest_subtree_fork_choice,
             &mut latest_validator_votes_for_frozen_banks,
+            &mut RetransmittedSlotsMetrics::default(),
         );
         // No new stats should have been computed
         assert!(newly_computed.is_empty());
@@ -4723,6 +4783,7 @@ pub(crate) mod tests {
             &vote_simulator.bank_forks,
             heaviest_subtree_fork_choice,
             &mut latest_validator_votes_for_frozen_banks,
+            &mut RetransmittedSlotsMetrics::default(),
         );
 
         let bank1 = vote_simulator.bank_forks.read().unwrap().get(1).unwrap();
@@ -4792,6 +4853,7 @@ pub(crate) mod tests {
             &vote_simulator.bank_forks,
             &mut vote_simulator.heaviest_subtree_fork_choice,
             &mut vote_simulator.latest_validator_votes_for_frozen_banks,
+            &mut RetransmittedSlotsMetrics::default(),
         );
 
         frozen_banks.sort_by_key(|bank| bank.slot());
@@ -5076,6 +5138,7 @@ pub(crate) mod tests {
             &RwLock::new(bank_forks),
             &vote_tracker,
             &ClusterSlots::default(),
+            &mut RetransmittedSlotsMetrics::default(),
         );
 
         let propagated_stats = &progress_map.get(&10).unwrap().propagated_stats;
@@ -5167,6 +5230,7 @@ pub(crate) mod tests {
             &RwLock::new(bank_forks),
             &vote_tracker,
             &ClusterSlots::default(),
+            &mut RetransmittedSlotsMetrics::default(),
         );
 
         for i in 1..=10 {
@@ -5252,6 +5316,7 @@ pub(crate) mod tests {
             &RwLock::new(bank_forks),
             &vote_tracker,
             &ClusterSlots::default(),
+            &mut RetransmittedSlotsMetrics::default(),
         );
 
         // Only the first 5 banks should have reached the threshold
@@ -5712,6 +5777,7 @@ pub(crate) mod tests {
             &bank_forks,
             &mut HeaviestSubtreeForkChoice::new_from_bank_forks(&bank_forks.read().unwrap()),
             &mut LatestValidatorVotesForFrozenBanks::default(),
+            &mut RetransmittedSlotsMetrics::default(),
         );
 
         // Check status is true
@@ -6250,6 +6316,7 @@ pub(crate) mod tests {
             &bank_forks,
             &mut heaviest_subtree_fork_choice,
             &mut latest_validator_votes_for_frozen_banks,
+            &mut RetransmittedSlotsMetrics::default(),
         );
 
         // Try to switch to vote to the heaviest slot 6, then return the vote results
@@ -6374,6 +6441,7 @@ pub(crate) mod tests {
             &bank_forks,
             &mut heaviest_subtree_fork_choice,
             &mut latest_validator_votes_for_frozen_banks,
+            &mut RetransmittedSlotsMetrics::default(),
         );
         // Try to switch to vote to the heaviest slot 5, then return the vote results
         let (heaviest_bank, heaviest_bank_on_same_fork) = heaviest_subtree_fork_choice
@@ -6813,6 +6881,7 @@ pub(crate) mod tests {
             &poh_recorder,
             &retransmit_slots_sender,
             &mut progress,
+            &mut RetransmittedSlotsMetrics::default(),
         );
         let res = retransmit_slots_receiver.recv_timeout(Duration::from_millis(10));
         assert!(res.is_ok(), "retry_iteration=0, retry_time=None");
@@ -6826,6 +6895,7 @@ pub(crate) mod tests {
             &poh_recorder,
             &retransmit_slots_sender,
             &mut progress,
+            &mut RetransmittedSlotsMetrics::default(),
         );
         let res = retransmit_slots_receiver.recv_timeout(Duration::from_millis(10));
         assert!(
@@ -6842,6 +6912,7 @@ pub(crate) mod tests {
             &poh_recorder,
             &retransmit_slots_sender,
             &mut progress,
+            &mut RetransmittedSlotsMetrics::default(),
         );
         let res = retransmit_slots_receiver.recv_timeout(Duration::from_millis(10));
         assert!(
@@ -6858,6 +6929,7 @@ pub(crate) mod tests {
             &poh_recorder,
             &retransmit_slots_sender,
             &mut progress,
+            &mut RetransmittedSlotsMetrics::default(),
         );
         let res = retransmit_slots_receiver.recv_timeout(Duration::from_millis(10));
         assert!(
@@ -6874,6 +6946,7 @@ pub(crate) mod tests {
             &poh_recorder,
             &retransmit_slots_sender,
             &mut progress,
+            &mut RetransmittedSlotsMetrics::default(),
         );
         let res = retransmit_slots_receiver.recv_timeout(Duration::from_millis(10));
         assert!(
@@ -6890,6 +6963,7 @@ pub(crate) mod tests {
             &poh_recorder,
             &retransmit_slots_sender,
             &mut progress,
+            &mut RetransmittedSlotsMetrics::default(),
         );
         let res = retransmit_slots_receiver.recv_timeout(Duration::from_millis(10));
         assert!(
@@ -6917,6 +6991,7 @@ pub(crate) mod tests {
             &poh_recorder,
             &retransmit_slots_sender,
             &mut progress,
+            &mut RetransmittedSlotsMetrics::default(),
         );
         let res = retransmit_slots_receiver.recv_timeout(Duration::from_millis(10));
         assert!(
@@ -6933,6 +7008,7 @@ pub(crate) mod tests {
             &poh_recorder,
             &retransmit_slots_sender,
             &mut progress,
+            &mut RetransmittedSlotsMetrics::default(),
         );
         let res = retransmit_slots_receiver.recv_timeout(Duration::from_millis(10));
         assert!(
@@ -7004,6 +7080,7 @@ pub(crate) mod tests {
             &retransmit_slots_sender,
             &mut progress,
             latest_leader_slot,
+            &mut RetransmittedSlotsMetrics::default(),
         );
         let received_slots = receive_slots(&retransmit_slots_receiver);
         assert_eq!(received_slots, vec![0]);
@@ -7015,6 +7092,7 @@ pub(crate) mod tests {
             &retransmit_slots_sender,
             &mut progress,
             latest_leader_slot,
+            &mut RetransmittedSlotsMetrics::default(),
         );
         let received_slots = receive_slots(&retransmit_slots_receiver);
         assert_eq!(received_slots, vec![4, 5, 6]);
@@ -7026,6 +7104,7 @@ pub(crate) mod tests {
             &retransmit_slots_sender,
             &mut progress,
             latest_leader_slot,
+            &mut RetransmittedSlotsMetrics::default(),
         );
         let received_slots = receive_slots(&retransmit_slots_receiver);
         assert_eq!(received_slots, vec![8, 9, 11]);
@@ -7058,6 +7137,7 @@ pub(crate) mod tests {
             bank_forks,
             heaviest_subtree_fork_choice,
             latest_validator_votes_for_frozen_banks,
+            &mut RetransmittedSlotsMetrics::default(),
         );
         let (heaviest_bank, heaviest_bank_on_same_fork) = heaviest_subtree_fork_choice
             .select_forks(&frozen_banks, tower, progress, ancestors, bank_forks);
