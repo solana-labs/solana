@@ -162,12 +162,18 @@ pub enum CreateAncientStorage {
     Pack,
 }
 
-#[derive(Copy, Clone, Eq, PartialEq, Debug)]
-enum StoreTo {
+#[derive(Debug)]
+enum StoreTo<'a> {
     /// write to cache
     Cache,
     /// write to storage
-    Storage,
+    Storage(&'a Arc<AccountStorageEntry>),
+}
+
+impl<'a> StoreTo<'a> {
+    fn is_cached(&self) -> bool {
+        matches!(self, StoreTo::Cache)
+    }
 }
 
 #[derive(Default)]
@@ -349,7 +355,7 @@ impl CurrentAncientAppendVec {
                 accounts_to_store.slot,
             ),
             None::<Vec<Hash>>,
-            Some(self.append_vec()),
+            self.append_vec(),
             None,
             StoreReclaims::Ignore,
         )
@@ -3967,7 +3973,7 @@ impl AccountsDb {
                     INCLUDE_SLOT_IN_HASH_IRRELEVANT_APPEND_VEC_OPERATION,
                 ),
                 None::<Vec<&Hash>>,
-                Some(shrink_in_progress.new_storage()),
+                shrink_in_progress.new_storage(),
                 None,
                 StoreReclaims::Ignore,
             );
@@ -6405,7 +6411,7 @@ impl AccountsDb {
             self.store_accounts_frozen(
                 (slot, &accounts[..], include_slot_in_hash),
                 Some(hashes),
-                Some(&flushed_store),
+                &flushed_store,
                 None,
                 StoreReclaims::Default,
             );
@@ -6423,7 +6429,7 @@ impl AccountsDb {
                 self.store_accounts_frozen(
                     (slot, &accounts[..], include_slot_in_hash),
                     Some(hashes),
-                    Some(&flushed_store),
+                    &flushed_store,
                     None,
                     StoreReclaims::Ignore,
                 );
@@ -6571,7 +6577,7 @@ impl AccountsDb {
         hashes: Option<Vec<impl Borrow<Hash>>>,
         storage_finder: F,
         mut write_version_producer: P,
-        store_to: StoreTo,
+        store_to: &StoreTo,
         txn_signatures: Option<&[Option<&'a Signature>]>,
     ) -> Vec<AccountInfo> {
         let mut calc_stored_meta_time = Measure::start("calc_stored_meta");
@@ -6585,7 +6591,7 @@ impl AccountsDb {
             .calc_stored_meta
             .fetch_add(calc_stored_meta_time.as_us(), Ordering::Relaxed);
 
-        if store_to == StoreTo::Cache {
+        if store_to.is_cached() {
             let signature_iter: Box<dyn std::iter::Iterator<Item = &Option<&Signature>>> =
                 match txn_signatures {
                     Some(txn_signatures) => {
@@ -8100,7 +8106,7 @@ impl AccountsDb {
     ) {
         self.store(
             accounts,
-            StoreTo::Cache,
+            &StoreTo::Cache,
             txn_signatures,
             StoreReclaims::Default,
         );
@@ -8109,9 +8115,10 @@ impl AccountsDb {
     /// Store the account update.
     /// only called by tests
     pub fn store_uncached(&self, slot: Slot, accounts: &[(&Pubkey, &AccountSharedData)]) {
+        let storage = self.find_storage_candidate(slot, 1);
         self.store(
             (slot, accounts, INCLUDE_SLOT_IN_HASH_TESTS),
-            StoreTo::Storage,
+            &StoreTo::Storage(&storage),
             None,
             StoreReclaims::Default,
         );
@@ -8120,7 +8127,7 @@ impl AccountsDb {
     fn store<'a, T: ReadableAccount + Sync + ZeroLamport + 'a>(
         &self,
         accounts: impl StorableAccounts<'a, T>,
-        store_to: StoreTo,
+        store_to: &StoreTo,
         txn_signatures: Option<&'a [Option<&'a Signature>]>,
         reclaim: StoreReclaims,
     ) {
@@ -8290,7 +8297,7 @@ impl AccountsDb {
         &self,
         accounts: impl StorableAccounts<'a, T>,
         hashes: Option<Vec<impl Borrow<Hash>>>,
-        store_to: StoreTo,
+        store_to: &StoreTo,
         txn_signatures: Option<&'a [Option<&'a Signature>]>,
         reclaim: StoreReclaims,
     ) {
@@ -8305,7 +8312,6 @@ impl AccountsDb {
         self.store_accounts_custom(
             accounts,
             hashes,
-            None,
             None::<Box<dyn Iterator<Item = u64>>>,
             store_to,
             reset_accounts,
@@ -8318,7 +8324,7 @@ impl AccountsDb {
         &self,
         accounts: impl StorableAccounts<'a, T>,
         hashes: Option<Vec<impl Borrow<Hash>>>,
-        storage: Option<&Arc<AccountStorageEntry>>,
+        storage: &Arc<AccountStorageEntry>,
         write_version_producer: Option<Box<dyn Iterator<Item = StoredMetaWriteVersion>>>,
         reclaim: StoreReclaims,
     ) -> StoreAccountsTiming {
@@ -8329,9 +8335,8 @@ impl AccountsDb {
         self.store_accounts_custom(
             accounts,
             hashes,
-            storage,
             write_version_producer,
-            StoreTo::Storage,
+            &StoreTo::Storage(storage),
             reset_accounts,
             None,
             reclaim,
@@ -8342,17 +8347,17 @@ impl AccountsDb {
         &self,
         accounts: impl StorableAccounts<'a, T>,
         hashes: Option<Vec<impl Borrow<Hash>>>,
-        storage: Option<&Arc<AccountStorageEntry>>,
         write_version_producer: Option<Box<dyn Iterator<Item = u64>>>,
-        store_to: StoreTo,
+        store_to: &StoreTo,
         reset_accounts: bool,
         txn_signatures: Option<&[Option<&Signature>]>,
         reclaim: StoreReclaims,
     ) -> StoreAccountsTiming {
-        let storage_finder = Box::new(move |slot, size| {
-            storage
-                .cloned()
-                .unwrap_or_else(|| self.find_storage_candidate(slot, size))
+        let storage_finder = Box::new(move |_slot, _size| match store_to {
+            StoreTo::Storage(storage) => Arc::clone(storage),
+            StoreTo::Cache => {
+                unimplemented!("illegal");
+            }
         });
 
         let write_version_producer: Box<dyn Iterator<Item = u64>> = write_version_producer
@@ -8385,7 +8390,7 @@ impl AccountsDb {
 
         let reclaim = if matches!(reclaim, StoreReclaims::Ignore) {
             UpsertReclaim::IgnoreReclaims
-        } else if store_to == StoreTo::Cache {
+        } else if store_to.is_cached() {
             UpsertReclaim::PreviousSlotEntryWasCached
         } else {
             UpsertReclaim::PopulateReclaims
@@ -8408,7 +8413,7 @@ impl AccountsDb {
         // entries
         reclaims.retain(|(_, r)| !r.is_cached());
 
-        if store_to == StoreTo::Cache {
+        if store_to.is_cached() {
             assert!(reclaims.is_empty());
         }
 
@@ -12330,7 +12335,7 @@ pub mod tests {
         db.store_accounts_unfrozen(
             (some_slot, &[(&key, &account)][..]),
             Some(vec![&Hash::default()]),
-            StoreTo::Storage,
+            &StoreTo::Storage(&db.find_storage_candidate(some_slot, 1)),
             None,
             StoreReclaims::Default,
         );
@@ -12592,7 +12597,7 @@ pub mod tests {
         db.store_accounts_unfrozen(
             (some_slot, accounts),
             Some(vec![&some_hash]),
-            StoreTo::Storage,
+            &StoreTo::Storage(&db.find_storage_candidate(some_slot, 1)),
             None,
             StoreReclaims::Default,
         );
@@ -16026,7 +16031,7 @@ pub mod tests {
         pub fn store_for_tests(&self, slot: Slot, accounts: &[(&Pubkey, &AccountSharedData)]) {
             self.store(
                 (slot, accounts, INCLUDE_SLOT_IN_HASH_TESTS),
-                StoreTo::Cache,
+                &StoreTo::Cache,
                 None,
                 StoreReclaims::Default,
             );
