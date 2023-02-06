@@ -882,7 +882,7 @@ pub fn create_accounts_run_and_snapshot_dirs(
 /// directory does not exist, create it.
 fn get_snapshot_accounts_hardlink_dir(
     appendvec_path: &Path,
-    bank_slot: u64,
+    bank_slot: Slot,
     account_paths: &mut HashSet<PathBuf>,
     hardlinks_dir: impl AsRef<Path>,
 ) -> Result<PathBuf> {
