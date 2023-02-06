@@ -47,7 +47,7 @@ fn create_connection_cache(
     client_node_id: &Keypair,
     stake: u64,
     total_stake: u64,
-) -> Arc<ConnectionCache> {
+) -> ConnectionCache {
     match use_quic {
         true => {
             let staked_nodes = Arc::new(RwLock::new(StakedNodes::default()));
@@ -58,16 +58,14 @@ fn create_connection_cache(
                 .pubkey_stake_map
                 .insert(client_node_id.pubkey(), stake);
 
-            let connection_cache = ConnectionCache::new_with_client_options(
+            ConnectionCache::new_with_client_options(
                 tpu_connection_pool_size,
                 None,
                 Some((client_node_id, bind_address)),
                 Some((&staked_nodes, &client_node_id.pubkey())),
-            );
-
-            Arc::new(connection_cache)
+            )
         }
-        false => Arc::new(ConnectionCache::with_udp(tpu_connection_pool_size)),
+        false => ConnectionCache::with_udp(tpu_connection_pool_size),
     }
 }
 
@@ -81,7 +79,7 @@ fn create_client(
     rpc_tpu_sockets: Option<(SocketAddr, SocketAddr)>,
     num_nodes: usize,
     target_node: Option<Pubkey>,
-    connection_cache: Arc<ConnectionCache>,
+    connection_cache: ConnectionCache,
 ) -> Arc<dyn BenchTpsClient + Send + Sync> {
     match external_client_type {
         ExternalClientType::RpcClient => Arc::new(RpcClient::new_with_commitment(
@@ -89,6 +87,7 @@ fn create_client(
             CommitmentConfig::confirmed(),
         )),
         ExternalClientType::ThinClient => {
+            let connection_cache = Arc::new(connection_cache);
             if let Some((rpc, tpu)) = rpc_tpu_sockets {
                 Arc::new(ThinClient::new(rpc, tpu, connection_cache))
             } else {
