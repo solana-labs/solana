@@ -17,6 +17,7 @@ use {
 };
 
 /// Relationship between two fork IDs
+#[derive(Copy, Clone, PartialEq)]
 pub enum BlockRelation {
     /// The slot is on the same fork and is an ancestor of the other slot
     Ancestor,
@@ -156,6 +157,7 @@ impl LoadedPrograms {
                 })
                 .cloned()
                 .collect();
+            second_level.reverse();
             !second_level.is_empty()
         });
     }
@@ -193,5 +195,351 @@ impl LoadedPrograms {
     /// Removes the entries at the given keys, if they exist
     pub fn remove_entries(&mut self, _key: impl Iterator<Item = Pubkey>) {
         // TODO: Remove at primary index level
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::loaded_programs::{
+        BlockRelation, ForkGraph, LoadedProgram, LoadedProgramType, LoadedPrograms, WorkingSlot,
+    };
+    use solana_sdk::clock::Slot;
+    use solana_sdk::pubkey::Pubkey;
+    use std::ops::ControlFlow;
+    use std::sync::Arc;
+
+    struct TestForkGraph {
+        relation: BlockRelation,
+    }
+    impl ForkGraph for TestForkGraph {
+        fn relationship(&self, _a: Slot, _b: Slot) -> BlockRelation {
+            self.relation
+        }
+    }
+
+    #[test]
+    fn test_prune_empty() {
+        let mut cache = LoadedPrograms::default();
+        let fork_graph = TestForkGraph {
+            relation: BlockRelation::Unrelated,
+        };
+
+        cache.prune(&fork_graph, 0);
+        assert!(cache.entries.is_empty());
+
+        cache.prune(&fork_graph, 10);
+        assert!(cache.entries.is_empty());
+
+        let fork_graph = TestForkGraph {
+            relation: BlockRelation::Ancestor,
+        };
+
+        cache.prune(&fork_graph, 0);
+        assert!(cache.entries.is_empty());
+
+        cache.prune(&fork_graph, 10);
+        assert!(cache.entries.is_empty());
+
+        let fork_graph = TestForkGraph {
+            relation: BlockRelation::Descendant,
+        };
+
+        cache.prune(&fork_graph, 0);
+        assert!(cache.entries.is_empty());
+
+        cache.prune(&fork_graph, 10);
+        assert!(cache.entries.is_empty());
+
+        let fork_graph = TestForkGraph {
+            relation: BlockRelation::Unknown,
+        };
+
+        cache.prune(&fork_graph, 0);
+        assert!(cache.entries.is_empty());
+
+        cache.prune(&fork_graph, 10);
+        assert!(cache.entries.is_empty());
+    }
+
+    #[derive(Default)]
+    struct TestForkGraphSpecific {
+        forks: Vec<Vec<Slot>>,
+    }
+
+    impl TestForkGraphSpecific {
+        fn insert_fork(&mut self, fork: &[Slot]) {
+            let mut fork = fork.to_vec();
+            fork.sort();
+            self.forks.push(fork)
+        }
+    }
+
+    impl ForkGraph for TestForkGraphSpecific {
+        fn relationship(&self, a: Slot, b: Slot) -> BlockRelation {
+            match self.forks.iter().try_for_each(|fork| {
+                let relation = fork
+                    .iter()
+                    .position(|x| *x == a)
+                    .and_then(|a_pos| {
+                        fork.iter().position(|x| *x == b).and_then(|b_pos| {
+                            (a_pos == b_pos)
+                                .then(|| BlockRelation::Equal)
+                                .or_else(|| (a_pos < b_pos).then(|| BlockRelation::Ancestor))
+                                .or(Some(BlockRelation::Descendant))
+                        })
+                    })
+                    .unwrap_or(BlockRelation::Unrelated);
+
+                if relation != BlockRelation::Unrelated {
+                    return ControlFlow::Break(relation);
+                }
+
+                ControlFlow::Continue(())
+            }) {
+                ControlFlow::Break(relation) => relation,
+                _ => BlockRelation::Unrelated,
+            }
+        }
+    }
+
+    struct TestWorkingSlot {
+        slot: Slot,
+        fork: Vec<Slot>,
+        slot_pos: usize,
+    }
+
+    impl TestWorkingSlot {
+        fn new(slot: Slot, fork: &[Slot]) -> Self {
+            let mut fork = fork.to_vec();
+            fork.sort();
+            let slot_pos = fork
+                .iter()
+                .position(|current| *current == slot)
+                .expect("The fork didn't have the slot in it");
+            TestWorkingSlot {
+                slot,
+                fork,
+                slot_pos,
+            }
+        }
+    }
+
+    impl WorkingSlot for TestWorkingSlot {
+        fn current_slot(&self) -> Slot {
+            self.slot
+        }
+
+        fn is_ancestor(&self, other: Slot) -> bool {
+            self.fork
+                .iter()
+                .position(|current| *current == other)
+                .and_then(|other_pos| Some(other_pos < self.slot_pos))
+                .unwrap_or(false)
+        }
+    }
+
+    fn new_test_loaded_program(deployment_slot: Slot) -> Arc<LoadedProgram> {
+        Arc::new(LoadedProgram {
+            program: LoadedProgramType::Invalid,
+            deployment_slot,
+            effective_slot: 0,
+            usage_counter: Default::default(),
+        })
+    }
+
+    #[test]
+    fn test_fork_extract_and_prune() {
+        let mut cache = LoadedPrograms::default();
+
+        // Fork graph created for the test
+        //                   0
+        //                 /   \
+        //                10    5
+        //                |     |
+        //                20    11
+        //                |     | \
+        //                22   15  25
+        //                      |   |
+        //                     16  27
+
+        let mut fork_graph = TestForkGraphSpecific::default();
+        fork_graph.insert_fork(&[0, 10, 20, 22]);
+        fork_graph.insert_fork(&[0, 5, 11, 15, 16]);
+        fork_graph.insert_fork(&[0, 5, 11, 25, 27]);
+
+        let program1 = Pubkey::new_unique();
+        cache.entries.insert(
+            program1,
+            vec![
+                new_test_loaded_program(0),
+                new_test_loaded_program(10),
+                new_test_loaded_program(20),
+            ],
+        );
+
+        let program2 = Pubkey::new_unique();
+        cache.entries.insert(
+            program2,
+            vec![new_test_loaded_program(5), new_test_loaded_program(11)],
+        );
+
+        let program3 = Pubkey::new_unique();
+        cache
+            .entries
+            .insert(program3, vec![new_test_loaded_program(25)]);
+
+        let program4 = Pubkey::new_unique();
+        cache.entries.insert(
+            program4,
+            vec![
+                new_test_loaded_program(0),
+                new_test_loaded_program(5),
+                new_test_loaded_program(15),
+            ],
+        );
+
+        // Current fork graph
+        //                   0
+        //                 /   \
+        //                10    5
+        //                |     |
+        //                20    11
+        //                |     | \
+        //                22   15  25
+        //                      |   |
+        //                     16  27
+
+        // Testing fork 0 - 10 - 12 - 22 with current slot at 22
+        let working_slot = TestWorkingSlot::new(22, &[0, 10, 20, 22]);
+        let (found, missing) = cache.extract(
+            &working_slot,
+            vec![program1, program2, program3, program4].into_iter(),
+        );
+
+        assert!(found.contains_key(&program1));
+        assert_eq!(found[&program1].deployment_slot, 20);
+
+        assert!(found.contains_key(&program4));
+        assert_eq!(found[&program4].deployment_slot, 0);
+
+        assert!(missing.contains(&program2));
+        assert!(missing.contains(&program3));
+
+        // Testing fork 0 - 5 - 11 - 15 - 16 with current slot at 16
+        let working_slot = TestWorkingSlot::new(16, &[0, 5, 11, 15, 16]);
+        let (found, missing) = cache.extract(
+            &working_slot,
+            vec![program1, program2, program3, program4].into_iter(),
+        );
+
+        assert!(found.contains_key(&program1));
+        assert_eq!(found[&program1].deployment_slot, 0);
+
+        assert!(found.contains_key(&program2));
+        assert_eq!(found[&program2].deployment_slot, 11);
+
+        assert!(found.contains_key(&program4));
+        assert_eq!(found[&program4].deployment_slot, 15);
+
+        assert!(missing.contains(&program3));
+
+        // Testing fork 0 - 5 - 11 - 15 - 16 with current slot at 11
+        let working_slot = TestWorkingSlot::new(11, &[0, 5, 11, 15, 16]);
+        let (found, missing) = cache.extract(
+            &working_slot,
+            vec![program1, program2, program3, program4].into_iter(),
+        );
+
+        assert!(found.contains_key(&program1));
+        assert_eq!(found[&program1].deployment_slot, 0);
+
+        assert!(found.contains_key(&program2));
+        assert_eq!(found[&program2].deployment_slot, 5);
+
+        assert!(found.contains_key(&program4));
+        assert_eq!(found[&program4].deployment_slot, 5);
+
+        assert!(missing.contains(&program3));
+
+        cache.prune(&fork_graph, 5);
+
+        // Fork graph after pruning
+        //                   0
+        //                   |
+        //                   5
+        //                   |
+        //                   11
+        //                   | \
+        //                  15  25
+        //                   |   |
+        //                  16  27
+
+        // Testing fork 0 - 10 - 12 - 22 (which was pruned) with current slot at 22
+        let working_slot = TestWorkingSlot::new(22, &[0, 10, 20, 22]);
+        let (found, missing) = cache.extract(
+            &working_slot,
+            vec![program1, program2, program3, program4].into_iter(),
+        );
+
+        assert!(found.contains_key(&program1));
+        // Since the fork was pruned, we should not find the entry deployed at slot 20.
+        assert_eq!(found[&program1].deployment_slot, 0);
+
+        assert!(found.contains_key(&program4));
+        assert_eq!(found[&program4].deployment_slot, 0);
+
+        assert!(missing.contains(&program2));
+        assert!(missing.contains(&program3));
+
+        // Testing fork 0 - 5 - 11 - 25 - 27 with current slot at 27
+        let working_slot = TestWorkingSlot::new(27, &[0, 5, 11, 25, 27]);
+        let (found, _missing) = cache.extract(
+            &working_slot,
+            vec![program1, program2, program3, program4].into_iter(),
+        );
+
+        assert!(found.contains_key(&program1));
+        assert_eq!(found[&program1].deployment_slot, 0);
+
+        assert!(found.contains_key(&program2));
+        assert_eq!(found[&program2].deployment_slot, 11);
+
+        assert!(found.contains_key(&program3));
+        assert_eq!(found[&program3].deployment_slot, 25);
+
+        assert!(found.contains_key(&program4));
+        assert_eq!(found[&program4].deployment_slot, 5);
+
+        cache.prune(&fork_graph, 15);
+
+        // Fork graph after pruning
+        //                  0
+        //                  |
+        //                  5
+        //                  |
+        //                  11
+        //                  |
+        //                  15
+        //                  |
+        //                  16
+
+        // Testing fork 0 - 5 - 11 - 25 - 27 (with root at 15, slot 25, 27 are pruned) with current slot at 27
+        let working_slot = TestWorkingSlot::new(27, &[0, 5, 11, 25, 27]);
+        let (found, missing) = cache.extract(
+            &working_slot,
+            vec![program1, program2, program3, program4].into_iter(),
+        );
+
+        assert!(found.contains_key(&program1));
+        assert_eq!(found[&program1].deployment_slot, 0);
+
+        assert!(found.contains_key(&program2));
+        assert_eq!(found[&program2].deployment_slot, 11);
+
+        assert!(found.contains_key(&program4));
+        assert_eq!(found[&program4].deployment_slot, 5);
+
+        // program3 was deployed on slot 25, which has been pruned
+        assert!(missing.contains(&program3));
     }
 }
