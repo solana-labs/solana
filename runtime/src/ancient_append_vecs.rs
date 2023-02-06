@@ -88,6 +88,60 @@ impl AncientSlotInfos {
             amount_shrunk(r).cmp(&amount_shrunk(l))
         });
     }
+
+    /// truncate 'all_infos' such that when the remaining entries in
+    /// 'all_infos' are combined, the total number of storages <= 'max_storages'
+    /// The idea is that 'all_infos' is sorted from smallest capacity to largest,
+    /// but that isn't required for this function to be 'correct'.
+    #[allow(dead_code)]
+    fn truncate_to_max_storages(&mut self, max_storages: usize, ideal_storage_size: u64) {
+        // these indexes into 'all_infos' are useless once we truncate 'all_infos', so make sure they're cleared out to avoid any issues
+        self.shrink_indexes.clear();
+        let total_storages = self.all_infos.len();
+        let mut cumulative_bytes = 0u64;
+        for (i, info) in self.all_infos.iter().enumerate() {
+            saturating_add_assign!(cumulative_bytes, info.alive_bytes);
+            let ancient_storages_required = (cumulative_bytes / ideal_storage_size + 1) as usize;
+            let storages_remaining = total_storages - i - 1;
+            // if the remaining uncombined storages and the # of resulting
+            // combined ancient storages is less than the threshold, then
+            // we've gone too far, so get rid of this entry and all after it.
+            // Every storage after this one is larger.
+            if storages_remaining + ancient_storages_required < max_storages {
+                self.all_infos.truncate(i);
+                break;
+            }
+        }
+    }
+
+    /// remove entries from 'all_infos' such that combining
+    /// the remaining entries into storages of 'ideal_storage_size'
+    /// will get us below 'max_storages'
+    /// The entires that are removed will be reconsidered the next time around.
+    /// Combining too many storages costs i/o and cpu so the goal is to find the sweet spot so
+    /// that we make progress in cleaning/shrinking/combining but that we don't cause unnecessary
+    /// churn.
+    #[allow(dead_code)]
+    fn filter_by_smallest_capacity(&mut self, max_storages: usize, ideal_storage_size: u64) {
+        let total_storages = self.all_infos.len();
+        if total_storages <= max_storages {
+            // currently fewer storages than max, so nothing to shrink
+            self.shrink_indexes.clear();
+            self.all_infos.clear();
+            return;
+        }
+
+        // sort by 'should_shrink' then smallest capacity to largest
+        self.all_infos.sort_unstable_by(|l, r| {
+            r.should_shrink
+                .cmp(&l.should_shrink)
+                .then_with(|| l.capacity.cmp(&r.capacity))
+        });
+
+        // remove any storages we don't need to combine this pass to achieve
+        // # resulting storages <= 'max_storages'
+        self.truncate_to_max_storages(max_storages, ideal_storage_size);
+    }
 }
 
 impl AccountsDb {
@@ -487,6 +541,141 @@ pub mod tests {
                     assert_eq!(infos.total_alive_bytes_shrink, 0);
                 }
             }
+        }
+    }
+
+    fn create_test_infos(count: usize) -> AncientSlotInfos {
+        let (db, slot1) = create_db_with_storages_and_index(true /*alive*/, 1, None);
+        let storage = db.storage.get_slot_storage_entry(slot1).unwrap();
+        AncientSlotInfos {
+            all_infos: (0..count)
+                .map(|index| SlotInfo {
+                    storage: Arc::clone(&storage),
+                    slot: index as Slot,
+                    capacity: 1,
+                    alive_bytes: 1,
+                    should_shrink: false,
+                })
+                .collect(),
+            shrink_indexes: (0..count).collect(),
+            ..AncientSlotInfos::default()
+        }
+    }
+
+    #[test]
+    fn test_filter_by_smallest_capacity_empty() {
+        for max_storages in 1..3 {
+            // requesting N max storage, has 1 storage, N >= 1 so nothing to do
+            let ideal_storage_size_large = get_ancient_append_vec_capacity();
+            let mut infos = create_test_infos(1);
+            infos.filter_by_smallest_capacity(max_storages, ideal_storage_size_large);
+            assert!(infos.all_infos.is_empty());
+        }
+    }
+
+    #[test]
+    fn test_filter_by_smaller_capacity_sort() {
+        // max is 3
+        // 4 storages
+        // storage[3] is big enough to cause us to need another storage
+        // so, storage[0] and [1] can be combined into 1, resulting in 3 remaining storages, which is
+        // the goal, so we only have to combine the first 2 to hit the goal
+        let ideal_storage_size_large = get_ancient_append_vec_capacity();
+        for reorder in [false, true] {
+            let mut infos = create_test_infos(4);
+            infos
+                .all_infos
+                .iter_mut()
+                .enumerate()
+                .for_each(|(i, info)| info.capacity = 1 + i as u64);
+            if reorder {
+                infos.all_infos[3].capacity = 0; // sort to beginning
+            }
+            infos.all_infos[3].alive_bytes = ideal_storage_size_large;
+            let max_storages = 3;
+            infos.filter_by_smallest_capacity(max_storages, ideal_storage_size_large);
+            assert_eq!(
+                infos
+                    .all_infos
+                    .iter()
+                    .map(|info| info.slot)
+                    .collect::<Vec<_>>(),
+                if reorder { vec![3, 0, 1] } else { vec![0, 1] },
+                "reorder: {reorder}"
+            );
+        }
+    }
+
+    #[test]
+    fn test_truncate_to_max_storages() {
+        for filter in [false, true] {
+            let test = |infos: &mut AncientSlotInfos, max_storages, ideal_storage_size| {
+                if filter {
+                    infos.filter_by_smallest_capacity(max_storages, ideal_storage_size);
+                } else {
+                    infos.truncate_to_max_storages(max_storages, ideal_storage_size);
+                }
+            };
+            let ideal_storage_size_large = get_ancient_append_vec_capacity();
+            let mut infos = create_test_infos(1);
+            let max_storages = 1;
+            // 1 storage, 1 max, but 1 storage does not fill the entire new combined storage, so truncate nothing
+            test(&mut infos, max_storages, ideal_storage_size_large);
+            assert_eq!(infos.all_infos.len(), usize::from(!filter));
+
+            let mut infos = create_test_infos(1);
+            let max_storages = 1;
+            infos.all_infos[0].alive_bytes = ideal_storage_size_large + 1; // too big for 1 ideal storage
+                                                                           // 1 storage, 1 max, but 1 overflows the entire new combined storage, so truncate nothing
+            test(&mut infos, max_storages, ideal_storage_size_large);
+            assert_eq!(infos.all_infos.len(), usize::from(!filter));
+
+            let mut infos = create_test_infos(1);
+            let max_storages = 2;
+            // all truncated because these infos will fit into the # storages
+            test(&mut infos, max_storages, ideal_storage_size_large);
+            assert!(infos.all_infos.is_empty());
+
+            let mut infos = create_test_infos(1);
+            infos.all_infos[0].alive_bytes = ideal_storage_size_large + 1;
+            let max_storages = 2;
+            // none truncated because the one storage calculates to be larger than 1 ideal storage, so we need to
+            // combine
+            test(&mut infos, max_storages, ideal_storage_size_large);
+            assert_eq!(
+                infos
+                    .all_infos
+                    .iter()
+                    .map(|info| info.slot)
+                    .collect::<Vec<_>>(),
+                if filter { Vec::default() } else { vec![0] }
+            );
+
+            // both need to be combined to reach '1'
+            let max_storages = 1;
+            for ideal_storage_size in [1, 2] {
+                let mut infos = create_test_infos(2);
+                test(&mut infos, max_storages, ideal_storage_size);
+                assert_eq!(infos.all_infos.len(), 2);
+            }
+
+            // max is 3
+            // 4 storages
+            // storage[3] is big enough to cause us to need another storage
+            // so, storage[0] and [1] can be combined into 1, resulting in 3 remaining storages, which is
+            // the goal, so we only have to combine the first 2 to hit the goal
+            let mut infos = create_test_infos(4);
+            infos.all_infos[3].alive_bytes = ideal_storage_size_large;
+            let max_storages = 3;
+            test(&mut infos, max_storages, ideal_storage_size_large);
+            assert_eq!(
+                infos
+                    .all_infos
+                    .iter()
+                    .map(|info| info.slot)
+                    .collect::<Vec<_>>(),
+                vec![0, 1]
+            );
         }
     }
 
