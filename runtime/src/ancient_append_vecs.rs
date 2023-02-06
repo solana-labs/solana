@@ -95,6 +95,8 @@ impl AncientSlotInfos {
     /// but that isn't required for this function to be 'correct'.
     #[allow(dead_code)]
     fn truncate_to_max_storages(&mut self, max_storages: usize, ideal_storage_size: u64) {
+        // these indexes into 'all_infos' are useless once we truncate 'all_infos', so make sure they're cleared out to avoid any issues
+        self.shrink_indexes.clear();
         let total_storages = self.all_infos.len();
         let mut cumulative_bytes = 0u64;
         for (i, info) in self.all_infos.iter().enumerate() {
