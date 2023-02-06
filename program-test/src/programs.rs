@@ -70,7 +70,8 @@ pub fn spl_programs(rent: &Rent) -> Vec<(Pubkey, AccountSharedData)> {
                         data: program_data,
                         owner: *loader_id,
                         executable: false,
-                        rent_epoch: 0,
+                        has_application_fees: false,
+                        rent_epoch_or_application_fees: 0,
                     }),
                 ));
                 bincode::serialize(&UpgradeableLoaderState::Program {

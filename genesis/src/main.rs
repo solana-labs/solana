@@ -674,7 +674,8 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                             data: program_data,
                             owner: loader,
                             executable: false,
-                            rent_epoch: 0,
+                            has_application_fees: false,
+                            rent_epoch_or_application_fees: 0,
                         }),
                     );
 
@@ -689,7 +690,8 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                             data: program_data,
                             owner: loader,
                             executable: true,
-                            rent_epoch: 0,
+                            has_application_fees: false,
+                            rent_epoch_or_application_fees: 0,
                         }),
                     );
                 }

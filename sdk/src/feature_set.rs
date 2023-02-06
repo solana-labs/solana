@@ -604,6 +604,8 @@ pub mod remove_congestion_multiplier_from_fee_calculation {
 
 pub mod enable_request_heap_frame_ix {
     solana_sdk::declare_id!("Hr1nUA9b7NJ6eChS26o7Vi8gYYDDwWD3YeBfzJkTbU86");
+}
+
 pub mod add_application_fees_program {
     solana_sdk::declare_id!("7hwmoguW2KEXkznQEsGfqGA9XTpGvScVae5MroWX5A9o");
 }

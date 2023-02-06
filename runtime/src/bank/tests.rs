@@ -21,7 +21,6 @@ use {
             genesis_sysvar_and_builtin_program_lamports, GenesisConfigInfo, ValidatorVoteKeypairs,
         },
         inline_spl_token,
-        rent_collector::RENT_EXEMPT_RENT_EPOCH,
         rent_paying_accounts_by_partition::RentPayingAccountsByPartition,
         status_cache::MAX_CACHE_ENTRIES,
         transaction_error_metrics::TransactionErrorMetrics,
@@ -42,7 +41,7 @@ use {
     solana_sdk::{
         account::{
             create_account_shared_data_with_fields as create_account, from_account, Account,
-            AccountSharedData, ReadableAccount, WritableAccount,
+            AccountSharedData, ReadableAccount, WritableAccount, RENT_EXEMPT_RENT_EPOCH,
         },
         account_utils::StateMut,
         bpf_loader, bpf_loader_deprecated,

@@ -163,27 +163,28 @@ pub struct AccountMeta {
     /// lamports in the account
     pub lamports: u64,
     /// the epoch at which this account will next owe rent
-    pub rent_epoch: Epoch,
+    pub rent_epoch_or_application_fees: u64,
     /// the program that owns this account. If executable, the program that loads this account.
     pub owner: Pubkey,
     /// this account's data contains a loaded program (and is now read-only)
     pub executable: bool,
     /// the epoch at which this account will next owe rent or application fees for the account
     /// switched by the boolean above
-    pub application_fees: u64,
+    pub has_application_fees: bool,
 }
 
 impl<'a, T: ReadableAccount> From<&'a T> for AccountMeta {
     fn from(account: &'a T) -> Self {
+        let has_application_fees = account.has_application_fees();
         Self {
             lamports: account.lamports(),
             owner: *account.owner(),
             executable: account.executable(),
-            has_application_fees: account.has_application_fees(),
-            application_fees: if account.has_application_fees() {
+            has_application_fees,
+            rent_epoch_or_application_fees: if has_application_fees {
                 account.application_fees()
             } else {
-                0
+                account.rent_epoch()
             },
         }
     }

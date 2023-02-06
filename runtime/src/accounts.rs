@@ -312,7 +312,7 @@ impl Accounts {
         let requested_loaded_accounts_data_size_limit =
             Self::get_requested_loaded_accounts_data_size_limit(feature_set);
         let mut accumulated_accounts_data_size: usize = 0;
-        let mut account_application_fees: HashMap<Pubkey, u64> = HashMap::new();
+        let mut application_fees: HashMap<Pubkey, u64> = HashMap::new();
         let mut payer_index = 0;
 
         // we reverse the iteration over keys so that we collect all the application fees
@@ -331,7 +331,7 @@ impl Accounts {
                             .is_active(&feature_set::instructions_sysvar_owned_by_sysvar::id()),
                     )
                 } else {
-                    let (mut account, rent) = if let Some(account_override) =
+                    let (account, rent) = if let Some(account_override) =
                         account_overrides.and_then(|overrides| overrides.get(key))
                     {
                         (account_override.clone(), 0)
@@ -340,15 +340,24 @@ impl Accounts {
                             .load_with_fixed_root(ancestors, key)
                             .map(|(mut account, _)| {
                                 if message.is_writable(i) {
-                                    let rent_due = rent_collector
+                                    let rent_due_result = rent_collector
                                         .collect_from_existing_account(
                                             key,
                                             &mut account,
                                             self.accounts_db.filler_account_suffix.as_ref(),
                                             set_exempt_rent_epoch_max,
-                                        )
-                                        .rent_amount;
-                                    (account, rent_due)
+                                        );
+                                    match rent_due_result {
+                                        Ok(rent_due) => {
+                                            (account, rent_due.rent_amount)
+                                        },
+                                        Err(_) => {
+                                            // should never happen
+                                            error!("trying to set rent epoch for the account with application fees {}", key);
+                                            (account, 0)
+                                        }
+
+                                    }
                                 } else {
                                     (account, 0)
                                 }
@@ -360,7 +369,8 @@ impl Accounts {
                                     // All new accounts must be rent-exempt (enforced in Bank::execute_loaded_transaction).
                                     // Currently, rent collection sets rent_epoch to u64::MAX, but initializing the account
                                     // with this field already set would allow us to skip rent collection for these accounts.
-                                    default_account.set_rent_epoch(u64::MAX);
+                                    // ignore error because error should never happen
+                                    let _ = default_account.set_rent_epoch(u64::MAX);
                                 }
                                 (default_account, 0)
                             })
@@ -374,7 +384,7 @@ impl Accounts {
 
                     if account.has_application_fees {
                         // if account has application fees insert the fees in the map
-                        account_application_fees.insert(*key, account.rent_epoch_or_application_fees);
+                        application_fees.insert(*key, account.rent_epoch_or_application_fees);
                     }
 
                     if !validated_fee_payer && message.is_non_loader_key(i) {
@@ -437,7 +447,7 @@ impl Accounts {
 
         if validated_fee_payer {
             let key_and_account = &mut accounts[payer_index];
-            let application_fees_sum = account_application_fees.iter().map(|x| *x.1).sum::<u64>();
+            let application_fees_sum = application_fees.iter().map(|x| *x.1).sum::<u64>();
 
             Self::validate_fee_payer(
                 &key_and_account.0,

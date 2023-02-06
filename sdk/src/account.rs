@@ -22,6 +22,11 @@ use {
     },
 };
 
+/// When rent is collected from an exempt account, rent_epoch is set to this
+/// value. The idea is to have a fixed, consistent value for rent_epoch for all accounts that do not collect rent.
+/// This enables us to get rid of the field completely.
+pub const RENT_EXEMPT_RENT_EPOCH: Epoch = Epoch::MAX;
+
 /// An Account with data that is stored on chain
 #[repr(C)]
 #[frozen_abi(digest = "HawRVHh7t4d3H3bitWHFt25WhhoDmbJMCfWdESQQoYEy")]
@@ -286,9 +291,13 @@ impl WritableAccount for Account {
         self.executable = executable;
     }
     fn set_rent_epoch(&mut self, epoch: Epoch) -> Result<(), InstructionError> {
-        if self.has_application_fees && epoch != 0 {
-            // cannot set epoch because application fees are present
-            Err(InstructionError::CannotSetRentEpochForAccountWithAppFees.into())
+        if self.has_application_fees {
+            if epoch != RENT_EXEMPT_RENT_EPOCH {
+                // cannot set epoch because application fees are present
+                Err(InstructionError::CannotSetRentEpochForAccountWithAppFees.into())
+            } else {
+                Ok(())
+            }
         } else {
             self.rent_epoch_or_application_fees = epoch;
             Ok(())
@@ -302,12 +311,13 @@ impl WritableAccount for Account {
             }
             Ok(())
         } else {
-            if self.rent_epoch_or_application_fees != 0 {
-                return Err(InstructionError::CannotSetAppFeesForAccountWithRentEpoch.into());
+            if self.rent_epoch_or_application_fees != RENT_EXEMPT_RENT_EPOCH {
+                Err(InstructionError::CannotSetAppFeesForAccountWithRentEpoch.into())
+            } else {
+                self.has_application_fees = true;
+                self.rent_epoch_or_application_fees = fees;
+                Ok(())
             }
-            self.has_application_fees = true;
-            self.rent_epoch_or_application_fees = fees;
-            Ok(())
         }
     }
     fn create(
@@ -354,9 +364,13 @@ impl WritableAccount for AccountSharedData {
         self.executable = executable;
     }
     fn set_rent_epoch(&mut self, epoch: Epoch) -> Result<(), InstructionError> {
-        if self.has_application_fees && epoch != 0 {
-            // cannot set epoch because application fees are present
-            Err(InstructionError::CannotSetRentEpochForAccountWithAppFees.into())
+        if self.has_application_fees {
+            if epoch != RENT_EXEMPT_RENT_EPOCH {
+                // cannot set epoch because application fees are present
+                Err(InstructionError::CannotSetRentEpochForAccountWithAppFees.into())
+            } else {
+                Ok(())
+            }
         } else {
             self.rent_epoch_or_application_fees = epoch;
             Ok(())
@@ -370,12 +384,13 @@ impl WritableAccount for AccountSharedData {
             }
             Ok(())
         } else {
-            if self.rent_epoch_or_application_fees != 0 {
-                return Err(InstructionError::CannotSetAppFeesForAccountWithRentEpoch.into());
+            if self.rent_epoch_or_application_fees != RENT_EXEMPT_RENT_EPOCH {
+                Err(InstructionError::CannotSetAppFeesForAccountWithRentEpoch.into())
+            } else {
+                self.has_application_fees = true;
+                self.rent_epoch_or_application_fees = fees;
+                Ok(())
             }
-            self.has_application_fees = true;
-            self.rent_epoch_or_application_fees = fees;
-            Ok(())
         }
     }
     fn create(
