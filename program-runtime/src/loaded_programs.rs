@@ -206,6 +206,7 @@ mod tests {
     use solana_sdk::clock::Slot;
     use solana_sdk::pubkey::Pubkey;
     use std::ops::ControlFlow;
+    use std::sync::atomic::AtomicU64;
     use std::sync::Arc;
 
     struct TestForkGraph {
@@ -343,7 +344,7 @@ mod tests {
             program: LoadedProgramType::Invalid,
             deployment_slot,
             effective_slot: 0,
-            usage_counter: Default::default(),
+            usage_counter: AtomicU64::default(),
         })
     }
 
