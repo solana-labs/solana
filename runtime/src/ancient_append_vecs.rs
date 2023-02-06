@@ -89,6 +89,39 @@ impl AncientSlotInfos {
         });
     }
 
+    /// clear 'should_shrink' for storages after a cutoff to determine value
+    #[allow(dead_code)]
+    fn clear_should_shrink_after_cutoff(&mut self, percent_of_alive_shrunk_data: u64) {
+        let mut bytes_to_shrink_due_to_ratio = 0;
+        // shrink enough slots to write 'percent_of_alive_shrunk_data'% of the total alive data
+        // from slots that exceeded the shrink threshold.
+        // The goal is to limit overall i/o in this pass while making progress.
+        let threhold_bytes = self.total_alive_bytes_shrink * percent_of_alive_shrunk_data / 100;
+        for info_index in &self.shrink_indexes {
+            let info = &mut self.all_infos[*info_index];
+            if bytes_to_shrink_due_to_ratio >= threhold_bytes {
+                // we exceeded the amount to shrink due to alive ratio, so don't shrink this one just due to ratio
+                // It MAY be shrunk based on total capacity still.
+                // Mark it as false for 'ratio_shrink' so it gets evaluated solely based on # of files.
+                info.should_shrink = false;
+            } else {
+                saturating_add_assign!(bytes_to_shrink_due_to_ratio, info.alive_bytes);
+            }
+        }
+    }
+
+    /// after this function, only slots that were chosen to shrink are marked with
+    /// 'should_shrink'
+    /// There are likely more candidates to shrink than will be chosen.
+    #[allow(dead_code)]
+    fn choose_storages_to_shrink(&mut self, percent_of_alive_shrunk_data: u64) {
+        // sort the shrink_ratio_slots by most bytes saved to fewest
+        // most bytes saved is more valuable to shrink
+        self.sort_shrink_indexes_by_bytes_saved();
+
+        self.clear_should_shrink_after_cutoff(percent_of_alive_shrunk_data);
+    }
+
     /// truncate 'all_infos' such that when the remaining entries in
     /// 'all_infos' are combined, the total number of storages <= 'max_storages'
     /// The idea is that 'all_infos' is sorted from smallest capacity to largest,
@@ -737,6 +770,76 @@ pub mod tests {
             );
             assert_eq!(infos.total_alive_bytes, alive_bytes_expected);
             assert_eq!(infos.total_alive_bytes_shrink, dead_bytes);
+        }
+    }
+
+    #[test]
+    fn test_clear_should_shrink_after_cutoff_empty() {
+        let mut infos = create_test_infos(2);
+        for count in 0..2 {
+            for i in 0..count {
+                infos.all_infos[i].should_shrink = true;
+            }
+        }
+        infos.clear_should_shrink_after_cutoff(100);
+        assert_eq!(
+            0,
+            infos
+                .all_infos
+                .iter()
+                .filter_map(|info| info.should_shrink.then_some(()))
+                .count()
+        );
+    }
+
+    #[test]
+    fn test_clear_should_shrink_after_cutoff_simple() {
+        for swap in [false, true] {
+            for (percent_of_alive_shrunk_data, mut expected_infos) in
+                [(0, 0), (9, 1), (10, 1), (89, 2), (90, 2), (91, 2), (100, 2)]
+            {
+                for clear in [true, false] {
+                    let mut infos = create_test_infos(2);
+                    infos
+                        .all_infos
+                        .iter_mut()
+                        .enumerate()
+                        .for_each(|(i, info)| {
+                            info.should_shrink = true;
+                            info.capacity = ((i + 1) * 1000) as u64;
+                        });
+                    infos.all_infos[0].alive_bytes = 100;
+                    infos.all_infos[1].alive_bytes = 900;
+                    if swap {
+                        infos.all_infos = infos.all_infos.into_iter().rev().collect();
+                    }
+                    infos.total_alive_bytes_shrink =
+                        infos.all_infos.iter().map(|info| info.alive_bytes).sum();
+                    if clear {
+                        infos.clear_should_shrink_after_cutoff(percent_of_alive_shrunk_data);
+                    } else {
+                        infos.choose_storages_to_shrink(percent_of_alive_shrunk_data);
+                    }
+                    if expected_infos == 2
+                        && infos.all_infos[infos.shrink_indexes[0]].alive_bytes
+                            >= infos.total_alive_bytes_shrink * percent_of_alive_shrunk_data / 100
+                    {
+                        // if the sorting ends up putting the bigger alive_bytes storage first, then only 1 will be shrunk due to 'should_shrink'
+                        expected_infos = 1;
+                    }
+                    let count = infos
+                        .all_infos
+                        .iter()
+                        .filter_map(|info| info.should_shrink.then_some(()))
+                        .count();
+                    assert_eq!(
+                        expected_infos,
+                        count,
+                        "percent_of_alive_shrunk_data: {percent_of_alive_shrunk_data}, infos: {expected_infos}, clear: {clear}, swap: {swap}, data: {:?}",
+                        infos.all_infos.iter().map(|info| (info.slot, info.capacity, info.alive_bytes)).collect::<Vec<_>>()
+                    );
+                }
+            }
         }
     }
 
