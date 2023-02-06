@@ -55,6 +55,18 @@ pub enum LoadedProgramType {
     BuiltIn(BuiltInProgram<InvokeContext<'static>>),
 }
 
+impl Debug for LoadedProgramType {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            LoadedProgramType::Invalid => write!(f, "LoadedProgramType::Invalid"),
+            LoadedProgramType::LegacyV0(_) => write!(f, "LoadedProgramType::LegacyV0"),
+            LoadedProgramType::LegacyV1(_) => write!(f, "LoadedProgramType::LegacyV1"),
+            LoadedProgramType::BuiltIn(_) => write!(f, "LoadedProgramType::BuiltIn"),
+        }
+    }
+}
+
+#[derive(Debug)]
 pub struct LoadedProgram {
     /// The program of this entry
     pub program: LoadedProgramType,
@@ -105,18 +117,12 @@ impl LoadedProgram {
     }
 }
 
-#[derive(Default)]
+#[derive(Debug, Default)]
 pub struct LoadedPrograms {
     /// A two level index:
     ///
     /// Pubkey is the address of a program, multiple versions can coexists simultaneously under the same address (in different slots).
     entries: HashMap<Pubkey, Vec<Arc<LoadedProgram>>>,
-}
-
-impl Debug for LoadedPrograms {
-    fn fmt(&self, _f: &mut Formatter<'_>) -> std::fmt::Result {
-        todo!()
-    }
 }
 
 impl LoadedPrograms {
