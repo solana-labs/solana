@@ -115,6 +115,10 @@ impl AncientSlotInfos {
     /// remove entries from 'all_infos' such that combining
     /// the remaining entries into storages of 'ideal_storage_size'
     /// will get us below 'max_storages'
+    /// The entires that are removed will be reconsidered the next time around.
+    /// Combining too many storages costs i/o and cpu so the goal is to find the sweet spot so
+    /// that we make progress in cleaning/shrinking/combining but that we don't cause unnecessary
+    /// churn.
     #[allow(dead_code)]
     fn filter_by_smallest_capacity(&mut self, max_storages: usize, ideal_storage_size: u64) {
         let total_storages = self.all_infos.len();
@@ -125,11 +129,10 @@ impl AncientSlotInfos {
             return;
         }
 
-        // sort by should_shrink then smallest to largest
-        self.all_infos.sort_by(|l, r| {
-            l.should_shrink
-                .cmp(&r.should_shrink)
-                .reverse()
+        // sort by 'should_shrink' then smallest capacity to largest
+        self.all_infos.sort_unstable_by(|l, r| {
+            r.should_shrink
+                .cmp(&l.should_shrink)
                 .then_with(|| l.capacity.cmp(&r.capacity))
         });
 
