@@ -1,5 +1,7 @@
 //! The `repair_service` module implements the tools necessary to generate a thread which
 //! regularly finds missing shreds in the ledger and sends repair requests for those shreds
+#[cfg(test)]
+use solana_ledger::shred::Nonce;
 use {
     crate::{
         ancestor_hashes_service::{AncestorHashesReplayUpdateReceiver, AncestorHashesService},
@@ -13,12 +15,19 @@ use {
     crossbeam_channel::{Receiver as CrossbeamReceiver, Sender as CrossbeamSender},
     lru::LruCache,
     solana_gossip::cluster_info::ClusterInfo,
-    solana_ledger::blockstore::{Blockstore, SlotMeta},
+    solana_ledger::{
+        blockstore::{Blockstore, SlotMeta},
+        shred,
+    },
     solana_measure::measure::Measure,
     solana_runtime::{bank_forks::BankForks, contains::Contains},
     solana_sdk::{
-        clock::Slot, epoch_schedule::EpochSchedule, hash::Hash, pubkey::Pubkey,
+        clock::{Slot, DEFAULT_TICKS_PER_SECOND, MS_PER_TICK},
+        epoch_schedule::EpochSchedule,
+        hash::Hash,
+        pubkey::Pubkey,
         signer::keypair::Keypair,
+        timing::timestamp,
     },
     solana_streamer::sendmmsg::{batch_send, SendPktsError},
     std::{
@@ -33,8 +42,8 @@ use {
         time::{Duration, Instant},
     },
 };
-#[cfg(test)]
-use {solana_ledger::shred::Nonce, solana_sdk::timing::timestamp};
+
+pub const DEFER_REPAIR_THRESHOLD: Duration = Duration::from_millis(200);
 
 pub type DuplicateSlotsResetSender = CrossbeamSender<Vec<(Slot, Hash)>>;
 pub type DuplicateSlotsResetReceiver = CrossbeamReceiver<Vec<(Slot, Hash)>>;
@@ -518,20 +527,41 @@ impl RepairService {
         slot: Slot,
         slot_meta: &SlotMeta,
         max_repairs: usize,
+        delay_threshold: Duration,
     ) -> Vec<ShredRepairType> {
         if max_repairs == 0 || slot_meta.is_full() {
             vec![]
         } else if slot_meta.consumed == slot_meta.received {
+            // check delay time of last shred
+            if slot_meta.received > 0 {
+                if let Some(shred_data) = blockstore
+                    .get_data_shred(slot, slot_meta.received - 1)
+                    .unwrap()
+                {
+                    let reference_tick =
+                        u64::from(shred::layout::get_reference_tick(&shred_data).unwrap());
+                    let ticks_since_first_insert = DEFAULT_TICKS_PER_SECOND
+                        * (timestamp() - slot_meta.first_shred_timestamp)
+                        / 1000;
+                    if ticks_since_first_insert
+                        < reference_tick + delay_threshold.as_millis() as u64 / MS_PER_TICK
+                    {
+                        return vec![];
+                    }
+                }
+            }
             vec![ShredRepairType::HighestShred(slot, slot_meta.received)]
         } else {
-            let reqs = blockstore.find_missing_data_indexes(
-                slot,
-                slot_meta.first_shred_timestamp,
-                slot_meta.consumed,
-                slot_meta.received,
-                max_repairs,
-            );
-            reqs.into_iter()
+            blockstore
+                .find_missing_data_indexes(
+                    slot,
+                    slot_meta.first_shred_timestamp,
+                    delay_threshold,
+                    slot_meta.consumed,
+                    slot_meta.received,
+                    max_repairs,
+                )
+                .into_iter()
                 .map(|i| ShredRepairType::Shred(slot, i))
                 .collect()
         }
@@ -558,6 +588,7 @@ impl RepairService {
                     slot,
                     &slot_meta,
                     max_repairs - repairs.len(),
+                    DEFER_REPAIR_THRESHOLD,
                 );
                 repairs.extend(new_repairs);
                 let next_slots = slot_meta.next_slots;
@@ -595,6 +626,7 @@ impl RepairService {
                 slot,
                 &meta,
                 max_repairs - repairs.len(),
+                Duration::from_millis(200),
             );
             repairs.extend(new_repairs);
         }
@@ -617,6 +649,7 @@ impl RepairService {
                     slot,
                     &slot_meta,
                     MAX_REPAIR_PER_DUPLICATE,
+                    Duration::from_millis(200),
                 ))
             }
         } else {
@@ -773,6 +806,7 @@ mod test {
         },
         solana_runtime::bank::Bank,
         solana_sdk::{
+            clock::DEFAULT_MS_PER_SLOT,
             signature::{Keypair, Signer},
             timing::timestamp,
         },
@@ -953,6 +987,7 @@ mod test {
             shreds.pop();
 
             blockstore.insert_shreds(shreds, None, false).unwrap();
+            std::thread::sleep(Duration::from_millis(DEFAULT_MS_PER_SLOT) + DEFER_REPAIR_THRESHOLD);
 
             // We didn't get the last shred for this slot, so ask for the highest shred for that slot
             let expected: Vec<ShredRepairType> =

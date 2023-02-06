@@ -104,9 +104,6 @@ lazy_static! {
 
 pub const MAX_REPLAY_WAKE_UP_SIGNALS: usize = 1;
 pub const MAX_COMPLETED_SLOTS_IN_CHANNEL: usize = 100_000;
-pub const MAX_TURBINE_PROPAGATION: Duration = Duration::from_millis(200);
-pub const MAX_TURBINE_DELAY_IN_TICKS: u64 =
-    MAX_TURBINE_PROPAGATION.as_millis() as u64 / MS_PER_TICK;
 
 // An upper bound on maximum number of data shreds we can handle in a slot
 // 32K shreds would allow ~320K peak TPS
@@ -1787,6 +1784,7 @@ impl Blockstore {
         db_iterator: &mut DBRawIterator,
         slot: Slot,
         first_timestamp: u64,
+        delay_threshold: Duration,
         start_index: u64,
         end_index: u64,
         max_missing: usize,
@@ -1798,6 +1796,7 @@ impl Blockstore {
             return vec![];
         }
 
+        let delay_threshold_ticks = delay_threshold.as_millis() as u64 / MS_PER_TICK;
         let mut missing_indexes = vec![];
         let ticks_since_first_insert =
             DEFAULT_TICKS_PER_SECOND * (timestamp() - first_timestamp) / 1000;
@@ -1831,7 +1830,7 @@ impl Blockstore {
             // the tick that will be used to figure out the timeout for this hole
             let data = db_iterator.value().expect("couldn't read value");
             let reference_tick = u64::from(shred::layout::get_reference_tick(data).unwrap());
-            if ticks_since_first_insert < reference_tick + MAX_TURBINE_DELAY_IN_TICKS {
+            if ticks_since_first_insert < reference_tick + delay_threshold_ticks {
                 // The higher index holes have not timed out yet
                 break 'outer;
             }
@@ -1861,6 +1860,7 @@ impl Blockstore {
         &self,
         slot: Slot,
         first_timestamp: u64,
+        delay_threshold: Duration,
         start_index: u64,
         end_index: u64,
         max_missing: usize,
@@ -1873,6 +1873,7 @@ impl Blockstore {
                 &mut db_iterator,
                 slot,
                 first_timestamp,
+                delay_threshold,
                 start_index,
                 end_index,
                 max_missing,
@@ -4423,6 +4424,8 @@ pub mod tests {
         std::{thread::Builder, time::Duration},
     };
 
+    const TEST_DEFER_REPAIR_THRESHOLD: Duration = Duration::from_millis(200);
+
     // used for tests only
     pub(crate) fn make_slot_entries_with_transactions(num_entries: u64) -> Vec<Entry> {
         let mut entries: Vec<Entry> = Vec::new();
@@ -5878,27 +5881,62 @@ pub mod tests {
         // range of [0, gap)
         let expected: Vec<u64> = (1..gap).collect();
         assert_eq!(
-            blockstore.find_missing_data_indexes(slot, 0, 0, gap, gap as usize),
+            blockstore.find_missing_data_indexes(
+                slot,
+                0,
+                TEST_DEFER_REPAIR_THRESHOLD,
+                0,
+                gap,
+                gap as usize
+            ),
             expected
         );
         assert_eq!(
-            blockstore.find_missing_data_indexes(slot, 0, 1, gap, (gap - 1) as usize),
+            blockstore.find_missing_data_indexes(
+                slot,
+                0,
+                TEST_DEFER_REPAIR_THRESHOLD,
+                1,
+                gap,
+                (gap - 1) as usize
+            ),
             expected,
         );
         assert_eq!(
-            blockstore.find_missing_data_indexes(slot, 0, 0, gap - 1, (gap - 1) as usize),
+            blockstore.find_missing_data_indexes(
+                slot,
+                0,
+                TEST_DEFER_REPAIR_THRESHOLD,
+                0,
+                gap - 1,
+                (gap - 1) as usize
+            ),
             &expected[..expected.len() - 1],
         );
         assert_eq!(
-            blockstore.find_missing_data_indexes(slot, 0, gap - 2, gap, gap as usize),
+            blockstore.find_missing_data_indexes(
+                slot,
+                0,
+                TEST_DEFER_REPAIR_THRESHOLD,
+                gap - 2,
+                gap,
+                gap as usize
+            ),
             vec![gap - 2, gap - 1],
         );
         assert_eq!(
-            blockstore.find_missing_data_indexes(slot, 0, gap - 2, gap, 1),
+            blockstore.find_missing_data_indexes(
+                slot,
+                0,
+                TEST_DEFER_REPAIR_THRESHOLD,
+                gap - 2,
+                gap,
+                1
+            ),
             vec![gap - 2],
         );
         assert_eq!(
-            blockstore.find_missing_data_indexes(slot, 0, 0, gap, 1),
+            blockstore.find_missing_data_indexes(slot, 0, TEST_DEFER_REPAIR_THRESHOLD, 0, gap, 1),
             vec![1],
         );
 
@@ -5907,11 +5945,25 @@ pub mod tests {
         let mut expected: Vec<u64> = (1..gap).collect();
         expected.push(gap + 1);
         assert_eq!(
-            blockstore.find_missing_data_indexes(slot, 0, 0, gap + 2, (gap + 2) as usize),
+            blockstore.find_missing_data_indexes(
+                slot,
+                0,
+                TEST_DEFER_REPAIR_THRESHOLD,
+                0,
+                gap + 2,
+                (gap + 2) as usize
+            ),
             expected,
         );
         assert_eq!(
-            blockstore.find_missing_data_indexes(slot, 0, 0, gap + 2, (gap - 1) as usize),
+            blockstore.find_missing_data_indexes(
+                slot,
+                0,
+                TEST_DEFER_REPAIR_THRESHOLD,
+                0,
+                gap + 2,
+                (gap - 1) as usize
+            ),
             &expected[..expected.len() - 1],
         );
 
@@ -5928,6 +5980,7 @@ pub mod tests {
                     blockstore.find_missing_data_indexes(
                         slot,
                         0,
+                        TEST_DEFER_REPAIR_THRESHOLD,
                         j * gap,
                         i * gap,
                         ((i - j) * gap) as usize
@@ -5964,12 +6017,26 @@ pub mod tests {
 
         let empty: Vec<u64> = vec![];
         assert_eq!(
-            blockstore.find_missing_data_indexes(slot, timestamp(), 0, 50, 1),
+            blockstore.find_missing_data_indexes(
+                slot,
+                timestamp(),
+                TEST_DEFER_REPAIR_THRESHOLD,
+                0,
+                50,
+                1
+            ),
             empty
         );
         let expected: Vec<_> = (1..=9).collect();
         assert_eq!(
-            blockstore.find_missing_data_indexes(slot, timestamp() - 400, 0, 50, 9),
+            blockstore.find_missing_data_indexes(
+                slot,
+                timestamp() - 400,
+                TEST_DEFER_REPAIR_THRESHOLD,
+                0,
+                50,
+                9
+            ),
             expected
         );
     }
@@ -5984,19 +6051,19 @@ pub mod tests {
         // Early exit conditions
         let empty: Vec<u64> = vec![];
         assert_eq!(
-            blockstore.find_missing_data_indexes(slot, 0, 0, 0, 1),
+            blockstore.find_missing_data_indexes(slot, 0, TEST_DEFER_REPAIR_THRESHOLD, 0, 0, 1),
             empty
         );
         assert_eq!(
-            blockstore.find_missing_data_indexes(slot, 0, 5, 5, 1),
+            blockstore.find_missing_data_indexes(slot, 0, TEST_DEFER_REPAIR_THRESHOLD, 5, 5, 1),
             empty
         );
         assert_eq!(
-            blockstore.find_missing_data_indexes(slot, 0, 4, 3, 1),
+            blockstore.find_missing_data_indexes(slot, 0, TEST_DEFER_REPAIR_THRESHOLD, 4, 3, 1),
             empty
         );
         assert_eq!(
-            blockstore.find_missing_data_indexes(slot, 0, 1, 2, 0),
+            blockstore.find_missing_data_indexes(slot, 0, TEST_DEFER_REPAIR_THRESHOLD, 1, 2, 0),
             empty
         );
 
@@ -6023,7 +6090,10 @@ pub mod tests {
         // [i, first_index - 1]
         for start in 0..STARTS {
             let result = blockstore.find_missing_data_indexes(
-                slot, 0, start, // start
+                slot,
+                0,
+                TEST_DEFER_REPAIR_THRESHOLD,
+                start, // start
                 END,   //end
                 MAX,   //max
             );
@@ -6051,7 +6121,14 @@ pub mod tests {
         for i in 0..num_shreds as u64 {
             for j in 0..i {
                 assert_eq!(
-                    blockstore.find_missing_data_indexes(slot, 0, j, i, (i - j) as usize),
+                    blockstore.find_missing_data_indexes(
+                        slot,
+                        0,
+                        TEST_DEFER_REPAIR_THRESHOLD,
+                        j,
+                        i,
+                        (i - j) as usize
+                    ),
                     empty
                 );
             }

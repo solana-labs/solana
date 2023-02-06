@@ -2,7 +2,7 @@ use {
     crate::{
         heaviest_subtree_fork_choice::HeaviestSubtreeForkChoice,
         repair_generic_traversal::{get_closest_completion, get_unknown_last_index},
-        repair_service::{BestRepairsStats, RepairTiming},
+        repair_service::{BestRepairsStats, RepairTiming, DEFER_REPAIR_THRESHOLD},
         repair_weighted_traversal,
         serve_repair::ShredRepairType,
         tree_diff::TreeDiff,
@@ -359,6 +359,7 @@ impl RepairWeight {
             repairs,
             max_new_shreds,
             ignore_slots,
+            DEFER_REPAIR_THRESHOLD,
         );
     }
 
