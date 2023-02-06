@@ -718,6 +718,8 @@ impl<'a> BorrowedAccount<'a> {
 
     #[cfg(not(target_os = "solana"))]
     pub fn set_application_fees(&mut self, application_fees: u64) -> Result<(), InstructionError> {
+        use crate::account::RENT_EXEMPT_RENT_EPOCH;
+
         if self
             .transaction_context
             .is_early_verification_of_account_modifications_enabled()
@@ -726,7 +728,7 @@ impl<'a> BorrowedAccount<'a> {
             if !self.is_writable() {
                 return Err(InstructionError::ReadonlyLamportChange);
             }
-            if !self.has_application_fees() && self.get_rent_epoch() != 0 {
+            if !self.has_application_fees() && self.get_rent_epoch() != RENT_EXEMPT_RENT_EPOCH {
                 return Err(InstructionError::CannotSetAppFeesForAccountWithRentEpoch);
             }
             // don't touch the account if the lamports do not change

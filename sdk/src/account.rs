@@ -252,7 +252,7 @@ impl ReadableAccount for Account {
     }
     fn rent_epoch(&self) -> Epoch {
         if self.has_application_fees {
-            0
+            RENT_EXEMPT_RENT_EPOCH
         } else {
             self.rent_epoch_or_application_fees
         }
@@ -432,7 +432,7 @@ impl ReadableAccount for AccountSharedData {
     }
     fn rent_epoch(&self) -> Epoch {
         if self.has_application_fees {
-            0
+            RENT_EXEMPT_RENT_EPOCH
         } else {
             self.rent_epoch_or_application_fees
         }
@@ -470,7 +470,7 @@ impl ReadableAccount for Ref<'_, AccountSharedData> {
     }
     fn rent_epoch(&self) -> Epoch {
         if self.has_application_fees {
-            0
+            RENT_EXEMPT_RENT_EPOCH
         } else {
             self.rent_epoch_or_application_fees
         }
@@ -515,7 +515,7 @@ impl ReadableAccount for Ref<'_, Account> {
     }
     fn rent_epoch(&self) -> Epoch {
         if self.has_application_fees {
-            0
+            RENT_EXEMPT_RENT_EPOCH
         } else {
             self.rent_epoch_or_application_fees
         }
@@ -1427,5 +1427,48 @@ pub mod tests {
         assert_eq!(account2.owner, deserialized_acc2.owner);
         assert_eq!(account2.executable, deserialized_acc2.executable);
         assert_eq!(account2.rent_epoch, deserialized_acc2.rent_epoch);
+    }
+
+
+    #[test]
+    fn test_updating_application_fees_for_account_with_rent_epoch_fails() {
+        let key = Pubkey::new_unique();
+        let ( mut account1, mut account2) = make_two_accounts(&key);
+        assert_eq!(account1.set_application_fees(100), Err(InstructionError::CannotSetAppFeesForAccountWithRentEpoch));
+        assert_eq!(account2.set_application_fees(100), Err(InstructionError::CannotSetAppFeesForAccountWithRentEpoch));
+
+        account1.set_rent_epoch(RENT_EXEMPT_RENT_EPOCH).unwrap();
+        account2.set_rent_epoch(RENT_EXEMPT_RENT_EPOCH).unwrap();
+        assert_eq!(account1.set_application_fees(100), Ok(()));
+        assert_eq!(account2.set_application_fees(100), Ok(()));
+        assert_eq!(account1.has_application_fees(), true);
+        assert_eq!(account2.has_application_fees(), true);
+        assert_eq!(account1.application_fees(), 100);
+        assert_eq!(account2.application_fees(), 100);
+        assert_eq!(account1.rent_epoch(), RENT_EXEMPT_RENT_EPOCH);
+        assert_eq!(account2.rent_epoch(), RENT_EXEMPT_RENT_EPOCH);
+
+        // further setting rent_epoch to rent_exempt does not trigger error
+        account1.set_rent_epoch(RENT_EXEMPT_RENT_EPOCH).unwrap();
+        account2.set_rent_epoch(RENT_EXEMPT_RENT_EPOCH).unwrap();
+    }
+
+    #[test]
+    fn test_updating_rent_epoch_for_account_with_application_fee_fails() {
+        let key = Pubkey::new_unique();
+        let ( mut account1, mut account2) = make_two_accounts(&key);
+        account1.set_rent_epoch(RENT_EXEMPT_RENT_EPOCH).unwrap();
+        account2.set_rent_epoch(RENT_EXEMPT_RENT_EPOCH).unwrap();
+        assert_eq!(account1.set_application_fees(100), Ok(()));
+        assert_eq!(account2.set_application_fees(100), Ok(()));
+        assert_eq!(account1.has_application_fees(), true);
+        assert_eq!(account2.has_application_fees(), true);
+        assert_eq!(account1.application_fees(), 100);
+        assert_eq!(account2.application_fees(), 100);
+        assert_eq!(account1.rent_epoch(), RENT_EXEMPT_RENT_EPOCH);
+        assert_eq!(account2.rent_epoch(), RENT_EXEMPT_RENT_EPOCH);
+
+        assert_eq!(account1.set_rent_epoch(12),Err(InstructionError::CannotSetRentEpochForAccountWithAppFees));
+        assert_eq!(account2.set_rent_epoch(12),Err(InstructionError::CannotSetRentEpochForAccountWithAppFees));
     }
 }

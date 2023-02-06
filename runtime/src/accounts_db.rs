@@ -18,6 +18,8 @@
 //! tracks the number of commits to the entire data store. So the latest
 //! commit for each slot entry would be indexed.
 
+use solana_sdk::account::RENT_EXEMPT_RENT_EPOCH;
+
 use {
     crate::{
         account_info::{AccountInfo, Offset, StorageLocation, StoredSize},
@@ -900,7 +902,7 @@ impl<'a> ReadableAccount for LoadedAccount<'a> {
         match self {
             LoadedAccount::Stored(stored_account_meta) => {
                 if stored_account_meta.account_meta.has_application_fees {
-                    0
+                    RENT_EXEMPT_RENT_EPOCH
                 } else {
                     stored_account_meta
                         .account_meta
@@ -2242,7 +2244,7 @@ impl<'a> ReadableAccount for StoredAccountMeta<'a> {
     }
     fn rent_epoch(&self) -> Epoch {
         if self.account_meta.has_application_fees {
-            0
+            RENT_EXEMPT_RENT_EPOCH
         } else {
             self.account_meta.rent_epoch_or_application_fees
         }
