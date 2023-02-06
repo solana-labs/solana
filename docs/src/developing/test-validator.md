@@ -147,7 +147,7 @@ JSON RPC URL: http://127.0.0.1:8899
 ⠈ 00:36:02 | Processed Slot: 5142 | Confirmed Slot: 5142 | Finalized Slot: 5110 | Snapshot Slot: 5100 | Transactions: 5142 | ◎499.974295000
 ```
 
-- Session running time, current slot of the the three block
+- Session running time, current slot of the three block
   [commitment levels](../api/http#configuring-state-commitment),
   slot height of the last snapshot, transaction count,
   [voting authority](/running-validator/vote-accounts#vote-authority) balance
