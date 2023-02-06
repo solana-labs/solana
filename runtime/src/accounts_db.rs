@@ -822,7 +822,7 @@ impl<'a> LoadedAccountAccessor<'a> {
                 cached_account.as_ref().map(|cached_account| AccountMeta {
                     lamports: cached_account.account.lamports(),
                     rent_epoch: cached_account.account.rent_epoch(),
-                    owner: cached_account.account.owner().clone(),
+                    owner: *cached_account.account.owner(),
                     executable: cached_account.account.executable(),
                 })
             }
@@ -4951,7 +4951,7 @@ impl AccountsDb {
                 return Some(AccountMeta {
                     lamports: account.lamports(),
                     rent_epoch: account.rent_epoch(),
-                    owner: account.owner().clone(),
+                    owner: *account.owner(),
                     executable: account.executable(),
                 });
             }
