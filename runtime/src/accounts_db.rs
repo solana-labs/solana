@@ -18,6 +18,7 @@
 //! tracks the number of commits to the entire data store. So the latest
 //! commit for each slot entry would be indexed.
 
+use crate::append_vec::AccountMeta;
 use {
     crate::{
         account_info::{AccountInfo, Offset, StorageLocation, StoredSize},
@@ -811,6 +812,29 @@ impl<'a> LoadedAccountAccessor<'a> {
                         storage_entry
                             .get_stored_account_meta(*offset)
                             .map(LoadedAccount::Stored)
+                    })
+            }
+        }
+    }
+
+    fn get_account_meta(&self) -> Option<AccountMeta> {
+        match self {
+            LoadedAccountAccessor::Cached(cached_account) => {
+                cached_account.as_ref().map(|cached_account| AccountMeta {
+                    lamports: cached_account.account.lamports(),
+                    rent_epoch: cached_account.account.rent_epoch(),
+                    owner: cached_account.account.owner().clone(),
+                    executable: cached_account.account.executable(),
+                })
+            }
+            LoadedAccountAccessor::Stored(maybe_storage_entry) => {
+                // storage entry may not be present if slot was cleaned up in
+                // between reading the accounts index and calling this function to
+                // get account meta from the storage entry here
+                maybe_storage_entry
+                    .as_ref()
+                    .and_then(|(storage_entry, offset)| {
+                        storage_entry.accounts.get_account_meta(*offset)
                     })
             }
         }
@@ -4916,6 +4940,33 @@ impl AccountsDb {
         load_hint: LoadHint,
     ) -> Option<(AccountSharedData, Slot)> {
         self.do_load(ancestors, pubkey, None, load_hint, LoadZeroLamports::None)
+    }
+
+    pub fn get_account_meta(&self, ancestors: &Ancestors, pubkey: &Pubkey) -> Option<AccountMeta> {
+        let (slot, storage_location, _maybe_account_accesor) =
+            self.read_index_for_accessor_or_load_slow(ancestors, pubkey, None, false)?;
+
+        if !storage_location.is_cached() {
+            let result = self.read_only_accounts_cache.load(*pubkey, slot);
+            if let Some(account) = result {
+                return Some(AccountMeta {
+                    lamports: account.lamports(),
+                    rent_epoch: account.rent_epoch(),
+                    owner: account.owner().clone(),
+                    executable: account.executable(),
+                });
+            }
+        }
+
+        let (account_accessor, _slot) = self.retry_to_get_account_accessor(
+            slot,
+            storage_location,
+            ancestors,
+            pubkey,
+            None,
+            LoadHint::Unspecified,
+        )?;
+        account_accessor.get_account_meta()
     }
 
     pub fn load_account_into_read_cache(&self, ancestors: &Ancestors, pubkey: &Pubkey) {
@@ -14066,6 +14117,71 @@ pub mod tests {
             .map(|(account, _)| account);
         assert!(account.is_none());
         assert_eq!(db.read_only_accounts_cache.cache_len(), 1);
+    }
+
+    #[test]
+    fn test_get_account_meta() {
+        let db = Arc::new(AccountsDb::new_with_config_for_tests(
+            Vec::new(),
+            &ClusterType::Development,
+            AccountSecondaryIndexes::default(),
+            AccountShrinkThreshold::default(),
+        ));
+
+        let account1_key = Pubkey::new_unique();
+        let owner1_key = Pubkey::new_unique();
+        let account1 = AccountSharedData::new(321, 10, &owner1_key);
+
+        let account2_key = Pubkey::new_unique();
+        let owner2_key = Pubkey::new_unique();
+        let account2 = AccountSharedData::new(1, 1, &owner2_key);
+
+        db.store_cached((0, &[(&account1_key, &account1)][..]), None);
+        db.store_cached((1, &[(&account2_key, &account2)][..]), None);
+
+        db.add_root(0);
+        db.add_root(1);
+
+        // Flush the cache so that the account meta will be read from the storage
+        db.flush_accounts_cache(true, None);
+        db.clean_accounts_for_tests();
+
+        let account_meta = db
+            .get_account_meta(&Ancestors::default(), &account1_key)
+            .unwrap();
+        assert_eq!(account_meta.lamports, 321);
+        assert_eq!(account_meta.owner, owner1_key);
+
+        let account_meta = db
+            .get_account_meta(&Ancestors::default(), &account2_key)
+            .unwrap();
+        assert_eq!(account_meta.lamports, 1);
+        assert_eq!(account_meta.owner, owner2_key);
+
+        // Flush the cache and load account1 (so that it's in the cache)
+        db.flush_accounts_cache(true, None);
+        db.clean_accounts_for_tests();
+        let _ = db
+            .do_load(
+                &Ancestors::default(),
+                &account1_key,
+                Some(0),
+                LoadHint::Unspecified,
+                LoadZeroLamports::SomeWithZeroLamportAccountForTests,
+            )
+            .unwrap();
+
+        let account_meta = db
+            .get_account_meta(&Ancestors::default(), &account1_key)
+            .unwrap();
+        assert_eq!(account_meta.lamports, 321);
+        assert_eq!(account_meta.owner, owner1_key);
+
+        let account_meta = db
+            .get_account_meta(&Ancestors::default(), &account2_key)
+            .unwrap();
+        assert_eq!(account_meta.lamports, 1);
+        assert_eq!(account_meta.owner, owner2_key);
     }
 
     /// a test that will accept either answer

@@ -572,7 +572,7 @@ impl AppendVec {
         Some((unsafe { &*ptr }, next))
     }
 
-    /// Return account metadata for the account at `offset` if its data doesn't overrun
+    /// Return stored account metadata for the account at `offset` if its data doesn't overrun
     /// the internal buffer. Otherwise return None. Also return the offset of the first byte
     /// after the requested data that falls on a 64-byte boundary.
     pub fn get_account<'a>(&'a self, offset: usize) -> Option<(StoredAccountMeta<'a>, usize)> {
@@ -592,6 +592,17 @@ impl AppendVec {
             },
             next,
         ))
+    }
+
+    /// Return account metadata for the account at `offset` if its data doesn't overrun
+    /// the internal buffer. Otherwise return None.
+    pub fn get_account_meta(&self, offset: usize) -> Option<AccountMeta> {
+        // Skip over StoredMeta data in the account
+        let offset = offset.checked_add(mem::size_of::<StoredMeta>())?;
+        // u64_align! does an unchecked add for alignment. Check that it won't cause an overflow.
+        offset.checked_add(ALIGN_BOUNDARY_OFFSET - 1)?;
+        let (account_meta, _): (&AccountMeta, _) = self.get_type(u64_align!(offset))?;
+        Some(account_meta.clone())
     }
 
     #[cfg(test)]
@@ -1045,6 +1056,56 @@ pub mod tests {
         let index1 = av.append_account_test(&account1).unwrap();
         assert_eq!(av.get_account_test(index).unwrap(), account);
         assert_eq!(av.get_account_test(index1).unwrap(), account1);
+    }
+
+    #[test]
+    fn test_get_account_meta() {
+        let path = get_append_vec_path("test_append_data");
+        let av = AppendVec::new(&path.path, true, 1024 * 1024);
+        let mut account = create_test_account(5);
+
+        let test_account_meta = AccountMeta {
+            lamports: 12345678,
+            rent_epoch: 123,
+            owner: Pubkey::new_unique(),
+            executable: true,
+        };
+        account.1.set_lamports(test_account_meta.lamports);
+        account.1.set_rent_epoch(test_account_meta.rent_epoch);
+        account.1.set_owner(test_account_meta.owner);
+        account.1.set_executable(test_account_meta.executable);
+
+        let index = av.append_account_test(&account).unwrap();
+        assert_eq!(av.get_account_meta(index), Some(test_account_meta.clone()));
+
+        let mut account1 = create_test_account(6);
+        let test_account_meta1 = AccountMeta {
+            lamports: 87654321,
+            rent_epoch: 234,
+            owner: Pubkey::new_unique(),
+            executable: false,
+        };
+        account1.1.set_lamports(test_account_meta1.lamports);
+        account1.1.set_rent_epoch(test_account_meta1.rent_epoch);
+        account1.1.set_owner(test_account_meta1.owner);
+        account1.1.set_executable(test_account_meta1.executable);
+
+        let index1 = av.append_account_test(&account1).unwrap();
+        assert_eq!(av.get_account_meta(index1), Some(test_account_meta1));
+        assert_eq!(av.get_account_meta(index), Some(test_account_meta));
+
+        // tests for overflow
+        assert_eq!(
+            av.get_account_meta(usize::MAX - mem::size_of::<StoredMeta>()),
+            None
+        );
+
+        assert_eq!(
+            av.get_account_meta(
+                usize::MAX - mem::size_of::<StoredMeta>() - mem::size_of::<AccountMeta>() + 1
+            ),
+            None
+        );
     }
 
     #[test]
