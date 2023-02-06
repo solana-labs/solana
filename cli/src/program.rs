@@ -2159,15 +2159,15 @@ fn send_deploy_messages(
         if let Some(write_signer) = write_signer {
             trace!("Writing program data");
             let connection_cache = if config.use_quic {
-                Arc::new(ConnectionCache::new(1))
+                ConnectionCache::new(1)
             } else {
-                Arc::new(ConnectionCache::with_udp(1))
+                ConnectionCache::with_udp(1)
             };
             let tpu_client = TpuClient::new_with_connection_cache(
                 rpc_client.clone(),
                 &config.websocket_url,
                 TpuClientConfig::default(),
-                connection_cache,
+                Arc::new(connection_cache.into()),
             )?;
             let transaction_errors = tpu_client
                 .send_and_confirm_messages_with_spinner(
