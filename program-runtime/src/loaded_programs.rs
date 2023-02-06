@@ -1,4 +1,3 @@
-use std::fmt::{Debug, Formatter};
 use {
     crate::invoke_context::InvokeContext,
     solana_rbpf::{
@@ -12,6 +11,7 @@ use {
     },
     std::{
         collections::HashMap,
+        fmt::{Debug, Formatter},
         sync::{atomic::AtomicU64, Arc},
     },
 };
@@ -85,7 +85,7 @@ impl LoadedProgram {
         };
         Ok(Self {
             deployment_slot,
-            effective_slot: deployment_slot + 1,
+            effective_slot: deployment_slot.saturating_add(1),
             usage_counter: AtomicU64::new(0),
             program,
         })
@@ -98,7 +98,7 @@ impl LoadedProgram {
     ) -> Self {
         Self {
             deployment_slot,
-            effective_slot: deployment_slot + 1,
+            effective_slot: deployment_slot.saturating_add(1),
             usage_counter: AtomicU64::new(0),
             program: LoadedProgramType::BuiltIn(program),
         }
@@ -127,14 +127,17 @@ impl LoadedPrograms {
             .iter()
             .position(|at| at.effective_slot >= entry.effective_slot);
         if let Some(index) = index {
-            if second_level[index].deployment_slot == entry.deployment_slot
-                && second_level[index].effective_slot == entry.effective_slot
+            let existing = second_level
+                .get(index)
+                .expect("Missing entry, even though position was found");
+            if existing.deployment_slot == entry.deployment_slot
+                && existing.effective_slot == entry.effective_slot
             {
                 return false;
             }
         }
         second_level.insert(index.unwrap_or(second_level.len()), Arc::new(entry));
-        return true;
+        true
     }
 
     /// Before rerooting the blockstore this removes all programs of orphan forks
@@ -200,14 +203,17 @@ impl LoadedPrograms {
 
 #[cfg(test)]
 mod tests {
-    use crate::loaded_programs::{
-        BlockRelation, ForkGraph, LoadedProgram, LoadedProgramType, LoadedPrograms, WorkingSlot,
+    use {
+        crate::loaded_programs::{
+            BlockRelation, ForkGraph, LoadedProgram, LoadedProgramType, LoadedPrograms, WorkingSlot,
+        },
+        solana_sdk::{clock::Slot, pubkey::Pubkey},
+        std::{
+            collections::HashMap,
+            ops::ControlFlow,
+            sync::{atomic::AtomicU64, Arc},
+        },
     };
-    use solana_sdk::clock::Slot;
-    use solana_sdk::pubkey::Pubkey;
-    use std::ops::ControlFlow;
-    use std::sync::atomic::AtomicU64;
-    use std::sync::Arc;
 
     struct TestForkGraph {
         relation: BlockRelation,
@@ -284,8 +290,8 @@ mod tests {
                     .and_then(|a_pos| {
                         fork.iter().position(|x| *x == b).and_then(|b_pos| {
                             (a_pos == b_pos)
-                                .then(|| BlockRelation::Equal)
-                                .or_else(|| (a_pos < b_pos).then(|| BlockRelation::Ancestor))
+                                .then_some(BlockRelation::Equal)
+                                .or_else(|| (a_pos < b_pos).then_some(BlockRelation::Ancestor))
                                 .or(Some(BlockRelation::Descendant))
                         })
                     })
@@ -334,7 +340,7 @@ mod tests {
             self.fork
                 .iter()
                 .position(|current| *current == other)
-                .and_then(|other_pos| Some(other_pos < self.slot_pos))
+                .map(|other_pos| other_pos < self.slot_pos)
                 .unwrap_or(false)
         }
     }
@@ -346,6 +352,17 @@ mod tests {
             effective_slot: 0,
             usage_counter: AtomicU64::default(),
         })
+    }
+
+    fn match_slot(
+        table: &HashMap<Pubkey, Arc<LoadedProgram>>,
+        program: &Pubkey,
+        deployment_slot: Slot,
+    ) -> bool {
+        table
+            .get(program)
+            .map(|entry| entry.deployment_slot == deployment_slot)
+            .unwrap_or(false)
     }
 
     #[test]
@@ -417,11 +434,8 @@ mod tests {
             vec![program1, program2, program3, program4].into_iter(),
         );
 
-        assert!(found.contains_key(&program1));
-        assert_eq!(found[&program1].deployment_slot, 20);
-
-        assert!(found.contains_key(&program4));
-        assert_eq!(found[&program4].deployment_slot, 0);
+        assert!(match_slot(&found, &program1, 20));
+        assert!(match_slot(&found, &program4, 0));
 
         assert!(missing.contains(&program2));
         assert!(missing.contains(&program3));
@@ -433,14 +447,9 @@ mod tests {
             vec![program1, program2, program3, program4].into_iter(),
         );
 
-        assert!(found.contains_key(&program1));
-        assert_eq!(found[&program1].deployment_slot, 0);
-
-        assert!(found.contains_key(&program2));
-        assert_eq!(found[&program2].deployment_slot, 11);
-
-        assert!(found.contains_key(&program4));
-        assert_eq!(found[&program4].deployment_slot, 15);
+        assert!(match_slot(&found, &program1, 0));
+        assert!(match_slot(&found, &program2, 11));
+        assert!(match_slot(&found, &program4, 15));
 
         assert!(missing.contains(&program3));
 
@@ -451,14 +460,9 @@ mod tests {
             vec![program1, program2, program3, program4].into_iter(),
         );
 
-        assert!(found.contains_key(&program1));
-        assert_eq!(found[&program1].deployment_slot, 0);
-
-        assert!(found.contains_key(&program2));
-        assert_eq!(found[&program2].deployment_slot, 5);
-
-        assert!(found.contains_key(&program4));
-        assert_eq!(found[&program4].deployment_slot, 5);
+        assert!(match_slot(&found, &program1, 0));
+        assert!(match_slot(&found, &program2, 5));
+        assert!(match_slot(&found, &program4, 5));
 
         assert!(missing.contains(&program3));
 
@@ -482,12 +486,9 @@ mod tests {
             vec![program1, program2, program3, program4].into_iter(),
         );
 
-        assert!(found.contains_key(&program1));
         // Since the fork was pruned, we should not find the entry deployed at slot 20.
-        assert_eq!(found[&program1].deployment_slot, 0);
-
-        assert!(found.contains_key(&program4));
-        assert_eq!(found[&program4].deployment_slot, 0);
+        assert!(match_slot(&found, &program1, 0));
+        assert!(match_slot(&found, &program4, 0));
 
         assert!(missing.contains(&program2));
         assert!(missing.contains(&program3));
@@ -499,17 +500,10 @@ mod tests {
             vec![program1, program2, program3, program4].into_iter(),
         );
 
-        assert!(found.contains_key(&program1));
-        assert_eq!(found[&program1].deployment_slot, 0);
-
-        assert!(found.contains_key(&program2));
-        assert_eq!(found[&program2].deployment_slot, 11);
-
-        assert!(found.contains_key(&program3));
-        assert_eq!(found[&program3].deployment_slot, 25);
-
-        assert!(found.contains_key(&program4));
-        assert_eq!(found[&program4].deployment_slot, 5);
+        assert!(match_slot(&found, &program1, 0));
+        assert!(match_slot(&found, &program2, 11));
+        assert!(match_slot(&found, &program3, 25));
+        assert!(match_slot(&found, &program4, 5));
 
         cache.prune(&fork_graph, 15);
 
@@ -531,14 +525,9 @@ mod tests {
             vec![program1, program2, program3, program4].into_iter(),
         );
 
-        assert!(found.contains_key(&program1));
-        assert_eq!(found[&program1].deployment_slot, 0);
-
-        assert!(found.contains_key(&program2));
-        assert_eq!(found[&program2].deployment_slot, 11);
-
-        assert!(found.contains_key(&program4));
-        assert_eq!(found[&program4].deployment_slot, 5);
+        assert!(match_slot(&found, &program1, 0));
+        assert!(match_slot(&found, &program2, 11));
+        assert!(match_slot(&found, &program4, 5));
 
         // program3 was deployed on slot 25, which has been pruned
         assert!(missing.contains(&program3));

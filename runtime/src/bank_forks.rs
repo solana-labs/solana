@@ -670,7 +670,6 @@ impl ForkGraph for BankForks {
 
 #[cfg(test)]
 mod tests {
-    use crate::contains::Contains;
     use {
         super::*,
         crate::{
