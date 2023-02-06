@@ -1316,9 +1316,13 @@ pub mod tests {
         assert_eq!(mem::size_of::<StoredMeta>(), 0x30);
 
         assert_eq!(offset_of!(AccountMeta, lamports), 0x00);
-        assert_eq!(offset_of!(AccountMeta, rent_epoch), 0x08);
+        assert_eq!(
+            offset_of!(AccountMeta, rent_epoch_or_application_fees),
+            0x08
+        );
         assert_eq!(offset_of!(AccountMeta, owner), 0x10);
         assert_eq!(offset_of!(AccountMeta, executable), 0x30);
-        assert_eq!(mem::size_of::<AccountMeta>(), 0x38);
+        assert_eq!(offset_of!(AccountMeta, executable), 0x38);
+        assert_eq!(mem::size_of::<AccountMeta>(), 0x46);
     }
 }

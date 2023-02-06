@@ -72,10 +72,6 @@ impl Processor {
             }
         };
 
-        if writable_account.get_rent_epoch() != 0 {
-            return Err(InstructionError::CannotSetAppFeesForAccountWithRentEpoch);
-        }
-
         let writable_account_key = *writable_account.get_key();
         ic_msg!(
             invoke_context,

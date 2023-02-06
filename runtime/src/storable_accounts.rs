@@ -497,6 +497,8 @@ pub mod tests {
                     Pubkey::default(),
                     false,
                     0,
+                    false,
+                    0,
                 );
                 raw.push((
                     pk,
@@ -510,7 +512,12 @@ pub mod tests {
                         lamports: account.lamports(),
                         owner: *account.owner(),
                         executable: account.executable(),
-                        rent_epoch: account.rent_epoch(),
+                        has_application_fees: account.has_application_fees(),
+                        rent_epoch_or_application_fees: if account.has_application_fees() {
+                            account.application_fees()
+                        } else {
+                            account.rent_epoch()
+                        },
                     },
                 ));
             }

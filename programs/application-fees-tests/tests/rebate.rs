@@ -35,7 +35,7 @@ async fn test_application_fees_are_applied_without_rebate() {
         assert_matches!(client.process_transaction(transaction).await, Ok(()));
         let account = client.get_account(writable_account).await.unwrap().unwrap();
         assert_eq!(account.has_application_fees, false);
-        assert_eq!(account.rent_epoch_or_application_fees, 0);
+        assert_eq!(account.rent_epoch_or_application_fees, u64::MAX);
     }
     advance_slot(&mut context).await;
     let account = context

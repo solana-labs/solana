@@ -172,6 +172,7 @@ fn new_execution_result(
             return_data: None,
             executed_units: 0,
             accounts_data_len_delta: 0,
+            application_fees_changes: ApplicationFeeChanges::new(),
         },
         tx_executor_cache: Rc::new(RefCell::new(TransactionExecutorCache::default())),
     }
@@ -548,12 +549,15 @@ fn test_credit_debit_rent_no_side_effect_on_hash() {
         {
             // make sure rent and epoch change are such that we collect all lamports in accounts 4 & 5
             let mut account_copy = accounts[4].clone();
-            let expected_rent = bank.rent_collector().collect_from_existing_account(
-                &keypairs[4].pubkey(),
-                &mut account_copy,
-                None,
-                set_exempt_rent_epoch_max,
-            );
+            let expected_rent = bank
+                .rent_collector()
+                .collect_from_existing_account(
+                    &keypairs[4].pubkey(),
+                    &mut account_copy,
+                    None,
+                    set_exempt_rent_epoch_max,
+                )
+                .unwrap();
             assert_eq!(expected_rent.rent_amount, too_few_lamports);
             assert_eq!(account_copy.lamports(), 0);
         }
@@ -2136,7 +2140,7 @@ fn test_collect_rent_from_accounts() {
         let data_size = 0; // make sure we're rent exempt
         let lamports = later_bank.get_minimum_balance_for_rent_exemption(data_size); // cannot be 0 or we zero out rent_epoch in rent collection and we need to be rent exempt
         let mut account = AccountSharedData::new(lamports, data_size, &Pubkey::default());
-        account.set_rent_epoch(later_bank.epoch() - 1); // non-zero, but less than later_bank's epoch
+        account.set_rent_epoch(later_bank.epoch() - 1).unwrap(); // non-zero, but less than later_bank's epoch
 
         // loaded from previous slot, so we skip rent collection on it
         let _result = later_bank.collect_rent_from_accounts(
@@ -4136,7 +4140,7 @@ fn test_bank_update_sysvar_account() {
                         },
                         bank1.inherit_specially_retained_account_fields(optional_account),
                     );
-                    account.set_rent_epoch(dummy_rent_epoch);
+                    account.set_rent_epoch(dummy_rent_epoch).unwrap();
                     account
                 });
                 let current_account = bank1.get_account(&dummy_clock_id).unwrap();
@@ -6242,7 +6246,10 @@ fn test_pre_post_transaction_balances() {
     // This is a TransactionError - not possible to charge fees
     assert!(matches!(
         transaction_results.execution_results[1],
-        TransactionExecutionResult::NotExecuted(TransactionError::AccountNotFound),
+        TransactionExecutionResult::NotExecuted {
+            error: TransactionError::AccountNotFound,
+            ..
+        }
     ));
     assert_eq!(transaction_balances_set.pre_balances[1], vec![0, 0, 1]);
     assert_eq!(transaction_balances_set.post_balances[1], vec![0, 0, 1]);
@@ -7575,7 +7582,7 @@ fn test_bank_executor_cache() {
     )
     .unwrap();
     program_account.set_executable(true);
-    program_account.set_rent_epoch(1);
+    program_account.set_rent_epoch(1).unwrap();
     let programdata_data_offset = UpgradeableLoaderState::size_of_programdata_metadata();
     let mut programdata_account = AccountSharedData::new(
         40,
@@ -7589,7 +7596,7 @@ fn test_bank_executor_cache() {
         })
         .unwrap();
     programdata_account.data_mut()[programdata_data_offset..].copy_from_slice(&elf);
-    programdata_account.set_rent_epoch(1);
+    programdata_account.set_rent_epoch(1).unwrap();
     bank.store_account_and_update_capitalization(&key1, &program_account);
     bank.store_account_and_update_capitalization(&programdata_key, &programdata_account);
     bank.create_executor(&key1).unwrap();
@@ -11503,7 +11510,7 @@ fn test_skip_rewrite() {
     let mut account = AccountSharedData::default();
     let bank_slot = 10;
     for account_rent_epoch in 0..3 {
-        account.set_rent_epoch(account_rent_epoch);
+        account.set_rent_epoch(account_rent_epoch).unwrap();
         for rent_amount in [0, 1] {
             for loaded_slot in (bank_slot - 1)..=bank_slot {
                 for old_rent_epoch in account_rent_epoch.saturating_sub(1)..=account_rent_epoch {
@@ -11686,7 +11693,7 @@ fn test_resize_and_rent() {
         account_data_size_small,
         &mock_program_id,
     );
-    rent_paying_account.set_rent_epoch(1);
+    rent_paying_account.set_rent_epoch(1).unwrap();
 
     // restore program-owned account
     bank.store_account(&rent_paying_pubkey, &rent_paying_account);
@@ -12114,12 +12121,15 @@ fn test_accounts_data_size_and_rent_collection() {
 
         // Ensure if we collect rent from the account that it will be reclaimed
         {
-            let info = bank.rent_collector.collect_from_existing_account(
-                &keypair.pubkey(),
-                &mut account,
-                None,
-                set_exempt_rent_epoch_max,
-            );
+            let info = bank
+                .rent_collector
+                .collect_from_existing_account(
+                    &keypair.pubkey(),
+                    &mut account,
+                    None,
+                    set_exempt_rent_epoch_max,
+                )
+                .unwrap();
             assert_eq!(info.account_data_len_reclaimed, data_size as u64);
         }
 
