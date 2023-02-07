@@ -2137,10 +2137,10 @@ impl ScheduleStage {
     }
 }
 
-pub struct SchedulablePayload<C>(pub Flushable<TaskInQueue, C>);
+pub struct SchedulablePayload<C, B>(pub Flushable<TaskInQueue, C, B>);
 pub struct ExecutablePayload(pub Box<ExecutionEnvironment>);
 pub struct UnlockablePayload<T>(pub Box<ExecutionEnvironment>, pub T);
-pub struct ExaminablePayload<T, C>(pub Flushable<(Box<ExecutionEnvironment>, T), C>);
+pub struct ExaminablePayload<T, C, B>(pub Flushable<(Box<ExecutionEnvironment>, T), C, B>);
 
 #[derive(Debug)]
 pub struct Checkpoint<T, B>(std::sync::Mutex<(usize, Option<T>, Option<B>)>, std::sync::Condvar);
