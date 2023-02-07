@@ -2194,6 +2194,13 @@ impl<T, B> Checkpoint<T, B> {
         self_return_value.take().unwrap()
     }
 
+    pub fn context_value_ref(&self) -> &B {
+        let mut g = self.0.lock().unwrap();
+        let (_self_remaining_threads, self_return_value, b) = &mut *g;
+        b
+    }
+
+
     pub fn new(remaining_threads: usize) -> std::sync::Arc<Self> {
         std::sync::Arc::new(Self(
             std::sync::Mutex::new((remaining_threads, None, None)),
