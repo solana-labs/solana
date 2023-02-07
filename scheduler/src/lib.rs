@@ -2194,18 +2194,19 @@ impl<T, B> Checkpoint<T, B> {
         self_return_value.take().unwrap()
     }
 
-    pub fn context_value_ref<F>(&self, on_get: impl Fn(&Option<B>) -> F) -> F {
-        let mut g = self.0.lock().unwrap();
-        let (_self_remaining_threads, self_return_value, b) = &mut *g;
-        on_get(b)
-    }
-
-
     pub fn new(remaining_threads: usize) -> std::sync::Arc<Self> {
         std::sync::Arc::new(Self(
             std::sync::Mutex::new((remaining_threads, None, None)),
             std::sync::Condvar::new(),
         ))
+    }
+}
+
+impl<T, B> Checkpoint<T, B> {
+    pub fn context_value_ref<F>(&self, on_get: impl Fn(&Option<B>) -> F) -> F {
+        let mut g = self.0.lock().unwrap();
+        let (_self_remaining_threads, self_return_value, b) = &mut *g;
+        on_get(b)
     }
 }
 
