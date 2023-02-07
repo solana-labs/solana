@@ -206,9 +206,9 @@ impl AncientSlotInfos {
 
 impl AccountsDb {
     /// calculate all storage info for the storages in slots
-    /// prune the ones to ignore given tuning parameters
+    /// Then, apply 'tuning' to filter out slots we do NOT want to combine.
     #[allow(dead_code)]
-    fn collect_sort_filter_info(
+    fn collect_sort_filter_ancient_slots(
         &self,
         slots: Vec<Slot>,
         tuning: PackedAncientStorageTuning,
@@ -607,7 +607,7 @@ pub mod tests {
                             ideal_storage_size: NonZeroU64::new(1).unwrap(),
                             can_randomly_shrink,
                         };
-                        infos = db.collect_sort_filter_info(vec![slot1], tuning);
+                        infos = db.collect_sort_filter_ancient_slots(vec![slot1], tuning);
                     }
                 }
                 assert_eq!(infos.all_infos.len(), 1);
@@ -764,7 +764,7 @@ pub mod tests {
                                 ideal_storage_size: NonZeroU64::new(1).unwrap(),
                                 can_randomly_shrink,
                             };
-                            db.collect_sort_filter_info(slot_vec.clone(), tuning)
+                            db.collect_sort_filter_ancient_slots(slot_vec.clone(), tuning)
                         }
                     };
                     assert_eq!(infos.all_infos.len(), 1, "method: {method:?}");
@@ -1056,7 +1056,7 @@ pub mod tests {
                             can_randomly_shrink,
                         };
                         // note this can sort infos.all_infos
-                        db.collect_sort_filter_info(slot_vec.clone(), tuning)
+                        db.collect_sort_filter_ancient_slots(slot_vec.clone(), tuning)
                     }
                 };
 
