@@ -1,1 +1,1 @@
-struct TransactionRunner(Bank);
+struct TransactionRunner(Arc<Bank>);
