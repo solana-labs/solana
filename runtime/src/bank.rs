@@ -4991,10 +4991,7 @@ impl Bank {
 
         // Sort first by stake and then by validator identity pubkey for determinism
         validator_stakes.sort_by(|(pubkey1, staked1), (pubkey2, staked2)| {
-            match staked2.cmp(staked1) {
-                std::cmp::Ordering::Equal => pubkey2.cmp(pubkey1),
-                other => other,
-            }
+            staked2.cmp(staked1).then(pubkey2.cmp(pubkey1))
         });
 
         let enforce_fix = self.no_overflow_rent_distribution_enabled();
