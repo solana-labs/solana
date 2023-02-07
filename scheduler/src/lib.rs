@@ -2202,7 +2202,7 @@ impl<T, B> Checkpoint<T, B> {
     }
 }
 
-pub enum Flushable<T, C> {
+pub enum Flushable<T, C, B> {
     Payload(T),
-    Flush(std::sync::Arc<Checkpoint<C>>),
+    Flush(std::sync::Arc<Checkpoint<C, B>>),
 }
