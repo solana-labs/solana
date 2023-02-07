@@ -2196,7 +2196,7 @@ impl<T, B> Checkpoint<T, B> {
 
     pub fn new(remaining_threads: usize) -> std::sync::Arc<Self> {
         std::sync::Arc::new(Self(
-            std::sync::Mutex::new((remaining_threads, None)),
+            std::sync::Mutex::new((remaining_threads, None, None)),
             std::sync::Condvar::new(),
         ))
     }
