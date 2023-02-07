@@ -945,8 +945,10 @@ impl AbiExample for BuiltinPrograms {
     }
 }
 
-struct SchedulerPool<C> {
-    schedulers: Vec<Box<Scheduler<C>>>,
+struct RunnerContext;
+
+struct SchedulerPool<C, B> {
+    schedulers: Vec<Box<Scheduler<C, B>>>,
 }
 
 impl SchedulerPool<ExecuteTimings> {
