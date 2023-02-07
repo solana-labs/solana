@@ -6568,14 +6568,12 @@ impl AccountsDb {
         'a: 'c,
         'b,
         'c,
-        F: FnMut(Slot, usize) -> Arc<AccountStorageEntry>,
         P: Iterator<Item = u64>,
         T: ReadableAccount + Sync + ZeroLamport + 'b,
     >(
         &self,
         accounts: &'c impl StorableAccounts<'b, T>,
         hashes: Option<Vec<impl Borrow<Hash>>>,
-        storage_finder: F,
         mut write_version_producer: P,
         store_to: &StoreTo,
         txn_signatures: Option<&[Option<&'a Signature>]>,
@@ -6591,68 +6589,77 @@ impl AccountsDb {
             .calc_stored_meta
             .fetch_add(calc_stored_meta_time.as_us(), Ordering::Relaxed);
 
-        if store_to.is_cached() {
-            let signature_iter: Box<dyn std::iter::Iterator<Item = &Option<&Signature>>> =
-                match txn_signatures {
-                    Some(txn_signatures) => {
-                        assert_eq!(txn_signatures.len(), accounts.len());
-                        Box::new(txn_signatures.iter())
-                    }
-                    None => Box::new(std::iter::repeat(&None).take(accounts.len())),
-                };
+        match store_to {
+            StoreTo::Cache => {
+                let signature_iter: Box<dyn std::iter::Iterator<Item = &Option<&Signature>>> =
+                    match txn_signatures {
+                        Some(txn_signatures) => {
+                            assert_eq!(txn_signatures.len(), accounts.len());
+                            Box::new(txn_signatures.iter())
+                        }
+                        None => Box::new(std::iter::repeat(&None).take(accounts.len())),
+                    };
 
-            self.write_accounts_to_cache(
-                slot,
-                accounts,
-                signature_iter,
-                accounts.include_slot_in_hash(),
-                write_version_producer,
-            )
-        } else if accounts.has_hash_and_write_version() {
-            self.write_accounts_to_storage(
-                slot,
-                storage_finder,
-                &StorableAccountsWithHashesAndWriteVersions::<'_, '_, _, _, &Hash>::new(accounts),
-            )
-        } else {
-            let write_versions = (0..accounts.len())
-                .map(|_| write_version_producer.next().unwrap())
-                .collect::<Vec<_>>();
-            match hashes {
-                Some(hashes) => self.write_accounts_to_storage(
+                self.write_accounts_to_cache(
                     slot,
-                    storage_finder,
-                    &StorableAccountsWithHashesAndWriteVersions::new_with_hashes_and_write_versions(
-                        accounts,
-                        hashes,
-                        write_versions,
-                    ),
-                ),
-                None => {
-                    // hash any accounts where we were lazy in calculating the hash
-                    let mut hash_time = Measure::start("hash_accounts");
-                    let len = accounts.len();
-                    let mut hashes = Vec::with_capacity(len);
-                    for index in 0..accounts.len() {
-                        let (pubkey, account) = (accounts.pubkey(index), accounts.account(index));
-                        let hash = Self::hash_account(
-                            slot,
-                            account,
-                            pubkey,
-                            accounts.include_slot_in_hash(),
-                        );
-                        hashes.push(hash);
-                    }
-                    hash_time.stop();
-                    self.stats
-                        .store_hash_accounts
-                        .fetch_add(hash_time.as_us(), Ordering::Relaxed);
+                    accounts,
+                    signature_iter,
+                    accounts.include_slot_in_hash(),
+                    write_version_producer,
+                )
+            }
+            StoreTo::Storage(storage) => {
+                let storage_finder = Box::new(move |_slot, _size| Arc::clone(storage));
 
+                if accounts.has_hash_and_write_version() {
                     self.write_accounts_to_storage(
+                        slot,
+                        storage_finder,
+                        &StorableAccountsWithHashesAndWriteVersions::<'_, '_, _, _, &Hash>::new(
+                            accounts,
+                        ),
+                    )
+                } else {
+                    let write_versions = (0..accounts.len())
+                        .map(|_| write_version_producer.next().unwrap())
+                        .collect::<Vec<_>>();
+                    match hashes {
+                        Some(hashes) => self.write_accounts_to_storage(
                             slot,
                             storage_finder,
-                            &StorableAccountsWithHashesAndWriteVersions::new_with_hashes_and_write_versions(accounts, hashes, write_versions),
-                        )
+                            &StorableAccountsWithHashesAndWriteVersions::new_with_hashes_and_write_versions(
+                                accounts,
+                                hashes,
+                                write_versions,
+                            ),
+                        ),
+                        None => {
+                            // hash any accounts where we were lazy in calculating the hash
+                            let mut hash_time = Measure::start("hash_accounts");
+                            let len = accounts.len();
+                            let mut hashes = Vec::with_capacity(len);
+                            for index in 0..accounts.len() {
+                                let (pubkey, account) = (accounts.pubkey(index), accounts.account(index));
+                                let hash = Self::hash_account(
+                                    slot,
+                                    account,
+                                    pubkey,
+                                    accounts.include_slot_in_hash(),
+                                );
+                                hashes.push(hash);
+                            }
+                            hash_time.stop();
+                            self.stats
+                                .store_hash_accounts
+                                .fetch_add(hash_time.as_us(), Ordering::Relaxed);
+
+                            self.write_accounts_to_storage(
+                                    slot,
+                                    storage_finder,
+                                    &StorableAccountsWithHashesAndWriteVersions::new_with_hashes_and_write_versions(accounts, hashes, write_versions),
+                                )
+                        }
+                    }
                 }
             }
         }
@@ -8353,13 +8360,6 @@ impl AccountsDb {
         txn_signatures: Option<&[Option<&Signature>]>,
         reclaim: StoreReclaims,
     ) -> StoreAccountsTiming {
-        let storage_finder = Box::new(move |_slot, _size| match store_to {
-            StoreTo::Storage(storage) => Arc::clone(storage),
-            StoreTo::Cache => {
-                unimplemented!("illegal");
-            }
-        });
-
         let write_version_producer: Box<dyn Iterator<Item = u64>> = write_version_producer
             .unwrap_or_else(|| {
                 let mut current_version = self.bulk_assign_write_version(accounts.len());
@@ -8377,7 +8377,6 @@ impl AccountsDb {
         let infos = self.store_accounts_to(
             &accounts,
             hashes,
-            storage_finder,
             write_version_producer,
             store_to,
             txn_signatures,
