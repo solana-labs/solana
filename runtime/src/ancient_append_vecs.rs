@@ -13,6 +13,20 @@ use {
     std::sync::Arc,
 };
 
+/// ancient packing algorithm tuning per pass
+#[derive(Debug)]
+#[allow(dead_code)]
+struct PackedAncientStorageTuning {
+    /// shrink enough of these ancient append vecs to realize this% of the total dead data that needs to be shrunk
+    /// Doing too much burns too much time and disk i/o.
+    /// Doing too little could cause us to never catch up and have old data accumulate.
+    percent_of_alive_shrunk_data: u64,
+    /// number of ancient slots we should aim to have. If we have more than this, combine further.
+    max_ancient_slots: usize,
+    /// # of bytes in an ideal ancient storage size
+    ideal_storage_size: u64,
+}
+
 /// info about a storage eligible to be combined into an ancient append vec.
 /// Useful to help sort vecs of storages.
 #[derive(Debug)]
@@ -77,6 +91,17 @@ impl AncientSlotInfos {
         }
     }
 
+    /// modify 'self' to contain only the slot infos for the slots that should be combined
+    /// (and in this process effectively shrunk)
+    #[allow(dead_code)]
+    fn filter_ancient_slots(&mut self, tuning: &PackedAncientStorageTuning) {
+        // figure out which slots to combine
+        // 1. should_shrink: largest bytes saved above some cutoff of ratio
+        self.choose_storages_to_shrink(tuning.percent_of_alive_shrunk_data);
+        // 2. smallest files so we get the largest number of files to remove
+        self.filter_by_smallest_capacity(tuning.max_ancient_slots, tuning.ideal_storage_size);
+    }
+
     // sort 'shrink_indexes' by most bytes saved, highest to lowest
     #[allow(dead_code)]
     fn sort_shrink_indexes_by_bytes_saved(&mut self) {
@@ -89,7 +114,7 @@ impl AncientSlotInfos {
         });
     }
 
-    /// clear 'should_shrink' for storages after a cutoff to determine value
+    /// clear 'should_shrink' for storages after a cutoff to limit how many storages we shrink
     #[allow(dead_code)]
     fn clear_should_shrink_after_cutoff(&mut self, percent_of_alive_shrunk_data: u64) {
         let mut bytes_to_shrink_due_to_ratio = 0;
@@ -100,9 +125,9 @@ impl AncientSlotInfos {
         for info_index in &self.shrink_indexes {
             let info = &mut self.all_infos[*info_index];
             if bytes_to_shrink_due_to_ratio >= threhold_bytes {
-                // we exceeded the amount to shrink due to alive ratio, so don't shrink this one just due to ratio
+                // we exceeded the amount to shrink due to alive ratio, so don't shrink this one just due to 'should_shrink'
                 // It MAY be shrunk based on total capacity still.
-                // Mark it as false for 'ratio_shrink' so it gets evaluated solely based on # of files.
+                // Mark it as false for 'should_shrink' so it gets evaluated solely based on # of files.
                 info.should_shrink = false;
             } else {
                 saturating_add_assign!(bytes_to_shrink_due_to_ratio, info.alive_bytes);
@@ -134,7 +159,8 @@ impl AncientSlotInfos {
         let mut cumulative_bytes = 0u64;
         for (i, info) in self.all_infos.iter().enumerate() {
             saturating_add_assign!(cumulative_bytes, info.alive_bytes);
-            let ancient_storages_required = (cumulative_bytes / ideal_storage_size + 1) as usize;
+            let ancient_storages_required =
+                (cumulative_bytes / ideal_storage_size.max(1) + 1) as usize;
             let storages_remaining = total_storages - i - 1;
             // if the remaining uncombined storages and the # of resulting
             // combined ancient storages is less than the threshold, then
@@ -304,6 +330,8 @@ pub mod tests {
             hash::Hash,
             pubkey::Pubkey,
         },
+        strum::IntoEnumIterator,
+        strum_macros::EnumIter,
     };
 
     #[test]
@@ -595,14 +623,36 @@ pub mod tests {
         }
     }
 
+    #[derive(EnumIter, Debug, PartialEq, Eq)]
+    enum TestSmallestCapacity {
+        FilterAncientSlots,
+        FilterBySmallestCapacity,
+    }
+
     #[test]
     fn test_filter_by_smallest_capacity_empty() {
-        for max_storages in 1..3 {
-            // requesting N max storage, has 1 storage, N >= 1 so nothing to do
-            let ideal_storage_size_large = get_ancient_append_vec_capacity();
-            let mut infos = create_test_infos(1);
-            infos.filter_by_smallest_capacity(max_storages, ideal_storage_size_large);
-            assert!(infos.all_infos.is_empty());
+        for method in TestSmallestCapacity::iter() {
+            for max_storages in 1..3 {
+                // requesting N max storage, has 1 storage, N >= 1 so nothing to do
+                let ideal_storage_size_large = get_ancient_append_vec_capacity();
+                let mut infos = create_test_infos(1);
+                match method {
+                    TestSmallestCapacity::FilterAncientSlots => {
+                        let tuning = PackedAncientStorageTuning {
+                            max_ancient_slots: max_storages,
+                            ideal_storage_size: ideal_storage_size_large,
+                            // irrelevant since we clear 'shrink_indexes'
+                            percent_of_alive_shrunk_data: 0,
+                        };
+                        infos.shrink_indexes.clear();
+                        infos.filter_ancient_slots(&tuning);
+                    }
+                    TestSmallestCapacity::FilterBySmallestCapacity => {
+                        infos.filter_by_smallest_capacity(max_storages, ideal_storage_size_large);
+                    }
+                }
+                assert!(infos.all_infos.is_empty());
+            }
         }
     }
 
@@ -613,29 +663,45 @@ pub mod tests {
         // storage[3] is big enough to cause us to need another storage
         // so, storage[0] and [1] can be combined into 1, resulting in 3 remaining storages, which is
         // the goal, so we only have to combine the first 2 to hit the goal
-        let ideal_storage_size_large = get_ancient_append_vec_capacity();
-        for reorder in [false, true] {
-            let mut infos = create_test_infos(4);
-            infos
-                .all_infos
-                .iter_mut()
-                .enumerate()
-                .for_each(|(i, info)| info.capacity = 1 + i as u64);
-            if reorder {
-                infos.all_infos[3].capacity = 0; // sort to beginning
-            }
-            infos.all_infos[3].alive_bytes = ideal_storage_size_large;
-            let max_storages = 3;
-            infos.filter_by_smallest_capacity(max_storages, ideal_storage_size_large);
-            assert_eq!(
+        for method in TestSmallestCapacity::iter() {
+            let ideal_storage_size_large = get_ancient_append_vec_capacity();
+            for reorder in [false, true] {
+                let mut infos = create_test_infos(4);
                 infos
                     .all_infos
-                    .iter()
-                    .map(|info| info.slot)
-                    .collect::<Vec<_>>(),
-                if reorder { vec![3, 0, 1] } else { vec![0, 1] },
-                "reorder: {reorder}"
-            );
+                    .iter_mut()
+                    .enumerate()
+                    .for_each(|(i, info)| info.capacity = 1 + i as u64);
+                if reorder {
+                    infos.all_infos[3].capacity = 0; // sort to beginning
+                }
+                infos.all_infos[3].alive_bytes = ideal_storage_size_large;
+                let max_storages = 3;
+                match method {
+                    TestSmallestCapacity::FilterBySmallestCapacity => {
+                        infos.filter_by_smallest_capacity(max_storages, ideal_storage_size_large);
+                    }
+                    TestSmallestCapacity::FilterAncientSlots => {
+                        let tuning = PackedAncientStorageTuning {
+                            max_ancient_slots: max_storages,
+                            ideal_storage_size: ideal_storage_size_large,
+                            // irrelevant since we clear 'shrink_indexes'
+                            percent_of_alive_shrunk_data: 0,
+                        };
+                        infos.shrink_indexes.clear();
+                        infos.filter_ancient_slots(&tuning);
+                    }
+                }
+                assert_eq!(
+                    infos
+                        .all_infos
+                        .iter()
+                        .map(|info| info.slot)
+                        .collect::<Vec<_>>(),
+                    if reorder { vec![3, 0, 1] } else { vec![0, 1] },
+                    "reorder: {reorder}"
+                );
+            }
         }
     }
 
@@ -793,12 +859,22 @@ pub mod tests {
     }
 
     #[test]
+    fn test_filter_ancient_slots() {}
+
+    #[derive(EnumIter, Debug, PartialEq, Eq)]
+    enum TestShouldShrink {
+        FilterAncientSlots,
+        ClearShouldShrink,
+        ChooseStoragesToShrink,
+    }
+
+    #[test]
     fn test_clear_should_shrink_after_cutoff_simple() {
         for swap in [false, true] {
-            for (percent_of_alive_shrunk_data, mut expected_infos) in
-                [(0, 0), (9, 1), (10, 1), (89, 2), (90, 2), (91, 2), (100, 2)]
-            {
-                for clear in [true, false] {
+            for method in TestShouldShrink::iter() {
+                for (percent_of_alive_shrunk_data, mut expected_infos) in
+                    [(0, 0), (9, 1), (10, 1), (89, 2), (90, 2), (91, 2), (100, 2)]
+                {
                     let mut infos = create_test_infos(2);
                     infos
                         .all_infos
@@ -815,17 +891,38 @@ pub mod tests {
                     }
                     infos.total_alive_bytes_shrink =
                         infos.all_infos.iter().map(|info| info.alive_bytes).sum();
-                    if clear {
-                        infos.clear_should_shrink_after_cutoff(percent_of_alive_shrunk_data);
-                    } else {
-                        infos.choose_storages_to_shrink(percent_of_alive_shrunk_data);
+                    match method {
+                        TestShouldShrink::FilterAncientSlots => {
+                            let tuning = PackedAncientStorageTuning {
+                                percent_of_alive_shrunk_data,
+                                // 0 so that we combine everything with regard to the overall # of slots limit
+                                max_ancient_slots: 0,
+                                // this is irrelevant since the limit is artificially 0
+                                ideal_storage_size: 0,
+                            };
+                            infos.filter_ancient_slots(&tuning);
+                        }
+                        TestShouldShrink::ClearShouldShrink => {
+                            infos.clear_should_shrink_after_cutoff(percent_of_alive_shrunk_data);
+                        }
+                        TestShouldShrink::ChooseStoragesToShrink => {
+                            infos.choose_storages_to_shrink(percent_of_alive_shrunk_data);
+                        }
                     }
-                    if expected_infos == 2
-                        && infos.all_infos[infos.shrink_indexes[0]].alive_bytes
-                            >= infos.total_alive_bytes_shrink * percent_of_alive_shrunk_data / 100
-                    {
-                        // if the sorting ends up putting the bigger alive_bytes storage first, then only 1 will be shrunk due to 'should_shrink'
-                        expected_infos = 1;
+
+                    if expected_infos == 2 {
+                        let modify = if method == TestShouldShrink::FilterAncientSlots {
+                            // filter_ancient_slots modifies in several ways and doesn't retain the values to compare
+                            percent_of_alive_shrunk_data == 89 || percent_of_alive_shrunk_data == 90
+                        } else {
+                            infos.all_infos[infos.shrink_indexes[0]].alive_bytes
+                                >= infos.total_alive_bytes_shrink * percent_of_alive_shrunk_data
+                                    / 100
+                        };
+                        if modify {
+                            // if the sorting ends up putting the bigger alive_bytes storage first, then only 1 will be shrunk due to 'should_shrink'
+                            expected_infos = 1;
+                        }
                     }
                     let count = infos
                         .all_infos
@@ -835,7 +932,7 @@ pub mod tests {
                     assert_eq!(
                         expected_infos,
                         count,
-                        "percent_of_alive_shrunk_data: {percent_of_alive_shrunk_data}, infos: {expected_infos}, clear: {clear}, swap: {swap}, data: {:?}",
+                        "percent_of_alive_shrunk_data: {percent_of_alive_shrunk_data}, infos: {expected_infos}, method: {method:?}, swap: {swap}, data: {:?}",
                         infos.all_infos.iter().map(|info| (info.slot, info.capacity, info.alive_bytes)).collect::<Vec<_>>()
                     );
                 }
