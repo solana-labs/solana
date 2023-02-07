@@ -17122,7 +17122,10 @@ pub mod tests {
         }
     }
 
-    fn get_all_accounts(db: &AccountsDb, slots: Range<Slot>) -> Vec<(Pubkey, AccountSharedData)> {
+    pub(crate) fn get_all_accounts(
+        db: &AccountsDb,
+        slots: Range<Slot>,
+    ) -> Vec<(Pubkey, AccountSharedData)> {
         slots
             .filter_map(|slot| {
                 let storage = db.storage.get_slot_storage_entry(slot);
@@ -17138,7 +17141,7 @@ pub mod tests {
             .collect::<Vec<_>>()
     }
 
-    fn compare_all_accounts(
+    pub(crate) fn compare_all_accounts(
         one: &[(Pubkey, AccountSharedData)],
         two: &[(Pubkey, AccountSharedData)],
     ) {
