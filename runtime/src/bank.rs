@@ -39,6 +39,7 @@ pub use solana_sdk::reward_type::RewardType;
 use {
     crate::{
         account_overrides::AccountOverrides,
+        account_rent_state::RentState,
         accounts::{
             AccountAddressFilter, Accounts, LoadedTransaction, PubkeyAccountSlot,
             TransactionLoadResult,
@@ -4990,10 +4991,7 @@ impl Bank {
 
         // Sort first by stake and then by validator identity pubkey for determinism
         validator_stakes.sort_by(|(pubkey1, staked1), (pubkey2, staked2)| {
-            match staked2.cmp(staked1) {
-                std::cmp::Ordering::Equal => pubkey2.cmp(pubkey1),
-                other => other,
-            }
+            staked2.cmp(staked1).then(pubkey2.cmp(pubkey1))
         });
 
         let enforce_fix = self.no_overflow_rent_distribution_enabled();
@@ -5032,8 +5030,27 @@ impl Bank {
                     let mut account = self
                         .get_account_with_fixed_root(&pubkey)
                         .unwrap_or_default();
-                    if account.checked_add_lamports(rent_to_be_paid).is_err() {
-                        // overflow adding lamports
+                    let rent = self.rent_collector().rent;
+                    let recipient_pre_rent_state = RentState::from_account(&account, &rent);
+                    let distribution = account.checked_add_lamports(rent_to_be_paid);
+                    let recipient_post_rent_state = RentState::from_account(&account, &rent);
+                    let rent_state_transition_allowed = recipient_post_rent_state
+                        .transition_allowed_from(&recipient_pre_rent_state);
+                    if !rent_state_transition_allowed {
+                        warn!(
+                            "Rent distribution of {rent_to_be_paid} to {pubkey} results in \
+                            invalid RentState: {recipient_post_rent_state:?}"
+                        );
+                        inc_new_counter_warn!(
+                            "rent-distribution-rent-paying",
+                            rent_to_be_paid as usize
+                        );
+                    }
+                    if distribution.is_err()
+                        || (self.prevent_rent_paying_rent_recipients()
+                            && !rent_state_transition_allowed)
+                    {
+                        // overflow adding lamports or resulting account is not rent-exempt
                         self.capitalization.fetch_sub(rent_to_be_paid, Relaxed);
                         error!(
                             "Burned {} rent lamports instead of sending to {}",
@@ -7361,6 +7378,11 @@ impl Bank {
     pub fn no_overflow_rent_distribution_enabled(&self) -> bool {
         self.feature_set
             .is_active(&feature_set::no_overflow_rent_distribution::id())
+    }
+
+    pub fn prevent_rent_paying_rent_recipients(&self) -> bool {
+        self.feature_set
+            .is_active(&feature_set::prevent_rent_paying_rent_recipients::id())
     }
 
     pub fn versioned_tx_message_enabled(&self) -> bool {
