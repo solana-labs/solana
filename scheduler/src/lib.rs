@@ -2179,7 +2179,7 @@ impl<T, B> Checkpoint<T, B> {
             );
             let _ = *self
                 .1
-                .wait_while(g, |&mut (remaining_threads, _)| remaining_threads > 0)
+                .wait_while(g, |&mut (remaining_threads, _, _)| remaining_threads > 0)
                 .unwrap();
             trace!(
                 "Checkpoint::wait_for_restart: {} is started...",
