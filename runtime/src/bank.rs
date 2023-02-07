@@ -1543,6 +1543,7 @@ impl<C> Scheduler<C> {
             .unwrap();
         checkpoint.wait_for_restart(None);
         let r = checkpoint.take_restart_value();
+        self.last_checkpoint = Some(checkpoint);
         self.collected_results.lock().unwrap().push(Ok(r));
         {
             *self.bank.write().unwrap() = None;
