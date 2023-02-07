@@ -594,15 +594,17 @@ impl AppendVec {
         ))
     }
 
-    /// Return account metadata for the account at `offset` if its data doesn't overrun
-    /// the internal buffer. Otherwise return None.
-    pub fn get_account_meta(&self, offset: usize) -> Option<AccountMeta> {
+    /// Return Some(true) if the account owner at `offset` is one of the pubkeys in `owners`.
+    /// Return Some(false) if the account owner is not one of the pubkeys in `owners`.
+    /// It returns None if the `offset` value causes a data overrun.
+    pub fn account_matches_owners(&self, offset: usize, owners: &[&Pubkey]) -> Option<bool> {
         // Skip over StoredMeta data in the account
         let offset = offset.checked_add(mem::size_of::<StoredMeta>())?;
         // u64_align! does an unchecked add for alignment. Check that it won't cause an overflow.
         offset.checked_add(ALIGN_BOUNDARY_OFFSET - 1)?;
         let (account_meta, _): (&AccountMeta, _) = self.get_type(u64_align!(offset))?;
-        Some(account_meta.clone())
+
+        Some(owners.contains(&&account_meta.owner))
     }
 
     #[cfg(test)]
@@ -1059,50 +1061,38 @@ pub mod tests {
     }
 
     #[test]
-    fn test_get_account_meta() {
+    fn test_account_matches_owners() {
         let path = get_append_vec_path("test_append_data");
         let av = AppendVec::new(&path.path, true, 1024 * 1024);
+        let owners: Vec<Pubkey> = (0..2).map(|_| Pubkey::new_unique()).collect();
+        let owners_refs: Vec<&Pubkey> = owners.iter().collect();
+
         let mut account = create_test_account(5);
-
-        let test_account_meta = AccountMeta {
-            lamports: 12345678,
-            rent_epoch: 123,
-            owner: Pubkey::new_unique(),
-            executable: true,
-        };
-        account.1.set_lamports(test_account_meta.lamports);
-        account.1.set_rent_epoch(test_account_meta.rent_epoch);
-        account.1.set_owner(test_account_meta.owner);
-        account.1.set_executable(test_account_meta.executable);
-
+        account.1.set_owner(owners[0]);
         let index = av.append_account_test(&account).unwrap();
-        assert_eq!(av.get_account_meta(index), Some(test_account_meta.clone()));
+        assert_eq!(av.account_matches_owners(index, &owners_refs), Some(true));
 
         let mut account1 = create_test_account(6);
-        let test_account_meta1 = AccountMeta {
-            lamports: 87654321,
-            rent_epoch: 234,
-            owner: Pubkey::new_unique(),
-            executable: false,
-        };
-        account1.1.set_lamports(test_account_meta1.lamports);
-        account1.1.set_rent_epoch(test_account_meta1.rent_epoch);
-        account1.1.set_owner(test_account_meta1.owner);
-        account1.1.set_executable(test_account_meta1.executable);
-
+        account1.1.set_owner(owners[1]);
         let index1 = av.append_account_test(&account1).unwrap();
-        assert_eq!(av.get_account_meta(index1), Some(test_account_meta1));
-        assert_eq!(av.get_account_meta(index), Some(test_account_meta));
+        assert_eq!(av.account_matches_owners(index1, &owners_refs), Some(true));
+        assert_eq!(av.account_matches_owners(index, &owners_refs), Some(true));
+
+        let mut account2 = create_test_account(6);
+        account2.1.set_owner(Pubkey::new_unique());
+        let index2 = av.append_account_test(&account2).unwrap();
+        assert_eq!(av.account_matches_owners(index2, &owners_refs), Some(false));
 
         // tests for overflow
         assert_eq!(
-            av.get_account_meta(usize::MAX - mem::size_of::<StoredMeta>()),
+            av.account_matches_owners(usize::MAX - mem::size_of::<StoredMeta>(), &owners_refs),
             None
         );
 
         assert_eq!(
-            av.get_account_meta(
-                usize::MAX - mem::size_of::<StoredMeta>() - mem::size_of::<AccountMeta>() + 1
+            av.account_matches_owners(
+                usize::MAX - mem::size_of::<StoredMeta>() - mem::size_of::<AccountMeta>() + 1,
+                &owners_refs
             ),
             None
         );

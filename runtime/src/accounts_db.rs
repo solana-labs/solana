@@ -42,9 +42,9 @@ use {
             get_ancient_append_vec_capacity, is_ancient, AccountsToStore, StorageSelector,
         },
         append_vec::{
-            aligned_stored_size, AccountMeta, AppendVec,
-            StorableAccountsWithHashesAndWriteVersions, StoredAccountMeta, StoredMetaWriteVersion,
-            APPEND_VEC_MMAPPED_FILES_OPEN, STORE_META_OVERHEAD,
+            aligned_stored_size, AppendVec, StorableAccountsWithHashesAndWriteVersions,
+            StoredAccountMeta, StoredMetaWriteVersion, APPEND_VEC_MMAPPED_FILES_OPEN,
+            STORE_META_OVERHEAD,
         },
         cache_hash_data::{CacheHashData, CacheHashDataFile},
         contains::Contains,
@@ -816,16 +816,11 @@ impl<'a> LoadedAccountAccessor<'a> {
         }
     }
 
-    fn get_account_meta(&self) -> Option<AccountMeta> {
+    fn account_matches_owners(&self, owners: &[&Pubkey]) -> Option<bool> {
         match self {
-            LoadedAccountAccessor::Cached(cached_account) => {
-                cached_account.as_ref().map(|cached_account| AccountMeta {
-                    lamports: cached_account.account.lamports(),
-                    rent_epoch: cached_account.account.rent_epoch(),
-                    owner: *cached_account.account.owner(),
-                    executable: cached_account.account.executable(),
-                })
-            }
+            LoadedAccountAccessor::Cached(cached_account) => cached_account
+                .as_ref()
+                .map(|cached_account| owners.contains(&cached_account.account.owner())),
             LoadedAccountAccessor::Stored(maybe_storage_entry) => {
                 // storage entry may not be present if slot was cleaned up in
                 // between reading the accounts index and calling this function to
@@ -833,7 +828,9 @@ impl<'a> LoadedAccountAccessor<'a> {
                 maybe_storage_entry
                     .as_ref()
                     .and_then(|(storage_entry, offset)| {
-                        storage_entry.accounts.get_account_meta(*offset)
+                        storage_entry
+                            .accounts
+                            .account_matches_owners(*offset, owners)
                     })
             }
         }
@@ -4941,19 +4938,19 @@ impl AccountsDb {
         self.do_load(ancestors, pubkey, None, load_hint, LoadZeroLamports::None)
     }
 
-    pub fn get_account_meta(&self, ancestors: &Ancestors, pubkey: &Pubkey) -> Option<AccountMeta> {
+    pub fn account_matches_owners(
+        &self,
+        ancestors: &Ancestors,
+        account: &Pubkey,
+        owners: &[&Pubkey],
+    ) -> Option<bool> {
         let (slot, storage_location, _maybe_account_accesor) =
-            self.read_index_for_accessor_or_load_slow(ancestors, pubkey, None, false)?;
+            self.read_index_for_accessor_or_load_slow(ancestors, account, None, false)?;
 
         if !storage_location.is_cached() {
-            let result = self.read_only_accounts_cache.load(*pubkey, slot);
+            let result = self.read_only_accounts_cache.load(*account, slot);
             if let Some(account) = result {
-                return Some(AccountMeta {
-                    lamports: account.lamports(),
-                    rent_epoch: account.rent_epoch(),
-                    owner: *account.owner(),
-                    executable: account.executable(),
-                });
+                return Some(owners.contains(&account.owner()));
             }
         }
 
@@ -4961,11 +4958,11 @@ impl AccountsDb {
             slot,
             storage_location,
             ancestors,
-            pubkey,
+            account,
             None,
             LoadHint::Unspecified,
         )?;
-        account_accessor.get_account_meta()
+        account_accessor.account_matches_owners(owners)
     }
 
     pub fn load_account_into_read_cache(&self, ancestors: &Ancestors, pubkey: &Pubkey) {
@@ -14119,7 +14116,7 @@ pub mod tests {
     }
 
     #[test]
-    fn test_get_account_meta() {
+    fn test_account_matches_owners() {
         let db = Arc::new(AccountsDb::new_with_config_for_tests(
             Vec::new(),
             &ClusterType::Development,
@@ -14127,35 +14124,46 @@ pub mod tests {
             AccountShrinkThreshold::default(),
         ));
 
+        let owners: Vec<Pubkey> = (0..2).map(|_| Pubkey::new_unique()).collect();
+        let owners_refs: Vec<&Pubkey> = owners.iter().collect();
+
         let account1_key = Pubkey::new_unique();
-        let owner1_key = Pubkey::new_unique();
-        let account1 = AccountSharedData::new(321, 10, &owner1_key);
+        let account1 = AccountSharedData::new(321, 10, &owners[0]);
 
         let account2_key = Pubkey::new_unique();
-        let owner2_key = Pubkey::new_unique();
-        let account2 = AccountSharedData::new(1, 1, &owner2_key);
+        let account2 = AccountSharedData::new(1, 1, &owners[1]);
+
+        let account3_key = Pubkey::new_unique();
+        let account3 = AccountSharedData::new(1, 1, &Pubkey::new_unique());
 
         db.store_cached((0, &[(&account1_key, &account1)][..]), None);
         db.store_cached((1, &[(&account2_key, &account2)][..]), None);
+        db.store_cached((2, &[(&account3_key, &account3)][..]), None);
 
         db.add_root(0);
         db.add_root(1);
+        db.add_root(2);
 
         // Flush the cache so that the account meta will be read from the storage
         db.flush_accounts_cache(true, None);
         db.clean_accounts_for_tests();
 
-        let account_meta = db
-            .get_account_meta(&Ancestors::default(), &account1_key)
-            .unwrap();
-        assert_eq!(account_meta.lamports, 321);
-        assert_eq!(account_meta.owner, owner1_key);
-
-        let account_meta = db
-            .get_account_meta(&Ancestors::default(), &account2_key)
-            .unwrap();
-        assert_eq!(account_meta.lamports, 1);
-        assert_eq!(account_meta.owner, owner2_key);
+        assert_eq!(
+            db.account_matches_owners(&Ancestors::default(), &account1_key, &owners_refs),
+            Some(true)
+        );
+        assert_eq!(
+            db.account_matches_owners(&Ancestors::default(), &account2_key, &owners_refs),
+            Some(true)
+        );
+        assert_eq!(
+            db.account_matches_owners(&Ancestors::default(), &account3_key, &owners_refs),
+            Some(false)
+        );
+        assert_eq!(
+            db.account_matches_owners(&Ancestors::default(), &Pubkey::new_unique(), &owners_refs),
+            None
+        );
 
         // Flush the cache and load account1 (so that it's in the cache)
         db.flush_accounts_cache(true, None);
@@ -14170,17 +14178,22 @@ pub mod tests {
             )
             .unwrap();
 
-        let account_meta = db
-            .get_account_meta(&Ancestors::default(), &account1_key)
-            .unwrap();
-        assert_eq!(account_meta.lamports, 321);
-        assert_eq!(account_meta.owner, owner1_key);
-
-        let account_meta = db
-            .get_account_meta(&Ancestors::default(), &account2_key)
-            .unwrap();
-        assert_eq!(account_meta.lamports, 1);
-        assert_eq!(account_meta.owner, owner2_key);
+        assert_eq!(
+            db.account_matches_owners(&Ancestors::default(), &account1_key, &owners_refs),
+            Some(true)
+        );
+        assert_eq!(
+            db.account_matches_owners(&Ancestors::default(), &account2_key, &owners_refs),
+            Some(true)
+        );
+        assert_eq!(
+            db.account_matches_owners(&Ancestors::default(), &account3_key, &owners_refs),
+            Some(false)
+        );
+        assert_eq!(
+            db.account_matches_owners(&Ancestors::default(), &Pubkey::new_unique(), &owners_refs),
+            None
+        );
     }
 
     /// a test that will accept either answer
