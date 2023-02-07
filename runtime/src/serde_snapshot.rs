@@ -601,7 +601,7 @@ where
     Ok(bank)
 }
 
-fn reconstruct_single_storage(
+pub(crate) fn reconstruct_single_storage(
     slot: &Slot,
     append_vec_path: &Path,
     current_len: usize,
@@ -825,6 +825,10 @@ where
     );
 
     let next_append_vec_id = next_append_vec_id.load(Ordering::Acquire);
+    assert!(
+        next_append_vec_id.checked_sub(1).is_some(),
+        "subtraction underflow"
+    );
     let max_append_vec_id = next_append_vec_id - 1;
     assert!(
         max_append_vec_id <= AppendVecId::MAX / 2,

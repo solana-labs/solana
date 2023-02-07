@@ -19,7 +19,8 @@ pub enum ArchiveFormat {
     TarGzip,
     TarZstd,
     TarLz4,
-    Tar,
+    Tar,  // tar only, uncompressed
+    None, // direct files, not tarred
 }
 
 impl ArchiveFormat {
@@ -31,6 +32,7 @@ impl ArchiveFormat {
             ArchiveFormat::TarZstd => TAR_ZSTD_EXTENSION,
             ArchiveFormat::TarLz4 => TAR_LZ4_EXTENSION,
             ArchiveFormat::Tar => TAR_EXTENSION,
+            ArchiveFormat::None => "",
         }
     }
 
