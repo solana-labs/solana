@@ -919,9 +919,9 @@ type TaskQueueOccupiedEntry<'a> =
 use enum_dispatch::enum_dispatch;
 
 #[enum_dispatch]
-enum ModeSpecificTaskQueue<C> {
+enum ModeSpecificTaskQueue<C, B> {
     Banking(TaskQueue),
-    Replaying(ChannelBackedTaskQueue<C>),
+    Replaying(ChannelBackedTaskQueue<C, B>),
 }
 
 #[enum_dispatch(ModeSpecificTaskQueue<C, B>)]
@@ -964,10 +964,10 @@ impl<C, B> TaskQueueReader<C, B> for TaskQueue {
     }
 }
 
-struct ChannelBackedTaskQueue<C> {
-    channel: crossbeam_channel::Receiver<SchedulablePayload<C>>,
+struct ChannelBackedTaskQueue<C, B> {
+    channel: crossbeam_channel::Receiver<SchedulablePayload<C, B>>,
     buffered_task: Option<TaskInQueue>,
-    buffered_flush: Option<std::sync::Arc<Checkpoint<C>>>,
+    buffered_flush: Option<std::sync::Arc<Checkpoint<C, B>>>,
 }
 
 impl<C> ChannelBackedTaskQueue<C> {
