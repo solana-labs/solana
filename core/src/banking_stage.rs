@@ -944,7 +944,7 @@ impl BankingStage {
         if let Err(recorder_err) = record_transactions_result {
             inc_new_counter_info!("banking_stage-max_height_reached", 1);
             inc_new_counter_info!(
-                "banking_stage-record_transactions_retryable_record_txs",
+                "banking_stage-max_height_reached_num_to_commit",
                 executed_transactions_count
             );
 
