@@ -28,6 +28,7 @@ use {
             Mutex,
         },
     },
+    thiserror::Error,
 };
 
 pub mod test_utils;
@@ -268,6 +269,14 @@ impl<'a> Iterator for AppendVecAccountsIter<'a> {
             None
         }
     }
+}
+
+#[derive(Error, Debug, PartialEq, Eq)]
+pub enum MatchAccountOwnerError {
+    #[error("The account owner does not match with the provided list")]
+    NoMatch,
+    #[error("Unable to load the account")]
+    UnableToLoad,
 }
 
 /// A thread-safe, file-backed block of memory used to store `Account` instances. Append operations
@@ -594,17 +603,30 @@ impl AppendVec {
         ))
     }
 
-    /// Return Some(true) if the account owner at `offset` is one of the pubkeys in `owners`.
-    /// Return Some(false) if the account owner is not one of the pubkeys in `owners`.
-    /// It returns None if the `offset` value causes a data overrun.
-    pub fn account_matches_owners(&self, offset: usize, owners: &[&Pubkey]) -> Option<bool> {
+    fn get_account_meta<'a>(&'a self, offset: usize) -> Option<&'a AccountMeta> {
         // Skip over StoredMeta data in the account
         let offset = offset.checked_add(mem::size_of::<StoredMeta>())?;
         // u64_align! does an unchecked add for alignment. Check that it won't cause an overflow.
         offset.checked_add(ALIGN_BOUNDARY_OFFSET - 1)?;
         let (account_meta, _): (&AccountMeta, _) = self.get_type(u64_align!(offset))?;
+        Some(account_meta)
+    }
 
-        Some(owners.contains(&&account_meta.owner))
+    /// Return Some(true) if the account owner at `offset` is one of the pubkeys in `owners`.
+    /// Return Some(false) if the account owner is not one of the pubkeys in `owners`.
+    /// It returns None if the `offset` value causes a data overrun.
+    pub fn account_matches_owners(
+        &self,
+        offset: usize,
+        owners: &[&Pubkey],
+    ) -> Result<(), MatchAccountOwnerError> {
+        let account_meta = self
+            .get_account_meta(offset)
+            .ok_or(MatchAccountOwnerError::UnableToLoad)?;
+        owners
+            .contains(&&account_meta.owner)
+            .then_some(())
+            .ok_or(MatchAccountOwnerError::NoMatch)
     }
 
     #[cfg(test)]
@@ -1070,23 +1092,26 @@ pub mod tests {
         let mut account = create_test_account(5);
         account.1.set_owner(owners[0]);
         let index = av.append_account_test(&account).unwrap();
-        assert_eq!(av.account_matches_owners(index, &owners_refs), Some(true));
+        assert_eq!(av.account_matches_owners(index, &owners_refs), Ok(()));
 
         let mut account1 = create_test_account(6);
         account1.1.set_owner(owners[1]);
         let index1 = av.append_account_test(&account1).unwrap();
-        assert_eq!(av.account_matches_owners(index1, &owners_refs), Some(true));
-        assert_eq!(av.account_matches_owners(index, &owners_refs), Some(true));
+        assert_eq!(av.account_matches_owners(index1, &owners_refs), Ok(()));
+        assert_eq!(av.account_matches_owners(index, &owners_refs), Ok(()));
 
         let mut account2 = create_test_account(6);
         account2.1.set_owner(Pubkey::new_unique());
         let index2 = av.append_account_test(&account2).unwrap();
-        assert_eq!(av.account_matches_owners(index2, &owners_refs), Some(false));
+        assert_eq!(
+            av.account_matches_owners(index2, &owners_refs),
+            Err(MatchAccountOwnerError::NoMatch)
+        );
 
         // tests for overflow
         assert_eq!(
             av.account_matches_owners(usize::MAX - mem::size_of::<StoredMeta>(), &owners_refs),
-            None
+            Err(MatchAccountOwnerError::UnableToLoad)
         );
 
         assert_eq!(
@@ -1094,7 +1119,7 @@ pub mod tests {
                 usize::MAX - mem::size_of::<StoredMeta>() - mem::size_of::<AccountMeta>() + 1,
                 &owners_refs
             ),
-            None
+            Err(MatchAccountOwnerError::UnableToLoad)
         );
     }
 
