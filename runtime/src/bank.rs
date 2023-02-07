@@ -8613,7 +8613,7 @@ impl Bank {
     pub fn wait_for_scheduler(&self, via_drop: bool) -> Result<ExecuteTimings> {
         let mut s = self.scheduler2.write().unwrap();
 
-        if let Some(mut scheduler) = s.as_ref() {
+        if let Some(scheduler) = s.as_mut() {
             let commit_mode = self.commit_mode();
             if matches!(commit_mode, CommitMode::Replaying) || via_drop {
                 if matches!(commit_mode, CommitMode::Banking) {
