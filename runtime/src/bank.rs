@@ -1352,7 +1352,7 @@ impl Scheduler<ExecuteTimings> {
                 let mut transaction_error_counts = TransactionError::counter();
                 let (mut skipped, mut succeeded) = (0, 0);
                 let mut last_slot = None;
-                let (mut latest_checkpoint, mut latest_context) = (None::<solana_scheduler::Checkpoint<_, _>>, None);
+                let (mut latest_checkpoint, mut latest_context) = (None::<Arc<solana_scheduler::Checkpoint<_, _>>>, None);
 
                 loop {
                 while let Ok(r) = retired_ee_receiver.recv_timeout(std::time::Duration::from_millis(20))
