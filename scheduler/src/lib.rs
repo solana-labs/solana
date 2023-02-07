@@ -1660,7 +1660,7 @@ impl ScheduleStage {
     }
 
     #[must_use]
-    fn _run<'a, AST: AtScheduleThread, T: Send, C>(
+    fn _run<'a, AST: AtScheduleThread, T: Send, C, B>(
         ast: AST,
         random_id: u64,
         max_executing_queue_count: usize,
@@ -1672,7 +1672,7 @@ impl ScheduleStage {
         from_exec: &crossbeam_channel::Receiver<UnlockablePayload<T>>,
         maybe_to_next_stage: Option<&crossbeam_channel::Sender<ExaminablePayload<T, C>>>, // assume nonblocking
         never: &'a crossbeam_channel::Receiver<SchedulablePayload<C>>,
-    ) -> Option<std::sync::Arc<Checkpoint<C>>> {
+    ) -> Option<std::sync::Arc<Checkpoint<C, B>>> {
         let mut maybe_start_time = None;
         let mut slot = None;
         let mut mode = None;
