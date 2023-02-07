@@ -3907,7 +3907,7 @@ impl AccountsDb {
 
     fn do_shrink_slot_store(&self, slot: Slot, store: &Arc<AccountStorageEntry>) {
         if self.accounts_cache.contains(slot) {
-            // It is not correct to shrink a slot while it it is in the write cache until flush is complete and the slot is removed from the write cache.
+            // It is not correct to shrink a slot while it is in the write cache until flush is complete and the slot is removed from the write cache.
             // There can exist a window after a slot is made a root and before the write cache flushing for that slot begins and then completes.
             // There can also exist a window after a slot is being flushed from the write cache until the index is updated and the slot is removed from the write cache.
             // During the second window, once an append vec has been created for the slot, it could be possible to try to shrink that slot.
