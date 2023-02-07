@@ -6559,6 +6559,7 @@ dependencies = [
  "arrayref",
  "assert_matches",
  "bincode",
+ "bitflags",
  "blake3",
  "bv",
  "bytemuck",

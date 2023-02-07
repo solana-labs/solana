@@ -893,7 +893,7 @@ impl<'a> ReadableAccount for LoadedAccount<'a> {
     fn executable(&self) -> bool {
         match self {
             LoadedAccount::Stored(stored_account_meta) => {
-                stored_account_meta.account_meta.executable
+                stored_account_meta.account_meta.executable()
             }
             LoadedAccount::Cached(cached_account) => cached_account.account.executable(),
         }
@@ -901,7 +901,7 @@ impl<'a> ReadableAccount for LoadedAccount<'a> {
     fn rent_epoch(&self) -> Epoch {
         match self {
             LoadedAccount::Stored(stored_account_meta) => {
-                if stored_account_meta.account_meta.has_application_fees {
+                if stored_account_meta.account_meta.has_application_fees() {
                     RENT_EXEMPT_RENT_EPOCH
                 } else {
                     stored_account_meta
@@ -915,7 +915,7 @@ impl<'a> ReadableAccount for LoadedAccount<'a> {
     fn has_application_fees(&self) -> bool {
         match self {
             LoadedAccount::Stored(stored_account_meta) => {
-                stored_account_meta.account_meta.has_application_fees
+                stored_account_meta.account_meta.has_application_fees()
             }
             LoadedAccount::Cached(cached_account) => cached_account.account.has_application_fees(),
         }
@@ -923,7 +923,7 @@ impl<'a> ReadableAccount for LoadedAccount<'a> {
     fn application_fees(&self) -> u64 {
         match self {
             LoadedAccount::Stored(stored_account_meta) => {
-                if stored_account_meta.account_meta.has_application_fees {
+                if stored_account_meta.account_meta.has_application_fees() {
                     stored_account_meta
                         .account_meta
                         .rent_epoch_or_application_fees
@@ -2240,20 +2240,20 @@ impl<'a> ReadableAccount for StoredAccountMeta<'a> {
         &self.account_meta.owner
     }
     fn executable(&self) -> bool {
-        self.account_meta.executable
+        self.account_meta.executable()
     }
     fn rent_epoch(&self) -> Epoch {
-        if self.account_meta.has_application_fees {
+        if self.account_meta.has_application_fees() {
             RENT_EXEMPT_RENT_EPOCH
         } else {
             self.account_meta.rent_epoch_or_application_fees
         }
     }
     fn has_application_fees(&self) -> bool {
-        self.account_meta.has_application_fees
+        self.account_meta.has_application_fees()
     }
     fn application_fees(&self) -> u64 {
-        if self.account_meta.has_application_fees {
+        if self.account_meta.has_application_fees() {
             self.account_meta.rent_epoch_or_application_fees
         } else {
             0
@@ -9415,7 +9415,7 @@ pub mod tests {
                 tests::*, AccountIndex, AccountSecondaryIndexes,
                 AccountSecondaryIndexesIncludeExclude, ReadAccountMapEntry, RefCount,
             },
-            append_vec::{test_utils::TempFile, AccountMeta, StoredMeta},
+            append_vec::{test_utils::TempFile, AccountFlags, AccountMeta, StoredMeta},
             cache_hash_data_stats::CacheHashDataStats,
             inline_spl_token,
             secondary_index::MAX_NUM_LARGEST_INDEX_KEYS_RETURNED,
@@ -9586,8 +9586,7 @@ pub mod tests {
         let account_meta = AccountMeta {
             lamports: 1,
             owner: Pubkey::from([2; 32]),
-            executable: false,
-            has_application_fees: false,
+            account_flags: AccountFlags::NONE,
             rent_epoch_or_application_fees: 0,
         };
         let offset = 3;
@@ -9689,8 +9688,7 @@ pub mod tests {
         let account_meta = AccountMeta {
             lamports,
             owner,
-            executable,
-            has_application_fees: false,
+            account_flags: AccountFlags::new(executable, false),
             rent_epoch_or_application_fees: rent_epoch,
         };
         let offset = 99;
@@ -12255,8 +12253,7 @@ pub mod tests {
         let account_meta = AccountMeta {
             lamports,
             owner,
-            executable,
-            has_application_fees: false,
+            account_flags: AccountFlags::new(executable, false),
             rent_epoch_or_application_fees: rent_epoch,
         };
         let data = Vec::new();

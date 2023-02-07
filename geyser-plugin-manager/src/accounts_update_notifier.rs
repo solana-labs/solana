@@ -12,7 +12,7 @@ use {
         append_vec::StoredAccountMeta,
     },
     solana_sdk::{
-        account::{AccountSharedData, ReadableAccount},
+        account::{AccountSharedData, ReadableAccount, RENT_EXEMPT_RENT_EPOCH},
         clock::Slot,
         pubkey::Pubkey,
         signature::Signature,
@@ -131,9 +131,9 @@ impl AccountsUpdateNotifierImpl {
             pubkey: stored_account_meta.pubkey().as_ref(),
             lamports: stored_account_meta.account_meta.lamports,
             owner: stored_account_meta.account_meta.owner.as_ref(),
-            executable: stored_account_meta.account_meta.executable,
-            rent_epoch: if stored_account_meta.account_meta.has_application_fees {
-                0
+            executable: stored_account_meta.account_meta.executable(),
+            rent_epoch: if stored_account_meta.account_meta.has_application_fees() {
+                RENT_EXEMPT_RENT_EPOCH
             } else {
                 stored_account_meta
                     .account_meta

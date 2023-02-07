@@ -301,6 +301,8 @@ impl<'a> StorableAccounts<'a, StoredAccountMeta<'a>>
 
 #[cfg(test)]
 pub mod tests {
+    use crate::append_vec::AccountFlags;
+
     use {
         super::*,
         crate::{
@@ -347,8 +349,7 @@ pub mod tests {
         let account_meta = AccountMeta {
             lamports,
             owner,
-            executable,
-            has_application_fees,
+            account_flags: AccountFlags::new(executable, has_application_fees),
             rent_epoch_or_application_fees,
         };
         let data = Vec::default();
@@ -407,8 +408,10 @@ pub mod tests {
                             AccountMeta {
                                 lamports: account.lamports(),
                                 owner: *account.owner(),
-                                executable: account.executable(),
-                                has_application_fees: account.has_application_fees(),
+                                account_flags: AccountFlags::new(
+                                    account.executable(),
+                                    account.has_application_fees(),
+                                ),
                                 rent_epoch_or_application_fees: if account.has_application_fees() {
                                     account.application_fees()
                                 } else {
@@ -511,8 +514,10 @@ pub mod tests {
                     AccountMeta {
                         lamports: account.lamports(),
                         owner: *account.owner(),
-                        executable: account.executable(),
-                        has_application_fees: account.has_application_fees(),
+                        account_flags: AccountFlags::new(
+                            account.executable(),
+                            account.has_application_fees(),
+                        ),
                         rent_epoch_or_application_fees: if account.has_application_fees() {
                             account.application_fees()
                         } else {

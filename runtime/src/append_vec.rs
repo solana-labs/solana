@@ -6,6 +6,7 @@
 
 use {
     crate::storable_accounts::StorableAccounts,
+    bitflags::bitflags,
     log::*,
     memmap2::MmapMut,
     serde::{Deserialize, Serialize},
@@ -155,6 +156,28 @@ pub struct StoredMeta {
     pub pubkey: Pubkey,
 }
 
+bitflags! {
+    #[derive(Serialize, Deserialize, Default)]
+    pub struct AccountFlags: u8 {
+        const NONE = 0b00000000;
+        const EXECUTABLE = 0b00000001;
+        const HAS_APPLICATION_FEES = 0b00000010;
+    }
+}
+
+impl AccountFlags {
+    pub fn new(executable: bool, has_application_fees: bool) -> Self {
+        let mut flags = AccountFlags::NONE;
+        if executable {
+            flags |= AccountFlags::EXECUTABLE;
+        }
+        if has_application_fees {
+            flags |= AccountFlags::HAS_APPLICATION_FEES;
+        }
+        flags
+    }
+}
+
 /// This struct will be backed by mmaped and snapshotted data files.
 /// So the data layout must be stable and consistent across the entire cluster!
 #[derive(Serialize, Deserialize, Clone, Debug, Default, Eq, PartialEq)]
@@ -162,15 +185,24 @@ pub struct StoredMeta {
 pub struct AccountMeta {
     /// lamports in the account
     pub lamports: u64,
-    /// the epoch at which this account will next owe rent
+    /// the epoch at which this account will next owe rent or application fees depending on the account flags
     pub rent_epoch_or_application_fees: u64,
     /// the program that owns this account. If executable, the program that loads this account.
     pub owner: Pubkey,
     /// this account's data contains a loaded program (and is now read-only)
-    pub executable: bool,
-    /// the epoch at which this account will next owe rent or application fees for the account
-    /// switched by the boolean above
-    pub has_application_fees: bool,
+    /// 1st bit executable
+    /// 2nd bit has_application_fees
+    pub account_flags: AccountFlags,
+}
+
+impl AccountMeta {
+    pub fn executable(&self) -> bool {
+        self.account_flags & AccountFlags::EXECUTABLE == AccountFlags::EXECUTABLE
+    }
+
+    pub fn has_application_fees(&self) -> bool {
+        self.account_flags & AccountFlags::HAS_APPLICATION_FEES == AccountFlags::HAS_APPLICATION_FEES
+    }
 }
 
 impl<'a, T: ReadableAccount> From<&'a T> for AccountMeta {
@@ -179,8 +211,7 @@ impl<'a, T: ReadableAccount> From<&'a T> for AccountMeta {
         Self {
             lamports: account.lamports(),
             owner: *account.owner(),
-            executable: account.executable(),
-            has_application_fees,
+            account_flags: AccountFlags::new(account.executable(), account.has_application_fees()),
             rent_epoch_or_application_fees: if has_application_fees {
                 account.application_fees()
             } else {
@@ -218,8 +249,8 @@ impl<'a> StoredAccountMeta<'a> {
         AccountSharedData::from(Account {
             lamports: self.account_meta.lamports,
             owner: self.account_meta.owner,
-            executable: self.account_meta.executable,
-            has_application_fees: self.account_meta.has_application_fees,
+            executable: self.account_meta.executable(),
+            has_application_fees: self.account_meta.has_application_fees(),
             rent_epoch_or_application_fees: self.account_meta.rent_epoch_or_application_fees,
             data: self.data.to_vec(),
         })
@@ -230,19 +261,14 @@ impl<'a> StoredAccountMeta<'a> {
     }
 
     fn sanitize(&self) -> bool {
-        self.sanitize_executable()
+        self.sanitize_executable_and_application_fees()
             && self.sanitize_lamports()
-            && self.sanitize_has_application_fees()
+            && self.sanitize_executable_and_application_fees()
     }
 
-    fn sanitize_executable(&self) -> bool {
+    fn sanitize_executable_and_application_fees(&self) -> bool {
         // Sanitize executable to ensure higher 7-bits are cleared correctly.
-        self.ref_executable_byte() & !1 == 0
-    }
-
-    fn sanitize_has_application_fees(&self) -> bool {
-        // Sanitize executable to ensure higher 7-bits are cleared correctly.
-        self.ref_has_application_fees_byte() & !1 == 0
+        self.ref_account_flags_byte() & !3 == 0
     }
 
     fn sanitize_lamports(&self) -> bool {
@@ -250,23 +276,14 @@ impl<'a> StoredAccountMeta<'a> {
         self.account_meta.lamports != 0 || self.clone_account() == AccountSharedData::default()
     }
 
-    fn ref_executable_byte(&self) -> &u8 {
+    fn ref_account_flags_byte(&self) -> &u8 {
         // Use extra references to avoid value silently clamped to 1 (=true) and 0 (=false)
         // Yes, this really happens; see test_new_from_file_crafted_executable
-        let executable_bool: &bool = &self.account_meta.executable;
-        // UNSAFE: Force to interpret mmap-backed bool as u8 to really read the actual memory content
-        let executable_byte: &u8 = unsafe { &*(executable_bool as *const bool as *const u8) };
-        executable_byte
-    }
-
-    fn ref_has_application_fees_byte(&self) -> &u8 {
-        // Use extra references to avoid value silently clamped to 1 (=true) and 0 (=false)
-        // Yes, this really happens; see test_new_from_file_crafted_executable
-        let has_application_fees: &bool = &self.account_meta.has_application_fees;
-        // UNSAFE: Force to interpret mmap-backed bool as u8 to really read the actual memory content
-        let has_application_fees_byte: &u8 =
-            unsafe { &*(has_application_fees as *const bool as *const u8) };
-        has_application_fees_byte
+        let account_flags: &AccountFlags = &self.account_meta.account_flags;
+        // UNSAFE: Force to interpret mmap-backed account_flags as u8 to really read the actual memory content
+        let account_flags_byte: &u8 =
+            unsafe { &*(account_flags as *const AccountFlags as *const u8) };
+        account_flags_byte
     }
 }
 
@@ -676,8 +693,10 @@ impl AppendVec {
                 .map(|account| AccountMeta {
                     lamports: account.lamports(),
                     owner: *account.owner(),
-                    executable: account.executable(),
-                    has_application_fees: account.has_application_fees(),
+                    account_flags: AccountFlags::new(
+                        account.executable(),
+                        account.has_application_fees(),
+                    ),
                     rent_epoch_or_application_fees: if account.has_application_fees() {
                         account.application_fees()
                     } else {
@@ -728,6 +747,8 @@ impl AppendVec {
 
 #[cfg(test)]
 pub mod tests {
+    use solana_sdk::account::RENT_EXEMPT_RENT_EPOCH;
+
     use {
         super::{test_utils::*, *},
         crate::accounts_db::INCLUDE_SLOT_IN_HASH_TESTS,
@@ -773,18 +794,12 @@ pub mod tests {
             }
         }
 
-        fn get_executable_byte(&self) -> u8 {
-            let executable_bool: bool = self.account_meta.executable;
-            // UNSAFE: Force to interpret mmap-backed bool as u8 to really read the actual memory content
-            let executable_byte: u8 = unsafe { std::mem::transmute::<bool, u8>(executable_bool) };
-            executable_byte
-        }
-
         #[allow(clippy::cast_ref_to_mut)]
-        fn set_executable_as_byte(&self, new_executable_byte: u8) {
+        fn set_account_flags_as_byte(&self, new_executable_byte: u8) {
             // UNSAFE: Force to interpret mmap-backed &bool as &u8 to write some crafted value;
             unsafe {
-                *(&self.account_meta.executable as *const bool as *mut u8) = new_executable_byte;
+                *(&self.account_meta.account_flags as *const AccountFlags as *mut u8) =
+                    new_executable_byte;
             }
         }
     }
@@ -962,15 +977,14 @@ pub mod tests {
         let def1 = AccountMeta {
             lamports: 1,
             owner: Pubkey::new_unique(),
-            executable: true,
-            has_application_fees: false,
+            account_flags: AccountFlags { bits: 0x1 },
             rent_epoch_or_application_fees: 3,
         };
         let def2_account = Account {
             lamports: def1.lamports,
             owner: def1.owner,
-            executable: def1.executable,
-            has_application_fees: def1.has_application_fees,
+            executable: def1.executable(),
+            has_application_fees: def1.has_application_fees(),
             rent_epoch_or_application_fees: def1.rent_epoch_or_application_fees,
             data: Vec::new(),
         };
@@ -1263,42 +1277,35 @@ pub mod tests {
         let accounts = av.accounts(0);
 
         // ensure false is 0u8 and true is 1u8 actually
-        assert_eq!(*accounts[0].ref_executable_byte(), 0);
-        assert_eq!(*accounts[1].ref_executable_byte(), 1);
+        assert_eq!(*accounts[0].ref_account_flags_byte(), 0);
+        assert_eq!(*accounts[1].ref_account_flags_byte(), 1);
 
         let account = &accounts[0];
-        let crafted_executable = u8::max_value() - 1;
+        let crafted_executable = !3;
 
-        account.set_executable_as_byte(crafted_executable);
+        account.set_account_flags_as_byte(crafted_executable);
 
         // reload crafted accounts
         let accounts = av.accounts(0);
         let account = accounts.first().unwrap();
 
-        // upper 7-bits are not 0, so sanitization should fail
-        assert!(!account.sanitize_executable());
+        // upper 6-bits are not 0, so sanitization should fail
+        assert!(!account.sanitize_executable_and_application_fees());
 
         // we can observe crafted value by ref
         {
-            let executable_bool: &bool = &account.account_meta.executable;
+            let account_flags = &account.account_meta.account_flags.bits;
             // Depending on use, *executable_bool can be truthy or falsy due to direct memory manipulation
             // assert_eq! thinks *executable_bool is equal to false but the if condition thinks it's not, contradictorily.
-            assert!(!*executable_bool);
+            assert!(!account.account_meta.executable());
             #[cfg(not(target_arch = "aarch64"))]
             {
-                const FALSE: bool = false; // keep clippy happy
-                if *executable_bool == FALSE {
+                const FALSE: u8 = 0; // keep clippy happy
+                if *account_flags == FALSE {
                     panic!("This didn't occur if this test passed.");
                 }
             }
-            assert_eq!(*account.ref_executable_byte(), crafted_executable);
-        }
-
-        // we can NOT observe crafted value by value
-        {
-            let executable_bool: bool = account.account_meta.executable;
-            assert!(!executable_bool);
-            assert_eq!(account.get_executable_byte(), 0); // Wow, not crafted_executable!
+            assert_eq!(*account.ref_account_flags_byte(), crafted_executable);
         }
 
         av.flush().unwrap();
@@ -1321,8 +1328,96 @@ pub mod tests {
             0x08
         );
         assert_eq!(offset_of!(AccountMeta, owner), 0x10);
-        assert_eq!(offset_of!(AccountMeta, executable), 0x30);
-        assert_eq!(offset_of!(AccountMeta, executable), 0x38);
-        assert_eq!(mem::size_of::<AccountMeta>(), 0x46);
+        assert_eq!(offset_of!(AccountMeta, account_flags), 0x30);
+        assert_eq!(mem::size_of::<AccountMeta>(), 0x38);
+    }
+
+    #[test]
+    fn test_account_flags() {
+        // executable: false, has_application_fees: false
+        let account_meta = AccountMeta {
+            account_flags: AccountFlags::new(false, false),
+            ..Default::default()
+        };
+        assert_eq!(account_meta.executable(), false);
+        assert_eq!(account_meta.has_application_fees(), false);
+
+        // executable: false, has_application_fees: true
+        let account_meta = AccountMeta {
+            account_flags: AccountFlags::new(false, true),
+            ..Default::default()
+        };
+        assert_eq!(account_meta.executable(), false);
+        assert_eq!(account_meta.has_application_fees(), true);
+
+        // executable: true, has_application_fees: false
+        let account_meta = AccountMeta {
+            account_flags: AccountFlags::new(true, false),
+            ..Default::default()
+        };
+        assert_eq!(account_meta.executable(), true);
+        assert_eq!(account_meta.has_application_fees(), false);
+
+        // executable: true, has_application_fees: true
+        let account_meta = AccountMeta {
+            account_flags: AccountFlags::new(true, true),
+            ..Default::default()
+        };
+        assert_eq!(account_meta.executable(), true);
+        assert_eq!(account_meta.has_application_fees(), true);
+    }
+
+    #[test]
+    fn test_sanatize_for_executable_and_application_fees() {
+        let file = get_append_vec_path("test_new_from_crafted_executable");
+        let path = &file.path;
+        let mut av = AppendVec::new(path, true, 1024 * 1024);
+        av.set_no_remove_on_drop();
+        // executable false, application fees false
+        av.append_account_test(&create_test_account(10)).unwrap();
+        // executable true, application fees false
+        {
+            let mut accounts = create_test_account(10);
+            accounts.1.set_executable(true);
+            av.append_account_test(&accounts).unwrap();
+        }
+        // executable false, application fees true
+        {
+            let mut accounts = create_test_account(10);
+            accounts.1.set_rent_epoch(RENT_EXEMPT_RENT_EPOCH).unwrap();
+            accounts.1.set_application_fees(100).unwrap();
+            av.append_account_test(&accounts).unwrap();
+        }
+        // executable true, application fees true
+        {
+            let mut accounts = create_test_account(10);
+            accounts.1.set_rent_epoch(RENT_EXEMPT_RENT_EPOCH).unwrap();
+            accounts.1.set_executable(true);
+            accounts.1.set_application_fees(100).unwrap();
+            av.append_account_test(&accounts).unwrap();
+        }
+
+        let accounts = av.accounts(0);
+        let account = accounts.first().unwrap();
+        assert_eq!(account.account_meta.account_flags, AccountFlags::NONE);
+        assert_eq!(account.sanitize_executable_and_application_fees(), true);
+
+        let account = accounts.get(1).unwrap();
+        assert_eq!(account.account_meta.account_flags, AccountFlags::EXECUTABLE);
+        assert_eq!(account.sanitize_executable_and_application_fees(), true);
+
+        let account = accounts.get(2).unwrap();
+        assert_eq!(
+            account.account_meta.account_flags,
+            AccountFlags::HAS_APPLICATION_FEES
+        );
+        assert_eq!(account.sanitize_executable_and_application_fees(), true);
+
+        let account = accounts.get(3).unwrap();
+        assert_eq!(
+            account.account_meta.account_flags,
+            AccountFlags::EXECUTABLE | AccountFlags::HAS_APPLICATION_FEES
+        );
+        assert_eq!(account.sanitize_executable_and_application_fees(), true);
     }
 }

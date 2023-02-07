@@ -382,9 +382,9 @@ impl Accounts {
                         error_counters,
                     )?;
 
-                    if account.has_application_fees {
+                    if account.has_application_fees() {
                         // if account has application fees insert the fees in the map
-                        application_fees.insert(*key, account.rent_epoch_or_application_fees);
+                        application_fees.insert(*key, account.application_fees());
                     }
 
                     if !validated_fee_payer && message.is_non_loader_key(i) {
@@ -1382,8 +1382,6 @@ fn prepare_if_nonce_account(
 
 #[cfg(test)]
 mod tests {
-    use std::str::FromStr;
-
     use {
         super::*,
         crate::{
@@ -1394,11 +1392,10 @@ mod tests {
         itertools::Itertools,
         solana_address_lookup_table_program::state::LookupTableMeta,
         solana_program_runtime::{
-            compute_budget, executor_cache::TransactionExecutorCache,
-            invoke_context::ApplicationFeeChanges,
+            executor_cache::TransactionExecutorCache, invoke_context::ApplicationFeeChanges,
         },
         solana_sdk::{
-            account::{AccountSharedData, WritableAccount},
+            account::{AccountSharedData, WritableAccount, RENT_EXEMPT_RENT_EPOCH},
             epoch_schedule::EpochSchedule,
             genesis_config::ClusterType,
             hash::Hash,
@@ -1415,6 +1412,7 @@ mod tests {
             cell::RefCell,
             convert::TryFrom,
             rc::Rc,
+            str::FromStr,
             sync::atomic::{AtomicBool, AtomicU64, Ordering},
             thread, time,
         },
@@ -3995,18 +3993,18 @@ mod tests {
         accounts.store_slow_uncached(0, &payer.pubkey(), &payer_acc);
 
         let mut key1_acc = AccountSharedData::new(100, 0, &owner.pubkey());
-        key1_acc.has_application_fees = true;
-        key1_acc.rent_epoch_or_application_fees = 100;
+        key1_acc.set_rent_epoch(RENT_EXEMPT_RENT_EPOCH).unwrap();
+        key1_acc.set_application_fees(100).unwrap();
         accounts.store_slow_uncached(0, &key1, &key1_acc);
 
         let mut key2_acc = AccountSharedData::new(100, 0, &owner.pubkey());
-        key2_acc.has_application_fees = true;
-        key2_acc.rent_epoch_or_application_fees = 1000;
+        key2_acc.set_rent_epoch(RENT_EXEMPT_RENT_EPOCH).unwrap();
+        key2_acc.set_application_fees(1000).unwrap();
         accounts.store_slow_uncached(0, &key2, &key2_acc);
 
         let mut key3_acc = AccountSharedData::new(100, 0, &owner.pubkey());
-        key3_acc.has_application_fees = true;
-        key3_acc.rent_epoch_or_application_fees = 10000;
+        key3_acc.set_rent_epoch(RENT_EXEMPT_RENT_EPOCH).unwrap();
+        key3_acc.set_application_fees(10000).unwrap();
         accounts.store_slow_uncached(0, &key3, &key3_acc);
 
         let blockhash = Hash::new_unique();
@@ -4114,8 +4112,8 @@ mod tests {
         accounts.store_slow_uncached(0, &payer.pubkey(), &payer_acc);
 
         let mut key1_acc = AccountSharedData::new(100, 0, &owner.pubkey());
-        key1_acc.has_application_fees = true;
-        key1_acc.rent_epoch_or_application_fees = 10001;
+        key1_acc.set_rent_epoch(RENT_EXEMPT_RENT_EPOCH).unwrap();
+        key1_acc.set_application_fees(10001).unwrap();
         accounts.store_slow_uncached(0, &key1, &key1_acc);
         let blockhash = Hash::new_unique();
         let tx1 = create_transfer_transaction(&payer, &key1, blockhash);

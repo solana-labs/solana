@@ -191,7 +191,11 @@ impl PreAccount {
 mod tests {
     use {
         super::*,
-        solana_sdk::{account::Account, instruction::InstructionError, system_program},
+        solana_sdk::{
+            account::{Account, RENT_EXEMPT_RENT_EPOCH},
+            instruction::InstructionError,
+            system_program,
+        },
     };
 
     #[test]
@@ -240,6 +244,30 @@ mod tests {
                 post: AccountSharedData::from(Account {
                     owner: *owner,
                     lamports: std::u64::MAX,
+                    ..Account::default()
+                }),
+            }
+        }
+        pub fn new_rent_free(owner: &Pubkey, program_id: &Pubkey) -> Self {
+            Self {
+                program_id: *program_id,
+                rent: Rent::default(),
+                is_writable: true,
+                pre: PreAccount::new(
+                    &solana_sdk::pubkey::new_rand(),
+                    AccountSharedData::from(Account {
+                        owner: *owner,
+                        lamports: std::u64::MAX,
+                        has_application_fees: false,
+                        rent_epoch_or_application_fees: RENT_EXEMPT_RENT_EPOCH,
+                        ..Account::default()
+                    }),
+                ),
+                post: AccountSharedData::from(Account {
+                    owner: *owner,
+                    lamports: std::u64::MAX,
+                    has_application_fees: false,
+                    rent_epoch_or_application_fees: RENT_EXEMPT_RENT_EPOCH,
                     ..Account::default()
                 }),
             }
@@ -531,16 +559,11 @@ mod tests {
     }
 
     #[test]
-    fn test_verify_account_changes_application_fees() {
+    fn test_verify_account_cannot_change_application_fees() {
         let alice_program_id = solana_sdk::pubkey::new_rand();
 
         assert_eq!(
-            Change::new(&alice_program_id, &system_program::id()).verify(),
-            Ok(()),
-            "nothing changed!"
-        );
-        assert_eq!(
-            Change::new(&alice_program_id, &system_program::id())
+            Change::new_rent_free(&alice_program_id, &system_program::id())
                 .change_application_fees(0, 1)
                 .unwrap()
                 .verify(),

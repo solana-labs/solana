@@ -129,9 +129,9 @@ pub struct AccountSharedData {
     /// this account's data contains a loaded program (and is now read-only)
     executable: bool,
     // has application fees
-    pub has_application_fees: bool,
+    has_application_fees: bool,
     /// the epoch at which this account will next owe rent
-    pub rent_epoch_or_application_fees: u64,
+    rent_epoch_or_application_fees: u64,
 }
 
 /// Compares two ReadableAccounts
@@ -1429,13 +1429,18 @@ pub mod tests {
         assert_eq!(account2.rent_epoch, deserialized_acc2.rent_epoch);
     }
 
-
     #[test]
     fn test_updating_application_fees_for_account_with_rent_epoch_fails() {
         let key = Pubkey::new_unique();
-        let ( mut account1, mut account2) = make_two_accounts(&key);
-        assert_eq!(account1.set_application_fees(100), Err(InstructionError::CannotSetAppFeesForAccountWithRentEpoch));
-        assert_eq!(account2.set_application_fees(100), Err(InstructionError::CannotSetAppFeesForAccountWithRentEpoch));
+        let (mut account1, mut account2) = make_two_accounts(&key);
+        assert_eq!(
+            account1.set_application_fees(100),
+            Err(InstructionError::CannotSetAppFeesForAccountWithRentEpoch)
+        );
+        assert_eq!(
+            account2.set_application_fees(100),
+            Err(InstructionError::CannotSetAppFeesForAccountWithRentEpoch)
+        );
 
         account1.set_rent_epoch(RENT_EXEMPT_RENT_EPOCH).unwrap();
         account2.set_rent_epoch(RENT_EXEMPT_RENT_EPOCH).unwrap();
@@ -1456,7 +1461,7 @@ pub mod tests {
     #[test]
     fn test_updating_rent_epoch_for_account_with_application_fee_fails() {
         let key = Pubkey::new_unique();
-        let ( mut account1, mut account2) = make_two_accounts(&key);
+        let (mut account1, mut account2) = make_two_accounts(&key);
         account1.set_rent_epoch(RENT_EXEMPT_RENT_EPOCH).unwrap();
         account2.set_rent_epoch(RENT_EXEMPT_RENT_EPOCH).unwrap();
         assert_eq!(account1.set_application_fees(100), Ok(()));
@@ -1468,7 +1473,13 @@ pub mod tests {
         assert_eq!(account1.rent_epoch(), RENT_EXEMPT_RENT_EPOCH);
         assert_eq!(account2.rent_epoch(), RENT_EXEMPT_RENT_EPOCH);
 
-        assert_eq!(account1.set_rent_epoch(12),Err(InstructionError::CannotSetRentEpochForAccountWithAppFees));
-        assert_eq!(account2.set_rent_epoch(12),Err(InstructionError::CannotSetRentEpochForAccountWithAppFees));
+        assert_eq!(
+            account1.set_rent_epoch(12),
+            Err(InstructionError::CannotSetRentEpochForAccountWithAppFees)
+        );
+        assert_eq!(
+            account2.set_rent_epoch(12),
+            Err(InstructionError::CannotSetRentEpochForAccountWithAppFees)
+        );
     }
 }

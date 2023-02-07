@@ -198,7 +198,7 @@ pub mod tests {
                     remove_account_for_tests,
                 },
             },
-            append_vec::{AccountMeta, StoredAccountMeta, StoredMeta},
+            append_vec::{AccountFlags, AccountMeta, StoredAccountMeta, StoredMeta},
         },
         solana_sdk::{
             account::{AccountSharedData, ReadableAccount},
@@ -229,8 +229,7 @@ pub mod tests {
         let account_meta = AccountMeta {
             lamports: 1,
             owner: Pubkey::from([2; 32]),
-            executable: false,
-            has_application_fees: false,
+            account_flags: AccountFlags::new(false, false),
             rent_epoch_or_application_fees: 0,
         };
         let offset = 3;
