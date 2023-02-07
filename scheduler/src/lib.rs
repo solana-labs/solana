@@ -2149,7 +2149,7 @@ impl<T, B> Checkpoint<T, B> {
     pub fn wait_for_restart(&self, maybe_given_restart_value: Option<T>) {
         let current_thread_name = std::thread::current().name().unwrap().to_string();
         let mut g = self.0.lock().unwrap();
-        let (self_remaining_threads, self_return_value) = &mut *g;
+        let (self_remaining_threads, self_return_value, _) = &mut *g;
         trace!(
             "Checkpoint::wait_for_restart: {} is entering at {} -> {}",
             current_thread_name,
