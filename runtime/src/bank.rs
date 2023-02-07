@@ -946,7 +946,9 @@ impl AbiExample for BuiltinPrograms {
 }
 
 #[derive(Clone, Debug)]
-struct RunnerContext;
+struct RunnerContext {
+    bank: Arc<Bank>,
+};
 
 struct SchedulerPool<C> {
     schedulers: Vec<Box<Scheduler<C>>>,
