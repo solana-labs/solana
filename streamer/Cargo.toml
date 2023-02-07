@@ -10,6 +10,8 @@ documentation = "https://docs.rs/solana-streamer"
 edition = "2021"
 
 [dependencies]
+async-channel = "1.8.0"
+bytes = "1.4.0"
 crossbeam-channel = "0.5"
 futures-util = "0.3.25"
 histogram = "0.6.9"
