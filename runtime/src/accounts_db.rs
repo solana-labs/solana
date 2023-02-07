@@ -821,9 +821,9 @@ impl<'a> LoadedAccountAccessor<'a> {
             LoadedAccountAccessor::Cached(cached_account) => cached_account
                 .as_ref()
                 .and_then(|cached_account| {
-                    owners
-                        .contains(&cached_account.account.owner())
-                        .then_some(())
+                    (!cached_account.account.is_zero_lamport()
+                        && owners.contains(&cached_account.account.owner()))
+                    .then_some(())
                 })
                 .ok_or(MatchAccountOwnerError::NoMatch),
             LoadedAccountAccessor::Stored(maybe_storage_entry) => {
@@ -4957,8 +4957,7 @@ impl AccountsDb {
         if !storage_location.is_cached() {
             let result = self.read_only_accounts_cache.load(*account, slot);
             if let Some(account) = result {
-                return owners
-                    .contains(&account.owner())
+                return (!account.is_zero_lamport() && owners.contains(&account.owner()))
                     .then_some(())
                     .ok_or(MatchAccountOwnerError::NoMatch);
             }
@@ -14148,13 +14147,19 @@ pub mod tests {
         let account3_key = Pubkey::new_unique();
         let account3 = AccountSharedData::new(1, 1, &Pubkey::new_unique());
 
+        // Account with 0 lamports
+        let account4_key = Pubkey::new_unique();
+        let account4 = AccountSharedData::new(0, 1, &owners[1]);
+
         db.store_cached((0, &[(&account1_key, &account1)][..]), None);
         db.store_cached((1, &[(&account2_key, &account2)][..]), None);
         db.store_cached((2, &[(&account3_key, &account3)][..]), None);
+        db.store_cached((3, &[(&account4_key, &account4)][..]), None);
 
         db.add_root(0);
         db.add_root(1);
         db.add_root(2);
+        db.add_root(3);
 
         // Flush the cache so that the account meta will be read from the storage
         db.flush_accounts_cache(true, None);
@@ -14170,6 +14175,10 @@ pub mod tests {
         );
         assert_eq!(
             db.account_matches_owners(&Ancestors::default(), &account3_key, &owners_refs),
+            Err(MatchAccountOwnerError::NoMatch)
+        );
+        assert_eq!(
+            db.account_matches_owners(&Ancestors::default(), &account4_key, &owners_refs),
             Err(MatchAccountOwnerError::NoMatch)
         );
         assert_eq!(
@@ -14200,6 +14209,10 @@ pub mod tests {
         );
         assert_eq!(
             db.account_matches_owners(&Ancestors::default(), &account3_key, &owners_refs),
+            Err(MatchAccountOwnerError::NoMatch)
+        );
+        assert_eq!(
+            db.account_matches_owners(&Ancestors::default(), &account4_key, &owners_refs),
             Err(MatchAccountOwnerError::NoMatch)
         );
         assert_eq!(

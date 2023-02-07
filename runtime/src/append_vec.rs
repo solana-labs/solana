@@ -603,7 +603,7 @@ impl AppendVec {
         ))
     }
 
-    fn get_account_meta<'a>(&'a self, offset: usize) -> Option<&'a AccountMeta> {
+    fn get_account_meta<'a>(&self, offset: usize) -> Option<&'a AccountMeta> {
         // Skip over StoredMeta data in the account
         let offset = offset.checked_add(mem::size_of::<StoredMeta>())?;
         // u64_align! does an unchecked add for alignment. Check that it won't cause an overflow.
@@ -623,8 +623,7 @@ impl AppendVec {
         let account_meta = self
             .get_account_meta(offset)
             .ok_or(MatchAccountOwnerError::UnableToLoad)?;
-        owners
-            .contains(&&account_meta.owner)
+        (account_meta.lamports != 0 && owners.contains(&&account_meta.owner))
             .then_some(())
             .ok_or(MatchAccountOwnerError::NoMatch)
     }
