@@ -1501,6 +1501,7 @@ impl Scheduler<ExecuteTimings> {
             bank,
             slot: Default::default(),
             commit_status,
+            last_checkpoint: None,
         };
         info!(
             "scheduler: id_{:016x} setup done with {}us",
