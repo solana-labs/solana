@@ -1022,12 +1022,12 @@ pub mod commit_mode {
 pub use commit_mode::{AtomicCommitMode, CommitMode};
 
 #[derive(Debug)]
-struct Scheduler<C> {
+struct Scheduler<C, B> {
     random_id: u64,
     scheduler_thread_handle: Option<std::thread::JoinHandle<Result<(Duration, Duration)>>>,
     executing_thread_handles: Option<Vec<std::thread::JoinHandle<Result<(Duration, Duration)>>>>,
     error_collector_thread_handle: Option<std::thread::JoinHandle<Result<(Duration, Duration)>>>,
-    transaction_sender: Option<crossbeam_channel::Sender<solana_scheduler::SchedulablePayload<C>>>,
+    transaction_sender: Option<crossbeam_channel::Sender<solana_scheduler::SchedulablePayload<C, B>>>,
     preloader: Arc<solana_scheduler::Preloader>,
     graceful_stop_initiated: AtomicBool,
     collected_results: Arc<std::sync::Mutex<Vec<Result<C>>>>,
