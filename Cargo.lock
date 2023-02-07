@@ -5458,6 +5458,7 @@ dependencies = [
  "solana-stake-program",
  "solana-streamer",
  "solana-tpu-client",
+ "solana-transaction-runner",
  "solana-transaction-status",
  "solana-version",
  "solana-vote-program",
@@ -7044,6 +7045,13 @@ dependencies = [
  "solana-streamer",
  "solana-transaction-status",
  "solana-version",
+]
+
+[[package]]
+name = "solana-transaction-runner"
+version = "1.16.0"
+dependencies = [
+ "solana-sdk 1.16.0",
 ]
 
 [[package]]

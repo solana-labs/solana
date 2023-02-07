@@ -61,6 +61,7 @@ solana-send-transaction-service = { path = "../send-transaction-service", versio
 solana-streamer = { path = "../streamer", version = "=1.16.0" }
 solana-tpu-client = { path = "../tpu-client", version = "=1.16.0", default-features = false }
 solana-transaction-status = { path = "../transaction-status", version = "=1.16.0" }
+solana-transaction-runner = { path = "../transaction-runner", version = "=1.16.0" }
 solana-version = { path = "../version", version = "=1.16.0" }
 solana-vote-program = { path = "../programs/vote", version = "=1.16.0" }
 sys-info = "0.9.1"
