@@ -1352,14 +1352,14 @@ impl Scheduler<ExecuteTimings> {
                 let mut transaction_error_counts = TransactionError::counter();
                 let (mut skipped, mut succeeded) = (0, 0);
                 let mut last_slot = None;
-                let (mut latest_checkpoint, mut latest_context) = (None::<Arc<solana_scheduler::Checkpoint<_, _>>>, None);
+                let (mut latest_checkpoint, mut latest_runner_context) = (None::<Arc<solana_scheduler::Checkpoint<_, _>>>, None);
 
                 loop {
                 while let Ok(r) = retired_ee_receiver.recv_timeout(std::time::Duration::from_millis(20))
                 {
                     use crate::transaction_priority_details::GetTransactionPriorityDetails;
                     if let Some(latest_checkpoint) = latest_checkpoint.take() {
-                        latest_context = latest_checkpoint.clone_context_value();
+                        latest_runner_context = latest_checkpoint.clone_context_value();
                     }
 
                     match r {
