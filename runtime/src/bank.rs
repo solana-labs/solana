@@ -1036,7 +1036,7 @@ struct Scheduler<C> {
     bank: std::sync::Arc<std::sync::RwLock<std::option::Option<std::sync::Weak<Bank>>>>,
     slot: AtomicU64,
     commit_status: Arc<CommitStatus>,
-    current_checkpoint: Option<Arc<solana_scheduler::Checkpoint<C>>>,
+    current_checkpoint: Option<Arc<solana_scheduler::Checkpoint<C, RunnerContext>>>,
 }
 
 impl<C> Scheduler<C> {
