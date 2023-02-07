@@ -2855,6 +2855,11 @@ impl Blockstore {
                                     result.insert(lookup.account_key);
                                 });
                             }
+                            // howdy, anybody who reached here from the panic messsage!
+                            // the .unwrap() below could indicate there was an odd error or there
+                            // could simply be a tx with a new alt, which is just created in this
+                            // range. too bad... this edge case isn't currently supported.
+                            // for casual use, please chose different slot range.
                             let sanitized_tx = bank.fully_verify_transaction(tx).unwrap();
                             sanitized_tx
                                 .message()
