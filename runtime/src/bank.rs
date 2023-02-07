@@ -2224,7 +2224,7 @@ impl Bank {
                 RwLock::new(Some(SCHEDULER_POOL.lock().unwrap().take_from_pool()))
             },
             CommitMode::Banking => {
-                let s: Option<Arc<Scheduler<ExecuteTimings>>> = parent.scheduler2.write().unwrap().take();
+                let s: Option<Box<Scheduler<ExecuteTimings>>> = parent.scheduler2.write().unwrap().take();
                 if let Some(scheduler) = s {
                     use assert_matches::assert_matches;
                     assert_matches!(parent.commit_mode(), CommitMode::Banking);
