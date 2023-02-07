@@ -10,7 +10,7 @@ use {
     },
     rand::{thread_rng, Rng},
     solana_sdk::{clock::Slot, saturating_add_assign},
-    std::sync::Arc,
+    std::{num::NonZeroU64, sync::Arc},
 };
 
 /// ancient packing algorithm tuning per pass
@@ -24,7 +24,7 @@ struct PackedAncientStorageTuning {
     /// number of ancient slots we should aim to have. If we have more than this, combine further.
     max_ancient_slots: usize,
     /// # of bytes in an ideal ancient storage size
-    ideal_storage_size: u64,
+    ideal_storage_size: NonZeroU64,
 }
 
 /// info about a storage eligible to be combined into an ancient append vec.
@@ -152,15 +152,14 @@ impl AncientSlotInfos {
     /// The idea is that 'all_infos' is sorted from smallest capacity to largest,
     /// but that isn't required for this function to be 'correct'.
     #[allow(dead_code)]
-    fn truncate_to_max_storages(&mut self, max_storages: usize, ideal_storage_size: u64) {
+    fn truncate_to_max_storages(&mut self, max_storages: usize, ideal_storage_size: NonZeroU64) {
         // these indexes into 'all_infos' are useless once we truncate 'all_infos', so make sure they're cleared out to avoid any issues
         self.shrink_indexes.clear();
         let total_storages = self.all_infos.len();
         let mut cumulative_bytes = 0u64;
         for (i, info) in self.all_infos.iter().enumerate() {
             saturating_add_assign!(cumulative_bytes, info.alive_bytes);
-            let ancient_storages_required =
-                (cumulative_bytes / ideal_storage_size.max(1) + 1) as usize;
+            let ancient_storages_required = (cumulative_bytes / ideal_storage_size + 1) as usize;
             let storages_remaining = total_storages - i - 1;
             // if the remaining uncombined storages and the # of resulting
             // combined ancient storages is less than the threshold, then
@@ -181,7 +180,7 @@ impl AncientSlotInfos {
     /// that we make progress in cleaning/shrinking/combining but that we don't cause unnecessary
     /// churn.
     #[allow(dead_code)]
-    fn filter_by_smallest_capacity(&mut self, max_storages: usize, ideal_storage_size: u64) {
+    fn filter_by_smallest_capacity(&mut self, max_storages: usize, ideal_storage_size: NonZeroU64) {
         let total_storages = self.all_infos.len();
         if total_storages <= max_storages {
             // currently fewer storages than max, so nothing to shrink
@@ -640,7 +639,7 @@ pub mod tests {
                     TestSmallestCapacity::FilterAncientSlots => {
                         let tuning = PackedAncientStorageTuning {
                             max_ancient_slots: max_storages,
-                            ideal_storage_size: ideal_storage_size_large,
+                            ideal_storage_size: NonZeroU64::new(ideal_storage_size_large).unwrap(),
                             // irrelevant since we clear 'shrink_indexes'
                             percent_of_alive_shrunk_data: 0,
                         };
@@ -648,7 +647,10 @@ pub mod tests {
                         infos.filter_ancient_slots(&tuning);
                     }
                     TestSmallestCapacity::FilterBySmallestCapacity => {
-                        infos.filter_by_smallest_capacity(max_storages, ideal_storage_size_large);
+                        infos.filter_by_smallest_capacity(
+                            max_storages,
+                            NonZeroU64::new(ideal_storage_size_large).unwrap(),
+                        );
                     }
                 }
                 assert!(infos.all_infos.is_empty());
@@ -679,12 +681,15 @@ pub mod tests {
                 let max_storages = 3;
                 match method {
                     TestSmallestCapacity::FilterBySmallestCapacity => {
-                        infos.filter_by_smallest_capacity(max_storages, ideal_storage_size_large);
+                        infos.filter_by_smallest_capacity(
+                            max_storages,
+                            NonZeroU64::new(ideal_storage_size_large).unwrap(),
+                        );
                     }
                     TestSmallestCapacity::FilterAncientSlots => {
                         let tuning = PackedAncientStorageTuning {
                             max_ancient_slots: max_storages,
-                            ideal_storage_size: ideal_storage_size_large,
+                            ideal_storage_size: NonZeroU64::new(ideal_storage_size_large).unwrap(),
                             // irrelevant since we clear 'shrink_indexes'
                             percent_of_alive_shrunk_data: 0,
                         };
@@ -719,20 +724,32 @@ pub mod tests {
             let mut infos = create_test_infos(1);
             let max_storages = 1;
             // 1 storage, 1 max, but 1 storage does not fill the entire new combined storage, so truncate nothing
-            test(&mut infos, max_storages, ideal_storage_size_large);
+            test(
+                &mut infos,
+                max_storages,
+                NonZeroU64::new(ideal_storage_size_large).unwrap(),
+            );
             assert_eq!(infos.all_infos.len(), usize::from(!filter));
 
             let mut infos = create_test_infos(1);
             let max_storages = 1;
             infos.all_infos[0].alive_bytes = ideal_storage_size_large + 1; // too big for 1 ideal storage
                                                                            // 1 storage, 1 max, but 1 overflows the entire new combined storage, so truncate nothing
-            test(&mut infos, max_storages, ideal_storage_size_large);
+            test(
+                &mut infos,
+                max_storages,
+                NonZeroU64::new(ideal_storage_size_large).unwrap(),
+            );
             assert_eq!(infos.all_infos.len(), usize::from(!filter));
 
             let mut infos = create_test_infos(1);
             let max_storages = 2;
             // all truncated because these infos will fit into the # storages
-            test(&mut infos, max_storages, ideal_storage_size_large);
+            test(
+                &mut infos,
+                max_storages,
+                NonZeroU64::new(ideal_storage_size_large).unwrap(),
+            );
             assert!(infos.all_infos.is_empty());
 
             let mut infos = create_test_infos(1);
@@ -740,7 +757,11 @@ pub mod tests {
             let max_storages = 2;
             // none truncated because the one storage calculates to be larger than 1 ideal storage, so we need to
             // combine
-            test(&mut infos, max_storages, ideal_storage_size_large);
+            test(
+                &mut infos,
+                max_storages,
+                NonZeroU64::new(ideal_storage_size_large).unwrap(),
+            );
             assert_eq!(
                 infos
                     .all_infos
@@ -754,7 +775,11 @@ pub mod tests {
             let max_storages = 1;
             for ideal_storage_size in [1, 2] {
                 let mut infos = create_test_infos(2);
-                test(&mut infos, max_storages, ideal_storage_size);
+                test(
+                    &mut infos,
+                    max_storages,
+                    NonZeroU64::new(ideal_storage_size).unwrap(),
+                );
                 assert_eq!(infos.all_infos.len(), 2);
             }
 
@@ -766,7 +791,11 @@ pub mod tests {
             let mut infos = create_test_infos(4);
             infos.all_infos[3].alive_bytes = ideal_storage_size_large;
             let max_storages = 3;
-            test(&mut infos, max_storages, ideal_storage_size_large);
+            test(
+                &mut infos,
+                max_storages,
+                NonZeroU64::new(ideal_storage_size_large).unwrap(),
+            );
             assert_eq!(
                 infos
                     .all_infos
@@ -898,7 +927,7 @@ pub mod tests {
                                 // 0 so that we combine everything with regard to the overall # of slots limit
                                 max_ancient_slots: 0,
                                 // this is irrelevant since the limit is artificially 0
-                                ideal_storage_size: 0,
+                                ideal_storage_size: NonZeroU64::new(1).unwrap(),
                             };
                             infos.filter_ancient_slots(&tuning);
                         }
