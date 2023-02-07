@@ -1,2 +1,1 @@
-struct TransactionRunner {
-}
+struct TransactionRunner(Bank);
