@@ -125,6 +125,16 @@ pub struct LoadedPrograms {
     entries: HashMap<Pubkey, Vec<Arc<LoadedProgram>>>,
 }
 
+#[cfg(RUSTC_WITH_SPECIALIZATION)]
+impl solana_frozen_abi::abi_example::AbiExample for LoadedPrograms {
+    fn example() -> Self {
+        // Delegate AbiExample impl to Default before going deep and stuck with
+        // not easily impl-able Arc<dyn Executor> due to rust's coherence issue
+        // This is safe because LoadedPrograms isn't serializable by definition.
+        Self::default()
+    }
+}
+
 impl LoadedPrograms {
     /// Inserts a single entry
     pub fn insert_entry(&mut self, key: Pubkey, entry: LoadedProgram) -> bool {
