@@ -7051,7 +7051,7 @@ dependencies = [
 name = "solana-transaction-runner"
 version = "1.16.0"
 dependencies = [
- "solana-sdk 1.16.0",
+ "solana-runtime",
 ]
 
 [[package]]
