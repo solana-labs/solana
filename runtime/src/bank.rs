@@ -948,6 +948,14 @@ impl AbiExample for BuiltinPrograms {
 #[derive(Clone, Debug)]
 struct RunnerContext {
     bank: Arc<Bank>,
+    // poh callback
+    // tx status writer
+}
+
+impl RunnerContext {
+    fn slot(&self) -> Slot {
+        self.bank.slo()
+    }
 }
 
 struct SchedulerPool<C> {
@@ -1353,7 +1361,6 @@ impl Scheduler<ExecuteTimings> {
                 use variant_counter::VariantCount;
                 let mut transaction_error_counts = TransactionError::counter();
                 let (mut skipped, mut succeeded) = (0, 0);
-                let mut last_slot = None;
                 let (mut latest_checkpoint, mut latest_runner_context) = (None::<Arc<solana_scheduler::Checkpoint<_, _>>>, None);
 
                 loop {
@@ -1367,7 +1374,6 @@ impl Scheduler<ExecuteTimings> {
                     match r {
                         solana_scheduler::ExaminablePayload(solana_scheduler::Flushable::Payload((mut ee, timings))) => {
                             cumulative_timings.accumulate(&timings);
-                            last_slot = Some(ee.task.slot);
 
                             if send_metrics && ee.finish_time.is_some() {
                                 let sig = ee.task.tx.0.signature().to_string();
@@ -1432,10 +1438,9 @@ impl Scheduler<ExecuteTimings> {
                             drop(ee);
                         },
                         solana_scheduler::ExaminablePayload(solana_scheduler::Flushable::Flush(checkpoint)) => {
-                            info!("post_execution_handler: slot: {last_slot:?} {:?}", transaction_error_counts.aggregate().into_iter().chain([("succeeded", succeeded), ("skipped", skipped)].into_iter()).filter(|&(k, v)| v > 0).collect::<std::collections::BTreeMap<_, _>>());
+                            info!("post_execution_handler: slot: {:?} {:?}", latest_runner_context.slot(), transaction_error_counts.aggregate().into_iter().chain([("succeeded", succeeded), ("skipped", skipped)].into_iter()).filter(|&(k, v)| v > 0).collect::<std::collections::BTreeMap<_, _>>());
                             transaction_error_counts.reset();
                             (succeeded, skipped) = (0, 0);
-                            last_slot = None;
                             checkpoint.wait_for_restart(Some(std::mem::take(&mut cumulative_timings)));
                             latest_checkpoint = Some(checkpoint);
                         },
