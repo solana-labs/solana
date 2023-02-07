@@ -946,7 +946,7 @@ impl AbiExample for BuiltinPrograms {
 }
 
 struct SchedulerPool<C> {
-    schedulers: Vec<Arc<Scheduler<C>>>,
+    schedulers: Vec<Box<Scheduler<C>>>,
 }
 
 impl SchedulerPool<ExecuteTimings> {
@@ -958,10 +958,10 @@ impl SchedulerPool<ExecuteTimings> {
 
     fn create(&mut self) {
         self.schedulers
-            .push(Arc::new(Scheduler::<ExecuteTimings>::default2()));
+            .push(Box::new(Scheduler::<ExecuteTimings>::default2()));
     }
 
-    fn take_from_pool(&mut self) -> Arc<Scheduler<ExecuteTimings>> {
+    fn take_from_pool(&mut self) -> Box<Scheduler<ExecuteTimings>> {
         if let Some(scheduler) = self.schedulers.pop() {
             trace!(
                 "SchedulerPool: id_{:016x} is taken... len: {} => {}",
@@ -976,14 +976,13 @@ impl SchedulerPool<ExecuteTimings> {
         }
     }
 
-    fn return_to_pool(&mut self, scheduler: Arc<Scheduler<ExecuteTimings>>) {
+    fn return_to_pool(&mut self, scheduler: Box<Scheduler<ExecuteTimings>>) {
         trace!(
             "SchedulerPool: id_{:016x} is returned... len: {} => {}",
             scheduler.random_id,
             self.schedulers.len(),
             self.schedulers.len() + 1
         );
-        assert_eq!(1, Arc::strong_count(&scheduler));
         assert!(scheduler.collected_results.lock().unwrap().is_empty());
         assert!(scheduler.bank.read().unwrap().is_none());
         assert_eq!(scheduler.slot.load(std::sync::atomic::Ordering::SeqCst), 0);
