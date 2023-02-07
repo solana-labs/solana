@@ -985,7 +985,7 @@ impl<C> ChannelBackedTaskQueue<C> {
     }
 }
 
-impl<C> TaskQueueReader<C> for ChannelBackedTaskQueue<C> {
+impl<C, B> TaskQueueReader<C, B> for ChannelBackedTaskQueue<C, B> {
     #[inline(never)]
     fn add_to_schedule(&mut self, unique_weight: UniqueWeight, task: TaskInQueue) {
         self.buffer(task)
@@ -1003,7 +1003,7 @@ impl<C> TaskQueueReader<C> for ChannelBackedTaskQueue<C> {
         self.task_count_hint() == 0
     }
 
-    fn take_buffered_flush(&mut self) -> Option<std::sync::Arc<Checkpoint<C>>> {
+    fn take_buffered_flush(&mut self) -> Option<std::sync::Arc<Checkpoint<C, B>>> {
         self.buffered_flush.take()
     }
 
