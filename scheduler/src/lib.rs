@@ -934,7 +934,7 @@ trait TaskQueueReader<C> {
     fn is_backed_by_channel(&self) -> bool;
 }
 
-impl<C> TaskQueueReader<C> for TaskQueue {
+impl<C, B> TaskQueueReader<C, B> for TaskQueue {
     #[inline(never)]
     fn add_to_schedule(&mut self, unique_weight: UniqueWeight, task: TaskInQueue) {
         //trace!("TaskQueue::add(): {:?}", unique_weight);
@@ -955,7 +955,7 @@ impl<C> TaskQueueReader<C> for TaskQueue {
         self.tasks.is_empty()
     }
 
-    fn take_buffered_flush(&mut self) -> Option<std::sync::Arc<Checkpoint<C>>> {
+    fn take_buffered_flush(&mut self) -> Option<std::sync::Arc<Checkpoint<C, B>>> {
         None
     }
 
