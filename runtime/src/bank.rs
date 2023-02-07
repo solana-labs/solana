@@ -1512,7 +1512,7 @@ impl Scheduler<ExecuteTimings> {
 }
 
 impl<C> Scheduler<C> {
-    fn gracefully_stop(&self) -> Result<()> {
+    fn gracefully_stop(&mut self) -> Result<()> {
         if self
             .graceful_stop_initiated
             .load(std::sync::atomic::Ordering::SeqCst)
