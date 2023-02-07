@@ -1352,11 +1352,15 @@ impl Scheduler<ExecuteTimings> {
                 let mut transaction_error_counts = TransactionError::counter();
                 let (mut skipped, mut succeeded) = (0, 0);
                 let mut last_slot = None;
+                let mut latest_checkpoint = None;
 
                 loop {
                 while let Ok(r) = retired_ee_receiver.recv_timeout(std::time::Duration::from_millis(20))
                 {
                     use crate::transaction_priority_details::GetTransactionPriorityDetails;
+                    if let Some(latest_checkpoint) = latest_checkpoint.take() {
+                        latest_context = latest_checkpoint.clone_context_value();
+                    }
 
                     match r {
                         solana_scheduler::ExaminablePayload(solana_scheduler::Flushable::Payload((mut ee, timings))) => {
@@ -1431,6 +1435,7 @@ impl Scheduler<ExecuteTimings> {
                             (succeeded, skipped) = (0, 0);
                             last_slot = None;
                             checkpoint.wait_for_restart(Some(std::mem::take(&mut cumulative_timings)));
+                            latest_checkpoint = Some(checkpoint);
                         },
                     }
                 }
