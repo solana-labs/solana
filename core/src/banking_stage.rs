@@ -781,10 +781,6 @@ impl BankingStage {
         let mut starting_transaction_index = None;
 
         if !transactions.is_empty() {
-            let num_to_record = transactions.len();
-            inc_new_counter_info!("banking_stage-record_count", 1);
-            inc_new_counter_info!("banking_stage-record_transactions", num_to_record);
-
             let (hash, hash_time) = measure!(hash_transactions(&transactions), "hash");
             record_transactions_timings.hash_us = hash_time.as_us();
 
@@ -797,11 +793,6 @@ impl BankingStage {
                     starting_transaction_index = starting_index;
                 }
                 Err(PohRecorderError::MaxHeightReached) => {
-                    inc_new_counter_info!("banking_stage-max_height_reached", 1);
-                    inc_new_counter_info!(
-                        "banking_stage-max_height_reached_num_to_commit",
-                        num_to_record
-                    );
                     return RecordTransactionsSummary {
                         record_transactions_timings,
                         result: Err(PohRecorderError::MaxHeightReached),
@@ -890,6 +881,13 @@ impl BankingStage {
         let (freeze_lock, freeze_lock_time) = measure!(bank.freeze_lock(), "freeze_lock");
         execute_and_commit_timings.freeze_lock_us = freeze_lock_time.as_us();
 
+        if !executed_transactions.is_empty() {
+            inc_new_counter_info!("banking_stage-record_count", 1);
+            inc_new_counter_info!(
+                "banking_stage-record_transactions",
+                executed_transactions_count
+            );
+        }
         let (record_transactions_summary, record_time) = measure!(
             Self::record_transactions(bank.slot(), executed_transactions, poh),
             "record_transactions",
@@ -907,8 +905,9 @@ impl BankingStage {
         };
 
         if let Err(recorder_err) = record_transactions_result {
+            inc_new_counter_info!("banking_stage-max_height_reached", 1);
             inc_new_counter_info!(
-                "banking_stage-record_transactions_retryable_record_txs",
+                "banking_stage-max_height_reached_num_to_commit",
                 executed_transactions_count
             );
 
