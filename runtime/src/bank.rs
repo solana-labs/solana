@@ -945,7 +945,7 @@ impl AbiExample for BuiltinPrograms {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 struct RunnerContext;
 
 struct SchedulerPool<C> {
