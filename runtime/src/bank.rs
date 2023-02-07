@@ -1034,7 +1034,7 @@ struct Scheduler<C> {
     bank: std::sync::Arc<std::sync::RwLock<std::option::Option<std::sync::Weak<Bank>>>>,
     slot: AtomicU64,
     commit_status: Arc<CommitStatus>,
-    last_checkpoint: Option<Arc<solana_scheduler::Checkpoint<C>>>,
+    current_checkpoint: Option<Arc<solana_scheduler::Checkpoint<C>>>,
 }
 
 impl<C> Scheduler<C> {
@@ -1501,7 +1501,7 @@ impl Scheduler<ExecuteTimings> {
             bank,
             slot: Default::default(),
             commit_status,
-            last_checkpoint: None,
+            current_checkpoint: None,
         };
         info!(
             "scheduler: id_{:016x} setup done with {}us",
@@ -1545,7 +1545,7 @@ impl<C> Scheduler<C> {
             .unwrap();
         checkpoint.wait_for_restart(None);
         let r = checkpoint.take_restart_value();
-        self.last_checkpoint = Some(checkpoint);
+        self.current_checkpoint = Some(checkpoint);
         self.collected_results.lock().unwrap().push(Ok(r));
         {
             *self.bank.write().unwrap() = None;
