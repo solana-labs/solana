@@ -970,8 +970,8 @@ struct ChannelBackedTaskQueue<C, B> {
     buffered_flush: Option<std::sync::Arc<Checkpoint<C, B>>>,
 }
 
-impl<C> ChannelBackedTaskQueue<C> {
-    fn new(channel: &crossbeam_channel::Receiver<SchedulablePayload<C>>) -> Self {
+impl<C, B> ChannelBackedTaskQueue<C, B> {
+    fn new(channel: &crossbeam_channel::Receiver<SchedulablePayload<C, B>>) -> Self {
         Self {
             channel: channel.clone(),
             buffered_task: None,
