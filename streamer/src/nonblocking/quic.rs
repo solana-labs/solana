@@ -535,12 +535,8 @@ async fn patch_batch_sender(packet_sender: Sender<PacketBatch>,
             if exit.load(Ordering::Relaxed) {
                 return;
             }
-            if let Ok(recv_result) = tokio::time::timeout(
-                Duration::from_micros(250),
-                packet_receiver.recv(),
-            )
-            .await {
-                if let Ok((meta, bytes, offset, end_of_chunk)) = recv_result {
+
+                if let Ok((meta, bytes, offset, end_of_chunk)) = packet_receiver.try_recv() {
                     let mut packet = Packet::default();
                     *packet.meta_mut() = meta;
                     // todo: pretty sure there's an extend_with function or something that allows for 1 less
@@ -550,7 +546,9 @@ async fn patch_batch_sender(packet_sender: Sender<PacketBatch>,
                     packet_batch[i].buffer_mut()[offset as usize..end_of_chunk]
                     .copy_from_slice(&bytes);
                 }
-            }
+                else {
+                    sleep(Duration::from_micros(250)).await;
+                }
             let elapsed = last_sent.elapsed();
             if packet_batch.len() >= 64 || (!packet_batch.is_empty() && elapsed.as_millis() >= 1) {
                 // todo: handle this error
