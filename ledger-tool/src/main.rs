@@ -282,7 +282,7 @@ fn output_slot(
     }
 
     let (muxed_sender, muxed_receiver) =
-        crossbeam_channel::unbounded::<solana_scheduler::SchedulablePayload<()>>();
+        crossbeam_channel::unbounded::<solana_scheduler::SchedulablePayload<(), ()>>();
 
     // this should be target number of saturated cpu cores
     let lane_count = std::env::var("EXECUTION_LANE_COUNT")
