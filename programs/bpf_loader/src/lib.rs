@@ -174,7 +174,6 @@ fn create_executor_from_bytes(
     }
     Ok(Arc::new(BpfExecutor {
         verified_executable,
-        use_jit,
     }))
 }
 
@@ -1384,7 +1383,6 @@ fn process_loader_instruction(
 /// BPF Loader's Executor implementation
 pub struct BpfExecutor {
     verified_executable: VerifiedExecutable<RequisiteVerifier, InvokeContext<'static>>,
-    use_jit: bool,
 }
 
 // Well, implement Debug for solana_rbpf::vm::Executable in solana-rbpf...
@@ -1401,6 +1399,14 @@ impl Executor for BpfExecutor {
         let transaction_context = &invoke_context.transaction_context;
         let instruction_context = transaction_context.get_current_instruction_context()?;
         let program_id = *instruction_context.get_last_program_key(transaction_context)?;
+        #[cfg(any(target_os = "windows", not(target_arch = "x86_64")))]
+        let use_jit = false;
+        #[cfg(all(not(target_os = "windows"), target_arch = "x86_64"))]
+        let use_jit = self
+            .verified_executable
+            .get_executable()
+            .get_compiled_program()
+            .is_some();
 
         let mut serialize_time = Measure::start("serialize");
         let (parameter_bytes, regions, account_lengths) = serialize_parameters(
@@ -1434,7 +1440,7 @@ impl Executor for BpfExecutor {
 
             execute_time = Measure::start("execute");
             stable_log::program_invoke(&log_collector, &program_id, stack_height);
-            let (compute_units_consumed, result) = vm.execute_program(!self.use_jit);
+            let (compute_units_consumed, result) = vm.execute_program(!use_jit);
             drop(vm);
             ic_logger_msg!(
                 log_collector,
