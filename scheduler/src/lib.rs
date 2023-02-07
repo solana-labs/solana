@@ -2145,7 +2145,7 @@ pub struct ExaminablePayload<T, C>(pub Flushable<(Box<ExecutionEnvironment>, T),
 #[derive(Debug)]
 pub struct Checkpoint<T, B>(std::sync::Mutex<(usize, Option<T>, Option<B>)>, std::sync::Condvar);
 
-impl<T> Checkpoint<T> {
+impl<T, B> Checkpoint<T, B> {
     pub fn wait_for_restart(&self, maybe_given_restart_value: Option<T>) {
         let current_thread_name = std::thread::current().name().unwrap().to_string();
         let mut g = self.0.lock().unwrap();
