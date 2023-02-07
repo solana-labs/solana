@@ -2106,7 +2106,7 @@ impl ScheduleStage {
     }
 
     #[must_use]
-    pub fn run<T: Send, C>(
+    pub fn run<T: Send, C, B>(
         random_id: u64,
         max_executing_queue_count: usize,
         runnable_queue: &mut TaskQueue,
@@ -2116,7 +2116,7 @@ impl ScheduleStage {
         to_high_execute_substage: Option<&crossbeam_channel::Sender<ExecutablePayload>>,
         from_execute_substage: &crossbeam_channel::Receiver<UnlockablePayload<T>>,
         maybe_to_next_stage: Option<&crossbeam_channel::Sender<ExaminablePayload<T, C>>>, // assume nonblocking
-    ) -> Option<std::sync::Arc<Checkpoint<C>>> {
+    ) -> Option<std::sync::Arc<Checkpoint<C, B>>> {
         #[derive(Clone, Copy, Debug)]
         struct AtTopOfScheduleThread;
         unsafe impl AtScheduleThread for AtTopOfScheduleThread {}
