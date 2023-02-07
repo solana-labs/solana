@@ -924,13 +924,13 @@ enum ModeSpecificTaskQueue<C> {
     Replaying(ChannelBackedTaskQueue<C>),
 }
 
-#[enum_dispatch(ModeSpecificTaskQueue<C>)]
-trait TaskQueueReader<C> {
+#[enum_dispatch(ModeSpecificTaskQueue<C, B>)]
+trait TaskQueueReader<C, B> {
     fn add_to_schedule(&mut self, unique_weight: UniqueWeight, task: TaskInQueue);
     fn heaviest_entry_to_execute(&mut self) -> Option<TaskInQueue>;
     fn task_count_hint(&self) -> usize;
     fn has_no_task_hint(&self) -> bool;
-    fn take_buffered_flush(&mut self) -> Option<std::sync::Arc<Checkpoint<C>>>;
+    fn take_buffered_flush(&mut self) -> Option<std::sync::Arc<Checkpoint<C, B>>>;
     fn is_backed_by_channel(&self) -> bool;
 }
 
