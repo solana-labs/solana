@@ -2143,7 +2143,7 @@ pub struct UnlockablePayload<T>(pub Box<ExecutionEnvironment>, pub T);
 pub struct ExaminablePayload<T, C>(pub Flushable<(Box<ExecutionEnvironment>, T), C>);
 
 #[derive(Debug)]
-pub struct Checkpoint<T>(std::sync::Mutex<(usize, Option<T>)>, std::sync::Condvar);
+pub struct Checkpoint<T, B>(std::sync::Mutex<(usize, Option<T>, Option<B>)>, std::sync::Condvar);
 
 impl<T> Checkpoint<T> {
     pub fn wait_for_restart(&self, maybe_given_restart_value: Option<T>) {
