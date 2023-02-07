@@ -1793,7 +1793,7 @@ pub struct Bank {
 
     pub incremental_snapshot_persistence: Option<BankIncrementalSnapshotPersistence>,
 
-    scheduler2: RwLock<Option<Arc<Scheduler<ExecuteTimings>>>>,
+    scheduler2: RwLock<Option<Box<Scheduler<ExecuteTimings>>>>,
     commit_mode: AtomicCommitMode,
     pub blockhash_override: RwLock<Option<Hash>>,
 }
