@@ -4,15 +4,17 @@ use {
         streamer::StakedNodes,
         tls_certificates::get_pubkey_from_tls_certificate,
     },
+    async_channel::{Sender as AsyncSender, Receiver as AsyncReceiver, unbounded},
     crossbeam_channel::Sender,
     indexmap::map::{Entry, IndexMap},
     percentage::Percentage,
     quinn::{Connecting, Connection, Endpoint, EndpointConfig, TokioRuntime, VarInt},
     quinn_proto::VarIntBoundsExceeded,
+    bytes::Bytes,
     rand::{thread_rng, Rng},
     solana_perf::packet::PacketBatch,
     solana_sdk::{
-        packet::{Packet, PACKET_DATA_SIZE},
+        packet::{Packet, PACKET_DATA_SIZE, Meta},
         pubkey::Pubkey,
         quic::{
             QUIC_CONNECTION_HANDSHAKE_TIMEOUT_MS, QUIC_MAX_STAKED_CONCURRENT_STREAMS,
@@ -108,6 +110,8 @@ pub async fn run_server(
     ));
     let staked_connection_table: Arc<Mutex<ConnectionTable>> =
         Arc::new(Mutex::new(ConnectionTable::new(ConnectionPeerType::Staked)));
+    let (sender, receiver) = unbounded();
+    tokio::spawn(patch_batch_sender(packet_sender, receiver, exit.clone(), stats.clone()));
     while !exit.load(Ordering::Relaxed) {
         const WAIT_FOR_CONNECTION_TIMEOUT_MS: u64 = 1000;
         const WAIT_BETWEEN_NEW_CONNECTIONS_US: u64 = 1000;
@@ -128,7 +132,7 @@ pub async fn run_server(
                 connection,
                 unstaked_connection_table.clone(),
                 staked_connection_table.clone(),
-                packet_sender.clone(),
+                sender.clone(),
                 max_connections_per_peer,
                 staked_nodes.clone(),
                 max_staked_connections,
@@ -229,7 +233,7 @@ enum ConnectionHandlerError {
 }
 
 struct NewConnectionHandlerParams {
-    packet_sender: Sender<PacketBatch>,
+    packet_sender: AsyncSender<(Meta, Bytes, u64, usize)>,
     remote_pubkey: Option<Pubkey>,
     stake: u64,
     total_stake: u64,
@@ -241,7 +245,7 @@ struct NewConnectionHandlerParams {
 
 impl NewConnectionHandlerParams {
     fn new_unstaked(
-        packet_sender: Sender<PacketBatch>,
+        packet_sender: AsyncSender<(Meta, Bytes, u64, usize)>,
         max_connections_per_peer: usize,
         stats: Arc<StreamStats>,
     ) -> NewConnectionHandlerParams {
@@ -415,7 +419,7 @@ async fn setup_connection(
     connecting: Connecting,
     unstaked_connection_table: Arc<Mutex<ConnectionTable>>,
     staked_connection_table: Arc<Mutex<ConnectionTable>>,
-    packet_sender: Sender<PacketBatch>,
+    packet_sender: AsyncSender<(Meta, Bytes, u64, usize)>,
     max_connections_per_peer: usize,
     staked_nodes: Arc<RwLock<StakedNodes>>,
     max_staked_connections: usize,
@@ -519,10 +523,60 @@ async fn setup_connection(
     }
 }
 
+async fn patch_batch_sender(packet_sender: Sender<PacketBatch>, 
+    packet_receiver: AsyncReceiver<(Meta, Bytes, u64, usize)>, 
+    exit: Arc<AtomicBool>,
+    stats: Arc<StreamStats>,) {
+    loop {
+        let mut packet_batch = PacketBatch::with_capacity(64);
+        //todo: perhaps we should be timing from the first time the packet batch becomes non-zero length?
+        let last_sent = Instant::now();
+        loop {
+            if exit.load(Ordering::Relaxed) {
+                return;
+            }
+            if let Ok(recv_result) = tokio::time::timeout(
+                Duration::from_micros(250),
+                packet_receiver.recv(),
+            )
+            .await {
+                if let Ok((meta, bytes, offset, end_of_chunk)) = recv_result {
+                    let mut packet = Packet::default();
+                    *packet.meta_mut() = meta;
+                    // todo: pretty sure there's an extend_with function or something that allows for 1 less
+                    // junk copy of the packet's data
+                    packet_batch.push(packet);
+                    let i = packet_batch.len() - 1;
+                    packet_batch[i].buffer_mut()[offset as usize..end_of_chunk]
+                    .copy_from_slice(&bytes);
+                }
+            }
+            let elapsed = last_sent.elapsed();
+            if packet_batch.len() >= 64 || (!packet_batch.is_empty() && elapsed.as_millis() >= 1) {
+                // todo: handle this error
+                let len = packet_batch.len();
+
+                if let Err(e) = packet_sender.send(packet_batch) {
+                    stats
+                        .total_packet_batch_send_err
+                        .fetch_add(1, Ordering::Relaxed);
+                    info!("send error: {}", e);
+                } else {
+                    stats
+                        .total_packet_batches_sent
+                        .fetch_add(1, Ordering::Relaxed);
+                    trace!("sent {} packet batch", len);
+                }
+                break;
+            }
+        }
+    }
+}
+
 #[allow(clippy::too_many_arguments)]
 async fn handle_connection(
     connection: Connection,
-    packet_sender: Sender<PacketBatch>,
+    packet_sender: AsyncSender<(Meta, Bytes, u64, usize)>,
     remote_addr: SocketAddr,
     remote_pubkey: Option<Pubkey>,
     last_update: Arc<AtomicU64>,
@@ -573,14 +627,14 @@ async fn handle_connection(
                             .await
                             {
                                 if handle_chunk(
-                                    &chunk,
+                                    chunk,
                                     &mut maybe_batch,
                                     &remote_addr,
                                     &packet_sender,
                                     stats.clone(),
                                     stake,
                                     peer_type,
-                                ) {
+                                ).await {
                                     last_update.store(timing::timestamp(), Ordering::Relaxed);
                                     break;
                                 }
@@ -625,11 +679,11 @@ async fn handle_connection(
 }
 
 // Return true if the server should drop the stream
-fn handle_chunk(
-    chunk: &Result<Option<quinn::Chunk>, quinn::ReadError>,
+async fn handle_chunk(
+    chunk: Result<Option<quinn::Chunk>, quinn::ReadError>,
     maybe_batch: &mut Option<PacketBatch>,
     remote_addr: &SocketAddr,
-    packet_sender: &Sender<PacketBatch>,
+    packet_sender: &AsyncSender<(Meta, Bytes, u64, usize)>,
     stats: Arc<StreamStats>,
     stake: u64,
     peer_type: ConnectionPeerType,
@@ -657,45 +711,36 @@ fn handle_chunk(
                 }
 
                 // chunk looks valid
-                if maybe_batch.is_none() {
-                    let mut batch = PacketBatch::with_capacity(1);
-                    let mut packet = Packet::default();
-                    packet.meta_mut().set_socket_addr(remote_addr);
-                    packet.meta_mut().sender_stake = stake;
-                    batch.push(packet);
-                    *maybe_batch = Some(batch);
-                    stats
-                        .total_packets_allocated
-                        .fetch_add(1, Ordering::Relaxed);
-                }
 
-                if let Some(batch) = maybe_batch.as_mut() {
-                    let end_of_chunk = match (chunk.offset as usize).checked_add(chunk.bytes.len())
-                    {
-                        Some(end) => end,
-                        None => return true,
-                    };
-                    batch[0].buffer_mut()[chunk.offset as usize..end_of_chunk]
-                        .copy_from_slice(&chunk.bytes);
-                    batch[0].meta_mut().size = std::cmp::max(batch[0].meta().size, end_of_chunk);
-                    stats.total_chunks_received.fetch_add(1, Ordering::Relaxed);
-                    match peer_type {
-                        ConnectionPeerType::Staked => {
-                            stats
-                                .total_staked_chunks_received
-                                .fetch_add(1, Ordering::Relaxed);
-                        }
-                        ConnectionPeerType::Unstaked => {
-                            stats
-                                .total_unstaked_chunks_received
-                                .fetch_add(1, Ordering::Relaxed);
-                        }
+                let mut meta = Meta::default();
+                meta.set_socket_addr(remote_addr);
+                meta.sender_stake = stake;
+                let offset = chunk.offset;
+                let end_of_chunk = match (chunk.offset as usize).checked_add(chunk.bytes.len())
+                {
+                    Some(end) => end,
+                    None => return true,
+                };
+                if let Err(err) = packet_sender.send((meta, chunk.bytes, offset, end_of_chunk)).await {
+                    info!("handle_chunk send error {}", err);
+                }
+                
+                match peer_type {
+                    ConnectionPeerType::Staked => {
+                        stats
+                            .total_staked_chunks_received
+                            .fetch_add(1, Ordering::Relaxed);
+                    }
+                    ConnectionPeerType::Unstaked => {
+                        stats
+                            .total_unstaked_chunks_received
+                            .fetch_add(1, Ordering::Relaxed);
                     }
                 }
             } else {
                 trace!("chunk is none");
                 // done receiving chunks
-                if let Some(batch) = maybe_batch.take() {
+                /*if let Some(batch) = maybe_batch.take() {
                     let len = batch[0].meta().size;
                     if let Err(e) = packet_sender.send(batch) {
                         stats
@@ -708,11 +753,12 @@ fn handle_chunk(
                             .fetch_add(1, Ordering::Relaxed);
                         trace!("sent {} byte packet", len);
                     }
+                    //todo: re-add stats counting empty streams
                 } else {
                     stats
                         .total_packet_batches_none
                         .fetch_add(1, Ordering::Relaxed);
-                }
+                }*/
                 return true;
             }
         }
