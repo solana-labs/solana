@@ -1226,7 +1226,7 @@ impl Scheduler<ExecuteTimings> {
                 let (last_blockhash, lamports_per_signature) =
                     bank.last_blockhash_and_lamports_per_signature();
 
-                let commit_mode = latest_runner_context.as_ref().unwrap().mode();
+                let commit_mode = latest_runner_context.as_ref().unwrap().mode;
                 let commited_first_transaction_index = match commit_mode {
                     solana_scheduler::Mode::Replaying => {
                         //info!("replaying commit! {slot}");
