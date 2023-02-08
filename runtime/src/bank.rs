@@ -998,7 +998,6 @@ impl SchedulerPool<ExecuteTimings> {
         );
         assert!(scheduler.collected_results.lock().unwrap().is_empty());
         assert!(scheduler.bank.read().unwrap().is_none());
-        assert_eq!(scheduler.slot.load(std::sync::atomic::Ordering::SeqCst), 0);
         assert!(scheduler
             .graceful_stop_initiated
             .load(std::sync::atomic::Ordering::SeqCst));
