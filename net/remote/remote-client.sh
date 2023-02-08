@@ -72,10 +72,10 @@ solana-bench-tps)
 
   if ${TPU_CLIENT}; then
     args+=(--use-tpu-client)
-    args+=(--url "$entrypointIp:8899")
+    args+=(--url "http://$entrypointIp:8899")
   elif ${RPC_CLIENT}; then
     args+=(--use-rpc-client)
-    args+=(--url "$entrypointIp:8899")
+    args+=(--url "http://$entrypointIp:8899")
   else
     args+=(--entrypoint "$entrypointIp:8001")
   fi
