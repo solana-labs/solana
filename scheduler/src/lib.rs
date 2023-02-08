@@ -1662,6 +1662,7 @@ impl ScheduleStage {
     #[must_use]
     fn _run<'a, AST: AtScheduleThread, T: Send, C, B>(
         ast: AST,
+        checkpoint: &mut Option<std::sync::Arc<Checkpoint<C, B>>>,
         executing_thread_count: usize,
         _runnable_queue: &mut TaskQueue,
         address_book: &mut AddressBook,
@@ -1772,6 +1773,8 @@ impl ScheduleStage {
             .parse::<usize>()
             .unwrap();
 
+        let mut runner_context = None;
+
         loop {
             // no execution at all => absolutely no active locks
             let select_skipped = from_disconnected && executing_queue_count == 0;
@@ -1837,6 +1840,9 @@ impl ScheduleStage {
                                        format!("")
                                    };
                                    info!("schedule_once:initial {} {slot_label}{mode_label}", log_prefix());
+                                   if let Some(checkpoint) = checkpoint.take() {
+                                       runner_context = checkpoint.clone_context_value();
+                                   }
                                }
                                runnable_queue.add_to_schedule(task.unique_weight, task)
                            },
@@ -2128,6 +2134,7 @@ impl ScheduleStage {
 
     #[must_use]
     pub fn run<T: Send, C, B>(
+        checkpoint: &mut Option<std::sync::Arc<Checkpoint<C, B>>>,
         max_executing_queue_count: usize,
         runnable_queue: &mut TaskQueue,
         address_book: &mut AddressBook,
@@ -2144,6 +2151,7 @@ impl ScheduleStage {
 
         Self::_run::<AtTopOfScheduleThread, T, C, B>(
             AtTopOfScheduleThread,
+            checkpoint,
             max_executing_queue_count,
             runnable_queue,
             address_book,
