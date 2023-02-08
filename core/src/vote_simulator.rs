@@ -276,34 +276,6 @@ pub fn initialize_state(
     validator_keypairs_map: &HashMap<Pubkey, ValidatorVoteKeypairs>,
     stake: u64,
 ) -> (BankForks, ProgressMap, HeaviestSubtreeForkChoice) {
-    let validator_keypairs: Vec<_> = validator_keypairs_map.values().collect();
-    let GenesisConfigInfo {
-        mut genesis_config,
-        mint_keypair,
-        ..
-    } = create_genesis_config_with_vote_accounts(
-        1_000_000_000,
-        &validator_keypairs,
-        vec![stake; validator_keypairs.len()],
-    );
-
-    genesis_config.poh_config.hashes_per_tick = Some(2);
-    let bank0 = Bank::new_for_tests(&genesis_config);
-
-    for pubkey in validator_keypairs_map.keys() {
-        bank0.transfer(10_000, &mint_keypair, pubkey).unwrap();
-    }
-
-    while bank0.tick_height() < bank0.max_tick_height() {
-        bank0.register_tick(&Hash::new_unique());
-    }
-    bank0.freeze();
-    let mut progress = ProgressMap::default();
-    progress.insert(
-        0,
-        ForkProgress::new_from_bank(&bank0, bank0.collector_id(), &Pubkey::default(), None, 0, 0),
-    );
-    let bank_forks = BankForks::new(bank0);
-    let heaviest_subtree_fork_choice = HeaviestSubtreeForkChoice::new_from_bank_forks(&bank_forks);
-    (bank_forks, progress, heaviest_subtree_fork_choice)
+    panic!();
 }
+
