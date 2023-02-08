@@ -68,6 +68,7 @@ seconds)
 4. Timeout for notification message on client side : 10s
 5. Max number of transaction per connection : 10000
 
+**This addition is over the unidirectional stream connection, so that it will support older clients too.**
 
 ## In working
 
