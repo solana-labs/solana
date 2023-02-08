@@ -176,7 +176,7 @@ impl<'a> StoreTo<'a> {
     }
 }
 
-#[derive(Default)]
+#[derive(Default, Debug)]
 /// hold alive accounts and bytes used by those accounts
 /// alive means in the accounts index
 pub(crate) struct AliveAccounts<'a> {
@@ -185,6 +185,7 @@ pub(crate) struct AliveAccounts<'a> {
 }
 
 /// separate pubkeys into those with a single refcount and those with > 1 refcount
+#[derive(Debug)]
 pub(crate) struct ShrinkCollectAliveSeparatedByRefs<'a> {
     pub(crate) one_ref: AliveAccounts<'a>,
     pub(crate) many_refs: AliveAccounts<'a>,
@@ -428,6 +429,7 @@ impl AncientSlotPubkeys {
     }
 }
 
+#[derive(Debug)]
 pub(crate) struct ShrinkCollect<'a, T: ShrinkCollectRefs<'a>> {
     pub(crate) slot: Slot,
     pub(crate) capacity: u64,
