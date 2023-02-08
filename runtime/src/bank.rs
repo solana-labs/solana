@@ -4374,7 +4374,7 @@ impl Bank {
                     .unwrap()
                     .push(last_result);
                 drop(s2);
-                self.sync_transaction_runner_context();
+                self.resync_transaction_runner_context();
                 //*self.scheduler.write().unwrap() = new_scheduler;
                 w_blockhash_queue
             },
@@ -6882,10 +6882,14 @@ impl Bank {
         }
     }
 
-    pub fn sync_transaction_runner_context(self: &Arc<Self>) {
+    pub fn sync_transaction_runner_context(self: &Arc<Self>, mode: solana_scheduler::Mode) {
         let s = self.scheduler2.read().unwrap();
         let scheduler = s.as_ref().unwrap();
-        scheduler.replace_transaction_runner_context(self.clone(), panic!());
+        scheduler.replace_transaction_runner_context(self.clone(), mode);
+    }
+
+    pub fn resync_transaction_runner_context(self: &Arc<Self>) {
+        self.sync_transaction_runner_context(self, panic!())
     }
 
     pub fn commit_mode(&self) -> CommitMode {
