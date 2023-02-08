@@ -6909,8 +6909,7 @@ impl Bank {
     }
 
     pub fn sync_transaction_runner_context(self: &Arc<Self>) {
-        let s = self.scheduler2.read().unwrap();
-        let scheduler = s.as_ref().unwrap();
+        let scheduler = self.scheduler2.read().unwrap().as_ref().unwrap();
         scheduler.replace_transaction_runner_context(self.clone());
     }
 
