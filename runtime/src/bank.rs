@@ -1481,7 +1481,7 @@ impl Scheduler<ExecuteTimings> {
                     .parse::<usize>()
                     .unwrap();
 
-                let (mut latest_checkpoint, mut latest_runner_context) = (initial_checkpoint, None::<RunnerContext>);
+                let (mut latest_checkpoint, mut latest_runner_context) = (Some(initial_checkpoint), None::<RunnerContext>);
 
                 loop {
                     if let Some(latest_checkpoint) = latest_checkpoint.take() {
