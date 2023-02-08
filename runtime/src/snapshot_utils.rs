@@ -930,7 +930,7 @@ fn get_snapshot_accounts_hardlink_dir(
 /// and id.
 fn hard_link_storages_to_snapshot(
     bank_snapshot_dir: impl AsRef<Path>,
-    bank_slot: u64,
+    bank_slot: Slot,
     snapshot_storages: &[Arc<AccountStorageEntry>],
 ) -> Result<()> {
     let accounts_hardlinks_dir = bank_snapshot_dir.as_ref().join("accounts_hardlinks");
@@ -2344,13 +2344,16 @@ pub fn verify_snapshot_archive<P, Q, R>(
 }
 
 /// Remove outdated bank snapshots
-pub fn purge_old_bank_snapshots(bank_snapshots_dir: impl AsRef<Path>, num_retain: usize) {
+pub fn purge_old_bank_snapshots(
+    bank_snapshots_dir: impl AsRef<Path>,
+    num_bank_snapshots_to_retain: usize,
+) {
     let do_purge = |mut bank_snapshots: Vec<BankSnapshotInfo>| {
         bank_snapshots.sort_unstable();
         bank_snapshots
             .into_iter()
             .rev()
-            .skip(num_retain)
+            .skip(num_bank_snapshots_to_retain)
             .for_each(|bank_snapshot| {
                 let r = remove_bank_snapshot(bank_snapshot.slot, &bank_snapshots_dir);
                 if r.is_err() {
