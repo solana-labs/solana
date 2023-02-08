@@ -1154,7 +1154,6 @@ impl Scheduler<ExecuteTimings> {
         let (processed_ee_sender, processed_ee_receiver) = crossbeam_channel::unbounded();
         let (retired_ee_sender, retired_ee_receiver) = crossbeam_channel::unbounded();
 
-        let initial_checkpoint = Self::new_checkpoint();
 
         let bank = Arc::new(std::sync::RwLock::new(None::<std::sync::Weak<Bank>>));
 
@@ -1163,6 +1162,7 @@ impl Scheduler<ExecuteTimings> {
             .parse::<usize>()
             .unwrap();
         let thread_count = 3 + executing_thread_count * 2;
+        let initial_checkpoint = Self::new_checkpoint(thread_count);
 
         let send_metrics = std::env::var("SOLANA_TRANSACTION_TIMINGS").is_ok();
 
