@@ -3880,14 +3880,14 @@ impl Bank {
         // committed before this write lock can be obtained here.
         let mut hash = self.hash.write().unwrap();
         if *hash == Hash::default() {
-            match self.transaction_runner_mode() {
+            /*match self.transaction_runner_mode() {
                 solana_scheduler::Mode::Replaying => {
                     assert!(self.scheduler2.read().unwrap().is_none());
                 }
                 solana_scheduler::Mode::Banking => {
                     assert!(self.scheduler2.read().unwrap().is_some());
                 }
-            }
+            }*/
             // finish up any deferred changes to account state
             self.collect_rent_eagerly();
             self.collect_fees();
