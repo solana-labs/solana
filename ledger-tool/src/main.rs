@@ -294,7 +294,8 @@ fn output_slot(
         .parse::<usize>()
         .unwrap();
     //let (pre_execute_env_sender, pre_execute_env_receiver) = crossbeam_channel::bounded(lane_count * lane_channel_factor);
-    //let (pre_execute_env_sender, pre_execute_env_receiver) = crossbeam_channel::unbounded();
+    /*
+    let (pre_execute_env_sender, pre_execute_env_receiver) = crossbeam_channel::unbounded();
 
     //let (pre_execute_env_sender, pre_execute_env_receiver) = crossbeam_channel::unbounded();
     let (post_execute_env_sender, post_execute_env_receiver) = crossbeam_channel::unbounded();
@@ -384,6 +385,7 @@ fn output_slot(
             t2
         })
         .collect::<Vec<_>>();
+        */
 
     let depth = Arc::new(std::sync::atomic::AtomicUsize::default());
 
