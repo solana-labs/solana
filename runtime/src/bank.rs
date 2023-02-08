@@ -952,6 +952,12 @@ struct RunnerContext {
     // tx status writer
 }
 
+impl solana_scheduler::WithMode for RunnerContext {
+    fn mode(&self) -> solana_scheduler::Mode {
+        self.mode
+    }
+}
+
 impl RunnerContext {
     fn slot(&self) -> Slot {
         self.bank.as_ref().map(|b| b.slot()).unwrap_or(0)
