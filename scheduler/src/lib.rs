@@ -1915,7 +1915,7 @@ impl ScheduleStage {
                         if elapsed > std::time::Duration::from_millis(150) {
                             let delta = (processed_count - last_processed_count) as u128;
                             let elapsed2 = elapsed.as_micros();
-                            info!("schedule_once:interval id_{:016x} {slot:?} {mode:?} ch(prev: {}, exec: {}+{}|{}), r: {}, u/c: {}/{}, (imm+provi)/max: ({}+{})/{} s: {} l(s+f): {}+{} ({}txs/{}us={}tps)", random_id, (if from_disconnected { "-".to_string() } else { format!("{}", from_prev.len()) }), to_high_execute_substage.map(|t| format!("{}", t.len())).unwrap_or("-".into()), to_execute_substage.len(), from_exec.len(), runnable_queue.task_count_hint(), address_book.uncontended_task_ids.len(), contended_count, executing_queue_count, provisioning_tracker_count, max_executing_queue_count, address_book.stuck_tasks.len(), processed_count, failed_lock_count, delta, elapsed.as_micros(), 1_000_000_u128*delta/elapsed2);
+                            info!("schedule_once:interval {} {slot:?} {mode:?} ch(prev: {}, exec: {}+{}|{}), r: {}, u/c: {}/{}, (imm+provi)/max: ({}+{})/{} s: {} l(s+f): {}+{} ({}txs/{}us={}tps)", log_prefix(), (if from_disconnected { "-".to_string() } else { format!("{}", from_prev.len()) }), to_high_execute_substage.map(|t| format!("{}", t.len())).unwrap_or("-".into()), to_execute_substage.len(), from_exec.len(), runnable_queue.task_count_hint(), address_book.uncontended_task_ids.len(), contended_count, executing_queue_count, provisioning_tracker_count, max_executing_queue_count, address_book.stuck_tasks.len(), processed_count, failed_lock_count, delta, elapsed.as_micros(), 1_000_000_u128*delta/elapsed2);
                             (last_time, last_processed_count) =
                                 (Some(std::time::Instant::now()), processed_count);
                         }
@@ -1962,7 +1962,7 @@ impl ScheduleStage {
                         executing_queue_count = executing_queue_count.checked_add(1).unwrap();
                         to_execute_substage.send(ExecutablePayload(Flushable::Payload(ee))).unwrap();
                     }
-                    debug!("schedule_once id_{:016x} [R] ch(prev: {}, exec: {}+{}|{}), r: {}, u/c: {}/{}, (imm+provi)/max: ({}+{})/{} s: {} l(s+f): {}+{}", random_id, (if from_disconnected { "-".to_string() } else { format!("{}", from_prev.len()) }), to_high_execute_substage.map(|t| format!("{}", t.len())).unwrap_or("-".into()), to_execute_substage.len(), from_exec.len(), runnable_queue.task_count_hint(), address_book.uncontended_task_ids.len(), contended_count, executing_queue_count, provisioning_tracker_count, max_executing_queue_count, address_book.stuck_tasks.len(), processed_count, failed_lock_count);
+                    debug!("schedule_once {} [R] ch(prev: {}, exec: {}+{}|{}), r: {}, u/c: {}/{}, (imm+provi)/max: ({}+{})/{} s: {} l(s+f): {}+{}", log_prefix(), (if from_disconnected { "-".to_string() } else { format!("{}", from_prev.len()) }), to_high_execute_substage.map(|t| format!("{}", t.len())).unwrap_or("-".into()), to_execute_substage.len(), from_exec.len(), runnable_queue.task_count_hint(), address_book.uncontended_task_ids.len(), contended_count, executing_queue_count, provisioning_tracker_count, max_executing_queue_count, address_book.stuck_tasks.len(), processed_count, failed_lock_count);
 
                     interval_count += 1;
                     if interval_count % 100 == 0 {
@@ -1970,7 +1970,7 @@ impl ScheduleStage {
                         if elapsed > std::time::Duration::from_millis(150) {
                             let delta = (processed_count - last_processed_count) as u128;
                             let elapsed2 = elapsed.as_micros();
-                            info!("schedule_once:interval id_{:016x} {slot:?} {mode:?} ch(prev: {}, exec: {}+{}|{}), r: {}, u/c: {}/{}, (imm+provi)/max: ({}+{})/{} s: {} l(s+f): {}+{} ({}txs/{}us={}tps)", random_id, (if from_disconnected { "-".to_string() } else { format!("{}", from_prev.len()) }), to_high_execute_substage.map(|t| format!("{}", t.len())).unwrap_or("-".into()), to_execute_substage.len(), from_exec.len(), runnable_queue.task_count_hint(), address_book.uncontended_task_ids.len(), contended_count, executing_queue_count, provisioning_tracker_count, max_executing_queue_count, address_book.stuck_tasks.len(), processed_count, failed_lock_count, delta, elapsed.as_micros(), 1_000_000_u128*delta/elapsed2);
+                            info!("schedule_once:interval {} {slot:?} {mode:?} ch(prev: {}, exec: {}+{}|{}), r: {}, u/c: {}/{}, (imm+provi)/max: ({}+{})/{} s: {} l(s+f): {}+{} ({}txs/{}us={}tps)", log_prefix(), (if from_disconnected { "-".to_string() } else { format!("{}", from_prev.len()) }), to_high_execute_substage.map(|t| format!("{}", t.len())).unwrap_or("-".into()), to_execute_substage.len(), from_exec.len(), runnable_queue.task_count_hint(), address_book.uncontended_task_ids.len(), contended_count, executing_queue_count, provisioning_tracker_count, max_executing_queue_count, address_book.stuck_tasks.len(), processed_count, failed_lock_count, delta, elapsed.as_micros(), 1_000_000_u128*delta/elapsed2);
                             (last_time, last_processed_count) =
                                 (Some(std::time::Instant::now()), processed_count);
                         }
@@ -2068,7 +2068,7 @@ impl ScheduleStage {
             if select_skipped {
                 let task_count = runnable_queue.task_count_hint();
                 let uncontended_count = address_book.uncontended_task_ids.len();
-                assert!(executing_queue_count >= 1 || did_processed, "id_{random_id:016x} {slot:?} {mode:?} {executing_queue_count} >= 1 || {did_processed}, extra: ({task_count} {contended_count} {provisioning_tracker_count} {uncontended_count})");
+                assert!(executing_queue_count >= 1 || did_processed, "id_{} {slot:?} {mode:?} {executing_queue_count} >= 1 || {did_processed}, extra: ({task_count} {contended_count} {provisioning_tracker_count} {uncontended_count})", log_prefix());
             }
         }
         if let Some(checkpoint) = &maybe_checkpoint {
