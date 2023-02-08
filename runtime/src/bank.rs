@@ -956,6 +956,10 @@ impl RunnerContext {
     fn slot(&self) -> Slot {
         self.bank.as_ref().unwrap().slot()
     }
+
+    fn bank(&self) -> Option<&Arc<Bank>> {
+        self.bank.as_ref()
+    }
 }
 
 struct SchedulerPool<C> {
