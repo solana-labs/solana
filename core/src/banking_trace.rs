@@ -1103,7 +1103,6 @@ impl BankingSimulator {
 
                 let options = NewBankOptions {
                     blockhash_override: faked_blockhash,
-                    banking: true,
                     ..Default::default()
                 };
                 let new_bank = Bank::new_from_parent_with_options(&bank, &simulated_leader, new_slot, options);
@@ -1115,7 +1114,7 @@ impl BankingSimulator {
                     banking_retracer.original_hash_event(bank.slot(), original_last_blockhash, hash_override.unwrap());
                 }
                 retransmit_slots_sender.send(bank.slot()).unwrap();
-                bank_forks.write().unwrap().add_new_bank(new_bank);
+                bank_forks.write().unwrap().add_new_bank_for_banking(new_bank);
                 bank = bank_forks.read().unwrap().working_bank();
                 bank.resume_banking_commit();
                 poh_recorder.write().unwrap().set_bank(&bank, false);
