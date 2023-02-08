@@ -4353,6 +4353,7 @@ impl Bank {
                 let last_result = self.wait_for_scheduler(false);
                 let scheduler = SCHEDULER_POOL.lock().unwrap().take_from_pool();
                 let mut s2 = self.scheduler2.write().unwrap();
+                let old_mode = s2.mode();
                 *s2 = Some(scheduler);
 
                 // Only acquire the write lock for the blockhash queue on block boundaries because
@@ -4374,7 +4375,7 @@ impl Bank {
                     .unwrap()
                     .push(last_result);
                 drop(s2);
-                self.resync_transaction_runner_context();
+                self.sync_transaction_runner_context(old_mode);
                 //*self.scheduler.write().unwrap() = new_scheduler;
                 w_blockhash_queue
             },
@@ -6886,10 +6887,6 @@ impl Bank {
         let s = self.scheduler2.read().unwrap();
         let scheduler = s.as_ref().unwrap();
         scheduler.replace_transaction_runner_context(self.clone(), mode);
-    }
-
-    pub fn resync_transaction_runner_context(self: &Arc<Self>) {
-        self.sync_transaction_runner_context(panic!())
     }
 
     pub fn commit_mode(&self) -> CommitMode {
