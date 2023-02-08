@@ -1245,11 +1245,11 @@ impl Scheduler<ExecuteTimings> {
 
                 let commit_mode = bank.commit_mode();
                 let commited_first_transaction_index = match commit_mode {
-                    CommitMode::Replaying => {
+                    solana_scheduler::Mode::Replaying => {
                         //info!("replaying commit! {slot}");
                         Some(ee.task.transaction_index() as usize)
                    },
-                    CommitMode::Banking => {
+                    solana_scheduler::Mode::Banking => {
                         //info!("banking commit! {slot}");
                         let executed_transactions: Vec<_> = execution_results
                                 .iter()
