@@ -1660,7 +1660,7 @@ impl ScheduleStage {
     }
 
     #[must_use]
-    fn _run<'a, AST: AtScheduleThread, T: Send, C, B>(
+    fn _run<'a, AST: AtScheduleThread, T: Send, C, B: Clone>(
         ast: AST,
         checkpoint: &mut Option<std::sync::Arc<Checkpoint<C, B>>>,
         executing_thread_count: usize,
