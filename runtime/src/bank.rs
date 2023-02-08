@@ -1350,7 +1350,11 @@ impl Scheduler<ExecuteTimings> {
                 break;
                 }
                 },
-                _ => todo!(),
+                solana_scheduler::ExecutablePayload(solana_scheduler::Flushable::Flush(checkpoint)) => {
+                    checkpoint.wait_for_restart(None);
+                    latest_checkpoint = Some(checkpoint);
+                    latest_runner_context = None;
+                }
                 }
             }
             todo!();
