@@ -1195,7 +1195,7 @@ impl Scheduler<ExecuteTimings> {
                 trace!("execute_substage: transaction_index: {} execute_clock: {} at thread: {}", thx, transaction_index, current_execute_clock);
 
                 let mut timings = Default::default();
-                let Some(&bank) = latest_runner_context.as_ref().unwrap().bank else {
+                let Some(bank) = latest_runner_context.as_ref().unwrap().bank() else {
                     processed_ee_sender.send(solana_scheduler::UnlockablePayload(ee, timings)).unwrap();
                     continue 'recv;
                 };
