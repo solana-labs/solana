@@ -6850,33 +6850,7 @@ impl Bank {
             transactions.len()
         );
 
-        let s = {
-            let r = self.scheduler2.read().unwrap();
-
-            if r.as_ref().is_none() {
-                let thread_name = std::thread::current().name().unwrap().to_string();
-                trace!("{thread_name} no scheduler...?!");
-                return;
-            }
-
-            if r.as_ref().unwrap().bank.read().unwrap().is_none() {
-                drop(r);
-                //info!("reconfiguring scheduler with new bank...");
-                // this relocking (r=>w) is racy here; we want parking_lot's upgrade; but overwriting should be
-                // safe.
-                let ss = self.scheduler2.write().unwrap();
-                let w = ss.as_ref().unwrap();
-                *w.bank.write().unwrap() = Some(Arc::downgrade(self));
-                drop(w);
-                drop(ss);
-
-                let s = self.scheduler2.read().unwrap();
-                info!("reconfigured scheduler to the bank slot: {}", self.slot());
-                s
-            } else {
-                r
-            }
-        };
+        let s = self.scheduler2.read().unwrap();
         let scheduler = s.as_ref().unwrap();
 
         for (st, i) in transactions.iter().zip(transaction_indexes) {
