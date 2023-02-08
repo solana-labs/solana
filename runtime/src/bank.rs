@@ -1631,7 +1631,7 @@ impl<C> Scheduler<C> {
     }
 
     fn current_runner_mode() -> solana_scheduler::Mode {
-        self.current_checkpoint.with_context_value(|c| c.mode)
+        self.current_checkpoint.with_context_value(|c| c.mode).unwrap()
     }
 }
 
