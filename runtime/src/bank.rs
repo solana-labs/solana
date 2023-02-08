@@ -8625,7 +8625,7 @@ impl Bank {
             if !scheduler.has_context() {
                 warn!(
                     "Bank::wait_for_scheduler(via_drop: {}) id_{:016x} no context {} ...",
-                    scheduler.random_id, via_drop, current_thread_name
+                    via_drop, scheduler.random_id, current_thread_name
                 );
                 return Ok(Default::default());
             }
