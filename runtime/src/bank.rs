@@ -1202,7 +1202,7 @@ impl Scheduler<ExecuteTimings> {
 
                 let mut timings = Default::default();
                 let Some(bank) = latest_runner_context.as_ref().unwrap().bank() else {
-                    panic!();
+                    warn!("ODD");
                     processed_ee_sender.send(solana_scheduler::UnlockablePayload(ee, timings)).unwrap();
                     continue 'recv;
                 };
