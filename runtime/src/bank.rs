@@ -1314,10 +1314,10 @@ impl Scheduler<ExecuteTimings> {
                 } else {
                     let sig = ee.task.tx.0.signature().to_string();
                     match commit_mode {
-                        CommitMode::Replaying => {
+                        solana_scheduler::Mode::Replaying => {
                             error!("found odd tx error: slot: {}, signature: {}, {:?}", slot, sig, tx_result);
                         },
-                        CommitMode::Banking => {
+                        solana_scheduler::Mode::Banking => {
                             trace!("found odd tx error: slot: {}, signature: {}, {:?}", slot, sig, tx_result);
                         }
                     }
