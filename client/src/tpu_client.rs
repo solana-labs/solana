@@ -24,18 +24,18 @@ pub use {
 /// The client uses RPC to determine the current leader and fetch node contact info
 /// This is just a thin wrapper over the "BackendTpuClient", use that directly for more efficiency.
 pub struct TpuClient<
-    R, // ConnectionPool
-    S, // ConnectionManager
-    T, // NewConnectionConfig
+    P, // ConnectionPool
+    M, // ConnectionManager
+    C, // NewConnectionConfig
 > {
-    tpu_client: BackendTpuClient<R, S, T>,
+    tpu_client: BackendTpuClient<P, M, C>,
 }
 
-impl<R, S, T> TpuClient<R, S, T>
+impl<P, M, C> TpuClient<P, M, C>
 where
-    R: ConnectionPool<NewConnectionConfig = T>,
-    S: ConnectionManager<ConnectionPool = R, NewConnectionConfig = T>,
-    T: NewConnectionConfig,
+    P: ConnectionPool<NewConnectionConfig = C>,
+    M: ConnectionManager<ConnectionPool = P, NewConnectionConfig = C>,
+    C: NewConnectionConfig,
 {
     /// Serialize and send transaction to the current and upcoming leader TPUs according to fanout
     /// size
@@ -88,18 +88,18 @@ impl TpuClient<QuicPool, QuicConnectionManager, QuicConfig> {
     }
 }
 
-impl<R, S, T> TpuClient<R, S, T>
+impl<P, M, C> TpuClient<P, M, C>
 where
-    R: ConnectionPool<NewConnectionConfig = T>,
-    S: ConnectionManager<ConnectionPool = R, NewConnectionConfig = T>,
-    T: NewConnectionConfig,
+    P: ConnectionPool<NewConnectionConfig = C>,
+    M: ConnectionManager<ConnectionPool = P, NewConnectionConfig = C>,
+    C: NewConnectionConfig,
 {
     /// Create a new client that disconnects when dropped
     pub fn new_with_connection_cache(
         rpc_client: Arc<RpcClient>,
         websocket_url: &str,
         config: TpuClientConfig,
-        connection_cache: Arc<BackendConnectionCache<R, S, T>>,
+        connection_cache: Arc<BackendConnectionCache<P, M, C>>,
     ) -> Result<Self> {
         Ok(Self {
             tpu_client: BackendTpuClient::new_with_connection_cache(
@@ -111,10 +111,10 @@ where
         })
     }
 
-    pub fn send_and_confirm_messages_with_spinner<K: Signers>(
+    pub fn send_and_confirm_messages_with_spinner<T: Signers>(
         &self,
         messages: &[Message],
-        signers: &K,
+        signers: &T,
     ) -> Result<Vec<Option<TransactionError>>> {
         self.tpu_client
             .send_and_confirm_messages_with_spinner(messages, signers)

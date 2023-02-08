@@ -255,50 +255,50 @@ impl LeaderTpuCache {
 /// Client which sends transactions directly to the current leader's TPU port over UDP.
 /// The client uses RPC to determine the current leader and fetch node contact info
 pub struct TpuClient<
-    R, // ConnectionPool
-    S, // ConnectionManager
-    T, // NewConnectionConfig
+    P, // ConnectionPool
+    M, // ConnectionManager
+    C, // NewConnectionConfig
 > {
     fanout_slots: u64,
     leader_tpu_service: LeaderTpuService,
     exit: Arc<AtomicBool>,
     rpc_client: Arc<RpcClient>,
-    connection_cache: Arc<ConnectionCache<R, S, T>>,
+    connection_cache: Arc<ConnectionCache<P, M, C>>,
 }
 
-async fn send_wire_transaction_to_addr<R, S, T>(
-    connection_cache: &ConnectionCache<R, S, T>,
+async fn send_wire_transaction_to_addr<P, M, C>(
+    connection_cache: &ConnectionCache<P, M, C>,
     addr: &SocketAddr,
     wire_transaction: Vec<u8>,
 ) -> TransportResult<()>
 where
-    R: ConnectionPool<NewConnectionConfig = T>,
-    S: ConnectionManager<ConnectionPool = R, NewConnectionConfig = T>,
-    T: NewConnectionConfig,
+    P: ConnectionPool<NewConnectionConfig = C>,
+    M: ConnectionManager<ConnectionPool = P, NewConnectionConfig = C>,
+    C: NewConnectionConfig,
 {
     let conn = connection_cache.get_nonblocking_connection(addr);
     conn.send_data(&wire_transaction).await
 }
 
-async fn send_wire_transaction_batch_to_addr<R, S, T>(
-    connection_cache: &ConnectionCache<R, S, T>,
+async fn send_wire_transaction_batch_to_addr<P, M, C>(
+    connection_cache: &ConnectionCache<P, M, C>,
     addr: &SocketAddr,
     wire_transactions: &[Vec<u8>],
 ) -> TransportResult<()>
 where
-    R: ConnectionPool<NewConnectionConfig = T>,
-    S: ConnectionManager<ConnectionPool = R, NewConnectionConfig = T>,
-    T: NewConnectionConfig,
+    P: ConnectionPool<NewConnectionConfig = C>,
+    M: ConnectionManager<ConnectionPool = P, NewConnectionConfig = C>,
+    C: NewConnectionConfig,
 {
     let conn = connection_cache.get_nonblocking_connection(addr);
     conn.send_data_batch(wire_transactions).await
 }
 
-impl<R, S, T> TpuClient<R, S, T>
+impl<P, M, C> TpuClient<P, M, C>
 where
-    R: ConnectionPool<NewConnectionConfig = T>,
-    S: ConnectionManager<ConnectionPool = R, NewConnectionConfig = T>,
-    T: NewConnectionConfig,
+    P: ConnectionPool<NewConnectionConfig = C>,
+    M: ConnectionManager<ConnectionPool = P, NewConnectionConfig = C>,
+    C: NewConnectionConfig,
 {
     /// Serialize and send transaction to the current and upcoming leader TPUs according to fanout
     /// size
@@ -414,7 +414,7 @@ where
         rpc_client: Arc<RpcClient>,
         websocket_url: &str,
         config: TpuClientConfig,
-        connection_manager: S,
+        connection_manager: M,
     ) -> Result<Self> {
         let connection_cache = Arc::new(
             ConnectionCache::new(connection_manager, DEFAULT_CONNECTION_POOL_SIZE).unwrap(),
@@ -427,7 +427,7 @@ where
         rpc_client: Arc<RpcClient>,
         websocket_url: &str,
         config: TpuClientConfig,
-        connection_cache: Arc<ConnectionCache<R, S, T>>,
+        connection_cache: Arc<ConnectionCache<P, M, C>>,
     ) -> Result<Self> {
         let exit = Arc::new(AtomicBool::new(false));
         let leader_tpu_service =
@@ -443,10 +443,10 @@ where
     }
 
     #[cfg(feature = "spinner")]
-    pub async fn send_and_confirm_messages_with_spinner<K: Signers>(
+    pub async fn send_and_confirm_messages_with_spinner<T: Signers>(
         &self,
         messages: &[Message],
-        signers: &K,
+        signers: &T,
     ) -> Result<Vec<Option<TransactionError>>> {
         let mut expired_blockhash_retries = 5;
         let progress_bar = spinner::new_progress_bar();
@@ -576,7 +576,7 @@ where
     }
 }
 
-impl<R, S, T> Drop for TpuClient<R, S, T> {
+impl<P, M, C> Drop for TpuClient<P, M, C> {
     fn drop(&mut self) {
         self.exit.store(true, Ordering::Relaxed);
     }
