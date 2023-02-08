@@ -1550,7 +1550,6 @@ impl Scheduler<ExecuteTimings> {
             graceful_stop_initiated: Default::default(),
             collected_results,
             bank,
-            slot: Default::default(),
             commit_status,
             current_checkpoint: initial_checkpoint,
             thread_count,
