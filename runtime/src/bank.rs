@@ -1547,7 +1547,6 @@ impl Scheduler<ExecuteTimings> {
             preloader,
             graceful_stop_initiated: Default::default(),
             collected_results,
-            bank,
             commit_status,
             current_checkpoint: initial_checkpoint,
             thread_count,
