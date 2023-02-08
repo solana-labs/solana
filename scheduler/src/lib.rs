@@ -2090,12 +2090,14 @@ impl ScheduleStage {
                     .unwrap();
 
             }
-            for _ in executing_thread_count/2..executing_thread_count {
-                to_high_execute_substage
-                    .send(ExecutablePayload(Flushable::Flush(std::sync::Arc::clone(
-                        checkpoint,
-                    ))))
-                    .unwrap();
+            if let Some(to_high_execute_substage) = to_high_execute_substage {
+                for _ in executing_thread_count/2..executing_thread_count {
+                    to_high_execute_substage
+                        .send(ExecutablePayload(Flushable::Flush(std::sync::Arc::clone(
+                            checkpoint,
+                        ))))
+                        .unwrap();
+                }
             }
         }
         drop(to_next_stage);
