@@ -1497,7 +1497,6 @@ impl Scheduler<ExecuteTimings> {
 
                     let mut runnable_queue = solana_scheduler::TaskQueue::default();
                     let maybe_checkpoint = solana_scheduler::ScheduleStage::run(
-                        random_id,
                         max_executing_queue_count,
                         &mut runnable_queue,
                         &mut address_book,
