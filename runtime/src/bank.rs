@@ -1187,7 +1187,7 @@ impl Scheduler<ExecuteTimings> {
                 let (mut wall_time, cpu_time) = (Measure::start("process_message_time"), cpu_time::ThreadTime::now());
 
                 let current_execute_clock = ee.task.execute_time();
-                let transaction_index = ee.task.transaction_index();
+                let transaction_index = ee.task.transaction_index(latest_runner_context.as_ref().unwrap().mode);
                 trace!("execute_substage: transaction_index: {} execute_clock: {} at thread: {}", thx, transaction_index, current_execute_clock);
 
                 let mut timings = Default::default();
