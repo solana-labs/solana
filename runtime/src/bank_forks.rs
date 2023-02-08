@@ -185,7 +185,7 @@ impl BankForks {
         }
     }
 
-    pub fn add_new_bank(&mut self, bank: Bank) -> Arc<Bank> {
+    fn add_new_bank(&mut self, bank: Bank, mode: solana_scheduler::Mode) -> Arc<Bank> {
         let bank = Arc::new(bank);
         let prev = self.banks.insert(bank.slot(), bank.clone());
         assert!(prev.is_none());
@@ -194,8 +194,16 @@ impl BankForks {
         for parent in bank.proper_ancestors() {
             self.descendants.entry(parent).or_default().insert(slot);
         }
-        bank.sync_transaction_runner_context();
+        bank.sync_transaction_runner_context(mode);
         bank
+    }
+
+    pub fn add_new_bank_for_banking() -> Arc<Bank> {
+        self.add_new_bank(bank, solana_scheduler::Mode::Banking)
+    }
+
+    pub fn add_new_bank_for_replaying() -> Arc<Bank> {
+        self.add_new_bank(bank, solana_scheduler::Mode::Replaying)
     }
 
     pub fn remove(&mut self, slot: Slot) -> Option<Arc<Bank>> {
