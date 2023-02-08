@@ -1690,7 +1690,7 @@ impl ScheduleStage {
         let mut interval_count = 0;
         let mut failed_lock_count = 0;
 
-        assert!(max_executing_queue_count > 0);
+        assert!(executing_thread_count > 0);
 
         let (ee_sender, ee_receiver) = crossbeam_channel::unbounded::<ExaminablePayload<T, C, B>>();
 
