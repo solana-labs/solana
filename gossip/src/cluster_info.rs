@@ -1203,7 +1203,6 @@ impl ClusterInfo {
     }
 
     /// Returns duplicate-shreds inserted since the given cursor.
-    #[allow(dead_code)]
     pub(crate) fn get_duplicate_shreds(&self, cursor: &mut Cursor) -> Vec<DuplicateShred> {
         let gossip_crds = self.gossip.crds.read().unwrap();
         gossip_crds
