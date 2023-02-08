@@ -3896,10 +3896,10 @@ impl Bank {
         let mut hash = self.hash.write().unwrap();
         if *hash == Hash::default() {
             match self.commit_mode() {
-                CommitMode::Replaying => {
+                solana_scheduler::Mode::Replaying => {
                     assert!(self.scheduler2.read().unwrap().is_none());
                 }
-                CommitMode::Banking => {
+                solana_scheduler::Mode::Banking => {
                     assert!(self.scheduler2.read().unwrap().is_some());
                 }
             }
