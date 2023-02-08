@@ -2084,7 +2084,7 @@ impl ScheduleStage {
                 .unwrap();
             for _ in 0..executing_thread_count/2 {
                 to_execute_substage
-                    .send(ExaminablePayload(Flushable::Flush(std::sync::Arc::clone(
+                    .send(ExecutablePayload(Flushable::Flush(std::sync::Arc::clone(
                         checkpoint,
                     ))))
                     .unwrap();
@@ -2092,7 +2092,7 @@ impl ScheduleStage {
             }
             for _ in executing_thread_count/2..executing_thread_count {
                 to_high_execute_substage
-                    .send(ExaminablePayload(Flushable::Flush(std::sync::Arc::clone(
+                    .send(ExecutablePayload(Flushable::Flush(std::sync::Arc::clone(
                         checkpoint,
                     ))))
                     .unwrap();
