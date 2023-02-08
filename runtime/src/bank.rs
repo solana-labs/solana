@@ -4370,6 +4370,8 @@ impl Bank {
                     .lock()
                     .unwrap()
                     .push(last_result);
+                drop(s2);
+                self.sync_transaction_runner_context();
                 //*self.scheduler.write().unwrap() = new_scheduler;
                 w_blockhash_queue
             },
