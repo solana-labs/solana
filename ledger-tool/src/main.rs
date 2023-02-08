@@ -307,10 +307,8 @@ fn output_slot(
         .name("sol-scheduler".to_string())
         .spawn(move || {
             use rand::Rng;
-            let random_id = rand::thread_rng().gen::<u64>();
             loop {
                 ScheduleStage::run(
-                    random_id,
                     lane_count * lane_channel_factor,
                     &mut runnable_queue,
                     &mut address_book,
