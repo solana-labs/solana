@@ -42,9 +42,9 @@ use {
             get_ancient_append_vec_capacity, is_ancient, AccountsToStore, StorageSelector,
         },
         append_vec::{
-            aligned_stored_size, AppendVec, StorableAccountsWithHashesAndWriteVersions,
-            StoredAccountMeta, StoredMetaWriteVersion, APPEND_VEC_MMAPPED_FILES_OPEN,
-            STORE_META_OVERHEAD,
+            aligned_stored_size, AppendVec, MatchAccountOwnerError,
+            StorableAccountsWithHashesAndWriteVersions, StoredAccountMeta, StoredMetaWriteVersion,
+            APPEND_VEC_MMAPPED_FILES_OPEN, STORE_META_OVERHEAD,
         },
         cache_hash_data::{CacheHashData, CacheHashDataFile},
         contains::Contains,
@@ -815,6 +815,32 @@ impl<'a> LoadedAccountAccessor<'a> {
             }
         }
     }
+
+    fn account_matches_owners(&self, owners: &[&Pubkey]) -> Result<(), MatchAccountOwnerError> {
+        match self {
+            LoadedAccountAccessor::Cached(cached_account) => cached_account
+                .as_ref()
+                .and_then(|cached_account| {
+                    (!cached_account.account.is_zero_lamport()
+                        && owners.contains(&cached_account.account.owner()))
+                    .then_some(())
+                })
+                .ok_or(MatchAccountOwnerError::NoMatch),
+            LoadedAccountAccessor::Stored(maybe_storage_entry) => {
+                // storage entry may not be present if slot was cleaned up in
+                // between reading the accounts index and calling this function to
+                // get account meta from the storage entry here
+                maybe_storage_entry
+                    .as_ref()
+                    .map(|(storage_entry, offset)| {
+                        storage_entry
+                            .accounts
+                            .account_matches_owners(*offset, owners)
+                    })
+                    .unwrap_or(Err(MatchAccountOwnerError::UnableToLoad))
+            }
+        }
+    }
 }
 
 pub enum LoadedAccount<'a> {
@@ -1452,7 +1478,6 @@ pub struct AccountsStats {
     store_handle_reclaims: AtomicU64,
     store_append_accounts: AtomicU64,
     pub stakes_cache_check_and_store_us: AtomicU64,
-    store_find_store: AtomicU64,
     store_num_accounts: AtomicU64,
     store_total_data: AtomicU64,
     recycle_store_count: AtomicU64,
@@ -4919,6 +4944,38 @@ impl AccountsDb {
         self.do_load(ancestors, pubkey, None, load_hint, LoadZeroLamports::None)
     }
 
+    pub fn account_matches_owners(
+        &self,
+        ancestors: &Ancestors,
+        account: &Pubkey,
+        owners: &[&Pubkey],
+    ) -> Result<(), MatchAccountOwnerError> {
+        let (slot, storage_location, _maybe_account_accesor) = self
+            .read_index_for_accessor_or_load_slow(ancestors, account, None, false)
+            .ok_or(MatchAccountOwnerError::UnableToLoad)?;
+
+        if !storage_location.is_cached() {
+            let result = self.read_only_accounts_cache.load(*account, slot);
+            if let Some(account) = result {
+                return (!account.is_zero_lamport() && owners.contains(&account.owner()))
+                    .then_some(())
+                    .ok_or(MatchAccountOwnerError::NoMatch);
+            }
+        }
+
+        let (account_accessor, _slot) = self
+            .retry_to_get_account_accessor(
+                slot,
+                storage_location,
+                ancestors,
+                account,
+                None,
+                LoadHint::Unspecified,
+            )
+            .ok_or(MatchAccountOwnerError::UnableToLoad)?;
+        account_accessor.account_matches_owners(owners)
+    }
+
     pub fn load_account_into_read_cache(&self, ancestors: &Ancestors, pubkey: &Pubkey) {
         self.do_load_with_populate_read_cache(
             ancestors,
@@ -6043,29 +6100,18 @@ impl AccountsDb {
     fn write_accounts_to_storage<
         'a,
         'b,
-        F: FnMut(Slot, usize) -> Arc<AccountStorageEntry>,
         T: ReadableAccount + Sync,
         U: StorableAccounts<'a, T>,
         V: Borrow<Hash>,
     >(
         &self,
         slot: Slot,
-        mut storage_finder: F,
+        storage: &AccountStorageEntry,
         accounts_and_meta_to_store: &StorableAccountsWithHashesAndWriteVersions<'a, 'b, T, U, V>,
     ) -> Vec<AccountInfo> {
         let mut infos: Vec<AccountInfo> = Vec::with_capacity(accounts_and_meta_to_store.len());
         let mut total_append_accounts_us = 0;
-        let mut total_storage_find_us = 0;
         while infos.len() < accounts_and_meta_to_store.len() {
-            let mut storage_find = Measure::start("storage_finder");
-            let account = accounts_and_meta_to_store.account(infos.len());
-            let data_len = account
-                .map(|account| account.data().len())
-                .unwrap_or_default();
-            // ok if storage can't hold data + alignment at end - we just need the unaligned data to fit
-            let storage = storage_finder(slot, data_len + STORE_META_OVERHEAD);
-            storage_find.stop();
-            total_storage_find_us += storage_find.as_us();
             let mut append_accounts = Measure::start("append_accounts");
             let rvs = storage
                 .accounts
@@ -6076,6 +6122,10 @@ impl AccountsDb {
                 storage.set_status(AccountStorageStatus::Full);
 
                 // See if an account overflows the append vecs in the slot.
+                let account = accounts_and_meta_to_store.account(infos.len());
+                let data_len = account
+                    .map(|account| account.data().len())
+                    .unwrap_or_default();
                 let data_len = (data_len + STORE_META_OVERHEAD) as u64;
                 if !self.has_space_available(slot, data_len) {
                     let special_store_size = std::cmp::max(data_len * 2, self.file_size);
@@ -6109,9 +6159,6 @@ impl AccountsDb {
         self.stats
             .store_append_accounts
             .fetch_add(total_append_accounts_us, Ordering::Relaxed);
-        self.stats
-            .store_find_store
-            .fetch_add(total_storage_find_us, Ordering::Relaxed);
 
         infos
     }
@@ -6609,12 +6656,10 @@ impl AccountsDb {
                 )
             }
             StoreTo::Storage(storage) => {
-                let storage_finder = Box::new(move |_slot, _size| Arc::clone(storage));
-
                 if accounts.has_hash_and_write_version() {
                     self.write_accounts_to_storage(
                         slot,
-                        storage_finder,
+                        storage,
                         &StorableAccountsWithHashesAndWriteVersions::<'_, '_, _, _, &Hash>::new(
                             accounts,
                         ),
@@ -6626,7 +6671,7 @@ impl AccountsDb {
                     match hashes {
                         Some(hashes) => self.write_accounts_to_storage(
                             slot,
-                            storage_finder,
+                            storage,
                             &StorableAccountsWithHashesAndWriteVersions::new_with_hashes_and_write_versions(
                                 accounts,
                                 hashes,
@@ -6655,7 +6700,7 @@ impl AccountsDb {
 
                             self.write_accounts_to_storage(
                                     slot,
-                                    storage_finder,
+                                    storage,
                                     &StorableAccountsWithHashesAndWriteVersions::new_with_hashes_and_write_versions(accounts, hashes, write_versions),
                                 )
                         }
@@ -8213,11 +8258,6 @@ impl AccountsDb {
                     self.stats
                         .stakes_cache_check_and_store_us
                         .swap(0, Ordering::Relaxed),
-                    i64
-                ),
-                (
-                    "find_storage",
-                    self.stats.store_find_store.swap(0, Ordering::Relaxed),
                     i64
                 ),
                 (
@@ -14086,6 +14126,101 @@ pub mod tests {
         assert_eq!(db.read_only_accounts_cache.cache_len(), 1);
     }
 
+    #[test]
+    fn test_account_matches_owners() {
+        let db = Arc::new(AccountsDb::new_with_config_for_tests(
+            Vec::new(),
+            &ClusterType::Development,
+            AccountSecondaryIndexes::default(),
+            AccountShrinkThreshold::default(),
+        ));
+
+        let owners: Vec<Pubkey> = (0..2).map(|_| Pubkey::new_unique()).collect();
+        let owners_refs: Vec<&Pubkey> = owners.iter().collect();
+
+        let account1_key = Pubkey::new_unique();
+        let account1 = AccountSharedData::new(321, 10, &owners[0]);
+
+        let account2_key = Pubkey::new_unique();
+        let account2 = AccountSharedData::new(1, 1, &owners[1]);
+
+        let account3_key = Pubkey::new_unique();
+        let account3 = AccountSharedData::new(1, 1, &Pubkey::new_unique());
+
+        // Account with 0 lamports
+        let account4_key = Pubkey::new_unique();
+        let account4 = AccountSharedData::new(0, 1, &owners[1]);
+
+        db.store_cached((0, &[(&account1_key, &account1)][..]), None);
+        db.store_cached((1, &[(&account2_key, &account2)][..]), None);
+        db.store_cached((2, &[(&account3_key, &account3)][..]), None);
+        db.store_cached((3, &[(&account4_key, &account4)][..]), None);
+
+        db.add_root(0);
+        db.add_root(1);
+        db.add_root(2);
+        db.add_root(3);
+
+        // Flush the cache so that the account meta will be read from the storage
+        db.flush_accounts_cache(true, None);
+        db.clean_accounts_for_tests();
+
+        assert_eq!(
+            db.account_matches_owners(&Ancestors::default(), &account1_key, &owners_refs),
+            Ok(())
+        );
+        assert_eq!(
+            db.account_matches_owners(&Ancestors::default(), &account2_key, &owners_refs),
+            Ok(())
+        );
+        assert_eq!(
+            db.account_matches_owners(&Ancestors::default(), &account3_key, &owners_refs),
+            Err(MatchAccountOwnerError::NoMatch)
+        );
+        assert_eq!(
+            db.account_matches_owners(&Ancestors::default(), &account4_key, &owners_refs),
+            Err(MatchAccountOwnerError::NoMatch)
+        );
+        assert_eq!(
+            db.account_matches_owners(&Ancestors::default(), &Pubkey::new_unique(), &owners_refs),
+            Err(MatchAccountOwnerError::UnableToLoad)
+        );
+
+        // Flush the cache and load account1 (so that it's in the cache)
+        db.flush_accounts_cache(true, None);
+        db.clean_accounts_for_tests();
+        let _ = db
+            .do_load(
+                &Ancestors::default(),
+                &account1_key,
+                Some(0),
+                LoadHint::Unspecified,
+                LoadZeroLamports::SomeWithZeroLamportAccountForTests,
+            )
+            .unwrap();
+
+        assert_eq!(
+            db.account_matches_owners(&Ancestors::default(), &account1_key, &owners_refs),
+            Ok(())
+        );
+        assert_eq!(
+            db.account_matches_owners(&Ancestors::default(), &account2_key, &owners_refs),
+            Ok(())
+        );
+        assert_eq!(
+            db.account_matches_owners(&Ancestors::default(), &account3_key, &owners_refs),
+            Err(MatchAccountOwnerError::NoMatch)
+        );
+        assert_eq!(
+            db.account_matches_owners(&Ancestors::default(), &account4_key, &owners_refs),
+            Err(MatchAccountOwnerError::NoMatch)
+        );
+        assert_eq!(
+            db.account_matches_owners(&Ancestors::default(), &Pubkey::new_unique(), &owners_refs),
+            Err(MatchAccountOwnerError::UnableToLoad)
+        );
+    }
+
     /// a test that will accept either answer
     const LOAD_ZERO_LAMPORTS_ANY_TESTS: LoadZeroLamports = LoadZeroLamports::None;
 
@@ -17122,7 +17257,10 @@ pub mod tests {
         }
     }
 
-    fn get_all_accounts(db: &AccountsDb, slots: Range<Slot>) -> Vec<(Pubkey, AccountSharedData)> {
+    pub(crate) fn get_all_accounts(
+        db: &AccountsDb,
+        slots: Range<Slot>,
+    ) -> Vec<(Pubkey, AccountSharedData)> {
         slots
             .filter_map(|slot| {
                 let storage = db.storage.get_slot_storage_entry(slot);
@@ -17138,7 +17276,7 @@ pub mod tests {
             .collect::<Vec<_>>()
     }
 
-    fn compare_all_accounts(
+    pub(crate) fn compare_all_accounts(
         one: &[(Pubkey, AccountSharedData)],
         two: &[(Pubkey, AccountSharedData)],
     ) {

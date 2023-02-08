@@ -5,12 +5,12 @@
 //! Otherwise, an ancient append vec is the same as any other append vec
 use {
     crate::{
-        accounts_db::{AccountStorageEntry, AccountsDb},
+        accounts_db::{AccountStorageEntry, AccountsDb, GetUniqueAccountsResult},
         append_vec::{AppendVec, StoredAccountMeta},
     },
     rand::{thread_rng, Rng},
     solana_sdk::{clock::Slot, saturating_add_assign},
-    std::sync::Arc,
+    std::{num::NonZeroU64, sync::Arc},
 };
 
 /// ancient packing algorithm tuning per pass
@@ -24,7 +24,7 @@ struct PackedAncientStorageTuning {
     /// number of ancient slots we should aim to have. If we have more than this, combine further.
     max_ancient_slots: usize,
     /// # of bytes in an ideal ancient storage size
-    ideal_storage_size: u64,
+    ideal_storage_size: NonZeroU64,
 }
 
 /// info about a storage eligible to be combined into an ancient append vec.
@@ -152,15 +152,14 @@ impl AncientSlotInfos {
     /// The idea is that 'all_infos' is sorted from smallest capacity to largest,
     /// but that isn't required for this function to be 'correct'.
     #[allow(dead_code)]
-    fn truncate_to_max_storages(&mut self, max_storages: usize, ideal_storage_size: u64) {
+    fn truncate_to_max_storages(&mut self, max_storages: usize, ideal_storage_size: NonZeroU64) {
         // these indexes into 'all_infos' are useless once we truncate 'all_infos', so make sure they're cleared out to avoid any issues
         self.shrink_indexes.clear();
         let total_storages = self.all_infos.len();
         let mut cumulative_bytes = 0u64;
         for (i, info) in self.all_infos.iter().enumerate() {
             saturating_add_assign!(cumulative_bytes, info.alive_bytes);
-            let ancient_storages_required =
-                (cumulative_bytes / ideal_storage_size.max(1) + 1) as usize;
+            let ancient_storages_required = (cumulative_bytes / ideal_storage_size + 1) as usize;
             let storages_remaining = total_storages - i - 1;
             // if the remaining uncombined storages and the # of resulting
             // combined ancient storages is less than the threshold, then
@@ -181,7 +180,7 @@ impl AncientSlotInfos {
     /// that we make progress in cleaning/shrinking/combining but that we don't cause unnecessary
     /// churn.
     #[allow(dead_code)]
-    fn filter_by_smallest_capacity(&mut self, max_storages: usize, ideal_storage_size: u64) {
+    fn filter_by_smallest_capacity(&mut self, max_storages: usize, ideal_storage_size: NonZeroU64) {
         let total_storages = self.all_infos.len();
         if total_storages <= max_storages {
             // currently fewer storages than max, so nothing to shrink
@@ -225,6 +224,26 @@ impl AccountsDb {
             }
         }
         infos
+    }
+
+    /// for each slot in 'ancient_slots', collect all accounts in that slot
+    /// return the collection of accounts by slot
+    #[allow(dead_code)]
+    fn get_unique_accounts_from_storage_for_combining_ancient_slots<'a>(
+        &self,
+        ancient_slots: &'a [SlotInfo],
+    ) -> Vec<(&'a SlotInfo, GetUniqueAccountsResult<'a>)> {
+        let mut accounts_to_combine = Vec::with_capacity(ancient_slots.len());
+
+        for info in ancient_slots {
+            let unique_accounts = self.get_unique_accounts_from_storage_for_shrink(
+                &info.storage,
+                &self.shrink_ancient_stats.shrink_stats,
+            );
+            accounts_to_combine.push((info, unique_accounts));
+        }
+
+        accounts_to_combine
     }
 }
 
@@ -319,8 +338,8 @@ pub mod tests {
             accounts_db::{
                 get_temp_accounts_paths,
                 tests::{
-                    create_db_with_storages_and_index, create_storages_and_update_index,
-                    remove_account_for_tests,
+                    compare_all_accounts, create_db_with_storages_and_index,
+                    create_storages_and_update_index, get_all_accounts, remove_account_for_tests,
                 },
             },
             append_vec::{AccountMeta, StoredAccountMeta, StoredMeta},
@@ -330,9 +349,108 @@ pub mod tests {
             hash::Hash,
             pubkey::Pubkey,
         },
+        std::ops::Range,
         strum::IntoEnumIterator,
         strum_macros::EnumIter,
     };
+
+    fn get_sample_storages(
+        slots: usize,
+    ) -> (
+        AccountsDb,
+        Vec<Arc<AccountStorageEntry>>,
+        Range<u64>,
+        Vec<SlotInfo>,
+    ) {
+        let alive = true;
+        let (db, slot1) = create_db_with_storages_and_index(alive, slots, None);
+        let original_stores = (0..slots)
+            .filter_map(|slot| db.storage.get_slot_storage_entry((slot as Slot) + slot1))
+            .collect::<Vec<_>>();
+        let slot_infos = original_stores
+            .iter()
+            .map(|storage| SlotInfo {
+                storage: Arc::clone(storage),
+                slot: storage.slot(),
+                capacity: 0,
+                alive_bytes: 0,
+                should_shrink: false,
+            })
+            .collect();
+        (
+            db,
+            original_stores,
+            slot1..(slot1 + slots as Slot),
+            slot_infos,
+        )
+    }
+
+    fn unique_to_accounts<'a>(
+        one: impl Iterator<Item = &'a GetUniqueAccountsResult<'a>>,
+    ) -> Vec<(Pubkey, AccountSharedData)> {
+        one.flat_map(|result| {
+            result
+                .stored_accounts
+                .iter()
+                .map(|result| (*result.pubkey(), result.to_account_shared_data()))
+        })
+        .collect()
+    }
+
+    pub(crate) fn compare_all_vec_accounts<'a>(
+        one: impl Iterator<Item = &'a GetUniqueAccountsResult<'a>>,
+        two: impl Iterator<Item = &'a GetUniqueAccountsResult<'a>>,
+    ) {
+        compare_all_accounts(&unique_to_accounts(one), &unique_to_accounts(two));
+    }
+
+    #[test]
+    fn test_get_unique_accounts_from_storage_for_combining_ancient_slots() {
+        for num_slots in 0..3 {
+            for reverse in [false, true] {
+                let (db, storages, slots, mut infos) = get_sample_storages(num_slots);
+                let original_results = storages
+                    .iter()
+                    .map(|store| db.get_unique_accounts_from_storage(store))
+                    .collect::<Vec<_>>();
+                if reverse {
+                    // reverse the contents for further testing
+                    infos = infos.into_iter().rev().collect();
+                }
+                let results =
+                    db.get_unique_accounts_from_storage_for_combining_ancient_slots(&infos);
+
+                let all_accounts = get_all_accounts(&db, slots);
+                assert_eq!(all_accounts.len(), num_slots);
+
+                compare_all_vec_accounts(
+                    original_results.iter(),
+                    results.iter().map(|(_, accounts)| accounts),
+                );
+                compare_all_accounts(
+                    &all_accounts,
+                    &unique_to_accounts(results.iter().map(|(_, accounts)| accounts)),
+                );
+
+                let map = |info: &SlotInfo| {
+                    (
+                        info.storage.append_vec_id(),
+                        info.slot,
+                        info.capacity,
+                        info.alive_bytes,
+                        info.should_shrink,
+                    )
+                };
+                assert_eq!(
+                    infos.iter().map(map).collect::<Vec<_>>(),
+                    results
+                        .into_iter()
+                        .map(|(info, _)| map(info))
+                        .collect::<Vec<_>>()
+                );
+            }
+        }
+    }
 
     #[test]
     fn test_accounts_to_store_simple() {
@@ -640,7 +758,7 @@ pub mod tests {
                     TestSmallestCapacity::FilterAncientSlots => {
                         let tuning = PackedAncientStorageTuning {
                             max_ancient_slots: max_storages,
-                            ideal_storage_size: ideal_storage_size_large,
+                            ideal_storage_size: NonZeroU64::new(ideal_storage_size_large).unwrap(),
                             // irrelevant since we clear 'shrink_indexes'
                             percent_of_alive_shrunk_data: 0,
                         };
@@ -648,7 +766,10 @@ pub mod tests {
                         infos.filter_ancient_slots(&tuning);
                     }
                     TestSmallestCapacity::FilterBySmallestCapacity => {
-                        infos.filter_by_smallest_capacity(max_storages, ideal_storage_size_large);
+                        infos.filter_by_smallest_capacity(
+                            max_storages,
+                            NonZeroU64::new(ideal_storage_size_large).unwrap(),
+                        );
                     }
                 }
                 assert!(infos.all_infos.is_empty());
@@ -679,12 +800,15 @@ pub mod tests {
                 let max_storages = 3;
                 match method {
                     TestSmallestCapacity::FilterBySmallestCapacity => {
-                        infos.filter_by_smallest_capacity(max_storages, ideal_storage_size_large);
+                        infos.filter_by_smallest_capacity(
+                            max_storages,
+                            NonZeroU64::new(ideal_storage_size_large).unwrap(),
+                        );
                     }
                     TestSmallestCapacity::FilterAncientSlots => {
                         let tuning = PackedAncientStorageTuning {
                             max_ancient_slots: max_storages,
-                            ideal_storage_size: ideal_storage_size_large,
+                            ideal_storage_size: NonZeroU64::new(ideal_storage_size_large).unwrap(),
                             // irrelevant since we clear 'shrink_indexes'
                             percent_of_alive_shrunk_data: 0,
                         };
@@ -719,20 +843,32 @@ pub mod tests {
             let mut infos = create_test_infos(1);
             let max_storages = 1;
             // 1 storage, 1 max, but 1 storage does not fill the entire new combined storage, so truncate nothing
-            test(&mut infos, max_storages, ideal_storage_size_large);
+            test(
+                &mut infos,
+                max_storages,
+                NonZeroU64::new(ideal_storage_size_large).unwrap(),
+            );
             assert_eq!(infos.all_infos.len(), usize::from(!filter));
 
             let mut infos = create_test_infos(1);
             let max_storages = 1;
             infos.all_infos[0].alive_bytes = ideal_storage_size_large + 1; // too big for 1 ideal storage
                                                                            // 1 storage, 1 max, but 1 overflows the entire new combined storage, so truncate nothing
-            test(&mut infos, max_storages, ideal_storage_size_large);
+            test(
+                &mut infos,
+                max_storages,
+                NonZeroU64::new(ideal_storage_size_large).unwrap(),
+            );
             assert_eq!(infos.all_infos.len(), usize::from(!filter));
 
             let mut infos = create_test_infos(1);
             let max_storages = 2;
             // all truncated because these infos will fit into the # storages
-            test(&mut infos, max_storages, ideal_storage_size_large);
+            test(
+                &mut infos,
+                max_storages,
+                NonZeroU64::new(ideal_storage_size_large).unwrap(),
+            );
             assert!(infos.all_infos.is_empty());
 
             let mut infos = create_test_infos(1);
@@ -740,7 +876,11 @@ pub mod tests {
             let max_storages = 2;
             // none truncated because the one storage calculates to be larger than 1 ideal storage, so we need to
             // combine
-            test(&mut infos, max_storages, ideal_storage_size_large);
+            test(
+                &mut infos,
+                max_storages,
+                NonZeroU64::new(ideal_storage_size_large).unwrap(),
+            );
             assert_eq!(
                 infos
                     .all_infos
@@ -754,7 +894,11 @@ pub mod tests {
             let max_storages = 1;
             for ideal_storage_size in [1, 2] {
                 let mut infos = create_test_infos(2);
-                test(&mut infos, max_storages, ideal_storage_size);
+                test(
+                    &mut infos,
+                    max_storages,
+                    NonZeroU64::new(ideal_storage_size).unwrap(),
+                );
                 assert_eq!(infos.all_infos.len(), 2);
             }
 
@@ -766,7 +910,11 @@ pub mod tests {
             let mut infos = create_test_infos(4);
             infos.all_infos[3].alive_bytes = ideal_storage_size_large;
             let max_storages = 3;
-            test(&mut infos, max_storages, ideal_storage_size_large);
+            test(
+                &mut infos,
+                max_storages,
+                NonZeroU64::new(ideal_storage_size_large).unwrap(),
+            );
             assert_eq!(
                 infos
                     .all_infos
@@ -898,7 +1046,7 @@ pub mod tests {
                                 // 0 so that we combine everything with regard to the overall # of slots limit
                                 max_ancient_slots: 0,
                                 // this is irrelevant since the limit is artificially 0
-                                ideal_storage_size: 0,
+                                ideal_storage_size: NonZeroU64::new(1).unwrap(),
                             };
                             infos.filter_ancient_slots(&tuning);
                         }
