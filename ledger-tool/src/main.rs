@@ -308,6 +308,8 @@ fn output_slot(
         .spawn(move || {
             use rand::Rng;
             loop {
+                impl solana_scheduler::WithMode for () {
+                }
                 ScheduleStage::run(
                     &mut None,
                     lane_count * lane_channel_factor,
