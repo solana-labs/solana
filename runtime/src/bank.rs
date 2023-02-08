@@ -1587,7 +1587,7 @@ impl<C> Scheduler<C> {
         checkpoint.wait_for_restart(None);
         let r = checkpoint.take_restart_value();
         self.current_checkpoint = checkpoint;
-        self.current_checkpoint.replace_context_value(RunnerContext{bank: None});
+        self.current_checkpoint.update_context_value(|c| {c.bank= None});
         self.collected_results.lock().unwrap().push(Ok(r));
 
         /*
