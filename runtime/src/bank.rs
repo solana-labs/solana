@@ -1620,6 +1620,10 @@ impl<C> Scheduler<C> {
         }
         self.commit_status.notify_as_resumed();
     }
+
+    fn update_transaction_runner_context(&self, bank: &Arc<Bank>) {
+        self.current_checkpoint.update_context_value(RunnerContext { bank });
+    }
 }
 
 impl<C> Drop for Scheduler<C> {
