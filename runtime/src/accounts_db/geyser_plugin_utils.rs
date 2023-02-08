@@ -104,8 +104,8 @@ impl AccountsDb {
             // We can pass an incrementing number here for write_version in the future, if the storage does not have a write_version.
             // As long as all accounts for this slot are in 1 append vec that can be itereated olest to newest.
             accounts_to_stream.insert(account.meta.pubkey, account);
-            notify_stats.total_accounts += account_len;
         });
+        notify_stats.total_accounts += account_len;
         measure_filter.stop();
         notify_stats.elapsed_filtering_us += measure_filter.as_us() as usize;
 
