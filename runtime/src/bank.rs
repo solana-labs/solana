@@ -1568,7 +1568,7 @@ impl<C> Scheduler<C> {
         solana_scheduler::Checkpoint::new(thread_count)
     }
 
-    fn new_checkpoint(&self) -> Arc<solana_scheduler::Checkpoint<C, RunnerContext>> {
+    fn checkpoint(&self) -> Arc<solana_scheduler::Checkpoint<C, RunnerContext>> {
         Self::new_checkpoint(self.thread_count)
     }
 
