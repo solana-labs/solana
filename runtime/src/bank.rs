@@ -954,7 +954,7 @@ struct RunnerContext {
 
 impl RunnerContext {
     fn slot(&self) -> Slot {
-        self.bank.as_ref().unwrap().slot()
+        self.bank.as_ref().unwrap().map(|b| b.slot()).unwrap_or(0)
     }
 
     fn bank(&self) -> Option<&Arc<Bank>> {
