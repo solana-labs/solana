@@ -1329,10 +1329,7 @@ impl Scheduler<ExecuteTimings> {
                     }
                 }
 
-                drop(bank);
                 drop(batch);
-                drop(weak_bank);
-                drop(ro_bank);
 
                 //ee.reindex_with_address_book();
                 processed_ee_sender.send(solana_scheduler::UnlockablePayload(ee, timings)).unwrap();
