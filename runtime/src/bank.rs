@@ -6875,12 +6875,12 @@ impl Bank {
     pub fn resume_banking_commit(self: &Arc<Self>) {
         use assert_matches::assert_matches;
         match self.commit_mode() {
-            CommitMode::Banking => {
+            solana_scheduler::Mode::Banking => {
                 let s = self.scheduler2.read().unwrap();
                 let scheduler = s.as_ref().unwrap();
                 scheduler.resume_commit_into_bank(Some(self));
             },
-            CommitMode::Replaying => {
+            solana_scheduler::Mode::Replaying => {
                 info!("maybe isolated banking?");
             },
         }
