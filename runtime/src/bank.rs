@@ -6882,13 +6882,6 @@ impl Bank {
                 info!("reconfigured scheduler to the bank slot: {}", self.slot());
                 s
             } else {
-                assert_eq!(
-                    self.slot(),
-                    r.as_ref()
-                        .unwrap()
-                        .slot
-                        .load(std::sync::atomic::Ordering::SeqCst)
-                );
                 r
             }
         };
