@@ -291,6 +291,9 @@ pub enum SnapshotError {
 
     #[error("snapshot slot deltas are invalid: {0}")]
     VerifySlotDeltas(#[from] VerifySlotDeltasError),
+
+    #[error("Invalid appendvec path: {}", .0.display())]
+    InvalidAppendvecPath(PathBuf),
 }
 pub type Result<T> = std::result::Result<T, SnapshotError>;
 
@@ -878,6 +881,29 @@ pub fn create_accounts_run_and_snapshot_dirs(
     Ok((run_path, snapshot_path))
 }
 
+fn get_account_path_from_appendvec_path(appendvec_path: &Path) -> Result<PathBuf> {
+    let path = appendvec_path.to_path_buf();
+    let run_path = path
+        .parent()
+        .ok_or(SnapshotError::InvalidAppendvecPath(path.clone()))?;
+    let run_file_name = run_path
+        .file_name()
+        .ok_or(SnapshotError::InvalidAppendvecPath(path.clone()))?;
+    // All appendvec files should be under <account_path>/run/.
+    // When generating the bank snapshot directory, they are hardlinked to <account_path>/snapshot/<slot>/
+    if run_file_name != "run" {
+        error!(
+            "The account path {} does not have run/ as its immediate parent directory.",
+            run_path.display()
+        );
+        return Err(SnapshotError::InvalidAppendvecPath(path.clone()));
+    }
+    let account_path = run_path
+        .parent()
+        .ok_or(SnapshotError::InvalidAppendvecPath(path.clone()))?;
+    Ok(account_path.to_path_buf())
+}
+
 /// From an appendvec path, derive the snapshot hardlink path.  If the corresponding snapshot hardlink
 /// directory does not exist, create it.
 fn get_snapshot_accounts_hardlink_dir(
@@ -886,23 +912,15 @@ fn get_snapshot_accounts_hardlink_dir(
     account_paths: &mut HashSet<PathBuf>,
     hardlinks_dir: impl AsRef<Path>,
 ) -> Result<PathBuf> {
-    let run_path = appendvec_path.parent().unwrap();
-    // All appendvec files should be under <account_path>/run/.
-    // When generating the bank snapshot directory, they are hardlinked to <account_path>/snapshot/<slot>/
-    if run_path.file_name().unwrap() != "run" {
-        panic!(
-            "The account path {} does not run/ as the immediate parent directory.",
-            run_path.display()
-        );
-    }
-
-    let account_path = run_path.parent().unwrap();
-
+    let account_path = get_account_path_from_appendvec_path(appendvec_path)
+        // Let it panic here because incorrect appendvec path is an unrecoverable error.  The
+        // SnapshotError::InvalidAppendvecPath already provided enough error information.
+        .unwrap();
     let snapshot_hardlink_dir = account_path.join("snapshot").join(bank_slot.to_string());
 
     // Use the hashset to track, to avoid checking the file system.  Only set up the hardlink directory
     // and the symlink to it at the first time of seeing the account_path.
-    if !account_paths.contains(account_path) {
+    if !account_paths.contains(&account_path) {
         let idx = account_paths.len();
         info!(
             "for appendvec_path {}, create hard-link path {}",
@@ -918,7 +936,7 @@ fn get_snapshot_accounts_hardlink_dir(
         })?;
         let symlink_path = hardlinks_dir.as_ref().join(format!("account_path_{idx}"));
         symlink::symlink_dir(&snapshot_hardlink_dir, symlink_path)?;
-        account_paths.insert(account_path.to_path_buf());
+        account_paths.insert(account_path);
     };
 
     Ok(snapshot_hardlink_dir)

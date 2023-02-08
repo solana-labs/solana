@@ -16,7 +16,7 @@ use {
     crossbeam_channel::{Receiver, SendError, Sender},
     log::*,
     rand::{thread_rng, Rng},
-    snapshot_utils::{purge_old_bank_snapshots, MAX_BANK_SNAPSHOTS_TO_RETAIN},
+    snapshot_utils::MAX_BANK_SNAPSHOTS_TO_RETAIN,
     solana_measure::measure::Measure,
     solana_sdk::clock::{BankId, Slot},
     stats::StatsManager,
@@ -400,7 +400,7 @@ impl SnapshotRequestHandler {
 
         // Cleanup outdated snapshots
         let mut purge_old_snapshots_time = Measure::start("purge_old_snapshots_time");
-        purge_old_bank_snapshots(
+        snapshot_utils::purge_old_bank_snapshots(
             &self.snapshot_config.bank_snapshots_dir,
             MAX_BANK_SNAPSHOTS_TO_RETAIN,
         );
