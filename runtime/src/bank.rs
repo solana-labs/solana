@@ -8619,8 +8619,17 @@ impl Bank {
 
     pub fn wait_for_scheduler(&self, via_drop: bool) -> Result<ExecuteTimings> {
         let mut s = self.scheduler2.write().unwrap();
+        let current_thread_name = std::thread::current().name().unwrap().to_string();
 
         if let Some(scheduler) = s.as_mut() {
+            if !scheduler.has_context() {
+                warn!(
+                    "Bank::wait_for_scheduler(via_drop: {}) id_{:016x} no context {} ...",
+                    scheduler.random_id, via_drop, current_thread_name
+                );
+                return Ok(Default::default());
+            }
+
             let runner_mode = scheduler.current_runner_mode();
             if matches!(runner_mode, solana_scheduler::Mode::Replaying) || via_drop {
                 info!("wait_for_scheduler({runner_mode:?}/{via_drop}): gracefully stopping bank ({})...", self.slot());
@@ -8651,7 +8660,6 @@ impl Bank {
                 Ok(Default::default())
             }
         } else {
-            let current_thread_name = std::thread::current().name().unwrap().to_string();
             warn!(
                 "Bank::wait_for_scheduler(via_drop: {}) skipped by {} ...",
                 via_drop, current_thread_name
