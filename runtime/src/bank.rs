@@ -1198,7 +1198,7 @@ impl Scheduler<ExecuteTimings> {
                 let Some(bank) = latest_runner_context.as_ref().unwrap().bank else {
                     processed_ee_sender.send(solana_scheduler::UnlockablePayload(ee, timings)).unwrap();
                     continue 'recv;
-                }
+                };
                 let slot = bank.slot();
 
                 let tx_account_lock_limit = bank.get_transaction_account_lock_limit();
