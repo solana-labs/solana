@@ -1417,7 +1417,7 @@ impl Scheduler<ExecuteTimings> {
                                     },
                                     Err(e) => {
                                         transaction_error_counts.record(&e);
-                                        match ee.task.mode {
+                                        match latest_runner_context.as_ref().unwrap().mode {
                                             solana_scheduler::Mode::Replaying => {
                                                 error!(
                                                     "scheduler: Unexpected validator error: {:?}, transaction: {:?}",
