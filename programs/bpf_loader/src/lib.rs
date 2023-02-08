@@ -161,15 +161,17 @@ fn create_executor_from_bytes(
             })?;
     verify_code_time.stop();
     create_executor_metrics.verify_code_us = verify_code_time.as_us();
-    #[cfg(all(not(target_os = "windows"), target_arch = "x86_64"))]
     if use_jit {
-        let mut jit_compile_time = Measure::start("jit_compile_time");
-        let jit_compile_result = verified_executable.jit_compile();
-        jit_compile_time.stop();
-        create_executor_metrics.jit_compile_us = jit_compile_time.as_us();
-        if let Err(err) = jit_compile_result {
-            ic_logger_msg!(log_collector, "Failed to compile program {:?}", err);
-            return Err(InstructionError::ProgramFailedToCompile);
+        #[cfg(all(not(target_os = "windows"), target_arch = "x86_64"))]
+        {
+            let mut jit_compile_time = Measure::start("jit_compile_time");
+            let jit_compile_result = verified_executable.jit_compile();
+            jit_compile_time.stop();
+            create_executor_metrics.jit_compile_us = jit_compile_time.as_us();
+            if let Err(err) = jit_compile_result {
+                ic_logger_msg!(log_collector, "Failed to compile program {:?}", err);
+                return Err(InstructionError::ProgramFailedToCompile);
+            }
         }
     }
     Ok(Arc::new(BpfExecutor {
