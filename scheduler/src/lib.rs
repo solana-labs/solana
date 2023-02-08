@@ -1829,7 +1829,7 @@ impl ScheduleStage {
                                                    Mode::Banking => ModeSpecificTaskQueue::Banking(TaskQueue::default()),
                                                };
                                            }
-                                           mode = Some(task.mode);
+                                           mode = Some(new_mode);
                                        };
                                    } else {
                                        info!("schedule_once:initial {}", log_prefix(&runner_context));
