@@ -1564,8 +1564,12 @@ impl Scheduler<ExecuteTimings> {
 }
 
 impl<C> Scheduler<C> {
-    fn new_checkpoint() -> Arc<solana_scheduler::Checkpoint<C, RunnerContext>> {
-        solana_scheduler::Checkpoint::new(3)
+    fn new_checkpoint(thread_count: usize) -> Arc<solana_scheduler::Checkpoint<C, RunnerContext>> {
+        solana_scheduler::Checkpoint::new(thread_count)
+    }
+
+    fn new_checkpoint(&self) -> Arc<solana_scheduler::Checkpoint<C, RunnerContext>> {
+        Self::new_checkpoint(self.thread_count)
     }
 
     fn gracefully_stop(&mut self) -> Result<()> {
