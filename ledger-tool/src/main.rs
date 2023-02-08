@@ -309,6 +309,7 @@ fn output_slot(
             use rand::Rng;
             loop {
                 ScheduleStage::run(
+                    None,
                     lane_count * lane_channel_factor,
                     &mut runnable_queue,
                     &mut address_book,
