@@ -539,16 +539,18 @@ impl RepairService {
             vec![]
         } else if slot_meta.consumed == slot_meta.received {
             // check delay time of last shred
-            if let Some(index) = slot_meta.received.checked_sub(1) {
-                if let Ok(Some(shred_data)) = blockstore.get_data_shred(slot, index) {
-                    let reference_tick =
-                        u64::from(shred::layout::get_reference_tick(&shred_data).unwrap());
-                    let ticks_since_first_insert = DEFAULT_TICKS_PER_SECOND
-                        * (now_timestamp.saturating_sub(slot_meta.first_shred_timestamp))
-                        / 1_000;
-                    if ticks_since_first_insert < reference_tick + defer_threshold_ticks {
-                        return vec![];
-                    }
+            if let Some(reference_tick) = slot_meta
+                .received
+                .checked_sub(1)
+                .and_then(|index| blockstore.get_data_shred(slot, index).ok()?)
+                .and_then(|shred| shred::layout::get_reference_tick(&shred).ok())
+                .map(u64::from)
+            {
+                let ticks_since_first_insert = DEFAULT_TICKS_PER_SECOND
+                    * (now_timestamp.saturating_sub(slot_meta.first_shred_timestamp))
+                    / 1_000;
+                if ticks_since_first_insert < reference_tick + defer_threshold_ticks {
+                    return vec![];
                 }
             }
             vec![ShredRepairType::HighestShred(slot, slot_meta.received)]
