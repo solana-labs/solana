@@ -1630,7 +1630,7 @@ impl<C> Scheduler<C> {
         self.current_checkpoint.replace_context_value(RunnerContext { bank: Some(bank), mode });
     }
 
-    fn current_runner_mode() -> solana_scheduler::Mode {
+    fn current_runner_mode(&self) -> solana_scheduler::Mode {
         self.current_checkpoint.with_context_value(|c| c.mode).unwrap()
     }
 }
