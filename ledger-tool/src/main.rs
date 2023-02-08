@@ -281,8 +281,12 @@ fn output_slot(
         }
     }
 
+    struct A;
+    impl solana_scheduler::WithMode for A {
+        fn mode(&self) -> solana_scheduler::Mode { panic!() }
+    }
     let (muxed_sender, muxed_receiver) =
-        crossbeam_channel::unbounded::<solana_scheduler::SchedulablePayload<(), ()>>();
+        crossbeam_channel::unbounded::<solana_scheduler::SchedulablePayload<(), A>>();
 
     // this should be target number of saturated cpu cores
     let lane_count = std::env::var("EXECUTION_LANE_COUNT")
@@ -294,10 +298,6 @@ fn output_slot(
         .parse::<usize>()
         .unwrap();
     //let (pre_execute_env_sender, pre_execute_env_receiver) = crossbeam_channel::bounded(lane_count * lane_channel_factor);
-                struct A;
-                impl solana_scheduler::WithMode for A {
-                    fn mode(&self) -> solana_scheduler::Mode { panic!() }
-                }
     let (pre_execute_env_sender, pre_execute_env_receiver) = crossbeam_channel::unbounded();
 
     //let (pre_execute_env_sender, pre_execute_env_receiver) = crossbeam_channel::unbounded();
