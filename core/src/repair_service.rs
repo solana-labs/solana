@@ -45,8 +45,7 @@ use {solana_ledger::shred::Nonce, solana_sdk::clock::DEFAULT_MS_PER_SLOT};
 
 // Time to defer repair requests to allow for turbine propagation
 pub(crate) const DEFER_REPAIR_THRESHOLD: Duration = Duration::from_millis(200);
-pub(crate) const DEFER_REPAIR_THRESHOLD_TICKS: u64 =
-    DEFER_REPAIR_THRESHOLD.as_millis() as u64 / MS_PER_TICK;
+const DEFER_REPAIR_THRESHOLD_TICKS: u64 = DEFER_REPAIR_THRESHOLD.as_millis() as u64 / MS_PER_TICK;
 
 pub type DuplicateSlotsResetSender = CrossbeamSender<Vec<(Slot, Hash)>>;
 pub type DuplicateSlotsResetReceiver = CrossbeamReceiver<Vec<(Slot, Hash)>>;
