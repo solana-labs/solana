@@ -1822,7 +1822,7 @@ impl ScheduleStage {
                                        info!("schedule_once:initial {} => {}", log_prefix(&runner_context), log_prefix(&new_runner_context));
                                        runner_context = new_runner_context;
                                        let new_mode = runner_context.as_ref().unwrap().mode;
-                                       if new_mode != mode {
+                                       if Some(new_mode) != mode {
                                            if !force_channel_backed {
                                                runnable_queue = match new_mode {
                                                    Mode::Replaying => ModeSpecificTaskQueue::Replaying(ChannelBackedTaskQueue::new(from_prev)),
