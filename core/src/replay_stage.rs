@@ -2575,7 +2575,7 @@ impl ReplayStage {
                 match cumulative_timings {
                     Err(err) => {
                         match bank.commit_mode() {
-                        solana_runtime::bank::CommitMode::Replaying => {
+                        solana_scheduler::Mode::Replaying => {
                             // Error means the slot needs to be marked as dead
                             Self::mark_dead_slot(
                                 blockstore,
@@ -2596,7 +2596,7 @@ impl ReplayStage {
                             // bank is completed
                             continue;
                         },
-                        solana_runtime::bank::CommitMode::Banking => {
+                        solana_scheduler::Mode::Banking => {
                             // propagate timings for Err case for tpu bank
                             info!("discarding harmless transaction error for tpu bank({}): {:?}", bank.slot(), err);
                         }
