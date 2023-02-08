@@ -1488,10 +1488,6 @@ impl Scheduler<ExecuteTimings> {
                 let (mut latest_checkpoint, mut latest_runner_context) = (Some(initial_checkpoint), None::<RunnerContext>);
 
                 loop {
-                    if let Some(latest_checkpoint) = latest_checkpoint.take() {
-                        latest_runner_context = latest_checkpoint.clone_context_value();
-                    }
-
                     let mut runnable_queue = solana_scheduler::TaskQueue::default();
                     let maybe_checkpoint = solana_scheduler::ScheduleStage::run(
                         executing_thread_count,
@@ -1502,7 +1498,13 @@ impl Scheduler<ExecuteTimings> {
                         Some(&scheduled_high_ee_sender),
                         &processed_ee_receiver,
                         Some(&retired_ee_sender),
-                        || format!("id_{:016x} slot: {}", random_id, latest_runner_context.as_ref().unwrap().slot()),
+                        || {
+                            if let Some(latest_checkpoint) = latest_checkpoint.take() {
+                                latest_runner_context = latest_checkpoint.clone_context_value();
+                            }
+
+                            format!("id_{:016x} slot: {}", random_id, latest_runner_context.as_ref().unwrap().slot())
+                        }
                     );
 
                     if let Some(checkpoint) = maybe_checkpoint {
