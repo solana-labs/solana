@@ -1236,7 +1236,7 @@ impl Scheduler<ExecuteTimings> {
                 let commited_first_transaction_index = match mode {
                     solana_scheduler::Mode::Replaying => {
                         //info!("replaying commit! {slot}");
-                        Some(ee.task.transaction_index(latest_runner_context.as_ref().unwrap().mode) as usize)
+                        Some(ee.task.transaction_index(mode) as usize)
                    },
                     solana_scheduler::Mode::Banking => {
                         //info!("banking commit! {slot}");
@@ -1576,7 +1576,7 @@ impl<C> Scheduler<C> {
         checkpoint.wait_for_restart(None);
         let r = checkpoint.take_restart_value();
         self.current_checkpoint = checkpoint;
-        self.current_checkpoint.update_context_value(|c| {c.bank= None});
+        self.current_checkpoint.update_context_value(|c| {c.bank= None;});
         self.collected_results.lock().unwrap().push(Ok(r));
 
         /*
