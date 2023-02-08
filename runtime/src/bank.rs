@@ -1160,7 +1160,7 @@ impl Scheduler<ExecuteTimings> {
             .unwrap_or(format!("{}", 8))
             .parse::<usize>()
             .unwrap();
-        let base_thread_count = std::cmp::max(executing_thread_count / 2, 1);
+        let base_thread_count = executing_thread_count / 2;
         let thread_count = 3 + executing_thread_count;
         let initial_checkpoint = Self::new_checkpoint(thread_count);
 
@@ -1169,7 +1169,7 @@ impl Scheduler<ExecuteTimings> {
         let max_thread_priority = std::env::var("MAX_THREAD_PRIORITY").is_ok();
         let commit_status = Arc::new(CommitStatus::new());
 
-        let executing_thread_count = base_thread_count * 2;
+        let executing_thread_count = std::cmp::max(base_thread_count * 2, 1);
         let executing_thread_handles = (0..executing_thread_count).map(|thx| {
             let (scheduled_ee_receiver, scheduled_high_ee_receiver, processed_ee_sender) = (scheduled_ee_receiver.clone(), scheduled_high_ee_receiver.clone(), processed_ee_sender.clone());
             let initial_checkpoint = initial_checkpoint.clone();
