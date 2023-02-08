@@ -43,7 +43,10 @@ use {
     },
 };
 
-pub const DEFER_REPAIR_THRESHOLD: Duration = Duration::from_millis(200);
+// Time to defer repair requests to allow for turbine propagation
+pub(crate) const DEFER_REPAIR_THRESHOLD: Duration = Duration::from_millis(200);
+pub(crate) const DEFER_REPAIR_THRESHOLD_TICKS: u64 =
+    DEFER_REPAIR_THRESHOLD.as_millis() as u64 / MS_PER_TICK;
 
 pub type DuplicateSlotsResetSender = CrossbeamSender<Vec<(Slot, Hash)>>;
 pub type DuplicateSlotsResetReceiver = CrossbeamReceiver<Vec<(Slot, Hash)>>;
@@ -351,6 +354,8 @@ impl RepairService {
                     MAX_UNKNOWN_LAST_INDEX_REPAIRS,
                     MAX_CLOSEST_COMPLETION_REPAIRS,
                     &duplicate_slot_repair_statuses,
+                    timestamp(),
+                    DEFER_REPAIR_THRESHOLD_TICKS,
                     &mut repair_timing,
                     &mut best_repairs_stats,
                 );
@@ -527,25 +532,21 @@ impl RepairService {
         slot: Slot,
         slot_meta: &SlotMeta,
         max_repairs: usize,
-        delay_threshold: Duration,
+        now_timestamp: u64,
+        defer_threshold_ticks: u64,
     ) -> Vec<ShredRepairType> {
         if max_repairs == 0 || slot_meta.is_full() {
             vec![]
         } else if slot_meta.consumed == slot_meta.received {
             // check delay time of last shred
-            if slot_meta.received > 0 {
-                if let Some(shred_data) = blockstore
-                    .get_data_shred(slot, slot_meta.received - 1)
-                    .unwrap()
-                {
+            if let Some(index) = slot_meta.received.checked_sub(1) {
+                if let Ok(Some(shred_data)) = blockstore.get_data_shred(slot, index) {
                     let reference_tick =
                         u64::from(shred::layout::get_reference_tick(&shred_data).unwrap());
                     let ticks_since_first_insert = DEFAULT_TICKS_PER_SECOND
-                        * (timestamp() - slot_meta.first_shred_timestamp)
-                        / 1000;
-                    if ticks_since_first_insert
-                        < reference_tick + delay_threshold.as_millis() as u64 / MS_PER_TICK
-                    {
+                        * (now_timestamp.saturating_sub(slot_meta.first_shred_timestamp))
+                        / 1_000;
+                    if ticks_since_first_insert < reference_tick + defer_threshold_ticks {
                         return vec![];
                     }
                 }
@@ -555,8 +556,9 @@ impl RepairService {
             blockstore
                 .find_missing_data_indexes(
                     slot,
+                    now_timestamp,
                     slot_meta.first_shred_timestamp,
-                    delay_threshold,
+                    DEFER_REPAIR_THRESHOLD_TICKS,
                     slot_meta.consumed,
                     slot_meta.received,
                     max_repairs,
@@ -574,6 +576,8 @@ impl RepairService {
         max_repairs: usize,
         slot: Slot,
         duplicate_slot_repair_statuses: &impl Contains<'a, Slot>,
+        now_timestamp: u64,
+        defer_threshold_ticks: u64,
     ) {
         let mut pending_slots = vec![slot];
         while repairs.len() < max_repairs && !pending_slots.is_empty() {
@@ -588,7 +592,8 @@ impl RepairService {
                     slot,
                     &slot_meta,
                     max_repairs - repairs.len(),
-                    DEFER_REPAIR_THRESHOLD,
+                    now_timestamp,
+                    defer_threshold_ticks,
                 );
                 repairs.extend(new_repairs);
                 let next_slots = slot_meta.next_slots;
@@ -626,7 +631,8 @@ impl RepairService {
                 slot,
                 &meta,
                 max_repairs - repairs.len(),
-                Duration::from_millis(200),
+                timestamp(),
+                DEFER_REPAIR_THRESHOLD_TICKS,
             );
             repairs.extend(new_repairs);
         }
@@ -649,7 +655,8 @@ impl RepairService {
                     slot,
                     &slot_meta,
                     MAX_REPAIR_PER_DUPLICATE,
-                    Duration::from_millis(200),
+                    timestamp(),
+                    DEFER_REPAIR_THRESHOLD_TICKS,
                 ))
             }
         } else {
@@ -842,6 +849,8 @@ mod test {
                     MAX_UNKNOWN_LAST_INDEX_REPAIRS,
                     MAX_CLOSEST_COMPLETION_REPAIRS,
                     &HashSet::default(),
+                    timestamp(),
+                    DEFER_REPAIR_THRESHOLD_TICKS,
                     &mut RepairTiming::default(),
                     &mut BestRepairsStats::default(),
                 ),
@@ -879,6 +888,8 @@ mod test {
                     MAX_UNKNOWN_LAST_INDEX_REPAIRS,
                     MAX_CLOSEST_COMPLETION_REPAIRS,
                     &HashSet::default(),
+                    timestamp(),
+                    DEFER_REPAIR_THRESHOLD_TICKS,
                     &mut RepairTiming::default(),
                     &mut BestRepairsStats::default(),
                 ),
@@ -941,6 +952,8 @@ mod test {
                     MAX_UNKNOWN_LAST_INDEX_REPAIRS,
                     MAX_CLOSEST_COMPLETION_REPAIRS,
                     &HashSet::default(),
+                    timestamp(),
+                    DEFER_REPAIR_THRESHOLD_TICKS,
                     &mut RepairTiming::default(),
                     &mut BestRepairsStats::default(),
                 ),
@@ -957,6 +970,8 @@ mod test {
                     MAX_UNKNOWN_LAST_INDEX_REPAIRS,
                     MAX_CLOSEST_COMPLETION_REPAIRS,
                     &HashSet::default(),
+                    timestamp(),
+                    DEFER_REPAIR_THRESHOLD_TICKS,
                     &mut RepairTiming::default(),
                     &mut BestRepairsStats::default(),
                 )[..],
@@ -964,6 +979,11 @@ mod test {
             );
         }
         Blockstore::destroy(&blockstore_path).expect("Expected successful database destruction");
+    }
+
+    fn post_shred_deferment_timestamp() -> u64 {
+        // adjust timestamp to bypass shred deferment window
+        timestamp() + DEFAULT_MS_PER_SLOT + DEFER_REPAIR_THRESHOLD.as_millis() as u64
     }
 
     #[test]
@@ -987,7 +1007,6 @@ mod test {
             shreds.pop();
 
             blockstore.insert_shreds(shreds, None, false).unwrap();
-            std::thread::sleep(Duration::from_millis(DEFAULT_MS_PER_SLOT) + DEFER_REPAIR_THRESHOLD);
 
             // We didn't get the last shred for this slot, so ask for the highest shred for that slot
             let expected: Vec<ShredRepairType> =
@@ -1004,6 +1023,8 @@ mod test {
                     MAX_UNKNOWN_LAST_INDEX_REPAIRS,
                     MAX_CLOSEST_COMPLETION_REPAIRS,
                     &HashSet::default(),
+                    post_shred_deferment_timestamp(),
+                    DEFER_REPAIR_THRESHOLD_TICKS,
                     &mut RepairTiming::default(),
                     &mut BestRepairsStats::default(),
                 ),

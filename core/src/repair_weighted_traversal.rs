@@ -6,10 +6,7 @@ use {
     solana_ledger::{blockstore::Blockstore, blockstore_meta::SlotMeta},
     solana_runtime::contains::Contains,
     solana_sdk::{clock::Slot, hash::Hash},
-    std::{
-        collections::{HashMap, HashSet},
-        time::Duration,
-    },
+    std::collections::{HashMap, HashSet},
 };
 
 #[derive(Debug, PartialEq, Eq)]
@@ -83,7 +80,8 @@ pub fn get_best_repair_shreds<'a>(
     repairs: &mut Vec<ShredRepairType>,
     max_new_shreds: usize,
     ignore_slots: &impl Contains<'a, Slot>,
-    delay_threshold: Duration,
+    now_timestamp: u64,
+    defer_threshold_ticks: u64,
 ) {
     let initial_len = repairs.len();
     let max_repairs = initial_len + max_new_shreds;
@@ -110,7 +108,8 @@ pub fn get_best_repair_shreds<'a>(
                             slot,
                             slot_meta,
                             max_repairs - repairs.len(),
-                            delay_threshold,
+                            now_timestamp,
+                            defer_threshold_ticks,
                         );
                         repairs.extend(new_repairs);
                     }
@@ -132,6 +131,8 @@ pub fn get_best_repair_shreds<'a>(
                                 max_repairs,
                                 *new_child_slot,
                                 ignore_slots,
+                                now_timestamp,
+                                defer_threshold_ticks,
                             );
                         }
                         visited_set.insert(*new_child_slot);
@@ -146,12 +147,17 @@ pub fn get_best_repair_shreds<'a>(
 pub mod test {
     use {
         super::*,
+        crate::repair_service::{DEFER_REPAIR_THRESHOLD, DEFER_REPAIR_THRESHOLD_TICKS},
         solana_ledger::{
             get_tmp_ledger_path,
             shred::{Shred, ShredFlags},
         },
         solana_runtime::bank_utils,
-        solana_sdk::{clock::DEFAULT_MS_PER_SLOT, hash::Hash},
+        solana_sdk::{
+            clock::{DEFAULT_MS_PER_SLOT, DEFAULT_TICKS_PER_SECOND},
+            hash::Hash,
+            timing::timestamp,
+        },
         trees::tr,
     };
 
@@ -221,6 +227,11 @@ pub mod test {
         );
     }
 
+    fn post_shred_deferment_timestamp() -> u64 {
+        // adjust timestamp to bypass shred deferment window
+        timestamp() + DEFAULT_MS_PER_SLOT + DEFER_REPAIR_THRESHOLD.as_millis() as u64
+    }
+
     #[test]
     fn test_get_best_repair_shreds() {
         let (blockstore, heaviest_subtree_fork_choice) = setup_forks();
@@ -230,6 +241,7 @@ pub mod test {
         let mut repairs = vec![];
         let mut slot_meta_cache = HashMap::default();
         let last_shred = blockstore.meta(0).unwrap().unwrap().received;
+
         get_best_repair_shreds(
             &heaviest_subtree_fork_choice,
             &blockstore,
@@ -237,11 +249,11 @@ pub mod test {
             &mut repairs,
             6,
             &HashSet::default(),
-            Duration::from_secs(1_000),
+            timestamp(),
+            DEFAULT_TICKS_PER_SECOND * 1_000, // ensure deferment
         );
         assert_eq!(repairs, vec![]);
 
-        std::thread::sleep(Duration::from_millis(DEFAULT_MS_PER_SLOT));
         get_best_repair_shreds(
             &heaviest_subtree_fork_choice,
             &blockstore,
@@ -249,7 +261,8 @@ pub mod test {
             &mut repairs,
             6,
             &HashSet::default(),
-            Duration::from_millis(0),
+            post_shred_deferment_timestamp(),
+            DEFER_REPAIR_THRESHOLD_TICKS,
         );
         assert_eq!(
             repairs,
@@ -272,7 +285,6 @@ pub mod test {
             2,
             Hash::default(),
         );
-        std::thread::sleep(Duration::from_millis(DEFAULT_MS_PER_SLOT));
         get_best_repair_shreds(
             &heaviest_subtree_fork_choice,
             &blockstore,
@@ -280,7 +292,8 @@ pub mod test {
             &mut repairs,
             6,
             &HashSet::default(),
-            Duration::from_millis(0),
+            post_shred_deferment_timestamp(),
+            DEFER_REPAIR_THRESHOLD_TICKS,
         );
         assert_eq!(
             repairs,
@@ -321,7 +334,8 @@ pub mod test {
             &mut repairs,
             4,
             &HashSet::default(),
-            Duration::from_millis(200),
+            post_shred_deferment_timestamp(),
+            DEFER_REPAIR_THRESHOLD_TICKS,
         );
         assert_eq!(
             repairs,
@@ -336,7 +350,6 @@ pub mod test {
         repairs = vec![];
         slot_meta_cache = HashMap::default();
         blockstore.add_tree(tr(2) / (tr(8)), true, false, 2, Hash::default());
-        std::thread::sleep(Duration::from_millis(DEFAULT_MS_PER_SLOT));
         get_best_repair_shreds(
             &heaviest_subtree_fork_choice,
             &blockstore,
@@ -344,7 +357,8 @@ pub mod test {
             &mut repairs,
             4,
             &HashSet::default(),
-            Duration::from_millis(200),
+            post_shred_deferment_timestamp(),
+            DEFER_REPAIR_THRESHOLD_TICKS,
         );
         assert_eq!(
             repairs,
@@ -361,7 +375,6 @@ pub mod test {
         // Add a branch to slot 2, make sure it doesn't repair child
         // 4 again when the Unvisited(2) event happens
         blockstore.add_tree(tr(2) / (tr(6) / tr(7)), true, false, 2, Hash::default());
-        std::thread::sleep(Duration::from_millis(DEFAULT_MS_PER_SLOT));
 
         let mut repairs = vec![];
         let mut slot_meta_cache = HashMap::default();
@@ -372,7 +385,8 @@ pub mod test {
             &mut repairs,
             std::usize::MAX,
             &HashSet::default(),
-            Duration::from_millis(0),
+            post_shred_deferment_timestamp(),
+            DEFER_REPAIR_THRESHOLD_TICKS,
         );
         let last_shred = blockstore.meta(0).unwrap().unwrap().received;
         assert_eq!(
@@ -387,7 +401,6 @@ pub mod test {
     #[test]
     fn test_get_best_repair_shreds_ignore() {
         let (blockstore, heaviest_subtree_fork_choice) = setup_forks();
-        std::thread::sleep(Duration::from_millis(DEFAULT_MS_PER_SLOT));
 
         // Adding slots to ignore should remove them from the repair set, but
         // should not remove their children
@@ -402,7 +415,8 @@ pub mod test {
             &mut repairs,
             std::usize::MAX,
             &ignore_set,
-            Duration::from_millis(0),
+            post_shred_deferment_timestamp(),
+            DEFER_REPAIR_THRESHOLD_TICKS,
         );
         assert_eq!(
             repairs,
@@ -417,7 +431,6 @@ pub mod test {
         repairs = vec![];
         slot_meta_cache = HashMap::default();
         blockstore.add_tree(tr(2) / (tr(6) / tr(7)), true, false, 2, Hash::default());
-        std::thread::sleep(Duration::from_millis(DEFAULT_MS_PER_SLOT));
         ignore_set.insert(2);
         get_best_repair_shreds(
             &heaviest_subtree_fork_choice,
@@ -426,7 +439,8 @@ pub mod test {
             &mut repairs,
             std::usize::MAX,
             &ignore_set,
-            Duration::from_millis(0),
+            post_shred_deferment_timestamp(),
+            DEFER_REPAIR_THRESHOLD_TICKS,
         );
         assert_eq!(
             repairs,
@@ -448,7 +462,8 @@ pub mod test {
             &mut repairs,
             std::usize::MAX,
             &ignore_set,
-            Duration::from_millis(0),
+            post_shred_deferment_timestamp(),
+            DEFER_REPAIR_THRESHOLD_TICKS,
         );
         assert_eq!(
             repairs,

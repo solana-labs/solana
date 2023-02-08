@@ -2,7 +2,7 @@ use {
     crate::{
         heaviest_subtree_fork_choice::HeaviestSubtreeForkChoice,
         repair_generic_traversal::{get_closest_completion, get_unknown_last_index},
-        repair_service::{BestRepairsStats, RepairTiming, DEFER_REPAIR_THRESHOLD},
+        repair_service::{BestRepairsStats, RepairTiming},
         repair_weighted_traversal,
         serve_repair::ShredRepairType,
         tree_diff::TreeDiff,
@@ -157,6 +157,8 @@ impl RepairWeight {
         max_unknown_last_index_repairs: usize,
         max_closest_completion_repairs: usize,
         ignore_slots: &impl Contains<'a, Slot>,
+        now_timestamp: u64,
+        defer_threshold_ticks: u64,
         repair_timing: &mut RepairTiming,
         stats: &mut BestRepairsStats,
     ) -> Vec<ShredRepairType> {
@@ -187,6 +189,8 @@ impl RepairWeight {
             &mut best_shreds_repairs,
             max_new_shreds,
             ignore_slots,
+            now_timestamp,
+            defer_threshold_ticks,
         );
         let num_best_shreds_repairs = best_shreds_repairs.len();
         let repair_slots_set: HashSet<Slot> =
@@ -350,6 +354,8 @@ impl RepairWeight {
         repairs: &mut Vec<ShredRepairType>,
         max_new_shreds: usize,
         ignore_slots: &impl Contains<'a, Slot>,
+        now_timestamp: u64,
+        defer_threshold_ticks: u64,
     ) {
         let root_tree = self.trees.get(&self.root).expect("Root tree must exist");
         repair_weighted_traversal::get_best_repair_shreds(
@@ -359,7 +365,8 @@ impl RepairWeight {
             repairs,
             max_new_shreds,
             ignore_slots,
-            DEFER_REPAIR_THRESHOLD,
+            now_timestamp,
+            defer_threshold_ticks,
         );
     }
 
