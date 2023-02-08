@@ -1856,7 +1856,6 @@ struct LoadVoteAndStakeAccountsResult {
 pub struct NewBankOptions {
     pub vote_only_bank: bool,
     pub blockhash_override: Option<Hash>,
-    pub banking: bool,
 }
 
 #[derive(Debug, Default)]
