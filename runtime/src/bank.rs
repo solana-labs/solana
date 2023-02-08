@@ -1153,6 +1153,8 @@ impl Scheduler<ExecuteTimings> {
         let (processed_ee_sender, processed_ee_receiver) = crossbeam_channel::unbounded();
         let (retired_ee_sender, retired_ee_receiver) = crossbeam_channel::unbounded();
 
+        let initial_checkpoint = 
+
         let bank = Arc::new(std::sync::RwLock::new(None::<std::sync::Weak<Bank>>));
 
         let executing_thread_count = std::env::var("EXECUTING_THREAD_COUNT")
@@ -1526,7 +1528,7 @@ impl Scheduler<ExecuteTimings> {
             bank,
             slot: Default::default(),
             commit_status,
-            current_checkpoint: None,
+            current_checkpoint: Some(initial_checkpoint),
         };
         info!(
             "scheduler: id_{:016x} setup done with {}us",
@@ -1539,6 +1541,10 @@ impl Scheduler<ExecuteTimings> {
 }
 
 impl<C> Scheduler<C> {
+    fn new_checkpoint() -> solana_scheduler::Checkpoint {
+        solana_scheduler::Checkpoint::new(3)
+    }
+
     fn gracefully_stop(&mut self) -> Result<()> {
         if self
             .graceful_stop_initiated
@@ -1560,7 +1566,7 @@ impl<C> Scheduler<C> {
         //let transaction_sender = self.transaction_sender.take().unwrap();
 
         //drop(transaction_sender);
-        let checkpoint = solana_scheduler::Checkpoint::new(3);
+        let checkpoint = Self::new_checkpoint();
         self.transaction_sender
             .as_ref()
             .unwrap()
