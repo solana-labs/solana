@@ -1184,7 +1184,7 @@ impl Scheduler<ExecuteTimings> {
 
             'recv: while let Ok(r) = (if thx >= executing_thread_count { scheduled_high_ee_receiver.recv() } else { scheduled_ee_receiver.recv()}) {
                 match r {
-                solana_scheduler::ExecutablePayload(mut ee) => {
+                solana_scheduler::ExecutablePayload(solana_scheduler::Flushable::Payload(mut ee)) => {
 
                 'retry: loop {
                 commit_status.check_and_wait();
