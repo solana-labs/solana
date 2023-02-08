@@ -4380,9 +4380,7 @@ mod tests {
         let genesis_config = GenesisConfig::default();
         let bank = Bank::new_for_tests(&genesis_config);
 
-        while !bank.is_complete() {
-            bank.register_tick(&Hash::new_unique());
-        }
+        bank.fill_bank_with_ticks_for_tests();
 
         let bank_snapshots_dir = tempfile::TempDir::new().unwrap();
 
