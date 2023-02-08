@@ -6904,6 +6904,12 @@ impl Bank {
         }
     }
 
+    pub fn sync_transaction_runner_context(self: &Arc<Self>) {
+        let s = self.scheduler2.read().unwrap();
+        let scheduler = s.as_ref().unwrap();
+        scheduler.update_transaction_runner_context(self);
+    }
+
     pub fn commit_mode(&self) -> CommitMode {
         self.commit_mode.load(Relaxed)
     }
