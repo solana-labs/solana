@@ -1678,7 +1678,8 @@ impl ScheduleStage {
         let mut slot = None;
         let mut mode = None;
         let (mut last_time, mut last_processed_count) = (maybe_start_time.map(|(a, b)| b).clone(), 0_usize);
-        info!("schedule_once:standby {}", log_prefix());
+        let mut runner_context = None;
+        info!("schedule_once:standby {}", log_prefix(&runner_context));
 
         let mut executing_queue_count = 0_usize;
         let mut contended_count = 0;
@@ -1773,7 +1774,6 @@ impl ScheduleStage {
             .parse::<usize>()
             .unwrap();
 
-        let mut runner_context = None;
 
         loop {
             // no execution at all => absolutely no active locks
