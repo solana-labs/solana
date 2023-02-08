@@ -1236,7 +1236,7 @@ impl Scheduler<ExecuteTimings> {
                 let commited_first_transaction_index = match mode {
                     solana_scheduler::Mode::Replaying => {
                         //info!("replaying commit! {slot}");
-                        Some(ee.task.transaction_index() as usize)
+                        Some(ee.task.transaction_index(latest_runner_context.as_ref().unwrap().mode) as usize)
                    },
                     solana_scheduler::Mode::Banking => {
                         //info!("banking commit! {slot}");
@@ -1387,7 +1387,7 @@ impl Scheduler<ExecuteTimings> {
                                     ee.finish_time.unwrap(),
                                     "transaction_timings",
                                     ("slot", latest_runner_context.as_ref().unwrap().slot(), i64),
-                                    ("index", ee.task.transaction_index(), i64),
+                                    ("index", ee.task.transaction_index(latest_runner_context.as_ref().unwrap().mode), i64),
                                     ("thread", format!("solScExLane{:02}", ee.thx), String),
                                     ("signature", &sig, String),
                                     ("account_locks_in_json", serde_json::to_string(&ee.task.tx.0.get_account_locks_unchecked()).unwrap(), String),
