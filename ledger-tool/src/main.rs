@@ -385,7 +385,6 @@ fn output_slot(
             t2
         })
         .collect::<Vec<_>>();
-        */
 
     let depth = Arc::new(std::sync::atomic::AtomicUsize::default());
 
@@ -492,6 +491,7 @@ fn output_slot(
         handles.into_iter().for_each(|t| t.join().unwrap());
         handles2.into_iter().for_each(|t| t.join().unwrap());
         handles3.into_iter().for_each(|t| t.join().unwrap());
+        */
 
         output_slot_rewards(blockstore, slot, method);
     } else if verbose_level >= 1 {
