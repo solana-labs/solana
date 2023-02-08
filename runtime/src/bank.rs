@@ -1349,7 +1349,8 @@ impl Scheduler<ExecuteTimings> {
                 processed_ee_sender.send(solana_scheduler::UnlockablePayload(ee, timings)).unwrap();
                 break;
                 }
-                }
+                },
+                _ => todo!(),
                 }
             }
             todo!();
