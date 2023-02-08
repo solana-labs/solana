@@ -947,7 +947,7 @@ impl AbiExample for BuiltinPrograms {
 
 #[derive(Clone, Debug)]
 struct RunnerContext {
-    bank: Arc<Bank>,
+    bank: Option<Arc<Bank>>,
     // poh callback
     // tx status writer
 }
