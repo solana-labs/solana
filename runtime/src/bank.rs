@@ -1618,11 +1618,11 @@ impl<C> Scheduler<C> {
 
     fn pause_commit_into_bank(&self) {
         self.commit_status.notify_as_paused();
-        self.current_checkpoint.update_context_value(|c| c.bank = None);
+        self.current_checkpoint.update_context_value(|c| {c.bank = None;});
     }
 
     fn resume_commit_into_bank(&self, bank: Option<&Arc<Bank>>) {
-        self.current_checkpoint.replace_context_value(|c| c.bank = bank);
+        self.current_checkpoint.replace_context_value(|c| {c.bank = bank;});
         self.commit_status.notify_as_resumed();
     }
 
