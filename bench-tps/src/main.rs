@@ -24,8 +24,13 @@ use {
     },
     solana_streamer::{socket::SocketAddrSpace, streamer::StakedNodes},
     std::{
-        collections::HashMap, fs::File, io::prelude::*, net::SocketAddr, path::Path, process::exit,
-        sync::{RwLock, Arc,},
+        collections::HashMap,
+        fs::File,
+        io::prelude::*,
+        net::SocketAddr,
+        path::Path,
+        process::exit,
+        sync::{Arc, RwLock},
     },
 };
 
@@ -60,12 +65,17 @@ fn create_client(
                 Arc::new(ThinClient::new(rpc, tpu, connection_cache))
             } else {
                 let staked_nodes = Arc::new(RwLock::new(StakedNodes::default()));
-                let nodes =
-                    discover_cluster(entrypoint_addr, num_nodes, SocketAddrSpace::Unspecified, staked_nodes, use_quic)
-                        .unwrap_or_else(|err| {
-                            eprintln!("Failed to discover {num_nodes} nodes: {err:?}");
-                            exit(1);
-                        });
+                let nodes = discover_cluster(
+                    entrypoint_addr,
+                    num_nodes,
+                    SocketAddrSpace::Unspecified,
+                    staked_nodes,
+                    use_quic,
+                )
+                .unwrap_or_else(|err| {
+                    eprintln!("Failed to discover {num_nodes} nodes: {err:?}");
+                    exit(1);
+                });
                 if multi_client {
                     let (client, num_clients) =
                         get_multi_client(&nodes, &SocketAddrSpace::Unspecified, connection_cache);

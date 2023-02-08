@@ -7,7 +7,7 @@ use {
         nonblocking::tpu_connection::TpuConnection as NonblockingTpuConnection,
         tpu_connection::TpuConnection,
     },
-    solana_quic_client::quic_client::{temporary_pub::*,},
+    solana_quic_client::quic_client::temporary_pub::*,
     solana_sdk::transport::Result as TransportResult,
     solana_streamer::packet::PacketBatch,
     std::{net::SocketAddr, sync::Arc},
@@ -43,11 +43,16 @@ impl TpuConnection for QuicTpuConnection {
         Ok(())
     }
 
-    fn send_some_wire_transaction_batch_async(&self, buffers: Vec<usize>, data: Arc<PacketBatch>) -> TransportResult<()> {
+    fn send_some_wire_transaction_batch_async(
+        &self,
+        buffers: Vec<usize>,
+        data: Arc<PacketBatch>,
+    ) -> TransportResult<()> {
         let _lock = ASYNC_TASK_SEMAPHORE.acquire();
         let inner = self.inner.clone();
-        let _handle =
-            RUNTIME.spawn(async move { send_some_wire_transaction_batch_async(inner, buffers, data).await });
+        let _handle = RUNTIME.spawn(async move {
+            send_some_wire_transaction_batch_async(inner, buffers, data).await
+        });
         Ok(())
     }
 }

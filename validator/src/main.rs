@@ -1642,7 +1642,7 @@ pub fn main() {
         tpu_use_quic,
         tpu_connection_pool_size,
         tpu_enable_udp,
-        Some(staked_nodes)
+        Some(staked_nodes),
     )
     .unwrap_or_else(|e| {
         error!("Failed to start validator: {:?}", e);

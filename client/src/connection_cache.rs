@@ -79,11 +79,19 @@ impl ConnectionCache {
     }
 
     /// Create a connection cache with a specific quic client endpoint.
-    pub fn new_with_maybe_endpoint_and_offset(connection_pool_size: usize, client_endpoint: Option<Endpoint>, maybe_offset: Option<u16>) -> Self {
+    pub fn new_with_maybe_endpoint_and_offset(
+        connection_pool_size: usize,
+        client_endpoint: Option<Endpoint>,
+        maybe_offset: Option<u16>,
+    ) -> Self {
         Self::_new_with_endpoint(connection_pool_size, client_endpoint, maybe_offset)
     }
 
-    fn _new_with_endpoint(connection_pool_size: usize, client_endpoint: Option<Endpoint>, maybe_offset: Option<u16>) -> Self {
+    fn _new_with_endpoint(
+        connection_pool_size: usize,
+        client_endpoint: Option<Endpoint>,
+        maybe_offset: Option<u16>,
+    ) -> Self {
         // The minimum pool size is 1.
         let connection_pool_size = 1.max(connection_pool_size);
         Self {
@@ -178,7 +186,7 @@ impl ConnectionCache {
 
         let (to_create_connection, endpoint) =
             map.get(addr)
-            .map_or((true, self.create_endpoint(force_use_udp)), |pool| {
+                .map_or((true, self.create_endpoint(force_use_udp)), |pool| {
                     (
                         pool.need_new_connection(self.connection_pool_size),
                         pool.endpoint.clone(),
@@ -251,9 +259,11 @@ impl ConnectionCache {
         let port_offset = if self.use_quic() {
             match self.maybe_offset {
                 Some(offset) => offset,
-                None => QUIC_PORT_OFFSET
-            } 
-        } else { 0 };
+                None => QUIC_PORT_OFFSET,
+            }
+        } else {
+            0
+        };
 
         let port = addr
             .port()
@@ -680,7 +690,11 @@ mod tests {
         )
         .unwrap();
 
-        let connection_cache = ConnectionCache::new_with_maybe_endpoint_and_offset(1, Some(response_recv_endpoint), None);
+        let connection_cache = ConnectionCache::new_with_maybe_endpoint_and_offset(
+            1,
+            Some(response_recv_endpoint),
+            None,
+        );
 
         // server port 1:
         let port1 = 9001;

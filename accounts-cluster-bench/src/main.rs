@@ -22,7 +22,7 @@ use {
         system_instruction, system_program,
         transaction::Transaction,
     },
-    solana_streamer::{socket::SocketAddrSpace, streamer::StakedNodes,},
+    solana_streamer::{socket::SocketAddrSpace, streamer::StakedNodes},
     solana_transaction_status::parse_token::spl_token_instruction,
     std::{
         cmp::min,
@@ -30,8 +30,7 @@ use {
         process::exit,
         sync::{
             atomic::{AtomicU64, Ordering},
-            Arc,
-            RwLock,
+            Arc, RwLock,
         },
         thread::sleep,
         time::{Duration, Instant},

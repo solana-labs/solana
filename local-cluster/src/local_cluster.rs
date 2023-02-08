@@ -42,7 +42,7 @@ use {
         transaction::Transaction,
     },
     solana_stake_program::{config::create_account as create_stake_config_account, stake_state},
-    solana_streamer::{streamer::StakedNodes, socket::SocketAddrSpace},
+    solana_streamer::{socket::SocketAddrSpace, streamer::StakedNodes},
     solana_tpu_client::tpu_connection_cache::{
         DEFAULT_TPU_CONNECTION_POOL_SIZE, DEFAULT_TPU_ENABLE_UDP, DEFAULT_TPU_USE_QUIC,
     },
@@ -350,7 +350,7 @@ impl LocalCluster {
             config.node_stakes.len() + config.num_listeners as usize,
             socket_addr_space,
             staked_nodes.clone(),
-            config.tpu_use_quic
+            config.tpu_use_quic,
         )
         .unwrap();
 
@@ -359,7 +359,7 @@ impl LocalCluster {
             config.node_stakes.len(),
             socket_addr_space,
             staked_nodes,
-            config.tpu_use_quic
+            config.tpu_use_quic,
         )
         .unwrap();
 
@@ -543,7 +543,7 @@ impl LocalCluster {
             alive_node_contact_infos.len(),
             socket_addr_space,
             staked_nodes,
-            true
+            true,
         )
         .unwrap();
         info!("{} discovered {} nodes", test_name, cluster_nodes.len());
@@ -576,7 +576,7 @@ impl LocalCluster {
             alive_node_contact_infos.len(),
             socket_addr_space,
             staked_nodes,
-            true
+            true,
         )
         .unwrap();
         info!("{} discovered {} nodes", test_name, cluster_nodes.len());

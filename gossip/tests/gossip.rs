@@ -55,7 +55,7 @@ fn test_node(exit: &Arc<AtomicBool>) -> (Arc<ClusterInfo>, GossipService, UdpSoc
         exit,
         true,
         keypair,
-        Arc::new(RwLock::new(StakedNodes::default()))
+        Arc::new(RwLock::new(StakedNodes::default())),
     );
     let _ = cluster_info.my_contact_info();
     (
@@ -86,7 +86,7 @@ fn test_node_with_bank(
         exit,
         true,
         node_keypair,
-        Arc::new(RwLock::new(StakedNodes::default()))
+        Arc::new(RwLock::new(StakedNodes::default())),
     );
     let _ = cluster_info.my_contact_info();
     (

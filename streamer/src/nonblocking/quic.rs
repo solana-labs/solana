@@ -4,17 +4,17 @@ use {
         streamer::StakedNodes,
         tls_certificates::get_pubkey_from_tls_certificate,
     },
-    async_channel::{Sender as AsyncSender, Receiver as AsyncReceiver, unbounded},
+    async_channel::{unbounded, Receiver as AsyncReceiver, Sender as AsyncSender},
+    bytes::Bytes,
     crossbeam_channel::Sender,
     indexmap::map::{Entry, IndexMap},
     percentage::Percentage,
     quinn::{Connecting, Connection, Endpoint, EndpointConfig, TokioRuntime, VarInt},
     quinn_proto::VarIntBoundsExceeded,
-    bytes::Bytes,
     rand::{thread_rng, Rng},
     solana_perf::packet::PacketBatch,
     solana_sdk::{
-        packet::{Packet, PACKET_DATA_SIZE, Meta},
+        packet::{Meta, Packet, PACKET_DATA_SIZE},
         pubkey::Pubkey,
         quic::{
             QUIC_CONNECTION_HANDSHAKE_TIMEOUT_MS, QUIC_MAX_STAKED_CONCURRENT_STREAMS,
@@ -111,7 +111,12 @@ pub async fn run_server(
     let staked_connection_table: Arc<Mutex<ConnectionTable>> =
         Arc::new(Mutex::new(ConnectionTable::new(ConnectionPeerType::Staked)));
     let (sender, receiver) = unbounded();
-    tokio::spawn(patch_batch_sender(packet_sender, receiver, exit.clone(), stats.clone()));
+    tokio::spawn(patch_batch_sender(
+        packet_sender,
+        receiver,
+        exit.clone(),
+        stats.clone(),
+    ));
     while !exit.load(Ordering::Relaxed) {
         const WAIT_FOR_CONNECTION_TIMEOUT_MS: u64 = 1000;
         const WAIT_BETWEEN_NEW_CONNECTIONS_US: u64 = 1000;
@@ -518,37 +523,22 @@ async fn setup_connection(
     }
 }
 
-async fn patch_batch_sender(packet_sender: Sender<PacketBatch>, 
-    packet_receiver: AsyncReceiver<(Meta, Bytes, u64, usize)>, 
+async fn patch_batch_sender(
+    packet_sender: Sender<PacketBatch>,
+    packet_receiver: AsyncReceiver<(Meta, Bytes, u64, usize)>,
     exit: Arc<AtomicBool>,
-    stats: Arc<StreamStats>,) {
+    stats: Arc<StreamStats>,
+) {
     loop {
         let mut packet_batch = PacketBatch::with_capacity(64);
-        //todo: perhaps we should be timing from the first time the packet batch becomes non-zero length?
-        let last_sent = Instant::now();
+        let mut last_sent = Instant::now();
         loop {
             if exit.load(Ordering::Relaxed) {
                 return;
             }
-
-                if let Ok((meta, bytes, offset, end_of_chunk)) = packet_receiver.try_recv() {
-                    let mut packet = Packet::default();
-                    *packet.meta_mut() = meta;
-                    // todo: pretty sure there's an extend_with function or something that allows for 1 less
-                    // junk copy of the packet's data
-                    packet_batch.push(packet);
-                    let i = packet_batch.len() - 1;
-                    packet_batch[i].buffer_mut()[offset as usize..end_of_chunk]
-                    .copy_from_slice(&bytes);
-                }
-                else {
-                    sleep(Duration::from_micros(250)).await;
-                }
             let elapsed = last_sent.elapsed();
             if packet_batch.len() >= 64 || (!packet_batch.is_empty() && elapsed.as_millis() >= 1) {
-                // todo: handle this error
                 let len = packet_batch.len();
-
                 if let Err(e) = packet_sender.send(packet_batch) {
                     stats
                         .total_packet_batch_send_err
@@ -561,6 +551,23 @@ async fn patch_batch_sender(packet_sender: Sender<PacketBatch>,
                     trace!("sent {} packet batch", len);
                 }
                 break;
+            }
+
+            let res = packet_receiver.try_recv();
+            if res.is_ok() {
+                let (meta, bytes, offset, end_of_chunk) = res.unwrap();
+                let mut packet = Packet::default();
+                *packet.meta_mut() = meta;
+                // todo: pretty sure there's an extend_with function or something that allows for 1 less
+                // junk copy of the packet's data
+                packet_batch.push(packet);
+                let i = packet_batch.len() - 1;
+                packet_batch[i].buffer_mut()[offset as usize..end_of_chunk].copy_from_slice(&bytes);
+                if packet_batch.len() == 1 {
+                    last_sent = Instant::now();
+                }
+            } else {
+                sleep(Duration::from_micros(250)).await;
             }
         }
     }
@@ -626,7 +633,9 @@ async fn handle_connection(
                                     stats.clone(),
                                     stake,
                                     peer_type,
-                                ).await {
+                                )
+                                .await
+                                {
                                     last_update.store(timing::timestamp(), Ordering::Relaxed);
                                     break;
                                 }
@@ -704,15 +713,17 @@ async fn handle_chunk(
                 meta.set_socket_addr(remote_addr);
                 meta.sender_stake = stake;
                 let offset = chunk.offset;
-                let end_of_chunk = match (chunk.offset as usize).checked_add(chunk.bytes.len())
-                {
+                let end_of_chunk = match (chunk.offset as usize).checked_add(chunk.bytes.len()) {
                     Some(end) => end,
                     None => return true,
                 };
-                if let Err(err) = packet_sender.send((meta, chunk.bytes, offset, end_of_chunk)).await {
+                if let Err(err) = packet_sender
+                    .send((meta, chunk.bytes, offset, end_of_chunk))
+                    .await
+                {
                     info!("handle_chunk send error {}", err);
                 }
-                
+
                 match peer_type {
                     ConnectionPeerType::Staked => {
                         stats

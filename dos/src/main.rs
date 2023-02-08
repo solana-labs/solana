@@ -71,7 +71,7 @@ use {
     std::{
         net::{SocketAddr, UdpSocket},
         process::exit,
-        sync::{RwLock, Arc,},
+        sync::{Arc, RwLock},
         thread,
         time::{Duration, Instant},
     },

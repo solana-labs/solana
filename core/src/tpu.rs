@@ -1,6 +1,7 @@
 //! The `tpu` module implements the Transaction Processing Unit, a
 //! multi-stage transaction processing pipeline in software.
 
+pub use solana_sdk::quic::MAX_QUIC_CONNECTIONS_PER_PEER;
 use {
     crate::{
         banking_stage::BankingStage,
@@ -41,8 +42,6 @@ use {
         thread,
     },
 };
-
-pub use solana_sdk::quic::MAX_QUIC_CONNECTIONS_PER_PEER;
 
 pub const DEFAULT_TPU_COALESCE_MS: u64 = 5;
 

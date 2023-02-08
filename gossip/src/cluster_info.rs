@@ -2632,13 +2632,15 @@ impl ClusterInfo {
                 match self.run_socket_consume(&receiver, &sender, &thread_pool) {
                     Err(GossipError::RecvTimeoutError(RecvTimeoutError::Disconnected)) => {
                         info!("gossip consume thread receiving channel disconnected");
-                        break},
+                        break;
+                    }
                     Err(GossipError::RecvTimeoutError(RecvTimeoutError::Timeout)) => (),
                     // A send operation can only fail if the receiving end of a
                     // channel is disconnected.
                     Err(GossipError::SendError) => {
                         info!("gossip consume thread send error");
-                        break},
+                        break;
+                    }
                     Err(err) => error!("gossip consume: {}", err),
                     Ok(()) => (),
                 }

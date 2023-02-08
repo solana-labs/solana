@@ -31,8 +31,7 @@ use {
         process::exit,
         sync::{
             atomic::{AtomicBool, Ordering},
-            Arc,
-            RwLock,
+            Arc, RwLock,
         },
         thread::sleep,
         time::{Duration, Instant},
@@ -602,7 +601,7 @@ fn main() {
             0,                       // my_shred_version
             SocketAddrSpace::Unspecified,
             staked_nodes,
-            true
+            true,
         )
         .unwrap_or_else(|err| {
             eprintln!("Failed to discover {entrypoint_addr} node: {err:?}");

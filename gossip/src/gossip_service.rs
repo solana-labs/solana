@@ -2,27 +2,28 @@
 
 use {
     crate::{cluster_info::ClusterInfo, legacy_contact_info::LegacyContactInfo as ContactInfo},
-    crossbeam_channel::{unbounded, Sender},
+    crossbeam_channel::{unbounded, RecvTimeoutError, Sender},
     rand::{thread_rng, Rng},
-    solana_client::{connection_cache::ConnectionCache, thin_client::ThinClient, tpu_connection::{TpuConnection}},
+    solana_client::{
+        connection_cache::ConnectionCache, thin_client::ThinClient, tpu_connection::TpuConnection,
+    },
     solana_perf::recycler::Recycler,
     solana_runtime::bank_forks::BankForks,
-    crossbeam_channel::RecvTimeoutError,
     solana_sdk::{
         pubkey::Pubkey,
-        signature::{Keypair, Signer},
         quic::MAX_QUIC_CONNECTIONS_PER_PEER,
+        signature::{Keypair, Signer},
         timing::timestamp,
     },
     solana_streamer::{
-        streamer::StakedNodes,
+        nonblocking::quic::DEFAULT_WAIT_FOR_CHUNK_TIMEOUT_MS,
+        quic::{spawn_server, StreamStats, MAX_STAKED_CONNECTIONS, MAX_UNSTAKED_CONNECTIONS},
         socket::SocketAddrSpace,
-        streamer::{self, StreamerReceiveStats, StreamerSendStats, PacketBatchReceiver, StreamerError, Result},
-        quic::{spawn_server, MAX_STAKED_CONNECTIONS,
-            MAX_UNSTAKED_CONNECTIONS, StreamStats},
-        nonblocking::quic::{DEFAULT_WAIT_FOR_CHUNK_TIMEOUT_MS},
+        streamer::{
+            self, PacketBatchReceiver, Result, StakedNodes, StreamerError, StreamerReceiveStats,
+            StreamerSendStats,
+        },
     },
-    
     std::{
         collections::{HashMap, HashSet},
         net::{SocketAddr, TcpListener, UdpSocket},
@@ -30,7 +31,7 @@ use {
             atomic::{AtomicBool, Ordering},
             Arc, RwLock,
         },
-        thread::{self, sleep, JoinHandle, Builder},
+        thread::{self, sleep, Builder, JoinHandle},
         time::{Duration, Instant},
     },
 };
@@ -58,12 +59,12 @@ fn recv_send_quic(
         socket_addr_space.check(&addr).then_some((i, addr))
     });
     //todo: bench this
-    let mut hashmap : HashMap<SocketAddr, Vec<usize>> = HashMap::new();
+    let mut hashmap: HashMap<SocketAddr, Vec<usize>> = HashMap::new();
     for p in packets {
         match hashmap.get_mut(&p.1) {
             Some(packet_set) => {
                 packet_set.push(p.0);
-            },
+            }
             None => {
                 hashmap.insert(p.1, vec![p.0]);
             }
@@ -72,10 +73,10 @@ fn recv_send_quic(
     let packet_batch = Arc::new(packet_batch);
     for packet_set in hashmap.into_iter() {
         let conn = connection_cache.get_connection(&packet_set.0);
-	    //info!("recv_send_quic connection remote address: {}", conn.tpu_addr());
-        //info!("recv_send_quic connection batch len: {}", packet_set.1.len());     
-	    let _ = conn.send_some_wire_transaction_batch_async(packet_set.1, packet_batch.clone());
-	    //info!("recv_send_quic send result: {:?}", res);    
+        //info!("recv_send_quic connection remote address: {}", conn.tpu_addr());
+        //info!("recv_send_quic connection batch len: {}", packet_set.1.len());
+        let _ = conn.send_some_wire_transaction_batch_async(packet_set.1, packet_batch.clone());
+        //info!("recv_send_quic send result: {:?}", res);
     }
     Ok(())
 }
@@ -100,14 +101,17 @@ fn quic_responder(
             }
 
             loop {
-                if let Err(e) = recv_send_quic(&connection_cache, &r, &socket_addr_space, &mut stats) {
+                if let Err(e) =
+                    recv_send_quic(&connection_cache, &r, &socket_addr_space, &mut stats)
+                {
                     match e {
                         StreamerError::RecvTimeout(RecvTimeoutError::Disconnected) => {
                             info!("quic_responder: recv_send_quic channel disconnected!");
-                            break},
+                            break;
+                        }
                         StreamerError::RecvTimeout(RecvTimeoutError::Timeout) => {
                             info!("quic_responder: recv_send_quic timed out");
-                        },
+                        }
                         _ => {
                             errors += 1;
                             last_error = Some(e);
@@ -131,7 +135,6 @@ fn quic_responder(
         .unwrap()
 }
 
-
 impl GossipService {
     pub fn new(
         cluster_info: &Arc<ClusterInfo>,
@@ -154,7 +157,7 @@ impl GossipService {
             use_quic
         );
         let socket_addr_space = *cluster_info.socket_addr_space();
-        let (maybe_endpoint, t_receiver) = if use_quic{
+        let (maybe_endpoint, t_receiver) = if use_quic {
             let stats = Arc::new(StreamStats::default());
             //todo: fix
             let (endpoint, t_receiver) = spawn_server(
@@ -168,21 +171,26 @@ impl GossipService {
                 MAX_STAKED_CONNECTIONS,
                 MAX_UNSTAKED_CONNECTIONS,
                 stats,
-                DEFAULT_WAIT_FOR_CHUNK_TIMEOUT_MS
-            ).unwrap();
+                DEFAULT_WAIT_FOR_CHUNK_TIMEOUT_MS,
+            )
+            .unwrap();
 
             (Some(endpoint), t_receiver)
-        } else{
-        (None, streamer::receiver(
-            gossip_socket.clone(),
-            exit.clone(),
-            request_sender,
-            Recycler::default(),
-            Arc::new(StreamerReceiveStats::new("gossip_receiver")),
-            1,
-            false,
-            None,
-        ))};
+        } else {
+            (
+                None,
+                streamer::receiver(
+                    gossip_socket.clone(),
+                    exit.clone(),
+                    request_sender,
+                    Recycler::default(),
+                    Arc::new(StreamerReceiveStats::new("gossip_receiver")),
+                    1,
+                    false,
+                    None,
+                ),
+            )
+        };
         let (consume_sender, listen_receiver) = unbounded();
         let t_socket_consume = cluster_info.clone().start_socket_consume_thread(
             request_receiver,
@@ -204,22 +212,27 @@ impl GossipService {
             exit.clone(),
         );
         let t_responder = if use_quic {
-            let connection_cache = ConnectionCache::new_with_maybe_endpoint_and_offset(1, Some(maybe_endpoint.unwrap()), Some(0));
-            quic_responder(            
-            "Gossip",
-            connection_cache,
-            response_receiver,
-            socket_addr_space,
-            stats_reporter_sender,)
-        }
-        else {
-        streamer::responder(
-            "Gossip",
-            gossip_socket,
-            response_receiver,
-            socket_addr_space,
-            stats_reporter_sender,
-        )};
+            let connection_cache = ConnectionCache::new_with_maybe_endpoint_and_offset(
+                1,
+                Some(maybe_endpoint.unwrap()),
+                Some(0),
+            );
+            quic_responder(
+                "Gossip",
+                connection_cache,
+                response_receiver,
+                socket_addr_space,
+                stats_reporter_sender,
+            )
+        } else {
+            streamer::responder(
+                "Gossip",
+                gossip_socket,
+                response_receiver,
+                socket_addr_space,
+                stats_reporter_sender,
+            )
+        };
         let thread_hdls = vec![
             t_receiver,
             t_responder,
@@ -244,7 +257,7 @@ pub fn discover_cluster(
     num_nodes: usize,
     socket_addr_space: SocketAddrSpace,
     staked_nodes: Arc<RwLock<StakedNodes>>,
-    use_quic: bool
+    use_quic: bool,
 ) -> std::io::Result<Vec<ContactInfo>> {
     const DISCOVER_CLUSTER_TIMEOUT: Duration = Duration::from_secs(120);
     let (_all_peers, validators) = discover(
@@ -258,7 +271,7 @@ pub fn discover_cluster(
         0,    // my_shred_version
         socket_addr_space,
         staked_nodes,
-        use_quic
+        use_quic,
     )?;
     Ok(validators)
 }
@@ -274,7 +287,7 @@ pub fn discover(
     my_shred_version: u16,
     socket_addr_space: SocketAddrSpace,
     staked_nodes: Arc<RwLock<StakedNodes>>,
-    use_quic: bool
+    use_quic: bool,
 ) -> std::io::Result<(
     Vec<ContactInfo>, // all gossip peers
     Vec<ContactInfo>, // tvu peers (validators)
@@ -290,7 +303,7 @@ pub fn discover(
         true, // should_check_duplicate_instance,
         socket_addr_space,
         staked_nodes,
-        use_quic
+        use_quic,
     );
 
     let id = spy_ref.id();
@@ -447,7 +460,7 @@ pub fn make_gossip_node(
     should_check_duplicate_instance: bool,
     socket_addr_space: SocketAddrSpace,
     staked_nodes: Arc<RwLock<StakedNodes>>,
-    use_quic: bool
+    use_quic: bool,
 ) -> (GossipService, Option<TcpListener>, Arc<ClusterInfo>) {
     let keypair = Arc::new(keypair);
     let (node, gossip_socket, ip_echo) = if let Some(gossip_addr) = gossip_addr {
@@ -470,7 +483,7 @@ pub fn make_gossip_node(
         exit,
         use_quic,
         keypair,
-        staked_nodes
+        staked_nodes,
     );
     (gossip_service, ip_echo, cluster_info)
 }
@@ -506,7 +519,7 @@ mod tests {
             &exit,
             true,
             keypair,
-            Arc::new(RwLock::new(StakedNodes::default()))
+            Arc::new(RwLock::new(StakedNodes::default())),
         );
         exit.store(true, Ordering::Relaxed);
         d.join().unwrap();

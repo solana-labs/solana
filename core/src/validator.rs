@@ -741,7 +741,7 @@ impl Validator {
 
         let staked_nodes = match maybe_staked_nodes {
             Some(staked_nodes) => staked_nodes,
-            None => Arc::new(RwLock::new(StakedNodes::default()))
+            None => Arc::new(RwLock::new(StakedNodes::default())),
         };
 
         let connection_cache = match use_quic {

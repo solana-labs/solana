@@ -13,13 +13,13 @@ use {
         gossip_service::discover, legacy_contact_info::LegacyContactInfo as ContactInfo,
     },
     solana_sdk::pubkey::Pubkey,
-    solana_streamer::{socket::SocketAddrSpace, streamer::StakedNodes,},
+    solana_streamer::{socket::SocketAddrSpace, streamer::StakedNodes},
     std::{
         error,
         net::{IpAddr, Ipv4Addr, SocketAddr},
         process::exit,
-        time::Duration,
         sync::{Arc, RwLock},
+        time::Duration,
     },
 };
 
@@ -211,7 +211,11 @@ fn process_spy_results(
     }
 }
 
-fn process_spy(matches: &ArgMatches, socket_addr_space: SocketAddrSpace, use_quic: bool) -> std::io::Result<()> {
+fn process_spy(
+    matches: &ArgMatches,
+    socket_addr_space: SocketAddrSpace,
+    use_quic: bool,
+) -> std::io::Result<()> {
     let num_nodes_exactly = matches
         .value_of("num_nodes_exactly")
         .map(|num| num.to_string().parse().unwrap());
@@ -275,7 +279,7 @@ fn parse_entrypoint(matches: &ArgMatches) -> Option<SocketAddr> {
 fn process_rpc_url(
     matches: &ArgMatches,
     socket_addr_space: SocketAddrSpace,
-    use_quic: bool
+    use_quic: bool,
 ) -> std::io::Result<()> {
     let any = matches.is_present("any");
     let all = matches.is_present("all");
@@ -294,7 +298,7 @@ fn process_rpc_url(
         shred_version,
         socket_addr_space,
         staked_nodes,
-        use_quic
+        use_quic,
     )?;
 
     let rpc_addrs: Vec<_> = validators
