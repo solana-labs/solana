@@ -950,7 +950,6 @@ struct RunnerContext {
     bank: Arc<Bank>,
     // poh callback
     // tx status writer
-    is_aborted: bool,
 }
 
 impl RunnerContext {
