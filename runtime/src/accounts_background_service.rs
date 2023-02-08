@@ -544,6 +544,8 @@ impl AccountsBackgroundService {
             .spawn(move || {
                 let mut stats = StatsManager::new();
                 let mut last_snapshot_end_time = None;
+                // This is for holding the reference counts of the appendvecs of the latest
+                // snapshot, so they are not released or recycled until this va
                 // Prefix with _ because of the compiler warning - value assigned never read
                 let mut _last_snapshot_storages: Option<AccountStorages> = None;
                 loop {

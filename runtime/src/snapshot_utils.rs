@@ -881,6 +881,7 @@ pub fn create_accounts_run_and_snapshot_dirs(
     Ok((run_path, snapshot_path))
 }
 
+/// Return account path from the appendvec path after checking its format.
 fn get_account_path_from_appendvec_path(appendvec_path: &Path) -> Result<PathBuf> {
     let path = appendvec_path.to_path_buf();
     let run_path = path
@@ -913,7 +914,7 @@ fn get_snapshot_accounts_hardlink_dir(
     hardlinks_dir: impl AsRef<Path>,
 ) -> Result<PathBuf> {
     let account_path = get_account_path_from_appendvec_path(appendvec_path)
-        // Let it panic here because incorrect appendvec path is an unrecoverable error.  The
+        // Let it panic here because incorrect appendvec path is an unrecoverable error.
         // SnapshotError::InvalidAppendvecPath already provided enough error information.
         .unwrap();
     let snapshot_hardlink_dir = account_path.join("snapshot").join(bank_slot.to_string());

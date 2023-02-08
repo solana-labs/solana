@@ -65,6 +65,7 @@ use {
     tempfile::TempDir,
     test_case::test_case,
 };
+
 struct SnapshotTestConfig {
     bank_forks: BankForks,
     genesis_config_info: GenesisConfigInfo,
