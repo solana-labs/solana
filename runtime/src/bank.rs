@@ -1602,10 +1602,8 @@ impl<C> Scheduler<C> {
         checkpoint.wait_for_restart(None);
         let r = checkpoint.take_restart_value();
         self.current_checkpoint = checkpoint;
+        self.current_checkpoint.update_context_value(RunnerContext{bank: None});
         self.collected_results.lock().unwrap().push(Ok(r));
-        {
-            *self.bank.write().unwrap() = None;
-        }
 
         /*
         let executing_thread_duration_pairs: Result<Vec<_>> = self.executing_thread_handles.take().unwrap().into_iter().map(|executing_thread_handle| {
