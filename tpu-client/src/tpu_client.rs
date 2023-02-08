@@ -62,21 +62,21 @@ impl Default for TpuClientConfig {
 /// Client which sends transactions directly to the current leader's TPU port over UDP.
 /// The client uses RPC to determine the current leader and fetch node contact info
 pub struct TpuClient<
-    R, // ConnectionPool
-    S, // ConnectionManager
-    T, // NewConnectionConfig
+    P, // ConnectionPool
+    M, // ConnectionManager
+    C, // NewConnectionConfig
 > {
     _deprecated: UdpSocket, // TpuClient now uses the connection_cache to choose a send_socket
     //todo: get rid of this field
     rpc_client: Arc<RpcClient>,
-    tpu_client: Arc<NonblockingTpuClient<R, S, T>>,
+    tpu_client: Arc<NonblockingTpuClient<P, M, C>>,
 }
 
-impl<R, S, T> TpuClient<R, S, T>
+impl<P, M, C> TpuClient<P, M, C>
 where
-    R: ConnectionPool<NewConnectionConfig = T>,
-    S: ConnectionManager<ConnectionPool = R, NewConnectionConfig = T>,
-    T: NewConnectionConfig,
+    P: ConnectionPool<NewConnectionConfig = C>,
+    M: ConnectionManager<ConnectionPool = P, NewConnectionConfig = C>,
+    C: NewConnectionConfig,
 {
     /// Serialize and send transaction to the current and upcoming leader TPUs according to fanout
     /// size
@@ -121,7 +121,7 @@ where
         rpc_client: Arc<RpcClient>,
         websocket_url: &str,
         config: TpuClientConfig,
-        connection_manager: S,
+        connection_manager: M,
     ) -> Result<Self> {
         let create_tpu_client = NonblockingTpuClient::new(
             rpc_client.get_inner_client().clone(),
@@ -144,7 +144,7 @@ where
         rpc_client: Arc<RpcClient>,
         websocket_url: &str,
         config: TpuClientConfig,
-        connection_cache: Arc<ConnectionCache<R, S, T>>,
+        connection_cache: Arc<ConnectionCache<P, M, C>>,
     ) -> Result<Self> {
         let create_tpu_client = NonblockingTpuClient::new_with_connection_cache(
             rpc_client.get_inner_client().clone(),
@@ -163,10 +163,10 @@ where
     }
 
     #[cfg(feature = "spinner")]
-    pub fn send_and_confirm_messages_with_spinner<K: Signers>(
+    pub fn send_and_confirm_messages_with_spinner<T: Signers>(
         &self,
         messages: &[Message],
-        signers: &K,
+        signers: &T,
     ) -> Result<Vec<Option<TransactionError>>> {
         self.invoke(
             self.tpu_client
@@ -178,7 +178,7 @@ where
         &self.rpc_client
     }
 
-    fn invoke<O, F: std::future::Future<Output = O>>(&self, f: F) -> O {
+    fn invoke<T, F: std::future::Future<Output = T>>(&self, f: F) -> T {
         // `block_on()` panics if called within an asynchronous execution context. Whereas
         // `block_in_place()` only panics if called from a current_thread runtime, which is the
         // lesser evil.

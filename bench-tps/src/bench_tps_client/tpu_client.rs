@@ -10,11 +10,11 @@ use {
     },
 };
 
-impl<R, S, T> BenchTpsClient for TpuClient<R, S, T>
+impl<P, M, C> BenchTpsClient for TpuClient<P, M, C>
 where
-    R: ConnectionPool<NewConnectionConfig = T>,
-    S: ConnectionManager<ConnectionPool = R, NewConnectionConfig = T>,
-    T: NewConnectionConfig,
+    P: ConnectionPool<NewConnectionConfig = C>,
+    M: ConnectionManager<ConnectionPool = P, NewConnectionConfig = C>,
+    C: NewConnectionConfig,
 {
     fn send_transaction(&self, transaction: Transaction) -> Result<Signature> {
         let signature = transaction.signatures[0];

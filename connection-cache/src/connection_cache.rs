@@ -43,13 +43,13 @@ pub struct ConnectionCache<
     connection_config: T,
 }
 
-impl<R, S, T> ConnectionCache<R, S, T>
+impl<P, M, C> ConnectionCache<P, M, C>
 where
-    R: ConnectionPool<NewConnectionConfig = T>,
-    S: ConnectionManager<ConnectionPool = R, NewConnectionConfig = T>,
-    T: NewConnectionConfig,
+    P: ConnectionPool<NewConnectionConfig = C>,
+    M: ConnectionManager<ConnectionPool = P, NewConnectionConfig = C>,
+    C: NewConnectionConfig,
 {
-    pub fn new(connection_manager: S, connection_pool_size: usize) -> Result<Self, ClientError> {
+    pub fn new(connection_manager: M, connection_pool_size: usize) -> Result<Self, ClientError> {
         let config = connection_manager.new_connection_config();
         Ok(Self::new_with_config(
             connection_pool_size,
@@ -60,8 +60,8 @@ where
 
     pub fn new_with_config(
         connection_pool_size: usize,
-        connection_config: T,
-        connection_manager: S,
+        connection_config: C,
+        connection_manager: M,
     ) -> Self {
         Self {
             map: RwLock::new(IndexMap::with_capacity(MAX_CONNECTIONS)),
@@ -80,7 +80,7 @@ where
         &self,
         lock_timing_ms: &mut u64,
         addr: &SocketAddr,
-    ) -> CreateConnectionResult<<R as ConnectionPool>::BaseClientConnection> {
+    ) -> CreateConnectionResult<<P as ConnectionPool>::BaseClientConnection> {
         let mut get_connection_map_lock_measure = Measure::start("get_connection_map_lock_measure");
         let mut map = self.map.write().unwrap();
         get_connection_map_lock_measure.stop();
@@ -145,7 +145,7 @@ where
     fn get_or_add_connection(
         &self,
         addr: &SocketAddr,
-    ) -> GetConnectionResult<<R as ConnectionPool>::BaseClientConnection> {
+    ) -> GetConnectionResult<<P as ConnectionPool>::BaseClientConnection> {
         let mut get_connection_map_lock_measure = Measure::start("get_connection_map_lock_measure");
         let map = self.map.read().unwrap();
         get_connection_map_lock_measure.stop();
@@ -212,7 +212,7 @@ where
         &self,
         addr: &SocketAddr,
     ) -> (
-        Arc<<R as ConnectionPool>::BaseClientConnection>,
+        Arc<<P as ConnectionPool>::BaseClientConnection>,
         Arc<ConnectionCacheStats>,
     ) {
         let mut get_connection_measure = Measure::start("get_connection_measure");
@@ -264,7 +264,7 @@ where
         (connection, connection_cache_stats)
     }
 
-    pub fn get_connection(&self, addr: &SocketAddr) -> Arc<<<R as ConnectionPool>::BaseClientConnection as BaseClientConnection>::BlockingClientConnection>{
+    pub fn get_connection(&self, addr: &SocketAddr) -> Arc<<<P as ConnectionPool>::BaseClientConnection as BaseClientConnection>::BlockingClientConnection>{
         let (connection, connection_cache_stats) = self.get_connection_and_log_stats(addr);
         connection.new_blocking_connection(*addr, connection_cache_stats)
     }
@@ -272,7 +272,7 @@ where
     pub fn get_nonblocking_connection(
         &self,
         addr: &SocketAddr,
-    ) -> Arc<<<R as ConnectionPool>::BaseClientConnection as BaseClientConnection>::NonblockingClientConnection>{
+    ) -> Arc<<<P as ConnectionPool>::BaseClientConnection as BaseClientConnection>::NonblockingClientConnection>{
         let (connection, connection_cache_stats) = self.get_connection_and_log_stats(addr);
         connection.new_nonblocking_connection(*addr, connection_cache_stats)
     }
