@@ -1621,7 +1621,7 @@ impl<C> Scheduler<C> {
         self.commit_status.notify_as_resumed();
     }
 
-    fn update_transaction_runner_context(&self, bank: Arc<Bank>) {
+    fn replace_transaction_runner_context(&self, bank: Arc<Bank>) {
         self.current_checkpoint.as_ref().unwrap().update_context_value(RunnerContext { bank: bank });
     }
 }
@@ -6911,7 +6911,7 @@ impl Bank {
     pub fn sync_transaction_runner_context(self: &Arc<Self>) {
         let s = self.scheduler2.read().unwrap();
         let scheduler = s.as_ref().unwrap();
-        scheduler.update_transaction_runner_context(self.clone());
+        scheduler.replace_transaction_runner_context(self.clone());
     }
 
     pub fn commit_mode(&self) -> CommitMode {
