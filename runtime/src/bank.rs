@@ -1151,6 +1151,7 @@ impl Scheduler<ExecuteTimings> {
         let (processed_ee_sender, processed_ee_receiver) = crossbeam_channel::unbounded();
         let (retired_ee_sender, retired_ee_receiver) = crossbeam_channel::unbounded();
 
+
         let executing_thread_count = std::env::var("EXECUTING_THREAD_COUNT")
             .unwrap_or(format!("{}", 8))
             .parse::<usize>()
@@ -1193,17 +1194,12 @@ impl Scheduler<ExecuteTimings> {
                 let transaction_index = ee.task.transaction_index();
                 trace!("execute_substage: transaction_index: {} execute_clock: {} at thread: {}", thx, transaction_index, current_execute_clock);
 
-                let ro_bank = bank.read().unwrap();
                 let mut timings = Default::default();
-                if ro_bank.is_none() {
+                let Some(bank) = latest_runner_context.as_ref().unwrap().bank else {
                     processed_ee_sender.send(solana_scheduler::UnlockablePayload(ee, timings)).unwrap();
                     continue 'recv;
                 }
-                let weak_bank = ro_bank.as_ref().unwrap().upgrade();
-                if weak_bank.is_none() {
-                    processed_ee_sender.send(solana_scheduler::UnlockablePayload(ee, timings)).unwrap();
-                    continue 'recv;
-                }
+                let slot = bank.slot();
 
                 let tx_account_lock_limit = bank.get_transaction_account_lock_limit();
                 let lock_result = ee.task.tx.0
