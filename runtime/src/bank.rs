@@ -8611,7 +8611,7 @@ impl Bank {
         let mut s = self.scheduler2.write().unwrap();
 
         if let Some(scheduler) = s.as_mut() {
-            let commit_mode = self.commit_mode();
+            let commit_mode = self.runner_context_mode();
             if matches!(commit_mode, solana_scheduler::Mode::Replaying) || via_drop {
                 info!("wait_for_scheduler({commit_mode:?}/{via_drop}): gracefully stopping bank ({})...", self.slot());
                 if matches!(commit_mode, solana_scheduler::Mode::Banking) {
