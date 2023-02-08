@@ -2230,6 +2230,12 @@ impl<T, B: Clone> Checkpoint<T, B> {
         *b = Some(new);
     }
 
+    pub fn update_context_value(&self, on_update: impl Fn(&mut B)) {
+        let mut g = self.0.lock().unwrap();
+        let (_self_remaining_threads, self_return_value, b) = &mut *g;
+        on_update(&mut *b)
+    }
+
     pub fn clone_context_value(&self) -> Option<B> {
         let mut g = self.0.lock().unwrap();
         let (_self_remaining_threads, self_return_value, b) = &mut *g;
