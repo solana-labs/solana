@@ -198,11 +198,11 @@ impl BankForks {
         bank
     }
 
-    pub fn add_new_bank_for_banking() -> Arc<Bank> {
+    pub fn add_new_bank_for_banking(bank: Bank) -> Arc<Bank> {
         self.add_new_bank(bank, solana_scheduler::Mode::Banking)
     }
 
-    pub fn add_new_bank_for_replaying() -> Arc<Bank> {
+    pub fn add_new_bank_for_replaying(bank: Bank) -> Arc<Bank> {
         self.add_new_bank(bank, solana_scheduler::Mode::Replaying)
     }
 
