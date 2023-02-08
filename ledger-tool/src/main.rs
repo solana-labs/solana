@@ -308,10 +308,7 @@ fn output_slot(
         .spawn(move || {
             use rand::Rng;
             loop {
-                struct A;
-                impl solana_scheduler::WithMode for A {
-                    fn mode(&self) -> solana_scheduler::Mode { panic!() }
-                }
+                /*
                 ScheduleStage::run::<_, _, A>(
                     &mut None,
                     lane_count * lane_channel_factor,
@@ -324,6 +321,7 @@ fn output_slot(
                     Some(&post_schedule_env_sender),
                     |_| "".into()
                 );
+                */
             }
         })
         .unwrap();
