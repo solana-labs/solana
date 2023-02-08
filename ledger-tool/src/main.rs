@@ -294,7 +294,10 @@ fn output_slot(
         .parse::<usize>()
         .unwrap();
     //let (pre_execute_env_sender, pre_execute_env_receiver) = crossbeam_channel::bounded(lane_count * lane_channel_factor);
-    /*
+                struct A;
+                impl solana_scheduler::WithMode for A {
+                    fn mode(&self) -> solana_scheduler::Mode { panic!() }
+                }
     let (pre_execute_env_sender, pre_execute_env_receiver) = crossbeam_channel::unbounded();
 
     //let (pre_execute_env_sender, pre_execute_env_receiver) = crossbeam_channel::unbounded();
@@ -309,7 +312,6 @@ fn output_slot(
         .spawn(move || {
             use rand::Rng;
             loop {
-                /*
                 ScheduleStage::run::<_, _, A>(
                     &mut None,
                     lane_count * lane_channel_factor,
@@ -322,7 +324,6 @@ fn output_slot(
                     Some(&post_schedule_env_sender),
                     |_| "".into()
                 );
-                */
             }
         })
         .unwrap();
@@ -491,8 +492,6 @@ fn output_slot(
         handles.into_iter().for_each(|t| t.join().unwrap());
         handles2.into_iter().for_each(|t| t.join().unwrap());
         handles3.into_iter().for_each(|t| t.join().unwrap());
-        */
-    }
 
         output_slot_rewards(blockstore, slot, method);
     } else if verbose_level >= 1 {
