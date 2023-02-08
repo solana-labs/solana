@@ -27,7 +27,7 @@ impl log::Log for LoggerShim {
 fn replace_logger(logger: env_logger::Logger) {
     log::set_max_level(logger.filter());
     *LOGGER.write().unwrap() = logger;
-    log_panics::init();
+    //log_panics::init();
     let _ = log::set_boxed_logger(Box::new(LoggerShim {}));
 }
 
