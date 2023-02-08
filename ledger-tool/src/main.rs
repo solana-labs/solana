@@ -281,6 +281,7 @@ fn output_slot(
         }
     }
 
+    #[derive(Clone)]
     struct A;
     impl solana_scheduler::WithMode for A {
         fn mode(&self) -> solana_scheduler::Mode { panic!() }
