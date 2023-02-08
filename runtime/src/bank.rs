@@ -8341,7 +8341,7 @@ impl Bank {
         self.feature_set = Arc::new(feature_set);
     }
 
-    pub fn fill_bank_with_ticks_for_tests(&self) {
+    pub fn fill_bank_with_ticks_for_tests(self: &Arc<Self>) {
         if self.tick_height.load(Relaxed) < self.max_tick_height {
             let last_blockhash = self.last_blockhash();
             while self.last_blockhash() == last_blockhash {
