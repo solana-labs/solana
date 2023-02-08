@@ -1151,9 +1151,6 @@ impl Scheduler<ExecuteTimings> {
         let (processed_ee_sender, processed_ee_receiver) = crossbeam_channel::unbounded();
         let (retired_ee_sender, retired_ee_receiver) = crossbeam_channel::unbounded();
 
-
-        let bank = Arc::new(std::sync::RwLock::new(None::<std::sync::Weak<Bank>>));
-
         let executing_thread_count = std::env::var("EXECUTING_THREAD_COUNT")
             .unwrap_or(format!("{}", 8))
             .parse::<usize>()
@@ -1168,7 +1165,6 @@ impl Scheduler<ExecuteTimings> {
 
         let executing_thread_handles = (0..(executing_thread_count * 2)).map(|thx| {
             let (scheduled_ee_receiver, scheduled_high_ee_receiver, processed_ee_sender) = (scheduled_ee_receiver.clone(), scheduled_high_ee_receiver.clone(), processed_ee_sender.clone());
-            let bank = bank.clone();
             let initial_checkpoint = initial_checkpoint.clone();
             let commit_status = commit_status.clone();
 
@@ -1208,8 +1204,6 @@ impl Scheduler<ExecuteTimings> {
                     processed_ee_sender.send(solana_scheduler::UnlockablePayload(ee, timings)).unwrap();
                     continue 'recv;
                 }
-                let bank = weak_bank.as_ref().unwrap();
-                let slot = bank.slot();
 
                 let tx_account_lock_limit = bank.get_transaction_account_lock_limit();
                 let lock_result = ee.task.tx.0
