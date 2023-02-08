@@ -1642,7 +1642,6 @@ impl<C> Scheduler<C> {
         self.commit_status.notify_as_paused();
         {
             *self.bank.write().unwrap() = None;
-            self.slot.store(0, std::sync::atomic::Ordering::SeqCst);
         }
     }
 
@@ -1650,7 +1649,6 @@ impl<C> Scheduler<C> {
         if let Some(bank) = bank {
             {
                 *self.bank.write().unwrap() = Some(Arc::downgrade(bank));
-                self.slot.store(bank.slot(), std::sync::atomic::Ordering::SeqCst);
             }
         }
         self.commit_status.notify_as_resumed();
@@ -6879,8 +6877,6 @@ impl Bank {
                 let ss = self.scheduler2.write().unwrap();
                 let w = ss.as_ref().unwrap();
                 *w.bank.write().unwrap() = Some(Arc::downgrade(self));
-                w.slot
-                    .store(self.slot(), std::sync::atomic::Ordering::SeqCst);
                 drop(w);
                 drop(ss);
 
