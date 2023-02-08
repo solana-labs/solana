@@ -223,6 +223,13 @@ struct WriteAncientAccounts<'a> {
     metrics: ShrinkStatsSub,
 }
 
+#[derive(Debug, Eq, PartialEq, Clone, Copy)]
+enum SkipOnlyManyRefsSlots {
+    Skip,
+    #[cfg(test)]
+    IncludeForTests,
+}
+
 impl<'a> WriteAncientAccounts<'a> {
     pub(crate) fn accumulate(&mut self, mut other: Self) {
         self.metrics.accumulate(&other.metrics);
@@ -324,10 +331,14 @@ impl AccountsDb {
     /// 2a. pubkeys with refcount = 1. This means this pubkey exists NOWHERE else in accounts db.
     /// 2b. pubkeys with refcount > 1
     /// Note that the return value can contain fewer items than 'stored_accounts_all' if we find storages which won't be affected.
+    /// Returns accounts to combine broken up by many refs and one ref.
+    /// 'skip_only_many_refs_slots' determines what happens if a resulting slot would have the same contents as it currently has.
+    /// If Skip, then leave it out of the return results. Only tests should not skip these slots.
     #[allow(dead_code)]
     fn calc_accounts_to_combine<'a>(
         &self,
         stored_accounts_all: &'a Vec<(&'a SlotInfo, GetUniqueAccountsResult<'a>)>,
+        skip_only_many_refs_slots: SkipOnlyManyRefsSlots,
     ) -> AccountsToCombine<'a> {
         let mut accounts_keep_slots = HashMap::default();
         let len = stored_accounts_all.len();
@@ -342,6 +353,14 @@ impl AccountsDb {
             );
             let many_refs = &mut shrink_collect.alive_accounts.many_refs;
             if !many_refs.accounts.is_empty() {
+                if skip_only_many_refs_slots == SkipOnlyManyRefsSlots::Skip
+                    && shrink_collect.alive_accounts.one_ref.accounts.is_empty()
+                    && shrink_collect.total_starting_accounts == many_refs.accounts.len()
+                {
+                    // all accounts in this append vec are alive and have many refs. In that case, there is nothing we can do.
+                    // We would just write these same contents back onto a new append vec at the same slot, which is a waste of time.
+                    continue;
+                }
                 // there are accounts with ref_count > 1. This means this account must remain IN this slot.
                 // The same account could exist in a newer or older slot. Moving this account across slots could result
                 // in this alive version of the account now being in a slot OLDER than the non-alive instances.
@@ -585,77 +604,127 @@ pub mod tests {
         // all accounts have 1 ref or all accounts have 2 refs
         for num_slots in 0..3 {
             for two_refs in [false, true] {
-                let (db, storages, slots, infos) = get_sample_storages(num_slots, None);
-                let original_results = storages
-                    .iter()
-                    .map(|store| db.get_unique_accounts_from_storage(store))
-                    .collect::<Vec<_>>();
-                if two_refs {
-                    original_results.iter().for_each(|results| {
-                        results.stored_accounts.iter().for_each(|account| {
-                            let entry = db
-                                .accounts_index
-                                .get_account_read_entry(account.pubkey())
-                                .unwrap();
-                            entry.addref();
-                        })
-                    });
-                }
-                let stored_accounts_all = infos
-                    .iter()
-                    .zip(original_results.into_iter())
-                    .collect::<Vec<_>>();
+                for skip in [
+                    SkipOnlyManyRefsSlots::IncludeForTests,
+                    SkipOnlyManyRefsSlots::Skip,
+                ] {
+                    for add_dead_account in [true, false] {
+                        let add_dead_account = add_dead_account && num_slots > 0;
+                        let (db, storages, slots, infos) = get_sample_storages(num_slots, None);
+                        let original_results = storages
+                            .iter()
+                            .map(|store| db.get_unique_accounts_from_storage(store))
+                            .collect::<Vec<_>>();
 
-                let accounts_to_combine = db.calc_accounts_to_combine(&stored_accounts_all);
-                let slots_vec = slots.collect::<Vec<_>>();
-                assert_eq!(accounts_to_combine.accounts_to_combine.len(), num_slots);
-                if two_refs {
-                    // all accounts should be in many_refs
-                    let mut accounts_keep = accounts_to_combine
-                        .accounts_keep_slots
-                        .keys()
-                        .cloned()
-                        .collect::<Vec<_>>();
-                    accounts_keep.sort_unstable();
-                    assert_eq!(accounts_keep, slots_vec);
-                    assert!(accounts_to_combine.target_slots.is_empty());
-                    assert_eq!(accounts_to_combine.accounts_keep_slots.len(), num_slots);
-                    assert!(accounts_to_combine
-                        .accounts_to_combine
-                        .iter()
-                        .all(|shrink_collect| shrink_collect
-                            .alive_accounts
-                            .one_ref
-                            .accounts
-                            .is_empty()));
-                    assert!(accounts_to_combine
-                        .accounts_to_combine
-                        .iter()
-                        .all(|shrink_collect| shrink_collect
-                            .alive_accounts
-                            .many_refs
-                            .accounts
-                            .is_empty()));
-                } else {
-                    // all accounts should be in one_ref and all slots are available as target slots
-                    assert_eq!(accounts_to_combine.target_slots, slots_vec);
-                    assert!(accounts_to_combine.accounts_keep_slots.is_empty());
-                    assert!(accounts_to_combine
-                        .accounts_to_combine
-                        .iter()
-                        .all(|shrink_collect| !shrink_collect
-                            .alive_accounts
-                            .one_ref
-                            .accounts
-                            .is_empty()));
-                    assert!(accounts_to_combine
-                        .accounts_to_combine
-                        .iter()
-                        .all(|shrink_collect| shrink_collect
-                            .alive_accounts
-                            .many_refs
-                            .accounts
-                            .is_empty()));
+                        let slot1 = slots.start;
+                        if add_dead_account {
+                            let storage = storages.first().unwrap().clone();
+                            let pk2 = solana_sdk::pubkey::new_rand();
+
+                            let account = original_results
+                                .first()
+                                .unwrap()
+                                .stored_accounts
+                                .first()
+                                .unwrap();
+                            let account = account.to_account_shared_data();
+                            append_single_account_with_default_hash(
+                                &storage, &pk2, &account, 0, false, None,
+                            );
+                        }
+
+                        if two_refs {
+                            original_results.iter().for_each(|results| {
+                                results.stored_accounts.iter().for_each(|account| {
+                                    let entry = db
+                                        .accounts_index
+                                        .get_account_read_entry(account.pubkey())
+                                        .unwrap();
+                                    entry.addref();
+                                })
+                            });
+                        }
+
+                        let original_results = storages
+                            .iter()
+                            .map(|store| db.get_unique_accounts_from_storage(store));
+
+                        let stored_accounts_all =
+                            infos.iter().zip(original_results).collect::<Vec<_>>();
+
+                        let accounts_to_combine =
+                            db.calc_accounts_to_combine(&stored_accounts_all, skip);
+                        let slots_vec = slots.collect::<Vec<_>>();
+                        let skipping_and_two_refs = skip == SkipOnlyManyRefsSlots::Skip && two_refs;
+                        let expected_num_slots = if skipping_and_two_refs {
+                            /* 1 dead account in the first storage results in a single storage needing to be shrunk */
+                            usize::from(add_dead_account)
+                        } else {
+                            num_slots
+                        };
+                        assert_eq!(
+                            accounts_to_combine.accounts_to_combine.len(),
+                            expected_num_slots
+                        );
+                        if two_refs {
+                            // all accounts should be in many_refs
+                            let mut accounts_keep = accounts_to_combine
+                                .accounts_keep_slots
+                                .keys()
+                                .cloned()
+                                .collect::<Vec<_>>();
+                            accounts_keep.sort_unstable();
+                            assert_eq!(
+                                accounts_keep,
+                                if skipping_and_two_refs {
+                                    if add_dead_account {
+                                        vec![slot1]
+                                    } else {
+                                        Vec::default()
+                                    }
+                                } else {
+                                    slots_vec
+                                }
+                            );
+                            assert!(accounts_to_combine.target_slots.is_empty());
+                            assert_eq!(
+                                accounts_to_combine.accounts_keep_slots.len(),
+                                expected_num_slots
+                            );
+                            assert!(accounts_to_combine.accounts_to_combine.iter().all(
+                                |shrink_collect| shrink_collect
+                                    .alive_accounts
+                                    .one_ref
+                                    .accounts
+                                    .is_empty()
+                            ));
+                            assert!(accounts_to_combine.accounts_to_combine.iter().all(
+                                |shrink_collect| shrink_collect
+                                    .alive_accounts
+                                    .many_refs
+                                    .accounts
+                                    .is_empty()
+                            ));
+                        } else {
+                            // all accounts should be in one_ref and all slots are available as target slots
+                            assert_eq!(accounts_to_combine.target_slots, slots_vec);
+                            assert!(accounts_to_combine.accounts_keep_slots.is_empty());
+                            assert!(accounts_to_combine.accounts_to_combine.iter().all(
+                                |shrink_collect| !shrink_collect
+                                    .alive_accounts
+                                    .one_ref
+                                    .accounts
+                                    .is_empty()
+                            ));
+                            assert!(accounts_to_combine.accounts_to_combine.iter().all(
+                                |shrink_collect| shrink_collect
+                                    .alive_accounts
+                                    .many_refs
+                                    .accounts
+                                    .is_empty()
+                            ));
+                        }
+                    }
                 }
             }
         }
@@ -667,103 +736,100 @@ pub mod tests {
         // 2 accounts
         // 1 with 1 ref
         // 1 with 2 refs
-        let num_slots = 1;
-        let (db, storages, slots, infos) = get_sample_storages(num_slots, None);
-        let original_results = storages
-            .iter()
-            .map(|store| db.get_unique_accounts_from_storage(store))
-            .collect::<Vec<_>>();
-        let storage = storages.first().unwrap().clone();
-        let pk_with_1_ref = solana_sdk::pubkey::new_rand();
-        let slot1 = slots.start;
-        let account_with_2_refs = original_results
-            .first()
-            .unwrap()
-            .stored_accounts
-            .first()
-            .unwrap();
-        let pk_with_2_refs = account_with_2_refs.pubkey();
-        let account_with_1_ref = account_with_2_refs.to_account_shared_data();
-        append_single_account_with_default_hash(
-            &storage,
-            &pk_with_1_ref,
-            &account_with_1_ref,
-            0,
-            true,
-            Some(&db.accounts_index),
-        );
-        original_results.iter().for_each(|results| {
-            results.stored_accounts.iter().for_each(|account| {
-                let entry = db
-                    .accounts_index
-                    .get_account_read_entry(account.pubkey())
-                    .unwrap();
-                entry.addref();
-            })
-        });
-
-        // update to get both accounts in the storage
-        let original_results = storages
-            .iter()
-            .map(|store| db.get_unique_accounts_from_storage(store))
-            .collect::<Vec<_>>();
-        assert_eq!(original_results.first().unwrap().stored_accounts.len(), 2);
-        let stored_accounts_all = infos
-            .iter()
-            .zip(original_results.into_iter())
-            .collect::<Vec<_>>();
-
-        let accounts_to_combine = db.calc_accounts_to_combine(&stored_accounts_all);
-        let slots_vec = slots.collect::<Vec<_>>();
-        assert_eq!(accounts_to_combine.accounts_to_combine.len(), num_slots);
-        // all accounts should be in many_refs
-        let mut accounts_keep = accounts_to_combine
-            .accounts_keep_slots
-            .keys()
-            .cloned()
-            .collect::<Vec<_>>();
-        accounts_keep.sort_unstable();
-        assert_eq!(accounts_keep, slots_vec);
-        assert!(accounts_to_combine.target_slots.is_empty());
-        assert_eq!(accounts_to_combine.accounts_keep_slots.len(), num_slots);
-        assert_eq!(
-            accounts_to_combine
-                .accounts_keep_slots
-                .get(&slot1)
+        for skip in [
+            SkipOnlyManyRefsSlots::IncludeForTests,
+            SkipOnlyManyRefsSlots::Skip,
+        ] {
+            let num_slots = 1;
+            let (db, storages, slots, infos) = get_sample_storages(num_slots, None);
+            let original_results = storages
+                .iter()
+                .map(|store| db.get_unique_accounts_from_storage(store))
+                .collect::<Vec<_>>();
+            let storage = storages.first().unwrap().clone();
+            let pk_with_1_ref = solana_sdk::pubkey::new_rand();
+            let slot1 = slots.start;
+            let account_with_2_refs = original_results
+                .first()
                 .unwrap()
-                .0
-                .accounts
+                .stored_accounts
+                .first()
+                .unwrap();
+            let pk_with_2_refs = account_with_2_refs.pubkey();
+            let account_with_1_ref = account_with_2_refs.to_account_shared_data();
+            append_single_account_with_default_hash(
+                &storage,
+                &pk_with_1_ref,
+                &account_with_1_ref,
+                0,
+                true,
+                Some(&db.accounts_index),
+            );
+            original_results.iter().for_each(|results| {
+                results.stored_accounts.iter().for_each(|account| {
+                    let entry = db
+                        .accounts_index
+                        .get_account_read_entry(account.pubkey())
+                        .unwrap();
+                    entry.addref();
+                })
+            });
+
+            // update to get both accounts in the storage
+            let original_results = storages
                 .iter()
-                .map(|meta| meta.pubkey())
-                .collect::<Vec<_>>(),
-            vec![pk_with_2_refs]
-        );
-        assert_eq!(accounts_to_combine.accounts_to_combine.len(), 1);
-        let one_ref_accounts = &accounts_to_combine
-            .accounts_to_combine
-            .first()
-            .unwrap()
-            .alive_accounts
-            .one_ref
-            .accounts;
-        assert_eq!(
-            one_ref_accounts
+                .map(|store| db.get_unique_accounts_from_storage(store))
+                .collect::<Vec<_>>();
+            assert_eq!(original_results.first().unwrap().stored_accounts.len(), 2);
+            let stored_accounts_all = infos
                 .iter()
-                .map(|meta| meta.pubkey())
-                .collect::<Vec<_>>(),
-            vec![&pk_with_1_ref]
-        );
-        assert_eq!(
-            one_ref_accounts
+                .zip(original_results.into_iter())
+                .collect::<Vec<_>>();
+
+            let accounts_to_combine = db.calc_accounts_to_combine(&stored_accounts_all, skip);
+            let slots_vec = slots.collect::<Vec<_>>();
+            assert_eq!(accounts_to_combine.accounts_to_combine.len(), num_slots);
+            // all accounts should be in many_refs
+            let mut accounts_keep = accounts_to_combine
+                .accounts_keep_slots
+                .keys()
+                .cloned()
+                .collect::<Vec<_>>();
+            accounts_keep.sort_unstable();
+            assert_eq!(accounts_keep, slots_vec);
+            assert!(accounts_to_combine.target_slots.is_empty());
+            assert_eq!(accounts_to_combine.accounts_keep_slots.len(), num_slots);
+            assert_eq!(
+                accounts_to_combine
+                    .accounts_keep_slots
+                    .get(&slot1)
+                    .unwrap()
+                    .0
+                    .accounts
+                    .iter()
+                    .map(|meta| meta.pubkey())
+                    .collect::<Vec<_>>(),
+                vec![pk_with_2_refs]
+            );
+            assert_eq!(accounts_to_combine.accounts_to_combine.len(), 1);
+            assert_eq!(
+                accounts_to_combine
+                    .accounts_to_combine
+                    .first()
+                    .unwrap()
+                    .alive_accounts
+                    .one_ref
+                    .accounts
+                    .iter()
+                    .map(|meta| meta.pubkey())
+                    .collect::<Vec<_>>(),
+                vec![&pk_with_1_ref]
+            );
+            assert!(accounts_to_combine
+                .accounts_to_combine
                 .iter()
-                .map(|meta| meta.to_account_shared_data())
-                .collect::<Vec<_>>(),
-            vec![account_with_1_ref]
-        );
-        assert!(accounts_to_combine
-            .accounts_to_combine
-            .iter()
-            .all(|shrink_collect| shrink_collect.alive_accounts.many_refs.accounts.is_empty()));
+                .all(|shrink_collect| shrink_collect.alive_accounts.many_refs.accounts.is_empty()));
+        }
     }
 
     #[test]

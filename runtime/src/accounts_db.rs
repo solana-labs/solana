@@ -442,6 +442,7 @@ pub(crate) struct ShrinkCollect<'a, T: ShrinkCollectRefs<'a>> {
     pub(crate) alive_accounts: T,
     /// total size in storage of all alive accounts
     pub(crate) alive_total_bytes: usize,
+    /// # of accounts in the original storage. This includes both alive and dead accounts.
     pub(crate) total_starting_accounts: usize,
     /// true if all alive accounts are zero lamports
     pub(crate) all_are_zero_lamports: bool,
