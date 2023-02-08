@@ -1162,6 +1162,7 @@ impl Scheduler<ExecuteTimings> {
             .unwrap_or(format!("{}", 8))
             .parse::<usize>()
             .unwrap();
+        let thread_count = 3 + executing_thread_count * 2;
 
         let send_metrics = std::env::var("SOLANA_TRANSACTION_TIMINGS").is_ok();
 
@@ -1553,6 +1554,7 @@ impl Scheduler<ExecuteTimings> {
             slot: Default::default(),
             commit_status,
             current_checkpoint: initial_checkpoint,
+            thread_count,
         };
         info!(
             "scheduler: id_{:016x} setup done with {}us",
