@@ -339,7 +339,7 @@ fn output_slot(
                     let send_metrics = std::env::var("SOLANA_TRANSACTION_TIMINGS").is_ok();
 
                     for step in 0.. {
-                        let mut ee = pre_execute_env_receiver.recv().unwrap().0;
+                        let Flushable::Payload(mut ee) = pre_execute_env_receiver.recv().unwrap().0 else { continue };
                         if step % 1966 == 0 {
                             error!("executing!: {} {}", step, pre_execute_env_receiver.len());
                         }
