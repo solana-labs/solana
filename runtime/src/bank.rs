@@ -3874,7 +3874,7 @@ impl Bank {
         // committed before this write lock can be obtained here.
         let mut hash = self.hash.write().unwrap();
         if *hash == Hash::default() {
-            match self.commit_mode() {
+            match self.runner_context_mode() {
                 solana_scheduler::Mode::Replaying => {
                     assert!(self.scheduler2.read().unwrap().is_none());
                 }
