@@ -1396,7 +1396,7 @@ impl Scheduler<ExecuteTimings> {
                                 datapoint_info_at!(
                                     ee.finish_time.unwrap(),
                                     "transaction_timings",
-                                    ("slot", latest_runner_context.slot(), i64),
+                                    ("slot", latest_runner_context.as_ref().unwrap().slot(), i64),
                                     ("index", ee.task.transaction_index(), i64),
                                     ("thread", format!("solScExLane{:02}", ee.thx), String),
                                     ("signature", &sig, String),
