@@ -125,7 +125,7 @@ fn create_executor_from_bytes(
     log_collector: Option<Rc<RefCell<LogCollector>>>,
     create_executor_metrics: &mut CreateMetrics,
     programdata: &[u8],
-    _use_jit: bool,
+    use_jit: bool,
     reject_deployment_of_broken_elfs: bool,
 ) -> Result<Arc<BpfExecutor>, InstructionError> {
     let mut register_syscalls_time = Measure::start("register_syscalls_time");
