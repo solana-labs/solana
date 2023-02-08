@@ -1541,7 +1541,7 @@ impl Scheduler<ExecuteTimings> {
 }
 
 impl<C> Scheduler<C> {
-    fn new_checkpoint() -> solana_scheduler::Checkpoint {
+    fn new_checkpoint() -> solana_scheduler::Checkpoint<C, RunnerContext> {
         solana_scheduler::Checkpoint::new(3)
     }
 
