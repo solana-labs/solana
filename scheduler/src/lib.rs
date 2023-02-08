@@ -1832,7 +1832,7 @@ impl ScheduleStage {
                                    } else {
                                        format!("")
                                    };
-                                   info!("schedule_once:initial id_{:016x}{slot_label}{mode_label}", random_id);
+                                   info!("schedule_once:initial {} {slot_label}{mode_label}", log_prefix());
                                }
                                runnable_queue.add_to_schedule(task.unique_weight, task)
                            },
