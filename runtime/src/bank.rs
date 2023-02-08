@@ -948,6 +948,7 @@ impl AbiExample for BuiltinPrograms {
 #[derive(Clone, Debug)]
 struct RunnerContext {
     bank: Option<Arc<Bank>>,
+    mode: solana_scheduler::Mode,
     // poh callback
     // tx status writer
 }
