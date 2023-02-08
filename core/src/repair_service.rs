@@ -355,7 +355,6 @@ impl RepairService {
                     MAX_CLOSEST_COMPLETION_REPAIRS,
                     &duplicate_slot_repair_statuses,
                     timestamp(),
-                    DEFER_REPAIR_THRESHOLD_TICKS,
                     &mut repair_timing,
                     &mut best_repairs_stats,
                 );
@@ -533,7 +532,6 @@ impl RepairService {
         slot_meta: &SlotMeta,
         max_repairs: usize,
         now_timestamp: u64,
-        defer_threshold_ticks: u64,
     ) -> Vec<ShredRepairType> {
         if max_repairs == 0 || slot_meta.is_full() {
             vec![]
@@ -549,7 +547,7 @@ impl RepairService {
                 let ticks_since_first_insert = DEFAULT_TICKS_PER_SECOND
                     * (now_timestamp.saturating_sub(slot_meta.first_shred_timestamp))
                     / 1_000;
-                if ticks_since_first_insert < reference_tick + defer_threshold_ticks {
+                if ticks_since_first_insert < reference_tick + DEFER_REPAIR_THRESHOLD_TICKS {
                     return vec![];
                 }
             }
@@ -579,7 +577,6 @@ impl RepairService {
         slot: Slot,
         duplicate_slot_repair_statuses: &impl Contains<'a, Slot>,
         now_timestamp: u64,
-        defer_threshold_ticks: u64,
     ) {
         let mut pending_slots = vec![slot];
         while repairs.len() < max_repairs && !pending_slots.is_empty() {
@@ -595,7 +592,6 @@ impl RepairService {
                     &slot_meta,
                     max_repairs - repairs.len(),
                     now_timestamp,
-                    defer_threshold_ticks,
                 );
                 repairs.extend(new_repairs);
                 let next_slots = slot_meta.next_slots;
@@ -634,7 +630,6 @@ impl RepairService {
                 &meta,
                 max_repairs - repairs.len(),
                 timestamp(),
-                DEFER_REPAIR_THRESHOLD_TICKS,
             );
             repairs.extend(new_repairs);
         }
@@ -658,7 +653,6 @@ impl RepairService {
                     &slot_meta,
                     MAX_REPAIR_PER_DUPLICATE,
                     timestamp(),
-                    DEFER_REPAIR_THRESHOLD_TICKS,
                 ))
             }
         } else {
@@ -857,7 +851,6 @@ mod test {
                     MAX_CLOSEST_COMPLETION_REPAIRS,
                     &HashSet::default(),
                     timestamp(),
-                    DEFER_REPAIR_THRESHOLD_TICKS,
                     &mut RepairTiming::default(),
                     &mut BestRepairsStats::default(),
                 ),
@@ -896,7 +889,6 @@ mod test {
                     MAX_CLOSEST_COMPLETION_REPAIRS,
                     &HashSet::default(),
                     timestamp(),
-                    DEFER_REPAIR_THRESHOLD_TICKS,
                     &mut RepairTiming::default(),
                     &mut BestRepairsStats::default(),
                 ),
@@ -960,7 +952,6 @@ mod test {
                     MAX_CLOSEST_COMPLETION_REPAIRS,
                     &HashSet::default(),
                     timestamp(),
-                    DEFER_REPAIR_THRESHOLD_TICKS,
                     &mut RepairTiming::default(),
                     &mut BestRepairsStats::default(),
                 ),
@@ -978,7 +969,6 @@ mod test {
                     MAX_CLOSEST_COMPLETION_REPAIRS,
                     &HashSet::default(),
                     timestamp(),
-                    DEFER_REPAIR_THRESHOLD_TICKS,
                     &mut RepairTiming::default(),
                     &mut BestRepairsStats::default(),
                 )[..],
@@ -1026,7 +1016,6 @@ mod test {
                     MAX_CLOSEST_COMPLETION_REPAIRS,
                     &HashSet::default(),
                     post_shred_deferment_timestamp(),
-                    DEFER_REPAIR_THRESHOLD_TICKS,
                     &mut RepairTiming::default(),
                     &mut BestRepairsStats::default(),
                 ),

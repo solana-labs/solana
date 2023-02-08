@@ -81,7 +81,6 @@ pub fn get_best_repair_shreds<'a>(
     max_new_shreds: usize,
     ignore_slots: &impl Contains<'a, Slot>,
     now_timestamp: u64,
-    defer_threshold_ticks: u64,
 ) {
     let initial_len = repairs.len();
     let max_repairs = initial_len + max_new_shreds;
@@ -109,7 +108,6 @@ pub fn get_best_repair_shreds<'a>(
                             slot_meta,
                             max_repairs - repairs.len(),
                             now_timestamp,
-                            defer_threshold_ticks,
                         );
                         repairs.extend(new_repairs);
                     }
@@ -132,7 +130,6 @@ pub fn get_best_repair_shreds<'a>(
                                 *new_child_slot,
                                 ignore_slots,
                                 now_timestamp,
-                                defer_threshold_ticks,
                             );
                         }
                         visited_set.insert(*new_child_slot);
@@ -147,13 +144,13 @@ pub fn get_best_repair_shreds<'a>(
 pub mod test {
     use {
         super::*,
-        crate::repair_service::{post_shred_deferment_timestamp, DEFER_REPAIR_THRESHOLD_TICKS},
+        crate::repair_service::post_shred_deferment_timestamp,
         solana_ledger::{
             get_tmp_ledger_path,
             shred::{Shred, ShredFlags},
         },
         solana_runtime::bank_utils,
-        solana_sdk::{clock::DEFAULT_TICKS_PER_SECOND, hash::Hash, timing::timestamp},
+        solana_sdk::{hash::Hash, timing::timestamp},
         trees::tr,
     };
 
@@ -240,8 +237,7 @@ pub mod test {
             &mut repairs,
             6,
             &HashSet::default(),
-            timestamp(),
-            DEFAULT_TICKS_PER_SECOND * 1_000, // ensure deferment
+            timestamp().saturating_sub(1_000 * 60), // ensure deferment
         );
         assert_eq!(repairs, vec![]);
 
@@ -253,7 +249,6 @@ pub mod test {
             6,
             &HashSet::default(),
             post_shred_deferment_timestamp(),
-            DEFER_REPAIR_THRESHOLD_TICKS,
         );
         assert_eq!(
             repairs,
@@ -284,7 +279,6 @@ pub mod test {
             6,
             &HashSet::default(),
             post_shred_deferment_timestamp(),
-            DEFER_REPAIR_THRESHOLD_TICKS,
         );
         assert_eq!(
             repairs,
@@ -326,7 +320,6 @@ pub mod test {
             4,
             &HashSet::default(),
             post_shred_deferment_timestamp(),
-            DEFER_REPAIR_THRESHOLD_TICKS,
         );
         assert_eq!(
             repairs,
@@ -349,7 +342,6 @@ pub mod test {
             4,
             &HashSet::default(),
             post_shred_deferment_timestamp(),
-            DEFER_REPAIR_THRESHOLD_TICKS,
         );
         assert_eq!(
             repairs,
@@ -377,7 +369,6 @@ pub mod test {
             std::usize::MAX,
             &HashSet::default(),
             post_shred_deferment_timestamp(),
-            DEFER_REPAIR_THRESHOLD_TICKS,
         );
         let last_shred = blockstore.meta(0).unwrap().unwrap().received;
         assert_eq!(
@@ -407,7 +398,6 @@ pub mod test {
             std::usize::MAX,
             &ignore_set,
             post_shred_deferment_timestamp(),
-            DEFER_REPAIR_THRESHOLD_TICKS,
         );
         assert_eq!(
             repairs,
@@ -431,7 +421,6 @@ pub mod test {
             std::usize::MAX,
             &ignore_set,
             post_shred_deferment_timestamp(),
-            DEFER_REPAIR_THRESHOLD_TICKS,
         );
         assert_eq!(
             repairs,
@@ -454,7 +443,6 @@ pub mod test {
             std::usize::MAX,
             &ignore_set,
             post_shred_deferment_timestamp(),
-            DEFER_REPAIR_THRESHOLD_TICKS,
         );
         assert_eq!(
             repairs,
