@@ -1464,7 +1464,7 @@ impl Scheduler<ExecuteTimings> {
                             transaction_error_counts.reset();
                             (succeeded, skipped) = (0, 0);
                             checkpoint.wait_for_restart(Some(std::mem::take(&mut cumulative_timings)));
-                            latest_checkpoint.put(Some(checkpoint));
+                            latest_checkpoint = Some(checkpoint);
                             latest_runner_context = None;
                         },
                     }
