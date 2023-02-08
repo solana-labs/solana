@@ -1712,7 +1712,7 @@ fn maybe_warp_slot(
         info!("warping to slot {}", warp_slot);
 
         let root_bank = bank_forks.root_bank();
-        bank_forks.add_new_bank_for_banking(Bank::warp_from_parent(
+        bank_forks.add_new_bank_for_replaying(Bank::warp_from_parent(
             &root_bank,
             &Pubkey::default(),
             warp_slot,

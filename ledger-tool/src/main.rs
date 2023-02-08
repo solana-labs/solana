@@ -313,7 +313,7 @@ fn output_slot(
         .spawn(move || {
             use rand::Rng;
             loop {
-                ScheduleStage::run::<_, _, A>(
+                ScheduleStage::run(
                     &mut None,
                     lane_count * lane_channel_factor,
                     &mut runnable_queue,
