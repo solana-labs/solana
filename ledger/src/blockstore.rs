@@ -92,12 +92,12 @@ pub use {
 lazy_static! {
     static ref PAR_THREAD_POOL: ThreadPool = rayon::ThreadPoolBuilder::new()
         .num_threads(get_max_thread_count())
-        .thread_name(|ix| format!("solBstore{ix:02}"))
+        .thread_name(|i| format!("solBstore{i:02}"))
         .build()
         .unwrap();
     static ref PAR_THREAD_POOL_ALL_CPUS: ThreadPool = rayon::ThreadPoolBuilder::new()
         .num_threads(num_cpus::get())
-        .thread_name(|ix| format!("solBstoreAll{ix:02}"))
+        .thread_name(|i| format!("solBstoreAll{i:02}"))
         .build()
         .unwrap();
 }
