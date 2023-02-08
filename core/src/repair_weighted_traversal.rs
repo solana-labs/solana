@@ -147,9 +147,7 @@ pub fn get_best_repair_shreds<'a>(
 pub mod test {
     use {
         super::*,
-        crate::repair_service::{
-            test::post_shred_deferment_timestamp, DEFER_REPAIR_THRESHOLD_TICKS,
-        },
+        crate::repair_service::{post_shred_deferment_timestamp, DEFER_REPAIR_THRESHOLD_TICKS},
         solana_ledger::{
             get_tmp_ledger_path,
             shred::{Shred, ShredFlags},

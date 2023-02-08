@@ -1,7 +1,5 @@
 //! The `repair_service` module implements the tools necessary to generate a thread which
 //! regularly finds missing shreds in the ledger and sends repair requests for those shreds
-#[cfg(test)]
-use solana_ledger::shred::Nonce;
 use {
     crate::{
         ancestor_hashes_service::{AncestorHashesReplayUpdateReceiver, AncestorHashesService},
@@ -42,6 +40,8 @@ use {
         time::{Duration, Instant},
     },
 };
+#[cfg(test)]
+use {solana_ledger::shred::Nonce, solana_sdk::clock::DEFAULT_MS_PER_SLOT};
 
 // Time to defer repair requests to allow for turbine propagation
 pub(crate) const DEFER_REPAIR_THRESHOLD: Duration = Duration::from_millis(200);
@@ -797,7 +797,13 @@ impl RepairService {
 }
 
 #[cfg(test)]
-pub(crate) mod test {
+pub(crate) fn post_shred_deferment_timestamp() -> u64 {
+    // adjust timestamp to bypass shred deferment window
+    timestamp() + DEFAULT_MS_PER_SLOT + DEFER_REPAIR_THRESHOLD.as_millis() as u64
+}
+
+#[cfg(test)]
+mod test {
     use {
         super::*,
         solana_gossip::{
@@ -813,18 +819,12 @@ pub(crate) mod test {
         },
         solana_runtime::bank::Bank,
         solana_sdk::{
-            clock::DEFAULT_MS_PER_SLOT,
             signature::{Keypair, Signer},
             timing::timestamp,
         },
         solana_streamer::socket::SocketAddrSpace,
         std::collections::HashSet,
     };
-
-    pub(crate) fn post_shred_deferment_timestamp() -> u64 {
-        // adjust timestamp to bypass shred deferment window
-        timestamp() + DEFAULT_MS_PER_SLOT + DEFER_REPAIR_THRESHOLD.as_millis() as u64
-    }
 
     fn new_test_cluster_info() -> ClusterInfo {
         let keypair = Arc::new(Keypair::new());
