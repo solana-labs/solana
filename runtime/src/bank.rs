@@ -1156,11 +1156,12 @@ impl Scheduler<ExecuteTimings> {
         let (retired_ee_sender, retired_ee_receiver) = crossbeam_channel::unbounded();
 
 
-        let base_thread_count = std::env::var("EXECUTING_THREAD_COUNT")
+        let executing_thread_count = std::env::var("EXECUTING_THREAD_COUNT")
             .unwrap_or(format!("{}", 8))
             .parse::<usize>()
             .unwrap();
-        let thread_count = 3 + base_thread_count * 2;
+        let base_thread_count = std::cmp::max(executing_thread_count / 2, 1);
+        let thread_count = 3 + executing_thread_count;
         let initial_checkpoint = Self::new_checkpoint(thread_count);
 
         let send_metrics = std::env::var("SOLANA_TRANSACTION_TIMINGS").is_ok();
