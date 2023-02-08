@@ -2249,6 +2249,7 @@ impl Bank {
         let (feature_set, feature_set_time_us) = measure_us!(parent.feature_set.clone());
 
         let accounts_data_size_initial = parent.load_accounts_data_size();
+        /*
         let commit_mode = if !banking || std::env::var("ISOLATED_BANKING_LIKE_REPLAY").is_ok() {
             CommitMode::Replaying
         } else {
@@ -2272,6 +2273,8 @@ impl Bank {
                 }
             },
         };
+        */
+        let scheduler = RwLock::new(Some(SCHEDULER_POOL.lock().unwrap().take_from_pool()));
 
         let mut new = Bank {
             incremental_snapshot_persistence: None,
