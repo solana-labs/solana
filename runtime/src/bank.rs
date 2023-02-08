@@ -8627,7 +8627,14 @@ impl Bank {
                     "Bank::wait_for_scheduler(via_drop: {}) id_{:016x} no context {} ...",
                     via_drop, scheduler.random_id, current_thread_name
                 );
-                return Ok(Default::default());
+                let _r = scheduler.gracefully_stop().unwrap();
+                let e = scheduler
+                    .handle_aborted_executions()
+                    .into_iter()
+                    .next()
+                    .unwrap();
+                SCHEDULER_POOL.lock().unwrap().return_to_pool(s.take().unwrap());
+                return e;
             }
 
             let runner_mode = scheduler.current_runner_mode();
