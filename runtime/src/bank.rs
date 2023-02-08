@@ -862,7 +862,6 @@ impl PartialEq for Bank {
             fee_structure: _,
             incremental_snapshot_persistence: _,
             scheduler2: _,
-            commit_mode: _,
             blockhash_override: _,
             // Ignore new fields explicitly if they do not impact PartialEq.
             // Adding ".." will remove compile-time checks that if a new field
@@ -1819,7 +1818,6 @@ pub struct Bank {
     pub incremental_snapshot_persistence: Option<BankIncrementalSnapshotPersistence>,
 
     scheduler2: RwLock<Option<Box<Scheduler<ExecuteTimings>>>>,
-    commit_mode: AtomicCommitMode,
     pub blockhash_override: RwLock<Option<Hash>>,
 }
 
