@@ -42,9 +42,9 @@ use {
             get_ancient_append_vec_capacity, is_ancient, AccountsToStore, StorageSelector,
         },
         append_vec::{
-            aligned_stored_size, AppendVec, StorableAccountsWithHashesAndWriteVersions,
-            StoredAccountMeta, StoredMetaWriteVersion, APPEND_VEC_MMAPPED_FILES_OPEN,
-            STORE_META_OVERHEAD,
+            aligned_stored_size, AppendVec, MatchAccountOwnerError,
+            StorableAccountsWithHashesAndWriteVersions, StoredAccountMeta, StoredMetaWriteVersion,
+            APPEND_VEC_MMAPPED_FILES_OPEN, STORE_META_OVERHEAD,
         },
         cache_hash_data::{CacheHashData, CacheHashDataFile},
         contains::Contains,
@@ -812,6 +812,32 @@ impl<'a> LoadedAccountAccessor<'a> {
                             .get_stored_account_meta(*offset)
                             .map(LoadedAccount::Stored)
                     })
+            }
+        }
+    }
+
+    fn account_matches_owners(&self, owners: &[&Pubkey]) -> Result<(), MatchAccountOwnerError> {
+        match self {
+            LoadedAccountAccessor::Cached(cached_account) => cached_account
+                .as_ref()
+                .and_then(|cached_account| {
+                    (!cached_account.account.is_zero_lamport()
+                        && owners.contains(&cached_account.account.owner()))
+                    .then_some(())
+                })
+                .ok_or(MatchAccountOwnerError::NoMatch),
+            LoadedAccountAccessor::Stored(maybe_storage_entry) => {
+                // storage entry may not be present if slot was cleaned up in
+                // between reading the accounts index and calling this function to
+                // get account meta from the storage entry here
+                maybe_storage_entry
+                    .as_ref()
+                    .map(|(storage_entry, offset)| {
+                        storage_entry
+                            .accounts
+                            .account_matches_owners(*offset, owners)
+                    })
+                    .unwrap_or(Err(MatchAccountOwnerError::UnableToLoad))
             }
         }
     }
@@ -4916,6 +4942,38 @@ impl AccountsDb {
         load_hint: LoadHint,
     ) -> Option<(AccountSharedData, Slot)> {
         self.do_load(ancestors, pubkey, None, load_hint, LoadZeroLamports::None)
+    }
+
+    pub fn account_matches_owners(
+        &self,
+        ancestors: &Ancestors,
+        account: &Pubkey,
+        owners: &[&Pubkey],
+    ) -> Result<(), MatchAccountOwnerError> {
+        let (slot, storage_location, _maybe_account_accesor) = self
+            .read_index_for_accessor_or_load_slow(ancestors, account, None, false)
+            .ok_or(MatchAccountOwnerError::UnableToLoad)?;
+
+        if !storage_location.is_cached() {
+            let result = self.read_only_accounts_cache.load(*account, slot);
+            if let Some(account) = result {
+                return (!account.is_zero_lamport() && owners.contains(&account.owner()))
+                    .then_some(())
+                    .ok_or(MatchAccountOwnerError::NoMatch);
+            }
+        }
+
+        let (account_accessor, _slot) = self
+            .retry_to_get_account_accessor(
+                slot,
+                storage_location,
+                ancestors,
+                account,
+                None,
+                LoadHint::Unspecified,
+            )
+            .ok_or(MatchAccountOwnerError::UnableToLoad)?;
+        account_accessor.account_matches_owners(owners)
     }
 
     pub fn load_account_into_read_cache(&self, ancestors: &Ancestors, pubkey: &Pubkey) {
@@ -14066,6 +14124,101 @@ pub mod tests {
             .map(|(account, _)| account);
         assert!(account.is_none());
         assert_eq!(db.read_only_accounts_cache.cache_len(), 1);
+    }
+
+    #[test]
+    fn test_account_matches_owners() {
+        let db = Arc::new(AccountsDb::new_with_config_for_tests(
+            Vec::new(),
+            &ClusterType::Development,
+            AccountSecondaryIndexes::default(),
+            AccountShrinkThreshold::default(),
+        ));
+
+        let owners: Vec<Pubkey> = (0..2).map(|_| Pubkey::new_unique()).collect();
+        let owners_refs: Vec<&Pubkey> = owners.iter().collect();
+
+        let account1_key = Pubkey::new_unique();
+        let account1 = AccountSharedData::new(321, 10, &owners[0]);
+
+        let account2_key = Pubkey::new_unique();
+        let account2 = AccountSharedData::new(1, 1, &owners[1]);
+
+        let account3_key = Pubkey::new_unique();
+        let account3 = AccountSharedData::new(1, 1, &Pubkey::new_unique());
+
+        // Account with 0 lamports
+        let account4_key = Pubkey::new_unique();
+        let account4 = AccountSharedData::new(0, 1, &owners[1]);
+
+        db.store_cached((0, &[(&account1_key, &account1)][..]), None);
+        db.store_cached((1, &[(&account2_key, &account2)][..]), None);
+        db.store_cached((2, &[(&account3_key, &account3)][..]), None);
+        db.store_cached((3, &[(&account4_key, &account4)][..]), None);
+
+        db.add_root(0);
+        db.add_root(1);
+        db.add_root(2);
+        db.add_root(3);
+
+        // Flush the cache so that the account meta will be read from the storage
+        db.flush_accounts_cache(true, None);
+        db.clean_accounts_for_tests();
+
+        assert_eq!(
+            db.account_matches_owners(&Ancestors::default(), &account1_key, &owners_refs),
+            Ok(())
+        );
+        assert_eq!(
+            db.account_matches_owners(&Ancestors::default(), &account2_key, &owners_refs),
+            Ok(())
+        );
+        assert_eq!(
+            db.account_matches_owners(&Ancestors::default(), &account3_key, &owners_refs),
+            Err(MatchAccountOwnerError::NoMatch)
+        );
+        assert_eq!(
+            db.account_matches_owners(&Ancestors::default(), &account4_key, &owners_refs),
+            Err(MatchAccountOwnerError::NoMatch)
+        );
+        assert_eq!(
+            db.account_matches_owners(&Ancestors::default(), &Pubkey::new_unique(), &owners_refs),
+            Err(MatchAccountOwnerError::UnableToLoad)
+        );
+
+        // Flush the cache and load account1 (so that it's in the cache)
+        db.flush_accounts_cache(true, None);
+        db.clean_accounts_for_tests();
+        let _ = db
+            .do_load(
+                &Ancestors::default(),
+                &account1_key,
+                Some(0),
+                LoadHint::Unspecified,
+                LoadZeroLamports::SomeWithZeroLamportAccountForTests,
+            )
+            .unwrap();
+
+        assert_eq!(
+            db.account_matches_owners(&Ancestors::default(), &account1_key, &owners_refs),
+            Ok(())
+        );
+        assert_eq!(
+            db.account_matches_owners(&Ancestors::default(), &account2_key, &owners_refs),
+            Ok(())
+        );
+        assert_eq!(
+            db.account_matches_owners(&Ancestors::default(), &account3_key, &owners_refs),
+            Err(MatchAccountOwnerError::NoMatch)
+        );
+        assert_eq!(
+            db.account_matches_owners(&Ancestors::default(), &account4_key, &owners_refs),
+            Err(MatchAccountOwnerError::NoMatch)
+        );
+        assert_eq!(
+            db.account_matches_owners(&Ancestors::default(), &Pubkey::new_unique(), &owners_refs),
+            Err(MatchAccountOwnerError::UnableToLoad)
+        );
     }
 
     /// a test that will accept either answer
