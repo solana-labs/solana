@@ -6,7 +6,7 @@ use {
     solana_measure::measure::Measure,
     solana_metrics::*,
     solana_sdk::{account::AccountSharedData, clock::Slot, pubkey::Pubkey, signature::Signature},
-    std::collections::{hash_map::Entry, HashMap, HashSet},
+    std::collections::{HashMap, HashSet},
 };
 
 #[derive(Default)]
