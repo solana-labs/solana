@@ -1226,8 +1226,8 @@ impl Scheduler<ExecuteTimings> {
                 let (last_blockhash, lamports_per_signature) =
                     bank.last_blockhash_and_lamports_per_signature();
 
-                let commit_mode = latest_runner_context.as_ref().unwrap().mode;
-                let commited_first_transaction_index = match commit_mode {
+                let mode = latest_runner_context.as_ref().unwrap().mode;
+                let commited_first_transaction_index = match mode {
                     solana_scheduler::Mode::Replaying => {
                         //info!("replaying commit! {slot}");
                         Some(ee.task.transaction_index() as usize)
@@ -1296,7 +1296,7 @@ impl Scheduler<ExecuteTimings> {
                     ee.cu = details.executed_units;
                 } else {
                     let sig = ee.task.tx.0.signature().to_string();
-                    match commit_mode {
+                    match mode {
                         solana_scheduler::Mode::Replaying => {
                             error!("found odd tx error: slot: {}, signature: {}, {:?}", slot, sig, tx_result);
                         },
