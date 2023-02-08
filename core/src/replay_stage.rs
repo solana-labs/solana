@@ -3591,7 +3591,7 @@ impl ReplayStage {
             Measure::start("generate_new_bank_forks_write_lock");
         let mut forks = bank_forks.write().unwrap();
         for (_, bank) in new_banks {
-            forks.add_new_bank(bank);
+            forks.add_new_bank_for_replaying(bank);
         }
         generate_new_bank_forks_write_lock.stop();
         saturating_add_assign!(
