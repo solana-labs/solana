@@ -8626,7 +8626,7 @@ impl Bank {
             let commit_mode = self.commit_mode();
             if matches!(commit_mode, CommitMode::Replaying) || via_drop {
                 info!("wait_for_scheduler({commit_mode:?}/{via_drop}): gracefully stopping bank ({})...", self.slot());
-                if matches!(commit_mode, CommitMode::Banking) {
+                if matches!(commit_mode, CommitMode::Banking) || via_drop {
                     assert!(via_drop);
                     scheduler.resume_commit_into_bank(None);
                 }
