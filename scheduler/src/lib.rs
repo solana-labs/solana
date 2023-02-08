@@ -2078,7 +2078,7 @@ impl ScheduleStage {
             if select_skipped {
                 let task_count = runnable_queue.task_count_hint();
                 let uncontended_count = address_book.uncontended_task_ids.len();
-                assert!(executing_queue_count >= 1 || did_processed, "id_{} {slot:?} {mode:?} {executing_queue_count} >= 1 || {did_processed}, extra: ({task_count} {contended_count} {provisioning_tracker_count} {uncontended_count})", log_prefix());
+                assert!(executing_queue_count >= 1 || did_processed, "id_{} {slot:?} {mode:?} {executing_queue_count} >= 1 || {did_processed}, extra: ({task_count} {contended_count} {provisioning_tracker_count} {uncontended_count})", log_prefix(&runner_context));
             }
         }
         if let Some(checkpoint) = &maybe_checkpoint {
