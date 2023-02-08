@@ -1043,7 +1043,6 @@ struct Scheduler<C> {
     preloader: Arc<solana_scheduler::Preloader>,
     graceful_stop_initiated: AtomicBool,
     collected_results: Arc<std::sync::Mutex<Vec<Result<C>>>>,
-    bank: std::sync::Arc<std::sync::RwLock<std::option::Option<std::sync::Weak<Bank>>>>,
     commit_status: Arc<CommitStatus>,
     current_checkpoint: Arc<solana_scheduler::Checkpoint<C, RunnerContext>>,
     thread_count: usize,
