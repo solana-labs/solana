@@ -6889,7 +6889,7 @@ impl Bank {
     }
 
     pub fn resync_transaction_runner_context(self: &Arc<Self>) {
-        self.sync_transaction_runner_context(self, panic!())
+        self.sync_transaction_runner_context(panic!())
     }
 
     pub fn commit_mode(&self) -> CommitMode {
