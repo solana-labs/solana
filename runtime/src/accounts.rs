@@ -1177,7 +1177,6 @@ impl Accounts {
                 | Err(TransactionError::WouldExceedMaxBlockCostLimit)
                 | Err(TransactionError::WouldExceedMaxVoteCostLimit)
                 | Err(TransactionError::WouldExceedMaxAccountCostLimit)
-                | Err(TransactionError::WouldExceedAccountDataBlockLimit)
                 | Err(TransactionError::WouldExceedAccountDataTotalLimit) => None,
                 _ => Some(tx.get_account_locks_unchecked()),
             })

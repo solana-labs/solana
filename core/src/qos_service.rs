@@ -176,9 +176,6 @@ impl QosService {
                         CostTrackerError::WouldExceedAccountMaxLimit => {
                             Err(TransactionError::WouldExceedMaxAccountCostLimit)
                         }
-                        CostTrackerError::WouldExceedAccountDataBlockLimit => {
-                            Err(TransactionError::WouldExceedAccountDataBlockLimit)
-                        }
                         CostTrackerError::WouldExceedAccountDataTotalLimit => {
                             Err(TransactionError::WouldExceedAccountDataTotalLimit)
                         }

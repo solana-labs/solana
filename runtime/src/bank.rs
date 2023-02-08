@@ -1598,15 +1598,7 @@ impl Bank {
                     .map(|drop_callback| drop_callback.clone_box()),
             )),
             freeze_started: AtomicBool::new(false),
-            cost_tracker: RwLock::new(CostTracker::new_with_account_data_size_limit(
-                feature_set
-                    .is_active(&feature_set::cap_accounts_data_len::id())
-                    .then(|| {
-                        parent
-                            .accounts_data_size_limit()
-                            .saturating_sub(accounts_data_size_initial)
-                    }),
-            )),
+            cost_tracker: RwLock::new(CostTracker::default()),
             sysvar_cache: RwLock::new(SysvarCache::default()),
             accounts_data_size_initial,
             accounts_data_size_delta_on_chain: AtomicI64::new(0),
@@ -4348,10 +4340,6 @@ impl Bank {
                     error_counters.would_exceed_max_account_cost_limit += 1;
                     Some(index)
                 }
-                Err(TransactionError::WouldExceedAccountDataBlockLimit) => {
-                    error_counters.would_exceed_account_data_block_limit += 1;
-                    Some(index)
-                }
                 // following are non-retryable errors
                 Err(TransactionError::TooManyAccountLocks) => {
                     error_counters.too_many_account_locks += 1;
@@ -6385,16 +6373,6 @@ impl Bank {
             ApplyFeatureActivationsCaller::FinishInit,
             debug_do_not_add_builtins,
         );
-
-        if self
-            .feature_set
-            .is_active(&feature_set::cap_accounts_data_len::id())
-        {
-            self.cost_tracker = RwLock::new(CostTracker::new_with_account_data_size_limit(Some(
-                self.accounts_data_size_limit()
-                    .saturating_sub(self.accounts_data_size_initial),
-            )));
-        }
     }
 
     pub fn set_inflation(&self, inflation: Inflation) {

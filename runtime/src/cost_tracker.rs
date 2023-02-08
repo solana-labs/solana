@@ -22,9 +22,6 @@ pub enum CostTrackerError {
     /// would exceed account max limit
     WouldExceedAccountMaxLimit,
 
-    /// would exceed account data block limit
-    WouldExceedAccountDataBlockLimit,
-
     /// would exceed account data total limit
     WouldExceedAccountDataTotalLimit,
 }
@@ -38,11 +35,6 @@ pub struct CostTracker {
     block_cost: u64,
     vote_cost: u64,
     transaction_count: u64,
-    account_data_size: u64,
-
-    /// The amount of total account data size remaining.  If `Some`, then do not add transactions
-    /// that would cause `account_data_size` to exceed this limit.
-    account_data_size_limit: Option<u64>,
 }
 
 impl Default for CostTracker {
@@ -61,22 +53,11 @@ impl Default for CostTracker {
             block_cost: 0,
             vote_cost: 0,
             transaction_count: 0,
-            account_data_size: 0,
-            account_data_size_limit: None,
         }
     }
 }
 
 impl CostTracker {
-    /// Construct and new CostTracker and set the account data size limit.
-    #[must_use]
-    pub fn new_with_account_data_size_limit(account_data_size_limit: Option<u64>) -> Self {
-        Self {
-            account_data_size_limit,
-            ..Self::default()
-        }
-    }
-
     /// allows to adjust limits initiated during construction
     pub fn set_limits(
         &mut self,
@@ -147,7 +128,6 @@ impl CostTracker {
             ("number_of_accounts", self.number_of_accounts() as i64, i64),
             ("costliest_account", costliest_account.to_string(), String),
             ("costliest_account_cost", costliest_account_cost as i64, i64),
-            ("account_data_size", self.account_data_size, i64),
         );
     }
 
@@ -178,21 +158,6 @@ impl CostTracker {
             return Err(CostTrackerError::WouldExceedAccountMaxLimit);
         }
 
-        // NOTE: Check if the total accounts data size is exceeded *before* the block accounts data
-        // size.  This way, transactions are not unnecessarily retried.
-        let account_data_size = self
-            .account_data_size
-            .saturating_add(tx_cost.account_data_size);
-        if let Some(account_data_size_limit) = self.account_data_size_limit {
-            if account_data_size > account_data_size_limit {
-                return Err(CostTrackerError::WouldExceedAccountDataTotalLimit);
-            }
-        }
-
-        if account_data_size > MAX_BLOCK_ACCOUNTS_DATA_SIZE_DELTA {
-            return Err(CostTrackerError::WouldExceedAccountDataBlockLimit);
-        }
-
         // check each account against account_cost_limit,
         for account_key in tx_cost.writable_accounts.iter() {
             match self.cost_by_writable_accounts.get(account_key) {
@@ -212,16 +177,12 @@ impl CostTracker {
 
     fn add_transaction_cost(&mut self, tx_cost: &TransactionCost) {
         self.add_transaction_execution_cost(tx_cost, tx_cost.sum());
-        saturating_add_assign!(self.account_data_size, tx_cost.account_data_size);
         saturating_add_assign!(self.transaction_count, 1);
     }
 
     fn remove_transaction_cost(&mut self, tx_cost: &TransactionCost) {
         let cost = tx_cost.sum();
         self.sub_transaction_execution_cost(tx_cost, cost);
-        self.account_data_size = self
-            .account_data_size
-            .saturating_sub(tx_cost.account_data_size);
         self.transaction_count = self.transaction_count.saturating_sub(1);
     }
 
@@ -285,19 +246,13 @@ mod tests {
     };
 
     impl CostTracker {
-        fn new(
-            account_cost_limit: u64,
-            block_cost_limit: u64,
-            vote_cost_limit: u64,
-            account_data_size_limit: Option<u64>,
-        ) -> Self {
+        fn new(account_cost_limit: u64, block_cost_limit: u64, vote_cost_limit: u64) -> Self {
             assert!(account_cost_limit <= block_cost_limit);
             assert!(vote_cost_limit <= block_cost_limit);
             Self {
                 account_cost_limit,
                 block_cost_limit,
                 vote_cost_limit,
-                account_data_size_limit,
                 ..Self::default()
             }
         }
@@ -362,7 +317,7 @@ mod tests {
 
     #[test]
     fn test_cost_tracker_initialization() {
-        let testee = CostTracker::new(10, 11, 8, None);
+        let testee = CostTracker::new(10, 11, 8);
         assert_eq!(10, testee.account_cost_limit);
         assert_eq!(11, testee.block_cost_limit);
         assert_eq!(8, testee.vote_cost_limit);
@@ -377,7 +332,7 @@ mod tests {
         let cost = tx_cost.sum();
 
         // build testee to have capacity for one simple transaction
-        let mut testee = CostTracker::new(cost, cost, cost, None);
+        let mut testee = CostTracker::new(cost, cost, cost);
         assert!(testee.would_fit(&tx_cost).is_ok());
         testee.add_transaction_cost(&tx_cost);
         assert_eq!(cost, testee.block_cost);
@@ -393,7 +348,7 @@ mod tests {
         let cost = tx_cost.sum();
 
         // build testee to have capacity for one simple transaction
-        let mut testee = CostTracker::new(cost, cost, cost, None);
+        let mut testee = CostTracker::new(cost, cost, cost);
         assert!(testee.would_fit(&tx_cost).is_ok());
         testee.add_transaction_cost(&tx_cost);
         assert_eq!(cost, testee.block_cost);
@@ -405,16 +360,13 @@ mod tests {
     #[test]
     fn test_cost_tracker_add_data() {
         let (mint_keypair, start_hash) = test_setup();
-        let (_tx, mut tx_cost) = build_simple_transaction(&mint_keypair, &start_hash);
-        tx_cost.account_data_size = 1;
+        let (_tx, tx_cost) = build_simple_transaction(&mint_keypair, &start_hash);
         let cost = tx_cost.sum();
 
         // build testee to have capacity for one simple transaction
-        let mut testee = CostTracker::new(cost, cost, cost, None);
+        let mut testee = CostTracker::new(cost, cost, cost);
         assert!(testee.would_fit(&tx_cost).is_ok());
-        let old = testee.account_data_size;
         testee.add_transaction_cost(&tx_cost);
-        assert_eq!(old + 1, testee.account_data_size);
     }
 
     #[test]
@@ -427,7 +379,7 @@ mod tests {
         let cost2 = tx_cost2.sum();
 
         // build testee to have capacity for two simple transactions, with same accounts
-        let mut testee = CostTracker::new(cost1 + cost2, cost1 + cost2, cost1 + cost2, None);
+        let mut testee = CostTracker::new(cost1 + cost2, cost1 + cost2, cost1 + cost2);
         {
             assert!(testee.would_fit(&tx_cost1).is_ok());
             testee.add_transaction_cost(&tx_cost1);
@@ -453,8 +405,7 @@ mod tests {
         let cost2 = tx_cost2.sum();
 
         // build testee to have capacity for two simple transactions, with same accounts
-        let mut testee =
-            CostTracker::new(cmp::max(cost1, cost2), cost1 + cost2, cost1 + cost2, None);
+        let mut testee = CostTracker::new(cmp::max(cost1, cost2), cost1 + cost2, cost1 + cost2);
         {
             assert!(testee.would_fit(&tx_cost1).is_ok());
             testee.add_transaction_cost(&tx_cost1);
@@ -479,8 +430,7 @@ mod tests {
         let cost2 = tx_cost2.sum();
 
         // build testee to have capacity for two simple transactions, but not for same accounts
-        let mut testee =
-            CostTracker::new(cmp::min(cost1, cost2), cost1 + cost2, cost1 + cost2, None);
+        let mut testee = CostTracker::new(cmp::min(cost1, cost2), cost1 + cost2, cost1 + cost2);
         // should have room for first transaction
         {
             assert!(testee.would_fit(&tx_cost1).is_ok());
@@ -503,12 +453,8 @@ mod tests {
         let cost2 = tx_cost2.sum();
 
         // build testee to have capacity for each chain, but not enough room for both transactions
-        let mut testee = CostTracker::new(
-            cmp::max(cost1, cost2),
-            cost1 + cost2 - 1,
-            cost1 + cost2 - 1,
-            None,
-        );
+        let mut testee =
+            CostTracker::new(cmp::max(cost1, cost2), cost1 + cost2 - 1, cost1 + cost2 - 1);
         // should have room for first transaction
         {
             assert!(testee.would_fit(&tx_cost1).is_ok());
@@ -531,12 +477,7 @@ mod tests {
         let cost2 = tx_cost2.sum();
 
         // build testee to have capacity for each chain, but not enough room for both votes
-        let mut testee = CostTracker::new(
-            cmp::max(cost1, cost2),
-            cost1 + cost2,
-            cost1 + cost2 - 1,
-            None,
-        );
+        let mut testee = CostTracker::new(cmp::max(cost1, cost2), cost1 + cost2, cost1 + cost2 - 1);
         // should have room for first vote
         {
             assert!(testee.would_fit(&tx_cost1).is_ok());
@@ -555,61 +496,6 @@ mod tests {
     }
 
     #[test]
-    fn test_cost_tracker_reach_data_block_limit() {
-        let (mint_keypair, start_hash) = test_setup();
-        // build two transactions with diff accounts
-        let second_account = Keypair::new();
-        let (_tx1, mut tx_cost1) = build_simple_transaction(&mint_keypair, &start_hash);
-        let (_tx2, mut tx_cost2) = build_simple_transaction(&second_account, &start_hash);
-        tx_cost1.account_data_size = MAX_BLOCK_ACCOUNTS_DATA_SIZE_DELTA;
-        tx_cost2.account_data_size = MAX_BLOCK_ACCOUNTS_DATA_SIZE_DELTA + 1;
-        let cost1 = tx_cost1.sum();
-        let cost2 = tx_cost2.sum();
-
-        // build testee that passes
-        let testee = CostTracker::new(
-            cmp::max(cost1, cost2),
-            cost1 + cost2 - 1,
-            cost1 + cost2 - 1,
-            None,
-        );
-        assert!(testee.would_fit(&tx_cost1).is_ok());
-        // data is too big
-        assert_eq!(
-            testee.would_fit(&tx_cost2),
-            Err(CostTrackerError::WouldExceedAccountDataBlockLimit),
-        );
-    }
-
-    #[test]
-    fn test_cost_tracker_reach_data_total_limit() {
-        let (mint_keypair, start_hash) = test_setup();
-        // build two transactions with diff accounts
-        let second_account = Keypair::new();
-        let (_tx1, mut tx_cost1) = build_simple_transaction(&mint_keypair, &start_hash);
-        let (_tx2, mut tx_cost2) = build_simple_transaction(&second_account, &start_hash);
-        let remaining_account_data_size = 1234;
-        tx_cost1.account_data_size = remaining_account_data_size;
-        tx_cost2.account_data_size = remaining_account_data_size + 1;
-        let cost1 = tx_cost1.sum();
-        let cost2 = tx_cost2.sum();
-
-        // build testee that passes
-        let testee = CostTracker::new(
-            cmp::max(cost1, cost2),
-            cost1 + cost2 - 1,
-            cost1 + cost2 - 1,
-            Some(remaining_account_data_size),
-        );
-        assert!(testee.would_fit(&tx_cost1).is_ok());
-        // data is too big
-        assert_eq!(
-            testee.would_fit(&tx_cost2),
-            Err(CostTrackerError::WouldExceedAccountDataTotalLimit),
-        );
-    }
-
-    #[test]
     fn test_cost_tracker_remove() {
         let (mint_keypair, start_hash) = test_setup();
         // build two transactions with diff accounts
@@ -619,7 +505,7 @@ mod tests {
         let cost1 = tx_cost1.sum();
         let cost2 = tx_cost2.sum();
         // build testee
-        let mut testee = CostTracker::new(cost1 + cost2, cost1 + cost2, cost1 + cost2, None);
+        let mut testee = CostTracker::new(cost1 + cost2, cost1 + cost2, cost1 + cost2);
 
         assert!(testee.try_add(&tx_cost1).is_ok());
         assert!(testee.try_add(&tx_cost2).is_ok());
@@ -646,7 +532,7 @@ mod tests {
         let account_max = cost * 2;
         let block_max = account_max * 3; // for three accts
 
-        let mut testee = CostTracker::new(account_max, block_max, block_max, None);
+        let mut testee = CostTracker::new(account_max, block_max, block_max);
 
         // case 1: a tx writes to 3 accounts, should success, we will have:
         // | acct1 | $cost |
@@ -715,7 +601,7 @@ mod tests {
         let account_max = cost * 2;
         let block_max = account_max * 3; // for three accts
 
-        let mut testee = CostTracker::new(account_max, block_max, block_max, None);
+        let mut testee = CostTracker::new(account_max, block_max, block_max);
         let tx_cost = TransactionCost {
             writable_accounts: vec![acct1, acct2, acct3],
             bpf_execution_cost: cost,
@@ -862,7 +748,6 @@ mod tests {
         assert_eq!(1, cost_tracker.number_of_accounts());
         assert_eq!(cost, cost_tracker.block_cost);
         assert_eq!(0, cost_tracker.vote_cost);
-        assert_eq!(0, cost_tracker.account_data_size);
 
         cost_tracker.remove_transaction_cost(&tx_cost);
         // assert cost_tracker is reverted to default
@@ -870,6 +755,5 @@ mod tests {
         assert_eq!(0, cost_tracker.number_of_accounts());
         assert_eq!(0, cost_tracker.block_cost);
         assert_eq!(0, cost_tracker.vote_cost);
-        assert_eq!(0, cost_tracker.account_data_size);
     }
 }

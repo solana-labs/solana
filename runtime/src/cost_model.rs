@@ -15,11 +15,7 @@ use {
         feature_set::{
             remove_deprecated_request_unit_ix, use_default_units_in_fee_calculation, FeatureSet,
         },
-        instruction::CompiledInstruction,
-        program_utils::limited_deserialize,
         pubkey::Pubkey,
-        system_instruction::SystemInstruction,
-        system_program,
         transaction::SanitizedTransaction,
     },
 };
@@ -35,7 +31,6 @@ pub struct TransactionCost {
     pub data_bytes_cost: u64,
     pub builtins_execution_cost: u64,
     pub bpf_execution_cost: u64,
-    pub account_data_size: u64,
     pub is_simple_vote: bool,
 }
 
@@ -48,7 +43,6 @@ impl Default for TransactionCost {
             data_bytes_cost: 0u64,
             builtins_execution_cost: 0u64,
             bpf_execution_cost: 0u64,
-            account_data_size: 0u64,
             is_simple_vote: false,
         }
     }
@@ -93,7 +87,6 @@ impl CostModel {
         tx_cost.signature_cost = Self::get_signature_cost(transaction);
         Self::get_write_lock_cost(&mut tx_cost, transaction);
         Self::get_transaction_cost(&mut tx_cost, transaction, feature_set);
-        tx_cost.account_data_size = Self::calculate_account_data_size(transaction);
         tx_cost.is_simple_vote = transaction.is_simple_vote_transaction();
 
         debug!("transaction {:?} has cost {:?}", transaction, tx_cost);
@@ -166,59 +159,6 @@ impl CostModel {
         tx_cost.bpf_execution_cost = bpf_costs;
         tx_cost.data_bytes_cost = data_bytes_len_total / INSTRUCTION_DATA_BYTES_COST;
     }
-
-    fn calculate_account_data_size_on_deserialized_system_instruction(
-        instruction: SystemInstruction,
-    ) -> u64 {
-        match instruction {
-            SystemInstruction::CreateAccount {
-                lamports: _lamports,
-                space,
-                owner: _owner,
-            } => space,
-            SystemInstruction::CreateAccountWithSeed {
-                base: _base,
-                seed: _seed,
-                lamports: _lamports,
-                space,
-                owner: _owner,
-            } => space,
-            SystemInstruction::Allocate { space } => space,
-            SystemInstruction::AllocateWithSeed {
-                base: _base,
-                seed: _seed,
-                space,
-                owner: _owner,
-            } => space,
-            _ => 0,
-        }
-    }
-
-    fn calculate_account_data_size_on_instruction(
-        program_id: &Pubkey,
-        instruction: &CompiledInstruction,
-    ) -> u64 {
-        if program_id == &system_program::id() {
-            if let Ok(instruction) = limited_deserialize(&instruction.data) {
-                return Self::calculate_account_data_size_on_deserialized_system_instruction(
-                    instruction,
-                );
-            }
-        }
-        0
-    }
-
-    /// eventually, potentially determine account data size of all writable accounts
-    /// at the moment, calculate account data size of account creation
-    fn calculate_account_data_size(transaction: &SanitizedTransaction) -> u64 {
-        transaction
-            .message()
-            .program_instructions_iter()
-            .map(|(program_id, instruction)| {
-                Self::calculate_account_data_size_on_instruction(program_id, instruction)
-            })
-            .sum()
-    }
 }
 
 #[cfg(test)]
@@ -253,53 +193,6 @@ mod tests {
         let bank = Arc::new(Bank::new_no_wallclock_throttle_for_tests(&genesis_config));
         let start_hash = bank.last_blockhash();
         (mint_keypair, start_hash)
-    }
-
-    #[test]
-    fn test_cost_model_data_len_cost() {
-        let lamports = 0;
-        let owner = Pubkey::default();
-        let seed = String::default();
-        let space = 100;
-        let base = Pubkey::default();
-        for instruction in [
-            SystemInstruction::CreateAccount {
-                lamports,
-                space,
-                owner,
-            },
-            SystemInstruction::CreateAccountWithSeed {
-                base,
-                seed: seed.clone(),
-                lamports,
-                space,
-                owner,
-            },
-            SystemInstruction::Allocate { space },
-            SystemInstruction::AllocateWithSeed {
-                base,
-                seed,
-                space,
-                owner,
-            },
-        ] {
-            assert_eq!(
-                space,
-                CostModel::calculate_account_data_size_on_deserialized_system_instruction(
-                    instruction
-                )
-            );
-        }
-        assert_eq!(
-            0,
-            CostModel::calculate_account_data_size_on_deserialized_system_instruction(
-                SystemInstruction::TransferWithSeed {
-                    lamports,
-                    from_seed: String::default(),
-                    from_owner: Pubkey::default(),
-                }
-            )
-        );
     }
 
     #[test]
