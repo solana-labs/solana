@@ -1636,17 +1636,11 @@ impl<C> Scheduler<C> {
 
     fn pause_commit_into_bank(&self) {
         self.commit_status.notify_as_paused();
-        {
-            *self.bank.write().unwrap() = None;
-        }
+        self.current_checkpoint.update_context_value(RunnerContext { bank: None });
     }
 
     fn resume_commit_into_bank(&self, bank: Option<&Arc<Bank>>) {
-        if let Some(bank) = bank {
-            {
-                *self.bank.write().unwrap() = Some(Arc::downgrade(bank));
-            }
-        }
+        self.current_checkpoint.update_context_value(RunnerContext { bank: bank });
         self.commit_status.notify_as_resumed();
     }
 
