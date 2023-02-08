@@ -1608,7 +1608,6 @@ impl<C> Scheduler<C> {
         self.collected_results.lock().unwrap().push(Ok(r));
         {
             *self.bank.write().unwrap() = None;
-            self.slot.store(0, std::sync::atomic::Ordering::SeqCst);
         }
 
         /*
