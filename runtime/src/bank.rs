@@ -1411,7 +1411,7 @@ impl Scheduler<ExecuteTimings> {
                                     ("compute_units", ee.cu, i64),
                                     ("priority", ee.task.tx.0.get_transaction_priority_details().map(|d| d.priority).unwrap_or_default(), i64),
                                 );
-                                info!("execute_substage: slot: {} transaction_index: {} timings: {:?}", ee.task.slot, ee.task.transaction_index(), timings);
+                                info!("execute_substage: slot: {} transaction_index: {} timings: {:?}", latest_runner_context.as_ref().unwrap().slot(), ee.task.transaction_index(), timings);
                             }
 
                             if let Some(result) = ee.execution_result.take() {
