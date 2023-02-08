@@ -1821,12 +1821,6 @@ impl ScheduleStage {
                                    maybe_start_time = Some((cpu_time::ThreadTime::now(), std::time::Instant::now()));
                                    last_time = maybe_start_time.map(|(a, b)| b).clone();
                                    let (old_slot, old_mode) = (slot, mode);
-                                   let slot_label = if old_slot != Some(task.slot) {
-                                       slot = Some(task.slot);
-                                       format!(" slot: {old_slot:?} => {slot:?}")
-                                   } else {
-                                       format!("")
-                                   };
                                    let mode_label = if old_mode != Some(task.mode) {
                                        if !force_channel_backed {
                                            runnable_queue = match task.mode {
