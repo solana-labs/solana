@@ -797,7 +797,7 @@ impl RepairService {
 }
 
 #[cfg(test)]
-mod test {
+pub(crate) mod test {
     use {
         super::*,
         solana_gossip::{
@@ -820,6 +820,11 @@ mod test {
         solana_streamer::socket::SocketAddrSpace,
         std::collections::HashSet,
     };
+
+    pub(crate) fn post_shred_deferment_timestamp() -> u64 {
+        // adjust timestamp to bypass shred deferment window
+        timestamp() + DEFAULT_MS_PER_SLOT + DEFER_REPAIR_THRESHOLD.as_millis() as u64
+    }
 
     fn new_test_cluster_info() -> ClusterInfo {
         let keypair = Arc::new(Keypair::new());
@@ -979,11 +984,6 @@ mod test {
             );
         }
         Blockstore::destroy(&blockstore_path).expect("Expected successful database destruction");
-    }
-
-    fn post_shred_deferment_timestamp() -> u64 {
-        // adjust timestamp to bypass shred deferment window
-        timestamp() + DEFAULT_MS_PER_SLOT + DEFER_REPAIR_THRESHOLD.as_millis() as u64
     }
 
     #[test]

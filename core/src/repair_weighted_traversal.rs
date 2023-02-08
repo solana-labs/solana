@@ -147,17 +147,15 @@ pub fn get_best_repair_shreds<'a>(
 pub mod test {
     use {
         super::*,
-        crate::repair_service::{DEFER_REPAIR_THRESHOLD, DEFER_REPAIR_THRESHOLD_TICKS},
+        crate::repair_service::{
+            test::post_shred_deferment_timestamp, DEFER_REPAIR_THRESHOLD_TICKS,
+        },
         solana_ledger::{
             get_tmp_ledger_path,
             shred::{Shred, ShredFlags},
         },
         solana_runtime::bank_utils,
-        solana_sdk::{
-            clock::{DEFAULT_MS_PER_SLOT, DEFAULT_TICKS_PER_SECOND},
-            hash::Hash,
-            timing::timestamp,
-        },
+        solana_sdk::{clock::DEFAULT_TICKS_PER_SECOND, hash::Hash, timing::timestamp},
         trees::tr,
     };
 
@@ -225,11 +223,6 @@ pub mod test {
                 Visit::Visited(0)
             ]
         );
-    }
-
-    fn post_shred_deferment_timestamp() -> u64 {
-        // adjust timestamp to bypass shred deferment window
-        timestamp() + DEFAULT_MS_PER_SLOT + DEFER_REPAIR_THRESHOLD.as_millis() as u64
     }
 
     #[test]
