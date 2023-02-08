@@ -31,16 +31,14 @@ const MAX_PUBKEY_PER_SLOT: usize = 300;
 
 struct ProofChunkMap {
     num_chunks: u8,
-    wallclock: u64,
     chunks: [Option<DuplicateShred>; MAX_NUM_CHUNKS],
 }
 
 impl ProofChunkMap {
-    fn new(num_chunks: u8, wallclock: u64) -> Self {
+    fn new(num_chunks: u8) -> Self {
         Self {
             num_chunks,
             chunks: <[Option<DuplicateShred>; MAX_NUM_CHUNKS]>::default(),
-            wallclock,
         }
     }
 }
@@ -171,10 +169,7 @@ impl DuplicateShredHandler {
         // Also skip frozen slots or slots with a different proof than me.
         match self.chunk_map.get(&slot) {
             Some(SlotStatus::Frozen) => false,
-            Some(SlotStatus::UnfinishedProof(slot_map)) => match slot_map.get(&data.from) {
-                None => true,
-                Some(proof_chunkmap) => proof_chunkmap.wallclock == data.wallclock,
-            },
+            Some(SlotStatus::UnfinishedProof(_)) => true,
             None => true,
         }
     }
@@ -211,7 +206,7 @@ impl DuplicateShredHandler {
         };
         let proof_chunk_map = slot_chunk_map
             .entry(data.from)
-            .or_insert_with(|| ProofChunkMap::new(data.num_chunks(), data.wallclock));
+            .or_insert_with(|| ProofChunkMap::new(data.num_chunks()));
         if data.num_chunks() != proof_chunk_map.num_chunks
             || data.chunk_index() >= proof_chunk_map.num_chunks
         {
@@ -468,7 +463,7 @@ mod tests {
             None,
             start_slot,
             None,
-            DUPLICATE_SHRED_MAX_PAYLOAD_SIZE,
+            DUPLICATE_SHRED_MAX_PAYLOAD_SIZE * 2,
         )
         .unwrap();
         for chunk in chunks1 {
