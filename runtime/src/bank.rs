@@ -1622,6 +1622,10 @@ impl<C> Scheduler<C> {
     fn current_runner_mode(&self) -> solana_scheduler::Mode {
         self.current_checkpoint.with_context_value(|c| c.mode).unwrap()
     }
+
+    fn has_context(&self) -> bool {
+        self.current_checkpoint.with_context_value(|_| ()).is_some()
+    }
 }
 
 impl<C> Drop for Scheduler<C> {
