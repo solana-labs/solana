@@ -654,6 +654,7 @@ pub struct Task {
     pub execute_time: std::sync::atomic::AtomicUsize,
     pub commit_time: std::sync::atomic::AtomicUsize,
     pub for_indexer: LockAttemptsInCell,
+    pub slot: solana_sdk::clock::Slot,
     pub mode: Mode,
 }
 
