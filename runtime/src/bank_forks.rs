@@ -206,6 +206,8 @@ impl BankForks {
         self.add_new_bank(bank, solana_scheduler::Mode::Replaying)
     }
 
+    // pub fn add_new_bank_as_{rooted/freezed}(...) { ... }
+
     pub fn remove(&mut self, slot: Slot) -> Option<Arc<Bank>> {
         let bank = self.banks.remove(&slot)?;
         for parent in bank.proper_ancestors() {
