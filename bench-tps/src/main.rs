@@ -19,11 +19,15 @@ use {
     solana_gossip::gossip_service::{discover_cluster, get_client, get_multi_client},
     solana_rpc_client::rpc_client::RpcClient,
     solana_sdk::{
+        account::from_account,
         commitment_config::CommitmentConfig,
         fee_calculator::FeeRateGovernor,
         pubkey::Pubkey,
         signature::{Keypair, Signer},
+        stake::state,
+        stake_history::StakeHistory,
         system_program,
+        sysvar::stake_history,
     },
     solana_streamer::{socket::SocketAddrSpace, streamer::StakedNodes},
     std::{
@@ -33,6 +37,7 @@ use {
         net::{IpAddr, SocketAddr},
         path::Path,
         process::exit,
+        str::FromStr,
         sync::{Arc, RwLock},
     },
 };
@@ -40,7 +45,18 @@ use {
 /// Number of signatures for all transactions in ~1 week at ~100K TPS
 pub const NUM_SIGNATURES_FOR_TXS: u64 = 100_000 * 60 * 60 * 24 * 7;
 
+fn find_node_activated_stake(rpc_client: Arc<RpcClient>, node_id: Pubkey) -> Result<u64, ()> {
+    let vote_accounts = rpc_client.get_vote_accounts().unwrap();
+    for vote_account in vote_accounts.current {
+        if Pubkey::from_str(&vote_account.node_pubkey).unwrap() == node_id {
+            return Ok(vote_account.activated_stake);
+        }
+    }
+    Err(())
+}
+
 fn create_connection_cache(
+    json_rpc_url: &str,
     tpu_connection_pool_size: usize,
     use_quic: bool,
     bind_address: IpAddr,
@@ -48,6 +64,38 @@ fn create_connection_cache(
     stake: u64,
     total_stake: u64,
 ) -> ConnectionCache {
+    let rpc_client = Arc::new(RpcClient::new_with_commitment(
+        json_rpc_url.to_string(),
+        CommitmentConfig::confirmed(),
+    ));
+
+    // get stake history
+    let stake_history_account = rpc_client.get_account(&stake_history::id()).unwrap();
+    let stake_history = from_account::<StakeHistory, _>(&stake_history_account)
+        .ok_or_else(|| {
+            eprintln!("Error: failed to deserialize stake history");
+            exit(1);
+        })
+        .unwrap();
+
+    if stake_history.len() == 0 {
+        eprintln!("Error: failed to deserialize stake history");
+        exit(1);
+    }
+    let total_stake = stake_history[0].0;
+
+    // get stake
+    let stake = find_node_activated_stake(rpc_client, client_node_id.pubkey()).unwrap();
+    println!("{stake} {total_stake}");
+
+    // get stake by stake account
+    //let stake_account = rpc_client.get_account(stake_account_address).unwrap();
+    //if stake_account.owner != stake::program::id() {
+    //    eprintln!("Error: {stake_account_address:?} is not a stake account");
+    //    exit(1);
+    //}
+    //let stake = stake_account.lamports;
+
     match use_quic {
         true => {
             let staked_nodes = Arc::new(RwLock::new(StakedNodes::default()));
@@ -258,6 +306,7 @@ fn main() {
         };
 
     let connection_cache = create_connection_cache(
+        json_rpc_url,
         *tpu_connection_pool_size,
         *use_quic,
         *bind_address,
