@@ -1658,7 +1658,7 @@ impl ScheduleStage {
     }
 
     #[must_use]
-    fn _run<'a, AST: AtScheduleThread, T: Send, C, B: Clone>(
+    fn _run<'a, AST: AtScheduleThread, T: Send, C, B: Clone + WithMode>(
         ast: AST,
         checkpoint: &mut Option<std::sync::Arc<Checkpoint<C, B>>>,
         executing_thread_count: usize,
@@ -2251,4 +2251,8 @@ impl<T, B: Clone> Checkpoint<T, B> {
 pub enum Flushable<T, C, B> {
     Payload(T),
     Flush(std::sync::Arc<Checkpoint<C, B>>),
+}
+
+pub trait WithMode {
+    fn mode() -> Mode;
 }
