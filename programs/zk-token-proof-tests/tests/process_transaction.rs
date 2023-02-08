@@ -524,6 +524,31 @@ async fn test_verify_proof_with_context<T: Pod + ZkProofData>(
         recent_blockhash,
     );
     client.process_transaction(transaction).await.unwrap();
+
+    // self-owned context state account
+    let context_state_account_and_authority = Keypair::new();
+    let context_state_info = ContextStateInfo {
+        context_state_account: &context_state_account_and_authority.pubkey(),
+        context_state_authority: &context_state_account_and_authority.pubkey(),
+    };
+
+    let instructions = vec![
+        system_instruction::create_account(
+            &payer.pubkey(),
+            &context_state_account_and_authority.pubkey(),
+            rent.minimum_balance(space),
+            space as u64,
+            &zk_token_proof_program::id(),
+        ),
+        verify_proof(proof_type, Some(context_state_info), success_proof_data),
+    ];
+    let transaction = Transaction::new_signed_with_payer(
+        &instructions,
+        Some(&payer.pubkey()),
+        &[payer, &context_state_account_and_authority],
+        recent_blockhash,
+    );
+    client.process_transaction(transaction).await.unwrap();
 }
 
 async fn test_close_context_state<T: Pod + ZkProofData>(
@@ -633,6 +658,94 @@ async fn test_close_context_state<T: Pod + ZkProofData>(
         &instructions,
         Some(&payer.pubkey()),
         &[payer, &context_state_account, &context_state_authority],
+        recent_blockhash,
+    );
+    client.process_transaction(transaction).await.unwrap();
+
+    // close proof context state with owner as destination
+    let instructions = vec![
+        system_instruction::create_account(
+            &payer.pubkey(),
+            &context_state_account.pubkey(),
+            0_u64,
+            space as u64,
+            &zk_token_proof_program::id(),
+        ),
+        verify_proof(proof_type, Some(context_state_info), success_proof_data),
+        close_context_state(
+            ContextStateInfo {
+                context_state_account: &context_state_account.pubkey(),
+                context_state_authority: &context_state_authority.pubkey(),
+            },
+            &context_state_authority.pubkey(),
+            proof_type,
+        ),
+    ];
+    let transaction = Transaction::new_signed_with_payer(
+        &instructions,
+        Some(&payer.pubkey()),
+        &[payer, &context_state_account, &context_state_authority],
+        recent_blockhash,
+    );
+    client.process_transaction(transaction).await.unwrap();
+
+    // try close account with itself as destination
+    let instructions = vec![
+        system_instruction::create_account(
+            &payer.pubkey(),
+            &context_state_account.pubkey(),
+            0_u64,
+            space as u64,
+            &zk_token_proof_program::id(),
+        ),
+        verify_proof(proof_type, Some(context_state_info), success_proof_data),
+        close_context_state(
+            ContextStateInfo {
+                context_state_account: &context_state_account.pubkey(),
+                context_state_authority: &context_state_authority.pubkey(),
+            },
+            &context_state_account.pubkey(),
+            proof_type,
+        ),
+    ];
+    let transaction = Transaction::new_signed_with_payer(
+        &instructions,
+        Some(&payer.pubkey()),
+        &[payer, &context_state_account, &context_state_authority],
+        recent_blockhash,
+    );
+    let err = client.process_transaction(transaction).await.unwrap_err().unwrap();
+    assert_eq!(
+        err,
+        TransactionError::InstructionError(2, InstructionError::InvalidInstructionData)
+    );
+
+    // close self-owned proof context accounts
+    let context_state_account_and_authority = Keypair::new();
+    let context_state_info = ContextStateInfo {
+        context_state_account: &context_state_account_and_authority.pubkey(),
+        context_state_authority: &context_state_account_and_authority.pubkey(),
+    };
+
+    let instructions = vec![
+        system_instruction::create_account(
+            &payer.pubkey(),
+            &context_state_account_and_authority.pubkey(),
+            0_u64,
+            space as u64,
+            &zk_token_proof_program::id(),
+        ),
+        verify_proof(proof_type, Some(context_state_info), success_proof_data),
+        close_context_state(
+            context_state_info,
+            &context_state_account.pubkey(),
+            proof_type,
+        ),
+    ];
+    let transaction = Transaction::new_signed_with_payer(
+        &instructions,
+        Some(&payer.pubkey()),
+        &[payer, &context_state_account_and_authority],
         recent_blockhash,
     );
     client.process_transaction(transaction).await.unwrap();

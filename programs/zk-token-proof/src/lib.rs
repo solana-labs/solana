@@ -83,28 +83,32 @@ fn process_close_proof_context<T: Pod + ZkProofContext>(
         *owner_account.get_key()
     };
 
-    let remaining_lamports = {
-        let mut proof_context_account =
-            instruction_context.try_borrow_instruction_account(transaction_context, 0)?;
-        let proof_context_state =
-            ProofContextState::<T>::try_from_bytes(proof_context_account.get_data())?;
-        let expected_owner_pubkey = proof_context_state.context_state_authority;
+    let proof_context_account_pubkey = *instruction_context
+        .try_borrow_instruction_account(transaction_context, 0)?
+        .get_key();
+    let destination_account_pubkey = *instruction_context
+        .try_borrow_instruction_account(transaction_context, 1)?
+        .get_key();
+    if proof_context_account_pubkey == destination_account_pubkey {
+        return Err(InstructionError::InvalidInstructionData);
+    }
 
-        if owner_pubkey != expected_owner_pubkey {
-            return Err(InstructionError::InvalidAccountOwner);
-        }
+    let mut proof_context_account =
+        instruction_context.try_borrow_instruction_account(transaction_context, 0)?;
+    let proof_context_state =
+        ProofContextState::<T>::try_from_bytes(proof_context_account.get_data())?;
+    let expected_owner_pubkey = proof_context_state.context_state_authority;
 
-        let remaining_lamports = proof_context_account.get_lamports();
-        proof_context_account.set_lamports(0)?;
-        proof_context_account.set_data_length(0)?;
-        proof_context_account.set_owner(system_program::id().as_ref())?;
-
-        remaining_lamports
-    };
+    if owner_pubkey != expected_owner_pubkey {
+        return Err(InstructionError::InvalidAccountOwner);
+    }
 
     let mut destination_account =
         instruction_context.try_borrow_instruction_account(transaction_context, 1)?;
-    destination_account.checked_add_lamports(remaining_lamports)?;
+    destination_account.checked_add_lamports(proof_context_account.get_lamports())?;
+    proof_context_account.set_lamports(0)?;
+    proof_context_account.set_data_length(0)?;
+    proof_context_account.set_owner(system_program::id().as_ref())?;
 
     Ok(())
 }
