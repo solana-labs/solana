@@ -99,17 +99,11 @@ impl AccountsDb {
                 notify_stats.skipped_accounts += 1;
                 return;
             }
-            match accounts_to_stream.entry(account.meta.pubkey) {
-                Entry::Occupied(mut entry) => {
-                    // later entries in the same slot are more recent and override earlier accounts for the same pubkey
-                    // We can pass an incrementing number here for write_version in the future, if the storage does not have a write_version.
-                    // As long as all accounts for this slot are in 1 append vec that can be itereated olest to newest.
-                    entry.insert(account);
-                }
-                Entry::Vacant(entry) => {
-                    entry.insert(account);
-                }
-            }
+
+            // later entries in the same slot are more recent and override earlier accounts for the same pubkey
+            // We can pass an incrementing number here for write_version in the future, if the storage does not have a write_version.
+            // As long as all accounts for this slot are in 1 append vec that can be itereated olest to newest.
+            accounts_to_stream.insert(account.meta.pubkey, account);
             notify_stats.total_accounts += account_len;
         });
         measure_filter.stop();
