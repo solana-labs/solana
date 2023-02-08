@@ -1839,7 +1839,7 @@ impl ScheduleStage {
                                    } else {
                                        format!("")
                                    };
-                                   info!("schedule_once:initial {} {slot_label}{mode_label}", log_prefix());
+                                   info!("schedule_once:initial {} {slot_label}{mode_label}", log_prefix(&runner_context));
                                    if let Some(checkpoint) = checkpoint.take() {
                                        runner_context = checkpoint.clone_context_value();
                                    }
