@@ -21,13 +21,13 @@ use {
 pub enum BlockRelation {
     /// The slot is on the same fork and is an ancestor of the other slot
     Ancestor,
-    /// The two slots are same and are on the same fork
+    /// The two slots are equal and are on the same fork
     Equal,
     /// The slot is on the same fork and is a descendant of the other slot
     Descendant,
     /// The slots are on two different forks and may have had a common ancestor at some point
     Unrelated,
-    /// Either or both of the slots are either older than the latest root, or are in future
+    /// Either one or both of the slots are either older than the latest root, or are in future
     Unknown,
 }
 
@@ -193,7 +193,9 @@ impl LoadedPrograms {
             .filter_map(|key| {
                 if let Some(second_level) = self.entries.get(&key) {
                     for entry in second_level.iter().rev() {
-                        if working_slot.is_ancestor(entry.deployment_slot) {
+                        if working_slot.current_slot() >= entry.effective_slot
+                            && working_slot.is_ancestor(entry.deployment_slot)
+                        {
                             return Some((key, entry.clone()));
                         }
                     }
@@ -345,6 +347,15 @@ mod tests {
                 slot_pos,
             }
         }
+
+        fn update_slot(&mut self, slot: Slot) {
+            self.slot = slot;
+            self.slot_pos = self
+                .fork
+                .iter()
+                .position(|current| *current == slot)
+                .expect("The fork didn't have the slot in it");
+        }
     }
 
     impl WorkingSlot for TestWorkingSlot {
@@ -361,11 +372,11 @@ mod tests {
         }
     }
 
-    fn new_test_loaded_program(deployment_slot: Slot) -> Arc<LoadedProgram> {
+    fn new_test_loaded_program(deployment_slot: Slot, effective_slot: Slot) -> Arc<LoadedProgram> {
         Arc::new(LoadedProgram {
             program: LoadedProgramType::Invalid,
             deployment_slot,
-            effective_slot: 0,
+            effective_slot,
             usage_counter: AtomicU64::default(),
         })
     }
@@ -395,6 +406,10 @@ mod tests {
         //                22   15  25
         //                      |   |
         //                     16  27
+        //                      |
+        //                     19
+        //                      |
+        //                     23
 
         let mut fork_graph = TestForkGraphSpecific::default();
         fork_graph.insert_fork(&[0, 10, 20, 22]);
@@ -405,30 +420,34 @@ mod tests {
         cache.entries.insert(
             program1,
             vec![
-                new_test_loaded_program(0),
-                new_test_loaded_program(10),
-                new_test_loaded_program(20),
+                new_test_loaded_program(0, 1),
+                new_test_loaded_program(10, 11),
+                new_test_loaded_program(20, 21),
             ],
         );
 
         let program2 = Pubkey::new_unique();
         cache.entries.insert(
             program2,
-            vec![new_test_loaded_program(5), new_test_loaded_program(11)],
+            vec![
+                new_test_loaded_program(5, 6),
+                new_test_loaded_program(11, 12),
+            ],
         );
 
         let program3 = Pubkey::new_unique();
         cache
             .entries
-            .insert(program3, vec![new_test_loaded_program(25)]);
+            .insert(program3, vec![new_test_loaded_program(25, 26)]);
 
         let program4 = Pubkey::new_unique();
         cache.entries.insert(
             program4,
             vec![
-                new_test_loaded_program(0),
-                new_test_loaded_program(5),
-                new_test_loaded_program(15),
+                new_test_loaded_program(0, 1),
+                new_test_loaded_program(5, 6),
+                // The following is a special case, where effective slot is 4 slots in the future
+                new_test_loaded_program(15, 19),
             ],
         );
 
@@ -442,6 +461,10 @@ mod tests {
         //                22   15  25
         //                      |   |
         //                     16  27
+        //                      |
+        //                     19
+        //                      |
+        //                     23
 
         // Testing fork 0 - 10 - 12 - 22 with current slot at 22
         let working_slot = TestWorkingSlot::new(22, &[0, 10, 20, 22]);
@@ -457,7 +480,7 @@ mod tests {
         assert!(missing.contains(&program3));
 
         // Testing fork 0 - 5 - 11 - 15 - 16 with current slot at 16
-        let working_slot = TestWorkingSlot::new(16, &[0, 5, 11, 15, 16]);
+        let mut working_slot = TestWorkingSlot::new(16, &[0, 5, 11, 15, 16, 19, 23]);
         let (found, missing) = cache.extract(
             &working_slot,
             vec![program1, program2, program3, program4].into_iter(),
@@ -465,6 +488,38 @@ mod tests {
 
         assert!(match_slot(&found, &program1, 0));
         assert!(match_slot(&found, &program2, 11));
+
+        // The effective slot of program4 deployed in slot 15 is 19. So it should not be usable in slot 16.
+        assert!(match_slot(&found, &program4, 5));
+
+        assert!(missing.contains(&program3));
+
+        // Testing the same fork above, but current slot is now 19 (equal to effective slot of program4).
+        working_slot.update_slot(19);
+        let (found, missing) = cache.extract(
+            &working_slot,
+            vec![program1, program2, program3, program4].into_iter(),
+        );
+
+        assert!(match_slot(&found, &program1, 0));
+        assert!(match_slot(&found, &program2, 11));
+
+        // The effective slot of program4 deployed in slot 15 is 19. So it should be usable in slot 19.
+        assert!(match_slot(&found, &program4, 15));
+
+        assert!(missing.contains(&program3));
+
+        // Testing the same fork above, but current slot is now 23 (future slot than effective slot of program4).
+        working_slot.update_slot(23);
+        let (found, missing) = cache.extract(
+            &working_slot,
+            vec![program1, program2, program3, program4].into_iter(),
+        );
+
+        assert!(match_slot(&found, &program1, 0));
+        assert!(match_slot(&found, &program2, 11));
+
+        // The effective slot of program4 deployed in slot 15 is 19. So it should be usable in slot 23.
         assert!(match_slot(&found, &program4, 15));
 
         assert!(missing.contains(&program3));
@@ -494,6 +549,10 @@ mod tests {
         //                  15  25
         //                   |   |
         //                  16  27
+        //                   |
+        //                  19
+        //                   |
+        //                  23
 
         // Testing fork 0 - 10 - 12 - 22 (which was pruned) with current slot at 22
         let working_slot = TestWorkingSlot::new(22, &[0, 10, 20, 22]);
@@ -533,6 +592,10 @@ mod tests {
         //                  15
         //                  |
         //                  16
+        //                  |
+        //                  19
+        //                  |
+        //                  23
 
         // Testing fork 0 - 5 - 11 - 25 - 27 (with root at 15, slot 25, 27 are pruned) with current slot at 27
         let working_slot = TestWorkingSlot::new(27, &[0, 5, 11, 25, 27]);
