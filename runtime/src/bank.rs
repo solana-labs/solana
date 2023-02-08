@@ -6853,7 +6853,7 @@ impl Bank {
 
     pub fn resume_banking_commit(self: &Arc<Self>) {
         use assert_matches::assert_matches;
-        match self.commit_mode() {
+        match self.runner_context_mode() {
             solana_scheduler::Mode::Banking => {
                 let s = self.scheduler2.read().unwrap();
                 let scheduler = s.as_ref().unwrap();
@@ -6871,7 +6871,7 @@ impl Bank {
         scheduler.replace_transaction_runner_context(self.clone(), mode);
     }
 
-    pub fn commit_mode(&self) -> solana_scheduler::Mode {
+    pub fn runner_context_mode(&self) -> solana_scheduler::Mode {
         let s = self.scheduler2.read().unwrap();
         let scheduler = s.as_ref().unwrap();
         scheduler.current_runner_mode()
