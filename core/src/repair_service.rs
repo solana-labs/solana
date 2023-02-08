@@ -544,9 +544,11 @@ impl RepairService {
                 .map(u64::from)
             {
                 let ticks_since_first_insert = DEFAULT_TICKS_PER_SECOND
-                    * (now_timestamp.saturating_sub(slot_meta.first_shred_timestamp))
+                    * now_timestamp.saturating_sub(slot_meta.first_shred_timestamp)
                     / 1_000;
-                if ticks_since_first_insert < reference_tick + DEFER_REPAIR_THRESHOLD_TICKS {
+                if ticks_since_first_insert
+                    < reference_tick.saturating_add(DEFER_REPAIR_THRESHOLD_TICKS)
+                {
                     return vec![];
                 }
             }
