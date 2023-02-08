@@ -1587,7 +1587,7 @@ impl<C> Scheduler<C> {
         checkpoint.wait_for_restart(None);
         let r = checkpoint.take_restart_value();
         self.current_checkpoint = checkpoint;
-        self.current_checkpoint.update_context_value(RunnerContext{bank: None});
+        self.current_checkpoint.replace_context_value(RunnerContext{bank: None});
         self.collected_results.lock().unwrap().push(Ok(r));
 
         /*
@@ -1618,16 +1618,16 @@ impl<C> Scheduler<C> {
 
     fn pause_commit_into_bank(&self) {
         self.commit_status.notify_as_paused();
-        self.current_checkpoint.update_context_value(RunnerContext { bank: None });
+        self.current_checkpoint.replace_context_value(RunnerContext { bank: None });
     }
 
     fn resume_commit_into_bank(&self, bank: Option<&Arc<Bank>>) {
-        self.current_checkpoint.update_context_value(RunnerContext { bank: bank.cloned() });
+        self.current_checkpoint.replace_context_value(RunnerContext { bank: bank.cloned() });
         self.commit_status.notify_as_resumed();
     }
 
     fn replace_transaction_runner_context(&self, bank: Arc<Bank>) {
-        self.current_checkpoint.update_context_value(RunnerContext { bank: Some(bank) });
+        self.current_checkpoint.replace_context_value(RunnerContext { bank: Some(bank) });
     }
 }
 
