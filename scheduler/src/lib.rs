@@ -1672,12 +1672,13 @@ impl ScheduleStage {
         from_exec: &crossbeam_channel::Receiver<UnlockablePayload<T>>,
         maybe_to_next_stage: Option<&crossbeam_channel::Sender<ExaminablePayload<T, C, B>>>, // assume nonblocking
         never: &'a crossbeam_channel::Receiver<SchedulablePayload<C, B>>,
+        log_prefix: impl Fn() -> String,
     ) -> Option<std::sync::Arc<Checkpoint<C, B>>> {
         let mut maybe_start_time = None;
         let mut slot = None;
         let mut mode = None;
         let (mut last_time, mut last_processed_count) = (maybe_start_time.map(|(a, b)| b).clone(), 0_usize);
-        info!("schedule_once:standby id_{:016x}", random_id);
+        info!("schedule_once:standby {}", log_prefix());
 
         let mut executing_queue_count = 0_usize;
         let mut contended_count = 0;
@@ -2134,6 +2135,7 @@ impl ScheduleStage {
             from_execute_substage,
             maybe_to_next_stage,
             &crossbeam_channel::never(),
+            log_prefix,
         )
     }
 }
