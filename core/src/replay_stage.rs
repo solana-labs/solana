@@ -2574,7 +2574,7 @@ impl ReplayStage {
                 let mut r_replay_stats = replay_stats.write().unwrap();
                 match cumulative_timings {
                     Err(err) => {
-                        match bank.commit_mode() {
+                        match bank.runner_context_mode() {
                         solana_scheduler::Mode::Replaying => {
                             // Error means the slot needs to be marked as dead
                             Self::mark_dead_slot(
