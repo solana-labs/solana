@@ -1464,7 +1464,10 @@ impl Scheduler<ExecuteTimings> {
 
         let scheduler_thread_handle = std::thread::Builder::new()
             .name("solScheduler".to_string())
-            .spawn(move || {
+            .spawn({
+                let initial_checkpoint = initial_checkpoint.clone();
+
+                move || {
                 let started = (cpu_time::ThreadTime::now(), std::time::Instant::now());
                 if max_thread_priority {
                     thread_priority::set_current_thread_priority(
@@ -1478,7 +1481,7 @@ impl Scheduler<ExecuteTimings> {
                     .parse::<usize>()
                     .unwrap();
 
-                let (mut latest_checkpoint, mut latest_runner_context) = (None::<Arc<solana_scheduler::Checkpoint<_, _>>>, None::<RunnerContext>);
+                let (mut latest_checkpoint, mut latest_runner_context) = (initial_checkpoint, None::<RunnerContext>);
 
                 loop {
                     if let Some(latest_checkpoint) = latest_checkpoint.take() {
@@ -1516,7 +1519,7 @@ impl Scheduler<ExecuteTimings> {
 
                 todo!();
                 Ok((started.0.elapsed(), started.1.elapsed()))
-            })
+            }})
             .unwrap();
 
         let s = Self {
