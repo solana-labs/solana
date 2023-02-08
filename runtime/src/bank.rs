@@ -2358,7 +2358,7 @@ impl Bank {
             accounts_data_size_delta_off_chain: AtomicI64::new(0),
             fee_structure: parent.fee_structure.clone(),
             scheduler2: scheduler,
-            //commit_mode: commit_mode.into(),
+            commit_mode: panic!(), //commit_mode.into(),
             blockhash_override: RwLock::new(blockhash_override),
         };
 
