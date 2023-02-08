@@ -26,7 +26,7 @@ pub use {
     withdraw_withheld::{WithdrawWithheldTokensData, WithdrawWithheldTokensProofContext},
 };
 
-pub trait ZkProofData {
+pub trait ZkProofData: Pod {
     type ProofContext: ZkProofContext;
 
     fn context_data(&self) -> &Self::ProofContext;
@@ -35,9 +35,7 @@ pub trait ZkProofData {
     fn verify_proof(&self) -> Result<(), ProofError>;
 }
 
-pub trait ZkProofContext: Pod {
-    const LEN: usize;
-}
+pub trait ZkProofContext: Pod {}
 
 #[cfg(not(target_os = "solana"))]
 #[derive(Debug, Copy, Clone)]

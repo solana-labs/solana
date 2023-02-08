@@ -244,9 +244,7 @@ impl ZkProofData for TransferData {
     }
 }
 
-impl ZkProofContext for TransferProofContext {
-    const LEN: usize = 416;
-}
+impl ZkProofContext for TransferProofContext {}
 
 #[allow(non_snake_case)]
 #[derive(Clone, Copy, Pod, Zeroable)]

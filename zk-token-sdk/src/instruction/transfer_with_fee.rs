@@ -380,9 +380,7 @@ impl ZkProofData for TransferWithFeeData {
     }
 }
 
-impl ZkProofContext for TransferWithFeeProofContext {
-    const LEN: usize = 650;
-}
+impl ZkProofContext for TransferWithFeeProofContext {}
 
 // #[derive(Clone, Copy, Pod, Zeroable)]
 #[repr(C)]

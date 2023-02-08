@@ -105,9 +105,7 @@ impl ZkProofData for WithdrawData {
     }
 }
 
-impl ZkProofContext for WithdrawProofContext {
-    const LEN: usize = 96;
-}
+impl ZkProofContext for WithdrawProofContext {}
 
 /// This struct represents the cryptographic proof component that certifies the account's solvency
 /// for withdrawal

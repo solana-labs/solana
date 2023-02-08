@@ -1,7 +1,8 @@
 ///! Instructions provided by the ZkToken Proof program
 pub use crate::instruction::*;
 use {
-    bytemuck::{bytes_of, Pod},
+    crate::zk_token_elgamal::pod::PodProofType,
+    bytemuck::{bytes_of, Pod, Zeroable},
     num_derive::{FromPrimitive, ToPrimitive},
     num_traits::{FromPrimitive, ToPrimitive},
     solana_program::{
@@ -9,14 +10,16 @@ use {
             AccountMeta, Instruction,
             InstructionError::{self, InvalidInstructionData},
         },
-        pubkey::{Pubkey, PUBKEY_BYTES},
-        sysvar,
+        pubkey::Pubkey,
     },
+    std::mem::size_of,
 };
 
 #[derive(Clone, Copy, Debug, FromPrimitive, ToPrimitive, PartialEq, Eq)]
 #[repr(u8)]
 pub enum ProofType {
+    /// Empty proof type used to distinguish if a proof context account is initialized
+    Uninitialized,
     CloseAccount,
     Withdraw,
     WithdrawWithheldTokens,
@@ -36,7 +39,7 @@ pub enum ProofInstruction {
     ///
     ///   * Creating a proof context account
     ///   0. `[writable]` The proof context account
-    ///   1. `[]` Rent sysvar
+    ///   1. `[]` The proof context account authority
     ///
     ///   * Otherwise
     ///   None
@@ -62,75 +65,35 @@ pub enum ProofInstruction {
 /// Data expected by `ProofInstruction::VerifyProof`.
 #[derive(Clone, Copy, Debug, PartialEq)]
 #[repr(C)]
-pub struct VerifyProofData<T: Pod + ZkProofData> {
+pub struct VerifyProofData<T: ZkProofData> {
     /// The zero-knowledge proof type to verify
-    pub proof_type: ProofType,
-    /// If `Some`, initialize a proof context state with an authority pubkey
-    pub create_context_state_with_authority: Option<Pubkey>,
+    pub proof_type: PodProofType,
     /// The proof data that contains the zero-knowledge proof and its context
     pub proof_data: T,
 }
 
-impl<T: Pod + ZkProofData> VerifyProofData<T> {
+// `bytemuck::Pod` cannot be derived for generic structs unless the struct is marked
+// `repr(packed)`, which may cause unnecessary complications when referencing its fields. Directly
+// mark `VerifyProofData` as `Zeroable` and `Pod` since since none of its fields has an alignment
+// requirement greater than 1 and therefore, guaranteed to be `packed`.
+unsafe impl<T: ZkProofData> Zeroable for VerifyProofData<T> {}
+unsafe impl<T: ZkProofData> Pod for VerifyProofData<T> {}
+
+impl<T: ZkProofData> VerifyProofData<T> {
     /// Serializes `VerifyProofData`.
     ///
     /// A `VerifyProofData::encode(&self)` syntax could force the caller to make unnecessary copy of
     /// `T: ZkProofData`, which can be quite large. This syntax takes in references to the
     /// individual `VerifyProofData` components to provide flexibility to the caller.
-    pub fn encode(
-        proof_type: ProofType,
-        create_context_state_with_authority: Option<&Pubkey>,
-        proof_data: &T,
-    ) -> Vec<u8> {
-        let mut buf = vec![ToPrimitive::to_u8(&proof_type).unwrap()];
-        if let Some(authority_pubkey) = create_context_state_with_authority {
-            buf.push(1);
-            buf.extend_from_slice(&authority_pubkey.to_bytes())
-        } else {
-            buf.push(0);
-        }
+    pub fn encode(proof_type: ProofType, proof_data: &T) -> Vec<u8> {
+        let mut buf = Vec::with_capacity(size_of::<Self>());
+        buf.push(ToPrimitive::to_u8(&proof_type).unwrap());
         buf.extend_from_slice(bytes_of(proof_data));
         buf
     }
 
-    /// Deserializes `VerifyProofData`.
-    pub fn try_from_bytes(input: &[u8]) -> Result<Self, InstructionError> {
-        let (proof_type, rest) = Self::decode_proof_type(input)?;
-        let (create_context_state_with_authority, proof_data) = Self::decode_optional_pubkey(rest)?;
-        let proof_data =
-            bytemuck::try_from_bytes::<T>(proof_data).map_err(|_| InvalidInstructionData)?;
-
-        Ok(Self {
-            proof_type,
-            create_context_state_with_authority,
-            proof_data: *proof_data,
-        })
-    }
-
-    fn decode_proof_type(input: &[u8]) -> Result<(ProofType, &[u8]), InstructionError> {
-        let proof_type = input
-            .first()
-            .and_then(|b| FromPrimitive::from_u8(*b))
-            .ok_or(InvalidInstructionData)?;
-        Ok((proof_type, &input[1..]))
-    }
-
-    fn decode_optional_pubkey(input: &[u8]) -> Result<(Option<Pubkey>, &[u8]), InstructionError> {
-        let create_context_state = input
-            .first()
-            .map(|b| *b == 1)
-            .ok_or(InvalidInstructionData)?;
-        if create_context_state {
-            let pubkey_bytes = input
-                .get(1..PUBKEY_BYTES + 1)
-                .ok_or(InvalidInstructionData)?;
-            Ok((
-                Pubkey::try_from(pubkey_bytes).ok(),
-                &input[PUBKEY_BYTES + 1..],
-            ))
-        } else {
-            Ok((None, &input[1..]))
-        }
+    pub fn try_from_bytes(input: &[u8]) -> Result<&Self, InstructionError> {
+        bytemuck::try_from_bytes(input).map_err(|_| InvalidInstructionData)
     }
 }
 
@@ -142,27 +105,23 @@ pub struct ContextStateInfo<'a> {
 }
 
 // Create a `VerifyProof` instruction.
-pub fn verify_proof<T: Pod + ZkProofData>(
+pub fn verify_proof<T: ZkProofData>(
     proof_type: ProofType,
     context_state_info: Option<ContextStateInfo>,
     proof_data: &T,
 ) -> Instruction {
-    let accounts = if let Some(context_state_account) =
-        context_state_info.map(|info| info.context_state_account)
-    {
+    let accounts = if let Some(context_state_info) = context_state_info {
         vec![
-            AccountMeta::new(*context_state_account, false),
-            AccountMeta::new_readonly(sysvar::rent::id(), false),
+            AccountMeta::new(*context_state_info.context_state_account, false),
+            AccountMeta::new_readonly(*context_state_info.context_state_authority, false),
         ]
     } else {
         vec![]
     };
 
-    let create_context_state_with_authority =
-        context_state_info.map(|info| info.context_state_authority);
     let data = [
         vec![ToPrimitive::to_u8(&ProofInstruction::VerifyProof).unwrap()],
-        VerifyProofData::encode(proof_type, create_context_state_with_authority, proof_data),
+        VerifyProofData::encode(proof_type, proof_data),
     ]
     .concat();
 

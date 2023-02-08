@@ -12,6 +12,7 @@ use {
         encryption::elgamal::ElGamalKeypair, instruction::*, zk_token_proof_instruction::*,
         zk_token_proof_program, zk_token_proof_state::ProofContextState,
     },
+    std::mem::size_of,
 };
 
 #[tokio::test]
@@ -36,7 +37,7 @@ async fn test_close_account() {
 
     test_verify_proof_with_context(
         ProofType::CloseAccount,
-        ProofContextState::<CloseAccountProofContext>::size(),
+        size_of::<ProofContextState<CloseAccountProofContext>>(),
         &success_proof_data,
         &fail_proof_data,
     )
@@ -44,7 +45,7 @@ async fn test_close_account() {
 
     test_close_context_state(
         ProofType::CloseAccount,
-        ProofContextState::<CloseAccountProofContext>::size(),
+        size_of::<ProofContextState<CloseAccountProofContext>>(),
         &success_proof_data,
     )
     .await;
@@ -87,7 +88,7 @@ async fn test_withdraw_withheld_tokens() {
 
     test_verify_proof_with_context(
         ProofType::WithdrawWithheldTokens,
-        ProofContextState::<WithdrawWithheldTokensProofContext>::size(),
+        size_of::<ProofContextState<WithdrawWithheldTokensProofContext>>(),
         &success_proof_data,
         &fail_proof_data,
     )
@@ -95,7 +96,7 @@ async fn test_withdraw_withheld_tokens() {
 
     test_close_context_state(
         ProofType::WithdrawWithheldTokens,
-        ProofContextState::<WithdrawWithheldTokensProofContext>::size(),
+        size_of::<ProofContextState<WithdrawWithheldTokensProofContext>>(),
         &success_proof_data,
     )
     .await;
@@ -138,7 +139,7 @@ async fn test_transfer() {
 
     test_verify_proof_with_context(
         ProofType::Transfer,
-        ProofContextState::<TransferProofContext>::size(),
+        size_of::<ProofContextState<TransferProofContext>>(),
         &success_proof_data,
         &fail_proof_data,
     )
@@ -146,7 +147,7 @@ async fn test_transfer() {
 
     test_close_context_state(
         ProofType::Transfer,
-        ProofContextState::<TransferProofContext>::size(),
+        size_of::<ProofContextState<TransferProofContext>>(),
         &success_proof_data,
     )
     .await;
@@ -203,7 +204,7 @@ async fn test_transfer_with_fee() {
 
     test_verify_proof_with_context(
         ProofType::TransferWithFee,
-        ProofContextState::<TransferWithFeeProofContext>::size(),
+        size_of::<ProofContextState<TransferWithFeeProofContext>>(),
         &success_proof_data,
         &fail_proof_data,
     )
@@ -211,7 +212,7 @@ async fn test_transfer_with_fee() {
 
     test_close_context_state(
         ProofType::TransferWithFee,
-        ProofContextState::<TransferWithFeeProofContext>::size(),
+        size_of::<ProofContextState<TransferWithFeeProofContext>>(),
         &success_proof_data,
     )
     .await;
@@ -250,7 +251,7 @@ async fn test_withdraw() {
 
     test_verify_proof_with_context(
         ProofType::Withdraw,
-        ProofContextState::<WithdrawProofContext>::size(),
+        size_of::<ProofContextState<WithdrawProofContext>>(),
         &success_proof_data,
         &fail_proof_data,
     )
@@ -258,7 +259,7 @@ async fn test_withdraw() {
 
     test_close_context_state(
         ProofType::Withdraw,
-        ProofContextState::<WithdrawProofContext>::size(),
+        size_of::<ProofContextState<WithdrawProofContext>>(),
         &success_proof_data,
     )
     .await;
@@ -286,7 +287,7 @@ async fn test_pubkey_validity() {
 
     test_verify_proof_with_context(
         ProofType::PubkeyValidity,
-        ProofContextState::<PubkeyValidityProofContext>::size(),
+        size_of::<ProofContextState<PubkeyValidityProofContext>>(),
         &success_proof_data,
         &fail_proof_data,
     )
@@ -294,7 +295,7 @@ async fn test_pubkey_validity() {
 
     test_close_context_state(
         ProofType::PubkeyValidity,
-        ProofContextState::<PubkeyValidityProofContext>::size(),
+        size_of::<ProofContextState<PubkeyValidityProofContext>>(),
         &success_proof_data,
     )
     .await;
@@ -439,7 +440,7 @@ async fn test_verify_proof_with_context<T: Pod + ZkProofData>(
         .unwrap();
     assert_eq!(
         err,
-        TransactionError::InstructionError(1, InstructionError::InsufficientFunds)
+        TransactionError::InsufficientFundsForRent { account_index: 1 },
     );
 
     // successfully create a proof context state
@@ -542,6 +543,33 @@ async fn test_close_context_state<T: Pod + ZkProofData>(
         &[instruction.clone()],
         Some(&payer.pubkey()),
         &[payer, &context_state_authority],
+        recent_blockhash,
+    );
+    client.process_transaction(transaction).await.unwrap();
+
+    // create and close proof context in a single transaction
+    let instructions = vec![
+        system_instruction::create_account(
+            &payer.pubkey(),
+            &context_state_account.pubkey(),
+            0_u64, // do not deposit rent
+            space as u64,
+            &zk_token_proof_program::id(),
+        ),
+        verify_proof(proof_type, Some(context_state_info), success_proof_data),
+        close_context_state(
+            ContextStateInfo {
+                context_state_account: &context_state_account.pubkey(),
+                context_state_authority: &context_state_authority.pubkey(),
+            },
+            &destination_account.pubkey(),
+            proof_type,
+        ),
+    ];
+    let transaction = Transaction::new_signed_with_payer(
+        &instructions,
+        Some(&payer.pubkey()),
+        &[payer, &context_state_account, &context_state_authority],
         recent_blockhash,
     );
     client.process_transaction(transaction).await.unwrap();

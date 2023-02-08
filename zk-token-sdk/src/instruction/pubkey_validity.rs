@@ -69,9 +69,7 @@ impl ZkProofData for PubkeyValidityData {
     }
 }
 
-impl ZkProofContext for PubkeyValidityProofContext {
-    const LEN: usize = 32;
-}
+impl ZkProofContext for PubkeyValidityProofContext {}
 
 #[derive(Clone, Copy, Pod, Zeroable)]
 #[repr(C)]

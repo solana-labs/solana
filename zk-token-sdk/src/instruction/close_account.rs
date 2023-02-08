@@ -83,9 +83,7 @@ impl ZkProofData for CloseAccountData {
     }
 }
 
-impl ZkProofContext for CloseAccountProofContext {
-    const LEN: usize = 96;
-}
+impl ZkProofContext for CloseAccountProofContext {}
 
 /// This struct represents the cryptographic proof component that certifies that the encrypted
 /// balance is zero

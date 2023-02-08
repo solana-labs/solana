@@ -2,12 +2,10 @@
 
 use {
     bytemuck::Pod,
-    solana_program_runtime::{
-        ic_msg, invoke_context::InvokeContext, sysvar_cache::get_sysvar_with_account_check,
-    },
+    solana_program_runtime::{ic_msg, invoke_context::InvokeContext},
     solana_sdk::{
         instruction::{InstructionError, TRANSACTION_LEVEL_STACK_HEIGHT},
-        program_memory, system_program,
+        system_program,
     },
     solana_zk_token_sdk::{
         zk_token_proof_instruction::*, zk_token_proof_program::id,
@@ -23,14 +21,23 @@ fn process_verify_proof<T: Pod + ZkProofData>(
     let instruction_context = transaction_context.get_current_instruction_context()?;
     let instruction_data = instruction_context.get_instruction_data();
 
+    // will not panic since the first two bytes are checked earlier by the caller
     let verify_proof_data = VerifyProofData::<T>::try_from_bytes(&instruction_data[1..])?;
+    let proof_data = &verify_proof_data.proof_data;
 
-    verify_proof_data.proof_data.verify_proof().map_err(|err| {
+    proof_data.verify_proof().map_err(|err| {
         ic_msg!(invoke_context, "proof_verification failed: {:?}", err);
         InstructionError::InvalidInstructionData
     })?;
 
-    if let Some(context_state_authority) = verify_proof_data.create_context_state_with_authority {
+    // create context state if accounts are provided with the instruction
+    if instruction_context.get_number_of_instruction_accounts() > 0 {
+        let context_state_authority = {
+            *instruction_context
+                .try_borrow_instruction_account(transaction_context, 1)?
+                .get_key()
+        };
+
         let mut proof_context_account =
             instruction_context.try_borrow_instruction_account(transaction_context, 0)?;
 
@@ -38,22 +45,20 @@ fn process_verify_proof<T: Pod + ZkProofData>(
             return Err(InstructionError::InvalidAccountOwner);
         }
 
+        let proof_context_state =
+            ProofContextState::<T::ProofContext>::try_from_bytes(proof_context_account.get_data())?;
+        if proof_context_state.proof_type != ProofType::Uninitialized.into() {
+            return Err(InstructionError::AccountAlreadyInitialized);
+        }
+
         let context_state_data = ProofContextState::encode(
-            verify_proof_data.proof_type,
+            verify_proof_data.proof_type.try_into()?,
             &context_state_authority,
-            verify_proof_data.proof_data.context_data(),
+            proof_data.context_data(),
         );
 
         if proof_context_account.get_data().len() != context_state_data.len() {
             return Err(InstructionError::InvalidAccountData);
-        }
-
-        let rent = get_sysvar_with_account_check::rent(invoke_context, instruction_context, 1)?;
-        if !rent.is_exempt(
-            proof_context_account.get_lamports(),
-            proof_context_account.get_data().len(),
-        ) {
-            return Err(InstructionError::InsufficientFunds);
         }
 
         proof_context_account.set_data(context_state_data)?;
@@ -67,32 +72,39 @@ fn process_close_proof_context<T: Pod + ZkProofContext>(
 ) -> Result<(), InstructionError> {
     let transaction_context = &invoke_context.transaction_context;
     let instruction_context = transaction_context.get_current_instruction_context()?;
-    let mut proof_context_account =
-        instruction_context.try_borrow_instruction_account(transaction_context, 0)?;
-    let proof_context_state =
-        ProofContextState::<T>::try_from_bytes(proof_context_account.get_data())?;
+
+    let owner_pubkey = {
+        let owner_account =
+            instruction_context.try_borrow_instruction_account(transaction_context, 2)?;
+
+        if !owner_account.is_signer() {
+            return Err(InstructionError::MissingRequiredSignature);
+        }
+        *owner_account.get_key()
+    };
+
+    let remaining_lamports = {
+        let mut proof_context_account =
+            instruction_context.try_borrow_instruction_account(transaction_context, 0)?;
+        let proof_context_state =
+            ProofContextState::<T>::try_from_bytes(proof_context_account.get_data())?;
+        let expected_owner_pubkey = proof_context_state.context_state_authority;
+
+        if owner_pubkey != expected_owner_pubkey {
+            return Err(InstructionError::InvalidAccountOwner);
+        }
+
+        let remaining_lamports = proof_context_account.get_lamports();
+        proof_context_account.set_lamports(0)?;
+        proof_context_account.set_data_length(0)?;
+        proof_context_account.set_owner(system_program::id().as_ref())?;
+
+        remaining_lamports
+    };
 
     let mut destination_account =
         instruction_context.try_borrow_instruction_account(transaction_context, 1)?;
-    let owner_account =
-        instruction_context.try_borrow_instruction_account(transaction_context, 2)?;
-
-    if !owner_account.is_signer() {
-        return Err(InstructionError::MissingRequiredSignature);
-    }
-
-    let expected_owner_pubkey = proof_context_state.context_state_authority;
-    if *owner_account.get_key() != expected_owner_pubkey {
-        return Err(InstructionError::InvalidAccountOwner);
-    }
-
-    destination_account.checked_add_lamports(proof_context_account.get_lamports())?;
-    proof_context_account.set_lamports(0)?;
-
-    let account_data = proof_context_account.get_data_mut()?;
-    let data_len = account_data.len();
-    program_memory::sol_memset(account_data, 0, data_len);
-    proof_context_account.set_owner(system_program::id().as_ref())?;
+    destination_account.checked_add_lamports(remaining_lamports)?;
 
     Ok(())
 }
@@ -143,6 +155,10 @@ pub fn process_instruction(invoke_context: &mut InvokeContext) -> Result<(), Ins
                 ic_msg!(invoke_context, "VerifyProof PubkeyValidity");
                 process_verify_proof::<PubkeyValidityData>(invoke_context)
             }
+            _ => {
+                ic_msg!(invoke_context, "unsupported proof type");
+                Err(InstructionError::InvalidInstructionData)
+            }
         },
         ProofInstruction::CloseContextState => match proof_type {
             ProofType::CloseAccount => {
@@ -168,6 +184,10 @@ pub fn process_instruction(invoke_context: &mut InvokeContext) -> Result<(), Ins
             ProofType::PubkeyValidity => {
                 ic_msg!(invoke_context, "CloseContextState PubkeyValidity");
                 process_close_proof_context::<PubkeyValidityProofContext>(invoke_context)
+            }
+            _ => {
+                ic_msg!(invoke_context, "unsupported proof type");
+                Err(InstructionError::InvalidInstructionData)
             }
         },
     }

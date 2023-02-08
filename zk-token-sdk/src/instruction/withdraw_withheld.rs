@@ -128,9 +128,7 @@ impl ZkProofData for WithdrawWithheldTokensData {
     }
 }
 
-impl ZkProofContext for WithdrawWithheldTokensProofContext {
-    const LEN: usize = 192;
-}
+impl ZkProofContext for WithdrawWithheldTokensProofContext {}
 
 /// This struct represents the cryptographic proof component that certifies the account's solvency
 /// for withdrawal
