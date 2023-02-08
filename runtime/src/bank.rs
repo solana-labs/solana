@@ -8623,11 +8623,11 @@ impl Bank {
         if let Some(scheduler) = s.as_mut() {
             let commit_mode = self.commit_mode();
             if matches!(commit_mode, CommitMode::Replaying) || via_drop {
+                info!("wait_for_scheduler({commit_mode:?}/{via_drop}): gracefully stopping bank ({})...", self.slot());
                 if matches!(commit_mode, CommitMode::Banking) {
                     assert!(via_drop);
+                    scheduler.resume_commit_into_bank(None);
                 }
-                info!("wait_for_scheduler({commit_mode:?}/{via_drop}): gracefully stopping bank ({})...", self.slot());
-                scheduler.resume_commit_into_bank(None);
                 let _r = scheduler.gracefully_stop().unwrap();
                 let e = scheduler
                     .handle_aborted_executions()
