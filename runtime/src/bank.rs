@@ -1053,7 +1053,7 @@ struct Scheduler<C> {
 }
 
 impl<C> Scheduler<C> {
-    fn schedule(&self, sanitized_tx: &SanitizedTransaction, index: usize, slot: Slot, mode: solana_scheduler::Mode) {
+    fn schedule(&self, sanitized_tx: &SanitizedTransaction, index: usize, mode: solana_scheduler::Mode) {
         trace!("Scheduler::schedule()");
         #[derive(Clone, Copy, Debug)]
         struct NotAtTopOfScheduleThread;
@@ -1085,7 +1085,7 @@ impl<C> Scheduler<C> {
             Mode::Replaying => solana_scheduler::UniqueWeight::max_value() - index as solana_scheduler::UniqueWeight,
         };
         let t =
-            solana_scheduler::Task::new_for_queue(nast, uw, (sanitized_tx.clone(), locks), slot, mode);
+            solana_scheduler::Task::new_for_queue(nast, uw, (sanitized_tx.clone(), locks), mode);
         self.transaction_sender
             .as_ref()
             .unwrap()
@@ -6837,7 +6837,7 @@ impl Bank {
         let scheduler = s.as_ref().unwrap();
 
         for (st, i) in transactions.iter().zip(transaction_indexes) {
-            scheduler.schedule(st, i, self.slot(), mode);
+            scheduler.schedule(st, i, mode);
         }
     }
 
