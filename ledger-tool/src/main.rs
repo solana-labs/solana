@@ -492,6 +492,7 @@ fn output_slot(
         handles2.into_iter().for_each(|t| t.join().unwrap());
         handles3.into_iter().for_each(|t| t.join().unwrap());
         */
+    }
 
         output_slot_rewards(blockstore, slot, method);
     } else if verbose_level >= 1 {
