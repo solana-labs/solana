@@ -679,7 +679,6 @@ impl Task {
         nast: NAST,
         unique_weight: UniqueWeight,
         tx: (SanitizedTransaction, Vec<LockAttempt>),
-        slot: solana_sdk::clock::Slot,
         mode: Mode,
     ) -> TaskInQueue {
         TaskInQueue::new(Self {
@@ -697,7 +696,6 @@ impl Task {
             queue_end_time: std::sync::atomic::AtomicUsize::new(usize::max_value()),
             execute_time: std::sync::atomic::AtomicUsize::new(usize::max_value()),
             commit_time: std::sync::atomic::AtomicUsize::new(usize::max_value()),
-            slot,
             mode,
         })
     }
@@ -825,7 +823,6 @@ impl Task {
             queue_end_time: std::sync::atomic::AtomicUsize::new(usize::max_value()),
             execute_time: std::sync::atomic::AtomicUsize::new(usize::max_value()),
             commit_time: std::sync::atomic::AtomicUsize::new(usize::max_value()),
-            slot: self.slot,
             mode: self.mode,
         }
     }
