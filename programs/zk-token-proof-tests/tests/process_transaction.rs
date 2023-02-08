@@ -15,6 +15,16 @@ use {
     std::mem::size_of,
 };
 
+const PROOF_TYPES: [ProofType; 7] = [
+    ProofType::Uninitialized,
+    ProofType::CloseAccount,
+    ProofType::Withdraw,
+    ProofType::WithdrawWithheldTokens,
+    ProofType::Transfer,
+    ProofType::TransferWithFee,
+    ProofType::PubkeyValidity,
+];
+
 #[tokio::test]
 async fn test_close_account() {
     let elgamal_keypair = ElGamalKeypair::new_rand();
@@ -339,6 +349,26 @@ async fn test_verify_proof_without_context<T: Pod + ZkProofData>(
         err,
         TransactionError::InstructionError(0, InstructionError::InvalidInstructionData)
     );
+
+    // try to verify a valid proof, but with a wrong `ProofType`
+    for wrong_proof_type in PROOF_TYPES {
+        if proof_type == wrong_proof_type {
+            continue;
+        }
+
+        let instructions = vec![verify_proof(wrong_proof_type, None, success_proof_data)];
+        let transaction = Transaction::new_signed_with_payer(
+            &instructions,
+            Some(&payer.pubkey()),
+            &[payer],
+            recent_blockhash,
+        );
+        let err = client.process_transaction(transaction).await.unwrap_err().unwrap();
+        assert_eq!(
+            err,
+            TransactionError::InstructionError(0, InstructionError::InvalidInstructionData)
+        );
+    }
 }
 
 async fn test_verify_proof_with_context<T: Pod + ZkProofData>(
@@ -442,6 +472,39 @@ async fn test_verify_proof_with_context<T: Pod + ZkProofData>(
         err,
         TransactionError::InsufficientFundsForRent { account_index: 1 },
     );
+
+    // try to create proof context state with an invalid `ProofType`
+    for wrong_proof_type in PROOF_TYPES {
+        if proof_type == wrong_proof_type {
+            continue;
+        }
+
+        let instructions = vec![
+            system_instruction::create_account(
+                &payer.pubkey(),
+                &context_state_account.pubkey(),
+                rent.minimum_balance(space),
+                space as u64,
+                &zk_token_proof_program::id(),
+            ),
+            verify_proof(wrong_proof_type, Some(context_state_info), success_proof_data),
+        ];
+        let transaction = Transaction::new_signed_with_payer(
+            &instructions,
+            Some(&payer.pubkey()),
+            &[payer, &context_state_account],
+            recent_blockhash,
+        );
+        let err = client
+            .process_transaction(transaction)
+            .await
+            .unwrap_err()
+            .unwrap();
+        assert_eq!(
+            err,
+            TransactionError::InstructionError(1, InstructionError::InvalidInstructionData)
+        );
+    }
 
     // successfully create a proof context state
     let instructions = vec![
