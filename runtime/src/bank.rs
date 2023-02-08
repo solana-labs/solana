@@ -1622,7 +1622,7 @@ impl<C> Scheduler<C> {
     }
 
     fn replace_transaction_runner_context(&self, bank: Arc<Bank>) {
-        self.current_checkpoint.as_ref().unwrap().update_context_value(RunnerContext { bank: bank });
+        self.current_checkpoint.as_ref().unwrap().update_context_value(RunnerContext { bank });
     }
 }
 
