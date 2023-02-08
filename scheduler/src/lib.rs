@@ -1662,7 +1662,7 @@ impl ScheduleStage {
     #[must_use]
     fn _run<'a, AST: AtScheduleThread, T: Send, C, B>(
         ast: AST,
-        max_executing_queue_count: usize,
+        executing_thread_count: usize,
         _runnable_queue: &mut TaskQueue,
         address_book: &mut AddressBook,
         mut from_prev: &'a crossbeam_channel::Receiver<SchedulablePayload<C, B>>,
@@ -1766,6 +1766,11 @@ impl ScheduleStage {
 
         let mut maybe_checkpoint = None;
         let mut runnable_queue = ModeSpecificTaskQueue::Replaying(ChannelBackedTaskQueue::new(from_prev));
+
+        let max_executing_queue_count = std::env::var("MAX_EXECUTING_QUEUE_COUNT")
+            .unwrap_or(format!("{}", executing_thread_count + 1))
+            .parse::<usize>()
+            .unwrap();
 
         loop {
             // no execution at all => absolutely no active locks
@@ -2077,6 +2082,21 @@ impl ScheduleStage {
                     checkpoint,
                 ))))
                 .unwrap();
+            for _ in 0..executing_thread_count/2 {
+                to_execute_substage
+                    .send(ExaminablePayload(Flushable::Flush(std::sync::Arc::clone(
+                        checkpoint,
+                    ))))
+                    .unwrap();
+
+            }
+            for _ in executing_thread_count/2..executing_thread_count {
+                to_high_execute_substage
+                    .send(ExaminablePayload(Flushable::Flush(std::sync::Arc::clone(
+                        checkpoint,
+                    ))))
+                    .unwrap();
+            }
         }
         drop(to_next_stage);
         drop(ee_sender);

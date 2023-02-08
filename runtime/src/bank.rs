@@ -1156,11 +1156,11 @@ impl Scheduler<ExecuteTimings> {
         let (retired_ee_sender, retired_ee_receiver) = crossbeam_channel::unbounded();
 
 
-        let executing_thread_count = std::env::var("EXECUTING_THREAD_COUNT")
+        let base_thread_count = std::env::var("EXECUTING_THREAD_COUNT")
             .unwrap_or(format!("{}", 8))
             .parse::<usize>()
             .unwrap();
-        let thread_count = 3 + executing_thread_count * 2;
+        let thread_count = 3 + base_thread_count * 2;
         let initial_checkpoint = Self::new_checkpoint(thread_count);
 
         let send_metrics = std::env::var("SOLANA_TRANSACTION_TIMINGS").is_ok();
@@ -1168,7 +1168,8 @@ impl Scheduler<ExecuteTimings> {
         let max_thread_priority = std::env::var("MAX_THREAD_PRIORITY").is_ok();
         let commit_status = Arc::new(CommitStatus::new());
 
-        let executing_thread_handles = (0..(executing_thread_count * 2)).map(|thx| {
+        let executing_thread_count = base_thread_count * 2;
+        let executing_thread_handles = (0..executing_thread_count).map(|thx| {
             let (scheduled_ee_receiver, scheduled_high_ee_receiver, processed_ee_sender) = (scheduled_ee_receiver.clone(), scheduled_high_ee_receiver.clone(), processed_ee_sender.clone());
             let initial_checkpoint = initial_checkpoint.clone();
             let commit_status = commit_status.clone();
@@ -1182,7 +1183,7 @@ impl Scheduler<ExecuteTimings> {
             }
             let (mut latest_checkpoint, mut latest_runner_context) = (Some(initial_checkpoint), None::<RunnerContext>);
 
-            'recv: while let Ok(r) = (if thx >= executing_thread_count { scheduled_high_ee_receiver.recv() } else { scheduled_ee_receiver.recv()}) {
+            'recv: while let Ok(r) = (if thx >= base_thread_count { scheduled_high_ee_receiver.recv() } else { scheduled_ee_receiver.recv()}) {
                 match r {
                 solana_scheduler::ExecutablePayload(solana_scheduler::Flushable::Payload(mut ee)) => {
 
@@ -1483,11 +1484,6 @@ impl Scheduler<ExecuteTimings> {
                     .unwrap();
                 }
 
-                let max_executing_queue_count = std::env::var("MAX_EXECUTING_QUEUE_COUNT")
-                    .unwrap_or(format!("{}", executing_thread_count + 1))
-                    .parse::<usize>()
-                    .unwrap();
-
                 let (mut latest_checkpoint, mut latest_runner_context) = (Some(initial_checkpoint), None::<RunnerContext>);
 
                 loop {
@@ -1497,7 +1493,7 @@ impl Scheduler<ExecuteTimings> {
 
                     let mut runnable_queue = solana_scheduler::TaskQueue::default();
                     let maybe_checkpoint = solana_scheduler::ScheduleStage::run(
-                        max_executing_queue_count,
+                        executing_thread_count,
                         &mut runnable_queue,
                         &mut address_book,
                         &transaction_receiver,
