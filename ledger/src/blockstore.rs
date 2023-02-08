@@ -136,10 +136,26 @@ impl std::fmt::Display for InsertDataShredError {
     }
 }
 
+/// A "complete data set" is a range of [`Shred`]s that combined in sequence carry a single
+/// serialized [`Vec<Entry>`].
+///
+/// Services such as the `WindowService` for a TVU, and `ReplayStage` for a TPU, piece together
+/// these sets by inserting shreds via direct or indirect calls to
+/// [`Blockstore::insert_shreds_handle_duplicate()`].
+///
+/// `solana_core::completed_data_sets_service::CompletedDataSetsService` is the main receiver of
+/// `CompletedDataSetInfo`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct CompletedDataSetInfo {
+    /// [`Slot`] to which the [`Shred`]s in this set belong.
     pub slot: Slot,
+
+    /// Index of the first [`Shred`] in the range of shreds that belong to this set.
+    /// Range is inclusive, `start_index..=end_index`.
     pub start_index: u32,
+
+    /// Index of the last [`Shred`] in the range of shreds that belong to this set.
+    /// Range is inclusive, `start_index..=end_index`.
     pub end_index: u32,
 }
 
