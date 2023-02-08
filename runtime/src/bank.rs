@@ -1473,7 +1473,13 @@ impl Scheduler<ExecuteTimings> {
                     .parse::<usize>()
                     .unwrap();
 
+                let (mut latest_checkpoint, mut latest_runner_context) = (None::<Arc<solana_scheduler::Checkpoint<_, _>>>, None::<RunnerContext>);
+
                 loop {
+                    if let Some(latest_checkpoint) = latest_checkpoint.take() {
+                        latest_runner_context = latest_checkpoint.clone_context_value();
+                    }
+
                     let mut runnable_queue = solana_scheduler::TaskQueue::default();
                     let maybe_checkpoint = solana_scheduler::ScheduleStage::run(
                         random_id,
@@ -1489,6 +1495,8 @@ impl Scheduler<ExecuteTimings> {
 
                     if let Some(checkpoint) = maybe_checkpoint {
                         checkpoint.wait_for_restart(None);
+                        latest_checkpoint = Some(checkpoint);
+                        latest_runner_context = None;
                         continue;
                     } else {
                         break;
