@@ -1499,7 +1499,7 @@ impl Scheduler<ExecuteTimings> {
                         Some(&scheduled_high_ee_sender),
                         &processed_ee_receiver,
                         Some(&retired_ee_sender),
-                        |runner_context| format!("id_{:016x} slot: {}", random_id, runner_context.as_ref().unwrap().slot()),
+                        || format!("id_{:016x} slot: {}", random_id, runner_context.as_ref().unwrap().slot()),
                     );
 
                     if let Some(checkpoint) = maybe_checkpoint {
