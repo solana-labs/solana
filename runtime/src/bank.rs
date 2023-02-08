@@ -1350,7 +1350,10 @@ impl Scheduler<ExecuteTimings> {
 
         let error_collector_thread_handle = std::thread::Builder::new()
             .name(format!("solScErrCol{:02}", 0))
-            .spawn(move || {
+            .spawn({
+                let initial_checkpoint = initial_checkpoint.clone();
+
+                move || {
                 let started = (cpu_time::ThreadTime::now(), std::time::Instant::now());
                 if max_thread_priority {
                     thread_priority::set_current_thread_priority(
@@ -1363,7 +1366,7 @@ impl Scheduler<ExecuteTimings> {
                 use variant_counter::VariantCount;
                 let mut transaction_error_counts = TransactionError::counter();
                 let (mut skipped, mut succeeded) = (0, 0);
-                let (mut latest_checkpoint, mut latest_runner_context) = (Some((&initial_checkpoint).clone()), None::<RunnerContext>);
+                let (mut latest_checkpoint, mut latest_runner_context) = (Some(initial_checkpoint), None::<RunnerContext>);
 
                 loop {
                 while let Ok(r) = retired_ee_receiver.recv_timeout(std::time::Duration::from_millis(20))
@@ -1453,7 +1456,7 @@ impl Scheduler<ExecuteTimings> {
                 todo!();
 
                 Ok((started.0.elapsed(), started.1.elapsed()))
-            })
+            }})
             .unwrap();
 
         use rand::Rng;
