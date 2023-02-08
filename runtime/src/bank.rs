@@ -6895,7 +6895,7 @@ impl Bank {
     pub fn commit_mode(&self) -> solana_scheduler::Mode {
         let s = self.scheduler2.read().unwrap();
         let scheduler = s.as_ref().unwrap();
-        scheduler
+        scheduler.current_runner_mode()
     }
 
     /// Process a batch of transactions.
