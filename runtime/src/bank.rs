@@ -1048,6 +1048,7 @@ struct Scheduler<C> {
     slot: AtomicU64,
     commit_status: Arc<CommitStatus>,
     current_checkpoint: Arc<solana_scheduler::Checkpoint<C, RunnerContext>>,
+    thread_count: usize,
 }
 
 impl<C> Scheduler<C> {
