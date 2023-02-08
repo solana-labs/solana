@@ -4330,7 +4330,7 @@ impl Bank {
         );
 
 
-        let commit_mode = self.commit_mode();
+        let commit_mode = self.runner_context_mode();
         let mut w_blockhash_queue = match commit_mode {
             solana_scheduler::Mode::Replaying => {
                 let last_result = self.wait_for_scheduler(false);
