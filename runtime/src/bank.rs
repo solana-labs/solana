@@ -1629,6 +1629,10 @@ impl<C> Scheduler<C> {
     fn replace_transaction_runner_context(&self, bank: Arc<Bank>, mode: solana_scheduler::Mode) {
         self.current_checkpoint.replace_context_value(RunnerContext { bank: Some(bank), mode });
     }
+
+    fn current_runner_mode() -> solana_scheduler::Mode {
+        self.current_checkpoint.with_context_value(|c| c.mode)
+    }
 }
 
 impl<C> Drop for Scheduler<C> {
@@ -4349,7 +4353,7 @@ impl Bank {
 
         let commit_mode = self.commit_mode();
         let mut w_blockhash_queue = match commit_mode {
-            CommitMode::Replaying => {
+            solana_scheduler::Mode::Replaying => {
                 let last_result = self.wait_for_scheduler(false);
                 let scheduler = SCHEDULER_POOL.lock().unwrap().take_from_pool();
                 let mut s2 = self.scheduler2.write().unwrap();
@@ -4378,7 +4382,7 @@ impl Bank {
                 //*self.scheduler.write().unwrap() = new_scheduler;
                 w_blockhash_queue
             },
-            CommitMode::Banking => {
+            solana_scheduler::Mode::Banking => {
                 // Only acquire the write lock for the blockhash queue on block boundaries because
                 // readers can starve this write lock acquisition and ticks would be slowed down too
                 // much if the write lock is acquired for each tick.
@@ -6888,8 +6892,10 @@ impl Bank {
         scheduler.replace_transaction_runner_context(self.clone(), mode);
     }
 
-    pub fn commit_mode(&self) -> CommitMode {
-        self.commit_mode.load(Relaxed)
+    pub fn commit_mode(&self) -> solana_scheduler::Mode {
+        let s = self.scheduler2.read().unwrap();
+        let scheduler = s.as_ref().unwrap();
+        scheduler
     }
 
     /// Process a batch of transactions.
