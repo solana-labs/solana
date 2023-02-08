@@ -1901,9 +1901,9 @@ pub(crate) struct ShrinkAncientStats {
 
 #[derive(Debug, Default)]
 pub(crate) struct ShrinkStatsSub {
-    store_accounts_timing: StoreAccountsTiming,
-    rewrite_elapsed_us: u64,
-    create_and_insert_store_elapsed_us: u64,
+    pub(crate) store_accounts_timing: StoreAccountsTiming,
+    pub(crate) rewrite_elapsed_us: u64,
+    pub(crate) create_and_insert_store_elapsed_us: u64,
 }
 
 impl ShrinkStatsSub {

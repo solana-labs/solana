@@ -206,6 +206,7 @@ impl<'a> Iterator for AccountStorageIter<'a> {
 
 /// exists while there is a shrink in progress
 /// keeps track of the 'new_store' being created and the 'old_store' being replaced.
+#[derive(Debug)]
 pub(crate) struct ShrinkInProgress<'a> {
     storage: &'a AccountStorage,
     /// old store which will be shrunk and replaced
