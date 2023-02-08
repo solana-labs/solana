@@ -16,13 +16,8 @@ console = "0.15.0"
 csv = "1.1.6"
 ctrlc = { version = "3.2.2", features = ["termination"] }
 indexmap = "1.9.1"
-<<<<<<< HEAD
 indicatif = "0.16.2"
-pickledb = "0.4.1"
-=======
-indicatif = "0.17.0"
 pickledb = { version = "0.5.1", default-features = false, features = ["yaml"] }
->>>>>>> 555db7e41 (chore: bump pickledb from 0.4.1 to 0.5.1 (#25511))
 serde = { version = "1.0", features = ["derive"] }
 solana-account-decoder = { path = "../account-decoder", version = "=1.14.15" }
 solana-clap-utils = { path = "../clap-utils", version = "=1.14.15" }
