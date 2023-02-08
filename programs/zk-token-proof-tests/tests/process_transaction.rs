@@ -363,7 +363,11 @@ async fn test_verify_proof_without_context<T: Pod + ZkProofData>(
             &[payer],
             recent_blockhash,
         );
-        let err = client.process_transaction(transaction).await.unwrap_err().unwrap();
+        let err = client
+            .process_transaction(transaction)
+            .await
+            .unwrap_err()
+            .unwrap();
         assert_eq!(
             err,
             TransactionError::InstructionError(0, InstructionError::InvalidInstructionData)
@@ -487,7 +491,11 @@ async fn test_verify_proof_with_context<T: Pod + ZkProofData>(
                 space as u64,
                 &zk_token_proof_program::id(),
             ),
-            verify_proof(wrong_proof_type, Some(context_state_info), success_proof_data),
+            verify_proof(
+                wrong_proof_type,
+                Some(context_state_info),
+                success_proof_data,
+            ),
         ];
         let transaction = Transaction::new_signed_with_payer(
             &instructions,
@@ -714,7 +722,11 @@ async fn test_close_context_state<T: Pod + ZkProofData>(
         &[payer, &context_state_account, &context_state_authority],
         recent_blockhash,
     );
-    let err = client.process_transaction(transaction).await.unwrap_err().unwrap();
+    let err = client
+        .process_transaction(transaction)
+        .await
+        .unwrap_err()
+        .unwrap();
     assert_eq!(
         err,
         TransactionError::InstructionError(2, InstructionError::InvalidInstructionData)
