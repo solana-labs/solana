@@ -1622,7 +1622,7 @@ impl<C> Scheduler<C> {
     }
 
     fn resume_commit_into_bank(&self, bank: Option<&Arc<Bank>>) {
-        self.current_checkpoint.update_context_value(|c| {c.bank = bank;});
+        self.current_checkpoint.update_context_value(|c| {c.bank = bank.cloned();});
         self.commit_status.notify_as_resumed();
     }
 
