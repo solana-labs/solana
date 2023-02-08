@@ -92,8 +92,12 @@ impl AccountStorage {
 
     /// remove the append vec at 'slot'
     /// returns the current contents
-    pub(crate) fn remove(&self, slot: &Slot) -> Option<Arc<AccountStorageEntry>> {
-        assert!(self.shrink_in_progress_map.is_empty());
+    pub(crate) fn remove(
+        &self,
+        slot: &Slot,
+        shrink_can_be_active: bool,
+    ) -> Option<Arc<AccountStorageEntry>> {
+        assert!(shrink_can_be_active || self.shrink_in_progress_map.is_empty());
         self.map.remove(slot).map(|(_, entry)| entry.storage)
     }
 
@@ -374,7 +378,7 @@ pub(crate) mod tests {
         storage
             .shrink_in_progress_map
             .insert(0, storage.get_test_storage());
-        storage.remove(&0);
+        storage.remove(&0, false);
     }
 
     #[test]

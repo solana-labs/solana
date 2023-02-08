@@ -4087,7 +4087,7 @@ impl AccountsDb {
             // shrink is in progress, so 1 new append vec to keep, 1 old one to throw away
             not_retaining_store(shrink_in_progress.old_storage());
             // dropping 'shrink_in_progress' removes the old append vec that was being shrunk from db's storage
-        } else if let Some(store) = self.storage.remove(&slot) {
+        } else if let Some(store) = self.storage.remove(&slot, false) {
             // no shrink in progress, so all append vecs in this slot are dead
             not_retaining_store(&store);
         }
@@ -4612,7 +4612,7 @@ impl AccountsDb {
                 .clean_dead_slot(slot, &mut AccountsIndexRootsStats::default());
             self.remove_bank_hash_info(&slot);
             // the storage has been removed from this slot and recycled or dropped
-            assert!(self.storage.remove(&slot).is_none());
+            assert!(self.storage.remove(&slot, false).is_none());
         });
     }
 
@@ -5779,7 +5779,7 @@ impl AccountsDb {
         let mut remove_storage_entries_elapsed = Measure::start("remove_storage_entries_elapsed");
         for remove_slot in removed_slots {
             // Remove the storage entries and collect some metrics
-            if let Some(store) = self.storage.remove(remove_slot) {
+            if let Some(store) = self.storage.remove(remove_slot, false) {
                 {
                     total_removed_storage_entries += 1;
                     total_removed_stored_bytes += store.accounts.capacity();
@@ -12710,7 +12710,7 @@ pub mod tests {
             db.store_for_tests(base_slot, &[(&key, &account)]);
             if pass == 0 {
                 db.add_root_and_flush_write_cache(base_slot);
-                db.storage.remove(&base_slot);
+                db.storage.remove(&base_slot, false);
                 assert!(db.get_snapshot_storages(..=after_slot, None).0.is_empty());
                 continue;
             }
