@@ -1075,7 +1075,7 @@ impl<C> Scheduler<C> {
             Mode::Replaying => solana_scheduler::UniqueWeight::max_value() - index as solana_scheduler::UniqueWeight,
         };
         let t =
-            solana_scheduler::Task::new_for_queue(nast, uw, (sanitized_tx.clone(), locks), mode);
+            solana_scheduler::Task::new_for_queue(nast, uw, (sanitized_tx.clone(), locks));
         self.transaction_sender
             .as_ref()
             .unwrap()
