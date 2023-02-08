@@ -1839,9 +1839,12 @@ impl ScheduleStage {
                                    } else {
                                        format!("")
                                    };
-                                   info!("schedule_once:initial {} {slot_label}{mode_label}", log_prefix(&runner_context));
                                    if let Some(checkpoint) = checkpoint.take() {
-                                       runner_context = checkpoint.clone_context_value();
+                                       let new_runner_context = checkpoint.clone_context_value();
+                                       info!("schedule_once:initial {} => {}", log_prefix(&runner_context), log_prefix(&new_runner_context));
+                                       runner_context = new_runner_context;
+                                   } else {
+                                       info!("schedule_once:initial {}", log_prefix(&runner_context));
                                    }
                                }
                                runnable_queue.add_to_schedule(task.unique_weight, task)
