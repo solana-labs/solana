@@ -6885,7 +6885,7 @@ impl Bank {
     pub fn sync_transaction_runner_context(self: &Arc<Self>) {
         let s = self.scheduler2.read().unwrap();
         let scheduler = s.as_ref().unwrap();
-        scheduler.replace_transaction_runner_context(self.clone());
+        scheduler.replace_transaction_runner_context(self.clone(), panic!());
     }
 
     pub fn commit_mode(&self) -> CommitMode {
