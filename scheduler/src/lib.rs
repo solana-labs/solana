@@ -1821,7 +1821,7 @@ impl ScheduleStage {
                                        let new_runner_context = checkpoint.clone_context_value();
                                        info!("schedule_once:initial {} => {}", log_prefix(&runner_context), log_prefix(&new_runner_context));
                                        runner_context = new_runner_context;
-                                       let new_mode = runner_context.as_ref().unwrap().mode;
+                                       let new_mode = runner_context.as_ref().unwrap().mode();
                                        if Some(new_mode) != mode {
                                            if !force_channel_backed {
                                                runnable_queue = match new_mode {
