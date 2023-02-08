@@ -318,7 +318,7 @@ fn output_slot(
                     None,
                     &post_execute_env_receiver,
                     Some(&post_schedule_env_sender),
-                    |_| "".into()
+                    |()| "".into()
                 );
             }
         })
