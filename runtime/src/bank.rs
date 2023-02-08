@@ -1443,6 +1443,7 @@ impl Scheduler<ExecuteTimings> {
                             (succeeded, skipped) = (0, 0);
                             checkpoint.wait_for_restart(Some(std::mem::take(&mut cumulative_timings)));
                             latest_checkpoint = Some(checkpoint);
+                            latest_runner_context = None;
                         },
                     }
                 }
