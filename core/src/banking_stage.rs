@@ -762,7 +762,7 @@ impl BankingStage {
         batch: &TransactionBatch,
         log_messages_bytes_limit: Option<usize>,
     ) -> ExecuteAndCommitTransactionsOutput {
-        let meta_data_services_enabled = committer.meta_data_services_enabled();
+        let transaction_status_sender_enabled = committer.transaction_status_sender_enabled();
         let mut execute_and_commit_timings = LeaderExecuteAndCommitTimings::default();
 
         let mut pre_balance_info = PreBalanceInfo::default();
@@ -770,7 +770,7 @@ impl BankingStage {
             {
                 // If the extra meta-data services are enabled for RPC, collect the
                 // pre-balances for native and token programs.
-                if meta_data_services_enabled {
+                if transaction_status_sender_enabled {
                     pre_balance_info.native = bank.collect_balances(batch);
                     pre_balance_info.token =
                         collect_token_balances(bank, batch, &mut pre_balance_info.mint_decimals)
@@ -784,9 +784,9 @@ impl BankingStage {
             bank.load_and_execute_transactions(
                 batch,
                 MAX_PROCESSING_AGE,
-                meta_data_services_enabled,
-                meta_data_services_enabled,
-                meta_data_services_enabled,
+                transaction_status_sender_enabled,
+                transaction_status_sender_enabled,
+                transaction_status_sender_enabled,
                 &mut execute_and_commit_timings.execute_timings,
                 None, // account_overrides
                 log_messages_bytes_limit
