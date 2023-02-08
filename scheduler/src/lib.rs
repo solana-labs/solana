@@ -1675,7 +1675,6 @@ impl ScheduleStage {
         log_prefix: impl Fn(&Option<B>) -> String,
     ) -> Option<std::sync::Arc<Checkpoint<C, B>>> {
         let mut maybe_start_time = None;
-        let mut slot = None;
         let mut mode = None;
         let (mut last_time, mut last_processed_count) = (maybe_start_time.map(|(a, b)| b).clone(), 0_usize);
         let mut runner_context = None;
@@ -1820,7 +1819,7 @@ impl ScheduleStage {
                                if maybe_start_time.is_none() {
                                    maybe_start_time = Some((cpu_time::ThreadTime::now(), std::time::Instant::now()));
                                    last_time = maybe_start_time.map(|(a, b)| b).clone();
-                                   let (old_slot, old_mode) = (slot, mode);
+                                   let old_mode = mode;
                                    let mode_label = if old_mode != Some(task.mode) {
                                        if !force_channel_backed {
                                            runnable_queue = match task.mode {
