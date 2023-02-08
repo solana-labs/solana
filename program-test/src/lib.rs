@@ -1121,7 +1121,7 @@ impl ProgramTestContext {
             bank.freeze();
             bank
         } else {
-            bank_forks.add_new_bank(Bank::warp_from_parent(
+            bank_forks.add_new_bank_for_replaying(Bank::warp_from_parent(
                 &bank,
                 &Pubkey::default(),
                 pre_warp_slot,
@@ -1157,7 +1157,7 @@ impl ProgramTestContext {
             });
 
         // warp_bank is frozen so go forward to get unfrozen bank at warp_slot
-        bank_forks.add_new_bank(Bank::new_from_parent(
+        bank_forks.add_new_bank_for_replaying(Bank::new_from_parent(
             &warp_bank,
             &Pubkey::default(),
             warp_slot,
