@@ -66,72 +66,9 @@ impl VoteSimulator {
         forks: Tree<u64>,
         cluster_votes: &HashMap<Pubkey, Vec<u64>>,
         is_frozen: bool,
-    ) {
-        let root = *forks.root().data();
-        assert!(self.bank_forks.read().unwrap().get(root).is_some());
-
-        let mut walk = TreeWalk::from(forks);
-
-        while let Some(visit) = walk.get() {
-            let slot = *visit.node().data();
-            if self.bank_forks.read().unwrap().get(slot).is_some() {
-                walk.forward();
-                continue;
-            }
-            let parent = *walk.get_parent().unwrap().data();
-            let parent_bank = self.bank_forks.read().unwrap().get(parent).unwrap();
-            let new_bank = Bank::new_from_parent(&parent_bank, &Pubkey::default(), slot);
-            self.progress
-                .entry(slot)
-                .or_insert_with(|| ForkProgress::new(Hash::default(), None, None, 0, 0));
-            for (pubkey, vote) in cluster_votes.iter() {
-                if vote.contains(&parent) {
-                    let keypairs = self.validator_keypairs.get(pubkey).unwrap();
-                    let latest_blockhash = parent_bank.last_blockhash();
-                    let vote_tx = vote_transaction::new_vote_transaction(
-                        // Must vote > root to be processed
-                        vec![parent],
-                        parent_bank.hash(),
-                        latest_blockhash,
-                        &keypairs.node_keypair,
-                        &keypairs.vote_keypair,
-                        &keypairs.vote_keypair,
-                        None,
-                    );
-                    info!("voting {} {}", parent_bank.slot(), parent_bank.hash());
-                    new_bank.process_transaction(&vote_tx).unwrap();
-
-                    // Check the vote landed
-                    let vote_account = new_bank
-                        .get_vote_account(&keypairs.vote_keypair.pubkey())
-                        .unwrap();
-                    let state = vote_account.vote_state();
-                    assert!(state
-                        .as_ref()
-                        .unwrap()
-                        .votes
-                        .iter()
-                        .any(|lockout| lockout.slot() == parent));
-                }
-            }
-            while new_bank.tick_height() < new_bank.max_tick_height() {
-                new_bank.register_tick(&Hash::new_unique());
-            }
-            if !visit.node().has_no_child() || is_frozen {
-                new_bank.freeze();
-                self.progress
-                    .get_fork_stats_mut(new_bank.slot())
-                    .expect("All frozen banks must exist in the Progress map")
-                    .bank_hash = Some(new_bank.hash());
-                self.heaviest_subtree_fork_choice.add_new_leaf_slot(
-                    (new_bank.slot(), new_bank.hash()),
-                    Some((new_bank.parent_slot(), new_bank.parent_hash())),
-                );
-            }
-            self.bank_forks.write().unwrap().add_new_bank(new_bank);
-
-            walk.forward();
-        }
+    ) 
+    {
+        panic!();
     }
 
     pub fn simulate_vote(
