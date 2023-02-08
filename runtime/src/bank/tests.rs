@@ -1,4 +1,3 @@
-#![cfg(test)]
 #[allow(deprecated)]
 use solana_sdk::sysvar::fees::Fees;
 use {
@@ -172,7 +171,7 @@ fn new_execution_result(
             return_data: None,
             executed_units: 0,
             accounts_data_len_delta: 0,
-            application_fees_changes: ApplicationFeeChanges::new(),
+            application_fees_changes: ApplicationFeeChanges::default(),
         },
         tx_executor_cache: Rc::new(RefCell::new(TransactionExecutorCache::default())),
     }
@@ -549,15 +548,12 @@ fn test_credit_debit_rent_no_side_effect_on_hash() {
         {
             // make sure rent and epoch change are such that we collect all lamports in accounts 4 & 5
             let mut account_copy = accounts[4].clone();
-            let expected_rent = bank
-                .rent_collector()
-                .collect_from_existing_account(
-                    &keypairs[4].pubkey(),
-                    &mut account_copy,
-                    None,
-                    set_exempt_rent_epoch_max,
-                )
-                .unwrap();
+            let expected_rent = bank.rent_collector().collect_from_existing_account(
+                &keypairs[4].pubkey(),
+                &mut account_copy,
+                None,
+                set_exempt_rent_epoch_max,
+            );
             assert_eq!(expected_rent.rent_amount, too_few_lamports);
             assert_eq!(account_copy.lamports(), 0);
         }
@@ -12121,15 +12117,12 @@ fn test_accounts_data_size_and_rent_collection() {
 
         // Ensure if we collect rent from the account that it will be reclaimed
         {
-            let info = bank
-                .rent_collector
-                .collect_from_existing_account(
-                    &keypair.pubkey(),
-                    &mut account,
-                    None,
-                    set_exempt_rent_epoch_max,
-                )
-                .unwrap();
+            let info = bank.rent_collector.collect_from_existing_account(
+                &keypair.pubkey(),
+                &mut account,
+                None,
+                set_exempt_rent_epoch_max,
+            );
             assert_eq!(info.account_data_len_reclaimed, data_size as u64);
         }
 

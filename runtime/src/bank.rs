@@ -3195,22 +3195,12 @@ impl Bank {
                     let amount = *iter.value();
                     match operation {
                         ApplicationFeesOperation::Collected => match self.deposit(pubkey, amount) {
-                            Ok(post_balance) => {
-                                self.rewards.write().unwrap().push((
-                                    *pubkey,
-                                    RewardInfo {
-                                        reward_type: RewardType::ApplicationFee,
-                                        lamports: amount as i64,
-                                        post_balance,
-                                        commission: None,
-                                    },
-                                ));
-                            }
                             Err(_) => {
                                 error!("Burning {} fee instead of crediting {}", pubkey, amount);
                                 inc_new_counter_error!("bank-burned_fee_lamports", amount as usize);
                                 burn += amount;
                             }
+                            Ok(_) => {}
                         },
                         ApplicationFeesOperation::Updated => {
                             if let Err(err) = self.update_application_fees(pubkey, amount) {
@@ -5524,14 +5514,6 @@ impl Bank {
                     set_exempt_rent_epoch_max,
                 ));
             time_collecting_rent_us += measure.as_us();
-
-            let rent_collected_info = match rent_collected_info {
-                Ok(info) => info,
-                Err(_) => {
-                    error!("Trying to collect rent on account with application fees(should not happen)");
-                    CollectedInfo::default()
-                }
-            };
 
             // only store accounts where we collected rent
             // but get the hash for all these accounts even if collected rent is 0 (= not updated).

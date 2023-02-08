@@ -42,10 +42,10 @@ pub struct Account {
     pub owner: Pubkey,
     /// this account's data contains a loaded program (and is now read-only)
     pub executable: bool,
-    // has application fees
+    /// has application fees
     pub has_application_fees: bool,
-    /// the epoch at which this account will next owe rent or application fees for the account
-    /// switched by the boolean above
+    /// the epoch at which this account will next owe rent
+    /// or application fees for the account if has_application_fees is true
     pub rent_epoch_or_application_fees: u64,
 }
 
@@ -128,9 +128,10 @@ pub struct AccountSharedData {
     owner: Pubkey,
     /// this account's data contains a loaded program (and is now read-only)
     executable: bool,
-    // has application fees
+    /// has application fees
     has_application_fees: bool,
     /// the epoch at which this account will next owe rent
+    /// or application fees for the account if has_application_fees is true
     rent_epoch_or_application_fees: u64,
 }
 

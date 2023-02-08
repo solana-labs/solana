@@ -192,11 +192,11 @@ impl fmt::Display for CliAccount {
         )?;
         writeln_name_value(
             f,
-            "rent_epoch",
+            "Rent Epoch",
             &self.keyed_account.account.rent_epoch.to_string(),
         )?;
         if let Some(application_fees) = self.keyed_account.account.application_fees {
-            writeln_name_value(f, "application_fees", &application_fees.to_string())?;
+            writeln_name_value(f, "Application Fees", &application_fees.to_string())?;
         }
         Ok(())
     }

@@ -261,17 +261,19 @@ pub enum InstructionError {
     #[error("Max instruction trace length exceeded")]
     MaxInstructionTraceLengthExceeded,
 
-    // Setting rent epoch for account which has an application fees
+    /// Setting rent epoch for account which has an application fees
     #[error("Cannot set rent epoch for account which has application fees")]
     CannotSetRentEpochForAccountWithAppFees,
 
-    // Setting application fees for an account which is not rent free
+    /// Setting application fees for an account which is not rent free
     #[error("Cannot set application fees for account which has rent epoch")]
     CannotSetAppFeesForAccountWithRentEpoch,
-    // Note: For any new error added here an equivalent ProgramError and its
-    // conversions must also be added
+
+    /// Cannot change the application fees for account while executing instruction
     #[error("Cannot change application fees")]
     CannotChangeApplicationFees,
+    // Note: For any new error added here an equivalent ProgramError and its
+    // conversions must also be added
 }
 
 /// A directive for a single invocation of a Solana program.

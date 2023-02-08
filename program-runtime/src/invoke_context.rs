@@ -102,27 +102,11 @@ struct SyscallContext {
     allocator: Rc<RefCell<dyn Alloc>>,
 }
 
-#[derive(Clone, PartialEq, Eq, Debug)]
+#[derive(Clone, PartialEq, Eq, Debug, Default)]
 pub struct ApplicationFeeChanges {
     pub application_fees: HashMap<Pubkey, u64>,
     pub rebated: HashMap<Pubkey, u64>,
     pub updated: Vec<(Pubkey, u64)>,
-}
-
-impl ApplicationFeeChanges {
-    pub fn new() -> Self {
-        Self {
-            application_fees: HashMap::new(),
-            rebated: HashMap::new(),
-            updated: Vec::new(),
-        }
-    }
-}
-
-impl Default for ApplicationFeeChanges {
-    fn default() -> Self {
-        Self::new()
-    }
 }
 
 pub struct InvokeContext<'a> {

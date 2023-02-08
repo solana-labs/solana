@@ -298,7 +298,6 @@ impl Accounts {
 
         // There is no way to predict what program will execute without an error
         // If a fee can pay for execution then the program will be scheduled
-        let mut validated_fee_payer = false;
         let mut tx_rent: TransactionRent = 0;
         let message = tx.message();
         let account_keys = message.account_keys();
@@ -313,10 +312,9 @@ impl Accounts {
             Self::get_requested_loaded_accounts_data_size_limit(feature_set);
         let mut accumulated_accounts_data_size: usize = 0;
         let mut application_fees: HashMap<Pubkey, u64> = HashMap::new();
-        let mut payer_index = 0;
+        let mut payer_index = None;
 
-        // we reverse the iteration over keys so that we collect all the application fees
-        // and then validate fees at the last
+        // we fill the application fees map and then calculate the fees accordingly
         let mut accounts = account_keys
             .iter()
             .enumerate()
@@ -340,24 +338,13 @@ impl Accounts {
                             .load_with_fixed_root(ancestors, key)
                             .map(|(mut account, _)| {
                                 if message.is_writable(i) {
-                                    let rent_due_result = rent_collector
-                                        .collect_from_existing_account(
-                                            key,
-                                            &mut account,
-                                            self.accounts_db.filler_account_suffix.as_ref(),
-                                            set_exempt_rent_epoch_max,
-                                        );
-                                    match rent_due_result {
-                                        Ok(rent_due) => {
-                                            (account, rent_due.rent_amount)
-                                        },
-                                        Err(_) => {
-                                            // should never happen
-                                            error!("trying to set rent epoch for the account with application fees {}", key);
-                                            (account, 0)
-                                        }
-
-                                    }
+                                    let rent_due = rent_collector.collect_from_existing_account(
+                                        key,
+                                        &mut account,
+                                        self.accounts_db.filler_account_suffix.as_ref(),
+                                        set_exempt_rent_epoch_max,
+                                    );
+                                    (account, rent_due.rent_amount)
                                 } else {
                                     (account, 0)
                                 }
@@ -387,12 +374,11 @@ impl Accounts {
                         application_fees.insert(*key, account.application_fees());
                     }
 
-                    if !validated_fee_payer && message.is_non_loader_key(i) {
+                    if payer_index.is_none() && message.is_non_loader_key(i) {
                         if i != 0 {
                             warn!("Payer index should be 0! {:?}", tx);
                         }
-                        payer_index = i;
-                        validated_fee_payer = true;
+                        payer_index = Some(i);
                     }
 
                     if bpf_loader_upgradeable::check_id(account.owner()) {
@@ -443,9 +429,10 @@ impl Accounts {
 
                 account_found_and_dep_index.push((account_found, account_dep_index));
                 Ok((*key, account))
-            }).collect::<Result<Vec<_>>>()?;
+            })
+            .collect::<Result<Vec<_>>>()?;
 
-        if validated_fee_payer {
+        if let Some(payer_index) = payer_index {
             let key_and_account = &mut accounts[payer_index];
             let application_fees_sum = application_fees.iter().map(|x| *x.1).sum::<u64>();
 
@@ -1443,7 +1430,7 @@ mod tests {
                 return_data: None,
                 executed_units: 0,
                 accounts_data_len_delta: 0,
-                application_fees_changes: ApplicationFeeChanges::new(),
+                application_fees_changes: ApplicationFeeChanges::default(),
             },
             tx_executor_cache: Rc::new(RefCell::new(TransactionExecutorCache::default())),
         }

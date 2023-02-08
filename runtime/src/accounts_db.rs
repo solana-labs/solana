@@ -18,8 +18,6 @@
 //! tracks the number of commits to the entire data store. So the latest
 //! commit for each slot entry would be indexed.
 
-use solana_sdk::account::RENT_EXEMPT_RENT_EPOCH;
-
 use {
     crate::{
         account_info::{AccountInfo, Offset, StorageLocation, StoredSize},
@@ -73,7 +71,9 @@ use {
     solana_measure::{measure, measure::Measure, measure_us},
     solana_rayon_threadlimit::get_thread_count,
     solana_sdk::{
-        account::{Account, AccountSharedData, ReadableAccount, WritableAccount},
+        account::{
+            Account, AccountSharedData, ReadableAccount, WritableAccount, RENT_EXEMPT_RENT_EPOCH,
+        },
         clock::{BankId, Epoch, Slot},
         epoch_schedule::EpochSchedule,
         genesis_config::{ClusterType, GenesisConfig},
@@ -9586,7 +9586,7 @@ pub mod tests {
         let account_meta = AccountMeta {
             lamports: 1,
             owner: Pubkey::from([2; 32]),
-            account_flags: AccountFlags::NONE,
+            account_flags: AccountFlags::empty(),
             rent_epoch_or_application_fees: 0,
         };
         let offset = 3;

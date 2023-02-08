@@ -159,7 +159,6 @@ pub struct StoredMeta {
 bitflags! {
     #[derive(Serialize, Deserialize, Default)]
     pub struct AccountFlags: u8 {
-        const NONE = 0b00000000;
         const EXECUTABLE = 0b00000001;
         const HAS_APPLICATION_FEES = 0b00000010;
     }
@@ -167,7 +166,7 @@ bitflags! {
 
 impl AccountFlags {
     pub fn new(executable: bool, has_application_fees: bool) -> Self {
-        let mut flags = AccountFlags::NONE;
+        let mut flags = AccountFlags::empty();
         if executable {
             flags |= AccountFlags::EXECUTABLE;
         }
@@ -185,7 +184,8 @@ impl AccountFlags {
 pub struct AccountMeta {
     /// lamports in the account
     pub lamports: u64,
-    /// the epoch at which this account will next owe rent or application fees depending on the account flags
+    /// the epoch at which this account will next owe rent
+    /// or application fees depending has_application_fees bit in the account flags
     pub rent_epoch_or_application_fees: u64,
     /// the program that owns this account. If executable, the program that loads this account.
     pub owner: Pubkey,
@@ -201,7 +201,8 @@ impl AccountMeta {
     }
 
     pub fn has_application_fees(&self) -> bool {
-        self.account_flags & AccountFlags::HAS_APPLICATION_FEES == AccountFlags::HAS_APPLICATION_FEES
+        self.account_flags & AccountFlags::HAS_APPLICATION_FEES
+            == AccountFlags::HAS_APPLICATION_FEES
     }
 }
 
@@ -268,7 +269,9 @@ impl<'a> StoredAccountMeta<'a> {
 
     fn sanitize_executable_and_application_fees(&self) -> bool {
         // Sanitize executable to ensure higher 7-bits are cleared correctly.
-        self.ref_account_flags_byte() & !3 == 0
+        const SANITIZER: u8 =
+            !(AccountFlags::EXECUTABLE.bits() | AccountFlags::HAS_APPLICATION_FEES.bits());
+        self.ref_account_flags_byte() & SANITIZER == 0
     }
 
     fn sanitize_lamports(&self) -> bool {
@@ -1399,7 +1402,7 @@ pub mod tests {
 
         let accounts = av.accounts(0);
         let account = accounts.first().unwrap();
-        assert_eq!(account.account_meta.account_flags, AccountFlags::NONE);
+        assert_eq!(account.account_meta.account_flags, AccountFlags::empty());
         assert_eq!(account.sanitize_executable_and_application_fees(), true);
 
         let account = accounts.get(1).unwrap();

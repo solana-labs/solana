@@ -5,7 +5,6 @@ use solana_sdk::{
     epoch_schedule::EpochSchedule,
     genesis_config::GenesisConfig,
     incinerator,
-    instruction::InstructionError,
     pubkey::Pubkey,
     rent::{Rent, RentDue},
 };
@@ -113,33 +112,35 @@ impl RentCollector {
         account: &mut AccountSharedData,
         filler_account_suffix: Option<&Pubkey>,
         set_exempt_rent_epoch_max: bool,
-    ) -> Result<CollectedInfo, InstructionError> {
+    ) -> CollectedInfo {
         match self.calculate_rent_result(address, account, filler_account_suffix) {
             RentResult::Exempt => {
                 if set_exempt_rent_epoch_max {
-                    account.set_rent_epoch(RENT_EXEMPT_RENT_EPOCH)?;
+                    // setting rent exempt rent epoch should work even if application has application fees
+                    account.set_rent_epoch(RENT_EXEMPT_RENT_EPOCH).unwrap();
                 }
-                Ok(CollectedInfo::default())
+                CollectedInfo::default()
             }
-            RentResult::NoRentCollectionNow => Ok(CollectedInfo::default()),
+            RentResult::NoRentCollectionNow => CollectedInfo::default(),
             RentResult::CollectRent {
                 new_rent_epoch,
                 rent_due,
             } => match account.lamports().checked_sub(rent_due) {
                 None | Some(0) => {
                     let account = std::mem::take(account);
-                    Ok(CollectedInfo {
+                    CollectedInfo {
                         rent_amount: account.lamports(),
                         account_data_len_reclaimed: account.data().len() as u64,
-                    })
+                    }
                 }
                 Some(lamports) => {
                     account.set_lamports(lamports);
-                    account.set_rent_epoch(new_rent_epoch)?;
-                    Ok(CollectedInfo {
+                    // here we already tested that account does not have application fees
+                    account.set_rent_epoch(new_rent_epoch).unwrap();
+                    CollectedInfo {
                         rent_amount: rent_due,
                         account_data_len_reclaimed: 0u64,
-                    })
+                    }
                 }
             },
         }
@@ -153,7 +154,10 @@ impl RentCollector {
         account: &impl ReadableAccount,
         filler_account_suffix: Option<&Pubkey>,
     ) -> RentResult {
-        if account.rent_epoch() == RENT_EXEMPT_RENT_EPOCH || account.rent_epoch() > self.epoch {
+        if account.rent_epoch() == RENT_EXEMPT_RENT_EPOCH
+            || account.rent_epoch() > self.epoch
+            || account.has_application_fees()
+        {
             // potentially rent paying account (or known and already marked exempt)
             // Maybe collect rent later, leave account alone for now.
             return RentResult::NoRentCollectionNow;
@@ -235,7 +239,6 @@ mod tests {
                 /*filler_account_suffix:*/ None,
                 set_exempt_rent_epoch_max,
             )
-            .unwrap()
         }
     }
 
@@ -258,7 +261,7 @@ mod tests {
                         None,
                         set_exempt_rent_epoch_max
                     ),
-                    Ok(CollectedInfo::default())
+                    CollectedInfo::default()
                 );
                 assert_eq!(account_clone, account);
             }
@@ -283,7 +286,7 @@ mod tests {
                         None,
                         set_exempt_rent_epoch_max
                     ),
-                    Ok(CollectedInfo::default())
+                    CollectedInfo::default()
                 );
                 assert_eq!(account_clone, account_expected);
             }
@@ -308,7 +311,7 @@ mod tests {
                         None,
                         set_exempt_rent_epoch_max
                     ),
-                    Ok(CollectedInfo::default())
+                    CollectedInfo::default()
                 );
                 assert_eq!(account_clone, account_expected);
             }
@@ -340,10 +343,10 @@ mod tests {
                                 filler_accounts,
                                 set_exempt_rent_epoch_max
                             ),
-                            Ok(CollectedInfo {
+                            CollectedInfo {
                                 rent_amount: rent_due_expected,
                                 account_data_len_reclaimed: 0
-                            })
+                            }
                         );
                         let mut account_expected = account.clone();
                         account_expected.set_lamports(account.lamports() - rent_due_expected);
@@ -377,7 +380,7 @@ mod tests {
                         None,
                         set_exempt_rent_epoch_max
                     ),
-                    Ok(CollectedInfo::default())
+                    CollectedInfo::default()
                 );
                 assert_eq!(account_clone, account_expected);
             }
@@ -399,7 +402,7 @@ mod tests {
                         None,
                         set_exempt_rent_epoch_max
                     ),
-                    Ok(CollectedInfo::default())
+                    CollectedInfo::default()
                 );
                 assert_eq!(account_clone, account);
             }
@@ -430,7 +433,7 @@ mod tests {
                         Some(&filler_account),
                         set_exempt_rent_epoch_max
                     ),
-                    Ok(CollectedInfo::default())
+                    CollectedInfo::default()
                 );
                 assert_eq!(account_clone, account_expected);
             }
@@ -471,14 +474,12 @@ mod tests {
             assert_eq!(collected.account_data_len_reclaimed, 0);
 
             // collect rent on a already-existing account
-            let collected = rent_collector
-                .collect_from_existing_account(
-                    &solana_sdk::pubkey::new_rand(),
-                    &mut existing_account,
-                    None, // filler_account_suffix
-                    set_exempt_rent_epoch_max,
-                )
-                .unwrap();
+            let collected = rent_collector.collect_from_existing_account(
+                &solana_sdk::pubkey::new_rand(),
+                &mut existing_account,
+                None, // filler_account_suffix
+                set_exempt_rent_epoch_max,
+            );
             assert!(existing_account.lamports() < old_lamports);
             assert_eq!(
                 existing_account.lamports() + collected.rent_amount,
@@ -518,7 +519,7 @@ mod tests {
                         set_exempt_rent_epoch_max,
                     );
                     assert_eq!(account.lamports(), huge_lamports);
-                    assert_eq!(collected, Ok(CollectedInfo::default()));
+                    assert_eq!(collected, CollectedInfo::default());
                     continue;
                 }
 
@@ -528,14 +529,12 @@ mod tests {
                 account.set_lamports(tiny_lamports);
 
                 // ... and trigger another rent collection on the same epoch and check that rent is working
-                let collected = rent_collector
-                    .collect_from_existing_account(
-                        &pubkey,
-                        &mut account,
-                        None, // filler_account_suffix
-                        set_exempt_rent_epoch_max,
-                    )
-                    .unwrap();
+                let collected = rent_collector.collect_from_existing_account(
+                    &pubkey,
+                    &mut account,
+                    None, // filler_account_suffix
+                    set_exempt_rent_epoch_max,
+                );
                 assert_eq!(account.lamports(), tiny_lamports - collected.rent_amount);
                 assert_ne!(collected, CollectedInfo::default());
             }
@@ -557,14 +556,12 @@ mod tests {
             let epoch = 3;
             let rent_collector = default_rent_collector_clone_with_epoch(epoch);
 
-            let collected = rent_collector
-                .collect_from_existing_account(
-                    &pubkey,
-                    &mut account,
-                    None, // filler_account_suffix
-                    set_exempt_rent_epoch_max,
-                )
-                .unwrap();
+            let collected = rent_collector.collect_from_existing_account(
+                &pubkey,
+                &mut account,
+                None, // filler_account_suffix
+                set_exempt_rent_epoch_max,
+            );
             assert_eq!(account.lamports(), 0);
             assert_eq!(collected.rent_amount, 1);
         }
@@ -586,14 +583,12 @@ mod tests {
             });
             let rent_collector = default_rent_collector_clone_with_epoch(account_rent_epoch + 1);
 
-            let collected = rent_collector
-                .collect_from_existing_account(
-                    &Pubkey::new_unique(),
-                    &mut account,
-                    None, // filler_account_suffix
-                    set_exempt_rent_epoch_max,
-                )
-                .unwrap();
+            let collected = rent_collector.collect_from_existing_account(
+                &Pubkey::new_unique(),
+                &mut account,
+                None, // filler_account_suffix
+                set_exempt_rent_epoch_max,
+            );
 
             assert_eq!(collected.rent_amount, account_lamports);
             assert_eq!(

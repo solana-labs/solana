@@ -185,7 +185,7 @@ impl Processor {
                     let mut rebated_amount = None;
                     if let Some(lamports_rebated) = lamports_rebated {
                         rebated_amount = Some(*lamports_rebated);
-                        // add these in rabates map
+                        // add these in rebates map
                         invoke_context
                             .application_fee_changes
                             .rebated
