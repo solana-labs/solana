@@ -1593,7 +1593,7 @@ impl<C> Scheduler<C> {
         //let transaction_sender = self.transaction_sender.take().unwrap();
 
         //drop(transaction_sender);
-        let checkpoint = Self::new_checkpoint();
+        let checkpoint = self.checkpoint();
         self.transaction_sender
             .as_ref()
             .unwrap()
