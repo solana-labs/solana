@@ -1179,10 +1179,18 @@ impl Scheduler<ExecuteTimings> {
             if max_thread_priority {
                 thread_priority::set_current_thread_priority(thread_priority::ThreadPriority::Max).unwrap();
             }
+            let (mut latest_checkpoint, mut latest_runner_context) = (Some(initial_checkpoint), None::<RunnerContext>);
 
-            'recv: while let Ok(solana_scheduler::ExecutablePayload(mut ee)) = (if thx >= executing_thread_count { scheduled_high_ee_receiver.recv() } else { scheduled_ee_receiver.recv()}) {
+            'recv: while let Ok(r) = (if thx >= executing_thread_count { scheduled_high_ee_receiver.recv() } else { scheduled_ee_receiver.recv()}) {
+                match r {
+                solana_scheduler::ExecutablePayload(mut ee) => {
+
                 'retry: loop {
                 commit_status.check_and_wait();
+                if let Some(latest_checkpoint) = latest_checkpoint.take() {
+                    latest_runner_context = latest_checkpoint.clone_context_value();
+                }
+
                 let (mut wall_time, cpu_time) = (Measure::start("process_message_time"), cpu_time::ThreadTime::now());
 
                 let current_execute_clock = ee.task.execute_time();
@@ -1268,6 +1276,7 @@ impl Scheduler<ExecuteTimings> {
                                     trace!("{current_thread_name} pausing due to poh error until resumed...: {:?}", e);
                                     // this is needed so that we don't enter busy loop
                                     commit_status.notify_as_paused();
+                                    // meddle with checkpoint/context
                                     continue 'retry;
                                 },
                             }
@@ -1338,6 +1347,8 @@ impl Scheduler<ExecuteTimings> {
                 //ee.reindex_with_address_book();
                 processed_ee_sender.send(solana_scheduler::UnlockablePayload(ee, timings)).unwrap();
                 break;
+                }
+                }
                 }
             }
             todo!();
