@@ -654,7 +654,6 @@ pub struct Task {
     pub execute_time: std::sync::atomic::AtomicUsize,
     pub commit_time: std::sync::atomic::AtomicUsize,
     pub for_indexer: LockAttemptsInCell,
-    pub mode: Mode,
 }
 
 #[derive(Debug)]
@@ -679,7 +678,6 @@ impl Task {
         nast: NAST,
         unique_weight: UniqueWeight,
         tx: (SanitizedTransaction, Vec<LockAttempt>),
-        mode: Mode,
     ) -> TaskInQueue {
         TaskInQueue::new(Self {
             for_indexer: LockAttemptsInCell::new(std::cell::RefCell::new(
@@ -696,12 +694,11 @@ impl Task {
             queue_end_time: std::sync::atomic::AtomicUsize::new(usize::max_value()),
             execute_time: std::sync::atomic::AtomicUsize::new(usize::max_value()),
             commit_time: std::sync::atomic::AtomicUsize::new(usize::max_value()),
-            mode,
         })
     }
 
-    pub fn transaction_index(&self) -> u64 {
-        match self.mode {
+    pub fn transaction_index(&self, mode: Mode) -> u64 {
+        match mode {
             Mode::Replaying => (UniqueWeight::max_value() - self.unique_weight).try_into().unwrap(),
             Mode::Banking => (u64::max_value() as u128 & self.unique_weight).try_into().unwrap(),
         }
@@ -823,7 +820,6 @@ impl Task {
             queue_end_time: std::sync::atomic::AtomicUsize::new(usize::max_value()),
             execute_time: std::sync::atomic::AtomicUsize::new(usize::max_value()),
             commit_time: std::sync::atomic::AtomicUsize::new(usize::max_value()),
-            mode: self.mode,
         }
     }
 
@@ -1275,7 +1271,13 @@ impl ScheduleStage {
                         &unique_weight,
                         &message_hash,
                         &mut next_task.lock_attempts_mut(ast),
-                        next_task.mode,
+                        (
+                            if runnable_queue.is_backed_by_channel() {
+                                Mode::Replaying
+                            } else {
+                                Mode::Banking
+                            }
+                        )
                     );
 
                 if unlockable_count > 0 {
