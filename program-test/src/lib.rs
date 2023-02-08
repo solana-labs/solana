@@ -1121,7 +1121,7 @@ impl ProgramTestContext {
             bank.freeze();
             bank
         } else {
-            bank_forks.insert(Bank::warp_from_parent(
+            bank_forks.add_new_bank(Bank::warp_from_parent(
                 &bank,
                 &Pubkey::default(),
                 pre_warp_slot,
