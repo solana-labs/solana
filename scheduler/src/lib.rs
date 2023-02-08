@@ -1817,23 +1817,20 @@ impl ScheduleStage {
                                if maybe_start_time.is_none() {
                                    maybe_start_time = Some((cpu_time::ThreadTime::now(), std::time::Instant::now()));
                                    last_time = maybe_start_time.map(|(a, b)| b).clone();
-                                   let old_mode = mode;
-                                   let mode_label = if old_mode != Some(task.mode) {
-                                       if !force_channel_backed {
-                                           runnable_queue = match task.mode {
-                                               Mode::Replaying => ModeSpecificTaskQueue::Replaying(ChannelBackedTaskQueue::new(from_prev)),
-                                               Mode::Banking => ModeSpecificTaskQueue::Banking(TaskQueue::default()),
-                                           };
-                                       }
-                                       mode = Some(task.mode);
-                                       format!(" mode: {old_mode:?} => {mode:?}")
-                                   } else {
-                                       format!("")
-                                   };
                                    if let Some(checkpoint) = checkpoint.take() {
                                        let new_runner_context = checkpoint.clone_context_value();
                                        info!("schedule_once:initial {} => {}", log_prefix(&runner_context), log_prefix(&new_runner_context));
                                        runner_context = new_runner_context;
+                                       let new_mode = Some(runner_context.as_ref().unwrap().mode);
+                                       if new_mode != mode {
+                                           if !force_channel_backed {
+                                               runnable_queue = match new_mode {
+                                                   Mode::Replaying => ModeSpecificTaskQueue::Replaying(ChannelBackedTaskQueue::new(from_prev)),
+                                                   Mode::Banking => ModeSpecificTaskQueue::Banking(TaskQueue::default()),
+                                               };
+                                           }
+                                           mode = Some(task.mode);
+                                       };
                                    } else {
                                        info!("schedule_once:initial {}", log_prefix(&runner_context));
                                    }
