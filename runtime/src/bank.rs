@@ -1022,22 +1022,6 @@ pub static POH: std::sync::RwLock<Option<Box<dyn Fn(&Bank, Vec<VersionedTransact
 use solana_transaction_status::TransactionTokenBalance;
 pub static STATUS_SENDER_CALLBACK: std::sync::RwLock<Option<(Option<usize>, Box<dyn Fn(Option<(Vec<Vec<u64>>, Vec<Vec<TransactionTokenBalance>>)>, &Arc<Bank>, &TransactionBatch, &mut HashMap<Pubkey, u8>, Option<TransactionResults>, Option<usize>) -> std::option::Option<(Vec<Vec<u64>>, Vec<Vec<TransactionTokenBalance>>)> + Send + Sync>)>> = std::sync::RwLock::new(None);
 
-pub mod commit_mode {
-    use std::result::Result; // restore shadowing for not fully qualified macro expansion in atomic_enum...
-    #[derive(Default)]
-    #[atomic_enum]
-    pub enum CommitMode {
-        Banking,
-        #[default]
-        Replaying,
-    }
-
-    impl Default for AtomicCommitMode {
-        fn default() -> Self { Self::new(Default::default()) }
-    }
-}
-pub use commit_mode::{AtomicCommitMode, CommitMode};
-
 #[derive(Debug)]
 struct Scheduler<C> {
     random_id: u64,
