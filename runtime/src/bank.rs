@@ -1047,7 +1047,7 @@ struct Scheduler<C> {
     bank: std::sync::Arc<std::sync::RwLock<std::option::Option<std::sync::Weak<Bank>>>>,
     slot: AtomicU64,
     commit_status: Arc<CommitStatus>,
-    current_checkpoint: Option<Arc<solana_scheduler::Checkpoint<C, RunnerContext>>>,
+    current_checkpoint: Arc<solana_scheduler::Checkpoint<C, RunnerContext>>,
 }
 
 impl<C> Scheduler<C> {
@@ -1528,7 +1528,7 @@ impl Scheduler<ExecuteTimings> {
             bank,
             slot: Default::default(),
             commit_status,
-            current_checkpoint: Some(initial_checkpoint),
+            current_checkpoint: initial_checkpoint,
         };
         info!(
             "scheduler: id_{:016x} setup done with {}us",
@@ -1576,7 +1576,7 @@ impl<C> Scheduler<C> {
             .unwrap();
         checkpoint.wait_for_restart(None);
         let r = checkpoint.take_restart_value();
-        self.current_checkpoint = Some(checkpoint);
+        self.current_checkpoint = checkpoint;
         self.collected_results.lock().unwrap().push(Ok(r));
         {
             *self.bank.write().unwrap() = None;
@@ -1628,7 +1628,7 @@ impl<C> Scheduler<C> {
     }
 
     fn replace_transaction_runner_context(&self, bank: Arc<Bank>) {
-        self.current_checkpoint.as_ref().unwrap().update_context_value(RunnerContext { bank });
+        self.current_checkpoint.update_context_value(RunnerContext { bank });
     }
 }
 
