@@ -2124,7 +2124,7 @@ impl ScheduleStage {
     }
 
     #[must_use]
-    pub fn run<T: Send, C, B: Clone>(
+    pub fn run<T: Send, C, B: Clone + WithMode>(
         checkpoint: &mut Option<std::sync::Arc<Checkpoint<C, B>>>,
         max_executing_queue_count: usize,
         runnable_queue: &mut TaskQueue,
