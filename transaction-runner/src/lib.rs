@@ -46,7 +46,7 @@ impl SchedulerPool {
     }
 
     fn create(self: &Arc<Self>, context: SchedulerContext) {
-        self.schedulers.lock().unwrap().push(Box::new(Scheduler::default2(self.clone(), context)));
+        self.schedulers.lock().unwrap().push(Box::new(Scheduler::spawn(self.clone(), context)));
     }
 }
 
@@ -187,7 +187,7 @@ impl CommitStatus {
 }
 
 impl Scheduler {
-    fn default2(scheduler_pool: Arc<SchedulerPool>, initial_context: SchedulerContext) -> Self {
+    fn spawn(scheduler_pool: Arc<SchedulerPool>, initial_context: SchedulerContext) -> Self {
         let start = Instant::now();
         let mut address_book = solana_scheduler::AddressBook::default();
         let preloader = Arc::new(address_book.preloader());
