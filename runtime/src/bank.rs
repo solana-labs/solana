@@ -1052,7 +1052,7 @@ use solana_transaction_status::TransactionTokenBalance;
 pub static STATUS_SENDER_CALLBACK: std::sync::RwLock<Option<(Option<usize>, Box<dyn Fn(Option<(Vec<Vec<u64>>, Vec<Vec<TransactionTokenBalance>>)>, &Arc<Bank>, &TransactionBatch, &mut HashMap<Pubkey, u8>, Option<TransactionResults>, Option<usize>) -> std::option::Option<(Vec<Vec<u64>>, Vec<Vec<TransactionTokenBalance>>)> + Send + Sync>)>> = std::sync::RwLock::new(None);
 
 #[derive(Debug)]
-struct Scheduler<C> {
+pub(crate) struct Scheduler<C> {
     random_id: u64,
     scheduler_thread_handle: Option<std::thread::JoinHandle<Result<(Duration, Duration)>>>,
     executing_thread_handles: Option<Vec<std::thread::JoinHandle<Result<(Duration, Duration)>>>>,
