@@ -991,6 +991,10 @@ impl SchedulerContext {
     fn bank(&self) -> Option<&Arc<Bank>> {
         self.bank.as_ref()
     }
+
+    fn log_prefix(&self, random_id: u64) -> String {
+        format!("id_{:016x}{}", random_id, self.as_ref().map(|c| format!(" slot: {}, mode: {:?}", c.slot(), c.mode)).unwrap_or("".into()))
+    }
 }
 
 #[derive(Debug)]
@@ -1516,7 +1520,7 @@ impl Scheduler {
                         Some(&scheduled_high_ee_sender),
                         &processed_ee_receiver,
                         Some(&retired_ee_sender),
-                        |scheduler_context| format!("id_{:016x}{}", random_id, scheduler_context.as_ref().map(|c| format!(" slot: {}, mode: {:?}", c.slot(), c.mode)).unwrap_or("".into())),
+                        |scheduler_context| scheduler_context.log_prefix(random_id),
                     );
 
                     if let Some(checkpoint) = maybe_checkpoint {
