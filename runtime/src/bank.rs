@@ -1879,7 +1879,7 @@ struct LoadVoteAndStakeAccountsResult {
     vote_accounts_cache_miss_count: usize,
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct NewBankOptions {
     pub vote_only_bank: bool,
     pub blockhash_override: Option<Hash>,
