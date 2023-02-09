@@ -963,7 +963,7 @@ impl Runner {
         RunnerContext { runner: self, bank, mode }
     }
 
-    fn take_scheduler_from_pool(&self) -> usize {
+    fn take_scheduler_from_pool(&self) -> Box<Scheduler<ExecuteTimings>> {
         self.runner_pool.lock().unwrap().take_from_pool()
     }
 }
