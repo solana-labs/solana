@@ -7977,7 +7977,12 @@ impl Bank {
                 let context = scheduler.scheduler_context();
                 let pool = scheduler.scheduler_pool();
                 pool.return_to_pool(scheduler);
-                (e, Some(pool.take_from_pool(context)))
+                let ns = if take_next {
+                    pool.take_from_pool(context)
+                } else {
+                    None
+                }
+                (e, ns)
             } else {
                 info!("wait_for_scheduler(Banking): pausing commit into bank ({})...", self.slot());
                 scheduler.pause_commit_into_bank();
