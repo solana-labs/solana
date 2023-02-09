@@ -98,7 +98,7 @@ impl Drop for SchedulerPool {
 
 pub struct AAA((SchedulerPool, usize));
 
-impl LikeSchedulerPool for AAA(Arc<SchedulerPool>) {
+impl LikeSchedulerPool for AAA {
     fn take_from_pool(&self, mode: solana_scheduler::Mode) -> Box<dyn LikeScheduler> {
         panic!();
     }
