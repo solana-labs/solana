@@ -8762,7 +8762,7 @@ impl Bank {
         total_accounts_stats
     }
 
-    pub(crate) fn install_scheduler(&self, scheduler: Box<Scheduler>) {
+    pub(crate) fn install_scheduler(&self, scheduler: Box<dyn ScheduleLike>) {
         let mut s = self.scheduler.write().unwrap();
         assert!(s.is_none());
         *s = Some(scheduler)
