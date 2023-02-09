@@ -766,7 +766,7 @@ impl LikeScheduler for Scheduler {
         self.current_checkpoint.clone_context_value().unwrap()
     }
 
-    fn replace_scheduler_context(&self, context: SchedulerContext) -> SchedulerContext {
+    fn replace_scheduler_context(&self, context: SchedulerContext) {
         self.current_checkpoint.replace_context_value(context)
     }
 }
