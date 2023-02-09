@@ -36,11 +36,16 @@ use {
             AccessType, BlockstoreOptions, BlockstoreRecoveryMode, LedgerColumnOptions,
             ShredStorageType, BLOCKSTORE_DIRECTORY_ROCKS_FIFO,
         },
-        blockstore_processor::{self, BlockstoreProcessorError, ProcessOptions, TransactionStatusSender},
+        blockstore_processor::{
+            self, BlockstoreProcessorError, ProcessOptions, TransactionStatusSender,
+        },
         shred::Shred,
     },
     solana_measure::{measure, measure::Measure},
-    solana_rpc::{transaction_status_service::TransactionStatusService, transaction_notifier_interface::TransactionNotifierLock},
+    solana_rpc::{
+        transaction_notifier_interface::TransactionNotifierLock,
+        transaction_status_service::TransactionStatusService,
+    },
     solana_runtime::{
         accounts::Accounts,
         accounts_background_service::{
@@ -1249,7 +1254,8 @@ fn load_bank_forks(
         None,
     );
 
-    let (transaction_status_sender, transaction_status_service) = if transaction_notifier.is_some() {
+    let (transaction_status_sender, transaction_status_service) = if transaction_notifier.is_some()
+    {
         let (transaction_status_sender, transaction_status_receiver) = unbounded();
         let transaction_status_service = TransactionStatusService::new(
             transaction_status_receiver,
@@ -1260,7 +1266,12 @@ fn load_bank_forks(
             false,
             &exit,
         );
-        (Some(TransactionStatusSender { sender: transaction_status_sender }), Some(transaction_status_service))
+        (
+            Some(TransactionStatusSender {
+                sender: transaction_status_sender,
+            }),
+            Some(transaction_status_service),
+        )
     } else {
         (None, None)
     };
