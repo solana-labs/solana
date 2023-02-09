@@ -962,6 +962,10 @@ impl Runner {
     fn context(self: Arc<Self>, bank: Option<Arc<Bank>>, mode: solana_scheduler::Mode) -> RunnerContext {
         RunnerContext { runner: self, bank, mode }
     }
+
+    fn take_scheduler_from_pool(&self) -> usize {
+        self.runner_pool.lock().unwrap().take_from_pool()
+    }
 }
 
 impl solana_scheduler::WithMode for RunnerContext {
