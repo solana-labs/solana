@@ -998,12 +998,12 @@ impl SchedulerContext {
 }
 
 #[derive(Debug)]
-struct SchedulerPool {
+pub struct SchedulerPool {
     schedulers: Vec<Box<dyn LikeScheduler>>,
 }
 
 impl SchedulerPool {
-    const fn new() -> Self {
+    const pub fn new() -> Self {
         Self {
             schedulers: Vec::new(),
         }
