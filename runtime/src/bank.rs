@@ -978,7 +978,7 @@ impl TransactionRunner {
         SchedulerContext { bank, mode }
     }
 
-    pub(crate) fn take_scheduler_from_pool(self: &Arc<Self>) -> Box<dyn Scheduler> {
+    pub(crate) fn take_scheduler_from_pool(self: &Arc<Self>) -> Box<dyn ScheduleLike> {
         self.scheduler_pool.lock().unwrap().take_from_pool(self.clone())
     }
 
