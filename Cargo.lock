@@ -7055,6 +7055,7 @@ dependencies = [
  "log",
  "solana-ledger",
  "solana-poh",
+ "solana-program-runtime",
  "solana-runtime",
 ]
 
