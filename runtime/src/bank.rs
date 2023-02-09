@@ -7988,7 +7988,7 @@ impl Bank {
                     .next()
                     .unwrap()
                 */
-                Ok(Default::default())
+                (Ok(Default::default()), panic!())
             }
         } else {
             warn!(
