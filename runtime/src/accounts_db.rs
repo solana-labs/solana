@@ -17323,7 +17323,7 @@ pub mod tests {
             for i in 0..two_indexes.len() {
                 let pubkey2 = two[two_indexes[i]].0;
                 if pubkey2 == *pubkey {
-                    assert!(accounts_equal(account, &two[i].1));
+                    assert!(accounts_equal(account, &two[two_indexes[i]].1));
                     two_indexes.remove(i);
                     break;
                 }
