@@ -1159,7 +1159,7 @@ impl CommitStatus {
 }
 
 impl Scheduler {
-    fn default2(runner: Arc<TransactionRunner>) -> Self {
+    fn default2(transaction_runner: Arc<TransactionRunner>) -> Self {
         let start = Instant::now();
         let mut address_book = solana_scheduler::AddressBook::default();
         let preloader = Arc::new(address_book.preloader());
