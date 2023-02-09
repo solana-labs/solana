@@ -714,10 +714,6 @@ impl Scheduler {
     fn replace_scheduler_context(&self, scheduler_context: SchedulerContext) {
         self.current_checkpoint.replace_context_value(scheduler_context);
     }
-
-    fn current_scheduler_mode(&self) -> solana_scheduler::Mode {
-        self.current_checkpoint.with_context_value(|c| c.mode).unwrap()
-    }
 }
 
 impl Drop for Scheduler {
@@ -762,7 +758,7 @@ impl LikeScheduler for Scheduler {
     }
 
     fn current_scheduler_mode(&self) -> solana_scheduler::Mode {
-        panic!();
+        self.current_checkpoint.with_context_value(|c| c.mode).unwrap()
     }
 
     fn has_context(&self) -> bool {
