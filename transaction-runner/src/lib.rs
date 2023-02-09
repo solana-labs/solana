@@ -756,3 +756,52 @@ impl LikeScheduler for Scheduler {
         self.scheduler_pool.take_from_pool(self.current_checkpoint.clone_context_value().unwrap())
     }
 }
+
+pub fn initialize_transaction_status_sender_callback(log_messages_bytes_limit: Option<usize>, sender: TransactionStatusSender) {
+    use solana_transaction_status::TransactionTokenBalance;
+    *STATUS_SENDER_CALLBACK.write().unwrap() = Some({
+        (
+        log_messages_bytes_limit,
+        Box::new(move |pre, bank: &Arc<Bank>, batch, mut mint_decimals, tx_results, commited_first_transaction_index| {
+            match pre {
+                None => {
+                    Some((
+                        bank.collect_balances(batch),
+                        collect_token_balances(bank, batch, mint_decimals),
+                    ))
+                },
+                Some((pre_native_balances, pre_token_balances)) => {
+                    let tx_results = tx_results.unwrap();
+                    let commited_first_transaction_index = commited_first_transaction_index.unwrap();
+                    let TransactionResults {
+                        fee_collection_results,
+                        execution_results,
+                        rent_debits,
+                        ..
+                    } = tx_results;
+
+                    let post_native_balances = bank.collect_balances(batch);
+                    let post_token_balances = collect_token_balances(bank, batch, mint_decimals);
+                    let token_balances =
+                        TransactionTokenBalancesSet::new(pre_token_balances, post_token_balances);
+
+                    sender.send_transaction_status_batch(
+                        bank.clone(),
+                        batch.sanitized_transactions().to_vec(),
+                        execution_results,
+                        TransactionBalancesSet::new(
+                            pre_native_balances,
+                            post_native_balances,
+                        ),
+                        token_balances,
+                        rent_debits,
+                        vec![commited_first_transaction_index],
+                    );
+                    None
+                }
+            }
+        })
+        )
+    });
+}
+
