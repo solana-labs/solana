@@ -1228,8 +1228,8 @@ mod tests {
         )
         .unwrap();
         assert_eq!(ins.program_id, program_id);
-        assert_eq!(ins.accounts, StableVec::from(accounts));
-        assert_eq!(ins.data, StableVec::from(data));
+        assert_eq!(ins.accounts, accounts);
+        assert_eq!(ins.data, data);
     }
 
     #[test]
@@ -1701,12 +1701,12 @@ mod tests {
         fn into_region(self, vm_addr: u64) -> (Vec<u8>, MemoryRegion) {
             let accounts_len = mem::size_of::<AccountMeta>() * self.accounts.len();
 
-            let size = mem::size_of::<Instruction>() + accounts_len + self.data.len();
+            let size = mem::size_of::<StableInstruction>() + accounts_len + self.data.len();
 
             let mut data = vec![0; size];
 
             let vm_addr = vm_addr as usize;
-            let accounts_addr = vm_addr + mem::size_of::<Instruction>();
+            let accounts_addr = vm_addr + mem::size_of::<StableInstruction>();
             let data_addr = accounts_addr + accounts_len;
 
             let ins = Instruction {
@@ -1722,6 +1722,7 @@ mod tests {
                     Vec::from_raw_parts(data_addr as *mut _, self.data.len(), self.data.len())
                 },
             };
+            let ins = StableInstruction::from(ins);
 
             unsafe {
                 ptr::write_unaligned(data.as_mut_ptr().cast(), ins);
