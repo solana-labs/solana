@@ -951,6 +951,7 @@ struct RunnerContext {
     mode: solana_scheduler::Mode,
 }
 
+// Remove Default
 #[derive(Debug, Default)]
 pub struct Runner {
     runner_pool: std::sync::Mutex<SchedulerPool<ExecuteTimings>>,
@@ -2058,7 +2059,7 @@ impl Bank {
             accounts_data_size_delta_on_chain: AtomicI64::new(0),
             accounts_data_size_delta_off_chain: AtomicI64::new(0),
             fee_structure: FeeStructure::default(),
-            scheduler2: RwLock::new(Some(SCHEDULER_POOL.lock().unwrap().take_from_pool())),
+            scheduler2: RwLock::new(None),
             blockhash_override: RwLock::new(Default::default()),
         };
 
@@ -2677,7 +2678,7 @@ impl Bank {
             accounts_data_size_delta_on_chain: AtomicI64::new(0),
             accounts_data_size_delta_off_chain: AtomicI64::new(0),
             fee_structure: FeeStructure::default(),
-            scheduler2: RwLock::new(Some(SCHEDULER_POOL.lock().unwrap().take_from_pool())), // Default::default();Default::default(),
+            scheduler2: RwLock::new(None), // Default::default();Default::default(),
             blockhash_override: RwLock::new(Default::default()),
         };
         bank.finish_init(
@@ -4370,10 +4371,11 @@ impl Bank {
 
 
         let runner_mode = self.transaction_runner_mode();
+        let runner = self.transaction_runner();
         let mut w_blockhash_queue = match runner_mode {
             solana_scheduler::Mode::Replaying => {
                 let last_result = self.wait_for_scheduler(false);
-                let scheduler = SCHEDULER_POOL.lock().unwrap().take_from_pool();
+                let scheduler = runner.take_scheduler_from_pool();
                 let mut s2 = self.scheduler2.write().unwrap();
                 *s2 = Some(scheduler);
 
