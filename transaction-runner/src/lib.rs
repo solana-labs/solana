@@ -49,21 +49,6 @@ impl SchedulerPool {
         self.schedulers.lock().unwrap().push(Box::new(Scheduler::default2(self.clone())));
     }
 
-    pub fn take_from_pool(self: &Arc<Self>) -> Box<dyn LikeScheduler> {
-        if let Some(scheduler) = self.schedulers.lock().unwrap().pop() {
-            trace!(
-                "SchedulerPool: id_{:016x} is taken... len: {} => {}",
-                scheduler.random_id(),
-                self.schedulers.lock().unwrap().len() + 1,
-                self.schedulers.lock().unwrap().len()
-            );
-            scheduler
-        } else {
-            self.create();
-            self.take_from_pool()
-        }
-    }
-
     pub fn return_to_pool(&mut self, scheduler: Box<dyn LikeScheduler>) {
         trace!(
             "SchedulerPool: id_{:016x} is returned... len: {} => {}",
@@ -101,8 +86,20 @@ pub struct AAA(Arc<SchedulerPool>);
 
 impl LikeSchedulerPool for AAA {
     fn take_from_pool(&self, mode: solana_scheduler::Mode) -> Box<dyn LikeScheduler> {
-        panic!();
+        if let Some(scheduler) = self.0.schedulers.lock().unwrap().pop() {
+            trace!(
+                "SchedulerPool: id_{:016x} is taken... len: {} => {}",
+                scheduler.random_id(),
+                self.schedulers.lock().unwrap().len() + 1,
+                self.schedulers.lock().unwrap().len()
+            );
+            scheduler
+        } else {
+            self.0.create();
+            self.take_from_pool(mode)
+        }
     }
+
 
     fn return_to_pool(&self, scheduler: Box<dyn LikeScheduler>) {
         panic!();
