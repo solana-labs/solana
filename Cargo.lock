@@ -5784,6 +5784,7 @@ dependencies = [
  "solana-ledger",
  "solana-logger 1.16.0",
  "solana-measure",
+ "solana-rpc",
  "solana-runtime",
  "solana-sdk 1.16.0",
  "solana-stake-program",
