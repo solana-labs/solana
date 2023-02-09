@@ -1844,8 +1844,8 @@ pub struct Bank {
 }
 
 pub trait LikePool: Send + Sync + std::fmt::Debug {
-    pub fn take_from_pool(&mut self, runner: ArcPool) -> Box<dyn LikeScheduler>
-    pub fn return_to_pool(&mut self, scheduler: Box<dyn LikeScheduler>)
+    pub fn take_from_pool(&mut self, runner: ArcPool) -> Box<dyn LikeScheduler>;
+    pub fn return_to_pool(&mut self, scheduler: Box<dyn LikeScheduler>);
 }
 
 pub trait LikeScheduler: Send + Sync + std::fmt::Debug {
