@@ -768,7 +768,7 @@ impl LikeScheduler for Scheduler {
         panic!();
     }
 
-    fn replace_scheduler_context(&self, scheduler_context: SchedulerContext) {
+    fn collected_results(&self) -> Arc<std::sync::Mutex<Vec<Result<ExecuteTimings>>>> {
         panic!();
     }
 
