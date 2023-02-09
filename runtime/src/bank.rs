@@ -962,6 +962,7 @@ impl TransactionRunner {
     pub fn new() -> Self {
         Self {
             scheduler_pool: std::sync::Mutex::new(SchedulerPool::new()),
+            poh: std::sync::RwLock::new(None),
         }
     }
 
