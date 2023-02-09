@@ -71,7 +71,7 @@ impl SchedulerPoolWrapper {
 } 
 
 impl SchedulerPool {
-    fn take_from_pool(self: &Arc<Self>, context: SchedulerContext) -> Box<dyn LikeScheduler> {
+    fn take_from_pool(self: &Arc<Self>, context: Option<SchedulerContext>) -> Box<dyn LikeScheduler> {
         let maybe_scheduler = self.schedulers.lock().unwrap().pop();
         if let Some(scheduler) = maybe_scheduler {
             trace!(
@@ -80,11 +80,13 @@ impl SchedulerPool {
                 self.schedulers.lock().unwrap().len() + 1,
                 self.schedulers.lock().unwrap().len()
             );
-            scheduler.replace_scheduler_context(context);
+            if let Some(context) = context {
+                scheduler.replace_scheduler_context(context);
+            }
             scheduler
         } else {
-            self.create(context.clone());
-            self.take_from_pool(context)
+            self.create(context);
+            self.take_from_pool(None)
         }
     }
 }
