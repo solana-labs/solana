@@ -68,7 +68,7 @@ impl SchedulerPoolWrapper {
     pub fn new() -> Self {
         Self(Arc::new(SchedulerPool::new()))
     }
-} 
+}
 
 impl SchedulerPool {
     fn take_from_pool(self: &Arc<Self>, context: Option<SchedulerContext>) -> Box<dyn LikeScheduler> {
@@ -823,4 +823,3 @@ pub fn initialize_transaction_status_sender_callback(log_messages_bytes_limit: O
         )
     });
 }
-
