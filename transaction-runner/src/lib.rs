@@ -83,18 +83,7 @@ impl SchedulerPool {
 
 impl LikeSchedulerPool for SchedulePoolWrapper {
     fn take_from_pool(&self, context: SchedulerContext) -> Box<dyn LikeScheduler> {
-        if let Some(scheduler) = self.0.schedulers.lock().unwrap().pop() {
-            trace!(
-                "SchedulerPool: id_{:016x} is taken... len: {} => {}",
-                scheduler.random_id(),
-                self.0.schedulers.lock().unwrap().len() + 1,
-                self.0.schedulers.lock().unwrap().len()
-            );
-            scheduler
-        } else {
-            self.0.create(context.clone());
-            self.take_from_pool(context)
-        }
+        self.0.take_from_pool(context)
     }
 
 
