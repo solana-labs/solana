@@ -2163,21 +2163,32 @@ fn send_deploy_messages(
             } else {
                 ConnectionCache::with_udp(1)
             };
-            let tpu_client = TpuClient::new_with_connection_cache(
-                rpc_client.clone(),
-                &config.websocket_url,
-                TpuClientConfig::default(),
-                Arc::new(connection_cache.into()),
-            )?;
-            let transaction_errors = tpu_client
+            let transaction_errors = match connection_cache {
+                ConnectionCache::Udp(cache) => TpuClient::new_with_connection_cache(
+                    rpc_client.clone(),
+                    &config.websocket_url,
+                    TpuClientConfig::default(),
+                    Arc::new(cache),
+                )?
                 .send_and_confirm_messages_with_spinner(
                     write_messages,
                     &[payer_signer, write_signer],
-                )
-                .map_err(|err| format!("Data writes to account failed: {err}"))?
-                .into_iter()
-                .flatten()
-                .collect::<Vec<_>>();
+                ),
+                ConnectionCache::Quic(cache) => TpuClient::new_with_connection_cache(
+                    rpc_client.clone(),
+                    &config.websocket_url,
+                    TpuClientConfig::default(),
+                    Arc::new(cache),
+                )?
+                .send_and_confirm_messages_with_spinner(
+                    write_messages,
+                    &[payer_signer, write_signer],
+                ),
+            }
+            .map_err(|err| format!("Data writes to account failed: {err}"))?
+            .into_iter()
+            .flatten()
+            .collect::<Vec<_>>();
 
             if !transaction_errors.is_empty() {
                 for transaction_error in &transaction_errors {

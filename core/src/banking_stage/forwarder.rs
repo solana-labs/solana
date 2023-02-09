@@ -7,7 +7,7 @@ use {
         tracer_packet_stats::TracerPacketStats,
         unprocessed_transaction_storage::UnprocessedTransactionStorage,
     },
-    solana_client::connection_cache::ConnectionCache,
+    solana_client::{connection_cache::ConnectionCache, tpu_connection::TpuConnection},
     solana_gossip::cluster_info::ClusterInfo,
     solana_measure::measure::Measure,
     solana_perf::{data_budget::DataBudget, packet::Packet},
