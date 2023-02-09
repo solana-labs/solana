@@ -950,7 +950,6 @@ struct SchedulerContext {
     mode: solana_scheduler::Mode,
 }
 
-#[derive(Debug)]
 pub struct TransactionRunner {
     scheduler_pool: std::sync::Mutex<SchedulerPool>,
     poh: std::sync::RwLock<Option<Box<dyn Fn(&Bank, Vec<VersionedTransaction>, solana_sdk::hash::Hash) -> std::result::Result<Option<usize>, ()> + Send + Sync>>>,
