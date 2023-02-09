@@ -1041,11 +1041,11 @@ impl SchedulerPool {
     fn return_to_pool(&mut self, scheduler: Box<dyn ScheduleLike>) {
         trace!(
             "SchedulerPool: id_{:016x} is returned... len: {} => {}",
-            scheduler.random_id,
+            scheduler.random_id(),
             self.schedulers.len(),
             self.schedulers.len() + 1
         );
-        assert!(scheduler.collected_results.lock().unwrap().is_empty());
+        assert!(scheduler.collected_results().lock().unwrap().is_empty());
         //assert!(scheduler.current_checkpoint.clone_context_value().unwrap().bank.is_none());
         assert!(scheduler
             .graceful_stop_initiated
