@@ -7980,7 +7980,6 @@ impl Bank {
             assert!(scheduler.has_context());
 
             let scheduler_mode = scheduler.current_scheduler_mode();
-            let pool = scheduler.scheduler_pool();
             if matches!(scheduler_mode, solana_scheduler::Mode::Replaying) || via_drop {
                 info!("wait_for_scheduler({scheduler_mode:?}/{via_drop}): gracefully stopping bank ({})...", self.slot());
                 if matches!(scheduler_mode, solana_scheduler::Mode::Banking) {
@@ -7995,7 +7994,7 @@ impl Bank {
                     .into_iter()
                     .next()
                     .unwrap();
-                pool.return_to_pool(s.take().unwrap());
+                s.take().unwrap().take_next_scheduler_from_pool()
                 e
             } else {
                 info!("wait_for_scheduler(Banking): pausing commit into bank ({})...", self.slot());
