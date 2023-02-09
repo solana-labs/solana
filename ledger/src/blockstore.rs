@@ -92,12 +92,12 @@ pub use {
 lazy_static! {
     static ref PAR_THREAD_POOL: ThreadPool = rayon::ThreadPoolBuilder::new()
         .num_threads(get_max_thread_count())
-        .thread_name(|ix| format!("solBstore{ix:02}"))
+        .thread_name(|i| format!("solBstore{i:02}"))
         .build()
         .unwrap();
     static ref PAR_THREAD_POOL_ALL_CPUS: ThreadPool = rayon::ThreadPoolBuilder::new()
         .num_threads(num_cpus::get())
-        .thread_name(|ix| format!("solBstoreAll{ix:02}"))
+        .thread_name(|i| format!("solBstoreAll{i:02}"))
         .build()
         .unwrap();
 }
@@ -136,10 +136,26 @@ impl std::fmt::Display for InsertDataShredError {
     }
 }
 
+/// A "complete data set" is a range of [`Shred`]s that combined in sequence carry a single
+/// serialized [`Vec<Entry>`].
+///
+/// Services such as the `WindowService` for a TVU, and `ReplayStage` for a TPU, piece together
+/// these sets by inserting shreds via direct or indirect calls to
+/// [`Blockstore::insert_shreds_handle_duplicate()`].
+///
+/// `solana_core::completed_data_sets_service::CompletedDataSetsService` is the main receiver of
+/// `CompletedDataSetInfo`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct CompletedDataSetInfo {
+    /// [`Slot`] to which the [`Shred`]s in this set belong.
     pub slot: Slot,
+
+    /// Index of the first [`Shred`] in the range of shreds that belong to this set.
+    /// Range is inclusive, `start_index..=end_index`.
     pub start_index: u32,
+
+    /// Index of the last [`Shred`] in the range of shreds that belong to this set.
+    /// Range is inclusive, `start_index..=end_index`.
     pub end_index: u32,
 }
 

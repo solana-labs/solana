@@ -14,6 +14,7 @@ pub mod compute_budget;
 pub mod executor;
 pub mod executor_cache;
 pub mod invoke_context;
+pub mod loaded_programs;
 pub mod log_collector;
 pub mod pre_account;
 pub mod prioritization_fee;

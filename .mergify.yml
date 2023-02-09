@@ -1,7 +1,3 @@
-# Validate your changes with:
-#
-#   $ curl -F 'data=@.mergify.yml' https://gh.mergify.io/validate/
-#
 # https://doc.mergify.io/
 pull_request_rules:
   - name: label changes from community
@@ -88,6 +84,7 @@ pull_request_rules:
         assignees: &BackportAssignee
           - "{{ merged_by|replace('mergify[bot]', label|select('equalto', 'community')|first|default(author)|replace('community', '@solana-labs/community-pr-s
 ubscribers')) }}"
+        title: "{{ destination_branch }}: {{ title }} (backport of #{{ number }})"
         ignore_conflicts: true
         labels:
           - feature-gate
@@ -100,6 +97,7 @@ ubscribers')) }}"
     actions:
       backport:
         assignees: *BackportAssignee
+        title: "{{ destination_branch }}: {{ title }} (backport of #{{ number }})"
         ignore_conflicts: true
         branches:
           - v1.13
@@ -110,6 +108,7 @@ ubscribers')) }}"
     actions:
       backport:
         assignees: *BackportAssignee
+        title: "{{ destination_branch }}: {{ title }} (backport of #{{ number }})"
         ignore_conflicts: true
         labels:
           - feature-gate
@@ -122,6 +121,7 @@ ubscribers')) }}"
     actions:
       backport:
         assignees: *BackportAssignee
+        title: "{{ destination_branch }}: {{ title }} (backport of #{{ number }})"
         ignore_conflicts: true
         branches:
           - v1.14
@@ -132,6 +132,7 @@ ubscribers')) }}"
     actions:
       backport:
         assignees: *BackportAssignee
+        title: "{{ destination_branch }}: {{ title }} (backport of #{{ number }})"
         ignore_conflicts: true
         labels:
           - feature-gate
@@ -144,6 +145,7 @@ ubscribers')) }}"
     actions:
       backport:
         assignees: *BackportAssignee
+        title: "{{ destination_branch }}: {{ title }} (backport of #{{ number }})"
         ignore_conflicts: true
         branches:
           - v1.15
