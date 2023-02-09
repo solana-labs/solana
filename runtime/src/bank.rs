@@ -7978,7 +7978,7 @@ impl Bank {
                     Some(scheduler.scheduler_context())
                 } else {
                     None
-                }
+                };
                 let pool = scheduler.scheduler_pool();
                 pool.return_to_pool(scheduler);
                 (e, context.map(|c| pool.take_from_pool(c)))
