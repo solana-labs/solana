@@ -100,7 +100,7 @@ pub struct ReplicaAccountInfoV3<'a> {
     /// write_version.
     pub write_version: u64,
 
-    /// Reference to transaction caused this account modification
+    /// Reference to transaction causing this account modification
     pub txn: Option<&'a SanitizedTransaction>,
 }
 

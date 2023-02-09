@@ -2943,12 +2943,8 @@ mod tests {
             .any(|(pubkey, _account)| *pubkey == &keypair1.pubkey()));
 
         assert_eq!(transactions.len(), 2);
-        assert!(transactions
-            .iter()
-            .any(|txn| txn.unwrap().eq(&tx0)));
-        assert!(transactions
-            .iter()
-            .any(|txn| txn.unwrap().eq(&tx1)));
+        assert!(transactions.iter().any(|txn| txn.unwrap().eq(&tx0)));
+        assert!(transactions.iter().any(|txn| txn.unwrap().eq(&tx1)));
 
         // Ensure readonly_lock reflects lock
         assert_eq!(

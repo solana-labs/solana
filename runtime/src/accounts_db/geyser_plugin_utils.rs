@@ -5,7 +5,9 @@ use {
     },
     solana_measure::measure::Measure,
     solana_metrics::*,
-    solana_sdk::{account::AccountSharedData, clock::Slot, pubkey::Pubkey, transaction::SanitizedTransaction},
+    solana_sdk::{
+        account::AccountSharedData, clock::Slot, pubkey::Pubkey, transaction::SanitizedTransaction,
+    },
     std::collections::{hash_map::Entry, HashMap, HashSet},
 };
 

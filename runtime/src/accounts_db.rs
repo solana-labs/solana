@@ -80,7 +80,7 @@ use {
         rent::Rent,
         saturating_add_assign,
         timing::AtomicInterval,
-        transaction::SanitizedTransaction
+        transaction::SanitizedTransaction,
     },
     std::{
         borrow::{Borrow, Cow},
@@ -8212,13 +8212,7 @@ impl AccountsDb {
         }
 
         // we use default hashes for now since the same account may be stored to the cache multiple times
-        self.store_accounts_unfrozen(
-            accounts,
-            None::<Vec<Hash>>,
-            store_to,
-            transactions,
-            reclaim,
-        );
+        self.store_accounts_unfrozen(accounts, None::<Vec<Hash>>, store_to, transactions, reclaim);
         self.report_store_timings();
     }
 
