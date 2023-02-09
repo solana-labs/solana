@@ -443,9 +443,11 @@ impl BankingStage {
 
                 let mut packet_receiver = PacketReceiver::new(id, packet_receiver);
                 let poh_recorder = poh_recorder.clone();
-                let transaction_status_sender = transaction_status_sender.clone();
-                let replay_vote_sender = replay_vote_sender.clone();
 
+                let committer = Committer::new(
+                    transaction_status_sender.clone(),
+                    replay_vote_sender.clone(),
+                );
                 let decision_maker = DecisionMaker::new(cluster_info.id(), poh_recorder.clone());
                 let forwarder = Forwarder::new(
                     poh_recorder.clone(),
@@ -462,10 +464,9 @@ impl BankingStage {
                             &mut packet_receiver,
                             &decision_maker,
                             &forwarder,
+                            &committer,
                             &poh_recorder,
                             id,
-                            transaction_status_sender,
-                            replay_vote_sender,
                             log_messages_bytes_limit,
                             unprocessed_transaction_storage,
                         );
@@ -480,9 +481,8 @@ impl BankingStage {
     fn do_process_packets(
         bank_start: &BankStart,
         payload: &mut ConsumeScannerPayload,
+        committer: &Committer,
         recorder: &TransactionRecorder,
-        transaction_status_sender: &Option<TransactionStatusSender>,
-        replay_vote_sender: &ReplayVoteSender,
         banking_stage_stats: &BankingStageStats,
         qos_service: &QosService,
         log_messages_bytes_limit: Option<usize>,
@@ -500,10 +500,9 @@ impl BankingStage {
             Self::process_packets_transactions(
                 &bank_start.working_bank,
                 &bank_start.bank_creation_time,
+                committer,
                 recorder,
                 &payload.sanitized_transactions,
-                transaction_status_sender,
-                replay_vote_sender,
                 banking_stage_stats,
                 qos_service,
                 payload.slot_metrics_tracker,
@@ -553,14 +552,12 @@ impl BankingStage {
         Some(retryable_transaction_indexes)
     }
 
-    #[allow(clippy::too_many_arguments)]
     pub fn consume_buffered_packets(
         bank_start: &BankStart,
         unprocessed_transaction_storage: &mut UnprocessedTransactionStorage,
-        transaction_status_sender: &Option<TransactionStatusSender>,
-        replay_vote_sender: &ReplayVoteSender,
         test_fn: Option<impl Fn()>,
         banking_stage_stats: &BankingStageStats,
+        committer: &Committer,
         recorder: &TransactionRecorder,
         qos_service: &QosService,
         slot_metrics_tracker: &mut LeaderSlotMetricsTracker,
@@ -579,9 +576,8 @@ impl BankingStage {
                 Self::do_process_packets(
                     bank_start,
                     payload,
+                    committer,
                     recorder,
-                    transaction_status_sender,
-                    replay_vote_sender,
                     banking_stage_stats,
                     qos_service,
                     log_messages_bytes_limit,
@@ -624,9 +620,8 @@ impl BankingStage {
     fn process_buffered_packets(
         decision_maker: &DecisionMaker,
         forwarder: &Forwarder,
+        committer: &Committer,
         unprocessed_transaction_storage: &mut UnprocessedTransactionStorage,
-        transaction_status_sender: &Option<TransactionStatusSender>,
-        replay_vote_sender: &ReplayVoteSender,
         banking_stage_stats: &BankingStageStats,
         recorder: &TransactionRecorder,
         qos_service: &QosService,
@@ -652,10 +647,9 @@ impl BankingStage {
                     Self::consume_buffered_packets(
                         &bank_start,
                         unprocessed_transaction_storage,
-                        transaction_status_sender,
-                        replay_vote_sender,
                         None::<Box<dyn Fn()>>,
                         banking_stage_stats,
+                        committer,
                         recorder,
                         qos_service,
                         slot_metrics_tracker,
@@ -699,10 +693,9 @@ impl BankingStage {
         packet_receiver: &mut PacketReceiver,
         decision_maker: &DecisionMaker,
         forwarder: &Forwarder,
+        committer: &Committer,
         poh_recorder: &Arc<RwLock<PohRecorder>>,
         id: u32,
-        transaction_status_sender: Option<TransactionStatusSender>,
-        replay_vote_sender: ReplayVoteSender,
         log_messages_bytes_limit: Option<usize>,
         mut unprocessed_transaction_storage: UnprocessedTransactionStorage,
     ) {
@@ -722,9 +715,8 @@ impl BankingStage {
                     Self::process_buffered_packets(
                         decision_maker,
                         forwarder,
+                        committer,
                         &mut unprocessed_transaction_storage,
-                        &transaction_status_sender,
-                        &replay_vote_sender,
                         &banking_stage_stats,
                         &recorder,
                         &qos_service,
@@ -765,12 +757,12 @@ impl BankingStage {
 
     fn execute_and_commit_transactions_locked(
         bank: &Arc<Bank>,
+        committer: &Committer,
         poh: &TransactionRecorder,
         batch: &TransactionBatch,
-        transaction_status_sender: &Option<TransactionStatusSender>,
-        replay_vote_sender: &ReplayVoteSender,
         log_messages_bytes_limit: Option<usize>,
     ) -> ExecuteAndCommitTransactionsOutput {
+        let transaction_status_sender_enabled = committer.transaction_status_sender_enabled();
         let mut execute_and_commit_timings = LeaderExecuteAndCommitTimings::default();
 
         let mut pre_balance_info = PreBalanceInfo::default();
@@ -778,7 +770,7 @@ impl BankingStage {
             {
                 // If the extra meta-data services are enabled for RPC, collect the
                 // pre-balances for native and token programs.
-                if transaction_status_sender.is_some() {
+                if transaction_status_sender_enabled {
                     pre_balance_info.native = bank.collect_balances(batch);
                     pre_balance_info.token =
                         collect_token_balances(bank, batch, &mut pre_balance_info.mint_decimals)
@@ -792,9 +784,9 @@ impl BankingStage {
             bank.load_and_execute_transactions(
                 batch,
                 MAX_PROCESSING_AGE,
-                transaction_status_sender.is_some(),
-                transaction_status_sender.is_some(),
-                transaction_status_sender.is_some(),
+                transaction_status_sender_enabled,
+                transaction_status_sender_enabled,
+                transaction_status_sender_enabled,
                 &mut execute_and_commit_timings.execute_timings,
                 None, // account_overrides
                 log_messages_bytes_limit
@@ -880,7 +872,7 @@ impl BankingStage {
         }
 
         let (commit_time_us, commit_transaction_statuses) = if executed_transactions_count != 0 {
-            Committer::commit_transactions(
+            committer.commit_transactions(
                 batch,
                 &mut loaded_transactions,
                 execution_results,
@@ -888,8 +880,6 @@ impl BankingStage {
                 bank,
                 &mut pre_balance_info,
                 &mut execute_and_commit_timings,
-                transaction_status_sender,
-                replay_vote_sender,
                 signature_count,
                 executed_transactions_count,
                 executed_non_vote_transactions_count,
@@ -937,10 +927,9 @@ impl BankingStage {
     pub fn process_and_record_transactions(
         bank: &Arc<Bank>,
         txs: &[SanitizedTransaction],
+        committer: &Committer,
         poh: &TransactionRecorder,
         chunk_offset: usize,
-        transaction_status_sender: &Option<TransactionStatusSender>,
-        replay_vote_sender: &ReplayVoteSender,
         qos_service: &QosService,
         log_messages_bytes_limit: Option<usize>,
     ) -> ProcessTransactionBatchOutput {
@@ -962,10 +951,9 @@ impl BankingStage {
         let mut execute_and_commit_transactions_output =
             Self::execute_and_commit_transactions_locked(
                 bank,
+                committer,
                 poh,
                 &batch,
-                transaction_status_sender,
-                replay_vote_sender,
                 log_messages_bytes_limit,
             );
 
@@ -1036,9 +1024,8 @@ impl BankingStage {
         bank: &Arc<Bank>,
         bank_creation_time: &Instant,
         transactions: &[SanitizedTransaction],
+        committer: &Committer,
         poh: &TransactionRecorder,
-        transaction_status_sender: &Option<TransactionStatusSender>,
-        replay_vote_sender: &ReplayVoteSender,
         qos_service: &QosService,
         log_messages_bytes_limit: Option<usize>,
     ) -> ProcessTransactionsSummary {
@@ -1067,10 +1054,9 @@ impl BankingStage {
             let process_transaction_batch_output = Self::process_and_record_transactions(
                 bank,
                 &transactions[chunk_start..chunk_end],
+                committer,
                 poh,
                 chunk_start,
-                transaction_status_sender,
-                replay_vote_sender,
                 qos_service,
                 log_messages_bytes_limit,
             );
@@ -1206,14 +1192,12 @@ impl BankingStage {
         Self::filter_valid_transaction_indexes(&results)
     }
 
-    #[allow(clippy::too_many_arguments)]
     fn process_packets_transactions<'a>(
         bank: &'a Arc<Bank>,
         bank_creation_time: &Instant,
+        committer: &'a Committer,
         poh: &'a TransactionRecorder,
         sanitized_transactions: &[SanitizedTransaction],
-        transaction_status_sender: &Option<TransactionStatusSender>,
-        replay_vote_sender: &'a ReplayVoteSender,
         banking_stage_stats: &'a BankingStageStats,
         qos_service: &'a QosService,
         slot_metrics_tracker: &'a mut LeaderSlotMetricsTracker,
@@ -1225,9 +1209,8 @@ impl BankingStage {
                 bank,
                 bank_creation_time,
                 sanitized_transactions,
+                committer,
                 poh,
-                transaction_status_sender,
-                replay_vote_sender,
                 qos_service,
                 log_messages_bytes_limit,
             ),
@@ -1910,14 +1893,14 @@ mod tests {
 
             poh_recorder.write().unwrap().set_bank(&bank, false);
             let (replay_vote_sender, _replay_vote_receiver) = unbounded();
+            let committer = Committer::new(None, replay_vote_sender);
 
             let process_transactions_batch_output = BankingStage::process_and_record_transactions(
                 &bank,
                 &transactions,
+                &committer,
                 &recorder,
                 0,
-                &None,
-                &replay_vote_sender,
                 &QosService::new(1),
                 None,
             );
@@ -1967,10 +1950,9 @@ mod tests {
             let process_transactions_batch_output = BankingStage::process_and_record_transactions(
                 &bank,
                 &transactions,
+                &committer,
                 &recorder,
                 0,
-                &None,
-                &replay_vote_sender,
                 &QosService::new(1),
                 None,
             );
@@ -2047,14 +2029,14 @@ mod tests {
 
             poh_recorder.write().unwrap().set_bank(&bank, false);
             let (replay_vote_sender, _replay_vote_receiver) = unbounded();
+            let committer = Committer::new(None, replay_vote_sender);
 
             let process_transactions_batch_output = BankingStage::process_and_record_transactions(
                 &bank,
                 &transactions,
+                &committer,
                 &recorder,
                 0,
-                &None,
-                &replay_vote_sender,
                 &QosService::new(1),
                 None,
             );
@@ -2121,7 +2103,7 @@ mod tests {
 
             poh_recorder.write().unwrap().set_bank(&bank, false);
             let (replay_vote_sender, _replay_vote_receiver) = unbounded();
-
+            let committer = Committer::new(None, replay_vote_sender);
             let qos_service = QosService::new(1);
 
             let get_block_cost = || bank.read_cost_tracker().unwrap().block_cost();
@@ -2143,10 +2125,9 @@ mod tests {
             let process_transactions_batch_output = BankingStage::process_and_record_transactions(
                 &bank,
                 &transactions,
+                &committer,
                 &recorder,
                 0,
-                &None,
-                &replay_vote_sender,
                 &qos_service,
                 None,
             );
@@ -2183,10 +2164,9 @@ mod tests {
             let process_transactions_batch_output = BankingStage::process_and_record_transactions(
                 &bank,
                 &transactions,
+                &committer,
                 &recorder,
                 0,
-                &None,
-                &replay_vote_sender,
                 &qos_service,
                 None,
             );
@@ -2276,14 +2256,14 @@ mod tests {
             let poh_simulator = simulate_poh(record_receiver, &poh_recorder);
 
             let (replay_vote_sender, _replay_vote_receiver) = unbounded();
+            let committer = Committer::new(None, replay_vote_sender);
 
             let process_transactions_batch_output = BankingStage::process_and_record_transactions(
                 &bank,
                 &transactions,
+                &committer,
                 &recorder,
                 0,
-                &None,
-                &replay_vote_sender,
                 &QosService::new(1),
                 None,
             );
@@ -2354,14 +2334,14 @@ mod tests {
             let poh_simulator = simulate_poh(record_receiver, &Arc::new(RwLock::new(poh_recorder)));
 
             let (replay_vote_sender, _replay_vote_receiver) = unbounded();
+            let committer = Committer::new(None, replay_vote_sender);
 
             let process_transactions_summary = BankingStage::process_transactions(
                 &bank,
                 &Instant::now(),
                 &transactions,
+                &committer,
                 &recorder,
-                &None,
-                &replay_vote_sender,
                 &QosService::new(1),
                 None,
             );
@@ -2421,14 +2401,14 @@ mod tests {
         let poh_simulator = simulate_poh(record_receiver, &poh_recorder);
 
         let (replay_vote_sender, _replay_vote_receiver) = unbounded();
+        let committer = Committer::new(None, replay_vote_sender);
 
         let process_transactions_summary = BankingStage::process_transactions(
             &bank,
             &Instant::now(),
             &transactions,
+            &committer,
             &recorder,
-            &None,
-            &replay_vote_sender,
             &QosService::new(1),
             None,
         );
@@ -2649,20 +2629,24 @@ mod tests {
             );
 
             let (replay_vote_sender, _replay_vote_receiver) = unbounded();
+            let committer = Committer::new(
+                Some(TransactionStatusSender {
+                    sender: transaction_status_sender,
+                }),
+                replay_vote_sender,
+            );
 
             let _ = BankingStage::process_and_record_transactions(
                 &bank,
                 &transactions,
+                &committer,
                 &recorder,
                 0,
-                &Some(TransactionStatusSender {
-                    sender: transaction_status_sender,
-                }),
-                &replay_vote_sender,
                 &QosService::new(1),
                 None,
             );
 
+            drop(committer); // drop/disconnect transaction_status_sender
             transaction_status_service.join().unwrap();
 
             let confirmed_block = blockstore.get_rooted_block(bank.slot(), false).unwrap();
@@ -2818,20 +2802,24 @@ mod tests {
             );
 
             let (replay_vote_sender, _replay_vote_receiver) = unbounded();
+            let committer = Committer::new(
+                Some(TransactionStatusSender {
+                    sender: transaction_status_sender,
+                }),
+                replay_vote_sender,
+            );
 
             let _ = BankingStage::process_and_record_transactions(
                 &bank,
                 &[sanitized_tx.clone()],
+                &committer,
                 &recorder,
                 0,
-                &Some(TransactionStatusSender {
-                    sender: transaction_status_sender,
-                }),
-                &replay_vote_sender,
                 &QosService::new(1),
                 None,
             );
 
+            drop(committer); // drop/disconnect transaction_status_sender
             transaction_status_service.join().unwrap();
 
             let mut confirmed_block = blockstore.get_rooted_block(bank.slot(), false).unwrap();
@@ -2939,6 +2927,7 @@ mod tests {
                 );
 
             let (replay_vote_sender, _replay_vote_receiver) = unbounded();
+            let committer = Committer::new(None, replay_vote_sender);
 
             // When the working bank in poh_recorder is None, no packets should be processed (consume will not be called)
             assert!(!poh_recorder.read().unwrap().has_bank());
@@ -2950,10 +2939,9 @@ mod tests {
             BankingStage::consume_buffered_packets(
                 &bank_start,
                 &mut buffered_packet_batches,
-                &None,
-                &replay_vote_sender,
                 None::<Box<dyn Fn()>>,
                 &BankingStageStats::default(),
+                &committer,
                 &recorder,
                 &QosService::new(1),
                 &mut LeaderSlotMetricsTracker::new(0),
@@ -2997,6 +2985,7 @@ mod tests {
                 );
 
             let (replay_vote_sender, _replay_vote_receiver) = unbounded();
+            let committer = Committer::new(None, replay_vote_sender);
 
             // When the working bank in poh_recorder is None, no packets should be processed
             assert!(!poh_recorder.read().unwrap().has_bank());
@@ -3008,10 +2997,9 @@ mod tests {
             BankingStage::consume_buffered_packets(
                 &bank_start,
                 &mut buffered_packet_batches,
-                &None,
-                &replay_vote_sender,
                 None::<Box<dyn Fn()>>,
                 &BankingStageStats::default(),
+                &committer,
                 &recorder,
                 &QosService::new(1),
                 &mut LeaderSlotMetricsTracker::new(0),
@@ -3048,6 +3036,8 @@ mod tests {
             let recorder = poh_recorder_.read().unwrap().recorder();
             let bank_start = poh_recorder.read().unwrap().bank_start().unwrap();
             let (replay_vote_sender, _replay_vote_receiver) = unbounded();
+            let committer = Committer::new(None, replay_vote_sender);
+
             // Start up thread to process the banks
             let t_consume = Builder::new()
                 .name("consume-buffered-packets".to_string())
@@ -3070,10 +3060,9 @@ mod tests {
                     BankingStage::consume_buffered_packets(
                         &bank_start,
                         &mut buffered_packet_batches,
-                        &None,
-                        &replay_vote_sender,
                         test_fn,
                         &BankingStageStats::default(),
+                        &committer,
                         &recorder,
                         &QosService::new(1),
                         &mut LeaderSlotMetricsTracker::new(0),
