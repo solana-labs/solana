@@ -61,7 +61,7 @@ impl SchedulerPool {
             scheduler
         } else {
             self.create();
-            self.take_from_pool(runner)
+            self.take_from_pool()
         }
     }
 
