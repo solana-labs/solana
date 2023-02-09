@@ -1848,6 +1848,16 @@ pub trait LikePool: Send + Sync + std::fmt::Debug {
     fn return_to_pool(&mut self, scheduler: Box<dyn LikeScheduler>);
 }
 
+impl LikePool for SchedulerPool {
+    fn take_from_pool(&mut self, runner: ArcPool) -> Box<dyn LikeScheduler> {
+        panic!();
+    }
+
+    fn return_to_pool(&mut self, scheduler: Box<dyn LikeScheduler>) {
+        panic!();
+    }
+}
+
 pub trait LikeScheduler: Send + Sync + std::fmt::Debug {
     fn graceful_stop_initiated(&self) -> &AtomicBool;
     fn random_id(&self) -> u64;
