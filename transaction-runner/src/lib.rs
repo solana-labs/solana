@@ -65,7 +65,7 @@ impl Drop for SchedulerPool {
 pub struct AAA(Arc<SchedulerPool>);
 
 impl LikeSchedulerPool for AAA {
-    fn take_from_pool(&self, mode: solana_scheduler::Mode) -> Box<dyn LikeScheduler> {
+    fn take_from_pool(&self, context: SchedulerContext) -> Box<dyn LikeScheduler> {
         if let Some(scheduler) = self.0.schedulers.lock().unwrap().pop() {
             trace!(
                 "SchedulerPool: id_{:016x} is taken... len: {} => {}",
@@ -75,8 +75,8 @@ impl LikeSchedulerPool for AAA {
             );
             scheduler
         } else {
-            self.0.create();
-            self.take_from_pool(mode)
+            self.0.create(contet);
+            self.take_from_pool(context)
         }
     }
 
