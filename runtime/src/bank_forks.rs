@@ -196,7 +196,7 @@ impl BankForks {
         for parent in bank.proper_ancestors() {
             self.descendants.entry(parent).or_default().insert(slot);
         }
-        bank.install_scheduler(self.like_scheduler_pool.as_ref().unwrap().take_from_pool(self.like_scheduler_pool.as_ref().unwrap().clone()));
+        bank.install_scheduler(self.like_scheduler_pool.as_ref().unwrap().take_from_pool(self.like_scheduler_pool.as_ref().unwrap().clone(), mode));
         bank
     }
 
