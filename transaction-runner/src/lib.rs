@@ -62,9 +62,9 @@ impl Drop for SchedulerPool {
 }
 
 #[derive(Debug)]
-pub struct AAA(Arc<SchedulerPool>);
+pub struct SchedulePoolWrapper(Arc<SchedulerPool>);
 
-impl LikeSchedulerPool for AAA {
+impl LikeSchedulerPool for SchedulePoolWrapper {
     fn take_from_pool(&self, context: SchedulerContext) -> Box<dyn LikeScheduler> {
         if let Some(scheduler) = self.0.schedulers.lock().unwrap().pop() {
             trace!(
