@@ -10,7 +10,6 @@ use solana_runtime::bank::LoadAndExecuteTransactionsOutput;
 use solana_runtime::bank::CommitTransactionCounts;
 use std::borrow::Cow;
 use solana_runtime::bank::LikeScheduler;
-use solana_runtime::bank::ArcPool;
 use solana_runtime::bank::LikePool;
 use solana_runtime::bank::SchedulerContext;
 use std::sync::atomic::AtomicBool;
@@ -98,7 +97,7 @@ impl Drop for SchedulerPool {
 }
 
 impl LikePool for SchedulerPool {
-    fn take_from_pool(&self, runner: ArcPool, mode: solana_scheduler::Mode) -> Box<dyn LikeScheduler> {
+    fn take_from_pool(&self, mode: solana_scheduler::Mode) -> Box<dyn LikeScheduler> {
         panic!();
     }
 

@@ -970,8 +970,6 @@ impl SchedulerContext {
     }
 }
 
-pub type ArcPool = Arc<Box<dyn LikePool>>;
-
 /// Manager for the state of all accounts and programs after processing its entries.
 /// AbiExample is needed even without Serialize/Deserialize; actual (de-)serialization
 /// are implemented elsewhere for versioning
@@ -1154,7 +1152,7 @@ pub struct Bank {
 }
 
 pub trait LikePool: Send + Sync + std::fmt::Debug {
-    fn take_from_pool(&self, pool: ArcPool, mode: solana_scheduler::Mode) -> Box<dyn LikeScheduler>;
+    fn take_from_pool(&self, mode: solana_scheduler::Mode) -> Box<dyn LikeScheduler>;
     fn return_to_pool(&self, scheduler: Box<dyn LikeScheduler>);
 }
 
