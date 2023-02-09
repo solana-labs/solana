@@ -47,16 +47,16 @@ impl SchedulerPool {
     }
 
     fn create(&mut self, runner: ArcPool) {
-        self.schedulers.push(Box::new(Scheduler::default2(runner)));
+        self.schedulers.lock().unwrap().push(Box::new(Scheduler::default2(runner)));
     }
 
     pub fn take_from_pool(self: &Arc<Self>, runner: ArcPool) -> Box<dyn LikeScheduler> {
-        if let Some(scheduler) = self.schedulers.pop() {
+        if let Some(scheduler) = self.schedulers.lock().unwrap().pop() {
             trace!(
                 "SchedulerPool: id_{:016x} is taken... len: {} => {}",
                 scheduler.random_id(),
-                self.schedulers.len() + 1,
-                self.schedulers.len()
+                self.schedulers.lock().unwrap().len() + 1,
+                self.schedulers.lock().unwrap().len()
             );
             scheduler
         } else {
@@ -69,8 +69,8 @@ impl SchedulerPool {
         trace!(
             "SchedulerPool: id_{:016x} is returned... len: {} => {}",
             scheduler.random_id(),
-            self.schedulers.len(),
-            self.schedulers.len() + 1
+            self.schedulers.lock().unwrap().len(),
+            self.schedulers.lock().unwrap().len() + 1
         );
         assert!(scheduler.collected_results().lock().unwrap().is_empty());
         //assert!(scheduler.current_checkpoint.clone_context_value().unwrap().bank.is_none());
@@ -82,7 +82,7 @@ impl SchedulerPool {
             .graceful_stop_initiated()
             .store(false, std::sync::atomic::Ordering::SeqCst);
 
-        self.schedulers.push(scheduler);
+        self.schedulers.lock().unwrap().push(scheduler);
     }
 }
 
