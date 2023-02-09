@@ -995,11 +995,11 @@ impl SchedulerContext {
 }
 
 #[derive(Debug)]
-struct SchedulerPool<C> {
-    schedulers: Vec<Box<Scheduler<C>>>,
+struct SchedulerPool {
+    schedulers: Vec<Box<Scheduler<ExecuteTimings>>>,
 }
 
-impl SchedulerPool<ExecuteTimings> {
+impl SchedulerPool {
     const fn new() -> Self {
         Self {
             schedulers: Vec::new(),
