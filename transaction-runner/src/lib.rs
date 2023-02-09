@@ -64,6 +64,12 @@ impl Drop for SchedulerPool {
 #[derive(Debug)]
 pub struct SchedulerPoolWrapper(Arc<SchedulerPool>);
 
+impl SchedulerPoolWrapper {
+    fn new() -> Self {
+        Self(Arc::new(SchedulerPool::new()))
+    }
+} 
+
 impl SchedulerPool {
     fn take_from_pool(self: &Arc<Self>, context: SchedulerContext) -> Box<dyn LikeScheduler> {
         if let Some(scheduler) = self.schedulers.lock().unwrap().pop() {
