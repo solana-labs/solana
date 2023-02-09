@@ -4677,7 +4677,7 @@ pub mod tests {
             solana_program::{program_option::COption, pubkey::Pubkey as SplTokenPubkey},
             state::{AccountState as TokenAccountState, Mint},
         },
-        std::{borrow::Cow, collections::HashMap},
+        std::{borrow::Cow, collections::HashMap, net::Ipv4Addr},
     };
 
     const TEST_MINT_LAMPORTS: u64 = 1_000_000_000;
@@ -4767,7 +4767,7 @@ pub mod tests {
             let identity = cluster_info.id();
             cluster_info.insert_info(ContactInfo::new_with_socketaddr(
                 &leader_pubkey,
-                &socketaddr!("127.0.0.1:1234"),
+                &socketaddr!(Ipv4Addr::LOCALHOST, 1234),
             ));
             let max_slots = Arc::new(MaxSlots::default());
             // note that this means that slot 0 will always be considered complete
@@ -6384,8 +6384,10 @@ pub mod tests {
         io.extend_with(rpc_full::FullImpl.to_delegate());
         let cluster_info = Arc::new({
             let keypair = Arc::new(Keypair::new());
-            let contact_info =
-                ContactInfo::new_with_socketaddr(&keypair.pubkey(), &socketaddr!("127.0.0.1:1234"));
+            let contact_info = ContactInfo::new_with_socketaddr(
+                &keypair.pubkey(),
+                &socketaddr!(Ipv4Addr::LOCALHOST, 1234),
+            );
             ClusterInfo::new(contact_info, keypair, SocketAddrSpace::Unspecified)
         });
         let tpu_address = cluster_info.my_contact_info().tpu;

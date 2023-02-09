@@ -3,7 +3,7 @@ use {
     crate::geyser_plugin_manager::GeyserPluginManager,
     log::*,
     solana_geyser_plugin_interface::geyser_plugin_interface::{
-        ReplicaAccountInfoV2, ReplicaAccountInfoVersions,
+        ReplicaAccountInfoV3, ReplicaAccountInfoVersions,
     },
     solana_measure::measure::Measure,
     solana_metrics::*,
@@ -15,7 +15,7 @@ use {
         account::{AccountSharedData, ReadableAccount},
         clock::Slot,
         pubkey::Pubkey,
-        signature::Signature,
+        transaction::SanitizedTransaction,
     },
     std::sync::{Arc, RwLock},
 };
@@ -29,12 +29,12 @@ impl AccountsUpdateNotifierInterface for AccountsUpdateNotifierImpl {
         &self,
         slot: Slot,
         account: &AccountSharedData,
-        txn_signature: &Option<&Signature>,
+        txn: &Option<&SanitizedTransaction>,
         pubkey: &Pubkey,
         write_version: u64,
     ) {
         if let Some(account_info) =
-            self.accountinfo_from_shared_account_data(account, txn_signature, pubkey, write_version)
+            self.accountinfo_from_shared_account_data(account, txn, pubkey, write_version)
         {
             self.notify_plugins_of_account_update(account_info, slot, false);
         }
@@ -107,11 +107,11 @@ impl AccountsUpdateNotifierImpl {
     fn accountinfo_from_shared_account_data<'a>(
         &self,
         account: &'a AccountSharedData,
-        txn_signature: &'a Option<&'a Signature>,
+        txn: &'a Option<&'a SanitizedTransaction>,
         pubkey: &'a Pubkey,
         write_version: u64,
-    ) -> Option<ReplicaAccountInfoV2<'a>> {
-        Some(ReplicaAccountInfoV2 {
+    ) -> Option<ReplicaAccountInfoV3<'a>> {
+        Some(ReplicaAccountInfoV3 {
             pubkey: pubkey.as_ref(),
             lamports: account.lamports(),
             owner: account.owner().as_ref(),
@@ -119,15 +119,15 @@ impl AccountsUpdateNotifierImpl {
             rent_epoch: account.rent_epoch(),
             data: account.data(),
             write_version,
-            txn_signature: *txn_signature,
+            txn: *txn,
         })
     }
 
     fn accountinfo_from_stored_account_meta<'a>(
         &self,
         stored_account_meta: &'a StoredAccountMeta,
-    ) -> Option<ReplicaAccountInfoV2<'a>> {
-        Some(ReplicaAccountInfoV2 {
+    ) -> Option<ReplicaAccountInfoV3<'a>> {
+        Some(ReplicaAccountInfoV3 {
             pubkey: stored_account_meta.pubkey().as_ref(),
             lamports: stored_account_meta.account_meta.lamports,
             owner: stored_account_meta.account_meta.owner.as_ref(),
@@ -135,13 +135,13 @@ impl AccountsUpdateNotifierImpl {
             rent_epoch: stored_account_meta.account_meta.rent_epoch,
             data: stored_account_meta.data,
             write_version: stored_account_meta.meta.write_version_obsolete,
-            txn_signature: None,
+            txn: None,
         })
     }
 
     fn notify_plugins_of_account_update(
         &self,
-        account: ReplicaAccountInfoV2,
+        account: ReplicaAccountInfoV3,
         slot: Slot,
         is_startup: bool,
     ) {
@@ -154,7 +154,7 @@ impl AccountsUpdateNotifierImpl {
         for plugin in plugin_manager.plugins.iter_mut() {
             let mut measure = Measure::start("geyser-plugin-update-account");
             match plugin.update_account(
-                ReplicaAccountInfoVersions::V0_0_2(&account),
+                ReplicaAccountInfoVersions::V0_0_3(&account),
                 slot,
                 is_startup,
             ) {

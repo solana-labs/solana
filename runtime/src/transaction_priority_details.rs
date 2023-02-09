@@ -25,6 +25,7 @@ pub trait GetTransactionPriorityDetails {
                 instructions,
                 true,  // use default units per instruction
                 false, // stop supporting prioritization by request_units_deprecated instruction
+                true,  // enable request heap frame instruction
             )
             .ok()?;
         Some(TransactionPriorityDetails {

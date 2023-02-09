@@ -91,7 +91,7 @@ impl Default for TestValidatorNodeConfig {
         let port_range = (MIN_PORT_RANGE, MAX_PORT_RANGE);
 
         Self {
-            gossip_addr: socketaddr!("127.0.0.1:0"),
+            gossip_addr: socketaddr!(Ipv4Addr::LOCALHOST, 0),
             port_range,
             bind_ip_addr,
         }

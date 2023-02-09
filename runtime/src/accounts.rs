@@ -31,7 +31,7 @@ use {
         bpf_loader_upgradeable::{self, UpgradeableLoaderState},
         clock::{BankId, Slot},
         feature_set::{
-            self, remove_congestion_multiplier_from_fee_calculation,
+            self, enable_request_heap_frame_ix, remove_congestion_multiplier_from_fee_calculation,
             remove_deprecated_request_unit_ix, use_default_units_in_fee_calculation, FeatureSet,
         },
         fee::FeeStructure,
@@ -47,7 +47,6 @@ use {
         },
         pubkey::Pubkey,
         saturating_add_assign,
-        signature::Signature,
         slot_hashes::SlotHashes,
         system_program,
         sysvar::{self, epoch_schedule::EpochSchedule, instructions::construct_instructions_data},
@@ -601,6 +600,7 @@ impl Accounts {
                             feature_set.is_active(&use_default_units_in_fee_calculation::id()),
                             !feature_set.is_active(&remove_deprecated_request_unit_ix::id()),
                             feature_set.is_active(&remove_congestion_multiplier_from_fee_calculation::id()),
+                            feature_set.is_active(&enable_request_heap_frame_ix::id()) || self.accounts_db.expected_cluster_type() != ClusterType::MainnetBeta,
                         )
                     } else {
                         return (Err(TransactionError::BlockhashNotFound), None);
@@ -1202,7 +1202,7 @@ impl Accounts {
         lamports_per_signature: u64,
         include_slot_in_hash: IncludeSlotInHash,
     ) {
-        let (accounts_to_store, txn_signatures) = self.collect_accounts_to_store(
+        let (accounts_to_store, transactions) = self.collect_accounts_to_store(
             txs,
             res,
             loaded,
@@ -1212,7 +1212,7 @@ impl Accounts {
         );
         self.accounts_db.store_cached(
             (slot, &accounts_to_store[..], include_slot_in_hash),
-            Some(&txn_signatures),
+            Some(&transactions),
         );
     }
 
@@ -1239,10 +1239,10 @@ impl Accounts {
         lamports_per_signature: u64,
     ) -> (
         Vec<(&'a Pubkey, &'a AccountSharedData)>,
-        Vec<Option<&'a Signature>>,
+        Vec<Option<&'a SanitizedTransaction>>,
     ) {
         let mut accounts = Vec::with_capacity(load_results.len());
-        let mut signatures = Vec::with_capacity(load_results.len());
+        let mut transactions = Vec::with_capacity(load_results.len());
         for (i, ((tx_load_result, nonce), tx)) in load_results.iter_mut().zip(txs).enumerate() {
             if tx_load_result.is_err() {
                 // Don't store any accounts if tx failed to load
@@ -1292,12 +1292,12 @@ impl Accounts {
                     if execution_status.is_ok() || is_nonce_account || is_fee_payer {
                         // Add to the accounts to store
                         accounts.push((&*address, &*account));
-                        signatures.push(Some(tx.signature()));
+                        transactions.push(Some(tx));
                     }
                 }
             }
         }
-        (accounts, signatures)
+        (accounts, transactions)
     }
 }
 
@@ -1640,6 +1640,7 @@ mod tests {
             &FeeStructure::default(),
             true,
             false,
+            true,
             true,
         );
         assert_eq!(fee, lamports_per_signature);
@@ -2379,15 +2380,15 @@ mod tests {
     }
 
     #[test]
-    fn test_accounts_empty_bank_hash() {
+    fn test_accounts_empty_bank_hash_stats() {
         let accounts = Accounts::new_with_config_for_tests(
             Vec::new(),
             &ClusterType::Development,
             AccountSecondaryIndexes::default(),
             AccountShrinkThreshold::default(),
         );
-        assert!(accounts.accounts_db.get_bank_hash_info(0).is_some());
-        assert!(accounts.accounts_db.get_bank_hash_info(1).is_none());
+        assert!(accounts.accounts_db.get_bank_hash_stats(0).is_some());
+        assert!(accounts.accounts_db.get_bank_hash_stats(1).is_none());
     }
 
     #[test]
@@ -2872,7 +2873,6 @@ mod tests {
             (message.account_keys[1], account2.clone()),
         ];
         let tx0 = new_sanitized_tx(&[&keypair0], message, Hash::default());
-        let tx0_sign = *tx0.signature();
 
         let instructions = vec![CompiledInstruction::new(2, &(), vec![0, 1])];
         let message = Message::new_with_compiled_instructions(
@@ -2888,7 +2888,6 @@ mod tests {
             (message.account_keys[1], account2),
         ];
         let tx1 = new_sanitized_tx(&[&keypair1], message, Hash::default());
-        let tx1_sign = *tx1.signature();
 
         let loaded0 = (
             Ok(LoadedTransaction {
@@ -2925,9 +2924,9 @@ mod tests {
                 .unwrap()
                 .insert_new_readonly(&pubkey);
         }
-        let txs = vec![tx0, tx1];
+        let txs = vec![tx0.clone(), tx1.clone()];
         let execution_results = vec![new_execution_result(Ok(()), None); 2];
-        let (collected_accounts, txn_signatures) = accounts.collect_accounts_to_store(
+        let (collected_accounts, transactions) = accounts.collect_accounts_to_store(
             &txs,
             &execution_results,
             loaded.as_mut_slice(),
@@ -2943,13 +2942,9 @@ mod tests {
             .iter()
             .any(|(pubkey, _account)| *pubkey == &keypair1.pubkey()));
 
-        assert_eq!(txn_signatures.len(), 2);
-        assert!(txn_signatures
-            .iter()
-            .any(|signature| signature.unwrap().to_string().eq(&tx0_sign.to_string())));
-        assert!(txn_signatures
-            .iter()
-            .any(|signature| signature.unwrap().to_string().eq(&tx1_sign.to_string())));
+        assert_eq!(transactions.len(), 2);
+        assert!(transactions.iter().any(|txn| txn.unwrap().eq(&tx0)));
+        assert!(transactions.iter().any(|txn| txn.unwrap().eq(&tx1)));
 
         // Ensure readonly_lock reflects lock
         assert_eq!(

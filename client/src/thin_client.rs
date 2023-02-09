@@ -7,6 +7,7 @@ use {
     crate::connection_cache::ConnectionCache,
     log::*,
     rayon::iter::{IntoParallelIterator, ParallelIterator},
+    solana_connection_cache::client_connection::ClientConnection,
     solana_rpc_client::rpc_client::RpcClient,
     solana_rpc_client_api::{config::RpcProgramAccountsConfig, response::Response},
     solana_sdk::{
