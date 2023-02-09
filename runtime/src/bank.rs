@@ -1928,7 +1928,7 @@ pub trait ScheduleLike: Send + Sync + std::fmt::Debug {
     }
 }
 
-pub impl ScheduleLike for Scheduler {
+impl ScheduleLike for Scheduler {
     fn graceful_stop_initiated(&self) -> &AtomicBool {
         panic!();
     }
