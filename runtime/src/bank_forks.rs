@@ -77,9 +77,9 @@ impl Index<u64> for BankForks {
 }
 
 impl BankForks {
-    pub fn new(bank: Bank, a: usize) -> Self {
+    pub fn new(bank: Bank) -> Self {
         let root = bank.slot();
-        Self::new_from_banks(&[Arc::new(bank)], root, a)
+        Self::new_from_banks(&[Arc::new(bank)], root)
     }
 
     pub fn banks(&self) -> HashMap<Slot, Arc<Bank>> {
@@ -154,7 +154,7 @@ impl BankForks {
         self[self.root()].clone()
     }
 
-    pub fn new_from_banks(initial_forks: &[Arc<Bank>], root: Slot, a: usize) -> Self {
+    pub fn new_from_banks(initial_forks: &[Arc<Bank>], root: Slot) -> Self {
         let mut banks = HashMap::new();
 
         // Iterate through the heads of all the different forks
