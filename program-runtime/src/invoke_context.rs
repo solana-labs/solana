@@ -64,6 +64,7 @@ impl<'a> ContextObject for InvokeContext<'a> {
         self.trace_log_stack
             .last_mut()
             .expect("Inconsistent trace log stack")
+            .trace_log
             .push(state);
     }
 
@@ -102,14 +103,19 @@ struct SyscallContext {
     allocator: Rc<RefCell<dyn Alloc>>,
 }
 
+#[derive(Default)]
+pub struct TraceLogStackFrame {
+    pub trace_log: Vec<[u64; 12]>,
+    pub consumed_bpf_units: RefCell<Vec<(usize, u64)>>,
+}
+
 pub struct InvokeContext<'a> {
     pub transaction_context: &'a mut TransactionContext,
     rent: Rent,
     pre_accounts: Vec<PreAccount>,
     builtin_programs: &'a [BuiltinProgram],
     pub sysvar_cache: Cow<'a, SysvarCache>,
-    pub trace_log_stack: Vec<Vec<[u64; 12]>>,
-    pub consumed_bpf_units_stack: RefCell<Vec<Vec<(usize, u64)>>>,
+    pub trace_log_stack: Vec<TraceLogStackFrame>,
     log_collector: Option<Rc<RefCell<LogCollector>>>,
     compute_budget: ComputeBudget,
     current_compute_budget: ComputeBudget,
@@ -121,6 +127,7 @@ pub struct InvokeContext<'a> {
     pub blockhash: Hash,
     pub lamports_per_signature: u64,
     syscall_context: Vec<Option<SyscallContext>>,
+    pub enable_instruction_tracing: bool,
 }
 
 impl<'a> InvokeContext<'a> {
@@ -137,6 +144,7 @@ impl<'a> InvokeContext<'a> {
         blockhash: Hash,
         lamports_per_signature: u64,
         prev_accounts_data_len: u64,
+        debugging_features: bool,
     ) -> Self {
         Self {
             transaction_context,
@@ -144,8 +152,7 @@ impl<'a> InvokeContext<'a> {
             pre_accounts: Vec::new(),
             builtin_programs,
             sysvar_cache,
-            trace_log_stack: vec![Vec::new()],
-            consumed_bpf_units_stack: RefCell::new(vec![Vec::new()]),
+            trace_log_stack: vec![TraceLogStackFrame::default()],
             log_collector,
             current_compute_budget: compute_budget,
             compute_budget,
@@ -157,12 +164,14 @@ impl<'a> InvokeContext<'a> {
             blockhash,
             lamports_per_signature,
             syscall_context: Vec::new(),
+            enable_instruction_tracing: debugging_features,
         }
     }
 
-    pub fn new_mock(
+    pub fn new_mock_with_debugging(
         transaction_context: &'a mut TransactionContext,
         builtin_programs: &'a [BuiltinProgram],
+        debugging_features: bool,
     ) -> Self {
         let mut sysvar_cache = SysvarCache::default();
         sysvar_cache.fill_missing_entries(|pubkey, callback| {
@@ -194,7 +203,15 @@ impl<'a> InvokeContext<'a> {
             Hash::default(),
             0,
             0,
+            debugging_features,
         )
+    }
+
+    pub fn new_mock(
+        transaction_context: &'a mut TransactionContext,
+        builtin_programs: &'a [BuiltinProgram],
+    ) -> Self {
+        Self::new_mock_with_debugging(transaction_context, builtin_programs, false)
     }
 
     /// Push a stack frame onto the invocation stack
@@ -277,8 +294,7 @@ impl<'a> InvokeContext<'a> {
             }
         }
 
-        self.trace_log_stack.push(Vec::new());
-        self.consumed_bpf_units_stack.borrow_mut().push(Vec::new());
+        self.trace_log_stack.push(TraceLogStackFrame::default());
         self.syscall_context.push(None);
         self.transaction_context.push()
     }
@@ -286,7 +302,6 @@ impl<'a> InvokeContext<'a> {
     /// Pop a stack frame from the invocation stack
     pub fn pop(&mut self) -> Result<(), InstructionError> {
         self.trace_log_stack.pop();
-        self.consumed_bpf_units_stack.borrow_mut().pop();
         self.syscall_context.pop();
         self.transaction_context.pop()
     }
@@ -875,19 +890,16 @@ impl<'a> InvokeContext<'a> {
     }
 
     fn log_consumed_bpf_units(&self, amount: u64) {
-        if amount != 0 {
-            self.consumed_bpf_units_stack
-                .borrow_mut()
-                .last_mut()
-                .expect("Inconsistent consumed BPF units stack")
-                .push((
-                    self.trace_log_stack
-                        .last()
-                        .expect("Inconsistent trace log stack")
-                        .len()
-                        .saturating_sub(1),
-                    amount,
-                ));
+        if self.enable_instruction_tracing && amount != 0 {
+            let trace_log_stack_frame = self
+                .trace_log_stack
+                .last()
+                .expect("Inconsistent trace log stack");
+
+            trace_log_stack_frame.consumed_bpf_units.borrow_mut().push((
+                trace_log_stack_frame.trace_log.len().saturating_sub(1),
+                amount,
+            ));
         }
     }
 }
