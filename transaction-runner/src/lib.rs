@@ -780,7 +780,7 @@ impl LikeScheduler for Scheduler {
         panic!();
     }
 
-    fn take_next_scheduler_from_pool(&self) -> Box<dyn LikeScheduler> {
+    fn take_next_scheduler_from_pool(self) -> Box<dyn LikeScheduler> {
         panic!();
     }
 }
