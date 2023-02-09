@@ -124,7 +124,7 @@ pub(crate) struct Scheduler {
     commit_status: Arc<CommitStatus>,
     current_checkpoint: Arc<solana_scheduler::Checkpoint<ExecuteTimings, SchedulerContext>>,
     thread_count: usize,
-    scheduler_pool: ArcPool, // use Weak to cut circuric dep.
+    scheduler_pool: Arc<SchedulerPool>, // use Weak to cut circuric dep.
 }
 
 impl Scheduler {
