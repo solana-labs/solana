@@ -311,7 +311,7 @@ pub fn invoke_signed_unchecked(
     }
 
     #[cfg(not(target_os = "solana"))]
-    crate::program_stubs::sol_invoke_signed(&instruction, account_infos, signers_seeds)
+    crate::program_stubs::sol_invoke_signed(instruction, account_infos, signers_seeds)
 }
 
 /// Maximum size that can be set using [`set_return_data`].
