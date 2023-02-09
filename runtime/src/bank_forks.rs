@@ -205,7 +205,7 @@ impl BankForks {
         bank
     }
 
-    fn install_scheduler_pool(&self, pool: Box<dyn LikeSchedulerPool>) {
+    pub fn install_scheduler_pool(&self, pool: Box<dyn LikeSchedulerPool>) {
         *self.scheduler_pool.lock().unwrap() = Some(pool);
     }
 
