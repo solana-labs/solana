@@ -1551,6 +1551,7 @@ impl Scheduler {
             commit_status,
             current_checkpoint: initial_checkpoint,
             thread_count,
+            transaction_runner,
         };
         info!(
             "scheduler: id_{:016x} setup done with {}us",
