@@ -1879,6 +1879,10 @@ pub struct Bank {
 }
 
 trait ScheduleLike: Send + Sync + std::fmt::Debug {
+    fn schedule(&self, sanitized_tx: &SanitizedTransaction, index: usize, mode: solana_scheduler::Mode) {
+        panic!();
+    }
+
     fn handle_aborted_executions(&self) -> Vec<Result<ExecuteTimings>> {
         panic!();
     }
@@ -1917,6 +1921,10 @@ trait ScheduleLike: Send + Sync + std::fmt::Debug {
 }
 
 impl ScheduleLike for Scheduler {
+    fn schedule(&self, sanitized_tx: &SanitizedTransaction, index: usize, mode: solana_scheduler::Mode) {
+        panic!();
+    }
+
     fn handle_aborted_executions(&self) -> Vec<Result<ExecuteTimings>> {
         panic!();
     }
