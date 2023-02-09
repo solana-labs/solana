@@ -205,7 +205,7 @@ impl BankForks {
         bank
     }
 
-    fn install_scheduler_pool(&self, pool: Box<dyn LikeSchedulerPool) {
+    fn install_scheduler_pool(&self, pool: Box<dyn LikeSchedulerPool>) {
     }
 
     pub fn add_new_bank_for_banking(&mut self, bank: Bank) -> Arc<Bank> {
