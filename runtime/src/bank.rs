@@ -3678,10 +3678,10 @@ impl Bank {
         let scheduler_mode = self.scheduler_mode();
         let mut w_blockhash_queue = match scheduler_mode {
             solana_scheduler::Mode::Replaying => {
-                let (last_result, scheduler) = self.wait_for_scheduler(false, true);
-                let scheduler = scheduler.unwrap();
+                let (last_result, next_scheduler) = self.wait_for_scheduler(false, true);
+                let next_scheduler = next_scheduler.unwrap();
                 let mut s2 = self.scheduler.write().unwrap();
-                *s2 = Some(scheduler);
+                *s2 = Some(next_scheduler);
 
                 // Only acquire the write lock for the blockhash queue on block boundaries because
                 // readers can starve this write lock acquisition and ticks would be slowed down too
@@ -7967,6 +7967,11 @@ impl Bank {
                 } else if via_drop  {
                     scheduler.resume_commit_into_bank(None);
                 }
+                let next_context = if take_next {
+                    Some(scheduler.scheduler_context())
+                } else {
+                    None
+                };
                 let _r = scheduler.gracefully_stop().unwrap();
                 let e = scheduler
                     .handle_aborted_executions()
@@ -7974,14 +7979,9 @@ impl Bank {
                     .next()
                     .unwrap();
                 let scheduler = s.take().unwrap();
-                let context = if take_next {
-                    Some(scheduler.scheduler_context())
-                } else {
-                    None
-                };
                 let pool = scheduler.scheduler_pool();
                 pool.return_to_pool(scheduler);
-                (e, context.map(|c| pool.take_from_pool(c)))
+                (e, next_context.map(|c| pool.take_from_pool(c)))
             } else {
                 info!("wait_for_scheduler(Banking): pausing commit into bank ({})...", self.slot());
                 scheduler.pause_commit_into_bank();
