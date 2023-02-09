@@ -1282,8 +1282,8 @@ impl Scheduler {
                                 .collect();
                         if !executed_transactions.is_empty() {
                             let hash = solana_entry::entry::hash_transactions(&executed_transactions);
-                            let poh = transaction_runner.poh.read().unwrap();
-                            let res = poh.as_ref().unwrap().0(bank.as_ref(), executed_transactions, hash);
+                            let poh = POH.read().unwrap();
+                            let res = poh.as_ref().unwrap()(bank.as_ref(), executed_transactions, hash);
                             match res {
                                 Ok(aa) => aa,
                                 Err(e) => {
