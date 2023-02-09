@@ -1274,21 +1274,19 @@ pub mod test {
 
         let handle = tokio::spawn(patch_batch_sender(packet_batch_sender, pkt_receiver, exit.clone(), stats));
 
-        let sender2=ptk_sender.clone();
-
         for _i in 0..1000 {
             let meta = Meta::default();
             let bytes = Bytes::from("Hello world");
             let offset = 0;
             let size = bytes.len();
-            sender2.send((meta, bytes, offset, size)).await.unwrap();
+            ptk_sender.send((meta, bytes, offset, size)).await.unwrap();
         }
         let mut i =0;
         while i < 1000 {
             let res = packet_batch_receiver.try_recv();
             if res.is_ok() {
                 let len = res.unwrap().len();
-                i+= len;
+                i += len;
             }
             else {
                 sleep(Duration::from_millis(1)).await;
