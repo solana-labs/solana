@@ -540,7 +540,7 @@ pub mod tests {
         // all accounts have 1 ref or all accounts have 2 refs
         for num_slots in 0..3 {
             for two_refs in [false, true] {
-                let (db, storages, slots, infos) = get_sample_storages(num_slots);
+                let (db, storages, slots, infos) = get_sample_storages(num_slots, None);
                 let original_results = storages
                     .iter()
                     .map(|store| db.get_unique_accounts_from_storage(store))
@@ -623,7 +623,7 @@ pub mod tests {
         // 1 with 1 ref
         // 1 with 2 refs
         let num_slots = 1;
-        let (db, storages, slots, infos) = get_sample_storages(num_slots);
+        let (db, storages, slots, infos) = get_sample_storages(num_slots, None);
         let original_results = storages
             .iter()
             .map(|store| db.get_unique_accounts_from_storage(store))
