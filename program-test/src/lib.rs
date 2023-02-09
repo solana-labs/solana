@@ -33,7 +33,7 @@ use {
         fee_calculator::{FeeCalculator, FeeRateGovernor, DEFAULT_TARGET_LAMPORTS_PER_SIGNATURE},
         genesis_config::{ClusterType, GenesisConfig},
         hash::Hash,
-        instruction::InstructionError,
+        instruction::{Instruction, InstructionError},
         native_token::sol_to_lamports,
         poh_config::PohConfig,
         program_error::{ProgramError, UNSUPPORTED_SYSVAR},
@@ -224,10 +224,12 @@ impl solana_sdk::program_stubs::SyscallStubs for SyscallStubs {
 
     fn sol_invoke_signed(
         &self,
-        instruction: &StableInstruction,
+        instruction: &Instruction,
         account_infos: &[AccountInfo],
         signers_seeds: &[&[&[u8]]],
     ) -> ProgramResult {
+        // bprumo TODO: can I do anything to remove this clone?
+        let instruction = StableInstruction::from(instruction.clone());
         let invoke_context = get_invoke_context();
         let log_collector = invoke_context.get_log_collector();
         let transaction_context = &invoke_context.transaction_context;
@@ -250,7 +252,7 @@ impl solana_sdk::program_stubs::SyscallStubs for SyscallStubs {
             .collect::<Vec<_>>();
 
         let (instruction_accounts, program_indices) = invoke_context
-            .prepare_instruction(instruction, &signers)
+            .prepare_instruction(&instruction, &signers)
             .unwrap();
 
         // Copy caller's account_info modifications into invoke_context accounts

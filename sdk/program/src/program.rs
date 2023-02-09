@@ -291,11 +291,10 @@ pub fn invoke_signed_unchecked(
     account_infos: &[AccountInfo],
     signers_seeds: &[&[&[u8]]],
 ) -> ProgramResult {
-    // bprumo TODO: it would be nice to not clone `instruction`... Can this fn take a StableInstruction instead?
-    let instruction = StableInstruction::from(instruction.clone());
-
     #[cfg(target_os = "solana")]
     {
+        // bprumo TODO: it would be nice to not clone `instruction`... Can this fn take a StableInstruction instead?
+        let instruction = StableInstruction::from(instruction.clone());
         let result = unsafe {
             crate::syscalls::sol_invoke_signed_rust(
                 &instruction as *const _ as *const u8,

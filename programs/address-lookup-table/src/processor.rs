@@ -13,6 +13,7 @@ use {
         instruction::InstructionError,
         program_utils::limited_deserialize,
         pubkey::{Pubkey, PUBKEY_BYTES},
+        stable_layout::stable_instruction::StableInstruction,
         system_instruction,
         transaction_context::IndexOfAccount,
     },
@@ -144,18 +145,25 @@ impl Processor {
 
         if required_lamports > 0 {
             invoke_context.native_invoke(
-                system_instruction::transfer(&payer_key, &table_key, required_lamports),
+                StableInstruction::from(system_instruction::transfer(
+                    &payer_key,
+                    &table_key,
+                    required_lamports,
+                )),
                 &[payer_key],
             )?;
         }
 
         invoke_context.native_invoke(
-            system_instruction::allocate(&table_key, table_account_data_len as u64),
+            StableInstruction::from(system_instruction::allocate(
+                &table_key,
+                table_account_data_len as u64,
+            )),
             &[table_key],
         )?;
 
         invoke_context.native_invoke(
-            system_instruction::assign(&table_key, &crate::id()),
+            StableInstruction::from(system_instruction::assign(&table_key, &crate::id())),
             &[table_key],
         )?;
 
@@ -332,7 +340,11 @@ impl Processor {
             drop(payer_account);
 
             invoke_context.native_invoke(
-                system_instruction::transfer(&payer_key, &table_key, required_lamports),
+                StableInstruction::from(system_instruction::transfer(
+                    &payer_key,
+                    &table_key,
+                    required_lamports,
+                )),
                 &[payer_key],
             )?;
         }

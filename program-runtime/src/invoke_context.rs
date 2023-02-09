@@ -17,7 +17,7 @@ use {
         bpf_loader_upgradeable::{self, UpgradeableLoaderState},
         feature_set::{enable_early_verification_of_account_modifications, FeatureSet},
         hash::Hash,
-        instruction::{AccountMeta, Instruction, InstructionError},
+        instruction::{AccountMeta, InstructionError},
         native_loader,
         pubkey::Pubkey,
         rent::Rent,
@@ -490,10 +490,9 @@ impl<'a> InvokeContext<'a> {
     /// Entrypoint for a cross-program invocation from a builtin program
     pub fn native_invoke(
         &mut self,
-        instruction: Instruction,
+        instruction: StableInstruction,
         signers: &[Pubkey],
     ) -> Result<(), InstructionError> {
-        let instruction = StableInstruction::from(instruction);
         let (instruction_accounts, program_indices) =
             self.prepare_instruction(&instruction, signers)?;
         let mut compute_units_consumed = 0;
@@ -1038,7 +1037,7 @@ mod tests {
         super::*,
         crate::compute_budget,
         serde::{Deserialize, Serialize},
-        solana_sdk::account::WritableAccount,
+        solana_sdk::{account::WritableAccount, instruction::Instruction},
     };
 
     #[derive(Debug, Serialize, Deserialize)]
@@ -1154,6 +1153,7 @@ mod tests {
                         &MockInstruction::NoopSuccess,
                         metas,
                     );
+                    let inner_instruction = StableInstruction::from(inner_instruction);
                     invoke_context
                         .transaction_context
                         .get_next_instruction_context()
@@ -1337,6 +1337,7 @@ mod tests {
             invoke_context.push().unwrap();
             let inner_instruction =
                 Instruction::new_with_bincode(callee_program_id, &case.0, metas.clone());
+            let inner_instruction = StableInstruction::from(inner_instruction);
             let result = invoke_context
                 .native_invoke(inner_instruction, &[])
                 .and(invoke_context.pop());

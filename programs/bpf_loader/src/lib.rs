@@ -55,6 +55,7 @@ use {
         program_utils::limited_deserialize,
         pubkey::Pubkey,
         saturating_add_assign,
+        stable_layout::stable_instruction::StableInstruction,
         system_instruction::{self, MAX_PERMITTED_DATA_LENGTH},
         transaction_context::{
             BorrowedAccount, IndexOfAccount, InstructionContext, TransactionContext,
@@ -675,6 +676,7 @@ fn process_loader_upgradeable_instruction(
                 .iter()
                 .map(|seeds| Pubkey::create_program_address(seeds, caller_program_id))
                 .collect::<Result<Vec<Pubkey>, solana_sdk::pubkey::PubkeyError>>()?;
+            let instruction = StableInstruction::from(instruction);
             invoke_context.native_invoke(instruction, signers.as_slice())?;
 
             // Load and verify the program bits
@@ -1299,7 +1301,11 @@ fn process_loader_upgradeable_instruction(
                 )?;
 
                 invoke_context.native_invoke(
-                    system_instruction::transfer(&payer_key, &programdata_key, required_payment),
+                    StableInstruction::from(system_instruction::transfer(
+                        &payer_key,
+                        &programdata_key,
+                        required_payment,
+                    )),
                     &[],
                 )?;
             }
