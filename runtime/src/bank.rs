@@ -7974,15 +7974,14 @@ impl Bank {
                     .next()
                     .unwrap();
                 let scheduler = s.take().unwrap();
-                let context = scheduler.scheduler_context();
-                let pool = scheduler.scheduler_pool();
-                pool.return_to_pool(scheduler);
-                let ns = if take_next {
-                    pool.take_from_pool(context)
+                let context = if take_next {
+                    Some(scheduler.scheduler_context())
                 } else {
                     None
                 }
-                (e, ns)
+                let pool = scheduler.scheduler_pool();
+                pool.return_to_pool(scheduler);
+                (e, context.map(|c| pool.take_from_pool(c)))
             } else {
                 info!("wait_for_scheduler(Banking): pausing commit into bank ({})...", self.slot());
                 scheduler.pause_commit_into_bank();
