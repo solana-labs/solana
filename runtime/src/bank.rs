@@ -1020,7 +1020,7 @@ impl SchedulerPool {
             );
             scheduler
         } else {
-            self.create();
+            self.create(runner.clone());
             self.take_from_pool(runner)
         }
     }
