@@ -49,6 +49,40 @@ impl SchedulerPool {
         self.schedulers.lock().unwrap().push(Box::new(Scheduler::default2(self.clone())));
     }
 
+    pub fn take_from_pool(self: &Arc<Self>) -> Box<dyn LikeScheduler> {
+        if let Some(scheduler) = self.schedulers.lock().unwrap().pop() {
+            trace!(
+                "SchedulerPool: id_{:016x} is taken... len: {} => {}",
+                scheduler.random_id(),
+                self.schedulers.lock().unwrap().len() + 1,
+                self.schedulers.lock().unwrap().len()
+            );
+            scheduler
+        } else {
+            self.create();
+            self.take_from_pool()
+        }
+    }
+
+    pub fn return_to_pool(&mut self, scheduler: Box<dyn LikeScheduler>) {
+        trace!(
+            "SchedulerPool: id_{:016x} is returned... len: {} => {}",
+            scheduler.random_id(),
+            self.schedulers.lock().unwrap().len(),
+            self.schedulers.lock().unwrap().len() + 1
+        );
+        assert!(scheduler.collected_results().lock().unwrap().is_empty());
+        //assert!(scheduler.current_checkpoint.clone_context_value().unwrap().bank.is_none());
+        assert!(scheduler
+            .graceful_stop_initiated()
+            .load(std::sync::atomic::Ordering::SeqCst));
+
+        scheduler
+            .graceful_stop_initiated()
+            .store(false, std::sync::atomic::Ordering::SeqCst);
+
+        self.schedulers.lock().unwrap().push(scheduler);
+    }
 }
 
 impl Drop for SchedulerPool {
