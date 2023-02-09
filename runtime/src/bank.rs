@@ -1204,6 +1204,7 @@ impl Scheduler {
             let (scheduled_ee_receiver, scheduled_high_ee_receiver, processed_ee_sender) = (scheduled_ee_receiver.clone(), scheduled_high_ee_receiver.clone(), processed_ee_sender.clone());
             let initial_checkpoint = initial_checkpoint.clone();
             let commit_status = commit_status.clone();
+            let transaction_runner = transaction_runner.clone();
 
             std::thread::Builder::new().name(format!("solScExLane{:02}", thx)).spawn(move || {
             let mut mint_decimals: HashMap<Pubkey, u8> = HashMap::new();
