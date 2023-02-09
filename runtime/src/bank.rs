@@ -1042,9 +1042,6 @@ impl SchedulerPool<ExecuteTimings> {
     }
 }
 
-static SCHEDULER_POOL: std::sync::Mutex<SchedulerPool<ExecuteTimings>> =
-    std::sync::Mutex::new(SchedulerPool::new());
-
 pub static POH: std::sync::RwLock<Option<Box<dyn Fn(&Bank, Vec<VersionedTransaction>, solana_sdk::hash::Hash) -> std::result::Result<Option<usize>, ()> + Send + Sync>>> = std::sync::RwLock::new(None);
 use solana_transaction_status::TransactionTokenBalance;
 pub static STATUS_SENDER_CALLBACK: std::sync::RwLock<Option<(Option<usize>, Box<dyn Fn(Option<(Vec<Vec<u64>>, Vec<Vec<TransactionTokenBalance>>)>, &Arc<Bank>, &TransactionBatch, &mut HashMap<Pubkey, u8>, Option<TransactionResults>, Option<usize>) -> std::option::Option<(Vec<Vec<u64>>, Vec<Vec<TransactionTokenBalance>>)> + Send + Sync>)>> = std::sync::RwLock::new(None);
@@ -8659,20 +8656,7 @@ impl Bank {
         let current_thread_name = std::thread::current().name().unwrap().to_string();
 
         if let Some(scheduler) = s.as_mut() {
-            if !scheduler.has_context() {
-                warn!(
-                    "Bank::wait_for_scheduler(via_drop: {}) id_{:016x} no context {} ...",
-                    via_drop, scheduler.random_id, current_thread_name
-                );
-                let _r = scheduler.gracefully_stop().unwrap();
-                let e = scheduler
-                    .handle_aborted_executions()
-                    .into_iter()
-                    .next()
-                    .unwrap();
-                SCHEDULER_POOL.lock().unwrap().return_to_pool(s.take().unwrap());
-                return e;
-            }
+            assert!(scheduler.has_context());
 
             let runner_mode = scheduler.current_runner_mode();
             let runner = scheduler.current_runner();
