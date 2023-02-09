@@ -966,6 +966,10 @@ impl Runner {
     fn take_scheduler_from_pool(&self) -> Box<Scheduler<ExecuteTimings>> {
         self.runner_pool.lock().unwrap().take_from_pool()
     }
+
+    fn return_scheduler_from_pool(&self, Box<Scheduler<ExecuteTimings>>) {
+        self.runner_pool.lock().unwrap().return_to_pool(scheduler)
+    }
 }
 
 impl solana_scheduler::WithMode for RunnerContext {
@@ -8684,7 +8688,7 @@ impl Bank {
                     .into_iter()
                     .next()
                     .unwrap();
-                SCHEDULER_POOL.lock().unwrap().return_to_pool(s.take().unwrap());
+                runner.return_scheduler_to_pool(s.take().unwrap());
                 e
             } else {
                 info!("wait_for_scheduler(Banking): pausing commit into bank ({})...", self.slot());
