@@ -232,7 +232,11 @@ impl Scheduler {
             .unwrap();
         let base_thread_count = executing_thread_count / 2;
         let thread_count = 3 + executing_thread_count;
-        let initial_checkpoint = Self::new_checkpoint(thread_count);
+        let initial_checkpoint = {
+            let mut c = Self::new_checkpoint(thread_count);
+            c.replace_scheduler_context(initial_context);
+            c
+        };
 
         let send_metrics = std::env::var("SOLANA_TRANSACTION_TIMINGS").is_ok();
 
