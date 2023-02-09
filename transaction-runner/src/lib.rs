@@ -98,7 +98,7 @@ impl Drop for SchedulerPool {
 }
 
 impl LikePool for SchedulerPool {
-    fn take_from_pool(&self, runner: ArcPool) -> Box<dyn LikeScheduler> {
+    fn take_from_pool(&self, runner: ArcPool, mode: solana_scheduler::Mode) -> Box<dyn LikeScheduler> {
         panic!();
     }
 
