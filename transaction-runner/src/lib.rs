@@ -65,7 +65,7 @@ impl Drop for SchedulerPool {
 pub struct SchedulerPoolWrapper(Arc<SchedulerPool>);
 
 impl SchedulerPoolWrapper {
-    fn new() -> Self {
+    pub fn new() -> Self {
         Self(Arc::new(SchedulerPool::new()))
     }
 } 
