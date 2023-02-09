@@ -1894,6 +1894,10 @@ trait ScheduleLike: Send + Sync {
     fn transaction_runner(&self) -> Arc<TransactionRunner> {
         panic!();
     }
+
+    fn gracefully_stop(&mut self) -> Result<()> {
+        panic!();
+    }
 }
 
 struct VoteWithStakeDelegations {
