@@ -1630,8 +1630,8 @@ impl<C> Scheduler<C> {
         self.commit_status.notify_as_resumed();
     }
 
-    fn replace_transaction_runner_context(&self, bank: Arc<Bank>, mode: solana_scheduler::Mode) {
-        self.current_checkpoint.replace_context_value(RunnerContext { bank: Some(bank), mode });
+    fn replace_transaction_runner_context(&self, runner_context: RunnerContext) {
+        self.current_checkpoint.replace_context_value(runner_context);
     }
 
     fn current_runner_mode(&self) -> solana_scheduler::Mode {
