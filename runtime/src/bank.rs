@@ -1651,7 +1651,7 @@ impl Scheduler {
     }
 
     fn transaction_runner(&self) -> Arc<TransactionRunner> {
-        self.current_checkpoint.with_context_value(|c| c.runner.clone()).unwrap()
+        self.transaction_runner.clone()
     }
 
     fn has_context(&self) -> bool {
