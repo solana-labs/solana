@@ -17,6 +17,7 @@ use std::sync::atomic::AtomicBool;
 use solana_sdk::transaction::SanitizedTransaction;
 use solana_sdk::transaction::Result;
 use solana_program_runtime::timings::ExecuteTimings;
+use solana_runtime::transaction_priority_details::GetTransactionPriorityDetails;
 
 struct TransactionRunner(Arc<Bank>, solana_poh::poh_recorder::PohRecorder, solana_ledger::blockstore_processor::TransactionStatusSender);
 
