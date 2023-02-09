@@ -980,7 +980,7 @@ impl RunnerContext {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 struct SchedulerPool<C> {
     schedulers: Vec<Box<Scheduler<C>>>,
 }
