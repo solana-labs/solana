@@ -975,7 +975,7 @@ pub struct SchedulerPool {
     schedulers: Vec<Box<dyn LikeScheduler>>,
 }
 
-pub type ArcPool = Arc<std::sync::Mutex<SchedulerPool>>;
+pub type ArcPool = Arc<std::sync::Mutex<Box<dyn LikePool>>>;
 
 impl SchedulerPool {
     pub const fn new() -> Self {
@@ -1841,6 +1841,9 @@ pub struct Bank {
 
     scheduler: RwLock<Option<Box<dyn LikeScheduler>>>,
     pub blockhash_override: RwLock<Option<Hash>>,
+}
+
+pub trait LikePool: Send + Sync + std::fmt::Debug {
 }
 
 pub trait LikeScheduler: Send + Sync + std::fmt::Debug {
