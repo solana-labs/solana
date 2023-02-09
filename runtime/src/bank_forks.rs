@@ -188,7 +188,8 @@ impl BankForks {
             accounts_hash_interval_slots: std::u64::MAX,
             last_accounts_hash_slot: root,
             in_vote_only_mode: Arc::new(AtomicBool::new(false)),
-            scheduler_pool: None, //Arc::new(std::sync::Mutex::new(Box::new(crate::bank::SchedulerPool::new())))
+            scheduler_pool: Some(Arc::new(std::sync::Mutex::new(Box::new(crate::bank::SchedulerPool::new())))),
+            //scheduler_pool: None,
         }
     }
 
