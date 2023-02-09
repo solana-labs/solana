@@ -950,33 +950,6 @@ pub struct SchedulerContext {
     mode: solana_scheduler::Mode,
 }
 
-/*
-#[derive(Debug)]
-pub struct TransactionRunner {
-    scheduler_pool: std::sync::Mutex<SchedulerPool>,
-}
-
-impl TransactionRunner {
-    pub fn new() -> Self {
-        Self {
-            scheduler_pool: std::sync::Mutex::new(SchedulerPool::new()),
-        }
-    }
-
-    fn context(self: Arc<Self>, bank: Option<Arc<Bank>>, mode: solana_scheduler::Mode) -> SchedulerContext {
-        SchedulerContext { bank, mode }
-    }
-
-    pub(crate) fn take_scheduler_from_pool(self: &Arc<Self>) -> Box<dyn LikeScheduler> {
-        self.scheduler_pool.lock().unwrap().take_from_pool(self.clone())
-    }
-
-    pub(crate) fn return_scheduler_to_pool(&self, scheduler: Box<dyn LikeScheduler>) {
-        self.scheduler_pool.lock().unwrap().return_to_pool(scheduler)
-    }
-}
-*/
-
 impl solana_scheduler::WithMode for SchedulerContext {
     fn mode(&self) -> solana_scheduler::Mode {
         self.mode
@@ -1068,7 +1041,7 @@ pub(crate) struct Scheduler {
     commit_status: Arc<CommitStatus>,
     current_checkpoint: Arc<solana_scheduler::Checkpoint<ExecuteTimings, SchedulerContext>>,
     thread_count: usize,
-    transaction_runner: ArcPool, // use Weak to cut circuric dep.
+    scheduler_pool: ArcPool, // use Weak to cut circuric dep.
 }
 
 impl Scheduler {
@@ -1164,7 +1137,7 @@ impl CommitStatus {
 }
 
 impl Scheduler {
-    fn default2(transaction_runner: ArcPool) -> Self {
+    fn default2(scheduler_pool: ArcPool) -> Self {
         let start = Instant::now();
         let mut address_book = solana_scheduler::AddressBook::default();
         let preloader = Arc::new(address_book.preloader());
@@ -1196,7 +1169,7 @@ impl Scheduler {
             let (scheduled_ee_receiver, scheduled_high_ee_receiver, processed_ee_sender) = (scheduled_ee_receiver.clone(), scheduled_high_ee_receiver.clone(), processed_ee_sender.clone());
             let initial_checkpoint = initial_checkpoint.clone();
             let commit_status = commit_status.clone();
-            let transaction_runner = transaction_runner.clone();
+            let scheduler_pool = scheduler_pool.clone();
 
             std::thread::Builder::new().name(format!("solScExLane{:02}", thx)).spawn(move || {
             let mut mint_decimals: HashMap<Pubkey, u8> = HashMap::new();
@@ -1558,7 +1531,7 @@ impl Scheduler {
             commit_status,
             current_checkpoint: initial_checkpoint,
             thread_count,
-            transaction_runner,
+            scheduler_pool,
         };
         info!(
             "scheduler: id_{:016x} setup done with {}us",
@@ -1658,8 +1631,8 @@ impl Scheduler {
         self.current_checkpoint.with_context_value(|c| c.mode).unwrap()
     }
 
-    fn transaction_runner(&self) -> ArcPool {
-        self.transaction_runner.clone()
+    fn scheduler_pool(&self) -> ArcPool {
+        self.scheduler_pool.clone()
     }
 
     fn has_context(&self) -> bool {
@@ -1877,7 +1850,7 @@ pub trait LikeScheduler: Send + Sync + std::fmt::Debug {
     fn handle_aborted_executions(&self) -> Vec<Result<ExecuteTimings>>;
     fn pause_commit_into_bank(&self);
     fn resume_commit_into_bank(&self, bank: Option<&Arc<Bank>>);
-    fn transaction_runner(&self) -> ArcPool;
+    fn scheduler_pool(&self) -> ArcPool;
     fn gracefully_stop(&mut self) -> Result<()>;
     fn current_scheduler_mode(&self) -> solana_scheduler::Mode;
     fn has_context(&self) -> bool; 
@@ -1910,7 +1883,7 @@ impl LikeScheduler for Scheduler {
         panic!();
     }
 
-    fn transaction_runner(&self) -> ArcPool {
+    fn scheduler_pool(&self) -> ArcPool {
         panic!();
     }
 
@@ -4444,7 +4417,7 @@ impl Bank {
 
 
         let scheduler_mode = self.scheduler_mode();
-        let runner = self.transaction_runner();
+        let runner = self.scheduler_pool();
         let mut w_blockhash_queue = match scheduler_mode {
             solana_scheduler::Mode::Replaying => {
                 let last_result = self.wait_for_scheduler(false);
@@ -4471,7 +4444,7 @@ impl Bank {
                     .unwrap()
                     .push(last_result);
                 drop(s2);
-                self.sync_scheduler_context(self.transaction_runner(), scheduler_mode);
+                self.sync_scheduler_context(self.scheduler_pool(), scheduler_mode);
                 //*self.scheduler.write().unwrap() = new_scheduler;
                 w_blockhash_queue
             },
@@ -6985,10 +6958,10 @@ impl Bank {
         scheduler.replace_scheduler_context(SchedulerContext{ bank: Some(self.clone()), mode});
     }
 
-    pub fn transaction_runner(&self) -> ArcPool {
+    pub fn scheduler_pool(&self) -> ArcPool {
         let s = self.scheduler.read().unwrap();
         let scheduler = s.as_ref().unwrap();
-        scheduler.transaction_runner()
+        scheduler.scheduler_pool()
     }
 
     pub fn scheduler_mode(&self) -> solana_scheduler::Mode {
@@ -8741,7 +8714,7 @@ impl Bank {
             assert!(scheduler.has_context());
 
             let scheduler_mode = scheduler.current_scheduler_mode();
-            let runner = scheduler.transaction_runner();
+            let runner = scheduler.scheduler_pool();
             if matches!(scheduler_mode, solana_scheduler::Mode::Replaying) || via_drop {
                 info!("wait_for_scheduler({scheduler_mode:?}/{via_drop}): gracefully stopping bank ({})...", self.slot());
                 if matches!(scheduler_mode, solana_scheduler::Mode::Banking) {
