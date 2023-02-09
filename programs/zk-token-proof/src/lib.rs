@@ -32,11 +32,9 @@ fn process_verify_proof<T: Pod + ZkProofData>(
 
     // create context state if accounts are provided with the instruction
     if instruction_context.get_number_of_instruction_accounts() > 0 {
-        let context_state_authority = {
-            *instruction_context
-                .try_borrow_instruction_account(transaction_context, 1)?
-                .get_key()
-        };
+        let context_state_authority = *instruction_context
+            .try_borrow_instruction_account(transaction_context, 1)?
+            .get_key();
 
         let mut proof_context_account =
             instruction_context.try_borrow_instruction_account(transaction_context, 0)?;
@@ -81,7 +79,7 @@ fn process_close_proof_context<T: Pod + ZkProofContext>(
             return Err(InstructionError::MissingRequiredSignature);
         }
         *owner_account.get_key()
-    };
+    }; // done with `owner_account`, so drop it to prevent a potential double borrow
 
     let proof_context_account_pubkey = *instruction_context
         .try_borrow_instruction_account(transaction_context, 0)?
@@ -135,6 +133,10 @@ pub fn process_instruction(invoke_context: &mut InvokeContext) -> Result<(), Ins
 
     match instruction {
         ProofInstruction::VerifyProof => match proof_type {
+            ProofType::Uninitialized => {
+                ic_msg!(invoke_context, "Uninitialized proof type not supported");
+                Err(InstructionError::InvalidInstructionData)
+            }
             ProofType::CloseAccount => {
                 ic_msg!(invoke_context, "VerifyProof CloseAccount");
                 process_verify_proof::<CloseAccountData>(invoke_context)
@@ -159,12 +161,12 @@ pub fn process_instruction(invoke_context: &mut InvokeContext) -> Result<(), Ins
                 ic_msg!(invoke_context, "VerifyProof PubkeyValidity");
                 process_verify_proof::<PubkeyValidityData>(invoke_context)
             }
-            _ => {
-                ic_msg!(invoke_context, "unsupported proof type");
-                Err(InstructionError::InvalidInstructionData)
-            }
         },
         ProofInstruction::CloseContextState => match proof_type {
+            ProofType::Uninitialized => {
+                ic_msg!(invoke_context, "Uninitialized proof type not supported");
+                Err(InstructionError::InvalidInstructionData)
+            }
             ProofType::CloseAccount => {
                 ic_msg!(invoke_context, "CloseContextState CloseAccount");
                 process_close_proof_context::<CloseAccountProofContext>(invoke_context)
@@ -188,10 +190,6 @@ pub fn process_instruction(invoke_context: &mut InvokeContext) -> Result<(), Ins
             ProofType::PubkeyValidity => {
                 ic_msg!(invoke_context, "CloseContextState PubkeyValidity");
                 process_close_proof_context::<PubkeyValidityProofContext>(invoke_context)
-            }
-            _ => {
-                ic_msg!(invoke_context, "unsupported proof type");
-                Err(InstructionError::InvalidInstructionData)
             }
         },
     }
