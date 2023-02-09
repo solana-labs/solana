@@ -46,8 +46,8 @@ impl SchedulerPool {
         }
     }
 
-    fn create(&mut self, runner: ArcPool) {
-        self.schedulers.lock().unwrap().push(Box::new(Scheduler::default2(runner)));
+    fn create(self: &Arc<Self>) {
+        self.schedulers.lock().unwrap().push(Box::new(Scheduler::default2(self.clone())));
     }
 
     pub fn take_from_pool(self: &Arc<Self>, runner: ArcPool) -> Box<dyn LikeScheduler> {
