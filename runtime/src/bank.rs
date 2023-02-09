@@ -1048,11 +1048,11 @@ impl SchedulerPool {
         assert!(scheduler.collected_results().lock().unwrap().is_empty());
         //assert!(scheduler.current_checkpoint.clone_context_value().unwrap().bank.is_none());
         assert!(scheduler
-            .graceful_stop_initiated
+            .graceful_stop_initiated()
             .load(std::sync::atomic::Ordering::SeqCst));
 
         scheduler
-            .graceful_stop_initiated
+            .graceful_stop_initiated()
             .store(false, std::sync::atomic::Ordering::SeqCst);
 
         self.schedulers.push(scheduler);
@@ -1879,6 +1879,10 @@ pub struct Bank {
 }
 
 trait ScheduleLike: Send + Sync + std::fmt::Debug {
+    fn graceful_stop_initiated(&self) -> &AtomicBool {
+        panic!();
+    }
+
     fn random_id(&self) -> u64 {
         panic!();
     }
@@ -1925,6 +1929,10 @@ trait ScheduleLike: Send + Sync + std::fmt::Debug {
 }
 
 impl ScheduleLike for Scheduler {
+    fn graceful_stop_initiated(&self) -> &AtomicBool {
+        panic!();
+    }
+
     fn random_id(&self) -> u64 {
         panic!();
     }
