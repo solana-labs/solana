@@ -1,6 +1,7 @@
 use std::sync::Arc;
 use solana_runtime::bank::Bank;
 use solana_runtime::bank::LikeScheduler;
+use solana_runtime::bank::ArcPool;
 
 struct TransactionRunner(Arc<Bank>, solana_poh::poh_recorder::PohRecorder, solana_ledger::blockstore_processor::TransactionStatusSender);
 
