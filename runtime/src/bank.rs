@@ -1444,6 +1444,11 @@ impl Scheduler<ExecuteTimings> {
                         },
                         solana_scheduler::ExaminablePayload(solana_scheduler::Flushable::Flush(checkpoint)) => {
                             info!("post_execution_handler: slot: {:?} {:?}", latest_runner_context.as_ref().map(|c| format!("{}", c.slot())).unwrap_or("???".into()), transaction_error_counts.aggregate().into_iter().chain([("succeeded", succeeded), ("skipped", skipped)].into_iter()).filter(|&(k, v)| v > 0).collect::<std::collections::BTreeMap<_, _>>());
+                            match latest_runner_context.as_ref().map(|c| c.mode) {
+                                Some(solana_scheduler::Mode::Replaying) => {
+                                    assert_eq!(skipped, 0);
+                                }
+                            }
                             transaction_error_counts.reset();
                             (succeeded, skipped) = (0, 0);
                             checkpoint.wait_for_restart(Some(std::mem::take(&mut cumulative_timings)));
