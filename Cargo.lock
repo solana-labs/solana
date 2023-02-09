@@ -7053,6 +7053,7 @@ dependencies = [
  "cpu-time",
  "crossbeam-channel",
  "log",
+ "rand 0.7.3",
  "solana-ledger",
  "solana-metrics",
  "solana-poh",
