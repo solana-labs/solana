@@ -5,13 +5,13 @@
 
 use {
     crate::connection_cache::ConnectionCache,
-    solana_rpc_client::rpc_client::RpcClient,
-    solana_rpc_client_api::{config::RpcProgramAccountsConfig},
     solana_quic_client::{QuicConfig, QuicConnectionManager, QuicPool},
+    solana_rpc_client::rpc_client::RpcClient,
+    solana_rpc_client_api::config::RpcProgramAccountsConfig,
     solana_sdk::{
         account::Account,
         client::{AsyncClient, Client, SyncClient},
-        clock::{Slot,},
+        clock::Slot,
         commitment_config::CommitmentConfig,
         epoch_info::EpochInfo,
         fee_calculator::{FeeCalculator, FeeRateGovernor},
@@ -24,13 +24,9 @@ use {
         transaction::{self, Transaction, VersionedTransaction},
         transport::Result as TransportResult,
     },
-    solana_thin_client::thin_client::{ThinClient as BackendThinClient},
+    solana_thin_client::thin_client::ThinClient as BackendThinClient,
     solana_udp_client::{UdpConfig, UdpConnectionManager, UdpPool},
-    std::{
-        net::SocketAddr,
-        sync::Arc,
-        time::{Duration},
-    },
+    std::{net::SocketAddr, sync::Arc, time::Duration},
 };
 
 /// A thin wrapper over thin-client/ThinClient to ease
@@ -41,7 +37,9 @@ pub enum ThinClient {
     Udp(BackendThinClient<UdpPool, UdpConnectionManager, UdpConfig>),
 }
 
+/// Macros easing the forwarding calls to the BackendThinClient
 macro_rules! dispatch {
+    /*  Regular version */
     ($vis:vis fn $name:ident(&self $(, $arg:ident : $ty:ty)*) $(-> $out:ty)?) => {
         #[inline]
         $vis fn $name(&self $(, $arg:$ty)*) $(-> $out)? {
@@ -51,6 +49,8 @@ macro_rules! dispatch {
             }
         }
     };
+
+    /* The self is a mut */
     ($vis:vis fn $name:ident(&mut self $(, $arg:ident : $ty:ty)*) $(-> $out:ty)?) => {
         #[inline]
         $vis fn $name(&mut self $(, $arg:$ty)*) $(-> $out)? {
@@ -60,6 +60,8 @@ macro_rules! dispatch {
             }
         }
     };
+
+    /* There is a type parameter */
     ($vis:vis fn $name:ident<T: Signers>(&self $(, $arg:ident : $ty:ty)*) $(-> $out:ty)?) => {
         #[inline]
         $vis fn $name<T: Signers>(&self $(, $arg:$ty)*) $(-> $out)? {
@@ -68,10 +70,10 @@ macro_rules! dispatch {
                 Self::Udp(this) => this.$name($($arg),*),
             }
         }
-    };    
+    };
 }
 
-
+/// Macro forwarding calls to BackendThinClient with deprecated functions
 macro_rules! dispatch_allow_deprecated {
     ($vis:vis fn $name:ident(&self $(, $arg:ident : $ty:ty)*) $(-> $out:ty)?) => {
         #[inline]
@@ -90,9 +92,7 @@ macro_rules! dispatch_allow_deprecated {
     };
 }
 
-
-impl ThinClient
-{
+impl ThinClient {
     /// Create a new ThinClient that will interface with the Rpc at `rpc_addr` using TCP
     /// and the Tpu at `tpu_addr` over `transactions_socket` using Quic or UDP
     /// (currently hardcoded to UDP)
@@ -101,13 +101,15 @@ impl ThinClient
         tpu_addr: SocketAddr,
         connection_cache: Arc<ConnectionCache>,
     ) -> Self {
-        match *connection_cache {
+        match &*connection_cache {
             ConnectionCache::Quic(connection_cache) => {
-                let thin_client = BackendThinClient::new(rpc_addr, tpu_addr, Arc::new(connection_cache));
+                let thin_client =
+                    BackendThinClient::new(rpc_addr, tpu_addr, connection_cache.clone());
                 ThinClient::Quic(thin_client)
-            },
+            }
             ConnectionCache::Udp(connection_cache) => {
-                let thin_client = BackendThinClient::new(rpc_addr, tpu_addr, Arc::new(connection_cache));
+                let thin_client =
+                    BackendThinClient::new(rpc_addr, tpu_addr, connection_cache.clone());
                 ThinClient::Udp(thin_client)
             }
         }
@@ -119,13 +121,23 @@ impl ThinClient
         timeout: Duration,
         connection_cache: Arc<ConnectionCache>,
     ) -> Self {
-        match *connection_cache {
+        match &*connection_cache {
             ConnectionCache::Quic(connection_cache) => {
-                let thin_client = BackendThinClient::new_socket_with_timeout(rpc_addr, tpu_addr,  timeout,Arc::new(connection_cache));
+                let thin_client = BackendThinClient::new_socket_with_timeout(
+                    rpc_addr,
+                    tpu_addr,
+                    timeout,
+                    connection_cache.clone(),
+                );
                 ThinClient::Quic(thin_client)
-            },
+            }
             ConnectionCache::Udp(connection_cache) => {
-                let thin_client = BackendThinClient::new_socket_with_timeout(rpc_addr, tpu_addr,  timeout, Arc::new(connection_cache));
+                let thin_client = BackendThinClient::new_socket_with_timeout(
+                    rpc_addr,
+                    tpu_addr,
+                    timeout,
+                    connection_cache.clone(),
+                );
                 ThinClient::Udp(thin_client)
             }
         }
@@ -136,13 +148,21 @@ impl ThinClient
         tpu_addrs: Vec<SocketAddr>,
         connection_cache: Arc<ConnectionCache>,
     ) -> Self {
-        match *connection_cache {
+        match &*connection_cache {
             ConnectionCache::Quic(connection_cache) => {
-                let thin_client = BackendThinClient::new_from_addrs(rpc_addrs, tpu_addrs, Arc::new(connection_cache));
+                let thin_client = BackendThinClient::new_from_addrs(
+                    rpc_addrs,
+                    tpu_addrs,
+                    connection_cache.clone(),
+                );
                 ThinClient::Quic(thin_client)
-            },
+            }
             ConnectionCache::Udp(connection_cache) => {
-                let thin_client = BackendThinClient::new_from_addrs(rpc_addrs, tpu_addrs, Arc::new(connection_cache));
+                let thin_client = BackendThinClient::new_from_addrs(
+                    rpc_addrs,
+                    tpu_addrs,
+                    connection_cache.clone(),
+                );
                 ThinClient::Udp(thin_client)
             }
         }
@@ -200,16 +220,13 @@ impl ThinClient
         &mut self,
         sig: &Signature
     ) -> TransportResult<usize>);
-
 }
 
-impl Client for ThinClient
-{
+impl Client for ThinClient {
     dispatch!(fn tpu_addr(&self) -> String);
 }
 
-impl SyncClient for ThinClient
-{
+impl SyncClient for ThinClient {
     dispatch!(fn send_and_confirm_message<T: Signers>(
         &self,
         keypairs: &T,
@@ -316,8 +333,7 @@ impl SyncClient for ThinClient
     dispatch!(fn get_fee_for_message(&self, message: &Message) -> TransportResult<u64>);
 }
 
-impl AsyncClient for ThinClient
-{    
+impl AsyncClient for ThinClient {
     dispatch!(fn async_send_versioned_transaction(
         &self,
         transaction: VersionedTransaction
