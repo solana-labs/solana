@@ -1898,6 +1898,10 @@ trait ScheduleLike: Send + Sync {
     fn gracefully_stop(&mut self) -> Result<()> {
         panic!();
     }
+
+    fn current_scheduler_mode(&self) -> solana_scheduler::Mode {
+        panic!();
+    }
 }
 
 struct VoteWithStakeDelegations {
