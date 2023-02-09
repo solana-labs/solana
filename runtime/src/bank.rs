@@ -7994,7 +7994,7 @@ impl Bank {
                     .into_iter()
                     .next()
                     .unwrap();
-                runner.lock().unwrap().return_to_pool(s.take().unwrap());
+                runner.return_to_pool(s.take().unwrap());
                 e
             } else {
                 info!("wait_for_scheduler(Banking): pausing commit into bank ({})...", self.slot());
