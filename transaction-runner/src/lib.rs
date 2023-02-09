@@ -25,6 +25,7 @@ use solana_sdk::transaction::TransactionError;
 use std::time::Instant;
 use solana_sdk::transaction::VersionedTransaction;
 use solana_metrics::inc_new_counter_info;
+use solana_metrics::inc_new_counter;
 
 struct TransactionRunner(Arc<Bank>, solana_poh::poh_recorder::PohRecorder, solana_ledger::blockstore_processor::TransactionStatusSender);
 

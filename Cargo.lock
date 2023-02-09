@@ -7061,6 +7061,7 @@ dependencies = [
  "solana-runtime",
  "solana-scheduler",
  "solana-sdk 1.16.0",
+ "solana-transaction-status",
  "thread-priority",
  "variant_counter",
 ]
