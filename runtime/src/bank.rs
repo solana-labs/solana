@@ -4443,7 +4443,7 @@ impl Bank {
                 //new_scheduler.collected_results.lock().unwrap().push(maybe_last_error);
                 s2.as_ref()
                     .unwrap()
-                    .collected_results
+                    .collected_results()
                     .lock()
                     .unwrap()
                     .push(last_result);
