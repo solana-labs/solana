@@ -5,8 +5,8 @@ use std::{marker::PhantomData, mem::ManuallyDrop, ptr::NonNull};
 /// `Vec`, with a stable memory layout
 ///
 /// This container is used within the runtime to ensure memory mapping and memory accesses are
-/// valid.  We rely on known addresses and offsets within the runtime, and since `Vec`'s layout is
-/// allowed to change, we must provide a way to lock down the memory layout.  `StableVec`
+/// valid.  We rely on known addresses and offsets within the runtime, and since `Vec`'s layout
+/// is allowed to change, we must provide a way to lock down the memory layout.  `StableVec`
 /// reimplements the bare minimum of `Vec`'s API sufficient only for the runtime's needs.
 ///
 /// To ensure memory allocation and deallocation is handled correctly, it is only possible to

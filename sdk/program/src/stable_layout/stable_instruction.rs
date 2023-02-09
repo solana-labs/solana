@@ -1,4 +1,4 @@
-//! Instruction, with a stable memory layout
+//! `Instruction`, with a stable memory layout
 
 use {
     crate::{
@@ -9,6 +9,25 @@ use {
     std::fmt::Debug,
 };
 
+/// `Instruction`, with a stable memory layout
+///
+/// This is used within the runtime to ensure memory mapping and memory accesses are valid.  We
+/// rely on known addresses and offsets within the runtime, and since `Instruction`'s layout is
+/// allowed to change, we must provide a way to lock down the memory layout.  `StableInstruction`
+/// reimplements the bare minimum of `Instruction`'s API sufficient only for the runtime's needs.
+///
+/// # Examples
+///
+/// Creating a `StableInstruction` from an `Instruction`
+///
+/// ```
+/// # use solana_program::{instruction::{AccountMeta, Instruction}, pubkey::Pubkey, stable_layout::stable_instruction::StableInstruction};
+/// # let program_id = Pubkey::default();
+/// # let accounts = Vec::default();
+/// # let data = Vec::default();
+/// let instruction = Instruction { program_id, accounts, data };
+/// let instruction = StableInstruction::from(instruction);
+/// ```
 #[derive(Debug, PartialEq)]
 #[repr(C)]
 pub struct StableInstruction {

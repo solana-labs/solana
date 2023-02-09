@@ -228,7 +228,6 @@ impl solana_sdk::program_stubs::SyscallStubs for SyscallStubs {
         account_infos: &[AccountInfo],
         signers_seeds: &[&[&[u8]]],
     ) -> ProgramResult {
-        // bprumo TODO: can I do anything to remove this clone?
         let instruction = StableInstruction::from(instruction.clone());
         let invoke_context = get_invoke_context();
         let log_collector = invoke_context.get_log_collector();
