@@ -1002,7 +1002,7 @@ pub struct SchedulerPool {
     schedulers: Vec<Box<dyn LikeScheduler>>,
 }
 
-type ArcPool = Arc<std::sync::Mutex<SchedulerPool>>;
+pub type ArcPool = Arc<std::sync::Mutex<SchedulerPool>>;
 
 impl SchedulerPool {
     pub const fn new() -> Self {
