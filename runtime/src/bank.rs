@@ -1916,6 +1916,44 @@ trait ScheduleLike: Send + Sync + std::fmt::Debug {
     }
 }
 
+impl ScheduleLike for Scheduler {
+    fn handle_aborted_executions(&self) -> Vec<Result<ExecuteTimings>> {
+        panic!();
+    }
+
+    fn pause_commit_into_bank(&self) {
+        panic!();
+    }
+
+    fn resume_commit_into_bank(&self, bank: Option<&Arc<Bank>>) {
+        panic!();
+    }
+
+    fn transaction_runner(&self) -> Arc<TransactionRunner> {
+        panic!();
+    }
+
+    fn gracefully_stop(&mut self) -> Result<()> {
+        panic!();
+    }
+
+    fn current_scheduler_mode(&self) -> solana_scheduler::Mode {
+        panic!();
+    }
+
+    fn has_context(&self) -> bool {
+        panic!();
+    }
+
+    fn replace_scheduler_context(&self, scheduler_context: SchedulerContext) {
+        panic!();
+    }
+
+    fn collected_results(&self) -> Arc<std::sync::Mutex<Vec<Result<ExecuteTimings>>>> {
+        panic!();
+    }
+}
+
 struct VoteWithStakeDelegations {
     vote_state: Arc<VoteState>,
     vote_account: AccountSharedData,
