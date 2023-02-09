@@ -1554,6 +1554,8 @@ mod test {
         let ReplayBlockstoreComponents {
             blockstore: requester_blockstore,
             vote_simulator,
+            my_pubkey,
+            leader_schedule_cache,
             ..
         } = setup_dead_slot(dead_slot, correct_bank_hashes);
 
@@ -1639,6 +1641,8 @@ mod test {
             None,
             &mut PurgeRepairSlotCounter::default(),
             &dumped_slots_sender,
+            &my_pubkey,
+            &leader_schedule_cache,
         );
 
         // Simulate making a request
