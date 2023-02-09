@@ -1638,6 +1638,10 @@ impl<C> Scheduler<C> {
         self.current_checkpoint.with_context_value(|c| c.mode).unwrap()
     }
 
+    fn current_runner(&self) -> Arc<Runner> {
+        self.current_checkpoint.with_context_value(|c| c.runner.clone()).unwrap()
+    }
+
     fn has_context(&self) -> bool {
         self.current_checkpoint.with_context_value(|_| ()).is_some()
     }
@@ -6894,6 +6898,12 @@ impl Bank {
         let s = self.scheduler2.read().unwrap();
         let scheduler = s.as_ref().unwrap();
         scheduler.replace_transaction_runner_context(runner.context(Some(self.clone()), mode));
+    }
+
+    pub fn transaction_runner(&self) -> Arc<Runner> {
+        let s = self.scheduler2.read().unwrap();
+        let scheduler = s.as_ref().unwrap();
+        scheduler.current_runner()
     }
 
     pub fn transaction_runner_mode(&self) -> solana_scheduler::Mode {
