@@ -965,7 +965,7 @@ impl TransactionRunner {
     }
 
     fn context(self: Arc<Self>, bank: Option<Arc<Bank>>, mode: solana_scheduler::Mode) -> SchedulerContext {
-        SchedulerContext { runner: self, bank, mode }
+        SchedulerContext { bank, mode }
     }
 
     pub(crate) fn take_scheduler_from_pool(self: &Arc<Self>) -> Box<Scheduler> {
