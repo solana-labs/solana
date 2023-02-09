@@ -9,7 +9,7 @@ use {
     std::fmt::Debug,
 };
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 #[repr(C)]
 pub struct StableInstruction {
     pub accounts: StableVec<AccountMeta>,
