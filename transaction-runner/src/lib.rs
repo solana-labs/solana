@@ -630,8 +630,8 @@ impl Scheduler {
         s
     }
 
-    fn pool() -> Arc<dyn LikeSchedulerPool> {
-        panic!();
+    fn pool(&self) -> Arc<dyn LikeSchedulerPool> {
+        self.scheduler_pool
     }
 }
 
