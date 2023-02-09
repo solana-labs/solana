@@ -469,7 +469,7 @@ pub mod tests {
                 },
                 INCLUDE_SLOT_IN_HASH_TESTS,
             },
-            append_vec::{AccountMeta, StoredAccountMeta, StoredMeta},
+            append_vec::{aligned_stored_size, AccountMeta, StoredAccountMeta, StoredMeta},
             storable_accounts::StorableAccountsBySlot,
         },
         solana_sdk::{
@@ -484,6 +484,7 @@ pub mod tests {
 
     fn get_sample_storages(
         slots: usize,
+        account_data_size: Option<u64>,
     ) -> (
         AccountsDb,
         Vec<Arc<AccountStorageEntry>>,
@@ -491,7 +492,7 @@ pub mod tests {
         Vec<SlotInfo>,
     ) {
         let alive = true;
-        let (db, slot1) = create_db_with_storages_and_index(alive, slots, None);
+        let (db, slot1) = create_db_with_storages_and_index(alive, slots, account_data_size);
         let original_stores = (0..slots)
             .filter_map(|slot| db.storage.get_slot_storage_entry((slot as Slot) + slot1))
             .collect::<Vec<_>>();
@@ -716,7 +717,7 @@ pub mod tests {
     fn test_get_unique_accounts_from_storage_for_combining_ancient_slots() {
         for num_slots in 0..3 {
             for reverse in [false, true] {
-                let (db, storages, slots, mut infos) = get_sample_storages(num_slots);
+                let (db, storages, slots, mut infos) = get_sample_storages(num_slots, None);
                 let original_results = storages
                     .iter()
                     .map(|store| db.get_unique_accounts_from_storage(store))
@@ -1400,62 +1401,76 @@ pub mod tests {
 
     #[test]
     fn test_write_ancient_accounts() {
-        for num_slots in 0..4 {
-            for combine_into in 0..=num_slots {
-                if combine_into == num_slots && num_slots > 0 {
-                    // invalid combination when num_slots > 0, but required to hit num_slots=0, combine_into=0
-                    continue;
-                }
-                let (db, storages, slots, _infos) = get_sample_storages(num_slots);
+        for data_size in [None, Some(10_000_000)] {
+            for num_slots in 0..4 {
+                for combine_into in 0..=num_slots {
+                    if combine_into == num_slots && num_slots > 0 {
+                        // invalid combination when num_slots > 0, but required to hit num_slots=0, combine_into=0
+                        continue;
+                    }
+                    let (db, storages, slots, _infos) = get_sample_storages(num_slots, data_size);
 
-                let initial_accounts = get_all_accounts(&db, slots.clone());
+                    let initial_accounts = get_all_accounts(&db, slots.clone());
 
-                let accounts_vecs = storages
-                    .iter()
-                    .map(|storage| (storage.slot(), storage.accounts.accounts(0)))
-                    .collect::<Vec<_>>();
-                // reshape the data
-                let accounts_vecs2 = accounts_vecs
-                    .iter()
-                    .map(|(slot, accounts)| (*slot, accounts.iter().collect::<Vec<_>>()))
-                    .collect::<Vec<_>>();
-                let accounts = accounts_vecs2
-                    .iter()
-                    .map(|(slot, accounts)| (*slot, &accounts[..]))
-                    .collect::<Vec<_>>();
+                    let accounts_vecs = storages
+                        .iter()
+                        .map(|storage| (storage.slot(), storage.accounts.accounts(0)))
+                        .collect::<Vec<_>>();
+                    // reshape the data
+                    let accounts_vecs2 = accounts_vecs
+                        .iter()
+                        .map(|(slot, accounts)| (*slot, accounts.iter().collect::<Vec<_>>()))
+                        .collect::<Vec<_>>();
+                    let accounts = accounts_vecs2
+                        .iter()
+                        .map(|(slot, accounts)| (*slot, &accounts[..]))
+                        .collect::<Vec<_>>();
 
-                let target_slot = slots.clone().nth(combine_into).unwrap_or(slots.start);
-                let accounts_to_write = StorableAccountsBySlot::new(
-                    target_slot,
-                    &accounts[..],
-                    INCLUDE_SLOT_IN_HASH_TESTS,
-                );
+                    let target_slot = slots.clone().nth(combine_into).unwrap_or(slots.start);
+                    let accounts_to_write = StorableAccountsBySlot::new(
+                        target_slot,
+                        &accounts[..],
+                        INCLUDE_SLOT_IN_HASH_TESTS,
+                    );
 
-                if num_slots > 0 {
-                    let mut result = db
-                        .write_ancient_accounts(1, accounts_to_write)
-                        .shrinks_in_progress;
-                    let one = result.drain().collect::<Vec<_>>();
-                    assert_eq!(1, one.len());
-                    assert_eq!(target_slot, one.first().unwrap().0);
+                    let bytes = storages
+                        .iter()
+                        .map(|storage| storage.written_bytes())
+                        .sum::<u64>();
                     assert_eq!(
-                        one.first().unwrap().1.old_storage().append_vec_id(),
-                        storages[combine_into].append_vec_id()
+                        bytes,
+                        initial_accounts
+                            .iter()
+                            .map(|(_, account)| aligned_stored_size(account.data().len()) as u64)
+                            .sum::<u64>()
                     );
-                    // make sure the single new append vec contains all the same accounts
-                    let accounts_in_new_storage =
-                        one.first().unwrap().1.new_storage().accounts.accounts(0);
-                    compare_all_accounts(
-                        &initial_accounts,
-                        &accounts_in_new_storage
-                            .into_iter()
-                            .map(|meta| (*meta.pubkey(), meta.to_account_shared_data()))
-                            .collect::<Vec<_>>()[..],
-                    );
-                }
-                let all_accounts = get_all_accounts(&db, target_slot..(target_slot + 1));
 
-                compare_all_accounts(&initial_accounts, &all_accounts);
+                    if num_slots > 0 {
+                        let mut result = db
+                            .write_ancient_accounts(bytes, accounts_to_write)
+                            .shrinks_in_progress;
+                        let one = result.drain().collect::<Vec<_>>();
+                        assert_eq!(1, one.len());
+                        assert_eq!(target_slot, one.first().unwrap().0);
+                        assert_eq!(
+                            one.first().unwrap().1.old_storage().append_vec_id(),
+                            storages[combine_into].append_vec_id()
+                        );
+                        // make sure the single new append vec contains all the same accounts
+                        let accounts_in_new_storage =
+                            one.first().unwrap().1.new_storage().accounts.accounts(0);
+                        compare_all_accounts(
+                            &initial_accounts,
+                            &accounts_in_new_storage
+                                .into_iter()
+                                .map(|meta| (*meta.pubkey(), meta.to_account_shared_data()))
+                                .collect::<Vec<_>>()[..],
+                        );
+                    }
+                    let all_accounts = get_all_accounts(&db, target_slot..(target_slot + 1));
+
+                    compare_all_accounts(&initial_accounts, &all_accounts);
+                }
             }
         }
     }

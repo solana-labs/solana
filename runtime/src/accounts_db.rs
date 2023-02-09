@@ -10498,9 +10498,9 @@ pub mod tests {
         account_data_size: Option<u64>,
     ) -> Arc<AccountStorageEntry> {
         let (_temp_dirs, paths) = get_temp_accounts_paths(1).unwrap();
-        let size: usize = 123;
+        let size: usize = aligned_stored_size(account_data_size.unwrap_or(123) as usize);
         let mut data = AccountStorageEntry::new(&paths[0], slot, id, size as u64);
-        let av = AppendVec::new(&tf.path, true, 1024 * 1024);
+        let av = AppendVec::new(&tf.path, true, (1024 * 1024).max(size));
         data.accounts = av;
 
         let arc = Arc::new(data);
