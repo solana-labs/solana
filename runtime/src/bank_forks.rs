@@ -66,7 +66,7 @@ pub struct BankForks {
     pub accounts_hash_interval_slots: Slot,
     last_accounts_hash_slot: Slot,
     in_vote_only_mode: Arc<AtomicBool>,
-    transaction_runner: Arc<crate::bank::Runner>,
+    transaction_runner: Arc<crate::bank::TransactionRunner>,
 }
 
 impl Index<u64> for BankForks {
@@ -183,7 +183,7 @@ impl BankForks {
             accounts_hash_interval_slots: std::u64::MAX,
             last_accounts_hash_slot: root,
             in_vote_only_mode: Arc::new(AtomicBool::new(false)),
-            transaction_runner: Arc::new(crate::bank::Runner::new()),
+            transaction_runner: Arc::new(crate::bank::TransactionRunner::new()),
         }
     }
 

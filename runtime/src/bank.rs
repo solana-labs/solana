@@ -946,19 +946,19 @@ impl AbiExample for BuiltinPrograms {
 
 #[derive(Clone, Debug)]
 struct SchedulerContext {
-    runner: Arc<Runner>,
+    runner: Arc<TransactionRunner>,
     bank: Option<Arc<Bank>>,
     mode: solana_scheduler::Mode,
 }
 
 #[derive(Debug)]
-pub struct Runner {
+pub struct TransactionRunner {
     scheduler_pool: std::sync::Mutex<SchedulerPool<ExecuteTimings>>,
     // poh callback
     // tx status writer
 }
 
-impl Runner {
+impl TransactionRunner {
     pub fn new() -> Self {
         Self {
             scheduler_pool: std::sync::Mutex::new(SchedulerPool::new()),
@@ -1650,7 +1650,7 @@ impl<C> Scheduler<C> {
         self.current_checkpoint.with_context_value(|c| c.mode).unwrap()
     }
 
-    fn current_runner(&self) -> Arc<Runner> {
+    fn current_runner(&self) -> Arc<TransactionRunner> {
         self.current_checkpoint.with_context_value(|c| c.runner.clone()).unwrap()
     }
 
@@ -6906,13 +6906,13 @@ impl Bank {
         }
     }
 
-    pub fn sync_transaction_runner_context(self: &Arc<Self>, runner: Arc<Runner>, mode: solana_scheduler::Mode) {
+    pub fn sync_transaction_runner_context(self: &Arc<Self>, runner: Arc<TransactionRunner>, mode: solana_scheduler::Mode) {
         let s = self.scheduler.read().unwrap();
         let scheduler = s.as_ref().unwrap();
         scheduler.replace_transaction_runner_context(runner.context(Some(self.clone()), mode));
     }
 
-    pub fn transaction_runner(&self) -> Arc<Runner> {
+    pub fn transaction_runner(&self) -> Arc<TransactionRunner> {
         let s = self.scheduler.read().unwrap();
         let scheduler = s.as_ref().unwrap();
         scheduler.current_runner()
