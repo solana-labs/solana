@@ -28,6 +28,7 @@ use solana_metrics::inc_new_counter_info;
 use solana_metrics::inc_new_counter;
 use solana_metrics::inc_counter;
 use solana_metrics::datapoint_info_at;
+use solana_metrics::create_counter;
 
 struct TransactionRunner(Arc<Bank>, solana_poh::poh_recorder::PohRecorder, solana_ledger::blockstore_processor::TransactionStatusSender);
 
