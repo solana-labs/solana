@@ -1154,7 +1154,7 @@ pub struct Bank {
 }
 
 pub trait LikePool: Send + Sync + std::fmt::Debug {
-    fn take_from_pool(&self, pool: ArcPool) -> Box<dyn LikeScheduler>;
+    fn take_from_pool(&self, pool: ArcPool, mode: solana_scheduler::Mode) -> Box<dyn LikeScheduler>;
     fn return_to_pool(&self, scheduler: Box<dyn LikeScheduler>);
 }
 
