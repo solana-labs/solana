@@ -391,20 +391,17 @@ pub fn test_faulty_node(
 ) -> (LocalCluster, Vec<Arc<Keypair>>) {
     solana_logger::setup_with_default("solana_local_cluster=info");
     let num_nodes = node_stakes.len();
-
     let mut validator_keys = Vec::with_capacity(num_nodes);
     validator_keys.resize_with(num_nodes, || (Arc::new(Keypair::new()), true));
-
     assert_eq!(node_stakes.len(), num_nodes);
     assert_eq!(validator_keys.len(), num_nodes);
 
-    let bad_leader_pubkey = validator_keys[0].0.as_ref().pubkey();
+    // Use a fixed leader schedule so that only the faulty node gets leader slots.
     let validator_to_slots = vec![(
-        bad_leader_pubkey,
+        validator_keys[0].0.as_ref().pubkey(),
         solana_sdk::clock::DEFAULT_DEV_SLOTS_PER_EPOCH as usize,
     )];
     let leader_schedule = create_custom_leader_schedule(validator_to_slots.into_iter());
-
     let fixed_leader_schedule = Some(FixedSchedule {
         leader_schedule: Arc::new(leader_schedule),
     });
