@@ -66,7 +66,7 @@ pub struct BankForks {
     pub accounts_hash_interval_slots: Slot,
     last_accounts_hash_slot: Slot,
     in_vote_only_mode: Arc<AtomicBool>,
-    like_scheduler_pool: Option<Box<dyn crate::bank::LikePool>>,
+    scheduler_pool: Option<Box<dyn crate::bank::LikePool>>,
 }
 
 impl Index<u64> for BankForks {
@@ -183,7 +183,7 @@ impl BankForks {
             accounts_hash_interval_slots: std::u64::MAX,
             last_accounts_hash_slot: root,
             in_vote_only_mode: Arc::new(AtomicBool::new(false)),
-            like_scheduler_pool: None, //Arc::new(std::sync::Mutex::new(Box::new(crate::bank::SchedulerPool::new())))
+            scheduler_pool: None, //Arc::new(std::sync::Mutex::new(Box::new(crate::bank::SchedulerPool::new())))
         }
     }
 
@@ -196,7 +196,7 @@ impl BankForks {
         for parent in bank.proper_ancestors() {
             self.descendants.entry(parent).or_default().insert(slot);
         }
-        bank.install_scheduler(self.like_scheduler_pool.as_ref().unwrap().take_from_pool(mode));
+        bank.install_scheduler(self.scheduler_pool.as_ref().unwrap().take_from_pool(mode));
         bank
     }
 
