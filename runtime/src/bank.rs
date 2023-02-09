@@ -8669,6 +8669,7 @@ impl Bank {
             }
 
             let runner_mode = scheduler.current_runner_mode();
+            let runner = scheduler.current_runner();
             if matches!(runner_mode, solana_scheduler::Mode::Replaying) || via_drop {
                 info!("wait_for_scheduler({runner_mode:?}/{via_drop}): gracefully stopping bank ({})...", self.slot());
                 if matches!(runner_mode, solana_scheduler::Mode::Banking) {
