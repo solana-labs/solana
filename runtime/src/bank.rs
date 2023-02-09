@@ -1052,21 +1052,21 @@ use solana_transaction_status::TransactionTokenBalance;
 pub static STATUS_SENDER_CALLBACK: std::sync::RwLock<Option<(Option<usize>, Box<dyn Fn(Option<(Vec<Vec<u64>>, Vec<Vec<TransactionTokenBalance>>)>, &Arc<Bank>, &TransactionBatch, &mut HashMap<Pubkey, u8>, Option<TransactionResults>, Option<usize>) -> std::option::Option<(Vec<Vec<u64>>, Vec<Vec<TransactionTokenBalance>>)> + Send + Sync>)>> = std::sync::RwLock::new(None);
 
 #[derive(Debug)]
-pub(crate) struct Scheduler<C> {
+pub(crate) struct Scheduler {
     random_id: u64,
     scheduler_thread_handle: Option<std::thread::JoinHandle<Result<(Duration, Duration)>>>,
     executing_thread_handles: Option<Vec<std::thread::JoinHandle<Result<(Duration, Duration)>>>>,
     error_collector_thread_handle: Option<std::thread::JoinHandle<Result<(Duration, Duration)>>>,
-    transaction_sender: Option<crossbeam_channel::Sender<solana_scheduler::SchedulablePayload<C, SchedulerContext>>>,
+    transaction_sender: Option<crossbeam_channel::Sender<solana_scheduler::SchedulablePayload<ExecuteTimings, SchedulerContext>>>,
     preloader: Arc<solana_scheduler::Preloader>,
     graceful_stop_initiated: AtomicBool,
-    collected_results: Arc<std::sync::Mutex<Vec<Result<C>>>>,
+    collected_results: Arc<std::sync::Mutex<Vec<Result<ExecuteTimings>>>>,
     commit_status: Arc<CommitStatus>,
-    current_checkpoint: Arc<solana_scheduler::Checkpoint<C, SchedulerContext>>,
+    current_checkpoint: Arc<solana_scheduler::Checkpoint<ExecuteTimings, SchedulerContext>>,
     thread_count: usize,
 }
 
-impl<C> Scheduler<C> {
+impl Scheduler {
     fn schedule(&self, sanitized_tx: &SanitizedTransaction, index: usize, mode: solana_scheduler::Mode) {
         trace!("Scheduler::schedule()");
         #[derive(Clone, Copy, Debug)]
@@ -1562,12 +1562,12 @@ impl Scheduler<ExecuteTimings> {
     }
 }
 
-impl<C> Scheduler<C> {
-    fn new_checkpoint(thread_count: usize) -> Arc<solana_scheduler::Checkpoint<C, SchedulerContext>> {
+impl Scheduler {
+    fn new_checkpoint(thread_count: usize) -> Arc<solana_scheduler::Checkpoint<ExecuteTimings, SchedulerContext>> {
         solana_scheduler::Checkpoint::new(thread_count)
     }
 
-    fn checkpoint(&self) -> Arc<solana_scheduler::Checkpoint<C, SchedulerContext>> {
+    fn checkpoint(&self) -> Arc<solana_scheduler::Checkpoint<ExecuteTimings, SchedulerContext>> {
         Self::new_checkpoint(self.thread_count)
     }
 
@@ -1628,7 +1628,7 @@ impl<C> Scheduler<C> {
         Ok(())
     }
 
-    fn handle_aborted_executions(&self) -> Vec<Result<C>> {
+    fn handle_aborted_executions(&self) -> Vec<Result<ExecuteTimings>> {
         std::mem::take(&mut self.collected_results.lock().unwrap())
     }
 
@@ -1659,7 +1659,7 @@ impl<C> Scheduler<C> {
     }
 }
 
-impl<C> Drop for Scheduler<C> {
+impl Drop for Scheduler {
     fn drop(&mut self) {
         let current_thread_name = std::thread::current().name().unwrap().to_string();
         warn!("Scheduler::drop() by {}...", current_thread_name);
