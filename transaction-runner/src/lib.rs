@@ -756,10 +756,6 @@ impl LikeScheduler for Scheduler {
         panic!();
     }
 
-    fn scheduler_pool(&self) -> ArcPool {
-        panic!();
-    }
-
     fn gracefully_stop(&mut self) -> Result<()> {
         panic!();
     }
@@ -773,10 +769,6 @@ impl LikeScheduler for Scheduler {
     }
 
     fn replace_scheduler_context(&self, scheduler_context: SchedulerContext) {
-        panic!();
-    }
-
-    fn collected_results(&self) -> Arc<std::sync::Mutex<Vec<Result<ExecuteTimings>>>> {
         panic!();
     }
 
