@@ -1154,7 +1154,7 @@ pub struct Bank {
 }
 
 pub trait LikePool: Send + Sync + std::fmt::Debug {
-    fn take_from_pool(&self, runner: ArcPool) -> Box<dyn LikeScheduler>;
+    fn take_from_pool(&self, pool: ArcPool) -> Box<dyn LikeScheduler>;
     fn return_to_pool(&self, scheduler: Box<dyn LikeScheduler>);
 }
 
@@ -3682,11 +3682,11 @@ impl Bank {
 
 
         let scheduler_mode = self.scheduler_mode();
-        let runner = self.scheduler_pool();
+        let pool = self.scheduler_pool();
         let mut w_blockhash_queue = match scheduler_mode {
             solana_scheduler::Mode::Replaying => {
                 let last_result = self.wait_for_scheduler(false);
-                let scheduler = runner.take_from_pool(runner.clone());
+                let scheduler = pool.take_from_pool(pool.clone());
                 let mut s2 = self.scheduler.write().unwrap();
                 *s2 = Some(scheduler);
 
@@ -6217,7 +6217,7 @@ impl Bank {
         }
     }
 
-    pub fn sync_scheduler_context(self: &Arc<Self>, runner: ArcPool, mode: solana_scheduler::Mode) {
+    pub fn sync_scheduler_context(self: &Arc<Self>, pool: ArcPool, mode: solana_scheduler::Mode) {
         let s = self.scheduler.read().unwrap();
         let scheduler = s.as_ref().unwrap();
         scheduler.replace_scheduler_context(SchedulerContext{ bank: Some(self.clone()), mode});
@@ -7979,7 +7979,7 @@ impl Bank {
             assert!(scheduler.has_context());
 
             let scheduler_mode = scheduler.current_scheduler_mode();
-            let runner = scheduler.scheduler_pool();
+            let pool = scheduler.scheduler_pool();
             if matches!(scheduler_mode, solana_scheduler::Mode::Replaying) || via_drop {
                 info!("wait_for_scheduler({scheduler_mode:?}/{via_drop}): gracefully stopping bank ({})...", self.slot());
                 if matches!(scheduler_mode, solana_scheduler::Mode::Banking) {
@@ -7994,7 +7994,7 @@ impl Bank {
                     .into_iter()
                     .next()
                     .unwrap();
-                runner.return_to_pool(s.take().unwrap());
+                pool.return_to_pool(s.take().unwrap());
                 e
             } else {
                 info!("wait_for_scheduler(Banking): pausing commit into bank ({})...", self.slot());
