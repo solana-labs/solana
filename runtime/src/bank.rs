@@ -1904,6 +1904,11 @@ trait ScheduleLike: Send + Sync {
     }
 
     fn has_context(&self) -> bool {
+        panic!();
+    }
+
+    fn replace_scheduler_context(&self, scheduler_context: SchedulerContext) {
+        panic!();
     }
 }
 
