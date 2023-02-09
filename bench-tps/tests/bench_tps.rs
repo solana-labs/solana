@@ -9,7 +9,6 @@ use {
         spl_convert::FromOtherSolana,
     },
     solana_client::{
-        connection_cache::ConnectionCache,
         thin_client::ThinClient,
         tpu_client::{TpuClient, TpuClientConfig},
     },
@@ -131,17 +130,8 @@ fn test_bench_tps_test_validator(config: Config) {
         CommitmentConfig::processed(),
     ));
     let websocket_url = test_validator.rpc_pubsub_url();
-    let connection_cache = ConnectionCache::default();
-
-    let client = Arc::new(
-        TpuClient::new_with_connection_cache(
-            rpc_client,
-            &websocket_url,
-            TpuClientConfig::default(),
-            Arc::new(connection_cache.into()),
-        )
-        .unwrap(),
-    );
+    let client =
+        Arc::new(TpuClient::new(rpc_client, &websocket_url, TpuClientConfig::default()).unwrap());
 
     let lamports_per_account = 1000;
 
