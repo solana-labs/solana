@@ -945,7 +945,7 @@ impl AbiExample for BuiltinPrograms {
 }
 
 #[derive(Clone, Debug)]
-struct RunnerContext {
+struct SchedulerContext {
     runner: Arc<Runner>,
     bank: Option<Arc<Bank>>,
     mode: solana_scheduler::Mode,
@@ -965,8 +965,8 @@ impl Runner {
         }
     }
 
-    fn context(self: Arc<Self>, bank: Option<Arc<Bank>>, mode: solana_scheduler::Mode) -> RunnerContext {
-        RunnerContext { runner: self, bank, mode }
+    fn context(self: Arc<Self>, bank: Option<Arc<Bank>>, mode: solana_scheduler::Mode) -> SchedulerContext {
+        SchedulerContext { runner: self, bank, mode }
     }
 
     pub(crate) fn take_scheduler_from_pool(&self) -> Box<Scheduler<ExecuteTimings>> {
@@ -978,13 +978,13 @@ impl Runner {
     }
 }
 
-impl solana_scheduler::WithMode for RunnerContext {
+impl solana_scheduler::WithMode for SchedulerContext {
     fn mode(&self) -> solana_scheduler::Mode {
         self.mode
     }
 }
 
-impl RunnerContext {
+impl SchedulerContext {
     fn slot(&self) -> Slot {
         self.bank.as_ref().map(|b| b.slot()).unwrap_or(0)
     }
@@ -1057,12 +1057,12 @@ pub(crate) struct Scheduler<C> {
     scheduler_thread_handle: Option<std::thread::JoinHandle<Result<(Duration, Duration)>>>,
     executing_thread_handles: Option<Vec<std::thread::JoinHandle<Result<(Duration, Duration)>>>>,
     error_collector_thread_handle: Option<std::thread::JoinHandle<Result<(Duration, Duration)>>>,
-    transaction_sender: Option<crossbeam_channel::Sender<solana_scheduler::SchedulablePayload<C, RunnerContext>>>,
+    transaction_sender: Option<crossbeam_channel::Sender<solana_scheduler::SchedulablePayload<C, SchedulerContext>>>,
     preloader: Arc<solana_scheduler::Preloader>,
     graceful_stop_initiated: AtomicBool,
     collected_results: Arc<std::sync::Mutex<Vec<Result<C>>>>,
     commit_status: Arc<CommitStatus>,
-    current_checkpoint: Arc<solana_scheduler::Checkpoint<C, RunnerContext>>,
+    current_checkpoint: Arc<solana_scheduler::Checkpoint<C, SchedulerContext>>,
     thread_count: usize,
 }
 
@@ -1196,7 +1196,7 @@ impl Scheduler<ExecuteTimings> {
             if max_thread_priority {
                 thread_priority::set_current_thread_priority(thread_priority::ThreadPriority::Max).unwrap();
             }
-            let (mut latest_checkpoint, mut latest_runner_context) = (Some(initial_checkpoint), None::<RunnerContext>);
+            let (mut latest_checkpoint, mut latest_runner_context) = (Some(initial_checkpoint), None::<SchedulerContext>);
 
             'recv: while let Ok(r) = (if thx >= base_thread_count { scheduled_high_ee_receiver.recv() } else { scheduled_ee_receiver.recv()}) {
                 match r {
@@ -1390,7 +1390,7 @@ impl Scheduler<ExecuteTimings> {
                 use variant_counter::VariantCount;
                 let mut transaction_error_counts = TransactionError::counter();
                 let (mut skipped, mut succeeded) = (0, 0);
-                let (mut latest_checkpoint, mut latest_runner_context) = (Some(initial_checkpoint), None::<RunnerContext>);
+                let (mut latest_checkpoint, mut latest_runner_context) = (Some(initial_checkpoint), None::<SchedulerContext>);
 
                 loop {
                 while let Ok(r) = retired_ee_receiver.recv_timeout(std::time::Duration::from_millis(20))
@@ -1563,11 +1563,11 @@ impl Scheduler<ExecuteTimings> {
 }
 
 impl<C> Scheduler<C> {
-    fn new_checkpoint(thread_count: usize) -> Arc<solana_scheduler::Checkpoint<C, RunnerContext>> {
+    fn new_checkpoint(thread_count: usize) -> Arc<solana_scheduler::Checkpoint<C, SchedulerContext>> {
         solana_scheduler::Checkpoint::new(thread_count)
     }
 
-    fn checkpoint(&self) -> Arc<solana_scheduler::Checkpoint<C, RunnerContext>> {
+    fn checkpoint(&self) -> Arc<solana_scheduler::Checkpoint<C, SchedulerContext>> {
         Self::new_checkpoint(self.thread_count)
     }
 
@@ -1642,7 +1642,7 @@ impl<C> Scheduler<C> {
         self.commit_status.notify_as_resumed();
     }
 
-    fn replace_transaction_runner_context(&self, runner_context: RunnerContext) {
+    fn replace_transaction_runner_context(&self, runner_context: SchedulerContext) {
         self.current_checkpoint.replace_context_value(runner_context);
     }
 
