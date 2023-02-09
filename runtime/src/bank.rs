@@ -1059,7 +1059,6 @@ impl SchedulerPool {
     }
 }
 
-pub static POH: std::sync::RwLock<Option<Box<dyn Fn(&Bank, Vec<VersionedTransaction>, solana_sdk::hash::Hash) -> std::result::Result<Option<usize>, ()> + Send + Sync>>> = std::sync::RwLock::new(None);
 use solana_transaction_status::TransactionTokenBalance;
 pub static STATUS_SENDER_CALLBACK: std::sync::RwLock<Option<(Option<usize>, Box<dyn Fn(Option<(Vec<Vec<u64>>, Vec<Vec<TransactionTokenBalance>>)>, &Arc<Bank>, &TransactionBatch, &mut HashMap<Pubkey, u8>, Option<TransactionResults>, Option<usize>) -> std::option::Option<(Vec<Vec<u64>>, Vec<Vec<TransactionTokenBalance>>)> + Send + Sync>)>> = std::sync::RwLock::new(None);
 
