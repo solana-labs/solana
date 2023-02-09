@@ -950,6 +950,7 @@ struct SchedulerContext {
     mode: solana_scheduler::Mode,
 }
 
+#[derive(Debug)]
 pub struct TransactionRunner {
     scheduler_pool: std::sync::Mutex<SchedulerPool>,
     poh: std::sync::RwLock<Option<Box<dyn Fn(&Bank, Vec<VersionedTransaction>, solana_sdk::hash::Hash) -> std::result::Result<Option<usize>, ()> + Send + Sync>>>,
@@ -1054,6 +1055,7 @@ pub static POH: std::sync::RwLock<Option<Box<dyn Fn(&Bank, Vec<VersionedTransact
 use solana_transaction_status::TransactionTokenBalance;
 pub static STATUS_SENDER_CALLBACK: std::sync::RwLock<Option<(Option<usize>, Box<dyn Fn(Option<(Vec<Vec<u64>>, Vec<Vec<TransactionTokenBalance>>)>, &Arc<Bank>, &TransactionBatch, &mut HashMap<Pubkey, u8>, Option<TransactionResults>, Option<usize>) -> std::option::Option<(Vec<Vec<u64>>, Vec<Vec<TransactionTokenBalance>>)> + Send + Sync>)>> = std::sync::RwLock::new(None);
 
+#[derive(Debug)]
 pub(crate) struct Scheduler {
     random_id: u64,
     scheduler_thread_handle: Option<std::thread::JoinHandle<Result<(Duration, Duration)>>>,
@@ -1689,7 +1691,7 @@ impl Drop for SchedulerPool {
 /// Manager for the state of all accounts and programs after processing its entries.
 /// AbiExample is needed even without Serialize/Deserialize; actual (de-)serialization
 /// are implemented elsewhere for versioning
-#[derive(AbiExample)]
+#[derive(AbiExample, Debug)]
 pub struct Bank {
     /// References to accounts, parent and signature status
     pub rc: BankRc,
