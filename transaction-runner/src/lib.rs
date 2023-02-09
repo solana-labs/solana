@@ -650,11 +650,6 @@ impl Scheduler {
         self.current_checkpoint.update_context_value(|c| {c.bank = None;});
     }
 
-    fn resume_commit_into_bank(&self, bank: Option<&Arc<Bank>>) {
-        self.current_checkpoint.update_context_value(|c| {c.bank = bank.cloned();});
-        self.commit_status.notify_as_resumed();
-    }
-
     fn replace_scheduler_context(&self, scheduler_context: SchedulerContext) {
         self.current_checkpoint.replace_context_value(scheduler_context);
     }
@@ -694,7 +689,8 @@ impl LikeScheduler for Scheduler {
     }
 
     fn resume_commit_into_bank(&self, bank: Option<&Arc<Bank>>) {
-        panic!();
+        self.current_checkpoint.update_context_value(|c| {c.bank = bank.cloned();});
+        self.commit_status.notify_as_resumed();
     }
 
     fn gracefully_stop(&mut self) -> Result<()> {
