@@ -631,7 +631,7 @@ impl Scheduler {
     }
 
     fn pool(&self) -> Box<dyn LikeSchedulerPool> {
-        Box::new(SchedulePoolWrapper(self.scheduler_pool))
+        Box::new(SchedulePoolWrapper(self.scheduler_pool.clone()))
     }
 }
 
