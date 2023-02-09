@@ -220,7 +220,7 @@ impl CommitStatus {
 }
 
 impl Scheduler {
-    fn default2(scheduler_pool: ArcPool) -> Self {
+    fn default2(scheduler_pool: Arc<SchedulerPool>) -> Self {
         let start = Instant::now();
         let mut address_book = solana_scheduler::AddressBook::default();
         let preloader = Arc::new(address_book.preloader());
