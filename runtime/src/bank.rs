@@ -6982,7 +6982,7 @@ impl Bank {
     pub fn sync_scheduler_context(self: &Arc<Self>, runner: ArcPool, mode: solana_scheduler::Mode) {
         let s = self.scheduler.read().unwrap();
         let scheduler = s.as_ref().unwrap();
-        scheduler.replace_scheduler_context(runner.context(Some(self.clone()), mode));
+        scheduler.replace_scheduler_context(SchedulerContext{ bank: Some(self.clone()), mode});
     }
 
     pub fn transaction_runner(&self) -> Arc<TransactionRunner> {
