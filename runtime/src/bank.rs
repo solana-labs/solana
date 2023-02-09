@@ -7973,7 +7973,9 @@ impl Bank {
                     .into_iter()
                     .next()
                     .unwrap();
-                s.take().unwrap().return_to_pool();
+                let scheduler = s.take().unwrap();
+                let pool = scheduler.scheduler_pool();
+                pool.return_to_pool(scheduler);
                 e
             } else {
                 info!("wait_for_scheduler(Banking): pausing commit into bank ({})...", self.slot());
