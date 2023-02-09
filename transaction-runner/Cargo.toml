@@ -15,6 +15,7 @@ cpu-time = "1.0.0"
 crossbeam-channel = "0.5"
 log = "0.4.17"
 rand = "0.7.0"
+solana-entry = { path = "../entry", version = "=1.16.0" }
 solana-ledger = { path = "../ledger", version = "=1.16.0" }
 solana-metrics = { path = "../metrics", version = "=1.16.0" }
 solana-poh = { path = "../poh", version = "=1.16.0" }
