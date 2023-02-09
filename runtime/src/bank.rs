@@ -1063,6 +1063,7 @@ pub(crate) struct Scheduler {
     commit_status: Arc<CommitStatus>,
     current_checkpoint: Arc<solana_scheduler::Checkpoint<ExecuteTimings, SchedulerContext>>,
     thread_count: usize,
+    transaction_runner: Arc<TransactionRunner>,
 }
 
 impl Scheduler {
