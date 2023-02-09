@@ -1,6 +1,6 @@
 use {
     log::*,
-}
+};
 use std::sync::Arc;
 use solana_runtime::bank::Bank;
 use solana_runtime::bank::LikeScheduler;

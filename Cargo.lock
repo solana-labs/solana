@@ -7052,6 +7052,7 @@ dependencies = [
 name = "solana-transaction-runner"
 version = "1.16.0"
 dependencies = [
+ "log",
  "solana-ledger",
  "solana-poh",
  "solana-runtime",
