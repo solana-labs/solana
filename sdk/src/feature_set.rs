@@ -765,8 +765,8 @@ lazy_static! {
         (remove_congestion_multiplier_from_fee_calculation::id(), "Remove congestion multiplier from transaction fee calculation #29881"),
         (enable_request_heap_frame_ix::id(), "Enable transaction to request heap frame using compute budget instruction #30076"),
         (prevent_rent_paying_rent_recipients::id(), "prevent recipients of rent rewards from ending in rent-paying state #30???"),
-        (enable_repair_peer_selection_experiments::id(), "enable repair peer selection experiments #TODO"),
-        (disable_repair_peer_selection_experiments::id(), "disable repair peer selection experiments #TODO"),
+        (enable_repair_peer_selection_experiments::id(), "enable repair peer selection experiments #30082"),
+        (disable_repair_peer_selection_experiments::id(), "disable repair peer selection experiments #30083"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()
