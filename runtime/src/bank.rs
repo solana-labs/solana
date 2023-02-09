@@ -1008,7 +1008,7 @@ impl SchedulerPool {
 
     fn create(&mut self) {
         self.schedulers
-            .push(Box::new(Scheduler::<ExecuteTimings>::default2()));
+            .push(Box::new(Scheduler::default2()));
     }
 
     fn take_from_pool(&mut self) -> Box<Scheduler> {
