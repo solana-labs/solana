@@ -10316,7 +10316,7 @@ pub mod tests {
         let pubkey = solana_sdk::pubkey::new_rand();
         let acc = AccountSharedData::new(1, 48, AccountSharedData::default().owner());
         let mark_alive = false;
-        append_single_account_with_default_hash(&storage, &pubkey, &acc, 1, mark_alive);
+        append_single_account_with_default_hash(&storage, &pubkey, &acc, 1, mark_alive, None);
 
         let calls = Arc::new(AtomicU64::new(0));
         let temp_dir = TempDir::new().unwrap();
@@ -10363,17 +10363,18 @@ pub mod tests {
             .collect::<Vec<_>>()
     }
 
-    fn append_single_account_with_default_hash(
+    pub(crate) fn append_single_account_with_default_hash(
         storage: &AccountStorageEntry,
         pubkey: &Pubkey,
         account: &AccountSharedData,
         write_version: StoredMetaWriteVersion,
         mark_alive: bool,
+        add_to_index: Option<&AccountsIndex<AccountInfo>>,
     ) {
-        let slot_ignored = Slot::MAX;
+        let slot = storage.slot();
         let accounts = [(pubkey, account)];
         let slice = &accounts[..];
-        let account_data = (slot_ignored, slice);
+        let account_data = (slot, slice);
         let hash = Hash::default();
         let storable_accounts =
             StorableAccountsWithHashesAndWriteVersions::new_with_hashes_and_write_versions(
@@ -10382,10 +10383,31 @@ pub mod tests {
                 vec![write_version],
             );
         let old_written = storage.written_bytes();
-        storage.accounts.append_accounts(&storable_accounts, 0);
+        let offsets = storage
+            .accounts
+            .append_accounts(&storable_accounts, 0)
+            .unwrap();
         if mark_alive {
             // updates 'alive_bytes' on the storage
             storage.add_account((storage.written_bytes() - old_written) as usize);
+        }
+
+        if let Some(index) = add_to_index {
+            let account_info = AccountInfo::new(
+                StorageLocation::AppendVec(storage.append_vec_id(), offsets[0]),
+                (offsets[1] - offsets[0]).try_into().unwrap(),
+                account.lamports(),
+            );
+            index.upsert(
+                slot,
+                slot,
+                pubkey,
+                account,
+                &AccountSecondaryIndexes::default(),
+                account_info,
+                &mut Vec::default(),
+                UpsertReclaim::IgnoreReclaims,
+            );
         }
     }
 
@@ -10408,7 +10430,7 @@ pub mod tests {
         let pubkey = solana_sdk::pubkey::new_rand();
         let acc = AccountSharedData::new(1, 48, AccountSharedData::default().owner());
         let mark_alive = false;
-        append_single_account_with_default_hash(&storage, &pubkey, &acc, 1, mark_alive);
+        append_single_account_with_default_hash(&storage, &pubkey, &acc, 1, mark_alive, None);
 
         let calls = Arc::new(AtomicU64::new(0));
 
@@ -10446,7 +10468,14 @@ pub mod tests {
             account_data_size.unwrap_or(48) as usize,
             AccountSharedData::default().owner(),
         );
-        append_single_account_with_default_hash(storage, pubkey, &acc, write_version, mark_alive);
+        append_single_account_with_default_hash(
+            storage,
+            pubkey,
+            &acc,
+            write_version,
+            mark_alive,
+            None,
+        );
     }
 
     fn sample_storage_with_entries(
