@@ -1878,7 +1878,7 @@ pub struct Bank {
     pub blockhash_override: RwLock<Option<Hash>>,
 }
 
-trait ScheduleLike: Send + Sync + std::fmt::Debug {
+pub trait ScheduleLike: Send + Sync + std::fmt::Debug {
     fn graceful_stop_initiated(&self) -> &AtomicBool {
         panic!();
     }
@@ -1928,7 +1928,7 @@ trait ScheduleLike: Send + Sync + std::fmt::Debug {
     }
 }
 
-impl ScheduleLike for Scheduler {
+pub impl ScheduleLike for Scheduler {
     fn graceful_stop_initiated(&self) -> &AtomicBool {
         panic!();
     }
