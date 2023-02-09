@@ -1023,11 +1023,11 @@ impl SchedulerPool {
         self.schedulers.push(Box::new(Scheduler::default2(runner)));
     }
 
-    fn take_from_pool(&mut self, runner: Arc<TransactionRunner>) -> Box<Scheduler> {
+    fn take_from_pool(&mut self, runner: Arc<TransactionRunner>) -> Box<dyn ScheduleLike> {
         if let Some(scheduler) = self.schedulers.pop() {
             trace!(
                 "SchedulerPool: id_{:016x} is taken... len: {} => {}",
-                scheduler.random_id,
+                scheduler.random_id(),
                 self.schedulers.len() + 1,
                 self.schedulers.len()
             );
