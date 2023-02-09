@@ -2290,7 +2290,7 @@ impl Bank {
             },
         };
         */
-        let scheduler = RwLock::new(Some(SCHEDULER_POOL.lock().unwrap().take_from_pool()));
+        let scheduler = RwLock::new(Some(runner.take_scheduler_from_pool()));
 
         let mut new = Bank {
             incremental_snapshot_persistence: None,
