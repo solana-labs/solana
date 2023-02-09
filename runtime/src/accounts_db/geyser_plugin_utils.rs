@@ -5,7 +5,9 @@ use {
     },
     solana_measure::measure::Measure,
     solana_metrics::*,
-    solana_sdk::{account::AccountSharedData, clock::Slot, pubkey::Pubkey, signature::Signature},
+    solana_sdk::{
+        account::AccountSharedData, clock::Slot, pubkey::Pubkey, transaction::SanitizedTransaction,
+    },
     std::collections::{hash_map::Entry, HashMap, HashSet},
 };
 
@@ -63,7 +65,7 @@ impl AccountsDb {
         &self,
         slot: Slot,
         account: &AccountSharedData,
-        txn_signature: &Option<&Signature>,
+        txn: &Option<&SanitizedTransaction>,
         pubkey: &Pubkey,
         write_version_producer: &mut P,
     ) where
@@ -74,7 +76,7 @@ impl AccountsDb {
             notifier.notify_account_update(
                 slot,
                 account,
-                txn_signature,
+                txn,
                 pubkey,
                 write_version_producer.next().unwrap(),
             );
@@ -177,7 +179,7 @@ pub mod tests {
             account::{AccountSharedData, ReadableAccount},
             clock::Slot,
             pubkey::Pubkey,
-            signature::Signature,
+            transaction::SanitizedTransaction,
         },
         std::sync::{
             atomic::{AtomicBool, Ordering},
@@ -203,7 +205,7 @@ pub mod tests {
             &self,
             slot: Slot,
             account: &AccountSharedData,
-            _txn_signature: &Option<&Signature>,
+            _txn: &Option<&SanitizedTransaction>,
             pubkey: &Pubkey,
             _write_version: u64,
         ) {
