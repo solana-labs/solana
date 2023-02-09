@@ -1073,7 +1073,7 @@ impl BankingSimulator {
             if poh_recorder.read().unwrap().bank().is_none() {
                 let old_slot = bank.slot();
 
-                if let Err(e) = bank.wait_for_scheduler(false) {
+                if let Err(e) = bank.wait_for_scheduler(false, false).0 {
                     error!("wait_for_scheduler returned error...: {e:?}");
                 }
                 let mut hash_override = if !no_fake_hash {
