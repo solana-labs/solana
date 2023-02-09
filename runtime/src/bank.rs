@@ -1164,7 +1164,7 @@ pub trait LikeScheduler: Send + Sync + std::fmt::Debug {
     fn has_context(&self) -> bool; 
     fn collected_results(&self) -> Arc<std::sync::Mutex<Vec<Result<ExecuteTimings>>>>; 
     fn scheduler_pool(&self) -> Box<dyn LikeSchedulerPool>;
-    fn take_next_from_pool(&self) -> Box<dyn LikeScheduler>;
+    fn scheduler_context(&self) -> SchedulerContext;
 }
 
 struct VoteWithStakeDelegations {
@@ -3678,8 +3678,8 @@ impl Bank {
         let scheduler_mode = self.scheduler_mode();
         let mut w_blockhash_queue = match scheduler_mode {
             solana_scheduler::Mode::Replaying => {
-                let scheduler = self.scheduler.read().unwrap().as_ref().unwrap().take_next_from_pool();
-                let last_result = self.wait_for_scheduler(false);
+                let (last_result, scheduler) = self.wait_for_scheduler(false, true);
+                let scheduler = scheduler.unwrap();
                 let mut s2 = self.scheduler.write().unwrap();
                 *s2 = Some(scheduler);
 
@@ -7951,7 +7951,7 @@ impl Bank {
         *s = Some(scheduler)
     }
 
-    pub fn wait_for_scheduler(&self, via_drop: bool) -> Result<ExecuteTimings> {
+    pub fn wait_for_scheduler(&self, via_drop: bool, take_next: bool) -> (Result<ExecuteTimings>, Option<Box<dyn LikeScheduler>) {
         let mut s = self.scheduler.write().unwrap();
         let current_thread_name = std::thread::current().name().unwrap().to_string();
 
@@ -7974,9 +7974,10 @@ impl Bank {
                     .next()
                     .unwrap();
                 let scheduler = s.take().unwrap();
+                let context = scheduler.scheduler_context();
                 let pool = scheduler.scheduler_pool();
                 pool.return_to_pool(scheduler);
-                e
+                (e, Some(pool.take_from_pool(context)))
             } else {
                 info!("wait_for_scheduler(Banking): pausing commit into bank ({})...", self.slot());
                 scheduler.pause_commit_into_bank();

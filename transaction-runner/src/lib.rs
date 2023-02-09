@@ -752,8 +752,8 @@ impl LikeScheduler for Scheduler {
         Box::new(SchedulePoolWrapper(self.scheduler_pool.clone()))
     }
 
-    fn take_next_from_pool(&self) -> Box<dyn LikeScheduler> {
-        self.scheduler_pool.take_from_pool(self.current_checkpoint.clone_context_value().unwrap())
+    fn scheduler_context(&self) -> SchedulerContext {
+        self.current_checkpoint.clone_context_value().unwrap()
     }
 }
 
