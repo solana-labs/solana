@@ -1433,6 +1433,7 @@ impl BankingStage {
 }
 
 pub fn initialize_poh_callback(poh_recorder: &Arc<RwLock<PohRecorder>>) {
+    /*
     use solana_runtime::bank::POH;
     *POH.write().unwrap() = Some({
         let poh_recorder_lock = poh_recorder.clone();
@@ -1454,6 +1455,7 @@ pub fn initialize_poh_callback(poh_recorder: &Arc<RwLock<PohRecorder>>) {
             res.map_err(|_| ())
         })
     });
+    */
 }
 
 #[cfg(test)]
