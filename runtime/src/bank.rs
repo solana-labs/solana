@@ -3914,7 +3914,7 @@ impl Bank {
         // committed before this write lock can be obtained here.
         let mut hash = self.hash.write().unwrap();
         if *hash == Hash::default() {
-            /*match self.transaction_scheduler_mode() {
+            /*match self.scheduler_mode() {
                 solana_scheduler::Mode::Replaying => {
                     assert!(self.scheduler2.read().unwrap().is_none());
                 }
@@ -4370,7 +4370,7 @@ impl Bank {
         );
 
 
-        let scheduler_mode = self.transaction_scheduler_mode();
+        let scheduler_mode = self.scheduler_mode();
         let runner = self.transaction_runner();
         let mut w_blockhash_queue = match scheduler_mode {
             solana_scheduler::Mode::Replaying => {
@@ -6894,7 +6894,7 @@ impl Bank {
 
     pub fn resume_banking_commit(self: &Arc<Self>) {
         use assert_matches::assert_matches;
-        match self.transaction_scheduler_mode() {
+        match self.scheduler_mode() {
             solana_scheduler::Mode::Banking => {
                 let s = self.scheduler.read().unwrap();
                 let scheduler = s.as_ref().unwrap();
@@ -6918,7 +6918,7 @@ impl Bank {
         scheduler.current_runner()
     }
 
-    pub fn transaction_scheduler_mode(&self) -> solana_scheduler::Mode {
+    pub fn scheduler_mode(&self) -> solana_scheduler::Mode {
         let s = self.scheduler.read().unwrap();
         let scheduler = s.as_ref().unwrap();
         scheduler.current_scheduler_mode()
