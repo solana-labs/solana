@@ -144,7 +144,6 @@ impl<'a> InvokeContext<'a> {
         blockhash: Hash,
         lamports_per_signature: u64,
         prev_accounts_data_len: u64,
-        debugging_features: bool,
     ) -> Self {
         Self {
             transaction_context,
@@ -164,14 +163,13 @@ impl<'a> InvokeContext<'a> {
             blockhash,
             lamports_per_signature,
             syscall_context: Vec::new(),
-            enable_instruction_tracing: debugging_features,
+            enable_instruction_tracing: false,
         }
     }
 
-    pub fn new_mock_with_debugging(
+    pub fn new_mock(
         transaction_context: &'a mut TransactionContext,
         builtin_programs: &'a [BuiltinProgram],
-        debugging_features: bool,
     ) -> Self {
         let mut sysvar_cache = SysvarCache::default();
         sysvar_cache.fill_missing_entries(|pubkey, callback| {
@@ -203,15 +201,7 @@ impl<'a> InvokeContext<'a> {
             Hash::default(),
             0,
             0,
-            debugging_features,
         )
-    }
-
-    pub fn new_mock(
-        transaction_context: &'a mut TransactionContext,
-        builtin_programs: &'a [BuiltinProgram],
-    ) -> Self {
-        Self::new_mock_with_debugging(transaction_context, builtin_programs, false)
     }
 
     /// Push a stack frame onto the invocation stack

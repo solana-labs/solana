@@ -79,7 +79,6 @@ impl MessageProcessor {
             blockhash,
             lamports_per_signature,
             current_accounts_data_len,
-            false,
         );
 
         debug_assert_eq!(program_indices.len(), message.instructions().len());

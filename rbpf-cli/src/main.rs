@@ -221,8 +221,8 @@ before execting it in the virtual machine.",
         1,
         1,
     );
-    let mut invoke_context =
-        InvokeContext::new_mock_with_debugging(&mut transaction_context, &[], true);
+    let mut invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
+    invoke_context.enable_instruction_tracing = true;
     invoke_context
         .transaction_context
         .get_next_instruction_context()
