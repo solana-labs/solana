@@ -629,6 +629,9 @@ impl Scheduler {
 
         s
     }
+
+    fn pool() {
+    }
 }
 
 impl Scheduler {
