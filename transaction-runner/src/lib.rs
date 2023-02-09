@@ -80,7 +80,7 @@ impl SchedulerPool {
                 self.schedulers.lock().unwrap().len() + 1,
                 self.schedulers.lock().unwrap().len()
             );
-            scheduler.update_context(context);
+            scheduler.replace_scheduler_context(context);
             scheduler
         } else {
             self.create(context.clone());
