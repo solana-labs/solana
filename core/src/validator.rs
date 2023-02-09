@@ -966,7 +966,7 @@ impl Validator {
             info!("Disabled banking tracer");
         }
         crate::banking_stage::initialize_poh_callback(&poh_recorder);
-        use solana_trunsaction_runner::initialize_transaction_status_sender_callback;
+        use solana_transaction_runner::initialize_transaction_status_sender_callback;
         if let Some(transaction_status_sender) = transaction_status_sender.as_ref() {
             info!("Initialized transaction status sender callback: {:?}", (config.runtime_config.log_messages_bytes_limit, transaction_status_sender));
             initialize_transaction_status_sender_callback(config.runtime_config.log_messages_bytes_limit, transaction_status_sender.clone());
