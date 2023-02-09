@@ -2565,7 +2565,7 @@ impl ReplayStage {
             assert_eq!(bank_slot, bank.slot());
             if bank.is_complete() {
                 info!("waiting for completed bank: slot: {}", bank.slot());
-                let cumulative_timings = bank.wait_for_scheduler(false);
+                let cumulative_timings = bank.wait_for_scheduler(false, false).0;
                 let bank_progress = progress
                     .get_mut(&bank.slot())
                     .expect("Bank fork progress entry missing for completed bank");
