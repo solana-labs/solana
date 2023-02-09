@@ -45,8 +45,8 @@ impl SchedulerPool {
         }
     }
 
-    fn create(self: &Arc<Self>) {
-        self.schedulers.lock().unwrap().push(Box::new(Scheduler::default2(self.clone())));
+    fn create(self: &Arc<Self>, context: SchedulerContext) {
+        self.schedulers.lock().unwrap().push(Box::new(Scheduler::default2(self.clone(), context)));
     }
 }
 
@@ -75,7 +75,7 @@ impl LikeSchedulerPool for AAA {
             );
             scheduler
         } else {
-            self.0.create(context);
+            self.0.create(context.clone());
             self.take_from_pool(context)
         }
     }
