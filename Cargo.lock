@@ -7057,6 +7057,7 @@ dependencies = [
  "solana-poh",
  "solana-program-runtime",
  "solana-runtime",
+ "solana-scheduler",
 ]
 
 [[package]]
