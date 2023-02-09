@@ -1151,11 +1151,6 @@ pub struct Bank {
     pub blockhash_override: RwLock<Option<Hash>>,
 }
 
-pub trait LikePool: Send + Sync + std::fmt::Debug {
-    fn take_from_pool(&self, mode: solana_scheduler::Mode) -> Box<dyn LikeScheduler>;
-    fn return_to_pool(&self, scheduler: Box<dyn LikeScheduler>);
-}
-
 pub trait LikeScheduler: Send + Sync + std::fmt::Debug {
     fn graceful_stop_initiated(&self) -> &AtomicBool;
     fn random_id(&self) -> u64;

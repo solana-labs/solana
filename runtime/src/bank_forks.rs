@@ -66,7 +66,12 @@ pub struct BankForks {
     pub accounts_hash_interval_slots: Slot,
     last_accounts_hash_slot: Slot,
     in_vote_only_mode: Arc<AtomicBool>,
-    scheduler_pool: Option<Box<dyn crate::bank::LikePool>>,
+    scheduler_pool: Option<Box<dyn LikePool>>,
+}
+
+pub trait LikePool: Send + Sync + std::fmt::Debug {
+    fn take_from_pool(&self, mode: solana_scheduler::Mode) -> Box<dyn LikeScheduler>;
+    fn return_to_pool(&self, scheduler: Box<dyn LikeScheduler>);
 }
 
 impl Index<u64> for BankForks {
