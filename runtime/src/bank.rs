@@ -957,15 +957,15 @@ impl solana_scheduler::WithMode for SchedulerContext {
 }
 
 impl SchedulerContext {
-    fn slot(&self) -> Slot {
+    pub fn slot(&self) -> Slot {
         self.bank.as_ref().map(|b| b.slot()).unwrap_or(0)
     }
 
-    fn bank(&self) -> Option<&Arc<Bank>> {
+    pub fn bank(&self) -> Option<&Arc<Bank>> {
         self.bank.as_ref()
     }
 
-    fn log_prefix(random_id: u64, context: &Option<Self>) -> String {
+    pub fn log_prefix(random_id: u64, context: &Option<Self>) -> String {
         format!("id_{:016x}{}", random_id, context.as_ref().map(|c| format!(" slot: {}, mode: {:?}", c.slot(), c.mode)).unwrap_or("".into()))
     }
 }
