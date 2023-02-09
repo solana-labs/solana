@@ -1453,6 +1453,7 @@ fn load_bank_forks(
             accounts_update_notifier,
             &Arc::default(),
         );
+    bank_forks.write().unwrap().install_scheduler_pool(Box::new(solana_transaction_runner::SchedulerPoolWrapper::new()));
 
     let (snapshot_request_sender, snapshot_request_receiver) = crossbeam_channel::unbounded();
     let (accounts_package_sender, _accounts_package_receiver) = crossbeam_channel::unbounded();
