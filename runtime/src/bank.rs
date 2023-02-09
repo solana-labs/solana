@@ -1186,6 +1186,9 @@ impl Scheduler {
         let max_thread_priority = std::env::var("MAX_THREAD_PRIORITY").is_ok();
         let commit_status = Arc::new(CommitStatus::new());
 
+        use rand::Rng;
+        let random_id = rand::thread_rng().gen::<u64>();
+
         let executing_thread_count = std::cmp::max(base_thread_count * 2, 1);
         let executing_thread_handles = (0..executing_thread_count).map(|thx| {
             let (scheduled_ee_receiver, scheduled_high_ee_receiver, processed_ee_sender) = (scheduled_ee_receiver.clone(), scheduled_high_ee_receiver.clone(), processed_ee_sender.clone());
@@ -1489,8 +1492,6 @@ impl Scheduler {
             }})
             .unwrap();
 
-        use rand::Rng;
-        let random_id = rand::thread_rng().gen::<u64>();
 
         let scheduler_thread_handle = std::thread::Builder::new()
             .name("solScheduler".to_string())
