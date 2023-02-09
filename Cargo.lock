@@ -6612,8 +6612,6 @@ dependencies = [
  "tempfile",
  "test-case",
  "thiserror",
- "thread-priority",
- "variant_counter",
  "zstd",
 ]
 
@@ -7060,6 +7058,8 @@ dependencies = [
  "solana-runtime",
  "solana-scheduler",
  "solana-sdk 1.16.0",
+ "thread-priority",
+ "variant_counter",
 ]
 
 [[package]]
