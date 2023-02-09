@@ -2200,7 +2200,7 @@ impl Bank {
         new_bank_options: NewBankOptions,
     ) -> Self {
         let mut time = Measure::start("bank::new_from_parent");
-        let NewBankOptions { vote_only_bank, blockhash_override } = new_bank_options;
+        let NewBankOptions { vote_only_bank, blockhash_override, runner } = new_bank_options;
 
         parent.freeze();
         assert_ne!(slot, parent.slot());
