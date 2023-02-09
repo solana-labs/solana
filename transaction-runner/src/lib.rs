@@ -629,10 +629,6 @@ impl Scheduler {
 
         s
     }
-
-    fn scheduler_pool(&self) -> Box<dyn LikeSchedulerPool> {
-        Box::new(SchedulePoolWrapper(self.scheduler_pool.clone()))
-    }
 }
 
 impl Scheduler {
@@ -781,8 +777,8 @@ impl LikeScheduler for Scheduler {
         panic!();
     }
 
-    fn return_to_pool(&self) {
-        panic!();
+    fn scheduler_pool(&self) -> Box<dyn LikeSchedulerPool> {
+        Box::new(SchedulePoolWrapper(self.scheduler_pool.clone()))
     }
 
     fn take_next_from_pool(&self) -> Box<dyn LikeScheduler> {
