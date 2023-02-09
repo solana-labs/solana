@@ -4448,7 +4448,7 @@ impl Bank {
         let mut w_blockhash_queue = match scheduler_mode {
             solana_scheduler::Mode::Replaying => {
                 let last_result = self.wait_for_scheduler(false);
-                let scheduler = runner.take_scheduler_from_pool();
+                let scheduler = runner.lock().unwrap().take_from_pool();
                 let mut s2 = self.scheduler.write().unwrap();
                 *s2 = Some(scheduler);
 
