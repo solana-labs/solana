@@ -1164,7 +1164,7 @@ impl CommitStatus {
 }
 
 impl Scheduler {
-    fn default2(transaction_runner: Arc<TransactionRunner>) -> Self {
+    fn default2(transaction_runner: ArcPool) -> Self {
         let start = Instant::now();
         let mut address_book = solana_scheduler::AddressBook::default();
         let preloader = Arc::new(address_book.preloader());
@@ -1658,7 +1658,7 @@ impl Scheduler {
         self.current_checkpoint.with_context_value(|c| c.mode).unwrap()
     }
 
-    fn transaction_runner(&self) -> Arc<TransactionRunner> {
+    fn transaction_runner(&self) -> ArcPool {
         self.transaction_runner.clone()
     }
 
