@@ -765,6 +765,10 @@ impl LikeScheduler for Scheduler {
     fn scheduler_context(&self) -> SchedulerContext {
         self.current_checkpoint.clone_context_value().unwrap()
     }
+
+    fn replace_scheduler_context(&self, context: SchedulerContext) -> SchedulerContext {
+        self.current_checkpoint.replace_context_value(context)
+    }
 }
 
 use solana_transaction_status::token_balances::TransactionTokenBalancesSet;
