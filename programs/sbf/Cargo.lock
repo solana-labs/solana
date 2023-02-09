@@ -492,7 +492,7 @@ dependencies = [
  "cc",
  "cfg-if 1.0.0",
  "constant_time_eq",
- "digest 0.10.3",
+ "digest 0.10.6",
 ]
 
 [[package]]
@@ -1170,9 +1170,9 @@ dependencies = [
 
 [[package]]
 name = "digest"
-version = "0.10.3"
+version = "0.10.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f2fb860ca6fafa5552fb6d0e816a69c8e49f0908bf524e30a90d97c85892d506"
+checksum = "8168378f4e5023e7218c89c891c0fd8ecdb5e5e4f18cb78f38cf245dd021e76f"
 dependencies = [
  "block-buffer 0.10.0",
  "crypto-common",
@@ -1281,7 +1281,7 @@ dependencies = [
  "derivation-path",
  "ed25519-dalek",
  "hmac 0.12.1",
- "sha2 0.10.5",
+ "sha2 0.10.6",
 ]
 
 [[package]]
@@ -1850,7 +1850,7 @@ version = "0.12.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6c49c37c09c17a53d937dfbb742eb3a961d65a994e6bcdcf37e7399d0cc8ab5e"
 dependencies = [
- "digest 0.10.3",
+ "digest 0.10.6",
 ]
 
 [[package]]
@@ -3059,7 +3059,7 @@ version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "83a0692ec44e4cf1ef28ca317f14f8f07da2d95ec3fa01f86e4467b725e60917"
 dependencies = [
- "digest 0.10.3",
+ "digest 0.10.6",
 ]
 
 [[package]]
@@ -4117,7 +4117,7 @@ checksum = "028f48d513f9678cda28f6e4064755b3fbb2af6acd672f2c209b62323f7aea0f"
 dependencies = [
  "cfg-if 1.0.0",
  "cpufeatures",
- "digest 0.10.3",
+ "digest 0.10.6",
 ]
 
 [[package]]
@@ -4135,13 +4135,13 @@ dependencies = [
 
 [[package]]
 name = "sha2"
-version = "0.10.5"
+version = "0.10.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cf9db03534dff993187064c4e0c05a5708d2a9728ace9a8959b77bedf415dac5"
+checksum = "82e6b795fe2e3b1e845bafcb27aa35405c4d47cdfc92af5fc8d3002f76cebdc0"
 dependencies = [
  "cfg-if 1.0.0",
  "cpufeatures",
- "digest 0.10.3",
+ "digest 0.10.6",
 ]
 
 [[package]]
@@ -4162,7 +4162,7 @@ version = "0.10.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "eaedf34ed289ea47c2b741bb72e5357a209512d67bcd4bda44359e5bf0470f56"
 dependencies = [
- "digest 0.10.3",
+ "digest 0.10.6",
  "keccak",
 ]
 
@@ -4697,7 +4697,7 @@ dependencies = [
  "serde_bytes",
  "serde_derive",
  "serde_json",
- "sha2 0.10.5",
+ "sha2 0.10.6",
  "solana-frozen-abi-macro 1.14.8",
  "subtle",
  "thiserror",
@@ -4729,7 +4729,7 @@ dependencies = [
  "serde_bytes",
  "serde_derive",
  "serde_json",
- "sha2 0.10.5",
+ "sha2 0.10.6",
  "solana-frozen-abi-macro 1.16.0",
  "subtle",
  "thiserror",
@@ -4872,7 +4872,7 @@ dependencies = [
  "rustc_version 0.4.0",
  "serde",
  "serde_bytes",
- "sha2 0.10.5",
+ "sha2 0.10.6",
  "solana-account-decoder",
  "solana-bpf-loader-program",
  "solana-entry",
@@ -5049,7 +5049,7 @@ dependencies = [
  "serde_bytes",
  "serde_derive",
  "serde_json",
- "sha2 0.10.5",
+ "sha2 0.10.6",
  "sha3 0.10.4",
  "solana-frozen-abi 1.14.8",
  "solana-frozen-abi-macro 1.14.8",
@@ -5101,7 +5101,7 @@ dependencies = [
  "serde_bytes",
  "serde_derive",
  "serde_json",
- "sha2 0.10.5",
+ "sha2 0.10.6",
  "sha3 0.10.4",
  "solana-frozen-abi 1.16.0",
  "solana-frozen-abi-macro 1.16.0",
@@ -5808,7 +5808,7 @@ dependencies = [
  "byteorder 1.4.3",
  "chrono",
  "derivation-path",
- "digest 0.10.3",
+ "digest 0.10.6",
  "ed25519-dalek",
  "ed25519-dalek-bip32",
  "generic-array 0.14.6",
@@ -5831,7 +5831,7 @@ dependencies = [
  "serde_bytes",
  "serde_derive",
  "serde_json",
- "sha2 0.10.5",
+ "sha2 0.10.6",
  "sha3 0.10.4",
  "solana-frozen-abi 1.14.8",
  "solana-frozen-abi-macro 1.14.8",
@@ -5857,7 +5857,7 @@ dependencies = [
  "byteorder 1.4.3",
  "chrono",
  "derivation-path",
- "digest 0.10.3",
+ "digest 0.10.6",
  "ed25519-dalek",
  "ed25519-dalek-bip32",
  "generic-array 0.14.6",
@@ -5882,7 +5882,7 @@ dependencies = [
  "serde_derive",
  "serde_json",
  "serde_with",
- "sha2 0.10.5",
+ "sha2 0.10.6",
  "sha3 0.10.4",
  "solana-frozen-abi 1.16.0",
  "solana-frozen-abi-macro 1.16.0",
