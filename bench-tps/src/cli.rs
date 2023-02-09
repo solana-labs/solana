@@ -8,9 +8,7 @@ use {
         pubkey::Pubkey,
         signature::{read_keypair_file, Keypair},
     },
-    solana_tpu_client::tpu_connection_cache::{
-        DEFAULT_TPU_CONNECTION_POOL_SIZE, DEFAULT_TPU_USE_QUIC,
-    },
+    solana_tpu_client::tpu_client::{DEFAULT_TPU_CONNECTION_POOL_SIZE, DEFAULT_TPU_USE_QUIC},
     std::{
         net::{Ipv4Addr, SocketAddr},
         process::exit,
@@ -352,7 +350,7 @@ pub fn build_args<'a>(version: &'_ str) -> App<'a, '_> {
             Arg::with_name("num_conflict_groups")
                 .long("num-conflict-groups")
                 .takes_value(true)
-                .validator(|arg| is_within_range(arg, 1, usize::MAX - 1))
+                .validator(|arg| is_within_range(arg, 1..))
                 .help("The number of unique destination accounts per transactions 'chunk'. Lower values will result in more transaction conflicts.")
         )
 }

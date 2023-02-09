@@ -161,20 +161,21 @@ fn create_executor_from_bytes(
             })?;
     verify_code_time.stop();
     create_executor_metrics.verify_code_us = verify_code_time.as_us();
-    #[cfg(all(not(target_os = "windows"), target_arch = "x86_64"))]
     if use_jit {
-        let mut jit_compile_time = Measure::start("jit_compile_time");
-        let jit_compile_result = verified_executable.jit_compile();
-        jit_compile_time.stop();
-        create_executor_metrics.jit_compile_us = jit_compile_time.as_us();
-        if let Err(err) = jit_compile_result {
-            ic_logger_msg!(log_collector, "Failed to compile program {:?}", err);
-            return Err(InstructionError::ProgramFailedToCompile);
+        #[cfg(all(not(target_os = "windows"), target_arch = "x86_64"))]
+        {
+            let mut jit_compile_time = Measure::start("jit_compile_time");
+            let jit_compile_result = verified_executable.jit_compile();
+            jit_compile_time.stop();
+            create_executor_metrics.jit_compile_us = jit_compile_time.as_us();
+            if let Err(err) = jit_compile_result {
+                ic_logger_msg!(log_collector, "Failed to compile program {:?}", err);
+                return Err(InstructionError::ProgramFailedToCompile);
+            }
         }
     }
     Ok(Arc::new(BpfExecutor {
         verified_executable,
-        use_jit,
     }))
 }
 
@@ -680,13 +681,19 @@ fn process_loader_upgradeable_instruction(
                             ..programdata_data_offset.saturating_add(buffer_data_len),
                     )
                     .ok_or(InstructionError::AccountDataTooSmall)?;
-                let buffer =
+                let mut buffer =
                     instruction_context.try_borrow_instruction_account(transaction_context, 3)?;
                 let src_slice = buffer
                     .get_data()
                     .get(buffer_data_offset..)
                     .ok_or(InstructionError::AccountDataTooSmall)?;
                 dst_slice.copy_from_slice(src_slice);
+                if invoke_context
+                    .feature_set
+                    .is_active(&enable_program_redeployment_cooldown::id())
+                {
+                    buffer.set_data_length(UpgradeableLoaderState::size_of_buffer(0))?;
+                }
             }
 
             // Update the Program account
@@ -895,6 +902,12 @@ fn process_loader_upgradeable_instruction(
             )?;
             buffer.set_lamports(0)?;
             programdata.set_lamports(programdata_balance_required)?;
+            if invoke_context
+                .feature_set
+                .is_active(&enable_program_redeployment_cooldown::id())
+            {
+                buffer.set_data_length(UpgradeableLoaderState::size_of_buffer(0))?;
+            }
 
             ic_logger_msg!(log_collector, "Upgraded program {:?}", new_program_id);
         }
@@ -1079,7 +1092,7 @@ fn process_loader_upgradeable_instruction(
                     ic_logger_msg!(log_collector, "Closed Buffer {}", close_key);
                 }
                 UpgradeableLoaderState::ProgramData {
-                    slot: _,
+                    slot,
                     upgrade_authority_address: authority_address,
                 } => {
                     instruction_context.check_number_of_instruction_accounts(4)?;
@@ -1095,6 +1108,19 @@ fn process_loader_upgradeable_instruction(
                     if program_account.get_owner() != program_id {
                         ic_logger_msg!(log_collector, "Program account not owned by loader");
                         return Err(InstructionError::IncorrectProgramId);
+                    }
+                    if invoke_context
+                        .feature_set
+                        .is_active(&enable_program_redeployment_cooldown::id())
+                    {
+                        let clock = invoke_context.get_sysvar_cache().get_clock()?;
+                        if clock.slot == slot {
+                            ic_logger_msg!(
+                                log_collector,
+                                "Program was deployed in this block already"
+                            );
+                            return Err(InstructionError::InvalidArgument);
+                        }
                     }
 
                     match program_account.get_state()? {
@@ -1359,7 +1385,6 @@ fn process_loader_instruction(
 /// BPF Loader's Executor implementation
 pub struct BpfExecutor {
     verified_executable: VerifiedExecutable<RequisiteVerifier, InvokeContext<'static>>,
-    use_jit: bool,
 }
 
 // Well, implement Debug for solana_rbpf::vm::Executable in solana-rbpf...
@@ -1376,6 +1401,14 @@ impl Executor for BpfExecutor {
         let transaction_context = &invoke_context.transaction_context;
         let instruction_context = transaction_context.get_current_instruction_context()?;
         let program_id = *instruction_context.get_last_program_key(transaction_context)?;
+        #[cfg(any(target_os = "windows", not(target_arch = "x86_64")))]
+        let use_jit = false;
+        #[cfg(all(not(target_os = "windows"), target_arch = "x86_64"))]
+        let use_jit = self
+            .verified_executable
+            .get_executable()
+            .get_compiled_program()
+            .is_some();
 
         let mut serialize_time = Measure::start("serialize");
         let (parameter_bytes, regions, account_lengths) = serialize_parameters(
@@ -1409,7 +1442,7 @@ impl Executor for BpfExecutor {
 
             execute_time = Measure::start("execute");
             stable_log::program_invoke(&log_collector, &program_id, stack_height);
-            let (compute_units_consumed, result) = vm.execute_program(!self.use_jit);
+            let (compute_units_consumed, result) = vm.execute_program(!use_jit);
             drop(vm);
             ic_logger_msg!(
                 log_collector,
@@ -3574,6 +3607,10 @@ mod tests {
                 programdata_address,
             })
             .unwrap();
+        let clock_account = create_account_for_test(&Clock {
+            slot: 1,
+            ..Clock::default()
+        });
         let transaction_accounts = vec![
             (buffer_address, buffer_account.clone()),
             (recipient_address, recipient_account.clone()),
@@ -3679,6 +3716,7 @@ mod tests {
                 (recipient_address, recipient_account.clone()),
                 (authority_address, authority_account.clone()),
                 (program_address, program_account.clone()),
+                (sysvar::clock::id(), clock_account.clone()),
             ],
             vec![
                 AccountMeta {
@@ -3737,10 +3775,7 @@ mod tests {
                     sysvar::rent::id(),
                     create_account_for_test(&Rent::default()),
                 ),
-                (
-                    sysvar::clock::id(),
-                    create_account_for_test(&Clock::default()),
-                ),
+                (sysvar::clock::id(), clock_account),
                 (
                     system_program::id(),
                     AccountSharedData::new(0, 0, &system_program::id()),

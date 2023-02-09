@@ -236,7 +236,7 @@ impl PrioritizationFee {
             ("min_prioritization_fee", min_transaction_fee as i64, i64),
         );
         for (account_key, fee) in accounts_fees.iter().take(10) {
-            datapoint_info!(
+            datapoint_trace!(
                 "block_min_prioritization_fee",
                 ("slot", slot as i64, i64),
                 ("entity", account_key.to_string(), String),

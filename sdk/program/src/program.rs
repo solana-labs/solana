@@ -493,20 +493,6 @@ pub fn check_type_assumptions() {
             assert_eq!(**key_ptr, key);
         }
 
-        // is_signer
-        assert_eq!(offset_of!(AccountInfo, is_signer), 40);
-        let is_signer_ptr = (account_info_addr + 40) as *const bool;
-        unsafe {
-            assert!(*is_signer_ptr);
-        }
-
-        // is_writable
-        assert_eq!(offset_of!(AccountInfo, is_writable), 41);
-        let is_writable_ptr = (account_info_addr + 41) as *const bool;
-        unsafe {
-            assert!(!*is_writable_ptr);
-        }
-
         // lamports
         assert_eq!(offset_of!(AccountInfo, lamports), 8);
         let lamports_ptr = (account_info_addr + 8) as *const Rc<RefCell<&mut u64>>;
@@ -528,18 +514,32 @@ pub fn check_type_assumptions() {
             assert_eq!(**owner_ptr, owner);
         }
 
-        // executable
-        assert_eq!(offset_of!(AccountInfo, executable), 42);
-        let executable_ptr = (account_info_addr + 42) as *const bool;
-        unsafe {
-            assert!(*executable_ptr);
-        }
-
         // rent_epoch
         assert_eq!(offset_of!(AccountInfo, rent_epoch), 32);
         let renbt_epoch_ptr = (account_info_addr + 32) as *const Epoch;
         unsafe {
             assert_eq!(*renbt_epoch_ptr, 42);
+        }
+
+        // is_signer
+        assert_eq!(offset_of!(AccountInfo, is_signer), 40);
+        let is_signer_ptr = (account_info_addr + 40) as *const bool;
+        unsafe {
+            assert!(*is_signer_ptr);
+        }
+
+        // is_writable
+        assert_eq!(offset_of!(AccountInfo, is_writable), 41);
+        let is_writable_ptr = (account_info_addr + 41) as *const bool;
+        unsafe {
+            assert!(!*is_writable_ptr);
+        }
+
+        // executable
+        assert_eq!(offset_of!(AccountInfo, executable), 42);
+        let executable_ptr = (account_info_addr + 42) as *const bool;
+        unsafe {
+            assert!(*executable_ptr);
         }
     }
 }

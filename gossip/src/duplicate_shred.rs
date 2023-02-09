@@ -43,9 +43,12 @@ pub struct DuplicateShred {
 }
 
 impl DuplicateShred {
+    #[inline]
     pub(crate) fn num_chunks(&self) -> u8 {
         self.num_chunks
     }
+
+    #[inline]
     pub(crate) fn chunk_index(&self) -> u8 {
         self.chunk_index
     }

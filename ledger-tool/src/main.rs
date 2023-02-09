@@ -876,7 +876,7 @@ fn open_blockstore_with_temporary_primary_access(
     )
 }
 
-fn get_shred_storage_type(ledger_path: &Path, warn_message: &str) -> ShredStorageType {
+fn get_shred_storage_type(ledger_path: &Path, message: &str) -> ShredStorageType {
     // TODO: the following shred_storage_type inference must be updated once
     // the rocksdb options can be constructed via load_options_file() as the
     // value picked by passing None for `max_shred_storage_size` could affect
@@ -884,7 +884,7 @@ fn get_shred_storage_type(ledger_path: &Path, warn_message: &str) -> ShredStorag
     match ShredStorageType::from_ledger_path(ledger_path, None) {
         Some(s) => s,
         None => {
-            warn!("{}", warn_message);
+            info!("{}", message);
             ShredStorageType::RocksLevel
         }
     }
@@ -894,9 +894,17 @@ fn open_blockstore(
     ledger_path: &Path,
     access_type: AccessType,
     wal_recovery_mode: Option<BlockstoreRecoveryMode>,
-    shred_storage_type: &ShredStorageType,
     force_update_to_open: bool,
 ) -> Blockstore {
+    let shred_storage_type = get_shred_storage_type(
+        ledger_path,
+        &format!(
+            "Shred stroage type cannot be inferred for ledger at {:?}, \
+         using default RocksLevel",
+            ledger_path
+        ),
+    );
+
     match Blockstore::open_with_options(
         ledger_path,
         BlockstoreOptions {
@@ -904,7 +912,7 @@ fn open_blockstore(
             recovery_mode: wal_recovery_mode.clone(),
             enforce_ulimit_nofile: true,
             column_options: LedgerColumnOptions {
-                shred_storage_type: shred_storage_type.clone(),
+                shred_storage_type,
                 ..LedgerColumnOptions::default()
             },
         },
@@ -2334,8 +2342,7 @@ fn main() {
 
     info!("{} {}", crate_name!(), solana_version::version!());
 
-    let ledger_path = parse_ledger_path(&matches, "ledger_path");
-
+    let ledger_path = PathBuf::from(value_t_or_exit!(matches, "ledger_path", String));
     let snapshot_archive_path = value_t!(matches, "snapshot_archive_path", String)
         .ok()
         .map(PathBuf::from);
@@ -2349,13 +2356,9 @@ fn main() {
         .map(BlockstoreRecoveryMode::from);
     let force_update_to_open = matches.is_present("force_update_to_open");
     let verbose_level = matches.occurrences_of("verbose");
-    let shred_storage_type = get_shred_storage_type(
-        &ledger_path,
-        "Shred storage type cannot be inferred, the default RocksLevel will be used",
-    );
 
     if let ("bigtable", Some(arg_matches)) = matches.subcommand() {
-        bigtable_process_command(&ledger_path, arg_matches, &shred_storage_type)
+        bigtable_process_command(&ledger_path, arg_matches)
     } else {
         let ledger_path = canonicalize_ledger_path(&ledger_path);
 
@@ -2371,7 +2374,6 @@ fn main() {
                         &ledger_path,
                         AccessType::Secondary,
                         wal_recovery_mode,
-                        &shred_storage_type,
                         force_update_to_open,
                     ),
                     starting_slot,
@@ -2387,30 +2389,31 @@ fn main() {
                 let starting_slot = value_t_or_exit!(arg_matches, "starting_slot", Slot);
                 let ending_slot = value_t_or_exit!(arg_matches, "ending_slot", Slot);
                 let target_db = PathBuf::from(value_t_or_exit!(arg_matches, "target_db", String));
-                let target_shred_storage_type = get_shred_storage_type(
-                    &target_db,
-                    &format!(
-                        "Shred storage type of target_db cannot be inferred, \
-                     the default RocksLevel will be used. \
-                     If you want to use FIFO shred_storage_type on an empty target_db, \
-                     create {BLOCKSTORE_DIRECTORY_ROCKS_FIFO} foldar the specified target_db directory.",
-                    ),
-                );
 
                 let source = open_blockstore(
                     &ledger_path,
                     AccessType::Secondary,
                     None,
-                    &shred_storage_type,
                     force_update_to_open,
                 );
-                let target = open_blockstore(
+
+                // Check if shred storage type can be inferred; if not, a new
+                // ledger is being created. open_blockstore() will attempt to
+                // to infer shred storage type as well, but this check provides
+                // extra insight to user on how to create a FIFO ledger.
+                let _ = get_shred_storage_type(
                     &target_db,
-                    AccessType::Primary,
-                    None,
-                    &target_shred_storage_type,
-                    force_update_to_open,
+                    &format!(
+                        "No --target-db ledger at {:?} was detected, default \
+                        compaction (RocksLevel) will be used. Fifo compaction \
+                        can be enabled for a new ledger by manually creating \
+                        {BLOCKSTORE_DIRECTORY_ROCKS_FIFO} directory within \
+                        the specified --target_db directory.",
+                        &target_db
+                    ),
                 );
+                let target =
+                    open_blockstore(&target_db, AccessType::Primary, None, force_update_to_open);
                 for (slot, _meta) in source.slot_meta_iterator(starting_slot).unwrap() {
                     if slot > ending_slot {
                         break;
@@ -2489,7 +2492,6 @@ fn main() {
                     &ledger_path,
                     AccessType::Secondary,
                     wal_recovery_mode,
-                    &shred_storage_type,
                     force_update_to_open,
                 );
                 match load_bank_forks(
@@ -2542,7 +2544,6 @@ fn main() {
                     &ledger_path,
                     AccessType::Secondary,
                     None,
-                    &shred_storage_type,
                     force_update_to_open,
                 );
                 for (slot, _meta) in ledger
@@ -2582,7 +2583,6 @@ fn main() {
                     &ledger_path,
                     AccessType::Secondary,
                     wal_recovery_mode,
-                    &shred_storage_type,
                     force_update_to_open,
                 );
                 match load_bank_forks(
@@ -2609,7 +2609,6 @@ fn main() {
                     &ledger_path,
                     AccessType::Secondary,
                     wal_recovery_mode,
-                    &shred_storage_type,
                     force_update_to_open,
                 );
                 for slot in slots {
@@ -2634,7 +2633,6 @@ fn main() {
                         &ledger_path,
                         AccessType::Secondary,
                         wal_recovery_mode,
-                        &shred_storage_type,
                         force_update_to_open,
                     ),
                     starting_slot,
@@ -2651,7 +2649,6 @@ fn main() {
                     &ledger_path,
                     AccessType::Secondary,
                     wal_recovery_mode,
-                    &shred_storage_type,
                     force_update_to_open,
                 );
                 let starting_slot = value_t_or_exit!(arg_matches, "starting_slot", Slot);
@@ -2664,7 +2661,6 @@ fn main() {
                     &ledger_path,
                     AccessType::Secondary,
                     wal_recovery_mode,
-                    &shred_storage_type,
                     force_update_to_open,
                 );
                 let starting_slot = value_t_or_exit!(arg_matches, "starting_slot", Slot);
@@ -2678,7 +2674,6 @@ fn main() {
                     &ledger_path,
                     AccessType::Primary,
                     wal_recovery_mode,
-                    &shred_storage_type,
                     force_update_to_open,
                 );
                 for slot in slots {
@@ -2694,7 +2689,6 @@ fn main() {
                     &ledger_path,
                     AccessType::Primary,
                     wal_recovery_mode,
-                    &shred_storage_type,
                     force_update_to_open,
                 );
                 for slot in slots {
@@ -2713,7 +2707,6 @@ fn main() {
                     &ledger_path,
                     AccessType::Secondary,
                     wal_recovery_mode,
-                    &shred_storage_type,
                     force_update_to_open,
                 );
                 let mut ancestors = BTreeSet::new();
@@ -2825,7 +2818,6 @@ fn main() {
                     &ledger_path,
                     AccessType::Secondary,
                     wal_recovery_mode,
-                    &shred_storage_type,
                     force_update_to_open,
                 );
                 let (bank_forks, ..) = load_bank_forks(
@@ -2869,7 +2861,6 @@ fn main() {
                     &ledger_path,
                     AccessType::Secondary,
                     wal_recovery_mode,
-                    &shred_storage_type,
                     force_update_to_open,
                 );
                 match load_bank_forks(
@@ -2983,7 +2974,6 @@ fn main() {
                     &ledger_path,
                     AccessType::Secondary,
                     wal_recovery_mode,
-                    &shred_storage_type,
                     force_update_to_open,
                 ));
 
@@ -3378,7 +3368,6 @@ fn main() {
                     &ledger_path,
                     AccessType::Secondary,
                     wal_recovery_mode,
-                    &shred_storage_type,
                     force_update_to_open,
                 );
                 let (bank_forks, ..) = load_bank_forks(
@@ -3467,7 +3456,6 @@ fn main() {
                     &ledger_path,
                     AccessType::Secondary,
                     wal_recovery_mode,
-                    &shred_storage_type,
                     force_update_to_open,
                 );
                 match load_bank_forks(
@@ -3999,7 +3987,6 @@ fn main() {
                     &ledger_path,
                     access_type,
                     wal_recovery_mode,
-                    &shred_storage_type,
                     force_update_to_open,
                 );
 
@@ -4073,7 +4060,6 @@ fn main() {
                     &ledger_path,
                     AccessType::Secondary,
                     wal_recovery_mode,
-                    &shred_storage_type,
                     force_update_to_open,
                 );
                 let max_height = if let Some(height) = arg_matches.value_of("max_height") {
@@ -4127,7 +4113,6 @@ fn main() {
                     &ledger_path,
                     AccessType::Secondary,
                     wal_recovery_mode,
-                    &shred_storage_type,
                     force_update_to_open,
                 );
                 let num_slots = value_t_or_exit!(arg_matches, "num_slots", usize);
@@ -4152,7 +4137,6 @@ fn main() {
                     &ledger_path,
                     AccessType::Primary,
                     wal_recovery_mode,
-                    &shred_storage_type,
                     force_update_to_open,
                 );
                 let start_root = if let Some(root) = arg_matches.value_of("start_root") {
@@ -4202,7 +4186,6 @@ fn main() {
                     &ledger_path,
                     AccessType::Secondary,
                     wal_recovery_mode,
-                    &shred_storage_type,
                     force_update_to_open,
                 );
 
@@ -4275,7 +4258,6 @@ fn main() {
                         &ledger_path,
                         AccessType::Secondary,
                         wal_recovery_mode,
-                        &shred_storage_type,
                         force_update_to_open,
                     )
                     .db(),
@@ -4286,7 +4268,6 @@ fn main() {
                     &ledger_path,
                     AccessType::Secondary,
                     wal_recovery_mode,
-                    &shred_storage_type,
                     force_update_to_open,
                 );
 
@@ -4310,7 +4291,6 @@ fn main() {
                     &ledger_path,
                     AccessType::Secondary,
                     wal_recovery_mode,
-                    &shred_storage_type,
                     false,
                 );
                 let sst_file_name = arg_matches.value_of("file_name");
