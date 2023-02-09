@@ -1902,6 +1902,9 @@ trait ScheduleLike: Send + Sync {
     fn current_scheduler_mode(&self) -> solana_scheduler::Mode {
         panic!();
     }
+
+    fn has_context(&self) -> bool {
+    }
 }
 
 struct VoteWithStakeDelegations {
