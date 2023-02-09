@@ -128,50 +128,6 @@ pub(crate) struct Scheduler {
     scheduler_pool: Arc<SchedulerPool>, // use Weak to cut circuric dep.
 }
 
-impl Scheduler {
-    fn schedule(&self, sanitized_tx: &SanitizedTransaction, index: usize, mode: solana_scheduler::Mode) {
-        trace!("Scheduler::schedule()");
-        #[derive(Clone, Copy, Debug)]
-        struct NotAtTopOfScheduleThread;
-        unsafe impl solana_scheduler::NotAtScheduleThread for NotAtTopOfScheduleThread {}
-        let nast = NotAtTopOfScheduleThread;
-
-        let locks = sanitized_tx.get_account_locks_unchecked();
-        let writable_lock_iter = locks.writable.iter().map(|address| {
-            solana_scheduler::LockAttempt::new(
-                self.preloader.load(**address),
-                solana_scheduler::RequestedUsage::Writable,
-            )
-        });
-        let readonly_lock_iter = locks.readonly.iter().map(|address| {
-            solana_scheduler::LockAttempt::new(
-                self.preloader.load(**address),
-                solana_scheduler::RequestedUsage::Readonly,
-            )
-        });
-        let locks = writable_lock_iter
-            .chain(readonly_lock_iter)
-            .collect::<Vec<_>>();
-
-        //assert_eq!(index, self.transaction_index.fetch_add(1, std::sync::atomic::Ordering::SeqCst));
-        use solana_scheduler::{Mode, UniqueWeight};
-        use solana_runtime::transaction_priority_details::GetTransactionPriorityDetails;
-        let uw = match mode {
-            Mode::Banking => ((sanitized_tx.get_transaction_priority_details().map(|d| d.priority).unwrap_or_default() as UniqueWeight) << 64) | ((usize::max_value() - index) as UniqueWeight),
-            Mode::Replaying => solana_scheduler::UniqueWeight::max_value() - index as solana_scheduler::UniqueWeight,
-        };
-        let t =
-            solana_scheduler::Task::new_for_queue(nast, uw, (sanitized_tx.clone(), locks));
-        self.transaction_sender
-            .as_ref()
-            .unwrap()
-            .send(solana_scheduler::SchedulablePayload(
-                solana_scheduler::Flushable::Payload(t),
-            ))
-            .unwrap();
-    }
-}
-
 #[derive(Debug)]
 struct CommitStatus {
     is_paused: std::sync::Mutex<bool>, // maybe should use blockheight: u64 to avoid race for races between replay and executor's poh error?
@@ -668,7 +624,45 @@ impl LikeScheduler for Scheduler {
     }
 
     fn schedule(&self, sanitized_tx: &SanitizedTransaction, index: usize, mode: solana_scheduler::Mode) {
-        panic!();
+        trace!("Scheduler::schedule()");
+        #[derive(Clone, Copy, Debug)]
+        struct NotAtTopOfScheduleThread;
+        unsafe impl solana_scheduler::NotAtScheduleThread for NotAtTopOfScheduleThread {}
+        let nast = NotAtTopOfScheduleThread;
+
+        let locks = sanitized_tx.get_account_locks_unchecked();
+        let writable_lock_iter = locks.writable.iter().map(|address| {
+            solana_scheduler::LockAttempt::new(
+                self.preloader.load(**address),
+                solana_scheduler::RequestedUsage::Writable,
+            )
+        });
+        let readonly_lock_iter = locks.readonly.iter().map(|address| {
+            solana_scheduler::LockAttempt::new(
+                self.preloader.load(**address),
+                solana_scheduler::RequestedUsage::Readonly,
+            )
+        });
+        let locks = writable_lock_iter
+            .chain(readonly_lock_iter)
+            .collect::<Vec<_>>();
+
+        //assert_eq!(index, self.transaction_index.fetch_add(1, std::sync::atomic::Ordering::SeqCst));
+        use solana_scheduler::{Mode, UniqueWeight};
+        use solana_runtime::transaction_priority_details::GetTransactionPriorityDetails;
+        let uw = match mode {
+            Mode::Banking => ((sanitized_tx.get_transaction_priority_details().map(|d| d.priority).unwrap_or_default() as UniqueWeight) << 64) | ((usize::max_value() - index) as UniqueWeight),
+            Mode::Replaying => solana_scheduler::UniqueWeight::max_value() - index as solana_scheduler::UniqueWeight,
+        };
+        let t =
+            solana_scheduler::Task::new_for_queue(nast, uw, (sanitized_tx.clone(), locks));
+        self.transaction_sender
+            .as_ref()
+            .unwrap()
+            .send(solana_scheduler::SchedulablePayload(
+                solana_scheduler::Flushable::Payload(t),
+            ))
+            .unwrap();
     }
 
     fn handle_aborted_executions(&self) -> Vec<Result<ExecuteTimings>> {
