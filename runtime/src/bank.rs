@@ -959,9 +959,9 @@ pub struct Runner {
 }
 
 impl Runner {
-    fn new() -> Self {
+    pub fn new() -> Self {
         Self {
-            runner_pool: Mutex::new(SchedulerPool::new()),
+            runner_pool: std::sync::Mutex::new(SchedulerPool::new()),
         }
     }
 
