@@ -177,9 +177,12 @@ impl<'a> StoreTo<'a> {
 }
 
 #[derive(Default, Debug)]
-/// hold alive accounts and bytes used by those accounts
+/// hold alive accounts
 /// alive means in the accounts index
 pub(crate) struct AliveAccounts<'a> {
+    /// slot the accounts are currently stored in
+    #[allow(dead_code)]
+    pub(crate) slot: Slot,
     pub(crate) accounts: Vec<&'a StoredAccountMeta<'a>>,
     pub(crate) bytes: usize,
 }
@@ -192,7 +195,7 @@ pub(crate) struct ShrinkCollectAliveSeparatedByRefs<'a> {
 }
 
 pub(crate) trait ShrinkCollectRefs<'a>: Sync + Send {
-    fn with_capacity(capacity: usize) -> Self;
+    fn with_capacity(capacity: usize, slot: Slot) -> Self;
     fn collect(&mut self, other: Self);
     fn add(&mut self, ref_count: u64, account: &'a StoredAccountMeta<'a>);
     fn len(&self) -> usize;
@@ -205,10 +208,11 @@ impl<'a> ShrinkCollectRefs<'a> for AliveAccounts<'a> {
         self.bytes = self.bytes.saturating_add(other.bytes);
         self.accounts.append(&mut other.accounts);
     }
-    fn with_capacity(capacity: usize) -> Self {
+    fn with_capacity(capacity: usize, slot: Slot) -> Self {
         Self {
             accounts: Vec::with_capacity(capacity),
             bytes: 0,
+            slot,
         }
     }
     fn add(&mut self, _ref_count: u64, account: &'a StoredAccountMeta<'a>) {
@@ -231,10 +235,10 @@ impl<'a> ShrinkCollectRefs<'a> for ShrinkCollectAliveSeparatedByRefs<'a> {
         self.one_ref.collect(other.one_ref);
         self.many_refs.collect(other.many_refs);
     }
-    fn with_capacity(capacity: usize) -> Self {
+    fn with_capacity(capacity: usize, slot: Slot) -> Self {
         Self {
-            one_ref: AliveAccounts::with_capacity(capacity),
-            many_refs: AliveAccounts::with_capacity(capacity),
+            one_ref: AliveAccounts::with_capacity(capacity, slot),
+            many_refs: AliveAccounts::with_capacity(capacity, slot),
         }
     }
     fn add(&mut self, ref_count: u64, account: &'a StoredAccountMeta<'a>) {
@@ -3739,7 +3743,7 @@ impl AccountsDb {
         slot_to_shrink: Slot,
     ) -> LoadAccountsIndexForShrink<'a, T> {
         let count = accounts.len();
-        let mut alive_accounts = T::with_capacity(count);
+        let mut alive_accounts = T::with_capacity(count, slot_to_shrink);
         let mut unrefed_pubkeys = Vec::with_capacity(count);
 
         let mut alive = 0;
@@ -3839,7 +3843,7 @@ impl AccountsDb {
         let mut index_read_elapsed = Measure::start("index_read_elapsed");
 
         let len = stored_accounts.len();
-        let alive_accounts_collect = Mutex::new(T::with_capacity(len));
+        let alive_accounts_collect = Mutex::new(T::with_capacity(len, slot));
         let unrefed_pubkeys_collect = Mutex::new(Vec::with_capacity(len));
         stats
             .accounts_loaded
@@ -17155,6 +17159,8 @@ pub mod tests {
                                         .cloned()
                                         .collect::<Vec<_>>()
                                 };
+
+                                assert_eq!(shrink_collect.slot, slot5);
 
                                 assert_eq!(
                                     shrink_collect
