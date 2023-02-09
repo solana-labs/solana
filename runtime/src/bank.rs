@@ -98,6 +98,7 @@ use {
             MAX_CACHED_EXECUTORS,
         },
         invoke_context::{BuiltinProgram, ProcessInstructionWithContext},
+        loaded_programs::{LoadedPrograms, WorkingSlot},
         log_collector::LogCollector,
         sysvar_cache::SysvarCache,
         timings::{ExecuteTimingType, ExecuteTimings},
@@ -862,6 +863,7 @@ impl PartialEq for Bank {
             accounts_data_size_delta_off_chain: _,
             fee_structure: _,
             incremental_snapshot_persistence: _,
+            loaded_programs_cache: _,
             // Ignore new fields explicitly if they do not impact PartialEq.
             // Adding ".." will remove compile-time checks that if a new field
             // is added to the struct, this PartialEq is accordingly updated.
@@ -1119,6 +1121,8 @@ pub struct Bank {
     pub fee_structure: FeeStructure,
 
     pub incremental_snapshot_persistence: Option<BankIncrementalSnapshotPersistence>,
+
+    pub loaded_programs_cache: Arc<RwLock<LoadedPrograms>>,
 }
 
 struct VoteWithStakeDelegations {
@@ -1195,6 +1199,16 @@ impl<'a> StorableAccounts<'a, AccountSharedData> for (Slot, &'a [StakeReward], I
     }
     fn include_slot_in_hash(&self) -> IncludeSlotInHash {
         self.2
+    }
+}
+
+impl WorkingSlot for Bank {
+    fn current_slot(&self) -> Slot {
+        self.slot
+    }
+
+    fn is_ancestor(&self, other: Slot) -> bool {
+        self.ancestors.contains_key(&other)
     }
 }
 
@@ -1318,6 +1332,7 @@ impl Bank {
             accounts_data_size_delta_on_chain: AtomicI64::new(0),
             accounts_data_size_delta_off_chain: AtomicI64::new(0),
             fee_structure: FeeStructure::default(),
+            loaded_programs_cache: Arc::<RwLock<LoadedPrograms>>::default(),
         };
 
         let accounts_data_size_initial = bank.get_total_accounts_stats().unwrap().data_len as u64;
@@ -1612,6 +1627,7 @@ impl Bank {
             accounts_data_size_delta_on_chain: AtomicI64::new(0),
             accounts_data_size_delta_off_chain: AtomicI64::new(0),
             fee_structure: parent.fee_structure.clone(),
+            loaded_programs_cache: parent.loaded_programs_cache.clone(),
         };
 
         let (_, ancestors_time_us) = measure_us!({
@@ -1906,6 +1922,7 @@ impl Bank {
             accounts_data_size_delta_on_chain: AtomicI64::new(0),
             accounts_data_size_delta_off_chain: AtomicI64::new(0),
             fee_structure: FeeStructure::default(),
+            loaded_programs_cache: Arc::<RwLock<LoadedPrograms>>::default(),
         };
         bank.finish_init(
             genesis_config,

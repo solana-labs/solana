@@ -47,7 +47,7 @@ use {
 lazy_static! {
     static ref PAR_THREAD_POOL: ThreadPool = rayon::ThreadPoolBuilder::new()
         .num_threads(get_max_thread_count())
-        .thread_name(|ix| format!("solEntry{ix:02}"))
+        .thread_name(|i| format!("solEntry{i:02}"))
         .build()
         .unwrap();
 }

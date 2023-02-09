@@ -143,11 +143,11 @@ impl CostModel {
         // calculate bpf cost based on compute budget instructions
         let mut budget = ComputeBudget::default();
 
-        // Starting from v1.14, cost model uses compute_budget.set_compute_unit_limit to
+        // Starting from v1.15, cost model uses compute_budget.set_compute_unit_limit to
         // measure bpf_costs (code below), vs earlier versions that use estimated
         // bpf instruction costs. The calculated transaction costs are used by leaders
         // during block packing, different costs for same transaction due to different versions
-        // will not impact consensus. So for v1.14+, should call compute budget with
+        // will not impact consensus. So for v1.15+, should call compute budget with
         // the feature gate `enable_request_heap_frame_ix` enabled.
         let enable_request_heap_frame_ix = true;
         let result = budget.process_instructions(
