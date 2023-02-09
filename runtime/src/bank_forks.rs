@@ -66,7 +66,7 @@ pub struct BankForks {
     pub accounts_hash_interval_slots: Slot,
     last_accounts_hash_slot: Slot,
     in_vote_only_mode: Arc<AtomicBool>,
-    like_scheduler_pool: Option<crate::bank::ArcPool>,
+    like_scheduler_pool: Option<Box<dyn LikePool>>,
 }
 
 impl Index<u64> for BankForks {
