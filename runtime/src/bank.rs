@@ -1879,9 +1879,7 @@ pub struct Bank {
 }
 
 pub trait LikeScheduler: Send + Sync + std::fmt::Debug {
-    fn graceful_stop_initiated(&self) -> &AtomicBool {
-        panic!();
-    }
+    fn graceful_stop_initiated(&self) -> &AtomicBool;
 
     fn random_id(&self) -> u64 {
         panic!();
