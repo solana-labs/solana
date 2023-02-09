@@ -5,15 +5,16 @@
 
 use {
     crate::connection_cache::ConnectionCache,
-    log::*,
-    rayon::iter::{IntoParallelIterator, ParallelIterator},
-    solana_connection_cache::client_connection::ClientConnection,
+    solana_connection_cache::connection_cache::{
+        ConnectionCache as BackendConnectionCache, ConnectionManager, ConnectionPool,
+        NewConnectionConfig,
+    },
     solana_rpc_client::rpc_client::RpcClient,
-    solana_rpc_client_api::{config::RpcProgramAccountsConfig, response::Response},
+    solana_rpc_client_api::{config::RpcProgramAccountsConfig},
     solana_sdk::{
         account::Account,
         client::{AsyncClient, Client, SyncClient},
-        clock::{Slot, MAX_PROCESSING_AGE},
+        clock::{Slot,},
         commitment_config::CommitmentConfig,
         epoch_info::EpochInfo,
         fee_calculator::{FeeCalculator, FeeRateGovernor},
@@ -21,28 +22,34 @@ use {
         instruction::Instruction,
         message::Message,
         pubkey::Pubkey,
-        signature::{Keypair, Signature, Signer},
+        signature::{Keypair, Signature},
         signers::Signers,
-        system_instruction,
-        timing::duration_as_ms,
         transaction::{self, Transaction, VersionedTransaction},
         transport::Result as TransportResult,
     },
-    solana_thin_client::thin_client::{temporary_pub::*, ThinClient as BackendThinClient},
+    solana_thin_client::thin_client::{ThinClient as BackendThinClient},
     std::{
-        io,
         net::SocketAddr,
         sync::Arc,
-        time::{Duration, Instant},
+        time::{Duration},
     },
 };
 
 /// An object for querying and sending transactions to the network.
-pub struct ThinClient {
-    thin_client: BackendThinClient,
+pub struct ThinClient<
+    P, // ConnectionPool
+    M, // ConnectionManager
+    C, // NewConnectionConfig
+> {
+    thin_client: BackendThinClient<P, M, C>,
 }
 
-impl ThinClient {
+impl<P, M, C> ThinClient<P, M, C>
+where
+    P: ConnectionPool<NewConnectionConfig = C>,
+    M: ConnectionManager<ConnectionPool = P, NewConnectionConfig = C>,
+    C: NewConnectionConfig,
+{
     /// Create a new ThinClient that will interface with the Rpc at `rpc_addr` using TCP
     /// and the Tpu at `tpu_addr` over `transactions_socket` using Quic or UDP
     /// (currently hardcoded to UDP)
@@ -51,9 +58,17 @@ impl ThinClient {
         tpu_addr: SocketAddr,
         connection_cache: Arc<ConnectionCache>,
     ) -> Self {
-        let connection_cache = Arc::new(connection_cache.into());
-        Self {
-            thin_client: BackendThinClient::new(rpc_addr, tpu_addr, connection_cache)
+        match *connection_cache {
+            ConnectionCache::Quic(connection_cache) => {
+                Self {
+                    thin_client: BackendThinClient::new(rpc_addr, tpu_addr, connection_cache.clone())
+                }
+            }
+            ConnectionCache::Udp(connection_cache) =>  {
+                Self {
+                    thin_client: BackendThinClient::new(rpc_addr, tpu_addr, connection_cache.clone())
+                }
+            }
         }
     }
 
@@ -65,7 +80,12 @@ impl ThinClient {
     ) -> Self {
         let connection_cache = Arc::new(connection_cache.into());
         Self {
-            thin_client: BackendThinClient::new_socket_with_timeout(rpc_addr, tpu_addr, timeout, connection_cache)
+            thin_client: BackendThinClient::new_socket_with_timeout(
+                rpc_addr,
+                tpu_addr,
+                timeout,
+                connection_cache,
+            ),
         }
     }
 
@@ -76,7 +96,7 @@ impl ThinClient {
     ) -> Self {
         let connection_cache = Arc::new(connection_cache.into());
         Self {
-            thin_client: BackendThinClient::new_from_addrs(rpc_addrs, tpu_addrs, connection_cache)
+            thin_client: BackendThinClient::new_from_addrs(rpc_addrs, tpu_addrs, connection_cache),
         }
     }
 
@@ -92,7 +112,12 @@ impl ThinClient {
         tries: usize,
         min_confirmed_blocks: usize,
     ) -> TransportResult<Signature> {
-        self.thin_client.retry_transfer_until_confirmed(keypair, transaction, tries, min_confirmed_blocks)
+        self.thin_client.retry_transfer_until_confirmed(
+            keypair,
+            transaction,
+            tries,
+            min_confirmed_blocks,
+        )
     }
 
     /// Retry sending a signed Transaction with one signing Keypair to the server for processing.
@@ -112,7 +137,12 @@ impl ThinClient {
         tries: usize,
         pending_confirmations: usize,
     ) -> TransportResult<Signature> {
-        self.thin_client.send_and_confirm_transaction(keypairs, transaction, tries, pending_confirmations)
+        self.thin_client.send_and_confirm_transaction(
+            keypairs,
+            transaction,
+            tries,
+            pending_confirmations,
+        )
     }
 
     pub fn poll_get_balance(&self, pubkey: &Pubkey) -> TransportResult<u64> {
@@ -124,7 +154,8 @@ impl ThinClient {
         pubkey: &Pubkey,
         commitment_config: CommitmentConfig,
     ) -> TransportResult<u64> {
-        self.thin_client.poll_get_balance_with_commitment(pubkey, commitment_config)
+        self.thin_client
+            .poll_get_balance_with_commitment(pubkey, commitment_config)
     }
 
     pub fn wait_for_balance(&self, pubkey: &Pubkey, expected_balance: Option<u64>) -> Option<u64> {
@@ -136,7 +167,8 @@ impl ThinClient {
         pubkey: &Pubkey,
         config: RpcProgramAccountsConfig,
     ) -> TransportResult<Vec<(Pubkey, Account)>> {
-        self.thin_client.get_program_accounts_with_config(pubkey, config)
+        self.thin_client
+            .get_program_accounts_with_config(pubkey, config)
     }
 
     pub fn wait_for_balance_with_commitment(
@@ -145,7 +177,11 @@ impl ThinClient {
         expected_balance: Option<u64>,
         commitment_config: CommitmentConfig,
     ) -> Option<u64> {
-        self.thin_client.wait_for_balance_with_commitment(pubkey, expected_balance, commitment_config)
+        self.thin_client.wait_for_balance_with_commitment(
+            pubkey,
+            expected_balance,
+            commitment_config,
+        )
     }
 
     pub fn poll_for_signature_with_commitment(
@@ -153,24 +189,36 @@ impl ThinClient {
         signature: &Signature,
         commitment_config: CommitmentConfig,
     ) -> TransportResult<()> {
-        self.thin_client.poll_for_signature_with_commitment(signature, commitment_config)
+        self.thin_client
+            .poll_for_signature_with_commitment(signature, commitment_config)
     }
 
     pub fn get_num_blocks_since_signature_confirmation(
         &mut self,
         sig: &Signature,
     ) -> TransportResult<usize> {
-        self.thin_client.get_num_blocks_since_signature_confirmation(sig)
+        self.thin_client
+            .get_num_blocks_since_signature_confirmation(sig)
     }
 }
 
-impl Client for ThinClient {
+impl<P, M, C> Client for ThinClient<P, M, C>
+where
+    P: ConnectionPool<NewConnectionConfig = C>,
+    M: ConnectionManager<ConnectionPool = P, NewConnectionConfig = C>,
+    C: NewConnectionConfig,
+{
     fn tpu_addr(&self) -> String {
         self.thin_client.tpu_addr()
     }
 }
 
-impl SyncClient for ThinClient {
+impl<P, M, C> SyncClient for ThinClient<P, M, C>
+where
+    P: ConnectionPool<NewConnectionConfig = C>,
+    M: ConnectionManager<ConnectionPool = P, NewConnectionConfig = C>,
+    C: NewConnectionConfig,
+{
     fn send_and_confirm_message<T: Signers>(
         &self,
         keypairs: &T,
@@ -184,7 +232,8 @@ impl SyncClient for ThinClient {
         keypair: &Keypair,
         instruction: Instruction,
     ) -> TransportResult<Signature> {
-        self.thin_client.send_and_confirm_instruction(keypair, instruction)
+        self.thin_client
+            .send_and_confirm_instruction(keypair, instruction)
     }
 
     fn transfer_and_confirm(
@@ -193,7 +242,8 @@ impl SyncClient for ThinClient {
         keypair: &Keypair,
         pubkey: &Pubkey,
     ) -> TransportResult<Signature> {
-        self.thin_client.transfer_and_confirm(lamports, keypair, pubkey)
+        self.thin_client
+            .transfer_and_confirm(lamports, keypair, pubkey)
     }
 
     fn get_account_data(&self, pubkey: &Pubkey) -> TransportResult<Option<Vec<u8>>> {
@@ -209,7 +259,8 @@ impl SyncClient for ThinClient {
         pubkey: &Pubkey,
         commitment_config: CommitmentConfig,
     ) -> TransportResult<Option<Account>> {
-        self.thin_client.get_account_with_commitment(pubkey, commitment_config)
+        self.thin_client
+            .get_account_with_commitment(pubkey, commitment_config)
     }
 
     fn get_balance(&self, pubkey: &Pubkey) -> TransportResult<u64> {
@@ -221,11 +272,13 @@ impl SyncClient for ThinClient {
         pubkey: &Pubkey,
         commitment_config: CommitmentConfig,
     ) -> TransportResult<u64> {
-        self.thin_client.get_balance_with_commitment(pubkey, commitment_config)
+        self.thin_client
+            .get_balance_with_commitment(pubkey, commitment_config)
     }
 
     fn get_minimum_balance_for_rent_exemption(&self, data_len: usize) -> TransportResult<u64> {
-        self.thin_client.get_minimum_balance_for_rent_exemption(data_len)
+        self.thin_client
+            .get_minimum_balance_for_rent_exemption(data_len)
     }
 
     fn get_recent_blockhash(&self) -> TransportResult<(Hash, FeeCalculator)> {
@@ -238,7 +291,8 @@ impl SyncClient for ThinClient {
         commitment_config: CommitmentConfig,
     ) -> TransportResult<(Hash, FeeCalculator, Slot)> {
         #[allow(deprecated)]
-        self.thin_client.get_recent_blockhash_with_commitment(commitment_config)
+        self.thin_client
+            .get_recent_blockhash_with_commitment(commitment_config)
     }
 
     fn get_fee_calculator_for_blockhash(
@@ -266,7 +320,8 @@ impl SyncClient for ThinClient {
         signature: &Signature,
         commitment_config: CommitmentConfig,
     ) -> TransportResult<Option<transaction::Result<()>>> {
-        self.thin_client.get_signature_status_with_commitment(signature, commitment_config)
+        self.thin_client
+            .get_signature_status_with_commitment(signature, commitment_config)
     }
 
     fn get_slot(&self) -> TransportResult<u64> {
@@ -292,7 +347,8 @@ impl SyncClient for ThinClient {
         &self,
         commitment_config: CommitmentConfig,
     ) -> TransportResult<u64> {
-        self.thin_client.get_transaction_count_with_commitment(commitment_config)
+        self.thin_client
+            .get_transaction_count_with_commitment(commitment_config)
     }
 
     /// Poll the server until the signature has been confirmed by at least `min_confirmed_blocks`
@@ -301,7 +357,8 @@ impl SyncClient for ThinClient {
         signature: &Signature,
         min_confirmed_blocks: usize,
     ) -> TransportResult<usize> {
-        self.thin_client.poll_for_signature_confirmation(signature, min_confirmed_blocks)
+        self.thin_client
+            .poll_for_signature_confirmation(signature, min_confirmed_blocks)
     }
 
     fn poll_for_signature(&self, signature: &Signature) -> TransportResult<()> {
@@ -321,7 +378,8 @@ impl SyncClient for ThinClient {
         &self,
         commitment_config: CommitmentConfig,
     ) -> TransportResult<(Hash, u64)> {
-        self.thin_client.get_latest_blockhash_with_commitment(commitment_config)
+        self.thin_client
+            .get_latest_blockhash_with_commitment(commitment_config)
     }
 
     fn is_blockhash_valid(
@@ -329,7 +387,8 @@ impl SyncClient for ThinClient {
         blockhash: &Hash,
         commitment_config: CommitmentConfig,
     ) -> TransportResult<bool> {
-        self.thin_client.is_blockhash_valid(blockhash, commitment_config)
+        self.thin_client
+            .is_blockhash_valid(blockhash, commitment_config)
     }
 
     fn get_fee_for_message(&self, message: &Message) -> TransportResult<u64> {
@@ -337,18 +396,25 @@ impl SyncClient for ThinClient {
     }
 }
 
-impl AsyncClient for ThinClient {
+impl<P, M, C> AsyncClient for ThinClient<P, M, C>
+where
+    P: ConnectionPool<NewConnectionConfig = C>,
+    M: ConnectionManager<ConnectionPool = P, NewConnectionConfig = C>,
+    C: NewConnectionConfig,
+{    
     fn async_send_versioned_transaction(
         &self,
         transaction: VersionedTransaction,
     ) -> TransportResult<Signature> {
-        self.thin_client.async_send_versioned_transaction(transaction)
+        self.thin_client
+            .async_send_versioned_transaction(transaction)
     }
 
     fn async_send_versioned_transaction_batch(
         &self,
         batch: Vec<VersionedTransaction>,
     ) -> TransportResult<()> {
-        self.thin_client.async_send_versioned_transaction_batch(batch)
+        self.thin_client
+            .async_send_versioned_transaction_batch(batch)
     }
 }
