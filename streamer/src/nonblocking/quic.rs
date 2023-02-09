@@ -574,7 +574,7 @@ async fn patch_batch_sender(
                     last_sent = Instant::now();
                 }
             } else {
-                info!("patch_batch_sender recv error {:?}", res);
+                //info!("patch_batch_sender recv error {:?}", res);
                 sleep(Duration::from_micros(250)).await;
             }
         }
@@ -729,7 +729,11 @@ async fn handle_chunk(
                     Some(end) => end,
                     None => return true,
                 };
-                if let Err(err) = packet_sender.send((meta, chunk.bytes, offset, end_of_chunk)).await {
+                meta.size = std::cmp::max(meta.size, end_of_chunk);
+                if let Err(err) = packet_sender
+                    .send((meta, chunk.bytes, offset, end_of_chunk))
+                    .await
+                {
                     info!("handle_chunk send error {}", err);
                 }
                 
