@@ -1879,6 +1879,17 @@ pub struct Bank {
 }
 
 trait ScheduleLike: Send + Sync {
+    fn handle_aborted_executions(&self) -> Vec<Result<ExecuteTimings>> {
+        panic!();
+    }
+
+    fn pause_commit_into_bank(&self) {
+        panic!();
+    }
+
+    fn resume_commit_into_bank(&self, bank: Option<&Arc<Bank>>) {
+        panic!();
+    }
 }
 
 struct VoteWithStakeDelegations {
