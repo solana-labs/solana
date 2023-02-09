@@ -1878,7 +1878,7 @@ pub struct Bank {
     pub blockhash_override: RwLock<Option<Hash>>,
 }
 
-trait ScheduleLike {
+trait ScheduleLike: Send + Sync {
 }
 
 struct VoteWithStakeDelegations {
