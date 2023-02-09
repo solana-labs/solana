@@ -1874,8 +1874,11 @@ pub struct Bank {
 
     pub incremental_snapshot_persistence: Option<BankIncrementalSnapshotPersistence>,
 
-    scheduler: RwLock<Option<Box<Scheduler>>>,
+    scheduler: RwLock<Option<Box<dyn ScheduleLike>>>,
     pub blockhash_override: RwLock<Option<Hash>>,
+}
+
+trait ScheduleLike {
 }
 
 struct VoteWithStakeDelegations {
