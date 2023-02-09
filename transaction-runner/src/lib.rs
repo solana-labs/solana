@@ -93,7 +93,7 @@ impl SchedulerPool {
 
 impl LikeSchedulerPool for SchedulerPoolWrapper {
     fn take_from_pool(&self, context: SchedulerContext) -> Box<dyn LikeScheduler> {
-        self.0.take_from_pool(context)
+        self.0.take_from_pool(Some(context))
     }
 
 
