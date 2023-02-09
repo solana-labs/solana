@@ -7054,10 +7054,12 @@ version = "1.16.0"
 dependencies = [
  "log",
  "solana-ledger",
+ "solana-metrics",
  "solana-poh",
  "solana-program-runtime",
  "solana-runtime",
  "solana-scheduler",
+ "solana-sdk 1.16.0",
 ]
 
 [[package]]
