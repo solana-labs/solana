@@ -946,9 +946,9 @@ impl AbiExample for BuiltinPrograms {
 
 #[derive(Clone, Debug)]
 struct RunnerContext {
+    runner: Arc<Runner>,
     bank: Option<Arc<Bank>>,
     mode: solana_scheduler::Mode,
-    runner: Arc<Runner>,
     // poh callback
     // tx status writer
 }
@@ -956,6 +956,12 @@ struct RunnerContext {
 #[derive(Debug)]
 struct Runner {
     runner_pool: std::sync::Mutex<SchedulerPool<ExecuteTimings>>,
+}
+
+impl Runner {
+    fn context(self: Arc<Self>, bank: Option<Arc<Bank>>, mode: solana_scheduler::Mode) -> RunnerContext {
+        RunnerContext { runner: self, bank, mode }
+    }
 }
 
 impl solana_scheduler::WithMode for RunnerContext {
