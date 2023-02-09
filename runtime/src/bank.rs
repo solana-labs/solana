@@ -953,7 +953,7 @@ struct RunnerContext {
 
 #[derive(Debug)]
 pub struct Runner {
-    runner_pool: std::sync::Mutex<SchedulerPool<ExecuteTimings>>,
+    scheduler_pool: std::sync::Mutex<SchedulerPool<ExecuteTimings>>,
     // poh callback
     // tx status writer
 }
@@ -961,7 +961,7 @@ pub struct Runner {
 impl Runner {
     pub fn new() -> Self {
         Self {
-            runner_pool: std::sync::Mutex::new(SchedulerPool::new()),
+            scheduler_pool: std::sync::Mutex::new(SchedulerPool::new()),
         }
     }
 
@@ -970,11 +970,11 @@ impl Runner {
     }
 
     pub(crate) fn take_scheduler_from_pool(&self) -> Box<Scheduler<ExecuteTimings>> {
-        self.runner_pool.lock().unwrap().take_from_pool()
+        self.scheduler_pool.lock().unwrap().take_from_pool()
     }
 
     pub(crate) fn return_scheduler_to_pool(&self, scheduler: Box<Scheduler<ExecuteTimings>>) {
-        self.runner_pool.lock().unwrap().return_to_pool(scheduler)
+        self.scheduler_pool.lock().unwrap().return_to_pool(scheduler)
     }
 }
 
@@ -1646,7 +1646,7 @@ impl<C> Scheduler<C> {
         self.current_checkpoint.replace_context_value(runner_context);
     }
 
-    fn current_runner_mode(&self) -> solana_scheduler::Mode {
+    fn current_scheduler_mode(&self) -> solana_scheduler::Mode {
         self.current_checkpoint.with_context_value(|c| c.mode).unwrap()
     }
 
@@ -3914,7 +3914,7 @@ impl Bank {
         // committed before this write lock can be obtained here.
         let mut hash = self.hash.write().unwrap();
         if *hash == Hash::default() {
-            /*match self.transaction_runner_mode() {
+            /*match self.transaction_scheduler_mode() {
                 solana_scheduler::Mode::Replaying => {
                     assert!(self.scheduler2.read().unwrap().is_none());
                 }
@@ -4370,9 +4370,9 @@ impl Bank {
         );
 
 
-        let runner_mode = self.transaction_runner_mode();
+        let scheduler_mode = self.transaction_scheduler_mode();
         let runner = self.transaction_runner();
-        let mut w_blockhash_queue = match runner_mode {
+        let mut w_blockhash_queue = match scheduler_mode {
             solana_scheduler::Mode::Replaying => {
                 let last_result = self.wait_for_scheduler(false);
                 let scheduler = runner.take_scheduler_from_pool();
@@ -4398,7 +4398,7 @@ impl Bank {
                     .unwrap()
                     .push(last_result);
                 drop(s2);
-                self.sync_transaction_runner_context(self.transaction_runner(), runner_mode);
+                self.sync_transaction_runner_context(self.transaction_runner(), scheduler_mode);
                 //*self.scheduler.write().unwrap() = new_scheduler;
                 w_blockhash_queue
             },
@@ -6894,7 +6894,7 @@ impl Bank {
 
     pub fn resume_banking_commit(self: &Arc<Self>) {
         use assert_matches::assert_matches;
-        match self.transaction_runner_mode() {
+        match self.transaction_scheduler_mode() {
             solana_scheduler::Mode::Banking => {
                 let s = self.scheduler.read().unwrap();
                 let scheduler = s.as_ref().unwrap();
@@ -6918,10 +6918,10 @@ impl Bank {
         scheduler.current_runner()
     }
 
-    pub fn transaction_runner_mode(&self) -> solana_scheduler::Mode {
+    pub fn transaction_scheduler_mode(&self) -> solana_scheduler::Mode {
         let s = self.scheduler.read().unwrap();
         let scheduler = s.as_ref().unwrap();
-        scheduler.current_runner_mode()
+        scheduler.current_scheduler_mode()
     }
 
     /// Process a batch of transactions.
@@ -8667,11 +8667,11 @@ impl Bank {
         if let Some(scheduler) = s.as_mut() {
             assert!(scheduler.has_context());
 
-            let runner_mode = scheduler.current_runner_mode();
+            let scheduler_mode = scheduler.current_scheduler_mode();
             let runner = scheduler.current_runner();
-            if matches!(runner_mode, solana_scheduler::Mode::Replaying) || via_drop {
-                info!("wait_for_scheduler({runner_mode:?}/{via_drop}): gracefully stopping bank ({})...", self.slot());
-                if matches!(runner_mode, solana_scheduler::Mode::Banking) {
+            if matches!(scheduler_mode, solana_scheduler::Mode::Replaying) || via_drop {
+                info!("wait_for_scheduler({scheduler_mode:?}/{via_drop}): gracefully stopping bank ({})...", self.slot());
+                if matches!(scheduler_mode, solana_scheduler::Mode::Banking) {
                     assert!(via_drop);
                     scheduler.resume_commit_into_bank(None);
                 } else if via_drop  {
