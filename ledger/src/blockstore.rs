@@ -2857,10 +2857,10 @@ impl Blockstore {
                             }
                             // howdy, anybody who reached here from the panic messsage!
                             // the .unwrap() below could indicate there was an odd error or there
-                            // could simply be a tx with a new alt, which is just created/updated
+                            // could simply be a tx with a new ALT, which is just created/updated
                             // in this range. too bad... this edge case isn't currently supported.
                             // see: https://github.com/solana-labs/solana/issues/30165
-                            // for casual use, please chose different slot range.
+                            // for casual use, please choose different slot range.
                             let sanitized_tx = bank.fully_verify_transaction(tx).unwrap();
                             sanitized_tx
                                 .message()
