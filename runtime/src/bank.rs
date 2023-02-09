@@ -1858,7 +1858,7 @@ pub struct Bank {
 
     pub incremental_snapshot_persistence: Option<BankIncrementalSnapshotPersistence>,
 
-    scheduler: RwLock<Option<Box<Scheduler<ExecuteTimings>>>>,
+    scheduler: RwLock<Option<Box<Scheduler>>>,
     pub blockhash_override: RwLock<Option<Hash>>,
 }
 
