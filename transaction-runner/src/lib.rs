@@ -50,7 +50,7 @@ impl SchedulerPool {
         self.schedulers.lock().unwrap().push(Box::new(Scheduler::default2(self.clone())));
     }
 
-    pub fn take_from_pool(self: &Arc<Self>, runner: ArcPool) -> Box<dyn LikeScheduler> {
+    pub fn take_from_pool(self: &Arc<Self>) -> Box<dyn LikeScheduler> {
         if let Some(scheduler) = self.schedulers.lock().unwrap().pop() {
             trace!(
                 "SchedulerPool: id_{:016x} is taken... len: {} => {}",
@@ -60,7 +60,7 @@ impl SchedulerPool {
             );
             scheduler
         } else {
-            self.create(runner.clone());
+            self.create();
             self.take_from_pool(runner)
         }
     }
