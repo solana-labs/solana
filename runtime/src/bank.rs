@@ -8655,7 +8655,7 @@ impl Bank {
         total_accounts_stats
     }
 
-    pub fn install_scheduler(&self, scheduler: Box<Scheduler<ExecuteTimings>>) {
+    pub(crate) fn install_scheduler(&self, scheduler: Box<Scheduler<ExecuteTimings>>) {
         let mut s = self.scheduler2.write().unwrap();
         assert!(s.is_none());
         *s = Some(scheduler)
