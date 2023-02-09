@@ -234,7 +234,7 @@ impl Scheduler {
         let thread_count = 3 + executing_thread_count;
         let initial_checkpoint = {
             let mut c = Self::new_checkpoint(thread_count);
-            c.replace_scheduler_context(initial_context);
+            c.replace_context_value(initial_context);
             c
         };
 
