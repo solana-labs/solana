@@ -153,7 +153,7 @@ impl Scheduler {
 
         //assert_eq!(index, self.transaction_index.fetch_add(1, std::sync::atomic::Ordering::SeqCst));
         use solana_scheduler::{Mode, UniqueWeight};
-        use crate::transaction_priority_details::GetTransactionPriorityDetails;
+        use solana_runtime::transaction_priority_details::GetTransactionPriorityDetails;
         let uw = match mode {
             Mode::Banking => ((sanitized_tx.get_transaction_priority_details().map(|d| d.priority).unwrap_or_default() as UniqueWeight) << 64) | ((usize::max_value() - index) as UniqueWeight),
             Mode::Replaying => solana_scheduler::UniqueWeight::max_value() - index as solana_scheduler::UniqueWeight,
@@ -459,7 +459,7 @@ impl Scheduler {
                 loop {
                 while let Ok(r) = retired_ee_receiver.recv_timeout(std::time::Duration::from_millis(20))
                 {
-                    use crate::transaction_priority_details::GetTransactionPriorityDetails;
+                    use solana_runtime::transaction_priority_details::GetTransactionPriorityDetails;
                     if let Some(latest_checkpoint) = latest_checkpoint.take() {
                         latest_scheduler_context = latest_checkpoint.clone_context_value();
                     }
