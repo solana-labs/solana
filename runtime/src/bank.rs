@@ -945,7 +945,7 @@ impl AbiExample for BuiltinPrograms {
 }
 
 #[derive(Clone, Debug)]
-struct SchedulerContext {
+pub struct SchedulerContext {
     bank: Option<Arc<Bank>>,
     mode: solana_scheduler::Mode,
 }
