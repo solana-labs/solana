@@ -97,7 +97,7 @@ impl Drop for SchedulerPool {
     }
 }
 
-impl LikePool for SchedulerPool {
+impl LikePool for Arc<SchedulerPool> {
     fn take_from_pool(&self, runner: ArcPool) -> Box<dyn LikeScheduler> {
         panic!();
     }
