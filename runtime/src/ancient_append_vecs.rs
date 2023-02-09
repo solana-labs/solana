@@ -631,20 +631,20 @@ pub mod tests {
             .map(|store| db.get_unique_accounts_from_storage(store))
             .collect::<Vec<_>>();
         let storage = storages.first().unwrap().clone();
-        let pk_1_ref = solana_sdk::pubkey::new_rand();
+        let pk_with_1_ref = solana_sdk::pubkey::new_rand();
         let slot1 = slots.start;
-        let account_2_refs = original_results
+        let account_with_2_refs = original_results
             .first()
             .unwrap()
             .stored_accounts
             .first()
             .unwrap();
-        let pk_2_refs = account_2_refs.pubkey();
-        let account_1_ref = account_2_refs.to_account_shared_data();
+        let pk_with_2_refs = account_with_2_refs.pubkey();
+        let account_with_1_ref = account_with_2_refs.to_account_shared_data();
         append_single_account_with_default_hash(
             &storage,
-            &pk_1_ref,
-            &account_1_ref,
+            &pk_with_1_ref,
+            &account_with_1_ref,
             0,
             true,
             Some(&db.accounts_index),
@@ -693,34 +693,29 @@ pub mod tests {
                 .iter()
                 .map(|meta| meta.pubkey())
                 .collect::<Vec<_>>(),
-            vec![pk_2_refs]
+            vec![pk_with_2_refs]
         );
         assert_eq!(accounts_to_combine.accounts_to_combine.len(), 1);
+        let one_ref_accounts = &accounts_to_combine
+            .accounts_to_combine
+            .first()
+            .unwrap()
+            .alive_accounts
+            .one_ref
+            .accounts;
         assert_eq!(
-            accounts_to_combine
-                .accounts_to_combine
-                .first()
-                .unwrap()
-                .alive_accounts
-                .one_ref
-                .accounts
+            one_ref_accounts
                 .iter()
                 .map(|meta| meta.pubkey())
                 .collect::<Vec<_>>(),
-            vec![&pk_1_ref]
+            vec![&pk_with_1_ref]
         );
         assert_eq!(
-            accounts_to_combine
-                .accounts_to_combine
-                .first()
-                .unwrap()
-                .alive_accounts
-                .one_ref
-                .accounts
+            one_ref_accounts
                 .iter()
                 .map(|meta| meta.to_account_shared_data())
                 .collect::<Vec<_>>(),
-            vec![account_1_ref]
+            vec![account_with_1_ref]
         );
         assert!(accounts_to_combine
             .accounts_to_combine
