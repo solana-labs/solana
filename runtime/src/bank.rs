@@ -970,7 +970,7 @@ impl SchedulerContext {
     }
 }
 
-pub type ArcPool = Arc<std::sync::Mutex<Box<dyn LikePool>>>;
+pub type ArcPool = Arc<Box<dyn LikePool>>;
 
 /// Manager for the state of all accounts and programs after processing its entries.
 /// AbiExample is needed even without Serialize/Deserialize; actual (de-)serialization
@@ -1154,8 +1154,8 @@ pub struct Bank {
 }
 
 pub trait LikePool: Send + Sync + std::fmt::Debug {
-    fn take_from_pool(&mut self, runner: ArcPool) -> Box<dyn LikeScheduler>;
-    fn return_to_pool(&mut self, scheduler: Box<dyn LikeScheduler>);
+    fn take_from_pool(&self, runner: ArcPool) -> Box<dyn LikeScheduler>;
+    fn return_to_pool(&self, scheduler: Box<dyn LikeScheduler>);
 }
 
 pub trait LikeScheduler: Send + Sync + std::fmt::Debug {

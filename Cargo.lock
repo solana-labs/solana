@@ -6582,7 +6582,6 @@ dependencies = [
  "rustc_version 0.4.0",
  "serde",
  "serde_derive",
- "serde_json",
  "solana-address-lookup-table-program",
  "solana-bpf-loader-program",
  "solana-bucket-map",
