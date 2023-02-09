@@ -196,7 +196,7 @@ impl BankForks {
         for parent in bank.proper_ancestors() {
             self.descendants.entry(parent).or_default().insert(slot);
         }
-        bank.sync_transaction_runner_context(self.transaction_runner, mode);
+        bank.sync_transaction_runner_context(self.transaction_runner.clone(), mode);
         bank
     }
 
