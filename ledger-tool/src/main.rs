@@ -1250,7 +1250,7 @@ fn load_bank_forks(
             transaction_notifier,
             blockstore.clone(),
             false,
-            &exit.clone(),
+            &exit,
         );
         (Some(TransactionStatusSender { sender: transaction_status_sender }), Some(transaction_status_service))
     } else {
