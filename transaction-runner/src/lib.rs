@@ -58,7 +58,7 @@ impl SchedulerPool {
                 self.schedulers.len() + 1,
                 self.schedulers.len()
             );
-            scheduler
+            Box::new(scheduler)
         } else {
             self.create(runner.clone());
             self.take_from_pool(runner)
