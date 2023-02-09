@@ -978,11 +978,11 @@ impl TransactionRunner {
         SchedulerContext { bank, mode }
     }
 
-    pub(crate) fn take_scheduler_from_pool(self: &Arc<Self>) -> Box<dyn ScheduleLike> {
+    pub(crate) fn take_scheduler_from_pool(self: &Arc<Self>) -> Box<dyn LikeScheduler> {
         self.scheduler_pool.lock().unwrap().take_from_pool(self.clone())
     }
 
-    pub(crate) fn return_scheduler_to_pool(&self, scheduler: Box<dyn ScheduleLike>) {
+    pub(crate) fn return_scheduler_to_pool(&self, scheduler: Box<dyn LikeScheduler>) {
         self.scheduler_pool.lock().unwrap().return_to_pool(scheduler)
     }
 }
@@ -1009,7 +1009,7 @@ impl SchedulerContext {
 
 #[derive(Debug)]
 struct SchedulerPool {
-    schedulers: Vec<Box<dyn ScheduleLike>>,
+    schedulers: Vec<Box<dyn LikeScheduler>>,
 }
 
 impl SchedulerPool {
@@ -1023,7 +1023,7 @@ impl SchedulerPool {
         self.schedulers.push(Box::new(Scheduler::default2(runner)));
     }
 
-    fn take_from_pool(&mut self, runner: Arc<TransactionRunner>) -> Box<dyn ScheduleLike> {
+    fn take_from_pool(&mut self, runner: Arc<TransactionRunner>) -> Box<dyn LikeScheduler> {
         if let Some(scheduler) = self.schedulers.pop() {
             trace!(
                 "SchedulerPool: id_{:016x} is taken... len: {} => {}",
@@ -1038,7 +1038,7 @@ impl SchedulerPool {
         }
     }
 
-    fn return_to_pool(&mut self, scheduler: Box<dyn ScheduleLike>) {
+    fn return_to_pool(&mut self, scheduler: Box<dyn LikeScheduler>) {
         trace!(
             "SchedulerPool: id_{:016x} is returned... len: {} => {}",
             scheduler.random_id(),
@@ -1874,11 +1874,11 @@ pub struct Bank {
 
     pub incremental_snapshot_persistence: Option<BankIncrementalSnapshotPersistence>,
 
-    scheduler: RwLock<Option<Box<dyn ScheduleLike>>>,
+    scheduler: RwLock<Option<Box<dyn LikeScheduler>>>,
     pub blockhash_override: RwLock<Option<Hash>>,
 }
 
-pub trait ScheduleLike: Send + Sync + std::fmt::Debug {
+pub trait LikeScheduler: Send + Sync + std::fmt::Debug {
     fn graceful_stop_initiated(&self) -> &AtomicBool {
         panic!();
     }
@@ -1928,7 +1928,7 @@ pub trait ScheduleLike: Send + Sync + std::fmt::Debug {
     }
 }
 
-impl ScheduleLike for Scheduler {
+impl LikeScheduler for Scheduler {
     fn graceful_stop_initiated(&self) -> &AtomicBool {
         panic!();
     }
@@ -8770,7 +8770,7 @@ impl Bank {
         total_accounts_stats
     }
 
-    pub(crate) fn install_scheduler(&self, scheduler: Box<dyn ScheduleLike>) {
+    pub(crate) fn install_scheduler(&self, scheduler: Box<dyn LikeScheduler>) {
         let mut s = self.scheduler.write().unwrap();
         assert!(s.is_none());
         *s = Some(scheduler)
