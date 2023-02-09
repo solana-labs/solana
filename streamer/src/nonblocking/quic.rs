@@ -4,7 +4,7 @@ use {
         streamer::StakedNodes,
         tls_certificates::get_pubkey_from_tls_certificate,
     },
-    async_channel::{unbounded, Receiver as AsyncReceiver, Sender as AsyncSender},
+    async_channel::{unbounded as async_unbounded, Receiver as AsyncReceiver, Sender as AsyncSender},
     bytes::Bytes,
     crossbeam_channel::Sender,
     indexmap::map::{Entry, IndexMap},
@@ -110,7 +110,7 @@ pub async fn run_server(
     ));
     let staked_connection_table: Arc<Mutex<ConnectionTable>> =
         Arc::new(Mutex::new(ConnectionTable::new(ConnectionPeerType::Staked)));
-    let (sender, receiver) = unbounded();
+    let (sender, receiver) = async_unbounded();
     tokio::spawn(patch_batch_sender(
         packet_sender,
         receiver,
@@ -443,7 +443,7 @@ async fn setup_connection(
                     stats.clone(),
                 ),
                 |(pubkey, stake, total_stake, max_stake, min_stake)| NewConnectionHandlerParams {
-                    packet_sender,
+                    packet_sender: packet_sender.clone(),
                     remote_pubkey: Some(pubkey),
                     stake,
                     total_stake,
@@ -529,6 +529,7 @@ async fn patch_batch_sender(
     exit: Arc<AtomicBool>,
     stats: Arc<StreamStats>,
 ) {
+    info!("enter patch_batch_sender");
     loop {
         let mut packet_batch = PacketBatch::with_capacity(64);
         let mut last_sent = Instant::now();
@@ -548,7 +549,7 @@ async fn patch_batch_sender(
                     stats
                         .total_packet_batches_sent
                         .fetch_add(1, Ordering::Relaxed);
-                    trace!("sent {} packet batch", len);
+                    info!("sent {} packet batch", len);
                 }
                 break;
             }
@@ -567,6 +568,7 @@ async fn patch_batch_sender(
                     last_sent = Instant::now();
                 }
             } else {
+                info!("patch_batch_sender recv error {:?}", res);
                 sleep(Duration::from_micros(250)).await;
             }
         }
@@ -984,6 +986,7 @@ pub mod test {
             tls_certificates::new_self_signed_tls_certificate_chain,
         },
         crossbeam_channel::{unbounded, Receiver},
+        async_channel::unbounded as async_unbounded,
         quinn::{ClientConfig, IdleTimeout, TransportConfig, VarInt},
         solana_sdk::{
             quic::{QUIC_KEEP_ALIVE_MS, QUIC_MAX_TIMEOUT_MS},
@@ -1239,6 +1242,42 @@ pub mod test {
         exit.store(true, Ordering::Relaxed);
         t.await.unwrap();
     }
+
+    #[tokio::test]
+    async fn test_packet_batcher() {
+        solana_logger::setup();
+        let (packet_batch_sender, packet_batch_receiver) = unbounded();
+        let (ptk_sender, pkt_receiver) = async_unbounded();
+        let exit = Arc::new(AtomicBool::new(false));
+        let stats = Arc::new(StreamStats::default());
+
+        let handle = tokio::spawn(patch_batch_sender(packet_batch_sender, pkt_receiver, exit.clone(), stats));
+
+        let sender2=ptk_sender.clone();
+
+        for _i in 0..1000 {
+            let meta = Meta::default();
+            let bytes = Bytes::from("Hello world");
+            let offset = 0;
+            let size = bytes.len();
+            sender2.send((meta, bytes, offset, size)).await.unwrap();
+        }
+        let mut i =0;
+        while i < 1000 {
+            let res = packet_batch_receiver.try_recv();
+            if res.is_ok() {
+                let len = res.unwrap().len();
+                i+= len;
+            }
+            else {
+                sleep(Duration::from_millis(1)).await;
+            }
+        }
+        exit.store(true, Ordering::Relaxed);
+        handle.await.unwrap();
+
+    }
+
 
     #[tokio::test]
     async fn test_quic_stream_timeout() {
