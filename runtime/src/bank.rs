@@ -1011,7 +1011,7 @@ impl SchedulerPool {
             .push(Box::new(Scheduler::<ExecuteTimings>::default2()));
     }
 
-    fn take_from_pool(&mut self) -> Box<Scheduler<ExecuteTimings>> {
+    fn take_from_pool(&mut self) -> Box<Scheduler> {
         if let Some(scheduler) = self.schedulers.pop() {
             trace!(
                 "SchedulerPool: id_{:016x} is taken... len: {} => {}",
