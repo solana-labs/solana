@@ -183,7 +183,7 @@ impl BankForks {
             accounts_hash_interval_slots: std::u64::MAX,
             last_accounts_hash_slot: root,
             in_vote_only_mode: Arc::new(AtomicBool::new(false)),
-            transaction_runner: Default::default(),
+            transaction_runner: Runner::default(),
         }
     }
 
