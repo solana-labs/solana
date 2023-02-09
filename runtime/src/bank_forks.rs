@@ -3,7 +3,7 @@
 use {
     crate::{
         accounts_background_service::{AbsRequestSender, SnapshotRequest, SnapshotRequestType},
-        bank::{Bank, LikeScheduler},
+        bank::{Bank, LikeScheduler, SchedulerContext},
         epoch_accounts_hash,
         snapshot_config::SnapshotConfig,
     },
@@ -70,7 +70,7 @@ pub struct BankForks {
 }
 
 pub trait LikeSchedulerPool: Send + Sync + std::fmt::Debug {
-    fn take_from_pool(&self, context: crate::bank::SchedulerContext) -> Box<dyn LikeScheduler>;
+    fn take_from_pool(&self, context: SchedulerContext) -> Box<dyn LikeScheduler>;
     fn return_to_pool(&self, scheduler: Box<dyn LikeScheduler>);
 }
 
