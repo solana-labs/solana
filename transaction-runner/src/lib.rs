@@ -759,6 +759,8 @@ impl LikeScheduler for Scheduler {
 
 use solana_transaction_status::token_balances::TransactionTokenBalancesSet;
 use solana_runtime::bank::TransactionBalancesSet;
+use solana_ledger::blockstore_processor::TransactionStatusSender;
+use solana_ledger::token_balances::collect_token_balances;
 
 pub fn initialize_transaction_status_sender_callback(log_messages_bytes_limit: Option<usize>, sender: TransactionStatusSender) {
     use solana_transaction_status::TransactionTokenBalance;
