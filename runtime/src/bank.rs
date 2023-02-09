@@ -1470,7 +1470,7 @@ impl Scheduler {
                             drop(ee);
                         },
                         solana_scheduler::ExaminablePayload(solana_scheduler::Flushable::Flush(checkpoint)) => {
-                            info!("post_execution_handler: slot: {:?} {:?}", SchedulerContext::log_prefix(random_id, latest_scheduler_context), transaction_error_counts.aggregate().into_iter().chain([("succeeded", succeeded), ("skipped", skipped)].into_iter()).filter(|&(k, v)| v > 0).collect::<std::collections::BTreeMap<_, _>>());
+                            info!("post_execution_handler: slot: {:?} {:?}", SchedulerContext::log_prefix(random_id, &latest_scheduler_context), transaction_error_counts.aggregate().into_iter().chain([("succeeded", succeeded), ("skipped", skipped)].into_iter()).filter(|&(k, v)| v > 0).collect::<std::collections::BTreeMap<_, _>>());
                             if let Some(solana_scheduler::Mode::Replaying) = latest_scheduler_context.as_ref().map(|c| c.mode) {
                                 assert_eq!(skipped, 0);
                             }
