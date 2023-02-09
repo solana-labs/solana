@@ -36,13 +36,13 @@ struct TransactionRunner(Arc<Bank>, solana_poh::poh_recorder::PohRecorder, solan
 
 #[derive(Debug)]
 pub struct SchedulerPool {
-    schedulers: Vec<Box<dyn LikeScheduler>>,
+    schedulers: std::sync::Mutex<Vec<Box<dyn LikeScheduler>>>,
 }
 
 impl SchedulerPool {
     pub const fn new() -> Self {
         Self {
-            schedulers: Vec::new(),
+            schedulers: std::sync::Mutex::new(Vec::new()),
         }
     }
 
