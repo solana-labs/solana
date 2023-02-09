@@ -98,11 +98,11 @@ impl Drop for SchedulerPool {
 }
 
 impl LikePool for SchedulerPool {
-    fn take_from_pool(&mut self, runner: ArcPool) -> Box<dyn LikeScheduler> {
+    fn take_from_pool(&self, runner: ArcPool) -> Box<dyn LikeScheduler> {
         panic!();
     }
 
-    fn return_to_pool(&mut self, scheduler: Box<dyn LikeScheduler>) {
+    fn return_to_pool(&self, scheduler: Box<dyn LikeScheduler>) {
         panic!();
     }
 }
