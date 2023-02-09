@@ -10,7 +10,7 @@ use {
     rayon::prelude::*,
     solana_client::connection_cache::ConnectionCache,
     solana_core::{
-        banking_stage::{BankingStage, BankingStageStats},
+        banking_stage::{committer::Committer, BankingStage, BankingStageStats},
         banking_trace::{BankingPacketBatch, BankingTracer},
         leader_slot_banking_stage_metrics::LeaderSlotMetricsTracker,
         qos_service::QosService,
@@ -91,16 +91,16 @@ fn bench_consume_buffered(bencher: &mut Bencher) {
             ThreadType::Transactions,
         );
         let (s, _r) = unbounded();
+        let committer = Committer::new(None, s);
         // This tests the performance of buffering packets.
         // If the packet buffers are copied, performance will be poor.
         bencher.iter(move || {
             BankingStage::consume_buffered_packets(
                 &bank_start,
                 &mut transaction_buffer,
-                &None,
-                &s,
                 None::<Box<dyn Fn()>>,
                 &BankingStageStats::default(),
+                &committer,
                 &recorder,
                 &QosService::new(1),
                 &mut LeaderSlotMetricsTracker::new(0),
