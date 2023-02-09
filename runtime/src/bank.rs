@@ -1881,49 +1881,27 @@ pub struct Bank {
 pub trait LikeScheduler: Send + Sync + std::fmt::Debug {
     fn graceful_stop_initiated(&self) -> &AtomicBool;
 
-    fn random_id(&self) -> u64 {
-        panic!();
-    }
+    fn random_id(&self) -> u64;
 
-    fn schedule(&self, sanitized_tx: &SanitizedTransaction, index: usize, mode: solana_scheduler::Mode) {
-        panic!();
-    }
+    fn schedule(&self, sanitized_tx: &SanitizedTransaction, index: usize, mode: solana_scheduler::Mode);
 
-    fn handle_aborted_executions(&self) -> Vec<Result<ExecuteTimings>> {
-        panic!();
-    }
+    fn handle_aborted_executions(&self) -> Vec<Result<ExecuteTimings>>;
 
-    fn pause_commit_into_bank(&self) {
-        panic!();
-    }
+    fn pause_commit_into_bank(&self);
 
-    fn resume_commit_into_bank(&self, bank: Option<&Arc<Bank>>) {
-        panic!();
-    }
+    fn resume_commit_into_bank(&self, bank: Option<&Arc<Bank>>);
 
-    fn transaction_runner(&self) -> Arc<TransactionRunner> {
-        panic!();
-    }
+    fn transaction_runner(&self) -> Arc<TransactionRunner>;
 
-    fn gracefully_stop(&mut self) -> Result<()> {
-        panic!();
-    }
+    fn gracefully_stop(&mut self) -> Result<()>;
 
-    fn current_scheduler_mode(&self) -> solana_scheduler::Mode {
-        panic!();
-    }
+    fn current_scheduler_mode(&self) -> solana_scheduler::Mode;
 
-    fn has_context(&self) -> bool {
-        panic!();
-    }
+    fn has_context(&self) -> bool; 
 
-    fn replace_scheduler_context(&self, scheduler_context: SchedulerContext) {
-        panic!();
-    }
+    fn replace_scheduler_context(&self, scheduler_context: SchedulerContext); 
 
-    fn collected_results(&self) -> Arc<std::sync::Mutex<Vec<Result<ExecuteTimings>>>> {
-        panic!();
-    }
+    fn collected_results(&self) -> Arc<std::sync::Mutex<Vec<Result<ExecuteTimings>>>>; 
 }
 
 impl LikeScheduler for Scheduler {
