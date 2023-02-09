@@ -1878,7 +1878,7 @@ pub struct Bank {
     pub blockhash_override: RwLock<Option<Hash>>,
 }
 
-trait ScheduleLike: Send + Sync {
+trait ScheduleLike: Send + Sync + Debug {
     fn handle_aborted_executions(&self) -> Vec<Result<ExecuteTimings>> {
         panic!();
     }
