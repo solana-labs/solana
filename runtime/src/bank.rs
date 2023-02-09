@@ -1011,7 +1011,7 @@ impl SchedulerPool {
         }
     }
 
-    fn create(&mut self, runner: Arc<TransactionRunner>) {
+    fn create(&mut self, runner: ArcPool) {
         self.schedulers.push(Box::new(Scheduler::default2(runner)));
     }
 
