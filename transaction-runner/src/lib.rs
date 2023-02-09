@@ -714,10 +714,6 @@ impl Scheduler {
         self.current_checkpoint.with_context_value(|c| c.mode).unwrap()
     }
 
-    fn scheduler_pool(&self) -> ArcPool {
-        self.scheduler_pool.clone()
-    }
-
     fn has_context(&self) -> bool {
         self.current_checkpoint.with_context_value(|_| ()).is_some()
     }
