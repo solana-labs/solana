@@ -62,7 +62,7 @@ impl Drop for SchedulerPool {
 }
 
 #[derive(Debug)]
-pub struct SchedulePoolWrapper(Arc<SchedulerPool>);
+pub struct SchedulerPoolWrapper(Arc<SchedulerPool>);
 
 impl SchedulerPool {
     fn take_from_pool(self: &Arc<Self>, context: SchedulerContext) -> Box<dyn LikeScheduler> {
@@ -81,7 +81,7 @@ impl SchedulerPool {
     }
 }
 
-impl LikeSchedulerPool for SchedulePoolWrapper {
+impl LikeSchedulerPool for SchedulerPoolWrapper {
     fn take_from_pool(&self, context: SchedulerContext) -> Box<dyn LikeScheduler> {
         self.0.take_from_pool(context)
     }
@@ -749,7 +749,7 @@ impl LikeScheduler for Scheduler {
     }
 
     fn scheduler_pool(&self) -> Box<dyn LikeSchedulerPool> {
-        Box::new(SchedulePoolWrapper(self.scheduler_pool.clone()))
+        Box::new(SchedulerPoolWrapper(self.scheduler_pool.clone()))
     }
 
     fn scheduler_context(&self) -> SchedulerContext {
