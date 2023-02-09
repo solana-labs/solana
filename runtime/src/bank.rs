@@ -992,8 +992,8 @@ impl SchedulerContext {
         self.bank.as_ref()
     }
 
-    fn log_prefix(self: &Option<Self>, random_id: u64) -> String {
-        format!("id_{:016x}{}", random_id, self.as_ref().map(|c| format!(" slot: {}, mode: {:?}", c.slot(), c.mode)).unwrap_or("".into()))
+    fn log_prefix(context: &Option<Self>, random_id: u64) -> String {
+        format!("id_{:016x}{}", random_id, context.as_ref().map(|c| format!(" slot: {}, mode: {:?}", c.slot(), c.mode)).unwrap_or("".into()))
     }
 }
 
