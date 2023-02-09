@@ -770,7 +770,7 @@ impl LikeScheduler for Scheduler {
     }
 
     fn collected_results(&self) -> Arc<std::sync::Mutex<Vec<Result<ExecuteTimings>>>> {
-        panic!();
+        self.collected_results.clone()
     }
 
     fn scheduler_pool(&self) -> Box<dyn LikeSchedulerPool> {
