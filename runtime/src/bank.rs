@@ -1006,8 +1006,8 @@ impl SchedulerPool {
         }
     }
 
-    fn create(&mut self) {
-        self.schedulers.push(Box::new(Scheduler::default2()));
+    fn create(&mut self, runner: Arc<TransactionRunner>) {
+        self.schedulers.push(Box::new(Scheduler::default2(runner)));
     }
 
     fn take_from_pool(&mut self) -> Box<Scheduler> {
@@ -1158,7 +1158,7 @@ impl CommitStatus {
 }
 
 impl Scheduler {
-    fn default2() -> Self {
+    fn default2(runner: Arc<TransactionRunner>) -> Self {
         let start = Instant::now();
         let mut address_book = solana_scheduler::AddressBook::default();
         let preloader = Arc::new(address_book.preloader());
