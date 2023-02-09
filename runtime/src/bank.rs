@@ -1165,11 +1165,9 @@ pub trait LikeScheduler: Send + Sync + std::fmt::Debug {
     fn handle_aborted_executions(&self) -> Vec<Result<ExecuteTimings>>;
     fn pause_commit_into_bank(&self);
     fn resume_commit_into_bank(&self, bank: Option<&Arc<Bank>>);
-    fn scheduler_pool(&self) -> ArcPool;
     fn gracefully_stop(&mut self) -> Result<()>;
     fn current_scheduler_mode(&self) -> solana_scheduler::Mode;
     fn has_context(&self) -> bool; 
-    fn replace_scheduler_context(&self, scheduler_context: SchedulerContext); 
     fn collected_results(&self) -> Arc<std::sync::Mutex<Vec<Result<ExecuteTimings>>>>; 
     fn return_to_pool(&self);
     fn take_next_from_pool(&self) -> Box<dyn LikeScheduler>;
@@ -3710,7 +3708,6 @@ impl Bank {
                     .unwrap()
                     .push(last_result);
                 drop(s2);
-                self.sync_scheduler_context(self.scheduler_pool(), scheduler_mode);
                 //*self.scheduler.write().unwrap() = new_scheduler;
                 w_blockhash_queue
             },
@@ -6216,18 +6213,6 @@ impl Bank {
                 info!("maybe isolated banking?");
             },
         }
-    }
-
-    pub fn sync_scheduler_context(self: &Arc<Self>, pool: ArcPool, mode: solana_scheduler::Mode) {
-        let s = self.scheduler.read().unwrap();
-        let scheduler = s.as_ref().unwrap();
-        scheduler.replace_scheduler_context(SchedulerContext{ bank: Some(self.clone()), mode});
-    }
-
-    pub fn scheduler_pool(&self) -> ArcPool {
-        let s = self.scheduler.read().unwrap();
-        let scheduler = s.as_ref().unwrap();
-        scheduler.scheduler_pool()
     }
 
     pub fn scheduler_mode(&self) -> solana_scheduler::Mode {
