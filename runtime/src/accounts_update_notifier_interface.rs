@@ -1,6 +1,8 @@
 use {
     crate::append_vec::StoredAccountMeta,
-    solana_sdk::{account::AccountSharedData, clock::Slot, pubkey::Pubkey, signature::Signature},
+    solana_sdk::{
+        account::AccountSharedData, clock::Slot, pubkey::Pubkey, transaction::SanitizedTransaction,
+    },
     std::sync::{Arc, RwLock},
 };
 
@@ -10,7 +12,7 @@ pub trait AccountsUpdateNotifierInterface: std::fmt::Debug {
         &self,
         slot: Slot,
         account: &AccountSharedData,
-        txn_signature: &Option<&Signature>,
+        txn: &Option<&SanitizedTransaction>,
         pubkey: &Pubkey,
         write_version: u64,
     );
