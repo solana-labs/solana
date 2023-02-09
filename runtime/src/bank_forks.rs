@@ -66,7 +66,7 @@ pub struct BankForks {
     pub accounts_hash_interval_slots: Slot,
     last_accounts_hash_slot: Slot,
     in_vote_only_mode: Arc<AtomicBool>,
-    scheduler_pool: std::sync::Mutex<Option<Box<dyn LikeSchedulerPool>>>,
+    scheduler_pool: Option<Box<dyn LikeSchedulerPool>>,
 }
 
 pub trait LikeSchedulerPool: Send + Sync + std::fmt::Debug {
@@ -201,12 +201,12 @@ impl BankForks {
         for parent in bank.proper_ancestors() {
             self.descendants.entry(parent).or_default().insert(slot);
         }
-        bank.install_scheduler(self.scheduler_pool.lock().unwrap().as_ref().unwrap().take_from_pool(SchedulerContext{bank: Some(bank.clone()), mode}));
+        bank.install_scheduler(self.scheduler_pool.as_ref().unwrap().take_from_pool(SchedulerContext{bank: Some(bank.clone()), mode}));
         bank
     }
 
     pub fn install_scheduler_pool(&mut self, pool: Box<dyn LikeSchedulerPool>) {
-        *self.scheduler_pool.lock().unwrap() = Some(pool);
+        self.scheduler_pool = Some(pool);
     }
 
     pub fn add_new_bank_for_banking(&mut self, bank: Bank) -> Arc<Bank> {
