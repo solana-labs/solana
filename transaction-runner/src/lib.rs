@@ -36,7 +36,7 @@ struct TransactionRunner(Arc<Bank>, solana_poh::poh_recorder::PohRecorder, solan
 
 #[derive(Debug)]
 pub struct SchedulerPool {
-    schedulers: Vec<Scheduler>,
+    schedulers: Vec<Box<dyn LikeScheduler>>,
 }
 
 impl SchedulerPool {
@@ -58,7 +58,7 @@ impl SchedulerPool {
                 self.schedulers.len() + 1,
                 self.schedulers.len()
             );
-            Box::new(scheduler)
+            scheduler
         } else {
             self.create(runner.clone());
             self.take_from_pool(runner)
