@@ -1877,7 +1877,7 @@ pub trait LikeScheduler: Send + Sync + std::fmt::Debug {
     fn handle_aborted_executions(&self) -> Vec<Result<ExecuteTimings>>;
     fn pause_commit_into_bank(&self);
     fn resume_commit_into_bank(&self, bank: Option<&Arc<Bank>>);
-    fn transaction_runner(&self) -> Arc<TransactionRunner>;
+    fn transaction_runner(&self) -> ArcPool;
     fn gracefully_stop(&mut self) -> Result<()>;
     fn current_scheduler_mode(&self) -> solana_scheduler::Mode;
     fn has_context(&self) -> bool; 
@@ -1910,7 +1910,7 @@ impl LikeScheduler for Scheduler {
         panic!();
     }
 
-    fn transaction_runner(&self) -> Arc<TransactionRunner> {
+    fn transaction_runner(&self) -> ArcPool {
         panic!();
     }
 
