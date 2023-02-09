@@ -982,7 +982,7 @@ impl TransactionRunner {
         self.scheduler_pool.lock().unwrap().take_from_pool(self.clone())
     }
 
-    pub(crate) fn return_scheduler_to_pool(&self, scheduler: Box<Scheduler>) {
+    pub(crate) fn return_scheduler_to_pool(&self, scheduler: Box<dyn ScheduleLike>) {
         self.scheduler_pool.lock().unwrap().return_to_pool(scheduler)
     }
 }
