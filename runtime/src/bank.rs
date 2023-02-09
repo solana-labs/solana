@@ -1026,7 +1026,7 @@ impl SchedulerPool {
         }
     }
 
-    fn return_to_pool(&mut self, scheduler: Box<Scheduler<ExecuteTimings>>) {
+    fn return_to_pool(&mut self, scheduler: Box<Scheduler>) {
         trace!(
             "SchedulerPool: id_{:016x} is returned... len: {} => {}",
             scheduler.random_id,
@@ -8654,7 +8654,7 @@ impl Bank {
         total_accounts_stats
     }
 
-    pub(crate) fn install_scheduler(&self, scheduler: Box<Scheduler<ExecuteTimings>>) {
+    pub(crate) fn install_scheduler(&self, scheduler: Box<Scheduler>) {
         let mut s = self.scheduler.write().unwrap();
         assert!(s.is_none());
         *s = Some(scheduler)
