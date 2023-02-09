@@ -48,26 +48,6 @@ impl SchedulerPool {
     fn create(self: &Arc<Self>) {
         self.schedulers.lock().unwrap().push(Box::new(Scheduler::default2(self.clone())));
     }
-
-    pub fn return_to_pool(&mut self, scheduler: Box<dyn LikeScheduler>) {
-        trace!(
-            "SchedulerPool: id_{:016x} is returned... len: {} => {}",
-            scheduler.random_id(),
-            self.schedulers.lock().unwrap().len(),
-            self.schedulers.lock().unwrap().len() + 1
-        );
-        assert!(scheduler.collected_results().lock().unwrap().is_empty());
-        //assert!(scheduler.current_checkpoint.clone_context_value().unwrap().bank.is_none());
-        assert!(scheduler
-            .graceful_stop_initiated()
-            .load(std::sync::atomic::Ordering::SeqCst));
-
-        scheduler
-            .graceful_stop_initiated()
-            .store(false, std::sync::atomic::Ordering::SeqCst);
-
-        self.schedulers.lock().unwrap().push(scheduler);
-    }
 }
 
 impl Drop for SchedulerPool {
@@ -102,7 +82,23 @@ impl LikeSchedulerPool for AAA {
 
 
     fn return_to_pool(&self, scheduler: Box<dyn LikeScheduler>) {
-        panic!();
+        trace!(
+            "SchedulerPool: id_{:016x} is returned... len: {} => {}",
+            scheduler.random_id(),
+            self.0.schedulers.lock().unwrap().len(),
+            self.0.schedulers.lock().unwrap().len() + 1
+        );
+        assert!(scheduler.collected_results().lock().unwrap().is_empty());
+        //assert!(scheduler.current_checkpoint.clone_context_value().unwrap().bank.is_none());
+        assert!(scheduler
+            .graceful_stop_initiated()
+            .load(std::sync::atomic::Ordering::SeqCst));
+
+        scheduler
+            .graceful_stop_initiated()
+            .store(false, std::sync::atomic::Ordering::SeqCst);
+
+        self.0.schedulers.lock().unwrap().push(scheduler);
     }
 }
 
