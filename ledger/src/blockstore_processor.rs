@@ -1576,7 +1576,6 @@ pub fn fill_blockstore_slot_with_ticks(
     last_entry_hash
 }
 
-
 #[cfg(test)]
 pub mod tests {
     use {
