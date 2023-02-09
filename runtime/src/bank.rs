@@ -1023,7 +1023,7 @@ impl SchedulerPool {
         self.schedulers.push(Box::new(Scheduler::default2(runner)));
     }
 
-    fn take_from_pool(&mut self, runner: Arc<TransactionRunner>) -> Box<dyn ScheduleLike> {
+    fn take_from_pool(&mut self, runner: Arc<TransactionRunner>) -> Box<dyn Scheduler> {
         if let Some(scheduler) = self.schedulers.pop() {
             trace!(
                 "SchedulerPool: id_{:016x} is taken... len: {} => {}",
@@ -1879,6 +1879,10 @@ pub struct Bank {
 }
 
 trait ScheduleLike: Send + Sync + std::fmt::Debug {
+    fn random_id(&self) -> u64 {
+        panic!();
+    }
+
     fn schedule(&self, sanitized_tx: &SanitizedTransaction, index: usize, mode: solana_scheduler::Mode) {
         panic!();
     }
@@ -1921,6 +1925,10 @@ trait ScheduleLike: Send + Sync + std::fmt::Debug {
 }
 
 impl ScheduleLike for Scheduler {
+    fn random_id(&self) -> u64 {
+        panic!();
+    }
+
     fn schedule(&self, sanitized_tx: &SanitizedTransaction, index: usize, mode: solana_scheduler::Mode) {
         panic!();
     }
