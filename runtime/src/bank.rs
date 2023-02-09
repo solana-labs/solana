@@ -1689,7 +1689,7 @@ impl Drop for SchedulerPool {
 /// Manager for the state of all accounts and programs after processing its entries.
 /// AbiExample is needed even without Serialize/Deserialize; actual (de-)serialization
 /// are implemented elsewhere for versioning
-#[derive(AbiExample, Debug)]
+#[derive(AbiExample)]
 pub struct Bank {
     /// References to accounts, parent and signature status
     pub rc: BankRc,
