@@ -96,6 +96,7 @@ impl Drop for SchedulerPool {
     }
 }
 
+#[derive(Debug)]
 pub struct AAA((SchedulerPool, usize));
 
 impl LikeSchedulerPool for AAA {
