@@ -630,8 +630,8 @@ impl Scheduler {
         s
     }
 
-    fn pool(&self) -> Arc<dyn LikeSchedulerPool> {
-        self.scheduler_pool
+    fn pool(&self) -> Box<dyn LikeSchedulerPool> {
+        Box::new(SchedulePoolWrapper(self.scheduler_pool))
     }
 }
 
