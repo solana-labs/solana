@@ -950,6 +950,7 @@ pub struct SchedulerContext {
     mode: solana_scheduler::Mode,
 }
 
+/*
 #[derive(Debug)]
 pub struct TransactionRunner {
     scheduler_pool: std::sync::Mutex<SchedulerPool>,
@@ -974,6 +975,7 @@ impl TransactionRunner {
         self.scheduler_pool.lock().unwrap().return_to_pool(scheduler)
     }
 }
+*/
 
 impl solana_scheduler::WithMode for SchedulerContext {
     fn mode(&self) -> solana_scheduler::Mode {
