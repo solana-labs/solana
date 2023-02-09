@@ -969,11 +969,11 @@ impl Runner {
         RunnerContext { runner: self, bank, mode }
     }
 
-    pub fn take_scheduler_from_pool(&self) -> Box<Scheduler<ExecuteTimings>> {
+    pub(crate) fn take_scheduler_from_pool(&self) -> Box<Scheduler<ExecuteTimings>> {
         self.runner_pool.lock().unwrap().take_from_pool()
     }
 
-    pub fn return_scheduler_to_pool(&self, scheduler: Box<Scheduler<ExecuteTimings>>) {
+    pub(crate) fn return_scheduler_to_pool(&self, scheduler: Box<Scheduler<ExecuteTimings>>) {
         self.runner_pool.lock().unwrap().return_to_pool(scheduler)
     }
 }
