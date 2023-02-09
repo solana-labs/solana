@@ -1009,7 +1009,7 @@ impl SchedulerContext {
 
 #[derive(Debug)]
 struct SchedulerPool {
-    schedulers: Vec<Box<Scheduler>>,
+    schedulers: Vec<Box<dyn ScheduleLike>>,
 }
 
 impl SchedulerPool {
