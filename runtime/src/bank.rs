@@ -949,13 +949,13 @@ struct RunnerContext {
     runner: Arc<Runner>,
     bank: Option<Arc<Bank>>,
     mode: solana_scheduler::Mode,
-    // poh callback
-    // tx status writer
 }
 
 #[derive(Debug, Default)]
 pub struct Runner {
     runner_pool: std::sync::Mutex<SchedulerPool<ExecuteTimings>>,
+    // poh callback
+    // tx status writer
 }
 
 impl Runner {
