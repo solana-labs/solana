@@ -1579,6 +1579,7 @@ pub fn fill_blockstore_slot_with_ticks(
 
 pub fn initialize_transaction_status_sender_callback(log_messages_bytes_limit: Option<usize>, sender: TransactionStatusSender) {
     use solana_transaction_status::TransactionTokenBalance;
+    /*
     use solana_runtime::bank::STATUS_SENDER_CALLBACK;
     *STATUS_SENDER_CALLBACK.write().unwrap() = Some({
         (
@@ -1624,6 +1625,7 @@ pub fn initialize_transaction_status_sender_callback(log_messages_bytes_limit: O
         })
         )
     });
+    */
 }
 
 #[cfg(test)]
