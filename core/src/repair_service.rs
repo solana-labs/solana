@@ -13,12 +13,19 @@ use {
     crossbeam_channel::{Receiver as CrossbeamReceiver, Sender as CrossbeamSender},
     lru::LruCache,
     solana_gossip::cluster_info::ClusterInfo,
-    solana_ledger::blockstore::{Blockstore, SlotMeta},
+    solana_ledger::{
+        blockstore::{Blockstore, SlotMeta},
+        shred,
+    },
     solana_measure::measure::Measure,
     solana_runtime::{bank_forks::BankForks, contains::Contains},
     solana_sdk::{
-        clock::Slot, epoch_schedule::EpochSchedule, hash::Hash, pubkey::Pubkey,
+        clock::{Slot, DEFAULT_TICKS_PER_SECOND, MS_PER_TICK},
+        epoch_schedule::EpochSchedule,
+        hash::Hash,
+        pubkey::Pubkey,
         signer::keypair::Keypair,
+        timing::timestamp,
     },
     solana_streamer::sendmmsg::{batch_send, SendPktsError},
     std::{
@@ -34,7 +41,11 @@ use {
     },
 };
 #[cfg(test)]
-use {solana_ledger::shred::Nonce, solana_sdk::timing::timestamp};
+use {solana_ledger::shred::Nonce, solana_sdk::clock::DEFAULT_MS_PER_SLOT};
+
+// Time to defer repair requests to allow for turbine propagation
+pub(crate) const DEFER_REPAIR_THRESHOLD: Duration = Duration::from_millis(200);
+const DEFER_REPAIR_THRESHOLD_TICKS: u64 = DEFER_REPAIR_THRESHOLD.as_millis() as u64 / MS_PER_TICK;
 
 pub type DuplicateSlotsResetSender = CrossbeamSender<Vec<(Slot, Hash)>>;
 pub type DuplicateSlotsResetReceiver = CrossbeamReceiver<Vec<(Slot, Hash)>>;
@@ -342,6 +353,7 @@ impl RepairService {
                     MAX_UNKNOWN_LAST_INDEX_REPAIRS,
                     MAX_CLOSEST_COMPLETION_REPAIRS,
                     &duplicate_slot_repair_statuses,
+                    timestamp(),
                     &mut repair_timing,
                     &mut best_repairs_stats,
                 );
@@ -518,20 +530,41 @@ impl RepairService {
         slot: Slot,
         slot_meta: &SlotMeta,
         max_repairs: usize,
+        now_timestamp: u64,
     ) -> Vec<ShredRepairType> {
         if max_repairs == 0 || slot_meta.is_full() {
             vec![]
         } else if slot_meta.consumed == slot_meta.received {
+            // check delay time of last shred
+            if let Some(reference_tick) = slot_meta
+                .received
+                .checked_sub(1)
+                .and_then(|index| blockstore.get_data_shred(slot, index).ok()?)
+                .and_then(|shred| shred::layout::get_reference_tick(&shred).ok())
+                .map(u64::from)
+            {
+                let ticks_since_first_insert = DEFAULT_TICKS_PER_SECOND
+                    * now_timestamp.saturating_sub(slot_meta.first_shred_timestamp)
+                    / 1_000;
+                if ticks_since_first_insert
+                    < reference_tick.saturating_add(DEFER_REPAIR_THRESHOLD_TICKS)
+                {
+                    return vec![];
+                }
+            }
             vec![ShredRepairType::HighestShred(slot, slot_meta.received)]
         } else {
-            let reqs = blockstore.find_missing_data_indexes(
-                slot,
-                slot_meta.first_shred_timestamp,
-                slot_meta.consumed,
-                slot_meta.received,
-                max_repairs,
-            );
-            reqs.into_iter()
+            blockstore
+                .find_missing_data_indexes(
+                    slot,
+                    now_timestamp,
+                    slot_meta.first_shred_timestamp,
+                    DEFER_REPAIR_THRESHOLD_TICKS,
+                    slot_meta.consumed,
+                    slot_meta.received,
+                    max_repairs,
+                )
+                .into_iter()
                 .map(|i| ShredRepairType::Shred(slot, i))
                 .collect()
         }
@@ -544,6 +577,7 @@ impl RepairService {
         max_repairs: usize,
         slot: Slot,
         duplicate_slot_repair_statuses: &impl Contains<'a, Slot>,
+        now_timestamp: u64,
     ) {
         let mut pending_slots = vec![slot];
         while repairs.len() < max_repairs && !pending_slots.is_empty() {
@@ -558,6 +592,7 @@ impl RepairService {
                     slot,
                     &slot_meta,
                     max_repairs - repairs.len(),
+                    now_timestamp,
                 );
                 repairs.extend(new_repairs);
                 let next_slots = slot_meta.next_slots;
@@ -595,6 +630,7 @@ impl RepairService {
                 slot,
                 &meta,
                 max_repairs - repairs.len(),
+                timestamp(),
             );
             repairs.extend(new_repairs);
         }
@@ -617,6 +653,7 @@ impl RepairService {
                     slot,
                     &slot_meta,
                     MAX_REPAIR_PER_DUPLICATE,
+                    timestamp(),
                 ))
             }
         } else {
@@ -757,6 +794,12 @@ impl RepairService {
 }
 
 #[cfg(test)]
+pub(crate) fn post_shred_deferment_timestamp() -> u64 {
+    // adjust timestamp to bypass shred deferment window
+    timestamp() + DEFAULT_MS_PER_SLOT + DEFER_REPAIR_THRESHOLD.as_millis() as u64
+}
+
+#[cfg(test)]
 mod test {
     use {
         super::*,
@@ -808,6 +851,7 @@ mod test {
                     MAX_UNKNOWN_LAST_INDEX_REPAIRS,
                     MAX_CLOSEST_COMPLETION_REPAIRS,
                     &HashSet::default(),
+                    timestamp(),
                     &mut RepairTiming::default(),
                     &mut BestRepairsStats::default(),
                 ),
@@ -845,6 +889,7 @@ mod test {
                     MAX_UNKNOWN_LAST_INDEX_REPAIRS,
                     MAX_CLOSEST_COMPLETION_REPAIRS,
                     &HashSet::default(),
+                    timestamp(),
                     &mut RepairTiming::default(),
                     &mut BestRepairsStats::default(),
                 ),
@@ -907,6 +952,7 @@ mod test {
                     MAX_UNKNOWN_LAST_INDEX_REPAIRS,
                     MAX_CLOSEST_COMPLETION_REPAIRS,
                     &HashSet::default(),
+                    timestamp(),
                     &mut RepairTiming::default(),
                     &mut BestRepairsStats::default(),
                 ),
@@ -923,6 +969,7 @@ mod test {
                     MAX_UNKNOWN_LAST_INDEX_REPAIRS,
                     MAX_CLOSEST_COMPLETION_REPAIRS,
                     &HashSet::default(),
+                    timestamp(),
                     &mut RepairTiming::default(),
                     &mut BestRepairsStats::default(),
                 )[..],
@@ -969,6 +1016,7 @@ mod test {
                     MAX_UNKNOWN_LAST_INDEX_REPAIRS,
                     MAX_CLOSEST_COMPLETION_REPAIRS,
                     &HashSet::default(),
+                    post_shred_deferment_timestamp(),
                     &mut RepairTiming::default(),
                     &mut BestRepairsStats::default(),
                 ),

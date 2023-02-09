@@ -668,7 +668,7 @@ pub mod layout {
         (offsets.end <= shred.len()).then_some(offsets)
     }
 
-    pub(crate) fn get_reference_tick(shred: &[u8]) -> Result<u8, Error> {
+    pub fn get_reference_tick(shred: &[u8]) -> Result<u8, Error> {
         if get_shred_type(shred)? != ShredType::Data {
             return Err(Error::InvalidShredType);
         }
