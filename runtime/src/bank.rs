@@ -1038,7 +1038,7 @@ impl SchedulerPool {
         }
     }
 
-    fn return_to_pool(&mut self, scheduler: Box<Scheduler>) {
+    fn return_to_pool(&mut self, scheduler: Box<dyn ScheduleLike>) {
         trace!(
             "SchedulerPool: id_{:016x} is returned... len: {} => {}",
             scheduler.random_id,
