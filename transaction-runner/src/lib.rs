@@ -640,62 +640,6 @@ impl Scheduler {
         Self::new_checkpoint(self.thread_count)
     }
 
-    fn gracefully_stop(&mut self) -> Result<()> {
-        if self
-            .graceful_stop_initiated
-            .load(std::sync::atomic::Ordering::SeqCst)
-        {
-            warn!(
-                "Scheduler::gracefully_stop(): id_{:016x} (skipped..?)",
-                self.random_id
-            );
-            return Ok(());
-        }
-        self.graceful_stop_initiated
-            .store(true, std::sync::atomic::Ordering::SeqCst);
-
-        trace!(
-            "Scheduler::gracefully_stop(): id_{:016x} waiting..",
-            self.random_id
-        );
-        //let transaction_sender = self.transaction_sender.take().unwrap();
-
-        //drop(transaction_sender);
-        let checkpoint = self.checkpoint();
-        self.transaction_sender
-            .as_ref()
-            .unwrap()
-            .send(solana_scheduler::SchedulablePayload(
-                solana_scheduler::Flushable::Flush(std::sync::Arc::clone(&checkpoint)),
-            ))
-            .unwrap();
-        checkpoint.wait_for_restart(None);
-        let r = checkpoint.take_restart_value();
-        self.current_checkpoint = checkpoint;
-        self.current_checkpoint.update_context_value(|c| {c.bank= None;});
-        self.collected_results.lock().unwrap().push(Ok(r));
-
-        /*
-        let executing_thread_duration_pairs: Result<Vec<_>> = self.executing_thread_handles.take().unwrap().into_iter().map(|executing_thread_handle| {
-            executing_thread_handle.join().unwrap().map(|u| (u.0.as_micros(), u.1.as_micros()))
-        }).collect();
-        let mut executing_thread_duration_pairs = executing_thread_duration_pairs?;
-        executing_thread_duration_pairs.sort();
-        let (executing_thread_cpu_us, executing_thread_wall_time_us): (Vec<_>, Vec<_>) = executing_thread_duration_pairs.into_iter().unzip();
-
-        let h = self.scheduler_thread_handle.take().unwrap();
-        let scheduler_thread_duration_pairs = h.join().unwrap()?;
-        let (scheduler_thread_cpu_us, scheduler_thread_wall_time_us) = (scheduler_thread_duration_pairs.0.as_micros(), scheduler_thread_duration_pairs.1.as_micros());
-        let h = self.error_collector_thread_handle.take().unwrap();
-        let error_collector_thread_duration_pairs = h.join().unwrap()?;
-        let (error_collector_thread_cpu_us, error_collector_thread_wall_time_us) = (error_collector_thread_duration_pairs.0.as_micros(), error_collector_thread_duration_pairs.1.as_micros());
-
-        info!("Scheduler::gracefully_stop(): slot: {} id_{:016x} durations 1/2 (cpu ): scheduler: {}us, error_collector: {}us, lanes: {}us = {:?}", self.slot.map(|s| format!("{}", s)).unwrap_or("-".into()), self.random_id, scheduler_thread_cpu_us, error_collector_thread_cpu_us, executing_thread_cpu_us.iter().sum::<u128>(), &executing_thread_cpu_us);
-        info!("Scheduler::gracefully_stop(): slot: {} id_{:016x} durations 2/2 (wall): scheduler: {}us, error_collector: {}us, lanes: {}us = {:?}", self.slot.map(|s| format!("{}", s)).unwrap_or("-".into()), self.random_id, scheduler_thread_wall_time_us, error_collector_thread_wall_time_us, executing_thread_wall_time_us.iter().sum::<u128>(), &executing_thread_wall_time_us);
-        */
-
-        Ok(())
-    }
 
     fn handle_aborted_executions(&self) -> Vec<Result<ExecuteTimings>> {
         std::mem::take(&mut self.collected_results.lock().unwrap())
@@ -754,7 +698,60 @@ impl LikeScheduler for Scheduler {
     }
 
     fn gracefully_stop(&mut self) -> Result<()> {
-        panic!();
+        if self
+            .graceful_stop_initiated
+            .load(std::sync::atomic::Ordering::SeqCst)
+        {
+            warn!(
+                "Scheduler::gracefully_stop(): id_{:016x} (skipped..?)",
+                self.random_id
+            );
+            return Ok(());
+        }
+        self.graceful_stop_initiated
+            .store(true, std::sync::atomic::Ordering::SeqCst);
+
+        trace!(
+            "Scheduler::gracefully_stop(): id_{:016x} waiting..",
+            self.random_id
+        );
+        //let transaction_sender = self.transaction_sender.take().unwrap();
+
+        //drop(transaction_sender);
+        let checkpoint = self.checkpoint();
+        self.transaction_sender
+            .as_ref()
+            .unwrap()
+            .send(solana_scheduler::SchedulablePayload(
+                solana_scheduler::Flushable::Flush(std::sync::Arc::clone(&checkpoint)),
+            ))
+            .unwrap();
+        checkpoint.wait_for_restart(None);
+        let r = checkpoint.take_restart_value();
+        self.current_checkpoint = checkpoint;
+        self.current_checkpoint.update_context_value(|c| {c.bank= None;});
+        self.collected_results.lock().unwrap().push(Ok(r));
+
+        /*
+        let executing_thread_duration_pairs: Result<Vec<_>> = self.executing_thread_handles.take().unwrap().into_iter().map(|executing_thread_handle| {
+            executing_thread_handle.join().unwrap().map(|u| (u.0.as_micros(), u.1.as_micros()))
+        }).collect();
+        let mut executing_thread_duration_pairs = executing_thread_duration_pairs?;
+        executing_thread_duration_pairs.sort();
+        let (executing_thread_cpu_us, executing_thread_wall_time_us): (Vec<_>, Vec<_>) = executing_thread_duration_pairs.into_iter().unzip();
+
+        let h = self.scheduler_thread_handle.take().unwrap();
+        let scheduler_thread_duration_pairs = h.join().unwrap()?;
+        let (scheduler_thread_cpu_us, scheduler_thread_wall_time_us) = (scheduler_thread_duration_pairs.0.as_micros(), scheduler_thread_duration_pairs.1.as_micros());
+        let h = self.error_collector_thread_handle.take().unwrap();
+        let error_collector_thread_duration_pairs = h.join().unwrap()?;
+        let (error_collector_thread_cpu_us, error_collector_thread_wall_time_us) = (error_collector_thread_duration_pairs.0.as_micros(), error_collector_thread_duration_pairs.1.as_micros());
+
+        info!("Scheduler::gracefully_stop(): slot: {} id_{:016x} durations 1/2 (cpu ): scheduler: {}us, error_collector: {}us, lanes: {}us = {:?}", self.slot.map(|s| format!("{}", s)).unwrap_or("-".into()), self.random_id, scheduler_thread_cpu_us, error_collector_thread_cpu_us, executing_thread_cpu_us.iter().sum::<u128>(), &executing_thread_cpu_us);
+        info!("Scheduler::gracefully_stop(): slot: {} id_{:016x} durations 2/2 (wall): scheduler: {}us, error_collector: {}us, lanes: {}us = {:?}", self.slot.map(|s| format!("{}", s)).unwrap_or("-".into()), self.random_id, scheduler_thread_wall_time_us, error_collector_thread_wall_time_us, executing_thread_wall_time_us.iter().sum::<u128>(), &executing_thread_wall_time_us);
+        */
+
+        Ok(())
     }
 
     fn current_scheduler_mode(&self) -> solana_scheduler::Mode {
