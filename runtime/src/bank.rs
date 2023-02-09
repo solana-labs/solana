@@ -1002,6 +1002,8 @@ pub struct SchedulerPool {
     schedulers: Vec<Box<dyn LikeScheduler>>,
 }
 
+type ArcPool = Arc<std::sync::Mutex<SchedulerPool>>>;
+
 impl SchedulerPool {
     pub const fn new() -> Self {
         Self {
@@ -6977,7 +6979,7 @@ impl Bank {
         }
     }
 
-    pub fn sync_scheduler_context(self: &Arc<Self>, runner: Arc<TransactionRunner>, mode: solana_scheduler::Mode) {
+    pub fn sync_scheduler_context(self: &Arc<Self>, runner: ArcPool, mode: solana_scheduler::Mode) {
         let s = self.scheduler.read().unwrap();
         let scheduler = s.as_ref().unwrap();
         scheduler.replace_scheduler_context(runner.context(Some(self.clone()), mode));
