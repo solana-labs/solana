@@ -8655,10 +8655,10 @@ impl Bank {
         total_accounts_stats
     }
 
-    pub fn install_scheduler(&self, scheduler: usize) {
+    pub fn install_scheduler(&self, scheduler: Box<Scheduler<ExecuteTimings>>) {
         let mut s = self.scheduler2.write().unwrap();
         assert!(s.is_none());
-        *s = scheduler
+        *s = Some(scheduler)
     }
 
     pub fn wait_for_scheduler(&self, via_drop: bool) -> Result<ExecuteTimings> {
