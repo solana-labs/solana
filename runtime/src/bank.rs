@@ -1165,7 +1165,7 @@ pub trait LikeScheduler: Send + Sync + std::fmt::Debug {
     fn collected_results(&self) -> Arc<std::sync::Mutex<Vec<Result<ExecuteTimings>>>>; 
     fn scheduler_pool(&self) -> Box<dyn LikeSchedulerPool>;
     fn scheduler_context(&self) -> SchedulerContext;
-    fn replace_scheduler_context(&self, SchedulerContext);
+    fn replace_scheduler_context(&self, context: SchedulerContext);
 }
 
 struct VoteWithStakeDelegations {
