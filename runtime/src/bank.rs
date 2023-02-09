@@ -1910,6 +1910,10 @@ trait ScheduleLike: Send + Sync {
     fn replace_scheduler_context(&self, scheduler_context: SchedulerContext) {
         panic!();
     }
+
+    fn collected_results(&self) -> Arc<std::sync::Mutex<Vec<Result<ExecuteTimings>>>> {
+        panic!();
+    }
 }
 
 struct VoteWithStakeDelegations {
