@@ -711,3 +711,53 @@ impl Drop for Scheduler {
 }
 
 
+impl LikeScheduler for Scheduler {
+    fn graceful_stop_initiated(&self) -> &AtomicBool {
+        panic!();
+    }
+
+    fn random_id(&self) -> u64 {
+        panic!();
+    }
+
+    fn schedule(&self, sanitized_tx: &SanitizedTransaction, index: usize, mode: solana_scheduler::Mode) {
+        panic!();
+    }
+
+    fn handle_aborted_executions(&self) -> Vec<Result<ExecuteTimings>> {
+        panic!();
+    }
+
+    fn pause_commit_into_bank(&self) {
+        panic!();
+    }
+
+    fn resume_commit_into_bank(&self, bank: Option<&Arc<Bank>>) {
+        panic!();
+    }
+
+    fn scheduler_pool(&self) -> ArcPool {
+        panic!();
+    }
+
+    fn gracefully_stop(&mut self) -> Result<()> {
+        panic!();
+    }
+
+    fn current_scheduler_mode(&self) -> solana_scheduler::Mode {
+        panic!();
+    }
+
+    fn has_context(&self) -> bool {
+        panic!();
+    }
+
+    fn replace_scheduler_context(&self, scheduler_context: SchedulerContext) {
+        panic!();
+    }
+
+    fn collected_results(&self) -> Arc<std::sync::Mutex<Vec<Result<ExecuteTimings>>>> {
+        panic!();
+    }
+}
+
