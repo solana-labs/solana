@@ -23,6 +23,7 @@ use solana_sdk::pubkey::Pubkey;
 use solana_sdk::clock::MAX_PROCESSING_AGE;
 use solana_sdk::transaction::TransactionError;
 use std::time::Instant;
+use solana_sdk::transaction::VersionedTransaction;
 
 struct TransactionRunner(Arc<Bank>, solana_poh::poh_recorder::PohRecorder, solana_ledger::blockstore_processor::TransactionStatusSender);
 
