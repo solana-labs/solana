@@ -7996,7 +7996,7 @@ impl Bank {
                 via_drop, current_thread_name
             );
 
-            Ok(Default::default())
+            (Ok(Default::default()), None)
         }
     }
 
