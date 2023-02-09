@@ -967,10 +967,10 @@ impl std::fmt::Debug for PohCallback {
 }
 
 impl TransactionRunner {
-    pub fn new() -> Self {
+    pub fn new(a: Box<dyn Fn(&Bank, Vec<VersionedTransaction>, solana_sdk::hash::Hash) -> std::result::Result<Option<usize>, ()> + Send + Sync>) -> Self {
         Self {
             scheduler_pool: std::sync::Mutex::new(SchedulerPool::new()),
-            poh: std::sync::RwLock::new(None),
+            poh: std::sync::RwLock::new(PohCallback(a)),
         }
     }
 
