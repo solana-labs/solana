@@ -313,6 +313,7 @@ impl AccountsDb {
     /// 2. separate, by slot, into:
     /// 2a. pubkeys with refcount = 1. This means this pubkey exists NOWHERE else in accounts db.
     /// 2b. pubkeys with refcount > 1
+    /// Note that the return value can contain fewer items than 'stored_accounts_all' if we find storages which won't be affected.
     #[allow(dead_code)]
     fn calc_accounts_to_combine<'a>(
         &self,
@@ -352,6 +353,7 @@ impl AccountsDb {
 
 /// hold all alive accounts to be shrunk and/or combined
 #[allow(dead_code)]
+#[derive(Debug, Default)]
 struct AccountsToCombine<'a> {
     /// slots and alive accounts that must remain in the slot they are currently in
     /// because the account exists in more than 1 slot in accounts db
@@ -629,20 +631,20 @@ pub mod tests {
             .map(|store| db.get_unique_accounts_from_storage(store))
             .collect::<Vec<_>>();
         let storage = storages.first().unwrap().clone();
-        let pk2 = solana_sdk::pubkey::new_rand();
+        let pk_1_ref = solana_sdk::pubkey::new_rand();
         let slot1 = slots.start;
-        let account = original_results
+        let account_2_refs = original_results
             .first()
             .unwrap()
             .stored_accounts
             .first()
             .unwrap();
-        let pk1 = account.pubkey();
-        let account = account.to_account_shared_data();
+        let pk_2_refs = account_2_refs.pubkey();
+        let account_1_ref = account_2_refs.to_account_shared_data();
         append_single_account_with_default_hash(
             &storage,
-            &pk2,
-            &account,
+            &pk_1_ref,
+            &account_1_ref,
             0,
             true,
             Some(&db.accounts_index),
@@ -691,7 +693,7 @@ pub mod tests {
                 .iter()
                 .map(|meta| meta.pubkey())
                 .collect::<Vec<_>>(),
-            vec![pk1]
+            vec![pk_2_refs]
         );
         assert_eq!(accounts_to_combine.accounts_to_combine.len(), 1);
         assert_eq!(
@@ -705,7 +707,20 @@ pub mod tests {
                 .iter()
                 .map(|meta| meta.pubkey())
                 .collect::<Vec<_>>(),
-            vec![&pk2]
+            vec![&pk_1_ref]
+        );
+        assert_eq!(
+            accounts_to_combine
+                .accounts_to_combine
+                .first()
+                .unwrap()
+                .alive_accounts
+                .one_ref
+                .accounts
+                .iter()
+                .map(|meta| meta.to_account_shared_data())
+                .collect::<Vec<_>>(),
+            vec![account_1_ref]
         );
         assert!(accounts_to_combine
             .accounts_to_combine
@@ -1474,9 +1489,6 @@ pub mod tests {
             }
         }
     }
-
-    #[test]
-    fn test_filter_ancient_slots() {}
 
     #[derive(EnumIter, Debug, PartialEq, Eq)]
     enum TestShouldShrink {
