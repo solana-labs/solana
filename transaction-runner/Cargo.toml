@@ -15,6 +15,7 @@ log = "0.4.17"
 solana-ledger = { path = "../ledger", version = "=1.16.0" }
 solana-poh = { path = "../poh", version = "=1.16.0" }
 solana-runtime = { path = "../runtime", version = "=1.16.0" }
+solana-program-runtime = { path = "../program-runtime", version = "=1.16.0" }
 
 [lib]
 crate-type = ["lib"]
