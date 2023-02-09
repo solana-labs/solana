@@ -660,11 +660,11 @@ impl Drop for Scheduler {
 
 impl LikeScheduler for Scheduler {
     fn graceful_stop_initiated(&self) -> &AtomicBool {
-        panic!();
+        &self.graceful_stop_initiated
     }
 
     fn random_id(&self) -> u64 {
-        panic!();
+        self.random_id
     }
 
     fn schedule(&self, sanitized_tx: &SanitizedTransaction, index: usize, mode: solana_scheduler::Mode) {
