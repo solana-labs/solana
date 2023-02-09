@@ -953,9 +953,17 @@ struct SchedulerContext {
 #[derive(Debug)]
 pub struct TransactionRunner {
     scheduler_pool: std::sync::Mutex<SchedulerPool>,
-    poh: std::sync::RwLock<Option<Box<dyn Fn(&Bank, Vec<VersionedTransaction>, solana_sdk::hash::Hash) -> std::result::Result<Option<usize>, ()> + Send + Sync>>>,
+    poh: std::sync::RwLock<Option<PohCallback>>,
     // poh callback
     // tx status writer
+}
+
+struct PohCallback(Box<dyn Fn(&Bank, Vec<VersionedTransaction>, solana_sdk::hash::Hash) -> std::result::Result<Option<usize>, ()> + Send + Sync>);
+
+impl Debug for PohCallback {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        write!(f, "PohCallback{self:p}")
+    }
 }
 
 impl TransactionRunner {
