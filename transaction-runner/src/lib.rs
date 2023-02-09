@@ -90,8 +90,8 @@ impl LikeSchedulerPool for AAA {
             trace!(
                 "SchedulerPool: id_{:016x} is taken... len: {} => {}",
                 scheduler.random_id(),
-                self.schedulers.lock().unwrap().len() + 1,
-                self.schedulers.lock().unwrap().len()
+                self.0.schedulers.lock().unwrap().len() + 1,
+                self.0.schedulers.lock().unwrap().len()
             );
             scheduler
         } else {
