@@ -8655,6 +8655,12 @@ impl Bank {
         total_accounts_stats
     }
 
+    pub fn install_scheduler(&self, scheduler: usize) {
+        let mut s = self.scheduler2.write().unwrap();
+        assert!(s.is_none());
+        *s = scheduler
+    }
+
     pub fn wait_for_scheduler(&self, via_drop: bool) -> Result<ExecuteTimings> {
         let mut s = self.scheduler2.write().unwrap();
         let current_thread_name = std::thread::current().name().unwrap().to_string();
