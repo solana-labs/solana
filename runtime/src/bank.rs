@@ -1195,7 +1195,7 @@ impl Scheduler {
             if max_thread_priority {
                 thread_priority::set_current_thread_priority(thread_priority::ThreadPriority::Max).unwrap();
             }
-            let (mut latest_checkpoint, mut latest_runner_context) = (Some(initial_checkpoint), None::<SchedulerContext>);
+            let (mut latest_checkpoint, mut latest_scheduler_context) = (Some(initial_checkpoint), None::<SchedulerContext>);
 
             'recv: while let Ok(r) = (if thx >= base_thread_count { scheduled_high_ee_receiver.recv() } else { scheduled_ee_receiver.recv()}) {
                 match r {
@@ -1204,17 +1204,17 @@ impl Scheduler {
                 'retry: loop {
                 commit_status.check_and_wait();
                 if let Some(latest_checkpoint) = latest_checkpoint.take() {
-                    latest_runner_context = latest_checkpoint.clone_context_value();
+                    latest_scheduler_context = latest_checkpoint.clone_context_value();
                 }
 
                 let (mut wall_time, cpu_time) = (Measure::start("process_message_time"), cpu_time::ThreadTime::now());
 
                 let current_execute_clock = ee.task.execute_time();
-                let transaction_index = ee.task.transaction_index(latest_runner_context.as_ref().unwrap().mode);
+                let transaction_index = ee.task.transaction_index(latest_scheduler_context.as_ref().unwrap().mode);
                 trace!("execute_substage: transaction_index: {} execute_clock: {} at thread: {}", thx, transaction_index, current_execute_clock);
 
                 let mut timings = Default::default();
-                let Some(bank) = latest_runner_context.as_ref().unwrap().bank() else {
+                let Some(bank) = latest_scheduler_context.as_ref().unwrap().bank() else {
                     warn!("ODD");
                     processed_ee_sender.send(solana_scheduler::UnlockablePayload(ee, timings)).unwrap();
                     continue 'recv;
@@ -1255,7 +1255,7 @@ impl Scheduler {
                 let (last_blockhash, lamports_per_signature) =
                     bank.last_blockhash_and_lamports_per_signature();
 
-                let mode = latest_runner_context.as_ref().unwrap().mode;
+                let mode = latest_scheduler_context.as_ref().unwrap().mode;
                 let commited_first_transaction_index = match mode {
                     solana_scheduler::Mode::Replaying => {
                         //info!("replaying commit! {slot}");
@@ -1359,7 +1359,7 @@ impl Scheduler {
                 solana_scheduler::ExecutablePayload(solana_scheduler::Flushable::Flush(checkpoint)) => {
                     checkpoint.wait_for_restart(None);
                     latest_checkpoint = Some(checkpoint);
-                    latest_runner_context = None;
+                    latest_scheduler_context = None;
                 }
                 }
             }
@@ -1389,14 +1389,14 @@ impl Scheduler {
                 use variant_counter::VariantCount;
                 let mut transaction_error_counts = TransactionError::counter();
                 let (mut skipped, mut succeeded) = (0, 0);
-                let (mut latest_checkpoint, mut latest_runner_context) = (Some(initial_checkpoint), None::<SchedulerContext>);
+                let (mut latest_checkpoint, mut latest_scheduler_context) = (Some(initial_checkpoint), None::<SchedulerContext>);
 
                 loop {
                 while let Ok(r) = retired_ee_receiver.recv_timeout(std::time::Duration::from_millis(20))
                 {
                     use crate::transaction_priority_details::GetTransactionPriorityDetails;
                     if let Some(latest_checkpoint) = latest_checkpoint.take() {
-                        latest_runner_context = latest_checkpoint.clone_context_value();
+                        latest_scheduler_context = latest_checkpoint.clone_context_value();
                     }
 
                     match r {
@@ -1409,8 +1409,8 @@ impl Scheduler {
                                 datapoint_info_at!(
                                     ee.finish_time.unwrap(),
                                     "transaction_timings",
-                                    ("slot", latest_runner_context.as_ref().unwrap().slot(), i64),
-                                    ("index", ee.task.transaction_index(latest_runner_context.as_ref().unwrap().mode), i64),
+                                    ("slot", latest_scheduler_context.as_ref().unwrap().slot(), i64),
+                                    ("index", ee.task.transaction_index(latest_scheduler_context.as_ref().unwrap().mode), i64),
                                     ("thread", format!("solScExLane{:02}", ee.thx), String),
                                     ("signature", &sig, String),
                                     ("account_locks_in_json", serde_json::to_string(&ee.task.tx.0.get_account_locks_unchecked()).unwrap(), String),
@@ -1424,7 +1424,7 @@ impl Scheduler {
                                     ("compute_units", ee.cu, i64),
                                     ("priority", ee.task.tx.0.get_transaction_priority_details().map(|d| d.priority).unwrap_or_default(), i64),
                                 );
-                                info!("execute_substage: slot: {} transaction_index: {} timings: {:?}", latest_runner_context.as_ref().unwrap().slot(), ee.task.transaction_index(latest_runner_context.as_ref().unwrap().mode), timings);
+                                info!("execute_substage: slot: {} transaction_index: {} timings: {:?}", latest_scheduler_context.as_ref().unwrap().slot(), ee.task.transaction_index(latest_scheduler_context.as_ref().unwrap().mode), timings);
                             }
 
                             if let Some(result) = ee.execution_result.take() {
@@ -1440,7 +1440,7 @@ impl Scheduler {
                                     },
                                     Err(e) => {
                                         transaction_error_counts.record(&e);
-                                        match latest_runner_context.as_ref().unwrap().mode {
+                                        match latest_scheduler_context.as_ref().unwrap().mode {
                                             solana_scheduler::Mode::Replaying => {
                                                 error!(
                                                     "scheduler: Unexpected validator error: {:?}, transaction: {:?}",
@@ -1466,15 +1466,15 @@ impl Scheduler {
                             drop(ee);
                         },
                         solana_scheduler::ExaminablePayload(solana_scheduler::Flushable::Flush(checkpoint)) => {
-                            info!("post_execution_handler: slot: {:?} {:?}", latest_runner_context.as_ref().map(|c| format!("{}", c.slot())).unwrap_or("???".into()), transaction_error_counts.aggregate().into_iter().chain([("succeeded", succeeded), ("skipped", skipped)].into_iter()).filter(|&(k, v)| v > 0).collect::<std::collections::BTreeMap<_, _>>());
-                            if let Some(solana_scheduler::Mode::Replaying) = latest_runner_context.as_ref().map(|c| c.mode) {
+                            info!("post_execution_handler: slot: {:?} {:?}", latest_scheduler_context.as_ref().map(|c| format!("{}", c.slot())).unwrap_or("???".into()), transaction_error_counts.aggregate().into_iter().chain([("succeeded", succeeded), ("skipped", skipped)].into_iter()).filter(|&(k, v)| v > 0).collect::<std::collections::BTreeMap<_, _>>());
+                            if let Some(solana_scheduler::Mode::Replaying) = latest_scheduler_context.as_ref().map(|c| c.mode) {
                                 assert_eq!(skipped, 0);
                             }
                             transaction_error_counts.reset();
                             (succeeded, skipped) = (0, 0);
                             checkpoint.wait_for_restart(Some(std::mem::take(&mut cumulative_timings)));
                             latest_checkpoint = Some(checkpoint);
-                            latest_runner_context = None;
+                            latest_scheduler_context = None;
                         },
                     }
                 }
@@ -1516,7 +1516,7 @@ impl Scheduler {
                         Some(&scheduled_high_ee_sender),
                         &processed_ee_receiver,
                         Some(&retired_ee_sender),
-                        |runner_context| format!("id_{:016x}{}", random_id, runner_context.as_ref().map(|c| format!(" slot: {}, mode: {:?}", c.slot(), c.mode)).unwrap_or("".into())),
+                        |scheduler_context| format!("id_{:016x}{}", random_id, scheduler_context.as_ref().map(|c| format!(" slot: {}, mode: {:?}", c.slot(), c.mode)).unwrap_or("".into())),
                     );
 
                     if let Some(checkpoint) = maybe_checkpoint {
@@ -1641,8 +1641,8 @@ impl Scheduler {
         self.commit_status.notify_as_resumed();
     }
 
-    fn replace_transaction_runner_context(&self, runner_context: SchedulerContext) {
-        self.current_checkpoint.replace_context_value(runner_context);
+    fn replace_scheduler_context(&self, scheduler_context: SchedulerContext) {
+        self.current_checkpoint.replace_context_value(scheduler_context);
     }
 
     fn current_scheduler_mode(&self) -> solana_scheduler::Mode {
@@ -4397,7 +4397,7 @@ impl Bank {
                     .unwrap()
                     .push(last_result);
                 drop(s2);
-                self.sync_transaction_runner_context(self.transaction_runner(), scheduler_mode);
+                self.sync_scheduler_context(self.transaction_runner(), scheduler_mode);
                 //*self.scheduler.write().unwrap() = new_scheduler;
                 w_blockhash_queue
             },
@@ -6905,10 +6905,10 @@ impl Bank {
         }
     }
 
-    pub fn sync_transaction_runner_context(self: &Arc<Self>, runner: Arc<TransactionRunner>, mode: solana_scheduler::Mode) {
+    pub fn sync_scheduler_context(self: &Arc<Self>, runner: Arc<TransactionRunner>, mode: solana_scheduler::Mode) {
         let s = self.scheduler.read().unwrap();
         let scheduler = s.as_ref().unwrap();
-        scheduler.replace_transaction_runner_context(runner.context(Some(self.clone()), mode));
+        scheduler.replace_scheduler_context(runner.context(Some(self.clone()), mode));
     }
 
     pub fn transaction_runner(&self) -> Arc<TransactionRunner> {
