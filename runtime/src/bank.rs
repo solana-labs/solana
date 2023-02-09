@@ -2210,7 +2210,7 @@ impl Bank {
         new_bank_options: NewBankOptions,
     ) -> Self {
         let mut time = Measure::start("bank::new_from_parent");
-        let NewBankOptions { vote_only_bank, blockhash_override, runner } = new_bank_options;
+        let NewBankOptions { vote_only_bank, blockhash_override } = new_bank_options;
 
         parent.freeze();
         assert_ne!(slot, parent.slot());
@@ -2300,7 +2300,7 @@ impl Bank {
             },
         };
         */
-        let scheduler = RwLock::new(Some(runner.take_scheduler_from_pool()));
+        let scheduler = RwLock::new(None);
 
         let mut new = Bank {
             incremental_snapshot_persistence: None,
