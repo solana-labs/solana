@@ -951,8 +951,7 @@ struct RunnerContext {
     mode: solana_scheduler::Mode,
 }
 
-// Remove Default
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct Runner {
     runner_pool: std::sync::Mutex<SchedulerPool<ExecuteTimings>>,
     // poh callback
@@ -960,6 +959,12 @@ pub struct Runner {
 }
 
 impl Runner {
+    fn new() -> Self {
+        Self {
+            runner_pool: Mutex::new(SchedulerPool::new()),
+        }
+    }
+
     fn context(self: Arc<Self>, bank: Option<Arc<Bank>>, mode: solana_scheduler::Mode) -> RunnerContext {
         RunnerContext { runner: self, bank, mode }
     }
@@ -989,7 +994,7 @@ impl RunnerContext {
     }
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 struct SchedulerPool<C> {
     schedulers: Vec<Box<Scheduler<C>>>,
 }
