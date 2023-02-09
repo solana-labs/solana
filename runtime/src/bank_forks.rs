@@ -79,7 +79,7 @@ impl Index<u64> for BankForks {
 impl BankForks {
     pub fn new(bank: Bank, a: usize) -> Self {
         let root = bank.slot();
-        Self::new_from_banks(&[Arc::new(bank)], root, a: usize)
+        Self::new_from_banks(&[Arc::new(bank)], root, a)
     }
 
     pub fn banks(&self) -> HashMap<Slot, Arc<Bank>> {
