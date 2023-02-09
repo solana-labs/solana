@@ -36,7 +36,7 @@ struct TransactionRunner(Arc<Bank>, solana_poh::poh_recorder::PohRecorder, solan
 
 #[derive(Debug)]
 pub struct SchedulerPool {
-    schedulers: Vec<Box<dyn LikeScheduler>>,
+    schedulers: Vec<Scheduler>,
 }
 
 impl SchedulerPool {
