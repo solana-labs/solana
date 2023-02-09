@@ -5,7 +5,7 @@ use {
     crate::{
         banking_stage::BankingStage,
         banking_trace::{BankingTracer, TracerThread},
-        broadcast_stage::{BroadcastStage, BroadcastStageType, RetransmitSlotsReceiver},
+        broadcast_stage::{BroadcastStage, BroadcastStageType},
         cluster_info_vote_listener::{
             ClusterInfoVoteListener, GossipDuplicateConfirmedSlotsSender,
             GossipVerifiedVoteHashSender, VerifiedVoteSender, VoteTracker,
@@ -78,7 +78,6 @@ impl Tpu {
         cluster_info: &Arc<ClusterInfo>,
         poh_recorder: &Arc<RwLock<PohRecorder>>,
         entry_receiver: Receiver<WorkingBankEntry>,
-        retransmit_slots_receiver: RetransmitSlotsReceiver,
         sockets: TpuSockets,
         subscriptions: &Arc<RpcSubscriptions>,
         transaction_status_sender: Option<TransactionStatusSender>,
@@ -242,7 +241,6 @@ impl Tpu {
             broadcast_sockets,
             cluster_info.clone(),
             entry_receiver,
-            retransmit_slots_receiver,
             exit.clone(),
             blockstore.clone(),
             bank_forks,

@@ -4,7 +4,6 @@
 use {
     crate::{
         banking_trace::BankingTracer,
-        broadcast_stage::RetransmitSlotsSender,
         cache_block_meta_service::CacheBlockMetaSender,
         cluster_info_vote_listener::{
             GossipDuplicateConfirmedSlotsReceiver, GossipVerifiedVoteHashReceiver,
@@ -121,7 +120,6 @@ impl Tvu {
         rewards_recorder_sender: Option<RewardsRecorderSender>,
         cache_block_meta_sender: Option<CacheBlockMetaSender>,
         vote_tracker: Arc<VoteTracker>,
-        retransmit_slots_sender: RetransmitSlotsSender,
         gossip_verified_vote_hash_receiver: GossipVerifiedVoteHashReceiver,
         verified_vote_receiver: VerifiedVoteReceiver,
         replay_vote_sender: ReplayVoteSender,
@@ -288,7 +286,6 @@ impl Tvu {
             maybe_process_block_store,
             vote_tracker,
             cluster_slots,
-            retransmit_slots_sender,
             duplicate_slots_reset_receiver,
             replay_vote_sender,
             gossip_confirmed_slots_receiver,
@@ -417,7 +414,6 @@ pub mod tests {
         let vote_keypair = Keypair::new();
         let leader_schedule_cache = Arc::new(LeaderScheduleCache::new_from_bank(&bank));
         let block_commitment_cache = Arc::new(RwLock::new(BlockCommitmentCache::default()));
-        let (retransmit_slots_sender, _retransmit_slots_receiver) = unbounded();
         let (_gossip_verified_vote_hash_sender, gossip_verified_vote_hash_receiver) = unbounded();
         let (_verified_vote_sender, verified_vote_receiver) = unbounded();
         let (replay_vote_sender, _replay_vote_receiver) = unbounded();
@@ -460,7 +456,6 @@ pub mod tests {
             None,
             None,
             Arc::<VoteTracker>::default(),
-            retransmit_slots_sender,
             gossip_verified_vote_hash_receiver,
             verified_vote_receiver,
             replay_vote_sender,

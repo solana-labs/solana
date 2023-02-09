@@ -939,7 +939,6 @@ impl Validator {
 
         let vote_tracker = Arc::<VoteTracker>::default();
 
-        let (retransmit_slots_sender, retransmit_slots_receiver) = unbounded();
         let (verified_vote_sender, verified_vote_receiver) = unbounded();
         let (gossip_verified_vote_hash_sender, gossip_verified_vote_hash_receiver) = unbounded();
         let (cluster_confirmed_slot_sender, cluster_confirmed_slot_receiver) = unbounded();
@@ -993,7 +992,6 @@ impl Validator {
             rewards_recorder_sender,
             cache_block_meta_sender,
             vote_tracker.clone(),
-            retransmit_slots_sender,
             gossip_verified_vote_hash_receiver,
             verified_vote_receiver,
             replay_vote_sender.clone(),
@@ -1022,7 +1020,6 @@ impl Validator {
             &cluster_info,
             &poh_recorder,
             entry_receiver,
-            retransmit_slots_receiver,
             TpuSockets {
                 transactions: node.sockets.tpu,
                 transaction_forwards: node.sockets.tpu_forwards,
