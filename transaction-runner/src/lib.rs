@@ -85,7 +85,7 @@ impl SchedulerPool {
             }
             scheduler
         } else {
-            self.create(context);
+            self.create(context.unwrap());
             self.take_from_pool(None)
         }
     }
