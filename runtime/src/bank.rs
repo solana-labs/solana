@@ -1650,7 +1650,7 @@ impl<C> Scheduler<C> {
         self.current_checkpoint.with_context_value(|c| c.mode).unwrap()
     }
 
-    fn current_runner(&self) -> Arc<TransactionRunner> {
+    fn transaction_runner(&self) -> Arc<TransactionRunner> {
         self.current_checkpoint.with_context_value(|c| c.runner.clone()).unwrap()
     }
 
@@ -6915,7 +6915,7 @@ impl Bank {
     pub fn transaction_runner(&self) -> Arc<TransactionRunner> {
         let s = self.scheduler.read().unwrap();
         let scheduler = s.as_ref().unwrap();
-        scheduler.current_runner()
+        scheduler.transaction_runner()
     }
 
     pub fn scheduler_mode(&self) -> solana_scheduler::Mode {
@@ -8668,7 +8668,7 @@ impl Bank {
             assert!(scheduler.has_context());
 
             let scheduler_mode = scheduler.current_scheduler_mode();
-            let runner = scheduler.current_runner();
+            let runner = scheduler.transaction_runner();
             if matches!(scheduler_mode, solana_scheduler::Mode::Replaying) || via_drop {
                 info!("wait_for_scheduler({scheduler_mode:?}/{via_drop}): gracefully stopping bank ({})...", self.slot());
                 if matches!(scheduler_mode, solana_scheduler::Mode::Banking) {
