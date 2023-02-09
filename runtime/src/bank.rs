@@ -953,7 +953,7 @@ struct RunnerContext {
     // tx status writer
 }
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 struct Runner {
     runner_pool: std::sync::Mutex<SchedulerPool<ExecuteTimings>>,
 }
