@@ -675,7 +675,6 @@ impl LikeScheduler for Scheduler {
         std::mem::take(&mut self.collected_results.lock().unwrap())
     }
 
-
     fn pause_commit_into_bank(&self) {
         self.commit_status.notify_as_paused();
         self.current_checkpoint.update_context_value(|c| {c.bank = None;});
