@@ -4,7 +4,7 @@ use {
     solana_ledger::{
         blockstore_processor::TransactionStatusSender, token_balances::collect_token_balances,
     },
-    solana_measure::measure,
+    solana_measure::{measure, measure_us},
     solana_runtime::{
         accounts::TransactionLoadResult,
         bank::{
@@ -15,7 +15,7 @@ use {
         transaction_batch::TransactionBatch,
         vote_sender_types::ReplayVoteSender,
     },
-    solana_sdk::{saturating_add_assign, transaction::SanitizedTransaction},
+    solana_sdk::saturating_add_assign,
     solana_transaction_status::token_balances::TransactionTokenBalancesSet,
     std::sync::Arc,
 };
@@ -34,7 +34,6 @@ impl Committer {
         batch: &TransactionBatch,
         loaded_transactions: &mut [TransactionLoadResult],
         execution_results: Vec<TransactionExecutionResult>,
-        sanitized_txs: &[SanitizedTransaction],
         starting_transaction_index: Option<usize>,
         bank: &Arc<Bank>,
         pre_balance_info: &mut PreBalanceInfo,
@@ -54,27 +53,22 @@ impl Committer {
         let (last_blockhash, lamports_per_signature) =
             bank.last_blockhash_and_lamports_per_signature();
 
-        let (tx_results, commit_time) = measure!(
-            bank.commit_transactions(
-                sanitized_txs,
-                loaded_transactions,
-                execution_results,
-                last_blockhash,
-                lamports_per_signature,
-                CommitTransactionCounts {
-                    committed_transactions_count: executed_transactions_count as u64,
-                    committed_non_vote_transactions_count: executed_non_vote_transactions_count
-                        as u64,
-                    committed_with_failure_result_count: executed_transactions_count
-                        .saturating_sub(executed_with_successful_result_count)
-                        as u64,
-                    signature_count,
-                },
-                &mut execute_and_commit_timings.execute_timings,
-            ),
-            "commit",
-        );
-        let commit_time_us = commit_time.as_us();
+        let (tx_results, commit_time_us) = measure_us!(bank.commit_transactions(
+            batch.sanitized_transactions(),
+            loaded_transactions,
+            execution_results,
+            last_blockhash,
+            lamports_per_signature,
+            CommitTransactionCounts {
+                committed_transactions_count: executed_transactions_count as u64,
+                committed_non_vote_transactions_count: executed_non_vote_transactions_count as u64,
+                committed_with_failure_result_count: executed_transactions_count
+                    .saturating_sub(executed_with_successful_result_count)
+                    as u64,
+                signature_count,
+            },
+            &mut execute_and_commit_timings.execute_timings,
+        ));
         execute_and_commit_timings.commit_us = commit_time_us;
 
         let commit_transaction_statuses = tx_results
@@ -88,25 +82,22 @@ impl Committer {
             })
             .collect();
 
-        let (_, find_and_send_votes_time) = measure!(
-            {
-                bank_utils::find_and_send_votes(
-                    sanitized_txs,
-                    &tx_results,
-                    Some(replay_vote_sender),
-                );
-                Self::collect_balances_and_send_status_batch(
-                    transaction_status_sender,
-                    tx_results,
-                    bank,
-                    batch,
-                    pre_balance_info,
-                    starting_transaction_index,
-                );
-            },
-            "find_and_send_votes",
-        );
-        execute_and_commit_timings.find_and_send_votes_us = find_and_send_votes_time.as_us();
+        let ((), find_and_send_votes_us) = measure_us!({
+            bank_utils::find_and_send_votes(
+                batch.sanitized_transactions(),
+                &tx_results,
+                Some(replay_vote_sender),
+            );
+            Self::collect_balances_and_send_status_batch(
+                transaction_status_sender,
+                tx_results,
+                bank,
+                batch,
+                pre_balance_info,
+                starting_transaction_index,
+            );
+        });
+        execute_and_commit_timings.find_and_send_votes_us = find_and_send_votes_us;
         (commit_time_us, commit_transaction_statuses)
     }
 

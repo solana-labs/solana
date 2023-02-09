@@ -31,8 +31,8 @@ use {
         bpf_loader_upgradeable::{self, UpgradeableLoaderState},
         clock::{BankId, Slot},
         feature_set::{
-            self, remove_deprecated_request_unit_ix, use_default_units_in_fee_calculation,
-            FeatureSet,
+            self, enable_request_heap_frame_ix, remove_congestion_multiplier_from_fee_calculation,
+            remove_deprecated_request_unit_ix, use_default_units_in_fee_calculation, FeatureSet,
         },
         fee::FeeStructure,
         genesis_config::ClusterType,
@@ -208,7 +208,7 @@ impl Accounts {
 
     pub fn new_from_parent(parent: &Accounts, slot: Slot, parent_slot: Slot) -> Self {
         let accounts_db = parent.accounts_db.clone();
-        accounts_db.insert_default_bank_hash(slot, parent_slot);
+        accounts_db.insert_default_bank_hash_stats(slot, parent_slot);
         Self {
             accounts_db,
             account_locks: Mutex::new(AccountLocks::default()),
@@ -600,6 +600,8 @@ impl Accounts {
                             fee_structure,
                             feature_set.is_active(&use_default_units_in_fee_calculation::id()),
                             !feature_set.is_active(&remove_deprecated_request_unit_ix::id()),
+                            feature_set.is_active(&remove_congestion_multiplier_from_fee_calculation::id()),
+                            feature_set.is_active(&enable_request_heap_frame_ix::id()) || self.accounts_db.expected_cluster_type() != ClusterType::MainnetBeta,
                         )
                     } else {
                         return (Err(TransactionError::BlockhashNotFound), None);
@@ -1639,6 +1641,8 @@ mod tests {
             &FeeStructure::default(),
             true,
             false,
+            true,
+            true,
         );
         assert_eq!(fee, lamports_per_signature);
 
@@ -2377,15 +2381,15 @@ mod tests {
     }
 
     #[test]
-    fn test_accounts_empty_bank_hash() {
+    fn test_accounts_empty_bank_hash_stats() {
         let accounts = Accounts::new_with_config_for_tests(
             Vec::new(),
             &ClusterType::Development,
             AccountSecondaryIndexes::default(),
             AccountShrinkThreshold::default(),
         );
-        assert!(accounts.accounts_db.get_bank_hash_info(0).is_some());
-        assert!(accounts.accounts_db.get_bank_hash_info(1).is_none());
+        assert!(accounts.accounts_db.get_bank_hash_stats(0).is_some());
+        assert!(accounts.accounts_db.get_bank_hash_stats(1).is_none());
     }
 
     #[test]

@@ -44,7 +44,7 @@ use {
         signature::{read_keypair_file, write_keypair_file, Keypair, Signer},
     },
     solana_streamer::socket::SocketAddrSpace,
-    solana_tpu_client::tpu_connection_cache::{
+    solana_tpu_client::tpu_client::{
         DEFAULT_TPU_CONNECTION_POOL_SIZE, DEFAULT_TPU_ENABLE_UDP, DEFAULT_TPU_USE_QUIC,
     },
     std::{
@@ -91,7 +91,7 @@ impl Default for TestValidatorNodeConfig {
         let port_range = (MIN_PORT_RANGE, MAX_PORT_RANGE);
 
         Self {
-            gossip_addr: socketaddr!("127.0.0.1:0"),
+            gossip_addr: socketaddr!(Ipv4Addr::LOCALHOST, 0),
             port_range,
             bind_ip_addr,
         }

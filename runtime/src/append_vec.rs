@@ -28,6 +28,7 @@ use {
             Mutex,
         },
     },
+    thiserror::Error,
 };
 
 pub mod test_utils;
@@ -106,32 +107,27 @@ impl<'a: 'b, 'b, T: ReadableAccount + Sync + 'b, U: StorableAccounts<'a, T>, V: 
         }
     }
 
-    /// hash for the account at 'index'
-    pub fn hash(&self, index: usize) -> &Hash {
-        if self.accounts.has_hash_and_write_version() {
-            self.accounts.hash(index)
+    /// get all account fields at 'index'
+    pub fn get(&self, index: usize) -> (Option<&T>, &Pubkey, &Hash, StoredMetaWriteVersion) {
+        let account = self.accounts.account_default_if_zero_lamport(index);
+        let pubkey = self.accounts.pubkey(index);
+        let (hash, write_version) = if self.accounts.has_hash_and_write_version() {
+            (
+                self.accounts.hash(index),
+                self.accounts.write_version(index),
+            )
         } else {
-            self.hashes_and_write_versions.as_ref().unwrap().0[index].borrow()
-        }
+            let item = self.hashes_and_write_versions.as_ref().unwrap();
+            (item.0[index].borrow(), item.1[index])
+        };
+        (account, pubkey, hash, write_version)
     }
-    /// write_version for the account at 'index'
-    pub fn write_version(&self, index: usize) -> u64 {
-        if self.accounts.has_hash_and_write_version() {
-            self.accounts.write_version(index)
-        } else {
-            self.hashes_and_write_versions.as_ref().unwrap().1[index]
-        }
-    }
+
     /// None if account at index has lamports == 0
     /// Otherwise, Some(account)
     /// This is the only way to access the account.
     pub fn account(&self, index: usize) -> Option<&T> {
         self.accounts.account_default_if_zero_lamport(index)
-    }
-
-    /// pubkey at 'index'
-    pub fn pubkey(&self, index: usize) -> &Pubkey {
-        self.accounts.pubkey(index)
     }
 
     /// # accounts to write
@@ -273,6 +269,14 @@ impl<'a> Iterator for AppendVecAccountsIter<'a> {
             None
         }
     }
+}
+
+#[derive(Error, Debug, PartialEq, Eq)]
+pub enum MatchAccountOwnerError {
+    #[error("The account owner does not match with the provided list")]
+    NoMatch,
+    #[error("Unable to load the account")]
+    UnableToLoad,
 }
 
 /// A thread-safe, file-backed block of memory used to store `Account` instances. Append operations
@@ -577,7 +581,7 @@ impl AppendVec {
         Some((unsafe { &*ptr }, next))
     }
 
-    /// Return account metadata for the account at `offset` if its data doesn't overrun
+    /// Return stored account metadata for the account at `offset` if its data doesn't overrun
     /// the internal buffer. Otherwise return None. Also return the offset of the first byte
     /// after the requested data that falls on a 64-byte boundary.
     pub fn get_account<'a>(&'a self, offset: usize) -> Option<(StoredAccountMeta<'a>, usize)> {
@@ -597,6 +601,31 @@ impl AppendVec {
             },
             next,
         ))
+    }
+
+    fn get_account_meta<'a>(&self, offset: usize) -> Option<&'a AccountMeta> {
+        // Skip over StoredMeta data in the account
+        let offset = offset.checked_add(mem::size_of::<StoredMeta>())?;
+        // u64_align! does an unchecked add for alignment. Check that it won't cause an overflow.
+        offset.checked_add(ALIGN_BOUNDARY_OFFSET - 1)?;
+        let (account_meta, _): (&AccountMeta, _) = self.get_type(u64_align!(offset))?;
+        Some(account_meta)
+    }
+
+    /// Return Some(true) if the account owner at `offset` is one of the pubkeys in `owners`.
+    /// Return Some(false) if the account owner is not one of the pubkeys in `owners`.
+    /// It returns None if the `offset` value causes a data overrun.
+    pub fn account_matches_owners(
+        &self,
+        offset: usize,
+        owners: &[&Pubkey],
+    ) -> Result<(), MatchAccountOwnerError> {
+        let account_meta = self
+            .get_account_meta(offset)
+            .ok_or(MatchAccountOwnerError::UnableToLoad)?;
+        (account_meta.lamports != 0 && owners.contains(&&account_meta.owner))
+            .then_some(())
+            .ok_or(MatchAccountOwnerError::NoMatch)
     }
 
     #[cfg(test)]
@@ -646,10 +675,10 @@ impl AppendVec {
         let _lock = self.append_lock.lock().unwrap();
         let mut offset = self.len();
 
-        let mut rv = Vec::with_capacity(accounts.accounts.len());
         let len = accounts.accounts.len();
+        let mut rv = Vec::with_capacity(len);
         for i in skip..len {
-            let account = accounts.account(i);
+            let (account, pubkey, hash, write_version_obsolete) = accounts.get(i);
             let account_meta = account
                 .map(|account| AccountMeta {
                     lamports: account.lamports(),
@@ -660,11 +689,11 @@ impl AppendVec {
                 .unwrap_or_default();
 
             let stored_meta = StoredMeta {
-                pubkey: *accounts.pubkey(i),
+                pubkey: *pubkey,
                 data_len: account
                     .map(|account| account.data().len())
                     .unwrap_or_default() as u64,
-                write_version_obsolete: accounts.write_version(i),
+                write_version_obsolete,
             };
             let meta_ptr = &stored_meta as *const StoredMeta;
             let account_meta_ptr = &account_meta as *const AccountMeta;
@@ -673,7 +702,7 @@ impl AppendVec {
                 .map(|account| account.data())
                 .unwrap_or_default()
                 .as_ptr();
-            let hash_ptr = accounts.hash(i).as_ref().as_ptr();
+            let hash_ptr = hash.as_ref().as_ptr();
             let ptrs = [
                 (meta_ptr as *const u8, mem::size_of::<StoredMeta>()),
                 (account_meta_ptr as *const u8, mem::size_of::<AccountMeta>()),
@@ -865,9 +894,10 @@ pub mod tests {
         assert_eq!(storable.len(), pubkeys.len());
         assert!(!storable.is_empty());
         (0..2).for_each(|i| {
-            assert_eq!(storable.hash(i), &hashes[i]);
-            assert_eq!(&storable.write_version(i), &write_versions[i]);
-            assert_eq!(storable.pubkey(i), &pubkeys[i]);
+            let (_, pubkey, hash, write_version) = storable.get(i);
+            assert_eq!(hash, &hashes[i]);
+            assert_eq!(write_version, write_versions[i]);
+            assert_eq!(pubkey, &pubkeys[i]);
         });
     }
 
@@ -1049,6 +1079,47 @@ pub mod tests {
         let index1 = av.append_account_test(&account1).unwrap();
         assert_eq!(av.get_account_test(index).unwrap(), account);
         assert_eq!(av.get_account_test(index1).unwrap(), account1);
+    }
+
+    #[test]
+    fn test_account_matches_owners() {
+        let path = get_append_vec_path("test_append_data");
+        let av = AppendVec::new(&path.path, true, 1024 * 1024);
+        let owners: Vec<Pubkey> = (0..2).map(|_| Pubkey::new_unique()).collect();
+        let owners_refs: Vec<&Pubkey> = owners.iter().collect();
+
+        let mut account = create_test_account(5);
+        account.1.set_owner(owners[0]);
+        let index = av.append_account_test(&account).unwrap();
+        assert_eq!(av.account_matches_owners(index, &owners_refs), Ok(()));
+
+        let mut account1 = create_test_account(6);
+        account1.1.set_owner(owners[1]);
+        let index1 = av.append_account_test(&account1).unwrap();
+        assert_eq!(av.account_matches_owners(index1, &owners_refs), Ok(()));
+        assert_eq!(av.account_matches_owners(index, &owners_refs), Ok(()));
+
+        let mut account2 = create_test_account(6);
+        account2.1.set_owner(Pubkey::new_unique());
+        let index2 = av.append_account_test(&account2).unwrap();
+        assert_eq!(
+            av.account_matches_owners(index2, &owners_refs),
+            Err(MatchAccountOwnerError::NoMatch)
+        );
+
+        // tests for overflow
+        assert_eq!(
+            av.account_matches_owners(usize::MAX - mem::size_of::<StoredMeta>(), &owners_refs),
+            Err(MatchAccountOwnerError::UnableToLoad)
+        );
+
+        assert_eq!(
+            av.account_matches_owners(
+                usize::MAX - mem::size_of::<StoredMeta>() - mem::size_of::<AccountMeta>() + 1,
+                &owners_refs
+            ),
+            Err(MatchAccountOwnerError::UnableToLoad)
+        );
     }
 
     #[test]

@@ -546,6 +546,7 @@ pub struct RpcSnapshotSlotInfo {
 }
 
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
 pub struct RpcPrioritizationFee {
     pub slot: Slot,
     pub prioritization_fee: u64,

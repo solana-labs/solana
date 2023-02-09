@@ -21,6 +21,8 @@ log = "0.4.17"
 quinn = "0.9.3"
 rand = "0.7.0"
 rayon = "1.5.3"
+
+solana-connection-cache = { path = "../connection-cache", version = "=1.16.0" }
 solana-measure = { path = "../measure", version = "=1.16.0" }
 solana-metrics = { path = "../metrics", version = "=1.16.0" }
 solana-net-utils = { path = "../net-utils", version = "=1.16.0" }

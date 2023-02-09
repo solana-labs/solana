@@ -67,7 +67,7 @@ use {
         transaction::Transaction,
     },
     solana_streamer::socket::SocketAddrSpace,
-    solana_tpu_client::tpu_connection_cache::DEFAULT_TPU_CONNECTION_POOL_SIZE,
+    solana_tpu_client::tpu_client::DEFAULT_TPU_CONNECTION_POOL_SIZE,
     std::{
         net::{SocketAddr, UdpSocket},
         process::exit,
@@ -285,7 +285,7 @@ fn create_sender_thread(
                         Ok(tx_batch) => {
                             let len = tx_batch.batch.len();
                             let mut measure_send_txs = Measure::start("measure_send_txs");
-                            let res = connection.send_wire_transaction_batch_async(tx_batch.batch);
+                            let res = connection.send_data_batch_async(tx_batch.batch);
 
                             measure_send_txs.stop();
                             time_send_ns += measure_send_txs.as_ns();

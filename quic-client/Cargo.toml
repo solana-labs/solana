@@ -20,6 +20,8 @@ quinn = "0.9.3"
 quinn-proto = "0.9.2"
 quinn-udp = "0.3.2"
 rustls = { version = "0.20.6", default-features = false, features = ["dangerous_configuration", "logging"] }
+
+solana-connection-cache = { path = "../connection-cache", version = "=1.16.0" }
 solana-measure = { path = "../measure", version = "=1.16.0" }
 solana-metrics = { path = "../metrics", version = "=1.16.0" }
 solana-net-utils = { path = "../net-utils", version = "=1.16.0" }
