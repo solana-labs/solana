@@ -1179,8 +1179,26 @@ impl StakeReward {
     }
 }
 
+pub struct Iter2<'a> {
+    data: &'a (Slot, &'a [StakeReward], IncludeSlotInHash),
+    index: usize,
+}
+
+impl<'a> Iterator for Iter2<'a> {
+    type Item=(&'a Pubkey, &'a AccountSharedData);
+    fn next(&mut self) -> Option<Self::Item> {
+        (self.index < self.data.len()).then_some({
+            let result = (self.data.pubkey(self.index), self.data.account(self.index));
+            self.index += 1;
+            result
+        })
+    }
+}
+
 /// allow [StakeReward] to be passed to `StoreAccounts` directly without copies or vec construction
-impl<'a> StorableAccounts<'a, AccountSharedData> for (Slot, &'a [StakeReward], IncludeSlotInHash) {
+impl<'a> StorableAccounts<'a, AccountSharedData, Iter2<'a>> for (Slot, &'a [StakeReward], IncludeSlotInHash) {
+    fn iter(&'a self)-> Iter2<'a>  {Iter2{ data: self, index: 0}}
+    //type Iter = ();
     fn pubkey(&self, index: usize) -> &Pubkey {
         &self.1[index].stake_pubkey
     }
@@ -2960,7 +2978,7 @@ impl Bank {
         // store stake account even if stakers_reward is 0
         // because credits observed has changed
         let mut m = Measure::start("store_stake_account");
-        self.store_accounts((self.slot(), stake_rewards, self.include_slot_in_hash()));
+        self.store_accounts(&(self.slot(), stake_rewards, self.include_slot_in_hash()));
         m.stop();
         metrics
             .store_stake_accounts_us
@@ -5368,7 +5386,7 @@ impl Bank {
         if !accounts_to_store.is_empty() {
             // TODO: Maybe do not call `store_accounts()` here.  Instead return `accounts_to_store`
             // and have `collect_rent_in_partition()` perform all the stores.
-            let (_, measure) = measure!(self.store_accounts((
+            let (_, measure) = measure!(self.store_accounts(&(
                 self.slot(),
                 &accounts_to_store[..],
                 self.include_slot_in_hash()
@@ -6219,16 +6237,16 @@ impl Bank {
         pubkey: &Pubkey,
         account: &T,
     ) {
-        self.store_accounts((
+        self.store_accounts(&(
             self.slot(),
             &[(pubkey, account)][..],
             self.include_slot_in_hash(),
         ))
     }
 
-    pub fn store_accounts<'a, T: ReadableAccount + Sync + ZeroLamport + 'a>(
+    pub fn store_accounts<'a, T: ReadableAccount + Sync + ZeroLamport + 'a, U: Iterator<Item=(&'a Pubkey, &'a T)> + 'a>(
         &self,
-        accounts: impl StorableAccounts<'a, T>,
+        accounts: &'a impl StorableAccounts<'a, T, U>,
     ) {
         assert!(!self.freeze_started());
         let mut m = Measure::start("stakes_cache.check_and_store");

@@ -16,7 +16,9 @@ use {
     },
     rand::{thread_rng, Rng},
     solana_measure::{measure, measure_us},
-    solana_sdk::{account::ReadableAccount, clock::Slot, hash::Hash, saturating_add_assign},
+    solana_sdk::{
+        account::ReadableAccount, clock::Slot, hash::Hash, pubkey::Pubkey, saturating_add_assign,
+    },
     std::{collections::HashMap, num::NonZeroU64, sync::Arc},
 };
 
@@ -241,10 +243,15 @@ impl AccountsDb {
     /// write 'accounts_to_write' into it
     /// return shrink_in_progress and some metrics
     #[allow(dead_code)]
-    fn write_ancient_accounts<'a, 'b: 'a, T: ReadableAccount + Sync + ZeroLamport + 'a>(
+    fn write_ancient_accounts<
+        'a,
+        'b: 'a,
+        T: ReadableAccount + Sync + ZeroLamport + 'a,
+        I: Iterator<Item = (&'a Pubkey, &'a T)> + 'a,
+    >(
         &'b self,
         bytes: u64,
-        accounts_to_write: impl StorableAccounts<'a, T>,
+        accounts_to_write: &'a impl StorableAccounts<'a, T, I>,
     ) -> WriteAncientAccounts<'b> {
         let target_slot = accounts_to_write.target_slot();
         let (shrink_in_progress, create_and_insert_store_elapsed_us) =
@@ -431,7 +438,7 @@ impl<'a> AccountsToStore<'a> {
     }
 
     /// get the accounts to store in the given 'storage'
-    pub fn get(&self, storage: StorageSelector) -> &[&'a StoredAccountMeta<'a>] {
+    pub fn get(&'a self, storage: StorageSelector) -> &'a [&'a StoredAccountMeta<'a>] {
         let range = match storage {
             StorageSelector::Primary => 0..self.index_first_item_overflow,
             StorageSelector::Overflow => self.index_first_item_overflow..self.accounts.len(),

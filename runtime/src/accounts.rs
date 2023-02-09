@@ -1211,14 +1211,14 @@ impl Accounts {
             lamports_per_signature,
         );
         self.accounts_db.store_cached(
-            (slot, &accounts_to_store[..], include_slot_in_hash),
+            &(slot, &accounts_to_store[..], include_slot_in_hash),
             Some(&transactions),
         );
     }
 
-    pub fn store_accounts_cached<'a, T: ReadableAccount + Sync + ZeroLamport + 'a>(
+    pub fn store_accounts_cached<'a, T: ReadableAccount + Sync + ZeroLamport + 'a, I: Iterator<Item=(&'a Pubkey, &'a T)> + 'a>(
         &self,
-        accounts: impl StorableAccounts<'a, T>,
+        accounts:&'a impl StorableAccounts<'a, T, I>,
     ) {
         self.accounts_db.store_cached(accounts, None)
     }

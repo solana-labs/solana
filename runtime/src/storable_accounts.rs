@@ -1,15 +1,38 @@
 //! trait for abstracting underlying storage of pubkey and account pairs to be written
+
 use {
     crate::{accounts_db::IncludeSlotInHash, append_vec::StoredAccountMeta},
     solana_sdk::{account::ReadableAccount, clock::Slot, hash::Hash, pubkey::Pubkey},
 };
+
+pub trait StorableAccountsIterator<'a, T : ReadableAccount + Sync + 'a> {
+    fn next(&mut self) -> Option<(&'a Pubkey, &'a T)>;
+}
 
 /// abstract access to pubkey, account, slot, target_slot of either:
 /// a. (slot, &[&Pubkey, &ReadableAccount])
 /// b. (slot, &[&Pubkey, &ReadableAccount, Slot]) (we will use this later)
 /// This trait avoids having to allocate redundant data when there is a duplicated slot parameter.
 /// All legacy callers do not have a unique slot per account to store.
-pub trait StorableAccounts<'a, T: ReadableAccount + Sync>: Sync {
+pub trait StorableAccounts<'a:, T: ReadableAccount + Sync + 'a, U: Iterator<Item=(&'a Pubkey, &'a T)>>: Sync {
+    //type Iter: impl Iterator<Item=u8>;
+    fn iter(&'a self) -> U;
+    /* {//Option<Self::Iter> {
+        None
+    }*/
+    /*
+    fn iter2(&self) -> Option<Box<dyn StorableAccountsIterator<'a, T>>>
+    {
+        None
+    }
+    */
+/*
+    fn iter<F: FnMut(&'a Pubkey, &'a T) + 'a>(&'a self, mut next: F) {
+        for index in 0..self.len() {
+            next(self.pubkey(index), self.account(index));
+        }
+    }
+*/
     /// pubkey at 'index'
     fn pubkey(&self, index: usize) -> &Pubkey;
     /// account at 'index'
@@ -72,7 +95,25 @@ pub struct StorableAccountsMovingSlots<'a, T: ReadableAccount + Sync> {
     pub include_slot_in_hash: IncludeSlotInHash,
 }
 
-impl<'a, T: ReadableAccount + Sync> StorableAccounts<'a, T> for StorableAccountsMovingSlots<'a, T> {
+pub struct Iter4<'a, T: ReadableAccount + Sync> {
+    data: &'a StorableAccountsMovingSlots<'a, T>,
+    index: usize,
+}
+
+impl<'a, T: ReadableAccount + Sync> Iterator for Iter4<'a, T> {
+    type Item=(&'a Pubkey, &'a T);
+    fn next(&mut self) -> Option<Self::Item> {
+        (self.index < self.data.len()).then_some({
+            let result = (self.data.pubkey(self.index), self.data.account(self.index));
+            self.index += 1;
+            result
+        })
+    }
+}
+
+impl<'a, T: ReadableAccount + Sync> StorableAccounts<'a, T, Iter4<'a, T>> for StorableAccountsMovingSlots<'a, T> {
+    fn iter(&'a self)-> Iter4<'a, T>  {Iter4 {data: self, index: 0}}
+    //type Iter = ();
     fn pubkey(&self, index: usize) -> &Pubkey {
         self.accounts[index].0
     }
@@ -94,11 +135,29 @@ impl<'a, T: ReadableAccount + Sync> StorableAccounts<'a, T> for StorableAccounts
     }
 }
 
+
+pub struct Iter6<'a, T: ReadableAccount + Sync> {
+    data: &'a (Slot, &'a [(&'a Pubkey, &'a T)], IncludeSlotInHash),
+    index: usize,
+}
+
+impl<'a, T: ReadableAccount + Sync> Iterator for Iter6<'a, T> {
+    type Item=(&'a Pubkey, &'a T);
+    fn next(&mut self) -> Option<Self::Item> {
+        (self.index < self.data.len()).then_some({
+            let result = (self.data.pubkey(self.index), self.data.account(self.index));
+            self.index += 1;
+            result
+        })
+    }
+}
 /// The last parameter exists until this feature is activated:
 ///  ignore slot when calculating an account hash #28420
-impl<'a, T: ReadableAccount + Sync> StorableAccounts<'a, T>
+impl<'a, T: ReadableAccount + Sync> StorableAccounts<'a, T, Iter6<'a, T>>
     for (Slot, &'a [(&'a Pubkey, &'a T)], IncludeSlotInHash)
 {
+    fn iter(&'a self)-> Iter6<'a, T> {Iter6 {data: self, index:0}}
+    //type Iter = ();
     fn pubkey(&self, index: usize) -> &Pubkey {
         self.1[index].0
     }
@@ -120,11 +179,29 @@ impl<'a, T: ReadableAccount + Sync> StorableAccounts<'a, T>
     }
 }
 
+pub struct Iter7<'a> {
+    data: &'a (Slot, &'a [&'a StoredAccountMeta<'a>], IncludeSlotInHash),
+    index: usize,
+}
+
+impl<'a> Iterator for Iter7<'a> {
+    type Item=(&'a Pubkey, &'a StoredAccountMeta<'a>);
+    fn next(&mut self) -> Option<Self::Item> {
+        (self.index < self.data.len()).then_some({
+            let result = (self.data.pubkey(self.index), self.data.account(self.index));
+            self.index += 1;
+            result
+        })
+    }
+}
+
 /// The last parameter exists until this feature is activated:
 ///  ignore slot when calculating an account hash #28420
-impl<'a> StorableAccounts<'a, StoredAccountMeta<'a>>
+impl<'a> StorableAccounts<'a, StoredAccountMeta<'a>, Iter7<'a>>
     for (Slot, &'a [&'a StoredAccountMeta<'a>], IncludeSlotInHash)
 {
+    fn iter(&'a self)-> Iter7<'a>  {Iter7 {data: self, index: 0}}
+    //type Iter = ();
     fn pubkey(&self, index: usize) -> &Pubkey {
         self.account(index).pubkey()
     }
@@ -222,10 +299,35 @@ impl<'a> StorableAccountsBySlot<'a> {
     }
 }
 
+pub struct Iter5<'a> {
+    data: &'a StorableAccountsBySlot<'a>,
+    outer_index: usize,
+    inner_index: usize
+}
+
+impl<'a> Iterator for Iter5<'a> {
+    type Item=(&'a Pubkey, &'a StoredAccountMeta<'a>);
+    fn next(&mut self) -> Option<Self::Item> {
+        while self.outer_index < self.data.slots_and_accounts.len() {
+            let inner = &self.data.slots_and_accounts[self.outer_index];
+            if self.inner_index < inner.1.len() {
+                let inner = &inner.1[self.inner_index];
+                self.inner_index += 1;
+                return Some((inner.pubkey(), inner));
+            }
+            self.inner_index = 0;
+            self.outer_index += 1;
+        }
+        None
+    }
+}
+
 /// The last parameter exists until this feature is activated:
 ///  ignore slot when calculating an account hash #28420
-impl<'a> StorableAccounts<'a, StoredAccountMeta<'a>> for StorableAccountsBySlot<'a> {
-    fn pubkey(&self, index: usize) -> &Pubkey {
+impl<'a> StorableAccounts<'a, StoredAccountMeta<'a>, Iter5<'a>> for StorableAccountsBySlot<'a> {
+    fn iter(&'a self)-> Iter5<'a>  {Iter5{ data: self, outer_index:0, inner_index: 0}}
+    //type Iter = ();
+        fn pubkey(&self, index: usize) -> &Pubkey {
         self.account(index).pubkey()
     }
     fn account(&self, index: usize) -> &StoredAccountMeta<'a> {
@@ -259,9 +361,30 @@ impl<'a> StorableAccounts<'a, StoredAccountMeta<'a>> for StorableAccountsBySlot<
     }
 }
 
+pub struct Iter1<'a> {
+    data: &'a (
+        Slot,
+        &'a [&'a StoredAccountMeta<'a>],
+        IncludeSlotInHash,
+        Slot,
+    ),
+    index: usize,
+}
+
+impl<'a> Iterator for Iter1<'a> {
+    type Item=(&'a Pubkey, &'a StoredAccountMeta<'a>);
+    fn next(&mut self) -> Option<Self::Item> {
+        (self.index < self.data.len()).then_some({
+            let result = (self.data.pubkey(self.index), self.data.account(self.index));
+            self.index += 1;
+            result
+        })
+    }
+}
+
 /// this tuple contains a single different source slot that applies to all accounts
 /// accounts are StoredAccountMeta
-impl<'a> StorableAccounts<'a, StoredAccountMeta<'a>>
+impl<'a> StorableAccounts<'a, StoredAccountMeta<'a>, Iter1<'a>>
     for (
         Slot,
         &'a [&'a StoredAccountMeta<'a>],
@@ -269,6 +392,8 @@ impl<'a> StorableAccounts<'a, StoredAccountMeta<'a>>
         Slot,
     )
 {
+    fn iter(&'a self)-> Iter1<'a> {Iter1 {data: self, index: 0}}
+
     fn pubkey(&self, index: usize) -> &Pubkey {
         self.account(index).pubkey()
     }

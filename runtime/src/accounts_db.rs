@@ -353,7 +353,7 @@ impl CurrentAncientAppendVec {
         let accounts = accounts_to_store.get(storage_selector);
 
         db.store_accounts_frozen(
-            (
+            &(
                 self.slot(),
                 accounts,
                 INCLUDE_SLOT_IN_HASH_IRRELEVANT_APPEND_VEC_OPERATION,
@@ -3998,7 +3998,7 @@ impl AccountsDb {
             // without use of rather wide locks in this whole function, because we're
             // mutating rooted slots; There should be no writers to them.
             stats_sub.store_accounts_timing = self.store_accounts_frozen(
-                (
+                &(
                     slot,
                     &shrink_collect.alive_accounts.alive_accounts()[..],
                     INCLUDE_SLOT_IN_HASH_IRRELEVANT_APPEND_VEC_OPERATION,
@@ -6108,13 +6108,14 @@ impl AccountsDb {
         'a,
         'b,
         T: ReadableAccount + Sync,
-        U: StorableAccounts<'a, T>,
+        U: StorableAccounts<'a, T, I>,
         V: Borrow<Hash>,
+        I: Iterator<Item=(&'a Pubkey, &'a T)>,
     >(
         &self,
         slot: Slot,
         storage: &AccountStorageEntry,
-        accounts_and_meta_to_store: &StorableAccountsWithHashesAndWriteVersions<'a, 'b, T, U, V>,
+        accounts_and_meta_to_store: &StorableAccountsWithHashesAndWriteVersions<'a, 'b, T, U, V, I>,
     ) -> Vec<AccountInfo> {
         let mut infos: Vec<AccountInfo> = Vec::with_capacity(accounts_and_meta_to_store.len());
         let mut total_append_accounts_us = 0;
@@ -6463,7 +6464,7 @@ impl AccountsDb {
             // irrelevant - account will already be hashed since it was used in bank hash previously
             let include_slot_in_hash = IncludeSlotInHash::IrrelevantAssertOnUse;
             self.store_accounts_frozen(
-                (slot, &accounts[..], include_slot_in_hash),
+                &(slot, &accounts[..], include_slot_in_hash),
                 Some(hashes),
                 &flushed_store,
                 None,
@@ -6481,7 +6482,7 @@ impl AccountsDb {
                     hashes.push(hash);
                 });
                 self.store_accounts_frozen(
-                    (slot, &accounts[..], include_slot_in_hash),
+                    &(slot, &accounts[..], include_slot_in_hash),
                     Some(hashes),
                     &flushed_store,
                     None,
@@ -6567,10 +6568,10 @@ impl AccountsDb {
         }
     }
 
-    fn write_accounts_to_cache<'a, 'b, T: ReadableAccount + Sync, P>(
+    fn write_accounts_to_cache<'a, 'b, T: ReadableAccount + Sync + 'b, P, I: Iterator<Item=(&'b Pubkey, &'b T)>>(
         &self,
         slot: Slot,
-        accounts_and_meta_to_store: &impl StorableAccounts<'b, T>,
+        accounts_and_meta_to_store: &impl StorableAccounts<'b, T, I>,
         txn_iter: Box<dyn std::iter::Iterator<Item = &Option<&SanitizedTransaction>> + 'a>,
         include_slot_in_hash: IncludeSlotInHash,
         mut write_version_producer: P,
@@ -6624,9 +6625,10 @@ impl AccountsDb {
         'c,
         P: Iterator<Item = u64>,
         T: ReadableAccount + Sync + ZeroLamport + 'b,
+        I: Iterator<Item=(&'b Pubkey, &'b T)> + 'b,
     >(
         &self,
-        accounts: &'c impl StorableAccounts<'b, T>,
+        accounts: &'b impl StorableAccounts<'b, T, I>,
         hashes: Option<Vec<impl Borrow<Hash>>>,
         mut write_version_producer: P,
         store_to: &StoreTo,
@@ -6667,7 +6669,7 @@ impl AccountsDb {
                     self.write_accounts_to_storage(
                         slot,
                         storage,
-                        &StorableAccountsWithHashesAndWriteVersions::<'_, '_, _, _, &Hash>::new(
+                        &StorableAccountsWithHashesAndWriteVersions::<'_, '_, _, _, &Hash, _>::new(
                             accounts,
                         ),
                     )
@@ -6690,6 +6692,16 @@ impl AccountsDb {
                             let mut hash_time = Measure::start("hash_accounts");
                             let len = accounts.len();
                             let mut hashes = Vec::with_capacity(len);
+                            for (pubkey, account) in accounts.iter() {
+                                let hash = Self::hash_account(
+                                    slot,
+                                    account,
+                                    pubkey,
+                                    accounts.include_slot_in_hash(),
+                                );
+                                hashes.push(hash);
+                            }
+/*        
                             for index in 0..accounts.len() {
                                 let (pubkey, account) = (accounts.pubkey(index), accounts.account(index));
                                 let hash = Self::hash_account(
@@ -6700,6 +6712,7 @@ impl AccountsDb {
                                 );
                                 hashes.push(hash);
                             }
+                            */
                             hash_time.stop();
                             self.stats
                                 .store_hash_accounts
@@ -7778,10 +7791,10 @@ impl AccountsDb {
         }
     }
 
-    fn update_index<'a, T: ReadableAccount + Sync>(
+    fn update_index<'a, T: ReadableAccount + Sync + 'a, I: Iterator<Item=(&'a Pubkey, &'a T)>>(
         &self,
         infos: Vec<AccountInfo>,
-        accounts: &impl StorableAccounts<'a, T>,
+        accounts: &impl StorableAccounts<'a, T, I>,
         reclaim: UpsertReclaim,
     ) -> SlotList<AccountInfo> {
         let target_slot = accounts.target_slot();
@@ -8158,9 +8171,9 @@ impl AccountsDb {
             .fetch_add(measure.as_us(), Ordering::Relaxed);
     }
 
-    pub fn store_cached<'a, T: ReadableAccount + Sync + ZeroLamport + 'a>(
+    pub fn store_cached<'a, T: ReadableAccount + Sync + ZeroLamport + 'a, I: Iterator<Item=(&'a Pubkey, &'a T)> + 'a>(
         &self,
-        accounts: impl StorableAccounts<'a, T>,
+        accounts: &'a impl StorableAccounts<'a, T, I>,
         transactions: Option<&'a [Option<&'a SanitizedTransaction>]>,
     ) {
         self.store(
@@ -8176,16 +8189,16 @@ impl AccountsDb {
     pub fn store_uncached(&self, slot: Slot, accounts: &[(&Pubkey, &AccountSharedData)]) {
         let storage = self.find_storage_candidate(slot, 1);
         self.store(
-            (slot, accounts, INCLUDE_SLOT_IN_HASH_TESTS),
+            &(slot, accounts, INCLUDE_SLOT_IN_HASH_TESTS),
             &StoreTo::Storage(&storage),
             None,
             StoreReclaims::Default,
         );
     }
 
-    fn store<'a, T: ReadableAccount + Sync + ZeroLamport + 'a>(
+    fn store<'a, T: ReadableAccount + Sync + ZeroLamport + 'a, I: Iterator<Item=(&'a Pubkey, &'a T)> + 'a>(
         &self,
-        accounts: impl StorableAccounts<'a, T>,
+        accounts: &'a impl StorableAccounts<'a, T, I>,
         store_to: &StoreTo,
         transactions: Option<&'a [Option<&'a SanitizedTransaction>]>,
         reclaim: StoreReclaims,
@@ -8341,9 +8354,9 @@ impl AccountsDb {
         }
     }
 
-    fn store_accounts_unfrozen<'a, T: ReadableAccount + Sync + ZeroLamport + 'a>(
+    fn store_accounts_unfrozen<'a, T: ReadableAccount + Sync + ZeroLamport + 'a, I: Iterator<Item=(&'a Pubkey, &'a T)> + 'a>(
         &self,
-        accounts: impl StorableAccounts<'a, T>,
+        accounts: &'a impl StorableAccounts<'a, T, I>,
         hashes: Option<Vec<impl Borrow<Hash>>>,
         store_to: &StoreTo,
         transactions: Option<&'a [Option<&'a SanitizedTransaction>]>,
@@ -8368,9 +8381,9 @@ impl AccountsDb {
         );
     }
 
-    pub(crate) fn store_accounts_frozen<'a, T: ReadableAccount + Sync + ZeroLamport + 'a>(
+    pub(crate) fn store_accounts_frozen<'a, T: ReadableAccount + Sync + ZeroLamport + 'a, I: Iterator<Item=(&'a Pubkey, &'a T)> + 'a>(
         &self,
-        accounts: impl StorableAccounts<'a, T>,
+        accounts: &'a impl StorableAccounts<'a, T, I>,
         hashes: Option<Vec<impl Borrow<Hash>>>,
         storage: &Arc<AccountStorageEntry>,
         write_version_producer: Option<Box<dyn Iterator<Item = StoredMetaWriteVersion>>>,
@@ -8391,9 +8404,9 @@ impl AccountsDb {
         )
     }
 
-    fn store_accounts_custom<'a, T: ReadableAccount + Sync + ZeroLamport + 'a>(
+    fn store_accounts_custom<'a, T: ReadableAccount + Sync + ZeroLamport + 'a, I: Iterator<Item=(&'a Pubkey, &'a T)> + 'a>(
         &self,
-        accounts: impl StorableAccounts<'a, T>,
+        accounts: &'a impl StorableAccounts<'a, T, I>,
         hashes: Option<Vec<impl Borrow<Hash>>>,
         write_version_producer: Option<Box<dyn Iterator<Item = u64>>>,
         store_to: &StoreTo,
@@ -8416,7 +8429,7 @@ impl AccountsDb {
             .fetch_add(accounts.len() as u64, Ordering::Relaxed);
         let mut store_accounts_time = Measure::start("store_accounts");
         let infos = self.store_accounts_to(
-            &accounts,
+            accounts,
             hashes,
             write_version_producer,
             store_to,
@@ -8444,7 +8457,7 @@ impl AccountsDb {
         // after the account are stored by the above `store_accounts_to`
         // call and all the accounts are stored, all reads after this point
         // will know to not check the cache anymore
-        let mut reclaims = self.update_index(infos, &accounts, reclaim);
+        let mut reclaims = self.update_index(infos, accounts, reclaim);
 
         // For each updated account, `reclaims` should only have at most one
         // item (if the account was previously updated in this slot).

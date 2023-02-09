@@ -66,8 +66,9 @@ pub struct StorableAccountsWithHashesAndWriteVersions<
     'a: 'b,
     'b,
     T: ReadableAccount + Sync + 'b,
-    U: StorableAccounts<'a, T>,
+    U: StorableAccounts<'a, T, I>,
     V: Borrow<Hash>,
+    I: Iterator<Item=(&'a Pubkey, &'a T)>,
 > {
     /// accounts to store
     /// always has pubkey and account
@@ -76,10 +77,11 @@ pub struct StorableAccountsWithHashesAndWriteVersions<
     /// if accounts does not have hash and write version, this has a hash and write version per account
     hashes_and_write_versions: Option<(Vec<V>, Vec<StoredMetaWriteVersion>)>,
     _phantom: PhantomData<&'a T>,
+    _phantom2: PhantomData<&'a I>,
 }
 
-impl<'a: 'b, 'b, T: ReadableAccount + Sync + 'b, U: StorableAccounts<'a, T>, V: Borrow<Hash>>
-    StorableAccountsWithHashesAndWriteVersions<'a, 'b, T, U, V>
+impl<'a: 'b, 'b, T: ReadableAccount + Sync + 'b, U: StorableAccounts<'a, T, I>, V: Borrow<Hash>, I: Iterator<Item=(&'a Pubkey, &'a T)>>
+    StorableAccountsWithHashesAndWriteVersions<'a, 'b, T, U, V, I>
 {
     /// used when accounts contains hash and write version already
     pub fn new(accounts: &'b U) -> Self {
@@ -88,6 +90,7 @@ impl<'a: 'b, 'b, T: ReadableAccount + Sync + 'b, U: StorableAccounts<'a, T>, V: 
             accounts,
             hashes_and_write_versions: None,
             _phantom: PhantomData,
+            _phantom2: PhantomData,
         }
     }
     /// used when accounts does NOT contains hash or write version
@@ -104,6 +107,7 @@ impl<'a: 'b, 'b, T: ReadableAccount + Sync + 'b, U: StorableAccounts<'a, T>, V: 
             accounts,
             hashes_and_write_versions: Some((hashes, write_versions)),
             _phantom: PhantomData,
+            _phantom2: PhantomData,
         }
     }
 
@@ -665,11 +669,12 @@ impl AppendVec {
         'a,
         'b,
         T: ReadableAccount + Sync,
-        U: StorableAccounts<'a, T>,
+        U: StorableAccounts<'a, T, I>,
         V: Borrow<Hash>,
+        I: Iterator<Item=(&'a Pubkey, &'a T)>,
     >(
         &self,
-        accounts: &StorableAccountsWithHashesAndWriteVersions<'a, 'b, T, U, V>,
+        accounts: &StorableAccountsWithHashesAndWriteVersions<'a, 'b, T, U, V, I>,
         skip: usize,
     ) -> Option<Vec<usize>> {
         let _lock = self.append_lock.lock().unwrap();
