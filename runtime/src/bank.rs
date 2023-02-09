@@ -861,7 +861,7 @@ impl PartialEq for Bank {
             accounts_data_size_delta_off_chain: _,
             fee_structure: _,
             incremental_snapshot_persistence: _,
-            scheduler2: _,
+            scheduler: _,
             blockhash_override: _,
             // Ignore new fields explicitly if they do not impact PartialEq.
             // Adding ".." will remove compile-time checks that if a new field
@@ -1858,7 +1858,7 @@ pub struct Bank {
 
     pub incremental_snapshot_persistence: Option<BankIncrementalSnapshotPersistence>,
 
-    scheduler2: RwLock<Option<Box<Scheduler<ExecuteTimings>>>>,
+    scheduler: RwLock<Option<Box<Scheduler<ExecuteTimings>>>>,
     pub blockhash_override: RwLock<Option<Hash>>,
 }
 
@@ -2060,7 +2060,7 @@ impl Bank {
             accounts_data_size_delta_on_chain: AtomicI64::new(0),
             accounts_data_size_delta_off_chain: AtomicI64::new(0),
             fee_structure: FeeStructure::default(),
-            scheduler2: RwLock::new(None),
+            scheduler: RwLock::new(None),
             blockhash_override: RwLock::new(Default::default()),
         };
 
@@ -2300,7 +2300,6 @@ impl Bank {
             },
         };
         */
-        let scheduler = RwLock::new(None);
 
         let mut new = Bank {
             incremental_snapshot_persistence: None,
@@ -2383,7 +2382,7 @@ impl Bank {
             accounts_data_size_delta_on_chain: AtomicI64::new(0),
             accounts_data_size_delta_off_chain: AtomicI64::new(0),
             fee_structure: parent.fee_structure.clone(),
-            scheduler2: scheduler,
+            scheduler: RwLock::new(None),
             blockhash_override: RwLock::new(blockhash_override),
         };
 
@@ -2679,7 +2678,7 @@ impl Bank {
             accounts_data_size_delta_on_chain: AtomicI64::new(0),
             accounts_data_size_delta_off_chain: AtomicI64::new(0),
             fee_structure: FeeStructure::default(),
-            scheduler2: RwLock::new(None), // Default::default();Default::default(),
+            scheduler: RwLock::new(None),
             blockhash_override: RwLock::new(Default::default()),
         };
         bank.finish_init(
@@ -4377,7 +4376,7 @@ impl Bank {
             solana_scheduler::Mode::Replaying => {
                 let last_result = self.wait_for_scheduler(false);
                 let scheduler = runner.take_scheduler_from_pool();
-                let mut s2 = self.scheduler2.write().unwrap();
+                let mut s2 = self.scheduler.write().unwrap();
                 *s2 = Some(scheduler);
 
                 // Only acquire the write lock for the blockhash queue on block boundaries because
@@ -6861,7 +6860,7 @@ impl Bank {
             transactions.len()
         );
 
-        let s = self.scheduler2.read().unwrap();
+        let s = self.scheduler.read().unwrap();
         let scheduler = s.as_ref().unwrap();
 
         for (st, i) in transactions.iter().zip(transaction_indexes) {
@@ -6897,7 +6896,7 @@ impl Bank {
         use assert_matches::assert_matches;
         match self.transaction_runner_mode() {
             solana_scheduler::Mode::Banking => {
-                let s = self.scheduler2.read().unwrap();
+                let s = self.scheduler.read().unwrap();
                 let scheduler = s.as_ref().unwrap();
                 scheduler.resume_commit_into_bank(Some(self));
             },
@@ -6908,19 +6907,19 @@ impl Bank {
     }
 
     pub fn sync_transaction_runner_context(self: &Arc<Self>, runner: Arc<Runner>, mode: solana_scheduler::Mode) {
-        let s = self.scheduler2.read().unwrap();
+        let s = self.scheduler.read().unwrap();
         let scheduler = s.as_ref().unwrap();
         scheduler.replace_transaction_runner_context(runner.context(Some(self.clone()), mode));
     }
 
     pub fn transaction_runner(&self) -> Arc<Runner> {
-        let s = self.scheduler2.read().unwrap();
+        let s = self.scheduler.read().unwrap();
         let scheduler = s.as_ref().unwrap();
         scheduler.current_runner()
     }
 
     pub fn transaction_runner_mode(&self) -> solana_scheduler::Mode {
-        let s = self.scheduler2.read().unwrap();
+        let s = self.scheduler.read().unwrap();
         let scheduler = s.as_ref().unwrap();
         scheduler.current_runner_mode()
     }
@@ -8656,13 +8655,13 @@ impl Bank {
     }
 
     pub(crate) fn install_scheduler(&self, scheduler: Box<Scheduler<ExecuteTimings>>) {
-        let mut s = self.scheduler2.write().unwrap();
+        let mut s = self.scheduler.write().unwrap();
         assert!(s.is_none());
         *s = Some(scheduler)
     }
 
     pub fn wait_for_scheduler(&self, via_drop: bool) -> Result<ExecuteTimings> {
-        let mut s = self.scheduler2.write().unwrap();
+        let mut s = self.scheduler.write().unwrap();
         let current_thread_name = std::thread::current().name().unwrap().to_string();
 
         if let Some(scheduler) = s.as_mut() {
@@ -8922,7 +8921,7 @@ impl TotalAccountsStats {
 
 impl Drop for Bank {
     fn drop(&mut self) {
-        if self.scheduler2.read().unwrap().is_some() {
+        if self.scheduler.read().unwrap().is_some() {
             let r = self.wait_for_scheduler(true);
             if let Err(err) = r {
                 warn!(
