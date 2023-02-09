@@ -782,6 +782,6 @@ impl LikeScheduler for Scheduler {
     }
 
     fn take_next_from_pool(&self) -> Box<dyn LikeScheduler> {
-        self.scheduler_pool.take_from_pool()
+        self.scheduler_pool.take_from_pool(self.current_checkpoint.clone_context_value())
     }
 }
