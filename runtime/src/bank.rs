@@ -1890,6 +1890,10 @@ trait ScheduleLike: Send + Sync {
     fn resume_commit_into_bank(&self, bank: Option<&Arc<Bank>>) {
         panic!();
     }
+
+    fn transaction_runner(&self) -> Arc<TransactionRunner> {
+        panic!();
+    }
 }
 
 struct VoteWithStakeDelegations {
