@@ -65,11 +65,11 @@ mod tests {
 
         let instruction_addr = &instruction as *const _ as u64;
 
-        let accounts_ptr = instruction_addr as *const &[AccountMeta; 2];
-        assert_eq!(unsafe { *accounts_ptr }, accounts.as_slice());
+        let accounts_ptr = instruction_addr as *const StableVec<AccountMeta>;
+        assert_eq!(unsafe { &*accounts_ptr }, &accounts);
 
-        let data_ptr = (instruction_addr + 24) as *const &[u8; 5];
-        assert_eq!(unsafe { *data_ptr }, data.as_slice());
+        let data_ptr = (instruction_addr + 24) as *const StableVec<u8>;
+        assert_eq!(unsafe { &*data_ptr }, &data);
 
         let pubkey_ptr = (instruction_addr + 48) as *const Pubkey;
         assert_eq!(unsafe { *pubkey_ptr }, program_id);

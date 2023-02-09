@@ -92,6 +92,8 @@ macro_rules! impl_partial_eq {
     }
 }
 impl_partial_eq! { [] StableVec<T>, StableVec<U> }
+impl_partial_eq! { [] StableVec<T>, Vec<U> }
+impl_partial_eq! { [] Vec<T>, StableVec<U> }
 impl_partial_eq! { [] StableVec<T>, &[U] }
 impl_partial_eq! { [] StableVec<T>, &mut [U] }
 impl_partial_eq! { [] &[T], StableVec<U> }
