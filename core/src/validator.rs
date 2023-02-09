@@ -971,6 +971,7 @@ impl Validator {
             info!("Initialized transaction status sender callback: {:?}", (config.runtime_config.log_messages_bytes_limit, transaction_status_sender));
             initialize_transaction_status_sender_callback(config.runtime_config.log_messages_bytes_limit, transaction_status_sender.clone());
         }
+        bank_forks.install_scheduler_pool(Box::new(solana_transaction_runner::SchedulerPool::new()));
 
         let (replay_vote_sender, replay_vote_receiver) = unbounded();
         let tvu = Tvu::new(
