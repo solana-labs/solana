@@ -953,7 +953,7 @@ struct SchedulerContext {
 
 #[derive(Debug)]
 pub struct TransactionRunner {
-    scheduler_pool: std::sync::Mutex<SchedulerPool<ExecuteTimings>>,
+    scheduler_pool: std::sync::Mutex<SchedulerPool>,
     // poh callback
     // tx status writer
 }
@@ -1670,7 +1670,7 @@ impl<C> Drop for Scheduler<C> {
     }
 }
 
-impl<C> Drop for SchedulerPool<C> {
+impl Drop for SchedulerPool {
     fn drop(&mut self) {
         let current_thread_name = std::thread::current().name().unwrap().to_string();
         warn!("SchedulerPool::drop() by {}...", current_thread_name);
