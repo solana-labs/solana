@@ -1301,13 +1301,13 @@ impl Scheduler<ExecuteTimings> {
                     let details = execution_results[0].details().unwrap();
                     ee.cu = details.executed_units;
                 } else {
-                    let sig = ee.task.tx.0.signature().to_string();
+                    let sig = || ee.task.tx.0.signature().to_string();
                     match mode {
                         solana_scheduler::Mode::Replaying => {
-                            error!("found odd tx error: slot: {}, signature: {}, {:?}", slot, sig, tx_result);
+                            error!("found odd tx error: slot: {}, signature: {}, {:?}", slot, sig(), tx_result);
                         },
                         solana_scheduler::Mode::Banking => {
-                            trace!("found odd tx error: slot: {}, signature: {}, {:?}", slot, sig, tx_result);
+                            trace!("found odd tx error: slot: {}, signature: {}, {:?}", slot, sig(), tx_result);
                         }
                     }
                 };
