@@ -954,7 +954,7 @@ struct RunnerContext {
 }
 
 #[derive(Debug, Default)]
-pub(crate) struct Runner {
+pub struct Runner {
     runner_pool: std::sync::Mutex<SchedulerPool<ExecuteTimings>>,
 }
 
