@@ -6890,10 +6890,10 @@ impl Bank {
         }
     }
 
-    pub fn sync_transaction_runner_context(self: &Arc<Self>, mode: solana_scheduler::Mode) {
+    pub fn sync_transaction_runner_context(self: &Arc<Self>, runner: Arc<Runner>, mode: solana_scheduler::Mode) {
         let s = self.scheduler2.read().unwrap();
         let scheduler = s.as_ref().unwrap();
-        scheduler.replace_transaction_runner_context(self.clone(), mode);
+        scheduler.replace_transaction_runner_context(runner.context(self.clone(), mode));
     }
 
     pub fn transaction_runner_mode(&self) -> solana_scheduler::Mode {
