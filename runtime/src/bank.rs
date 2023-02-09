@@ -6985,7 +6985,7 @@ impl Bank {
         scheduler.replace_scheduler_context(SchedulerContext{ bank: Some(self.clone()), mode});
     }
 
-    pub fn transaction_runner(&self) -> Arc<TransactionRunner> {
+    pub fn transaction_runner(&self) -> ArcPool {
         let s = self.scheduler.read().unwrap();
         let scheduler = s.as_ref().unwrap();
         scheduler.transaction_runner()
