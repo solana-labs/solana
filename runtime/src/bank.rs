@@ -996,7 +996,7 @@ impl SchedulerContext {
 
 #[derive(Debug)]
 struct SchedulerPool {
-    schedulers: Vec<Box<Scheduler<ExecuteTimings>>>,
+    schedulers: Vec<Box<Scheduler>>,
 }
 
 impl SchedulerPool {
