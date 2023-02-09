@@ -1158,7 +1158,7 @@ impl CommitStatus {
     }
 }
 
-impl Scheduler<ExecuteTimings> {
+impl Scheduler {
     fn default2() -> Self {
         let start = Instant::now();
         let mut address_book = solana_scheduler::AddressBook::default();
