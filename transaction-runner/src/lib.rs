@@ -49,7 +49,21 @@ impl SchedulerPool {
         self.schedulers.lock().unwrap().push(Box::new(Scheduler::default2(self.clone())));
     }
 
-    pub fn take_from_pool(self: &Arc<Self>) -> Box<dyn LikeScheduler> {
+}
+
+impl Drop for SchedulerPool {
+    fn drop(&mut self) {
+        let current_thread_name = std::thread::current().name().unwrap().to_string();
+        warn!("SchedulerPool::drop() by {}...", current_thread_name);
+        todo!();
+        //info!("Scheduler::drop(): id_{:016x} begin..", self.random_id);
+        //self.gracefully_stop().unwrap();
+        //info!("Scheduler::drop(): id_{:016x} end...", self.random_id);
+    }
+}
+
+impl LikeSchedulerPool for SchedulerPool {
+    fn take_from_pool(self: &Arc<Self>) -> Box<dyn LikeScheduler> {
         if let Some(scheduler) = self.schedulers.lock().unwrap().pop() {
             trace!(
                 "SchedulerPool: id_{:016x} is taken... len: {} => {}",
@@ -64,7 +78,7 @@ impl SchedulerPool {
         }
     }
 
-    pub fn return_to_pool(&mut self, scheduler: Box<dyn LikeScheduler>) {
+    fn return_to_pool(&mut self, scheduler: Box<dyn LikeScheduler>) {
         trace!(
             "SchedulerPool: id_{:016x} is returned... len: {} => {}",
             scheduler.random_id(),
@@ -82,27 +96,6 @@ impl SchedulerPool {
             .store(false, std::sync::atomic::Ordering::SeqCst);
 
         self.schedulers.lock().unwrap().push(scheduler);
-    }
-}
-
-impl Drop for SchedulerPool {
-    fn drop(&mut self) {
-        let current_thread_name = std::thread::current().name().unwrap().to_string();
-        warn!("SchedulerPool::drop() by {}...", current_thread_name);
-        todo!();
-        //info!("Scheduler::drop(): id_{:016x} begin..", self.random_id);
-        //self.gracefully_stop().unwrap();
-        //info!("Scheduler::drop(): id_{:016x} end...", self.random_id);
-    }
-}
-
-impl LikeSchedulerPool for SchedulerPool {
-    fn take_from_pool(&self, mode: solana_scheduler::Mode) -> Box<dyn LikeScheduler> {
-        panic!();
-    }
-
-    fn return_to_pool(&self, scheduler: Box<dyn LikeScheduler>) {
-        panic!();
     }
 }
 
