@@ -5011,7 +5011,7 @@ impl Bank {
         // If two items are still equal, their relative order does not matter since
         // both refer to the same validator.
         validator_stakes.sort_unstable_by(|(pubkey1, staked1), (pubkey2, staked2)| {
-            staked2.cmp(staked1).then(pubkey2.cmp(pubkey1))
+            (staked1, pubkey1).cmp(&(staked2, pubkey2)).reverse()
         });
 
         let enforce_fix = self.no_overflow_rent_distribution_enabled();
