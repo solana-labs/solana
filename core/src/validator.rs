@@ -973,7 +973,7 @@ impl Validator {
             info!("Initialized transaction status sender callback: {:?}", (config.runtime_config.log_messages_bytes_limit, transaction_status_sender));
             initialize_transaction_status_sender_callback(config.runtime_config.log_messages_bytes_limit, transaction_status_sender.clone());
         }
-        bank_forks.write().unwrap().install_scheduler_pool(SchedulerPool::new_boxed(Some(&poh_recorder)));
+        bank_forks.write().unwrap().install_scheduler_pool(SchedulerPool::new_boxed(Some(&poh_recorder), config.runtime_config.log_messages_bytes_limit, Some(transaction_status_sender.clone())));
 
         let (replay_vote_sender, replay_vote_receiver) = unbounded();
         let tvu = Tvu::new(
