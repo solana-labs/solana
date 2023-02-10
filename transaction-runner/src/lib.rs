@@ -49,6 +49,10 @@ impl SchedulerPool {
     fn prepare_new_scheduler(self: &Arc<Self>, context: SchedulerContext) {
         self.schedulers.lock().unwrap().push(Box::new(Scheduler::spawn(self.clone(), context)));
     }
+
+    fn new_boxed() -> Box<dyn LikeSchedulerPool> {
+        panic!()
+    }
 }
 
 impl Drop for SchedulerPool {
