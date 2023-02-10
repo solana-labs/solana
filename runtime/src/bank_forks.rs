@@ -205,7 +205,7 @@ impl BankForks {
         if let Some(inherited_scheduler) = inherited_scheduler {
             inherited_scheduler.replace_scheduler_context(new_context);
             bank.install_scheduler(inherited_scheduler);
-        } else
+        } else {
             bank.install_scheduler(self.scheduler_pool.as_ref().unwrap().take_from_pool(new_context);
         }
         bank
