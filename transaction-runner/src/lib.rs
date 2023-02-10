@@ -46,7 +46,7 @@ impl SchedulerPool {
         }
     }
 
-    fn create(self: &Arc<Self>, context: SchedulerContext) {
+    fn prepare_new_scheduler(self: &Arc<Self>, context: SchedulerContext) {
         self.schedulers.lock().unwrap().push(Box::new(Scheduler::spawn(self.clone(), context)));
     }
 }
@@ -91,7 +91,7 @@ impl SchedulerPool {
         } else {
             drop(schedulers);
 
-            self.create(context.unwrap());
+            self.prepare_new_scheduler(context.unwrap());
             self.take_from_pool(None)
         }
     }
