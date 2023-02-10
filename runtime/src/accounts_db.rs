@@ -17312,17 +17312,36 @@ pub mod tests {
         one: &[(Pubkey, AccountSharedData)],
         two: &[(Pubkey, AccountSharedData)],
     ) {
+        let mut failures = 0;
         let mut two_indexes = (0..two.len()).collect::<Vec<_>>();
         one.iter().for_each(|(pubkey, account)| {
             for i in 0..two_indexes.len() {
                 let pubkey2 = two[two_indexes[i]].0;
                 if pubkey2 == *pubkey {
-                    assert!(accounts_equal(account, &two[two_indexes[i]].1));
+                    if !accounts_equal(account, &two[two_indexes[i]].1) {
+                        failures += 1;
+                    }
                     two_indexes.remove(i);
                     break;
                 }
             }
         });
+        // helper method to reduce the volume of logged data to help identify differences
+        // modify this when you hit a failure
+        let clean = |accounts: &[(Pubkey, AccountSharedData)]| {
+            accounts
+                .iter()
+                .map(|(_pubkey, account)| account.lamports())
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(
+            failures,
+            0,
+            "one: {:?}, two: {:?}, two_indexes: {:?}",
+            clean(one),
+            clean(two),
+            two_indexes,
+        );
         assert!(
             two_indexes.is_empty(),
             "one: {one:?}, two: {two:?}, two_indexes: {two_indexes:?}"
