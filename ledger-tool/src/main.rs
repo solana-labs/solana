@@ -1330,7 +1330,7 @@ fn minimize_bank_for_snapshot(
     ending_slot: Slot,
 ) {
     let (transaction_account_set, transaction_accounts_measure) = measure!(
-        blockstore.get_accounts_used_in_range(snapshot_slot, ending_slot),
+        blockstore.get_accounts_used_in_range(bank, snapshot_slot, ending_slot),
         "get transaction accounts"
     );
     let total_accounts_len = transaction_account_set.len();
@@ -1910,6 +1910,7 @@ fn main() {
             .arg(&no_snapshot_arg)
             .arg(&account_paths_arg)
             .arg(&accounts_db_skip_initial_hash_calc_arg)
+            .arg(&accountsdb_skip_shrink)
             .arg(&ancient_append_vecs)
             .arg(&hard_forks_arg)
             .arg(&max_genesis_archive_unpacked_size_arg)
@@ -3025,6 +3026,7 @@ fn main() {
                         halt_at_slot: Some(snapshot_slot),
                         poh_verify: false,
                         accounts_db_config: Some(get_accounts_db_config(&ledger_path, arg_matches)),
+                        accounts_db_skip_shrink: arg_matches.is_present("accounts_db_skip_shrink"),
                         ..ProcessOptions::default()
                     },
                     snapshot_archive_path,
