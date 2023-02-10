@@ -346,7 +346,7 @@ impl AccountsDb {
                 // there are accounts with ref_count > 1. This means this account must remain IN this slot.
                 // The same account could exist in a newer or older slot. Moving this account across slots could result
                 // in this alive version of the account now being in a slot OLDER than the non-alive instances.
-                accounts_keep_slots.insert(info.slot, (std::mem::take(many_refs), *info));
+                accounts_keep_slots.insert(info.slot, std::mem::take(many_refs));
             } else {
                 // No alive accounts in this slot have a ref_count > 1. So, ALL alive accounts in this slot can be written to any other slot
                 // we find convenient. There is NO other instance of any account to conflict with.
@@ -419,7 +419,7 @@ struct AccountsToCombine<'a> {
     /// to any slot.
     /// We want to keep the ref_count > 1 accounts by themselves, expecting the multiple ref_counts will be resolved
     /// soon and we can clean the duplicates up (which maybe THIS one).
-    accounts_keep_slots: HashMap<Slot, (AliveAccounts<'a>, &'a SlotInfo)>,
+    accounts_keep_slots: HashMap<Slot, AliveAccounts<'a>>,
     /// all the rest of alive accounts that can move slots and should be combined
     /// This includes all accounts with ref_count = 1 from the slots in 'accounts_keep_slots'
     accounts_to_combine: Vec<ShrinkCollect<'a, ShrinkCollectAliveSeparatedByRefs<'a>>>,
@@ -695,10 +695,7 @@ pub mod tests {
         let (db, _storages, _slots, _infos) = get_sample_storages(0, None);
         let mut write_ancient_accounts = WriteAncientAccounts::default();
         db.write_ancient_accounts_to_same_slot_multiple_refs(
-            AccountsToCombine::default()
-                .accounts_keep_slots
-                .iter()
-                .map(|(_slot, (info, _slot_info))| info),
+            AccountsToCombine::default().accounts_keep_slots.values(),
             &mut write_ancient_accounts,
         );
         assert!(write_ancient_accounts.shrinks_in_progress.is_empty());
@@ -1075,10 +1072,7 @@ pub mod tests {
                 // test write_ancient_accounts_to_same_slot_multiple_refs since we built interesting 'AccountsToCombine'
                 let mut write_ancient_accounts = WriteAncientAccounts::default();
                 db.write_ancient_accounts_to_same_slot_multiple_refs(
-                    accounts_to_combine
-                        .accounts_keep_slots
-                        .iter()
-                        .map(|(_slot, (info, _slot_info))| info),
+                    accounts_to_combine.accounts_keep_slots.values(),
                     &mut write_ancient_accounts,
                 );
                 if two_refs {
@@ -1185,7 +1179,6 @@ pub mod tests {
                 .accounts_keep_slots
                 .get(&slot1)
                 .unwrap()
-                .0
                 .accounts
                 .iter()
                 .map(|meta| meta.pubkey())
@@ -1222,10 +1215,7 @@ pub mod tests {
         // test write_ancient_accounts_to_same_slot_multiple_refs since we built interesting 'AccountsToCombine'
         let mut write_ancient_accounts = WriteAncientAccounts::default();
         db.write_ancient_accounts_to_same_slot_multiple_refs(
-            accounts_to_combine
-                .accounts_keep_slots
-                .iter()
-                .map(|(_slot, (info, _slot_info))| info),
+            accounts_to_combine.accounts_keep_slots.values(),
             &mut write_ancient_accounts,
         );
         assert_eq!(write_ancient_accounts.shrinks_in_progress.len(), num_slots);
