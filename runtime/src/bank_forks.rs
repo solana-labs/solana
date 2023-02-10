@@ -192,7 +192,7 @@ impl BankForks {
         }
     }
 
-    fn add_new_bank(&mut self, bank: Bank, mode: solana_scheduler::Mode, Option<Box<dyn LikeScheduler>>) -> Arc<Bank> {
+    fn add_new_bank(&mut self, bank: Bank, mode: solana_scheduler::Mode, scheduler: Option<Box<dyn LikeScheduler>>) -> Arc<Bank> {
         let bank = Arc::new(bank);
         let prev = self.banks.insert(bank.slot(), bank.clone());
         assert!(prev.is_none());
