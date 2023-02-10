@@ -9,9 +9,7 @@ use {
     solana_core::{
         consensus::Tower, tower_storage::TowerStorage, validator::ValidatorStartProgress,
     },
-    solana_gossip::{
-        cluster_info::ClusterInfo, legacy_contact_info::LegacyContactInfo as ContactInfo,
-    },
+    solana_gossip::{cluster_info::ClusterInfo, contact_info::ContactInfo},
     solana_rpc::rpc::verify_pubkey,
     solana_rpc_client_api::{config::RpcAccountIndex, custom_error::RpcCustomError},
     solana_runtime::{accounts_index::AccountIndex, bank_forks::BankForks},
@@ -24,7 +22,7 @@ use {
         collections::{HashMap, HashSet},
         error,
         fmt::{self, Display},
-        net::SocketAddr,
+        net::{IpAddr, Ipv4Addr, SocketAddr},
         path::{Path, PathBuf},
         sync::{Arc, RwLock},
         thread::{self, Builder},
@@ -91,36 +89,28 @@ pub struct AdminRpcRepairWhitelist {
 }
 
 impl From<ContactInfo> for AdminRpcContactInfo {
-    fn from(contact_info: ContactInfo) -> Self {
-        let ContactInfo {
-            id,
-            gossip,
-            tvu,
-            tvu_forwards,
-            repair,
-            tpu,
-            tpu_forwards,
-            tpu_vote,
-            rpc,
-            rpc_pubsub,
-            serve_repair,
-            wallclock,
-            shred_version,
-        } = contact_info;
+    fn from(node: ContactInfo) -> Self {
+        macro_rules! unwrap_socket {
+            ($name:ident) => {
+                node.$name().unwrap_or_else(|_| {
+                    SocketAddr::new(IpAddr::V4(Ipv4Addr::UNSPECIFIED), /*port:*/ 0u16)
+                })
+            };
+        }
         Self {
-            id: id.to_string(),
-            last_updated_timestamp: wallclock,
-            gossip,
-            tvu,
-            tvu_forwards,
-            repair,
-            tpu,
-            tpu_forwards,
-            tpu_vote,
-            rpc,
-            rpc_pubsub,
-            serve_repair,
-            shred_version,
+            id: node.pubkey().to_string(),
+            last_updated_timestamp: node.wallclock(),
+            gossip: unwrap_socket!(gossip),
+            tvu: unwrap_socket!(tvu),
+            tvu_forwards: unwrap_socket!(tvu_forwards),
+            repair: unwrap_socket!(repair),
+            tpu: unwrap_socket!(tpu),
+            tpu_forwards: unwrap_socket!(tpu_forwards),
+            tpu_vote: unwrap_socket!(tpu_vote),
+            rpc: unwrap_socket!(rpc),
+            rpc_pubsub: unwrap_socket!(rpc_pubsub),
+            serve_repair: unwrap_socket!(serve_repair),
+            shred_version: node.shred_version(),
         }
     }
 }
@@ -693,10 +683,11 @@ mod tests {
         fn start_with_config(config: TestConfig) -> Self {
             let keypair = Arc::new(Keypair::new());
             let cluster_info = Arc::new(ClusterInfo::new(
-                ContactInfo {
-                    id: keypair.pubkey(),
-                    ..ContactInfo::default()
-                },
+                ContactInfo::new(
+                    keypair.pubkey(),
+                    solana_sdk::timing::timestamp(), // wallclock
+                    0u16,                            // shred_version
+                ),
                 keypair,
                 SocketAddrSpace::Unspecified,
             ));
