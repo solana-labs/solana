@@ -1,5 +1,4 @@
 use {
-    super::PreBalanceInfo,
     crate::leader_slot_banking_stage_timing_metrics::LeaderExecuteAndCommitTimings,
     solana_ledger::{
         blockstore_processor::TransactionStatusSender, token_balances::collect_token_balances,
@@ -15,15 +14,24 @@ use {
         transaction_batch::TransactionBatch,
         vote_sender_types::ReplayVoteSender,
     },
-    solana_sdk::saturating_add_assign,
-    solana_transaction_status::token_balances::TransactionTokenBalancesSet,
-    std::sync::Arc,
+    solana_sdk::{pubkey::Pubkey, saturating_add_assign},
+    solana_transaction_status::{
+        token_balances::TransactionTokenBalancesSet, TransactionTokenBalance,
+    },
+    std::{collections::HashMap, sync::Arc},
 };
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum CommitTransactionDetails {
     Committed { compute_units: u64 },
     NotCommitted,
+}
+
+#[derive(Default)]
+pub(super) struct PreBalanceInfo {
+    pub native: Vec<Vec<u64>>,
+    pub token: Vec<Vec<TransactionTokenBalance>>,
+    pub mint_decimals: HashMap<Pubkey, u8>,
 }
 
 pub struct Committer {
