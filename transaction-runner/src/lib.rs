@@ -31,6 +31,7 @@ use solana_metrics::create_counter;
 use solana_measure::measure::Measure;
 use std::sync::RwLock;
 use solana_poh::poh_recorder::PohRecorder;
+use solana_poh::poh_recorder::TransactionRecorder;
 
 struct TransactionRunner(Arc<Bank>, PohRecorder, solana_ledger::blockstore_processor::TransactionStatusSender);
 
