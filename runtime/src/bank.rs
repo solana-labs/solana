@@ -7951,6 +7951,11 @@ impl Bank {
         *s = Some(scheduler)
     }
 
+    pub(crate) fn uninstall_scheduler(&self) -> Box<dyn LikeScheduler> {
+        let mut s = self.scheduler.write().unwrap();
+        *s.take()
+    }
+
     pub fn wait_for_scheduler(&self, via_drop: bool, take_next: bool) -> (Result<ExecuteTimings>, Option<Box<dyn LikeScheduler>>) {
         let mut s = self.scheduler.write().unwrap();
         let current_thread_name = std::thread::current().name().unwrap().to_string();
