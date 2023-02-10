@@ -843,7 +843,7 @@ impl BankingSimulator {
             );
             (exit, r, s, entry_receiver)
         };
-        crate::banking_stage::initialize_poh_callback(&poh_recorder);
+        solana_transaction_runner::initialize_poh_callback(&poh_recorder);
         let target_ns_per_slot = solana_poh::poh_service::PohService::target_ns_per_tick(
             start_bank.ticks_per_slot(),
             genesis_config.poh_config.target_tick_duration.as_nanos() as u64,
