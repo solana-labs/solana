@@ -1164,7 +1164,7 @@ fn load_bank_forks(
             if Blockstore::open_with_options(
                 blockstore.ledger_path(),
                 BlockstoreOptions {
-                    access_type: AccessType::Primary,
+                    access_type: AccessType::PrimaryForMaintenance,
                     ..BlockstoreOptions::default()
                 },
             )
