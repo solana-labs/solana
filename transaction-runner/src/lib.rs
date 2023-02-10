@@ -270,7 +270,7 @@ impl Scheduler {
                 'retry: loop {
                 commit_status.check_and_wait(&mut latest_scheduler_context);
                 if latest_scheduler_context.is_none() {
-                    latest_scheduler_context = latest_checkpoint.unwrap().clone_context_value();
+                    latest_scheduler_context = latest_checkpoint.as_ref().unwrap().clone_context_value();
                 }
 
                 let (mut wall_time, cpu_time) = (Measure::start("process_message_time"), cpu_time::ThreadTime::now());
