@@ -11,7 +11,7 @@ use {
 pub struct PodBool(u8);
 impl From<bool> for PodBool {
     fn from(b: bool) -> Self {
-        Self(if b { 1 } else { 0 })
+        Self(u8::from(b))
     }
 }
 impl From<&PodBool> for bool {
