@@ -51,7 +51,7 @@ impl SchedulerPool {
         Self {
             schedulers: std::sync::Mutex::new(Vec::new()),
             poh: poh_recorder.map(|poh_recorder| {
-                let poh_recorder = poh_recorder.as_ref().unwrap().read().unwrap();
+                let poh_recorder = poh_recorder.read().unwrap();
                 poh_recorder.recorder()
             }),
         }
