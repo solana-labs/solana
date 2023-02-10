@@ -180,7 +180,7 @@ impl CommitStatus {
         }
     }
 
-    fn check_and_wait(&self) {
+    fn check_and_wait(&self, scheduler_context: &mut Option<SchedulerContext>) {
         let mut is_paused = self.is_paused.lock().unwrap();
         if !*is_paused {
             return
@@ -189,6 +189,7 @@ impl CommitStatus {
 
         info!("CommitStatus: {current_thread_name} is paused...");
         self.condvar.wait_while(is_paused, |now_is_paused| *now_is_paused).unwrap();
+        drop(scheduler_context.take());
         info!("CommitStatus: {current_thread_name} is resumed...");
     }
 
@@ -267,9 +268,9 @@ impl Scheduler {
                 solana_scheduler::ExecutablePayload(solana_scheduler::Flushable::Payload(mut ee)) => {
 
                 'retry: loop {
-                commit_status.check_and_wait();
-                if let Some(latest_checkpoint) = latest_checkpoint.take() {
-                    latest_scheduler_context = latest_checkpoint.clone_context_value();
+                commit_status.check_and_wait(&mut latest_scheduler_context);
+                if latest_scheduler_context.is_none() {
+                    latest_scheduler_context = latest_checkpoint.unwrap().clone_context_value();
                 }
 
                 let (mut wall_time, cpu_time) = (Measure::start("process_message_time"), cpu_time::ThreadTime::now());
