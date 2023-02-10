@@ -37,6 +37,7 @@ struct TransactionRunner(Arc<Bank>, solana_poh::poh_recorder::PohRecorder, solan
 #[derive(Debug)]
 pub struct SchedulerPool {
     schedulers: std::sync::Mutex<Vec<Box<dyn LikeScheduler>>>,
+    poh: Option<solana_poh::poh_recorder::PohRecorder>,
 }
 
 impl SchedulerPool {
