@@ -1930,7 +1930,6 @@ pub(crate) struct ShrinkStats {
     num_slots_shrunk: AtomicUsize,
     storage_read_elapsed: AtomicU64,
     index_read_elapsed: AtomicU64,
-    find_alive_elapsed: AtomicU64,
     create_and_insert_store_elapsed: AtomicU64,
     store_accounts_elapsed: AtomicU64,
     update_index_elapsed: AtomicU64,
@@ -2072,13 +2071,6 @@ impl ShrinkAncientStats {
                     "index_read_elapsed",
                     self.shrink_stats
                         .index_read_elapsed
-                        .swap(0, Ordering::Relaxed) as i64,
-                    i64
-                ),
-                (
-                    "find_alive_elapsed",
-                    self.shrink_stats
-                        .find_alive_elapsed
                         .swap(0, Ordering::Relaxed) as i64,
                     i64
                 ),
@@ -4028,26 +4020,15 @@ impl AccountsDb {
             );
         }
 
-        Self::update_shrink_stats(
-            &self.shrink_stats,
-            0, // find_alive_elapsed
-            stats_sub,
-        );
+        Self::update_shrink_stats(&self.shrink_stats, stats_sub);
         self.shrink_stats.report();
     }
 
     #[allow(clippy::too_many_arguments)]
-    pub(crate) fn update_shrink_stats(
-        shrink_stats: &ShrinkStats,
-        find_alive_elapsed_us: u64,
-        stats_sub: ShrinkStatsSub,
-    ) {
+    pub(crate) fn update_shrink_stats(shrink_stats: &ShrinkStats, stats_sub: ShrinkStatsSub) {
         shrink_stats
             .num_slots_shrunk
             .fetch_add(1, Ordering::Relaxed);
-        shrink_stats
-            .find_alive_elapsed
-            .fetch_add(find_alive_elapsed_us, Ordering::Relaxed);
         shrink_stats.create_and_insert_store_elapsed.fetch_add(
             stats_sub.create_and_insert_store_elapsed_us,
             Ordering::Relaxed,
@@ -4542,12 +4523,12 @@ impl AccountsDb {
         // split accounts in 'slot' into:
         // 'Primary', which can fit in 'current_ancient'
         // 'Overflow', which will have to go into a new ancient append vec at 'slot'
-        let (to_store, find_alive_elapsed_us) = measure_us!(AccountsToStore::new(
+        let to_store = AccountsToStore::new(
             available_bytes,
             shrink_collect.alive_accounts.alive_accounts(),
             shrink_collect.alive_total_bytes,
-            slot
-        ));
+            slot,
+        );
 
         ancient_slot_pubkeys.maybe_unref_accounts_already_in_ancient(
             slot,
@@ -4602,11 +4583,7 @@ impl AccountsDb {
         // we should not try to shrink any of the stores from this slot anymore. All shrinking for this slot is now handled by ancient append vec code.
         self.shrink_candidate_slots.lock().unwrap().remove(&slot);
 
-        Self::update_shrink_stats(
-            &self.shrink_ancient_stats.shrink_stats,
-            find_alive_elapsed_us,
-            stats_sub,
-        );
+        Self::update_shrink_stats(&self.shrink_ancient_stats.shrink_stats, stats_sub);
     }
 
     /// each slot in 'dropped_roots' has been combined into an ancient append vec.
