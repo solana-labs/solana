@@ -267,7 +267,7 @@ impl Scheduler {
             if max_thread_priority {
                 thread_priority::set_current_thread_priority(thread_priority::ThreadPriority::Max).unwrap();
             }
-            let (mut latest_checkpoint, mut latest_scheduler_context) = (Some(initial_checkpoint), None::<SchedulerContext>);
+            let (mut latest_checkpoint, mut latest_scheduler_context) = (initial_checkpoint, None::<SchedulerContext>);
 
             'recv: while let Ok(r) = (if thx >= base_thread_count { scheduled_high_ee_receiver.recv() } else { scheduled_ee_receiver.recv()}) {
                 match r {
@@ -276,7 +276,7 @@ impl Scheduler {
                 'retry: loop {
                 commit_status.check_and_wait(&mut latest_scheduler_context);
                 if latest_scheduler_context.is_none() {
-                    latest_scheduler_context = latest_checkpoint.as_ref().unwrap().clone_context_value();
+                    latest_scheduler_context = latest_checkpoint.clone_context_value();
                 }
 
                 let (mut wall_time, cpu_time) = (Measure::start("process_message_time"), cpu_time::ThreadTime::now());
@@ -428,7 +428,7 @@ impl Scheduler {
                 },
                 solana_scheduler::ExecutablePayload(solana_scheduler::Flushable::Flush(checkpoint)) => {
                     checkpoint.wait_for_restart(None);
-                    latest_checkpoint = Some(checkpoint);
+                    latest_checkpoint = checkpoint;
                     latest_scheduler_context = None;
                 }
                 }
