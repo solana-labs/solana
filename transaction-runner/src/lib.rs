@@ -40,7 +40,7 @@ pub struct SchedulerPool {
 }
 
 impl SchedulerPool {
-    pub const fn new() -> Self {
+    pub fn new() -> Self {
         Self {
             schedulers: std::sync::Mutex::new(Vec::new()),
         }
@@ -70,7 +70,7 @@ impl Drop for SchedulerPool {
 pub struct SchedulerPoolWrapper(Arc<SchedulerPool>);
 
 impl SchedulerPoolWrapper {
-    pub const fn new() -> Self {
+    pub fn new() -> Self {
         Self(Arc::new(SchedulerPool::new()))
     }
 }
