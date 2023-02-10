@@ -336,6 +336,7 @@ impl Scheduler {
                                 .collect();
                         if !executed_transactions.is_empty() {
                             let hash = solana_entry::entry::hash_transactions(&executed_transactions);
+                            let a = scheduler_pool.poh_recorder.unwrap().read().unwrap();
                             let poh = POH.read().unwrap();
                             let res = poh.as_ref().unwrap()(bank.as_ref(), executed_transactions, hash);
                             match res {
