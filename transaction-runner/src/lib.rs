@@ -842,6 +842,9 @@ pub fn initialize_transaction_status_sender_callback(log_messages_bytes_limit: O
     });
 }
 
+fn record_transactions() {
+}
+
 pub fn initialize_poh_callback(poh_recorder: &Arc<RwLock<PohRecorder>>) {
     *POH.write().unwrap() = Some({
         let poh_recorder_lock = poh_recorder.clone();
@@ -850,7 +853,7 @@ pub fn initialize_poh_callback(poh_recorder: &Arc<RwLock<PohRecorder>>) {
         let skip_poh = std::env::var("SKIP_POH").is_ok();
         drop(poh_recorder);
 
-        Box::new(move |bank: &Bank, transactions, hash| -> std::result::Result<_, ()> {
+        Box::new(move |bank: &Bank, transactions, hash| -> std::result::Result<usize, ()> {
             if skip_poh {
                 return Ok(Default::default());
             }
