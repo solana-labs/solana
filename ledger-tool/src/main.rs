@@ -1149,11 +1149,31 @@ fn load_bank_forks(
     }
 
     let account_paths = if let Some(account_paths) = arg_matches.value_of("account_paths") {
+        // If this blockstore access is Primary, no other process (solana-validator) can hold
+        // Primary access. So, allow a custom accounts path without worry of wiping the accounts
+        // of solana-validator.
         if !blockstore.is_primary_access() {
-            // Be defensive, when default account dir is explicitly specified, it's still possible
-            // to wipe the dir possibly shared by the running validator!
-            eprintln!("Error: custom accounts path is not supported under secondary access");
-            exit(1);
+            // Attempt to open the Blockstore in Primary access; if successful, no other process
+            // was holding Primary so allow things to proceed with custom accounts path. Release
+            // the Primary access instead of holding it to give priority to solana-validator over
+            // solana-ledger-tool should solana-validator start before we've finished.
+            info!(
+                "Checking if another process currently holding Primary access to {:?}",
+                blockstore.ledger_path()
+            );
+            if Blockstore::open_with_options(
+                blockstore.ledger_path(),
+                BlockstoreOptions {
+                    access_type: AccessType::Primary,
+                    ..BlockstoreOptions::default()
+                },
+            )
+            .is_err()
+            {
+                // Couldn't get Primary access, error out to be defensive.
+                eprintln!("Error: custom accounts path is not supported under secondary access");
+                exit(1);
+            }
         }
         account_paths.split(',').map(PathBuf::from).collect()
     } else if blockstore.is_primary_access() {
