@@ -51,7 +51,7 @@ impl SchedulerPool {
     }
 
     fn new_boxed() -> Box<dyn LikeSchedulerPool> {
-        panic!()
+        Box::new(SchedulerPoolWrapper::new())
     }
 }
 
@@ -70,7 +70,7 @@ impl Drop for SchedulerPool {
 pub struct SchedulerPoolWrapper(Arc<SchedulerPool>);
 
 impl SchedulerPoolWrapper {
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Self(Arc::new(SchedulerPool::new()))
     }
 }
