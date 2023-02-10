@@ -181,7 +181,6 @@ impl<'a> StoreTo<'a> {
 /// alive means in the accounts index
 pub(crate) struct AliveAccounts<'a> {
     /// slot the accounts are currently stored in
-    #[allow(dead_code)]
     pub(crate) slot: Slot,
     pub(crate) accounts: Vec<&'a StoredAccountMeta<'a>>,
     pub(crate) bytes: usize,
