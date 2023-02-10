@@ -7050,6 +7050,7 @@ dependencies = [
 name = "solana-transaction-runner"
 version = "1.16.0"
 dependencies = [
+ "assert_matches",
  "cpu-time",
  "crossbeam-channel",
  "log",
