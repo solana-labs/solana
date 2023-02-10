@@ -201,12 +201,12 @@ impl BankForks {
         for parent in bank.proper_ancestors() {
             self.descendants.entry(parent).or_default().insert(slot);
         }
-        let new_context = SchedulerContext{bank: Some(bank.clone()), mode});
+        let new_context = SchedulerContext{bank: Some(bank.clone()), mode};
         if let Some(inherited_scheduler) = inherited_scheduler {
             inherited_scheduler.replace_scheduler_context(new_context);
             bank.install_scheduler(inherited_scheduler);
         } else {
-            bank.install_scheduler(self.scheduler_pool.as_ref().unwrap().take_from_pool(new_context);
+            bank.install_scheduler(self.scheduler_pool.as_ref().unwrap().take_from_pool(new_context));
         }
         bank
     }
