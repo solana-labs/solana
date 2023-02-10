@@ -192,7 +192,7 @@ impl BankForks {
         }
     }
 
-    fn add_new_bank(&mut self, bank: Bank, mode: solana_scheduler::Mode, scheduler: Option<Box<dyn LikeScheduler>>) -> Arc<Bank> {
+    fn add_new_bank(&mut self, bank: Bank, mode: solana_scheduler::Mode, inherited_scheduler: Option<Box<dyn LikeScheduler>>) -> Arc<Bank> {
         let bank = Arc::new(bank);
         let prev = self.banks.insert(bank.slot(), bank.clone());
         assert!(prev.is_none());
@@ -201,7 +201,13 @@ impl BankForks {
         for parent in bank.proper_ancestors() {
             self.descendants.entry(parent).or_default().insert(slot);
         }
-        bank.install_scheduler(self.scheduler_pool.as_ref().unwrap().take_from_pool(SchedulerContext{bank: Some(bank.clone()), mode}));
+        let new_context = SchedulerContext{bank: Some(bank.clone()), mode});
+        if let Some(inherited_scheduler) = inherited_scheduler {
+            inherited_scheduler.replace_scheduler_context(new_context);
+            bank.install_scheduler(inherited_scheduler);
+        } else
+            bank.install_scheduler(self.scheduler_pool.as_ref().unwrap().take_from_pool(new_context);
+        }
         bank
     }
 
