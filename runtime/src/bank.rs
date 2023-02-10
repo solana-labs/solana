@@ -7951,7 +7951,7 @@ impl Bank {
         *s = Some(scheduler)
     }
 
-    pub(crate) fn uninstall_scheduler(&self) -> Option<Box<dyn LikeScheduler>> {
+    pub fn uninstall_scheduler(&self) -> Option<Box<dyn LikeScheduler>> {
         let mut s = self.scheduler.write().unwrap();
         s.take()
     }
