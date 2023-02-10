@@ -501,13 +501,15 @@ impl<'a> PackedAncientStorage<'a> {
                     }
                 }
 
-                // these accounts belong in the current packed storage we're working on
-                accounts_to_write.push((
-                    alive_accounts.slot,
-                    // maybe all alive accounts from the current or could be partial
-                    &alive_accounts.accounts
-                        [partial_inner_index..partial_inner_index_max_exclusive],
-                ));
+                if partial_inner_index < partial_inner_index_max_exclusive {
+                    // these accounts belong in the current packed storage we're working on
+                    accounts_to_write.push((
+                        alive_accounts.slot,
+                        // maybe all alive accounts from the current or could be partial
+                        &alive_accounts.accounts
+                            [partial_inner_index..partial_inner_index_max_exclusive],
+                    ));
+                }
                 // start next storage with the account we ended with
                 // this could be the end of the current alive accounts or could be anywhere within that vec
                 partial_inner_index = partial_inner_index_max_exclusive;
@@ -846,7 +848,7 @@ pub mod tests {
     fn test_pack_ancient_storages_varying() {
         // n slots
         // different number of accounts in each slot
-        // each account has differet size
+        // each account has different size
         // divide into different ideal sizes so that we combine multiple slots sometimes and combine partial slots
         // compare at end that all accounts are in result exactly once
         solana_logger::setup();
@@ -930,10 +932,25 @@ pub mod tests {
 
                 let largest_account_size = aligned_stored_size(data_size) as u64;
                 // all packed storages should be close to ideal size
-                result.iter().for_each(|packed| {
+                result.iter().enumerate().for_each(|(i, packed)| {
+                    if i + 1 < result.len() && ideal_size > largest_account_size {
+                        // cannot assert this on the last packed storage - it may be small
+                        // cannot assert this when the ideal size is too small to hold the largest account size
+                        assert!(
+                            packed.bytes >= ideal_size - largest_account_size,
+                            "packed size too small: bytes: {}, ideal: {}, largest: {}",
+                            packed.bytes,
+                            ideal_size,
+                            largest_account_size
+                        );
+                    }
                     assert!(
-                        packed.bytes <= ideal_size + largest_account_size,
-                        "bytes: {}, ideal_size: {}, data_size: {}, num_slots: {}, # accounts: {}",
+                        packed.bytes > 0,
+                        "packed size of zero"
+                    );
+                    assert!(
+                        packed.bytes <= ideal_size || packed.accounts.iter().map(|(_slot, accounts)| accounts.len()).sum::<usize>() == 1,
+                        "packed size too large: bytes: {}, ideal_size: {}, data_size: {}, num_slots: {}, # accounts: {}",
                         packed.bytes,
                         ideal_size,
                         data_size,
