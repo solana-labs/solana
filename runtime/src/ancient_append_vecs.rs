@@ -239,11 +239,11 @@ impl AccountsDb {
     fn collect_sort_filter_ancient_slots(
         &self,
         slots: Vec<Slot>,
-        tuning: PackedAncientStorageTuning,
+        tuning: &PackedAncientStorageTuning,
     ) -> AncientSlotInfos {
         let mut ancient_slot_infos = self.calc_ancient_slot_info(slots, tuning.can_randomly_shrink);
 
-        ancient_slot_infos.filter_ancient_slots(&tuning);
+        ancient_slot_infos.filter_ancient_slots(tuning);
         ancient_slot_infos
     }
 
@@ -1077,7 +1077,7 @@ pub mod tests {
                             ideal_storage_size: NonZeroU64::new(1).unwrap(),
                             can_randomly_shrink,
                         };
-                        infos = db.collect_sort_filter_ancient_slots(vec![slot1], tuning);
+                        infos = db.collect_sort_filter_ancient_slots(vec![slot1], &tuning);
                     }
                 }
                 assert_eq!(infos.all_infos.len(), 1);
@@ -1234,7 +1234,7 @@ pub mod tests {
                                 ideal_storage_size: NonZeroU64::new(1).unwrap(),
                                 can_randomly_shrink,
                             };
-                            db.collect_sort_filter_ancient_slots(slot_vec.clone(), tuning)
+                            db.collect_sort_filter_ancient_slots(slot_vec.clone(), &tuning)
                         }
                     };
                     assert_eq!(infos.all_infos.len(), 1, "method: {method:?}");
@@ -1526,7 +1526,7 @@ pub mod tests {
                             can_randomly_shrink,
                         };
                         // note this can sort infos.all_infos
-                        db.collect_sort_filter_ancient_slots(slot_vec.clone(), tuning)
+                        db.collect_sort_filter_ancient_slots(slot_vec.clone(), &tuning)
                     }
                 };
 
