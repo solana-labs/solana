@@ -50,7 +50,7 @@ impl SchedulerPool {
     fn new(poh_recorder: Option<&Arc<RwLock<PohRecorder>>>) -> Self {
         Self {
             schedulers: std::sync::Mutex::new(Vec::new()),
-            poh: poh_recorder.map(|poh_recorder| {
+            transaction_recorder: poh_recorder.map(|poh_recorder| {
                 let poh_recorder = poh_recorder.read().unwrap();
                 poh_recorder.recorder()
             }),
