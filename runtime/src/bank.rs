@@ -5007,8 +5007,10 @@ impl Bank {
         #[cfg(not(test))]
         assert!(!validator_stakes.is_empty());
 
-        // Sort first by stake and then by validator identity pubkey for determinism
-        validator_stakes.sort_by(|(pubkey1, staked1), (pubkey2, staked2)| {
+        // Sort first by stake and then by validator identity pubkey for determinism.
+        // If two items are still equal, their relative order does not matter since
+        // both refer to the same validator.
+        validator_stakes.sort_unstable_by(|(pubkey1, staked1), (pubkey2, staked2)| {
             staked2.cmp(staked1).then(pubkey2.cmp(pubkey1))
         });
 
