@@ -194,8 +194,9 @@ impl CommitStatus {
         let current_thread_name = std::thread::current().name().unwrap().to_string();
 
         info!("CommitStatus: {current_thread_name} is paused...");
-        self.condvar.wait_while(is_paused, |now_is_paused| *now_is_paused).unwrap();
+        // drop arc in scheduler_context as soon as possible
         drop(scheduler_context.take());
+        self.condvar.wait_while(is_paused, |now_is_paused| *now_is_paused).unwrap();
         info!("CommitStatus: {current_thread_name} is resumed...");
     }
 
