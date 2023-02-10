@@ -91,7 +91,7 @@ impl SchedulerPool {
     }
 
     fn return_to_pool(self: &Arc<Self>, scheduler: Box<dyn LikeScheduler>) {
-        let schedulers = self.0.schedulers.lock().unwrap();
+        let schedulers = self.schedulers.lock().unwrap();
 
         trace!(
             "SchedulerPool: id_{:016x} is returned... len: {} => {}",
