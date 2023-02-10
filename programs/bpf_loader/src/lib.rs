@@ -41,9 +41,10 @@ use {
         entrypoint::{HEAP_LENGTH, SUCCESS},
         feature_set::{
             cap_accounts_data_allocations_per_transaction, cap_bpf_program_instruction_accounts,
-            check_slice_translation_size, disable_deploy_of_alloc_free_syscall,
-            enable_bpf_loader_extend_program_ix, enable_bpf_loader_set_authority_checked_ix,
-            enable_program_redeployment_cooldown, limit_max_instruction_trace_length, FeatureSet,
+            check_slice_translation_size, delay_visibility_of_program_deployment,
+            disable_deploy_of_alloc_free_syscall, enable_bpf_loader_extend_program_ix,
+            enable_bpf_loader_set_authority_checked_ix, enable_program_redeployment_cooldown,
+            limit_max_instruction_trace_length, FeatureSet,
         },
         instruction::{AccountMeta, InstructionError},
         loader_instruction::LoaderInstruction,
@@ -232,6 +233,7 @@ pub fn create_executor_from_account(
             // Executor exists and is cached, use it
             Some(Some(executor)) => return Ok((executor, None)),
             // We cached that the Executor does not exist, abort
+            // This case can only happen once delay_visibility_of_program_deployment is active.
             Some(None) => return Err(InstructionError::InvalidAccountData),
             // Nothing cached, try to load from account instead
             None => {}
@@ -255,7 +257,12 @@ pub fn create_executor_from_account(
         false, /* reject_deployment_of_broken_elfs */
     )?;
     if let Some(mut tx_executor_cache) = tx_executor_cache {
-        tx_executor_cache.set(*program.get_key(), executor.clone(), false);
+        tx_executor_cache.set(
+            *program.get_key(),
+            executor.clone(),
+            false,
+            feature_set.is_active(&delay_visibility_of_program_deployment::id()),
+        );
     }
     Ok((executor, Some(create_executor_metrics)))
 }
@@ -263,6 +270,9 @@ pub fn create_executor_from_account(
 macro_rules! deploy_program {
     ($invoke_context:expr, $use_jit:expr, $program_id:expr,
      $drop:expr, $new_programdata:expr $(,)?) => {{
+        let delay_visibility_of_program_deployment = $invoke_context
+            .feature_set
+            .is_active(&delay_visibility_of_program_deployment::id());
         let mut create_executor_metrics = CreateMetrics::default();
         let executor = create_executor_from_bytes(
             &$invoke_context.feature_set,
@@ -276,10 +286,12 @@ macro_rules! deploy_program {
         $drop
         create_executor_metrics.program_id = $program_id.to_string();
         create_executor_metrics.submit_datapoint(&mut $invoke_context.timings);
-        $invoke_context
-            .tx_executor_cache
-            .borrow_mut()
-            .set($program_id, executor, true);
+        $invoke_context.tx_executor_cache.borrow_mut().set(
+            $program_id,
+            executor,
+            true,
+            delay_visibility_of_program_deployment,
+        );
     }};
 }
 

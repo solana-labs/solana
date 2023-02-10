@@ -610,6 +610,10 @@ pub mod prevent_rent_paying_rent_recipients {
     solana_sdk::declare_id!("Fab5oP3DmsLYCiQZXdjyqT3ukFFPrsmqhXU4WU1AWVVF");
 }
 
+pub mod delay_visibility_of_program_deployment {
+    solana_sdk::declare_id!("GmuBvtFb2aHfSfMXpuFeWZGHyDeCLPS79s48fmCWCfM5");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -757,6 +761,7 @@ lazy_static! {
         (remove_congestion_multiplier_from_fee_calculation::id(), "Remove congestion multiplier from transaction fee calculation #29881"),
         (enable_request_heap_frame_ix::id(), "Enable transaction to request heap frame using compute budget instruction #30076"),
         (prevent_rent_paying_rent_recipients::id(), "prevent recipients of rent rewards from ending in rent-paying state #30151"),
+        (delay_visibility_of_program_deployment::id(), "delay visibility of program upgrades #30085"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()

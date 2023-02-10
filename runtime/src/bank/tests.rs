@@ -7716,10 +7716,10 @@ fn test_bank_executor_cache() {
     // do work
     let mut executors =
         TransactionExecutorCache::new((2..3).map(|i| (accounts[i].0, executor.clone())));
-    executors.set(key1, executor.clone(), false);
-    executors.set(key2, executor.clone(), false);
-    executors.set(key3, executor.clone(), true);
-    executors.set(key4, executor.clone(), false);
+    executors.set(key1, executor.clone(), false, true);
+    executors.set(key2, executor.clone(), false, true);
+    executors.set(key3, executor.clone(), true, true);
+    executors.set(key4, executor.clone(), false, true);
     let executors = Rc::new(RefCell::new(executors));
 
     // store Missing
@@ -7810,7 +7810,7 @@ fn test_bank_executor_cow() {
 
     // add one to root bank
     let mut executors = TransactionExecutorCache::default();
-    executors.set(key1, executor.clone(), false);
+    executors.set(key1, executor.clone(), false, true);
     let executors = Rc::new(RefCell::new(executors));
     root.store_executors_which_added_to_the_cache(&executors);
     let executors = root.get_tx_executor_cache(accounts);
@@ -7825,7 +7825,7 @@ fn test_bank_executor_cow() {
     assert_eq!(executors.borrow().visible.len(), 1);
 
     let mut executors = TransactionExecutorCache::default();
-    executors.set(key2, executor.clone(), false);
+    executors.set(key2, executor.clone(), false, true);
     let executors = Rc::new(RefCell::new(executors));
     fork1.store_executors_which_added_to_the_cache(&executors);
 

@@ -43,9 +43,21 @@ impl TransactionExecutorCache {
         self.visible.get(key).cloned()
     }
 
-    pub fn set(&mut self, key: Pubkey, executor: Arc<dyn Executor>, upgrade: bool) {
+    pub fn set(
+        &mut self,
+        key: Pubkey,
+        executor: Arc<dyn Executor>,
+        upgrade: bool,
+        delay_visibility_of_program_deployment: bool,
+    ) {
         if upgrade {
-            self.visible.insert(key, Some(executor.clone()));
+            if delay_visibility_of_program_deployment {
+                // Place a tombstone in the cache so that
+                // we don't load the new version from the database as it should remain invisible
+                self.visible.insert(key, None);
+            } else {
+                self.visible.insert(key, Some(executor.clone()));
+            }
             self.deployments.insert(key, executor);
         } else {
             self.visible.insert(key, Some(executor.clone()));
