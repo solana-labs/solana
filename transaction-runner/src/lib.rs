@@ -801,6 +801,7 @@ use solana_ledger::blockstore_processor::TransactionStatusSender;
 use solana_ledger::token_balances::collect_token_balances;
 
 fn send_transaction_status(Option<(Vec<Vec<u64>>, Vec<Vec<TransactionTokenBalance>>)>, &Arc<Bank>, &TransactionBatch, &mut HashMap<Pubkey, u8>, Option<TransactionResults>, Option<usize>) -> std::option::Option<(Vec<Vec<u64>>, Vec<Vec<TransactionTokenBalance>>)> {
+    panic!();
 }
 
 pub fn initialize_transaction_status_sender_callback(log_messages_bytes_limit: Option<usize>, sender: TransactionStatusSender) {
