@@ -25,6 +25,21 @@ pub use {
     withdraw::{WithdrawData, WithdrawProofContext},
     withdraw_withheld::{WithdrawWithheldTokensData, WithdrawWithheldTokensProofContext},
 };
+use {
+    num_derive::{FromPrimitive, ToPrimitive},
+    solana_program::instruction::InstructionError,
+};
+
+#[derive(Clone, Copy, Debug, FromPrimitive, ToPrimitive, PartialEq, Eq)]
+#[repr(u8)]
+pub enum ProofType {
+    CloseAccount,
+    Withdraw,
+    WithdrawWithheldTokens,
+    Transfer,
+    TransferWithFee,
+    PubkeyValidity,
+}
 
 pub trait ZkProofData: Pod {
     type ProofContext: ZkProofContext;
@@ -35,7 +50,9 @@ pub trait ZkProofData: Pod {
     fn verify_proof(&self) -> Result<(), ProofError>;
 }
 
-pub trait ZkProofContext: Pod {}
+pub trait ZkProofContext: Pod {
+    fn proof_type(&self) -> Result<ProofType, InstructionError>;
+}
 
 #[cfg(not(target_os = "solana"))]
 #[derive(Debug, Copy, Clone)]

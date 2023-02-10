@@ -15,10 +15,11 @@ use {
 };
 use {
     crate::{
-        instruction::{ZkProofContext, ZkProofData},
-        zk_token_elgamal::pod,
+        instruction::{ProofType, ZkProofContext, ZkProofData},
+        zk_token_elgamal::pod::{self, PodProofType},
     },
     bytemuck::{Pod, Zeroable},
+    solana_program::instruction::InstructionError,
 };
 
 #[cfg(not(target_os = "solana"))]
@@ -44,6 +45,9 @@ pub struct WithdrawData {
 #[derive(Clone, Copy, Pod, Zeroable)]
 #[repr(C)]
 pub struct WithdrawProofContext {
+    /// The proof type
+    pub proof_type: PodProofType, // 1 byte
+
     /// The source account ElGamal pubkey
     pub pubkey: pod::ElGamalPubkey, // 32 bytes
 
@@ -75,6 +79,7 @@ impl WithdrawData {
         let pod_final_ciphertext: pod::ElGamalCiphertext = final_ciphertext.into();
 
         let context = WithdrawProofContext {
+            proof_type: ProofType::Withdraw.into(),
             pubkey: pod_pubkey,
             final_ciphertext: pod_final_ciphertext,
         };
@@ -105,7 +110,11 @@ impl ZkProofData for WithdrawData {
     }
 }
 
-impl ZkProofContext for WithdrawProofContext {}
+impl ZkProofContext for WithdrawProofContext {
+    fn proof_type(&self) -> Result<ProofType, InstructionError> {
+        self.proof_type.try_into()
+    }
+}
 
 /// This struct represents the cryptographic proof component that certifies the account's solvency
 /// for withdrawal

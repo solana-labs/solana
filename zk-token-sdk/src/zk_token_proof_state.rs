@@ -1,10 +1,6 @@
 use {
-    crate::{
-        zk_token_elgamal::pod::PodProofType,
-        zk_token_proof_instruction::{ProofType, ZkProofContext},
-    },
+    crate::{zk_token_elgamal::pod::PodBool, zk_token_proof_instruction::ZkProofContext},
     bytemuck::{bytes_of, Pod, Zeroable},
-    num_traits::ToPrimitive,
     solana_program::{
         instruction::{InstructionError, InstructionError::InvalidAccountData},
         pubkey::Pubkey,
@@ -16,10 +12,10 @@ use {
 #[derive(Clone, Copy, Debug, PartialEq)]
 #[repr(C)]
 pub struct ProofContextState<T: ZkProofContext> {
-    /// The zero-knowledge proof type
-    pub proof_type: PodProofType,
     /// The proof context authority that can close the account
     pub context_state_authority: Pubkey,
+    /// If `true`, the proof ocntext account is already initialized
+    pub is_initialized: PodBool,
     /// The proof context data
     pub proof_context: T,
 }
@@ -33,18 +29,43 @@ unsafe impl<T: ZkProofContext> Pod for ProofContextState<T> {}
 
 impl<T: ZkProofContext> ProofContextState<T> {
     pub fn encode(
-        proof_type: ProofType,
         context_state_authority: &Pubkey,
+        is_initialized: bool,
         proof_context: &T,
     ) -> Vec<u8> {
         let mut buf = Vec::with_capacity(size_of::<Self>());
-        buf.push(ToPrimitive::to_u8(&proof_type).unwrap());
         buf.extend_from_slice(context_state_authority.as_ref());
+        buf.push(is_initialized as u8);
         buf.extend_from_slice(bytes_of(proof_context));
         buf
     }
 
+    /// Interpret a slice as a `ProofContextState`.
+    ///
+    /// This function requires a generic parameter. To access only the generic-independent fields
+    /// in `ProofContextState` without a generic parameter, use
+    /// `ProofContextStateMeta::try_from_bytes` instead.
     pub fn try_from_bytes(input: &[u8]) -> Result<&Self, InstructionError> {
         bytemuck::try_from_bytes(input).map_err(|_| InvalidAccountData)
+    }
+}
+
+/// The `ProofContextState` without the proof context itself. This struct exists to facilitate the
+/// decoding of generic-independent fields in `ProofContextState`.
+#[derive(Clone, Copy, Debug, PartialEq, Pod, Zeroable)]
+#[repr(C)]
+pub struct ProofContextStateMeta {
+    /// The proof context authority that can close the account
+    pub context_state_authority: Pubkey,
+    /// If `true`, the proof ocntext account is already initialized
+    pub is_initialized: PodBool,
+}
+
+impl ProofContextStateMeta {
+    pub fn try_from_bytes(input: &[u8]) -> Result<&Self, InstructionError> {
+        input
+            .get(..size_of::<ProofContextStateMeta>())
+            .and_then(|data| bytemuck::try_from_bytes(data).ok())
+            .ok_or(InvalidAccountData)
     }
 }

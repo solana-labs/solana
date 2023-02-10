@@ -8,6 +8,26 @@ use {
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Pod, Zeroable)]
 #[repr(transparent)]
+pub struct PodBool(u8);
+impl From<bool> for PodBool {
+    fn from(b: bool) -> Self {
+        Self(if b { 1 } else { 0 })
+    }
+}
+impl From<&PodBool> for bool {
+    fn from(b: &PodBool) -> Self {
+        b.0 != 0
+    }
+}
+
+impl From<PodBool> for bool {
+    fn from(b: PodBool) -> Self {
+        b.0 != 0
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Pod, Zeroable)]
+#[repr(transparent)]
 pub struct PodU16([u8; 2]);
 impl From<u16> for PodU16 {
     fn from(n: u16) -> Self {
@@ -46,7 +66,7 @@ impl TryFrom<PodProofType> for ProofType {
     type Error = InstructionError;
 
     fn try_from(pod: PodProofType) -> Result<Self, Self::Error> {
-        FromPrimitive::from_u8(pod.0).ok_or(Self::Error::InvalidInstructionData)
+        FromPrimitive::from_u8(pod.0).ok_or(Self::Error::InvalidAccountData)
     }
 }
 

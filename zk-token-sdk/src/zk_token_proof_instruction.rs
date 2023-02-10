@@ -1,54 +1,18 @@
 ///! Instructions provided by the ZkToken Proof program
 pub use crate::instruction::*;
 use {
-    crate::zk_token_elgamal::pod::PodProofType,
-    bytemuck::{bytes_of, Pod, Zeroable},
+    bytemuck::bytes_of,
     num_derive::{FromPrimitive, ToPrimitive},
     num_traits::{FromPrimitive, ToPrimitive},
     solana_program::{
-        instruction::{
-            AccountMeta, Instruction,
-            InstructionError::{self, InvalidInstructionData},
-        },
+        instruction::{AccountMeta, Instruction},
         pubkey::Pubkey,
     },
-    std::mem::size_of,
 };
 
 #[derive(Clone, Copy, Debug, FromPrimitive, ToPrimitive, PartialEq, Eq)]
 #[repr(u8)]
-pub enum ProofType {
-    /// Empty proof type used to distinguish if a proof context account is initialized
-    Uninitialized,
-    CloseAccount,
-    Withdraw,
-    WithdrawWithheldTokens,
-    Transfer,
-    TransferWithFee,
-    PubkeyValidity,
-}
-
-#[derive(Clone, Copy, Debug, FromPrimitive, ToPrimitive, PartialEq, Eq)]
-#[repr(u8)]
 pub enum ProofInstruction {
-    /// Verify a zero-knowledge proof data.
-    ///
-    /// This instruction can be configured to optionally create a proof context state account.
-    ///
-    /// Accounts expected by this instruction:
-    ///
-    ///   * Creating a proof context account
-    ///   0. `[writable]` The proof context account
-    ///   1. `[]` The proof context account authority
-    ///
-    ///   * Otherwise
-    ///   None
-    ///
-    /// Data expected by this instruction:
-    ///   `VerifyProofData`
-    ///
-    VerifyProof,
-
     /// Close a zero-knowledge proof context state.
     ///
     /// Accounts expected by this instruction:
@@ -57,44 +21,117 @@ pub enum ProofInstruction {
     ///   2. `[signer]` The context account's owner
     ///
     /// Data expected by this instruction:
-    ///   `ProofType`
+    ///   None
     ///
     CloseContextState,
-}
 
-/// Data expected by `ProofInstruction::VerifyProof`.
-#[derive(Clone, Copy, Debug, PartialEq)]
-#[repr(C)]
-pub struct VerifyProofData<T: ZkProofData> {
-    /// The zero-knowledge proof type to verify
-    pub proof_type: PodProofType,
-    /// The proof data that contains the zero-knowledge proof and its context
-    pub proof_data: T,
-}
-
-// `bytemuck::Pod` cannot be derived for generic structs unless the struct is marked
-// `repr(packed)`, which may cause unnecessary complications when referencing its fields. Directly
-// mark `VerifyProofData` as `Zeroable` and `Pod` since since none of its fields has an alignment
-// requirement greater than 1 and therefore, guaranteed to be `packed`.
-unsafe impl<T: ZkProofData> Zeroable for VerifyProofData<T> {}
-unsafe impl<T: ZkProofData> Pod for VerifyProofData<T> {}
-
-impl<T: ZkProofData> VerifyProofData<T> {
-    /// Serializes `VerifyProofData`.
+    /// Verify a close account zero-knowledge proof.
     ///
-    /// A `VerifyProofData::encode(&self)` syntax could force the caller to make unnecessary copy of
-    /// `T: ZkProofData`, which can be quite large. This syntax takes in references to the
-    /// individual `VerifyProofData` components to provide flexibility to the caller.
-    pub fn encode(proof_type: ProofType, proof_data: &T) -> Vec<u8> {
-        let mut buf = Vec::with_capacity(size_of::<Self>());
-        buf.push(ToPrimitive::to_u8(&proof_type).unwrap());
-        buf.extend_from_slice(bytes_of(proof_data));
-        buf
-    }
+    /// This instruction can be configured to optionally create a proof context state account.
+    ///
+    /// Accounts expected by this instruction:
+    ///
+    ///   * Creating a proof context account
+    ///   0. `[writable]` The proof context account
+    ///   1. `[]` The proof context account owner
+    ///
+    ///   * Otherwise
+    ///   None
+    ///
+    /// Data expected by this instruction:
+    ///   `CloseAccountData`
+    ///
+    VerifyCloseAccount,
 
-    pub fn try_from_bytes(input: &[u8]) -> Result<&Self, InstructionError> {
-        bytemuck::try_from_bytes(input).map_err(|_| InvalidInstructionData)
-    }
+    /// Verify a withdraw zero-knowledge proof.
+    ///
+    /// This instruction can be configured to optionally create a proof context state account.
+    ///
+    /// Accounts expected by this instruction:
+    ///
+    ///   * Creating a proof context account
+    ///   0. `[writable]` The proof context account
+    ///   1. `[]` The proof context account owner
+    ///
+    ///   * Otherwise
+    ///   None
+    ///
+    /// Data expected by this instruction:
+    ///   `WithdrawData`
+    ///
+    VerifyWithdraw,
+
+    /// Verify a withdraw withheld tokens zero-knowledge proof.
+    ///
+    /// This instruction can be configured to optionally create a proof context state account.
+    ///
+    /// Accounts expected by this instruction:
+    ///
+    ///   * Creating a proof context account
+    ///   0. `[writable]` The proof context account
+    ///   1. `[]` The proof context account owner
+    ///
+    ///   * Otherwise
+    ///   None
+    ///
+    /// Data expected by this instruction:
+    ///   `WithdrawWithheldTokensData`
+    ///
+    VerifyWithdrawWithheldTokens,
+
+    /// Verify a transfer zero-knowledge proof.
+    ///
+    /// This instruction can be configured to optionally create a proof context state account.
+    ///
+    /// Accounts expected by this instruction:
+    ///
+    ///   * Creating a proof context account
+    ///   0. `[writable]` The proof context account
+    ///   1. `[]` The proof context account owner
+    ///
+    ///   * Otherwise
+    ///   None
+    ///
+    /// Data expected by this instruction:
+    ///   `TransferData`
+    ///
+    VerifyTransfer,
+
+    /// Verify a transfer with fee zero-knowledge proof.
+    ///
+    /// This instruction can be configured to optionally create a proof context state account.
+    ///
+    /// Accounts expected by this instruction:
+    ///
+    ///   * Creating a proof context account
+    ///   0. `[writable]` The proof context account
+    ///   1. `[]` The proof context account owner
+    ///
+    ///   * Otherwise
+    ///   None
+    ///
+    /// Data expected by this instruction:
+    ///   `TransferWithFeeData`
+    ///
+    VerifyTransferWithFee,
+
+    /// Verify a pubkey validity zero-knowledge proof.
+    ///
+    /// This instruction can be configured to optionally create a proof context state account.
+    ///
+    /// Accounts expected by this instruction:
+    ///
+    ///   * Creating a proof context account
+    ///   0. `[writable]` The proof context account
+    ///   1. `[]` The proof context account owner
+    ///
+    ///   * Otherwise
+    ///   None
+    ///
+    /// Data expected by this instruction:
+    ///   `PubkeyValidityData`
+    ///
+    VerifyPubkeyValidity,
 }
 
 /// Pubkeys associated with a context state account to be used as parameters to functions.
@@ -104,39 +141,10 @@ pub struct ContextStateInfo<'a> {
     pub context_state_authority: &'a Pubkey,
 }
 
-// Create a `VerifyProof` instruction.
-pub fn verify_proof<T: ZkProofData>(
-    proof_type: ProofType,
-    context_state_info: Option<ContextStateInfo>,
-    proof_data: &T,
-) -> Instruction {
-    let accounts = if let Some(context_state_info) = context_state_info {
-        vec![
-            AccountMeta::new(*context_state_info.context_state_account, false),
-            AccountMeta::new_readonly(*context_state_info.context_state_authority, false),
-        ]
-    } else {
-        vec![]
-    };
-
-    let data = [
-        vec![ToPrimitive::to_u8(&ProofInstruction::VerifyProof).unwrap()],
-        VerifyProofData::encode(proof_type, proof_data),
-    ]
-    .concat();
-
-    Instruction {
-        program_id: crate::zk_token_proof_program::id(),
-        accounts,
-        data,
-    }
-}
-
-// Create a `CloseContextState` instruction.
+/// Create a `CloseContextState` instruction.
 pub fn close_context_state(
     context_state_info: ContextStateInfo,
     destination_account: &Pubkey,
-    proof_type: ProofType,
 ) -> Instruction {
     let accounts = vec![
         AccountMeta::new(*context_state_info.context_state_account, false),
@@ -144,10 +152,7 @@ pub fn close_context_state(
         AccountMeta::new_readonly(*context_state_info.context_state_authority, true),
     ];
 
-    let data = vec![
-        ToPrimitive::to_u8(&ProofInstruction::CloseContextState).unwrap(),
-        ToPrimitive::to_u8(&proof_type).unwrap(),
-    ];
+    let data = vec![ToPrimitive::to_u8(&ProofInstruction::CloseContextState).unwrap()];
 
     Instruction {
         program_id: crate::zk_token_proof_program::id(),
@@ -156,16 +161,89 @@ pub fn close_context_state(
     }
 }
 
+/// Create a `VerifyCloseAccount` instruction.
+pub fn verify_close_account(
+    context_state_info: Option<ContextStateInfo>,
+    proof_data: &CloseAccountData,
+) -> Instruction {
+    ProofInstruction::VerifyCloseAccount.encode_verify_proof(context_state_info, proof_data)
+}
+
+/// Create a `VerifyWithdraw` instruction.
+pub fn verify_withdraw(
+    context_state_info: Option<ContextStateInfo>,
+    proof_data: &WithdrawData,
+) -> Instruction {
+    ProofInstruction::VerifyWithdraw.encode_verify_proof(context_state_info, proof_data)
+}
+
+/// Create a `VerifyWithdrawWithheldTokens` instruction.
+pub fn verify_withdraw_withheld_tokens(
+    context_state_info: Option<ContextStateInfo>,
+    proof_data: &WithdrawWithheldTokensData,
+) -> Instruction {
+    ProofInstruction::VerifyWithdrawWithheldTokens
+        .encode_verify_proof(context_state_info, proof_data)
+}
+
+/// Create a `VerifyTransfer` instruction.
+pub fn verify_transfer(
+    context_state_info: Option<ContextStateInfo>,
+    proof_data: &TransferData,
+) -> Instruction {
+    ProofInstruction::VerifyTransfer.encode_verify_proof(context_state_info, proof_data)
+}
+
+/// Create a `VerifyTransferWithFee` instruction.
+pub fn verify_transfer_with_fee(
+    context_state_info: Option<ContextStateInfo>,
+    proof_data: &TransferWithFeeData,
+) -> Instruction {
+    ProofInstruction::VerifyTransferWithFee.encode_verify_proof(context_state_info, proof_data)
+}
+
+/// Create a `VerifyPubkeyValidity` instruction.
+pub fn verify_pubkey_validity(
+    context_state_info: Option<ContextStateInfo>,
+    proof_data: &PubkeyValidityData,
+) -> Instruction {
+    ProofInstruction::VerifyPubkeyValidity.encode_verify_proof(context_state_info, proof_data)
+}
+
 impl ProofInstruction {
+    pub fn encode_verify_proof<T: ZkProofData>(
+        &self,
+        context_state_info: Option<ContextStateInfo>,
+        proof_data: &T,
+    ) -> Instruction {
+        let accounts = if let Some(context_state_info) = context_state_info {
+            vec![
+                AccountMeta::new(*context_state_info.context_state_account, false),
+                AccountMeta::new_readonly(*context_state_info.context_state_authority, false),
+            ]
+        } else {
+            vec![]
+        };
+
+        let mut data = vec![ToPrimitive::to_u8(self).unwrap()];
+        data.extend_from_slice(bytes_of(proof_data));
+
+        Instruction {
+            program_id: crate::zk_token_proof_program::id(),
+            accounts,
+            data,
+        }
+    }
+
     pub fn instruction_type(input: &[u8]) -> Option<Self> {
         input
             .first()
             .and_then(|instruction| FromPrimitive::from_u8(*instruction))
     }
 
-    pub fn proof_type(input: &[u8]) -> Option<ProofType> {
+    pub fn proof_data<T: ZkProofData>(input: &[u8]) -> Option<&T> {
         input
-            .get(1)
-            .and_then(|proof_type| FromPrimitive::from_u8(*proof_type))
+            .get(1..)
+            .and_then(|data| bytemuck::try_from_bytes(data).ok())
     }
 }

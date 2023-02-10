@@ -11,10 +11,11 @@ use {
 };
 use {
     crate::{
-        instruction::{ZkProofContext, ZkProofData},
-        zk_token_elgamal::pod,
+        instruction::{ProofType, ZkProofContext, ZkProofData},
+        zk_token_elgamal::pod::{self, PodProofType},
     },
     bytemuck::{Pod, Zeroable},
+    solana_program::instruction::InstructionError,
 };
 
 /// This struct includes the cryptographic proof *and* the account data information needed to
@@ -36,6 +37,9 @@ pub struct PubkeyValidityData {
 #[derive(Clone, Copy, Pod, Zeroable)]
 #[repr(C)]
 pub struct PubkeyValidityProofContext {
+    /// The proof type
+    pub proof_type: PodProofType, // 1 byte
+
     /// The public key to be proved
     pub pubkey: pod::ElGamalPubkey, // 32 bytes
 }
@@ -45,7 +49,10 @@ impl PubkeyValidityData {
     pub fn new(keypair: &ElGamalKeypair) -> Result<Self, ProofError> {
         let pod_pubkey = pod::ElGamalPubkey(keypair.public.to_bytes());
 
-        let context = PubkeyValidityProofContext { pubkey: pod_pubkey };
+        let context = PubkeyValidityProofContext {
+            proof_type: ProofType::PubkeyValidity.into(),
+            pubkey: pod_pubkey,
+        };
 
         let mut transcript = PubkeyValidityProof::transcript_new(&pod_pubkey);
         let proof = PubkeyValidityProof::new(keypair, &mut transcript);
@@ -69,7 +76,11 @@ impl ZkProofData for PubkeyValidityData {
     }
 }
 
-impl ZkProofContext for PubkeyValidityProofContext {}
+impl ZkProofContext for PubkeyValidityProofContext {
+    fn proof_type(&self) -> Result<ProofType, InstructionError> {
+        self.proof_type.try_into()
+    }
+}
 
 #[derive(Clone, Copy, Pod, Zeroable)]
 #[repr(C)]

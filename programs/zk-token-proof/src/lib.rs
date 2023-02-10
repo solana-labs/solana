@@ -8,8 +8,9 @@ use {
         system_program,
     },
     solana_zk_token_sdk::{
-        zk_token_proof_instruction::*, zk_token_proof_program::id,
-        zk_token_proof_state::ProofContextState,
+        zk_token_proof_instruction::*,
+        zk_token_proof_program::id,
+        zk_token_proof_state::{ProofContextState, ProofContextStateMeta},
     },
     std::result::Result,
 };
@@ -20,10 +21,10 @@ fn process_verify_proof<T: Pod + ZkProofData>(
     let transaction_context = &invoke_context.transaction_context;
     let instruction_context = transaction_context.get_current_instruction_context()?;
     let instruction_data = instruction_context.get_instruction_data();
-
-    // will not panic since the first two bytes are checked earlier by the caller
-    let verify_proof_data = VerifyProofData::<T>::try_from_bytes(&instruction_data[1..])?;
-    let proof_data = &verify_proof_data.proof_data;
+    let proof_data = ProofInstruction::proof_data::<T>(instruction_data).ok_or_else(|| {
+        ic_msg!(invoke_context, "invalid proof data");
+        InstructionError::InvalidInstructionData
+    })?;
 
     proof_data.verify_proof().map_err(|err| {
         ic_msg!(invoke_context, "proof_verification failed: {:?}", err);
@@ -43,17 +44,15 @@ fn process_verify_proof<T: Pod + ZkProofData>(
             return Err(InstructionError::InvalidAccountOwner);
         }
 
-        let proof_context_state =
-            ProofContextState::<T::ProofContext>::try_from_bytes(proof_context_account.get_data())?;
-        if proof_context_state.proof_type != ProofType::Uninitialized.into() {
+        let proof_context_state_meta =
+            ProofContextStateMeta::try_from_bytes(proof_context_account.get_data())?;
+
+        if proof_context_state_meta.is_initialized.into() {
             return Err(InstructionError::AccountAlreadyInitialized);
         }
 
-        let context_state_data = ProofContextState::encode(
-            verify_proof_data.proof_type.try_into()?,
-            &context_state_authority,
-            proof_data.context_data(),
-        );
+        let context_state_data =
+            ProofContextState::encode(&context_state_authority, true, proof_data.context_data());
 
         if proof_context_account.get_data().len() != context_state_data.len() {
             return Err(InstructionError::InvalidAccountData);
@@ -65,9 +64,7 @@ fn process_verify_proof<T: Pod + ZkProofData>(
     Ok(())
 }
 
-fn process_close_proof_context<T: Pod + ZkProofContext>(
-    invoke_context: &mut InvokeContext,
-) -> Result<(), InstructionError> {
+fn process_close_proof_context(invoke_context: &mut InvokeContext) -> Result<(), InstructionError> {
     let transaction_context = &invoke_context.transaction_context;
     let instruction_context = transaction_context.get_current_instruction_context()?;
 
@@ -93,9 +90,9 @@ fn process_close_proof_context<T: Pod + ZkProofContext>(
 
     let mut proof_context_account =
         instruction_context.try_borrow_instruction_account(transaction_context, 0)?;
-    let proof_context_state =
-        ProofContextState::<T>::try_from_bytes(proof_context_account.get_data())?;
-    let expected_owner_pubkey = proof_context_state.context_state_authority;
+    let proof_context_state_meta =
+        ProofContextStateMeta::try_from_bytes(proof_context_account.get_data())?;
+    let expected_owner_pubkey = proof_context_state_meta.context_state_authority;
 
     if owner_pubkey != expected_owner_pubkey {
         return Err(InstructionError::InvalidAccountOwner);
@@ -128,69 +125,35 @@ pub fn process_instruction(invoke_context: &mut InvokeContext) -> Result<(), Ins
     let instruction_data = instruction_context.get_instruction_data();
     let instruction = ProofInstruction::instruction_type(instruction_data)
         .ok_or(InstructionError::InvalidInstructionData)?;
-    let proof_type = ProofInstruction::proof_type(instruction_data)
-        .ok_or(InstructionError::InvalidInstructionData)?;
 
     match instruction {
-        ProofInstruction::VerifyProof => match proof_type {
-            ProofType::Uninitialized => {
-                ic_msg!(invoke_context, "Uninitialized proof type not supported");
-                Err(InstructionError::InvalidInstructionData)
-            }
-            ProofType::CloseAccount => {
-                ic_msg!(invoke_context, "VerifyProof CloseAccount");
-                process_verify_proof::<CloseAccountData>(invoke_context)
-            }
-            ProofType::Withdraw => {
-                ic_msg!(invoke_context, "VerifyProof Withdraw");
-                process_verify_proof::<WithdrawData>(invoke_context)
-            }
-            ProofType::WithdrawWithheldTokens => {
-                ic_msg!(invoke_context, "VerifyProof WithdrawWithheldTokens");
-                process_verify_proof::<WithdrawWithheldTokensData>(invoke_context)
-            }
-            ProofType::Transfer => {
-                ic_msg!(invoke_context, "VerifyProof Transfer");
-                process_verify_proof::<TransferData>(invoke_context)
-            }
-            ProofType::TransferWithFee => {
-                ic_msg!(invoke_context, "VerifyProof TransferWithFee");
-                process_verify_proof::<TransferWithFeeData>(invoke_context)
-            }
-            ProofType::PubkeyValidity => {
-                ic_msg!(invoke_context, "VerifyProof PubkeyValidity");
-                process_verify_proof::<PubkeyValidityData>(invoke_context)
-            }
-        },
-        ProofInstruction::CloseContextState => match proof_type {
-            ProofType::Uninitialized => {
-                ic_msg!(invoke_context, "Uninitialized proof type not supported");
-                Err(InstructionError::InvalidInstructionData)
-            }
-            ProofType::CloseAccount => {
-                ic_msg!(invoke_context, "CloseContextState CloseAccount");
-                process_close_proof_context::<CloseAccountProofContext>(invoke_context)
-            }
-            ProofType::Withdraw => {
-                ic_msg!(invoke_context, "CloseContextState Withdraw");
-                process_close_proof_context::<WithdrawProofContext>(invoke_context)
-            }
-            ProofType::WithdrawWithheldTokens => {
-                ic_msg!(invoke_context, "CloseContextState WithdrawWithheldTokens");
-                process_close_proof_context::<WithdrawWithheldTokensProofContext>(invoke_context)
-            }
-            ProofType::Transfer => {
-                ic_msg!(invoke_context, "CloseContextState Transfer");
-                process_close_proof_context::<TransferProofContext>(invoke_context)
-            }
-            ProofType::TransferWithFee => {
-                ic_msg!(invoke_context, "CloseContextState TransferWithFee");
-                process_close_proof_context::<TransferWithFeeProofContext>(invoke_context)
-            }
-            ProofType::PubkeyValidity => {
-                ic_msg!(invoke_context, "CloseContextState PubkeyValidity");
-                process_close_proof_context::<PubkeyValidityProofContext>(invoke_context)
-            }
-        },
+        ProofInstruction::CloseContextState => {
+            ic_msg!(invoke_context, "CloseContextState");
+            process_close_proof_context(invoke_context)
+        }
+        ProofInstruction::VerifyCloseAccount => {
+            ic_msg!(invoke_context, "VerifyCloseAccount");
+            process_verify_proof::<CloseAccountData>(invoke_context)
+        }
+        ProofInstruction::VerifyWithdraw => {
+            ic_msg!(invoke_context, "VerifyWithdraw");
+            process_verify_proof::<WithdrawData>(invoke_context)
+        }
+        ProofInstruction::VerifyWithdrawWithheldTokens => {
+            ic_msg!(invoke_context, "VerifyWithdrawWithheldTokens");
+            process_verify_proof::<WithdrawWithheldTokensData>(invoke_context)
+        }
+        ProofInstruction::VerifyTransfer => {
+            ic_msg!(invoke_context, "VerifyTransfer");
+            process_verify_proof::<TransferData>(invoke_context)
+        }
+        ProofInstruction::VerifyTransferWithFee => {
+            ic_msg!(invoke_context, "VerifyTransferWithFee");
+            process_verify_proof::<TransferWithFeeData>(invoke_context)
+        }
+        ProofInstruction::VerifyPubkeyValidity => {
+            ic_msg!(invoke_context, "VerifyPubkeyValidity");
+            process_verify_proof::<PubkeyValidityData>(invoke_context)
+        }
     }
 }

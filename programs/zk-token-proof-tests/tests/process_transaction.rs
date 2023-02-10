@@ -15,14 +15,13 @@ use {
     std::mem::size_of,
 };
 
-const PROOF_TYPES: [ProofType; 7] = [
-    ProofType::Uninitialized,
-    ProofType::CloseAccount,
-    ProofType::Withdraw,
-    ProofType::WithdrawWithheldTokens,
-    ProofType::Transfer,
-    ProofType::TransferWithFee,
-    ProofType::PubkeyValidity,
+const VERIFY_INSTRUCTION_TYPES: [ProofInstruction; 6] = [
+    ProofInstruction::VerifyCloseAccount,
+    ProofInstruction::VerifyWithdraw,
+    ProofInstruction::VerifyWithdrawWithheldTokens,
+    ProofInstruction::VerifyTransfer,
+    ProofInstruction::VerifyTransferWithFee,
+    ProofInstruction::VerifyPubkeyValidity,
 ];
 
 #[tokio::test]
@@ -39,14 +38,14 @@ async fn test_close_account() {
     let fail_proof_data = CloseAccountData::new(&incorrect_keypair, &zero_ciphertext).unwrap();
 
     test_verify_proof_without_context(
-        ProofType::CloseAccount,
+        ProofInstruction::VerifyCloseAccount,
         &success_proof_data,
         &fail_proof_data,
     )
     .await;
 
     test_verify_proof_with_context(
-        ProofType::CloseAccount,
+        ProofInstruction::VerifyCloseAccount,
         size_of::<ProofContextState<CloseAccountProofContext>>(),
         &success_proof_data,
         &fail_proof_data,
@@ -54,7 +53,7 @@ async fn test_close_account() {
     .await;
 
     test_close_context_state(
-        ProofType::CloseAccount,
+        ProofInstruction::VerifyCloseAccount,
         size_of::<ProofContextState<CloseAccountProofContext>>(),
         &success_proof_data,
     )
@@ -90,14 +89,14 @@ async fn test_withdraw_withheld_tokens() {
     .unwrap();
 
     test_verify_proof_without_context(
-        ProofType::WithdrawWithheldTokens,
+        ProofInstruction::VerifyWithdrawWithheldTokens,
         &success_proof_data,
         &fail_proof_data,
     )
     .await;
 
     test_verify_proof_with_context(
-        ProofType::WithdrawWithheldTokens,
+        ProofInstruction::VerifyWithdrawWithheldTokens,
         size_of::<ProofContextState<WithdrawWithheldTokensProofContext>>(),
         &success_proof_data,
         &fail_proof_data,
@@ -105,7 +104,7 @@ async fn test_withdraw_withheld_tokens() {
     .await;
 
     test_close_context_state(
-        ProofType::WithdrawWithheldTokens,
+        ProofInstruction::VerifyWithdrawWithheldTokens,
         size_of::<ProofContextState<WithdrawWithheldTokensProofContext>>(),
         &success_proof_data,
     )
@@ -144,11 +143,15 @@ async fn test_transfer() {
     )
     .unwrap();
 
-    test_verify_proof_without_context(ProofType::Transfer, &success_proof_data, &fail_proof_data)
-        .await;
+    test_verify_proof_without_context(
+        ProofInstruction::VerifyTransfer,
+        &success_proof_data,
+        &fail_proof_data,
+    )
+    .await;
 
     test_verify_proof_with_context(
-        ProofType::Transfer,
+        ProofInstruction::VerifyTransfer,
         size_of::<ProofContextState<TransferProofContext>>(),
         &success_proof_data,
         &fail_proof_data,
@@ -156,7 +159,7 @@ async fn test_transfer() {
     .await;
 
     test_close_context_state(
-        ProofType::Transfer,
+        ProofInstruction::VerifyTransfer,
         size_of::<ProofContextState<TransferProofContext>>(),
         &success_proof_data,
     )
@@ -206,14 +209,14 @@ async fn test_transfer_with_fee() {
     .unwrap();
 
     test_verify_proof_without_context(
-        ProofType::TransferWithFee,
+        ProofInstruction::VerifyTransferWithFee,
         &success_proof_data,
         &fail_proof_data,
     )
     .await;
 
     test_verify_proof_with_context(
-        ProofType::TransferWithFee,
+        ProofInstruction::VerifyTransferWithFee,
         size_of::<ProofContextState<TransferWithFeeProofContext>>(),
         &success_proof_data,
         &fail_proof_data,
@@ -221,7 +224,7 @@ async fn test_transfer_with_fee() {
     .await;
 
     test_close_context_state(
-        ProofType::TransferWithFee,
+        ProofInstruction::VerifyTransferWithFee,
         size_of::<ProofContextState<TransferWithFeeProofContext>>(),
         &success_proof_data,
     )
@@ -256,11 +259,15 @@ async fn test_withdraw() {
     )
     .unwrap();
 
-    test_verify_proof_without_context(ProofType::Withdraw, &success_proof_data, &fail_proof_data)
-        .await;
+    test_verify_proof_without_context(
+        ProofInstruction::VerifyWithdraw,
+        &success_proof_data,
+        &fail_proof_data,
+    )
+    .await;
 
     test_verify_proof_with_context(
-        ProofType::Withdraw,
+        ProofInstruction::VerifyWithdraw,
         size_of::<ProofContextState<WithdrawProofContext>>(),
         &success_proof_data,
         &fail_proof_data,
@@ -268,7 +275,7 @@ async fn test_withdraw() {
     .await;
 
     test_close_context_state(
-        ProofType::Withdraw,
+        ProofInstruction::VerifyWithdraw,
         size_of::<ProofContextState<WithdrawProofContext>>(),
         &success_proof_data,
     )
@@ -289,14 +296,14 @@ async fn test_pubkey_validity() {
     let fail_proof_data = PubkeyValidityData::new(&incorrect_keypair).unwrap();
 
     test_verify_proof_without_context(
-        ProofType::PubkeyValidity,
+        ProofInstruction::VerifyPubkeyValidity,
         &success_proof_data,
         &fail_proof_data,
     )
     .await;
 
     test_verify_proof_with_context(
-        ProofType::PubkeyValidity,
+        ProofInstruction::VerifyPubkeyValidity,
         size_of::<ProofContextState<PubkeyValidityProofContext>>(),
         &success_proof_data,
         &fail_proof_data,
@@ -304,7 +311,7 @@ async fn test_pubkey_validity() {
     .await;
 
     test_close_context_state(
-        ProofType::PubkeyValidity,
+        ProofInstruction::VerifyPubkeyValidity,
         size_of::<ProofContextState<PubkeyValidityProofContext>>(),
         &success_proof_data,
     )
@@ -312,7 +319,7 @@ async fn test_pubkey_validity() {
 }
 
 async fn test_verify_proof_without_context<T: Pod + ZkProofData>(
-    proof_type: ProofType,
+    proof_instruction: ProofInstruction,
     success_proof_data: &T,
     fail_proof_data: &T,
 ) {
@@ -323,7 +330,7 @@ async fn test_verify_proof_without_context<T: Pod + ZkProofData>(
     let recent_blockhash = context.last_blockhash;
 
     // verify a valid proof (wihtout creating a context account)
-    let instructions = vec![verify_proof(proof_type, None, success_proof_data)];
+    let instructions = vec![proof_instruction.encode_verify_proof(None, success_proof_data)];
     let transaction = Transaction::new_signed_with_payer(
         &instructions,
         Some(&payer.pubkey()),
@@ -333,7 +340,7 @@ async fn test_verify_proof_without_context<T: Pod + ZkProofData>(
     client.process_transaction(transaction).await.unwrap();
 
     // try to verify an invalid proof (without creating a context account)
-    let instructions = vec![verify_proof(proof_type, None, fail_proof_data)];
+    let instructions = vec![proof_instruction.encode_verify_proof(None, fail_proof_data)];
     let transaction = Transaction::new_signed_with_payer(
         &instructions,
         Some(&payer.pubkey()),
@@ -350,15 +357,16 @@ async fn test_verify_proof_without_context<T: Pod + ZkProofData>(
         TransactionError::InstructionError(0, InstructionError::InvalidInstructionData)
     );
 
-    // try to verify a valid proof, but with a wrong `ProofType`
-    for wrong_proof_type in PROOF_TYPES {
-        if proof_type == wrong_proof_type {
+    // try to verify a valid proof, but with a wrong proof type
+    for wrong_instruction_type in VERIFY_INSTRUCTION_TYPES {
+        if proof_instruction == wrong_instruction_type {
             continue;
         }
 
-        let instructions = vec![verify_proof(wrong_proof_type, None, success_proof_data)];
+        let instruction =
+            vec![wrong_instruction_type.encode_verify_proof(None, success_proof_data)];
         let transaction = Transaction::new_signed_with_payer(
-            &instructions,
+            &instruction,
             Some(&payer.pubkey()),
             &[payer],
             recent_blockhash,
@@ -376,7 +384,7 @@ async fn test_verify_proof_without_context<T: Pod + ZkProofData>(
 }
 
 async fn test_verify_proof_with_context<T: Pod + ZkProofData>(
-    proof_type: ProofType,
+    instruction_type: ProofInstruction,
     space: usize,
     success_proof_data: &T,
     fail_proof_data: &T,
@@ -405,7 +413,7 @@ async fn test_verify_proof_with_context<T: Pod + ZkProofData>(
             space as u64,
             &zk_token_proof_program::id(),
         ),
-        verify_proof(proof_type, Some(context_state_info), fail_proof_data),
+        instruction_type.encode_verify_proof(Some(context_state_info), fail_proof_data),
     ];
     let transaction = Transaction::new_signed_with_payer(
         &instructions,
@@ -432,7 +440,7 @@ async fn test_verify_proof_with_context<T: Pod + ZkProofData>(
             (space.checked_sub(1).unwrap()) as u64,
             &zk_token_proof_program::id(),
         ),
-        verify_proof(proof_type, Some(context_state_info), success_proof_data),
+        instruction_type.encode_verify_proof(Some(context_state_info), success_proof_data),
     ];
     let transaction = Transaction::new_signed_with_payer(
         &instructions,
@@ -459,7 +467,7 @@ async fn test_verify_proof_with_context<T: Pod + ZkProofData>(
             space as u64,
             &zk_token_proof_program::id(),
         ),
-        verify_proof(proof_type, Some(context_state_info), success_proof_data),
+        instruction_type.encode_verify_proof(Some(context_state_info), success_proof_data),
     ];
     let transaction = Transaction::new_signed_with_payer(
         &instructions,
@@ -478,8 +486,8 @@ async fn test_verify_proof_with_context<T: Pod + ZkProofData>(
     );
 
     // try to create proof context state with an invalid `ProofType`
-    for wrong_proof_type in PROOF_TYPES {
-        if proof_type == wrong_proof_type {
+    for wrong_instruction_type in VERIFY_INSTRUCTION_TYPES {
+        if instruction_type == wrong_instruction_type {
             continue;
         }
 
@@ -491,11 +499,8 @@ async fn test_verify_proof_with_context<T: Pod + ZkProofData>(
                 space as u64,
                 &zk_token_proof_program::id(),
             ),
-            verify_proof(
-                wrong_proof_type,
-                Some(context_state_info),
-                success_proof_data,
-            ),
+            wrong_instruction_type
+                .encode_verify_proof(Some(context_state_info), success_proof_data),
         ];
         let transaction = Transaction::new_signed_with_payer(
             &instructions,
@@ -523,7 +528,7 @@ async fn test_verify_proof_with_context<T: Pod + ZkProofData>(
             space as u64,
             &zk_token_proof_program::id(),
         ),
-        verify_proof(proof_type, Some(context_state_info), success_proof_data),
+        instruction_type.encode_verify_proof(Some(context_state_info), success_proof_data),
     ];
     let transaction = Transaction::new_signed_with_payer(
         &instructions,
@@ -532,6 +537,25 @@ async fn test_verify_proof_with_context<T: Pod + ZkProofData>(
         recent_blockhash,
     );
     client.process_transaction(transaction).await.unwrap();
+
+    // try overwriting the context state
+    let instructions =
+        vec![instruction_type.encode_verify_proof(Some(context_state_info), success_proof_data)];
+    let transaction = Transaction::new_signed_with_payer(
+        &instructions,
+        Some(&payer.pubkey()),
+        &[payer],
+        recent_blockhash,
+    );
+    let err = client
+        .process_transaction(transaction)
+        .await
+        .unwrap_err()
+        .unwrap();
+    assert_eq!(
+        err,
+        TransactionError::InstructionError(0, InstructionError::AccountAlreadyInitialized)
+    );
 
     // self-owned context state account
     let context_state_account_and_authority = Keypair::new();
@@ -548,7 +572,7 @@ async fn test_verify_proof_with_context<T: Pod + ZkProofData>(
             space as u64,
             &zk_token_proof_program::id(),
         ),
-        verify_proof(proof_type, Some(context_state_info), success_proof_data),
+        instruction_type.encode_verify_proof(Some(context_state_info), success_proof_data),
     ];
     let transaction = Transaction::new_signed_with_payer(
         &instructions,
@@ -560,7 +584,7 @@ async fn test_verify_proof_with_context<T: Pod + ZkProofData>(
 }
 
 async fn test_close_context_state<T: Pod + ZkProofData>(
-    proof_type: ProofType,
+    instruction_type: ProofInstruction,
     space: usize,
     success_proof_data: &T,
 ) {
@@ -590,7 +614,7 @@ async fn test_close_context_state<T: Pod + ZkProofData>(
             space as u64,
             &zk_token_proof_program::id(),
         ),
-        verify_proof(proof_type, Some(context_state_info), success_proof_data),
+        instruction_type.encode_verify_proof(Some(context_state_info), success_proof_data),
     ];
     let transaction = Transaction::new_signed_with_payer(
         &instructions,
@@ -608,7 +632,6 @@ async fn test_close_context_state<T: Pod + ZkProofData>(
             context_state_authority: &incorrect_authority.pubkey(),
         },
         &destination_account.pubkey(),
-        proof_type,
     );
     let transaction = Transaction::new_signed_with_payer(
         &[instruction],
@@ -633,7 +656,6 @@ async fn test_close_context_state<T: Pod + ZkProofData>(
             context_state_authority: &context_state_authority.pubkey(),
         },
         &destination_account.pubkey(),
-        proof_type,
     );
     let transaction = Transaction::new_signed_with_payer(
         &[instruction.clone()],
@@ -652,14 +674,13 @@ async fn test_close_context_state<T: Pod + ZkProofData>(
             space as u64,
             &zk_token_proof_program::id(),
         ),
-        verify_proof(proof_type, Some(context_state_info), success_proof_data),
+        instruction_type.encode_verify_proof(Some(context_state_info), success_proof_data),
         close_context_state(
             ContextStateInfo {
                 context_state_account: &context_state_account.pubkey(),
                 context_state_authority: &context_state_authority.pubkey(),
             },
             &destination_account.pubkey(),
-            proof_type,
         ),
     ];
     let transaction = Transaction::new_signed_with_payer(
@@ -679,14 +700,13 @@ async fn test_close_context_state<T: Pod + ZkProofData>(
             space as u64,
             &zk_token_proof_program::id(),
         ),
-        verify_proof(proof_type, Some(context_state_info), success_proof_data),
+        instruction_type.encode_verify_proof(Some(context_state_info), success_proof_data),
         close_context_state(
             ContextStateInfo {
                 context_state_account: &context_state_account.pubkey(),
                 context_state_authority: &context_state_authority.pubkey(),
             },
             &context_state_authority.pubkey(),
-            proof_type,
         ),
     ];
     let transaction = Transaction::new_signed_with_payer(
@@ -706,14 +726,13 @@ async fn test_close_context_state<T: Pod + ZkProofData>(
             space as u64,
             &zk_token_proof_program::id(),
         ),
-        verify_proof(proof_type, Some(context_state_info), success_proof_data),
+        instruction_type.encode_verify_proof(Some(context_state_info), success_proof_data),
         close_context_state(
             ContextStateInfo {
                 context_state_account: &context_state_account.pubkey(),
                 context_state_authority: &context_state_authority.pubkey(),
             },
             &context_state_account.pubkey(),
-            proof_type,
         ),
     ];
     let transaction = Transaction::new_signed_with_payer(
@@ -747,12 +766,8 @@ async fn test_close_context_state<T: Pod + ZkProofData>(
             space as u64,
             &zk_token_proof_program::id(),
         ),
-        verify_proof(proof_type, Some(context_state_info), success_proof_data),
-        close_context_state(
-            context_state_info,
-            &context_state_account.pubkey(),
-            proof_type,
-        ),
+        instruction_type.encode_verify_proof(Some(context_state_info), success_proof_data),
+        close_context_state(context_state_info, &context_state_account.pubkey()),
     ];
     let transaction = Transaction::new_signed_with_payer(
         &instructions,
