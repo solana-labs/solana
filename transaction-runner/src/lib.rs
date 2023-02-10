@@ -338,7 +338,7 @@ impl Scheduler {
                                 .collect();
                         if !executed_transactions.is_empty() {
                             let hash = solana_entry::entry::hash_transactions(&executed_transactions);
-                            let res = record_transactions(scheduler_pool.as_ref().unwrap().transaction_recorder, bank.as_ref(), executed_transactions, hash);
+                            let res = record_transactions(scheduler_pool.transaction_recorder.as_ref().unwrap(), bank.as_ref(), executed_transactions, hash);
                             match res {
                                 Ok(aa) => aa,
                                 Err(e) => {
