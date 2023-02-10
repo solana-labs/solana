@@ -38,6 +38,8 @@ struct TransactionRunner(Arc<Bank>, PohRecorder, solana_ledger::blockstore_proce
 pub struct SchedulerPool {
     schedulers: std::sync::Mutex<Vec<Box<dyn LikeScheduler>>>,
     transaction_recorder: Option<TransactionRecorder>,
+    log_messages_bytes_limit: Option<usize>,
+    transaction_status_sender: Option<TransactionStatusSender>,
 }
 
 impl std::fmt::Debug for SchedulerPool {
