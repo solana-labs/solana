@@ -50,7 +50,7 @@ impl SchedulerPool {
         self.schedulers.lock().unwrap().push(Box::new(Scheduler::spawn(self.clone(), context)));
     }
 
-    fn new_boxed() -> Box<dyn LikeSchedulerPool> {
+    pub fn new_boxed() -> Box<dyn LikeSchedulerPool> {
         Box::new(SchedulerPoolWrapper::new())
     }
 }
