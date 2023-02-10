@@ -206,6 +206,7 @@ impl BankForks {
     }
 
     pub fn install_scheduler_pool(&mut self, pool: Box<dyn LikeSchedulerPool>) {
+        assert!(self.scheduler_pool.is_none());
         self.scheduler_pool = Some(pool);
     }
 
