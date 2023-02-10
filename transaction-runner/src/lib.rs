@@ -149,7 +149,6 @@ impl LikeSchedulerPool for SchedulerPoolWrapper {
 }
 
 use solana_transaction_status::TransactionTokenBalance;
-pub static STATUS_SENDER_CALLBACK: std::sync::RwLock<Option<(Option<usize>, Box<dyn Fn(Option<(Vec<Vec<u64>>, Vec<Vec<TransactionTokenBalance>>)>, &Arc<Bank>, &TransactionBatch, &mut HashMap<Pubkey, u8>, Option<TransactionResults>, Option<usize>) -> std::option::Option<(Vec<Vec<u64>>, Vec<Vec<TransactionTokenBalance>>)> + Send + Sync>)>> = std::sync::RwLock::new(None);
 
 #[derive(Debug)]
 pub(crate) struct Scheduler {
@@ -837,18 +836,6 @@ fn send_transaction_status(sender: &TransactionStatusSender, pre: Option<(Vec<Ve
             None
         }
     }
-}
-
-pub fn initialize_transaction_status_sender_callback(log_messages_bytes_limit: Option<usize>, sender: TransactionStatusSender) {
-    use solana_transaction_status::TransactionTokenBalance;
-    *STATUS_SENDER_CALLBACK.write().unwrap() = Some({
-        (
-        log_messages_bytes_limit,
-        Box::new(move |pre, bank: &Arc<Bank>, batch, mut mint_decimals, tx_results, commited_first_transaction_index| {
-            panic!();
-        })
-        )
-    });
 }
 
 fn record_transactions(recorder: &TransactionRecorder, bank: &Bank, transactions: Vec<VersionedTransaction>, hash: solana_sdk::hash::Hash) -> std::result::Result<Option<usize>, ()> {
