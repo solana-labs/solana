@@ -24,7 +24,7 @@ use {
         genesis_utils::{create_genesis_config, GenesisConfigInfo},
         leader_schedule_cache::LeaderScheduleCache,
     },
-    solana_measure::measure,
+    solana_measure::{measure, measure_us},
     solana_metrics::poh_timing_point::{send_poh_timing_point, PohTimingSender, SlotPohTimingInfo},
     solana_runtime::bank::Bank,
     solana_sdk::{
@@ -173,12 +173,11 @@ impl TransactionRecorder {
         let mut starting_transaction_index = None;
 
         if !transactions.is_empty() {
-            let (hash, hash_time) = measure!(hash_transactions(&transactions), "hash");
-            record_transactions_timings.hash_us = hash_time.as_us();
+            let (hash, hash_us) = measure_us!(hash_transactions(&transactions));
+            record_transactions_timings.hash_us = hash_us;
 
-            let (res, poh_record_time) =
-                measure!(self.record(bank_slot, hash, transactions), "hash");
-            record_transactions_timings.poh_record_us = poh_record_time.as_us();
+            let (res, poh_record_us) = measure_us!(self.record(bank_slot, hash, transactions));
+            record_transactions_timings.poh_record_us = poh_record_us;
 
             match res {
                 Ok(starting_index) => {
