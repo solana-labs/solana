@@ -276,12 +276,13 @@ impl Scheduler {
                 let (mut wall_time, cpu_time) = (Measure::start("process_message_time"), cpu_time::ThreadTime::now());
 
                 let current_execute_clock = ee.task.execute_time();
-                let transaction_index = ee.task.transaction_index(latest_scheduler_context.as_ref().unwrap().mode);
+                let mode = latest_scheduler_context.as_ref().unwrap().mode;
+                let transaction_index = ee.task.transaction_index(mode);
                 trace!("execute_substage: transaction_index: {} execute_clock: {} at thread: {}", thx, transaction_index, current_execute_clock);
 
                 let mut timings = Default::default();
                 let Some(bank) = latest_scheduler_context.as_ref().unwrap().bank() else {
-                    warn!("ODD");
+                    assert_matches!(mode, solana_scheduler::Mode::Banking);
                     processed_ee_sender.send(solana_scheduler::UnlockablePayload(ee, timings)).unwrap();
                     continue 'recv;
                 };
@@ -320,7 +321,6 @@ impl Scheduler {
                 let (last_blockhash, lamports_per_signature) =
                     bank.last_blockhash_and_lamports_per_signature();
 
-                let mode = latest_scheduler_context.as_ref().unwrap().mode;
                 let commited_first_transaction_index = match mode {
                     solana_scheduler::Mode::Replaying => {
                         //info!("replaying commit! {slot}");
