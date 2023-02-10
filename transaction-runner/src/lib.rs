@@ -750,10 +750,6 @@ impl LikeScheduler for Scheduler {
         self.current_checkpoint.with_context_value(|c| c.mode).unwrap()
     }
 
-    fn has_context(&self) -> bool {
-        self.current_checkpoint.with_context_value(|_| ()).is_some()
-    }
-
     fn collected_results(&self) -> Arc<std::sync::Mutex<Vec<Result<ExecuteTimings>>>> {
         self.collected_results.clone()
     }

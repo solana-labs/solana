@@ -1161,7 +1161,6 @@ pub trait LikeScheduler: Send + Sync + std::fmt::Debug {
     fn resume_commit_into_bank(&self, bank: Option<&Arc<Bank>>);
     fn gracefully_stop(&mut self) -> Result<()>;
     fn current_scheduler_mode(&self) -> solana_scheduler::Mode;
-    fn has_context(&self) -> bool;
     fn collected_results(&self) -> Arc<std::sync::Mutex<Vec<Result<ExecuteTimings>>>>;
     fn scheduler_pool(&self) -> Box<dyn LikeSchedulerPool>;
     fn scheduler_context(&self) -> SchedulerContext;
@@ -7957,8 +7956,6 @@ impl Bank {
         let current_thread_name = std::thread::current().name().unwrap().to_string();
 
         if let Some(scheduler) = s.as_mut() {
-            assert!(scheduler.has_context());
-
             let scheduler_mode = scheduler.current_scheduler_mode();
             if matches!(scheduler_mode, solana_scheduler::Mode::Replaying) || via_drop {
                 info!("wait_for_scheduler({scheduler_mode:?}/{via_drop}): gracefully stopping bank ({})...", self.slot());
