@@ -3916,6 +3916,7 @@ impl AccountsDb {
         shrink_collect: &ShrinkCollect<'a, T>,
         stats: &ShrinkStats,
         shrink_in_progress: Option<ShrinkInProgress>,
+        shrink_can_be_active: bool,
     ) {
         let mut time = Measure::start("remove_old_stores_shrink");
         // Purge old, overwritten storage entries
@@ -3925,6 +3926,7 @@ impl AccountsDb {
             // otherwise, we'll call 'add_uncleaned_pubkeys_after_shrink' just on the unref'd keys below.
             shrink_collect.all_are_zero_lamports,
             shrink_in_progress,
+            shrink_can_be_active,
         );
 
         if !shrink_collect.all_are_zero_lamports {
@@ -4023,6 +4025,7 @@ impl AccountsDb {
                 &shrink_collect,
                 &self.shrink_stats,
                 Some(shrink_in_progress),
+                false,
             );
         }
 
@@ -4076,6 +4079,7 @@ impl AccountsDb {
         slot: Slot,
         add_dirty_stores: bool,
         shrink_in_progress: Option<ShrinkInProgress>,
+        shrink_can_be_active: bool,
     ) -> Vec<Arc<AccountStorageEntry>> {
         let mut dead_storages = Vec::default();
 
@@ -4091,7 +4095,7 @@ impl AccountsDb {
             // shrink is in progress, so 1 new append vec to keep, 1 old one to throw away
             not_retaining_store(shrink_in_progress.old_storage());
             // dropping 'shrink_in_progress' removes the old append vec that was being shrunk from db's storage
-        } else if let Some(store) = self.storage.remove(&slot, false) {
+        } else if let Some(store) = self.storage.remove(&slot, shrink_can_be_active) {
             // no shrink in progress, so all append vecs in this slot are dead
             not_retaining_store(&store);
         }
@@ -4593,6 +4597,7 @@ impl AccountsDb {
             &shrink_collect,
             &self.shrink_ancient_stats.shrink_stats,
             shrink_in_progress,
+            false,
         );
 
         // we should not try to shrink any of the stores from this slot anymore. All shrinking for this slot is now handled by ancient append vec code.
@@ -16425,7 +16430,7 @@ pub mod tests {
         let db = AccountsDb::new_single_for_tests();
         let slot = 0;
         for add_dirty_stores in [false, true] {
-            let dead_storages = db.mark_dirty_dead_stores(slot, add_dirty_stores, None);
+            let dead_storages = db.mark_dirty_dead_stores(slot, add_dirty_stores, None, false);
             assert!(dead_storages.is_empty());
             assert!(db.dirty_stores.is_empty());
         }
@@ -16443,7 +16448,7 @@ pub mod tests {
             let size = 1;
             let existing_store = db.create_and_insert_store(slot, size, "test");
             let old_id = existing_store.append_vec_id();
-            let dead_storages = db.mark_dirty_dead_stores(slot, add_dirty_stores, None);
+            let dead_storages = db.mark_dirty_dead_stores(slot, add_dirty_stores, None, false);
             assert!(db.storage.get_slot_storage_entry(slot).is_none());
             assert_eq!(dead_storages.len(), 1);
             assert_eq!(dead_storages.first().unwrap().append_vec_id(), old_id);
@@ -16470,7 +16475,7 @@ pub mod tests {
             let old_id = old_store.append_vec_id();
             let shrink_in_progress = db.get_store_for_shrink(slot, 100);
             let dead_storages =
-                db.mark_dirty_dead_stores(slot, add_dirty_stores, Some(shrink_in_progress));
+                db.mark_dirty_dead_stores(slot, add_dirty_stores, Some(shrink_in_progress), false);
             assert!(db.storage.get_slot_storage_entry(slot).is_some());
             assert_eq!(dead_storages.len(), 1);
             assert_eq!(dead_storages.first().unwrap().append_vec_id(), old_id);
