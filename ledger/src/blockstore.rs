@@ -39,9 +39,12 @@ use {
         poh_timing_point::{send_poh_timing_point, PohTimingSender, SlotPohTimingInfo},
     },
     solana_rayon_threadlimit::get_max_thread_count,
-    solana_runtime::hardened_unpack::{unpack_genesis_archive, MAX_GENESIS_ARCHIVE_UNPACKED_SIZE},
+    solana_runtime::{
+        bank::Bank,
+        hardened_unpack::{unpack_genesis_archive, MAX_GENESIS_ARCHIVE_UNPACKED_SIZE},
+    },
     solana_sdk::{
-        clock::{Slot, UnixTimestamp, DEFAULT_TICKS_PER_SECOND, MS_PER_TICK},
+        clock::{Slot, UnixTimestamp, DEFAULT_TICKS_PER_SECOND},
         genesis_config::{GenesisConfig, DEFAULT_GENESIS_ARCHIVE, DEFAULT_GENESIS_FILE},
         hash::Hash,
         pubkey::Pubkey,
@@ -70,7 +73,6 @@ use {
             atomic::{AtomicBool, Ordering},
             Arc, Mutex, RwLock, RwLockWriteGuard,
         },
-        time::Duration,
     },
     tempfile::{Builder, TempDir},
     thiserror::Error,
@@ -104,9 +106,6 @@ lazy_static! {
 
 pub const MAX_REPLAY_WAKE_UP_SIGNALS: usize = 1;
 pub const MAX_COMPLETED_SLOTS_IN_CHANNEL: usize = 100_000;
-pub const MAX_TURBINE_PROPAGATION: Duration = Duration::from_millis(200);
-pub const MAX_TURBINE_DELAY_IN_TICKS: u64 =
-    MAX_TURBINE_PROPAGATION.as_millis() as u64 / MS_PER_TICK;
 
 // An upper bound on maximum number of data shreds we can handle in a slot
 // 32K shreds would allow ~320K peak TPS
@@ -1802,7 +1801,9 @@ impl Blockstore {
     fn find_missing_indexes<C>(
         db_iterator: &mut DBRawIterator,
         slot: Slot,
+        now_timestamp: u64,
         first_timestamp: u64,
+        defer_threshold_ticks: u64,
         start_index: u64,
         end_index: u64,
         max_missing: usize,
@@ -1816,7 +1817,7 @@ impl Blockstore {
 
         let mut missing_indexes = vec![];
         let ticks_since_first_insert =
-            DEFAULT_TICKS_PER_SECOND * (timestamp() - first_timestamp) / 1000;
+            DEFAULT_TICKS_PER_SECOND * (now_timestamp - first_timestamp) / 1000;
 
         // Seek to the first shred with index >= start_index
         db_iterator.seek(&C::key((slot, start_index)));
@@ -1847,7 +1848,7 @@ impl Blockstore {
             // the tick that will be used to figure out the timeout for this hole
             let data = db_iterator.value().expect("couldn't read value");
             let reference_tick = u64::from(shred::layout::get_reference_tick(data).unwrap());
-            if ticks_since_first_insert < reference_tick + MAX_TURBINE_DELAY_IN_TICKS {
+            if ticks_since_first_insert < reference_tick + defer_threshold_ticks {
                 // The higher index holes have not timed out yet
                 break 'outer;
             }
@@ -1876,7 +1877,9 @@ impl Blockstore {
     pub fn find_missing_data_indexes(
         &self,
         slot: Slot,
+        now_timestamp: u64,
         first_timestamp: u64,
+        defer_threshold_ticks: u64,
         start_index: u64,
         end_index: u64,
         max_missing: usize,
@@ -1888,7 +1891,9 @@ impl Blockstore {
             Self::find_missing_indexes::<cf::ShredData>(
                 &mut db_iterator,
                 slot,
+                now_timestamp,
                 first_timestamp,
+                defer_threshold_ticks,
                 start_index,
                 end_index,
                 max_missing,
@@ -2851,6 +2856,7 @@ impl Blockstore {
     /// Used by ledger-tool to create a minimized snapshot
     pub fn get_accounts_used_in_range(
         &self,
+        bank: &Bank,
         starting_slot: Slot,
         ending_slot: Slot,
     ) -> DashSet<Pubkey> {
@@ -2860,11 +2866,27 @@ impl Blockstore {
             .into_par_iter()
             .for_each(|slot| {
                 if let Ok(entries) = self.get_slot_entries(slot, 0) {
-                    entries.par_iter().for_each(|entry| {
-                        entry.transactions.iter().for_each(|tx| {
-                            tx.message.static_account_keys().iter().for_each(|pubkey| {
-                                result.insert(*pubkey);
-                            });
+                    entries.into_par_iter().for_each(|entry| {
+                        entry.transactions.into_iter().for_each(|tx| {
+                            if let Some(lookups) = tx.message.address_table_lookups() {
+                                lookups.iter().for_each(|lookup| {
+                                    result.insert(lookup.account_key);
+                                });
+                            }
+                            // howdy, anybody who reached here from the panic messsage!
+                            // the .unwrap() below could indicate there was an odd error or there
+                            // could simply be a tx with a new ALT, which is just created/updated
+                            // in this range. too bad... this edge case isn't currently supported.
+                            // see: https://github.com/solana-labs/solana/issues/30165
+                            // for casual use, please choose different slot range.
+                            let sanitized_tx = bank.fully_verify_transaction(tx).unwrap();
+                            sanitized_tx
+                                .message()
+                                .account_keys()
+                                .iter()
+                                .for_each(|&pubkey| {
+                                    result.insert(pubkey);
+                                });
                         });
                     });
                 }
@@ -5894,27 +5916,75 @@ pub mod tests {
         // range of [0, gap)
         let expected: Vec<u64> = (1..gap).collect();
         assert_eq!(
-            blockstore.find_missing_data_indexes(slot, 0, 0, gap, gap as usize),
+            blockstore.find_missing_data_indexes(
+                slot,
+                timestamp(),
+                0,            // first_timestamp
+                0,            // defer_threshold_ticks
+                0,            // start_index
+                gap,          // end_index
+                gap as usize, // max_missing
+            ),
             expected
         );
         assert_eq!(
-            blockstore.find_missing_data_indexes(slot, 0, 1, gap, (gap - 1) as usize),
+            blockstore.find_missing_data_indexes(
+                slot,
+                timestamp(),
+                0,                  // first_timestamp
+                0,                  // defer_threshold_ticks
+                1,                  // start_index
+                gap,                // end_index
+                (gap - 1) as usize, // max_missing
+            ),
             expected,
         );
         assert_eq!(
-            blockstore.find_missing_data_indexes(slot, 0, 0, gap - 1, (gap - 1) as usize),
+            blockstore.find_missing_data_indexes(
+                slot,
+                timestamp(),
+                0,                  // first_timestmap
+                0,                  // defer_threshold_ticks
+                0,                  // start_index
+                gap - 1,            // end_index
+                (gap - 1) as usize, // max_missing
+            ),
             &expected[..expected.len() - 1],
         );
         assert_eq!(
-            blockstore.find_missing_data_indexes(slot, 0, gap - 2, gap, gap as usize),
+            blockstore.find_missing_data_indexes(
+                slot,
+                timestamp(),
+                0,            // first_timestmap
+                0,            // defer_threshold_ticks
+                gap - 2,      // start_index
+                gap,          // end_index
+                gap as usize, // max_missing
+            ),
             vec![gap - 2, gap - 1],
         );
         assert_eq!(
-            blockstore.find_missing_data_indexes(slot, 0, gap - 2, gap, 1),
+            blockstore.find_missing_data_indexes(
+                slot,
+                timestamp(),
+                0,       // first_timestamp
+                0,       // defer_threshold_ticks
+                gap - 2, // start_index
+                gap,     // end_index
+                1,       // max_missing
+            ),
             vec![gap - 2],
         );
         assert_eq!(
-            blockstore.find_missing_data_indexes(slot, 0, 0, gap, 1),
+            blockstore.find_missing_data_indexes(
+                slot,
+                timestamp(),
+                0,   // first_timestamp
+                0,   // defer_threshold_ticks
+                0,   // start_index
+                gap, // end_index
+                1,   // max_missing
+            ),
             vec![1],
         );
 
@@ -5923,11 +5993,27 @@ pub mod tests {
         let mut expected: Vec<u64> = (1..gap).collect();
         expected.push(gap + 1);
         assert_eq!(
-            blockstore.find_missing_data_indexes(slot, 0, 0, gap + 2, (gap + 2) as usize),
+            blockstore.find_missing_data_indexes(
+                slot,
+                timestamp(),
+                0,                  // first_timestamp
+                0,                  // defer_threshold_ticks
+                0,                  // start_index
+                gap + 2,            // end_index
+                (gap + 2) as usize, // max_missing
+            ),
             expected,
         );
         assert_eq!(
-            blockstore.find_missing_data_indexes(slot, 0, 0, gap + 2, (gap - 1) as usize),
+            blockstore.find_missing_data_indexes(
+                slot,
+                timestamp(),
+                0,                  // first_timestamp
+                0,                  // defer_threshold_ticks
+                0,                  // start_index
+                gap + 2,            // end_index
+                (gap - 1) as usize, // max_missing
+            ),
             &expected[..expected.len() - 1],
         );
 
@@ -5943,10 +6029,12 @@ pub mod tests {
                 assert_eq!(
                     blockstore.find_missing_data_indexes(
                         slot,
-                        0,
-                        j * gap,
-                        i * gap,
-                        ((i - j) * gap) as usize
+                        timestamp(),
+                        0,                        // first_timestamp
+                        0,                        // defer_threshold_ticks
+                        j * gap,                  // start_index
+                        i * gap,                  // end_index
+                        ((i - j) * gap) as usize, // max_missing
                     ),
                     expected,
                 );
@@ -5980,12 +6068,28 @@ pub mod tests {
 
         let empty: Vec<u64> = vec![];
         assert_eq!(
-            blockstore.find_missing_data_indexes(slot, timestamp(), 0, 50, 1),
+            blockstore.find_missing_data_indexes(
+                slot,
+                timestamp(),
+                timestamp(), // first_timestamp
+                0,           // defer_threshold_ticks
+                0,           // start_index
+                50,          // end_index
+                1,           // max_missing
+            ),
             empty
         );
         let expected: Vec<_> = (1..=9).collect();
         assert_eq!(
-            blockstore.find_missing_data_indexes(slot, timestamp() - 400, 0, 50, 9),
+            blockstore.find_missing_data_indexes(
+                slot,
+                timestamp(),
+                timestamp() - 400, // first_timestamp
+                0,                 // defer_threshold_ticks
+                0,                 // start_index
+                50,                // end_index
+                9,                 // max_missing
+            ),
             expected
         );
     }
@@ -6000,19 +6104,51 @@ pub mod tests {
         // Early exit conditions
         let empty: Vec<u64> = vec![];
         assert_eq!(
-            blockstore.find_missing_data_indexes(slot, 0, 0, 0, 1),
+            blockstore.find_missing_data_indexes(
+                slot,
+                timestamp(),
+                0, // first_timestamp
+                0, // defer_threshold_ticks
+                0, // start_index
+                0, // end_index
+                1, // max_missing
+            ),
             empty
         );
         assert_eq!(
-            blockstore.find_missing_data_indexes(slot, 0, 5, 5, 1),
+            blockstore.find_missing_data_indexes(
+                slot,
+                timestamp(),
+                0, // first_timestamp
+                0, // defer_threshold_ticks
+                5, // start_index
+                5, // end_index
+                1, // max_missing
+            ),
             empty
         );
         assert_eq!(
-            blockstore.find_missing_data_indexes(slot, 0, 4, 3, 1),
+            blockstore.find_missing_data_indexes(
+                slot,
+                timestamp(),
+                0, // first_timestamp
+                0, // defer_threshold_ticks
+                4, // start_index
+                3, // end_index
+                1, // max_missing
+            ),
             empty
         );
         assert_eq!(
-            blockstore.find_missing_data_indexes(slot, 0, 1, 2, 0),
+            blockstore.find_missing_data_indexes(
+                slot,
+                timestamp(),
+                0, // first_timestamp
+                0, // defer_threshold_ticks
+                1, // start_index
+                2, // end_index
+                0, // max_missing
+            ),
             empty
         );
 
@@ -6039,9 +6175,13 @@ pub mod tests {
         // [i, first_index - 1]
         for start in 0..STARTS {
             let result = blockstore.find_missing_data_indexes(
-                slot, 0, start, // start
-                END,   //end
-                MAX,   //max
+                slot,
+                timestamp(),
+                0,     // first_timestamp
+                0,     // defer_threshold_ticks
+                start, // start_index
+                END,   // end_index
+                MAX,   // max_missing
             );
             let expected: Vec<u64> = (start..END).filter(|i| *i != ONE && *i != OTHER).collect();
             assert_eq!(result, expected);
@@ -6067,7 +6207,15 @@ pub mod tests {
         for i in 0..num_shreds as u64 {
             for j in 0..i {
                 assert_eq!(
-                    blockstore.find_missing_data_indexes(slot, 0, j, i, (i - j) as usize),
+                    blockstore.find_missing_data_indexes(
+                        slot,
+                        timestamp(),
+                        0,                // first_timestamp
+                        0,                // defer_threshold_ticks
+                        j,                // start_index
+                        i,                // end_index
+                        (i - j) as usize, // max_missing
+                    ),
                     empty
                 );
             }

@@ -79,8 +79,8 @@ use {
         pubkey::Pubkey,
         rent::Rent,
         saturating_add_assign,
-        signature::Signature,
         timing::AtomicInterval,
+        transaction::SanitizedTransaction,
     },
     std::{
         borrow::{Borrow, Cow},
@@ -6571,16 +6571,16 @@ impl AccountsDb {
         &self,
         slot: Slot,
         accounts_and_meta_to_store: &impl StorableAccounts<'b, T>,
-        txn_signatures_iter: Box<dyn std::iter::Iterator<Item = &Option<&Signature>> + 'a>,
+        txn_iter: Box<dyn std::iter::Iterator<Item = &Option<&SanitizedTransaction>> + 'a>,
         include_slot_in_hash: IncludeSlotInHash,
         mut write_version_producer: P,
     ) -> Vec<AccountInfo>
     where
         P: Iterator<Item = u64>,
     {
-        txn_signatures_iter
+        txn_iter
             .enumerate()
-            .map(|(i, signature)| {
+            .map(|(i, txn)| {
                 let account = accounts_and_meta_to_store
                     .account_default_if_zero_lamport(i)
                     .map(|account| account.to_account_shared_data())
@@ -6594,7 +6594,7 @@ impl AccountsDb {
                 self.notify_account_at_accounts_update(
                     slot,
                     &account,
-                    signature,
+                    txn,
                     accounts_and_meta_to_store.pubkey(i),
                     &mut write_version_producer,
                 );
@@ -6630,7 +6630,7 @@ impl AccountsDb {
         hashes: Option<Vec<impl Borrow<Hash>>>,
         mut write_version_producer: P,
         store_to: &StoreTo,
-        txn_signatures: Option<&[Option<&'a Signature>]>,
+        transactions: Option<&[Option<&'a SanitizedTransaction>]>,
     ) -> Vec<AccountInfo> {
         let mut calc_stored_meta_time = Measure::start("calc_stored_meta");
         let slot = accounts.target_slot();
@@ -6645,11 +6645,11 @@ impl AccountsDb {
 
         match store_to {
             StoreTo::Cache => {
-                let signature_iter: Box<dyn std::iter::Iterator<Item = &Option<&Signature>>> =
-                    match txn_signatures {
-                        Some(txn_signatures) => {
-                            assert_eq!(txn_signatures.len(), accounts.len());
-                            Box::new(txn_signatures.iter())
+                let txn_iter: Box<dyn std::iter::Iterator<Item = &Option<&SanitizedTransaction>>> =
+                    match transactions {
+                        Some(transactions) => {
+                            assert_eq!(transactions.len(), accounts.len());
+                            Box::new(transactions.iter())
                         }
                         None => Box::new(std::iter::repeat(&None).take(accounts.len())),
                     };
@@ -6657,7 +6657,7 @@ impl AccountsDb {
                 self.write_accounts_to_cache(
                     slot,
                     accounts,
-                    signature_iter,
+                    txn_iter,
                     accounts.include_slot_in_hash(),
                     write_version_producer,
                 )
@@ -8161,12 +8161,12 @@ impl AccountsDb {
     pub fn store_cached<'a, T: ReadableAccount + Sync + ZeroLamport + 'a>(
         &self,
         accounts: impl StorableAccounts<'a, T>,
-        txn_signatures: Option<&'a [Option<&'a Signature>]>,
+        transactions: Option<&'a [Option<&'a SanitizedTransaction>]>,
     ) {
         self.store(
             accounts,
             &StoreTo::Cache,
-            txn_signatures,
+            transactions,
             StoreReclaims::Default,
         );
     }
@@ -8187,7 +8187,7 @@ impl AccountsDb {
         &self,
         accounts: impl StorableAccounts<'a, T>,
         store_to: &StoreTo,
-        txn_signatures: Option<&'a [Option<&'a Signature>]>,
+        transactions: Option<&'a [Option<&'a SanitizedTransaction>]>,
         reclaim: StoreReclaims,
     ) {
         // If all transactions in a batch are errored,
@@ -8219,13 +8219,7 @@ impl AccountsDb {
         }
 
         // we use default hashes for now since the same account may be stored to the cache multiple times
-        self.store_accounts_unfrozen(
-            accounts,
-            None::<Vec<Hash>>,
-            store_to,
-            txn_signatures,
-            reclaim,
-        );
+        self.store_accounts_unfrozen(accounts, None::<Vec<Hash>>, store_to, transactions, reclaim);
         self.report_store_timings();
     }
 
@@ -8352,7 +8346,7 @@ impl AccountsDb {
         accounts: impl StorableAccounts<'a, T>,
         hashes: Option<Vec<impl Borrow<Hash>>>,
         store_to: &StoreTo,
-        txn_signatures: Option<&'a [Option<&'a Signature>]>,
+        transactions: Option<&'a [Option<&'a SanitizedTransaction>]>,
         reclaim: StoreReclaims,
     ) {
         // This path comes from a store to a non-frozen slot.
@@ -8369,7 +8363,7 @@ impl AccountsDb {
             None::<Box<dyn Iterator<Item = u64>>>,
             store_to,
             reset_accounts,
-            txn_signatures,
+            transactions,
             reclaim,
         );
     }
@@ -8404,7 +8398,7 @@ impl AccountsDb {
         write_version_producer: Option<Box<dyn Iterator<Item = u64>>>,
         store_to: &StoreTo,
         reset_accounts: bool,
-        txn_signatures: Option<&[Option<&Signature>]>,
+        transactions: Option<&[Option<&SanitizedTransaction>]>,
         reclaim: StoreReclaims,
     ) -> StoreAccountsTiming {
         let write_version_producer: Box<dyn Iterator<Item = u64>> = write_version_producer
@@ -8426,7 +8420,7 @@ impl AccountsDb {
             hashes,
             write_version_producer,
             store_to,
-            txn_signatures,
+            transactions,
         );
         store_accounts_time.stop();
         self.stats
@@ -10316,7 +10310,7 @@ pub mod tests {
         let pubkey = solana_sdk::pubkey::new_rand();
         let acc = AccountSharedData::new(1, 48, AccountSharedData::default().owner());
         let mark_alive = false;
-        append_single_account_with_default_hash(&storage, &pubkey, &acc, 1, mark_alive);
+        append_single_account_with_default_hash(&storage, &pubkey, &acc, 1, mark_alive, None);
 
         let calls = Arc::new(AtomicU64::new(0));
         let temp_dir = TempDir::new().unwrap();
@@ -10363,17 +10357,18 @@ pub mod tests {
             .collect::<Vec<_>>()
     }
 
-    fn append_single_account_with_default_hash(
+    pub(crate) fn append_single_account_with_default_hash(
         storage: &AccountStorageEntry,
         pubkey: &Pubkey,
         account: &AccountSharedData,
         write_version: StoredMetaWriteVersion,
         mark_alive: bool,
+        add_to_index: Option<&AccountsIndex<AccountInfo>>,
     ) {
-        let slot_ignored = Slot::MAX;
+        let slot = storage.slot();
         let accounts = [(pubkey, account)];
         let slice = &accounts[..];
-        let account_data = (slot_ignored, slice);
+        let account_data = (slot, slice);
         let hash = Hash::default();
         let storable_accounts =
             StorableAccountsWithHashesAndWriteVersions::new_with_hashes_and_write_versions(
@@ -10382,10 +10377,31 @@ pub mod tests {
                 vec![write_version],
             );
         let old_written = storage.written_bytes();
-        storage.accounts.append_accounts(&storable_accounts, 0);
+        let offsets = storage
+            .accounts
+            .append_accounts(&storable_accounts, 0)
+            .unwrap();
         if mark_alive {
             // updates 'alive_bytes' on the storage
             storage.add_account((storage.written_bytes() - old_written) as usize);
+        }
+
+        if let Some(index) = add_to_index {
+            let account_info = AccountInfo::new(
+                StorageLocation::AppendVec(storage.append_vec_id(), offsets[0]),
+                (offsets[1] - offsets[0]).try_into().unwrap(),
+                account.lamports(),
+            );
+            index.upsert(
+                slot,
+                slot,
+                pubkey,
+                account,
+                &AccountSecondaryIndexes::default(),
+                account_info,
+                &mut Vec::default(),
+                UpsertReclaim::IgnoreReclaims,
+            );
         }
     }
 
@@ -10408,7 +10424,7 @@ pub mod tests {
         let pubkey = solana_sdk::pubkey::new_rand();
         let acc = AccountSharedData::new(1, 48, AccountSharedData::default().owner());
         let mark_alive = false;
-        append_single_account_with_default_hash(&storage, &pubkey, &acc, 1, mark_alive);
+        append_single_account_with_default_hash(&storage, &pubkey, &acc, 1, mark_alive, None);
 
         let calls = Arc::new(AtomicU64::new(0));
 
@@ -10446,7 +10462,14 @@ pub mod tests {
             account_data_size.unwrap_or(48) as usize,
             AccountSharedData::default().owner(),
         );
-        append_single_account_with_default_hash(storage, pubkey, &acc, write_version, mark_alive);
+        append_single_account_with_default_hash(
+            storage,
+            pubkey,
+            &acc,
+            write_version,
+            mark_alive,
+            None,
+        );
     }
 
     fn sample_storage_with_entries(
@@ -10469,9 +10492,9 @@ pub mod tests {
         account_data_size: Option<u64>,
     ) -> Arc<AccountStorageEntry> {
         let (_temp_dirs, paths) = get_temp_accounts_paths(1).unwrap();
-        let size: usize = 123;
+        let size: usize = aligned_stored_size(account_data_size.unwrap_or(123) as usize);
         let mut data = AccountStorageEntry::new(&paths[0], slot, id, size as u64);
-        let av = AppendVec::new(&tf.path, true, 1024 * 1024);
+        let av = AppendVec::new(&tf.path, true, (1024 * 1024).max(size));
         data.accounts = av;
 
         let arc = Arc::new(data);
@@ -17289,17 +17312,36 @@ pub mod tests {
         one: &[(Pubkey, AccountSharedData)],
         two: &[(Pubkey, AccountSharedData)],
     ) {
+        let mut failures = 0;
         let mut two_indexes = (0..two.len()).collect::<Vec<_>>();
         one.iter().for_each(|(pubkey, account)| {
             for i in 0..two_indexes.len() {
                 let pubkey2 = two[two_indexes[i]].0;
                 if pubkey2 == *pubkey {
-                    assert!(accounts_equal(account, &two[i].1));
+                    if !accounts_equal(account, &two[two_indexes[i]].1) {
+                        failures += 1;
+                    }
                     two_indexes.remove(i);
                     break;
                 }
             }
         });
+        // helper method to reduce the volume of logged data to help identify differences
+        // modify this when you hit a failure
+        let clean = |accounts: &[(Pubkey, AccountSharedData)]| {
+            accounts
+                .iter()
+                .map(|(_pubkey, account)| account.lamports())
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(
+            failures,
+            0,
+            "one: {:?}, two: {:?}, two_indexes: {:?}",
+            clean(one),
+            clean(two),
+            two_indexes,
+        );
         assert!(
             two_indexes.is_empty(),
             "one: {one:?}, two: {two:?}, two_indexes: {two_indexes:?}"

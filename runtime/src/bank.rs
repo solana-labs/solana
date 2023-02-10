@@ -1929,6 +1929,7 @@ impl Bank {
             additional_builtins,
             debug_do_not_add_builtins,
         );
+        bank.fill_missing_sysvar_cache_entries();
 
         // Sanity assertions between bank snapshot and genesis config
         // Consider removing from serializable bank state
@@ -6935,6 +6936,13 @@ impl Bank {
         }
 
         Ok(sanitized_tx)
+    }
+
+    pub fn fully_verify_transaction(
+        &self,
+        tx: VersionedTransaction,
+    ) -> Result<SanitizedTransaction> {
+        self.verify_transaction(tx, TransactionVerificationMode::FullVerification)
     }
 
     /// only called from ledger-tool or tests
