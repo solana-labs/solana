@@ -65,8 +65,8 @@ impl SchedulerPool {
         self.schedulers.lock().unwrap().push(Box::new(Scheduler::spawn(self.clone(), context)));
     }
 
-    pub fn new_boxed(poh_recorder: Option<&Arc<RwLock<PohRecorder>>>) -> Box<dyn LikeSchedulerPool> {
-        Box::new(SchedulerPoolWrapper::new(poh_recorder))
+    pub fn new_boxed(poh_recorder: Option<&Arc<RwLock<PohRecorder>>>, log_messages_bytes_limit: Option<usize>, transaction_status_sender: Option<TransactionStatusSender>) -> Box<dyn LikeSchedulerPool> {
+        Box::new(SchedulerPoolWrapper::new(poh_recorder, log_messages_bytes_limit, transaction_status_sender))
     }
 }
 
@@ -85,8 +85,8 @@ impl Drop for SchedulerPool {
 struct SchedulerPoolWrapper(Arc<SchedulerPool>);
 
 impl SchedulerPoolWrapper {
-    fn new(poh_recorder: Option<&Arc<RwLock<PohRecorder>>>) -> Self {
-        Self(Arc::new(SchedulerPool::new(poh_recorder)))
+    fn new(poh_recorder: Option<&Arc<RwLock<PohRecorder>>>, log_messages_bytes_limit: Option<usize>, transaction_status_sender: Option<TransactionStatusSender>) -> Self {
+        Self(Arc::new(SchedulerPool::new(poh_recorder, log_messages_bytes_limit, transaction_status_sender)))
     }
 }
 
