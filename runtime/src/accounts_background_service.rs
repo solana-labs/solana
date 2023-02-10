@@ -142,8 +142,6 @@ pub struct SnapshotRequestHandler {
     pub accounts_package_sender: Sender<AccountsPackage>,
 }
 
-type AccountStorages = Vec<Arc<AccountStorageEntry>>;
-
 impl SnapshotRequestHandler {
     // Returns the latest requested snapshot block height and storages
     pub fn handle_snapshot_requests(
@@ -151,7 +149,7 @@ impl SnapshotRequestHandler {
         test_hash_calculation: bool,
         non_snapshot_time_us: u128,
         last_full_snapshot_slot: &mut Option<Slot>,
-    ) -> Option<Result<(u64, AccountStorages), SnapshotError>> {
+    ) -> Option<Result<(u64, Vec<Arc<AccountStorageEntry>>), SnapshotError>> {
         let (
             snapshot_request,
             accounts_package_type,
@@ -268,7 +266,7 @@ impl SnapshotRequestHandler {
         last_full_snapshot_slot: &mut Option<Slot>,
         snapshot_request: SnapshotRequest,
         accounts_package_type: AccountsPackageType,
-    ) -> Result<(u64, AccountStorages), SnapshotError> {
+    ) -> Result<(u64, Vec<Arc<AccountStorageEntry>>), SnapshotError> {
         debug!(
             "handling snapshot request: {:?}, {:?}",
             snapshot_request, accounts_package_type
@@ -512,7 +510,7 @@ impl AbsRequestHandlers {
         test_hash_calculation: bool,
         non_snapshot_time_us: u128,
         last_full_snapshot_slot: &mut Option<Slot>,
-    ) -> Option<Result<(u64, AccountStorages), SnapshotError>> {
+    ) -> Option<Result<(u64, Vec<Arc<AccountStorageEntry>>), SnapshotError>> {
         self.snapshot_request_handler.handle_snapshot_requests(
             test_hash_calculation,
             non_snapshot_time_us,
@@ -547,7 +545,7 @@ impl AccountsBackgroundService {
                 // This is for holding the reference counts of the appendvecs of the latest
                 // snapshot, so they are not released or recycled until this va
                 // Prefix with _ because of the compiler warning - value assigned never read
-                let mut _last_snapshot_storages: Option<AccountStorages> = None;
+                let mut _last_snapshot_storages: Option<Vec<Arc<AccountStorageEntry>>> = None;
                 loop {
                     if exit.load(Ordering::Relaxed) {
                         break;
