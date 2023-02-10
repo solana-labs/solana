@@ -2168,7 +2168,7 @@ fn send_deploy_messages(
                     rpc_client.clone(),
                     &config.websocket_url,
                     TpuClientConfig::default(),
-                    Arc::new(cache),
+                    cache,
                 )?
                 .send_and_confirm_messages_with_spinner(
                     write_messages,
@@ -2178,7 +2178,7 @@ fn send_deploy_messages(
                     rpc_client.clone(),
                     &config.websocket_url,
                     TpuClientConfig::default(),
-                    Arc::new(cache),
+                    cache,
                 )?
                 .send_and_confirm_messages_with_spinner(
                     write_messages,

@@ -472,7 +472,7 @@ fn run_tpu_send_transaction(tpu_use_quic: bool) {
             rpc_client.clone(),
             &test_validator.rpc_pubsub_url(),
             TpuClientConfig::default(),
-            Arc::new(cache),
+            cache,
         )
         .unwrap()
         .send_transaction(&tx),
@@ -480,7 +480,7 @@ fn run_tpu_send_transaction(tpu_use_quic: bool) {
             rpc_client.clone(),
             &test_validator.rpc_pubsub_url(),
             TpuClientConfig::default(),
-            Arc::new(cache),
+            cache,
         )
         .unwrap()
         .send_transaction(&tx),
