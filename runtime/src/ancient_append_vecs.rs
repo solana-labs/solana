@@ -1005,7 +1005,7 @@ pub mod tests {
     fn test_calc_ancient_slot_info_several() {
         let can_randomly_shrink = false;
         for alive in [true, false] {
-            for slots in 2..4 {
+            for slots in 0..4 {
                 // 1_040_000 is big enough relative to page size to cause shrink ratio to be triggered
                 for data_size in [None, Some(1_040_000)] {
                     let (db, slot1) = create_db_with_storages_and_index(alive, slots, data_size);
