@@ -643,16 +643,11 @@ fn get_rpc_nodes(
         let rpc_peers = rpc_peers.unwrap();
         blacklist_timeout = Instant::now();
         if bootstrap_config.no_snapshot_fetch {
-            if rpc_peers.is_empty() {
-                retry_reason = Some("No RPC peers available.".to_owned());
-                continue;
-            } else {
-                let random_peer = &rpc_peers[thread_rng().gen_range(0, rpc_peers.len())];
-                return vec![GetRpcNodeResult {
-                    rpc_contact_info: random_peer.clone(),
-                    snapshot_hash: None,
-                }];
-            }
+            let random_peer = &rpc_peers[thread_rng().gen_range(0, rpc_peers.len())];
+            return vec![GetRpcNodeResult {
+                rpc_contact_info: random_peer.clone(),
+                snapshot_hash: None,
+            }];
         }
 
         let known_validators_to_wait_for = if newer_cluster_snapshot_timeout
