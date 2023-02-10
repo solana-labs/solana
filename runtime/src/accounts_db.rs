@@ -10478,8 +10478,18 @@ pub mod tests {
         slot: Slot,
         pubkey: &Pubkey,
         mark_alive: bool,
+        overallocate: Option<u64>,
     ) -> Arc<AccountStorageEntry> {
-        sample_storage_with_entries_id(tf, write_version, slot, pubkey, 0, mark_alive, None)
+        sample_storage_with_entries_id(
+            tf,
+            write_version,
+            slot,
+            pubkey,
+            0,
+            mark_alive,
+            None,
+            overallocate,
+        )
     }
 
     fn sample_storage_with_entries_id(
@@ -10490,11 +10500,14 @@ pub mod tests {
         id: AppendVecId,
         mark_alive: bool,
         account_data_size: Option<u64>,
+        overallocate: Option<u64>,
     ) -> Arc<AccountStorageEntry> {
         let (_temp_dirs, paths) = get_temp_accounts_paths(1).unwrap();
-        let size: usize = aligned_stored_size(account_data_size.unwrap_or(123) as usize);
+        let size: usize = overallocate
+            .unwrap_or_else(|| aligned_stored_size(account_data_size.unwrap_or(48) as usize) as u64)
+            as usize;
         let mut data = AccountStorageEntry::new(&paths[0], slot, id, size as u64);
-        let av = AppendVec::new(&tf.path, true, (1024 * 1024).max(size));
+        let av = AppendVec::new(&tf.path, true, size);
         data.accounts = av;
 
         let arc = Arc::new(data);
@@ -10514,8 +10527,14 @@ pub mod tests {
         let pubkey1 = solana_sdk::pubkey::new_rand();
         let pubkey2 = solana_sdk::pubkey::new_rand();
         let mark_alive = false;
-        let storage =
-            sample_storage_with_entries(&tf, write_version1, slot_expected, &pubkey1, mark_alive);
+        let storage = sample_storage_with_entries(
+            &tf,
+            write_version1,
+            slot_expected,
+            &pubkey1,
+            mark_alive,
+            None,
+        );
         let lamports = storage.accounts.account_iter().next().unwrap().lamports();
         let calls = Arc::new(AtomicU64::new(0));
         let mut scanner = TestScanSimple {
@@ -16897,8 +16916,14 @@ pub mod tests {
             let write_version1 = 0;
             let pubkey1 = solana_sdk::pubkey::new_rand();
             let mark_alive = false;
-            let storage =
-                sample_storage_with_entries(&tf, write_version1, slot, &pubkey1, mark_alive);
+            let storage = sample_storage_with_entries(
+                &tf,
+                write_version1,
+                slot,
+                &pubkey1,
+                mark_alive,
+                Some(10_000),
+            );
 
             let load = AccountsDb::hash_storage_info(&mut hasher, Some(&storage), slot);
             let hash = hasher.finish();
@@ -17448,7 +17473,7 @@ pub mod tests {
 
         // create a 2nd ancient append vec at 'next_slot'
         let next_slot = max_slot_inclusive + 1;
-        create_storages_and_update_index(&db, None, next_slot, num_normal_slots, true, None);
+        create_storages_and_update_index(&db, None, next_slot, num_normal_slots, true, None, None);
         let max_slot_inclusive = next_slot + (num_normal_slots as Slot);
 
         let initial_accounts = get_all_accounts(&db, ancient_slot..(max_slot_inclusive + 1));
@@ -17638,6 +17663,7 @@ pub mod tests {
         num_slots: usize,
         alive: bool,
         account_data_size: Option<u64>,
+        overallocate: Option<u64>,
     ) {
         if num_slots == 0 {
             return;
@@ -17666,6 +17692,7 @@ pub mod tests {
                 id,
                 alive,
                 account_data_size,
+                overallocate,
             );
             insert_store(db, Arc::clone(&storage));
         }
@@ -17683,6 +17710,7 @@ pub mod tests {
         alive: bool,
         num_slots: usize,
         account_data_size: Option<u64>,
+        overallocate: Option<u64>,
     ) -> (AccountsDb, Slot) {
         solana_logger::setup();
 
@@ -17694,7 +17722,15 @@ pub mod tests {
         // verify we create an ancient appendvec that has alive accounts and does not have dead accounts
 
         let slot1 = 1;
-        create_storages_and_update_index(&db, None, slot1, num_slots, alive, account_data_size);
+        create_storages_and_update_index(
+            &db,
+            None,
+            slot1,
+            num_slots,
+            alive,
+            account_data_size,
+            overallocate,
+        );
 
         let slot1 = slot1 as Slot;
         (db, slot1)
@@ -17704,7 +17740,8 @@ pub mod tests {
         alive: bool,
         num_normal_slots: usize,
     ) -> (AccountsDb, Slot) {
-        let (db, slot1) = create_db_with_storages_and_index(alive, num_normal_slots + 1, None);
+        let (db, slot1) =
+            create_db_with_storages_and_index(alive, num_normal_slots + 1, None, None);
         let storage = db.get_storage_for_slot(slot1).unwrap();
         let created_accounts = db.get_unique_accounts_from_storage(&storage);
 
@@ -17780,7 +17817,8 @@ pub mod tests {
         );
         let write_version1 = 0;
         let pubkey1 = solana_sdk::pubkey::new_rand();
-        let storage = sample_storage_with_entries(&tf, write_version1, slot5, &pubkey1, false);
+        let storage =
+            sample_storage_with_entries(&tf, write_version1, slot5, &pubkey1, false, None);
         let mut current_ancient = CurrentAncientAppendVec::default();
 
         let should_move = db.should_move_to_ancient_append_vec(

@@ -530,6 +530,7 @@ pub mod tests {
     fn get_sample_storages(
         slots: usize,
         account_data_size: Option<u64>,
+        overallocate: Option<u64>,
     ) -> (
         AccountsDb,
         Vec<Arc<AccountStorageEntry>>,
@@ -537,7 +538,8 @@ pub mod tests {
         Vec<SlotInfo>,
     ) {
         let alive = true;
-        let (db, slot1) = create_db_with_storages_and_index(alive, slots, account_data_size);
+        let (db, slot1) =
+            create_db_with_storages_and_index(alive, slots, account_data_size, overallocate);
         let original_stores = (0..slots)
             .filter_map(|slot| db.storage.get_slot_storage_entry((slot as Slot) + slot1))
             .collect::<Vec<_>>();
@@ -585,7 +587,7 @@ pub mod tests {
         // all accounts have 1 ref or all accounts have 2 refs
         for num_slots in 0..3 {
             for two_refs in [false, true] {
-                let (db, storages, slots, infos) = get_sample_storages(num_slots, None);
+                let (db, storages, slots, infos) = get_sample_storages(num_slots, None, None);
                 let original_results = storages
                     .iter()
                     .map(|store| db.get_unique_accounts_from_storage(store))
@@ -668,7 +670,7 @@ pub mod tests {
         // 1 with 1 ref
         // 1 with 2 refs
         let num_slots = 1;
-        let (db, storages, slots, infos) = get_sample_storages(num_slots, None);
+        let (db, storages, slots, infos) = get_sample_storages(num_slots, None, Some(10_000));
         let original_results = storages
             .iter()
             .map(|store| db.get_unique_accounts_from_storage(store))
@@ -770,7 +772,7 @@ pub mod tests {
     fn test_get_unique_accounts_from_storage_for_combining_ancient_slots() {
         for num_slots in 0..3 {
             for reverse in [false, true] {
-                let (db, storages, slots, mut infos) = get_sample_storages(num_slots, None);
+                let (db, storages, slots, mut infos) = get_sample_storages(num_slots, None, None);
                 let original_results = storages
                     .iter()
                     .map(|store| db.get_unique_accounts_from_storage(store))
@@ -932,8 +934,13 @@ pub mod tests {
         let slots = 1;
         for method in TestCollectInfo::iter() {
             // 1_040_000 is big enough relative to page size to cause shrink ratio to be triggered
-            for data_size in [None, Some(1_040_000)] {
-                let (db, slot1) = create_db_with_storages_and_index(alive, slots, data_size);
+            for data_size in [Some(48), Some(1_040_000)] {
+                let (db, slot1) = create_db_with_storages_and_index(
+                    alive,
+                    slots,
+                    data_size,
+                    data_size.map(|size| aligned_stored_size(size as usize) as u64),
+                );
                 let mut infos = AncientSlotInfos::default();
                 let storage = db.storage.get_slot_storage_entry(slot1).unwrap();
                 let alive_bytes_expected = storage.alive_bytes();
@@ -986,7 +993,7 @@ pub mod tests {
         let alive = false;
         let slots = 1;
         for call_add in [false, true] {
-            let (db, slot1) = create_db_with_storages_and_index(alive, slots, None);
+            let (db, slot1) = create_db_with_storages_and_index(alive, slots, None, None);
             let mut infos = AncientSlotInfos::default();
             let storage = db.storage.get_slot_storage_entry(slot1).unwrap();
             if call_add {
@@ -1007,8 +1014,16 @@ pub mod tests {
         for alive in [true, false] {
             for slots in 2..4 {
                 // 1_040_000 is big enough relative to page size to cause shrink ratio to be triggered
-                for data_size in [None, Some(1_040_000)] {
-                    let (db, slot1) = create_db_with_storages_and_index(alive, slots, data_size);
+                for (data_size, overallocate) in [
+                    (None, Some(1024 * 1024)),
+                    (Some(1_040_000), Some(1_041_000)),
+                ] {
+                    let (db, slot1) = create_db_with_storages_and_index(
+                        alive,
+                        slots,
+                        data_size,
+                        overallocate, //None,//Some(aligned_stored_size(data_size.unwrap_or(48) as usize) as u64),
+                    );
                     let slot_vec = (slot1..(slot1 + slots as Slot)).collect::<Vec<_>>();
                     let storages = slot_vec
                         .iter()
@@ -1064,9 +1079,13 @@ pub mod tests {
                 let alives = vec![false /*dummy*/, slot1_is_alive, !slot1_is_alive];
                 let slots = 2;
                 // 1_040_000 is big enough relative to page size to cause shrink ratio to be triggered
-                for data_size in [None, Some(1_040_000)] {
-                    let (db, slot1) =
-                        create_db_with_storages_and_index(true /*alive*/, slots, data_size);
+                for data_size in [Some(48), Some(1_040_000)] {
+                    let (db, slot1) = create_db_with_storages_and_index(
+                        true, /*alive*/
+                        slots,
+                        data_size,
+                        data_size.map(|size| aligned_stored_size(size as usize) as u64),
+                    );
                     assert_eq!(slot1, 1); // make sure index into alives will be correct
                     assert_eq!(alives[slot1 as usize], slot1_is_alive);
                     let slot_vec = (slot1..(slot1 + slots as Slot)).collect::<Vec<_>>();
@@ -1143,7 +1162,7 @@ pub mod tests {
     }
 
     fn create_test_infos(count: usize) -> AncientSlotInfos {
-        let (db, slot1) = create_db_with_storages_and_index(true /*alive*/, 1, None);
+        let (db, slot1) = create_db_with_storages_and_index(true /*alive*/, 1, None, None);
         let storage = db.storage.get_slot_storage_entry(slot1).unwrap();
         AncientSlotInfos {
             all_infos: (0..count)
@@ -1359,8 +1378,12 @@ pub mod tests {
                     .iter()
                     .map(|shrink| (!shrink).then_some(1_040_000))
                     .collect::<Vec<_>>();
-                let (db, slot1) =
-                    create_db_with_storages_and_index(true /*alive*/, 1, data_sizes[1]);
+                let (db, slot1) = create_db_with_storages_and_index(
+                    true, /*alive*/
+                    1,
+                    data_sizes[1],
+                    (slot1_shrink).then_some(1024 * 1024), // None,//aligned_stored_sizedata_sizes[1].map(|size| (size as usize) as u64).or_else(f),
+                );
                 let dead_bytes = 184; // constant based on None data size
                 create_storages_and_update_index(
                     &db,
@@ -1369,6 +1392,7 @@ pub mod tests {
                     1,
                     true,
                     data_sizes[(slot1 + 1) as usize],
+                    (!slot1_shrink).then_some(1024 * 1024),
                 );
 
                 assert_eq!(slot1, 1); // make sure index into shrinks will be correct
@@ -1469,7 +1493,7 @@ pub mod tests {
                             continue;
                         }
                         let (db, storages, slots, _infos) =
-                            get_sample_storages(num_slots, data_size);
+                            get_sample_storages(num_slots, data_size, None);
 
                         let initial_accounts = get_all_accounts(&db, slots.clone());
 
@@ -1634,7 +1658,7 @@ pub mod tests {
 
     #[test]
     fn test_sort_shrink_indexes_by_bytes_saved() {
-        let (db, slot1) = create_db_with_storages_and_index(true /*alive*/, 1, None);
+        let (db, slot1) = create_db_with_storages_and_index(true /*alive*/, 1, None, None);
         let storage = db.storage.get_slot_storage_entry(slot1).unwrap();
         // ignored
         let slot = 0;
