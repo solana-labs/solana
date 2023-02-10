@@ -50,7 +50,7 @@ impl SchedulerPool {
     fn new(poh_recorder: &Arc<RwLock<PohRecorder>>) -> Self {
         Self {
             schedulers: std::sync::Mutex::new(Vec::new()),
-            poh: Some(poh_recorder),
+            poh: Some(poh_recorder.clone()),
         }
     }
 
