@@ -829,3 +829,26 @@ pub fn initialize_transaction_status_sender_callback(log_messages_bytes_limit: O
         )
     });
 }
+
+pub fn initialize_poh_callback(poh_recorder: &Arc<RwLock<PohRecorder>>) {
+    *POH.write().unwrap() = Some({
+        let poh_recorder_lock = poh_recorder.clone();
+        let poh_recorder = poh_recorder_lock.read().unwrap();
+        let recorder = poh_recorder.recorder();
+        let skip_poh = std::env::var("SKIP_POH").is_ok();
+        drop(poh_recorder);
+
+        Box::new(move |bank: &Bank, transactions, hash| -> Result<_, ()> {
+            if skip_poh {
+                return Ok(Default::default());
+            }
+            //let current_thread_name = std::thread::current().name().unwrap().to_string();
+            //info!("scEx: {current_thread_name} committing.. {} txes", transactions.len());
+            let res = recorder.record(bank.slot(), hash, transactions);
+
+            //info!("scEx: {current_thread_name} recorded {:?}", res);
+
+            res.map_err(|_| ())
+        })
+    });
+}
