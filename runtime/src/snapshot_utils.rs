@@ -883,8 +883,7 @@ pub fn create_accounts_run_and_snapshot_dirs(
 
 /// Return account path from the appendvec path after checking its format.
 fn get_account_path_from_appendvec_path(appendvec_path: &Path) -> Option<PathBuf> {
-    let path = appendvec_path.to_path_buf();
-    let run_path = path.parent()?;
+    let run_path = appendvec_path.parent()?;
     let run_file_name = run_path.file_name()?;
     // All appendvec files should be under <account_path>/run/.
     // When generating the bank snapshot directory, they are hardlinked to <account_path>/snapshot/<slot>/
