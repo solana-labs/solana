@@ -25,8 +25,8 @@ const DEFAULT_CONNECTION_CACHE_USE_QUIC: bool = true;
 /// construction of the ConnectionCache for code dealing both with udp and quic.
 /// For the scenario only using udp or quic, use connection-cache/ConnectionCache directly.
 pub enum ConnectionCache {
-    Quic(BackendConnectionCache<QuicPool, QuicConnectionManager, QuicConfig>),
-    Udp(BackendConnectionCache<UdpPool, UdpConnectionManager, UdpConfig>),
+    Quic(Arc<BackendConnectionCache<QuicPool, QuicConnectionManager, QuicConfig>>),
+    Udp(Arc<BackendConnectionCache<UdpPool, UdpConnectionManager, UdpConfig>>),
 }
 
 type QuicBaseClientConnection = <QuicPool as ConnectionPool>::BaseClientConnection;
@@ -71,7 +71,7 @@ impl ConnectionCache {
         }
         let connection_manager = QuicConnectionManager::new_with_connection_config(config);
         let cache = BackendConnectionCache::new(connection_manager, connection_pool_size).unwrap();
-        Self::Quic(cache)
+        Self::Quic(Arc::new(cache))
     }
 
     #[deprecated(
@@ -102,7 +102,7 @@ impl ConnectionCache {
         let connection_pool_size = 1.max(connection_pool_size);
         let connection_manager = UdpConnectionManager::default();
         let cache = BackendConnectionCache::new(connection_manager, connection_pool_size).unwrap();
-        Self::Udp(cache)
+        Self::Udp(Arc::new(cache))
     }
 
     pub fn use_quic(&self) -> bool {

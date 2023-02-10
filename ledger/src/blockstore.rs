@@ -39,7 +39,10 @@ use {
         poh_timing_point::{send_poh_timing_point, PohTimingSender, SlotPohTimingInfo},
     },
     solana_rayon_threadlimit::get_max_thread_count,
-    solana_runtime::hardened_unpack::{unpack_genesis_archive, MAX_GENESIS_ARCHIVE_UNPACKED_SIZE},
+    solana_runtime::{
+        bank::Bank,
+        hardened_unpack::{unpack_genesis_archive, MAX_GENESIS_ARCHIVE_UNPACKED_SIZE},
+    },
     solana_sdk::{
         clock::{Slot, UnixTimestamp, DEFAULT_TICKS_PER_SECOND},
         genesis_config::{GenesisConfig, DEFAULT_GENESIS_ARCHIVE, DEFAULT_GENESIS_FILE},
@@ -2853,6 +2856,7 @@ impl Blockstore {
     /// Used by ledger-tool to create a minimized snapshot
     pub fn get_accounts_used_in_range(
         &self,
+        bank: &Bank,
         starting_slot: Slot,
         ending_slot: Slot,
     ) -> DashSet<Pubkey> {
@@ -2862,11 +2866,27 @@ impl Blockstore {
             .into_par_iter()
             .for_each(|slot| {
                 if let Ok(entries) = self.get_slot_entries(slot, 0) {
-                    entries.par_iter().for_each(|entry| {
-                        entry.transactions.iter().for_each(|tx| {
-                            tx.message.static_account_keys().iter().for_each(|pubkey| {
-                                result.insert(*pubkey);
-                            });
+                    entries.into_par_iter().for_each(|entry| {
+                        entry.transactions.into_iter().for_each(|tx| {
+                            if let Some(lookups) = tx.message.address_table_lookups() {
+                                lookups.iter().for_each(|lookup| {
+                                    result.insert(lookup.account_key);
+                                });
+                            }
+                            // howdy, anybody who reached here from the panic messsage!
+                            // the .unwrap() below could indicate there was an odd error or there
+                            // could simply be a tx with a new ALT, which is just created/updated
+                            // in this range. too bad... this edge case isn't currently supported.
+                            // see: https://github.com/solana-labs/solana/issues/30165
+                            // for casual use, please choose different slot range.
+                            let sanitized_tx = bank.fully_verify_transaction(tx).unwrap();
+                            sanitized_tx
+                                .message()
+                                .account_keys()
+                                .iter()
+                                .for_each(|&pubkey| {
+                                    result.insert(pubkey);
+                                });
                         });
                     });
                 }

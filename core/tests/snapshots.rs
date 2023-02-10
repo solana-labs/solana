@@ -10,9 +10,7 @@ use {
         accounts_hash_verifier::AccountsHashVerifier,
         snapshot_packager_service::SnapshotPackagerService,
     },
-    solana_gossip::{
-        cluster_info::ClusterInfo, legacy_contact_info::LegacyContactInfo as ContactInfo,
-    },
+    solana_gossip::{cluster_info::ClusterInfo, contact_info::ContactInfo},
     solana_runtime::{
         accounts_background_service::{
             AbsRequestHandlers, AbsRequestSender, AccountsBackgroundService,
@@ -516,10 +514,11 @@ fn test_concurrent_snapshot_packaging(
 
     let cluster_info = Arc::new({
         let keypair = Arc::new(Keypair::new());
-        let contact_info = ContactInfo {
-            id: keypair.pubkey(),
-            ..ContactInfo::default()
-        };
+        let contact_info = ContactInfo::new(
+            keypair.pubkey(),
+            timestamp(), // wallclock
+            0u16,        // shred_version
+        );
         ClusterInfo::new(contact_info, keypair, SocketAddrSpace::Unspecified)
     });
 

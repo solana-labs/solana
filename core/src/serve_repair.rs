@@ -1332,7 +1332,7 @@ mod tests {
     use {
         super::*,
         crate::{repair_response, result::Error},
-        solana_gossip::{socketaddr, socketaddr_any},
+        solana_gossip::{contact_info::ContactInfo, socketaddr, socketaddr_any},
         solana_ledger::{
             blockstore::make_many_slot_entries,
             blockstore_processor::fill_blockstore_slot_with_ticks,
@@ -1810,21 +1810,21 @@ mod tests {
         assert_matches!(rv, Err(Error::ClusterInfo(ClusterInfoError::NoPeers)));
 
         let serve_repair_addr = socketaddr!(Ipv4Addr::LOCALHOST, 1243);
-        let nxt = ContactInfo {
-            id: solana_sdk::pubkey::new_rand(),
-            gossip: socketaddr!(Ipv4Addr::LOCALHOST, 1234),
-            tvu: socketaddr!(Ipv4Addr::LOCALHOST, 1235),
-            tvu_forwards: socketaddr!(Ipv4Addr::LOCALHOST, 1236),
-            repair: socketaddr!(Ipv4Addr::LOCALHOST, 1237),
-            tpu: socketaddr!(Ipv4Addr::LOCALHOST, 1238),
-            tpu_forwards: socketaddr!(Ipv4Addr::LOCALHOST, 1239),
-            tpu_vote: socketaddr!(Ipv4Addr::LOCALHOST, 1240),
-            rpc: socketaddr!(Ipv4Addr::LOCALHOST, 1241),
-            rpc_pubsub: socketaddr!(Ipv4Addr::LOCALHOST, 1242),
-            serve_repair: serve_repair_addr,
-            wallclock: 0,
-            shred_version: 0,
-        };
+        let mut nxt = ContactInfo::new(
+            solana_sdk::pubkey::new_rand(),
+            timestamp(), // wallclock
+            0u16,        // shred_version
+        );
+        nxt.set_gossip((Ipv4Addr::LOCALHOST, 1234)).unwrap();
+        nxt.set_tvu((Ipv4Addr::LOCALHOST, 1235)).unwrap();
+        nxt.set_tvu_forwards((Ipv4Addr::LOCALHOST, 1236)).unwrap();
+        nxt.set_repair((Ipv4Addr::LOCALHOST, 1237)).unwrap();
+        nxt.set_tpu((Ipv4Addr::LOCALHOST, 1238)).unwrap();
+        nxt.set_tpu_forwards((Ipv4Addr::LOCALHOST, 1239)).unwrap();
+        nxt.set_tpu_vote((Ipv4Addr::LOCALHOST, 1240)).unwrap();
+        nxt.set_rpc((Ipv4Addr::LOCALHOST, 1241)).unwrap();
+        nxt.set_rpc_pubsub((Ipv4Addr::LOCALHOST, 1242)).unwrap();
+        nxt.set_serve_repair(serve_repair_addr).unwrap();
         cluster_info.insert_info(nxt.clone());
         let rv = serve_repair
             .repair_request(
@@ -1837,25 +1837,25 @@ mod tests {
                 &identity_keypair,
             )
             .unwrap();
-        assert_eq!(nxt.serve_repair, serve_repair_addr);
-        assert_eq!(rv.0, nxt.serve_repair);
+        assert_eq!(nxt.serve_repair().unwrap(), serve_repair_addr);
+        assert_eq!(rv.0, nxt.serve_repair().unwrap());
 
         let serve_repair_addr2 = socketaddr!([127, 0, 0, 2], 1243);
-        let nxt = ContactInfo {
-            id: solana_sdk::pubkey::new_rand(),
-            gossip: socketaddr!(Ipv4Addr::LOCALHOST, 1234),
-            tvu: socketaddr!(Ipv4Addr::LOCALHOST, 1235),
-            tvu_forwards: socketaddr!(Ipv4Addr::LOCALHOST, 1236),
-            repair: socketaddr!(Ipv4Addr::LOCALHOST, 1237),
-            tpu: socketaddr!(Ipv4Addr::LOCALHOST, 1238),
-            tpu_forwards: socketaddr!(Ipv4Addr::LOCALHOST, 1239),
-            tpu_vote: socketaddr!(Ipv4Addr::LOCALHOST, 1240),
-            rpc: socketaddr!(Ipv4Addr::LOCALHOST, 1241),
-            rpc_pubsub: socketaddr!(Ipv4Addr::LOCALHOST, 1242),
-            serve_repair: serve_repair_addr2,
-            wallclock: 0,
-            shred_version: 0,
-        };
+        let mut nxt = ContactInfo::new(
+            solana_sdk::pubkey::new_rand(),
+            timestamp(), // wallclock
+            0u16,        // shred_version
+        );
+        nxt.set_gossip((Ipv4Addr::LOCALHOST, 1234)).unwrap();
+        nxt.set_tvu((Ipv4Addr::LOCALHOST, 1235)).unwrap();
+        nxt.set_tvu_forwards((Ipv4Addr::LOCALHOST, 1236)).unwrap();
+        nxt.set_repair((Ipv4Addr::LOCALHOST, 1237)).unwrap();
+        nxt.set_tpu((Ipv4Addr::LOCALHOST, 1238)).unwrap();
+        nxt.set_tpu_forwards((Ipv4Addr::LOCALHOST, 1239)).unwrap();
+        nxt.set_tpu_vote((Ipv4Addr::LOCALHOST, 1240)).unwrap();
+        nxt.set_rpc((Ipv4Addr::LOCALHOST, 1241)).unwrap();
+        nxt.set_rpc_pubsub((Ipv4Addr::LOCALHOST, 1242)).unwrap();
+        nxt.set_serve_repair(serve_repair_addr2).unwrap();
         cluster_info.insert_info(nxt);
         let mut one = false;
         let mut two = false;
@@ -2136,7 +2136,7 @@ mod tests {
         // 1) repair validator set doesn't exist in gossip
         // 2) repair validator set only includes our own id
         // then no repairs should be generated
-        for pubkey in &[solana_sdk::pubkey::new_rand(), me.id] {
+        for pubkey in &[solana_sdk::pubkey::new_rand(), *me.pubkey()] {
             let known_validators = Some(vec![*pubkey].into_iter().collect());
             assert!(serve_repair.repair_peers(&known_validators, 1).is_empty());
             assert!(serve_repair
@@ -2153,10 +2153,10 @@ mod tests {
         }
 
         // If known validator exists in gossip, should return repair successfully
-        let known_validators = Some(vec![contact_info2.id].into_iter().collect());
+        let known_validators = Some(vec![*contact_info2.pubkey()].into_iter().collect());
         let repair_peers = serve_repair.repair_peers(&known_validators, 1);
         assert_eq!(repair_peers.len(), 1);
-        assert_eq!(repair_peers[0].id, contact_info2.id);
+        assert_eq!(&repair_peers[0].id, contact_info2.pubkey());
         assert!(serve_repair
             .repair_request(
                 &cluster_slots,
@@ -2177,8 +2177,8 @@ mod tests {
             .map(|c| c.id)
             .collect();
         assert_eq!(repair_peers.len(), 2);
-        assert!(repair_peers.contains(&contact_info2.id));
-        assert!(repair_peers.contains(&contact_info3.id));
+        assert!(repair_peers.contains(contact_info2.pubkey()));
+        assert!(repair_peers.contains(contact_info3.pubkey()));
         assert!(serve_repair
             .repair_request(
                 &cluster_slots,

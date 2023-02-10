@@ -448,14 +448,14 @@ fn test_duplicate_shreds_broadcast_leader() {
     let our_info = cluster.exit_node(&our_id);
     let node_keypair = our_info.info.keypair;
     let vote_keypair = our_info.info.voting_keypair;
-    let bad_leader_id = cluster.entry_point_info.id;
+    let bad_leader_id = *cluster.entry_point_info.pubkey();
     let bad_leader_ledger_path = cluster.validators[&bad_leader_id].info.ledger_path.clone();
     info!("our node id: {}", node_keypair.pubkey());
 
     // 3) Start up a gossip instance to listen for and push votes
     let voter_thread_sleep_ms = 100;
     let gossip_voter = cluster_tests::start_gossip_voter(
-        &cluster.entry_point_info.gossip,
+        &cluster.entry_point_info.gossip().unwrap(),
         &node_keypair,
         move |(label, leader_vote_tx)| {
             // Filter out votes not from the bad leader
@@ -721,7 +721,8 @@ fn test_switch_threshold_uses_gossip_votes() {
             cluster
                 .get_contact_info(&context.heaviest_validator_key)
                 .unwrap()
-                .gossip,
+                .gossip()
+                .unwrap(),
             &SocketAddrSpace::Unspecified,
         )
         .unwrap();
@@ -798,7 +799,7 @@ fn test_listener_startup() {
     };
     let cluster = LocalCluster::new(&mut config, SocketAddrSpace::Unspecified);
     let cluster_nodes = discover_cluster(
-        &cluster.entry_point_info.gossip,
+        &cluster.entry_point_info.gossip().unwrap(),
         4,
         SocketAddrSpace::Unspecified,
     )

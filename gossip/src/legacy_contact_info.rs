@@ -2,7 +2,6 @@ use {
     crate::crds_value::MAX_WALLCLOCK,
     solana_sdk::{
         pubkey::Pubkey,
-        rpc_port,
         sanitize::{Sanitize, SanitizeError},
         timing::timestamp,
     },
@@ -117,41 +116,6 @@ impl LegacyContactInfo {
         node
     }
 
-    // Used in tests
-    pub fn new_with_socketaddr(pubkey: &Pubkey, bind_addr: &SocketAddr) -> Self {
-        fn next_port(addr: &SocketAddr, nxt: u16) -> SocketAddr {
-            let mut nxt_addr = *addr;
-            nxt_addr.set_port(addr.port() + nxt);
-            nxt_addr
-        }
-
-        let tpu = *bind_addr;
-        let gossip = next_port(bind_addr, 1);
-        let tvu = next_port(bind_addr, 2);
-        let tpu_forwards = next_port(bind_addr, 3);
-        let tvu_forwards = next_port(bind_addr, 4);
-        let repair = next_port(bind_addr, 5);
-        let rpc = SocketAddr::new(bind_addr.ip(), rpc_port::DEFAULT_RPC_PORT);
-        let rpc_pubsub = SocketAddr::new(bind_addr.ip(), rpc_port::DEFAULT_RPC_PUBSUB_PORT);
-        let serve_repair = next_port(bind_addr, 6);
-        let tpu_vote = next_port(bind_addr, 7);
-        Self {
-            id: *pubkey,
-            gossip,
-            tvu,
-            tvu_forwards,
-            repair,
-            tpu,
-            tpu_forwards,
-            tpu_vote,
-            rpc,
-            rpc_pubsub,
-            serve_repair,
-            wallclock: timestamp(),
-            shred_version: 0,
-        }
-    }
-
     // Construct a LegacyContactInfo that's only usable for gossip
     pub fn new_gossip_entry_point(gossip_addr: &SocketAddr) -> Self {
         Self {
@@ -196,10 +160,7 @@ impl LegacyContactInfo {
 
 #[cfg(test)]
 mod tests {
-    use {
-        super::*,
-        solana_sdk::signature::{Keypair, Signer},
-    };
+    use super::*;
 
     #[test]
     fn test_is_valid_address() {
@@ -251,45 +212,6 @@ mod tests {
         assert!(ci.tpu.ip().is_unspecified());
         assert!(ci.tpu_vote.ip().is_unspecified());
         assert!(ci.serve_repair.ip().is_unspecified());
-    }
-    #[test]
-    fn test_socketaddr() {
-        let addr = socketaddr!(Ipv4Addr::LOCALHOST, 10);
-        let ci = LegacyContactInfo::new_with_socketaddr(&Keypair::new().pubkey(), &addr);
-        assert_eq!(ci.tpu, addr);
-        assert_eq!(ci.tpu_vote.port(), 17);
-        assert_eq!(ci.gossip.port(), 11);
-        assert_eq!(ci.tvu.port(), 12);
-        assert_eq!(ci.tpu_forwards.port(), 13);
-        assert_eq!(ci.rpc.port(), rpc_port::DEFAULT_RPC_PORT);
-        assert_eq!(ci.rpc_pubsub.port(), rpc_port::DEFAULT_RPC_PUBSUB_PORT);
-        assert_eq!(ci.serve_repair.port(), 16);
-    }
-
-    #[test]
-    fn replayed_data_new_with_socketaddr_with_pubkey() {
-        let keypair = Keypair::new();
-        let d1 = LegacyContactInfo::new_with_socketaddr(
-            &keypair.pubkey(),
-            &socketaddr!(Ipv4Addr::LOCALHOST, 1234),
-        );
-        assert_eq!(d1.id, keypair.pubkey());
-        assert_eq!(d1.gossip, socketaddr!(Ipv4Addr::LOCALHOST, 1235));
-        assert_eq!(d1.tvu, socketaddr!(Ipv4Addr::LOCALHOST, 1236));
-        assert_eq!(d1.tpu_forwards, socketaddr!(Ipv4Addr::LOCALHOST, 1237));
-        assert_eq!(d1.tpu, socketaddr!(Ipv4Addr::LOCALHOST, 1234));
-        assert_eq!(
-            d1.rpc,
-            socketaddr!(Ipv4Addr::LOCALHOST, rpc_port::DEFAULT_RPC_PORT)
-        );
-        assert_eq!(
-            d1.rpc_pubsub,
-            socketaddr!(Ipv4Addr::LOCALHOST, rpc_port::DEFAULT_RPC_PUBSUB_PORT)
-        );
-        assert_eq!(d1.tvu_forwards, socketaddr!(Ipv4Addr::LOCALHOST, 1238));
-        assert_eq!(d1.repair, socketaddr!(Ipv4Addr::LOCALHOST, 1239));
-        assert_eq!(d1.serve_repair, socketaddr!(Ipv4Addr::LOCALHOST, 1240));
-        assert_eq!(d1.tpu_vote, socketaddr!(Ipv4Addr::LOCALHOST, 1241));
     }
 
     #[test]

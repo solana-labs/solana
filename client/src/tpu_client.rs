@@ -77,7 +77,7 @@ impl TpuClient<QuicPool, QuicConnectionManager, QuicConfig> {
         config: TpuClientConfig,
     ) -> Result<Self> {
         let connection_cache = match ConnectionCache::default() {
-            ConnectionCache::Quic(cache) => Arc::new(cache),
+            ConnectionCache::Quic(cache) => cache,
             ConnectionCache::Udp(_) => {
                 return Err(TpuSenderError::Custom(String::from(
                     "Invalid default connection cache",

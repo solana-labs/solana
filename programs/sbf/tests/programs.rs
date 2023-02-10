@@ -154,6 +154,7 @@ fn run_program(name: &str) -> u64 {
                             .trace_log_stack
                             .last()
                             .expect("Inconsistent trace log stack")
+                            .trace_log
                             .clone(),
                     );
                 } else {
@@ -164,6 +165,7 @@ fn run_program(name: &str) -> u64 {
                         .trace_log_stack
                         .last()
                         .expect("Inconsistent trace log stack")
+                        .trace_log
                         .as_slice();
                     if jit.len() > interpreter.len() {
                         jit = &jit[0..interpreter.len()];
