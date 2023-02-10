@@ -1158,7 +1158,7 @@ pub trait LikeScheduler: Send + Sync + std::fmt::Debug {
     fn schedule_execution(&self, sanitized_tx: &SanitizedTransaction, index: usize, mode: solana_scheduler::Mode);
     fn handle_aborted_executions(&self) -> Vec<Result<ExecuteTimings>>;
     fn pause_commit_into_bank(&self);
-    fn resume_commit_into_bank(&self, bank: Option<&Arc<Bank>>);
+    fn resume_commit_into_bank(&self);
     fn gracefully_stop(&mut self) -> Result<()>;
     fn current_scheduler_mode(&self) -> solana_scheduler::Mode;
     fn collected_results(&self) -> Arc<std::sync::Mutex<Vec<Result<ExecuteTimings>>>>;
@@ -6201,7 +6201,7 @@ impl Bank {
             solana_scheduler::Mode::Banking => {
                 let s = self.scheduler.read().unwrap();
                 let scheduler = s.as_ref().unwrap();
-                scheduler.resume_commit_into_bank(Some(self));
+                scheduler.resume_commit_into_bank();
             },
             solana_scheduler::Mode::Replaying => {
                 info!("maybe isolated banking?");
@@ -7966,10 +7966,12 @@ impl Bank {
                 info!("wait_for_scheduler({scheduler_mode:?}/{via_drop}): gracefully stopping bank ({})...", self.slot());
                 if matches!(scheduler_mode, solana_scheduler::Mode::Banking) {
                     assert!(via_drop);
-                    scheduler.resume_commit_into_bank(None);
-                } else if via_drop  {
-                    scheduler.resume_commit_into_bank(None);
                 }
+                if via_drop {
+                    scheduler.replace_scheduler_context(SchedulerContext{bank: None, mode: scheduler_mode});
+                    scheduler.resume_commit_into_bank();
+                }
+
                 let next_context = if take_next {
                     Some(scheduler.scheduler_context())
                 } else {
