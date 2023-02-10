@@ -853,7 +853,7 @@ pub fn initialize_poh_callback(poh_recorder: &Arc<RwLock<PohRecorder>>) {
         let skip_poh = std::env::var("SKIP_POH").is_ok();
         drop(poh_recorder);
 
-        Box::new(move |bank: &Bank, transactions, hash| -> std::result::Result<usize, ()> {
+        Box::new(move |bank: &Bank, transactions, hash| -> std::result::Result<Option<usize>, ()> {
             if skip_poh {
                 return Ok(Default::default());
             }
