@@ -73,7 +73,7 @@ impl Consumer {
         test_fn: Option<impl Fn()>,
         banking_stage_stats: &BankingStageStats,
         committer: &Committer,
-        recorder: &TransactionRecorder,
+        transaction_recorder: &TransactionRecorder,
         qos_service: &QosService,
         slot_metrics_tracker: &mut LeaderSlotMetricsTracker,
         log_messages_bytes_limit: Option<usize>,
@@ -92,7 +92,7 @@ impl Consumer {
                     bank_start,
                     payload,
                     committer,
-                    recorder,
+                    transaction_recorder,
                     banking_stage_stats,
                     qos_service,
                     log_messages_bytes_limit,
@@ -136,7 +136,7 @@ impl Consumer {
         bank_start: &BankStart,
         payload: &mut ConsumeScannerPayload,
         committer: &Committer,
-        recorder: &TransactionRecorder,
+        transaction_recorder: &TransactionRecorder,
         banking_stage_stats: &BankingStageStats,
         qos_service: &QosService,
         log_messages_bytes_limit: Option<usize>,
@@ -155,7 +155,7 @@ impl Consumer {
                 &bank_start.working_bank,
                 &bank_start.bank_creation_time,
                 committer,
-                recorder,
+                transaction_recorder,
                 &payload.sanitized_transactions,
                 banking_stage_stats,
                 qos_service,
@@ -208,7 +208,7 @@ impl Consumer {
         bank: &Arc<Bank>,
         bank_creation_time: &Instant,
         committer: &Committer,
-        poh: &TransactionRecorder,
+        transaction_recorder: &TransactionRecorder,
         sanitized_transactions: &[SanitizedTransaction],
         banking_stage_stats: &BankingStageStats,
         qos_service: &QosService,
@@ -222,7 +222,7 @@ impl Consumer {
                 bank_creation_time,
                 sanitized_transactions,
                 committer,
-                poh,
+                transaction_recorder,
                 qos_service,
                 log_messages_bytes_limit,
             ));
@@ -282,7 +282,7 @@ impl Consumer {
         bank_creation_time: &Instant,
         transactions: &[SanitizedTransaction],
         committer: &Committer,
-        poh: &TransactionRecorder,
+        transaction_recorder: &TransactionRecorder,
         qos_service: &QosService,
         log_messages_bytes_limit: Option<usize>,
     ) -> ProcessTransactionsSummary {
@@ -312,7 +312,7 @@ impl Consumer {
                 bank,
                 &transactions[chunk_start..chunk_end],
                 committer,
-                poh,
+                transaction_recorder,
                 chunk_start,
                 qos_service,
                 log_messages_bytes_limit,
@@ -411,7 +411,7 @@ impl Consumer {
         bank: &Arc<Bank>,
         txs: &[SanitizedTransaction],
         committer: &Committer,
-        poh: &TransactionRecorder,
+        transaction_recorder: &TransactionRecorder,
         chunk_offset: usize,
         qos_service: &QosService,
         log_messages_bytes_limit: Option<usize>,
@@ -435,7 +435,7 @@ impl Consumer {
             Self::execute_and_commit_transactions_locked(
                 bank,
                 committer,
-                poh,
+                transaction_recorder,
                 &batch,
                 log_messages_bytes_limit,
             );
@@ -487,7 +487,7 @@ impl Consumer {
     fn execute_and_commit_transactions_locked(
         bank: &Arc<Bank>,
         committer: &Committer,
-        poh: &TransactionRecorder,
+        transaction_recorder: &TransactionRecorder,
         batch: &TransactionBatch,
         log_messages_bytes_limit: Option<usize>,
     ) -> ExecuteAndCommitTransactionsOutput {
@@ -555,8 +555,9 @@ impl Consumer {
                 executed_transactions_count
             );
         }
-        let (record_transactions_summary, record_us) =
-            measure_us!(poh.record_transactions(bank.slot(), executed_transactions));
+        let (record_transactions_summary, record_us) = measure_us!(
+            transaction_recorder.record_transactions(bank.slot(), executed_transactions)
+        );
         execute_and_commit_timings.record_us = record_us;
 
         let RecordTransactionsSummary {
