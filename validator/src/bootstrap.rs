@@ -38,9 +38,16 @@ use {
     },
 };
 
-/// When downloading snapshots, wait at most this long for snapshot hashes from _all_ known
-/// validators.  Afterwards, wait for snapshot hashes from _any_ know validator.
+/// When downloading snapshots, wait at most this long for snapshot hashes from
+/// _all_ known validators.  Afterwards, wait for snapshot hashes from _any_
+/// known validator.
 const WAIT_FOR_ALL_KNOWN_VALIDATORS: Duration = Duration::from_secs(60);
+/// If we don't have any alternative peers after this long, better off trying
+/// blacklisted peers again.
+const BLACKLIST_CLEAR_THRESHOLD: Duration = Duration::from_secs(60);
+/// If we can't find a good snapshot download candidate after this time, just
+/// give up.
+const NEWER_SNAPSHOT_THRESHOLD: Duration = Duration::from_secs(180);
 
 pub const MAX_RPC_CONNECTIONS_EVALUATED_PER_ITERATION: usize = 32;
 
@@ -232,15 +239,16 @@ fn get_rpc_peers(
     );
 
     if rpc_peers_blacklisted == rpc_peers_total {
-        *retry_reason =
-            if !blacklisted_rpc_nodes.is_empty() && blacklist_timeout.elapsed().as_secs() > 60 {
-                // If all nodes are blacklisted and no additional nodes are discovered after 60 seconds,
-                // remove the blacklist and try them all again
-                blacklisted_rpc_nodes.clear();
-                Some("Blacklist timeout expired".to_owned())
-            } else {
-                Some("Wait for known rpc peers".to_owned())
-            };
+        *retry_reason = if !blacklisted_rpc_nodes.is_empty()
+            && blacklist_timeout.elapsed() > BLACKLIST_CLEAR_THRESHOLD
+        {
+            // All nodes are blacklisted and no additional nodes recently discovered.
+            // Remove all nodes from the blacklist and try them again.
+            blacklisted_rpc_nodes.clear();
+            Some("Blacklist timeout expired".to_owned())
+        } else {
+            Some("Wait for known rpc peers".to_owned())
+        };
         return None;
     }
 
@@ -675,7 +683,7 @@ fn get_rpc_nodes(
             match newer_cluster_snapshot_timeout {
                 None => newer_cluster_snapshot_timeout = Some(Instant::now()),
                 Some(newer_cluster_snapshot_timeout) => {
-                    if newer_cluster_snapshot_timeout.elapsed().as_secs() > 180 {
+                    if newer_cluster_snapshot_timeout.elapsed() > NEWER_SNAPSHOT_THRESHOLD {
                         warn!("Giving up, did not get newer snapshots from the cluster.");
                         return vec![];
                     }
