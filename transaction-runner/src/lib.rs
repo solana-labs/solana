@@ -858,15 +858,5 @@ fn record_transactions(recorder: &TransactionRecorder, bank: &Bank, transactions
 }
 
 pub fn initialize_poh_callback(poh_recorder: &Arc<RwLock<PohRecorder>>) {
-    *POH.write().unwrap() = Some({
-        let poh_recorder_lock = poh_recorder.clone();
-        let poh_recorder = poh_recorder_lock.read().unwrap();
-        let recorder = poh_recorder.recorder();
-        //let skip_poh = std::env::var("SKIP_POH").is_ok();
-        drop(poh_recorder);
-
-        Box::new(move |bank: &Bank, transactions, hash| -> std::result::Result<Option<usize>, ()> {
-            record_transactions(&recorder, bank, transactions, hash)
-        })
-    });
+    unimplemented!();
 }
