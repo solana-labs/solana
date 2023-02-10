@@ -7963,7 +7963,7 @@ impl Bank {
         if let Some(scheduler) = s.as_mut() {
             let scheduler_mode = scheduler.current_scheduler_mode();
             if matches!(scheduler_mode, solana_scheduler::Mode::Replaying) || via_drop {
-                info!("wait_for_scheduler({scheduler_mode:?}/{via_drop}): gracefully stopping bank ({})...", self.slot());
+                info!("wait_for_scheduler({scheduler_mode:?}/{via_drop}): gracefully stopping bank ({})... take_next: {take_next}", self.slot());
                 if matches!(scheduler_mode, solana_scheduler::Mode::Banking) {
                     assert!(via_drop);
                 }
@@ -7988,7 +7988,7 @@ impl Bank {
                 pool.return_to_pool(scheduler);
                 (e, next_context.map(|c| pool.take_from_pool(c)))
             } else {
-                info!("wait_for_scheduler(Banking): pausing commit into bank ({})...", self.slot());
+                info!("wait_for_scheduler(Banking): pausing commit into bank ({})...  take_next: {take_next}", self.slot());
                 scheduler.pause_commit_into_bank();
                 /* proper per-slot metrics reporting is needed...
                 scheduler
@@ -7997,7 +7997,7 @@ impl Bank {
                     .next()
                     .unwrap()
                 */
-                (Ok(Default::default()), panic!())
+                (Ok(Default::default()), None)
             }
         } else {
             warn!(
