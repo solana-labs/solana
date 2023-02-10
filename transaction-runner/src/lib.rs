@@ -47,10 +47,10 @@ impl std::fmt::Debug for SchedulerPool {
 }
 
 impl SchedulerPool {
-    fn new() -> Self {
+    fn new(poh_recorder: &Arc<RwLock<PohRecorder>>) -> Self {
         Self {
             schedulers: std::sync::Mutex::new(Vec::new()),
-            poh: None,
+            poh: Some(poh_recorder),
         }
     }
 
@@ -58,8 +58,8 @@ impl SchedulerPool {
         self.schedulers.lock().unwrap().push(Box::new(Scheduler::spawn(self.clone(), context)));
     }
 
-    pub fn new_boxed() -> Box<dyn LikeSchedulerPool> {
-        Box::new(SchedulerPoolWrapper::new())
+    pub fn new_boxed(poh_recorder: &Arc<RwLock<PohRecorder>>) -> Box<dyn LikeSchedulerPool> {
+        Box::new(SchedulerPoolWrapper::new(poh_recorder))
     }
 }
 
@@ -78,8 +78,8 @@ impl Drop for SchedulerPool {
 struct SchedulerPoolWrapper(Arc<SchedulerPool>);
 
 impl SchedulerPoolWrapper {
-    fn new() -> Self {
-        Self(Arc::new(SchedulerPool::new()))
+    fn new(poh_recorder: &Arc<RwLock<PohRecorder>>) -> Self {
+        Self(Arc::new(SchedulerPool::new(poh_recorder)))
     }
 }
 
@@ -854,8 +854,4 @@ fn record_transactions(recorder: &TransactionRecorder, bank: &Bank, transactions
     //info!("scEx: {current_thread_name} recorded {:?}", res);
 
     res.map_err(|_| ())
-}
-
-pub fn initialize_poh_callback(poh_recorder: &Arc<RwLock<PohRecorder>>) {
-    unimplemented!();
 }

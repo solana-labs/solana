@@ -967,10 +967,8 @@ impl Validator {
         }
         use solana_transaction_runner::{
             SchedulerPool,
-            initialize_poh_callback,
             initialize_transaction_status_sender_callback,
         };
-        initialize_poh_callback(&poh_recorder);
         if let Some(transaction_status_sender) = transaction_status_sender.as_ref() {
             info!("Initialized transaction status sender callback: {:?}", (config.runtime_config.log_messages_bytes_limit, transaction_status_sender));
             initialize_transaction_status_sender_callback(config.runtime_config.log_messages_bytes_limit, transaction_status_sender.clone());
