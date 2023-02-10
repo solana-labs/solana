@@ -324,6 +324,7 @@ impl AccountsDb {
     /// 2a. pubkeys with refcount = 1. This means this pubkey exists NOWHERE else in accounts db.
     /// 2b. pubkeys with refcount > 1
     /// Note that the return value can contain fewer items than 'stored_accounts_all' if we find storages which won't be affected.
+    /// 'stored_accounts_all' should be sorted by slot
     #[allow(dead_code)]
     fn calc_accounts_to_combine<'a>(
         &self,
@@ -331,7 +332,7 @@ impl AccountsDb {
     ) -> AccountsToCombine<'a> {
         let mut accounts_keep_slots = HashMap::default();
         let len = stored_accounts_all.len();
-        let mut target_slots = Vec::with_capacity(len);
+        let mut target_slots_sorted = Vec::with_capacity(len);
 
         let mut accounts_to_combine = Vec::with_capacity(len);
         for (info, unique_accounts) in stored_accounts_all {
@@ -349,14 +350,14 @@ impl AccountsDb {
             } else {
                 // No alive accounts in this slot have a ref_count > 1. So, ALL alive accounts in this slot can be written to any other slot
                 // we find convenient. There is NO other instance of any account to conflict with.
-                target_slots.push(info.slot);
+                target_slots_sorted.push(info.slot);
             }
             accounts_to_combine.push(shrink_collect);
         }
         AccountsToCombine {
             accounts_to_combine,
             accounts_keep_slots,
-            target_slots,
+            target_slots_sorted,
         }
     }
 
@@ -426,7 +427,7 @@ struct AccountsToCombine<'a> {
     /// these slots will NOT be in 'accounts_keep_slots'
     /// Some of these slots will have ancient append vecs created at them to contain everything in 'accounts_to_combine'
     /// The rest will become dead slots with no accounts in them.
-    target_slots: Vec<Slot>,
+    target_slots_sorted: Vec<Slot>,
 }
 
 #[allow(dead_code)]
@@ -1031,7 +1032,7 @@ pub mod tests {
                         .collect::<Vec<_>>();
                     accounts_keep.sort_unstable();
                     assert_eq!(accounts_keep, slots_vec);
-                    assert!(accounts_to_combine.target_slots.is_empty());
+                    assert!(accounts_to_combine.target_slots_sorted.is_empty());
                     assert_eq!(accounts_to_combine.accounts_keep_slots.len(), num_slots);
                     assert!(accounts_to_combine
                         .accounts_to_combine
@@ -1051,7 +1052,7 @@ pub mod tests {
                             .is_empty()));
                 } else {
                     // all accounts should be in one_ref and all slots are available as target slots
-                    assert_eq!(accounts_to_combine.target_slots, slots_vec);
+                    assert_eq!(accounts_to_combine.target_slots_sorted, slots_vec);
                     assert!(accounts_to_combine.accounts_keep_slots.is_empty());
                     assert!(accounts_to_combine
                         .accounts_to_combine
@@ -1177,7 +1178,7 @@ pub mod tests {
             .collect::<Vec<_>>();
         accounts_keep.sort_unstable();
         assert_eq!(accounts_keep, slots_vec);
-        assert!(accounts_to_combine.target_slots.is_empty());
+        assert!(accounts_to_combine.target_slots_sorted.is_empty());
         assert_eq!(accounts_to_combine.accounts_keep_slots.len(), num_slots);
         assert_eq!(
             accounts_to_combine
