@@ -144,6 +144,7 @@ pub struct SnapshotRequestHandler {
 
 impl SnapshotRequestHandler {
     // Returns the latest requested snapshot block height and storages
+    #[allow(clippy::type_complexity)]
     pub fn handle_snapshot_requests(
         &self,
         test_hash_calculation: bool,
@@ -505,6 +506,7 @@ pub struct AbsRequestHandlers {
 
 impl AbsRequestHandlers {
     // Returns the latest requested snapshot block height, if one exists
+    #[allow(clippy::type_complexity)]
     pub fn handle_snapshot_requests(
         &self,
         test_hash_calculation: bool,
@@ -545,7 +547,7 @@ impl AccountsBackgroundService {
                 // This is for holding the reference counts of the appendvecs of the latest
                 // snapshot, so they are not released or recycled until this va
                 // Prefix with _ because of the compiler warning - value assigned never read
-                let mut _last_snapshot_storages: Option<Vec<Arc<AccountStorageEntry>>> = None;
+                let mut last_snapshot_storages: Option<Vec<Arc<AccountStorageEntry>>>;
                 loop {
                     if exit.load(Ordering::Relaxed) {
                         break;
@@ -624,7 +626,13 @@ impl AccountsBackgroundService {
                             last_cleaned_block_height = snapshot_block_height;
                             // Update the option, so the older one is released, causing the release of
                             // its reference counts of the appendvecs
-                            _last_snapshot_storages = Some(snapshot_storages);
+                            last_snapshot_storages = Some(snapshot_storages);
+                            debug!(
+                                "Number of snapshot storages kept alive for fastboot: {}",
+                                last_snapshot_storages
+                                    .map(|storages| storages.len())
+                                    .unwrap_or(0)
+                            );
                         } else {
                             exit.store(true, Ordering::Relaxed);
                             return;
