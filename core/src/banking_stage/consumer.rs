@@ -365,8 +365,6 @@ impl Consumer {
             // to the list of unprocessed txs.
             all_retryable_tx_indexes.extend_from_slice(&new_retryable_transaction_indexes);
 
-            // If `bank_creation_time` is None, it's a test so ignore the option so
-            // allow processing
             let should_bank_still_be_processing_txs =
                 Bank::should_bank_still_be_processing_txs(bank_creation_time, bank.ns_per_slot);
             match (
