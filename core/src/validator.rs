@@ -443,7 +443,7 @@ impl Validator {
         }
 
         if rayon::ThreadPoolBuilder::new()
-            .thread_name(|ix| format!("solRayonGlob{ix:02}"))
+            .thread_name(|i| format!("solRayonGlob{i:02}"))
             .build_global()
             .is_err()
         {

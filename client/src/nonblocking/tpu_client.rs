@@ -1,7 +1,11 @@
 pub use solana_tpu_client::nonblocking::tpu_client::{LeaderTpuService, TpuSenderError};
 use {
     crate::{connection_cache::ConnectionCache, tpu_client::TpuClientConfig},
-    solana_connection_cache::connection_cache::ConnectionCache as BackendConnectionCache,
+    solana_connection_cache::connection_cache::{
+        ConnectionCache as BackendConnectionCache, ConnectionManager, ConnectionPool,
+        NewConnectionConfig,
+    },
+    solana_quic_client::{QuicConfig, QuicConnectionManager, QuicPool},
     solana_rpc_client::nonblocking::rpc_client::RpcClient,
     solana_sdk::{
         message::Message,
@@ -15,11 +19,20 @@ use {
 
 /// Client which sends transactions directly to the current leader's TPU port over UDP.
 /// The client uses RPC to determine the current leader and fetch node contact info
-pub struct TpuClient {
-    tpu_client: BackendTpuClient,
+pub struct TpuClient<
+    P, // ConnectionPool
+    M, // ConnectionManager
+    C, // NewConnectionConfig
+> {
+    tpu_client: BackendTpuClient<P, M, C>,
 }
 
-impl TpuClient {
+impl<P, M, C> TpuClient<P, M, C>
+where
+    P: ConnectionPool<NewConnectionConfig = C>,
+    M: ConnectionManager<ConnectionPool = P, NewConnectionConfig = C>,
+    C: NewConnectionConfig,
+{
     /// Serialize and send transaction to the current and upcoming leader TPUs according to fanout
     /// size
     pub async fn send_transaction(&self, transaction: &Transaction) -> bool {
@@ -62,23 +75,39 @@ impl TpuClient {
             .try_send_wire_transaction_batch(wire_transactions)
             .await
     }
+}
 
+impl TpuClient<QuicPool, QuicConnectionManager, QuicConfig> {
     /// Create a new client that disconnects when dropped
     pub async fn new(
         rpc_client: Arc<RpcClient>,
         websocket_url: &str,
         config: TpuClientConfig,
     ) -> Result<Self> {
-        let connection_cache = Arc::new(ConnectionCache::default().into());
+        let connection_cache = match ConnectionCache::default() {
+            ConnectionCache::Quic(cache) => Arc::new(cache),
+            ConnectionCache::Udp(_) => {
+                return Err(TpuSenderError::Custom(String::from(
+                    "Invalid default connection cache",
+                )))
+            }
+        };
         Self::new_with_connection_cache(rpc_client, websocket_url, config, connection_cache).await
     }
+}
 
+impl<P, M, C> TpuClient<P, M, C>
+where
+    P: ConnectionPool<NewConnectionConfig = C>,
+    M: ConnectionManager<ConnectionPool = P, NewConnectionConfig = C>,
+    C: NewConnectionConfig,
+{
     /// Create a new client that disconnects when dropped
     pub async fn new_with_connection_cache(
         rpc_client: Arc<RpcClient>,
         websocket_url: &str,
         config: TpuClientConfig,
-        connection_cache: Arc<BackendConnectionCache>,
+        connection_cache: Arc<BackendConnectionCache<P, M, C>>,
     ) -> Result<Self> {
         Ok(Self {
             tpu_client: BackendTpuClient::new_with_connection_cache(

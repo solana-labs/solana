@@ -15,7 +15,10 @@ use {
     crate::poh_service::PohService,
     crossbeam_channel::{unbounded, Receiver, RecvTimeoutError, SendError, Sender, TrySendError},
     log::*,
-    solana_entry::{entry::Entry, poh::Poh},
+    solana_entry::{
+        entry::{hash_transactions, Entry},
+        poh::Poh,
+    },
     solana_ledger::{
         blockstore::Blockstore,
         genesis_utils::{create_genesis_config, GenesisConfigInfo},
@@ -26,7 +29,7 @@ use {
     solana_runtime::bank::Bank,
     solana_sdk::{
         clock::NUM_CONSECUTIVE_LEADER_SLOTS, hash::Hash, poh_config::PohConfig, pubkey::Pubkey,
-        transaction::VersionedTransaction,
+        saturating_add_assign, transaction::VersionedTransaction,
     },
     std::{
         cmp,
@@ -110,6 +113,33 @@ impl Record {
     }
 }
 
+#[derive(Default, Debug)]
+pub struct RecordTransactionsTimings {
+    pub execution_results_to_transactions_us: u64,
+    pub hash_us: u64,
+    pub poh_record_us: u64,
+}
+
+impl RecordTransactionsTimings {
+    pub fn accumulate(&mut self, other: &RecordTransactionsTimings) {
+        saturating_add_assign!(
+            self.execution_results_to_transactions_us,
+            other.execution_results_to_transactions_us
+        );
+        saturating_add_assign!(self.hash_us, other.hash_us);
+        saturating_add_assign!(self.poh_record_us, other.poh_record_us);
+    }
+}
+
+pub struct RecordTransactionsSummary {
+    // Metrics describing how time was spent recording transactions
+    pub record_transactions_timings: RecordTransactionsTimings,
+    // Result of trying to record the transactions into the PoH stream
+    pub result: Result<()>,
+    // Index in the slot of the first transaction recorded
+    pub starting_transaction_index: Option<usize>,
+}
+
 pub struct TransactionRecorder {
     // shared by all users of PohRecorder
     pub record_sender: Sender<Record>,
@@ -131,6 +161,47 @@ impl TransactionRecorder {
             is_exited,
         }
     }
+
+    /// Hashes `transactions` and sends to PoH service for recording. Waits for response up to 1s.
+    /// Panics on unexpected (non-`MaxHeightReached`) errors.
+    pub fn record_transactions(
+        &self,
+        bank_slot: Slot,
+        transactions: Vec<VersionedTransaction>,
+    ) -> RecordTransactionsSummary {
+        let mut record_transactions_timings = RecordTransactionsTimings::default();
+        let mut starting_transaction_index = None;
+
+        if !transactions.is_empty() {
+            let (hash, hash_time) = measure!(hash_transactions(&transactions), "hash");
+            record_transactions_timings.hash_us = hash_time.as_us();
+
+            let (res, poh_record_time) =
+                measure!(self.record(bank_slot, hash, transactions), "hash");
+            record_transactions_timings.poh_record_us = poh_record_time.as_us();
+
+            match res {
+                Ok(starting_index) => {
+                    starting_transaction_index = starting_index;
+                }
+                Err(PohRecorderError::MaxHeightReached) => {
+                    return RecordTransactionsSummary {
+                        record_transactions_timings,
+                        result: Err(PohRecorderError::MaxHeightReached),
+                        starting_transaction_index: None,
+                    };
+                }
+                Err(e) => panic!("Poh recorder returned unexpected error: {e:?}"),
+            }
+        }
+
+        RecordTransactionsSummary {
+            record_transactions_timings,
+            result: Ok(()),
+            starting_transaction_index,
+        }
+    }
+
     // Returns the index of `transactions.first()` in the slot, if being tracked by WorkingBank
     pub fn record(
         &self,
