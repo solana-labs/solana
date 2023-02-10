@@ -842,7 +842,7 @@ pub fn initialize_transaction_status_sender_callback(log_messages_bytes_limit: O
     });
 }
 
-fn record_transactions(recorder: usize, bank: usize, transactions: usize, hash: usize) -> std::result::Result<Option<usize>, ()> {
+fn record_transactions(recorder: usize, bank: &Bank, transactions: Vec<VersionedTransaction>, hash: solana_sdk::hash::Hash) -> std::result::Result<Option<usize>, ()> {
     //if skip_poh {
     //    return Ok(Default::default());
     //}
