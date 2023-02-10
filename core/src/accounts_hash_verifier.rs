@@ -464,10 +464,7 @@ mod tests {
     use {
         super::*,
         rand::seq::SliceRandom,
-        solana_gossip::{
-            cluster_info::make_accounts_hashes_message,
-            legacy_contact_info::LegacyContactInfo as ContactInfo,
-        },
+        solana_gossip::{cluster_info::make_accounts_hashes_message, contact_info::ContactInfo},
         solana_sdk::{
             hash::hash,
             signature::{Keypair, Signer},
