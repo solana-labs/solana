@@ -369,7 +369,7 @@ impl AccountsDb {
         } = packed;
         let accounts_to_write = StorableAccountsBySlot::new(
             target_slot,
-            &accounts_to_write[..],
+            accounts_to_write,
             INCLUDE_SLOT_IN_HASH_IRRELEVANT_APPEND_VEC_OPERATION,
         );
 
@@ -1974,7 +1974,7 @@ pub mod tests {
                         let target_slot = slots.clone().nth(combine_into).unwrap_or(slots.start);
                         let accounts_to_write = StorableAccountsBySlot::new(
                             target_slot,
-                            &accounts[..],
+                            &accounts,
                             INCLUDE_SLOT_IN_HASH_TESTS,
                         );
 
