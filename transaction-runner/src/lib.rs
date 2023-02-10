@@ -659,7 +659,7 @@ impl LikeScheduler for Scheduler {
         self.random_id
     }
 
-    fn schedule(&self, sanitized_tx: &SanitizedTransaction, index: usize, mode: solana_scheduler::Mode) {
+    fn schedule_execution(&self, sanitized_tx: &SanitizedTransaction, index: usize, mode: solana_scheduler::Mode) {
         trace!("Scheduler::schedule()");
         #[derive(Clone, Copy, Debug)]
         struct NotAtTopOfScheduleThread;
