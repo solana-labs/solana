@@ -34,7 +34,6 @@ use solana_poh::poh_recorder::PohRecorder;
 
 struct TransactionRunner(Arc<Bank>, PohRecorder, solana_ledger::blockstore_processor::TransactionStatusSender);
 
-#[derive(Debug)]
 pub struct SchedulerPool {
     schedulers: std::sync::Mutex<Vec<Box<dyn LikeScheduler>>>,
     poh: Option<PohRecorder>,
