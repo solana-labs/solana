@@ -49,13 +49,15 @@ impl std::fmt::Debug for SchedulerPool {
 }
 
 impl SchedulerPool {
-    fn new(poh_recorder: Option<&Arc<RwLock<PohRecorder>>>) -> Self {
+    fn new(poh_recorder: Option<&Arc<RwLock<PohRecorder>>>, log_messages_bytes_limit: Option<usize>, transaction_status_sender: Option<TransactionStatusSender>) -> Self {
         Self {
             schedulers: std::sync::Mutex::new(Vec::new()),
             transaction_recorder: poh_recorder.map(|poh_recorder| {
                 let poh_recorder = poh_recorder.read().unwrap();
                 poh_recorder.recorder()
             }),
+            log_messages_bytes_limit,
+            transaction_status_sender,
         }
     }
 
