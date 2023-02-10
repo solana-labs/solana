@@ -315,7 +315,7 @@ impl Scheduler {
                     bb.is_some(),
                     &mut timings,
                     None,
-                    status_sender_callback.as_ref().map(|a| a.0).flatten(),
+                    scheduler_pool.log_messages_bytes_limit,
                 );
 
                 let (last_blockhash, lamports_per_signature) =
