@@ -58,7 +58,7 @@ impl SchedulerPool {
         self.schedulers.lock().unwrap().push(Box::new(Scheduler::spawn(self.clone(), context)));
     }
 
-    pub fn new_boxed(poh_recorder: &Arc<RwLock<PohRecorder>>) -> Box<dyn LikeSchedulerPool> {
+    pub fn new_boxed(poh_recorder: Option<&Arc<RwLock<PohRecorder>>>) -> Box<dyn LikeSchedulerPool> {
         Box::new(SchedulerPoolWrapper::new(poh_recorder))
     }
 }
