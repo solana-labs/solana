@@ -842,7 +842,7 @@ pub fn initialize_transaction_status_sender_callback(log_messages_bytes_limit: O
     });
 }
 
-fn record_transactions(recorder: usize, bank: &Bank, transactions: Vec<VersionedTransaction>, hash: solana_sdk::hash::Hash) -> std::result::Result<Option<usize>, ()> {
+fn record_transactions(recorder: &TransactionRecorder, bank: &Bank, transactions: Vec<VersionedTransaction>, hash: solana_sdk::hash::Hash) -> std::result::Result<Option<usize>, ()> {
     //if skip_poh {
     //    return Ok(Default::default());
     //}
@@ -864,7 +864,7 @@ pub fn initialize_poh_callback(poh_recorder: &Arc<RwLock<PohRecorder>>) {
         drop(poh_recorder);
 
         Box::new(move |bank: &Bank, transactions, hash| -> std::result::Result<Option<usize>, ()> {
-            record_transactions(recorder, bank, transactions, hash)
+            record_transactions(&recorder, bank, transactions, hash)
         })
     });
 }
