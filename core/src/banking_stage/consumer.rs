@@ -263,9 +263,7 @@ impl Consumer {
 
         inc_new_counter_info!(
             "banking_stage-dropped_tx_before_forwarding",
-            retryable_transaction_indexes
-                .len()
-                .saturating_sub(filtered_retryable_transaction_indexes.len())
+            retryable_packets_filtered_count
         );
 
         process_transactions_summary.retryable_transaction_indexes =
