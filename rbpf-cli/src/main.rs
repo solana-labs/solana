@@ -222,6 +222,7 @@ before execting it in the virtual machine.",
         1,
     );
     let mut invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
+    invoke_context.enable_instruction_tracing = true;
     invoke_context
         .transaction_context
         .get_next_instruction_context()
@@ -312,6 +313,7 @@ before execting it in the virtual machine.",
             .trace_log_stack
             .last()
             .expect("Inconsistent trace log stack")
+            .trace_log
             .as_slice();
         if matches.value_of("trace").unwrap() == "stdout" {
             analysis
