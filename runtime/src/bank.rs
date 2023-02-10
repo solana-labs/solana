@@ -1155,7 +1155,7 @@ pub struct Bank {
 pub trait LikeScheduler: Send + Sync + std::fmt::Debug {
     fn graceful_stop_initiated(&self) -> &AtomicBool;
     fn random_id(&self) -> u64;
-    fn schedule(&self, sanitized_tx: &SanitizedTransaction, index: usize, mode: solana_scheduler::Mode);
+    fn schedule_execution(&self, sanitized_tx: &SanitizedTransaction, index: usize, mode: solana_scheduler::Mode);
     fn handle_aborted_executions(&self) -> Vec<Result<ExecuteTimings>>;
     fn pause_commit_into_bank(&self);
     fn resume_commit_into_bank(&self, bank: Option<&Arc<Bank>>);
@@ -6167,7 +6167,7 @@ impl Bank {
         let scheduler = s.as_ref().unwrap();
 
         for (st, i) in transactions.iter().zip(transaction_indexes) {
-            scheduler.schedule(st, i, mode);
+            scheduler.schedule_execution(st, i, mode);
         }
     }
 
