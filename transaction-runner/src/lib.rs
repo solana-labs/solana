@@ -44,6 +44,7 @@ impl SchedulerPool {
     fn new() -> Self {
         Self {
             schedulers: std::sync::Mutex::new(Vec::new()),
+            poh: None,
         }
     }
 
