@@ -5,7 +5,6 @@ use {
     std::time::{Duration, Instant},
 };
 
-#[derive(Debug)]
 pub struct Poh {
     pub hash: Hash,
     num_hashes: u64,

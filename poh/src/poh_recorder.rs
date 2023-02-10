@@ -220,7 +220,6 @@ pub enum PohLeaderStatus {
     Reached { poh_slot: Slot, parent_slot: Slot },
 }
 
-#[derive(Debug)]
 pub struct PohRecorder {
     pub poh: Arc<Mutex<Poh>>,
     tick_height: u64,

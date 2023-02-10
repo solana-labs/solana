@@ -40,6 +40,12 @@ pub struct SchedulerPool {
     poh: Option<PohRecorder>,
 }
 
+impl std::fmt::Debug for SchedulerPool {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "SchedulerPool{self:p}")
+    }
+}
+
 impl SchedulerPool {
     fn new() -> Self {
         Self {
