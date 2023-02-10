@@ -294,9 +294,8 @@ impl Scheduler {
                 let mut batch =
                     TransactionBatch::new(vec![lock_result], &bank, Cow::Owned(vec![ee.task.tx.0.clone()]));
                 batch.set_needs_unlock(false);
-                let status_sender_callback = STATUS_SENDER_CALLBACK.read().unwrap();
-                let bb = status_sender_callback.as_ref().map(|(_, status_sender_callback)|
-                    status_sender_callback(None, bank, &batch, &mut mint_decimals, None, None)
+                let bb = scheduler_pool.transaction_status_sender.as_ref().map(|sender|
+                    send_transaction_status(sender, None, bank, &batch, &mut mint_decimals, None, None)
                 );
 
                 let LoadAndExecuteTransactionsOutput {
@@ -410,7 +409,7 @@ impl Scheduler {
 
                 if let Some(commited_first_transaction_index) = commited_first_transaction_index {
                     if let Some(bb) = bb {
-                        assert!(status_sender_callback.as_ref().unwrap().1(bb, bank, &batch, &mut mint_decimals, Some(tx_results), Some(commited_first_transaction_index)).is_none());
+                        assert!(send_transaction_status(scheduler_pool.transaction_status_sender.as_ref().unwrap(), bb, bank, &batch, &mut mint_decimals, Some(tx_results), Some(commited_first_transaction_index)).is_none());
                     }
                 }
 
