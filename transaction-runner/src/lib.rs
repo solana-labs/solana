@@ -72,19 +72,24 @@ impl SchedulerPoolWrapper {
 
 impl SchedulerPool {
     fn take_from_pool(self: &Arc<Self>, context: Option<SchedulerContext>) -> Box<dyn LikeScheduler> {
-        let maybe_scheduler = self.schedulers.lock().unwrap().pop();
+        let mut schedulers = self.schedulers.lock().unwrap();
+        let maybe_scheduler = schedulers.pop();
         if let Some(scheduler) = maybe_scheduler {
             trace!(
                 "SchedulerPool: id_{:016x} is taken... len: {} => {}",
                 scheduler.random_id(),
-                self.schedulers.lock().unwrap().len() + 1,
-                self.schedulers.lock().unwrap().len()
+                schedulers.len() + 1,
+                schedulers.len()
             );
+            drop(schedulers);
+
             if let Some(context) = context {
                 scheduler.replace_scheduler_context(context);
             }
             scheduler
         } else {
+            drop(schedulers);
+
             self.create(context.unwrap());
             self.take_from_pool(None)
         }
