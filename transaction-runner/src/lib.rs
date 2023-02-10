@@ -47,10 +47,10 @@ impl std::fmt::Debug for SchedulerPool {
 }
 
 impl SchedulerPool {
-    fn new(poh_recorder: &Arc<RwLock<PohRecorder>>) -> Self {
+    fn new(poh_recorder: Option<&Arc<RwLock<PohRecorder>>>) -> Self {
         Self {
             schedulers: std::sync::Mutex::new(Vec::new()),
-            poh: Some(poh_recorder.clone()),
+            poh: poh_recorder.cloned(),
         }
     }
 
@@ -78,7 +78,7 @@ impl Drop for SchedulerPool {
 struct SchedulerPoolWrapper(Arc<SchedulerPool>);
 
 impl SchedulerPoolWrapper {
-    fn new(poh_recorder: &Arc<RwLock<PohRecorder>>) -> Self {
+    fn new(poh_recorder: Option<&Arc<RwLock<PohRecorder>>>) -> Self {
         Self(Arc::new(SchedulerPool::new(poh_recorder)))
     }
 }
