@@ -89,20 +89,15 @@ impl SchedulerPool {
             self.take_from_pool(None)
         }
     }
-}
 
-impl LikeSchedulerPool for SchedulerPoolWrapper {
-    fn take_from_pool(&self, context: SchedulerContext) -> Box<dyn LikeScheduler> {
-        self.0.take_from_pool(Some(context))
-    }
+    fn return_to_pool(self: &Arc<Self>, scheduler: Box<dyn LikeScheduler>) {
+        let schedulers = self.0.schedulers.lock().unwrap();
 
-
-    fn return_to_pool(&self, scheduler: Box<dyn LikeScheduler>) {
         trace!(
             "SchedulerPool: id_{:016x} is returned... len: {} => {}",
             scheduler.random_id(),
-            self.0.schedulers.lock().unwrap().len(),
-            self.0.schedulers.lock().unwrap().len() + 1
+            schedulers.len(),
+            schedulers.len() + 1
         );
         assert!(scheduler.collected_results().lock().unwrap().is_empty());
         //assert!(scheduler.current_checkpoint.clone_context_value().unwrap().bank.is_none());
@@ -114,7 +109,17 @@ impl LikeSchedulerPool for SchedulerPoolWrapper {
             .graceful_stop_initiated()
             .store(false, std::sync::atomic::Ordering::SeqCst);
 
-        self.0.schedulers.lock().unwrap().push(scheduler);
+        schedulers.push(scheduler);
+    }
+}
+
+impl LikeSchedulerPool for SchedulerPoolWrapper {
+    fn take_from_pool(&self, context: SchedulerContext) -> Box<dyn LikeScheduler> {
+        self.0.take_from_pool(Some(context))
+    }
+
+    fn return_to_pool(&self, scheduler: Box<dyn LikeScheduler>) {
+        self.0.return_to_pool(scheduler);
     }
 }
 
