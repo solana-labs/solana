@@ -1995,17 +1995,6 @@ fn test_program_sbf_invoke_in_same_tx_as_undeployment() {
         "solana_sbf_rust_invoke_and_return",
     );
 
-    // Deploy panic program
-    let panic_program_keypair = Keypair::new();
-    load_upgradeable_program(
-        &bank_client,
-        &mint_keypair,
-        &buffer_keypair,
-        &panic_program_keypair,
-        &authority_keypair,
-        "solana_sbf_rust_panic",
-    );
-
     let invoke_instruction =
         Instruction::new_with_bytes(program_id, &[0], vec![AccountMeta::new(clock::id(), false)]);
     let indirect_invoke_instruction = Instruction::new_with_bytes(
@@ -2016,8 +2005,6 @@ fn test_program_sbf_invoke_in_same_tx_as_undeployment() {
             AccountMeta::new_readonly(clock::id(), false),
         ],
     );
-    let panic_instruction =
-        Instruction::new_with_bytes(panic_program_keypair.pubkey(), &[], vec![]);
 
     // Prepare undeployment
     let (programdata_address, _) = Pubkey::find_program_address(
@@ -2031,7 +2018,7 @@ fn test_program_sbf_invoke_in_same_tx_as_undeployment() {
         Some(&program_id),
     );
 
-    // Undeployment is invisible to both top-level-instructions and CPI instructions
+    // Undeployment is visible to both top-level-instructions and CPI instructions
     for invoke_instruction in [invoke_instruction, indirect_invoke_instruction] {
         // Call upgradeable program
         let result =
@@ -2040,11 +2027,7 @@ fn test_program_sbf_invoke_in_same_tx_as_undeployment() {
 
         // Upgrade the program and invoke in same tx
         let message = Message::new(
-            &[
-                undeployment_instruction.clone(),
-                invoke_instruction,
-                panic_instruction.clone(), // Make sure the TX fails, so we don't have to deploy another program
-            ],
+            &[undeployment_instruction.clone(), invoke_instruction],
             Some(&mint_keypair.pubkey()),
         );
         let tx = Transaction::new(
@@ -2055,7 +2038,7 @@ fn test_program_sbf_invoke_in_same_tx_as_undeployment() {
         let (result, _, _) = process_transaction_and_record_inner(&bank, tx);
         assert_eq!(
             result.unwrap_err(),
-            TransactionError::InstructionError(2, InstructionError::ProgramFailedToComplete),
+            TransactionError::InstructionError(1, InstructionError::InvalidAccountData),
         );
     }
 }

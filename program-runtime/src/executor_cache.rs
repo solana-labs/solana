@@ -43,6 +43,10 @@ impl TransactionExecutorCache {
         self.visible.get(key).cloned()
     }
 
+    pub fn set_tombstone(&mut self, key: Pubkey) {
+        self.visible.insert(key, None);
+    }
+
     pub fn set(
         &mut self,
         key: Pubkey,
@@ -54,7 +58,7 @@ impl TransactionExecutorCache {
             if delay_visibility_of_program_deployment {
                 // Place a tombstone in the cache so that
                 // we don't load the new version from the database as it should remain invisible
-                self.visible.insert(key, None);
+                self.set_tombstone(key);
             } else {
                 self.visible.insert(key, Some(executor.clone()));
             }

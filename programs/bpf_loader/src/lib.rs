@@ -1166,6 +1166,15 @@ fn process_loader_upgradeable_instruction(
                                 instruction_context,
                                 &log_collector,
                             )?;
+                            if invoke_context
+                                .feature_set
+                                .is_active(&delay_visibility_of_program_deployment::id())
+                            {
+                                invoke_context
+                                    .tx_executor_cache
+                                    .borrow_mut()
+                                    .set_tombstone(program_key);
+                            }
                         }
                         _ => {
                             ic_logger_msg!(log_collector, "Invalid Program account");
