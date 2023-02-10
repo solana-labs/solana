@@ -591,8 +591,6 @@ dependencies = [
  "proc-macro-crate 0.1.5",
  "proc-macro2 1.0.50",
  "syn 1.0.107",
- "proc-macro2 1.0.51",
- "syn 1.0.107",
 ]
 
 [[package]]
@@ -7069,6 +7067,30 @@ dependencies = [
  "solana-rpc-client-api",
  "solana-sdk 1.16.0",
  "solana-version",
+]
+
+[[package]]
+name = "solana-zk-token-proof-program"
+version = "1.16.0"
+dependencies = [
+ "bytemuck",
+ "getrandom 0.1.16",
+ "num-derive",
+ "num-traits",
+ "solana-program-runtime",
+ "solana-sdk 1.16.0",
+ "solana-zk-token-sdk 1.16.0",
+]
+
+[[package]]
+name = "solana-zk-token-proof-program-tests"
+version = "1.16.0"
+dependencies = [
+ "bytemuck",
+ "solana-program-runtime",
+ "solana-program-test",
+ "solana-sdk 1.16.0",
+ "solana-zk-token-sdk 1.16.0",
 ]
 
 [[package]]
