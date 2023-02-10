@@ -4,7 +4,7 @@
 //! unstable and may change in future releases.
 
 use {
-    crate::connection_cache::ConnectionCache,
+    crate::connection_cache::{dispatch, ConnectionCache},
     solana_quic_client::{QuicConfig, QuicConnectionManager, QuicPool},
     solana_rpc_client::rpc_client::RpcClient,
     solana_rpc_client_api::config::RpcProgramAccountsConfig,
@@ -35,61 +35,6 @@ use {
 pub enum ThinClient {
     Quic(BackendThinClient<QuicPool, QuicConnectionManager, QuicConfig>),
     Udp(BackendThinClient<UdpPool, UdpConnectionManager, UdpConfig>),
-}
-
-/// Macros easing the forwarding calls to the BackendThinClient
-macro_rules! dispatch {
-    /*  Regular version */
-    ($vis:vis fn $name:ident(&self $(, $arg:ident : $ty:ty)*) $(-> $out:ty)?) => {
-        #[inline]
-        $vis fn $name(&self $(, $arg:$ty)*) $(-> $out)? {
-            match self {
-                Self::Quic(this) => this.$name($($arg),*),
-                Self::Udp(this) => this.$name($($arg),*),
-            }
-        }
-    };
-
-    /* The self is a mut */
-    ($vis:vis fn $name:ident(&mut self $(, $arg:ident : $ty:ty)*) $(-> $out:ty)?) => {
-        #[inline]
-        $vis fn $name(&mut self $(, $arg:$ty)*) $(-> $out)? {
-            match self {
-                Self::Quic(this) => this.$name($($arg),*),
-                Self::Udp(this) => this.$name($($arg),*),
-            }
-        }
-    };
-
-    /* There is a type parameter */
-    ($vis:vis fn $name:ident<T: Signers>(&self $(, $arg:ident : $ty:ty)*) $(-> $out:ty)?) => {
-        #[inline]
-        $vis fn $name<T: Signers>(&self $(, $arg:$ty)*) $(-> $out)? {
-            match self {
-                Self::Quic(this) => this.$name($($arg),*),
-                Self::Udp(this) => this.$name($($arg),*),
-            }
-        }
-    };
-}
-
-/// Macro forwarding calls to BackendThinClient with deprecated functions
-macro_rules! dispatch_allow_deprecated {
-    ($vis:vis fn $name:ident(&self $(, $arg:ident : $ty:ty)*) $(-> $out:ty)?) => {
-        #[inline]
-        $vis fn $name(&self $(, $arg:$ty)*) $(-> $out)? {
-            match self {
-                Self::Quic(this) => {
-                    #[allow(deprecated)]
-                    this.$name($($arg),*)
-                }
-                Self::Udp(this) => {
-                    #[allow(deprecated)]
-                    this.$name($($arg),*)
-                }
-            }
-        }
-    };
 }
 
 impl ThinClient {
@@ -266,19 +211,19 @@ impl SyncClient for ThinClient {
 
     dispatch!(fn get_minimum_balance_for_rent_exemption(&self, data_len: usize) -> TransportResult<u64>);
 
-    dispatch_allow_deprecated!(fn get_recent_blockhash(&self) -> TransportResult<(Hash, FeeCalculator)>);
+    dispatch!(#[allow(deprecated)] fn get_recent_blockhash(&self) -> TransportResult<(Hash, FeeCalculator)>);
 
-    dispatch_allow_deprecated!(fn get_recent_blockhash_with_commitment(
+    dispatch!(#[allow(deprecated)] fn get_recent_blockhash_with_commitment(
         &self,
         commitment_config: CommitmentConfig
     ) -> TransportResult<(Hash, FeeCalculator, Slot)>);
 
-    dispatch_allow_deprecated!(fn get_fee_calculator_for_blockhash(
+    dispatch!(#[allow(deprecated)] fn get_fee_calculator_for_blockhash(
         &self,
         blockhash: &Hash
     ) -> TransportResult<Option<FeeCalculator>>);
 
-    dispatch_allow_deprecated!(fn get_fee_rate_governor(&self) -> TransportResult<FeeRateGovernor>);
+    dispatch!(#[allow(deprecated)] fn get_fee_rate_governor(&self) -> TransportResult<FeeRateGovernor>);
 
     dispatch!(fn get_signature_status(
         &self,
@@ -315,7 +260,7 @@ impl SyncClient for ThinClient {
 
     dispatch!(fn poll_for_signature(&self, signature: &Signature) -> TransportResult<()>);
 
-    dispatch_allow_deprecated!(fn get_new_blockhash(&self, blockhash: &Hash) -> TransportResult<(Hash, FeeCalculator)>);
+    dispatch!(#[allow(deprecated)] fn get_new_blockhash(&self, blockhash: &Hash) -> TransportResult<(Hash, FeeCalculator)>);
 
     dispatch!(fn get_latest_blockhash(&self) -> TransportResult<Hash>);
 
