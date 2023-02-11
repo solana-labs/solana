@@ -201,7 +201,7 @@ impl BankForks {
         for parent in bank.proper_ancestors() {
             self.descendants.entry(parent).or_default().insert(slot);
         }
-        let new_context = SchedulerContext::new(Some(bank), mode);
+        let new_context = SchedulerContext::new(Some(&bank), mode);
         if let Some(inherited_scheduler) = inherited_scheduler {
             inherited_scheduler.replace_scheduler_context(new_context);
             bank.install_scheduler(inherited_scheduler);
