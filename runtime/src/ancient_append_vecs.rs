@@ -223,15 +223,6 @@ struct WriteAncientAccounts<'a> {
     metrics: ShrinkStatsSub,
 }
 
-impl<'a> WriteAncientAccounts<'a> {
-    pub(crate) fn accumulate(&mut self, mut other: Self) {
-        self.metrics.accumulate(&other.metrics);
-        other.shrinks_in_progress.drain().for_each(|(k, v)| {
-            self.shrinks_in_progress.insert(k, v);
-        });
-    }
-}
-
 impl AccountsDb {
     /// calculate all storage info for the storages in slots
     /// Then, apply 'tuning' to filter out slots we do NOT want to combine.
@@ -255,7 +246,8 @@ impl AccountsDb {
         &'b self,
         bytes: u64,
         accounts_to_write: impl StorableAccounts<'a, T>,
-    ) -> WriteAncientAccounts<'b> {
+        write_ancient_accounts: &mut WriteAncientAccounts<'b>,
+    ) {
         let target_slot = accounts_to_write.target_slot();
         let (shrink_in_progress, create_and_insert_store_elapsed_us) =
             measure_us!(self.get_store_for_shrink(target_slot, bytes));
@@ -266,14 +258,15 @@ impl AccountsDb {
             None,
             StoreReclaims::Ignore,
         ));
-        WriteAncientAccounts {
-            shrinks_in_progress: HashMap::from([(target_slot, shrink_in_progress)]),
-            metrics: ShrinkStatsSub {
-                store_accounts_timing,
-                rewrite_elapsed_us,
-                create_and_insert_store_elapsed_us,
-            },
-        }
+
+        write_ancient_accounts.metrics.accumulate(&ShrinkStatsSub {
+            store_accounts_timing,
+            rewrite_elapsed_us,
+            create_and_insert_store_elapsed_us,
+        });
+        write_ancient_accounts
+            .shrinks_in_progress
+            .insert(target_slot, shrink_in_progress);
     }
     /// go through all slots and populate 'SlotInfo', per slot
     /// This provides the list of possible ancient slots to sort, filter, and then combine.
@@ -380,8 +373,7 @@ impl AccountsDb {
             INCLUDE_SLOT_IN_HASH_IRRELEVANT_APPEND_VEC_OPERATION,
         );
 
-        write_ancient_accounts
-            .accumulate(self.write_ancient_accounts(*bytes_total, accounts_to_write))
+        self.write_ancient_accounts(*bytes_total, accounts_to_write, write_ancient_accounts)
     }
 
     /// For each slot and alive accounts in 'accounts_to_combine'
@@ -1999,24 +1991,25 @@ pub mod tests {
                     );
 
                         if num_slots > 0 {
-                            let mut result = match method {
-                                TestWriteAncient::AncientAccounts => {
-                                    db.write_ancient_accounts(bytes, accounts_to_write)
-                                        .shrinks_in_progress
-                                }
-                                TestWriteAncient::OnePackedStorage => {
-                                    let mut write_ancient_accounts =
-                                        WriteAncientAccounts::default();
+                            let mut write_ancient_accounts = WriteAncientAccounts::default();
 
+                            match method {
+                                TestWriteAncient::AncientAccounts => db.write_ancient_accounts(
+                                    bytes,
+                                    accounts_to_write,
+                                    &mut write_ancient_accounts,
+                                ),
+
+                                TestWriteAncient::OnePackedStorage => {
                                     let packed = PackedAncientStorage { accounts, bytes };
                                     db.write_one_packed_storage(
                                         &packed,
                                         target_slot,
                                         &mut write_ancient_accounts,
                                     );
-                                    write_ancient_accounts.shrinks_in_progress
                                 }
                             };
+                            let mut result = write_ancient_accounts.shrinks_in_progress;
                             let one = result.drain().collect::<Vec<_>>();
                             assert_eq!(1, one.len());
                             assert_eq!(target_slot, one.first().unwrap().0);
