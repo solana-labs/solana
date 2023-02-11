@@ -654,6 +654,7 @@ pub fn main() {
             Arg::with_name("no_port_check")
                 .long("--no-port-check")
                 .takes_value(false)
+                .hidden(true)
                 .help("Do not perform TCP/UDP reachable port checks at start-up")
         )
         .arg(
@@ -968,32 +969,37 @@ pub fn main() {
         .arg(
             Arg::with_name("no_poh_speed_test")
                 .long("no-poh-speed-test")
+                .hidden(true)
                 .help("Skip the check for PoH speed."),
         )
         .arg(
             Arg::with_name("no_os_network_limits_test")
-                .hidden(true)
                 .long("no-os-network-limits-test")
+                .hidden(true)
                 .help("Skip checks for OS network limits.")
         )
         .arg(
             Arg::with_name("no_os_memory_stats_reporting")
                 .long("no-os-memory-stats-reporting")
+                .hidden(true)
                 .help("Disable reporting of OS memory statistics.")
         )
         .arg(
             Arg::with_name("no_os_network_stats_reporting")
                 .long("no-os-network-stats-reporting")
+                .hidden(true)
                 .help("Disable reporting of OS network statistics.")
         )
         .arg(
             Arg::with_name("no_os_cpu_stats_reporting")
                 .long("no-os-cpu-stats-reporting")
+                .hidden(true)
                 .help("Disable reporting of OS CPU statistics.")
         )
         .arg(
             Arg::with_name("no_os_disk_stats_reporting")
                 .long("no-os-disk-stats-reporting")
+                .hidden(true)
                 .help("Disable reporting of OS disk statistics.")
         )
         .arg(
@@ -2950,7 +2956,7 @@ pub fn main() {
         if SystemMonitorService::check_os_network_limits() {
             info!("OS network limits test passed.");
         } else {
-            eprintln!("OS network limit test failed. solana-sys-tuner may be used to configure OS network limits. Bypass check with --no-os-network-limits-test.");
+            eprintln!("OS network limit test failed. See: https://docs.solana.com/running-validator/validator-start#system-tuning");
             exit(1);
         }
     }
