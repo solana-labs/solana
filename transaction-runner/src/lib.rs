@@ -214,9 +214,9 @@ impl CommitStatus {
     fn notify_as_resumed(&self) {
         let current_thread_name = std::thread::current().name().unwrap().to_string();
         let mut is_paused = self.is_paused.lock().unwrap();
-        if *is_paused {
+        if is_paused.0 {
             info!("CommitStatus: {current_thread_name} is notifying as resumed...");
-            *is_paused = false;
+            is_paused.0 = false;
             self.condvar.notify_all();
         }
     }
