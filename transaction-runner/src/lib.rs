@@ -279,6 +279,11 @@ impl Scheduler {
                 if latest_scheduler_context.is_none() {
                     latest_scheduler_context = latest_checkpoint.clone_context_value();
                 }
+                let Some(bank) = latest_scheduler_context.as_ref().unwrap().bank() else {
+                    assert_matches!(mode, solana_scheduler::Mode::Banking);
+                    processed_ee_sender.send(solana_scheduler::UnlockablePayload(ee, Default::default())).unwrap();
+                    continue 'recv;
+                };
 
                 let (mut wall_time, cpu_time) = (Measure::start("process_message_time"), cpu_time::ThreadTime::now());
 
@@ -287,12 +292,6 @@ impl Scheduler {
                 let transaction_index = ee.task.transaction_index(mode);
                 trace!("execute_substage: transaction_index: {} execute_clock: {} at thread: {}", thx, transaction_index, current_execute_clock);
 
-                let mut timings = Default::default();
-                let Some(bank) = latest_scheduler_context.as_ref().unwrap().bank() else {
-                    assert_matches!(mode, solana_scheduler::Mode::Banking);
-                    processed_ee_sender.send(solana_scheduler::UnlockablePayload(ee, timings)).unwrap();
-                    continue 'recv;
-                };
                 let slot = bank.slot();
 
                 let tx_account_lock_limit = bank.get_transaction_account_lock_limit();
@@ -306,6 +305,7 @@ impl Scheduler {
                     send_transaction_status(sender, None, &bank, &batch, &mut mint_decimals, None, None)
                 );
 
+                let mut timings = Default::default();
                 let LoadAndExecuteTransactionsOutput {
                     mut loaded_transactions,
                     mut execution_results,
