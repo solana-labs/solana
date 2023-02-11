@@ -279,6 +279,7 @@ impl Scheduler {
                 if latest_scheduler_context.is_none() {
                     latest_scheduler_context = latest_checkpoint.clone_context_value();
                 }
+                let mode = latest_scheduler_context.as_ref().unwrap().mode;
                 let Some(bank) = latest_scheduler_context.as_ref().unwrap().bank() else {
                     assert_matches!(mode, solana_scheduler::Mode::Banking);
                     processed_ee_sender.send(solana_scheduler::UnlockablePayload(ee, Default::default())).unwrap();
@@ -288,7 +289,6 @@ impl Scheduler {
                 let (mut wall_time, cpu_time) = (Measure::start("process_message_time"), cpu_time::ThreadTime::now());
 
                 let current_execute_clock = ee.task.execute_time();
-                let mode = latest_scheduler_context.as_ref().unwrap().mode;
                 let transaction_index = ee.task.transaction_index(mode);
                 trace!("execute_substage: transaction_index: {} execute_clock: {} at thread: {}", thx, transaction_index, current_execute_clock);
 
