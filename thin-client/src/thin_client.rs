@@ -43,77 +43,72 @@ use {
     },
 };
 
-pub mod temporary_pub {
-    use super::*;
+struct ClientOptimizer {
+    cur_index: AtomicUsize,
+    experiment_index: AtomicUsize,
+    experiment_done: AtomicBool,
+    times: RwLock<Vec<u64>>,
+    num_clients: usize,
+}
 
-    pub struct ClientOptimizer {
-        cur_index: AtomicUsize,
-        experiment_index: AtomicUsize,
-        experiment_done: AtomicBool,
-        times: RwLock<Vec<u64>>,
-        num_clients: usize,
+impl ClientOptimizer {
+    fn new(num_clients: usize) -> Self {
+        Self {
+            cur_index: AtomicUsize::new(0),
+            experiment_index: AtomicUsize::new(0),
+            experiment_done: AtomicBool::new(false),
+            times: RwLock::new(vec![std::u64::MAX; num_clients]),
+            num_clients,
+        }
     }
 
-    impl ClientOptimizer {
-        pub fn new(num_clients: usize) -> Self {
-            Self {
-                cur_index: AtomicUsize::new(0),
-                experiment_index: AtomicUsize::new(0),
-                experiment_done: AtomicBool::new(false),
-                times: RwLock::new(vec![std::u64::MAX; num_clients]),
-                num_clients,
-            }
-        }
-
-        pub fn experiment(&self) -> usize {
-            if self.experiment_index.load(Ordering::Relaxed) < self.num_clients {
-                let old = self.experiment_index.fetch_add(1, Ordering::Relaxed);
-                if old < self.num_clients {
-                    old
-                } else {
-                    self.best()
-                }
+    fn experiment(&self) -> usize {
+        if self.experiment_index.load(Ordering::Relaxed) < self.num_clients {
+            let old = self.experiment_index.fetch_add(1, Ordering::Relaxed);
+            if old < self.num_clients {
+                old
             } else {
                 self.best()
             }
-        }
-
-        pub fn report(&self, index: usize, time_ms: u64) {
-            if self.num_clients > 1
-                && (!self.experiment_done.load(Ordering::Relaxed) || time_ms == std::u64::MAX)
-            {
-                trace!(
-                    "report {} with {} exp: {}",
-                    index,
-                    time_ms,
-                    self.experiment_index.load(Ordering::Relaxed)
-                );
-
-                self.times.write().unwrap()[index] = time_ms;
-
-                if index == (self.num_clients - 1) || time_ms == std::u64::MAX {
-                    let times = self.times.read().unwrap();
-                    let (min_time, min_index) = min_index(&times);
-                    trace!(
-                        "done experimenting min: {} time: {} times: {:?}",
-                        min_index,
-                        min_time,
-                        times
-                    );
-
-                    // Only 1 thread should grab the num_clients-1 index, so this should be ok.
-                    self.cur_index.store(min_index, Ordering::Relaxed);
-                    self.experiment_done.store(true, Ordering::Relaxed);
-                }
-            }
-        }
-
-        pub fn best(&self) -> usize {
-            self.cur_index.load(Ordering::Relaxed)
+        } else {
+            self.best()
         }
     }
+
+    fn report(&self, index: usize, time_ms: u64) {
+        if self.num_clients > 1
+            && (!self.experiment_done.load(Ordering::Relaxed) || time_ms == std::u64::MAX)
+        {
+            trace!(
+                "report {} with {} exp: {}",
+                index,
+                time_ms,
+                self.experiment_index.load(Ordering::Relaxed)
+            );
+
+            self.times.write().unwrap()[index] = time_ms;
+
+            if index == (self.num_clients - 1) || time_ms == std::u64::MAX {
+                let times = self.times.read().unwrap();
+                let (min_time, min_index) = min_index(&times);
+                trace!(
+                    "done experimenting min: {} time: {} times: {:?}",
+                    min_index,
+                    min_time,
+                    times
+                );
+
+                // Only 1 thread should grab the num_clients-1 index, so this should be ok.
+                self.cur_index.store(min_index, Ordering::Relaxed);
+                self.experiment_done.store(true, Ordering::Relaxed);
+            }
+        }
+    }
+
+    fn best(&self) -> usize {
+        self.cur_index.load(Ordering::Relaxed)
+    }
 }
-use temporary_pub::*;
 
 /// An object for querying and sending transactions to the network.
 pub struct ThinClient<
