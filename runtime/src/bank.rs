@@ -966,7 +966,7 @@ impl SchedulerContext {
     }
 
     pub fn slot(&self) -> Slot {
-        self.bank.as_ref().map(|b| b.slot()).unwrap_or(0)
+        self.bank().map(|b| b.slot()).unwrap_or(0)
     }
 
     pub fn bank(&self) -> Option<&Arc<Bank>> {
