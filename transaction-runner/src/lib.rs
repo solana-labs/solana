@@ -187,7 +187,7 @@ impl CommitStatus {
     }
 
     fn check_and_wait(&self, scheduler_context: &mut Option<SchedulerContext>) {
-        let (mut is_paused, seq) = &mut self.is_paused.lock().unwrap();
+        let (mut is_paused, seq) = &mut *self.is_paused.lock().unwrap();
         if !*is_paused {
             return
         }
