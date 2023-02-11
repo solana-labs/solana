@@ -360,7 +360,7 @@ impl Scheduler {
                             //info!("scEx: {current_thread_name} committing.. {} txes", transactions.len());
                             let res = scheduler_pool.transaction_recorder.as_ref().unwrap().record(slot, hash, executed_transactions);
                             match res {
-                                Ok(aa) => aa,
+                                Ok(maybe_index) => maybe_index,
                                 Err(e) => {
                                     trace!("{thread_name} pausing due to poh error until resumed...: {:?}", e);
                                     // this is needed so that we don't enter busy loop
