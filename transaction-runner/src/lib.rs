@@ -357,7 +357,8 @@ impl Scheduler {
                                 .collect();
                         if !executed_transactions.is_empty() {
                             let hash = solana_entry::entry::hash_transactions(&executed_transactions);
-                            let res = record_transactions(scheduler_pool.transaction_recorder.as_ref().unwrap(), bank.as_ref(), executed_transactions, hash);
+                            //info!("scEx: {current_thread_name} committing.. {} txes", transactions.len());
+                            let res = scheduler_pool.transaction_recorder.as_ref().unwrap().record(slot, executed_transactions, hash);
                             match res {
                                 Ok(aa) => aa,
                                 Err(e) => {
@@ -845,17 +846,4 @@ fn send_transaction_status(sender: &TransactionStatusSender, pre: Option<(Vec<Ve
             None
         }
     }
-}
-
-fn record_transactions(recorder: &TransactionRecorder, bank: &Bank, transactions: Vec<VersionedTransaction>, hash: solana_sdk::hash::Hash) -> std::result::Result<Option<usize>, ()> {
-    //if skip_poh {
-    //    return Ok(Default::default());
-    //}
-    //let current_thread_name = std::thread::current().name().unwrap().to_string();
-    //info!("scEx: {current_thread_name} committing.. {} txes", transactions.len());
-    let res = recorder.record(bank.slot(), hash, transactions);
-
-    //info!("scEx: {current_thread_name} recorded {:?}", res);
-
-    res.map_err(|_| ())
 }
