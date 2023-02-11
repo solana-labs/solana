@@ -203,11 +203,11 @@ impl CommitStatus {
     fn notify_as_paused(&self) {
         let current_thread_name = std::thread::current().name().unwrap().to_string();
         let mut is_paused = self.is_paused.lock().unwrap();
-        if *is_paused {
+        if is_paused.0 {
             info!("CommitStatus: {current_thread_name} is skipped to notify as paused...");
         } else {
             info!("CommitStatus: {current_thread_name} is notifying as paused...");
-            *is_paused = true;
+            is_paused.0 = true;
         }
     }
 
