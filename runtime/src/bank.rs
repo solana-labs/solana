@@ -973,8 +973,8 @@ impl SchedulerContext {
         self.bank.as_ref()?.upgrade()
     }
 
-    pub fn log_prefix(random_id: u64, context: &Option<impl AsRef<Self>>) -> String {
-        format!("id_{:016x}{}", random_id, context.map(|&c| format!(" slot: {}, mode: {:?}", c.slot(), c.mode)).unwrap_or("".into()))
+    pub fn log_prefix(random_id: u64, context: &Option<&Self>) -> String {
+        format!("id_{:016x}{}", random_id, context.as_ref().map(|c| format!(" slot: {}, mode: {:?}", c.slot(), c.mode)).unwrap_or("".into()))
     }
 }
 
