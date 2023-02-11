@@ -915,7 +915,7 @@ fn get_snapshot_accounts_hardlink_dir(
     // and the symlink to it at the first time of seeing the account_path.
     if !account_paths.contains(&account_path) {
         let idx = account_paths.len();
-        info!(
+        debug!(
             "for appendvec_path {}, create hard-link path {}",
             appendvec_path.display(),
             snapshot_hardlink_dir.display()
@@ -2637,6 +2637,7 @@ mod tests {
         assert_matches::assert_matches,
         bincode::{deserialize_from, serialize_into},
         solana_sdk::{
+            account::AccountSharedData,
             genesis_config::create_genesis_config,
             native_token::sol_to_lamports,
             signature::{Keypair, Signer},
@@ -4428,5 +4429,54 @@ mod tests {
 
         // When the bank snapshot is removed, all the snapshot hardlink directories should be removed.
         assert!(hardlink_dirs.iter().all(|dir| fs::metadata(dir).is_err()));
+    }
+
+    #[test]
+    fn test_get_snapshot_accounts_hardlink_dir() {
+        solana_logger::setup();
+        let genesis_config = GenesisConfig::default();
+        let bank = Bank::new_for_tests(&genesis_config);
+        let db = &bank.accounts().accounts_db;
+        let slot = bank.slot();
+
+        let key = Pubkey::default();
+        let account = AccountSharedData::new(1, 0, &key);
+
+        db.store_for_tests(slot, &[(&key, &account)]);
+        db.add_root_and_flush_write_cache(slot);
+
+        let storages = bank.get_snapshot_storages(None);
+        let appendvec0 = storages.first().unwrap();
+
+        let appendvec_path = appendvec0.get_path();
+
+        let mut account_paths: HashSet<PathBuf> = HashSet::new();
+
+        let bank_snapshots_dir_tmp = tempfile::TempDir::new().unwrap();
+        let bank_snapshot_dir = bank_snapshots_dir_tmp.path().join(slot.to_string());
+        let accounts_hardlinks_dir = bank_snapshot_dir.join("accounts_hardlinks");
+        fs::create_dir_all(&accounts_hardlinks_dir).unwrap();
+
+        let ret = get_snapshot_accounts_hardlink_dir(
+            &appendvec_path,
+            slot,
+            &mut account_paths,
+            &accounts_hardlinks_dir,
+        );
+        assert!(ret.is_ok());
+
+        let wrong_appendvec_path = appendvec_path
+            .parent()
+            .unwrap()
+            .parent()
+            .unwrap()
+            .join(appendvec_path.file_name().unwrap());
+        let ret = get_snapshot_accounts_hardlink_dir(
+            &wrong_appendvec_path,
+            slot,
+            &mut account_paths,
+            accounts_hardlinks_dir,
+        );
+        assert!(ret.is_err());
     }
 }
