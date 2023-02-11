@@ -186,16 +186,20 @@ impl CommitStatus {
         }
     }
 
-    fn check_and_wait(&self, scheduler_context: &mut Option<SchedulerContext>) {
+    fn check_and_wait(&self, last_seq: &mut usize, scheduler_context: &mut Option<SchedulerContext>) {
         let mut is_paused = self.is_paused.lock().unwrap();
+        if last_seq != is_paused.1 {
+            *last_seq = is_paused.1;
+            // drop arc in scheduler_context as soon as possible
+            drop(scheduler_context.take());
+        }
+
         if !is_paused.0 {
             return
         }
         let current_thread_name = std::thread::current().name().unwrap().to_string();
 
         info!("CommitStatus: {current_thread_name} is paused...");
-        // drop arc in scheduler_context as soon as possible
-        drop(scheduler_context.take());
         self.condvar.wait_while(is_paused, |now_is_paused| now_is_paused.0).unwrap();
         info!("CommitStatus: {current_thread_name} is resumed...");
     }
