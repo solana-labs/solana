@@ -358,7 +358,7 @@ impl Scheduler {
                         if !executed_transactions.is_empty() {
                             let hash = solana_entry::entry::hash_transactions(&executed_transactions);
                             //info!("scEx: {current_thread_name} committing.. {} txes", transactions.len());
-                            let res = scheduler_pool.transaction_recorder.as_ref().unwrap().record(slot, executed_transactions, hash);
+                            let res = scheduler_pool.transaction_recorder.as_ref().unwrap().record(slot, hash, executed_transactions);
                             match res {
                                 Ok(aa) => aa,
                                 Err(e) => {
