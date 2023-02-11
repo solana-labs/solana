@@ -145,16 +145,29 @@ impl Default for ConnectionCache {
 }
 
 macro_rules! dispatch {
-    ($vis:vis fn $name:ident(&self $(, $arg:ident : $ty:ty)?) $(-> $out:ty)?) => {
+    ($(#[$meta:meta])* $vis:vis fn $name:ident$(<$($t:ident: $cons:ident),*>)?(&self $(, $arg:ident: $ty:ty)*) $(-> $out:ty)?) => {
         #[inline]
-        $vis fn $name(&self $(, $arg:$ty)?) $(-> $out)? {
+        $(#[$meta])*
+        $vis fn $name$(<$($t: $cons),*>)?(&self $(, $arg:$ty)*) $(-> $out)? {
             match self {
-                Self::Quic(this) => this.$name($($arg, )?),
-                Self::Udp(this) => this.$name($($arg, )?),
+                Self::Quic(this) => this.$name($($arg, )*),
+                Self::Udp(this) => this.$name($($arg, )*),
+            }
+        }
+    };
+    ($(#[$meta:meta])* $vis:vis fn $name:ident$(<$($t:ident: $cons:ident),*>)?(&mut self $(, $arg:ident: $ty:ty)*) $(-> $out:ty)?) => {
+        #[inline]
+        $(#[$meta])*
+        $vis fn $name$(<$($t: $cons),*>)?(&mut self $(, $arg:$ty)*) $(-> $out)? {
+            match self {
+                Self::Quic(this) => this.$name($($arg, )*),
+                Self::Udp(this) => this.$name($($arg, )*),
             }
         }
     };
 }
+
+pub(crate) use dispatch;
 
 impl ClientConnection for BlockingClientConnection {
     dispatch!(fn server_addr(&self) -> &SocketAddr);
