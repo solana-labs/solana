@@ -188,7 +188,7 @@ impl CommitStatus {
 
     fn check_and_wait(&self, scheduler_context: &mut Option<SchedulerContext>) {
         let mut is_paused = self.is_paused.lock().unwrap();
-        if !*is_paused.0 {
+        if !is_paused.0 {
             return
         }
         let current_thread_name = std::thread::current().name().unwrap().to_string();
