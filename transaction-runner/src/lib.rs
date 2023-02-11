@@ -174,7 +174,7 @@ pub(crate) struct Scheduler {
 
 #[derive(Debug)]
 struct CommitStatus {
-    is_paused: std::sync::Mutex<(bool, usize)>>, // maybe should use blockheight: u64 to avoid race for races between replay and executor's poh error?
+    is_paused: std::sync::Mutex<(bool, usize)>, // maybe should use blockheight: u64 to avoid race for races between replay and executor's poh error?
     condvar: std::sync::Condvar,
 }
 
