@@ -316,19 +316,19 @@ impl AccountsDb {
     /// 2. separate, by slot, into:
     /// 2a. pubkeys with refcount = 1. This means this pubkey exists NOWHERE else in accounts db.
     /// 2b. pubkeys with refcount > 1
-    /// Note that the return value can contain fewer items than 'stored_accounts_all' if we find storages which won't be affected.
-    /// 'stored_accounts_all' should be sorted by slot
+    /// Note that the return value can contain fewer items than 'accounts_per_storage' if we find storages which won't be affected.
+    /// 'accounts_per_storage' should be sorted by slot
     #[allow(dead_code)]
     fn calc_accounts_to_combine<'a>(
         &self,
-        stored_accounts_all: &'a Vec<(&'a SlotInfo, GetUniqueAccountsResult<'a>)>,
+        accounts_per_storage: &'a Vec<(&'a SlotInfo, GetUniqueAccountsResult<'a>)>,
     ) -> AccountsToCombine<'a> {
         let mut accounts_keep_slots = HashMap::default();
-        let len = stored_accounts_all.len();
+        let len = accounts_per_storage.len();
         let mut target_slots_sorted = Vec::with_capacity(len);
 
         let mut accounts_to_combine = Vec::with_capacity(len);
-        for (info, unique_accounts) in stored_accounts_all {
+        for (info, unique_accounts) in accounts_per_storage {
             let mut shrink_collect = self.shrink_collect::<ShrinkCollectAliveSeparatedByRefs<'_>>(
                 &info.storage,
                 unique_accounts,
@@ -413,7 +413,8 @@ struct AccountsToCombine<'a> {
     /// soon and we can clean the duplicates up (which maybe THIS one).
     accounts_keep_slots: HashMap<Slot, AliveAccounts<'a>>,
     /// all the rest of alive accounts that can move slots and should be combined
-    /// This includes all accounts with ref_count = 1 from the slots in 'accounts_keep_slots'
+    /// This includes all accounts with ref_count = 1 from the slots in 'accounts_keep_slots'.
+    /// There is one entry here for each storage we are processing. Even if all accounts are in 'accounts_keep_slots'.
     accounts_to_combine: Vec<ShrinkCollect<'a, ShrinkCollectAliveSeparatedByRefs<'a>>>,
     /// slots that contain alive accounts that can move into ANY other ancient slot
     /// these slots will NOT be in 'accounts_keep_slots'
@@ -1004,12 +1005,12 @@ pub mod tests {
                         })
                     });
                 }
-                let stored_accounts_all = infos
+                let accounts_per_storage = infos
                     .iter()
                     .zip(original_results.into_iter())
                     .collect::<Vec<_>>();
 
-                let accounts_to_combine = db.calc_accounts_to_combine(&stored_accounts_all);
+                let accounts_to_combine = db.calc_accounts_to_combine(&accounts_per_storage);
                 let slots_vec = slots.collect::<Vec<_>>();
                 assert_eq!(accounts_to_combine.accounts_to_combine.len(), num_slots);
                 if two_refs {
@@ -1148,12 +1149,12 @@ pub mod tests {
             .map(|store| db.get_unique_accounts_from_storage(store))
             .collect::<Vec<_>>();
         assert_eq!(original_results.first().unwrap().stored_accounts.len(), 2);
-        let stored_accounts_all = infos
+        let accounts_per_storage = infos
             .iter()
             .zip(original_results.into_iter())
             .collect::<Vec<_>>();
 
-        let accounts_to_combine = db.calc_accounts_to_combine(&stored_accounts_all);
+        let accounts_to_combine = db.calc_accounts_to_combine(&accounts_per_storage);
         let slots_vec = slots.collect::<Vec<_>>();
         assert_eq!(accounts_to_combine.accounts_to_combine.len(), num_slots);
         // all accounts should be in many_refs
