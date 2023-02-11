@@ -592,7 +592,7 @@ impl Scheduler {
                         Some(&scheduled_high_ee_sender),
                         &processed_ee_receiver,
                         Some(&retired_ee_sender),
-                        |scheduler_context| SchedulerContext::log_prefix(random_id, scheduler_context),
+                        |scheduler_context| SchedulerContext::log_prefix(random_id, scheduler_context.as_ref()),
                     );
 
                     if let Some(checkpoint) = maybe_checkpoint {
