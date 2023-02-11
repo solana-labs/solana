@@ -958,9 +958,9 @@ impl solana_scheduler::WithMode for SchedulerContext {
 }
 
 impl SchedulerContext {
-    pub fn new(bank: &Arc<Bank>, mode: solana_scheduler::Mode) -> Self {
+    pub fn new(bank: Option<&Arc<Bank>>, mode: solana_scheduler::Mode) -> Self {
         Self {
-            bank: bank.downgrade(),
+            bank: bank.map(|b| b.downgrade()),
             mode,
         }
     }
