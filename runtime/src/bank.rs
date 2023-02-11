@@ -958,6 +958,13 @@ impl solana_scheduler::WithMode for SchedulerContext {
 }
 
 impl SchedulerContext {
+    pub fn new(bank: &Arc<Bank>, mode solana_scheduler::Mode) -> Self {
+        Self {
+            bank: bank.downgrade(),
+            mode,
+        }
+    }
+
     pub fn slot(&self) -> Slot {
         self.bank.as_ref().map(|b| b.slot()).unwrap_or(0)
     }
