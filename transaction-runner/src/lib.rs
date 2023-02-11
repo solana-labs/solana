@@ -212,6 +212,7 @@ impl CommitStatus {
         } else {
             info!("CommitStatus: {current_thread_name} is notifying as paused...");
             is_paused.0 = true;
+            is_paused.1 += 1;
         }
     }
 
