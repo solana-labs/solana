@@ -196,7 +196,7 @@ impl CommitStatus {
         info!("CommitStatus: {current_thread_name} is paused...");
         // drop arc in scheduler_context as soon as possible
         drop(scheduler_context.take());
-        self.condvar.wait_while(is_paused, |now_is_paused| *now_is_paused).unwrap();
+        self.condvar.wait_while(is_paused, |now_is_paused| now_is_paused.0).unwrap();
         info!("CommitStatus: {current_thread_name} is resumed...");
     }
 
