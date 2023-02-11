@@ -5008,7 +5008,8 @@ impl Bank {
     ) -> TransactionResults {
         assert!(
             !self.freeze_started(),
-            "commit_transactions() working on a bank that is already frozen or is undergoing freezing!"
+            "commit_transactions() working on a bank(slot: {}) that is already frozen or is undergoing freezing!",
+            self.slot(),
         );
 
         let CommitTransactionCounts {
