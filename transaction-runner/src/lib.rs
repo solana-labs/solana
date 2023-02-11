@@ -88,7 +88,7 @@ impl Drop for SchedulerPool {
 }
 
 #[derive(Debug)]
-struct SchedulerPoolWrapper(Arc<SchedulerPool>);
+struct SchedulerPoolWrapper(std::rc::Rc<SchedulerPool>);
 
 impl SchedulerPoolWrapper {
     fn new(poh_recorder: Option<&Arc<RwLock<PohRecorder>>>, log_messages_bytes_limit: Option<usize>, transaction_status_sender: Option<TransactionStatusSender>) -> Self {
