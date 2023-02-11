@@ -4024,7 +4024,6 @@ impl AccountsDb {
         self.shrink_stats.report();
     }
 
-    #[allow(clippy::too_many_arguments)]
     pub(crate) fn update_shrink_stats(shrink_stats: &ShrinkStats, stats_sub: ShrinkStatsSub) {
         shrink_stats
             .num_slots_shrunk
@@ -7212,7 +7211,6 @@ impl AccountsDb {
         }
     }
 
-    #[allow(clippy::too_many_arguments)]
     fn calculate_accounts_hash_with_verify(
         &self,
         data_source: CalcAccountsHashDataSource,
