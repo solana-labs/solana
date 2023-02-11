@@ -191,7 +191,7 @@ impl CommitStatus {
         if *last_seq != is_paused.1 {
             *last_seq = is_paused.1;
             if let Some(sc) = scheduler_context.take() {
-                info!("CommitStatus: {current_thread_name} {} detected stale scheduler_context...", SchedulerContext::log_prefix(random_id, scheduler_context));
+                info!("CommitStatus: {current_thread_name} {} detected stale scheduler_context...", SchedulerContext::log_prefix(random_id, sc));
                 // drop arc in scheduler_context as soon as possible
                 drop(sc);
             }
