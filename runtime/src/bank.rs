@@ -963,7 +963,7 @@ impl SchedulerContext {
     }
 
     pub fn bank(&self) -> Option<&Arc<Bank>> {
-        self.bank.as_ref()
+        self.bank.as_ref().upgrade()
     }
 
     pub fn log_prefix(random_id: u64, context: &Option<Self>) -> String {
