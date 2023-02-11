@@ -974,7 +974,7 @@ impl SchedulerContext {
     }
 
     pub fn log_prefix(random_id: u64, context: &Option<impl AsRef<Self>>) -> String {
-        format!("id_{:016x}{}", random_id, context.map(|c| format!(" slot: {}, mode: {:?}", c.slot(), c.mode)).unwrap_or("".into()))
+        format!("id_{:016x}{}", random_id, context.map(|&c| format!(" slot: {}, mode: {:?}", c.slot(), c.mode)).unwrap_or("".into()))
     }
 }
 
