@@ -186,18 +186,20 @@ impl CommitStatus {
         }
     }
 
-    fn check_and_wait(&self, last_seq: &mut usize, scheduler_context: &mut Option<SchedulerContext>) {
+    fn check_and_wait(&self, random_id: u64, current_thread_name: &str, last_seq: &mut usize, scheduler_context: &mut Option<SchedulerContext>) {
         let mut is_paused = self.is_paused.lock().unwrap();
         if *last_seq != is_paused.1 {
             *last_seq = is_paused.1;
-            // drop arc in scheduler_context as soon as possible
-            drop(scheduler_context.take());
+            if Some(sc) = scheduler_context.take() {
+                info!("CommitStatus: {current_thread_name} {} detected stale scheduler_context...", SchedulerContext::log_prefix(random_id, scheduler_context));
+                // drop arc in scheduler_context as soon as possible
+                drop(sc);
+            }
         }
 
         if !is_paused.0 {
             return
         }
-        let current_thread_name = std::thread::current().name().unwrap().to_string();
 
         info!("CommitStatus: {current_thread_name} is paused...");
         self.condvar.wait_while(is_paused, |now_is_paused| now_is_paused.0).unwrap();
@@ -265,8 +267,9 @@ impl Scheduler {
             let initial_checkpoint = initial_checkpoint.clone();
             let commit_status = commit_status.clone();
             let scheduler_pool = scheduler_pool.clone();
+            let thread_name = format!("solScExLane{:02}", thx);
 
-            std::thread::Builder::new().name(format!("solScExLane{:02}", thx)).spawn(move || {
+            std::thread::Builder::new().name(thread_name.clone()).spawn(move || {
             let mut mint_decimals: HashMap<Pubkey, u8> = HashMap::new();
 
             let started = (cpu_time::ThreadTime::now(), std::time::Instant::now());
@@ -281,7 +284,7 @@ impl Scheduler {
                 solana_scheduler::ExecutablePayload(solana_scheduler::Flushable::Payload(mut ee)) => {
 
                 'retry: loop {
-                commit_status.check_and_wait(&mut latest_seq, &mut latest_scheduler_context);
+                commit_status.check_and_wait(random_id, &thread_name, &mut latest_seq, &mut latest_scheduler_context);
                 if latest_scheduler_context.is_none() {
                     latest_scheduler_context = latest_checkpoint.clone_context_value();
                 }
@@ -358,9 +361,7 @@ impl Scheduler {
                             match res {
                                 Ok(aa) => aa,
                                 Err(e) => {
-                                    let current_thread_name = std::thread::current().name().unwrap().to_string();
-
-                                    trace!("{current_thread_name} pausing due to poh error until resumed...: {:?}", e);
+                                    trace!("{thread_name} pausing due to poh error until resumed...: {:?}", e);
                                     // this is needed so that we don't enter busy loop
                                     commit_status.notify_as_paused();
                                     // meddle with checkpoint/context
