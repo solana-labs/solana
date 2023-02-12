@@ -65,12 +65,13 @@ pub fn setup_logging_with_thread_id() {
         .format(|buf, record| {
             writeln!(
                 buf,
-                "{:?} [{} {} {}] {}",
+                "{:?} [{} {} {}:{}] {}",
                 std::thread::current().id(),
                 buf.timestamp_nanos(),
                 buf.default_level_style(record.level())
                     .value(record.level()),
                 record.target(),
+                record.line().unwrap_or(0),
                 record.args()
             )
         })
