@@ -553,7 +553,7 @@ impl Scheduler {
                             (succeeded, skipped) = (0, 0);
                             latest_checkpoint = Some(checkpoint);
                             latest_scheduler_context = None;
-                            latest_checkpoint.wait_for_restart(Some(std::mem::take(&mut cumulative_timings)));
+                            latest_checkpoint.unwrap().wait_for_restart(Some(std::mem::take(&mut cumulative_timings)));
                         },
                     }
                 }
