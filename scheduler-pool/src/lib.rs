@@ -291,6 +291,14 @@ impl Scheduler {
                     latest_scheduler_context = latest_checkpoint.clone_context_value();
                     mode = Some(latest_scheduler_context.as_ref().unwrap().mode);
                 }
+                if matches!(mode, Some(solana_scheduler::Mode::Banking)) {
+                    commit_status.check_and_wait(random_id, &thread_name, &mut latest_seq, &mut latest_scheduler_context);
+                    if latest_scheduler_context.is_none() {
+                        latest_scheduler_context = latest_checkpoint.clone_context_value();
+                        mode = Some(latest_scheduler_context.as_ref().unwrap().mode);
+                    }
+                }
+
                 let Some(bank) = latest_scheduler_context.as_ref().unwrap().bank() else {
                     assert_matches!(mode, Some(solana_scheduler::Mode::Banking));
                     processed_ee_sender.send(solana_scheduler::UnlockablePayload(ee, Default::default())).unwrap();
