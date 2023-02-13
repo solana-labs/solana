@@ -328,9 +328,6 @@ fn execute_batches(
 
     let mut minimal_tx_cost = u64::MAX;
     let mut total_cost: u64 = 0;
-    // Allowing collect here, since it also computes the minimal tx cost, and aggregate cost.
-    // These two values are later used for checking if the tx_costs vector needs to be iterated over.
-    #[allow(clippy::needless_collect)]
     let tx_costs = sanitized_txs
         .iter()
         .map(|tx| {
