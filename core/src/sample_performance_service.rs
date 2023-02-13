@@ -51,9 +51,9 @@ impl SamplePerformanceService {
         blockstore: &Arc<Blockstore>,
         exit: Arc<AtomicBool>,
     ) {
-        let (bank, highest_slot) = {
+        let bank = {
             let forks = bank_forks.read().unwrap();
-            (forks.root_bank(), forks.highest_slot())
+            forks.root_bank()
         };
 
         // Store the absolute transaction counts to that we can compute the
@@ -62,7 +62,7 @@ impl SamplePerformanceService {
         let mut snapshot = SamplePerformanceSnapshot {
             num_transactions: bank.transaction_count(),
             num_non_vote_transactions: bank.non_vote_transaction_count_since_restart(),
-            highest_slot,
+            highest_slot: bank.slot(),
         };
 
         let mut now = Instant::now();
@@ -75,10 +75,11 @@ impl SamplePerformanceService {
 
             if elapsed.as_secs() >= SAMPLE_INTERVAL {
                 now = Instant::now();
-                let (bank, highest_slot) = {
+                let bank = {
                     let bank_forks = bank_forks.read().unwrap();
-                    (bank_forks.root_bank(), bank_forks.highest_slot())
+                    bank_forks.root_bank()
                 };
+                let highest_slot = bank.slot();
 
                 let num_slots = highest_slot.saturating_sub(snapshot.highest_slot);
                 let num_transactions = bank
