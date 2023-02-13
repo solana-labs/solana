@@ -424,6 +424,7 @@ impl ClusterInfoVoteListener {
                         &verified_vote_packets,
                     )?;
                 } else {
+                    info!("dropping bank_vote_sender_state_option...");
                     drop(bank_vote_sender_state_option.take());
                 }
             }
