@@ -180,7 +180,7 @@ fn get_rpc_peers(
     blacklist_timeout: &Instant,
     retry_reason: &mut Option<String>,
     bootstrap_config: &RpcBootstrapConfig,
-) -> Option<Vec<ContactInfo>> {
+) -> Vec<ContactInfo> {
     let shred_version = validator_config
         .expected_shred_version
         .unwrap_or_else(|| cluster_info.my_shred_version());
@@ -196,7 +196,7 @@ fn get_rpc_peers(
             exit(1);
         }
         info!("Waiting to adopt entrypoint shred version...");
-        return None;
+        return vec![];
     }
 
     info!(
@@ -249,10 +249,9 @@ fn get_rpc_peers(
         } else {
             Some("Wait for known rpc peers".to_owned())
         };
-        return None;
+        return vec![];
     }
-
-    Some(rpc_peers)
+    rpc_peers
 }
 
 fn check_vote_account(
@@ -645,22 +644,17 @@ fn get_rpc_nodes(
             &mut retry_reason,
             bootstrap_config,
         );
-        if rpc_peers.is_none() {
+        if rpc_peers.is_empty() {
             continue;
         }
-        let rpc_peers = rpc_peers.unwrap();
+
         blacklist_timeout = Instant::now();
         if bootstrap_config.no_snapshot_fetch {
-            if rpc_peers.is_empty() {
-                retry_reason = Some("No RPC peers available.".to_owned());
-                continue;
-            } else {
-                let random_peer = &rpc_peers[thread_rng().gen_range(0, rpc_peers.len())];
-                return vec![GetRpcNodeResult {
-                    rpc_contact_info: random_peer.clone(),
-                    snapshot_hash: None,
-                }];
-            }
+            let random_peer = &rpc_peers[thread_rng().gen_range(0, rpc_peers.len())];
+            return vec![GetRpcNodeResult {
+                rpc_contact_info: random_peer.clone(),
+                snapshot_hash: None,
+            }];
         }
 
         let known_validators_to_wait_for = if newer_cluster_snapshot_timeout
