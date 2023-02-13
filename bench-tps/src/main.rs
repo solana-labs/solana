@@ -215,7 +215,12 @@ fn main() {
     solana_metrics::set_panic_hook("bench-tps", /*version:*/ None);
 
     let matches = cli::build_args(solana_version::version!()).get_matches();
-    let cli_config = cli::extract_args(&matches);
+    let cli_config = cli::parse_args(&matches);
+    if let Err(error) = cli_config {
+        eprintln!("{error}");
+        exit(1);
+    }
+    let cli_config = cli_config.unwrap();
 
     let cli::Config {
         entrypoint_addr,
