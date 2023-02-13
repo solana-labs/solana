@@ -276,17 +276,13 @@ impl Scheduler {
                 thread_priority::set_current_thread_priority(thread_priority::ThreadPriority::Max).unwrap();
             }
             let mut latest_seq = 0;
-            let (mut latest_checkpoint, mut latest_scheduler_context) = (initial_checkpoint, None::<SchedulerContext>);
-            let mut mode = None;
+            let (mut latest_checkpoint, mut latest_scheduler_context, mut mode) = (initial_checkpoint, None::<SchedulerContext>, None);
 
             'recv: while let Ok(r) = (if thx >= base_thread_count { scheduled_high_ee_receiver.recv() } else { scheduled_ee_receiver.recv()}) {
                 match r {
                 solana_scheduler::ExecutablePayload(solana_scheduler::Flushable::Payload(mut ee)) => {
 
                 'retry: loop {
-                if matches!(mode, Some(solana_scheduler::Mode::Banking)) {
-                    commit_status.check_and_wait(random_id, &thread_name, &mut latest_seq, &mut latest_scheduler_context);
-                }
                 if latest_scheduler_context.is_none() {
                     latest_scheduler_context = latest_checkpoint.clone_context_value();
                     mode = Some(latest_scheduler_context.as_ref().unwrap().mode);
