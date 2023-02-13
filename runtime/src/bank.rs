@@ -960,7 +960,7 @@ impl solana_scheduler::WithMode for SchedulerContext {
 impl SchedulerContext {
     pub fn new(bank: Option<&Arc<Bank>>, mode: solana_scheduler::Mode) -> Self {
         Self {
-            bank: bank.map(|b| Arc::downgrade(b)),
+            bank: bank.cloned()
             mode,
         }
     }
