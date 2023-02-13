@@ -6227,8 +6227,10 @@ impl Bank {
 
     pub fn not_schedulable(&self) {
         let mut s = self.scheduler.write().unwrap();
-        let mut scheduler = s.as_mut().unwrap();
-        scheduler.trigger_stop()
+        if let Some(mut scheduler) = s.as_mut() {
+            info!("not_schedulable... slot: {}", self.slot());
+            scheduler.trigger_stop();
+        }
     }
 
     /// Process a batch of transactions.
