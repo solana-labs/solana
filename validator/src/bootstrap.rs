@@ -48,6 +48,8 @@ const BLACKLIST_CLEAR_THRESHOLD: Duration = Duration::from_secs(60);
 /// If we can't find a good snapshot download candidate after this time, just
 /// give up.
 const NEWER_SNAPSHOT_THRESHOLD: Duration = Duration::from_secs(180);
+/// If we haven't found any RPC peers after this time, just give up.
+const GET_RPC_PEERS_TIMEOUT: Duration = Duration::from_secs(300);
 
 pub const MAX_RPC_CONNECTIONS_EVALUATED_PER_ITERATION: usize = 32;
 
@@ -628,6 +630,7 @@ fn get_rpc_nodes(
     bootstrap_config: &RpcBootstrapConfig,
 ) -> Vec<GetRpcNodeResult> {
     let mut blacklist_timeout = Instant::now();
+    let mut get_rpc_peers_timout = Instant::now();
     let mut newer_cluster_snapshot_timeout = None;
     let mut retry_reason = None;
     loop {
@@ -645,10 +648,16 @@ fn get_rpc_nodes(
             bootstrap_config,
         );
         if rpc_peers.is_empty() {
+            if get_rpc_peers_timout.elapsed() > GET_RPC_PEERS_TIMEOUT {
+                error!("Unable to find any RPC peers");
+                return vec![];
+            }
             continue;
         }
-
+        let rpc_peers = rpc_peers.unwrap();
+        // Reset timeouts if we found any viable RPC peers.
         blacklist_timeout = Instant::now();
+        get_rpc_peers_timout = Instant::now();
         if bootstrap_config.no_snapshot_fetch {
             let random_peer = &rpc_peers[thread_rng().gen_range(0, rpc_peers.len())];
             return vec![GetRpcNodeResult {
