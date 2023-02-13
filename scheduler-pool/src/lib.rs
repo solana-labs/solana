@@ -791,7 +791,7 @@ impl LikeScheduler for Scheduler {
                 solana_scheduler::Flushable::Flush(std::sync::Arc::clone(&checkpoint)),
             ))
             .unwrap();
-        self.next_checkpoint = checkpoint;
+        self.next_checkpoint = Some(checkpoint);
         self.current_checkpoint.update_context_value(|c| {c.bank = None;});
     }
 
