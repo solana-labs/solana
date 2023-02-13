@@ -37,11 +37,14 @@ function Card({ to, header, body, externalIcon = false }) {
             )}
           </h3>
         </div>
-        <div className="card__body">
-          <p>
-            <Translate description={body.translateId}>{body.label}</Translate>
-          </p>
-        </div>
+
+        {typeof body === "object" && (
+          <div className="card__body">
+            <p>
+              <Translate description={body.translateId}>{body.label}</Translate>
+            </p>
+          </div>
+        )}
       </Link>
     </div>
   );
