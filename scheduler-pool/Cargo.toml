@@ -1,13 +1,13 @@
 [package]
 authors = ["Solana Maintainers <maintainers@solana.foundation>"]
 edition = "2021"
-name = "solana-transaction-runner"
-description = "The solana transaction runner"
+name = "solana-scheduler-pool"
+description = "The solana scheduler pool"
 version = "1.16.0"
 repository = "https://github.com/solana-labs/solana"
 license = "Apache-2.0"
 homepage = "https://solana.com/"
-documentation = "https://docs.rs/solana-scheduler"
+documentation = "https://docs.rs/solana-scheduler-pool"
 publish = true
 
 [dependencies]
@@ -32,4 +32,4 @@ variant_counter = "0.4.0"
 
 [lib]
 crate-type = ["lib"]
-name = "solana_transaction_runner"
+name = "solana_scheduler_pool"
