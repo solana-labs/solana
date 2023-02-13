@@ -23,19 +23,14 @@ pub const DEFAULT_TPU_ENABLE_UDP: bool = false;
 pub const DEFAULT_TPU_USE_QUIC: bool = true;
 pub const DEFAULT_TPU_CONNECTION_POOL_SIZE: usize = 4;
 
-pub mod temporary_pub {
-    use super::*;
+pub type Result<T> = std::result::Result<T, TpuSenderError>;
 
-    pub type Result<T> = std::result::Result<T, TpuSenderError>;
-
-    /// Send at ~100 TPS
-    #[cfg(feature = "spinner")]
-    pub const SEND_TRANSACTION_INTERVAL: Duration = Duration::from_millis(10);
-    /// Retry batch send after 4 seconds
-    #[cfg(feature = "spinner")]
-    pub const TRANSACTION_RESEND_INTERVAL: Duration = Duration::from_secs(4);
-}
-use temporary_pub::*;
+/// Send at ~100 TPS
+#[cfg(feature = "spinner")]
+pub(crate) const SEND_TRANSACTION_INTERVAL: Duration = Duration::from_millis(10);
+/// Retry batch send after 4 seconds
+#[cfg(feature = "spinner")]
+pub(crate) const TRANSACTION_RESEND_INTERVAL: Duration = Duration::from_secs(4);
 
 /// Default number of slots used to build TPU socket fanout set
 pub const DEFAULT_FANOUT_SLOTS: u64 = 12;
