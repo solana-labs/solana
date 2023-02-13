@@ -6644,6 +6644,7 @@ dependencies = [
  "solana-entry",
  "solana-ledger",
  "solana-measure",
+ "solana-metrics",
  "solana-poh",
  "solana-program-runtime",
  "solana-runtime",
