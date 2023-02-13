@@ -438,7 +438,7 @@ impl Scheduler {
                 solana_scheduler::ExecutablePayload(solana_scheduler::Flushable::Flush(checkpoint)) => {
                     latest_checkpoint = checkpoint;
                     latest_scheduler_context = None;
-                    checkpoint.wait_for_restart(None);
+                    latest_checkpoint.wait_for_restart(None);
                 }
                 }
             }
