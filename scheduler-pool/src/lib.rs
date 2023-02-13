@@ -436,9 +436,9 @@ impl Scheduler {
                 }
                 },
                 solana_scheduler::ExecutablePayload(solana_scheduler::Flushable::Flush(checkpoint)) => {
-                    checkpoint.wait_for_restart(None);
                     latest_checkpoint = checkpoint;
                     latest_scheduler_context = None;
+                    checkpoint.wait_for_restart(None);
                 }
                 }
             }
@@ -551,9 +551,9 @@ impl Scheduler {
                             }
                             transaction_error_counts.reset();
                             (succeeded, skipped) = (0, 0);
-                            checkpoint.wait_for_restart(Some(std::mem::take(&mut cumulative_timings)));
                             latest_checkpoint = Some(checkpoint);
                             latest_scheduler_context = None;
+                            checkpoint.wait_for_restart(Some(std::mem::take(&mut cumulative_timings)));
                         },
                     }
                 }

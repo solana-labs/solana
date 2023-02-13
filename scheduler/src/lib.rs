@@ -2091,8 +2091,8 @@ impl ScheduleStage {
                 "-".into()
             };
             info!("schedule_once:final   {} (no_more_work: {}) ch(prev: {}, exec: {}|{}), runnnable: {}, contended: {}, (immediate+provisional)/max: ({}+{})/{} uncontended: {} stuck: {} miss: {}, overall: {}txs/{}us={}tps! (cpu time: {cpu_time2}us)", log_prefix(&scheduler_context), no_more_work, (if from_disconnected { "-".to_string() } else { format!("{}", from_prev.len()) }), to_execute_substage.len(), (if from_exec_disconnected { "-".to_string() } else { format!("{}", from_exec.len())}), runnable_queue.task_count_hint(), contended_count, executing_queue_count, provisioning_tracker_count, max_executing_queue_count, address_book.uncontended_task_ids.len(), address_book.stuck_tasks.len(), failed_lock_count, processed_count, elapsed.as_micros(), tps_label);
-            drop(scheduler_context);
         }
+        drop(scheduler_context);
 
         if let Some(checkpoint) = &maybe_checkpoint {
             // wake up the receiver thread immediately by not using .send_buffered!
