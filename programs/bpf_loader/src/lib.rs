@@ -22,6 +22,7 @@ use {
         executor_cache::TransactionExecutorCache,
         ic_logger_msg, ic_msg,
         invoke_context::InvokeContext,
+        loaded_programs::LoadedProgram,
         log_collector::LogCollector,
         stable_log,
         sysvar_cache::get_sysvar_with_account_check,
@@ -180,24 +181,12 @@ fn create_executor_from_bytes(
     }))
 }
 
-pub fn create_executor_from_account(
-    feature_set: &FeatureSet,
-    compute_budget: &ComputeBudget,
-    log_collector: Option<Rc<RefCell<LogCollector>>>,
-    tx_executor_cache: Option<RefMut<TransactionExecutorCache>>,
+fn get_programdata_offset(
+    log_collector: &Option<Rc<RefCell<LogCollector>>>,
     program: &BorrowedAccount,
     programdata: &BorrowedAccount,
-    use_jit: bool,
-) -> Result<(Arc<dyn Executor>, Option<CreateMetrics>), InstructionError> {
-    if !check_loader_id(program.get_owner()) {
-        ic_logger_msg!(
-            log_collector,
-            "Executable account not owned by the BPF loader"
-        );
-        return Err(InstructionError::IncorrectProgramId);
-    }
-
-    let programdata_offset = if bpf_loader_upgradeable::check_id(program.get_owner()) {
+) -> Result<usize, InstructionError> {
+    if bpf_loader_upgradeable::check_id(program.get_owner()) {
         if let UpgradeableLoaderState::Program {
             programdata_address,
         } = program.get_state()?
@@ -219,14 +208,94 @@ pub fn create_executor_from_account(
                 ic_logger_msg!(log_collector, "Program has been closed");
                 return Err(InstructionError::InvalidAccountData);
             }
-            UpgradeableLoaderState::size_of_programdata_metadata()
+            Ok(UpgradeableLoaderState::size_of_programdata_metadata())
         } else {
             ic_logger_msg!(log_collector, "Invalid Program account");
-            return Err(InstructionError::InvalidAccountData);
+            Err(InstructionError::InvalidAccountData)
         }
+    } else {
+        Ok(0)
+    }
+}
+
+pub fn load_program_from_account(
+    feature_set: &FeatureSet,
+    compute_budget: &ComputeBudget,
+    log_collector: Option<Rc<RefCell<LogCollector>>>,
+    program: &BorrowedAccount,
+    programdata_key: Option<Pubkey>,
+    programdata: &BorrowedAccount,
+) -> Result<(LoadedProgram, Option<CreateMetrics>), InstructionError> {
+    if !check_loader_id(program.get_owner()) {
+        ic_logger_msg!(
+            log_collector,
+            "Executable account not owned by the BPF loader"
+        );
+        return Err(InstructionError::IncorrectProgramId);
+    }
+
+    let programdata_offset = get_programdata_offset(&log_collector, program, programdata)?;
+    let programdata_size = if programdata_offset != 0 {
+        programdata.get_data().len()
     } else {
         0
     };
+
+    let mut create_executor_metrics = CreateMetrics {
+        program_id: program.get_key().to_string(),
+        ..CreateMetrics::default()
+    };
+
+    let mut register_syscalls_time = Measure::start("register_syscalls_time");
+    let loader = syscalls::create_loader(feature_set, compute_budget, false, false, false)
+        .map_err(|e| {
+            ic_logger_msg!(log_collector, "Failed to register syscalls: {}", e);
+            InstructionError::ProgramEnvironmentSetupFailure
+        })?;
+    register_syscalls_time.stop();
+    create_executor_metrics.register_syscalls_us = register_syscalls_time.as_us();
+
+    let mut load_elf_time = Measure::start("load_elf_time");
+    let loaded_program = LoadedProgram::new(
+        program.get_owner(),
+        loader,
+        0, // Fill in the deployment slot of the program
+        programdata
+            .get_data()
+            .get(programdata_offset..)
+            .ok_or(InstructionError::AccountDataTooSmall)?,
+        program.get_data().len(),
+        programdata_key,
+        programdata_size,
+    )
+    .map_err(|err| {
+        ic_logger_msg!(log_collector, "{}", err);
+        InstructionError::InvalidAccountData
+    })?;
+    load_elf_time.stop();
+    create_executor_metrics.load_elf_us = load_elf_time.as_us();
+
+    Ok((loaded_program, Some(create_executor_metrics)))
+}
+
+pub fn create_executor_from_account(
+    feature_set: &FeatureSet,
+    compute_budget: &ComputeBudget,
+    log_collector: Option<Rc<RefCell<LogCollector>>>,
+    tx_executor_cache: Option<RefMut<TransactionExecutorCache>>,
+    program: &BorrowedAccount,
+    programdata: &BorrowedAccount,
+    use_jit: bool,
+) -> Result<(Arc<dyn Executor>, Option<CreateMetrics>), InstructionError> {
+    if !check_loader_id(program.get_owner()) {
+        ic_logger_msg!(
+            log_collector,
+            "Executable account not owned by the BPF loader"
+        );
+        return Err(InstructionError::IncorrectProgramId);
+    }
+
+    let programdata_offset = get_programdata_offset(&log_collector, program, programdata)?;
 
     if let Some(ref tx_executor_cache) = tx_executor_cache {
         match tx_executor_cache.get(program.get_key()) {

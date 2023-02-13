@@ -70,6 +70,12 @@ impl Debug for LoadedProgramType {
 pub struct LoadedProgram {
     /// The program of this entry
     pub program: LoadedProgramType,
+    /// Size of account that stores the program
+    pub account_size: usize,
+    /// Pubkey of programdata account, if the program uses bpf_loader_upgradeable
+    pub maybe_programdata: Option<Pubkey>,
+    /// Size of programdata account
+    pub programdata_account_size: usize,
     /// Slot in which the program was (re)deployed
     pub deployment_slot: Slot,
     /// Slot in which this entry will become active (can be in the future)
@@ -85,6 +91,9 @@ impl LoadedProgram {
         loader: Arc<BuiltInProgram<InvokeContext<'static>>>,
         deployment_slot: Slot,
         elf_bytes: &[u8],
+        account_size: usize,
+        programdata_key: Option<Pubkey>,
+        programdata_size: usize,
     ) -> Result<Self, EbpfError> {
         let program = if bpf_loader_deprecated::check_id(loader_key) {
             let executable = Executable::load(elf_bytes, loader.clone())?;
@@ -97,6 +106,9 @@ impl LoadedProgram {
         };
         Ok(Self {
             deployment_slot,
+            account_size,
+            maybe_programdata: programdata_key,
+            programdata_account_size: programdata_size,
             effective_slot: deployment_slot.saturating_add(1),
             usage_counter: AtomicU64::new(0),
             program,
@@ -110,6 +122,9 @@ impl LoadedProgram {
     ) -> Self {
         Self {
             deployment_slot,
+            account_size: 0,
+            maybe_programdata: None,
+            programdata_account_size: 0,
             effective_slot: deployment_slot.saturating_add(1),
             usage_counter: AtomicU64::new(0),
             program: LoadedProgramType::BuiltIn(program),
@@ -135,9 +150,14 @@ impl solana_frozen_abi::abi_example::AbiExample for LoadedPrograms {
     }
 }
 
+pub enum LoadedProgramEntry {
+    PreExisting(Arc<LoadedProgram>),
+    Inserted(Arc<LoadedProgram>),
+}
+
 impl LoadedPrograms {
     /// Inserts a single entry
-    pub fn insert_entry(&mut self, key: Pubkey, entry: LoadedProgram) -> bool {
+    pub fn insert_entry(&mut self, key: Pubkey, entry: LoadedProgram) -> LoadedProgramEntry {
         let second_level = self.entries.entry(key).or_insert_with(Vec::new);
         let index = second_level
             .iter()
@@ -149,11 +169,12 @@ impl LoadedPrograms {
             if existing.deployment_slot == entry.deployment_slot
                 && existing.effective_slot == entry.effective_slot
             {
-                return false;
+                return LoadedProgramEntry::PreExisting(existing.clone());
             }
         }
-        second_level.insert(index.unwrap_or(second_level.len()), Arc::new(entry));
-        true
+        let new_entry = Arc::new(entry);
+        second_level.insert(index.unwrap_or(second_level.len()), new_entry.clone());
+        LoadedProgramEntry::Inserted(new_entry)
     }
 
     /// Before rerooting the blockstore this removes all programs of orphan forks
@@ -375,6 +396,9 @@ mod tests {
     fn new_test_loaded_program(deployment_slot: Slot, effective_slot: Slot) -> Arc<LoadedProgram> {
         Arc::new(LoadedProgram {
             program: LoadedProgramType::Invalid,
+            account_size: 0,
+            maybe_programdata: None,
+            programdata_account_size: 0,
             deployment_slot,
             effective_slot,
             usage_counter: AtomicU64::default(),
