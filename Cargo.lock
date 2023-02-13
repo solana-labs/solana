@@ -5453,7 +5453,6 @@ dependencies = [
  "solana-rpc",
  "solana-rpc-client-api",
  "solana-runtime",
- "solana-scheduler",
  "solana-scheduler-pool",
  "solana-sdk 1.16.0",
  "solana-send-transaction-service",

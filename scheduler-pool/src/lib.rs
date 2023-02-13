@@ -38,6 +38,7 @@ use solana_runtime::bank::TransactionBalancesSet;
 use solana_ledger::blockstore_processor::TransactionStatusSender;
 use solana_ledger::token_balances::collect_token_balances;
 
+pub use solana_scheduler::Mode;
 
 struct TransactionRunner(Arc<Bank>, PohRecorder, solana_ledger::blockstore_processor::TransactionStatusSender);
 
