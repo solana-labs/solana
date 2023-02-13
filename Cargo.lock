@@ -6627,6 +6627,7 @@ dependencies = [
  "rand 0.7.3",
  "sha2 0.10.5",
  "solana-logger 1.16.0",
+ "solana-measure",
  "solana-metrics",
  "solana-sdk 1.16.0",
  "triomphe",
