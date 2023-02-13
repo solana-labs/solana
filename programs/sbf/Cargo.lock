@@ -6142,6 +6142,7 @@ dependencies = [
 name = "solana-validator"
 version = "1.16.0"
 dependencies = [
+ "byteorder 1.4.3",
  "chrono",
  "clap 2.33.3",
  "console",
