@@ -115,7 +115,7 @@ impl SchedulerPool {
         }
     }
 
-    fn return_to_pool(self: &Arc<Self>, scheduler: Box<dyn LikeScheduler>) {
+    fn return_to_pool(self: &Arc<Self>, mut scheduler: Box<dyn LikeScheduler>) {
         let mut schedulers = self.schedulers.lock().unwrap();
 
         trace!(
@@ -130,13 +130,7 @@ impl SchedulerPool {
                 panic!("bank(slot: {}) should have been emptied", bank.slot());
             }
         }
-        assert!(scheduler
-            .graceful_stop_initiated()
-            .load(std::sync::atomic::Ordering::SeqCst));
-
-        scheduler
-            .graceful_stop_initiated()
-            .store(false, std::sync::atomic::Ordering::SeqCst);
+        scheduler.clear_stop();
 
         schedulers.push(scheduler);
     }
@@ -162,7 +156,7 @@ pub(crate) struct Scheduler {
     error_collector_thread_handle: Option<std::thread::JoinHandle<Result<(Duration, Duration)>>>,
     transaction_sender: Option<crossbeam_channel::Sender<solana_scheduler::SchedulablePayload<ExecuteTimings, SchedulerContext>>>,
     preloader: Arc<solana_scheduler::Preloader>,
-    graceful_stop_initiated: AtomicBool,
+    graceful_stop_initiated: bool,
     collected_results: Arc<std::sync::Mutex<Vec<Result<ExecuteTimings>>>>,
     commit_status: Arc<CommitStatus>,
     current_checkpoint: Arc<solana_scheduler::Checkpoint<ExecuteTimings, SchedulerContext>>,
@@ -673,10 +667,6 @@ impl Drop for Scheduler {
 
 
 impl LikeScheduler for Scheduler {
-    fn graceful_stop_initiated(&self) -> &AtomicBool {
-        &self.graceful_stop_initiated
-    }
-
     fn random_id(&self) -> u64 {
         self.random_id
     }
@@ -737,12 +727,7 @@ impl LikeScheduler for Scheduler {
     }
 
     fn gracefully_stop(&mut self) -> Result<()> {
-        if !self
-            .graceful_stop_initiated
-            .load(std::sync::atomic::Ordering::SeqCst)
-        {
-            self.trigger_stop();
-        }
+        self.trigger_stop();
         let sc = self.scheduler_context();
         info!(
             "Scheduler::gracefully_stop(): {} waiting..",
@@ -780,9 +765,16 @@ impl LikeScheduler for Scheduler {
         Ok(())
     }
 
+    fn clear_stop(&mut self) {
+        assert!(self.graceful_stop_initiated);
+        self.graceful_stop_initiated = false;
+    }
+
     fn trigger_stop(&mut self) {
-        self.graceful_stop_initiated
-            .store(true, std::sync::atomic::Ordering::SeqCst);
+        if self.graceful_stop_initiated {
+            return;
+        }
+        self.graceful_stop_initiated = true;
 
         info!(
             "Scheduler::trigger_stop(): {} triggering stop..",
