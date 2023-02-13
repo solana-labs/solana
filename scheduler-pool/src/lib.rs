@@ -130,8 +130,10 @@ impl SchedulerPool {
             schedulers.len() + 1
         );
         assert!(scheduler.collected_results().lock().unwrap().is_empty());
-        if let Some(bank) = scheduler.scheduler_context().and_then(|c| c.bank()) {
-            panic!("bank(slot: {}) should have been emptied", bank.slot());
+        if let Some(sc) = scheduler.scheduler_context() {
+            if let Some(bank) = sc.bank() {
+                panic!("bank(slot: {}) should have been emptied", bank.slot());
+            }
         }
         assert!(scheduler
             .graceful_stop_initiated()
