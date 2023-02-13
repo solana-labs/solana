@@ -66,6 +66,10 @@ impl SamplePerformanceService {
                 snapshot = new_snapshot;
 
                 let perf_sample = PerfSampleV2 {
+                    // Note: since num_slots is computed from the highest slot and not the bank
+                    // slot, this value should not be used in conjunction with num_transactions or
+                    // num_non_vote_transactions to draw any conclusions about number of
+                    // transactions per slot.
                     num_slots,
                     num_transactions,
                     num_non_vote_transactions,
