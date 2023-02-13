@@ -947,7 +947,7 @@ impl AbiExample for BuiltinPrograms {
 
 #[derive(Clone, Debug)]
 pub struct SchedulerContext {
-    pub bank: Option<std::sync::Weak<Bank>>,
+    pub bank: Option<std::sync::Arc<Bank>>,
     pub mode: solana_scheduler::Mode,
 }
 
@@ -969,8 +969,8 @@ impl SchedulerContext {
         self.bank().map(|b| b.slot()).unwrap_or(0)
     }
 
-    pub fn bank(&self) -> Option<Arc<Bank>> {
-        self.bank.as_ref()?.upgrade()
+    pub fn bank(&self) -> &Bank {
+        self.bank.as_ref()
     }
 
     pub fn log_prefix(random_id: u64, context: Option<&Self>) -> String {
