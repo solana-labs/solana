@@ -1,6 +1,6 @@
 use {
     solana_ledger::{blockstore::Blockstore, blockstore_meta::PerfSampleV2},
-    solana_runtime::bank_forks::BankForks,
+    solana_runtime::{bank::Bank, bank_forks::BankForks},
     std::{
         sync::{
             atomic::{AtomicBool, Ordering},
@@ -51,10 +51,11 @@ impl SamplePerformanceService {
         blockstore: &Arc<Blockstore>,
         exit: Arc<AtomicBool>,
     ) {
-        let bank = {
-            let forks = bank_forks.read().unwrap();
-            forks.root_bank()
+        let root_bank = || -> Arc<Bank> {
+            let bank_forks = bank_forks.read().unwrap();
+            bank_forks.root_bank()
         };
+        let bank = root_bank();
 
         // Store the absolute transaction counts to that we can compute the
         // difference between these values at points in time to figure out
@@ -75,10 +76,7 @@ impl SamplePerformanceService {
 
             if elapsed.as_secs() >= SAMPLE_INTERVAL {
                 now = Instant::now();
-                let bank = {
-                    let bank_forks = bank_forks.read().unwrap();
-                    bank_forks.root_bank()
-                };
+                let bank = root_bank();
                 let highest_slot = bank.slot();
 
                 let num_slots = highest_slot.saturating_sub(snapshot.highest_slot);
