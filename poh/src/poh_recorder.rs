@@ -119,7 +119,7 @@ impl Record {
     }
 }
 
-#[drive(Debug)]
+#[derive(Debug)]
 pub struct TransactionRecorder {
     // shared by all users of PohRecorder
     pub record_sender: Sender<Record>,
