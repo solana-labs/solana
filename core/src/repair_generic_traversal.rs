@@ -4,7 +4,7 @@ use {
         serve_repair::ShredRepairType, tree_diff::TreeDiff,
     },
     solana_ledger::{blockstore::Blockstore, blockstore_meta::SlotMeta},
-    solana_sdk::{clock::Slot, hash::Hash, timing::timestamp},
+    solana_sdk::{clock::Slot, hash::Hash},
     std::collections::{HashMap, HashSet},
 };
 
@@ -114,6 +114,7 @@ pub fn get_closest_completion(
     slot_meta_cache: &mut HashMap<Slot, Option<SlotMeta>>,
     processed_slots: &mut HashSet<Slot>,
     limit: usize,
+    now_timestamp: u64,
 ) -> Vec<ShredRepairType> {
     let mut v: Vec<(Slot, u64)> = Vec::default();
     let iter = GenericTraversal::new(tree);
@@ -187,7 +188,7 @@ pub fn get_closest_completion(
                 slot,
                 slot_meta,
                 limit - repairs.len(),
-                timestamp(),
+                now_timestamp,
             );
             repairs.extend(new_repairs);
         }
@@ -200,10 +201,9 @@ pub fn get_closest_completion(
 pub mod test {
     use {
         super::*,
-        crate::repair_service::DEFER_REPAIR_THRESHOLD,
+        crate::repair_service::post_shred_deferment_timestamp,
         solana_ledger::{blockstore::Blockstore, get_tmp_ledger_path},
-        solana_sdk::hash::Hash,
-        std::thread::sleep,
+        solana_sdk::{hash::Hash, timing::timestamp},
         trees::{tr, Tree, TreeWalk},
     };
 
@@ -240,6 +240,7 @@ pub mod test {
             &mut slot_meta_cache,
             &mut processed_slots,
             10,
+            timestamp(),
         );
         assert_eq!(repairs, []);
 
@@ -255,7 +256,6 @@ pub mod test {
             Hash::default(),
         );
         let heaviest_subtree_fork_choice = HeaviestSubtreeForkChoice::new_from_tree(forks);
-        sleep(DEFER_REPAIR_THRESHOLD);
         let mut slot_meta_cache = HashMap::default();
         let mut processed_slots = HashSet::default();
         let repairs = get_closest_completion(
@@ -264,6 +264,7 @@ pub mod test {
             &mut slot_meta_cache,
             &mut processed_slots,
             2,
+            post_shred_deferment_timestamp(),
         );
         assert_eq!(
             repairs,

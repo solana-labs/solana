@@ -223,6 +223,7 @@ impl RepairWeight {
             &mut slot_meta_cache,
             &mut processed_slots,
             max_closest_completion_repairs,
+            now_timestamp,
         );
         let num_closest_completion_repairs = closest_completion_repairs.len();
         let num_closest_completion_slots = processed_slots.len() - pre_num_slots;
@@ -471,6 +472,7 @@ impl RepairWeight {
         slot_meta_cache: &mut HashMap<Slot, Option<SlotMeta>>,
         processed_slots: &mut HashSet<Slot>,
         max_new_repairs: usize,
+        now_timestamp: u64,
     ) -> Vec<ShredRepairType> {
         let mut repairs = Vec::default();
         for (_slot, tree) in self.trees.iter() {
@@ -483,6 +485,7 @@ impl RepairWeight {
                 slot_meta_cache,
                 processed_slots,
                 max_new_repairs - repairs.len(),
+                now_timestamp,
             );
             repairs.extend(new_repairs);
         }
