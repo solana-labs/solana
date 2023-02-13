@@ -7982,7 +7982,7 @@ impl Bank {
                 }
 
                 let next_context = if take_next {
-                    Some(scheduler.scheduler_context())
+                    Some(scheduler.scheduler_context().unwrap())
                 } else {
                     None
                 };
@@ -7995,7 +7995,7 @@ impl Bank {
                 let scheduler = s.take().unwrap();
                 let pool = scheduler.scheduler_pool();
                 pool.return_to_pool(scheduler);
-                (e, next_context.map(|c| pool.take_from_pool(c).unwrap()))
+                (e, next_context.map(|c| pool.take_from_pool(c)))
             } else {
                 info!("wait_for_scheduler(Banking): pausing commit into bank ({})...  take_next: {take_next}", self.slot());
                 assert!(!take_next);
