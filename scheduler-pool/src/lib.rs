@@ -160,7 +160,7 @@ pub(crate) struct Scheduler {
     collected_results: Arc<std::sync::Mutex<Vec<Result<ExecuteTimings>>>>,
     commit_status: Arc<CommitStatus>,
     current_checkpoint: Arc<solana_scheduler::Checkpoint<ExecuteTimings, SchedulerContext>>,
-    next_checkpoint: Option<Arc<solana_scheduler::Checkpoint<ExecuteTimings, SchedulerContext>>>,
+    stopped_mode: Option<solana_scheduler::Mode>,
     thread_count: usize,
     scheduler_pool: Arc<SchedulerPool>, // use Weak to cut circuric dep.
 }
@@ -627,7 +627,7 @@ impl Scheduler {
             collected_results,
             commit_status,
             current_checkpoint: initial_checkpoint,
-            next_checkpoint: Default::default(),
+            stopped_mode: Default::default(),
             thread_count,
             scheduler_pool,
         };
@@ -735,7 +735,7 @@ impl LikeScheduler for Scheduler {
             "Scheduler::gracefully_stop(): {} waiting..", label,
         );
 
-        self.current_checkpoint = self.next_checkpoint.take().unwrap();
+        self.current_checkpoint = self.stopped_mode.take().unwrap();
         self.current_checkpoint.wait_for_restart(None);
         let r = self.current_checkpoint.take_restart_value();
         self.collected_results.lock().unwrap().push(Ok(r));
