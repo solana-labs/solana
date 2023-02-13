@@ -40,6 +40,7 @@ use solana_ledger::token_balances::collect_token_balances;
 
 pub use solana_scheduler::Mode;
 
+#[derive(Debug)]
 pub struct SchedulerPool {
     schedulers: std::sync::Mutex<Vec<Box<dyn LikeScheduler>>>,
     transaction_recorder: Option<TransactionRecorder>,
