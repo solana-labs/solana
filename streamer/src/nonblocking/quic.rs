@@ -523,37 +523,23 @@ async fn setup_connection(
     }
 }
 
-async fn patch_batch_sender(packet_sender: Sender<PacketBatch>, 
-    packet_receiver: AsyncReceiver<(Meta, Bytes, u64, usize)>, 
+async fn patch_batch_sender(
+    packet_sender: Sender<PacketBatch>,
+    packet_receiver: AsyncReceiver<(Meta, Bytes, u64, usize)>,
     exit: Arc<AtomicBool>,
-    stats: Arc<StreamStats>,) {
+    stats: Arc<StreamStats>,
+) {
+    info!("enter patch_batch_sender");
     loop {
         let mut packet_batch = PacketBatch::with_capacity(64);
-        //todo: perhaps we should be timing from the first time the packet batch becomes non-zero length?
-        let last_sent = Instant::now();
+        let mut last_sent = Instant::now();
         loop {
             if exit.load(Ordering::Relaxed) {
                 return;
             }
-
-                if let Ok((meta, bytes, offset, end_of_chunk)) = packet_receiver.try_recv() {
-                    let mut packet = Packet::default();
-                    *packet.meta_mut() = meta;
-                    // todo: pretty sure there's an extend_with function or something that allows for 1 less
-                    // junk copy of the packet's data
-                    packet_batch.push(packet);
-                    let i = packet_batch.len() - 1;
-                    packet_batch[i].buffer_mut()[offset as usize..end_of_chunk]
-                    .copy_from_slice(&bytes);
-                }
-                else {
-                    sleep(Duration::from_micros(250)).await;
-                }
             let elapsed = last_sent.elapsed();
             if packet_batch.len() >= 64 || (!packet_batch.is_empty() && elapsed.as_millis() >= 1) {
-                // todo: handle this error
                 let len = packet_batch.len();
-
                 if let Err(e) = packet_sender.send(packet_batch) {
                     stats
                         .total_packet_batch_send_err
@@ -563,9 +549,27 @@ async fn patch_batch_sender(packet_sender: Sender<PacketBatch>,
                     stats
                         .total_packet_batches_sent
                         .fetch_add(1, Ordering::Relaxed);
-                    trace!("sent {} packet batch", len);
+                    info!("sent {} packet batch", len);
                 }
                 break;
+            }
+
+            let res = packet_receiver.try_recv();
+            if res.is_ok() {
+                let (meta, bytes, offset, end_of_chunk) = res.unwrap();
+                let mut packet = Packet::default();
+                *packet.meta_mut() = meta;
+                // todo: pretty sure there's an extend_with function or something that allows for 1 less
+                // junk copy of the packet's data
+                packet_batch.push(packet);
+                let i = packet_batch.len() - 1;
+                packet_batch[i].buffer_mut()[offset as usize..end_of_chunk].copy_from_slice(&bytes);
+                if packet_batch.len() == 1 {
+                    last_sent = Instant::now();
+                }
+            } else {
+                //info!("patch_batch_sender recv error {:?}", res);
+                sleep(Duration::from_micros(250)).await;
             }
         }
     }
