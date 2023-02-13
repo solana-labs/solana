@@ -57,7 +57,6 @@ solana-rpc = { path = "../rpc", version = "=1.16.0" }
 solana-rpc-client-api = { path = "../rpc-client-api", version = "=1.16.0" }
 solana-runtime = { path = "../runtime", version = "=1.16.0" }
 solana-sdk = { path = "../sdk", version = "=1.16.0" }
-solana-scheduler = { path = "../scheduler", version = "=1.16.0" }
 solana-scheduler-pool = { path = "../scheduler-pool", version = "=1.16.0" }
 solana-send-transaction-service = { path = "../send-transaction-service", version = "=1.16.0" }
 solana-streamer = { path = "../streamer", version = "=1.16.0" }
