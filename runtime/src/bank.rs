@@ -969,8 +969,8 @@ impl SchedulerContext {
         self.bank().map(|b| b.slot()).unwrap_or(0)
     }
 
-    pub fn bank(&self) -> Option<&Bank> {
-        self.bank.as_ref().map(|a| &*a)
+    pub fn bank(&self) -> Option<&Arc<Bank>> {
+        self.bank.as_ref()
     }
 
     pub fn log_prefix(random_id: u64, context: Option<&Self>) -> String {
