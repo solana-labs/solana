@@ -130,7 +130,7 @@ impl SchedulerPool {
             schedulers.len() + 1
         );
         assert!(scheduler.collected_results().lock().unwrap().is_empty());
-        //assert!(scheduler.current_checkpoint.clone_context_value().unwrap().bank.is_none());
+        assert!(scheduler.current_checkpoint.clone_context_value().map(|c| c.bank()).is_none());
         assert!(scheduler
             .graceful_stop_initiated()
             .load(std::sync::atomic::Ordering::SeqCst));
@@ -277,22 +277,26 @@ impl Scheduler {
             }
             let mut latest_seq = 0;
             let (mut latest_checkpoint, mut latest_scheduler_context) = (initial_checkpoint, None::<SchedulerContext>);
+            let mut mode = None;
 
             'recv: while let Ok(r) = (if thx >= base_thread_count { scheduled_high_ee_receiver.recv() } else { scheduled_ee_receiver.recv()}) {
                 match r {
                 solana_scheduler::ExecutablePayload(solana_scheduler::Flushable::Payload(mut ee)) => {
 
                 'retry: loop {
-                commit_status.check_and_wait(random_id, &thread_name, &mut latest_seq, &mut latest_scheduler_context);
+                if asseert_matches!(mode, Some(solana_scheduler::Mode::Banking)) {
+                    commit_status.check_and_wait(random_id, &thread_name, &mut latest_seq, &mut latest_scheduler_context);
+                }
                 if latest_scheduler_context.is_none() {
                     latest_scheduler_context = latest_checkpoint.clone_context_value();
+                    mode = Some(latest_scheduler_context.as_ref().unwrap().mode);
                 }
-                let mode = latest_scheduler_context.as_ref().unwrap().mode;
                 let Some(bank) = latest_scheduler_context.as_ref().unwrap().bank() else {
-                    assert_matches!(mode, solana_scheduler::Mode::Banking);
+                    assert_matches!(mode, Some(solana_scheduler::Mode::Banking));
                     processed_ee_sender.send(solana_scheduler::UnlockablePayload(ee, Default::default())).unwrap();
                     continue 'recv;
                 };
+                let mode = mode.unwrap();
 
                 let (mut wall_time, cpu_time) = (Measure::start("process_message_time"), cpu_time::ThreadTime::now());
 
