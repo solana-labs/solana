@@ -72,6 +72,7 @@ pub struct BankForks {
 pub trait LikeSchedulerPool: Send + Sync + std::fmt::Debug {
     fn take_from_pool(&self, context: SchedulerContext) -> Box<dyn LikeScheduler>;
     fn return_to_pool(&self, scheduler: Box<dyn LikeScheduler>);
+    // drop with exit atomicbool integration??
 }
 
 impl Index<u64> for BankForks {

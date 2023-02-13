@@ -1172,6 +1172,7 @@ pub trait LikeScheduler: Send + Sync + std::fmt::Debug {
     fn scheduler_pool(&self) -> Box<dyn LikeSchedulerPool>;
     fn scheduler_context(&self) -> Option<SchedulerContext>;
     fn replace_scheduler_context(&self, context: SchedulerContext);
+    // drop with exit atomicbool integration??
 }
 
 struct VoteWithStakeDelegations {
