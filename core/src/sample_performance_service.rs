@@ -56,6 +56,9 @@ impl SamplePerformanceService {
             (forks.root_bank(), forks.highest_slot())
         };
 
+        // Store the absolute transaction counts to that we can compute the
+        // difference between these values at points in time to figure out
+        // how many transactions occurred in that timespan.
         let mut snapshot = SamplePerformanceSnapshot {
             num_transactions: bank.transaction_count(),
             num_non_vote_transactions: bank.non_vote_transaction_count_since_restart(),
@@ -96,9 +99,11 @@ impl SamplePerformanceService {
                     error!("write_perf_sample failed: slot {:?} {:?}", highest_slot, e);
                 }
 
+                // Same as above, store the absolute transaction counts to use
+                // as comparison for the next iteration of this loop.
                 snapshot = SamplePerformanceSnapshot {
-                    num_transactions,
-                    num_non_vote_transactions,
+                    num_transactions: bank.transaction_count(),
+                    num_non_vote_transactions: bank.non_vote_transaction_count_since_restart(),
                     highest_slot,
                 };
             }
