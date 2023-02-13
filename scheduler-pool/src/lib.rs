@@ -475,7 +475,7 @@ impl Scheduler {
                 use variant_counter::VariantCount;
                 let mut transaction_error_counts = TransactionError::counter();
                 let (mut skipped, mut succeeded) = (0, 0);
-                let (mut latest_checkpoint, mut latest_scheduler_context) = (Some(initial_checkpoint), None::<SchedulerContext>);
+                let (mut latest_checkpoint, mut latest_scheduler_context) = (Some(initial_checkpoint), None);
 
                 loop {
                 while let Ok(r) = retired_ee_receiver.recv_timeout(std::time::Duration::from_millis(20))
