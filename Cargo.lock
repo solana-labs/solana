@@ -5454,12 +5454,12 @@ dependencies = [
  "solana-rpc-client-api",
  "solana-runtime",
  "solana-scheduler",
+ "solana-scheduler-pool",
  "solana-sdk 1.16.0",
  "solana-send-transaction-service",
  "solana-stake-program",
  "solana-streamer",
  "solana-tpu-client",
- "solana-transaction-runner",
  "solana-transaction-status",
  "solana-version",
  "solana-vote-program",
@@ -5920,10 +5920,10 @@ dependencies = [
  "solana-metrics",
  "solana-runtime",
  "solana-scheduler",
+ "solana-scheduler-pool",
  "solana-sdk 1.16.0",
  "solana-stake-program",
  "solana-storage-bigtable",
- "solana-transaction-runner",
  "solana-transaction-status",
  "solana-version",
  "solana-vote-program",
@@ -6636,6 +6636,30 @@ dependencies = [
 ]
 
 [[package]]
+name = "solana-scheduler-pool"
+version = "1.16.0"
+dependencies = [
+ "assert_matches",
+ "cpu-time",
+ "crossbeam-channel",
+ "log",
+ "rand 0.7.3",
+ "serde_json",
+ "solana-entry",
+ "solana-ledger",
+ "solana-measure",
+ "solana-metrics",
+ "solana-poh",
+ "solana-program-runtime",
+ "solana-runtime",
+ "solana-scheduler",
+ "solana-sdk 1.16.0",
+ "solana-transaction-status",
+ "thread-priority",
+ "variant_counter",
+]
+
+[[package]]
 name = "solana-sdk"
 version = "1.14.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7044,30 +7068,6 @@ dependencies = [
  "solana-streamer",
  "solana-transaction-status",
  "solana-version",
-]
-
-[[package]]
-name = "solana-transaction-runner"
-version = "1.16.0"
-dependencies = [
- "assert_matches",
- "cpu-time",
- "crossbeam-channel",
- "log",
- "rand 0.7.3",
- "serde_json",
- "solana-entry",
- "solana-ledger",
- "solana-measure",
- "solana-metrics",
- "solana-poh",
- "solana-program-runtime",
- "solana-runtime",
- "solana-scheduler",
- "solana-sdk 1.16.0",
- "solana-transaction-status",
- "thread-priority",
- "variant_counter",
 ]
 
 [[package]]

@@ -965,7 +965,7 @@ impl Validator {
         } else {
             info!("Disabled banking tracer");
         }
-        use solana_transaction_runner::{
+        use solana_scheduler_pool::{
             SchedulerPool,
         };
         info!("Initialized transaction status sender callback: {:?}", (config.runtime_config.log_messages_bytes_limit, &transaction_status_sender));
