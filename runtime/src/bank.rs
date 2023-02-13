@@ -1166,6 +1166,7 @@ pub trait LikeScheduler: Send + Sync + std::fmt::Debug {
     fn handle_aborted_executions(&self) -> Vec<Result<ExecuteTimings>>;
     fn pause_commit_into_bank(&self);  // pause()?
     fn resume_commit_into_bank(&self); // resume()?
+    fn trigger_stop(&mut self);
     fn gracefully_stop(&mut self) -> Result<()>; // terminate_gracefully()? or just shutdown()?
     fn current_scheduler_mode(&self) -> solana_scheduler::Mode;
     fn collected_results(&self) -> Arc<std::sync::Mutex<Vec<Result<ExecuteTimings>>>>;
@@ -6222,6 +6223,12 @@ impl Bank {
         let s = self.scheduler.read().unwrap();
         let scheduler = s.as_ref().unwrap();
         scheduler.current_scheduler_mode()
+    }
+
+    pub fn not_schedulable(&self) {
+        let mut s = self.scheduler.write().unwrap();
+        let mut scheduler = s.as_mut().unwrap();
+        scheduler.trigger_stop()
     }
 
     /// Process a batch of transactions.

@@ -184,11 +184,11 @@ impl CommitStatus {
         }
     }
 
-    fn check_and_wait(&self, random_id: u64, current_thread_name: &str, last_seq: &mut usize, scheduler_context: &mut Option<SchedulerContext>) {
+    fn check_and_wait(&self, random_id: u64, current_thread_name: &str, last_seq: &mut usize, context: &mut Option<SchedulerContext>) {
         let mut is_paused = self.is_paused.lock().unwrap();
         if *last_seq != is_paused.1 {
             *last_seq = is_paused.1;
-            if let Some(sc) = scheduler_context.take() {
+            if let Some(sc) = context.take() {
                 info!("CommitStatus: {current_thread_name} {} detected stale scheduler_context...", SchedulerContext::log_prefix(random_id, Some(&sc)));
                 // drop arc in scheduler_context as soon as possible
                 drop(sc);
@@ -599,7 +599,7 @@ impl Scheduler {
                         Some(&scheduled_high_ee_sender),
                         &processed_ee_receiver,
                         Some(&retired_ee_sender),
-                        |scheduler_context| SchedulerContext::log_prefix(random_id, scheduler_context.as_ref()),
+                        |context| SchedulerContext::log_prefix(random_id, context.as_ref()),
                     );
 
                     if let Some(checkpoint) = maybe_checkpoint {
@@ -655,8 +655,8 @@ impl Scheduler {
     }
 
 
-    fn replace_scheduler_context(&self, scheduler_context: SchedulerContext) {
-        self.current_checkpoint.replace_context_value(scheduler_context);
+    fn replace_scheduler_context_inner(&self, context: SchedulerContext) {
+        self.current_checkpoint.replace_context_value(context);
     }
 }
 
@@ -737,38 +737,21 @@ impl LikeScheduler for Scheduler {
     }
 
     fn gracefully_stop(&mut self) -> Result<()> {
-        if self
+        if !self
             .graceful_stop_initiated
             .load(std::sync::atomic::Ordering::SeqCst)
         {
-            warn!(
-                "Scheduler::gracefully_stop(): id_{:016x} (skipped..?)",
-                self.random_id
-            );
-            return Ok(());
+            self.trigger_stop();
         }
-        self.graceful_stop_initiated
-            .store(true, std::sync::atomic::Ordering::SeqCst);
-
-        trace!(
-            "Scheduler::gracefully_stop(): id_{:016x} waiting..",
-            self.random_id
+        let sc = self.scheduler_context();
+        info!(
+            "Scheduler::gracefully_stop(): {} waiting..",
+            SchedulerContext::log_prefix(self.random_id, sc.as_ref()),
         );
-        //let transaction_sender = self.transaction_sender.take().unwrap();
 
-        //drop(transaction_sender);
-        let checkpoint = self.checkpoint();
-        self.transaction_sender
-            .as_ref()
-            .unwrap()
-            .send(solana_scheduler::SchedulablePayload(
-                solana_scheduler::Flushable::Flush(std::sync::Arc::clone(&checkpoint)),
-            ))
-            .unwrap();
+        let checkpoint = &self.current_checkpoint;
         checkpoint.wait_for_restart(None);
         let r = checkpoint.take_restart_value();
-        self.current_checkpoint = checkpoint;
-        self.current_checkpoint.update_context_value(|c| {c.bank= None;});
         self.collected_results.lock().unwrap().push(Ok(r));
 
         /*
@@ -790,7 +773,34 @@ impl LikeScheduler for Scheduler {
         info!("Scheduler::gracefully_stop(): slot: {} id_{:016x} durations 2/2 (wall): scheduler: {}us, error_collector: {}us, lanes: {}us = {:?}", self.slot.map(|s| format!("{}", s)).unwrap_or("-".into()), self.random_id, scheduler_thread_wall_time_us, error_collector_thread_wall_time_us, executing_thread_wall_time_us.iter().sum::<u128>(), &executing_thread_wall_time_us);
         */
 
+        info!(
+            "Scheduler::gracefully_stop(): {} waiting done..",
+            SchedulerContext::log_prefix(self.random_id, sc.as_ref()),
+        );
         Ok(())
+    }
+
+    fn trigger_stop(&mut self) {
+        self.graceful_stop_initiated
+            .store(true, std::sync::atomic::Ordering::SeqCst);
+
+        info!(
+            "Scheduler::trigger_stop(): {} triggering stop..",
+            SchedulerContext::log_prefix(self.random_id, self.scheduler_context().as_ref()),
+        );
+        //let transaction_sender = self.transaction_sender.take().unwrap();
+
+        //drop(transaction_sender);
+        let checkpoint = self.checkpoint();
+        self.transaction_sender
+            .as_ref()
+            .unwrap()
+            .send(solana_scheduler::SchedulablePayload(
+                solana_scheduler::Flushable::Flush(std::sync::Arc::clone(&checkpoint)),
+            ))
+            .unwrap();
+        self.current_checkpoint = checkpoint;
+        self.current_checkpoint.update_context_value(|c| {c.bank = None;});
     }
 
     fn current_scheduler_mode(&self) -> solana_scheduler::Mode {
@@ -810,7 +820,7 @@ impl LikeScheduler for Scheduler {
     }
 
     fn replace_scheduler_context(&self, context: SchedulerContext) {
-        self.current_checkpoint.replace_context_value(context)
+        self.replace_scheduler_context_inner(context);
     }
 }
 

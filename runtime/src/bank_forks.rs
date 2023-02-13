@@ -56,8 +56,36 @@ struct SetRootTimings {
     prune_remove_ms: i64,
 }
 
+struct SchedulableBank(Arc<Bank>);
+
+impl SchedulableBank {
+    fn clone_arc(&self) -> Arc<Bank> {
+        self.0.clone()
+    }
+
+    fn into_arc(self) -> Arc<Bank> {
+        let s = self.clone_arc();
+        drop(self);
+        s
+    }
+}
+
+impl Drop for SchedulableBank {
+    fn drop(&mut self) {
+        self.0.not_schedulable();
+    }
+}
+
+impl std::ops::Deref for SchedulableBank {
+    type Target = Arc<Bank>;
+
+    fn deref(&self) -> &Arc<Bank> {
+        &self.0
+    }
+}
+
 pub struct BankForks {
-    banks: HashMap<Slot, Arc<Bank>>,
+    banks: HashMap<Slot, SchedulableBank>,
     descendants: HashMap<Slot, HashSet<Slot>>,
     root: Arc<AtomicSlot>,
 
@@ -89,7 +117,7 @@ impl BankForks {
     }
 
     pub fn banks(&self) -> HashMap<Slot, Arc<Bank>> {
-        self.banks.clone()
+        self.banks.iter().map(|(&s, b)| (s, b.clone_arc())).collect()
     }
 
     pub fn get_vote_only_mode_signal(&self) -> Arc<AtomicBool> {
@@ -125,7 +153,7 @@ impl BankForks {
         self.banks
             .iter()
             .filter(|(_, b)| b.is_frozen())
-            .map(|(k, b)| (*k, b.clone()))
+            .map(|(k, b)| (*k, b.clone_arc()))
             .collect()
     }
 
@@ -138,7 +166,7 @@ impl BankForks {
     }
 
     pub fn get(&self, bank_slot: Slot) -> Option<Arc<Bank>> {
-        self.banks.get(&bank_slot).cloned()
+        self.banks.get(&bank_slot).map(|b| b.clone_arc())
     }
 
     pub fn get_with_checked_hash(
@@ -165,10 +193,10 @@ impl BankForks {
 
         // Iterate through the heads of all the different forks
         for bank in initial_forks {
-            banks.insert(bank.slot(), bank.clone());
+            banks.insert(bank.slot(), SchedulableBank(bank.clone()));
             let parents = bank.parents();
             for parent in parents {
-                if banks.insert(parent.slot(), parent.clone()).is_some() {
+                if banks.insert(parent.slot(), SchedulableBank(parent.clone())).is_some() {
                     // All ancestors have already been inserted by another fork
                     break;
                 }
@@ -195,7 +223,7 @@ impl BankForks {
 
     fn add_new_bank(&mut self, bank: Bank, mode: solana_scheduler::Mode, inherited_scheduler: Option<Box<dyn LikeScheduler>>) -> Arc<Bank> {
         let bank = Arc::new(bank);
-        let prev = self.banks.insert(bank.slot(), bank.clone());
+        let prev = self.banks.insert(bank.slot(), SchedulableBank(bank.clone()));
         assert!(prev.is_none());
         let slot = bank.slot();
         self.descendants.entry(slot).or_default();
@@ -247,7 +275,7 @@ impl BankForks {
         if entry.get().is_empty() {
             entry.remove_entry();
         }
-        Some(bank)
+        Some(bank.into_arc())
     }
 
     pub fn highest_slot(&self) -> Slot {
@@ -270,7 +298,7 @@ impl BankForks {
         let root_bank = self
             .banks
             .get(&root)
-            .expect("root bank didn't exist in bank_forks");
+            .expect("root bank didn't exist in bank_forks").clone_arc();
         let new_epoch = root_bank.epoch();
         if old_epoch != new_epoch {
             info!(
@@ -295,9 +323,9 @@ impl BankForks {
             .unwrap_or(0);
         // Calculate the accounts hash at a fixed interval
         let mut is_root_bank_squashed = false;
-        let mut banks = vec![root_bank];
+        let mut banks = vec![root_bank.clone()];
         let parents = root_bank.parents();
-        banks.extend(parents.iter());
+        banks.extend(parents.clone());
         let total_parent_banks = banks.len();
         let mut total_squash_accounts_ms = 0;
         let mut total_squash_accounts_index_ms = 0;
@@ -314,7 +342,7 @@ impl BankForks {
         // `.find()`.
         let eah_banks: Vec<_> = banks
             .iter()
-            .filter(|&&bank| self.should_request_epoch_accounts_hash(bank))
+            .filter(|&bank| self.should_request_epoch_accounts_hash(&*bank))
             .collect();
         assert!(
             eah_banks.len() <= 1,
