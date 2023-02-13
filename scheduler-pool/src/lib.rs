@@ -728,10 +728,9 @@ impl LikeScheduler for Scheduler {
 
     fn gracefully_stop(&mut self) -> Result<()> {
         self.trigger_stop();
-        let sc = self.scheduler_context();
+        let label = self.scheduler_context.as_ref();
         info!(
-            "Scheduler::gracefully_stop(): {} waiting..",
-            SchedulerContext::log_prefix(self.random_id, sc.as_ref()),
+            "Scheduler::gracefully_stop(): {} waiting..", label,
         );
 
         let checkpoint = &self.current_checkpoint;
@@ -759,8 +758,7 @@ impl LikeScheduler for Scheduler {
         */
 
         info!(
-            "Scheduler::gracefully_stop(): {} waiting done..",
-            SchedulerContext::log_prefix(self.random_id, sc.as_ref()),
+            "Scheduler::gracefully_stop(): {} waiting done..", label,
         );
         Ok(())
     }
