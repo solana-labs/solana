@@ -1170,7 +1170,7 @@ pub trait LikeScheduler: Send + Sync + std::fmt::Debug {
     fn current_scheduler_mode(&self) -> solana_scheduler::Mode;
     fn collected_results(&self) -> Arc<std::sync::Mutex<Vec<Result<ExecuteTimings>>>>;
     fn scheduler_pool(&self) -> Box<dyn LikeSchedulerPool>;
-    fn scheduler_context(&self) -> SchedulerContext;
+    fn scheduler_context(&self) -> Option<SchedulerContext>;
     fn replace_scheduler_context(&self, context: SchedulerContext);
 }
 
