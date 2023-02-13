@@ -50,6 +50,7 @@ use {
         vote_sender_types::ReplayVoteSender,
     },
     solana_sdk::{clock::Slot, pubkey::Pubkey, signature::Keypair},
+    solana_streamer::streamer::StakedNodes,
     std::{
         collections::HashSet,
         net::UdpSocket,
@@ -137,6 +138,8 @@ impl Tvu {
         connection_cache: &Arc<ConnectionCache>,
         prioritization_fee_cache: &Arc<PrioritizationFeeCache>,
         banking_tracer: Arc<BankingTracer>,
+        identity_keypair: Arc<Keypair>,
+        staked_nodes: Arc<RwLock<StakedNodes>>,
     ) -> Result<Self, String> {
         let TvuSockets {
             repair: repair_socket,
@@ -218,6 +221,8 @@ impl Tvu {
                 duplicate_slots_sender,
                 ancestor_hashes_replay_update_receiver,
                 dumped_slots_receiver,
+                identity_keypair,
+                staked_nodes,
             )
         };
 
@@ -395,10 +400,11 @@ pub mod tests {
 
         let bank_forks = BankForks::new(Bank::new_for_tests(&genesis_config));
 
+        let keypair = Arc::new(Keypair::new());
         //start cluster_info1
         let cluster_info1 = ClusterInfo::new(
             target1.info.clone(),
-            Arc::new(Keypair::new()),
+            keypair.clone(),
             SocketAddrSpace::Unspecified,
         );
         cluster_info1.insert_info(leader.info);
@@ -479,6 +485,8 @@ pub mod tests {
             &Arc::new(ConnectionCache::default()),
             &_ignored_prioritization_fee_cache,
             BankingTracer::new_disabled(),
+            keypair,
+            Arc::new(RwLock::new(StakedNodes::default())),
         )
         .expect("assume success");
         exit.store(true, Ordering::Relaxed);

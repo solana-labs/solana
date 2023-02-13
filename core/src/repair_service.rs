@@ -33,10 +33,13 @@ use {
         epoch_schedule::EpochSchedule,
         hash::Hash,
         pubkey::Pubkey,
-        signer::keypair::Keypair,
+        signer::{keypair::Keypair, Signer},
         timing::timestamp,
     },
-    solana_streamer::sendmmsg::{batch_send, SendPktsError},
+    solana_streamer::{
+        sendmmsg::{batch_send, SendPktsError},
+        streamer::StakedNodes,
+    },
     std::{
         collections::{HashMap, HashSet},
         iter::Iterator,
@@ -234,6 +237,8 @@ impl RepairService {
         exit: Arc<AtomicBool>,
         repair_socket: Arc<UdpSocket>,
         quic_repair_endpoint: Option<Endpoint>,
+        identity_keypair: Arc<Keypair>,
+        staked_nodes: Arc<RwLock<StakedNodes>>,
         ancestor_hashes_socket: Arc<UdpSocket>,
         repair_info: RepairInfo,
         verified_vote_receiver: VerifiedVoteReceiver,
@@ -253,6 +258,8 @@ impl RepairService {
                         &exit,
                         &repair_socket,
                         quic_repair_endpoint,
+                        identity_keypair,
+                        staked_nodes,
                         repair_info,
                         verified_vote_receiver,
                         &outstanding_requests,
@@ -281,6 +288,8 @@ impl RepairService {
         exit: &AtomicBool,
         repair_socket: &UdpSocket,
         quic_repair_endpoint: Option<Endpoint>,
+        identity_keypair: Arc<Keypair>,
+        staked_nodes: Arc<RwLock<StakedNodes>>,
         repair_info: RepairInfo,
         verified_vote_receiver: VerifiedVoteReceiver,
         outstanding_requests: &RwLock<OutstandingShredRepairs>,
@@ -300,7 +309,16 @@ impl RepairService {
         let mut peers_cache = LruCache::new(REPAIR_PEERS_CACHE_CAPACITY);
 
         let connection_cache = quic_repair_endpoint.map(|client_endpoint| {
-            ConnectionCache::new_with_client_options(1, Some(client_endpoint), None, None)
+            let cert_info = Some((
+                &*identity_keypair,
+                client_endpoint.local_addr().unwrap().ip(),
+            ));
+            ConnectionCache::new_with_client_options(
+                1,
+                Some(client_endpoint),
+                cert_info,
+                Some((&staked_nodes, &identity_keypair.pubkey())),
+            )
         });
 
         loop {
