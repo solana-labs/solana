@@ -1,4 +1,5 @@
 use {
+    byteorder::{BigEndian, ReadBytesExt},
     log::*,
     rand::{seq::SliceRandom, thread_rng, Rng},
     rayon::prelude::*,
@@ -27,6 +28,7 @@ use {
     solana_streamer::socket::SocketAddrSpace,
     std::{
         collections::{hash_map::RandomState, HashMap, HashSet},
+        io::Cursor,
         net::{SocketAddr, TcpListener, UdpSocket},
         path::Path,
         process::exit,
@@ -34,7 +36,7 @@ use {
             atomic::{AtomicBool, Ordering},
             Arc, RwLock,
         },
-        time::{Duration, Instant},
+        time::{Duration, Instant, SystemTime, UNIX_EPOCH},
     },
 };
 
@@ -462,6 +464,43 @@ pub fn attempt_download_genesis_and_snapshot(
     Ok(())
 }
 
+fn check_system_time() {
+    // Setup connection to external time server
+    let client = UdpSocket::bind("0.0.0.0:0").expect("Couldn't bind to address");
+    const TIME_SERVER: &str = "time.nist.gov:37";
+    client
+        .connect(TIME_SERVER)
+        .expect("Connect to server failed");
+
+    // Request time from server
+    let request_data = vec![0; 48];
+    client.send(&request_data).expect("Couldn't send request");
+    let mut buf = [0; 4];
+    match client.recv(&mut buf) {
+        Ok(_received) => (),
+        Err(e) => warn!("recv function failed: {e:?}"),
+    }
+
+    // Parse response
+    let mut reader = Cursor::new(buf);
+    let time_second = reader.read_u32::<BigEndian>().unwrap();
+    let time_second = u64::from(time_second);
+    const SEVENTY_YEARS_IN_SECONDS: u64 = 2_208_988_800;
+    let unix_second = time_second - SEVENTY_YEARS_IN_SECONDS;
+    let system_clock_second = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_secs();
+
+    // Check for clock drift
+    let delta = unix_second.abs_diff(system_clock_second);
+    const MAX_CLOCK_DRIFT_DELTA_SECONDS: u64 = 10;
+    if delta > MAX_CLOCK_DRIFT_DELTA_SECONDS {
+        error!("System clock has diverged significantly from Time protocol value. Incorrect system clock \
+                can impact gossip and could be the cause of being unable to find RPC peers.")
+    }
+}
+
 #[allow(clippy::too_many_arguments)]
 pub fn rpc_bootstrap(
     node: &Node,
@@ -535,6 +574,7 @@ pub fn rpc_bootstrap(
                 &bootstrap_config,
             );
             if rpc_node_details_vec.is_empty() {
+                check_system_time();
                 return;
             }
 
