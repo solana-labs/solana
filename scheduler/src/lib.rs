@@ -3,7 +3,6 @@ use {
     log::*,
     rand::Rng,
     sha2::{Digest, Sha256},
-    solana_metrics::datapoint_info,
     solana_sdk::{
         hash::Hash,
         pubkey::Pubkey,
