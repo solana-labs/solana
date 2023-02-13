@@ -4,18 +4,19 @@ use {
         streamer::StakedNodes,
         tls_certificates::get_pubkey_from_tls_certificate,
     },
-    async_channel::{unbounded as async_unbounded, Receiver as AsyncReceiver, Sender as AsyncSender},
+    async_channel::{
+        unbounded as async_unbounded, Receiver as AsyncReceiver, Sender as AsyncSender,
+    },
     bytes::Bytes,
     crossbeam_channel::Sender,
     indexmap::map::{Entry, IndexMap},
     percentage::Percentage,
     quinn::{Connecting, Connection, Endpoint, EndpointConfig, TokioRuntime, VarInt},
     quinn_proto::VarIntBoundsExceeded,
-    bytes::Bytes,
     rand::{thread_rng, Rng},
     solana_perf::packet::PacketBatch,
     solana_sdk::{
-        packet::{Packet, PACKET_DATA_SIZE, Meta},
+        packet::{Meta, Packet, PACKET_DATA_SIZE},
         pubkey::Pubkey,
         quic::{
             QUIC_CONNECTION_HANDSHAKE_TIMEOUT_MS, QUIC_MAX_STAKED_CONCURRENT_STREAMS,
@@ -642,7 +643,9 @@ async fn handle_connection(
                                     stats.clone(),
                                     stake,
                                     peer_type,
-                                ).await {
+                                )
+                                .await
+                                {
                                     last_update.store(timing::timestamp(), Ordering::Relaxed);
                                     break;
                                 }
@@ -724,8 +727,7 @@ async fn handle_chunk(
                 meta.set_socket_addr(remote_addr);
                 meta.sender_stake = stake;
                 let offset = chunk.offset;
-                let end_of_chunk = match (chunk.offset as usize).checked_add(chunk.bytes.len())
-                {
+                let end_of_chunk = match (chunk.offset as usize).checked_add(chunk.bytes.len()) {
                     Some(end) => end,
                     None => return true,
                 };
@@ -736,7 +738,7 @@ async fn handle_chunk(
                 {
                     info!("handle_chunk send error {}", err);
                 }
-                
+
                 match peer_type {
                     ConnectionPeerType::Staked => {
                         stats
@@ -1009,8 +1011,8 @@ pub mod test {
             quic::{MAX_STAKED_CONNECTIONS, MAX_UNSTAKED_CONNECTIONS},
             tls_certificates::new_self_signed_tls_certificate,
         },
-        crossbeam_channel::{unbounded, Receiver},
         async_channel::unbounded as async_unbounded,
+        crossbeam_channel::{unbounded, Receiver},
         quinn::{ClientConfig, IdleTimeout, TransportConfig, VarInt},
         solana_sdk::{
             quic::{QUIC_KEEP_ALIVE_MS, QUIC_MAX_TIMEOUT_MS},
@@ -1276,7 +1278,12 @@ pub mod test {
         let exit = Arc::new(AtomicBool::new(false));
         let stats = Arc::new(StreamStats::default());
 
-        let handle = tokio::spawn(patch_batch_sender(packet_batch_sender, pkt_receiver, exit.clone(), stats));
+        let handle = tokio::spawn(patch_batch_sender(
+            packet_batch_sender,
+            pkt_receiver,
+            exit.clone(),
+            stats,
+        ));
 
         for _i in 0..1000 {
             let meta = Meta::default();
@@ -1285,22 +1292,19 @@ pub mod test {
             let size = bytes.len();
             ptk_sender.send((meta, bytes, offset, size)).await.unwrap();
         }
-        let mut i =0;
+        let mut i = 0;
         while i < 1000 {
             let res = packet_batch_receiver.try_recv();
             if res.is_ok() {
                 let len = res.unwrap().len();
                 i += len;
-            }
-            else {
+            } else {
                 sleep(Duration::from_millis(1)).await;
             }
         }
         exit.store(true, Ordering::Relaxed);
         handle.await.unwrap();
-
     }
-
 
     #[tokio::test]
     async fn test_quic_stream_timeout() {
