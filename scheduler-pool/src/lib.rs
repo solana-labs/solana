@@ -735,7 +735,7 @@ impl LikeScheduler for Scheduler {
             "Scheduler::gracefully_stop(): {} waiting..", label,
         );
 
-        self.current_checkpoint = self.stopped_mode.take().unwrap();
+        drop(self.stopped_mode.take().unwrap());
         self.current_checkpoint.wait_for_restart(None);
         let r = self.current_checkpoint.take_restart_value();
         self.collected_results.lock().unwrap().push(Ok(r));
