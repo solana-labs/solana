@@ -66,14 +66,6 @@ fn find_node_activated_stake(
         .map_or(Err(()), |value| {
             Ok((value.activated_stake, total_active_stake))
         })
-    /*
-    for vote_account in vote_accounts.current {
-        if Pubkey::from_str(&vote_account.node_pubkey).unwrap() == node_id {
-            return Ok(vote_account.activated_stake);
-        }
-    }
-    Err(())
-    */
 }
 
 fn create_connection_cache(
@@ -100,22 +92,6 @@ fn create_connection_cache(
         CommitmentConfig::confirmed(),
     ));
 
-    // get stake history
-    /*
-    let stake_history_account = rpc_client.get_account(&stake_history::id()).unwrap();
-    let stake_history = from_account::<StakeHistory, _>(&stake_history_account)
-        .ok_or_else(|| {
-            eprintln!("Error: failed to deserialize stake history");
-            exit(1);
-        })
-        .unwrap();
-
-    if stake_history.len() == 0 {
-        eprintln!("Error: failed to deserialize stake history");
-        exit(1);
-    }
-    //let total_stake = stake_history[0].0;
-    */
     let client_node_id = client_node_id.unwrap();
     let (stake, total_stake) =
         find_node_activated_stake(rpc_client, client_node_id.pubkey()).unwrap_or_default();
