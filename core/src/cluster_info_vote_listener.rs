@@ -423,6 +423,8 @@ impl ClusterInfoVoteListener {
                         verified_packets_sender,
                         &verified_vote_packets,
                     )?;
+                } else {
+                    drop(bank_vote_sender_state_option.take());
                 }
             }
         }
