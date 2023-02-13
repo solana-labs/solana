@@ -5,6 +5,8 @@ use {
     std::time::{Duration, Instant},
 };
 
+const VARIABLE_HASHES_PER_TICK: u64 = std::u64::MAX;
+
 pub struct Poh {
     pub hash: Hash,
     num_hashes: u64,
@@ -26,7 +28,7 @@ impl Poh {
     }
 
     pub fn new_with_slot_info(hash: Hash, hashes_per_tick: Option<u64>, tick_number: u64) -> Self {
-        let hashes_per_tick = hashes_per_tick.unwrap_or(std::u64::MAX);
+        let hashes_per_tick = hashes_per_tick.unwrap_or(VARIABLE_HASHES_PER_TICK);
         assert!(hashes_per_tick > 1);
         let now = Instant::now();
         Poh {
@@ -92,7 +94,7 @@ impl Poh {
 
         // If the hashes_per_tick is variable (std::u64::MAX) then always generate a tick.
         // Otherwise only tick if there are no remaining hashes
-        if self.hashes_per_tick < std::u64::MAX && self.remaining_hashes != 0 {
+        if self.hashes_per_tick != VARIABLE_HASHES_PER_TICK && self.remaining_hashes != 0 {
             return None;
         }
 
