@@ -23,7 +23,8 @@ use {
     solana_metrics::inc_new_counter_error,
     solana_perf::packet::{Packet, PacketBatch},
     solana_rayon_threadlimit::get_thread_count,
-    solana_sdk::clock::Slot,
+    solana_sdk::{clock::Slot, signature::Keypair},
+    solana_streamer::streamer::StakedNodes,
     std::{
         cmp::Reverse,
         collections::{HashMap, HashSet},
@@ -320,6 +321,8 @@ impl WindowService {
         duplicate_slots_sender: DuplicateSlotSender,
         ancestor_hashes_replay_update_receiver: AncestorHashesReplayUpdateReceiver,
         dumped_slots_receiver: DumpedSlotsReceiver,
+        identity_keypair: Arc<Keypair>,
+        staked_nodes: Arc<RwLock<StakedNodes>>,
     ) -> WindowService {
         let outstanding_requests = Arc::<RwLock<OutstandingShredRepairs>>::default();
 
@@ -330,6 +333,8 @@ impl WindowService {
             exit.clone(),
             repair_socket,
             quic_repair_endpoint,
+            identity_keypair,
+            staked_nodes,
             ancestor_hashes_socket,
             repair_info,
             verified_vote_receiver,

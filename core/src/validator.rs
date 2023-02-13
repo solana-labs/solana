@@ -1030,6 +1030,8 @@ impl Validator {
             &connection_cache,
             &prioritization_fee_cache,
             banking_tracer.clone(),
+            identity_keypair.clone(),
+            staked_nodes.clone(),
         )?;
 
         let tpu = Tpu::new(
