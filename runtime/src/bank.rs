@@ -969,7 +969,7 @@ impl SchedulerContext {
         self.bank().map(|b| b.slot()).unwrap_or(0)
     }
 
-    pub fn bank(&self) -> &Bank {
+    pub fn bank(&self) -> Option<&Bank> {
         self.bank.as_ref()
     }
 
