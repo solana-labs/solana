@@ -627,6 +627,7 @@ impl Scheduler {
             collected_results,
             commit_status,
             current_checkpoint: initial_checkpoint,
+            next_checkpoint: Default::default(),
             thread_count,
             scheduler_pool,
         };
