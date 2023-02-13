@@ -4,7 +4,6 @@ use {
         pubkey::Pubkey,
         rpc_port,
         sanitize::{Sanitize, SanitizeError},
-        signature::{Keypair, Signer},
         timing::timestamp,
     },
     solana_streamer::socket::SocketAddrSpace,
@@ -117,30 +116,8 @@ impl LegacyContactInfo {
         node
     }
 
-    #[cfg(test)]
-    /// LegacyContactInfo with multicast addresses for adversarial testing.
-    pub fn new_multicast() -> Self {
-        let addr = socketaddr!("224.0.1.255:1000");
-        assert!(addr.ip().is_multicast());
-        Self {
-            id: solana_sdk::pubkey::new_rand(),
-            gossip: addr,
-            tvu: addr,
-            tvu_forwards: addr,
-            repair: addr,
-            tpu: addr,
-            tpu_forwards: addr,
-            tpu_vote: addr,
-            rpc: addr,
-            rpc_pubsub: addr,
-            serve_repair: addr,
-            wallclock: 0,
-            shred_version: 0,
-        }
-    }
-
     // Used in tests
-    pub fn new_with_pubkey_socketaddr(pubkey: &Pubkey, bind_addr: &SocketAddr) -> Self {
+    pub fn new_with_socketaddr(pubkey: &Pubkey, bind_addr: &SocketAddr) -> Self {
         fn next_port(addr: &SocketAddr, nxt: u16) -> SocketAddr {
             let mut nxt_addr = *addr;
             nxt_addr.set_port(addr.port() + nxt);
@@ -174,12 +151,6 @@ impl LegacyContactInfo {
         }
     }
 
-    // Used in tests
-    pub fn new_with_socketaddr(bind_addr: &SocketAddr) -> Self {
-        let keypair = Keypair::new();
-        Self::new_with_pubkey_socketaddr(&keypair.pubkey(), bind_addr)
-    }
-
     // Construct a LegacyContactInfo that's only usable for gossip
     pub fn new_gossip_entry_point(gossip_addr: &SocketAddr) -> Self {
         Self {
@@ -208,7 +179,7 @@ impl LegacyContactInfo {
         (self.rpc, self.tpu)
     }
 
-    pub fn valid_client_facing_addr(
+    pub(crate) fn valid_client_facing_addr(
         &self,
         socket_addr_space: &SocketAddrSpace,
     ) -> Option<(SocketAddr, SocketAddr)> {
@@ -224,7 +195,10 @@ impl LegacyContactInfo {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use {
+        super::*,
+        solana_sdk::signature::{Keypair, Signer},
+    };
 
     #[test]
     fn test_is_valid_address() {
@@ -263,18 +237,7 @@ mod tests {
         assert!(ci.tpu_vote.ip().is_unspecified());
         assert!(ci.serve_repair.ip().is_unspecified());
     }
-    #[test]
-    fn test_multicast() {
-        let ci = LegacyContactInfo::new_multicast();
-        assert!(ci.gossip.ip().is_multicast());
-        assert!(ci.tvu.ip().is_multicast());
-        assert!(ci.tpu_forwards.ip().is_multicast());
-        assert!(ci.rpc.ip().is_multicast());
-        assert!(ci.rpc_pubsub.ip().is_multicast());
-        assert!(ci.tpu.ip().is_multicast());
-        assert!(ci.tpu_vote.ip().is_multicast());
-        assert!(ci.serve_repair.ip().is_multicast());
-    }
+
     #[test]
     fn test_entry_point() {
         let addr = socketaddr!("127.0.0.1:10");
@@ -291,7 +254,7 @@ mod tests {
     #[test]
     fn test_socketaddr() {
         let addr = socketaddr!("127.0.0.1:10");
-        let ci = LegacyContactInfo::new_with_socketaddr(&addr);
+        let ci = LegacyContactInfo::new_with_socketaddr(&Keypair::new().pubkey(), &addr);
         assert_eq!(ci.tpu, addr);
         assert_eq!(ci.tpu_vote.port(), 17);
         assert_eq!(ci.gossip.port(), 11);
@@ -305,7 +268,7 @@ mod tests {
     #[test]
     fn replayed_data_new_with_socketaddr_with_pubkey() {
         let keypair = Keypair::new();
-        let d1 = LegacyContactInfo::new_with_pubkey_socketaddr(
+        let d1 = LegacyContactInfo::new_with_socketaddr(
             &keypair.pubkey(),
             &socketaddr!("127.0.0.1:1234"),
         );
