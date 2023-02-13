@@ -130,7 +130,10 @@ impl SchedulerPool {
             schedulers.len() + 1
         );
         assert!(scheduler.collected_results().lock().unwrap().is_empty());
-        assert!(scheduler.scheduler_context().map(|c| c.bank()).is_none());
+        match scheduler.scheduler_context().map(|c| c.bank().is_some()) {
+            Some(true) => (),
+            _ => panic!(),
+        }
         assert!(scheduler
             .graceful_stop_initiated()
             .load(std::sync::atomic::Ordering::SeqCst));
