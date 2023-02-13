@@ -1,5 +1,4 @@
 #![allow(clippy::integer_arithmetic)]
-
 use {
     clap::value_t,
     log::*,
@@ -19,15 +18,11 @@ use {
     solana_gossip::gossip_service::{discover_cluster, get_client, get_multi_client},
     solana_rpc_client::rpc_client::RpcClient,
     solana_sdk::{
-        account::from_account,
         commitment_config::CommitmentConfig,
         fee_calculator::FeeRateGovernor,
         pubkey::Pubkey,
         signature::{Keypair, Signer},
-        stake::state,
-        stake_history::StakeHistory,
         system_program,
-        sysvar::stake_history,
     },
     solana_streamer::{socket::SocketAddrSpace, streamer::StakedNodes},
     std::{
@@ -37,7 +32,6 @@ use {
         net::{IpAddr, SocketAddr},
         path::Path,
         process::exit,
-        str::FromStr,
         sync::{Arc, RwLock},
     },
 };
@@ -45,14 +39,41 @@ use {
 /// Number of signatures for all transactions in ~1 week at ~100K TPS
 pub const NUM_SIGNATURES_FOR_TXS: u64 = 100_000 * 60 * 60 * 24 * 7;
 
-fn find_node_activated_stake(rpc_client: Arc<RpcClient>, node_id: Pubkey) -> Result<u64, ()> {
-    let vote_accounts = rpc_client.get_vote_accounts().unwrap();
+fn find_node_activated_stake(
+    rpc_client: Arc<RpcClient>,
+    node_id: Pubkey,
+) -> Result<(u64, u64), ()> {
+    let vote_accounts = rpc_client.get_vote_accounts();
+    if let Err(error) = vote_accounts {
+        error!("Failed to get vote accounts, error: {}", error);
+        return Err(());
+    }
+
+    let vote_accounts = vote_accounts.unwrap();
+
+    let total_active_stake: u64 = vote_accounts
+        .current
+        .iter()
+        .chain(vote_accounts.delinquent.iter())
+        .map(|vote_account| vote_account.activated_stake)
+        .sum();
+
+    let node_id_as_str = node_id.to_string();
+    vote_accounts
+        .current
+        .iter()
+        .find(|&vote_account| vote_account.node_pubkey == node_id_as_str)
+        .map_or(Err(()), |value| {
+            Ok((value.activated_stake, total_active_stake))
+        })
+    /*
     for vote_account in vote_accounts.current {
         if Pubkey::from_str(&vote_account.node_pubkey).unwrap() == node_id {
             return Ok(vote_account.activated_stake);
         }
     }
     Err(())
+    */
 }
 
 fn create_connection_cache(
@@ -60,16 +81,27 @@ fn create_connection_cache(
     tpu_connection_pool_size: usize,
     use_quic: bool,
     bind_address: IpAddr,
-    client_node_id: &Keypair,
-    stake: u64,
-    total_stake: u64,
+    client_node_id: Option<&Keypair>,
 ) -> ConnectionCache {
+    if !use_quic {
+        return ConnectionCache::with_udp(tpu_connection_pool_size);
+    }
+    if client_node_id.is_none() {
+        return ConnectionCache::new_with_client_options(
+            tpu_connection_pool_size,
+            None,
+            None,
+            None,
+        );
+    }
+
     let rpc_client = Arc::new(RpcClient::new_with_commitment(
         json_rpc_url.to_string(),
         CommitmentConfig::confirmed(),
     ));
 
     // get stake history
+    /*
     let stake_history_account = rpc_client.get_account(&stake_history::id()).unwrap();
     let stake_history = from_account::<StakeHistory, _>(&stake_history_account)
         .ok_or_else(|| {
@@ -82,39 +114,25 @@ fn create_connection_cache(
         eprintln!("Error: failed to deserialize stake history");
         exit(1);
     }
-    let total_stake = stake_history[0].0;
-
-    // get stake
-    let stake = find_node_activated_stake(rpc_client, client_node_id.pubkey()).unwrap();
-    println!("{stake} {total_stake}");
-
-    // get stake by stake account
-    //let stake_account = rpc_client.get_account(stake_account_address).unwrap();
-    //if stake_account.owner != stake::program::id() {
-    //    eprintln!("Error: {stake_account_address:?} is not a stake account");
-    //    exit(1);
-    //}
-    //let stake = stake_account.lamports;
-
-    match use_quic {
-        true => {
-            let staked_nodes = Arc::new(RwLock::new(StakedNodes::default()));
-            staked_nodes.write().unwrap().total_stake = total_stake;
-            staked_nodes
-                .write()
-                .unwrap()
-                .pubkey_stake_map
-                .insert(client_node_id.pubkey(), stake);
-
-            ConnectionCache::new_with_client_options(
-                tpu_connection_pool_size,
-                None,
-                Some((client_node_id, bind_address)),
-                Some((&staked_nodes, &client_node_id.pubkey())),
-            )
-        }
-        false => ConnectionCache::with_udp(tpu_connection_pool_size),
-    }
+    //let total_stake = stake_history[0].0;
+    */
+    let client_node_id = client_node_id.unwrap();
+    let (stake, total_stake) =
+        find_node_activated_stake(rpc_client, client_node_id.pubkey()).unwrap_or_default();
+    info!("Stake for specified client_node_id: {stake}, total stake: {total_stake}");
+    let staked_nodes = Arc::new(RwLock::new(StakedNodes::default()));
+    staked_nodes.write().unwrap().total_stake = total_stake;
+    staked_nodes
+        .write()
+        .unwrap()
+        .pubkey_stake_map
+        .insert(client_node_id.pubkey(), stake);
+    ConnectionCache::new_with_client_options(
+        tpu_connection_pool_size,
+        None,
+        Some((client_node_id, bind_address)),
+        Some((&staked_nodes, &client_node_id.pubkey())),
+    )
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -246,8 +264,6 @@ fn main() {
         instruction_padding_config,
         bind_address,
         client_node_id,
-        client_node_stake,
-        client_node_total_stake,
         ..
     } = &cli_config;
 
@@ -310,9 +326,7 @@ fn main() {
         *tpu_connection_pool_size,
         *use_quic,
         *bind_address,
-        client_node_id,
-        *client_node_stake,
-        *client_node_total_stake,
+        client_node_id.as_ref(),
     );
     let client = create_client(
         external_client_type,

@@ -69,9 +69,7 @@ pub struct Config {
     pub instruction_padding_config: Option<InstructionPaddingConfig>,
     pub num_conflict_groups: Option<usize>,
     pub bind_address: IpAddr,
-    pub client_node_id: Keypair,
-    pub client_node_stake: u64,
-    pub client_node_total_stake: u64,
+    pub client_node_id: Option<Keypair>,
 }
 
 impl Default for Config {
@@ -104,9 +102,7 @@ impl Default for Config {
             instruction_padding_config: None,
             num_conflict_groups: None,
             bind_address: IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)),
-            client_node_id: Keypair::new(),
-            client_node_stake: 0,
-            client_node_total_stake: 0,
+            client_node_id: None,
         }
     }
 }
@@ -367,6 +363,7 @@ pub fn build_args<'a>(version: &'_ str) -> App<'a, '_> {
                 .value_name("HOST")
                 .takes_value(true)
                 .validator(solana_net_utils::is_host)
+                .requires("client_node_id")
                 .help("IP address to use with connection cache"),
         )
         .arg(
@@ -374,25 +371,8 @@ pub fn build_args<'a>(version: &'_ str) -> App<'a, '_> {
                 .long("client-node-id")
                 .value_name("PATH")
                 .takes_value(true)
+                .requires("json_rpc_url")
                 .help("File containing a node id (keypair) to communicate with validators"),
-        )
-        .arg(
-            Arg::with_name("client_node_stake")
-                .long("client-node-stake")
-                .value_name("LAMPORTS")
-                .takes_value(true)
-                .help(
-                    "Stake of the client_node_id",
-                ),
-        )
-        .arg(
-            Arg::with_name("client_node_total_stake")
-                .long("client-node-total-stake")
-                .value_name("LAMPORTS")
-                .takes_value(true)
-                .help(
-                    "Total stake of the client_node_id",
-                ),
         )
 }
 
@@ -565,15 +545,9 @@ pub fn extract_args(matches: &ArgMatches) -> Config {
         &config.keypair_path,
     );
     if let Ok(node_id) = read_keypair_file(node_id_path) {
-        args.client_node_id = node_id;
+        args.client_node_id = Some(node_id);
     } else if matches.is_present("client_node_id") {
         panic!("could not parse identity path");
-    }
-    if let Some(v) = matches.value_of("client-node-stake") {
-        args.client_node_stake = v.to_string().parse().expect("can't parse lamports");
-    }
-    if let Some(v) = matches.value_of("client-node-total-stake") {
-        args.client_node_total_stake = v.to_string().parse().expect("can't parse lamports");
     }
 
     args
@@ -594,13 +568,14 @@ mod tests {
     }
 
     #[test]
-    fn test_cli_parse() {
+    fn test_cli_parse_with_client_node_id() {
         let keypair = Keypair::new();
         let keypair_file_name = "./keypair.json";
         write_keypair_to_file(&keypair, keypair_file_name);
 
         let matches = build_args("1.0.0").get_matches_from(vec![
             "solana-bench-tps",
+            "-u http://192.0.0.1:8899",
             "--bind-address",
             "192.0.0.1",
             "--client-node-id",
@@ -608,6 +583,6 @@ mod tests {
         ]);
         let result = extract_args(&matches);
         assert_eq!(result.bind_address, IpAddr::V4(Ipv4Addr::new(192, 0, 0, 1)));
-        assert_eq!(result.client_node_id, keypair);
+        assert_eq!(result.client_node_id, Some(keypair));
     }
 }
