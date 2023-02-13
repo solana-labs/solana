@@ -276,7 +276,7 @@ impl Scheduler {
                 thread_priority::set_current_thread_priority(thread_priority::ThreadPriority::Max).unwrap();
             }
             let mut latest_seq = 0;
-            let (mut latest_checkpoint, mut latest_scheduler_context, mut mode) = (initial_checkpoint, None::<SchedulerContext>, None);
+            let (mut latest_checkpoint, mut latest_scheduler_context, mut mode) = (initial_checkpoint, None, None);
 
             'recv: while let Ok(r) = (if thx >= base_thread_count { scheduled_high_ee_receiver.recv() } else { scheduled_ee_receiver.recv()}) {
                 match r {
