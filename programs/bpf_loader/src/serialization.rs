@@ -8,6 +8,7 @@ use {
         memory_region::MemoryRegion,
     },
     solana_sdk::{
+        account::WritableAccount,
         bpf_loader_deprecated,
         entrypoint::{BPF_ALIGN_OF_U128, MAX_PERMITTED_DATA_INCREASE, NON_DUP_MARKER},
         instruction::InstructionError,
@@ -17,7 +18,10 @@ use {
             BorrowedAccount, IndexOfAccount, InstructionContext, TransactionContext,
         },
     },
-    std::mem::{self, size_of},
+    std::{
+        mem::{self, size_of},
+        sync::Arc,
+    },
 };
 
 /// Maximum number of instruction accounts that can be serialized into the
@@ -81,7 +85,7 @@ impl Serializer {
         if self.copy_account_data {
             self.write_all(account.get_data());
         } else {
-            self.push_account_region(account);
+            self.push_account_region(account)?;
         }
 
         if self.aligned {
@@ -105,18 +109,54 @@ impl Serializer {
         Ok(())
     }
 
-    fn push_account_region(&mut self, account: &mut BorrowedAccount<'_>) {
+    fn push_account_region(
+        &mut self,
+        account: &mut BorrowedAccount<'_>,
+    ) -> Result<(), InstructionError> {
         self.push_region();
         let account_len = account.get_data().len();
         if account_len > 0 {
-            let region = if let Ok(data) = account.get_data_mut() {
-                MemoryRegion::new_writable(data, self.vaddr)
+            let region = if account.can_data_be_changed().is_ok() {
+                if account.is_shared() {
+                    // If the account is still shared it means it wasn't written to yet during this
+                    // transaction. We map it as CoW and it'll be copied the first time something
+                    // tries to write into it.
+                    let accounts = Arc::clone(account.transaction_context().accounts());
+                    let index_in_transaction = account.get_index_in_transaction();
+
+                    MemoryRegion::new_cow(
+                        account.get_data(),
+                        self.vaddr,
+                        Box::new(move || {
+                            // The two calls below can't relly fail. If they fail because of a bug,
+                            // whatever is writing will trigger an EbpfError::AccessViolation like
+                            // if the region was readonly, and the transaction will fail gracefully.
+                            let mut account = accounts
+                                .try_borrow_mut(index_in_transaction)
+                                .map_err(|_| ())?;
+                            accounts.touch(index_in_transaction).map_err(|_| ())?;
+
+                            if account.is_shared() {
+                                // See BorrowedAccount::make_data_mut() as to why we reserve extra
+                                // MAX_PERMITTED_DATA_INCREASE bytes here.
+                                account.reserve(MAX_PERMITTED_DATA_INCREASE);
+                            }
+                            Ok(account.data_as_mut_slice().as_mut_ptr() as u64)
+                        }),
+                    )
+                } else {
+                    // The account isn't shared anymore, meaning it was written to earlier during
+                    // this transaction. We can just map as writable no need for any fancy CoW
+                    // business.
+                    MemoryRegion::new_writable(account.get_data_mut()?, self.vaddr)
+                }
             } else {
                 MemoryRegion::new_readonly(account.get_data(), self.vaddr)
             };
             self.vaddr += region.len;
             self.regions.push(region);
         }
+        Ok(())
     }
 
     fn push_region(&mut self) {

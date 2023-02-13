@@ -1129,13 +1129,12 @@ fn update_caller_account(
     *caller_account.owner = *callee_account.get_owner();
 
     if direct_mapping && caller_account.original_data_len > 0 {
-        // This whole branch can be removed once we stop using AccountSharedData
-        // within transaction accounts. Mutating an account through
-        // AccountSharedData (which is possible from builtins), can change the
-        // allocation (pointer) and the capacity.
-        //
+        // If an account's data pointer has changed - because of CoW or because
+        // of using AccountSharedData directly (deprecated) - we must update the
+        // corresponding MemoryRegion in the caller's address space.
+
         // Since each instruction account is directly mapped in a memory region
-        // with a fixed length, upon returning from CPI we must ensure that the
+        // with a *fixed* length, upon returning from CPI we must ensure that the
         // current capacity is at least the original length (what is mapped in
         // memory), so that the account's memory region never points to an
         // invalid address.
@@ -1144,7 +1143,7 @@ fn update_caller_account(
             callee_account.reserve(min_capacity.saturating_sub(callee_account.capacity()))?
         }
 
-        // replace the region in case the allocation changed
+        // find the account's MemoryRegion
         let regions = memory_mapping.get_regions();
         let memory_region_index = regions
             .iter()
@@ -1153,17 +1152,24 @@ fn update_caller_account(
         let region = regions.get(memory_region_index).unwrap();
         debug_assert!(callee_account.capacity() >= region.len as usize);
 
-        let account_region = if let Ok(data) = callee_account.get_data_mut() {
-            let data =
-                unsafe { std::slice::from_raw_parts_mut(data.as_mut_ptr(), region.len as usize) };
-            MemoryRegion::new_writable(data, caller_account.vm_data_addr)
-        } else {
-            let data = unsafe {
-                std::slice::from_raw_parts(callee_account.get_data().as_ptr(), region.len as usize)
+        // If the account's data pointer has changed, update the region
+        if region.host_addr.get() != callee_account.get_data().as_ptr() as u64 {
+            let new_region = if let Ok(data) = callee_account.get_data_mut() {
+                let data = unsafe {
+                    std::slice::from_raw_parts_mut(data.as_mut_ptr(), region.len as usize)
+                };
+                MemoryRegion::new_writable(data, caller_account.vm_data_addr)
+            } else {
+                let data = unsafe {
+                    std::slice::from_raw_parts(
+                        callee_account.get_data().as_ptr(),
+                        region.len as usize,
+                    )
+                };
+                MemoryRegion::new_readonly(data, caller_account.vm_data_addr)
             };
-            MemoryRegion::new_readonly(data, caller_account.vm_data_addr)
-        };
-        memory_mapping.replace_region(memory_region_index, account_region)?;
+            memory_mapping.replace_region(memory_region_index, new_region)?;
+        }
     }
     let prev_len = *caller_account.ref_to_len_in_vm as usize;
     let post_len = callee_account.get_data().len();

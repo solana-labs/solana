@@ -22,9 +22,10 @@ use {
         pubkey::Pubkey,
     },
     std::{
-        cell::{RefCell, RefMut},
+        cell::{Ref, RefCell, RefMut},
         collections::HashSet,
         pin::Pin,
+        sync::Arc,
     },
 };
 
@@ -55,15 +56,93 @@ pub struct InstructionAccount {
 /// An account key and the matching account
 pub type TransactionAccount = (Pubkey, AccountSharedData);
 
+#[derive(Clone, Debug, PartialEq)]
+pub struct TransactionAccounts {
+    accounts: Vec<RefCell<AccountSharedData>>,
+    // FIXME: use bitfield
+    touched_flags: RefCell<Box<[bool]>>,
+    is_early_verification_of_account_modifications_enabled: bool,
+}
+
+#[cfg(not(target_os = "solana"))]
+impl TransactionAccounts {
+    fn new(
+        accounts: Vec<RefCell<AccountSharedData>>,
+        is_early_verification_of_account_modifications_enabled: bool,
+    ) -> TransactionAccounts {
+        TransactionAccounts {
+            touched_flags: RefCell::new(vec![false; accounts.len()].into_boxed_slice()),
+            accounts,
+            is_early_verification_of_account_modifications_enabled,
+        }
+    }
+
+    fn len(&self) -> usize {
+        self.accounts.len()
+    }
+
+    pub fn get(&self, index: IndexOfAccount) -> Option<&RefCell<AccountSharedData>> {
+        self.accounts.get(index as usize)
+    }
+
+    pub fn touch(&self, index: IndexOfAccount) -> Result<(), InstructionError> {
+        if self.is_early_verification_of_account_modifications_enabled {
+            *self
+                .touched_flags
+                .borrow_mut()
+                .get_mut(index as usize)
+                .ok_or(InstructionError::NotEnoughAccountKeys)? = true;
+        }
+        Ok(())
+    }
+
+    pub fn touched_count(&self) -> usize {
+        self.touched_flags
+            .borrow()
+            .iter()
+            .fold(0usize, |accumulator, was_touched| {
+                accumulator.saturating_add(*was_touched as usize)
+            })
+    }
+
+    pub fn try_borrow(
+        &self,
+        index: IndexOfAccount,
+    ) -> Result<Ref<'_, AccountSharedData>, InstructionError> {
+        self.accounts
+            .get(index as usize)
+            .ok_or(InstructionError::MissingAccount)?
+            .try_borrow()
+            .map_err(|_| InstructionError::AccountBorrowFailed)
+    }
+
+    pub fn try_borrow_mut(
+        &self,
+        index: IndexOfAccount,
+    ) -> Result<RefMut<'_, AccountSharedData>, InstructionError> {
+        self.accounts
+            .get(index as usize)
+            .ok_or(InstructionError::MissingAccount)?
+            .try_borrow_mut()
+            .map_err(|_| InstructionError::AccountBorrowFailed)
+    }
+
+    pub fn into_accounts(self) -> Vec<AccountSharedData> {
+        self.accounts
+            .into_iter()
+            .map(|account| account.into_inner())
+            .collect()
+    }
+}
+
 /// Loaded transaction shared between runtime and programs.
 ///
 /// This context is valid for the entire duration of a transaction being processed.
 #[derive(Debug, Clone, PartialEq)]
 pub struct TransactionContext {
     account_keys: Pin<Box<[Pubkey]>>,
-    accounts: Pin<Box<[RefCell<AccountSharedData>]>>,
+    accounts: Arc<TransactionAccounts>,
     #[cfg(not(target_os = "solana"))]
-    account_touched_flags: RefCell<Pin<Box<[bool]>>>,
     instruction_stack_capacity: usize,
     instruction_trace_capacity: usize,
     instruction_stack: Vec<usize>,
@@ -88,16 +167,13 @@ impl TransactionContext {
         instruction_stack_capacity: usize,
         instruction_trace_capacity: usize,
     ) -> Self {
-        let (account_keys, accounts): (Vec<Pubkey>, Vec<RefCell<AccountSharedData>>) =
-            transaction_accounts
-                .into_iter()
-                .map(|(key, account)| (key, RefCell::new(account)))
-                .unzip();
-        let account_touched_flags = vec![false; accounts.len()];
+        let (account_keys, accounts): (Vec<_>, Vec<_>) = transaction_accounts
+            .into_iter()
+            .map(|(key, account)| (key, RefCell::new(account)))
+            .unzip();
         Self {
             account_keys: Pin::new(account_keys.into_boxed_slice()),
-            accounts: Pin::new(accounts.into_boxed_slice()),
-            account_touched_flags: RefCell::new(Pin::new(account_touched_flags.into_boxed_slice())),
+            accounts: Arc::new(TransactionAccounts::new(accounts, rent.is_some())),
             instruction_stack_capacity,
             instruction_trace_capacity,
             instruction_stack: Vec::with_capacity(instruction_stack_capacity),
@@ -117,10 +193,15 @@ impl TransactionContext {
         if !self.instruction_stack.is_empty() {
             return Err(InstructionError::CallDepth);
         }
-        Ok(Vec::from(Pin::into_inner(self.accounts))
-            .into_iter()
-            .map(|account| account.into_inner())
-            .collect())
+
+        Ok(Arc::try_unwrap(self.accounts)
+            .expect("transaction_context.accounts has unexpected outstanding refs")
+            .into_accounts())
+    }
+
+    #[cfg(not(target_os = "solana"))]
+    pub fn accounts(&self) -> &Arc<TransactionAccounts> {
+        &self.accounts
     }
 
     /// Returns true if `enable_early_verification_of_account_modifications` is active
@@ -163,7 +244,7 @@ impl TransactionContext {
         index_in_transaction: IndexOfAccount,
     ) -> Result<&RefCell<AccountSharedData>, InstructionError> {
         self.accounts
-            .get(index_in_transaction as usize)
+            .get(index_in_transaction)
             .ok_or(InstructionError::NotEnoughAccountKeys)
     }
 
@@ -557,7 +638,7 @@ impl InstructionContext {
     ) -> Result<BorrowedAccount<'a>, InstructionError> {
         let account = transaction_context
             .accounts
-            .get(index_in_transaction as usize)
+            .get(index_in_transaction)
             .ok_or(InstructionError::MissingAccount)?
             .try_borrow_mut()
             .map_err(|_| InstructionError::AccountBorrowFailed)?;
@@ -667,6 +748,11 @@ pub struct BorrowedAccount<'a> {
 }
 
 impl<'a> BorrowedAccount<'a> {
+    /// Returns the transaction context
+    pub fn transaction_context(&self) -> &TransactionContext {
+        self.transaction_context
+    }
+
     /// Returns the index of this account (transaction wide)
     #[inline]
     pub fn get_index_in_transaction(&self) -> IndexOfAccount {
@@ -895,6 +981,18 @@ impl<'a> BorrowedAccount<'a> {
         self.account.capacity()
     }
 
+    /// Returns whether the underlying AccountSharedData is shared.
+    ///
+    /// The data is shared if the account has been loaded from the accounts database and has never
+    /// been written to. Writing to an account unshares it.
+    ///
+    /// During account serialization, if an account is shared it'll get mapped as CoW, else it'll
+    /// get mapped directly as writable.
+    #[cfg(not(target_os = "solana"))]
+    pub fn is_shared(&self) -> bool {
+        self.account.is_shared()
+    }
+
     #[cfg(not(target_os = "solana"))]
     fn make_data_mut(&mut self) {
         // if the account is still shared, it means this is the first time we're
@@ -902,6 +1000,9 @@ impl<'a> BorrowedAccount<'a> {
         // buffer with MAX_PERMITTED_DATA_INCREASE capacity so that if the
         // transaction reallocs, we don't have to copy the whole account data a
         // second time to fullfill the realloc.
+        //
+        // NOTE: The account memory region CoW code in Serializer::push_account_region() implements
+        // the same logic and must be kept in sync.
         if self.account.is_shared() {
             self.account.reserve(MAX_PERMITTED_DATA_INCREASE);
         }
@@ -1077,19 +1178,9 @@ impl<'a> BorrowedAccount<'a> {
 
     #[cfg(not(target_os = "solana"))]
     fn touch(&self) -> Result<(), InstructionError> {
-        if self
-            .transaction_context
-            .is_early_verification_of_account_modifications_enabled()
-        {
-            *self
-                .transaction_context
-                .account_touched_flags
-                .try_borrow_mut()
-                .map_err(|_| InstructionError::GenericError)?
-                .get_mut(self.index_in_transaction as usize)
-                .ok_or(InstructionError::NotEnoughAccountKeys)? = true;
-        }
-        Ok(())
+        self.transaction_context
+            .accounts()
+            .touch(self.index_in_transaction)
     }
 
     #[cfg(not(target_os = "solana"))]
@@ -1118,23 +1209,14 @@ pub struct ExecutionRecord {
 #[cfg(not(target_os = "solana"))]
 impl From<TransactionContext> for ExecutionRecord {
     fn from(context: TransactionContext) -> Self {
-        let account_touched_flags = context
-            .account_touched_flags
-            .try_borrow()
-            .expect("borrowing transaction_context.account_touched_flags failed");
-        let touched_account_count = account_touched_flags
-            .iter()
-            .fold(0u64, |accumulator, was_touched| {
-                accumulator.saturating_add(*was_touched as u64)
-            });
+        let accounts = Arc::try_unwrap(context.accounts)
+            .expect("transaction_context.accounts has unexpectd outstanding refs");
+        let touched_account_count = accounts.touched_count() as u64;
+        let accounts = accounts.into_accounts();
         Self {
             accounts: Vec::from(Pin::into_inner(context.account_keys))
                 .into_iter()
-                .zip(
-                    Vec::from(Pin::into_inner(context.accounts))
-                        .into_iter()
-                        .map(|account| account.into_inner()),
-                )
+                .zip(accounts)
                 .collect(),
             return_data: context.return_data,
             touched_account_count,
