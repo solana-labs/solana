@@ -970,7 +970,7 @@ impl SchedulerContext {
     }
 
     pub fn bank(&self) -> Option<&Bank> {
-        &*self.bank
+        &self.bank
     }
 
     pub fn log_prefix(random_id: u64, context: Option<&Self>) -> String {
