@@ -17,7 +17,7 @@ const SLEEP_INTERVAL: u64 = 500;
 pub struct SamplePerformanceSnapshot {
     pub num_transactions: u64,
     pub num_non_vote_transactions: u64,
-    pub highest_slot: u64,
+    pub last_sampled_root: u64,
 }
 
 pub struct SamplePerformanceService {
@@ -63,7 +63,7 @@ impl SamplePerformanceService {
         let mut snapshot = SamplePerformanceSnapshot {
             num_transactions: bank.transaction_count(),
             num_non_vote_transactions: bank.non_vote_transaction_count_since_restart(),
-            highest_slot: bank.slot(),
+            last_sampled_root: bank.slot(),
         };
 
         let mut now = Instant::now();
@@ -77,9 +77,9 @@ impl SamplePerformanceService {
             if elapsed.as_secs() >= SAMPLE_INTERVAL {
                 now = Instant::now();
                 let bank = root_bank();
-                let highest_slot = bank.slot();
+                let last_sampled_root = bank.slot();
 
-                let num_slots = highest_slot.saturating_sub(snapshot.highest_slot);
+                let num_slots = last_sampled_root.saturating_sub(snapshot.last_sampled_root);
                 let num_transactions = bank
                     .transaction_count()
                     .saturating_sub(snapshot.num_transactions);
@@ -94,8 +94,11 @@ impl SamplePerformanceService {
                     sample_period_secs: elapsed.as_secs() as u16,
                 };
 
-                if let Err(e) = blockstore.write_perf_sample(highest_slot, &perf_sample) {
-                    error!("write_perf_sample failed: slot {:?} {:?}", highest_slot, e);
+                if let Err(e) = blockstore.write_perf_sample(last_sampled_root, &perf_sample) {
+                    error!(
+                        "write_perf_sample failed: slot {:?} {:?}",
+                        last_sampled_root, e
+                    );
                 }
 
                 // Same as above, store the absolute transaction counts to use
@@ -103,7 +106,7 @@ impl SamplePerformanceService {
                 snapshot = SamplePerformanceSnapshot {
                     num_transactions: bank.transaction_count(),
                     num_non_vote_transactions: bank.non_vote_transaction_count_since_restart(),
-                    highest_slot,
+                    last_sampled_root,
                 };
             }
 
