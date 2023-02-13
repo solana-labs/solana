@@ -968,7 +968,6 @@ impl Validator {
         use solana_scheduler_pool::{
             SchedulerPool,
         };
-        info!("Initialized transaction status sender callback: {:?}", (config.runtime_config.log_messages_bytes_limit, &transaction_status_sender));
         let scheduler_pool = SchedulerPool::new_boxed(Some(&poh_recorder), config.runtime_config.log_messages_bytes_limit, transaction_status_sender.clone());
         bank_forks.write().unwrap().install_scheduler_pool(scheduler_pool);
 

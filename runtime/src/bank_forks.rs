@@ -213,7 +213,7 @@ impl BankForks {
 
     pub fn install_scheduler_pool(&mut self, pool: Box<dyn LikeSchedulerPool>) {
         assert!(self.scheduler_pool.is_none());
-        info!("Installed scheduler_pool: {:?}", pool);
+        info!("Installed new scheduler_pool into bank_forks: {:?}", pool);
         self.scheduler_pool = Some(pool);
     }
 
