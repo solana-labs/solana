@@ -19,7 +19,6 @@ dashmap = { version = "4.0.2" }
 log = "0.4.17"
 solana-sdk = { path = "../sdk", version = "=1.16.0" }
 solana-logger = { path = "../logger", version = "=1.16.0" }
-solana-metrics = { path = "../metrics", version = "=1.16.0" }
 sha2 = { version = "0.10.2" }
 triomphe = "0.1.7"
 rand = "0.7.0"
