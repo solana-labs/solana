@@ -2900,8 +2900,6 @@ impl Blockstore {
         slot: Slot,
         start_index: u64,
     ) -> Result<(CompletedRanges, Option<SlotMeta>)> {
-        let _lock = self.check_lowest_cleanup_slot(slot)?;
-
         let slot_meta_cf = self.db.column::<cf::SlotMeta>();
         let slot_meta = slot_meta_cf.get(slot)?;
         if slot_meta.is_none() {
