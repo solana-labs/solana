@@ -728,7 +728,7 @@ impl LikeScheduler for Scheduler {
 
     fn gracefully_stop(&mut self) -> Result<()> {
         self.trigger_stop();
-        let label = self.scheduler_context.as_ref();
+        let label = SchedulerContext::log_prefix(self.random_id, self.scheduler_context().as_ref());
         info!(
             "Scheduler::gracefully_stop(): {} waiting..", label,
         );
