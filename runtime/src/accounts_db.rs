@@ -153,7 +153,7 @@ pub enum IncludeSlotInHash {
     IrrelevantAssertOnUse,
 }
 
-#[derive(Debug, Default, Clone, Copy)]
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 pub enum CreateAncientStorage {
     /// ancient storages are created by appending
     #[default]
@@ -4287,7 +4287,7 @@ impl AccountsDb {
         }
 
         let can_randomly_shrink = true;
-        if matches!(self.create_ancient_storage, CreateAncientStorage::Append) {
+        if self.create_ancient_storage == CreateAncientStorage::Append {
             self.combine_ancient_slots(
                 self.get_sorted_potential_ancient_slots(),
                 can_randomly_shrink,
