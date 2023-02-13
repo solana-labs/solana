@@ -796,7 +796,9 @@ impl LikeScheduler for Scheduler {
     }
 
     fn current_scheduler_mode(&self) -> solana_scheduler::Mode {
-        self.current_checkpoint.with_context_value(|c| c.mode).unwrap()
+        self.stopped_mode.or_else(||
+            self.current_checkpoint.with_context_value(|c| c.mode).unwrap()
+        )
     }
 
     fn collected_results(&self) -> Arc<std::sync::Mutex<Vec<Result<ExecuteTimings>>>> {
