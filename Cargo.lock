@@ -5918,6 +5918,7 @@ dependencies = [
  "solana-measure",
  "solana-metrics",
  "solana-runtime",
+ "solana-scheduler",
  "solana-scheduler-pool",
  "solana-sdk 1.16.0",
  "solana-stake-program",
