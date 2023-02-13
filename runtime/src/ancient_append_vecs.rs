@@ -342,6 +342,34 @@ impl AccountsDb {
         accounts_to_combine
     }
 
+    /// finish shrink operation on slots where a new storage was created
+    /// drop root and storage for all original slots whose contents were combined into other storages
+    #[allow(dead_code)]
+    fn finish_combine_ancient_slots_packed<'a>(
+        &self,
+        accounts_to_combine: AccountsToCombine<'a>,
+        mut write_ancient_accounts: WriteAncientAccounts,
+        metrics: &mut ShrinkStatsSub,
+    ) {
+        let mut dropped_roots = Vec::with_capacity(accounts_to_combine.accounts_to_combine.len());
+        for shrink_collect in accounts_to_combine.accounts_to_combine {
+            let slot = shrink_collect.slot;
+
+            let shrink_in_progress = write_ancient_accounts.shrinks_in_progress.remove(&slot);
+            if shrink_in_progress.is_none() {
+                dropped_roots.push(slot);
+            }
+            self.remove_old_stores_shrink(
+                &shrink_collect,
+                &self.shrink_ancient_stats.shrink_stats,
+                shrink_in_progress,
+                true,
+            );
+        }
+        self.handle_dropped_roots_for_ancient(dropped_roots.into_iter());
+        metrics.accumulate(&write_ancient_accounts.metrics);
+    }
+
     /// given all accounts per ancient slot, in slots that we want to combine together:
     /// 1. Look up each pubkey in the index
     /// 2. separate, by slot, into:
@@ -1047,6 +1075,86 @@ pub mod tests {
     enum TestWriteMultipleRefs {
         MultipleRefs,
         PackedStorages,
+    }
+
+    #[test]
+    fn test_finish_combine_ancient_slots_packed() {
+        // n storages
+        // 1 account each
+        // all accounts have 1 ref
+        // nothing shrunk, so all storages and roots should be removed
+        // or all slots shrunk so no roots or storages should be removed
+        for all_slots_shrunk in [false, true] {
+            for num_slots in 0..3 {
+                let (db, storages, slots, infos) = get_sample_storages(num_slots, None);
+                let accounts_per_storage = infos
+                    .iter()
+                    .zip(
+                        storages
+                            .iter()
+                            .map(|store| db.get_unique_accounts_from_storage(store)),
+                    )
+                    .collect::<Vec<_>>();
+
+                let accounts_to_combine = db.calc_accounts_to_combine(&accounts_per_storage);
+                let mut stats = ShrinkStatsSub::default();
+                let mut write_ancient_accounts = WriteAncientAccounts::default();
+
+                slots.clone().for_each(|slot| {
+                    db.add_root(slot);
+                    assert!(db.storage.get_slot_storage_entry(slot).is_some());
+                });
+
+                let roots = db
+                    .accounts_index
+                    .roots_tracker
+                    .read()
+                    .unwrap()
+                    .alive_roots
+                    .get_all();
+                assert_eq!(roots, slots.clone().collect::<Vec<_>>());
+
+                if all_slots_shrunk {
+                    // make it look like each of the slots was shrunk
+                    slots.clone().for_each(|slot| {
+                        write_ancient_accounts
+                            .shrinks_in_progress
+                            .insert(slot, db.get_store_for_shrink(slot, 1));
+                    });
+                }
+
+                db.finish_combine_ancient_slots_packed(
+                    accounts_to_combine,
+                    write_ancient_accounts,
+                    &mut stats,
+                );
+                let roots_after = db
+                    .accounts_index
+                    .roots_tracker
+                    .read()
+                    .unwrap()
+                    .alive_roots
+                    .get_all();
+
+                assert_eq!(
+                    roots_after,
+                    if all_slots_shrunk {
+                        slots.clone().collect::<Vec<_>>()
+                    } else {
+                        vec![]
+                    },
+                    "all_slots_shrunk: {all_slots_shrunk}"
+                );
+                slots.for_each(|slot| {
+                    let storage = db.storage.get_slot_storage_entry(slot);
+                    if all_slots_shrunk {
+                        assert!(storage.is_some());
+                    } else {
+                        assert!(storage.is_none());
+                    }
+                });
+            }
+        }
     }
 
     #[test]
