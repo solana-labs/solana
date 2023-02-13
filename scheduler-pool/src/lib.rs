@@ -792,7 +792,6 @@ impl LikeScheduler for Scheduler {
             ))
             .unwrap();
         self.next_checkpoint = Some(checkpoint);
-        self.current_checkpoint.update_context_value(|c| {c.bank = None;});
     }
 
     fn current_scheduler_mode(&self) -> solana_scheduler::Mode {
