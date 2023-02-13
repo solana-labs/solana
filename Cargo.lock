@@ -6643,7 +6643,7 @@ dependencies = [
  "serde_json",
  "solana-entry",
  "solana-ledger",
- "solana-metrics",
+ "solana-measure",
  "solana-poh",
  "solana-program-runtime",
  "solana-runtime",
