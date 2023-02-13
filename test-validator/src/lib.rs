@@ -1,6 +1,7 @@
 #![allow(clippy::integer_arithmetic)]
 
 use {
+    bincode::deserialize,
     log::*,
     solana_cli_output::CliAccount,
     solana_client::rpc_request::MAX_MULTIPLE_ACCOUNTS,
@@ -29,6 +30,7 @@ use {
     },
     solana_sdk::{
         account::{Account, AccountSharedData},
+        bpf_loader_upgradeable::UpgradeableLoaderState,
         clock::{Slot, DEFAULT_MS_PER_SLOT},
         commitment_config::CommitmentConfig,
         epoch_schedule::EpochSchedule,
@@ -309,6 +311,38 @@ impl TestValidatorGenesis {
                 }
             }
         }
+        Ok(self)
+    }
+
+    pub fn clone_upgradeable_programs<T>(
+        &mut self,
+        addresses: T,
+        rpc_client: &RpcClient,
+    ) -> Result<&mut Self, String>
+    where
+        T: IntoIterator<Item = Pubkey> + Clone,
+    {
+        self.clone_accounts(addresses.clone(), rpc_client, false)?;
+
+        let mut programdata_addresses: HashSet<Pubkey> = HashSet::new();
+        for address in addresses {
+            let account_shared = self.accounts.get(&address).unwrap();
+            let account = Account::from(account_shared.clone());
+
+            if let Ok(UpgradeableLoaderState::Program {
+                programdata_address,
+            }) = deserialize(&account.data)
+            {
+                programdata_addresses.insert(programdata_address);
+            } else {
+                return Err(format!(
+                    "Failed to read upgradeable program account {address}",
+                ));
+            }
+        }
+
+        self.clone_accounts(programdata_addresses, rpc_client, false)?;
+
         Ok(self)
     }
 
