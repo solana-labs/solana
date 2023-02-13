@@ -47,12 +47,6 @@ pub struct SchedulerPool {
     transaction_status_sender: Option<TransactionStatusSender>,
 }
 
-impl std::fmt::Debug for SchedulerPool {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(f, "SchedulerPool{self:p}")
-    }
-}
-
 impl SchedulerPool {
     fn new(poh_recorder: Option<&Arc<RwLock<PohRecorder>>>, log_messages_bytes_limit: Option<usize>, transaction_status_sender: Option<TransactionStatusSender>) -> Self {
         Self {
