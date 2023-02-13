@@ -284,7 +284,7 @@ impl Scheduler {
                 solana_scheduler::ExecutablePayload(solana_scheduler::Flushable::Payload(mut ee)) => {
 
                 'retry: loop {
-                if assert_matches!(mode, Some(solana_scheduler::Mode::Banking)) {
+                if matches!(mode, Some(solana_scheduler::Mode::Banking)) {
                     commit_status.check_and_wait(random_id, &thread_name, &mut latest_seq, &mut latest_scheduler_context);
                 }
                 if latest_scheduler_context.is_none() {
