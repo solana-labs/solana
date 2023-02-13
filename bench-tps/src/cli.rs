@@ -1,7 +1,7 @@
 use {
     crate::spl_convert::FromOtherSolana,
     clap::{crate_description, crate_name, App, Arg, ArgMatches},
-    solana_clap_utils::input_validators::{is_url, is_url_or_moniker, is_within_range},
+    solana_clap_utils::input_validators::{is_keypair, is_url, is_url_or_moniker, is_within_range},
     solana_cli_config::{ConfigInput, CONFIG_FILE},
     solana_sdk::{
         fee_calculator::FeeRateGovernor,
@@ -372,7 +372,8 @@ pub fn build_args<'a>(version: &'_ str) -> App<'a, '_> {
                 .value_name("PATH")
                 .takes_value(true)
                 .requires("json_rpc_url")
-                .help("File containing a node id (keypair) of a validator with active stake. This allows communicating with network using staked connection"),
+                .validator(is_keypair)
+                .help("File containing the node id (keypair) of a validator with active stake. This allows communicating with network using staked connection"),
         )
 }
 
@@ -536,7 +537,7 @@ pub fn extract_args(matches: &ArgMatches) -> Config {
 
     if let Some(addr) = matches.value_of("bind_address") {
         args.bind_address = solana_net_utils::parse_host(addr).unwrap_or_else(|e| {
-            eprintln!("failed to parse bind_address address: {e}");
+            eprintln!("Failed to parse bind_address: {e}");
             exit(1)
         });
     }
@@ -544,10 +545,9 @@ pub fn extract_args(matches: &ArgMatches) -> Config {
         matches.value_of("client_node_id").unwrap_or(""),
         &config.keypair_path,
     );
+    // error is checked by arg validator
     if let Ok(node_id) = read_keypair_file(node_id_path) {
         args.client_node_id = Some(node_id);
-    } else if matches.is_present("client_node_id") {
-        panic!("could not parse identity path");
     }
 
     args

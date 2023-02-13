@@ -39,6 +39,10 @@ use {
 /// Number of signatures for all transactions in ~1 week at ~100K TPS
 pub const NUM_SIGNATURES_FOR_TXS: u64 = 100_000 * 60 * 60 * 24 * 7;
 
+/// Request information about node's stake
+/// If fail to get requested information, return error
+/// Otherwise return stake of the node
+/// along with total activated stake of the network
 fn find_node_activated_stake(
     rpc_client: Arc<RpcClient>,
     node_id: Pubkey,
@@ -59,13 +63,17 @@ fn find_node_activated_stake(
         .sum();
 
     let node_id_as_str = node_id.to_string();
-    vote_accounts
+    let find_result = vote_accounts
         .current
         .iter()
-        .find(|&vote_account| vote_account.node_pubkey == node_id_as_str)
-        .map_or(Err(()), |value| {
-            Ok((value.activated_stake, total_active_stake))
-        })
+        .find(|&vote_account| vote_account.node_pubkey == node_id_as_str);
+    match find_result {
+        Some(value) => Ok((value.activated_stake, total_active_stake)),
+        None => {
+            error!("failed to find stake for requested node");
+            Err(())
+        }
+    }
 }
 
 fn create_connection_cache(
@@ -79,12 +87,7 @@ fn create_connection_cache(
         return ConnectionCache::with_udp(tpu_connection_pool_size);
     }
     if client_node_id.is_none() {
-        return ConnectionCache::new_with_client_options(
-            tpu_connection_pool_size,
-            None,
-            None,
-            None,
-        );
+        return ConnectionCache::new(tpu_connection_pool_size);
     }
 
     let rpc_client = Arc::new(RpcClient::new_with_commitment(
