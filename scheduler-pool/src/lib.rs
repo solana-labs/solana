@@ -553,7 +553,9 @@ impl Scheduler {
                             transaction_error_counts.reset();
                             (succeeded, skipped) = (0, 0);
                             latest_checkpoint = Some(checkpoint);
-                            latest_scheduler_context = None;
+                            if let Some(sc) = latest_scheduler_context.take() {
+                                sc.dispose();
+                            }
                             latest_checkpoint.as_ref().unwrap().wait_for_restart(Some(std::mem::take(&mut cumulative_timings)));
                         },
                     }
