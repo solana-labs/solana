@@ -976,7 +976,7 @@ impl SchedulerContext {
     pub fn drop_cyclically(self) {
         if let Some(bank) = self.bank.take() {
             if let Ok(bank) = Arc::try_unwrap(bank) {
-                bank.drop_from_scheduler();
+                bank.drop_from_scheduler_thread();
             }
         }
     }
@@ -1175,7 +1175,7 @@ pub trait LikeScheduler: Send + Sync + std::fmt::Debug {
     fn pause_commit_into_bank(&self);  // pause()?
     fn resume_commit_into_bank(&self); // resume()?
     fn trigger_stop(&mut self);
-    fn gracefully_stop(&mut self) -> Result<()>; // terminate_gracefully()? or just shutdown()?
+    fn gracefully_stop(&mut self, from_internal: bool) -> Result<()>; // terminate_gracefully()? or just shutdown()?
     fn current_scheduler_mode(&self) -> solana_scheduler::Mode;
     fn collected_results(&self) -> Arc<std::sync::Mutex<Vec<Result<ExecuteTimings>>>>;
     fn scheduler_pool(&self) -> Box<dyn LikeSchedulerPool>;
@@ -7982,7 +7982,7 @@ impl Bank {
         s.take()
     }
 
-    pub fn wait_for_scheduler(&self, via_drop: bool, take_next: bool) -> (Result<ExecuteTimings>, Option<Box<dyn LikeScheduler>>) {
+    pub fn do_wait_for_scheduler(&self, via_drop: bool, take_next: bool, from_internal: bool) -> (Result<ExecuteTimings>, Option<Box<dyn LikeScheduler>>) {
         let mut s = self.scheduler.write().unwrap();
         let current_thread_name = std::thread::current().name().unwrap().to_string();
 
@@ -8003,7 +8003,7 @@ impl Bank {
                 } else {
                     None
                 };
-                let _r = scheduler.gracefully_stop().unwrap();
+                let _r = scheduler.gracefully_stop(from_internal).unwrap();
                 let e = scheduler
                     .handle_aborted_executions()
                     .into_iter()
@@ -8034,6 +8034,14 @@ impl Bank {
 
             (Ok(Default::default()), None)
         }
+    }
+
+    pub fn wait_for_scheduler(&self, via_drop: bool, take_next: bool) -> (Result<ExecuteTimings>, Option<Box<dyn LikeScheduler>>) {
+        self.do_wait_for_scheduler(via_drop, take_next, false);
+    }
+
+    pub fn drop_from_scheduler_thread(self) {
+        self.do_wait_for_scheduler(true, false, true);
     }
 
     /// Get the EAH that will be used by snapshots

@@ -730,7 +730,7 @@ impl LikeScheduler for Scheduler {
         self.commit_status.notify_as_resumed();
     }
 
-    fn gracefully_stop(&mut self) -> Result<()> {
+    fn gracefully_stop(&mut self, from_internal: bool) -> Result<()> {
         self.trigger_stop();
         let label = SchedulerContext::log_prefix(self.random_id, self.scheduler_context().as_ref());
         info!(
