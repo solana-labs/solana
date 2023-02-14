@@ -2243,14 +2243,6 @@ impl<T, B> Checkpoint<T, B> {
             std::sync::Condvar::new(),
         ))
     }
-
-    pub fn drop_cyclically(self) {
-        let mut g = self.0.lock().unwrap();
-        let (_, _, b) = &mut *g;
-        if let Some(sc) = b.take() {
-            sc.drop_cyclically()
-        }
-    }
 }
 
 impl<T, B: Clone> Checkpoint<T, B> {
@@ -2276,6 +2268,17 @@ impl<T, B: Clone> Checkpoint<T, B> {
         let mut g = self.0.lock().unwrap();
         let (_self_remaining_threads, self_return_value, b) = &mut *g;
         b.as_ref().map(with)
+    }
+}
+
+
+impl<T, B: WithMode> Checkpoint<T, B> {
+    pub fn drop_cyclically(self) {
+        let mut g = self.0.lock().unwrap();
+        let (_, _, b) = &mut *g;
+        if let Some(sc) = b.take() {
+            sc.drop_cyclically()
+        }
     }
 }
 
