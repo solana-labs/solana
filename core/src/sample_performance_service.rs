@@ -52,10 +52,9 @@ impl SamplePerformanceService {
         exit: Arc<AtomicBool>,
     ) {
         let mut snapshot = {
-            let (bank, highest_slot) = {
-                let forks = bank_forks.read().unwrap();
-                (forks.root_bank(), forks.highest_slot())
-            };
+            let forks = bank_forks.read().unwrap();
+            let bank = forks.root_bank();
+            let highest_slot = forks.highest_slot();
 
             // Store the absolute transaction counts to that we can compute the
             // difference between these values at points in time to figure out
