@@ -2172,7 +2172,7 @@ impl<T, B> Checkpoint<T, B> {
         let current_thread_name = std::thread::current().name().unwrap().to_string();
         let mut g = self.0.lock().unwrap();
         let (self_remaining_threads, self_return_value, _) = &mut *g;
-        trace!(
+        info!(
             "Checkpoint::wait_for_restart: {} is entering at {} -> {}",
             current_thread_name,
             *self_remaining_threads,
@@ -2190,12 +2190,12 @@ impl<T, B> Checkpoint<T, B> {
             assert!(self_return_value.is_some());
             drop(self_remaining_threads);
             self.1.notify_all();
-            trace!(
+            info!(
                 "Checkpoint::wait_for_restart: {} notified all others...",
                 current_thread_name
             );
         } else {
-            trace!(
+            info!(
                 "Checkpoint::wait_for_restart: {} is paused...",
                 current_thread_name
             );
@@ -2203,7 +2203,7 @@ impl<T, B> Checkpoint<T, B> {
                 .1
                 .wait_while(g, |&mut (remaining_threads, _, _)| remaining_threads > 0)
                 .unwrap();
-            trace!(
+            info!(
                 "Checkpoint::wait_for_restart: {} is started...",
                 current_thread_name
             );

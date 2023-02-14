@@ -7985,7 +7985,9 @@ impl Bank {
                 if matches!(scheduler_mode, solana_scheduler::Mode::Banking) {
                     assert!(via_drop);
                     scheduler.resume_commit_into_bank();
-                    info!("wait_for_scheduler {}", std::backtrace::Backtrace::force_capture());
+                }
+                if via_drop {
+                    info!("wait_for_scheduler(via_drop): {}", std::backtrace::Backtrace::force_capture());
                 }
 
                 let next_context = if take_next {

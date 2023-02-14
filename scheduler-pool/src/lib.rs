@@ -732,10 +732,11 @@ impl LikeScheduler for Scheduler {
         self.trigger_stop();
         let label = SchedulerContext::log_prefix(self.random_id, self.scheduler_context().as_ref());
         info!(
-            "Scheduler::gracefully_stop(): {} waiting..", label,
+            "Scheduler::gracefully_stop(): {} {} waiting..", label, std::thread::current().name().unwrap().to_string()
         );
 
         drop(self.stopped_mode.take().unwrap());
+        info!("just before wait for restart...");
         self.current_checkpoint.wait_for_restart(None);
         let r = self.current_checkpoint.take_restart_value();
         self.collected_results.lock().unwrap().push(Ok(r));
