@@ -974,7 +974,7 @@ impl SchedulerContext {
     }
 
     pub fn drop_cyclically(self) {
-        if let Some(bank) = self.take() {
+        if let Some(bank) = self.bank.take() {
             if let Ok(bank) = bank.try_unwrap() {
                 bank.drop_from_scheduler();
             }
