@@ -6241,6 +6241,7 @@ impl Bank {
         let mut s = self.scheduler.write().unwrap();
         if let Some(mut scheduler) = s.as_mut() {
             info!("not_schedulable... slot: {}", self.slot());
+            scheduler.resume_commit_into_bank();
             scheduler.trigger_stop();
         }
     }
