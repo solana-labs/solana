@@ -601,6 +601,9 @@ impl Scheduler {
                     );
 
                     if let Some(checkpoint) = maybe_checkpoint {
+                        if let Some(cp) = latest_checkpoint.take() {
+                            cp.drop_cyclically();
+                        }
                         checkpoint.wait_for_restart(None);
                         latest_checkpoint = Some(checkpoint);
                         continue;
