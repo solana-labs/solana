@@ -2273,7 +2273,7 @@ impl<T, B: Clone> Checkpoint<T, B> {
 
 
 impl<T, B: WithMode> Checkpoint<T, B> {
-    pub fn drop_cyclically(self: Self<Arc>) {
+    pub fn drop_cyclically(self: Arc<Self>) {
         if let Ok(cp) = Arc::try_unwrap(self) {
             let mut g = cp.0.lock().unwrap();
             let (_, _, b) = &mut *g;
@@ -2291,5 +2291,5 @@ pub enum Flushable<T, C, B> {
 
 pub trait WithMode {
     fn mode(&self) -> Mode;
-    fn drop_cyclically(self: Self<Arc>);
+    fn drop_cyclically(self: Arc<Self>);
 }
