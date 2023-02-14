@@ -60,8 +60,8 @@ pub enum Error {
     BlockstoreInsertFailed(#[from] BlockstoreError),
     #[error("data chunk mismatch")]
     DataChunkMismatch,
-    #[error("invalid chunk index")]
-    InvalidChunkIndex,
+    #[error("invalid chunk_index: {chunk_index}, num_chunks: {num_chunks}")]
+    InvalidChunkIndex { chunk_index: u8, num_chunks: u8 },
     #[error("invalid duplicate shreds")]
     InvalidDuplicateShreds,
     #[error("invalid duplicate slot proof")]
@@ -86,8 +86,8 @@ pub enum Error {
     SlotMismatch,
     #[error("type conversion error")]
     TryFromIntError(#[from] TryFromIntError),
-    #[error("unknown slot leader")]
-    UnknownSlotLeader,
+    #[error("unknown slot leader: {0}")]
+    UnknownSlotLeader(Slot),
 }
 
 // Asserts that the two shreds can indicate duplicate proof for
@@ -110,7 +110,8 @@ fn check_shreds(
         Err(Error::InvalidDuplicateShreds)
     } else {
         if let Some(leader_schedule) = leader_schedule {
-            let slot_leader = leader_schedule(shred1.slot()).ok_or(Error::UnknownSlotLeader)?;
+            let slot_leader =
+                leader_schedule(shred1.slot()).ok_or(Error::UnknownSlotLeader(shred1.slot()))?;
             if !shred1.verify(&slot_leader) || !shred2.verify(&slot_leader) {
                 return Err(Error::InvalidSignature);
             }
@@ -219,7 +220,10 @@ fn check_chunk(
         } else if dup.num_chunks != num_chunks {
             Err(Error::NumChunksMismatch)
         } else if dup.chunk_index >= num_chunks {
-            Err(Error::InvalidChunkIndex)
+            Err(Error::InvalidChunkIndex {
+                chunk_index: dup.chunk_index,
+                num_chunks,
+            })
         } else {
             Ok(())
         }
@@ -227,9 +231,9 @@ fn check_chunk(
 }
 
 /// Reconstructs the duplicate shreds from chunks of DuplicateShred.
-pub fn into_shreds(
+pub(crate) fn into_shreds(
+    slot_leader: &Pubkey,
     chunks: impl IntoIterator<Item = DuplicateShred>,
-    leader: impl LeaderScheduleFn,
 ) -> Result<(Shred, Shred), Error> {
     let mut chunks = chunks.into_iter();
     let DuplicateShred {
@@ -241,7 +245,6 @@ pub fn into_shreds(
         chunk,
         ..
     } = chunks.next().ok_or(Error::InvalidDuplicateShreds)?;
-    let slot_leader = leader(slot).ok_or(Error::UnknownSlotLeader)?;
     let check_chunk = check_chunk(slot, shred_index, shred_type, num_chunks);
     let mut data = HashMap::new();
     data.insert(chunk_index, chunk);
@@ -276,7 +279,7 @@ pub fn into_shreds(
         Err(Error::ShredTypeMismatch)
     } else if shred1.payload() == shred2.payload() {
         Err(Error::InvalidDuplicateShreds)
-    } else if !shred1.verify(&slot_leader) || !shred2.verify(&slot_leader) {
+    } else if !shred1.verify(slot_leader) || !shred2.verify(slot_leader) {
         Err(Error::InvalidSignature)
     } else {
         Ok((shred1, shred2))
@@ -391,7 +394,7 @@ pub(crate) mod tests {
         .unwrap()
         .collect();
         assert!(chunks.len() > 4);
-        let (shred3, shred4) = into_shreds(chunks, leader_schedule).unwrap();
+        let (shred3, shred4) = into_shreds(&leader.pubkey(), chunks).unwrap();
         assert_eq!(shred1, shred3);
         assert_eq!(shred2, shred4);
     }
