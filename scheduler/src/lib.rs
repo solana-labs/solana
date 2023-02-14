@@ -2248,7 +2248,7 @@ impl<T, B> Checkpoint<T, B> {
         let mut g = self.0.lock().unwrap();
         let (_, _, b) = &mut *g;
         if let Some(sc) = b.take() {
-            b.drop_cyclically()
+            sc.drop_cyclically()
         }
     }
 }
