@@ -174,26 +174,26 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
         )
         .arg(
             Arg::with_name("full_rpc_api")
-                .long("--full-rpc-api")
+                .long("full-rpc-api")
                 .conflicts_with("minimal_rpc_api")
                 .takes_value(false)
                 .help("Expose RPC methods for querying chain state and transaction history"),
         )
         .arg(
             Arg::with_name("obsolete_v1_7_rpc_api")
-                .long("--enable-rpc-obsolete_v1_7")
+                .long("enable-rpc-obsolete_v1_7")
                 .takes_value(false)
                 .help("Enable the obsolete RPC methods removed in v1.7"),
         )
         .arg(
             Arg::with_name("private_rpc")
-                .long("--private-rpc")
+                .long("private-rpc")
                 .takes_value(false)
                 .help("Do not publish the RPC port for use by others")
         )
         .arg(
             Arg::with_name("no_port_check")
-                .long("--no-port-check")
+                .long("no-port-check")
                 .takes_value(false)
                 .help("Do not perform TCP/UDP reachable port checks at start-up")
         )
@@ -1609,7 +1609,7 @@ fn get_deprecated_arguments() -> Vec<Arg<'static, 'static>> {
                    interval, use --full-snapshot-interval-slots.",
             ),
         Arg::with_name("minimal_rpc_api")
-            .long("--minimal-rpc-api")
+            .long("minimal-rpc-api")
             .takes_value(false)
             .hidden(true)
             .help("Only expose the RPC methods required to serve snapshots to other nodes"),
