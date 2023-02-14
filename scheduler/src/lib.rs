@@ -2273,7 +2273,7 @@ impl<T, B: Clone> Checkpoint<T, B> {
 
 impl<T, B: WithMode> Checkpoint<T, B> {
     pub fn drop_checkpoint_cyclically(self) -> bool {
-        let mut g = cp.0.lock().unwrap();
+        let mut g = self.0.lock().unwrap();
         let (_, _, b) = &mut *g;
         let mut did_dropped = false;
         if let Some(sc) = b.take() {
