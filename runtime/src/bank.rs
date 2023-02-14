@@ -7989,7 +7989,7 @@ impl Bank {
         if let Some(scheduler) = s.as_mut() {
             let scheduler_mode = scheduler.current_scheduler_mode();
             if matches!(scheduler_mode, solana_scheduler::Mode::Replaying) || via_drop {
-                info!("wait_for_scheduler({scheduler_mode:?}/{via_drop}): gracefully stopping bank ({})... take_next: {take_next}", self.slot());
+                info!("wait_for_scheduler({scheduler_mode:?}/{via_drop}): gracefully stopping bank ({})... take_next: {take_next} from_internal: {from_internal} by {current_thread_name}", self.slot());
                 if matches!(scheduler_mode, solana_scheduler::Mode::Banking) {
                     assert!(via_drop);
                     scheduler.resume_commit_into_bank();

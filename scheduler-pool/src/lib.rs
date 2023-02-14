@@ -739,6 +739,9 @@ impl LikeScheduler for Scheduler {
 
         drop(self.stopped_mode.take().unwrap());
         info!("just before wait for restart...");
+        if from_internal {
+            self.current_checkpoint.reduce_count();
+        }
         self.current_checkpoint.wait_for_restart(None);
         let r = self.current_checkpoint.take_restart_value();
         self.collected_results.lock().unwrap().push(Ok(r));
