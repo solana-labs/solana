@@ -7987,7 +7987,7 @@ impl Bank {
         s.take()
     }
 
-    pub fn do_wait_for_scheduler(&self, via_drop: bool, take_next: bool, from_internal: bool) -> (bool, (Result<ExecuteTimings>, Option<Box<dyn LikeScheduler>>)) {
+    pub fn do_wait_for_scheduler(&self, via_drop: bool, take_next: bool, from_internal: bool) -> (Option<bool>, (Result<ExecuteTimings>, Option<Box<dyn LikeScheduler>>)) {
         let mut s = self.scheduler.write().unwrap();
         let current_thread_name = std::thread::current().name().unwrap().to_string();
         if via_drop {
@@ -8017,7 +8017,7 @@ impl Bank {
                 let scheduler = s.take().unwrap();
                 let pool = scheduler.scheduler_pool();
                 pool.return_to_pool(scheduler);
-                (false, (e, next_context.map(|c| pool.take_from_pool(c))))
+                (Some(true), (e, next_context.map(|c| pool.take_from_pool(c))))
             } else {
                 info!("wait_for_scheduler(Banking): pausing commit into bank ({})...  take_next: {take_next}", self.slot());
                 assert!(!take_next);
@@ -8029,7 +8029,7 @@ impl Bank {
                     .next()
                     .unwrap()
                 */
-                (false, (Ok(Default::default()), None))
+                (None, (Ok(Default::default()), None))
             }
         } else {
             warn!(
@@ -8037,7 +8037,7 @@ impl Bank {
                 via_drop, current_thread_name
             );
 
-            (true, (Ok(Default::default()), None))
+            (Some(false), (Ok(Default::default()), None))
         }
     }
 
@@ -8046,7 +8046,7 @@ impl Bank {
     }
 
     pub fn drop_from_scheduler_thread(self) -> bool {
-        self.do_wait_for_scheduler(true, false, true).0
+        self.do_wait_for_scheduler(true, false, true).0.unwrap()
     }
 
     /// Get the EAH that will be used by snapshots
