@@ -59,13 +59,13 @@ pub type TransactionAccount = (Pubkey, AccountSharedData);
 #[derive(Clone, Debug, PartialEq)]
 pub struct TransactionAccounts {
     accounts: Vec<RefCell<AccountSharedData>>,
-    // FIXME: use bitfield
+    // FIXXME: use bitfield
     touched_flags: RefCell<Box<[bool]>>,
     is_early_verification_of_account_modifications_enabled: bool,
 }
 
-#[cfg(not(target_os = "solana"))]
 impl TransactionAccounts {
+    #[cfg(not(target_os = "solana"))]
     fn new(
         accounts: Vec<RefCell<AccountSharedData>>,
         is_early_verification_of_account_modifications_enabled: bool,
@@ -85,6 +85,7 @@ impl TransactionAccounts {
         self.accounts.get(index as usize)
     }
 
+    #[cfg(not(target_os = "solana"))]
     pub fn touch(&self, index: IndexOfAccount) -> Result<(), InstructionError> {
         if self.is_early_verification_of_account_modifications_enabled {
             *self
@@ -96,6 +97,7 @@ impl TransactionAccounts {
         Ok(())
     }
 
+    #[cfg(not(target_os = "solana"))]
     pub fn touched_count(&self) -> usize {
         self.touched_flags
             .borrow()
@@ -142,7 +144,6 @@ impl TransactionAccounts {
 pub struct TransactionContext {
     account_keys: Pin<Box<[Pubkey]>>,
     accounts: Arc<TransactionAccounts>,
-    #[cfg(not(target_os = "solana"))]
     instruction_stack_capacity: usize,
     instruction_trace_capacity: usize,
     instruction_stack: Vec<usize>,
