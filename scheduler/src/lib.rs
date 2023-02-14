@@ -2271,6 +2271,7 @@ impl<T, B: Clone> Checkpoint<T, B> {
     }
 }
 
+use triomphe::Arc;
 
 impl<T, B: WithMode> Checkpoint<T, B> {
     pub fn drop_cyclically(self: Arc<Self>) {
