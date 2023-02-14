@@ -3457,12 +3457,12 @@ pub mod rpc_full {
                     if my_shred_version == contact_info.shred_version
                         && ContactInfo::is_valid_address(&contact_info.gossip, socket_addr_space)
                     {
-                        let (version, feature_set) = if let Some(version) =
+                        let (version, feature_set, commit) = if let Some(version) =
                             cluster_info.get_node_version(&contact_info.id)
                         {
-                            (Some(version.to_string()), Some(version.feature_set))
+                            (Some(version.to_string()), Some(version.feature_set), version.commit)
                         } else {
-                            (None, None)
+                            (None, None, None)
                         };
                         Some(RpcContactInfo {
                             pubkey: contact_info.id.to_string(),
@@ -3473,6 +3473,7 @@ pub mod rpc_full {
                             version,
                             feature_set,
                             shred_version: Some(my_shred_version),
+                            commit: commit,
                         })
                     } else {
                         None // Exclude spy nodes
