@@ -975,7 +975,7 @@ impl SchedulerContext {
 
     pub fn drop_cyclically(self) {
         if let Some(bank) = self.bank.take() {
-            if let Ok(bank) = bank.try_unwrap() {
+            if let Ok(bank) = Arc::try_unwrap(bank) {
                 bank.drop_from_scheduler();
             }
         }
