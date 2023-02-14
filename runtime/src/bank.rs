@@ -7990,6 +7990,9 @@ impl Bank {
     pub fn do_wait_for_scheduler(&self, via_drop: bool, take_next: bool, from_internal: bool) -> (bool, (Result<ExecuteTimings>, Option<Box<dyn LikeScheduler>>)) {
         let mut s = self.scheduler.write().unwrap();
         let current_thread_name = std::thread::current().name().unwrap().to_string();
+        if via_drop {
+            info!("wait_for_scheduler(via_drop): {}", std::backtrace::Backtrace::force_capture());
+        }
 
         if let Some(scheduler) = s.as_mut() {
             let scheduler_mode = scheduler.current_scheduler_mode();
@@ -7998,9 +8001,6 @@ impl Bank {
                 if matches!(scheduler_mode, solana_scheduler::Mode::Banking) {
                     assert!(via_drop);
                     scheduler.resume_commit_into_bank();
-                }
-                if via_drop {
-                    info!("wait_for_scheduler(via_drop): {}", std::backtrace::Backtrace::force_capture());
                 }
 
                 let next_context = if take_next {
@@ -8033,7 +8033,7 @@ impl Bank {
             }
         } else {
             warn!(
-                "Bank::wait_for_scheduler(via_drop: {}) skipped by {} ...",
+                "Bank::wait_for_scheduler(via_drop: {}) skipped take_next: {take_next} from_internal: {from_internal} by {} ...",
                 via_drop, current_thread_name
             );
 
