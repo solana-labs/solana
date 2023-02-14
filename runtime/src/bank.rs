@@ -973,6 +973,14 @@ impl SchedulerContext {
         self.bank.as_ref()
     }
 
+    pub fn drop_cyclically(self) {
+        if let Some(bank) = self.take() {
+            if let Ok(bank) = bank.try_unwrap() {
+                bank.drop_from_scheduler();
+            }
+        }
+    }
+
     pub fn log_prefix(random_id: u64, context: Option<&Self>) -> String {
         format!("id_{:016x}{}", random_id, context.as_ref().map(|c| format!(" slot: {}, mode: {:?}", c.slot(), c.mode)).unwrap_or("".into()))
     }

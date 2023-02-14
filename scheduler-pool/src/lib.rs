@@ -554,7 +554,7 @@ impl Scheduler {
                             (succeeded, skipped) = (0, 0);
                             latest_checkpoint = Some(checkpoint);
                             if let Some(sc) = latest_scheduler_context.take() {
-                                sc.dispose();
+                                sc.drop_cyclically();
                             }
                             latest_checkpoint.as_ref().unwrap().wait_for_restart(Some(std::mem::take(&mut cumulative_timings)));
                         },
