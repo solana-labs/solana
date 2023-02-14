@@ -37,6 +37,7 @@ use solana_transaction_status::token_balances::TransactionTokenBalancesSet;
 use solana_runtime::bank::TransactionBalancesSet;
 use solana_ledger::blockstore_processor::TransactionStatusSender;
 use solana_ledger::token_balances::collect_token_balances;
+use solana_scheduler::WithMode;
 
 pub use solana_scheduler::Mode;
 
