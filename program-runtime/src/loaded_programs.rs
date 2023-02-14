@@ -70,12 +70,8 @@ impl Debug for LoadedProgramType {
 pub struct LoadedProgram {
     /// The program of this entry
     pub program: LoadedProgramType,
-    /// Size of account that stores the program
+    /// Size of account that stores the program and program data
     pub account_size: usize,
-    /// Pubkey of programdata account, if the program uses bpf_loader_upgradeable
-    pub maybe_programdata: Option<Pubkey>,
-    /// Size of programdata account
-    pub programdata_account_size: usize,
     /// Slot in which the program was (re)deployed
     pub deployment_slot: Slot,
     /// Slot in which this entry will become active (can be in the future)
@@ -92,8 +88,6 @@ impl LoadedProgram {
         deployment_slot: Slot,
         elf_bytes: &[u8],
         account_size: usize,
-        programdata_key: Option<Pubkey>,
-        programdata_size: usize,
     ) -> Result<Self, EbpfError> {
         let program = if bpf_loader_deprecated::check_id(loader_key) {
             let executable = Executable::load(elf_bytes, loader.clone())?;
@@ -107,8 +101,6 @@ impl LoadedProgram {
         Ok(Self {
             deployment_slot,
             account_size,
-            maybe_programdata: programdata_key,
-            programdata_account_size: programdata_size,
             effective_slot: deployment_slot.saturating_add(1),
             usage_counter: AtomicU64::new(0),
             program,
@@ -123,8 +115,6 @@ impl LoadedProgram {
         Self {
             deployment_slot,
             account_size: 0,
-            maybe_programdata: None,
-            programdata_account_size: 0,
             effective_slot: deployment_slot.saturating_add(1),
             usage_counter: AtomicU64::new(0),
             program: LoadedProgramType::BuiltIn(program),
@@ -397,8 +387,6 @@ mod tests {
         Arc::new(LoadedProgram {
             program: LoadedProgramType::Invalid,
             account_size: 0,
-            maybe_programdata: None,
-            programdata_account_size: 0,
             deployment_slot,
             effective_slot,
             usage_counter: AtomicU64::default(),

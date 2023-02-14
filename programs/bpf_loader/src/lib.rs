@@ -188,16 +188,9 @@ fn get_programdata_offset(
 ) -> Result<usize, InstructionError> {
     if bpf_loader_upgradeable::check_id(program.get_owner()) {
         if let UpgradeableLoaderState::Program {
-            programdata_address,
+            programdata_address: _,
         } = program.get_state()?
         {
-            if &programdata_address != programdata.get_key() {
-                ic_logger_msg!(
-                    log_collector,
-                    "Wrong ProgramData account for this Program account"
-                );
-                return Err(InstructionError::InvalidArgument);
-            }
             if !matches!(
                 programdata.get_state()?,
                 UpgradeableLoaderState::ProgramData {
@@ -223,7 +216,6 @@ pub fn load_program_from_account(
     compute_budget: &ComputeBudget,
     log_collector: Option<Rc<RefCell<LogCollector>>>,
     program: &BorrowedAccount,
-    programdata_key: Option<Pubkey>,
     programdata: &BorrowedAccount,
 ) -> Result<(LoadedProgram, Option<CreateMetrics>), InstructionError> {
     if !check_loader_id(program.get_owner()) {
@@ -264,9 +256,7 @@ pub fn load_program_from_account(
             .get_data()
             .get(programdata_offset..)
             .ok_or(InstructionError::AccountDataTooSmall)?,
-        program.get_data().len(),
-        programdata_key,
-        programdata_size,
+        program.get_data().len().saturating_add(programdata_size),
     )
     .map_err(|err| {
         ic_logger_msg!(log_collector, "{}", err);
