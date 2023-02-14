@@ -60,38 +60,43 @@ fn verify_reachable_ports(
     validator_config: &ValidatorConfig,
     socket_addr_space: &SocketAddrSpace,
 ) -> bool {
+    let verify_address = |addr: &Option<SocketAddr>| -> bool {
+        addr.as_ref()
+            .map(|addr| socket_addr_space.check(addr))
+            .unwrap_or_default()
+    };
     let mut udp_sockets = vec![&node.sockets.gossip, &node.sockets.repair];
 
-    if ContactInfo::is_valid_address(&node.info.serve_repair, socket_addr_space) {
+    if verify_address(&node.info.serve_repair().ok()) {
         udp_sockets.push(&node.sockets.serve_repair);
     }
-    if ContactInfo::is_valid_address(&node.info.tpu, socket_addr_space) {
+    if verify_address(&node.info.tpu().ok()) {
         udp_sockets.extend(node.sockets.tpu.iter());
         udp_sockets.push(&node.sockets.tpu_quic);
     }
-    if ContactInfo::is_valid_address(&node.info.tpu_forwards, socket_addr_space) {
+    if verify_address(&node.info.tpu_forwards().ok()) {
         udp_sockets.extend(node.sockets.tpu_forwards.iter());
         udp_sockets.push(&node.sockets.tpu_forwards_quic);
     }
-    if ContactInfo::is_valid_address(&node.info.tpu_vote, socket_addr_space) {
+    if verify_address(&node.info.tpu_vote().ok()) {
         udp_sockets.extend(node.sockets.tpu_vote.iter());
     }
-    if ContactInfo::is_valid_address(&node.info.tvu, socket_addr_space) {
+    if verify_address(&node.info.tvu().ok()) {
         udp_sockets.extend(node.sockets.tvu.iter());
         udp_sockets.extend(node.sockets.broadcast.iter());
         udp_sockets.extend(node.sockets.retransmit_sockets.iter());
     }
-    if ContactInfo::is_valid_address(&node.info.tvu_forwards, socket_addr_space) {
+    if verify_address(&node.info.tvu_forwards().ok()) {
         udp_sockets.extend(node.sockets.tvu_forwards.iter());
     }
 
     let mut tcp_listeners = vec![];
     if let Some((rpc_addr, rpc_pubsub_addr)) = validator_config.rpc_addrs {
         for (purpose, bind_addr, public_addr) in &[
-            ("RPC", rpc_addr, &node.info.rpc),
-            ("RPC pubsub", rpc_pubsub_addr, &node.info.rpc_pubsub),
+            ("RPC", rpc_addr, node.info.rpc()),
+            ("RPC pubsub", rpc_pubsub_addr, node.info.rpc_pubsub()),
         ] {
-            if ContactInfo::is_valid_address(public_addr, socket_addr_space) {
+            if verify_address(&public_addr.as_ref().ok().copied()) {
                 tcp_listeners.push((
                     bind_addr.port(),
                     TcpListener::bind(bind_addr).unwrap_or_else(|err| {
@@ -501,7 +506,10 @@ pub fn rpc_bootstrap(
                 identity_keypair.clone(),
                 cluster_entrypoints,
                 ledger_path,
-                &node.info.gossip,
+                &node
+                    .info
+                    .gossip()
+                    .expect("Operator must spin up node with valid gossip address"),
                 node.sockets.gossip.try_clone().unwrap(),
                 validator_config.expected_shred_version,
                 validator_config.gossip_validators.clone(),

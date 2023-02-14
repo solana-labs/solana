@@ -789,6 +789,7 @@ pub mod test {
         solana_client::thin_client::ThinClient,
         solana_core::validator::ValidatorConfig,
         solana_faucet::faucet::run_local_faucet,
+        solana_gossip::contact_info::LegacyContactInfo,
         solana_local_cluster::{
             cluster::Cluster,
             local_cluster::{ClusterConfig, LocalCluster},
@@ -896,7 +897,11 @@ pub mod test {
         assert_eq!(cluster.validators.len(), num_nodes);
 
         let nodes = cluster.get_node_pubkeys();
-        let node = cluster.get_contact_info(&nodes[0]).unwrap().clone();
+        let node = cluster
+            .get_contact_info(&nodes[0])
+            .map(LegacyContactInfo::try_from)
+            .unwrap()
+            .unwrap();
         let nodes_slice = [node];
 
         // send random transactions to TPU
@@ -905,7 +910,7 @@ pub mod test {
             &nodes_slice,
             10,
             DosClientParameters {
-                entrypoint_addr: cluster.entry_point_info.gossip,
+                entrypoint_addr: cluster.entry_point_info.gossip().unwrap(),
                 mode: Mode::Tpu,
                 data_size: 1024,
                 data_type: DataType::Random,
@@ -929,12 +934,16 @@ pub mod test {
         assert_eq!(cluster.validators.len(), num_nodes);
 
         let nodes = cluster.get_node_pubkeys();
-        let node = cluster.get_contact_info(&nodes[0]).unwrap().clone();
+        let node = cluster
+            .get_contact_info(&nodes[0])
+            .map(LegacyContactInfo::try_from)
+            .unwrap()
+            .unwrap();
         let nodes_slice = [node];
 
         let client = Arc::new(ThinClient::new(
-            cluster.entry_point_info.rpc,
-            cluster.entry_point_info.tpu,
+            cluster.entry_point_info.rpc().unwrap(),
+            cluster.entry_point_info.tpu().unwrap(),
             cluster.connection_cache.clone(),
         ));
 
@@ -944,7 +953,7 @@ pub mod test {
             10,
             Some(client.clone()),
             DosClientParameters {
-                entrypoint_addr: cluster.entry_point_info.gossip,
+                entrypoint_addr: cluster.entry_point_info.gossip().unwrap(),
                 mode: Mode::Tpu,
                 data_size: 0, // irrelevant
                 data_type: DataType::Transaction,
@@ -971,7 +980,7 @@ pub mod test {
             10,
             Some(client.clone()),
             DosClientParameters {
-                entrypoint_addr: cluster.entry_point_info.gossip,
+                entrypoint_addr: cluster.entry_point_info.gossip().unwrap(),
                 mode: Mode::Tpu,
                 data_size: 0, // irrelevant
                 data_type: DataType::Transaction,
@@ -998,7 +1007,7 @@ pub mod test {
             10,
             Some(client),
             DosClientParameters {
-                entrypoint_addr: cluster.entry_point_info.gossip,
+                entrypoint_addr: cluster.entry_point_info.gossip().unwrap(),
                 mode: Mode::Tpu,
                 data_size: 0, // irrelevant
                 data_type: DataType::Transaction,
@@ -1061,12 +1070,16 @@ pub mod test {
         cluster.transfer(&cluster.funding_keypair, &faucet_pubkey, 100_000_000);
 
         let nodes = cluster.get_node_pubkeys();
-        let node = cluster.get_contact_info(&nodes[0]).unwrap().clone();
+        let node = cluster
+            .get_contact_info(&nodes[0])
+            .map(LegacyContactInfo::try_from)
+            .unwrap()
+            .unwrap();
         let nodes_slice = [node];
 
         let client = Arc::new(ThinClient::new(
-            cluster.entry_point_info.rpc,
-            cluster.entry_point_info.tpu,
+            cluster.entry_point_info.rpc().unwrap(),
+            cluster.entry_point_info.tpu().unwrap(),
             cluster.connection_cache.clone(),
         ));
 
@@ -1077,7 +1090,7 @@ pub mod test {
             10,
             Some(client.clone()),
             DosClientParameters {
-                entrypoint_addr: cluster.entry_point_info.gossip,
+                entrypoint_addr: cluster.entry_point_info.gossip().unwrap(),
                 mode: Mode::Tpu,
                 data_size: 0, // irrelevant if not random
                 data_type: DataType::Transaction,
@@ -1106,7 +1119,7 @@ pub mod test {
             10,
             Some(client.clone()),
             DosClientParameters {
-                entrypoint_addr: cluster.entry_point_info.gossip,
+                entrypoint_addr: cluster.entry_point_info.gossip().unwrap(),
                 mode: Mode::Tpu,
                 data_size: 0, // irrelevant if not random
                 data_type: DataType::Transaction,
@@ -1134,7 +1147,7 @@ pub mod test {
             10,
             Some(client.clone()),
             DosClientParameters {
-                entrypoint_addr: cluster.entry_point_info.gossip,
+                entrypoint_addr: cluster.entry_point_info.gossip().unwrap(),
                 mode: Mode::Tpu,
                 data_size: 0, // irrelevant if not random
                 data_type: DataType::Transaction,
@@ -1162,7 +1175,7 @@ pub mod test {
             10,
             Some(client),
             DosClientParameters {
-                entrypoint_addr: cluster.entry_point_info.gossip,
+                entrypoint_addr: cluster.entry_point_info.gossip().unwrap(),
                 mode: Mode::Tpu,
                 data_size: 0, // irrelevant if not random
                 data_type: DataType::Transaction,

@@ -750,15 +750,16 @@ impl TestValidator {
             config.node_config.bind_ip_addr,
         );
         if let Some((rpc, rpc_pubsub)) = config.rpc_ports {
-            node.info.rpc = SocketAddr::new(node.info.gossip.ip(), rpc);
-            node.info.rpc_pubsub = SocketAddr::new(node.info.gossip.ip(), rpc_pubsub);
+            let addr = node.info.gossip().unwrap().ip();
+            node.info.set_rpc((addr, rpc)).unwrap();
+            node.info.set_rpc_pubsub((addr, rpc_pubsub)).unwrap();
         }
 
         let vote_account_address = validator_vote_account.pubkey();
-        let rpc_url = format!("http://{}", node.info.rpc);
-        let rpc_pubsub_url = format!("ws://{}/", node.info.rpc_pubsub);
-        let tpu = node.info.tpu;
-        let gossip = node.info.gossip;
+        let rpc_url = format!("http://{}", node.info.rpc().unwrap());
+        let rpc_pubsub_url = format!("ws://{}/", node.info.rpc_pubsub().unwrap());
+        let tpu = node.info.tpu().unwrap();
+        let gossip = node.info.gossip().unwrap();
 
         {
             let mut authorized_voter_keypairs = config.authorized_voter_keypairs.write().unwrap();
@@ -793,10 +794,13 @@ impl TestValidator {
         let mut validator_config = ValidatorConfig {
             geyser_plugin_config_files: config.geyser_plugin_config_files.clone(),
             rpc_addrs: Some((
-                SocketAddr::new(IpAddr::V4(Ipv4Addr::UNSPECIFIED), node.info.rpc.port()),
                 SocketAddr::new(
                     IpAddr::V4(Ipv4Addr::UNSPECIFIED),
-                    node.info.rpc_pubsub.port(),
+                    node.info.rpc().unwrap().port(),
+                ),
+                SocketAddr::new(
+                    IpAddr::V4(Ipv4Addr::UNSPECIFIED),
+                    node.info.rpc_pubsub().unwrap().port(),
                 ),
             )),
             rpc_config: config.rpc_config.clone(),
