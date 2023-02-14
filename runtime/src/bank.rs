@@ -6839,10 +6839,10 @@ impl Bank {
                 slot,
                 cap,
                 BankHashLamportsVerifyConfig {
-                    ancestors: &ancestors,
+                    ancestors,
                     test_hash_calculation: config.test_hash_calculation,
-                    epoch_schedule: &epoch_schedule,
-                    rent_collector: &rent_collector,
+                    epoch_schedule,
+                    rent_collector,
                     ignore_mismatch: config.ignore_mismatch,
                     store_detailed_debug_info: config.store_hash_raw_data_for_debug,
                     use_bg_thread_pool: false, // fg is waiting for this to run, so we can use the fg thread pool
