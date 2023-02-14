@@ -2289,5 +2289,5 @@ pub enum Flushable<T, C, B> {
 
 pub trait WithMode {
     fn mode(&self) -> Mode;
-    pub fn drop_cyclically(self);
+    fn drop_cyclically(self);
 }
