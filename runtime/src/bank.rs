@@ -8036,8 +8036,8 @@ impl Bank {
         }
     }
 
-    pub fn wait_for_scheduler(&self, via_drop: bool, take_next: bool) -> (Result<ExecuteTimings>, Option<Box<dyn LikeScheduler>>) -> (Result<ExecuteTimings>, Option<Box<dyn LikeScheduler>>) {
-        self.do_wait_for_scheduler(via_drop, take_next, false);
+    pub fn wait_for_scheduler(&self, via_drop: bool, take_next: bool) -> (Result<ExecuteTimings>, Option<Box<dyn LikeScheduler>>) {
+        self.do_wait_for_scheduler(via_drop, take_next, false)
     }
 
     pub fn drop_from_scheduler_thread(self) {
