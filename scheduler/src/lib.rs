@@ -2210,6 +2210,13 @@ impl<T, B> Checkpoint<T, B> {
         }
     }
 
+    pub fn register_return_value(&self, restart_value: T) {
+        let mut g = self.0.lock().unwrap();
+        let (_, self_return_value, _) = &mut *g;
+        assert!(self_return_value.is_none());
+        *self_return_value = Some(restart_value);
+    }
+
     pub fn reduce_count(&self) {
         let current_thread_name = std::thread::current().name().unwrap().to_string();
         let mut g = self.0.lock().unwrap();
