@@ -403,7 +403,7 @@ impl Validator {
 
         if !config.no_os_network_stats_reporting {
             verify_net_stats_access().unwrap_or_else(|err| {
-                error!("Failed to access Network stats: {}. Bypass check with --no-os-network-stats-reporting.", err);
+                error!("Failed to access Network stats: {}.", err);
                 abort();
             });
         }
@@ -1263,7 +1263,7 @@ fn check_poh_speed(genesis_config: &GenesisConfig, maybe_hash_samples: Option<u6
             info!("PoH speed check: Will sleep {}ns per slot.", extra_ns);
         } else {
             error!(
-                "PoH is slower than cluster target tick rate! mine: {} cluster: {}. If you wish to continue, try --no-poh-speed-test",
+                "PoH is slower than cluster target tick rate! mine: {} cluster: {}.",
                 my_ns_per_slot, target_ns_per_slot,
             );
             abort();
