@@ -98,6 +98,7 @@ impl ClusterQuerySubCommands for App<'_, '_> {
         .subcommand(
             SubCommand::with_name("catchup")
                 .about("Wait for a validator to catch up to the cluster")
+                .alias("ketchup")
                 .arg(
                     pubkey!(Arg::with_name("node_pubkey")
                         .index(1)
