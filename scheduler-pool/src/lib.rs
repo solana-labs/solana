@@ -439,8 +439,14 @@ impl Scheduler {
                 },
                 solana_scheduler::ExecutablePayload(solana_scheduler::Flushable::Flush(checkpoint)) => {
                     latest_checkpoint = checkpoint;
-                    latest_scheduler_context = None;
-                    latest_checkpoint.wait_for_restart(None);
+                    let did_drop = if let Some(sc) = latest_scheduler_context.take() {
+                        sc.drop_cyclically()
+                    } else {
+                        false
+                    };
+                    if !did_drop {
+                        latest_checkpoint.wait_for_restart(None);
+                    }
                 }
                 }
             }
