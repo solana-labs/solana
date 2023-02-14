@@ -2179,7 +2179,7 @@ impl<T, B> Checkpoint<T, B> {
             *self_remaining_threads - 1
         );
 
-        *self_remaining_threads -= 1;
+        *self_remaining_threads.checked_sub(1).unwrap();
 
         if let Some(given_restart_value) = maybe_given_restart_value {
             assert!(self_return_value.is_none());
@@ -2271,17 +2271,15 @@ impl<T, B: Clone> Checkpoint<T, B> {
     }
 }
 
-use std::sync::Arc;
-
 impl<T, B: WithMode> Checkpoint<T, B> {
-    pub fn drop_cyclically(self: Arc<Self>) {
-        if let Ok(cp) = Arc::try_unwrap(self) {
-            let mut g = cp.0.lock().unwrap();
-            let (_, _, b) = &mut *g;
-            if let Some(sc) = b.take() {
-                sc.drop_cyclically();
-            }
+    pub fn drop_checkpoint_cyclically(self) -> bool {
+        let mut g = cp.0.lock().unwrap();
+        let (_, _, b) = &mut *g;
+        let mut did_dropped = false;
+        if let Some(sc) = b.take() {
+            did_droped = sc.drop_cyclically();
         }
+        did_dropped
     }
 }
 

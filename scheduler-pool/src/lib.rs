@@ -555,10 +555,14 @@ impl Scheduler {
                             (succeeded, skipped) = (0, 0);
                             latest_checkpoint = Some(checkpoint);
                             latest_checkpoint.as_ref().unwrap().register_return_value(std::mem::take(&mut cumulative_timings));
-                            if let Some(sc) = latest_scheduler_context.take() {
-                                sc.drop_cyclically();
+                            let did_drop = if let Some(sc) = latest_scheduler_context.take() {
+                                sc.drop_cyclically()
+                            } else {
+                                false
+                            };
+                            if !did_drop {
+                                latest_checkpoint.as_ref().unwrap().wait_for_restart(None);
                             }
-                            latest_checkpoint.as_ref().unwrap().wait_for_restart(None);
                         },
                     }
                 }
@@ -603,7 +607,7 @@ impl Scheduler {
 
                     if let Some(checkpoint) = maybe_checkpoint {
                         if let Some(cp) = latest_checkpoint.take() {
-                            cp.drop_cyclically();
+                            cp.drop_checkpoint_cyclically();
                         }
                         checkpoint.wait_for_restart(None);
                         latest_checkpoint = Some(checkpoint);

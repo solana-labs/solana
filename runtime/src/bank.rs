@@ -956,12 +956,16 @@ impl solana_scheduler::WithMode for SchedulerContext {
         self.mode
     }
 
-    fn drop_cyclically(mut self) {
+    fn drop_cyclically(mut self) -> bool {
+        let mut did_drop = false;
         if let Some(bank) = self.bank.take() {
             if let Ok(bank) = Arc::try_unwrap(bank) {
                 bank.drop_from_scheduler_thread();
+                did_drop = true;
             }
         }
+
+        did_drop
     }
 }
 
