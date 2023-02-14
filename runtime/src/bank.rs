@@ -955,6 +955,14 @@ impl solana_scheduler::WithMode for SchedulerContext {
     fn mode(&self) -> solana_scheduler::Mode {
         self.mode
     }
+
+    fn drop_cyclically(mut self) {
+        if let Some(bank) = self.bank.take() {
+            if let Ok(bank) = Arc::try_unwrap(bank) {
+                bank.drop_from_scheduler_thread();
+            }
+        }
+    }
 }
 
 impl SchedulerContext {
@@ -971,14 +979,6 @@ impl SchedulerContext {
 
     pub fn bank(&self) -> Option<&Arc<Bank>> {
         self.bank.as_ref()
-    }
-
-    pub fn drop_cyclically(mut self) {
-        if let Some(bank) = self.bank.take() {
-            if let Ok(bank) = Arc::try_unwrap(bank) {
-                bank.drop_from_scheduler_thread();
-            }
-        }
     }
 
     pub fn log_prefix(random_id: u64, context: Option<&Self>) -> String {
