@@ -102,7 +102,7 @@ impl AncientSlotInfos {
                 alive_bytes,
                 should_shrink,
             });
-            self.total_alive_bytes += alive_bytes;
+            saturating_add_assign!(self.total_alive_bytes, alive_bytes);
         }
     }
 
@@ -136,10 +136,10 @@ impl AncientSlotInfos {
         // shrink enough slots to write 'percent_of_alive_shrunk_data'% of the total alive data
         // from slots that exceeded the shrink threshold.
         // The goal is to limit overall i/o in this pass while making progress.
-        let threhold_bytes = self.total_alive_bytes_shrink * percent_of_alive_shrunk_data / 100;
+        let threshold_bytes = self.total_alive_bytes_shrink * percent_of_alive_shrunk_data / 100;
         for info_index in &self.shrink_indexes {
             let info = &mut self.all_infos[*info_index];
-            if bytes_to_shrink_due_to_ratio >= threhold_bytes {
+            if bytes_to_shrink_due_to_ratio >= threshold_bytes {
                 // we exceeded the amount to shrink due to alive ratio, so don't shrink this one just due to 'should_shrink'
                 // It MAY be shrunk based on total capacity still.
                 // Mark it as false for 'should_shrink' so it gets evaluated solely based on # of files.
@@ -681,7 +681,7 @@ pub enum StorageSelector {
 /// The accounts may have to be split between 2 storages (primary and overflow) if there is not enough room in the primary storage.
 /// The 'store' functions need data stored in a slice of specific type.
 /// We need 1-2 of these slices constructed based on available bytes and individual account sizes.
-/// The slice arithmetic accross both hashes and account data gets messy. So, this struct abstracts that.
+/// The slice arithmetic across both hashes and account data gets messy. So, this struct abstracts that.
 pub struct AccountsToStore<'a> {
     accounts: &'a [&'a StoredAccountMeta<'a>],
     /// if 'accounts' contains more items than can be contained in the primary storage, then we have to split these accounts.

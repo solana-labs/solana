@@ -1659,7 +1659,7 @@ impl SplitAncientStorages {
     }
 
     /// create once ancient slots have been identified
-    /// This is easier to test, removing SortedStorges as a type to deal with here.
+    /// This is easier to test, removing SortedStorages as a type to deal with here.
     fn new_with_ancient_info(
         range: &Range<Slot>,
         ancient_slots: Vec<Slot>,
@@ -7218,7 +7218,6 @@ impl AccountsDb {
         }
     }
 
-    #[allow(clippy::too_many_arguments)]
     fn calculate_accounts_hash_with_verify(
         &self,
         data_source: CalcAccountsHashDataSource,
