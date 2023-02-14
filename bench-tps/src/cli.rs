@@ -593,6 +593,10 @@ pub fn parse_args(matches: &ArgMatches) -> Result<Config, &'static str> {
 }
 
 mod tests {
+    // without it make_tmp_path is claimed to be dead
+    #![allow(dead_code)]
+    // without it read_keypair_file, write_keypair_file are claimed to be unused
+    #![allow(unused_imports)]
     use {
         super::*,
         solana_sdk::signature::{read_keypair_file, write_keypair_file, Keypair, Signer},
