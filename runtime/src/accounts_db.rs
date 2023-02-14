@@ -193,15 +193,22 @@ pub(crate) struct ShrinkCollectAliveSeparatedByRefs<'a> {
     pub(crate) many_refs: AliveAccounts<'a>,
 }
 
-/// Parameters for bank hash and total lamports verification
+/// Configuration Parameters for running bank hash and total lamports verification
 #[derive(Debug, Clone)]
 pub struct BankHashLamportsVerifyConfig<'a> {
+    /// bank ancestors
     pub ancestors: &'a Ancestors,
+    /// true to verify hash calculation
     pub test_hash_calculation: bool,
+    /// epoch_schedule
     pub epoch_schedule: &'a EpochSchedule,
+    /// rent_collector
     pub rent_collector: &'a RentCollector,
+    /// true to ignore mismatches
     pub ignore_mismatch: bool,
+    /// true to dump debug log if mismatch happens
     pub store_detailed_debug_info: bool,
+    /// true to use dedicated background thread pool for verification
     pub use_bg_thread_pool: bool,
 }
 
