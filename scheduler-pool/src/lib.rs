@@ -606,10 +606,15 @@ impl Scheduler {
                     );
 
                     if let Some(checkpoint) = maybe_checkpoint {
+                        let mut did_dropped = false;
                         if let Some(cp) = latest_checkpoint.take() {
-                            cp.drop_checkpoint_cyclically();
+                            if let Ok(cp) = Arc::try_unwrap(cp) {
+                                did_dropped = cp.drop_checkpoint_cyclically();
+                            }
                         }
-                        checkpoint.wait_for_restart(None);
+                        if !did_dropped {
+                            checkpoint.wait_for_restart(None);
+                        }
                         latest_checkpoint = Some(checkpoint);
                         continue;
                     } else {
