@@ -353,7 +353,6 @@ impl RepairService {
                     MAX_UNKNOWN_LAST_INDEX_REPAIRS,
                     MAX_CLOSEST_COMPLETION_REPAIRS,
                     &duplicate_slot_repair_statuses,
-                    timestamp(),
                     &mut repair_timing,
                     &mut best_repairs_stats,
                 );
@@ -530,7 +529,6 @@ impl RepairService {
         slot: Slot,
         slot_meta: &SlotMeta,
         max_repairs: usize,
-        now_timestamp: u64,
     ) -> Vec<ShredRepairType> {
         if max_repairs == 0 || slot_meta.is_full() {
             vec![]
@@ -543,8 +541,9 @@ impl RepairService {
                 .and_then(|shred| shred::layout::get_reference_tick(&shred).ok())
                 .map(u64::from)
             {
+                // System time is not monotonic
                 let ticks_since_first_insert = DEFAULT_TICKS_PER_SECOND
-                    * now_timestamp.saturating_sub(slot_meta.first_shred_timestamp)
+                    * timestamp().saturating_sub(slot_meta.first_shred_timestamp)
                     / 1_000;
                 if ticks_since_first_insert
                     < reference_tick.saturating_add(DEFER_REPAIR_THRESHOLD_TICKS)
@@ -557,7 +556,6 @@ impl RepairService {
             blockstore
                 .find_missing_data_indexes(
                     slot,
-                    now_timestamp,
                     slot_meta.first_shred_timestamp,
                     DEFER_REPAIR_THRESHOLD_TICKS,
                     slot_meta.consumed,
@@ -577,7 +575,6 @@ impl RepairService {
         max_repairs: usize,
         slot: Slot,
         duplicate_slot_repair_statuses: &impl Contains<'a, Slot>,
-        now_timestamp: u64,
     ) {
         let mut pending_slots = vec![slot];
         while repairs.len() < max_repairs && !pending_slots.is_empty() {
@@ -592,7 +589,6 @@ impl RepairService {
                     slot,
                     &slot_meta,
                     max_repairs - repairs.len(),
-                    now_timestamp,
                 );
                 repairs.extend(new_repairs);
                 let next_slots = slot_meta.next_slots;
@@ -609,7 +605,6 @@ impl RepairService {
         blockstore: &Blockstore,
         max_repairs: usize,
         repair_range: &RepairSlotRange,
-        now_timestamp: u64,
     ) -> crate::result::Result<Vec<ShredRepairType>> {
         // Slot height and shred indexes for shreds we want to repair
         let mut repairs: Vec<ShredRepairType> = vec![];
@@ -631,7 +626,6 @@ impl RepairService {
                 slot,
                 &meta,
                 max_repairs - repairs.len(),
-                now_timestamp,
             );
             repairs.extend(new_repairs);
         }
@@ -654,7 +648,6 @@ impl RepairService {
                     slot,
                     &slot_meta,
                     MAX_REPAIR_PER_DUPLICATE,
-                    timestamp(),
                 ))
             }
         } else {
@@ -795,9 +788,11 @@ impl RepairService {
 }
 
 #[cfg(test)]
-pub(crate) fn post_shred_deferment_timestamp() -> u64 {
-    // adjust timestamp to bypass shred deferment window
-    timestamp() + DEFAULT_MS_PER_SLOT + DEFER_REPAIR_THRESHOLD.as_millis() as u64
+pub(crate) fn sleep_shred_deferment_period() {
+    // sleep to bypass shred deferment window
+    sleep(Duration::from_millis(
+        DEFAULT_MS_PER_SLOT + DEFER_REPAIR_THRESHOLD.as_millis() as u64,
+    ));
 }
 
 #[cfg(test)]
@@ -850,7 +845,6 @@ mod test {
                     MAX_UNKNOWN_LAST_INDEX_REPAIRS,
                     MAX_CLOSEST_COMPLETION_REPAIRS,
                     &HashSet::default(),
-                    timestamp(),
                     &mut RepairTiming::default(),
                     &mut BestRepairsStats::default(),
                 ),
@@ -888,7 +882,6 @@ mod test {
                     MAX_UNKNOWN_LAST_INDEX_REPAIRS,
                     MAX_CLOSEST_COMPLETION_REPAIRS,
                     &HashSet::default(),
-                    timestamp(),
                     &mut RepairTiming::default(),
                     &mut BestRepairsStats::default(),
                 ),
@@ -939,6 +932,7 @@ mod test {
                 .collect();
 
             let mut repair_weight = RepairWeight::new(0);
+            sleep_shred_deferment_period();
             assert_eq!(
                 repair_weight.get_best_weighted_repairs(
                     &blockstore,
@@ -949,7 +943,6 @@ mod test {
                     MAX_UNKNOWN_LAST_INDEX_REPAIRS,
                     MAX_CLOSEST_COMPLETION_REPAIRS,
                     &HashSet::default(),
-                    post_shred_deferment_timestamp(),
                     &mut RepairTiming::default(),
                     &mut BestRepairsStats::default(),
                 ),
@@ -966,7 +959,6 @@ mod test {
                     MAX_UNKNOWN_LAST_INDEX_REPAIRS,
                     MAX_CLOSEST_COMPLETION_REPAIRS,
                     &HashSet::default(),
-                    post_shred_deferment_timestamp(),
                     &mut RepairTiming::default(),
                     &mut BestRepairsStats::default(),
                 )[..],
@@ -1002,6 +994,7 @@ mod test {
             let expected: Vec<ShredRepairType> =
                 vec![ShredRepairType::HighestShred(0, num_shreds_per_slot - 1)];
 
+            sleep_shred_deferment_period();
             let mut repair_weight = RepairWeight::new(0);
             assert_eq!(
                 repair_weight.get_best_weighted_repairs(
@@ -1013,7 +1006,6 @@ mod test {
                     MAX_UNKNOWN_LAST_INDEX_REPAIRS,
                     MAX_CLOSEST_COMPLETION_REPAIRS,
                     &HashSet::default(),
-                    post_shred_deferment_timestamp(),
                     &mut RepairTiming::default(),
                     &mut BestRepairsStats::default(),
                 ),
@@ -1057,12 +1049,12 @@ mod test {
                         })
                         .collect();
 
+                    sleep_shred_deferment_period();
                     assert_eq!(
                         RepairService::generate_repairs_in_range(
                             &blockstore,
                             std::usize::MAX,
                             &repair_slot_range,
-                            post_shred_deferment_timestamp(),
                         )
                         .unwrap(),
                         expected
@@ -1111,7 +1103,6 @@ mod test {
                     &blockstore,
                     std::usize::MAX,
                     &repair_slot_range,
-                    timestamp(),
                 )
                 .unwrap(),
                 expected
