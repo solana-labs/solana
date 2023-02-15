@@ -1,6 +1,6 @@
 #![allow(clippy::integer_arithmetic)]
 use {
-    crate::{bigtable::*, ledger_path::*, output::*},
+    crate::{accounts::*, bigtable::*, ledger_path::*, output::*, utils::*},
     chrono::{DateTime, Utc},
     clap::{
         crate_description, crate_name, value_t, value_t_or_exit, values_t_or_exit, App,
@@ -11,12 +11,9 @@ use {
     itertools::Itertools,
     log::*,
     regex::Regex,
-    serde::{
-        ser::{SerializeSeq, Serializer},
-        Serialize,
-    },
+    serde::Serialize,
     serde_json::json,
-    solana_account_decoder::{UiAccount, UiAccountData, UiAccountEncoding},
+    solana_account_decoder::UiAccountEncoding,
     solana_clap_utils::{
         hidden_unless_forced,
         input_parsers::{cluster_type_of, pubkey_of, pubkeys_of},
@@ -24,7 +21,7 @@ use {
             is_parsable, is_pow2, is_pubkey, is_pubkey_or_keypair, is_slot, is_valid_percentage,
         },
     },
-    solana_cli_output::{CliAccount, CliAccountNewConfig, OutputFormat},
+    solana_cli_output::OutputFormat,
     solana_core::{
         system_monitor_service::{SystemMonitorService, SystemMonitorStatsReportConfig},
         validator::BlockVerificationMethod,
@@ -34,11 +31,11 @@ use {
     solana_ledger::{
         ancestor_iterator::AncestorIterator,
         bank_forks_utils,
-        blockstore::{create_new_ledger, Blockstore, BlockstoreError, PurgeType},
+        blockstore::{create_new_ledger, Blockstore, PurgeType},
         blockstore_db::{self, columns as cf, Column, ColumnName, Database},
         blockstore_options::{
             AccessType, BlockstoreOptions, BlockstoreRecoveryMode, LedgerColumnOptions,
-            ShredStorageType, BLOCKSTORE_DIRECTORY_ROCKS_FIFO,
+            BLOCKSTORE_DIRECTORY_ROCKS_FIFO,
         },
         blockstore_processor::{
             self, BlockstoreProcessorError, ProcessOptions, TransactionStatusSender,
@@ -51,21 +48,18 @@ use {
         transaction_status_service::TransactionStatusService,
     },
     solana_runtime::{
-        accounts::Accounts,
         accounts_background_service::{
             AbsRequestHandlers, AbsRequestSender, AccountsBackgroundService,
             PrunedBanksRequestHandler, SnapshotRequestHandler,
         },
-        accounts_db::{
-            AccountsDb, AccountsDbConfig, CalcAccountsHashDataSource, FillerAccountsConfig,
-        },
-        accounts_index::{AccountsIndexConfig, IndexLimitMb, ScanConfig},
+        accounts_db::CalcAccountsHashDataSource,
+        accounts_index::ScanConfig,
         accounts_update_notifier_interface::AccountsUpdateNotifier,
-        bank::{Bank, RewardCalculationEvent, TotalAccountsStats},
+        bank::{Bank, RewardCalculationEvent},
         bank_forks::BankForks,
         cost_model::CostModel,
         cost_tracker::CostTracker,
-        hardened_unpack::{open_genesis_config, MAX_GENESIS_ARCHIVE_UNPACKED_SIZE},
+        hardened_unpack::MAX_GENESIS_ARCHIVE_UNPACKED_SIZE,
         runtime_config::RuntimeConfig,
         snapshot_archive_info::SnapshotArchiveInfoGetter,
         snapshot_config::SnapshotConfig,
@@ -117,9 +111,11 @@ use {
     },
 };
 
+mod accounts;
 mod bigtable;
 mod ledger_path;
 mod output;
+mod utils;
 
 #[derive(PartialEq, Eq)]
 enum LedgerOutputMethod {
@@ -375,44 +371,6 @@ fn output_sorted_program_ids(program_ids: HashMap<Pubkey, u64>) {
     program_ids_array.sort_by(|a, b| b.1.cmp(&a.1));
     for (program_id, count) in program_ids_array.iter() {
         println!("{:<44}: {}", program_id.to_string(), count);
-    }
-}
-
-fn output_account(
-    pubkey: &Pubkey,
-    account: &AccountSharedData,
-    modified_slot: Option<Slot>,
-    print_account_data: bool,
-    encoding: UiAccountEncoding,
-) {
-    println!("{pubkey}:");
-    println!("  balance: {} SOL", lamports_to_sol(account.lamports()));
-    println!("  owner: '{}'", account.owner());
-    println!("  executable: {}", account.executable());
-    if let Some(slot) = modified_slot {
-        println!("  slot: {slot}");
-    }
-    println!("  rent_epoch: {}", account.rent_epoch());
-    println!("  data_len: {}", account.data().len());
-    if print_account_data {
-        let account_data = UiAccount::encode(pubkey, account, encoding, None, None).data;
-        match account_data {
-            UiAccountData::Binary(data, data_encoding) => {
-                println!("  data: '{data}'");
-                println!(
-                    "  encoding: {}",
-                    serde_json::to_string(&data_encoding).unwrap()
-                );
-            }
-            UiAccountData::Json(account_data) => {
-                println!(
-                    "  data: '{}'",
-                    serde_json::to_string(&account_data).unwrap()
-                );
-                println!("  encoding: \"jsonParsed\"");
-            }
-            UiAccountData::LegacyBinary(_) => {}
-        };
     }
 }
 
@@ -841,121 +799,6 @@ fn analyze_storage(database: &Database) {
     analyze_column::<OptimisticSlots>(database, "OptimisticSlots");
 }
 
-/// Open blockstore with temporary primary access to allow necessary,
-/// persistent changes to be made to the blockstore (such as creation of new
-/// column family(s)). Then, continue opening with `original_access_type`
-fn open_blockstore_with_temporary_primary_access(
-    ledger_path: &Path,
-    original_access_type: AccessType,
-    wal_recovery_mode: Option<BlockstoreRecoveryMode>,
-) -> Result<Blockstore, BlockstoreError> {
-    // Open with Primary will allow any configuration that automatically
-    // updates to take effect
-    info!("Attempting to temporarily open blockstore with Primary access in order to update");
-    {
-        let _ = Blockstore::open_with_options(
-            ledger_path,
-            BlockstoreOptions {
-                access_type: AccessType::PrimaryForMaintenance,
-                recovery_mode: wal_recovery_mode.clone(),
-                enforce_ulimit_nofile: true,
-                ..BlockstoreOptions::default()
-            },
-        )?;
-    }
-    // Now, attempt to open the blockstore with original AccessType
-    info!(
-        "Blockstore forced open succeeded, retrying with original access: {:?}",
-        original_access_type
-    );
-    Blockstore::open_with_options(
-        ledger_path,
-        BlockstoreOptions {
-            access_type: original_access_type,
-            recovery_mode: wal_recovery_mode,
-            enforce_ulimit_nofile: true,
-            ..BlockstoreOptions::default()
-        },
-    )
-}
-
-fn get_shred_storage_type(ledger_path: &Path, message: &str) -> ShredStorageType {
-    // TODO: the following shred_storage_type inference must be updated once
-    // the rocksdb options can be constructed via load_options_file() as the
-    // value picked by passing None for `max_shred_storage_size` could affect
-    // the persisted rocksdb options file.
-    match ShredStorageType::from_ledger_path(ledger_path, None) {
-        Some(s) => s,
-        None => {
-            info!("{}", message);
-            ShredStorageType::RocksLevel
-        }
-    }
-}
-
-fn open_blockstore(
-    ledger_path: &Path,
-    access_type: AccessType,
-    wal_recovery_mode: Option<BlockstoreRecoveryMode>,
-    force_update_to_open: bool,
-) -> Blockstore {
-    let shred_storage_type = get_shred_storage_type(
-        ledger_path,
-        &format!(
-            "Shred stroage type cannot be inferred for ledger at {ledger_path:?}, \
-         using default RocksLevel",
-        ),
-    );
-
-    match Blockstore::open_with_options(
-        ledger_path,
-        BlockstoreOptions {
-            access_type: access_type.clone(),
-            recovery_mode: wal_recovery_mode.clone(),
-            enforce_ulimit_nofile: true,
-            column_options: LedgerColumnOptions {
-                shred_storage_type,
-                ..LedgerColumnOptions::default()
-            },
-        },
-    ) {
-        Ok(blockstore) => blockstore,
-        Err(BlockstoreError::RocksDb(err))
-            if (err
-                .to_string()
-                // Missing column family
-                .starts_with("Invalid argument: Column family not found:")
-                || err
-                    .to_string()
-                    // Missing essential file, indicative of blockstore not existing
-                    .starts_with("IO error: No such file or directory:"))
-                && access_type == AccessType::Secondary =>
-        {
-            error!("Blockstore is incompatible with current software and requires updates");
-            if !force_update_to_open {
-                error!("Use --force-update-to-open to allow blockstore to update");
-                exit(1);
-            }
-            open_blockstore_with_temporary_primary_access(
-                ledger_path,
-                access_type,
-                wal_recovery_mode,
-            )
-            .unwrap_or_else(|err| {
-                error!(
-                    "Failed to open blockstore (with --force-update-to-open) at {:?}: {:?}",
-                    ledger_path, err
-                );
-                exit(1);
-            })
-        }
-        Err(err) => {
-            eprintln!("Failed to open blockstore at {ledger_path:?}: {err:?}");
-            exit(1);
-        }
-    }
-}
-
 fn raw_key_to_slot(key: &[u8], column_name: &str) -> Option<Slot> {
     match column_name {
         cf::SlotMeta::NAME => Some(cf::SlotMeta::slot(cf::SlotMeta::index(key))),
@@ -1029,52 +872,6 @@ fn hardforks_of(matches: &ArgMatches<'_>, name: &str) -> Option<Vec<Slot>> {
         Some(values_t_or_exit!(matches, name, Slot))
     } else {
         None
-    }
-}
-
-// Build an `AccountsDbConfig` from subcommand arguments. All of the arguments
-// matched by this functional are either optional or have a default value.
-// Thus, a subcommand need not support all of the arguments that are matched
-// by this function.
-fn get_accounts_db_config(ledger_path: &Path, arg_matches: &ArgMatches<'_>) -> AccountsDbConfig {
-    let accounts_index_bins = value_t!(arg_matches, "accounts_index_bins", usize).ok();
-    let accounts_index_index_limit_mb =
-        if let Some(limit) = value_t!(arg_matches, "accounts_index_memory_limit_mb", usize).ok() {
-            IndexLimitMb::Limit(limit)
-        } else if arg_matches.is_present("disable_accounts_disk_index") {
-            IndexLimitMb::InMemOnly
-        } else {
-            IndexLimitMb::Unspecified
-        };
-    let accounts_index_drives: Vec<PathBuf> = if arg_matches.is_present("accounts_index_path") {
-        values_t_or_exit!(arg_matches, "accounts_index_path", String)
-            .into_iter()
-            .map(PathBuf::from)
-            .collect()
-    } else {
-        vec![ledger_path.join("accounts_index.ledger-tool")]
-    };
-    let accounts_index_config = AccountsIndexConfig {
-        bins: accounts_index_bins,
-        index_limit_mb: accounts_index_index_limit_mb,
-        drives: Some(accounts_index_drives),
-        ..AccountsIndexConfig::default()
-    };
-
-    let filler_accounts_config = FillerAccountsConfig {
-        count: value_t!(arg_matches, "accounts_filler_count", usize).unwrap_or(0),
-        size: value_t!(arg_matches, "accounts_filler_size", usize).unwrap_or(0),
-    };
-
-    AccountsDbConfig {
-        index: Some(accounts_index_config),
-        accounts_hash_cache_path: Some(ledger_path.join(AccountsDb::ACCOUNTS_HASH_CACHE_DIR)),
-        filler_accounts_config,
-        ancient_append_vec_offset: value_t!(arg_matches, "accounts_db_ancient_append_vecs", i64)
-            .ok(),
-        exhaustively_verify_refcounts: arg_matches.is_present("accounts_db_verify_refcounts"),
-        skip_initial_hash_calc: arg_matches.is_present("accounts_db_skip_initial_hash_calculation"),
-        ..AccountsDbConfig::default()
     }
 }
 
@@ -1384,12 +1181,6 @@ fn compute_slot_cost(blockstore: &Blockstore, slot: Slot) -> Result<(), String> 
     println!("  Programs: {program_ids:?}");
 
     Ok(())
-}
-
-fn open_genesis_config_by(ledger_path: &Path, matches: &ArgMatches<'_>) -> GenesisConfig {
-    let max_genesis_archive_unpacked_size =
-        value_t_or_exit!(matches, "max_genesis_archive_unpacked_size", u64);
-    open_genesis_config(ledger_path, max_genesis_archive_unpacked_size)
 }
 
 /// Finds the accounts needed to replay slots `snapshot_slot` to `ending_slot`.
@@ -1737,6 +1528,19 @@ fn main() {
                 .takes_value(false)
                 .help("Show additional information where supported"),
         )
+        .accounts_subcommand(
+            &account_paths_arg,
+            &accounts_data_encoding_arg,
+            &accounts_db_skip_initial_hash_calc_arg,
+            &accounts_index_bins,
+            &accounts_index_limit,
+            &accountsdb_verify_refcounts,
+            &disable_disk_index,
+            &geyser_plugin_args,
+            &halt_at_slot_arg,
+            &hard_forks_arg,
+            &max_genesis_archive_unpacked_size_arg,
+            &no_snapshot_arg)
         .bigtable_subcommand()
         .subcommand(
             SubCommand::with_name("print")
@@ -2208,38 +2012,6 @@ fn main() {
                     .conflicts_with("no_snapshot")
             )
         ).subcommand(
-            SubCommand::with_name("accounts")
-            .about("Print account stats and contents after processing the ledger")
-            .arg(&no_snapshot_arg)
-            .arg(&account_paths_arg)
-            .arg(&accounts_index_bins)
-            .arg(&accounts_index_limit)
-            .arg(&disable_disk_index)
-            .arg(&accountsdb_verify_refcounts)
-            .arg(&accounts_db_skip_initial_hash_calc_arg)
-            .arg(&halt_at_slot_arg)
-            .arg(&hard_forks_arg)
-            .arg(&geyser_plugin_args)
-            .arg(&accounts_data_encoding_arg)
-            .arg(
-                Arg::with_name("include_sysvars")
-                    .long("include-sysvars")
-                    .takes_value(false)
-                    .help("Include sysvars too"),
-            )
-            .arg(
-                Arg::with_name("no_account_contents")
-                    .long("no-account-contents")
-                    .takes_value(false)
-                    .help("Do not print contents of each account, which is very slow with lots of accounts."),
-            )
-            .arg(Arg::with_name("no_account_data")
-                .long("no-account-data")
-                .takes_value(false)
-                .help("Do not print account data when printing account contents."),
-            )
-            .arg(&max_genesis_archive_unpacked_size_arg)
-        ).subcommand(
             SubCommand::with_name("capitalization")
             .about("Print capitalization (aka, total supply) while checksumming it")
             .arg(&no_snapshot_arg)
@@ -2484,6 +2256,15 @@ fn main() {
 
     if let ("bigtable", Some(arg_matches)) = matches.subcommand() {
         bigtable_process_command(&ledger_path, arg_matches)
+    } else if let ("accounts", Some(arg_matches)) = matches.subcommand() {
+        accounts_process_command(
+            &ledger_path,
+            force_update_to_open,
+            wal_recovery_mode,
+            snapshot_archive_path,
+            incremental_snapshot_archive_path,
+            arg_matches,
+        )
     } else {
         let ledger_path = canonicalize_ledger_path(&ledger_path);
 
@@ -3517,96 +3298,6 @@ fn main() {
                         eprintln!("Failed to load ledger: {err:?}");
                         exit(1);
                     }
-                }
-            }
-            ("accounts", Some(arg_matches)) => {
-                let halt_at_slot = value_t!(arg_matches, "halt_at_slot", Slot).ok();
-                let process_options = ProcessOptions {
-                    new_hard_forks: hardforks_of(arg_matches, "hard_forks"),
-                    halt_at_slot,
-                    run_verification: false,
-                    accounts_db_config: Some(get_accounts_db_config(&ledger_path, arg_matches)),
-                    ..ProcessOptions::default()
-                };
-                let genesis_config = open_genesis_config_by(&ledger_path, arg_matches);
-                let include_sysvars = arg_matches.is_present("include_sysvars");
-                let blockstore = open_blockstore(
-                    &ledger_path,
-                    AccessType::Secondary,
-                    wal_recovery_mode,
-                    force_update_to_open,
-                );
-                let (bank_forks, ..) = load_bank_forks(
-                    arg_matches,
-                    &genesis_config,
-                    Arc::new(blockstore),
-                    process_options,
-                    snapshot_archive_path,
-                    incremental_snapshot_archive_path,
-                )
-                .unwrap_or_else(|err| {
-                    eprintln!("Failed to load ledger: {err:?}");
-                    exit(1);
-                });
-
-                let bank = bank_forks.read().unwrap().working_bank();
-                let mut serializer = serde_json::Serializer::new(stdout());
-                let (summarize, mut json_serializer) =
-                    match OutputFormat::from_matches(arg_matches, "output_format", false) {
-                        OutputFormat::Json | OutputFormat::JsonCompact => {
-                            (false, Some(serializer.serialize_seq(None).unwrap()))
-                        }
-                        _ => (true, None),
-                    };
-                let mut total_accounts_stats = TotalAccountsStats::default();
-                let rent_collector = bank.rent_collector();
-                let print_account_contents = !arg_matches.is_present("no_account_contents");
-                let print_account_data = !arg_matches.is_present("no_account_data");
-                let data_encoding = parse_encoding_format(arg_matches);
-                let cli_account_new_config = CliAccountNewConfig {
-                    data_encoding,
-                    ..CliAccountNewConfig::default()
-                };
-                let scan_func = |some_account_tuple: Option<(&Pubkey, AccountSharedData, Slot)>| {
-                    if let Some((pubkey, account, slot)) = some_account_tuple
-                        .filter(|(_, account, _)| Accounts::is_loadable(account.lamports()))
-                    {
-                        if !include_sysvars && solana_sdk::sysvar::is_sysvar_id(pubkey) {
-                            return;
-                        }
-
-                        total_accounts_stats.accumulate_account(pubkey, &account, rent_collector);
-
-                        if print_account_contents {
-                            if let Some(json_serializer) = json_serializer.as_mut() {
-                                let cli_account = CliAccount::new_with_config(
-                                    pubkey,
-                                    &account,
-                                    &cli_account_new_config,
-                                );
-                                json_serializer.serialize_element(&cli_account).unwrap();
-                            } else {
-                                output_account(
-                                    pubkey,
-                                    &account,
-                                    Some(slot),
-                                    print_account_data,
-                                    data_encoding,
-                                );
-                            }
-                        }
-                    }
-                };
-                let mut measure = Measure::start("scanning accounts");
-                bank.scan_all_accounts_with_modified_slots(scan_func)
-                    .unwrap();
-                measure.stop();
-                info!("{}", measure);
-                if let Some(json_serializer) = json_serializer {
-                    json_serializer.end().unwrap();
-                }
-                if summarize {
-                    println!("\n{total_accounts_stats:#?}");
                 }
             }
             ("capitalization", Some(arg_matches)) => {
