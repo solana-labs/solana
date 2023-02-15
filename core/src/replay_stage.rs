@@ -3068,33 +3068,45 @@ impl ReplayStage {
                 fork_choice,
             );
 
-            let mut last_vote_unable_to_land = false;
-            if let Some(heaviest_bank_on_same_voted_fork) = heaviest_bank_on_same_voted_fork {
-                if let Some(last_voted_slot) = tower.last_voted_slot() {
-                    if let Some(my_latest_landed_vote) =
-                        progress.my_latest_landed_vote(heaviest_bank_on_same_voted_fork.slot())
-                    {
-                        last_vote_unable_to_land = my_latest_landed_vote < last_voted_slot
-                            && last_voted_slot < heaviest_bank_on_same_voted_fork.slot()
-                            && !heaviest_bank_on_same_voted_fork
-                                .is_in_slot_hashes_history(&last_voted_slot)
-                    }
-                }
-            }
-
             match switch_fork_decision {
                 SwitchForkDecision::FailedSwitchThreshold(switch_proof_stake, total_stake) => {
                     let reset_bank = heaviest_bank_on_same_voted_fork;
-                    // Check if the slot is inside SlotHashes history of the tip of the fork. If not, then
-                    // this vote will not do anything, we should vote on the tip of the fork instead.
-                    if last_vote_unable_to_land && reset_bank.is_some() {
-                        // If we can't switch, our last vote was on a non-duplicate/confirmed slot, but it is
-                        // now outside slothash, it means we haven't voted for a while, and there was no hope
-                        // of this last vote ever landing again.
+                    let last_vote_unable_to_land = match heaviest_bank_on_same_voted_fork {
+                        Some(heaviest_bank_on_same_voted_fork) => {
+                            match tower.last_voted_slot() {
+                                Some(last_voted_slot) => {
+                                    match progress.my_latest_landed_vote(
+                                        heaviest_bank_on_same_voted_fork.slot(),
+                                    ) {
+                                        Some(my_latest_landed_vote) =>
+                                        // Last vote did not land
+                                        {
+                                            my_latest_landed_vote < last_voted_slot
+                                                // If we are already voting at the tip, there is nothing we can do.
+                                                && last_voted_slot < heaviest_bank_on_same_voted_fork.slot()
+                                                // Last vote outside slot hashes of the tip of fork
+                                                && !heaviest_bank_on_same_voted_fork
+                                                    .is_in_slot_hashes_history(&last_voted_slot)
+                                        }
+                                        None => false,
+                                    }
+                                }
+                                None => false,
+                            }
+                        }
+                        None => false,
+                    };
 
-                        // We still do not want to reset to the heaviest fork per reason below, but we do want
-                        // to register our vote on the current fork, so we choose to vote at the tip of current
-                        // fork instead. This means longer lockout, but it might be enough to get majority vote.
+                    if last_vote_unable_to_land {
+                        // If we reach here, these assumptions are true:
+                        // 1. We can't switch because of threshold
+                        // 2. Our last vote was on a non-duplicate/confirmed slot
+                        // 3. Our last vote is now outside slot hashes history of the tip of fork
+                        // So, there was no hope of this last vote ever landing again.
+
+                        // In this case, we do want to obey threshold, yet try to register our vote on
+                        // the current fork, so we choose to vote at the tip of current fork instead.
+                        // This means longer lockout, but it might be enough to get majority vote.
                         reset_bank.map(|b| (b, SwitchForkDecision::SameFork))
                     } else {
                         // If we can't switch and our last vote was on a non-duplicate/confirmed slot, then
@@ -7031,9 +7043,10 @@ pub(crate) mod tests {
         );
         assert_eq!(tower.last_voted_slot(), Some(last_voted_slot));
         assert_eq!(progress.my_latest_landed_vote(tip_of_voted_fork), Some(0));
+        let other_fork_bank = &bank_forks.read().unwrap().get(other_fork_slot).unwrap();
         let SelectVoteAndResetForkResult { vote_bank, .. } =
             ReplayStage::select_vote_and_reset_forks(
-                &bank_forks.read().unwrap().get(other_fork_slot).unwrap(),
+                other_fork_bank,
                 Some(&new_bank),
                 &bank_forks.read().unwrap().ancestors(),
                 &bank_forks.read().unwrap().descendants(),
@@ -7044,6 +7057,56 @@ pub(crate) mod tests {
             );
         assert!(vote_bank.is_some());
         assert_eq!(vote_bank.unwrap().0.slot(), tip_of_voted_fork);
+
+        // If last vote is already equal to heaviest_bank_on_same_voted_fork,
+        // we should not vote.
+        let last_voted_bank = &bank_forks.read().unwrap().get(last_voted_slot).unwrap();
+        let SelectVoteAndResetForkResult { vote_bank, .. } =
+            ReplayStage::select_vote_and_reset_forks(
+                other_fork_bank,
+                Some(last_voted_bank),
+                &bank_forks.read().unwrap().ancestors(),
+                &bank_forks.read().unwrap().descendants(),
+                &progress,
+                &mut tower,
+                &latest_validator_votes_for_frozen_banks,
+                &heaviest_subtree_fork_choice,
+            );
+        assert!(vote_bank.is_none());
+
+        // If last vote is still inside slot hashes history of heaviest_bank_on_same_voted_fork,
+        // we should not vote.
+        let last_voted_bank_plus_1 = &bank_forks.read().unwrap().get(last_voted_slot + 1).unwrap();
+        let SelectVoteAndResetForkResult { vote_bank, .. } =
+            ReplayStage::select_vote_and_reset_forks(
+                other_fork_bank,
+                Some(last_voted_bank_plus_1),
+                &bank_forks.read().unwrap().ancestors(),
+                &bank_forks.read().unwrap().descendants(),
+                &progress,
+                &mut tower,
+                &latest_validator_votes_for_frozen_banks,
+                &heaviest_subtree_fork_choice,
+            );
+        assert!(vote_bank.is_none());
+
+        // create a new bank and make last_voted_slot land, we should not vote.
+        progress
+            .entry(new_bank.slot())
+            .and_modify(|s| s.fork_stats.my_latest_landed_vote = Some(last_voted_slot));
+        assert!(!new_bank.is_in_slot_hashes_history(&last_voted_slot));
+        let SelectVoteAndResetForkResult { vote_bank, .. } =
+            ReplayStage::select_vote_and_reset_forks(
+                other_fork_bank,
+                Some(&new_bank),
+                &bank_forks.read().unwrap().ancestors(),
+                &bank_forks.read().unwrap().descendants(),
+                &progress,
+                &mut tower,
+                &latest_validator_votes_for_frozen_banks,
+                &heaviest_subtree_fork_choice,
+            );
+        assert!(vote_bank.is_none());
     }
 
     #[test]
