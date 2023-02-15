@@ -21,11 +21,11 @@ Returns a list of confirmed blocks between two slots
 ### Parameters:
 
 <Parameter type={"u64"} required={true}>
-  end_slot, as <code>u64</code> integer
+  start_slot, as <code>u64</code> integer
 </Parameter>
 
 <Parameter type={"u64"} optional={true}>
-  start_slot, as <code>u64</code> integer (must be no more than 500,000 blocks
+  end_slot, as <code>u64</code> integer (must be no more than 500,000 blocks
   higher than the `start_slot`)
 </Parameter>
 
