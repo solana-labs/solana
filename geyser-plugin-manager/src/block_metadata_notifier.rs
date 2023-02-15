@@ -40,6 +40,7 @@ impl BlockMetadataNotifier for BlockMetadataNotifierImpl {
             let block_info =
                 Self::build_replica_block_info(slot, blockhash, &rewards, block_time, block_height);
             let block_info = ReplicaBlockInfoVersions::V0_0_1(&block_info);
+            let mut plugin = plugin.write().unwrap();
             match plugin.notify_block_metadata(block_info) {
                 Err(err) => {
                     error!(

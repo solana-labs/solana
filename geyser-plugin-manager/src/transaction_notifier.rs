@@ -45,6 +45,8 @@ impl TransactionNotifier for TransactionNotifierImpl {
         }
 
         for plugin in plugin_manager.plugins.iter_mut() {
+            let mut plugin = plugin.write().unwrap();
+
             if !plugin.transaction_notifications_enabled() {
                 continue;
             }

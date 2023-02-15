@@ -73,6 +73,7 @@ impl AccountsUpdateNotifierInterface for AccountsUpdateNotifierImpl {
 
         for plugin in plugin_manager.plugins.iter_mut() {
             let mut measure = Measure::start("geyser-plugin-end-of-restore-from-snapshot");
+            let mut plugin = plugin.write().unwrap();
             match plugin.notify_end_of_startup() {
                 Err(err) => {
                     error!(
@@ -150,6 +151,7 @@ impl AccountsUpdateNotifierImpl {
         }
         for plugin in plugin_manager.plugins.iter_mut() {
             let mut measure = Measure::start("geyser-plugin-update-account");
+            let mut plugin = plugin.write().unwrap();
             match plugin.update_account(
                 ReplicaAccountInfoVersions::V0_0_2(&account),
                 slot,

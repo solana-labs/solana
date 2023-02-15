@@ -52,6 +52,7 @@ impl SlotStatusNotifierImpl {
 
         for plugin in plugin_manager.plugins.iter_mut() {
             let mut measure = Measure::start("geyser-plugin-update-slot");
+            let mut plugin = plugin.write().unwrap();
             match plugin.update_slot_status(slot, parent, slot_status) {
                 Err(err) => {
                     error!(
