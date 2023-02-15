@@ -114,7 +114,7 @@ command_step() {
     timeout_in_minutes: $3
     artifact_paths: "log-*.txt"
     agents:
-      queue: "solana"
+      queue: "${4:-solana}"
 EOF
 }
 
@@ -139,7 +139,7 @@ wait_step() {
 }
 
 all_test_steps() {
-  command_step checks ". ci/rust-version.sh; ci/docker-run.sh \$\$rust_nightly_docker_image ci/test-checks.sh" 20
+  command_step checks ". ci/rust-version.sh; ci/docker-run.sh \$\$rust_nightly_docker_image ci/test-checks.sh" 20 check
   wait_step
 
   # Coverage...
@@ -308,12 +308,12 @@ EOF
 }
 
 pull_or_push_steps() {
-  command_step sanity "ci/test-sanity.sh" 5
+  command_step sanity "ci/test-sanity.sh" 5 check
   wait_step
 
   # Check for any .sh file changes
   if affects .sh$; then
-    command_step shellcheck "ci/shellcheck.sh" 5
+    command_step shellcheck "ci/shellcheck.sh" 5 check
     wait_step
   fi
 
