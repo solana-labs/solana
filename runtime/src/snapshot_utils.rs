@@ -2643,7 +2643,6 @@ mod tests {
         assert_matches::assert_matches,
         bincode::{deserialize_from, serialize_into},
         solana_sdk::{
-            account::AccountSharedData,
             genesis_config::create_genesis_config,
             native_token::sol_to_lamports,
             signature::{Keypair, Signer},
@@ -4440,33 +4439,24 @@ mod tests {
     #[test]
     fn test_get_snapshot_accounts_hardlink_dir() {
         solana_logger::setup();
-        let genesis_config = GenesisConfig::default();
-        let bank = Bank::new_for_tests(&genesis_config);
-        let db = &bank.accounts().accounts_db;
-        let slot = bank.slot();
 
-        let key = Pubkey::default();
-        let account = AccountSharedData::new(1, 0, &key);
+        let slot: Slot = 1;
 
-        db.store_for_tests(slot, &[(&key, &account)]);
-        db.add_root_and_flush_write_cache(slot);
-
-        let storages = bank.get_snapshot_storages(None);
-        let appendvec0 = storages.first().unwrap();
-
-        let appendvec_path = appendvec0.get_path();
-
-        let mut account_paths: HashSet<PathBuf> = HashSet::new();
+        let mut account_paths_set: HashSet<PathBuf> = HashSet::new();
 
         let bank_snapshots_dir_tmp = tempfile::TempDir::new().unwrap();
         let bank_snapshot_dir = bank_snapshots_dir_tmp.path().join(slot.to_string());
         let accounts_hardlinks_dir = bank_snapshot_dir.join("accounts_hardlinks");
         fs::create_dir_all(&accounts_hardlinks_dir).unwrap();
 
+        let (_tmp_dir, accounts_dir) = create_tmp_accounts_dir_for_tests();
+        let appendvec_filename = format!("{slot}.0");
+        let appendvec_path = accounts_dir.join(appendvec_filename);
+
         let ret = get_snapshot_accounts_hardlink_dir(
             &appendvec_path,
             slot,
-            &mut account_paths,
+            &mut account_paths_set,
             &accounts_hardlinks_dir,
         );
         assert!(ret.is_ok());
@@ -4480,9 +4470,10 @@ mod tests {
         let ret = get_snapshot_accounts_hardlink_dir(
             &wrong_appendvec_path,
             slot,
-            &mut account_paths,
+            &mut account_paths_set,
             accounts_hardlinks_dir,
         );
-        assert!(ret.is_err());
+
+        assert!(matches!(ret, Err(SnapshotError::InvalidAppendVecPath(_))));
     }
 }
