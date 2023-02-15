@@ -58,6 +58,9 @@ const CONNECTION_CLOSE_REASON_EXCEED_MAX_STREAM_COUNT: &[u8] = b"exceed_max_stre
 const CONNECTION_CLOSE_CODE_TOO_MANY: u32 = 4;
 const CONNECTION_CLOSE_REASON_TOO_MANY: &[u8] = b"too_many";
 
+
+const PACKET_BATCH_SIZE: usize = 64;
+
 #[allow(clippy::too_many_arguments)]
 pub fn spawn_server(
     sock: UdpSocket,
@@ -240,6 +243,12 @@ enum ConnectionHandlerError {
 }
 
 struct NewConnectionHandlerParams {
+    // In principle, the code should work as-is if we replaced this with a crossbeam channel
+    // as the server code never does a blocking send (as the channel's unbounded)
+    // or a blocking recv (as we always use try_recv)
+    // but I've found that it's simply too easy to accidentally block
+    // in async code when using the crossbeam channel, so for the sake of maintainability,
+    // we're sticking with an async channel
     packet_sender: AsyncSender<(Meta, Vec<(Bytes, u64, usize)>)>,
     remote_pubkey: Option<Pubkey>,
     stake: u64,
@@ -538,11 +547,11 @@ async fn packet_batch_sender(
 ) {
     trace!("enter packet_batch_sender");
     loop {
-        let mut packet_batch = PacketBatch::with_capacity(64);
+        let mut packet_batch = PacketBatch::with_capacity(PACKET_BATCH_SIZE);
 
         stats
         .total_packets_allocated
-        .fetch_add(64, Ordering::Relaxed);
+        .fetch_add(PACKET_BATCH_SIZE, Ordering::Relaxed);
 
         let mut last_sent = Instant::now();
         loop {
@@ -550,7 +559,7 @@ async fn packet_batch_sender(
                 return;
             }
             let elapsed = last_sent.elapsed();
-            if packet_batch.len() >= 64 || (!packet_batch.is_empty() && elapsed.as_millis() >= 1) {
+            if packet_batch.len() >= PACKET_BATCH_SIZE || (!packet_batch.is_empty() && elapsed.as_millis() >= 1) {
                 let len = packet_batch.len();
                 if let Err(e) = packet_sender.send(packet_batch) {
                     stats
@@ -571,8 +580,6 @@ async fn packet_batch_sender(
                 let (meta, bytes_vec) = res.unwrap();
                 let mut packet = Packet::default();
                 *packet.meta_mut() = meta;
-                // todo: pretty sure there's an extend_with function or something that allows for 1 less
-                // junk copy of the packet's data
                 packet_batch.push(packet);
                 let i = packet_batch.len() - 1;
                 for (bytes, offset, end_of_chunk) in bytes_vec {
@@ -735,7 +742,8 @@ async fn handle_chunk(
                     meta.sender_stake = stake;
                     *packet_accum = Some((meta, Vec::new()));
                 }
-                if let Some((meta, chunks)) =  packet_accum {
+                
+                if let Some((meta, chunks)) =  packet_accum.as_mut() {
                 let offset = chunk.offset;
                 let end_of_chunk = match (chunk.offset as usize).checked_add(chunk.bytes.len()) {
                     Some(end) => end,
@@ -1146,9 +1154,12 @@ pub mod test {
         }
         let mut received = 0;
         loop {
-            if let Ok(_x) = receiver.recv_timeout(Duration::from_millis(500)) {
+            if let Ok(_x) = receiver.try_recv() {
                 received += 1;
                 info!("got {}", received);
+            }
+            else {
+                sleep(Duration::from_millis(500)).await;
             }
             if received >= total {
                 break;
@@ -1199,9 +1210,12 @@ pub mod test {
         let now = Instant::now();
         let mut total_packets = 0;
         while now.elapsed().as_secs() < 10 {
-            if let Ok(packets) = receiver.recv_timeout(Duration::from_secs(1)) {
+            if let Ok(packets) = receiver.try_recv() {
                 total_packets += packets.len();
                 all_packets.push(packets)
+            }
+            else {
+                sleep(Duration::from_secs(1)).await;
             }
             if total_packets == num_expected_packets {
                 break;
@@ -1235,9 +1249,14 @@ pub mod test {
         let now = Instant::now();
         let mut total_packets = 0;
         while now.elapsed().as_secs() < 5 {
-            if let Ok(packets) = receiver.recv_timeout(Duration::from_secs(1)) {
+            // We're running in an async environment, we (almost) never
+            // want to block
+            if let Ok(packets) = receiver.try_recv() {
                 total_packets += packets.len();
                 all_packets.push(packets)
+            }
+            else {
+                sleep(Duration::from_secs(1)).await;
             }
             if total_packets >= num_expected_packets {
                 break;
@@ -1283,13 +1302,13 @@ pub mod test {
     #[tokio::test]
     async fn test_packet_batcher() {
         solana_logger::setup();
-        let (packet_batch_sender, packet_batch_receiver) = unbounded();
+        let (pkt_batch_sender, pkt_batch_receiver) = unbounded();
         let (ptk_sender, pkt_receiver) = async_unbounded();
         let exit = Arc::new(AtomicBool::new(false));
         let stats = Arc::new(StreamStats::default());
 
         let handle = tokio::spawn(packet_batch_sender(
-            packet_batch_sender,
+            pkt_batch_sender,
             pkt_receiver,
             exit.clone(),
             stats,
@@ -1300,11 +1319,11 @@ pub mod test {
             let bytes = Bytes::from("Hello world");
             let offset = 0;
             let size = bytes.len();
-            ptk_sender.send((meta, bytes, offset, size)).await.unwrap();
+            ptk_sender.send((meta, vec![(bytes, offset, size)])).await.unwrap();
         }
         let mut i = 0;
         while i < 1000 {
-            let res = packet_batch_receiver.try_recv();
+            let res = pkt_batch_receiver.try_recv();
             if res.is_ok() {
                 let len = res.unwrap().len();
                 i += len;
