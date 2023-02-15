@@ -142,10 +142,7 @@ pub enum AccountAddressFilter {
 
 impl Accounts {
     pub fn default_for_tests() -> Self {
-        Self {
-            accounts_db: Arc::new(AccountsDb::default_for_tests()),
-            account_locks: Mutex::default(),
-        }
+        Self::new_empty(AccountsDb::default_for_tests())
     }
 
     pub fn new_with_config_for_tests(
@@ -191,32 +188,30 @@ impl Accounts {
         accounts_update_notifier: Option<AccountsUpdateNotifier>,
         exit: &Arc<AtomicBool>,
     ) -> Self {
-        Self {
-            accounts_db: Arc::new(AccountsDb::new_with_config(
-                paths,
-                cluster_type,
-                account_indexes,
-                shrink_ratio,
-                accounts_db_config,
-                accounts_update_notifier,
-                exit,
-            )),
-            account_locks: Mutex::new(AccountLocks::default()),
-        }
+        Self::new_empty(AccountsDb::new_with_config(
+            paths,
+            cluster_type,
+            account_indexes,
+            shrink_ratio,
+            accounts_db_config,
+            accounts_update_notifier,
+            exit,
+        ))
     }
 
     pub fn new_from_parent(parent: &Accounts, slot: Slot, parent_slot: Slot) -> Self {
         let accounts_db = parent.accounts_db.clone();
         accounts_db.insert_default_bank_hash_stats(slot, parent_slot);
-        Self {
-            accounts_db,
-            account_locks: Mutex::new(AccountLocks::default()),
-        }
+        Self::new(accounts_db)
     }
 
     pub(crate) fn new_empty(accounts_db: AccountsDb) -> Self {
+        Self::new(Arc::new(accounts_db))
+    }
+
+    fn new(accounts_db: Arc<AccountsDb>) -> Self {
         Self {
-            accounts_db: Arc::new(accounts_db),
+            accounts_db,
             account_locks: Mutex::new(AccountLocks::default()),
         }
     }
