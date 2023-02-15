@@ -140,14 +140,9 @@ impl solana_frozen_abi::abi_example::AbiExample for LoadedPrograms {
     }
 }
 
-pub enum LoadedProgramEntry {
-    PreExisting(Arc<LoadedProgram>),
-    Inserted(Arc<LoadedProgram>),
-}
-
 impl LoadedPrograms {
     /// Inserts a single entry
-    pub fn insert_entry(&mut self, key: Pubkey, entry: LoadedProgram) -> LoadedProgramEntry {
+    pub fn insert_entry(&mut self, key: Pubkey, entry: LoadedProgram) -> bool {
         let second_level = self.entries.entry(key).or_insert_with(Vec::new);
         let index = second_level
             .iter()
@@ -159,12 +154,11 @@ impl LoadedPrograms {
             if existing.deployment_slot == entry.deployment_slot
                 && existing.effective_slot == entry.effective_slot
             {
-                return LoadedProgramEntry::PreExisting(existing.clone());
+                return false;
             }
         }
-        let new_entry = Arc::new(entry);
-        second_level.insert(index.unwrap_or(second_level.len()), new_entry.clone());
-        LoadedProgramEntry::Inserted(new_entry)
+        second_level.insert(index.unwrap_or(second_level.len()), Arc::new(entry));
+        true
     }
 
     /// Before rerooting the blockstore this removes all programs of orphan forks

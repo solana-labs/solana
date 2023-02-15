@@ -39,6 +39,7 @@ use {
     solana_sdk::{
         bpf_loader, bpf_loader_deprecated,
         bpf_loader_upgradeable::{self, UpgradeableLoaderState},
+        clock::Slot,
         entrypoint::{HEAP_LENGTH, SUCCESS},
         feature_set::{
             cap_accounts_data_allocations_per_transaction, cap_bpf_program_instruction_accounts,
@@ -181,33 +182,32 @@ fn create_executor_from_bytes(
     }))
 }
 
-fn get_programdata_offset(
+fn get_programdata_offset_and_depoyment_offset(
     log_collector: &Option<Rc<RefCell<LogCollector>>>,
     program: &BorrowedAccount,
     programdata: &BorrowedAccount,
-) -> Result<usize, InstructionError> {
+) -> Result<(usize, Slot), InstructionError> {
     if bpf_loader_upgradeable::check_id(program.get_owner()) {
         if let UpgradeableLoaderState::Program {
             programdata_address: _,
         } = program.get_state()?
         {
-            if !matches!(
-                programdata.get_state()?,
-                UpgradeableLoaderState::ProgramData {
-                    slot: _,
-                    upgrade_authority_address: _,
-                }
-            ) {
+            if let UpgradeableLoaderState::ProgramData {
+                slot,
+                upgrade_authority_address: _,
+            } = programdata.get_state()?
+            {
+                Ok((UpgradeableLoaderState::size_of_programdata_metadata(), slot))
+            } else {
                 ic_logger_msg!(log_collector, "Program has been closed");
-                return Err(InstructionError::InvalidAccountData);
+                Err(InstructionError::InvalidAccountData)
             }
-            Ok(UpgradeableLoaderState::size_of_programdata_metadata())
         } else {
             ic_logger_msg!(log_collector, "Invalid Program account");
             Err(InstructionError::InvalidAccountData)
         }
     } else {
-        Ok(0)
+        Ok((0, 0))
     }
 }
 
@@ -226,7 +226,8 @@ pub fn load_program_from_account(
         return Err(InstructionError::IncorrectProgramId);
     }
 
-    let programdata_offset = get_programdata_offset(&log_collector, program, programdata)?;
+    let (programdata_offset, deployment_slot) =
+        get_programdata_offset_and_depoyment_offset(&log_collector, program, programdata)?;
     let programdata_size = if programdata_offset != 0 {
         programdata.get_data().len()
     } else {
@@ -251,7 +252,7 @@ pub fn load_program_from_account(
     let loaded_program = LoadedProgram::new(
         program.get_owner(),
         loader,
-        0, // Fill in the deployment slot of the program
+        deployment_slot,
         programdata
             .get_data()
             .get(programdata_offset..)
@@ -285,7 +286,8 @@ pub fn create_executor_from_account(
         return Err(InstructionError::IncorrectProgramId);
     }
 
-    let programdata_offset = get_programdata_offset(&log_collector, program, programdata)?;
+    let (programdata_offset, _) =
+        get_programdata_offset_and_depoyment_offset(&log_collector, program, programdata)?;
 
     if let Some(ref tx_executor_cache) = tx_executor_cache {
         match tx_executor_cache.get(program.get_key()) {
