@@ -5957,7 +5957,7 @@ pub mod tests {
         );
         assert_eq!(
             blockstore.find_missing_data_indexes(
-                slot,
+                slot,    // slot
                 0,       // first_timestamp
                 0,       // defer_threshold_ticks
                 gap - 2, // start_index
@@ -5968,11 +5968,12 @@ pub mod tests {
         );
         assert_eq!(
             blockstore.find_missing_data_indexes(
-                slot, 0,   // first_timestamp
-                0,   // defer_threshold_ticks
-                0,   // start_index
-                gap, // end_index
-                1,   // max_missing
+                slot, // slot
+                0,    // first_timestamp
+                0,    // defer_threshold_ticks
+                0,    // start_index
+                gap,  // end_index
+                1,    // max_missing
             ),
             vec![1],
         );
@@ -6089,41 +6090,45 @@ pub mod tests {
         let empty: Vec<u64> = vec![];
         assert_eq!(
             blockstore.find_missing_data_indexes(
-                slot, 0, // first_timestamp
-                0, // defer_threshold_ticks
-                0, // start_index
-                0, // end_index
-                1, // max_missing
+                slot, // slot
+                0,    // first_timestamp
+                0,    // defer_threshold_ticks
+                0,    // start_index
+                0,    // end_index
+                1,    // max_missing
             ),
             empty
         );
         assert_eq!(
             blockstore.find_missing_data_indexes(
-                slot, 0, // first_timestamp
-                0, // defer_threshold_ticks
-                5, // start_index
-                5, // end_index
-                1, // max_missing
+                slot, // slot
+                0,    // first_timestamp
+                0,    // defer_threshold_ticks
+                5,    // start_index
+                5,    // end_index
+                1,    // max_missing
             ),
             empty
         );
         assert_eq!(
             blockstore.find_missing_data_indexes(
-                slot, 0, // first_timestamp
-                0, // defer_threshold_ticks
-                4, // start_index
-                3, // end_index
-                1, // max_missing
+                slot, // slot
+                0,    // first_timestamp
+                0,    // defer_threshold_ticks
+                4,    // start_index
+                3,    // end_index
+                1,    // max_missing
             ),
             empty
         );
         assert_eq!(
             blockstore.find_missing_data_indexes(
-                slot, 0, // first_timestamp
-                0, // defer_threshold_ticks
-                1, // start_index
-                2, // end_index
-                0, // max_missing
+                slot, // slot
+                0,    // first_timestamp
+                0,    // defer_threshold_ticks
+                1,    // start_index
+                2,    // end_index
+                0,    // max_missing
             ),
             empty
         );
@@ -6151,7 +6156,8 @@ pub mod tests {
         // [i, first_index - 1]
         for start in 0..STARTS {
             let result = blockstore.find_missing_data_indexes(
-                slot, 0,     // first_timestamp
+                slot,  // slot
+                0,     // first_timestamp
                 0,     // defer_threshold_ticks
                 start, // start_index
                 END,   // end_index
