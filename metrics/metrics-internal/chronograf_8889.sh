@@ -9,12 +9,12 @@ cd "$(dirname "$0")"
 
 case $HOST in
 internal-metrics.solana.com)
-  CHRONOGRAF_GH_CLIENT_ID=91be42fb4b05af968774
-  CHRONOGRAF_GH_CLIENT_SECRET=ee3f46a76be61bb102e4f41404cdb55e65442528
+  CHRONOGRAF_GH_CLIENT_ID=
+  CHRONOGRAF_GH_CLIENT_SECRET=
   ;;
 tds-internal-metrics.solana.com)
-  CHRONOGRAF_GH_CLIENT_ID=e106b44807718a74f387
-  CHRONOGRAF_GH_CLIENT_SECRET=a066e8ff8ed93a0751b7889f27786bde80b798d0
+  CHRONOGRAF_GH_CLIENT_ID=
+  CHRONOGRAF_GH_CLIENT_SECRET=
   ;;
 *)
   echo "Error: unknown $HOST"
@@ -54,11 +54,11 @@ sudo docker run \
   --env AUTH_DURATION=24h \
   --env TLS_CERTIFICATE=/certs/fullchain.pem \
   --env TLS_PRIVATE_KEY=/certs/privkey.pem \
-  --env GOOGLE_CLIENT_ID=618910652813-31k53nsv8gqtojv729ols0uipmiibahb.apps.googleusercontent.com \
-  --env GOOGLE_CLIENT_SECRET=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 \
+  --env GOOGLE_CLIENT_ID= \
+  --env GOOGLE_CLIENT_SECRET= \
   --env GOOGLE_DOMAINS=solana.com,jito.wtf,jumpcrypto.com,certus.one,mango.markets \
   --env PUBLIC_URL=https://internal-metrics.solana.com:8889 \
-  --env TOKEN_SECRET=sUPER5UPERuDN3VERgU420 \
+  --env TOKEN_SECRET= \
   --env inactivity-duration=48h \
   --name=chronograf_8889 \
   --net=influxdb \

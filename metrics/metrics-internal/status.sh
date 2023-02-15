@@ -22,8 +22,8 @@ echo +++ status
 
 for container in influxdb chronograf chronograf_8889 grafana; do
           if [ $(sudo docker inspect --format="{{.State.Status}}" $container) != "running" ] | [  $(sudo docker inspect --format="{{.State.Status}}" $container) = "exited" ]; then
-        curl -X POST -H 'Content-type: application/json' --data '{"text": "'"$container"' container is down in metrics-internal server"}' https://hooks.slack.com/services/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
-        curl -X POST -H 'Content-type: application/json' --data '{"content": "'"$container"' container is down in metrics-internal server"}' https://discord.com/api/webhooks/1018750424922198027/ZYGNVlyuiujutj9uaeWf2oXtNgRbV7Laad1tu1n8-gh-BTZQteuUJcYnLiUjTiWKC9J5
+        curl -X POST -H 'Content-type: application/json' --data '{"text": "'"$container"' container is down in metrics-internal server"}' <web-hook>
+        curl -X POST -H 'Content-type: application/json' --data '{"content": "'"$container"' container is down in metrics-internal server"}' <web-hook>
         echo "Starting up script"
         sudo bash $container.sh
         sleep 30
