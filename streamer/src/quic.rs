@@ -253,7 +253,8 @@ impl StreamStats {
             ),
             (
                 "packets_sent_for_batching",
-                self.total_packets_sent_for_batching.swap(0, Ordering::Relaxed),
+                self.total_packets_sent_for_batching
+                    .swap(0, Ordering::Relaxed),
                 i64
             ),
             (
@@ -279,7 +280,8 @@ impl StreamStats {
             ),
             (
                 "handle_chunk_to_packet_batcher_send_error",
-                self.total_handle_chunk_to_packet_batcher_send_err.swap(0, Ordering::Relaxed),
+                self.total_handle_chunk_to_packet_batcher_send_err
+                    .swap(0, Ordering::Relaxed),
                 i64
             ),
             (

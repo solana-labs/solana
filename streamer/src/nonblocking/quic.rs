@@ -58,7 +58,6 @@ const CONNECTION_CLOSE_REASON_EXCEED_MAX_STREAM_COUNT: &[u8] = b"exceed_max_stre
 const CONNECTION_CLOSE_CODE_TOO_MANY: u32 = 4;
 const CONNECTION_CLOSE_REASON_TOO_MANY: &[u8] = b"too_many";
 
-
 const PACKET_BATCH_SIZE: usize = 64;
 
 #[allow(clippy::too_many_arguments)]
@@ -550,8 +549,8 @@ async fn packet_batch_sender(
         let mut packet_batch = PacketBatch::with_capacity(PACKET_BATCH_SIZE);
 
         stats
-        .total_packets_allocated
-        .fetch_add(PACKET_BATCH_SIZE, Ordering::Relaxed);
+            .total_packets_allocated
+            .fetch_add(PACKET_BATCH_SIZE, Ordering::Relaxed);
 
         let mut last_sent = Instant::now();
         loop {
@@ -559,7 +558,9 @@ async fn packet_batch_sender(
                 return;
             }
             let elapsed = last_sent.elapsed();
-            if packet_batch.len() >= PACKET_BATCH_SIZE || (!packet_batch.is_empty() && elapsed.as_millis() >= 1) {
+            if packet_batch.len() >= PACKET_BATCH_SIZE
+                || (!packet_batch.is_empty() && elapsed.as_millis() >= 1)
+            {
                 let len = packet_batch.len();
                 if let Err(e) = packet_sender.send(packet_batch) {
                     stats
@@ -583,7 +584,8 @@ async fn packet_batch_sender(
                 packet_batch.push(packet);
                 let i = packet_batch.len() - 1;
                 for (bytes, offset, end_of_chunk) in bytes_vec {
-                    packet_batch[i].buffer_mut()[offset as usize..end_of_chunk].copy_from_slice(&bytes);
+                    packet_batch[i].buffer_mut()[offset as usize..end_of_chunk]
+                        .copy_from_slice(&bytes);
                 }
 
                 if packet_batch.len() == 1 {
@@ -742,51 +744,52 @@ async fn handle_chunk(
                     meta.sender_stake = stake;
                     *packet_accum = Some((meta, Vec::new()));
                 }
-                
-                if let Some((meta, chunks)) =  packet_accum.as_mut() {
-                let offset = chunk.offset;
-                let end_of_chunk = match (chunk.offset as usize).checked_add(chunk.bytes.len()) {
-                    Some(end) => end,
-                    None => return true,
-                };
-                chunks.push((chunk.bytes, offset, end_of_chunk));
 
-                meta.size = std::cmp::max(meta.size, end_of_chunk);
-            }
+                if let Some((meta, chunks)) = packet_accum.as_mut() {
+                    let offset = chunk.offset;
+                    let end_of_chunk = match (chunk.offset as usize).checked_add(chunk.bytes.len())
+                    {
+                        Some(end) => end,
+                        None => return true,
+                    };
+                    chunks.push((chunk.bytes, offset, end_of_chunk));
 
-            match peer_type {
-                ConnectionPeerType::Staked => {
-                    stats
-                        .total_staked_chunks_received
-                        .fetch_add(1, Ordering::Relaxed);
+                    meta.size = std::cmp::max(meta.size, end_of_chunk);
                 }
-                ConnectionPeerType::Unstaked => {
-                    stats
-                        .total_unstaked_chunks_received
-                        .fetch_add(1, Ordering::Relaxed);
+
+                match peer_type {
+                    ConnectionPeerType::Staked => {
+                        stats
+                            .total_staked_chunks_received
+                            .fetch_add(1, Ordering::Relaxed);
+                    }
+                    ConnectionPeerType::Unstaked => {
+                        stats
+                            .total_unstaked_chunks_received
+                            .fetch_add(1, Ordering::Relaxed);
+                    }
                 }
-            }
             } else {
                 // done receiving chunks
                 trace!("chunk is none");
-                if let Some(accum) =  packet_accum.take() {
-                    let len = accum.1.iter().map(|(bytes, _, _)| bytes.len()).sum::<usize>();
-                    if let Err(err) = packet_sender
-                    .send(accum)
-                    .await
-                {
-                    stats
-                    .total_handle_chunk_to_packet_batcher_send_err
-                    .fetch_add(1, Ordering::Relaxed);
-                trace!("packet batch send error {:?}", err);
+                if let Some(accum) = packet_accum.take() {
+                    let len = accum
+                        .1
+                        .iter()
+                        .map(|(bytes, _, _)| bytes.len())
+                        .sum::<usize>();
+                    if let Err(err) = packet_sender.send(accum).await {
+                        stats
+                            .total_handle_chunk_to_packet_batcher_send_err
+                            .fetch_add(1, Ordering::Relaxed);
+                        trace!("packet batch send error {:?}", err);
+                    } else {
+                        stats
+                            .total_packets_sent_for_batching
+                            .fetch_add(1, Ordering::Relaxed);
+                        trace!("sent {} byte packet for batching", len);
+                    }
                 } else {
-                    stats
-                    .total_packets_sent_for_batching
-                    .fetch_add(1, Ordering::Relaxed);
-                trace!("sent {} byte packet for batching", len);
-                }
-                }
-                else {
                     stats
                         .total_packet_batches_none
                         .fetch_add(1, Ordering::Relaxed);
@@ -1157,8 +1160,7 @@ pub mod test {
             if let Ok(_x) = receiver.try_recv() {
                 received += 1;
                 info!("got {}", received);
-            }
-            else {
+            } else {
                 sleep(Duration::from_millis(500)).await;
             }
             if received >= total {
@@ -1213,8 +1215,7 @@ pub mod test {
             if let Ok(packets) = receiver.try_recv() {
                 total_packets += packets.len();
                 all_packets.push(packets)
-            }
-            else {
+            } else {
                 sleep(Duration::from_secs(1)).await;
             }
             if total_packets == num_expected_packets {
@@ -1254,8 +1255,7 @@ pub mod test {
             if let Ok(packets) = receiver.try_recv() {
                 total_packets += packets.len();
                 all_packets.push(packets)
-            }
-            else {
+            } else {
                 sleep(Duration::from_secs(1)).await;
             }
             if total_packets >= num_expected_packets {
@@ -1319,7 +1319,10 @@ pub mod test {
             let bytes = Bytes::from("Hello world");
             let offset = 0;
             let size = bytes.len();
-            ptk_sender.send((meta, vec![(bytes, offset, size)])).await.unwrap();
+            ptk_sender
+                .send((meta, vec![(bytes, offset, size)]))
+                .await
+                .unwrap();
         }
         let mut i = 0;
         while i < 1000 {
