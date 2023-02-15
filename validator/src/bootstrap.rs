@@ -547,7 +547,11 @@ pub fn rpc_bootstrap(
             ) {
                 Ok(rpc_node_details) => rpc_node_details,
                 Err(err) => {
-                    error!("Failed to get RPC nodes: {}", err);
+                    error!(
+                        "Failed to get RPC nodes: {err}. Consider checking system \
+                        clock, removing `--no-port-check`, or adjusting \
+                        `--known-validator ...` arguments as applicable"
+                    );
                     exit(1);
                 }
             };
