@@ -528,18 +528,21 @@ pub fn rpc_bootstrap(
         }
 
         while vetted_rpc_nodes.is_empty() {
-            let rpc_node_details_vec = get_rpc_nodes(
+            let rpc_node_details = match get_rpc_nodes(
                 &gossip.as_ref().unwrap().0,
                 cluster_entrypoints,
                 validator_config,
                 &mut blacklisted_rpc_nodes.write().unwrap(),
                 &bootstrap_config,
-            );
-            if rpc_node_details_vec.is_empty() {
-                return;
-            }
+            ) {
+                Ok(rpc_node_details) => rpc_node_details,
+                Err(err) => {
+                    error!("Failed to get RPC nodes: {}", err);
+                    exit(1);
+                }
+            };
 
-            vetted_rpc_nodes = rpc_node_details_vec
+            vetted_rpc_nodes = rpc_node_details
                 .into_par_iter()
                 .map(|rpc_node_details| {
                     let GetRpcNodeResult {
@@ -628,7 +631,7 @@ fn get_rpc_nodes(
     validator_config: &ValidatorConfig,
     blacklisted_rpc_nodes: &mut HashSet<Pubkey>,
     bootstrap_config: &RpcBootstrapConfig,
-) -> Vec<GetRpcNodeResult> {
+) -> Result<Vec<GetRpcNodeResult>, String> {
     let mut blacklist_timeout = Instant::now();
     let mut get_rpc_peers_timout = Instant::now();
     let mut newer_cluster_snapshot_timeout = None;
@@ -649,21 +652,20 @@ fn get_rpc_nodes(
         );
         if rpc_peers.is_empty() {
             if get_rpc_peers_timout.elapsed() > GET_RPC_PEERS_TIMEOUT {
-                error!("Unable to find any RPC peers");
-                return vec![];
+                return Err("Unable to find any RPC peers".to_string());
             }
             continue;
         }
-        let rpc_peers = rpc_peers.unwrap();
+
         // Reset timeouts if we found any viable RPC peers.
         blacklist_timeout = Instant::now();
         get_rpc_peers_timout = Instant::now();
         if bootstrap_config.no_snapshot_fetch {
             let random_peer = &rpc_peers[thread_rng().gen_range(0, rpc_peers.len())];
-            return vec![GetRpcNodeResult {
+            return Ok(vec![GetRpcNodeResult {
                 rpc_contact_info: random_peer.clone(),
                 snapshot_hash: None,
-            }];
+            }]);
         }
 
         let known_validators_to_wait_for = if newer_cluster_snapshot_timeout
@@ -687,8 +689,9 @@ fn get_rpc_nodes(
                 None => newer_cluster_snapshot_timeout = Some(Instant::now()),
                 Some(newer_cluster_snapshot_timeout) => {
                     if newer_cluster_snapshot_timeout.elapsed() > NEWER_SNAPSHOT_THRESHOLD {
-                        warn!("Giving up, did not get newer snapshots from the cluster.");
-                        return vec![];
+                        return Err(
+                            "Giving up, did not get newer snapshots from the cluster.".to_string()
+                        );
                     }
                 }
             }
@@ -718,7 +721,7 @@ fn get_rpc_nodes(
                 })
                 .take(MAX_RPC_CONNECTIONS_EVALUATED_PER_ITERATION)
                 .collect();
-            return rpc_node_results;
+            return Ok(rpc_node_results);
         }
     }
 }
