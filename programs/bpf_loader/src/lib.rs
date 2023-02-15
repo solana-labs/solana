@@ -22,6 +22,7 @@ use {
         executor_cache::TransactionExecutorCache,
         ic_logger_msg, ic_msg,
         invoke_context::InvokeContext,
+        loaded_programs::LoadedProgram,
         log_collector::LogCollector,
         stable_log,
         sysvar_cache::get_sysvar_with_account_check,
@@ -38,6 +39,7 @@ use {
     solana_sdk::{
         bpf_loader, bpf_loader_deprecated,
         bpf_loader_upgradeable::{self, UpgradeableLoaderState},
+        clock::Slot,
         entrypoint::{HEAP_LENGTH, SUCCESS},
         feature_set::{
             cap_accounts_data_allocations_per_transaction, cap_bpf_program_instruction_accounts,
@@ -180,6 +182,93 @@ fn create_executor_from_bytes(
     }))
 }
 
+fn get_programdata_offset_and_depoyment_offset(
+    log_collector: &Option<Rc<RefCell<LogCollector>>>,
+    program: &BorrowedAccount,
+    programdata: &BorrowedAccount,
+) -> Result<(usize, Slot), InstructionError> {
+    if bpf_loader_upgradeable::check_id(program.get_owner()) {
+        if let UpgradeableLoaderState::Program {
+            programdata_address: _,
+        } = program.get_state()?
+        {
+            if let UpgradeableLoaderState::ProgramData {
+                slot,
+                upgrade_authority_address: _,
+            } = programdata.get_state()?
+            {
+                Ok((UpgradeableLoaderState::size_of_programdata_metadata(), slot))
+            } else {
+                ic_logger_msg!(log_collector, "Program has been closed");
+                Err(InstructionError::InvalidAccountData)
+            }
+        } else {
+            ic_logger_msg!(log_collector, "Invalid Program account");
+            Err(InstructionError::InvalidAccountData)
+        }
+    } else {
+        Ok((0, 0))
+    }
+}
+
+pub fn load_program_from_account(
+    feature_set: &FeatureSet,
+    compute_budget: &ComputeBudget,
+    log_collector: Option<Rc<RefCell<LogCollector>>>,
+    program: &BorrowedAccount,
+    programdata: &BorrowedAccount,
+) -> Result<(LoadedProgram, Option<CreateMetrics>), InstructionError> {
+    if !check_loader_id(program.get_owner()) {
+        ic_logger_msg!(
+            log_collector,
+            "Executable account not owned by the BPF loader"
+        );
+        return Err(InstructionError::IncorrectProgramId);
+    }
+
+    let (programdata_offset, deployment_slot) =
+        get_programdata_offset_and_depoyment_offset(&log_collector, program, programdata)?;
+    let programdata_size = if programdata_offset != 0 {
+        programdata.get_data().len()
+    } else {
+        0
+    };
+
+    let mut create_executor_metrics = CreateMetrics {
+        program_id: program.get_key().to_string(),
+        ..CreateMetrics::default()
+    };
+
+    let mut register_syscalls_time = Measure::start("register_syscalls_time");
+    let loader = syscalls::create_loader(feature_set, compute_budget, false, false, false)
+        .map_err(|e| {
+            ic_logger_msg!(log_collector, "Failed to register syscalls: {}", e);
+            InstructionError::ProgramEnvironmentSetupFailure
+        })?;
+    register_syscalls_time.stop();
+    create_executor_metrics.register_syscalls_us = register_syscalls_time.as_us();
+
+    let mut load_elf_time = Measure::start("load_elf_time");
+    let loaded_program = LoadedProgram::new(
+        program.get_owner(),
+        loader,
+        deployment_slot,
+        programdata
+            .get_data()
+            .get(programdata_offset..)
+            .ok_or(InstructionError::AccountDataTooSmall)?,
+        program.get_data().len().saturating_add(programdata_size),
+    )
+    .map_err(|err| {
+        ic_logger_msg!(log_collector, "{}", err);
+        InstructionError::InvalidAccountData
+    })?;
+    load_elf_time.stop();
+    create_executor_metrics.load_elf_us = load_elf_time.as_us();
+
+    Ok((loaded_program, Some(create_executor_metrics)))
+}
+
 pub fn create_executor_from_account(
     feature_set: &FeatureSet,
     compute_budget: &ComputeBudget,
@@ -197,36 +286,8 @@ pub fn create_executor_from_account(
         return Err(InstructionError::IncorrectProgramId);
     }
 
-    let programdata_offset = if bpf_loader_upgradeable::check_id(program.get_owner()) {
-        if let UpgradeableLoaderState::Program {
-            programdata_address,
-        } = program.get_state()?
-        {
-            if &programdata_address != programdata.get_key() {
-                ic_logger_msg!(
-                    log_collector,
-                    "Wrong ProgramData account for this Program account"
-                );
-                return Err(InstructionError::InvalidArgument);
-            }
-            if !matches!(
-                programdata.get_state()?,
-                UpgradeableLoaderState::ProgramData {
-                    slot: _,
-                    upgrade_authority_address: _,
-                }
-            ) {
-                ic_logger_msg!(log_collector, "Program has been closed");
-                return Err(InstructionError::InvalidAccountData);
-            }
-            UpgradeableLoaderState::size_of_programdata_metadata()
-        } else {
-            ic_logger_msg!(log_collector, "Invalid Program account");
-            return Err(InstructionError::InvalidAccountData);
-        }
-    } else {
-        0
-    };
+    let (programdata_offset, _) =
+        get_programdata_offset_and_depoyment_offset(&log_collector, program, programdata)?;
 
     if let Some(ref tx_executor_cache) = tx_executor_cache {
         match tx_executor_cache.get(program.get_key()) {
