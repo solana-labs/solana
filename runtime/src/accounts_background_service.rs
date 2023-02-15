@@ -548,7 +548,7 @@ impl AccountsBackgroundService {
                 // To support fastboot, we must ensure the storages used in the latest bank snapshot are
                 // not recycled nor removed early.  Hold an Arc of their AppendVecs to prevent them from
                 // expiring.
-                let mut last_snapshot_storages: Option<Vec<Arc<AccountStorageEntry>>>;
+                let mut last_snapshot_storages: Option<Vec<Arc<AccountStorageEntry>>> = None;
                 loop {
                     if exit.load(Ordering::Relaxed) {
                         break;
@@ -630,7 +630,8 @@ impl AccountsBackgroundService {
                             last_snapshot_storages = Some(snapshot_storages);
                             debug!(
                                 "Number of snapshot storages kept alive for fastboot: {}",
-                                &last_snapshot_storages
+                                last_snapshot_storages
+                                    .as_ref()
                                     .map(|storages| storages.len())
                                     .unwrap_or(0)
                             );
@@ -655,14 +656,12 @@ impl AccountsBackgroundService {
                     stats.record_and_maybe_submit(start_time.elapsed());
                     sleep(Duration::from_millis(INTERVAL_MS));
                 }
-                /*
                 info!(
                     "ABS loop done.  Number of snapshot storages kept alive for fastboot: {}",
                     last_snapshot_storages
                         .map(|storages| storages.len())
                         .unwrap_or(0)
                 );
-                */
             })
             .unwrap();
 
