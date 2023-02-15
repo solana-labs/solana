@@ -296,15 +296,6 @@ pub enum SnapshotError {
 
     #[error("invalid AppendVec path: {}", .0.display())]
     InvalidAppendVecPath(PathBuf),
-
-    #[error("no snapshot slot directory")]
-    NoSnapshotSlotDir,
-
-    #[error("unknown snapshot file")]
-    UnknownSnapshotFile,
-
-    #[error("missing status cache file")]
-    MissingStatusCacheFile,
 }
 pub type Result<T> = std::result::Result<T, SnapshotError>;
 
@@ -1828,22 +1819,6 @@ pub fn get_highest_incremental_snapshot_archive_slot(
         full_snapshot_slot,
     )
     .map(|incremental_snapshot_archive_info| incremental_snapshot_archive_info.slot())
-}
-
-/// There is a time window from the slot directory being created, and the content being completely
-/// filled.  Check the completion to avoid using a highest found slot directory with missing content.
-pub fn snapshot_slot_dir_check_complete(path: &Path) -> bool {
-    let completion_flag_file = path.to_path_buf().join(SNAPSHOT_COMPLETE_STATE_FILENAME);
-    fs::metadata(completion_flag_file).is_ok()
-}
-
-pub fn snapshot_slot_dir_check_version(path: &Path) -> bool {
-    let version_path = path.to_path_buf().join(SNAPSHOT_VERSION_FILENAME);
-    if let Ok(content) = fs::read_to_string(version_path) {
-        content.eq(SnapshotVersion::default().as_str())
-    } else {
-        false
-    }
 }
 
 /// Get the path (and metadata) for the full snapshot archive with the highest slot in a directory
