@@ -21,7 +21,7 @@ use {
 /// Creating a `StableInstruction` from an `Instruction`
 ///
 /// ```
-/// # use solana_program::{instruction::{AccountMeta, Instruction}, pubkey::Pubkey, stable_layout::stable_instruction::StableInstruction};
+/// # use solana_program::{instruction::Instruction, pubkey::Pubkey, stable_layout::stable_instruction::StableInstruction};
 /// # let program_id = Pubkey::default();
 /// # let accounts = Vec::default();
 /// # let data = Vec::default();
