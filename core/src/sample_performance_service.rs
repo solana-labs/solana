@@ -51,18 +51,19 @@ impl SamplePerformanceService {
         blockstore: &Arc<Blockstore>,
         exit: Arc<AtomicBool>,
     ) {
-        let (bank, highest_slot) = {
+        let mut snapshot = {
             let forks = bank_forks.read().unwrap();
-            (forks.root_bank(), forks.highest_slot())
-        };
+            let bank = forks.root_bank();
+            let highest_slot = forks.highest_slot();
 
-        // Store the absolute transaction counts to that we can compute the
-        // difference between these values at points in time to figure out
-        // how many transactions occurred in that timespan.
-        let mut snapshot = SamplePerformanceSnapshot {
-            num_transactions: bank.transaction_count(),
-            num_non_vote_transactions: bank.non_vote_transaction_count_since_restart(),
-            highest_slot,
+            // Store the absolute transaction counts to that we can compute the
+            // difference between these values at points in time to figure out
+            // how many transactions occurred in that timespan.
+            SamplePerformanceSnapshot {
+                num_transactions: bank.transaction_count(),
+                num_non_vote_transactions: bank.non_vote_transaction_count_since_restart(),
+                highest_slot,
+            }
         };
 
         let mut now = Instant::now();
