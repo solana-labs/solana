@@ -46,8 +46,8 @@ use {
         },
         accounts_db::{
             AccountShrinkThreshold, AccountStorageEntry, AccountsDbConfig,
-            CalcAccountsHashDataSource, IncludeSlotInHash, ACCOUNTS_DB_CONFIG_FOR_BENCHMARKS,
-            ACCOUNTS_DB_CONFIG_FOR_TESTING,
+            BankHashLamportsVerifyConfig, CalcAccountsHashDataSource, IncludeSlotInHash,
+            ACCOUNTS_DB_CONFIG_FOR_BENCHMARKS, ACCOUNTS_DB_CONFIG_FOR_TESTING,
         },
         accounts_hash::AccountsHash,
         accounts_index::{AccountSecondaryIndexes, IndexKey, ScanConfig, ScanResult, ZeroLamport},
@@ -6814,15 +6814,16 @@ impl Bank {
                         );
                         let result = accounts_.verify_bank_hash_and_lamports(
                             slot,
-                            &ancestors,
                             cap,
-                            config.test_hash_calculation,
-                            &epoch_schedule,
-                            &rent_collector,
-                            config.ignore_mismatch,
-                            config.store_hash_raw_data_for_debug,
-                            // true to run using bg thread pool
-                            true,
+                            BankHashLamportsVerifyConfig {
+                                ancestors: &ancestors,
+                                test_hash_calculation: config.test_hash_calculation,
+                                epoch_schedule: &epoch_schedule,
+                                rent_collector: &rent_collector,
+                                ignore_mismatch: config.ignore_mismatch,
+                                store_detailed_debug_info: config.store_hash_raw_data_for_debug,
+                                use_bg_thread_pool: true,
+                            },
                         );
                         accounts_
                             .accounts_db
@@ -6836,15 +6837,16 @@ impl Bank {
         } else {
             let result = accounts.verify_bank_hash_and_lamports(
                 slot,
-                &self.ancestors,
                 cap,
-                config.test_hash_calculation,
-                epoch_schedule,
-                rent_collector,
-                config.ignore_mismatch,
-                config.store_hash_raw_data_for_debug,
-                // fg is waiting for this to run, so we can use the fg thread pool
-                false,
+                BankHashLamportsVerifyConfig {
+                    ancestors,
+                    test_hash_calculation: config.test_hash_calculation,
+                    epoch_schedule,
+                    rent_collector,
+                    ignore_mismatch: config.ignore_mismatch,
+                    store_detailed_debug_info: config.store_hash_raw_data_for_debug,
+                    use_bg_thread_pool: false, // fg is waiting for this to run, so we can use the fg thread pool
+                },
             );
             self.set_initial_accounts_hash_verification_completed();
             result
