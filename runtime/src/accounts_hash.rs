@@ -127,6 +127,7 @@ pub struct HashStats {
     pub hash_total: usize,
     pub unreduced_entries: usize,
     pub num_snapshot_storage: usize,
+    pub scan_chunks: usize,
     pub num_slots: usize,
     pub num_dirty_slots: usize,
     pub collect_snapshots_us: u64,
@@ -206,6 +207,7 @@ impl HashStats {
                 self.num_snapshot_storage as i64,
                 i64
             ),
+            ("scan_chunks", self.scan_chunks as i64, i64),
             ("num_slots", self.num_slots as i64, i64),
             ("num_dirty_slots", self.num_dirty_slots as i64, i64),
             ("min_bin_size", self.min_bin_size as i64, i64),

@@ -7075,7 +7075,7 @@ impl AccountsDb {
         snapshot_storages: &SortedStorages,
         scanner: S,
         bin_range: &Range<usize>,
-        stats: &HashStats,
+        stats: &mut HashStats,
     ) -> Vec<CacheHashDataFile>
     where
         S: AppendVecScan,
@@ -7088,6 +7088,7 @@ impl AccountsDb {
             snapshot_storages,
         );
 
+        stats.scan_chunks = splitter.chunk_count;
         (0..splitter.chunk_count)
             .into_par_iter()
             .map(|chunk| {
@@ -10375,7 +10376,7 @@ pub mod tests {
             &get_storage_refs(&[storage]),
             test_scan,
             &Range { start: 0, end: 1 },
-            &HashStats::default(),
+            &mut HashStats::default(),
         );
         assert_eq!(calls.load(Ordering::Relaxed), 1);
         assert_scan(
