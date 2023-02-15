@@ -544,9 +544,10 @@ impl AccountsBackgroundService {
             .spawn(move || {
                 let mut stats = StatsManager::new();
                 let mut last_snapshot_end_time = None;
-                // This is for holding the reference counts of the appendvecs in the storage of
-                // the latest snapshot, so they are not released or recycled until this variable
-                // is updated to the storage of the newer latest snapshot.
+
+                // To support fastboot, we must ensure the storages used in the latest bank snapshot are
+                // not recycled nor removed early.  Hold an Arc of their AppendVecs to prevent them from
+                // expiring.
                 let mut last_snapshot_storages: Option<Vec<Arc<AccountStorageEntry>>>;
                 loop {
                     if exit.load(Ordering::Relaxed) {
