@@ -13,7 +13,7 @@ use {
     },
     itertools::Itertools,
     solana_ledger::token_balances::collect_token_balances,
-    solana_measure::{measure, measure::Measure, measure_us},
+    solana_measure::{measure::Measure, measure_us},
     solana_poh::poh_recorder::{
         BankStart, PohRecorderError, RecordTransactionsSummary, RecordTransactionsTimings,
         TransactionRecorder,
