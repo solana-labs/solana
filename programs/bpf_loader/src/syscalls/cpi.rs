@@ -3,7 +3,7 @@ use {
     crate::declare_syscall,
     solana_sdk::{
         feature_set::enable_bpf_loader_set_authority_checked_ix,
-        stable_layout::{stable_instruction::StableInstruction, stable_vec::StableVec},
+        stable_layout::stable_instruction::StableInstruction,
         syscalls::{
             MAX_CPI_ACCOUNT_INFOS, MAX_CPI_INSTRUCTION_ACCOUNTS, MAX_CPI_INSTRUCTION_DATA_LEN,
         },

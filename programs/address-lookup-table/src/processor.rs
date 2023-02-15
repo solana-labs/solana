@@ -13,7 +13,6 @@ use {
         instruction::InstructionError,
         program_utils::limited_deserialize,
         pubkey::{Pubkey, PUBKEY_BYTES},
-        stable_layout::stable_instruction::StableInstruction,
         system_instruction,
         transaction_context::IndexOfAccount,
     },

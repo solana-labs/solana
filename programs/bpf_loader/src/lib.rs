@@ -55,7 +55,6 @@ use {
         program_utils::limited_deserialize,
         pubkey::Pubkey,
         saturating_add_assign,
-        stable_layout::stable_instruction::StableInstruction,
         system_instruction::{self, MAX_PERMITTED_DATA_LENGTH},
         transaction_context::{
             BorrowedAccount, IndexOfAccount, InstructionContext, TransactionContext,
