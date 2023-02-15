@@ -285,6 +285,7 @@ fn output_slot(
     struct A;
     impl solana_scheduler::WithMode for A {
         fn mode(&self) -> solana_scheduler::Mode { panic!() }
+        fn drop_cyclically(self) -> bool { todo!() }
     }
     let (muxed_sender, muxed_receiver) =
         crossbeam_channel::unbounded::<solana_scheduler::SchedulablePayload<(), A>>();
