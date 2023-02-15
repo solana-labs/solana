@@ -7708,42 +7708,42 @@ fn test_bank_executor_cache() {
     let executors =
         TransactionExecutorCache::new((0..4).map(|i| (accounts[i].0, executor.clone())));
     let executors = Rc::new(RefCell::new(executors));
-    bank.store_missing_executors(&executors);
-    bank.store_updated_executors(&executors);
+    bank.store_executors_which_added_to_the_cache(&executors);
+    bank.store_executors_which_were_deployed(&executors);
     let stored_executors = bank.get_tx_executor_cache(accounts);
-    assert_eq!(stored_executors.borrow().executors.len(), 0);
+    assert_eq!(stored_executors.borrow().visible.len(), 0);
 
     // do work
     let mut executors =
         TransactionExecutorCache::new((2..3).map(|i| (accounts[i].0, executor.clone())));
-    executors.set(key1, executor.clone(), false);
-    executors.set(key2, executor.clone(), false);
-    executors.set(key3, executor.clone(), true);
-    executors.set(key4, executor.clone(), false);
+    executors.set(key1, executor.clone(), false, true);
+    executors.set(key2, executor.clone(), false, true);
+    executors.set(key3, executor.clone(), true, true);
+    executors.set(key4, executor.clone(), false, true);
     let executors = Rc::new(RefCell::new(executors));
 
     // store Missing
-    bank.store_missing_executors(&executors);
+    bank.store_executors_which_added_to_the_cache(&executors);
     let stored_executors = bank.get_tx_executor_cache(accounts);
-    assert_eq!(stored_executors.borrow().executors.len(), 2);
-    assert!(stored_executors.borrow().executors.contains_key(&key1));
-    assert!(stored_executors.borrow().executors.contains_key(&key2));
+    assert_eq!(stored_executors.borrow().visible.len(), 2);
+    assert!(stored_executors.borrow().visible.contains_key(&key1));
+    assert!(stored_executors.borrow().visible.contains_key(&key2));
 
     // store Updated
-    bank.store_updated_executors(&executors);
+    bank.store_executors_which_were_deployed(&executors);
     let stored_executors = bank.get_tx_executor_cache(accounts);
-    assert_eq!(stored_executors.borrow().executors.len(), 3);
-    assert!(stored_executors.borrow().executors.contains_key(&key1));
-    assert!(stored_executors.borrow().executors.contains_key(&key2));
-    assert!(stored_executors.borrow().executors.contains_key(&key3));
+    assert_eq!(stored_executors.borrow().visible.len(), 3);
+    assert!(stored_executors.borrow().visible.contains_key(&key1));
+    assert!(stored_executors.borrow().visible.contains_key(&key2));
+    assert!(stored_executors.borrow().visible.contains_key(&key3));
 
     // Check inheritance
     let bank = Bank::new_from_parent(&Arc::new(bank), &solana_sdk::pubkey::new_rand(), 1);
     let stored_executors = bank.get_tx_executor_cache(accounts);
-    assert_eq!(stored_executors.borrow().executors.len(), 3);
-    assert!(stored_executors.borrow().executors.contains_key(&key1));
-    assert!(stored_executors.borrow().executors.contains_key(&key2));
-    assert!(stored_executors.borrow().executors.contains_key(&key3));
+    assert_eq!(stored_executors.borrow().visible.len(), 3);
+    assert!(stored_executors.borrow().visible.contains_key(&key1));
+    assert!(stored_executors.borrow().visible.contains_key(&key2));
+    assert!(stored_executors.borrow().visible.contains_key(&key3));
 
     // Force compilation of an executor
     let mut file = File::open("../programs/bpf_loader/test_elfs/out/noop_aligned.so").unwrap();
@@ -7784,7 +7784,7 @@ fn test_bank_executor_cache() {
     bank.remove_executor(&key3);
     bank.remove_executor(&key4);
     let stored_executors = bank.get_tx_executor_cache(accounts);
-    assert_eq!(stored_executors.borrow().executors.len(), 0);
+    assert_eq!(stored_executors.borrow().visible.len(), 0);
 }
 
 #[test]
@@ -7810,36 +7810,36 @@ fn test_bank_executor_cow() {
 
     // add one to root bank
     let mut executors = TransactionExecutorCache::default();
-    executors.set(key1, executor.clone(), false);
+    executors.set(key1, executor.clone(), false, true);
     let executors = Rc::new(RefCell::new(executors));
-    root.store_missing_executors(&executors);
+    root.store_executors_which_added_to_the_cache(&executors);
     let executors = root.get_tx_executor_cache(accounts);
-    assert_eq!(executors.borrow().executors.len(), 1);
+    assert_eq!(executors.borrow().visible.len(), 1);
 
     let fork1 = Bank::new_from_parent(&root, &Pubkey::default(), 1);
     let fork2 = Bank::new_from_parent(&root, &Pubkey::default(), 2);
 
     let executors = fork1.get_tx_executor_cache(accounts);
-    assert_eq!(executors.borrow().executors.len(), 1);
+    assert_eq!(executors.borrow().visible.len(), 1);
     let executors = fork2.get_tx_executor_cache(accounts);
-    assert_eq!(executors.borrow().executors.len(), 1);
+    assert_eq!(executors.borrow().visible.len(), 1);
 
     let mut executors = TransactionExecutorCache::default();
-    executors.set(key2, executor.clone(), false);
+    executors.set(key2, executor.clone(), false, true);
     let executors = Rc::new(RefCell::new(executors));
-    fork1.store_missing_executors(&executors);
+    fork1.store_executors_which_added_to_the_cache(&executors);
 
     let executors = fork1.get_tx_executor_cache(accounts);
-    assert_eq!(executors.borrow().executors.len(), 2);
+    assert_eq!(executors.borrow().visible.len(), 2);
     let executors = fork2.get_tx_executor_cache(accounts);
-    assert_eq!(executors.borrow().executors.len(), 1);
+    assert_eq!(executors.borrow().visible.len(), 1);
 
     fork1.remove_executor(&key1);
 
     let executors = fork1.get_tx_executor_cache(accounts);
-    assert_eq!(executors.borrow().executors.len(), 1);
+    assert_eq!(executors.borrow().visible.len(), 1);
     let executors = fork2.get_tx_executor_cache(accounts);
-    assert_eq!(executors.borrow().executors.len(), 1);
+    assert_eq!(executors.borrow().visible.len(), 1);
 }
 
 #[test]

@@ -70,6 +70,8 @@ impl Debug for LoadedProgramType {
 pub struct LoadedProgram {
     /// The program of this entry
     pub program: LoadedProgramType,
+    /// Size of account that stores the program and program data
+    pub account_size: usize,
     /// Slot in which the program was (re)deployed
     pub deployment_slot: Slot,
     /// Slot in which this entry will become active (can be in the future)
@@ -85,6 +87,7 @@ impl LoadedProgram {
         loader: Arc<BuiltInProgram<InvokeContext<'static>>>,
         deployment_slot: Slot,
         elf_bytes: &[u8],
+        account_size: usize,
     ) -> Result<Self, EbpfError> {
         let program = if bpf_loader_deprecated::check_id(loader_key) {
             let executable = Executable::load(elf_bytes, loader.clone())?;
@@ -97,6 +100,7 @@ impl LoadedProgram {
         };
         Ok(Self {
             deployment_slot,
+            account_size,
             effective_slot: deployment_slot.saturating_add(1),
             usage_counter: AtomicU64::new(0),
             program,
@@ -110,6 +114,7 @@ impl LoadedProgram {
     ) -> Self {
         Self {
             deployment_slot,
+            account_size: 0,
             effective_slot: deployment_slot.saturating_add(1),
             usage_counter: AtomicU64::new(0),
             program: LoadedProgramType::BuiltIn(program),
@@ -375,6 +380,7 @@ mod tests {
     fn new_test_loaded_program(deployment_slot: Slot, effective_slot: Slot) -> Arc<LoadedProgram> {
         Arc::new(LoadedProgram {
             program: LoadedProgramType::Invalid,
+            account_size: 0,
             deployment_slot,
             effective_slot,
             usage_counter: AtomicU64::default(),

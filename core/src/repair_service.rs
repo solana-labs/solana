@@ -44,7 +44,7 @@ use {
 use {solana_ledger::shred::Nonce, solana_sdk::clock::DEFAULT_MS_PER_SLOT};
 
 // Time to defer repair requests to allow for turbine propagation
-pub(crate) const DEFER_REPAIR_THRESHOLD: Duration = Duration::from_millis(200);
+const DEFER_REPAIR_THRESHOLD: Duration = Duration::from_millis(200);
 const DEFER_REPAIR_THRESHOLD_TICKS: u64 = DEFER_REPAIR_THRESHOLD.as_millis() as u64 / MS_PER_TICK;
 
 pub type DuplicateSlotsResetSender = CrossbeamSender<Vec<(Slot, Hash)>>;
@@ -609,6 +609,7 @@ impl RepairService {
         blockstore: &Blockstore,
         max_repairs: usize,
         repair_range: &RepairSlotRange,
+        now_timestamp: u64,
     ) -> crate::result::Result<Vec<ShredRepairType>> {
         // Slot height and shred indexes for shreds we want to repair
         let mut repairs: Vec<ShredRepairType> = vec![];
@@ -630,7 +631,7 @@ impl RepairService {
                 slot,
                 &meta,
                 max_repairs - repairs.len(),
-                timestamp(),
+                now_timestamp,
             );
             repairs.extend(new_repairs);
         }
@@ -929,8 +930,6 @@ mod test {
             blockstore
                 .insert_shreds(shreds_to_write, None, false)
                 .unwrap();
-            // sleep so that the holes are ready for repair
-            sleep(Duration::from_secs(1));
             let expected: Vec<ShredRepairType> = (0..num_slots)
                 .flat_map(|slot| {
                     missing_indexes_per_slot
@@ -950,7 +949,7 @@ mod test {
                     MAX_UNKNOWN_LAST_INDEX_REPAIRS,
                     MAX_CLOSEST_COMPLETION_REPAIRS,
                     &HashSet::default(),
-                    timestamp(),
+                    post_shred_deferment_timestamp(),
                     &mut RepairTiming::default(),
                     &mut BestRepairsStats::default(),
                 ),
@@ -967,7 +966,7 @@ mod test {
                     MAX_UNKNOWN_LAST_INDEX_REPAIRS,
                     MAX_CLOSEST_COMPLETION_REPAIRS,
                     &HashSet::default(),
-                    timestamp(),
+                    post_shred_deferment_timestamp(),
                     &mut RepairTiming::default(),
                     &mut BestRepairsStats::default(),
                 )[..],
@@ -1038,8 +1037,7 @@ mod test {
                 slot_shreds.remove(0);
                 blockstore.insert_shreds(slot_shreds, None, false).unwrap();
             }
-            // sleep to make slot eligible for repair
-            sleep(Duration::from_secs(1));
+
             // Iterate through all possible combinations of start..end (inclusive on both
             // sides of the range)
             for start in 0..slots.len() {
@@ -1064,6 +1062,7 @@ mod test {
                             &blockstore,
                             std::usize::MAX,
                             &repair_slot_range,
+                            post_shred_deferment_timestamp(),
                         )
                         .unwrap(),
                         expected
@@ -1112,6 +1111,7 @@ mod test {
                     &blockstore,
                     std::usize::MAX,
                     &repair_slot_range,
+                    timestamp(),
                 )
                 .unwrap(),
                 expected

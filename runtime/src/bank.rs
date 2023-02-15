@@ -93,10 +93,7 @@ use {
         accounts_data_meter::MAX_ACCOUNTS_DATA_LEN,
         compute_budget::{self, ComputeBudget},
         executor::Executor,
-        executor_cache::{
-            BankExecutorCache, TransactionExecutorCache, TxBankExecutorCacheDiff,
-            MAX_CACHED_EXECUTORS,
-        },
+        executor_cache::{BankExecutorCache, TransactionExecutorCache, MAX_CACHED_EXECUTORS},
         invoke_context::{BuiltinProgram, ProcessInstructionWithContext},
         loaded_programs::{LoadedPrograms, WorkingSlot},
         log_collector::LogCollector,
@@ -4027,22 +4024,36 @@ impl Bank {
         Rc::new(RefCell::new(tx_executor_cache))
     }
 
-    /// Add executors back to the bank's cache if they were missing and not updated
-    fn store_missing_executors(&self, tx_executor_cache: &RefCell<TransactionExecutorCache>) {
-        tx_executor_cache
-            .borrow()
-            .update_global_cache(&self.executor_cache, |difference| {
-                difference == TxBankExecutorCacheDiff::Inserted
-            });
+    /// Add executors back to the bank's cache if they were missing and not re-/deployed
+    fn store_executors_which_added_to_the_cache(
+        &self,
+        tx_executor_cache: &RefCell<TransactionExecutorCache>,
+    ) {
+        let executors = tx_executor_cache
+            .borrow_mut()
+            .get_executors_added_to_the_cache();
+        if !executors.is_empty() {
+            self.executor_cache
+                .write()
+                .unwrap()
+                .put(executors.into_iter());
+        }
     }
 
-    /// Add updated executors back to the bank's cache
-    fn store_updated_executors(&self, tx_executor_cache: &RefCell<TransactionExecutorCache>) {
-        tx_executor_cache
-            .borrow()
-            .update_global_cache(&self.executor_cache, |difference| {
-                difference == TxBankExecutorCacheDiff::Updated
-            });
+    /// Add re-/deployed executors to the bank's cache
+    fn store_executors_which_were_deployed(
+        &self,
+        tx_executor_cache: &RefCell<TransactionExecutorCache>,
+    ) {
+        let executors = tx_executor_cache
+            .borrow_mut()
+            .get_executors_which_were_deployed();
+        if !executors.is_empty() {
+            self.executor_cache
+                .write()
+                .unwrap()
+                .put(executors.into_iter());
+        }
     }
 
     #[allow(dead_code)] // Preparation for BankExecutorCache rework
@@ -4219,12 +4230,13 @@ impl Bank {
             process_message_time.as_us()
         );
 
-        let mut store_missing_executors_time = Measure::start("store_missing_executors_time");
-        self.store_missing_executors(&tx_executor_cache);
-        store_missing_executors_time.stop();
+        let mut store_executors_which_added_to_the_cache_time =
+            Measure::start("store_executors_which_added_to_the_cache_time");
+        self.store_executors_which_added_to_the_cache(&tx_executor_cache);
+        store_executors_which_added_to_the_cache_time.stop();
         saturating_add_assign!(
             timings.execute_accessories.update_executors_us,
-            store_missing_executors_time.as_us()
+            store_executors_which_added_to_the_cache_time.as_us()
         );
 
         let status = process_result
@@ -4903,7 +4915,8 @@ impl Bank {
             sanitized_txs.len()
         );
 
-        let mut store_updated_executors_time = Measure::start("store_updated_executors_time");
+        let mut store_executors_which_were_deployed_time =
+            Measure::start("store_executors_which_were_deployed_time");
         for execution_result in &execution_results {
             if let TransactionExecutionResult::Executed {
                 details,
@@ -4911,14 +4924,14 @@ impl Bank {
             } = execution_result
             {
                 if details.status.is_ok() {
-                    self.store_updated_executors(tx_executor_cache);
+                    self.store_executors_which_were_deployed(tx_executor_cache);
                 }
             }
         }
-        store_updated_executors_time.stop();
+        store_executors_which_were_deployed_time.stop();
         saturating_add_assign!(
             timings.execute_accessories.update_executors_us,
-            store_updated_executors_time.as_us()
+            store_executors_which_were_deployed_time.as_us()
         );
 
         let accounts_data_len_delta = execution_results

@@ -13,7 +13,7 @@ use {
         crds_gossip_pull::{CrdsFilter, CrdsGossipPull, ProcessPullStats},
         crds_gossip_push::CrdsGossipPush,
         crds_value::{CrdsData, CrdsValue},
-        duplicate_shred::{self, DuplicateShredIndex, LeaderScheduleFn, MAX_DUPLICATE_SHREDS},
+        duplicate_shred::{self, DuplicateShredIndex, MAX_DUPLICATE_SHREDS},
         legacy_contact_info::LegacyContactInfo as ContactInfo,
         ping_pong::PingCache,
     },
@@ -22,6 +22,7 @@ use {
     rayon::ThreadPool,
     solana_ledger::shred::Shred,
     solana_sdk::{
+        clock::Slot,
         hash::Hash,
         pubkey::Pubkey,
         signature::{Keypair, Signer},
@@ -88,15 +89,18 @@ impl CrdsGossip {
         self.push.new_push_messages(pubkey, &self.crds, now, stakes)
     }
 
-    pub(crate) fn push_duplicate_shred(
+    pub(crate) fn push_duplicate_shred<F>(
         &self,
         keypair: &Keypair,
         shred: &Shred,
         other_payload: &[u8],
-        leader_schedule: Option<impl LeaderScheduleFn>,
+        leader_schedule: Option<F>,
         // Maximum serialized size of each DuplicateShred chunk payload.
         max_payload_size: usize,
-    ) -> Result<(), duplicate_shred::Error> {
+    ) -> Result<(), duplicate_shred::Error>
+    where
+        F: FnOnce(Slot) -> Option<Pubkey>,
+    {
         let pubkey = keypair.pubkey();
         // Skip if there are already records of duplicate shreds for this slot.
         let shred_slot = shred.slot();

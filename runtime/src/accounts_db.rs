@@ -153,7 +153,7 @@ pub enum IncludeSlotInHash {
     IrrelevantAssertOnUse,
 }
 
-#[derive(Debug, Default, Clone, Copy)]
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 pub enum CreateAncientStorage {
     /// ancient storages are created by appending
     #[default]
@@ -1659,7 +1659,7 @@ impl SplitAncientStorages {
     }
 
     /// create once ancient slots have been identified
-    /// This is easier to test, removing SortedStorges as a type to deal with here.
+    /// This is easier to test, removing SortedStorages as a type to deal with here.
     fn new_with_ancient_info(
         range: &Range<Slot>,
         ancient_slots: Vec<Slot>,
@@ -4024,7 +4024,6 @@ impl AccountsDb {
         self.shrink_stats.report();
     }
 
-    #[allow(clippy::too_many_arguments)]
     pub(crate) fn update_shrink_stats(shrink_stats: &ShrinkStats, stats_sub: ShrinkStatsSub) {
         shrink_stats
             .num_slots_shrunk
@@ -4288,10 +4287,17 @@ impl AccountsDb {
         }
 
         let can_randomly_shrink = true;
-        self.combine_ancient_slots(
-            self.get_sorted_potential_ancient_slots(),
-            can_randomly_shrink,
-        );
+        if self.create_ancient_storage == CreateAncientStorage::Append {
+            self.combine_ancient_slots(
+                self.get_sorted_potential_ancient_slots(),
+                can_randomly_shrink,
+            );
+        } else {
+            self.combine_ancient_slots_packed(
+                self.get_sorted_potential_ancient_slots(),
+                can_randomly_shrink,
+            );
+        }
     }
 
     #[cfg(test)]
@@ -7212,7 +7218,6 @@ impl AccountsDb {
         }
     }
 
-    #[allow(clippy::too_many_arguments)]
     fn calculate_accounts_hash_with_verify(
         &self,
         data_source: CalcAccountsHashDataSource,
@@ -11906,13 +11911,11 @@ pub mod tests {
         accounts.add_root(0);
 
         let mut current_slot = 1;
-        accounts.insert_default_bank_hash_stats(current_slot, current_slot - 1);
         accounts.store_for_tests(current_slot, &[(&pubkey, &account)]);
         accounts.calculate_accounts_delta_hash(current_slot);
         accounts.add_root_and_flush_write_cache(current_slot);
 
         current_slot += 1;
-        accounts.insert_default_bank_hash_stats(current_slot, current_slot - 1);
         accounts.store_for_tests(current_slot, &[(&pubkey, &zero_lamport_account)]);
         accounts.calculate_accounts_delta_hash(current_slot);
         accounts.add_root_and_flush_write_cache(current_slot);
@@ -11921,7 +11924,6 @@ pub mod tests {
 
         // Otherwise slot 2 will not be removed
         current_slot += 1;
-        accounts.insert_default_bank_hash_stats(current_slot, current_slot - 1);
         accounts.calculate_accounts_delta_hash(current_slot);
         accounts.add_root_and_flush_write_cache(current_slot);
 
@@ -17253,7 +17255,7 @@ pub mod tests {
         }
     }
 
-    const CAN_RANDOMLY_SHRINK_FALSE: bool = false;
+    pub(crate) const CAN_RANDOMLY_SHRINK_FALSE: bool = false;
 
     #[test]
     fn test_combine_ancient_slots_empty() {
