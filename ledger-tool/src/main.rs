@@ -1441,6 +1441,7 @@ fn main() {
         .max(rent.minimum_balance(StakeState::size_of()))
         .to_string();
     let default_graph_vote_account_mode = GraphVoteAccountMode::default();
+    let default_top_accounts_file_count_limit = &std::usize::MAX.to_string();
 
     let mut measure_total_execution_time = Measure::start("ledger tool");
 
@@ -1540,7 +1541,8 @@ fn main() {
             &halt_at_slot_arg,
             &hard_forks_arg,
             &max_genesis_archive_unpacked_size_arg,
-            &no_snapshot_arg)
+            &no_snapshot_arg,
+            default_top_accounts_file_count_limit)
         .bigtable_subcommand()
         .subcommand(
             SubCommand::with_name("print")
