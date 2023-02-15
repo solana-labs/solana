@@ -928,7 +928,13 @@ fn get_snapshot_accounts_hardlink_dir(
             )
         })?;
         let symlink_path = hardlinks_dir.as_ref().join(format!("account_path_{idx}"));
-        symlink::symlink_dir(&snapshot_hardlink_dir, symlink_path)?;
+        symlink::symlink_dir(&snapshot_hardlink_dir, symlink_path).map_err(|e| {
+            SnapshotError::IoWithSourceAndFile(
+                e,
+                "simlink the hard-link dir",
+                snapshot_hardlink_dir.clone(),
+            )
+        })?;
         account_paths.insert(account_path);
     };
 
