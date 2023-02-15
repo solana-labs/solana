@@ -17,7 +17,7 @@ use {
         storable_accounts::{StorableAccounts, StorableAccountsBySlot},
     },
     rand::{thread_rng, Rng},
-    solana_measure::{measure, measure_us},
+    solana_measure::measure_us,
     solana_sdk::{account::ReadableAccount, clock::Slot, hash::Hash, saturating_add_assign},
     std::{
         collections::HashMap,
