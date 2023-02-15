@@ -66,7 +66,13 @@ impl Debug for LoadedProgramType {
     }
 }
 
-#[derive(Debug)]
+impl Default for LoadedProgramType {
+    fn default() -> Self {
+        LoadedProgramType::Invalid
+    }
+}
+
+#[derive(Debug, Default)]
 pub struct LoadedProgram {
     /// The program of this entry
     pub program: LoadedProgramType,
@@ -118,6 +124,20 @@ impl LoadedProgram {
             effective_slot: deployment_slot.saturating_add(1),
             usage_counter: AtomicU64::new(0),
             program: LoadedProgramType::BuiltIn(program),
+        }
+    }
+
+    pub fn jit_compile(&mut self) -> Result<(), EbpfError> {
+        #[cfg(any(target_os = "windows", not(target_arch = "x86_64")))]
+        return Ok(());
+        #[cfg(all(not(target_os = "windows"), target_arch = "x86_64"))]
+        {
+            match &mut self.program {
+                LoadedProgramType::Invalid => panic!(),
+                LoadedProgramType::LegacyV0(executable) => executable.jit_compile(),
+                LoadedProgramType::LegacyV1(executable) => executable.jit_compile(),
+                LoadedProgramType::BuiltIn(_) => panic!(),
+            }
         }
     }
 }
