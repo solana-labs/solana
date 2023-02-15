@@ -58,6 +58,7 @@ solana-tpu-client = { path = "../tpu-client", version = "=1.16.0", default-featu
 solana-version = { path = "../version", version = "=1.16.0" }
 solana-vote-program = { path = "../programs/vote", version = "=1.16.0" }
 symlink = "0.1.0"
+thiserror = "1.0"
 
 [dev-dependencies]
 solana-account-decoder = { path = "../account-decoder", version = "=1.16.0" }

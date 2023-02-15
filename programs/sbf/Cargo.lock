@@ -6191,6 +6191,7 @@ dependencies = [
  "solana-version",
  "solana-vote-program",
  "symlink",
+ "thiserror",
  "tikv-jemallocator",
 ]
 
