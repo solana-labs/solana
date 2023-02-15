@@ -821,14 +821,18 @@ impl<'a> LoadedAccountAccessor<'a> {
         }
     }
 
-    fn account_matches_owners(&self, owners: &[&Pubkey]) -> Result<(), MatchAccountOwnerError> {
+    fn account_matches_owners(&self, owners: &[&Pubkey]) -> Result<usize, MatchAccountOwnerError> {
         match self {
             LoadedAccountAccessor::Cached(cached_account) => cached_account
                 .as_ref()
                 .and_then(|cached_account| {
-                    (!cached_account.account.is_zero_lamport()
-                        && owners.contains(&cached_account.account.owner()))
-                    .then_some(())
+                    if cached_account.account.is_zero_lamport() {
+                        None
+                    } else {
+                        owners
+                            .iter()
+                            .position(|entry| &cached_account.account.owner() == entry)
+                    }
                 })
                 .ok_or(MatchAccountOwnerError::NoMatch),
             LoadedAccountAccessor::Stored(maybe_storage_entry) => {
@@ -4938,12 +4942,16 @@ impl AccountsDb {
         self.do_load(ancestors, pubkey, None, load_hint, LoadZeroLamports::None)
     }
 
+    /// Return Ok(index_of_matching_owner) if the account owner at `offset` is one of the pubkeys in `owners`.
+    /// Return Err(MatchAccountOwnerError::NoMatch) if the account has 0 lamports or the owner is not one of
+    /// the pubkeys in `owners`.
+    /// Return Err(MatchAccountOwnerError::UnableToLoad) if the account could not be accessed.
     pub fn account_matches_owners(
         &self,
         ancestors: &Ancestors,
         account: &Pubkey,
         owners: &[&Pubkey],
-    ) -> Result<(), MatchAccountOwnerError> {
+    ) -> Result<usize, MatchAccountOwnerError> {
         let (slot, storage_location, _maybe_account_accesor) = self
             .read_index_for_accessor_or_load_slow(ancestors, account, None, false)
             .ok_or(MatchAccountOwnerError::UnableToLoad)?;
@@ -4951,9 +4959,14 @@ impl AccountsDb {
         if !storage_location.is_cached() {
             let result = self.read_only_accounts_cache.load(*account, slot);
             if let Some(account) = result {
-                return (!account.is_zero_lamport() && owners.contains(&account.owner()))
-                    .then_some(())
-                    .ok_or(MatchAccountOwnerError::NoMatch);
+                return if account.is_zero_lamport() {
+                    Err(MatchAccountOwnerError::NoMatch)
+                } else {
+                    owners
+                        .iter()
+                        .position(|entry| &account.owner() == entry)
+                        .ok_or(MatchAccountOwnerError::NoMatch)
+                };
             }
         }
 
@@ -14184,11 +14197,11 @@ pub mod tests {
 
         assert_eq!(
             db.account_matches_owners(&Ancestors::default(), &account1_key, &owners_refs),
-            Ok(())
+            Ok(0)
         );
         assert_eq!(
             db.account_matches_owners(&Ancestors::default(), &account2_key, &owners_refs),
-            Ok(())
+            Ok(1)
         );
         assert_eq!(
             db.account_matches_owners(&Ancestors::default(), &account3_key, &owners_refs),
@@ -14218,11 +14231,11 @@ pub mod tests {
 
         assert_eq!(
             db.account_matches_owners(&Ancestors::default(), &account1_key, &owners_refs),
-            Ok(())
+            Ok(0)
         );
         assert_eq!(
             db.account_matches_owners(&Ancestors::default(), &account2_key, &owners_refs),
-            Ok(())
+            Ok(1)
         );
         assert_eq!(
             db.account_matches_owners(&Ancestors::default(), &account3_key, &owners_refs),
