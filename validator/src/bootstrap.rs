@@ -36,6 +36,7 @@ use {
         },
         time::{Duration, Instant},
     },
+    thiserror::Error,
 };
 
 /// When downloading snapshots, wait at most this long for snapshot hashes from
@@ -316,6 +317,15 @@ fn check_vote_account(
     }
 
     Ok(())
+}
+
+#[derive(Error, Debug)]
+pub enum GetRpcNodeError {
+    #[error("Unable to find any RPC peers")]
+    NoRpcPeersFound,
+
+    #[error("Giving up, did not get newer snapshots from the cluster")]
+    NoNewerSnapshots,
 }
 
 /// Struct to wrap the return value from get_rpc_nodes().  The `rpc_contact_info` is the peer to
@@ -631,7 +641,7 @@ fn get_rpc_nodes(
     validator_config: &ValidatorConfig,
     blacklisted_rpc_nodes: &mut HashSet<Pubkey>,
     bootstrap_config: &RpcBootstrapConfig,
-) -> Result<Vec<GetRpcNodeResult>, String> {
+) -> Result<Vec<GetRpcNodeResult>, GetRpcNodeError> {
     let mut blacklist_timeout = Instant::now();
     let mut get_rpc_peers_timout = Instant::now();
     let mut newer_cluster_snapshot_timeout = None;
@@ -652,7 +662,7 @@ fn get_rpc_nodes(
         );
         if rpc_peers.is_empty() {
             if get_rpc_peers_timout.elapsed() > GET_RPC_PEERS_TIMEOUT {
-                return Err("Unable to find any RPC peers".to_string());
+                return Err(GetRpcNodeError::NoRpcPeersFound);
             }
             continue;
         }
@@ -689,9 +699,7 @@ fn get_rpc_nodes(
                 None => newer_cluster_snapshot_timeout = Some(Instant::now()),
                 Some(newer_cluster_snapshot_timeout) => {
                     if newer_cluster_snapshot_timeout.elapsed() > NEWER_SNAPSHOT_THRESHOLD {
-                        return Err(
-                            "Giving up, did not get newer snapshots from the cluster.".to_string()
-                        );
+                        return Err(GetRpcNodeError::NoNewerSnapshots);
                     }
                 }
             }
