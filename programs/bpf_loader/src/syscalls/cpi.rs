@@ -516,7 +516,6 @@ impl SyscallInvokeSigned for SyscallInvokeSignedC {
             invoke_context.get_check_size(),
         )?
         .to_vec();
-
         let accounts = meta_cs
             .iter()
             .map(|meta_c| {
