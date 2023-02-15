@@ -114,7 +114,7 @@ command_step() {
     timeout_in_minutes: $3
     artifact_paths: "log-*.txt"
     agents:
-      queue: ${4:-solana}
+      queue: "${4:-solana}"
 EOF
 }
 
