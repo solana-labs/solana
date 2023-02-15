@@ -52,7 +52,7 @@ server {
         index index.html index.htm index.nginx-debian.html;
 
         server_name _;
-        
+
         location / {
                 proxy_connect_timeout 1200s;
                 proxy_send_timeout 1200s;
@@ -81,7 +81,6 @@ server {
         #       deny all;
         #}
 }
-
 
 # Virtual Host configuration for example.com
 #
