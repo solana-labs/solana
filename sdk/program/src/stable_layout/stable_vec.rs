@@ -140,11 +140,6 @@ impl<T> Drop for StableVec<T> {
         // SAFETY: We have a valid StableVec, which we can only get from a Vec.  Therefore it is
         // safe to convert back to Vec.
         let _vec = unsafe { Vec::from_raw_parts(self.ptr.as_ptr(), self.len, self.cap) };
-
-        // For extra piece of mind, zero-out our guts
-        self.ptr = NonNull::dangling();
-        self.cap = 0;
-        self.len = 0;
     }
 }
 
