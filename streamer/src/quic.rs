@@ -22,12 +22,11 @@ use {
         thread,
         time::SystemTime,
     },
-    tokio::runtime::{Builder, Runtime},
+    tokio::runtime::Runtime,
 };
 
 pub const MAX_STAKED_CONNECTIONS: usize = 2000;
 pub const MAX_UNSTAKED_CONNECTIONS: usize = 500;
-const NUM_QUIC_STREAMER_WORKER_THREADS: usize = 1;
 
 struct SkipClientVerification;
 
@@ -127,8 +126,10 @@ pub struct StreamStats {
     pub(crate) total_staked_chunks_received: AtomicUsize,
     pub(crate) total_unstaked_chunks_received: AtomicUsize,
     pub(crate) total_packet_batch_send_err: AtomicUsize,
+    pub(crate) total_handle_chunk_to_packet_batcher_send_err: AtomicUsize,
     pub(crate) total_packet_batches_sent: AtomicUsize,
     pub(crate) total_packet_batches_none: AtomicUsize,
+    pub(crate) total_packets_sent_for_batching: AtomicUsize,
     pub(crate) total_stream_read_errors: AtomicUsize,
     pub(crate) total_stream_read_timeouts: AtomicUsize,
     pub(crate) num_evictions: AtomicUsize,
@@ -251,6 +252,11 @@ impl StreamStats {
                 i64
             ),
             (
+                "packets_sent_for_batching",
+                self.total_packets_sent_for_batching.swap(0, Ordering::Relaxed),
+                i64
+            ),
+            (
                 "chunks_received",
                 self.total_chunks_received.swap(0, Ordering::Relaxed),
                 i64
@@ -269,6 +275,11 @@ impl StreamStats {
             (
                 "packet_batch_send_error",
                 self.total_packet_batch_send_err.swap(0, Ordering::Relaxed),
+                i64
+            ),
+            (
+                "handle_chunk_to_packet_batcher_send_error",
+                self.total_handle_chunk_to_packet_batcher_send_err.swap(0, Ordering::Relaxed),
                 i64
             ),
             (

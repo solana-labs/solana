@@ -113,7 +113,7 @@ pub async fn run_server(
     let staked_connection_table: Arc<Mutex<ConnectionTable>> =
         Arc::new(Mutex::new(ConnectionTable::new(ConnectionPeerType::Staked)));
     let (sender, receiver) = async_unbounded();
-    tokio::spawn(patch_batch_sender(
+    tokio::spawn(packet_batch_sender(
         packet_sender,
         receiver,
         exit.clone(),
@@ -240,7 +240,7 @@ enum ConnectionHandlerError {
 }
 
 struct NewConnectionHandlerParams {
-    packet_sender: AsyncSender<(Meta, Bytes, u64, usize)>,
+    packet_sender: AsyncSender<(Meta, Vec<(Bytes, u64, usize)>)>,
     remote_pubkey: Option<Pubkey>,
     stake: u64,
     total_stake: u64,
@@ -252,7 +252,7 @@ struct NewConnectionHandlerParams {
 
 impl NewConnectionHandlerParams {
     fn new_unstaked(
-        packet_sender: AsyncSender<(Meta, Bytes, u64, usize)>,
+        packet_sender: AsyncSender<(Meta, Vec<(Bytes, u64, usize)>)>,
         max_connections_per_peer: usize,
         stats: Arc<StreamStats>,
     ) -> NewConnectionHandlerParams {
@@ -426,7 +426,7 @@ async fn setup_connection(
     connecting: Connecting,
     unstaked_connection_table: Arc<Mutex<ConnectionTable>>,
     staked_connection_table: Arc<Mutex<ConnectionTable>>,
-    packet_sender: AsyncSender<(Meta, Bytes, u64, usize)>,
+    packet_sender: AsyncSender<(Meta, Vec<(Bytes, u64, usize)>)>,
     max_connections_per_peer: usize,
     staked_nodes: Arc<RwLock<StakedNodes>>,
     max_staked_connections: usize,
@@ -530,15 +530,20 @@ async fn setup_connection(
     }
 }
 
-async fn patch_batch_sender(
+async fn packet_batch_sender(
     packet_sender: Sender<PacketBatch>,
-    packet_receiver: AsyncReceiver<(Meta, Bytes, u64, usize)>,
+    packet_receiver: AsyncReceiver<(Meta, Vec<(Bytes, u64, usize)>)>,
     exit: Arc<AtomicBool>,
     stats: Arc<StreamStats>,
 ) {
-    info!("enter patch_batch_sender");
+    trace!("enter packet_batch_sender");
     loop {
         let mut packet_batch = PacketBatch::with_capacity(64);
+
+        stats
+        .total_packets_allocated
+        .fetch_add(64, Ordering::Relaxed);
+
         let mut last_sent = Instant::now();
         loop {
             if exit.load(Ordering::Relaxed) {
@@ -551,31 +556,33 @@ async fn patch_batch_sender(
                     stats
                         .total_packet_batch_send_err
                         .fetch_add(1, Ordering::Relaxed);
-                    info!("send error: {}", e);
+                    trace!("Send error: {}", e);
                 } else {
                     stats
                         .total_packet_batches_sent
                         .fetch_add(1, Ordering::Relaxed);
-                    info!("sent {} packet batch", len);
+                    trace!("Sent {} packet batch", len);
                 }
                 break;
             }
 
             let res = packet_receiver.try_recv();
             if res.is_ok() {
-                let (meta, bytes, offset, end_of_chunk) = res.unwrap();
+                let (meta, bytes_vec) = res.unwrap();
                 let mut packet = Packet::default();
                 *packet.meta_mut() = meta;
                 // todo: pretty sure there's an extend_with function or something that allows for 1 less
                 // junk copy of the packet's data
                 packet_batch.push(packet);
                 let i = packet_batch.len() - 1;
-                packet_batch[i].buffer_mut()[offset as usize..end_of_chunk].copy_from_slice(&bytes);
+                for (bytes, offset, end_of_chunk) in bytes_vec {
+                    packet_batch[i].buffer_mut()[offset as usize..end_of_chunk].copy_from_slice(&bytes);
+                }
+
                 if packet_batch.len() == 1 {
                     last_sent = Instant::now();
                 }
             } else {
-                //info!("patch_batch_sender recv error {:?}", res);
                 sleep(Duration::from_micros(250)).await;
             }
         }
@@ -585,7 +592,7 @@ async fn patch_batch_sender(
 #[allow(clippy::too_many_arguments)]
 async fn handle_connection(
     connection: Connection,
-    packet_sender: AsyncSender<(Meta, Bytes, u64, usize)>,
+    packet_sender: AsyncSender<(Meta, Vec<(Bytes, u64, usize)>)>,
     remote_addr: SocketAddr,
     remote_pubkey: Option<Pubkey>,
     last_update: Arc<AtomicU64>,
@@ -692,9 +699,9 @@ async fn handle_connection(
 // Return true if the server should drop the stream
 async fn handle_chunk(
     chunk: Result<Option<quinn::Chunk>, quinn::ReadError>,
-    maybe_batch: &mut Option<PacketBatch>,
+    packet_accum: &mut Option<(Meta, Vec<(Bytes, u64, usize)>)>,
     remote_addr: &SocketAddr,
-    packet_sender: &AsyncSender<(Meta, Bytes, u64, usize)>,
+    packet_sender: &AsyncSender<(Meta, Vec<(Bytes, u64, usize)>)>,
     stats: Arc<StreamStats>,
     stake: u64,
     peer_type: ConnectionPeerType,
@@ -722,57 +729,60 @@ async fn handle_chunk(
                 }
 
                 // chunk looks valid
-
-                let mut meta = Meta::default();
-                meta.set_socket_addr(remote_addr);
-                meta.sender_stake = stake;
+                if packet_accum.is_none() {
+                    let mut meta = Meta::default();
+                    meta.set_socket_addr(remote_addr);
+                    meta.sender_stake = stake;
+                    *packet_accum = Some((meta, Vec::new()));
+                }
+                if let Some((meta, chunks)) =  packet_accum {
                 let offset = chunk.offset;
                 let end_of_chunk = match (chunk.offset as usize).checked_add(chunk.bytes.len()) {
                     Some(end) => end,
                     None => return true,
                 };
+                chunks.push((chunk.bytes, offset, end_of_chunk));
+
                 meta.size = std::cmp::max(meta.size, end_of_chunk);
-                if let Err(err) = packet_sender
-                    .send((meta, chunk.bytes, offset, end_of_chunk))
+            }
+
+            match peer_type {
+                ConnectionPeerType::Staked => {
+                    stats
+                        .total_staked_chunks_received
+                        .fetch_add(1, Ordering::Relaxed);
+                }
+                ConnectionPeerType::Unstaked => {
+                    stats
+                        .total_unstaked_chunks_received
+                        .fetch_add(1, Ordering::Relaxed);
+                }
+            }
+            } else {
+                // done receiving chunks
+                trace!("chunk is none");
+                if let Some(accum) =  packet_accum.take() {
+                    let len = accum.1.iter().map(|(bytes, _, _)| bytes.len()).sum::<usize>();
+                    if let Err(err) = packet_sender
+                    .send(accum)
                     .await
                 {
-                    info!("handle_chunk send error {}", err);
-                }
-
-                match peer_type {
-                    ConnectionPeerType::Staked => {
-                        stats
-                            .total_staked_chunks_received
-                            .fetch_add(1, Ordering::Relaxed);
-                    }
-                    ConnectionPeerType::Unstaked => {
-                        stats
-                            .total_unstaked_chunks_received
-                            .fetch_add(1, Ordering::Relaxed);
-                    }
-                }
-            } else {
-                trace!("chunk is none");
-                // done receiving chunks
-                /*if let Some(batch) = maybe_batch.take() {
-                    let len = batch[0].meta().size;
-                    if let Err(e) = packet_sender.send(batch) {
-                        stats
-                            .total_packet_batch_send_err
-                            .fetch_add(1, Ordering::Relaxed);
-                        info!("send error: {}", e);
-                    } else {
-                        stats
-                            .total_packet_batches_sent
-                            .fetch_add(1, Ordering::Relaxed);
-                        trace!("sent {} byte packet", len);
-                    }
-                    //todo: re-add stats counting empty streams
+                    stats
+                    .total_handle_chunk_to_packet_batcher_send_err
+                    .fetch_add(1, Ordering::Relaxed);
+                trace!("packet batch send error {:?}", err);
                 } else {
+                    stats
+                    .total_packets_sent_for_batching
+                    .fetch_add(1, Ordering::Relaxed);
+                trace!("sent {} byte packet for batching", len);
+                }
+                }
+                else {
                     stats
                         .total_packet_batches_none
                         .fetch_add(1, Ordering::Relaxed);
-                }*/
+                }
                 return true;
             }
         }
@@ -1278,7 +1288,7 @@ pub mod test {
         let exit = Arc::new(AtomicBool::new(false));
         let stats = Arc::new(StreamStats::default());
 
-        let handle = tokio::spawn(patch_batch_sender(
+        let handle = tokio::spawn(packet_batch_sender(
             packet_batch_sender,
             pkt_receiver,
             exit.clone(),
