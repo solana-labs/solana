@@ -276,7 +276,6 @@ impl SyscallInvokeSigned for SyscallInvokeSignedRust {
             invoke_context.get_check_size(),
         )?
         .to_vec();
-        let accounts = StableVec::from(accounts);
 
         let ix_data_len = ix.data.len() as u64;
         if invoke_context
@@ -298,11 +297,10 @@ impl SyscallInvokeSigned for SyscallInvokeSignedRust {
             invoke_context.get_check_size(),
         )?
         .to_vec();
-        let data = StableVec::from(data);
 
         Ok(StableInstruction {
-            accounts,
-            data,
+            accounts: accounts.into(),
+            data: data.into(),
             program_id: ix.program_id,
         })
     }
@@ -518,7 +516,6 @@ impl SyscallInvokeSigned for SyscallInvokeSignedC {
             invoke_context.get_check_size(),
         )?
         .to_vec();
-        let data = StableVec::from(data);
 
         let accounts = meta_cs
             .iter()
@@ -535,11 +532,10 @@ impl SyscallInvokeSigned for SyscallInvokeSignedC {
                 })
             })
             .collect::<Result<Vec<AccountMeta>, EbpfError>>()?;
-        let accounts = StableVec::from(accounts);
 
         Ok(StableInstruction {
-            accounts,
-            data,
+            accounts: accounts.into(),
+            data: data.into(),
             program_id: *program_id,
         })
     }

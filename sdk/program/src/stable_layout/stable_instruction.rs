@@ -39,8 +39,8 @@ pub struct StableInstruction {
 impl From<Instruction> for StableInstruction {
     fn from(other: Instruction) -> Self {
         Self {
-            accounts: StableVec::from(other.accounts),
-            data: StableVec::from(other.data),
+            accounts: other.accounts.into(),
+            data: other.data.into(),
             program_id: other.program_id,
         }
     }

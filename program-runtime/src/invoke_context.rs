@@ -1153,7 +1153,6 @@ mod tests {
                         &MockInstruction::NoopSuccess,
                         metas,
                     );
-                    let inner_instruction = StableInstruction::from(inner_instruction);
                     invoke_context
                         .transaction_context
                         .get_next_instruction_context()
@@ -1163,7 +1162,7 @@ mod tests {
                     assert_eq!(result, Err(InstructionError::UnbalancedInstruction));
                     result?;
                     invoke_context
-                        .native_invoke(inner_instruction, &[])
+                        .native_invoke(inner_instruction.into(), &[])
                         .and(invoke_context.pop())?;
                 }
                 MockInstruction::UnbalancedPop => instruction_context
@@ -1337,9 +1336,8 @@ mod tests {
             invoke_context.push().unwrap();
             let inner_instruction =
                 Instruction::new_with_bincode(callee_program_id, &case.0, metas.clone());
-            let inner_instruction = StableInstruction::from(inner_instruction);
             let result = invoke_context
-                .native_invoke(inner_instruction, &[])
+                .native_invoke(inner_instruction.into(), &[])
                 .and(invoke_context.pop());
             assert_eq!(result, case.1);
         }
