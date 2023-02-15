@@ -193,6 +193,25 @@ pub(crate) struct ShrinkCollectAliveSeparatedByRefs<'a> {
     pub(crate) many_refs: AliveAccounts<'a>,
 }
 
+/// Configuration Parameters for running bank hash and total lamports verification
+#[derive(Debug, Clone)]
+pub struct BankHashLamportsVerifyConfig<'a> {
+    /// bank ancestors
+    pub ancestors: &'a Ancestors,
+    /// true to verify hash calculation
+    pub test_hash_calculation: bool,
+    /// epoch_schedule
+    pub epoch_schedule: &'a EpochSchedule,
+    /// rent_collector
+    pub rent_collector: &'a RentCollector,
+    /// true to ignore mismatches
+    pub ignore_mismatch: bool,
+    /// true to dump debug log if mismatch happens
+    pub store_detailed_debug_info: bool,
+    /// true to use dedicated background thread pool for verification
+    pub use_bg_thread_pool: bool,
+}
+
 pub(crate) trait ShrinkCollectRefs<'a>: Sync + Send {
     fn with_capacity(capacity: usize, slot: Slot) -> Self;
     fn collect(&mut self, other: Self);
@@ -7578,18 +7597,11 @@ impl AccountsDb {
     }
 
     /// Only called from startup or test code.
-    #[allow(clippy::too_many_arguments)]
     pub fn verify_bank_hash_and_lamports(
         &self,
         slot: Slot,
-        ancestors: &Ancestors,
         total_lamports: u64,
-        test_hash_calculation: bool,
-        epoch_schedule: &EpochSchedule,
-        rent_collector: &RentCollector,
-        ignore_mismatch: bool,
-        store_hash_raw_data_for_debug: bool,
-        use_bg_thread_pool: bool,
+        config: BankHashLamportsVerifyConfig,
     ) -> Result<(), BankHashVerificationError> {
         use BankHashVerificationError::*;
 
@@ -7597,15 +7609,15 @@ impl AccountsDb {
         let (calculated_accounts_hash, calculated_lamports) = self
             .calculate_accounts_hash_with_verify(
                 CalcAccountsHashDataSource::Storages,
-                test_hash_calculation,
+                config.test_hash_calculation,
                 slot,
                 CalcAccountsHashConfig {
-                    use_bg_thread_pool,
+                    use_bg_thread_pool: config.use_bg_thread_pool,
                     check_hash,
-                    ancestors: Some(ancestors),
-                    epoch_schedule,
-                    rent_collector,
-                    store_detailed_debug_info_on_failure: store_hash_raw_data_for_debug,
+                    ancestors: Some(config.ancestors),
+                    epoch_schedule: config.epoch_schedule,
+                    rent_collector: config.rent_collector,
+                    store_detailed_debug_info_on_failure: config.store_detailed_debug_info,
                 },
                 None,
             )?;
@@ -7618,7 +7630,7 @@ impl AccountsDb {
             return Err(MismatchedTotalLamports(calculated_lamports, total_lamports));
         }
 
-        if ignore_mismatch {
+        if config.ignore_mismatch {
             Ok(())
         } else if let Some(found_accounts_hash) = self.get_accounts_hash(slot) {
             if calculated_accounts_hash == found_accounts_hash {
@@ -9555,6 +9567,24 @@ pub mod tests {
         /// note this requires that 'slot_and_append_vec' is Some
         fn append_vec_id(&self) -> AppendVecId {
             self.append_vec().append_vec_id()
+        }
+    }
+
+    impl<'a> BankHashLamportsVerifyConfig<'a> {
+        fn new_for_test(
+            ancestors: &'a Ancestors,
+            epoch_schedule: &'a EpochSchedule,
+            rent_collector: &'a RentCollector,
+        ) -> BankHashLamportsVerifyConfig<'a> {
+            BankHashLamportsVerifyConfig {
+                ancestors,
+                test_hash_calculation: true,
+                epoch_schedule,
+                rent_collector,
+                ignore_mismatch: false,
+                store_detailed_debug_info: false,
+                use_bg_thread_pool: false,
+            }
         }
     }
 
@@ -12084,18 +12114,17 @@ pub mod tests {
         assert_load_account(&accounts, current_slot, purged_pubkey2, 0);
         assert_load_account(&accounts, current_slot, dummy_pubkey, dummy_lamport);
 
+        let ancestors = Ancestors::default();
+        let epoch_schedule = EpochSchedule::default();
+        let rent_collector = RentCollector::default();
+        let config = BankHashLamportsVerifyConfig::new_for_test(
+            &ancestors,
+            &epoch_schedule,
+            &rent_collector,
+        );
+
         accounts
-            .verify_bank_hash_and_lamports(
-                4,
-                &Ancestors::default(),
-                1222,
-                true,
-                &EpochSchedule::default(),
-                &RentCollector::default(),
-                false,
-                false,
-                false,
-            )
+            .verify_bank_hash_and_lamports(4, 1222, config)
             .unwrap();
     }
 
@@ -12502,54 +12531,35 @@ pub mod tests {
         let some_slot: Slot = 0;
         let account = AccountSharedData::new(1, some_data_len, &key);
         let ancestors = vec![(some_slot, 0)].into_iter().collect();
+        let epoch_schedule = EpochSchedule::default();
+        let rent_collector = RentCollector::default();
 
         db.store_for_tests(some_slot, &[(&key, &account)]);
         db.add_root_and_flush_write_cache(some_slot);
         db.update_accounts_hash_for_tests(some_slot, &ancestors, true, true);
+
+        let config = BankHashLamportsVerifyConfig::new_for_test(
+            &ancestors,
+            &epoch_schedule,
+            &rent_collector,
+        );
+
         assert_matches!(
-            db.verify_bank_hash_and_lamports(
-                some_slot,
-                &ancestors,
-                1,
-                true,
-                &EpochSchedule::default(),
-                &RentCollector::default(),
-                false,
-                false,
-                false,
-            ),
+            db.verify_bank_hash_and_lamports(some_slot, 1, config.clone()),
             Ok(_)
         );
 
         db.remove_bank_hash_info(&some_slot);
+
         assert_matches!(
-            db.verify_bank_hash_and_lamports(
-                some_slot,
-                &ancestors,
-                1,
-                true,
-                &EpochSchedule::default(),
-                &RentCollector::default(),
-                false,
-                false,
-                false,
-            ),
+            db.verify_bank_hash_and_lamports(some_slot, 1, config.clone()),
             Err(MissingBankHash)
         );
 
         db.set_accounts_hash(some_slot, AccountsHash(Hash::new(&[0xca; HASH_BYTES])));
+
         assert_matches!(
-            db.verify_bank_hash_and_lamports(
-                some_slot,
-                &ancestors,
-                1,
-                true,
-                &EpochSchedule::default(),
-                &RentCollector::default(),
-                false,
-                false,
-                false,
-            ),
+            db.verify_bank_hash_and_lamports(some_slot, 1, config),
             Err(MismatchedBankHash)
         );
     }
@@ -12566,23 +12576,21 @@ pub mod tests {
             let some_slot: Slot = 0;
             let account = AccountSharedData::new(1, some_data_len, &key);
             let ancestors = vec![(some_slot, 0)].into_iter().collect();
+            let epoch_schedule = EpochSchedule::default();
+            let rent_collector = RentCollector::default();
+            let config = BankHashLamportsVerifyConfig::new_for_test(
+                &ancestors,
+                &epoch_schedule,
+                &rent_collector,
+            );
 
             db.store_for_tests(some_slot, &[(&key, &account)]);
             if pass == 0 {
                 db.add_root_and_flush_write_cache(some_slot);
                 db.update_accounts_hash_for_tests(some_slot, &ancestors, true, true);
+
                 assert_matches!(
-                    db.verify_bank_hash_and_lamports(
-                        some_slot,
-                        &ancestors,
-                        1,
-                        true,
-                        &EpochSchedule::default(),
-                        &RentCollector::default(),
-                        false,
-                        false,
-                        false,
-                    ),
+                    db.verify_bank_hash_and_lamports(some_slot, 1, config.clone()),
                     Ok(_)
                 );
                 continue;
@@ -12598,23 +12606,14 @@ pub mod tests {
             );
             db.add_root_and_flush_write_cache(some_slot);
             db.update_accounts_hash_for_tests(some_slot, &ancestors, true, true);
+
             assert_matches!(
-                db.verify_bank_hash_and_lamports(
-                    some_slot,
-                    &ancestors,
-                    2,
-                    true,
-                    &EpochSchedule::default(),
-                    &RentCollector::default(),
-                    false,
-                    false,
-                    false,
-                ),
+                db.verify_bank_hash_and_lamports(some_slot, 2, config.clone()),
                 Ok(_)
             );
 
             assert_matches!(
-                db.verify_bank_hash_and_lamports(some_slot, &ancestors, 10, true, &EpochSchedule::default(), &RentCollector::default(), false, false, false),
+                db.verify_bank_hash_and_lamports(some_slot, 10, config),
                 Err(MismatchedTotalLamports(expected, actual)) if expected == 2 && actual == 10
             );
         }
@@ -12630,18 +12629,17 @@ pub mod tests {
 
         db.add_root(some_slot);
         db.update_accounts_hash_for_tests(some_slot, &ancestors, true, true);
+
+        let epoch_schedule = EpochSchedule::default();
+        let rent_collector = RentCollector::default();
+        let config = BankHashLamportsVerifyConfig::new_for_test(
+            &ancestors,
+            &epoch_schedule,
+            &rent_collector,
+        );
+
         assert_matches!(
-            db.verify_bank_hash_and_lamports(
-                some_slot,
-                &ancestors,
-                0,
-                true,
-                &EpochSchedule::default(),
-                &RentCollector::default(),
-                false,
-                false,
-                false,
-            ),
+            db.verify_bank_hash_and_lamports(some_slot, 0, config),
             Ok(_)
         );
     }
@@ -12671,18 +12669,17 @@ pub mod tests {
             StoreReclaims::Default,
         );
         db.add_root(some_slot);
+
+        let epoch_schedule = EpochSchedule::default();
+        let rent_collector = RentCollector::default();
+        let config = BankHashLamportsVerifyConfig::new_for_test(
+            &ancestors,
+            &epoch_schedule,
+            &rent_collector,
+        );
+
         assert_matches!(
-            db.verify_bank_hash_and_lamports(
-                some_slot,
-                &ancestors,
-                1,
-                true,
-                &EpochSchedule::default(),
-                &RentCollector::default(),
-                false,
-                false,
-                false,
-            ),
+            db.verify_bank_hash_and_lamports(some_slot, 1, config),
             Err(MismatchedBankHash)
         );
     }
@@ -13211,34 +13208,23 @@ pub mod tests {
             );
 
             let no_ancestors = Ancestors::default();
+
+            let epoch_schedule = EpochSchedule::default();
+            let rent_collector = RentCollector::default();
+            let config = BankHashLamportsVerifyConfig::new_for_test(
+                &no_ancestors,
+                &epoch_schedule,
+                &rent_collector,
+            );
+
             accounts.update_accounts_hash_for_tests(current_slot, &no_ancestors, false, false);
             accounts
-                .verify_bank_hash_and_lamports(
-                    current_slot,
-                    &no_ancestors,
-                    22300,
-                    true,
-                    &EpochSchedule::default(),
-                    &RentCollector::default(),
-                    false,
-                    false,
-                    false,
-                )
+                .verify_bank_hash_and_lamports(current_slot, 22300, config.clone())
                 .unwrap();
 
             let accounts = reconstruct_accounts_db_via_serialization(&accounts, current_slot);
             accounts
-                .verify_bank_hash_and_lamports(
-                    current_slot,
-                    &no_ancestors,
-                    22300,
-                    true,
-                    &EpochSchedule::default(),
-                    &RentCollector::default(),
-                    false,
-                    false,
-                    false,
-                )
+                .verify_bank_hash_and_lamports(current_slot, 22300, config)
                 .unwrap();
 
             // repeating should be no-op
