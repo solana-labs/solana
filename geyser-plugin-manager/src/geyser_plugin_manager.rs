@@ -55,6 +55,7 @@ impl GeyserPluginManager {
         self.libs.push(Arc::clone(&lib));
 
         let owned_path = std::path::PathBuf::from(libpath);
+        let owned_config = config_file.to_owned();
         let handle = std::thread::spawn(move || {
             let mut refresh_path = owned_path.clone();
             refresh_path.set_extension("");
@@ -76,6 +77,7 @@ impl GeyserPluginManager {
                     .expect("valid path with valid filename was given if library loaded")
             ));
 
+            #[allow(unused_must_use)] // result io
             loop {
                 // Every 10 seconds..
                 std::thread::park_timeout(Duration::from_secs(10));
@@ -97,24 +99,33 @@ impl GeyserPluginManager {
                         {
                             // First construct plugin
                             let new_plugin_raw = constructor();
-                            let new_plugin: Box<dyn GeyserPlugin> = Box::from_raw(new_plugin_raw);
+                            let mut new_plugin: Box<dyn GeyserPlugin> =
+                                Box::from_raw(new_plugin_raw);
 
                             // Overwrite simultaneously
                             let mut plugin_lock = plugin.write().unwrap();
                             let mut lib_lock = lib.write().unwrap();
 
-                            // Overwrite and release locks
-                            *plugin_lock = new_plugin;
-                            *lib_lock = new_lib;
+                            // Try to start up new geyser
+                            if new_plugin.on_load(&owned_config).is_ok() {
+                                // Shutdown current geyser
+                                plugin_lock.on_unload();
 
-                            // Release explicitly for clarity
-                            drop(plugin_lock);
-                            drop(lib_lock);
+                                // Overwrite and release locks
+                                *plugin_lock = new_plugin;
+                                *lib_lock = new_lib;
 
-                            // Write success
-                            done_file.write(b"success");
+                                // Release explicitly for clarity
+                                drop(plugin_lock);
+                                drop(lib_lock);
+
+                                // Write success
+                                done_file.write(b"success");
+                            } else {
+                                done_file.write(b"created plugin but on_load failed");
+                            }
                         } else {
-                            done_file.write(b"failed to create plugin");
+                            done_file.write(b"failed to create_plugin");
                         }
                     } else {
                         done_file.write(b"failed to find plugin");
