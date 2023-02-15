@@ -1,0 +1,12 @@
+[package]
+name = "yktest"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+solana-client = { version = "1.16.0", path = "../client" }
+solana-program = { version = "1.16.0", path = "../sdk/program" }
+solana-remote-wallet = { version = "1.16.0", path = "../remote-wallet" }
+solana-sdk = { version = "1.16.0", path = "../sdk" }
