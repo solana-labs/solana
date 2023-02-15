@@ -1398,7 +1398,7 @@ fn build_storage_from_full_and_incremental_snapshot_dirs(
 
     let next_append_vec_id = Arc::new(AtomicU32::new(0));
     let (full_storage, measure_full_storage) = build_storage_from_snapshot_dir(
-        &full_snapshot_info,
+        full_snapshot_info,
         "full snapshot deserialize",
         account_paths,
         next_append_vec_id.clone(),
