@@ -318,11 +318,10 @@ fn test_bank_serialize_style(
         let temp_dir = TempDir::new().unwrap();
         let slot_dir = temp_dir.path().join(slot.to_string());
         let post_path = slot_dir.join(slot.to_string());
-        let mut pre_path = post_path.clone();
-        pre_path.set_extension(BANK_SNAPSHOT_PRE_FILENAME_EXTENSION);
+        let pre_path = post_path.with_extension(BANK_SNAPSHOT_PRE_FILENAME_EXTENSION);
         std::fs::create_dir(&slot_dir).unwrap();
         {
-            let mut f = std::fs::File::create(&pre_path).unwrap();
+            let mut f = std::fs::File::create(pre_path).unwrap();
             f.write_all(&buf).unwrap();
         }
 

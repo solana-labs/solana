@@ -1093,7 +1093,15 @@ fn test_incremental_snapshot_download_with_crossing_full_snapshot_interval_at_st
     info!(
         "Restarting the validator with full snapshot {validator_full_snapshot_slot_at_startup}..."
     );
+
+    // Stop the test validator
     let validator_info = cluster.exit_node(&validator_identity.pubkey());
+
+    // To restart, it is not enough to remove the old bank snapshot directories under snapshot/.
+    // The old hardlinks under <account_path>/snapshot/<slot> should also be removed.
+    // The purge call covers all of them.
+    snapshot_utils::purge_old_bank_snapshots(validator_snapshot_test_config.bank_snapshots_dir, 0);
+
     cluster.restart_node(
         &validator_identity.pubkey(),
         validator_info,

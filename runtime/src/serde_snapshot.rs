@@ -419,8 +419,7 @@ pub fn reserialize_bank_with_new_accounts_hash(
 ) -> bool {
     let bank_post = snapshot_utils::get_bank_snapshots_dir(bank_snapshots_dir, slot);
     let bank_post = bank_post.join(snapshot_utils::get_snapshot_file_name(slot));
-    let mut bank_pre = bank_post.clone();
-    bank_pre.set_extension(BANK_SNAPSHOT_PRE_FILENAME_EXTENSION);
+    let bank_pre = bank_post.with_extension(BANK_SNAPSHOT_PRE_FILENAME_EXTENSION);
 
     let mut found = false;
     {
