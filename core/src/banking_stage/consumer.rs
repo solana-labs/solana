@@ -26,6 +26,7 @@ use {
     },
     solana_sdk::{
         clock::{FORWARD_TRANSACTIONS_TO_LEADER_AT_SLOT_OFFSET, MAX_PROCESSING_AGE},
+        saturating_add_assign,
         timing::timestamp,
         transaction::{self, SanitizedTransaction, TransactionError},
     },
@@ -321,10 +322,11 @@ impl Consumer {
                 cost_model_us: new_cost_model_us,
                 execute_and_commit_transactions_output,
             } = process_transaction_batch_output;
-            total_cost_model_throttled_transactions_count =
-                total_cost_model_throttled_transactions_count
-                    .saturating_add(new_cost_model_throttled_transactions_count);
-            total_cost_model_us = total_cost_model_us.saturating_add(new_cost_model_us);
+            saturating_add_assign!(
+                total_cost_model_throttled_transactions_count,
+                new_cost_model_throttled_transactions_count
+            );
+            saturating_add_assign!(total_cost_model_us, new_cost_model_us);
 
             let ExecuteAndCommitTransactionsOutput {
                 transactions_attempted_execution_count: new_transactions_attempted_execution_count,
@@ -339,9 +341,10 @@ impl Consumer {
 
             total_execute_and_commit_timings.accumulate(&new_execute_and_commit_timings);
             total_error_counters.accumulate(&new_error_counters);
-            total_transactions_attempted_execution_count =
-                total_transactions_attempted_execution_count
-                    .saturating_add(new_transactions_attempted_execution_count);
+            saturating_add_assign!(
+                total_transactions_attempted_execution_count,
+                new_transactions_attempted_execution_count
+            );
 
             trace!(
                 "process_transactions result: {:?}",
@@ -349,14 +352,16 @@ impl Consumer {
             );
 
             if new_commit_transactions_result.is_ok() {
-                total_committed_transactions_count = total_committed_transactions_count
-                    .saturating_add(new_executed_transactions_count);
-                total_committed_transactions_with_successful_result_count =
-                    total_committed_transactions_with_successful_result_count
-                        .saturating_add(new_executed_with_successful_result_count);
+                saturating_add_assign!(
+                    total_committed_transactions_count,
+                    new_executed_transactions_count
+                );
+                saturating_add_assign!(
+                    total_committed_transactions_with_successful_result_count,
+                    new_executed_with_successful_result_count
+                );
             } else {
-                total_failed_commit_count =
-                    total_failed_commit_count.saturating_add(new_executed_transactions_count);
+                saturating_add_assign!(total_failed_commit_count, new_executed_transactions_count);
             }
 
             // Add the retryable txs (transactions that errored in a way that warrants a retry)
@@ -646,8 +651,8 @@ impl Consumer {
             (0, 0),
             |(units, times), program_timings| {
                 (
-                    units + program_timings.accumulated_units,
-                    times + program_timings.accumulated_us,
+                    units.saturating_add(program_timings.accumulated_units),
+                    times.saturating_add(program_timings.accumulated_us),
                 )
             },
         )
