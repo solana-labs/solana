@@ -380,19 +380,6 @@ pub fn build_args<'a>(version: &'_ str) -> App<'a, '_> {
         )
 }
 
-macro_rules! assign_or_return_err {
-    ($x: expr, $y: expr, $z: expr) => {
-        match $y {
-            Ok(value) => {
-                $x = value;
-            }
-            Err(_) => {
-                return Err($z);
-            }
-        }
-    };
-}
-
 /// Parses a clap `ArgMatches` structure into a `Config`
 pub fn parse_args(matches: &ArgMatches) -> Result<Config, &'static str> {
     let mut args = Config::default();
@@ -437,64 +424,52 @@ pub fn parse_args(matches: &ArgMatches) -> Result<Config, &'static str> {
     }
 
     if let Some(v) = matches.value_of("tpu_connection_pool_size") {
-        assign_or_return_err!(
-            args.tpu_connection_pool_size,
-            v.to_string().parse::<usize>(),
-            "can't parse tpu_connection_pool_size"
-        );
+        args.tpu_connection_pool_size = v
+            .to_string()
+            .parse::<usize>()
+            .map_err(|_| "can't parse tpu_connection_pool_size")?;
     }
 
     if let Some(addr) = matches.value_of("entrypoint") {
-        assign_or_return_err!(
-            args.entrypoint_addr,
-            solana_net_utils::parse_host_port(addr),
-            "failed to parse entrypoint address"
-        );
+        args.entrypoint_addr = solana_net_utils::parse_host_port(addr)
+            .map_err(|_| "failed to parse entrypoint address")?;
     }
 
     if let Some(t) = matches.value_of("threads") {
-        assign_or_return_err!(args.threads, t.to_string().parse(), "can't parse threads");
+        args.threads = t.to_string().parse().map_err(|_| "can't parse threads")?;
     }
 
     if let Some(n) = matches.value_of("num-nodes") {
-        assign_or_return_err!(
-            args.num_nodes,
-            n.to_string().parse(),
-            "can't parse num-nodes"
-        );
+        args.num_nodes = n.to_string().parse().map_err(|_| "can't parse num-nodes")?;
     }
 
     if let Some(duration) = matches.value_of("duration") {
-        let seconds;
-        assign_or_return_err!(
-            seconds,
-            duration.to_string().parse(),
-            "can't parse duration"
-        );
+        let seconds = duration
+            .to_string()
+            .parse()
+            .map_err(|_| "can't parse duration")?;
         args.duration = Duration::new(seconds, 0);
     }
 
     if let Some(s) = matches.value_of("tx_count") {
-        assign_or_return_err!(args.tx_count, s.to_string().parse(), "can't parse tx_count");
+        args.tx_count = s.to_string().parse().map_err(|_| "can't parse tx_count")?;
     }
 
     if let Some(s) = matches.value_of("keypair_multiplier") {
-        assign_or_return_err!(
-            args.keypair_multiplier,
-            s.to_string().parse(),
-            "can't parse keypair-multiplier"
-        );
+        args.keypair_multiplier = s
+            .to_string()
+            .parse()
+            .map_err(|_| "can't parse keypair-multiplier")?;
         if args.keypair_multiplier >= 2 {
             return Err("args.keypair_multiplier must be lower than 2");
         }
     }
 
     if let Some(t) = matches.value_of("thread-batch-sleep-ms") {
-        assign_or_return_err!(
-            args.thread_batch_sleep_ms,
-            t.to_string().parse(),
-            "can't parse thread-batch-sleep-ms"
-        );
+        args.thread_batch_sleep_ms = t
+            .to_string()
+            .parse()
+            .map_err(|_| "can't parse thread-batch-sleep-ms")?;
     }
 
     args.sustained = matches.is_present("sustained");
@@ -511,11 +486,8 @@ pub fn parse_args(matches: &ArgMatches) -> Result<Config, &'static str> {
     }
 
     if let Some(v) = matches.value_of("target_lamports_per_signature") {
-        assign_or_return_err!(
-            args.target_lamports_per_signature,
-            v.to_string().parse(),
-            "can't parse lamports"
-        );
+        args.target_lamports_per_signature =
+            v.to_string().parse().map_err(|_| "can't parse lamports")?;
     }
 
     args.multi_client = !matches.is_present("no-multi-client");
@@ -524,19 +496,15 @@ pub fn parse_args(matches: &ArgMatches) -> Result<Config, &'static str> {
         .map(|target_str| target_str.parse::<Pubkey>().unwrap());
 
     if let Some(v) = matches.value_of("num_lamports_per_account") {
-        assign_or_return_err!(
-            args.num_lamports_per_account,
-            v.to_string().parse(),
-            "can't parse lamports"
-        );
+        args.num_lamports_per_account =
+            v.to_string().parse().map_err(|_| "can't parse lamports")?;
     }
 
     if let Some(t) = matches.value_of("target_slots_per_epoch") {
-        assign_or_return_err!(
-            args.target_slots_per_epoch,
-            t.to_string().parse(),
-            "can't parse target slots per epoch"
-        );
+        args.target_slots_per_epoch = t
+            .to_string()
+            .parse()
+            .map_err(|_| "can't parse target slots per epoch")?;
     }
 
     if matches.is_present("use_randomized_compute_unit_price") {
@@ -552,12 +520,10 @@ pub fn parse_args(matches: &ArgMatches) -> Result<Config, &'static str> {
             .value_of("instruction_padding_program_id")
             .map(|target_str| target_str.parse().unwrap())
             .unwrap_or_else(|| FromOtherSolana::from(spl_instruction_padding::ID));
-        let parsed_data_size;
-        assign_or_return_err!(
-            parsed_data_size,
-            data_size.to_string().parse::<u32>(),
-            "Can't parse padded instruction data size"
-        );
+        let parsed_data_size = data_size
+            .to_string()
+            .parse()
+            .map_err(|_| "Can't parse padded instruction data size")?;
         args.instruction_padding_config = Some(InstructionPaddingConfig {
             program_id,
             data_size: parsed_data_size,
@@ -565,12 +531,9 @@ pub fn parse_args(matches: &ArgMatches) -> Result<Config, &'static str> {
     }
 
     if let Some(num_conflict_groups) = matches.value_of("num_conflict_groups") {
-        let parsed_num_conflict_groups;
-        assign_or_return_err!(
-            parsed_num_conflict_groups,
-            num_conflict_groups.parse(),
-            "Can't parse conflict groups"
-        );
+        let parsed_num_conflict_groups = num_conflict_groups
+            .parse()
+            .map_err(|_| "Can't parse conflict groups")?;
         args.num_conflict_groups = Some(parsed_num_conflict_groups);
     }
 
@@ -592,14 +555,15 @@ pub fn parse_args(matches: &ArgMatches) -> Result<Config, &'static str> {
     Ok(args)
 }
 
+#[cfg(test)]
 mod tests {
-    // without it make_tmp_path is claimed to be dead
-    #![allow(dead_code)]
-    // without it read_keypair_file, write_keypair_file are claimed to be unused
-    #![allow(unused_imports)]
     use {
-        super::*,
+        crate::cli::{build_args, parse_args, Config, ExternalClientType},
         solana_sdk::signature::{read_keypair_file, write_keypair_file, Keypair, Signer},
+        std::{
+            net::{Ipv4Addr, SocketAddr},
+            time::Duration,
+        },
     };
 
     fn make_tmp_path(name: &str) -> String {
@@ -609,9 +573,9 @@ mod tests {
         let path = format!("{}/tmp/{}-{}", out_dir, name, keypair.pubkey());
 
         // whack any possible collision
-        let _ignored = std::fs::remove_dir_all(&path);
+        let _ = std::fs::remove_dir_all(&path);
         // whack any possible collision
-        let _ignored = std::fs::remove_file(&path);
+        let _ = std::fs::remove_file(&path);
 
         path
     }
