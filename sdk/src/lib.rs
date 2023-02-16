@@ -50,8 +50,8 @@ pub use solana_program::{
     instruction, keccak, lamports, loader_instruction, loader_upgradeable_instruction, message,
     msg, native_token, nonce, program, program_error, program_memory, program_option, program_pack,
     rent, sanitize, sdk_ids, secp256k1_program, secp256k1_recover, serde_varint, serialize_utils,
-    short_vec, slot_hashes, slot_history, stake, stake_history, syscalls, system_instruction,
-    system_program, sysvar, unchecked_div_by_const, vote, wasm_bindgen,
+    short_vec, slot_hashes, slot_history, stable_layout, stake, stake_history, syscalls,
+    system_instruction, system_program, sysvar, unchecked_div_by_const, vote, wasm_bindgen,
 };
 
 pub mod account;

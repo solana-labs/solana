@@ -4954,6 +4954,7 @@ dependencies = [
  "byteorder",
  "libsecp256k1",
  "log",
+ "memoffset 0.8.0",
  "rand 0.7.3",
  "solana-measure",
  "solana-program-runtime",
