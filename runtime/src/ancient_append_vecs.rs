@@ -434,9 +434,9 @@ impl AccountsDb {
     /// finish shrink operation on slots where a new storage was created
     /// drop root and storage for all original slots whose contents were combined into other storages
     #[allow(dead_code)]
-    fn finish_combine_ancient_slots_packed_internal<'a>(
+    fn finish_combine_ancient_slots_packed_internal(
         &self,
-        accounts_to_combine: AccountsToCombine<'a>,
+        accounts_to_combine: AccountsToCombine<'_>,
         mut write_ancient_accounts: WriteAncientAccounts,
         metrics: &mut ShrinkStatsSub,
     ) {

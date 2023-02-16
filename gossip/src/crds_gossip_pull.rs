@@ -277,7 +277,7 @@ impl CrdsGossipPull {
             filters.truncate(MAX_NUM_PULL_REQUESTS);
         }
         // Associate each pull-request filter with a randomly selected peer.
-        let dist = WeightedIndex::new(&weights).unwrap();
+        let dist = WeightedIndex::new(weights).unwrap();
         let nodes = repeat_with(|| nodes[dist.sample(&mut rng)].clone());
         Ok(nodes.zip(filters).into_group_map())
     }
