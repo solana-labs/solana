@@ -1706,13 +1706,20 @@ pub fn main() {
                 .value_name("MEGABYTES")
                 .validator(is_parsable::<usize>)
                 .takes_value(true)
+                .requires("enable_accounts_disk_index")
                 .help("How much memory the accounts index can consume. If this is exceeded, some account index entries will be stored on disk."),
         )
         .arg(
             Arg::with_name("disable_accounts_disk_index")
                 .long("disable-accounts-disk-index")
                 .help("Disable the disk-based accounts index if it is enabled by default.")
-                .conflicts_with("accounts_index_memory_limit_mb")
+                .conflicts_with("enable_accounts_disk_index")
+        )
+        .arg(
+            Arg::with_name("enable_accounts_disk_index")
+                .long("enable-accounts-disk-index")
+                .conflicts_with("disable_accounts_disk_index")
+                .help("Enable the disk-based accounts index if it is disabled by default.")
         )
         .arg(
             Arg::with_name("accounts_index_bins")
@@ -2448,10 +2455,13 @@ pub fn main() {
     accounts_index_config.index_limit_mb =
         if let Some(limit) = value_t!(matches, "accounts_index_memory_limit_mb", usize).ok() {
             IndexLimitMb::Limit(limit)
-        } else if matches.is_present("disable_accounts_disk_index") {
-            IndexLimitMb::InMemOnly
-        } else {
+        } else if matches.is_present("enable_accounts_disk_index") {
             IndexLimitMb::Unspecified
+        } else {
+            if matches.is_present("disable_accounts_disk_index") {
+                warn!("ignoring `--disable-accounts-disk-index` as it specifies default behavior");
+            }
+            IndexLimitMb::InMemOnly
         };
 
     {

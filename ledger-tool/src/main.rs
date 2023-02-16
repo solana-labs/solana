@@ -1121,11 +1121,16 @@ fn main() {
         .value_name("MEGABYTES")
         .validator(is_parsable::<usize>)
         .takes_value(true)
+        .requires("enable_accounts_disk_index")
         .help("How much memory the accounts index can consume. If this is exceeded, some account index entries will be stored on disk.");
     let disable_disk_index = Arg::with_name("disable_accounts_disk_index")
         .long("disable-accounts-disk-index")
         .help("Disable the disk-based accounts index. It is enabled by default. The entire accounts index will be kept in memory.")
-        .conflicts_with("accounts_index_memory_limit_mb");
+        .conflicts_with("enable_accounts_disk_index");
+    let enable_disk_index = Arg::with_name("enable_accounts_disk_index")
+        .long("enable-accounts-disk-index")
+        .conflicts_with("disable_accounts_disk_index")
+        .help("Enable the disk-based accounts index if it is disabled by default.");
     let accountsdb_skip_shrink = Arg::with_name("accounts_db_skip_shrink")
         .long("accounts-db-skip-shrink")
         .help(
@@ -1539,6 +1544,7 @@ fn main() {
             .arg(&accounts_index_bins)
             .arg(&accounts_index_limit)
             .arg(&disable_disk_index)
+            .arg(&enable_disk_index)
             .arg(&accountsdb_skip_shrink)
             .arg(&accounts_filler_count)
             .arg(&accounts_filler_size)
@@ -2430,13 +2436,16 @@ fn main() {
                 );
 
                 accounts_index_config.index_limit_mb = if let Some(limit) =
-                    value_t!(arg_matches, "accounts_index_memory_limit_mb", usize).ok()
+                    value_t!(matches, "accounts_index_memory_limit_mb", usize).ok()
                 {
                     IndexLimitMb::Limit(limit)
-                } else if arg_matches.is_present("disable_accounts_disk_index") {
-                    IndexLimitMb::InMemOnly
-                } else {
+                } else if matches.is_present("enable_accounts_disk_index") {
                     IndexLimitMb::Unspecified
+                } else {
+                    if matches.is_present("disable_accounts_disk_index") {
+                        warn!("ignoring `--disable-accounts-disk-index` as it specifies default behavior");
+                    }
+                    IndexLimitMb::InMemOnly
                 };
 
                 {
