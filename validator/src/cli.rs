@@ -195,6 +195,7 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
             Arg::with_name("no_port_check")
                 .long("no-port-check")
                 .takes_value(false)
+                .hidden(true)
                 .help("Do not perform TCP/UDP reachable port checks at start-up")
         )
         .arg(
