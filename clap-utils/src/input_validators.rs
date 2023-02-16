@@ -340,7 +340,7 @@ where
 {
     let (prefix, value) = value
         .as_ref()
-        .split_once(":")
+        .split_once(':')
         .ok_or("Seed must contain ':' as delimiter")
         .unwrap();
     if prefix.is_empty() || value.is_empty() {
@@ -354,8 +354,8 @@ where
                     Err(format!("Wrong prefix length {len} {prefix}:{value}"))
                 } else {
                     let sign = &prefix[0..1];
-                    let type_size = &prefix[1..len - 2];
-                    let byte_order = &prefix[len - 2..len];
+                    let type_size = &prefix[1..len.saturating_sub(2)];
+                    let byte_order = &prefix[len.saturating_sub(2)..len];
                     if sign != "u" && sign != "i" {
                         Err(format!("Wrong prefix sign {sign} {prefix}:{value}"))
                     } else if type_size != "16"

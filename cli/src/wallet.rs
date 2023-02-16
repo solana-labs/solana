@@ -495,7 +495,7 @@ pub fn parse_find_program_address(matches: &ArgMatches<'_>) -> Result<CliCommand
         .map(|seeds| {
             seeds
                 .map(|value| {
-                    let (prefix, value) = value.split_once(":").unwrap();
+                    let (prefix, value) = value.split_once(':').unwrap();
                     match prefix {
                         "pubkey" => Pubkey::from_str(value).unwrap().to_bytes().to_vec(),
                         "string" => value.as_bytes().to_vec(),
