@@ -904,9 +904,8 @@ fn open_blockstore(
     let shred_storage_type = get_shred_storage_type(
         ledger_path,
         &format!(
-            "Shred stroage type cannot be inferred for ledger at {:?}, \
+            "Shred stroage type cannot be inferred for ledger at {ledger_path:?}, \
          using default RocksLevel",
-            ledger_path
         ),
     );
 

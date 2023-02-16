@@ -537,7 +537,7 @@ impl ServeRepair {
                 stats.err_unsigned += 1;
             }
             _ => {
-                debug_assert!(false, "unhandled error {:?}", error);
+                debug_assert!(false, "unhandled error {error:?}");
             }
         }
     }
@@ -838,8 +838,7 @@ impl ServeRepair {
                     None => {
                         debug_assert!(
                             false,
-                            "request should have failed deserialization: {:?}",
-                            request
+                            "request should have failed deserialization: {request:?}",
                         );
                         return Err(Error::from(RepairVerifyError::Malformed));
                     }
@@ -849,8 +848,7 @@ impl ServeRepair {
                     None => {
                         debug_assert!(
                             false,
-                            "request should have failed deserialization: {:?}",
-                            request
+                            "request should have failed deserialization: {request:?}",
                         );
                         return Err(Error::from(RepairVerifyError::Malformed));
                     }
