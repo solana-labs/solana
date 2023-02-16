@@ -29,13 +29,13 @@ impl BlockMetadataNotifier for BlockMetadataNotifierImpl {
         block_time: Option<UnixTimestamp>,
         block_height: Option<u64>,
     ) {
-        let mut plugin_manager = self.plugin_manager.write().unwrap();
+        let plugin_manager = self.plugin_manager.read().unwrap();
         if plugin_manager.plugins.is_empty() {
             return;
         }
         let rewards = Self::build_rewards(rewards);
 
-        for plugin in plugin_manager.plugins.iter_mut() {
+        for plugin in plugin_manager.plugins.iter() {
             let mut measure = Measure::start("geyser-plugin-update-slot");
             let block_info =
                 Self::build_replica_block_info(slot, blockhash, &rewards, block_time, block_height);
