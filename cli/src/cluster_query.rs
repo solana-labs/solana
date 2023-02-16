@@ -19,7 +19,7 @@ use {
         cli_version::CliVersion,
         display::{
             build_balance_message, format_labeled_address, new_spinner_progress_bar,
-            println_transaction, unix_timestamp_to_string, writeln_name_value,
+            writeln_name_value,
         },
         *,
     },
@@ -61,7 +61,9 @@ use {
         },
         transaction::Transaction,
     },
-    solana_transaction_status::UiTransactionEncoding,
+    solana_transaction_status::{
+        EncodableWithMeta, EncodedConfirmedTransactionWithStatusMeta, UiTransactionEncoding,
+    },
     solana_vote_program::vote_state::VoteState,
     std::{
         collections::{BTreeMap, HashMap, VecDeque},
@@ -2032,36 +2034,34 @@ pub fn process_transaction_history(
         },
     )?;
 
-    let transactions_found = format!("{} transactions found", results.len());
-
-    for result in results {
-        if config.verbose {
-            println!(
-                "{} [slot={} {}status={}] {}",
-                result.signature,
-                result.slot,
-                match result.block_time {
-                    None => "".to_string(),
-                    Some(block_time) =>
-                        format!("timestamp={} ", unix_timestamp_to_string(block_time)),
-                },
-                if let Some(err) = result.err {
-                    format!("Failed: {err:?}")
-                } else {
-                    match result.confirmation_status {
-                        None => "Finalized".to_string(),
-                        Some(status) => format!("{status:?}"),
-                    }
-                },
-                result.memo.unwrap_or_default(),
-            );
-        } else {
-            println!("{}", result.signature);
-        }
-
-        if show_transactions {
+    if !show_transactions {
+        let cli_signatures: Vec<_> = results
+            .into_iter()
+            .map(|result| {
+                let mut signature = CliHistorySignature {
+                    signature: result.signature,
+                    ..CliHistorySignature::default()
+                };
+                if config.verbose {
+                    signature.verbose = Some(CliHistoryVerbose {
+                        slot: result.slot,
+                        block_time: result.block_time,
+                        err: result.err,
+                        confirmation_status: result.confirmation_status,
+                        memo: result.memo,
+                    });
+                }
+                signature
+            })
+            .collect();
+        Ok(config
+            .output_format
+            .formatted_string(&CliHistorySignatureVec::new(cli_signatures)))
+    } else {
+        let mut cli_transactions = vec![];
+        for result in results {
             if let Ok(signature) = result.signature.parse::<Signature>() {
-                match rpc_client.get_transaction_with_config(
+                let (transaction, error_msg) = match rpc_client.get_transaction_with_config(
                     &signature,
                     RpcTransactionConfig {
                         encoding: Some(UiTransactionEncoding::Base64),
@@ -2069,26 +2069,47 @@ pub fn process_transaction_history(
                         max_supported_transaction_version: Some(0),
                     },
                 ) {
-                    Ok(confirmed_transaction) => {
-                        println_transaction(
-                            &confirmed_transaction
-                                .transaction
-                                .transaction
-                                .decode()
-                                .expect("Successful decode"),
-                            confirmed_transaction.transaction.meta.as_ref(),
-                            "  ",
+                    Ok(transaction) => {
+                        let EncodedConfirmedTransactionWithStatusMeta {
+                            block_time,
+                            slot,
+                            transaction: transaction_with_meta,
+                        } = transaction;
+
+                        let decoded_transaction =
+                            transaction_with_meta.transaction.decode().unwrap();
+                        let json_transaction = decoded_transaction.json_encode();
+
+                        (
+                            Some(CliTransaction {
+                                transaction: json_transaction,
+                                meta: transaction_with_meta.meta,
+                                block_time,
+                                slot: Some(slot),
+                                decoded_transaction,
+                                prefix: "  ".to_string(),
+                                sigverify_status: vec![],
+                            }),
                             None,
-                            None,
-                        );
+                        )
                     }
-                    Err(err) => println!("  Unable to get confirmed transaction details: {err}"),
-                }
+                    Err(err) => (
+                        None,
+                        Some(format!(
+                            "Unable to get confirmed transaction details, {signature}: {err}"
+                        )),
+                    ),
+                };
+                cli_transactions.push(CliHistoryTransaction {
+                    transaction,
+                    error_msg,
+                });
             }
-            println!();
         }
+        Ok(config
+            .output_format
+            .formatted_string(&CliHistoryTransactionVec::new(cli_transactions)))
     }
-    Ok(transactions_found)
 }
 
 #[derive(Serialize, Deserialize)]
