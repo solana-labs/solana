@@ -487,8 +487,8 @@ fn process_instruction_common(
         }
         match &executor.program {
             LoadedProgramType::Invalid => Err(InstructionError::InvalidAccountData),
-            LoadedProgramType::LegacyV0(executable) => execute(&executable, invoke_context),
-            LoadedProgramType::LegacyV1(executable) => execute(&executable, invoke_context),
+            LoadedProgramType::LegacyV0(executable) => execute(executable, invoke_context),
+            LoadedProgramType::LegacyV1(executable) => execute(executable, invoke_context),
             LoadedProgramType::BuiltIn(_) => Err(InstructionError::IncorrectProgramId),
         }
     } else {
