@@ -140,9 +140,14 @@ impl solana_frozen_abi::abi_example::AbiExample for LoadedPrograms {
     }
 }
 
+pub enum LoadedProgramEntry {
+    WasOccupied(Arc<LoadedProgram>),
+    WasVacant(Arc<LoadedProgram>),
+}
+
 impl LoadedPrograms {
     /// Inserts a single entry
-    pub fn insert_entry(&mut self, key: Pubkey, entry: LoadedProgram) -> bool {
+    pub fn insert_entry(&mut self, key: Pubkey, entry: LoadedProgram) -> LoadedProgramEntry {
         let second_level = self.entries.entry(key).or_insert_with(Vec::new);
         let index = second_level
             .iter()
@@ -154,11 +159,12 @@ impl LoadedPrograms {
             if existing.deployment_slot == entry.deployment_slot
                 && existing.effective_slot == entry.effective_slot
             {
-                return false;
+                return LoadedProgramEntry::WasOccupied(existing.clone());
             }
         }
-        second_level.insert(index.unwrap_or(second_level.len()), Arc::new(entry));
-        true
+        let new_entry = Arc::new(entry);
+        second_level.insert(index.unwrap_or(second_level.len()), new_entry.clone());
+        LoadedProgramEntry::WasVacant(new_entry)
     }
 
     /// Before rerooting the blockstore this removes all programs of orphan forks
@@ -228,7 +234,8 @@ impl LoadedPrograms {
 mod tests {
     use {
         crate::loaded_programs::{
-            BlockRelation, ForkGraph, LoadedProgram, LoadedProgramType, LoadedPrograms, WorkingSlot,
+            BlockRelation, ForkGraph, LoadedProgram, LoadedProgramEntry, LoadedProgramType,
+            LoadedPrograms, WorkingSlot,
         },
         solana_sdk::{clock::Slot, pubkey::Pubkey},
         std::{
@@ -377,14 +384,14 @@ mod tests {
         }
     }
 
-    fn new_test_loaded_program(deployment_slot: Slot, effective_slot: Slot) -> Arc<LoadedProgram> {
-        Arc::new(LoadedProgram {
+    fn new_test_loaded_program(deployment_slot: Slot, effective_slot: Slot) -> LoadedProgram {
+        LoadedProgram {
             program: LoadedProgramType::Invalid,
             account_size: 0,
             deployment_slot,
             effective_slot,
             usage_counter: AtomicU64::default(),
-        })
+        }
     }
 
     fn match_slot(
@@ -423,39 +430,55 @@ mod tests {
         fork_graph.insert_fork(&[0, 5, 11, 25, 27]);
 
         let program1 = Pubkey::new_unique();
-        cache.entries.insert(
-            program1,
-            vec![
-                new_test_loaded_program(0, 1),
-                new_test_loaded_program(10, 11),
-                new_test_loaded_program(20, 21),
-            ],
-        );
+        assert!(matches!(
+            cache.insert_entry(program1, new_test_loaded_program(0, 1)),
+            LoadedProgramEntry::WasVacant(_)
+        ));
+        assert!(matches!(
+            cache.insert_entry(program1, new_test_loaded_program(10, 11)),
+            LoadedProgramEntry::WasVacant(_)
+        ));
+        assert!(matches!(
+            cache.insert_entry(program1, new_test_loaded_program(20, 21)),
+            LoadedProgramEntry::WasVacant(_)
+        ));
+
+        // Test: inserting duplicate entry return pre existing entry from the cache
+        assert!(matches!(
+            cache.insert_entry(program1, new_test_loaded_program(20, 21)),
+            LoadedProgramEntry::WasOccupied(_)
+        ));
 
         let program2 = Pubkey::new_unique();
-        cache.entries.insert(
-            program2,
-            vec![
-                new_test_loaded_program(5, 6),
-                new_test_loaded_program(11, 12),
-            ],
-        );
+        assert!(matches!(
+            cache.insert_entry(program2, new_test_loaded_program(5, 6)),
+            LoadedProgramEntry::WasVacant(_)
+        ));
+        assert!(matches!(
+            cache.insert_entry(program2, new_test_loaded_program(11, 12)),
+            LoadedProgramEntry::WasVacant(_)
+        ));
 
         let program3 = Pubkey::new_unique();
-        cache
-            .entries
-            .insert(program3, vec![new_test_loaded_program(25, 26)]);
+        assert!(matches!(
+            cache.insert_entry(program3, new_test_loaded_program(25, 26)),
+            LoadedProgramEntry::WasVacant(_)
+        ));
 
         let program4 = Pubkey::new_unique();
-        cache.entries.insert(
-            program4,
-            vec![
-                new_test_loaded_program(0, 1),
-                new_test_loaded_program(5, 6),
-                // The following is a special case, where effective slot is 4 slots in the future
-                new_test_loaded_program(15, 19),
-            ],
-        );
+        assert!(matches!(
+            cache.insert_entry(program4, new_test_loaded_program(0, 1)),
+            LoadedProgramEntry::WasVacant(_)
+        ));
+        assert!(matches!(
+            cache.insert_entry(program4, new_test_loaded_program(5, 6)),
+            LoadedProgramEntry::WasVacant(_)
+        ));
+        // The following is a special case, where effective slot is 4 slots in the future
+        assert!(matches!(
+            cache.insert_entry(program4, new_test_loaded_program(15, 19)),
+            LoadedProgramEntry::WasVacant(_)
+        ));
 
         // Current fork graph
         //                   0
