@@ -701,7 +701,6 @@ pub fn archive_snapshot_package(
             ArchiveFormat::Tar => {
                 do_archive_files(&mut archive_file)?;
             }
-            ArchiveFormat::None => (),
         };
     }
 
@@ -2544,7 +2543,6 @@ fn untar_snapshot_create_shared_buffer(
             SharedBuffer::new(lz4::Decoder::new(BufReader::new(open_file())).unwrap())
         }
         ArchiveFormat::Tar => SharedBuffer::new(BufReader::new(open_file())),
-        ArchiveFormat::None => SharedBuffer::new(BufReader::new(open_file())),
     }
 }
 
