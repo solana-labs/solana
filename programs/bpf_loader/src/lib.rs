@@ -19,9 +19,10 @@ use {
     solana_program_runtime::{
         compute_budget::ComputeBudget,
         executor::CreateMetrics,
+        executor_cache::TransactionExecutorCache,
         ic_logger_msg, ic_msg,
         invoke_context::InvokeContext,
-        loaded_programs::{LoadedProgram, LoadedProgramType},
+        loaded_programs::{LoadProgramMetrics, LoadedProgram, LoadedProgramType},
         log_collector::LogCollector,
         stable_log,
         sysvar_cache::get_sysvar_with_account_check,
@@ -60,7 +61,12 @@ use {
             BorrowedAccount, IndexOfAccount, InstructionContext, TransactionContext,
         },
     },
-    std::{cell::RefCell, fmt::Debug, rc::Rc, sync::Arc},
+    std::{
+        cell::{RefCell, RefMut},
+        fmt::Debug,
+        rc::Rc,
+        sync::Arc,
+    },
     thiserror::Error,
 };
 
@@ -143,8 +149,8 @@ pub fn load_program_from_bytes(
     })?;
     register_syscalls_time.stop();
     create_executor_metrics.register_syscalls_us = register_syscalls_time.as_us();
-    let mut load_elf_time = Measure::start("load_elf_time");
 
+    let mut loaded_program_metrics = LoadProgramMetrics::default();
     // Allowing mut here, since it may be needed for jit compile, which is under a config flag
     #[allow(unused_mut)]
     let mut loaded_program = LoadedProgram::new(
@@ -153,19 +159,25 @@ pub fn load_program_from_bytes(
         deployment_slot,
         programdata,
         account_size,
+        &mut loaded_program_metrics,
     )
     .map_err(|err| {
         ic_logger_msg!(log_collector, "{}", err);
         InstructionError::InvalidAccountData
     })?;
-    load_elf_time.stop();
-    create_executor_metrics.load_elf_us = load_elf_time.as_us();
+    create_executor_metrics.load_elf_us = loaded_program_metrics.load_elf_us;
+    create_executor_metrics.verify_code_us = loaded_program_metrics.verify_code_us;
 
     if use_jit {
         #[cfg(all(not(target_os = "windows"), target_arch = "x86_64"))]
         {
             let mut jit_compile_time = Measure::start("jit_compile_time");
-            let jit_compile_result = loaded_program.jit_compile();
+            let jit_compile_result = match &mut loaded_program.program {
+                LoadedProgramType::Invalid => Err(EbpfError::JitNotCompiled),
+                LoadedProgramType::LegacyV0(executable) => executable.jit_compile(),
+                LoadedProgramType::LegacyV1(executable) => executable.jit_compile(),
+                LoadedProgramType::BuiltIn(_) => Err(EbpfError::JitNotCompiled),
+            };
             jit_compile_time.stop();
             create_executor_metrics.jit_compile_us = jit_compile_time.as_us();
             if let Err(err) = jit_compile_result {
@@ -210,10 +222,11 @@ pub fn load_program_from_account(
     feature_set: &FeatureSet,
     compute_budget: &ComputeBudget,
     log_collector: Option<Rc<RefCell<LogCollector>>>,
+    tx_executor_cache: Option<RefMut<TransactionExecutorCache>>,
     program: &BorrowedAccount,
     programdata: &BorrowedAccount,
     use_jit: bool,
-) -> Result<(LoadedProgram, Option<CreateMetrics>), InstructionError> {
+) -> Result<(Arc<LoadedProgram>, Option<CreateMetrics>), InstructionError> {
     if !check_loader_id(program.get_owner()) {
         ic_logger_msg!(
             log_collector,
@@ -235,7 +248,7 @@ pub fn load_program_from_account(
         ..CreateMetrics::default()
     };
 
-    let loaded_program = load_program_from_bytes(
+    let loaded_program = Arc::new(load_program_from_bytes(
         feature_set,
         compute_budget,
         log_collector,
@@ -249,7 +262,16 @@ pub fn load_program_from_account(
         deployment_slot,
         use_jit,
         false, /* reject_deployment_of_broken_elfs */
-    )?;
+    )?);
+    if let Some(mut tx_executor_cache) = tx_executor_cache {
+        tx_executor_cache.set(
+            *program.get_key(),
+            loaded_program.clone(),
+            false,
+            feature_set.is_active(&delay_visibility_of_program_deployment::id()),
+        );
+    }
+
     Ok((loaded_program, Some(create_executor_metrics)))
 }
 
@@ -448,6 +470,7 @@ fn process_instruction_common(
             &invoke_context.feature_set,
             invoke_context.get_compute_budget(),
             log_collector,
+            Some(invoke_context.tx_executor_cache.borrow_mut()),
             &program,
             programdata.as_ref().unwrap_or(&program),
             use_jit,
@@ -462,8 +485,8 @@ fn process_instruction_common(
         if let Some(create_executor_metrics) = create_executor_metrics {
             create_executor_metrics.submit_datapoint(&mut invoke_context.timings);
         }
-        match executor.program {
-            LoadedProgramType::Invalid => Err(InstructionError::IncorrectProgramId),
+        match &executor.program {
+            LoadedProgramType::Invalid => Err(InstructionError::InvalidAccountData),
             LoadedProgramType::LegacyV0(executable) => execute(&executable, invoke_context),
             LoadedProgramType::LegacyV1(executable) => execute(&executable, invoke_context),
             LoadedProgramType::BuiltIn(_) => Err(InstructionError::IncorrectProgramId),

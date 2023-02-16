@@ -1,5 +1,6 @@
 use {
     crate::invoke_context::InvokeContext,
+    solana_measure::measure::Measure,
     solana_rbpf::{
         elf::Executable,
         error::EbpfError,
@@ -86,6 +87,12 @@ pub struct LoadedProgram {
     pub usage_counter: AtomicU64,
 }
 
+#[derive(Debug, Default)]
+pub struct LoadProgramMetrics {
+    pub load_elf_us: u64,
+    pub verify_code_us: u64,
+}
+
 impl LoadedProgram {
     /// Creates a new user program
     pub fn new(
@@ -94,13 +101,32 @@ impl LoadedProgram {
         deployment_slot: Slot,
         elf_bytes: &[u8],
         account_size: usize,
+        metrics: &mut LoadProgramMetrics,
     ) -> Result<Self, EbpfError> {
         let program = if bpf_loader_deprecated::check_id(loader_key) {
+            let mut load_elf_time = Measure::start("load_elf_time");
             let executable = Executable::load(elf_bytes, loader.clone())?;
-            LoadedProgramType::LegacyV0(VerifiedExecutable::from_executable(executable)?)
+            load_elf_time.stop();
+            metrics.load_elf_us = load_elf_time.as_us();
+
+            let mut verify_code_time = Measure::start("verify_code_time");
+            let program_type =
+                LoadedProgramType::LegacyV0(VerifiedExecutable::from_executable(executable)?);
+            verify_code_time.stop();
+            metrics.verify_code_us = verify_code_time.as_us();
+            program_type
         } else if bpf_loader::check_id(loader_key) || bpf_loader_upgradeable::check_id(loader_key) {
+            let mut load_elf_time = Measure::start("load_elf_time");
             let executable = Executable::load(elf_bytes, loader.clone())?;
-            LoadedProgramType::LegacyV1(VerifiedExecutable::from_executable(executable)?)
+            load_elf_time.stop();
+            metrics.load_elf_us = load_elf_time.as_us();
+
+            let mut verify_code_time = Measure::start("verify_code_time");
+            let program_type =
+                LoadedProgramType::LegacyV1(VerifiedExecutable::from_executable(executable)?);
+            verify_code_time.stop();
+            metrics.verify_code_us = verify_code_time.as_us();
+            program_type
         } else {
             panic!();
         };
@@ -127,17 +153,13 @@ impl LoadedProgram {
         }
     }
 
-    pub fn jit_compile(&mut self) -> Result<(), EbpfError> {
-        #[cfg(any(target_os = "windows", not(target_arch = "x86_64")))]
-        return Ok(());
-        #[cfg(all(not(target_os = "windows"), target_arch = "x86_64"))]
-        {
-            match &mut self.program {
-                LoadedProgramType::Invalid => panic!(),
-                LoadedProgramType::LegacyV0(executable) => executable.jit_compile(),
-                LoadedProgramType::LegacyV1(executable) => executable.jit_compile(),
-                LoadedProgramType::BuiltIn(_) => panic!(),
-            }
+    pub fn new_tombstone() -> Self {
+        Self {
+            program: LoadedProgramType::Invalid,
+            account_size: 0,
+            deployment_slot: 0,
+            effective_slot: 0,
+            usage_counter: AtomicU64::default(),
         }
     }
 }
@@ -264,6 +286,12 @@ mod tests {
             sync::{atomic::AtomicU64, Arc},
         },
     };
+
+    #[test]
+    fn test_tombstone() {
+        let tombstone = LoadedProgram::new_tombstone();
+        assert!(matches!(tombstone.program, LoadedProgramType::Invalid));
+    }
 
     struct TestForkGraph {
         relation: BlockRelation,

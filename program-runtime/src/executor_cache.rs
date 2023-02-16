@@ -21,7 +21,7 @@ use {
 #[derive(Default, Debug)]
 pub struct TransactionExecutorCache {
     /// Executors or tombstones which are visible during the transaction
-    pub visible: HashMap<Pubkey, Option<Arc<LoadedProgram>>>,
+    pub visible: HashMap<Pubkey, Arc<LoadedProgram>>,
     /// Executors of programs which were re-/deploymed during the transaction
     pub deployments: HashMap<Pubkey, Arc<LoadedProgram>>,
     /// Executors which were missing in the cache and not re-/deploymed during the transaction
@@ -31,20 +31,19 @@ pub struct TransactionExecutorCache {
 impl TransactionExecutorCache {
     pub fn new(executable_keys: impl Iterator<Item = (Pubkey, Arc<LoadedProgram>)>) -> Self {
         Self {
-            visible: executable_keys
-                .map(|(id, executor)| (id, Some(executor)))
-                .collect(),
+            visible: executable_keys.collect(),
             deployments: HashMap::new(),
             add_to_cache: HashMap::new(),
         }
     }
 
-    pub fn get(&self, key: &Pubkey) -> Option<Option<Arc<LoadedProgram>>> {
+    pub fn get(&self, key: &Pubkey) -> Option<Arc<LoadedProgram>> {
         self.visible.get(key).cloned()
     }
 
     pub fn set_tombstone(&mut self, key: Pubkey) {
-        self.visible.insert(key, None);
+        self.visible
+            .insert(key, Arc::new(LoadedProgram::new_tombstone()));
     }
 
     pub fn set(
@@ -60,11 +59,11 @@ impl TransactionExecutorCache {
                 // we don't load the new version from the database as it should remain invisible
                 self.set_tombstone(key);
             } else {
-                self.visible.insert(key, Some(executor.clone()));
+                self.visible.insert(key, executor.clone());
             }
             self.deployments.insert(key, executor);
         } else {
-            self.visible.insert(key, Some(executor.clone()));
+            self.visible.insert(key, executor.clone());
             self.add_to_cache.insert(key, executor);
         }
     }

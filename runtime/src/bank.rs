@@ -4061,7 +4061,7 @@ impl Bank {
     }
 
     #[allow(dead_code)] // Preparation for BankExecutorCache rework
-    fn load_program(&self, pubkey: &Pubkey) -> Result<LoadedProgram> {
+    fn load_program(&self, pubkey: &Pubkey) -> Result<Arc<LoadedProgram>> {
         let program = if let Some(program) = self.get_account_with_fixed_root(pubkey) {
             program
         } else {
@@ -4118,6 +4118,7 @@ impl Bank {
             &self.feature_set,
             &self.runtime_config.compute_budget.unwrap_or_default(),
             None, // log_collector
+            None,
             &program,
             programdata.as_ref().unwrap_or(&program),
             self.runtime_config.bpf_jit,
