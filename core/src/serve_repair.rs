@@ -1584,7 +1584,7 @@ mod tests {
             );
             let slot = 239847;
             let request = RepairProtocol::Orphan { header, slot };
-            let mut packet = Packet::from_data(None, &request).unwrap();
+            let mut packet = Packet::from_data(None, request).unwrap();
             sign_packet(&mut packet, &my_keypair);
             packet
         };
@@ -1603,7 +1603,7 @@ mod tests {
             );
             let slot = 239847;
             let request = RepairProtocol::Orphan { header, slot };
-            let mut packet = Packet::from_data(None, &request).unwrap();
+            let mut packet = Packet::from_data(None, request).unwrap();
             sign_packet(&mut packet, &my_keypair);
             packet
         };
@@ -1625,7 +1625,7 @@ mod tests {
             );
             let slot = 239847;
             let request = RepairProtocol::Orphan { header, slot };
-            let mut packet = Packet::from_data(None, &request).unwrap();
+            let mut packet = Packet::from_data(None, request).unwrap();
             sign_packet(&mut packet, &my_keypair);
             packet
         };
@@ -1645,7 +1645,7 @@ mod tests {
             );
             let slot = 239847;
             let request = RepairProtocol::Orphan { header, slot };
-            let mut packet = Packet::from_data(None, &request).unwrap();
+            let mut packet = Packet::from_data(None, request).unwrap();
             sign_packet(&mut packet, &other_keypair);
             packet
         };
