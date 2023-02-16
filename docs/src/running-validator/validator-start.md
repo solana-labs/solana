@@ -439,12 +439,6 @@ solana-validator ..."); otherwise, when logrotate sends its signal to the
 validator, the enclosing script will die and take the validator process with
 it.
 
-### Disable port checks to speed up restarts
-
-Once your validator is operating normally, you can reduce the time it takes to
-restart your validator by adding the `--no-port-check` flag to your
-`solana-validator` command-line.
-
 ### Using a ramdisk with spill-over into swap for the accounts database to reduce SSD wear
 
 If your machine has plenty of RAM, a tmpfs ramdisk
