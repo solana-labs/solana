@@ -642,18 +642,15 @@ impl Consumer {
     }
 
     fn accumulate_execute_units_and_time(execute_timings: &ExecuteTimings) -> (u64, u64) {
-        let (units, times): (Vec<_>, Vec<_>) = execute_timings
-            .details
-            .per_program_timings
-            .values()
-            .map(|program_timings| {
+        execute_timings.details.per_program_timings.values().fold(
+            (0, 0),
+            |(units, times), program_timings| {
                 (
-                    program_timings.accumulated_units,
-                    program_timings.accumulated_us,
+                    units + program_timings.accumulated_units,
+                    times + program_timings.accumulated_us,
                 )
-            })
-            .unzip();
-        (units.iter().sum(), times.iter().sum())
+            },
+        )
     }
 
     /// This function filters pending packets that are still valid
