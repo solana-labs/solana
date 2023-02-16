@@ -2820,6 +2820,7 @@ impl Node {
             wallclock: timestamp(),
             shred_version: 0,
         };
+        let rpc = solana_net_utils::bind_to(bind_ip_addr, rpc_port, false).unwrap();
         Node {
             info,
             sockets: Sockets {
@@ -2837,7 +2838,7 @@ impl Node {
                 ancestor_hashes_requests,
                 tpu_quic,
                 tpu_forwards_quic,
-                rpc: None,
+                rpc: Some(rpc),
             },
         }
     }
