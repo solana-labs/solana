@@ -59,6 +59,10 @@ pub enum CliCommand {
     Fees {
         blockhash: Option<Hash>,
     },
+    FindProgramAddress {
+        seeds: Vec<Vec<u8>>,
+        program_id: Pubkey,
+    },
     FirstAvailableBlock,
     GetBlock {
         slot: Option<Slot>,
@@ -802,6 +806,7 @@ pub fn parse_command(
         ("create-address-with-seed", Some(matches)) => {
             parse_create_address_with_seed(matches, default_signer, wallet_manager)
         }
+        ("find-program-address", Some(matches)) => parse_find_program_address(matches),
         ("decode-transaction", Some(matches)) => parse_decode_transaction(matches),
         ("resolve-signer", Some(matches)) => {
             let signer_path = resolve_signer(matches, "signer", wallet_manager)?;
@@ -887,6 +892,9 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
         CliCommand::Fees { ref blockhash } => process_fees(&rpc_client, config, blockhash.as_ref()),
         CliCommand::Feature(feature_subcommand) => {
             process_feature_subcommand(&rpc_client, config, feature_subcommand)
+        }
+        CliCommand::FindProgramAddress { seeds, program_id } => {
+            process_find_program_address(config, seeds, program_id)
         }
         CliCommand::FirstAvailableBlock => process_first_available_block(&rpc_client),
         CliCommand::GetBlock { slot } => process_get_block(&rpc_client, config, *slot),

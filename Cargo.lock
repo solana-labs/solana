@@ -5279,6 +5279,7 @@ dependencies = [
  "criterion-stats",
  "crossbeam-channel",
  "ctrlc",
+ "hex",
  "humantime",
  "log",
  "num-traits",
