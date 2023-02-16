@@ -514,6 +514,8 @@ pub mod program_utils;
 pub mod pubkey;
 pub mod rent;
 pub mod sanitize;
+pub mod sbpf_loader;
+pub mod sbpf_loader_instruction;
 pub mod secp256k1_program;
 pub mod secp256k1_recover;
 pub mod serde_varint;
