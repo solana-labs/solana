@@ -3590,6 +3590,7 @@ fn test_program_fees() {
         false,
         true,
         true,
+        true,
     );
     bank_client
         .send_and_confirm_message(&[&mint_keypair], message)
@@ -3612,6 +3613,7 @@ fn test_program_fees() {
         &fee_structure,
         true,
         false,
+        true,
         true,
         true,
     );
