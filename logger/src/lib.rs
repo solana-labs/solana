@@ -61,7 +61,7 @@ pub fn setup() {
 // the thread id at the beginning, so you can filter out logs belonging to
 // different threads.
 pub fn setup_logging_with_thread_id(filter: &str) {
-    env_logger::Builder::from_env(env_logger::Env::new().default_filter_or(filter))
+    let logger = env_logger::Builder::from_env(env_logger::Env::new().default_filter_or(filter))
         .format(|buf, record| {
             writeln!(
                 buf,
@@ -75,7 +75,8 @@ pub fn setup_logging_with_thread_id(filter: &str) {
                 record.args()
             )
         })
-        .init();
+        .build();
+    replace_logger(logger);
 }
 
 // Configures file logging with a default filter if RUST_LOG is not set
