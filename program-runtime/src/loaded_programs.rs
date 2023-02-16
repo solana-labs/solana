@@ -219,8 +219,12 @@ pub enum LoadedProgramEntry {
 }
 
 impl LoadedPrograms {
-    /// Inserts a single entry
-    pub fn insert_entry(&mut self, key: Pubkey, entry: LoadedProgram) -> LoadedProgramEntry {
+    /// Inserts a single entry wrapped in an Arc
+    pub fn insert_entry_arc(
+        &mut self,
+        key: Pubkey,
+        entry: Arc<LoadedProgram>,
+    ) -> LoadedProgramEntry {
         let second_level = self.entries.entry(key).or_insert_with(Vec::new);
         let index = second_level
             .iter()
@@ -235,9 +239,13 @@ impl LoadedPrograms {
                 return LoadedProgramEntry::WasOccupied(existing.clone());
             }
         }
-        let new_entry = Arc::new(entry);
-        second_level.insert(index.unwrap_or(second_level.len()), new_entry.clone());
-        LoadedProgramEntry::WasVacant(new_entry)
+        second_level.insert(index.unwrap_or(second_level.len()), entry.clone());
+        LoadedProgramEntry::WasVacant(entry)
+    }
+
+    /// Inserts a single entry
+    pub fn insert_entry(&mut self, key: Pubkey, entry: LoadedProgram) -> LoadedProgramEntry {
+        self.insert_entry_arc(key, Arc::new(entry))
     }
 
     /// Before rerooting the blockstore this removes all programs of orphan forks
