@@ -70,6 +70,8 @@ mod snapshot_storage_rebuilder;
 pub use archive_format::*;
 
 pub const SNAPSHOT_STATUS_CACHE_FILENAME: &str = "status_cache";
+pub const SNAPSHOT_VERSION_FILENAME: &str = "version";
+pub const SNAPSHOT_STATE_COMPLETE_FILENAME: &str = "state_complete";
 pub const SNAPSHOT_ARCHIVE_DOWNLOAD_DIR: &str = "remote";
 pub const DEFAULT_FULL_SNAPSHOT_ARCHIVE_INTERVAL_SLOTS: Slot = 25_000;
 pub const DEFAULT_INCREMENTAL_SNAPSHOT_ARCHIVE_INTERVAL_SLOTS: Slot = 100;
@@ -430,6 +432,18 @@ pub fn remove_tmp_snapshot_archives(snapshot_archives_dir: impl AsRef<Path>) {
     }
 }
 
+/// Write the snapshot version as a file into the bank snapshot directory
+pub fn write_snapshot_version_file(
+    version_file: impl AsRef<Path>,
+    version: SnapshotVersion,
+) -> Result<()> {
+    let mut f = fs::File::create(version_file)
+        .map_err(|e| SnapshotError::IoWithSource(e, "create version file"))?;
+    f.write_all(version.as_str().as_bytes())
+        .map_err(|e| SnapshotError::IoWithSource(e, "write version file"))?;
+    Ok(())
+}
+
 /// Make a snapshot archive out of the snapshot package
 pub fn archive_snapshot_package(
     snapshot_package: &SnapshotPackage,
@@ -466,7 +480,7 @@ pub fn archive_snapshot_package(
 
     let staging_accounts_dir = staging_dir.path().join("accounts");
     let staging_snapshots_dir = staging_dir.path().join("snapshots");
-    let staging_version_file = staging_dir.path().join("version");
+    let staging_version_file = staging_dir.path().join(SNAPSHOT_VERSION_FILENAME);
     fs::create_dir_all(&staging_accounts_dir).map_err(|e| {
         SnapshotError::IoWithSourceAndFile(e, "create staging path", staging_accounts_dir.clone())
     })?;
@@ -498,14 +512,7 @@ pub fn archive_snapshot_package(
         }
     }
 
-    // Write version file
-    {
-        let mut f = fs::File::create(&staging_version_file).map_err(|e| {
-            SnapshotError::IoWithSourceAndFile(e, "create version file", staging_version_file)
-        })?;
-        f.write_all(snapshot_package.snapshot_version.as_str().as_bytes())
-            .map_err(|e| SnapshotError::IoWithSource(e, "write version file"))?;
-    }
+    write_snapshot_version_file(staging_version_file, snapshot_package.snapshot_version)?;
 
     // Tar the staging directory into the archive at `archive_path`
     let archive_path = tar_dir.join(format!(
@@ -522,7 +529,10 @@ pub fn archive_snapshot_package(
             let mut archive = tar::Builder::new(encoder);
             // Serialize the version and snapshots files before accounts so we can quickly determine the version
             // and other bank fields. This is necessary if we want to interleave unpacking with reconstruction
-            archive.append_path_with_name(staging_dir.as_ref().join("version"), "version")?;
+            archive.append_path_with_name(
+                staging_dir.as_ref().join(SNAPSHOT_VERSION_FILENAME),
+                SNAPSHOT_VERSION_FILENAME,
+            )?;
             for dir in ["snapshots", "accounts"] {
                 archive.append_dir_all(dir, staging_dir.as_ref().join(dir))?;
             }
@@ -1044,6 +1054,13 @@ pub fn add_bank_snapshot(
 
     let status_cache_path = bank_snapshot_dir.join(SNAPSHOT_STATUS_CACHE_FILENAME);
     serialize_status_cache(slot, &slot_deltas, &status_cache_path)?;
+
+    let version_path = bank_snapshot_dir.join(SNAPSHOT_VERSION_FILENAME);
+    write_snapshot_version_file(version_path, snapshot_version).unwrap();
+
+    // Mark this directory complete so it can be used.  Check this flag first before selecting for deserialization.
+    let state_complete_path = bank_snapshot_dir.join(SNAPSHOT_STATE_COMPLETE_FILENAME);
+    fs::File::create(state_complete_path)?;
 
     // Monitor sizes because they're capped to MAX_SNAPSHOT_DATA_FILE_SIZE
     datapoint_info!(
@@ -2345,6 +2362,16 @@ pub fn verify_snapshot_archive<P, Q, R>(
                 fs::remove_dir_all(dst_path).unwrap();
             }
             std::fs::remove_dir_all(accounts_hardlinks_dir).unwrap();
+        }
+
+        let version_path = snapshot_slot_dir.join(SNAPSHOT_VERSION_FILENAME);
+        if version_path.is_file() {
+            std::fs::remove_file(version_path).unwrap();
+        }
+
+        let state_complete_path = snapshot_slot_dir.join(SNAPSHOT_STATE_COMPLETE_FILENAME);
+        if state_complete_path.is_file() {
+            std::fs::remove_file(state_complete_path).unwrap();
         }
     }
 
