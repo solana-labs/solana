@@ -3,6 +3,7 @@
 use {
     crate::{
         ancestor_hashes_service::AncestorHashesReplayUpdateSender,
+        banking_trace::BankingTracer,
         broadcast_stage::RetransmitSlotsSender,
         cache_block_meta_service::CacheBlockMetaSender,
         cluster_info_vote_listener::{
@@ -99,7 +100,7 @@ const MAX_REPAIR_RETRY_LOOP_ATTEMPTS: usize = 10;
 lazy_static! {
     static ref PAR_THREAD_POOL: ThreadPool = rayon::ThreadPoolBuilder::new()
         .num_threads(MAX_CONCURRENT_FORKS_TO_REPLAY)
-        .thread_name(|ix| format!("solReplay{ix:02}"))
+        .thread_name(|i| format!("solReplay{i:02}"))
         .build()
         .unwrap();
 }
@@ -402,6 +403,7 @@ impl ReplayStage {
         log_messages_bytes_limit: Option<usize>,
         prioritization_fee_cache: Arc<PrioritizationFeeCache>,
         dumped_slots_sender: DumpedSlotsSender,
+        banking_tracer: Arc<BankingTracer>,
     ) -> Result<Self, String> {
         let mut tower = if let Some(process_blockstore) = maybe_process_blockstore {
             let tower = process_blockstore.process_to_create_tower()?;
@@ -917,6 +919,8 @@ impl ReplayStage {
                     poh_bank.map(|bank| bank.slot()),
                     &mut purge_repair_slot_counter,
                     &dumped_slots_sender,
+                    &my_pubkey,
+                    &leader_schedule_cache,
                 );
                 dump_then_repair_correct_slots_time.stop();
 
@@ -943,6 +947,7 @@ impl ReplayStage {
                         &mut progress,
                         &retransmit_slots_sender,
                         &mut skipped_slots_info,
+                        &banking_tracer,
                         has_new_vote_been_rooted,
                         transaction_status_sender.is_some(),
                     );
@@ -1159,6 +1164,7 @@ impl ReplayStage {
         (progress, heaviest_subtree_fork_choice)
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn dump_then_repair_correct_slots(
         duplicate_slots_to_repair: &mut DuplicateSlotsToRepair,
         ancestors: &mut HashMap<Slot, HashSet<Slot>>,
@@ -1169,6 +1175,8 @@ impl ReplayStage {
         poh_bank_slot: Option<Slot>,
         purge_repair_slot_counter: &mut PurgeRepairSlotCounter,
         dumped_slots_sender: &DumpedSlotsSender,
+        my_pubkey: &Pubkey,
+        leader_schedule_cache: &LeaderScheduleCache,
     ) {
         if duplicate_slots_to_repair.is_empty() {
             return;
@@ -1177,10 +1185,10 @@ impl ReplayStage {
         let root_bank = bank_forks.read().unwrap().root_bank();
         let mut dumped = vec![];
         // TODO: handle if alternate version of descendant also got confirmed after ancestor was
-        // confirmed, what happens then? Should probably keep track of purged list and skip things
-        // in `duplicate_slots_to_repair` that have already been purged. Add test.
+        // confirmed, what happens then? Should probably keep track of dumped list and skip things
+        // in `duplicate_slots_to_repair` that have already been dumped. Add test.
         duplicate_slots_to_repair.retain(|duplicate_slot, correct_hash| {
-            // Should not purge duplicate slots if there is currently a poh bank building
+            // Should not dump duplicate slots if there is currently a poh bank building
             // on top of that slot, as BankingStage might still be referencing/touching that state
             // concurrently.
             // Luckily for us, because the fork choice rule removes duplicate slots from fork
@@ -1200,13 +1208,13 @@ impl ReplayStage {
                 })
                 .unwrap_or(false);
 
-            let did_purge_repair = {
+            let did_dump_repair = {
                 if !is_poh_building_on_duplicate_fork {
                     let frozen_hash = bank_forks.read().unwrap().bank_hash(*duplicate_slot);
                     if let Some(frozen_hash) = frozen_hash {
                         if frozen_hash == *correct_hash {
                             warn!(
-                                "Trying to purge slot {} with correct_hash {}",
+                                "Trying to dump slot {} with correct_hash {}",
                                 *duplicate_slot, *correct_hash
                             );
                             return false;
@@ -1216,17 +1224,27 @@ impl ReplayStage {
                             )
                         {
                             warn!(
-                                "Trying to purge unfrozen slot {} that is not dead",
+                                "Trying to dump unfrozen slot {} that is not dead",
                                 *duplicate_slot
                             );
                             return false;
                         }
                     } else {
                         warn!(
-                            "Trying to purge slot {} which does not exist in bank forks",
+                            "Trying to dump slot {} which does not exist in bank forks",
                             *duplicate_slot
                         );
                         return false;
+                    }
+
+
+                    // Should not dump slots for which we were the leader
+                    if Some(*my_pubkey) == leader_schedule_cache.slot_leader_at(*duplicate_slot, None) {
+                            panic!("We are attempting to dump a block that we produced. \
+                                This indicates that we are producing duplicate blocks, \
+                                or that there is a bug in our runtime/replay code which \
+                                causes us to compute different bank hashes than the rest of the cluster. \
+                                We froze slot {duplicate_slot} with hash {frozen_hash:?} while the cluster hash is {correct_hash}");
                     }
 
                     Self::purge_unconfirmed_duplicate_slot(
@@ -1246,7 +1264,11 @@ impl ReplayStage {
                         .and_modify(|x| *x += 1)
                         .or_insert(1);
                     if *attempt_no > MAX_REPAIR_RETRY_LOOP_ATTEMPTS {
-                        panic!("We have tried to repair duplicate slot: {} more than {} times and are unable to freeze a block with bankhash {}, instead we have a block with bankhash {:?}. This is most likely a bug in the runtime. At this point manual intervention is needed to make progress. Exiting", *duplicate_slot, MAX_REPAIR_RETRY_LOOP_ATTEMPTS, *correct_hash, frozen_hash);
+                        panic!("We have tried to repair duplicate slot: {duplicate_slot} more than {MAX_REPAIR_RETRY_LOOP_ATTEMPTS} times \
+                            and are unable to freeze a block with bankhash {correct_hash}, \
+                            instead we have a block with bankhash {frozen_hash:?}. \
+                            This is most likely a bug in the runtime. \
+                            At this point manual intervention is needed to make progress. Exiting");
                     }
                     warn!(
                         "Notifying repair service to repair duplicate slot: {}, attempt {}",
@@ -1263,8 +1285,8 @@ impl ReplayStage {
                 }
             };
 
-            // If we purged/repaired, then no need to keep the slot in the set of pending work
-            !did_purge_repair
+            // If we dumped/repaired, then no need to keep the slot in the set of pending work
+            !did_dump_repair
         });
 
         // Notify repair of the dumped slots along with the correct hash
@@ -1654,6 +1676,7 @@ impl ReplayStage {
         progress_map: &mut ProgressMap,
         retransmit_slots_sender: &RetransmitSlotsSender,
         skipped_slots_info: &mut SkippedSlotsInfo,
+        banking_tracer: &Arc<BankingTracer>,
         has_new_vote_been_rooted: bool,
         track_transaction_indexes: bool,
     ) {
@@ -1774,6 +1797,9 @@ impl ReplayStage {
                 rpc_subscriptions,
                 NewBankOptions { vote_only_bank },
             );
+            // make sure parent is frozen for finalized hashes via the above
+            // new()-ing of its child bank
+            banking_tracer.hash_event(parent.slot(), &parent.last_blockhash(), &parent.hash());
 
             let tpu_bank = bank_forks.write().unwrap().insert(tpu_bank);
             poh_recorder
@@ -2565,7 +2591,6 @@ impl ReplayStage {
                     r_replay_stats.execute_timings
                     );
                 did_complete_bank = true;
-                info!("bank frozen: {}", bank.slot());
                 let _ = cluster_slots_update_sender.send(vec![bank_slot]);
                 if let Some(transaction_status_sender) = transaction_status_sender {
                     transaction_status_sender.send_transaction_status_freeze_message(bank);
@@ -2639,6 +2664,8 @@ impl ReplayStage {
                 if let Some(ref block_metadata_notifier) = block_metadata_notifier {
                     let block_metadata_notifier = block_metadata_notifier.read().unwrap();
                     block_metadata_notifier.notify_block_metadata(
+                        bank.parent_slot(),
+                        &bank.parent_hash().to_string(),
                         bank.slot(),
                         &bank.last_blockhash().to_string(),
                         &bank.rewards,
@@ -3666,9 +3693,9 @@ pub(crate) mod tests {
     pub struct ReplayBlockstoreComponents {
         pub blockstore: Arc<Blockstore>,
         validator_node_to_vote_keys: HashMap<Pubkey, Pubkey>,
-        my_pubkey: Pubkey,
+        pub(crate) my_pubkey: Pubkey,
         cluster_info: ClusterInfo,
-        leader_schedule_cache: Arc<LeaderScheduleCache>,
+        pub(crate) leader_schedule_cache: Arc<LeaderScheduleCache>,
         poh_recorder: RwLock<PohRecorder>,
         tower: Tower,
         rpc_subscriptions: Arc<RpcSubscriptions>,
@@ -6029,6 +6056,7 @@ pub(crate) mod tests {
         let ReplayBlockstoreComponents {
             ref mut vote_simulator,
             ref blockstore,
+            ref leader_schedule_cache,
             ..
         } = replay_blockstore_components(Some(forks), 1, None);
 
@@ -6065,6 +6093,8 @@ pub(crate) mod tests {
             None,
             &mut purge_repair_slot_counter,
             &dumped_slots_sender,
+            &Pubkey::new_unique(),
+            leader_schedule_cache,
         );
         assert_eq!(should_be_dumped, dumped_slots_receiver.recv().ok().unwrap());
 
@@ -6120,6 +6150,7 @@ pub(crate) mod tests {
             ref mut tower,
             ref blockstore,
             ref mut vote_simulator,
+            ref leader_schedule_cache,
             ..
         } = replay_components;
 
@@ -6184,6 +6215,8 @@ pub(crate) mod tests {
             None,
             &mut PurgeRepairSlotCounter::default(),
             &dumped_slots_sender,
+            &Pubkey::new_unique(),
+            leader_schedule_cache,
         );
 
         // Check everything was purged properly
@@ -7021,6 +7054,54 @@ pub(crate) mod tests {
         );
         let received_slots = receive_slots(&retransmit_slots_receiver);
         assert_eq!(received_slots, vec![8, 9, 11]);
+    }
+
+    #[test]
+    #[should_panic(expected = "We are attempting to dump a block that we produced")]
+    fn test_dump_own_slots_fails() {
+        // Create the tree of banks in a BankForks object
+        let forks = tr(0) / (tr(1)) / (tr(2));
+
+        let ReplayBlockstoreComponents {
+            ref mut vote_simulator,
+            ref blockstore,
+            ref my_pubkey,
+            ref leader_schedule_cache,
+            ..
+        } = replay_blockstore_components(Some(forks), 1, None);
+
+        let VoteSimulator {
+            ref mut progress,
+            ref bank_forks,
+            ..
+        } = vote_simulator;
+
+        let (mut ancestors, mut descendants) = {
+            let r_bank_forks = bank_forks.read().unwrap();
+            (r_bank_forks.ancestors(), r_bank_forks.descendants())
+        };
+
+        // Insert different versions of both 1 and 2. Although normally these slots would be dumped,
+        // because we were the leader for these slots we should panic
+        let mut duplicate_slots_to_repair = DuplicateSlotsToRepair::default();
+        duplicate_slots_to_repair.insert(1, Hash::new_unique());
+        duplicate_slots_to_repair.insert(2, Hash::new_unique());
+        let mut purge_repair_slot_counter = PurgeRepairSlotCounter::default();
+        let (dumped_slots_sender, _) = unbounded();
+
+        ReplayStage::dump_then_repair_correct_slots(
+            &mut duplicate_slots_to_repair,
+            &mut ancestors,
+            &mut descendants,
+            progress,
+            bank_forks,
+            blockstore,
+            None,
+            &mut purge_repair_slot_counter,
+            &dumped_slots_sender,
+            my_pubkey,
+            leader_schedule_cache,
+        );
     }
 
     fn run_compute_and_select_forks(

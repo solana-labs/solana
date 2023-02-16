@@ -1,0 +1,92 @@
+import {
+  DocBlock,
+  DocSideBySide,
+  CodeParams,
+  Parameter,
+  Field,
+  Values,
+  CodeSnippets,
+} from "../../../components/CodeDocBlock";
+
+<DocBlock>
+
+## getLatestBlockhash
+
+Returns the latest blockhash
+
+:::caution
+NEW: This method is only available in solana-core v1.9 or newer. Please use
+[getRecentBlockhash](#getrecentblockhash) for solana-core v1.8
+:::
+
+<DocSideBySide>
+<CodeParams>
+
+### Parameters:
+
+<Parameter type={"object"} optional={true}>
+
+Configuration object containing the following fields:
+
+<Field
+  name="commitment"
+  type="string"
+  optional={true}
+  href="/api/http#configuring-state-commitment"
+></Field>
+
+<Field name="minContextSlot" type="number" optional={true}>
+  The minimum slot that the request can be evaluated at
+</Field>
+
+</Parameter>
+
+### Result:
+
+`RpcResponse<object>` - RpcResponse JSON object with `value` field set to a JSON object including:
+
+- `blockhash: <string>` - a Hash as base-58 encoded string
+- `lastValidBlockHeight: <u64>` - last [block height](../../terminology.md#block-height) at which the blockhash will be valid
+
+</CodeParams>
+
+<CodeSnippets>
+
+### Code sample:
+
+```bash
+curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
+  {
+    "id":1,
+    "jsonrpc":"2.0",
+    "method":"getLatestBlockhash",
+    "params":[
+      {
+        "commitment":"processed"
+      }
+    ]
+  }
+'
+```
+
+### Response:
+
+```json
+{
+  "jsonrpc": "2.0",
+  "result": {
+    "context": {
+      "slot": 2792
+    },
+    "value": {
+      "blockhash": "EkSnNWid2cvwEVnVx9aBqawnmiCNiDgp3gUdkDPTKN1N",
+      "lastValidBlockHeight": 3090
+    }
+  },
+  "id": 1
+}
+```
+
+</CodeSnippets>
+</DocSideBySide>
+</DocBlock>

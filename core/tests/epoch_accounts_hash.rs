@@ -1,13 +1,12 @@
 #![allow(clippy::integer_arithmetic)]
 use {
+    crate::snapshot_utils::create_tmp_accounts_dir_for_tests,
     log::*,
     solana_core::{
         accounts_hash_verifier::AccountsHashVerifier,
         snapshot_packager_service::SnapshotPackagerService,
     },
-    solana_gossip::{
-        cluster_info::ClusterInfo, legacy_contact_info::LegacyContactInfo as ContactInfo,
-    },
+    solana_gossip::{cluster_info::ClusterInfo, contact_info::ContactInfo},
     solana_runtime::{
         accounts_background_service::{
             AbsRequestHandlers, AbsRequestSender, AccountsBackgroundService, DroppedSlotsReceiver,
@@ -442,9 +441,9 @@ fn test_snapshots_have_expected_epoch_accounts_hash() {
                 std::thread::sleep(Duration::from_secs(1));
             };
 
-            let accounts_dir = TempDir::new().unwrap();
+            let (_tmp_dir, accounts_dir) = create_tmp_accounts_dir_for_tests();
             let deserialized_bank = snapshot_utils::bank_from_snapshot_archives(
-                &[accounts_dir.path().to_path_buf()],
+                &[accounts_dir],
                 &snapshot_config.bank_snapshots_dir,
                 &full_snapshot_archive_info,
                 None,

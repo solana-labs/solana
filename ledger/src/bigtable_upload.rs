@@ -162,13 +162,13 @@ pub async fn upload_confirmed_blocks(
 
         (
             (0..config.num_blocks_to_upload_in_parallel)
-                .map(|_| {
+                .map(|i| {
                     let blockstore = blockstore.clone();
                     let sender = sender.clone();
                     let slot_receiver = slot_receiver.clone();
                     let exit = exit.clone();
                     std::thread::Builder::new()
-                        .name("solBigTGetBlk".into())
+                        .name(format!("solBigTGetBlk{i:02}"))
                         .spawn(move || {
                             let start = Instant::now();
                             let mut num_blocks_read = 0;

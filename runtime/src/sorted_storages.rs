@@ -29,7 +29,7 @@ impl<'a> SortedStorages<'a> {
         }
     }
 
-    /// primary method of retrieving (Slot, Arc<AccountStorageEntry>)
+    /// primary method of retrieving [`(Slot, Arc<AccountStorageEntry>)`]
     pub fn iter_range<R>(&'a self, range: &R) -> SortedStoragesIter<'a>
     where
         R: RangeBounds<Slot>,
@@ -70,9 +70,9 @@ impl<'a> SortedStorages<'a> {
         Self::new_with_slots(source.iter().zip(slots.into_iter()), None, None)
     }
 
-    /// create `SortedStorages` from 'source' iterator.
-    /// 'source' contains a Arc<AccountStorageEntry> and its associated slot
-    /// 'source' does not have to be sorted in any way, but is assumed to not have duplicate slot #s
+    /// create [`SortedStorages`] from `source` iterator.
+    /// `source` contains a [`Arc<AccountStorageEntry>`] and its associated slot
+    /// `source` does not have to be sorted in any way, but is assumed to not have duplicate slot #s
     pub fn new_with_slots(
         source: impl Iterator<Item = (&'a Arc<AccountStorageEntry>, Slot)> + Clone,
         // A slot used as a lower bound, but potentially smaller than the smallest slot in the given 'source' iterator
@@ -196,6 +196,7 @@ pub mod tests {
         super::*,
         crate::{
             accounts_db::{AccountStorageEntry, AppendVecId},
+            accounts_file::AccountsFile,
             append_vec::AppendVec,
         },
         std::sync::Arc,
@@ -369,7 +370,7 @@ pub mod tests {
         let size: usize = 123;
         let slot = 0;
         let mut data = AccountStorageEntry::new(&paths[0], slot, id, size as u64);
-        let av = AppendVec::new(&tf.path, true, 1024 * 1024);
+        let av = AccountsFile::AppendVec(AppendVec::new(&tf.path, true, 1024 * 1024));
         data.accounts = av;
 
         Arc::new(data)

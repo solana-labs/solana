@@ -39,6 +39,7 @@ use {
     },
     solana_sdk::{
         clock::{Slot, MAX_PROCESSING_AGE},
+        feature_set,
         genesis_config::GenesisConfig,
         hash::Hash,
         pubkey::Pubkey,
@@ -79,7 +80,7 @@ struct ReplayEntry {
 lazy_static! {
     static ref PAR_THREAD_POOL: ThreadPool = rayon::ThreadPoolBuilder::new()
         .num_threads(get_max_thread_count())
-        .thread_name(|ix| format!("solBstoreProc{ix:02}"))
+        .thread_name(|i| format!("solBstoreProc{i:02}"))
         .build()
         .unwrap();
 }
@@ -327,23 +328,28 @@ fn execute_batches(
 
     let mut minimal_tx_cost = u64::MAX;
     let mut total_cost: u64 = 0;
-    let mut total_cost_without_bpf: u64 = 0;
-    // Allowing collect here, since it also computes the minimal tx cost, and aggregate cost.
-    // These two values are later used for checking if the tx_costs vector needs to be iterated over.
-    // The collection is a pair of (full cost, cost without estimated-bpf-code-costs).
-    #[allow(clippy::needless_collect)]
     let tx_costs = sanitized_txs
         .iter()
         .map(|tx| {
             let tx_cost = CostModel::calculate_cost(tx, &bank.feature_set);
             let cost = tx_cost.sum();
-            let cost_without_bpf = tx_cost.sum_without_bpf();
             minimal_tx_cost = std::cmp::min(minimal_tx_cost, cost);
             total_cost = total_cost.saturating_add(cost);
-            total_cost_without_bpf = total_cost_without_bpf.saturating_add(cost_without_bpf);
-            (cost, cost_without_bpf)
+            tx_cost
         })
         .collect::<Vec<_>>();
+
+    if bank
+        .feature_set
+        .is_active(&feature_set::apply_cost_tracker_during_replay::id())
+    {
+        let mut cost_tracker = bank.write_cost_tracker().unwrap();
+        for tx_cost in &tx_costs {
+            cost_tracker
+                .try_add(tx_cost)
+                .map_err(TransactionError::from)?;
+        }
+    }
 
     let target_batch_count = get_thread_count() as u64;
 
@@ -351,15 +357,13 @@ fn execute_batches(
     let rebatched_txs = if total_cost > target_batch_count.saturating_mul(minimal_tx_cost) {
         let target_batch_cost = total_cost / target_batch_count;
         let mut batch_cost: u64 = 0;
-        let mut batch_cost_without_bpf: u64 = 0;
         let mut slice_start = 0;
         tx_costs
             .into_iter()
             .enumerate()
-            .for_each(|(index, cost_pair)| {
+            .for_each(|(index, tx_cost)| {
                 let next_index = index + 1;
-                batch_cost = batch_cost.saturating_add(cost_pair.0);
-                batch_cost_without_bpf = batch_cost_without_bpf.saturating_add(cost_pair.1);
+                batch_cost = batch_cost.saturating_add(tx_cost.sum());
                 if batch_cost >= target_batch_cost || next_index == sanitized_txs.len() {
                     let tx_batch = rebatch_transactions(
                         &lock_results,
@@ -372,7 +376,6 @@ fn execute_batches(
                     slice_start = next_index;
                     tx_batches.push(tx_batch);
                     batch_cost = 0;
-                    batch_cost_without_bpf = 0;
                 }
             });
         &tx_batches[..]
@@ -1777,7 +1780,6 @@ pub mod tests {
         solana_sdk::{
             account::{AccountSharedData, WritableAccount},
             epoch_schedule::EpochSchedule,
-            feature_set,
             hash::Hash,
             native_token::LAMPORTS_PER_SOL,
             pubkey::Pubkey,

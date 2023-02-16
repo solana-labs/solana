@@ -4,13 +4,12 @@
 //!
 
 use {
-    crate::banking_stage::{BatchedTransactionDetails, CommitTransactionDetails},
+    crate::banking_stage::{committer::CommitTransactionDetails, BatchedTransactionDetails},
     crossbeam_channel::{unbounded, Receiver, Sender},
     solana_measure::measure::Measure,
     solana_runtime::{
         bank::Bank,
         cost_model::{CostModel, TransactionCost},
-        cost_tracker::CostTrackerError,
     },
     solana_sdk::{
         clock::Slot,
@@ -166,23 +165,7 @@ impl QosService {
                 },
                 Err(e) => {
                     debug!("slot {:?}, transaction {:?}, cost {:?}, not fit into current block, '{:?}'", bank.slot(), tx, cost, e);
-                    match e {
-                        CostTrackerError::WouldExceedBlockMaxLimit => {
-                            Err(TransactionError::WouldExceedMaxBlockCostLimit)
-                        }
-                        CostTrackerError::WouldExceedVoteMaxLimit => {
-                            Err(TransactionError::WouldExceedMaxVoteCostLimit)
-                        }
-                        CostTrackerError::WouldExceedAccountMaxLimit => {
-                            Err(TransactionError::WouldExceedMaxAccountCostLimit)
-                        }
-                        CostTrackerError::WouldExceedAccountDataBlockLimit => {
-                            Err(TransactionError::WouldExceedAccountDataBlockLimit)
-                        }
-                        CostTrackerError::WouldExceedAccountDataTotalLimit => {
-                            Err(TransactionError::WouldExceedAccountDataTotalLimit)
-                        }
-                    }
+                    Err(TransactionError::from(e))
                 }
             })
             .collect();

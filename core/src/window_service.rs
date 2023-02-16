@@ -480,7 +480,7 @@ mod test {
     use {
         super::*,
         solana_entry::entry::{create_ticks, Entry},
-        solana_gossip::legacy_contact_info::LegacyContactInfo as ContactInfo,
+        solana_gossip::contact_info::ContactInfo,
         solana_ledger::{
             blockstore::{make_many_slot_entries, Blockstore},
             get_tmp_ledger_path,

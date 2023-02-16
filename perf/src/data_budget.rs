@@ -6,7 +6,7 @@ pub struct DataBudget {
     bytes: AtomicUsize,
     // Last time that we upped the bytes count, used
     // to detect when to up the bytes budget again
-    last_timestamp_ms: AtomicU64,
+    asof: AtomicU64,
 }
 
 impl DataBudget {
@@ -14,7 +14,7 @@ impl DataBudget {
     pub fn restricted() -> Self {
         Self {
             bytes: AtomicUsize::default(),
-            last_timestamp_ms: AtomicU64::new(u64::MAX),
+            asof: AtomicU64::new(u64::MAX),
         }
     }
 
@@ -22,19 +22,19 @@ impl DataBudget {
     // the budget and returns true. Otherwise returns false.
     #[must_use]
     pub fn take(&self, size: usize) -> bool {
-        let mut budget = self.bytes.load(Ordering::Acquire);
+        let mut bytes = self.bytes.load(Ordering::Acquire);
         loop {
-            if budget < size {
-                return false;
-            }
-            match self.bytes.compare_exchange_weak(
-                budget,
-                budget.saturating_sub(size),
+            bytes = match self.bytes.compare_exchange_weak(
+                bytes,
+                match bytes.checked_sub(size) {
+                    None => return false,
+                    Some(bytes) => bytes,
+                },
                 Ordering::AcqRel,
                 Ordering::Acquire,
             ) {
                 Ok(_) => return true,
-                Err(bytes) => budget = bytes,
+                Err(bytes) => bytes,
             }
         }
     }
@@ -43,21 +43,19 @@ impl DataBudget {
     // has passed since last update. Otherwise returns false.
     fn can_update(&self, duration_millis: u64) -> bool {
         let now = solana_sdk::timing::timestamp();
-        let mut last_timestamp = self.last_timestamp_ms.load(Ordering::Acquire);
-        loop {
-            if now < last_timestamp.saturating_add(duration_millis) {
-                return false;
-            }
-            match self.last_timestamp_ms.compare_exchange_weak(
-                last_timestamp,
+        let mut asof = self.asof.load(Ordering::Acquire);
+        while asof.saturating_add(duration_millis) <= now {
+            asof = match self.asof.compare_exchange_weak(
+                asof,
                 now,
                 Ordering::AcqRel,
                 Ordering::Acquire,
             ) {
                 Ok(_) => return true,
-                Err(ts) => last_timestamp = ts,
+                Err(asof) => asof,
             }
         }
+        false
     }
 
     /// Updates the budget if at least given milliseconds has passed since last
@@ -70,26 +68,18 @@ impl DataBudget {
         if self.can_update(duration_millis) {
             let mut bytes = self.bytes.load(Ordering::Acquire);
             loop {
-                match self.bytes.compare_exchange_weak(
+                bytes = match self.bytes.compare_exchange_weak(
                     bytes,
                     updater(bytes),
                     Ordering::AcqRel,
                     Ordering::Acquire,
                 ) {
                     Ok(_) => break,
-                    Err(b) => bytes = b,
+                    Err(bytes) => bytes,
                 }
             }
         }
         self.bytes.load(Ordering::Acquire)
-    }
-
-    // Non-atomic clone only for tests and simulations.
-    pub fn clone_non_atomic(&self) -> Self {
-        Self {
-            bytes: AtomicUsize::new(self.bytes.load(Ordering::Acquire)),
-            last_timestamp_ms: AtomicU64::new(self.last_timestamp_ms.load(Ordering::Acquire)),
-        }
     }
 }
 

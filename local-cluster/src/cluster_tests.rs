@@ -10,13 +10,15 @@ use {
     solana_core::consensus::VOTE_THRESHOLD_DEPTH,
     solana_entry::entry::{Entry, EntrySlice},
     solana_gossip::{
-        cluster_info,
-        crds_value::{self, CrdsData, CrdsValue},
+        cluster_info::{self, ClusterInfo},
+        contact_info::{ContactInfo, LegacyContactInfo},
+        crds::Cursor,
+        crds_value::{self, CrdsData, CrdsValue, CrdsValueLabel},
         gossip_error::GossipError,
-        gossip_service::discover_cluster,
-        legacy_contact_info::LegacyContactInfo as ContactInfo,
+        gossip_service::{self, discover_cluster, GossipService},
     },
     solana_ledger::blockstore::Blockstore,
+    solana_runtime::vote_transaction::VoteTransaction,
     solana_sdk::{
         client::SyncClient,
         clock::{self, Slot, NUM_CONSECUTIVE_LEADER_SLOTS},
@@ -29,22 +31,29 @@ use {
         signature::{Keypair, Signature, Signer},
         system_transaction,
         timing::{duration_as_ms, timestamp},
+        transaction::Transaction,
         transport::TransportError,
     },
     solana_streamer::socket::SocketAddrSpace,
     solana_vote_program::vote_transaction,
     std::{
+        borrow::Borrow,
         collections::{HashMap, HashSet},
-        net::{IpAddr, Ipv4Addr, SocketAddr},
+        net::{IpAddr, Ipv4Addr, SocketAddr, TcpListener},
         path::Path,
-        sync::{Arc, RwLock},
-        thread::sleep,
+        sync::{
+            atomic::{AtomicBool, Ordering},
+            Arc, RwLock,
+        },
+        thread::{sleep, JoinHandle},
         time::{Duration, Instant},
     },
 };
 
-pub fn get_client_facing_addr(contact_info: &ContactInfo) -> (SocketAddr, SocketAddr) {
-    let (rpc, mut tpu) = contact_info.client_facing_addr();
+pub fn get_client_facing_addr<T: Borrow<LegacyContactInfo>>(
+    contact_info: T,
+) -> (SocketAddr, SocketAddr) {
+    let (rpc, mut tpu) = contact_info.borrow().client_facing_addr();
     // QUIC certificate authentication requires the IP Address to match. ContactInfo might have
     // 0.0.0.0 as the IP instead of 127.0.0.1.
     tpu.set_ip(IpAddr::V4(Ipv4Addr::LOCALHOST));
@@ -60,8 +69,12 @@ pub fn spend_and_verify_all_nodes<S: ::std::hash::BuildHasher + Sync + Send>(
     socket_addr_space: SocketAddrSpace,
     connection_cache: &Arc<ConnectionCache>,
 ) {
-    let cluster_nodes =
-        discover_cluster(&entry_point_info.gossip, nodes, socket_addr_space).unwrap();
+    let cluster_nodes = discover_cluster(
+        &entry_point_info.gossip().unwrap(),
+        nodes,
+        socket_addr_space,
+    )
+    .unwrap();
     assert!(cluster_nodes.len() >= nodes);
     let ignore_nodes = Arc::new(ignore_nodes);
     cluster_nodes.par_iter().for_each(|ingress_node| {
@@ -103,7 +116,9 @@ pub fn verify_balances<S: ::std::hash::BuildHasher>(
     node: &ContactInfo,
     connection_cache: Arc<ConnectionCache>,
 ) {
-    let (rpc, tpu) = get_client_facing_addr(node);
+    let (rpc, tpu) = LegacyContactInfo::try_from(node)
+        .map(get_client_facing_addr)
+        .unwrap();
     let client = ThinClient::new(rpc, tpu, connection_cache);
     for (pk, b) in expected_balances {
         let bal = client
@@ -114,7 +129,7 @@ pub fn verify_balances<S: ::std::hash::BuildHasher>(
 }
 
 pub fn send_many_transactions(
-    node: &ContactInfo,
+    node: &LegacyContactInfo,
     funding_keypair: &Keypair,
     connection_cache: &Arc<ConnectionCache>,
     max_tokens_per_transfer: u64,
@@ -210,10 +225,16 @@ pub fn kill_entry_and_spend_and_verify_rest(
     socket_addr_space: SocketAddrSpace,
 ) {
     info!("kill_entry_and_spend_and_verify_rest...");
-    let cluster_nodes =
-        discover_cluster(&entry_point_info.gossip, nodes, socket_addr_space).unwrap();
+    let cluster_nodes = discover_cluster(
+        &entry_point_info.gossip().unwrap(),
+        nodes,
+        socket_addr_space,
+    )
+    .unwrap();
     assert!(cluster_nodes.len() >= nodes);
-    let (rpc, tpu) = get_client_facing_addr(entry_point_info);
+    let (rpc, tpu) = LegacyContactInfo::try_from(entry_point_info)
+        .map(get_client_facing_addr)
+        .unwrap();
     let client = ThinClient::new(rpc, tpu, connection_cache.clone());
 
     // sleep long enough to make sure we are in epoch 3
@@ -228,7 +249,7 @@ pub fn kill_entry_and_spend_and_verify_rest(
     info!("sleeping for 2 leader fortnights");
     sleep(Duration::from_millis(slot_millis * first_two_epoch_slots));
     info!("done sleeping for first 2 warmup epochs");
-    info!("killing entry point: {}", entry_point_info.id);
+    info!("killing entry point: {}", entry_point_info.pubkey());
     entry_point_validator_exit.write().unwrap().exit();
     info!("sleeping for some time");
     sleep(Duration::from_millis(
@@ -236,7 +257,7 @@ pub fn kill_entry_and_spend_and_verify_rest(
     ));
     info!("done sleeping for 2 fortnights");
     for ingress_node in &cluster_nodes {
-        if ingress_node.id == entry_point_info.id {
+        if &ingress_node.id == entry_point_info.pubkey() {
             info!("ingress_node.id == entry_point_info.id, continuing...");
             continue;
         }
@@ -324,13 +345,15 @@ pub fn check_for_new_roots(
         assert!(loop_start.elapsed() < loop_timeout);
 
         for (i, ingress_node) in contact_infos.iter().enumerate() {
-            let (rpc, tpu) = get_client_facing_addr(ingress_node);
+            let (rpc, tpu) = LegacyContactInfo::try_from(ingress_node)
+                .map(get_client_facing_addr)
+                .unwrap();
             let client = ThinClient::new(rpc, tpu, connection_cache.clone());
             let root_slot = client
                 .get_slot_with_commitment(CommitmentConfig::finalized())
                 .unwrap_or(0);
             roots[i].insert(root_slot);
-            num_roots_map.insert(ingress_node.id, roots[i].len());
+            num_roots_map.insert(*ingress_node.pubkey(), roots[i].len());
             let num_roots = roots.iter().map(|r| r.len()).min().unwrap();
             done = num_roots >= num_new_roots;
             if done || last_print.elapsed().as_secs() > 3 {
@@ -347,7 +370,7 @@ pub fn check_for_new_roots(
 
 pub fn check_no_new_roots(
     num_slots_to_wait: usize,
-    contact_infos: &[ContactInfo],
+    contact_infos: &[LegacyContactInfo],
     connection_cache: &Arc<ConnectionCache>,
     test_name: &str,
 ) {
@@ -412,13 +435,13 @@ pub fn check_no_new_roots(
 
 fn poll_all_nodes_for_signature(
     entry_point_info: &ContactInfo,
-    cluster_nodes: &[ContactInfo],
+    cluster_nodes: &[LegacyContactInfo],
     connection_cache: &Arc<ConnectionCache>,
     sig: &Signature,
     confs: usize,
 ) -> Result<(), TransportError> {
     for validator in cluster_nodes {
-        if validator.id == entry_point_info.id {
+        if &validator.id == entry_point_info.pubkey() {
             continue;
         }
         let (rpc, tpu) = get_client_facing_addr(validator);
@@ -427,6 +450,102 @@ fn poll_all_nodes_for_signature(
     }
 
     Ok(())
+}
+
+pub struct GossipVoter {
+    pub gossip_service: GossipService,
+    pub tcp_listener: Option<TcpListener>,
+    pub cluster_info: Arc<ClusterInfo>,
+    pub t_voter: JoinHandle<()>,
+    pub exit: Arc<AtomicBool>,
+}
+
+impl GossipVoter {
+    pub fn close(self) {
+        self.exit.store(true, Ordering::Relaxed);
+        self.t_voter.join().unwrap();
+        self.gossip_service.join().unwrap();
+    }
+}
+
+/// Reads votes from gossip and runs them through `vote_filter` to filter votes that then
+/// get passed to `generate_vote_tx` to create votes that are then pushed into gossip as if
+/// sent by a node with identity `node_keypair`.
+pub fn start_gossip_voter(
+    gossip_addr: &SocketAddr,
+    node_keypair: &Keypair,
+    vote_filter: impl Fn((CrdsValueLabel, Transaction)) -> Option<(VoteTransaction, Transaction)>
+        + std::marker::Send
+        + 'static,
+    mut process_vote_tx: impl FnMut(Slot, &Transaction, &VoteTransaction, &ClusterInfo)
+        + std::marker::Send
+        + 'static,
+    sleep_ms: u64,
+) -> GossipVoter {
+    let exit = Arc::new(AtomicBool::new(false));
+    let (gossip_service, tcp_listener, cluster_info) = gossip_service::make_gossip_node(
+        // Need to use our validator's keypair to gossip EpochSlots and votes for our
+        // node later.
+        node_keypair.insecure_clone(),
+        Some(gossip_addr),
+        &exit,
+        None,
+        0,
+        false,
+        SocketAddrSpace::Unspecified,
+    );
+
+    let t_voter = {
+        let exit = exit.clone();
+        let cluster_info = cluster_info.clone();
+        std::thread::spawn(move || {
+            let mut cursor = Cursor::default();
+            loop {
+                if exit.load(Ordering::Relaxed) {
+                    return;
+                }
+
+                let (labels, votes) = cluster_info.get_votes_with_labels(&mut cursor);
+                let mut parsed_vote_iter: Vec<_> = labels
+                    .into_iter()
+                    .zip(votes.into_iter())
+                    .filter_map(&vote_filter)
+                    .collect();
+
+                parsed_vote_iter.sort_by(|(vote, _), (vote2, _)| {
+                    vote.last_voted_slot()
+                        .unwrap()
+                        .cmp(&vote2.last_voted_slot().unwrap())
+                });
+
+                for (parsed_vote, leader_vote_tx) in &parsed_vote_iter {
+                    if let Some(latest_vote_slot) = parsed_vote.last_voted_slot() {
+                        info!("received vote for {}", latest_vote_slot);
+                        process_vote_tx(
+                            latest_vote_slot,
+                            leader_vote_tx,
+                            parsed_vote,
+                            &cluster_info,
+                        )
+                    }
+                    // Give vote some time to propagate
+                    sleep(Duration::from_millis(sleep_ms));
+                }
+
+                if parsed_vote_iter.is_empty() {
+                    sleep(Duration::from_millis(sleep_ms));
+                }
+            }
+        })
+    };
+
+    GossipVoter {
+        gossip_service,
+        tcp_listener,
+        cluster_info,
+        t_voter,
+        exit,
+    }
 }
 
 fn get_and_verify_slot_entries(

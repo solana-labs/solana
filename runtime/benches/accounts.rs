@@ -9,7 +9,9 @@ use {
     rayon::iter::{IntoParallelRefIterator, ParallelIterator},
     solana_runtime::{
         accounts::{AccountAddressFilter, Accounts},
-        accounts_db::{test_utils::create_test_accounts, AccountShrinkThreshold},
+        accounts_db::{
+            test_utils::create_test_accounts, AccountShrinkThreshold, BankHashLamportsVerifyConfig,
+        },
         accounts_index::{AccountSecondaryIndexes, ScanConfig},
         ancestors::Ancestors,
         bank::*,
@@ -100,14 +102,16 @@ fn test_accounts_hash_bank_hash(bencher: &mut Bencher) {
     bencher.iter(|| {
         assert!(accounts.verify_bank_hash_and_lamports(
             0,
-            &ancestors,
             total_lamports,
-            test_hash_calculation,
-            &EpochSchedule::default(),
-            &RentCollector::default(),
-            false,
-            false,
-            false,
+            BankHashLamportsVerifyConfig {
+                ancestors: &ancestors,
+                test_hash_calculation,
+                epoch_schedule: &EpochSchedule::default(),
+                rent_collector: &RentCollector::default(),
+                ignore_mismatch: false,
+                store_detailed_debug_info: false,
+                use_bg_thread_pool: false,
+            }
         ))
     });
 }
@@ -143,7 +147,7 @@ fn test_accounts_delta_hash(bencher: &mut Bencher) {
     let mut pubkeys: Vec<Pubkey> = vec![];
     create_test_accounts(&accounts, &mut pubkeys, 100_000, 0);
     bencher.iter(|| {
-        accounts.accounts_db.get_accounts_delta_hash(0);
+        accounts.accounts_db.calculate_accounts_delta_hash(0);
     });
 }
 

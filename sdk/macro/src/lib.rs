@@ -44,16 +44,18 @@ fn id_to_tokens(
     tokens: &mut proc_macro2::TokenStream,
 ) {
     tokens.extend(quote! {
-        /// The static program ID.
-        pub static ID: #pubkey_type = #id;
+        /// The const program ID.
+        pub const ID: #pubkey_type = #id;
 
         /// Returns `true` if given pubkey is the program ID.
+        // TODO make this const once `derive_const` makes it out of nightly
+        // and we can `derive_const(PartialEq)` on `Pubkey`.
         pub fn check_id(id: &#pubkey_type) -> bool {
             id == &ID
         }
 
         /// Returns the program ID.
-        pub fn id() -> #pubkey_type {
+        pub const fn id() -> #pubkey_type {
             ID
         }
 

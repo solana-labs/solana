@@ -132,6 +132,8 @@ where
         }
 
         let parts: Vec<_> = parts.map(|p| p.unwrap()).collect();
+        let account_filename =
+            (parts.len() == 2 && parts[0] == "accounts").then(|| PathBuf::from(parts[1]));
         let unpack_dir = match entry_checker(parts.as_slice(), kind) {
             UnpackPath::Invalid => {
                 return Err(UnpackError::Archive(format!(
@@ -175,8 +177,16 @@ where
         let entry_path_buf = unpack_dir.join(entry.path()?);
         set_perms(&entry_path_buf, mode)?;
 
+        let entry_path = if let Some(account_filename) = account_filename {
+            let stripped_path = unpack_dir.join(account_filename); // strip away "accounts"
+            fs::rename(&entry_path_buf, &stripped_path)?;
+            stripped_path
+        } else {
+            entry_path_buf
+        };
+
         // Process entry after setting permissions
-        entry_processor(entry_path_buf);
+        entry_processor(entry_path);
 
         total_entries += 1;
         let now = Instant::now();

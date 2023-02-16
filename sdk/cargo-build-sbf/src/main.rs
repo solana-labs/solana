@@ -160,8 +160,7 @@ fn find_installed_sbf_tools(arch: &str) -> Vec<String> {
 
 fn get_latest_sbf_tools_version() -> Result<String, String> {
     let url = "https://github.com/solana-labs/sbf-tools/releases/latest";
-    let resp =
-        reqwest::blocking::get(url).map_err(|err| format!("Failed to GET {}: {}", url, err))?;
+    let resp = reqwest::blocking::get(url).map_err(|err| format!("Failed to GET {url}: {err}"))?;
     let path = std::path::Path::new(resp.url().path());
     let version = path.file_name().unwrap().to_string_lossy().to_string();
     Ok(version)
@@ -173,7 +172,7 @@ fn normalize_version(version: String) -> String {
         |n: u32, c| if *c == b'.' { n.saturating_add(1) } else { n },
     );
     if dots == 1 {
-        format!("{}.0", version)
+        format!("{version}.0")
     } else {
         version
     }
@@ -937,7 +936,7 @@ fn main() {
 
     // The following line is scanned by CI configuration script to
     // separate cargo caches according to the version of sbf-tools.
-    let sbf_tools_version = String::from("v1.32");
+    let sbf_tools_version = String::from("v1.33");
     let version = format!("{}\nsbf-tools {}", crate_version!(), sbf_tools_version);
     let matches = clap::Command::new(crate_name!())
         .about(crate_description!())

@@ -3600,11 +3600,10 @@ impl RpcClient {
     /// #     AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\
     /// #     AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\
     /// #     AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=";
-    /// let memcmp = RpcFilterType::Memcmp(Memcmp {
-    ///     offset: 0,
-    ///     bytes: MemcmpEncodedBytes::Base64(base64_bytes.to_string()),
-    ///     encoding: None,
-    /// });
+    /// let memcmp = RpcFilterType::Memcmp(Memcmp::new(
+    ///     0,                                                    // offset
+    ///     MemcmpEncodedBytes::Base64(base64_bytes.to_string()), // encoded bytes
+    /// ));
     /// let config = RpcProgramAccountsConfig {
     ///     filters: Some(vec![
     ///         RpcFilterType::DataSize(128),

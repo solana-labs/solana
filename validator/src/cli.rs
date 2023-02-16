@@ -10,6 +10,7 @@ use {
         },
         keypair::SKIP_SEED_PHRASE_VALIDATION_ARG,
     },
+    solana_core::banking_trace::{DirByteLimit, BANKING_TRACE_DIR_DEFAULT_BYTE_LIMIT},
     solana_faucet::faucet::{self, FAUCET_PORT},
     solana_net_utils::{MINIMUM_VALIDATOR_PORT_RANGE_WIDTH, VALIDATOR_PORT_RANGE},
     solana_rpc::{rpc::MAX_REQUEST_BODY_SIZE, rpc_pubsub_service::PubSubConfig},
@@ -34,7 +35,7 @@ use {
     solana_send_transaction_service::send_transaction_service::{
         self, MAX_BATCH_SEND_RATE_MS, MAX_TRANSACTION_BATCH_SIZE,
     },
-    solana_tpu_client::tpu_connection_cache::DEFAULT_TPU_CONNECTION_POOL_SIZE,
+    solana_tpu_client::tpu_client::DEFAULT_TPU_CONNECTION_POOL_SIZE,
     std::{path::PathBuf, str::FromStr},
 };
 
@@ -173,26 +174,26 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
         )
         .arg(
             Arg::with_name("full_rpc_api")
-                .long("--full-rpc-api")
+                .long("full-rpc-api")
                 .conflicts_with("minimal_rpc_api")
                 .takes_value(false)
                 .help("Expose RPC methods for querying chain state and transaction history"),
         )
         .arg(
             Arg::with_name("obsolete_v1_7_rpc_api")
-                .long("--enable-rpc-obsolete_v1_7")
+                .long("enable-rpc-obsolete_v1_7")
                 .takes_value(false)
                 .help("Enable the obsolete RPC methods removed in v1.7"),
         )
         .arg(
             Arg::with_name("private_rpc")
-                .long("--private-rpc")
+                .long("private-rpc")
                 .takes_value(false)
                 .help("Do not publish the RPC port for use by others")
         )
         .arg(
             Arg::with_name("no_port_check")
-                .long("--no-port-check")
+                .long("no-port-check")
                 .takes_value(false)
                 .help("Do not perform TCP/UDP reachable port checks at start-up")
         )
@@ -485,6 +486,7 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
         .arg(
             Arg::with_name("no_poh_speed_test")
                 .long("no-poh-speed-test")
+                .hidden(true)
                 .help("Skip the check for PoH speed."),
         )
         .arg(
@@ -496,21 +498,25 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
         .arg(
             Arg::with_name("no_os_memory_stats_reporting")
                 .long("no-os-memory-stats-reporting")
+                .hidden(true)
                 .help("Disable reporting of OS memory statistics.")
         )
         .arg(
             Arg::with_name("no_os_network_stats_reporting")
                 .long("no-os-network-stats-reporting")
+                .hidden(true)
                 .help("Disable reporting of OS network statistics.")
         )
         .arg(
             Arg::with_name("no_os_cpu_stats_reporting")
                 .long("no-os-cpu-stats-reporting")
+                .hidden(true)
                 .help("Disable reporting of OS CPU statistics.")
         )
         .arg(
             Arg::with_name("no_os_disk_stats_reporting")
                 .long("no-os-disk-stats-reporting")
+                .hidden(true)
                 .help("Disable reporting of OS disk statistics.")
         )
         .arg(
@@ -963,7 +969,7 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                 .value_name("MILLISECS")
                 .hidden(true)
                 .takes_value(true)
-                .validator(|s| is_within_range(s, 1, MAX_BATCH_SEND_RATE_MS))
+                .validator(|s| is_within_range(s, 1..=MAX_BATCH_SEND_RATE_MS))
                 .default_value(&default_args.rpc_send_transaction_batch_ms)
                 .help("The rate at which transactions sent via rpc service are sent in batch."),
         )
@@ -999,7 +1005,7 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                 .value_name("NUMBER")
                 .hidden(true)
                 .takes_value(true)
-                .validator(|s| is_within_range(s, 1, MAX_TRANSACTION_BATCH_SIZE))
+                .validator(|s| is_within_range(s, 1..=MAX_TRANSACTION_BATCH_SIZE))
                 .default_value(&default_args.rpc_send_transaction_batch_size)
                 .help("The size of transactions to be sent in batch."),
         )
@@ -1182,6 +1188,12 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                       This option is for use during testing."),
         )
         .arg(
+            Arg::with_name("accounts_db_create_ancient_storage_packed")
+                .long("accounts-db-create-ancient-storage-packed")
+                .help("Create ancient storages in one shot instead of appending.")
+                .hidden(true),
+            )
+        .arg(
             Arg::with_name("accounts_db_ancient_append_vecs")
                 .long("accounts-db-ancient-append-vecs")
                 .value_name("SLOT-OFFSET")
@@ -1301,6 +1313,24 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
             Arg::with_name("replay_slots_concurrently")
                 .long("replay-slots-concurrently")
                 .help("Allow concurrent replay of slots on different forks")
+        )
+        .arg(
+            Arg::with_name("banking_trace_dir_byte_limit")
+                // expose friendly alternative name to cli than internal
+                // implementation-oriented one
+                .long("enable-banking-trace")
+                .value_name("BYTES")
+                .validator(is_parsable::<DirByteLimit>)
+                .takes_value(true)
+                // Firstly, zero limit value causes tracer to be disabled
+                // altogether, intuitively. On the other hand, this non-zero
+                // default doesn't enable banking tracer unless this flag is
+                // explicitly given, similar to --limit-ledger-size.
+                // see configure_banking_trace_dir_byte_limit() for this.
+                .default_value(&default_args.banking_trace_dir_byte_limit)
+                .help("Write trace files for simulate-leader-blocks, retaining \
+                       up to the default or specified total bytes in the \
+                       ledger")
         )
         .args(&get_deprecated_arguments())
         .after_help("The default subcommand is run")
@@ -1579,7 +1609,7 @@ fn get_deprecated_arguments() -> Vec<Arg<'static, 'static>> {
                    interval, use --full-snapshot-interval-slots.",
             ),
         Arg::with_name("minimal_rpc_api")
-            .long("--minimal-rpc-api")
+            .long("minimal-rpc-api")
             .takes_value(false)
             .hidden(true)
             .help("Only expose the RPC methods required to serve snapshots to other nodes"),
@@ -1683,6 +1713,8 @@ pub struct DefaultArgs {
     // Wait subcommand
     pub wait_for_restart_window_min_idle_time: String,
     pub wait_for_restart_window_max_delinquent_stake: String,
+
+    pub banking_trace_dir_byte_limit: String,
 }
 
 impl DefaultArgs {
@@ -1761,6 +1793,7 @@ impl DefaultArgs {
             exit_max_delinquent_stake: "5".to_string(),
             wait_for_restart_window_min_idle_time: "10".to_string(),
             wait_for_restart_window_max_delinquent_stake: "5".to_string(),
+            banking_trace_dir_byte_limit: BANKING_TRACE_DIR_DEFAULT_BYTE_LIMIT.to_string(),
         }
     }
 }
@@ -2126,6 +2159,20 @@ pub fn test_app<'a>(version: &'a str, default_args: &'a DefaultTestArgs) -> App<
                 .help(
                     "Copy an account from the cluster referenced by the --url argument, \
                      skipping it if it doesn't exist. \
+                     If the ledger already exists then this parameter is silently ignored",
+                ),
+        )
+        .arg(
+            Arg::with_name("clone_upgradeable_program")
+                .long("clone-upgradeable-program")
+                .value_name("ADDRESS")
+                .takes_value(true)
+                .validator(is_pubkey_or_keypair)
+                .multiple(true)
+                .requires("json_rpc_url")
+                .help(
+                    "Copy an upgradeable program and its executable data from the cluster \
+                     referenced by the --url argument the genesis configuration. \
                      If the ledger already exists then this parameter is silently ignored",
                 ),
         )

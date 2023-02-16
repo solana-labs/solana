@@ -273,7 +273,6 @@ impl ElGamalPubkey {
         &self.0
     }
 
-    #[allow(clippy::wrong_self_convention)]
     pub fn to_bytes(&self) -> [u8; 32] {
         self.0.compress().to_bytes()
     }
@@ -433,7 +432,6 @@ impl ElGamalCiphertext {
         }
     }
 
-    #[allow(clippy::wrong_self_convention)]
     pub fn to_bytes(&self) -> [u8; 64] {
         let mut bytes = [0u8; 64];
         bytes[..32].copy_from_slice(&self.commitment.to_bytes());
@@ -556,7 +554,6 @@ impl DecryptHandle {
         &self.0
     }
 
-    #[allow(clippy::wrong_self_convention)]
     pub fn to_bytes(&self) -> [u8; 32] {
         self.0.compress().to_bytes()
     }

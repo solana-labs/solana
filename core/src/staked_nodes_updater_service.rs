@@ -100,6 +100,13 @@ impl StakedNodesUpdaterService {
                     Some((node.tvu.ip(), *stake))
                 })
                 .collect();
+            let my_pubkey = *cluster_info.my_contact_info().pubkey();
+            if let Some(stake) = staked_nodes.get(&my_pubkey) {
+                id_to_stake.insert(my_pubkey, *stake);
+                if let Ok(tvu) = cluster_info.my_contact_info().tvu() {
+                    ip_to_stake.insert(tvu.ip(), *stake);
+                }
+            }
             Self::override_stake(
                 cluster_info,
                 total_stake,
@@ -123,18 +130,13 @@ impl StakedNodesUpdaterService {
         ip_to_stake_map: &mut HashMap<IpAddr, u64>,
         staked_map_overrides: &HashMap<Pubkey, u64>,
     ) {
-        for (id_override, stake_override) in staked_map_overrides.iter() {
-            if let Some(ip_override) =
-                cluster_info
-                    .all_peers()
-                    .into_iter()
-                    .find_map(|(node, _seen_time)| {
-                        if node.id == *id_override {
-                            return Some(node.tvu.ip());
-                        }
-                        None
-                    })
-            {
+        let nodes: HashMap<Pubkey, IpAddr> = cluster_info
+            .all_peers()
+            .into_iter()
+            .map(|(node, _)| (node.id, node.tvu.ip()))
+            .collect();
+        for (id_override, stake_override) in staked_map_overrides {
+            if let Some(&ip_override) = nodes.get(id_override) {
                 if let Some(previous_stake) = id_to_stake_map.get(id_override) {
                     *total_stake -= previous_stake;
                 }
@@ -143,9 +145,10 @@ impl StakedNodesUpdaterService {
                 ip_to_stake_map.insert(ip_override, *stake_override);
             } else {
                 error!(
-                        "staked nodes overrides configuration for id {} with stake {} does not match existing IP. Skipping",
-                        id_override, stake_override
-                    );
+                    "staked nodes overrides configuration for id \
+                        {id_override} with stake {stake_override} does not \
+                        match existing IP. Skipping",
+                );
             }
         }
     }

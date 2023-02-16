@@ -16,29 +16,36 @@ use {
         validator::ValidatorConfig,
     },
     solana_download_utils::download_snapshot_archive,
-    solana_gossip::gossip_service::discover_cluster,
+    solana_gossip::{contact_info::LegacyContactInfo, gossip_service::discover_cluster},
     solana_ledger::{
         ancestor_iterator::AncestorIterator, bank_forks_utils, blockstore::Blockstore,
         blockstore_processor::ProcessOptions,
     },
     solana_local_cluster::{
         cluster::{Cluster, ClusterValidatorInfo},
-        cluster_tests,
+        cluster_tests::{self},
         local_cluster::{ClusterConfig, LocalCluster},
         validator_configs::*,
     },
     solana_pubsub_client::pubsub_client::PubsubClient,
     solana_rpc_client::rpc_client::RpcClient,
     solana_rpc_client_api::{
-        config::{RpcProgramAccountsConfig, RpcSignatureSubscribeConfig},
+        config::{
+            RpcBlockSubscribeConfig, RpcBlockSubscribeFilter, RpcProgramAccountsConfig,
+            RpcSignatureSubscribeConfig,
+        },
         response::RpcSignatureResult,
     },
     solana_runtime::{
+        commitment::VOTE_THRESHOLD_SIZE,
         hardened_unpack::open_genesis_config,
         snapshot_archive_info::SnapshotArchiveInfoGetter,
         snapshot_config::SnapshotConfig,
         snapshot_package::SnapshotType,
-        snapshot_utils::{self, ArchiveFormat, SnapshotVersion},
+        snapshot_utils::{
+            self, create_accounts_run_and_snapshot_dirs, ArchiveFormat, SnapshotVersion,
+        },
+        vote_parser,
     },
     solana_sdk::{
         account::AccountSharedData,
@@ -54,7 +61,7 @@ use {
         system_program, system_transaction,
     },
     solana_streamer::socket::SocketAddrSpace,
-    solana_vote_program::vote_state::MAX_LOCKOUT_HISTORY,
+    solana_vote_program::{vote_state::MAX_LOCKOUT_HISTORY, vote_transaction},
     std::{
         collections::{HashMap, HashSet},
         fs,
@@ -62,7 +69,7 @@ use {
         iter,
         path::Path,
         sync::{
-            atomic::{AtomicBool, Ordering},
+            atomic::{AtomicBool, AtomicUsize, Ordering},
             Arc, Mutex,
         },
         thread::{sleep, Builder, JoinHandle},
@@ -188,11 +195,13 @@ fn test_local_cluster_signature_subscribe() {
     // Get non leader
     let non_bootstrap_id = nodes
         .into_iter()
-        .find(|id| *id != cluster.entry_point_info.id)
+        .find(|id| id != cluster.entry_point_info.pubkey())
         .unwrap();
     let non_bootstrap_info = cluster.get_contact_info(&non_bootstrap_id).unwrap();
 
-    let (rpc, tpu) = cluster_tests::get_client_facing_addr(non_bootstrap_info);
+    let (rpc, tpu) = LegacyContactInfo::try_from(non_bootstrap_info)
+        .map(cluster_tests::get_client_facing_addr)
+        .unwrap();
     let tx_client = ThinClient::new(rpc, tpu, cluster.connection_cache.clone());
 
     let (blockhash, _) = tx_client
@@ -207,7 +216,10 @@ fn test_local_cluster_signature_subscribe() {
     );
 
     let (mut sig_subscribe_client, receiver) = PubsubClient::signature_subscribe(
-        &format!("ws://{}", &non_bootstrap_info.rpc_pubsub.to_string()),
+        &format!(
+            "ws://{}",
+            &non_bootstrap_info.rpc_pubsub().unwrap().to_string()
+        ),
         &transaction.signatures[0],
         Some(RpcSignatureSubscribeConfig {
             commitment: Some(CommitmentConfig::processed()),
@@ -305,7 +317,7 @@ fn test_two_unbalanced_stakes() {
         num_slots_per_epoch,
     );
     cluster.close_preserve_ledgers();
-    let leader_pubkey = cluster.entry_point_info.id;
+    let leader_pubkey = *cluster.entry_point_info.pubkey();
     let leader_ledger = cluster.validators[&leader_pubkey].info.ledger_path.clone();
     cluster_tests::verify_ledger_ticks(&leader_ledger, num_ticks_per_slot as usize);
 }
@@ -328,14 +340,14 @@ fn test_forwarding() {
     let cluster = LocalCluster::new(&mut config, SocketAddrSpace::Unspecified);
 
     let cluster_nodes = discover_cluster(
-        &cluster.entry_point_info.gossip,
+        &cluster.entry_point_info.gossip().unwrap(),
         2,
         SocketAddrSpace::Unspecified,
     )
     .unwrap();
     assert!(cluster_nodes.len() >= 2);
 
-    let leader_pubkey = cluster.entry_point_info.id;
+    let leader_pubkey = *cluster.entry_point_info.pubkey();
 
     let validator_info = cluster_nodes
         .iter()
@@ -387,7 +399,7 @@ fn test_restart_node() {
         slots_per_epoch,
     );
     cluster_tests::send_many_transactions(
-        &cluster.entry_point_info,
+        &LegacyContactInfo::try_from(&cluster.entry_point_info).unwrap(),
         &cluster.funding_keypair,
         &cluster.connection_cache,
         10,
@@ -412,14 +424,16 @@ fn test_mainnet_beta_cluster_type() {
     };
     let cluster = LocalCluster::new(&mut config, SocketAddrSpace::Unspecified);
     let cluster_nodes = discover_cluster(
-        &cluster.entry_point_info.gossip,
+        &cluster.entry_point_info.gossip().unwrap(),
         1,
         SocketAddrSpace::Unspecified,
     )
     .unwrap();
     assert_eq!(cluster_nodes.len(), 1);
 
-    let (rpc, tpu) = cluster_tests::get_client_facing_addr(&cluster.entry_point_info);
+    let (rpc, tpu) = LegacyContactInfo::try_from(&cluster.entry_point_info)
+        .map(cluster_tests::get_client_facing_addr)
+        .unwrap();
     let client = ThinClient::new(rpc, tpu, cluster.connection_cache.clone());
 
     // Programs that are available at epoch 0
@@ -499,7 +513,7 @@ fn test_snapshot_download() {
 
     // Download the snapshot, then boot a validator from it.
     download_snapshot_archive(
-        &cluster.entry_point_info.rpc,
+        &cluster.entry_point_info.rpc().unwrap(),
         &validator_snapshot_test_config
             .validator_config
             .snapshot_config
@@ -630,7 +644,7 @@ fn test_incremental_snapshot_download() {
 
     // Download the snapshots, then boot a validator from them.
     download_snapshot_archive(
-        &cluster.entry_point_info.rpc,
+        &cluster.entry_point_info.rpc().unwrap(),
         &validator_snapshot_test_config
             .validator_config
             .snapshot_config
@@ -658,7 +672,7 @@ fn test_incremental_snapshot_download() {
     .unwrap();
 
     download_snapshot_archive(
-        &cluster.entry_point_info.rpc,
+        &cluster.entry_point_info.rpc().unwrap(),
         &validator_snapshot_test_config
             .validator_config
             .snapshot_config
@@ -806,7 +820,7 @@ fn test_incremental_snapshot_download_with_crossing_full_snapshot_interval_at_st
     // Download the snapshots, then boot a validator from them.
     info!("Downloading full snapshot to validator...");
     download_snapshot_archive(
-        &cluster.entry_point_info.rpc,
+        &cluster.entry_point_info.rpc().unwrap(),
         validator_snapshot_test_config
             .full_snapshot_archives_dir
             .path(),
@@ -840,7 +854,7 @@ fn test_incremental_snapshot_download_with_crossing_full_snapshot_interval_at_st
 
     info!("Downloading incremental snapshot to validator...");
     download_snapshot_archive(
-        &cluster.entry_point_info.rpc,
+        &cluster.entry_point_info.rpc().unwrap(),
         validator_snapshot_test_config
             .full_snapshot_archives_dir
             .path(),
@@ -1040,6 +1054,11 @@ fn test_incremental_snapshot_download_with_crossing_full_snapshot_interval_at_st
     };
     info!("leader full snapshot archive for comparison: {leader_full_snapshot_archive_for_comparison:#?}");
 
+    // Stop the validator before we reset its snapshots
+    info!("Stopping the validator...");
+    let validator_info = cluster.exit_node(&validator_identity.pubkey());
+    info!("Stopping the validator... DONE");
+
     info!("Delete all the snapshots on the validator and restore the originals from the backup...");
     delete_files_with_remote(
         validator_snapshot_test_config
@@ -1079,7 +1098,10 @@ fn test_incremental_snapshot_download_with_crossing_full_snapshot_interval_at_st
     info!(
         "Restarting the validator with full snapshot {validator_full_snapshot_slot_at_startup}..."
     );
-    let validator_info = cluster.exit_node(&validator_identity.pubkey());
+    // To restart, it is not enough to remove the old bank snapshot directories under snapshot/.
+    // The old hardlinks under <account_path>/snapshot/<slot> should also be removed.
+    // The purge call covers all of them.
+    snapshot_utils::purge_old_bank_snapshots(validator_snapshot_test_config.bank_snapshots_dir, 0);
     cluster.restart_node(
         &validator_identity.pubkey(),
         validator_info,
@@ -1237,7 +1259,7 @@ fn test_snapshot_restart_tower() {
     let all_pubkeys = cluster.get_node_pubkeys();
     let validator_id = all_pubkeys
         .into_iter()
-        .find(|x| *x != cluster.entry_point_info.id)
+        .find(|x| x != cluster.entry_point_info.pubkey())
         .unwrap();
     let validator_info = cluster.exit_node(&validator_id);
 
@@ -1337,7 +1359,7 @@ fn test_snapshots_blockstore_floor() {
 
     // Start up a new node from a snapshot
     let cluster_nodes = discover_cluster(
-        &cluster.entry_point_info.gossip,
+        &cluster.entry_point_info.gossip().unwrap(),
         1,
         SocketAddrSpace::Unspecified,
     )
@@ -1358,7 +1380,7 @@ fn test_snapshots_blockstore_floor() {
     let all_pubkeys = cluster.get_node_pubkeys();
     let validator_id = all_pubkeys
         .into_iter()
-        .find(|x| *x != cluster.entry_point_info.id)
+        .find(|x| x != cluster.entry_point_info.pubkey())
         .unwrap();
     let validator_client = cluster.get_validator_client(&validator_id).unwrap();
     let mut current_slot = 0;
@@ -1423,7 +1445,7 @@ fn test_snapshots_restart_validity() {
         // forwarded to and processed.
         trace!("Sending transactions");
         let new_balances = cluster_tests::send_many_transactions(
-            &cluster.entry_point_info,
+            &LegacyContactInfo::try_from(&cluster.entry_point_info).unwrap(),
             &cluster.funding_keypair,
             &cluster.connection_cache,
             10,
@@ -1518,7 +1540,7 @@ fn test_wait_for_max_stake() {
         ..ClusterConfig::default()
     };
     let cluster = LocalCluster::new(&mut config, SocketAddrSpace::Unspecified);
-    let client = RpcClient::new_socket(cluster.entry_point_info.rpc);
+    let client = RpcClient::new_socket(cluster.entry_point_info.rpc().unwrap());
 
     assert!(client
         .wait_for_max_stake(CommitmentConfig::default(), 33.0f32)
@@ -1543,7 +1565,7 @@ fn test_no_voting() {
     };
     let mut cluster = LocalCluster::new(&mut config, SocketAddrSpace::Unspecified);
     let client = cluster
-        .get_validator_client(&cluster.entry_point_info.id)
+        .get_validator_client(cluster.entry_point_info.pubkey())
         .unwrap();
     loop {
         let last_slot = client
@@ -1556,7 +1578,7 @@ fn test_no_voting() {
     }
 
     cluster.close_preserve_ledgers();
-    let leader_pubkey = cluster.entry_point_info.id;
+    let leader_pubkey = *cluster.entry_point_info.pubkey();
     let ledger_path = cluster.validators[&leader_pubkey].info.ledger_path.clone();
     let ledger = Blockstore::open(&ledger_path).unwrap();
     for i in 0..2 * VOTE_THRESHOLD_DEPTH {
@@ -2152,7 +2174,11 @@ fn create_snapshot_to_hard_fork(
     let (bank_forks, ..) = bank_forks_utils::load(
         &genesis_config,
         blockstore,
-        vec![ledger_path.join("accounts")],
+        vec![
+            create_accounts_run_and_snapshot_dirs(ledger_path.join("accounts"))
+                .unwrap()
+                .0,
+        ],
         None,
         snapshot_config.as_ref(),
         process_options,
@@ -2470,11 +2496,11 @@ fn run_test_load_program_accounts_partition(scan_commitment: CommitmentConfig) {
 
     let on_partition_start = |cluster: &mut LocalCluster, _: &mut ()| {
         let update_client = cluster
-            .get_validator_client(&cluster.entry_point_info.id)
+            .get_validator_client(cluster.entry_point_info.pubkey())
             .unwrap();
         update_client_sender.send(update_client).unwrap();
         let scan_client = cluster
-            .get_validator_client(&cluster.entry_point_info.id)
+            .get_validator_client(cluster.entry_point_info.pubkey())
             .unwrap();
         scan_client_sender.send(scan_client).unwrap();
     };
@@ -2502,6 +2528,221 @@ fn run_test_load_program_accounts_partition(scan_commitment: CommitmentConfig) {
         None,
         additional_accounts,
     );
+}
+
+#[test]
+#[serial]
+fn test_rpc_block_subscribe() {
+    let total_stake = 100 * DEFAULT_NODE_STAKE;
+    let leader_stake = total_stake;
+    let node_stakes = vec![leader_stake];
+    let mut validator_config = ValidatorConfig::default_for_test();
+    validator_config.enable_default_rpc_block_subscribe();
+
+    let validator_keys = vec![
+        "28bN3xyvrP4E8LwEgtLjhnkb7cY4amQb6DrYAbAYjgRV4GAGgkVM2K7wnxnAS7WDneuavza7x21MiafLu1HkwQt4",
+    ]
+    .iter()
+    .map(|s| (Arc::new(Keypair::from_base58_string(s)), true))
+    .take(node_stakes.len())
+    .collect::<Vec<_>>();
+
+    let mut config = ClusterConfig {
+        cluster_lamports: total_stake,
+        node_stakes,
+        validator_configs: vec![validator_config],
+        validator_keys: Some(validator_keys),
+        skip_warmup_slots: true,
+        ..ClusterConfig::default()
+    };
+    let cluster = LocalCluster::new(&mut config, SocketAddrSpace::Unspecified);
+    let (mut block_subscribe_client, receiver) = PubsubClient::block_subscribe(
+        &format!(
+            "ws://{}",
+            &cluster.entry_point_info.rpc_pubsub().unwrap().to_string()
+        ),
+        RpcBlockSubscribeFilter::All,
+        Some(RpcBlockSubscribeConfig {
+            commitment: Some(CommitmentConfig::confirmed()),
+            encoding: None,
+            transaction_details: None,
+            show_rewards: None,
+            max_supported_transaction_version: None,
+        }),
+    )
+    .unwrap();
+
+    let mut received_block = false;
+    let max_wait = 10_000;
+    let start = Instant::now();
+    while !received_block {
+        assert!(
+            start.elapsed() <= Duration::from_millis(max_wait),
+            "Went too long {max_wait} ms without receiving a confirmed block",
+        );
+        let responses: Vec<_> = receiver.try_iter().collect();
+        // Wait for a response
+        if !responses.is_empty() {
+            for response in responses {
+                assert!(response.value.err.is_none());
+                assert!(response.value.block.is_some());
+                if response.value.slot > 1 {
+                    received_block = true;
+                }
+            }
+        }
+        sleep(Duration::from_millis(100));
+    }
+
+    // If we don't drop the cluster, the blocking web socket service
+    // won't return, and the `block_subscribe_client` won't shut down
+    drop(cluster);
+    block_subscribe_client.shutdown().unwrap();
+}
+
+#[test]
+#[serial]
+#[allow(unused_attributes)]
+fn test_oc_bad_signatures() {
+    solana_logger::setup_with_default(RUST_LOG_FILTER);
+
+    let total_stake = 100 * DEFAULT_NODE_STAKE;
+    let leader_stake = (total_stake as f64 * VOTE_THRESHOLD_SIZE) as u64;
+    let our_node_stake = total_stake - leader_stake;
+    let node_stakes = vec![leader_stake, our_node_stake];
+    let mut validator_config = ValidatorConfig {
+        require_tower: true,
+        ..ValidatorConfig::default_for_test()
+    };
+    validator_config.enable_default_rpc_block_subscribe();
+    let validator_keys = vec![
+        "28bN3xyvrP4E8LwEgtLjhnkb7cY4amQb6DrYAbAYjgRV4GAGgkVM2K7wnxnAS7WDneuavza7x21MiafLu1HkwQt4",
+        "2saHBBoTkLMmttmPQP8KfBkcCw45S5cwtV3wTdGCscRC8uxdgvHxpHiWXKx4LvJjNJtnNcbSv5NdheokFFqnNDt8",
+    ]
+    .iter()
+    .map(|s| (Arc::new(Keypair::from_base58_string(s)), true))
+    .take(node_stakes.len())
+    .collect::<Vec<_>>();
+
+    let our_id = validator_keys.last().unwrap().0.pubkey();
+    let mut config = ClusterConfig {
+        cluster_lamports: total_stake,
+        node_stakes,
+        validator_configs: make_identical_validator_configs(&validator_config, 2),
+        validator_keys: Some(validator_keys),
+        skip_warmup_slots: true,
+        ..ClusterConfig::default()
+    };
+    let mut cluster = LocalCluster::new(&mut config, SocketAddrSpace::Unspecified);
+
+    // 2) Kill our node and start up a thread to simulate votes to control our voting behavior
+    let our_info = cluster.exit_node(&our_id);
+    let node_keypair = our_info.info.keypair;
+    let vote_keypair = our_info.info.voting_keypair;
+    info!(
+        "our node id: {}, vote id: {}",
+        node_keypair.pubkey(),
+        vote_keypair.pubkey()
+    );
+
+    // 3) Start up a spy to listen for and push votes to leader TPU
+    let (rpc, tpu) = LegacyContactInfo::try_from(&cluster.entry_point_info)
+        .map(cluster_tests::get_client_facing_addr)
+        .unwrap();
+    let client = ThinClient::new(rpc, tpu, cluster.connection_cache.clone());
+    let cluster_funding_keypair = cluster.funding_keypair.insecure_clone();
+    let voter_thread_sleep_ms: usize = 100;
+    let num_votes_simulated = Arc::new(AtomicUsize::new(0));
+    let gossip_voter = cluster_tests::start_gossip_voter(
+        &cluster.entry_point_info.gossip().unwrap(),
+        &node_keypair,
+        |(_label, leader_vote_tx)| {
+            let vote = vote_parser::parse_vote_transaction(&leader_vote_tx)
+                .map(|(_, vote, ..)| vote)
+                .unwrap();
+            // Filter out empty votes
+            if !vote.is_empty() {
+                Some((vote, leader_vote_tx))
+            } else {
+                None
+            }
+        },
+        {
+            let node_keypair = node_keypair.insecure_clone();
+            let vote_keypair = vote_keypair.insecure_clone();
+            let num_votes_simulated = num_votes_simulated.clone();
+            move |vote_slot, leader_vote_tx, parsed_vote, _cluster_info| {
+                info!("received vote for {}", vote_slot);
+                let vote_hash = parsed_vote.hash();
+                info!(
+                    "Simulating vote from our node on slot {}, hash {}",
+                    vote_slot, vote_hash
+                );
+
+                // Add all recent vote slots on this fork to allow cluster to pass
+                // vote threshold checks in replay. Note this will instantly force a
+                // root by this validator.
+                let vote_slots: Vec<Slot> = vec![vote_slot];
+
+                let bad_authorized_signer_keypair = Keypair::new();
+                let mut vote_tx = vote_transaction::new_vote_transaction(
+                    vote_slots,
+                    vote_hash,
+                    leader_vote_tx.message.recent_blockhash,
+                    &node_keypair,
+                    &vote_keypair,
+                    // Make a bad signer
+                    &bad_authorized_signer_keypair,
+                    None,
+                );
+                client
+                    .retry_transfer(&cluster_funding_keypair, &mut vote_tx, 5)
+                    .unwrap();
+
+                num_votes_simulated.fetch_add(1, Ordering::Relaxed);
+            }
+        },
+        voter_thread_sleep_ms as u64,
+    );
+
+    let (mut block_subscribe_client, receiver) = PubsubClient::block_subscribe(
+        &format!(
+            "ws://{}",
+            &cluster.entry_point_info.rpc_pubsub().unwrap().to_string()
+        ),
+        RpcBlockSubscribeFilter::All,
+        Some(RpcBlockSubscribeConfig {
+            commitment: Some(CommitmentConfig::confirmed()),
+            encoding: None,
+            transaction_details: None,
+            show_rewards: None,
+            max_supported_transaction_version: None,
+        }),
+    )
+    .unwrap();
+
+    const MAX_VOTES_TO_SIMULATE: usize = 10;
+    // Make sure test doesn't take too long
+    assert!(voter_thread_sleep_ms * MAX_VOTES_TO_SIMULATE <= 1000);
+    loop {
+        let responses: Vec<_> = receiver.try_iter().collect();
+        // Nothing should get optimistically confirmed or rooted
+        assert!(responses.is_empty());
+        // Wait for the voter thread to attempt sufficient number of votes to give
+        // a chance for the violation to occur
+        if num_votes_simulated.load(Ordering::Relaxed) > MAX_VOTES_TO_SIMULATE {
+            break;
+        }
+        sleep(Duration::from_millis(100));
+    }
+
+    // Clean up voter thread
+    gossip_voter.close();
+
+    // If we don't drop the cluster, the blocking web socket service
+    // won't return, and the `block_subscribe_client` won't shut down
+    drop(cluster);
+    block_subscribe_client.shutdown().unwrap();
 }
 
 #[test]
@@ -2764,10 +3005,10 @@ fn run_test_load_program_accounts(scan_commitment: CommitmentConfig) {
     let all_pubkeys = cluster.get_node_pubkeys();
     let other_validator_id = all_pubkeys
         .into_iter()
-        .find(|x| *x != cluster.entry_point_info.id)
+        .find(|x| x != cluster.entry_point_info.pubkey())
         .unwrap();
     let client = cluster
-        .get_validator_client(&cluster.entry_point_info.id)
+        .get_validator_client(cluster.entry_point_info.pubkey())
         .unwrap();
     update_client_sender.send(client).unwrap();
     let scan_client = cluster.get_validator_client(&other_validator_id).unwrap();

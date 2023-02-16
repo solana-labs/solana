@@ -12,7 +12,7 @@ use {
     },
     solana_gossip::{
         cluster_info::{ClusterInfo, Node},
-        legacy_contact_info::LegacyContactInfo as ContactInfo,
+        contact_info::ContactInfo,
     },
     solana_ledger::{
         genesis_utils::{create_genesis_config, GenesisConfigInfo},
@@ -21,7 +21,7 @@ use {
     solana_runtime::{bank::Bank, bank_forks::BankForks},
     solana_sdk::{
         pubkey,
-        signature::Keypair,
+        signature::{Keypair, Signer},
         timing::{timestamp, AtomicInterval},
     },
     solana_streamer::socket::SocketAddrSpace,
@@ -37,11 +37,11 @@ use {
 #[bench]
 fn broadcast_shreds_bench(bencher: &mut Bencher) {
     solana_logger::setup();
-    let leader_pubkey = pubkey::new_rand();
-    let leader_info = Node::new_localhost_with_pubkey(&leader_pubkey);
+    let leader_keypair = Arc::new(Keypair::new());
+    let leader_info = Node::new_localhost_with_pubkey(&leader_keypair.pubkey());
     let cluster_info = ClusterInfo::new(
         leader_info.info,
-        Arc::new(Keypair::new()),
+        leader_keypair,
         SocketAddrSpace::Unspecified,
     );
     let socket = UdpSocket::bind("0.0.0.0:0").unwrap();

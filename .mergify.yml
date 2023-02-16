@@ -1,12 +1,11 @@
-# Validate your changes with:
-#
-#   $ curl -F 'data=@.mergify.yml' https://gh.mergify.io/validate/
-#
 # https://doc.mergify.io/
 pull_request_rules:
   - name: label changes from community
     conditions:
       - author≠@core-contributors
+      - author≠@monorepo-maintainers
+      - author≠@monorepo-write
+      - author≠@monorepo-triage
       - author≠mergify[bot]
       - author≠dependabot[bot]
       - author≠github-actions[bot]
@@ -14,9 +13,13 @@ pull_request_rules:
       label:
         add:
           - community
+          - need:merge-assist
   - name: request review for community changes
     conditions:
       - author≠@core-contributors
+      - author≠@monorepo-maintainers
+      - author≠@monorepo-write
+      - author≠@monorepo-triage
       - author≠mergify[bot]
       - author≠dependabot[bot]
       - author≠github-actions[bot]
@@ -31,6 +34,19 @@ pull_request_rules:
       request_reviews:
         teams:
           - "@solana-labs/community-pr-subscribers"
+  - name: label changes from monorepo-triage
+    conditions:
+      - author≠@core-contributors
+      - author≠mergify[bot]
+      - author≠dependabot[bot]
+      - author≠github-actions[bot]
+      - author≠@monorepo-maintainers
+      - author≠@monorepo-write
+      - author=@monorepo-triage
+    actions:
+      label:
+        add:
+          - need:merge-assist
   - name: automatic merge (squash) on CI success
     conditions:
       - and:
@@ -38,48 +54,13 @@ pull_request_rules:
         - status-success=ci-gate
         - label=automerge
         - label!=no-automerge
-        - author≠@dont-squash-my-commits
         - or:
           # only require docs checks if docs files changed
           - -files~=^docs/
           - status-success=build & deploy docs
-        - or:
-          # only require explorer checks if explorer files changed
-          - status-success=check-explorer
-          - -files~=^explorer/
-        - or:
-          - and:
-            - status-success=all-web3-checks
-            - status-success=web3-commit-lint
-          # only require web3 checks if web3.js files changed
-          - -files~=^web3.js/
     actions:
       merge:
         method: squash
-  # Join the dont-squash-my-commits group if you won't like your commits squashed
-  - name: automatic merge (rebase) on CI success
-    conditions:
-      - and:
-        - status-success=buildkite/solana
-        - status-success=ci-gate
-        - label=automerge
-        - label!=no-automerge
-        - author=@dont-squash-my-commits
-        - or:
-          # only require docs checks if docs files changed
-          - -files~=^docs/
-          - status-success=build & deploy docs
-        - or:
-          # only require explorer checks if explorer files changed
-          - status-success=check-explorer
-          - -files~=^explorer/
-        - or:
-          # only require web3 checks if web3.js files changed
-          - status-success=all-web3-checks
-          - -files~=^web3.js/
-    actions:
-      merge:
-        method: rebase
   - name: remove automerge label on CI failure
     conditions:
       - label=automerge
@@ -90,12 +71,6 @@ pull_request_rules:
           - automerge
       comment:
         message: automerge label removed due to a CI failure
-  - name: remove outdated reviews
-    conditions:
-      - base=master
-    actions:
-      dismiss_reviews:
-        changes_requested: true
   - name: v1.13 feature-gate backport
     conditions:
       - label=v1.13
@@ -105,6 +80,7 @@ pull_request_rules:
         assignees: &BackportAssignee
           - "{{ merged_by|replace('mergify[bot]', label|select('equalto', 'community')|first|default(author)|replace('community', '@solana-labs/community-pr-s
 ubscribers')) }}"
+        title: "{{ destination_branch }}: {{ title }} (backport of #{{ number }})"
         ignore_conflicts: true
         labels:
           - feature-gate
@@ -117,6 +93,7 @@ ubscribers')) }}"
     actions:
       backport:
         assignees: *BackportAssignee
+        title: "{{ destination_branch }}: {{ title }} (backport of #{{ number }})"
         ignore_conflicts: true
         branches:
           - v1.13
@@ -127,6 +104,7 @@ ubscribers')) }}"
     actions:
       backport:
         assignees: *BackportAssignee
+        title: "{{ destination_branch }}: {{ title }} (backport of #{{ number }})"
         ignore_conflicts: true
         labels:
           - feature-gate
@@ -139,9 +117,34 @@ ubscribers')) }}"
     actions:
       backport:
         assignees: *BackportAssignee
+        title: "{{ destination_branch }}: {{ title }} (backport of #{{ number }})"
         ignore_conflicts: true
         branches:
           - v1.14
+  - name: v1.15 feature-gate backport
+    conditions:
+      - label=v1.15
+      - label=feature-gate
+    actions:
+      backport:
+        assignees: *BackportAssignee
+        title: "{{ destination_branch }}: {{ title }} (backport of #{{ number }})"
+        ignore_conflicts: true
+        labels:
+          - feature-gate
+        branches:
+          - v1.15
+  - name: v1.15 non-feature-gate backport
+    conditions:
+      - label=v1.15
+      - label!=feature-gate
+    actions:
+      backport:
+        assignees: *BackportAssignee
+        title: "{{ destination_branch }}: {{ title }} (backport of #{{ number }})"
+        ignore_conflicts: true
+        branches:
+          - v1.15
 
 commands_restrictions:
   # The author of copied PRs is the Mergify user.
