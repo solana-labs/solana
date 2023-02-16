@@ -143,6 +143,8 @@ pub struct BankSnapshotInfo {
     pub snapshot_type: BankSnapshotType,
     /// Path to the bank snapshot directory
     pub snapshot_dir: PathBuf,
+    /// Snapshot version
+    pub snapshot_version: SnapshotVersion,
 }
 
 impl PartialOrd for BankSnapshotInfo {
@@ -162,31 +164,52 @@ impl BankSnapshotInfo {
     pub fn new_from_dir(
         bank_snapshots_dir: impl AsRef<Path>,
         slot: Slot,
-    ) -> Option<BankSnapshotInfo> {
+    ) -> Result<BankSnapshotInfo> {
         // check this directory to see if there is a BankSnapshotPre and/or
         // BankSnapshotPost file
         let bank_snapshot_dir = get_bank_snapshots_dir(&bank_snapshots_dir, slot);
+
+        if !bank_snapshot_dir.is_dir() {
+            return Err(SnapshotError::InvalidBankSnapshotDir(bank_snapshot_dir));
+        }
+
+        let status_cache_file = bank_snapshot_dir.join(SNAPSHOT_STATUS_CACHE_FILENAME);
+        if fs::metadata(status_cache_file).is_err() {
+            return Err(SnapshotError::MissingStatusCacheFile(bank_snapshot_dir));
+        }
+
+        let version_path = bank_snapshot_dir.join(SNAPSHOT_VERSION_FILENAME);
+        let version_str = snapshot_version_from_file(version_path)?;
+        let snapshot_version = SnapshotVersion::from_str(version_str.as_str())
+            .or(Err(SnapshotError::InvalidVersion))?;
+
+        // There is a time window from the slot directory being created, and the content being completely
+        // filled.  Check the completion to avoid using a highest found slot directory with missing content.
+        let completion_flag_file = bank_snapshot_dir.join(SNAPSHOT_STATE_COMPLETE_FILENAME);
+        if fs::metadata(completion_flag_file).is_err() {
+            return Err(SnapshotError::DirIncomplete(bank_snapshot_dir));
+        }
+
         let bank_snapshot_post_path = bank_snapshot_dir.join(get_snapshot_file_name(slot));
         let bank_snapshot_pre_path =
             bank_snapshot_post_path.with_extension(BANK_SNAPSHOT_PRE_FILENAME_EXTENSION);
 
-        if bank_snapshot_pre_path.is_file() {
-            return Some(BankSnapshotInfo {
-                slot,
-                snapshot_type: BankSnapshotType::Pre,
-                snapshot_dir: bank_snapshot_dir,
-            });
-        }
+        let snapshot_type: Option<BankSnapshotType> = if bank_snapshot_pre_path.is_file() {
+            Some(BankSnapshotType::Pre)
+        } else if bank_snapshot_post_path.is_file() {
+            Some(BankSnapshotType::Post)
+        } else {
+            None
+        };
+        let snapshot_type = snapshot_type
+            .ok_or_else(|| SnapshotError::MissingSnapshotFile(bank_snapshot_dir.clone()))?;
 
-        if bank_snapshot_post_path.is_file() {
-            return Some(BankSnapshotInfo {
-                slot,
-                snapshot_type: BankSnapshotType::Post,
-                snapshot_dir: bank_snapshot_dir,
-            });
-        }
-
-        None
+        Ok(BankSnapshotInfo {
+            slot,
+            snapshot_type,
+            snapshot_dir: bank_snapshot_dir,
+            snapshot_version,
+        })
     }
 
     pub fn snapshot_path(&self) -> PathBuf {
@@ -299,6 +322,24 @@ pub enum SnapshotError {
 
     #[error("invalid account path: {}", .0.display())]
     InvalidAccountPath(PathBuf),
+
+    #[error("no valid snapshot dir found under {}", .0.display())]
+    NoSnapshotSlotDir(PathBuf),
+
+    #[error("invalid bank snapshot directory {}", .0.display())]
+    InvalidBankSnapshotDir(PathBuf),
+
+    #[error("missing status cache file {}", .0.display())]
+    MissingStatusCacheFile(PathBuf),
+
+    #[error("invalid snapshot version")]
+    InvalidVersion,
+
+    #[error("snapshot directory incomplete {}", .0.display())]
+    DirIncomplete(PathBuf),
+
+    #[error("missing snapshotfile {}", .0.display())]
+    MissingSnapshotFile(PathBuf),
 }
 pub type Result<T> = std::result::Result<T, SnapshotError>;
 
@@ -645,8 +686,7 @@ pub fn get_bank_snapshots(bank_snapshots_dir: impl AsRef<Path>) -> Vec<BankSnaps
                     })
             })
             .for_each(|slot| {
-                if let Some(snapshot_info) =
-                    BankSnapshotInfo::new_from_dir(&bank_snapshots_dir, slot)
+                if let Ok(snapshot_info) = BankSnapshotInfo::new_from_dir(&bank_snapshots_dir, slot)
                 {
                     bank_snapshots.push(snapshot_info);
                 }
@@ -1102,6 +1142,7 @@ pub fn add_bank_snapshot(
         slot,
         snapshot_type: BankSnapshotType::Pre,
         snapshot_dir: bank_snapshot_dir,
+        snapshot_version,
     })
 }
 
@@ -1838,6 +1879,24 @@ pub fn get_highest_incremental_snapshot_archive_slot(
         full_snapshot_slot,
     )
     .map(|incremental_snapshot_archive_info| incremental_snapshot_archive_info.slot())
+}
+
+/// Get the full snapshot with the highest slot in a directory
+/// Assume every bank snapshot directory is a full snapshot for now.  Will support incremental sanpshot
+/// later.
+pub fn get_highest_full_snapshot(snapshots_dir: impl AsRef<Path>) -> Result<BankSnapshotInfo> {
+    let bank_snapshots = get_bank_snapshots(&snapshots_dir);
+
+    do_get_highest_bank_snapshot(bank_snapshots).ok_or_else(|| SnapshotError::NoSnapshotSlotDir(
+        snapshots_dir.as_ref().to_path_buf(),
+    ))
+}
+
+pub fn get_highest_incremental_snapshot(
+    _snapshots_dir: impl AsRef<Path>,
+    _full_snapshot_slot: Slot,
+) -> Option<BankSnapshotInfo> {
+    None // Will handle the incremental case later
 }
 
 /// Get the path (and metadata) for the full snapshot archive with the highest slot in a directory
@@ -2685,7 +2744,10 @@ pub fn create_tmp_accounts_dir_for_tests() -> (TempDir, PathBuf) {
 mod tests {
     use {
         super::*,
-        crate::{accounts_db::ACCOUNTS_DB_CONFIG_FOR_TESTING, status_cache::Status},
+        crate::{
+            accounts_db::ACCOUNTS_DB_CONFIG_FOR_TESTING, bank_forks::BankForks,
+            status_cache::Status,
+        },
         assert_matches::assert_matches,
         bincode::{deserialize_from, serialize_into},
         solana_sdk::{
@@ -4521,5 +4583,53 @@ mod tests {
         );
 
         assert!(matches!(ret, Err(SnapshotError::InvalidAppendVecPath(_))));
+    }
+
+    #[test]
+    fn test_get_highest_full_snapshot() {
+        solana_logger::setup();
+
+        let genesis_config = GenesisConfig::default();
+        let bank0 = Bank::new_for_tests(&genesis_config);
+        let mut bank_forks = BankForks::new(bank0);
+
+        let tmp_dir = tempfile::TempDir::new().unwrap();
+        let bank_snapshots_dir = tmp_dir.path();
+        let collecter_id = Pubkey::new_unique();
+        let snapshot_version = SnapshotVersion::default();
+
+        for slot in 0..4 {
+            // prepare the bank
+            let parent_bank = bank_forks.get(slot).unwrap();
+            let bank = Bank::new_from_parent(&parent_bank, &collecter_id, slot + 1);
+            bank.fill_bank_with_ticks_for_tests();
+            bank.squash();
+            bank.force_flush_accounts_cache();
+
+            // generate the bank snapshot directory for slot+1
+            let snapshot_storages = bank.get_snapshot_storages(None);
+            let slot_deltas = bank.status_cache.read().unwrap().root_slot_deltas();
+            add_bank_snapshot(
+                bank_snapshots_dir,
+                &bank,
+                &snapshot_storages,
+                snapshot_version,
+                slot_deltas,
+            )
+            .unwrap();
+
+            bank_forks.insert(bank);
+        }
+
+        let snapshot = get_highest_full_snapshot(bank_snapshots_dir).unwrap();
+
+        assert_eq!(snapshot.slot, 4);
+
+        let complete_flag_file = snapshot.snapshot_dir.join(SNAPSHOT_STATE_COMPLETE_FILENAME);
+        fs::remove_file(complete_flag_file).unwrap();
+
+        let snapshot = get_highest_full_snapshot(bank_snapshots_dir).unwrap();
+
+        assert_eq!(snapshot.slot, 3);
     }
 }
