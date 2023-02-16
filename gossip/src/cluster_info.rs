@@ -2819,28 +2819,30 @@ impl Node {
         Self::new_localhost_with_pubkey(&pubkey)
     }
     pub fn new_localhost_with_pubkey(pubkey: &Pubkey) -> Self {
-        let bind_ip_addr = IpAddr::V4(Ipv4Addr::LOCALHOST);
+        let localhost_ip_addr = IpAddr::V4(Ipv4Addr::LOCALHOST);
+        let localhost_bind_addr = format!("{:?}:0", localhost_ip_addr);
+        let unspecified_bind_addr = format!("{:?}:0", IpAddr::V4(Ipv4Addr::UNSPECIFIED));
         let port_range = (1024, 65535);
-        let ((_tpu_port, tpu), (_tpu_quic_port, tpu_quic)) =
-            bind_two_in_range_with_offset(bind_ip_addr, port_range, QUIC_PORT_OFFSET).unwrap();
-        let (gossip_port, (gossip, ip_echo)) =
-            bind_common_in_range(bind_ip_addr, port_range).unwrap();
-        let gossip_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), gossip_port);
-        let tvu = UdpSocket::bind("127.0.0.1:0").unwrap();
-        let tvu_forwards = UdpSocket::bind("127.0.0.1:0").unwrap();
-        let ((_tpu_forwards_port, tpu_forwards), (_tpu_forwards_quic_port, tpu_forwards_quic)) =
-            bind_two_in_range_with_offset(bind_ip_addr, port_range, QUIC_PORT_OFFSET).unwrap();
-        let tpu_vote = UdpSocket::bind("127.0.0.1:0").unwrap();
-        let repair = UdpSocket::bind("127.0.0.1:0").unwrap();
-        let rpc_port = find_available_port_in_range(bind_ip_addr, port_range).unwrap();
-        let rpc_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), rpc_port);
-        let rpc_pubsub_port = find_available_port_in_range(bind_ip_addr, port_range).unwrap();
-        let rpc_pubsub_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), rpc_pubsub_port);
 
-        let broadcast = vec![UdpSocket::bind("0.0.0.0:0").unwrap()];
-        let retransmit_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
-        let serve_repair = UdpSocket::bind("127.0.0.1:0").unwrap();
-        let ancestor_hashes_requests = UdpSocket::bind("0.0.0.0:0").unwrap();
+        let ((_tpu_port, tpu), (_tpu_quic_port, tpu_quic)) =
+            bind_two_in_range_with_offset(localhost_ip_addr, port_range, QUIC_PORT_OFFSET).unwrap();
+        let (gossip_port, (gossip, ip_echo)) =
+            bind_common_in_range(localhost_ip_addr, port_range).unwrap();
+        let gossip_addr = SocketAddr::new(localhost_ip_addr, gossip_port);
+        let tvu = UdpSocket::bind(&localhost_bind_addr).unwrap();
+        let tvu_forwards = UdpSocket::bind(&localhost_bind_addr).unwrap();
+        let ((_tpu_forwards_port, tpu_forwards), (_tpu_forwards_quic_port, tpu_forwards_quic)) =
+            bind_two_in_range_with_offset(localhost_ip_addr, port_range, QUIC_PORT_OFFSET).unwrap();
+        let tpu_vote = UdpSocket::bind(&localhost_bind_addr).unwrap();
+        let repair = UdpSocket::bind(&localhost_bind_addr).unwrap();
+        let rpc_port = find_available_port_in_range(localhost_ip_addr, port_range).unwrap();
+        let rpc_addr = SocketAddr::new(localhost_ip_addr, rpc_port);
+        let rpc_pubsub_port = find_available_port_in_range(localhost_ip_addr, port_range).unwrap();
+        let rpc_pubsub_addr = SocketAddr::new(localhost_ip_addr, rpc_pubsub_port);
+        let broadcast = vec![UdpSocket::bind(&unspecified_bind_addr).unwrap()];
+        let retransmit_socket = UdpSocket::bind(&unspecified_bind_addr).unwrap();
+        let serve_repair = UdpSocket::bind(&localhost_bind_addr).unwrap();
+        let ancestor_hashes_requests = UdpSocket::bind(&unspecified_bind_addr).unwrap();
 
         let mut info = ContactInfo::new(
             *pubkey,
