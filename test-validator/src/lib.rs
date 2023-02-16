@@ -29,6 +29,7 @@ use {
     },
     solana_sdk::{
         account::{Account, AccountSharedData},
+        bpf_loader_upgradeable::UpgradeableLoaderState,
         clock::{Slot, DEFAULT_MS_PER_SLOT},
         commitment_config::CommitmentConfig,
         epoch_schedule::EpochSchedule,
@@ -309,6 +310,38 @@ impl TestValidatorGenesis {
                 }
             }
         }
+        Ok(self)
+    }
+
+    pub fn clone_upgradeable_programs<T>(
+        &mut self,
+        addresses: T,
+        rpc_client: &RpcClient,
+    ) -> Result<&mut Self, String>
+    where
+        T: IntoIterator<Item = Pubkey>,
+    {
+        let addresses: Vec<Pubkey> = addresses.into_iter().collect();
+        self.clone_accounts(addresses.clone(), rpc_client, false)?;
+
+        let mut programdata_addresses: HashSet<Pubkey> = HashSet::new();
+        for address in addresses {
+            let account = self.accounts.get(&address).unwrap();
+
+            if let Ok(UpgradeableLoaderState::Program {
+                programdata_address,
+            }) = account.deserialize_data()
+            {
+                programdata_addresses.insert(programdata_address);
+            } else {
+                return Err(format!(
+                    "Failed to read upgradeable program account {address}",
+                ));
+            }
+        }
+
+        self.clone_accounts(programdata_addresses, rpc_client, false)?;
+
         Ok(self)
     }
 

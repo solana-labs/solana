@@ -24,6 +24,7 @@ use {
         account_storage::{AccountStorage, AccountStorageStatus, ShrinkInProgress},
         accounts_background_service::{DroppedSlotsSender, SendDroppedBankCallback},
         accounts_cache::{AccountsCache, CachedAccount, SlotCache},
+        accounts_file::AccountsFile,
         accounts_hash::{
             AccountsDeltaHash, AccountsHash, AccountsHasher, CalcAccountsHashConfig,
             CalculateHashIntermediate, HashStats, ZeroLamportAccounts,
@@ -68,7 +69,7 @@ use {
     rand::{thread_rng, Rng},
     rayon::{prelude::*, ThreadPool},
     serde::{Deserialize, Serialize},
-    solana_measure::{measure, measure::Measure, measure_us},
+    solana_measure::{measure::Measure, measure_us},
     solana_rayon_threadlimit::get_thread_count,
     solana_sdk::{
         account::{Account, AccountSharedData, ReadableAccount, WritableAccount},
@@ -153,7 +154,7 @@ pub enum IncludeSlotInHash {
     IrrelevantAssertOnUse,
 }
 
-#[derive(Debug, Default, Clone, Copy)]
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 pub enum CreateAncientStorage {
     /// ancient storages are created by appending
     #[default]
@@ -191,6 +192,25 @@ pub(crate) struct AliveAccounts<'a> {
 pub(crate) struct ShrinkCollectAliveSeparatedByRefs<'a> {
     pub(crate) one_ref: AliveAccounts<'a>,
     pub(crate) many_refs: AliveAccounts<'a>,
+}
+
+/// Configuration Parameters for running bank hash and total lamports verification
+#[derive(Debug, Clone)]
+pub struct BankHashLamportsVerifyConfig<'a> {
+    /// bank ancestors
+    pub ancestors: &'a Ancestors,
+    /// true to verify hash calculation
+    pub test_hash_calculation: bool,
+    /// epoch_schedule
+    pub epoch_schedule: &'a EpochSchedule,
+    /// rent_collector
+    pub rent_collector: &'a RentCollector,
+    /// true to ignore mismatches
+    pub ignore_mismatch: bool,
+    /// true to dump debug log if mismatch happens
+    pub store_detailed_debug_info: bool,
+    /// true to use dedicated background thread pool for verification
+    pub use_bg_thread_pool: bool,
 }
 
 pub(crate) trait ShrinkCollectRefs<'a>: Sync + Send {
@@ -821,14 +841,18 @@ impl<'a> LoadedAccountAccessor<'a> {
         }
     }
 
-    fn account_matches_owners(&self, owners: &[&Pubkey]) -> Result<(), MatchAccountOwnerError> {
+    fn account_matches_owners(&self, owners: &[&Pubkey]) -> Result<usize, MatchAccountOwnerError> {
         match self {
             LoadedAccountAccessor::Cached(cached_account) => cached_account
                 .as_ref()
                 .and_then(|cached_account| {
-                    (!cached_account.account.is_zero_lamport()
-                        && owners.contains(&cached_account.account.owner()))
-                    .then_some(())
+                    if cached_account.account.is_zero_lamport() {
+                        None
+                    } else {
+                        owners
+                            .iter()
+                            .position(|entry| &cached_account.account.owner() == entry)
+                    }
                 })
                 .ok_or(MatchAccountOwnerError::NoMatch),
             LoadedAccountAccessor::Stored(maybe_storage_entry) => {
@@ -985,7 +1009,7 @@ pub struct AccountStorageEntry {
     pub(crate) slot: AtomicU64,
 
     /// storage holding the accounts
-    pub(crate) accounts: AppendVec,
+    pub(crate) accounts: AccountsFile,
 
     /// Keeps track of the number of accounts stored in a specific AppendVec.
     ///  This is periodically checked to reuse the stores that do not have
@@ -1007,9 +1031,9 @@ pub struct AccountStorageEntry {
 
 impl AccountStorageEntry {
     pub fn new(path: &Path, slot: Slot, id: AppendVecId, file_size: u64) -> Self {
-        let tail = AppendVec::file_name(slot, id);
+        let tail = AccountsFile::file_name(slot, id);
         let path = Path::new(path).join(tail);
-        let accounts = AppendVec::new(&path, true, file_size as usize);
+        let accounts = AccountsFile::AppendVec(AppendVec::new(&path, true, file_size as usize));
 
         Self {
             id: AtomicAppendVecId::new(id),
@@ -1024,7 +1048,7 @@ impl AccountStorageEntry {
     pub(crate) fn new_existing(
         slot: Slot,
         id: AppendVecId,
-        accounts: AppendVec,
+        accounts: AccountsFile,
         num_accounts: usize,
     ) -> Self {
         Self {
@@ -1659,7 +1683,7 @@ impl SplitAncientStorages {
     }
 
     /// create once ancient slots have been identified
-    /// This is easier to test, removing SortedStorges as a type to deal with here.
+    /// This is easier to test, removing SortedStorages as a type to deal with here.
     fn new_with_ancient_info(
         range: &Range<Slot>,
         ancient_slots: Vec<Slot>,
@@ -4024,7 +4048,6 @@ impl AccountsDb {
         self.shrink_stats.report();
     }
 
-    #[allow(clippy::too_many_arguments)]
     pub(crate) fn update_shrink_stats(shrink_stats: &ShrinkStats, stats_sub: ShrinkStatsSub) {
         shrink_stats
             .num_slots_shrunk
@@ -4288,10 +4311,17 @@ impl AccountsDb {
         }
 
         let can_randomly_shrink = true;
-        self.combine_ancient_slots(
-            self.get_sorted_potential_ancient_slots(),
-            can_randomly_shrink,
-        );
+        if self.create_ancient_storage == CreateAncientStorage::Append {
+            self.combine_ancient_slots(
+                self.get_sorted_potential_ancient_slots(),
+                can_randomly_shrink,
+            );
+        } else {
+            self.combine_ancient_slots_packed(
+                self.get_sorted_potential_ancient_slots(),
+                can_randomly_shrink,
+            );
+        }
     }
 
     #[cfg(test)]
@@ -4932,12 +4962,16 @@ impl AccountsDb {
         self.do_load(ancestors, pubkey, None, load_hint, LoadZeroLamports::None)
     }
 
+    /// Return Ok(index_of_matching_owner) if the account owner at `offset` is one of the pubkeys in `owners`.
+    /// Return Err(MatchAccountOwnerError::NoMatch) if the account has 0 lamports or the owner is not one of
+    /// the pubkeys in `owners`.
+    /// Return Err(MatchAccountOwnerError::UnableToLoad) if the account could not be accessed.
     pub fn account_matches_owners(
         &self,
         ancestors: &Ancestors,
         account: &Pubkey,
         owners: &[&Pubkey],
-    ) -> Result<(), MatchAccountOwnerError> {
+    ) -> Result<usize, MatchAccountOwnerError> {
         let (slot, storage_location, _maybe_account_accesor) = self
             .read_index_for_accessor_or_load_slow(ancestors, account, None, false)
             .ok_or(MatchAccountOwnerError::UnableToLoad)?;
@@ -4945,9 +4979,14 @@ impl AccountsDb {
         if !storage_location.is_cached() {
             let result = self.read_only_accounts_cache.load(*account, slot);
             if let Some(account) = result {
-                return (!account.is_zero_lamport() && owners.contains(&account.owner()))
-                    .then_some(())
-                    .ok_or(MatchAccountOwnerError::NoMatch);
+                return if account.is_zero_lamport() {
+                    Err(MatchAccountOwnerError::NoMatch)
+                } else {
+                    owners
+                        .iter()
+                        .position(|entry| &account.owner() == entry)
+                        .ok_or(MatchAccountOwnerError::NoMatch)
+                };
             }
         }
 
@@ -5481,11 +5520,15 @@ impl AccountsDb {
                     drop(recycle_stores);
                     let old_id = ret.append_vec_id();
                     ret.recycle(slot, self.next_id());
+                    // This info show the appendvec history change history.  It helps debugging
+                    // the appendvec data corrupution issues related to recycling.
                     debug!(
-                        "recycling store: {} {:?} old_id: {}",
+                        "recycling store: old slot {}, old_id: {}, new slot {}, new id{}, path {:?} ",
+                        slot,
+                        old_id,
+                        ret.slot(),
                         ret.append_vec_id(),
                         ret.get_path(),
-                        old_id
                     );
                     self.stats
                         .recycle_store_count
@@ -7212,7 +7255,6 @@ impl AccountsDb {
         }
     }
 
-    #[allow(clippy::too_many_arguments)]
     fn calculate_accounts_hash_with_verify(
         &self,
         data_source: CalcAccountsHashDataSource,
@@ -7556,18 +7598,11 @@ impl AccountsDb {
     }
 
     /// Only called from startup or test code.
-    #[allow(clippy::too_many_arguments)]
     pub fn verify_bank_hash_and_lamports(
         &self,
         slot: Slot,
-        ancestors: &Ancestors,
         total_lamports: u64,
-        test_hash_calculation: bool,
-        epoch_schedule: &EpochSchedule,
-        rent_collector: &RentCollector,
-        ignore_mismatch: bool,
-        store_hash_raw_data_for_debug: bool,
-        use_bg_thread_pool: bool,
+        config: BankHashLamportsVerifyConfig,
     ) -> Result<(), BankHashVerificationError> {
         use BankHashVerificationError::*;
 
@@ -7575,15 +7610,15 @@ impl AccountsDb {
         let (calculated_accounts_hash, calculated_lamports) = self
             .calculate_accounts_hash_with_verify(
                 CalcAccountsHashDataSource::Storages,
-                test_hash_calculation,
+                config.test_hash_calculation,
                 slot,
                 CalcAccountsHashConfig {
-                    use_bg_thread_pool,
+                    use_bg_thread_pool: config.use_bg_thread_pool,
                     check_hash,
-                    ancestors: Some(ancestors),
-                    epoch_schedule,
-                    rent_collector,
-                    store_detailed_debug_info_on_failure: store_hash_raw_data_for_debug,
+                    ancestors: Some(config.ancestors),
+                    epoch_schedule: config.epoch_schedule,
+                    rent_collector: config.rent_collector,
+                    store_detailed_debug_info_on_failure: config.store_detailed_debug_info,
                 },
                 None,
             )?;
@@ -7596,7 +7631,7 @@ impl AccountsDb {
             return Err(MismatchedTotalLamports(calculated_lamports, total_lamports));
         }
 
-        if ignore_mismatch {
+        if config.ignore_mismatch {
             Ok(())
         } else if let Some(found_accounts_hash) = self.get_accounts_hash(slot) {
             if calculated_accounts_hash == found_accounts_hash {
@@ -9536,6 +9571,24 @@ pub mod tests {
         }
     }
 
+    impl<'a> BankHashLamportsVerifyConfig<'a> {
+        fn new_for_test(
+            ancestors: &'a Ancestors,
+            epoch_schedule: &'a EpochSchedule,
+            rent_collector: &'a RentCollector,
+        ) -> BankHashLamportsVerifyConfig<'a> {
+            BankHashLamportsVerifyConfig {
+                ancestors,
+                test_hash_calculation: true,
+                epoch_schedule,
+                rent_collector,
+                ignore_mismatch: false,
+                store_detailed_debug_info: false,
+                use_bg_thread_pool: false,
+            }
+        }
+    }
+
     #[test]
     fn test_maybe_unref_accounts_already_in_ancient() {
         let db = AccountsDb::new_single_for_tests();
@@ -10284,7 +10337,7 @@ pub mod tests {
         let slot_expected: Slot = 0;
         let size: usize = 123;
         let mut data = AccountStorageEntry::new(&paths[0], slot_expected, 0, size as u64);
-        let av = AppendVec::new(&tf.path, true, 1024 * 1024);
+        let av = AccountsFile::AppendVec(AppendVec::new(&tf.path, true, 1024 * 1024));
         data.accounts = av;
 
         let storage = Arc::new(data);
@@ -10398,7 +10451,7 @@ pub mod tests {
         let slot_expected: Slot = 0;
         let size: usize = 123;
         let mut data = AccountStorageEntry::new(&paths[0], slot_expected, 0, size as u64);
-        let av = AppendVec::new(&tf.path, true, 1024 * 1024);
+        let av = AccountsFile::AppendVec(AppendVec::new(&tf.path, true, 1024 * 1024));
         data.accounts = av;
 
         let storage = Arc::new(data);
@@ -10475,7 +10528,7 @@ pub mod tests {
         let (_temp_dirs, paths) = get_temp_accounts_paths(1).unwrap();
         let size: usize = aligned_stored_size(account_data_size.unwrap_or(123) as usize);
         let mut data = AccountStorageEntry::new(&paths[0], slot, id, size as u64);
-        let av = AppendVec::new(&tf.path, true, (1024 * 1024).max(size));
+        let av = AccountsFile::AppendVec(AppendVec::new(&tf.path, true, (1024 * 1024).max(size)));
         data.accounts = av;
 
         let arc = Arc::new(data);
@@ -11906,13 +11959,11 @@ pub mod tests {
         accounts.add_root(0);
 
         let mut current_slot = 1;
-        accounts.insert_default_bank_hash_stats(current_slot, current_slot - 1);
         accounts.store_for_tests(current_slot, &[(&pubkey, &account)]);
         accounts.calculate_accounts_delta_hash(current_slot);
         accounts.add_root_and_flush_write_cache(current_slot);
 
         current_slot += 1;
-        accounts.insert_default_bank_hash_stats(current_slot, current_slot - 1);
         accounts.store_for_tests(current_slot, &[(&pubkey, &zero_lamport_account)]);
         accounts.calculate_accounts_delta_hash(current_slot);
         accounts.add_root_and_flush_write_cache(current_slot);
@@ -11921,7 +11972,6 @@ pub mod tests {
 
         // Otherwise slot 2 will not be removed
         current_slot += 1;
-        accounts.insert_default_bank_hash_stats(current_slot, current_slot - 1);
         accounts.calculate_accounts_delta_hash(current_slot);
         accounts.add_root_and_flush_write_cache(current_slot);
 
@@ -12065,18 +12115,17 @@ pub mod tests {
         assert_load_account(&accounts, current_slot, purged_pubkey2, 0);
         assert_load_account(&accounts, current_slot, dummy_pubkey, dummy_lamport);
 
+        let ancestors = Ancestors::default();
+        let epoch_schedule = EpochSchedule::default();
+        let rent_collector = RentCollector::default();
+        let config = BankHashLamportsVerifyConfig::new_for_test(
+            &ancestors,
+            &epoch_schedule,
+            &rent_collector,
+        );
+
         accounts
-            .verify_bank_hash_and_lamports(
-                4,
-                &Ancestors::default(),
-                1222,
-                true,
-                &EpochSchedule::default(),
-                &RentCollector::default(),
-                false,
-                false,
-                false,
-            )
+            .verify_bank_hash_and_lamports(4, 1222, config)
             .unwrap();
     }
 
@@ -12483,54 +12532,35 @@ pub mod tests {
         let some_slot: Slot = 0;
         let account = AccountSharedData::new(1, some_data_len, &key);
         let ancestors = vec![(some_slot, 0)].into_iter().collect();
+        let epoch_schedule = EpochSchedule::default();
+        let rent_collector = RentCollector::default();
 
         db.store_for_tests(some_slot, &[(&key, &account)]);
         db.add_root_and_flush_write_cache(some_slot);
         db.update_accounts_hash_for_tests(some_slot, &ancestors, true, true);
+
+        let config = BankHashLamportsVerifyConfig::new_for_test(
+            &ancestors,
+            &epoch_schedule,
+            &rent_collector,
+        );
+
         assert_matches!(
-            db.verify_bank_hash_and_lamports(
-                some_slot,
-                &ancestors,
-                1,
-                true,
-                &EpochSchedule::default(),
-                &RentCollector::default(),
-                false,
-                false,
-                false,
-            ),
+            db.verify_bank_hash_and_lamports(some_slot, 1, config.clone()),
             Ok(_)
         );
 
         db.remove_bank_hash_info(&some_slot);
+
         assert_matches!(
-            db.verify_bank_hash_and_lamports(
-                some_slot,
-                &ancestors,
-                1,
-                true,
-                &EpochSchedule::default(),
-                &RentCollector::default(),
-                false,
-                false,
-                false,
-            ),
+            db.verify_bank_hash_and_lamports(some_slot, 1, config.clone()),
             Err(MissingBankHash)
         );
 
         db.set_accounts_hash(some_slot, AccountsHash(Hash::new(&[0xca; HASH_BYTES])));
+
         assert_matches!(
-            db.verify_bank_hash_and_lamports(
-                some_slot,
-                &ancestors,
-                1,
-                true,
-                &EpochSchedule::default(),
-                &RentCollector::default(),
-                false,
-                false,
-                false,
-            ),
+            db.verify_bank_hash_and_lamports(some_slot, 1, config),
             Err(MismatchedBankHash)
         );
     }
@@ -12547,23 +12577,21 @@ pub mod tests {
             let some_slot: Slot = 0;
             let account = AccountSharedData::new(1, some_data_len, &key);
             let ancestors = vec![(some_slot, 0)].into_iter().collect();
+            let epoch_schedule = EpochSchedule::default();
+            let rent_collector = RentCollector::default();
+            let config = BankHashLamportsVerifyConfig::new_for_test(
+                &ancestors,
+                &epoch_schedule,
+                &rent_collector,
+            );
 
             db.store_for_tests(some_slot, &[(&key, &account)]);
             if pass == 0 {
                 db.add_root_and_flush_write_cache(some_slot);
                 db.update_accounts_hash_for_tests(some_slot, &ancestors, true, true);
+
                 assert_matches!(
-                    db.verify_bank_hash_and_lamports(
-                        some_slot,
-                        &ancestors,
-                        1,
-                        true,
-                        &EpochSchedule::default(),
-                        &RentCollector::default(),
-                        false,
-                        false,
-                        false,
-                    ),
+                    db.verify_bank_hash_and_lamports(some_slot, 1, config.clone()),
                     Ok(_)
                 );
                 continue;
@@ -12579,23 +12607,14 @@ pub mod tests {
             );
             db.add_root_and_flush_write_cache(some_slot);
             db.update_accounts_hash_for_tests(some_slot, &ancestors, true, true);
+
             assert_matches!(
-                db.verify_bank_hash_and_lamports(
-                    some_slot,
-                    &ancestors,
-                    2,
-                    true,
-                    &EpochSchedule::default(),
-                    &RentCollector::default(),
-                    false,
-                    false,
-                    false,
-                ),
+                db.verify_bank_hash_and_lamports(some_slot, 2, config.clone()),
                 Ok(_)
             );
 
             assert_matches!(
-                db.verify_bank_hash_and_lamports(some_slot, &ancestors, 10, true, &EpochSchedule::default(), &RentCollector::default(), false, false, false),
+                db.verify_bank_hash_and_lamports(some_slot, 10, config),
                 Err(MismatchedTotalLamports(expected, actual)) if expected == 2 && actual == 10
             );
         }
@@ -12611,18 +12630,17 @@ pub mod tests {
 
         db.add_root(some_slot);
         db.update_accounts_hash_for_tests(some_slot, &ancestors, true, true);
+
+        let epoch_schedule = EpochSchedule::default();
+        let rent_collector = RentCollector::default();
+        let config = BankHashLamportsVerifyConfig::new_for_test(
+            &ancestors,
+            &epoch_schedule,
+            &rent_collector,
+        );
+
         assert_matches!(
-            db.verify_bank_hash_and_lamports(
-                some_slot,
-                &ancestors,
-                0,
-                true,
-                &EpochSchedule::default(),
-                &RentCollector::default(),
-                false,
-                false,
-                false,
-            ),
+            db.verify_bank_hash_and_lamports(some_slot, 0, config),
             Ok(_)
         );
     }
@@ -12652,18 +12670,17 @@ pub mod tests {
             StoreReclaims::Default,
         );
         db.add_root(some_slot);
+
+        let epoch_schedule = EpochSchedule::default();
+        let rent_collector = RentCollector::default();
+        let config = BankHashLamportsVerifyConfig::new_for_test(
+            &ancestors,
+            &epoch_schedule,
+            &rent_collector,
+        );
+
         assert_matches!(
-            db.verify_bank_hash_and_lamports(
-                some_slot,
-                &ancestors,
-                1,
-                true,
-                &EpochSchedule::default(),
-                &RentCollector::default(),
-                false,
-                false,
-                false,
-            ),
+            db.verify_bank_hash_and_lamports(some_slot, 1, config),
             Err(MismatchedBankHash)
         );
     }
@@ -13192,34 +13209,23 @@ pub mod tests {
             );
 
             let no_ancestors = Ancestors::default();
+
+            let epoch_schedule = EpochSchedule::default();
+            let rent_collector = RentCollector::default();
+            let config = BankHashLamportsVerifyConfig::new_for_test(
+                &no_ancestors,
+                &epoch_schedule,
+                &rent_collector,
+            );
+
             accounts.update_accounts_hash_for_tests(current_slot, &no_ancestors, false, false);
             accounts
-                .verify_bank_hash_and_lamports(
-                    current_slot,
-                    &no_ancestors,
-                    22300,
-                    true,
-                    &EpochSchedule::default(),
-                    &RentCollector::default(),
-                    false,
-                    false,
-                    false,
-                )
+                .verify_bank_hash_and_lamports(current_slot, 22300, config.clone())
                 .unwrap();
 
             let accounts = reconstruct_accounts_db_via_serialization(&accounts, current_slot);
             accounts
-                .verify_bank_hash_and_lamports(
-                    current_slot,
-                    &no_ancestors,
-                    22300,
-                    true,
-                    &EpochSchedule::default(),
-                    &RentCollector::default(),
-                    false,
-                    false,
-                    false,
-                )
+                .verify_bank_hash_and_lamports(current_slot, 22300, config)
                 .unwrap();
 
             // repeating should be no-op
@@ -14178,11 +14184,11 @@ pub mod tests {
 
         assert_eq!(
             db.account_matches_owners(&Ancestors::default(), &account1_key, &owners_refs),
-            Ok(())
+            Ok(0)
         );
         assert_eq!(
             db.account_matches_owners(&Ancestors::default(), &account2_key, &owners_refs),
-            Ok(())
+            Ok(1)
         );
         assert_eq!(
             db.account_matches_owners(&Ancestors::default(), &account3_key, &owners_refs),
@@ -14212,11 +14218,11 @@ pub mod tests {
 
         assert_eq!(
             db.account_matches_owners(&Ancestors::default(), &account1_key, &owners_refs),
-            Ok(())
+            Ok(0)
         );
         assert_eq!(
             db.account_matches_owners(&Ancestors::default(), &account2_key, &owners_refs),
-            Ok(())
+            Ok(1)
         );
         assert_eq!(
             db.account_matches_owners(&Ancestors::default(), &account3_key, &owners_refs),
@@ -17253,7 +17259,7 @@ pub mod tests {
         }
     }
 
-    const CAN_RANDOMLY_SHRINK_FALSE: bool = false;
+    pub(crate) const CAN_RANDOMLY_SHRINK_FALSE: bool = false;
 
     #[test]
     fn test_combine_ancient_slots_empty() {

@@ -4,8 +4,8 @@ use {
         account_rent_state::{check_rent_state_with_account, RentState},
         accounts_db::{
             AccountShrinkThreshold, AccountsAddRootTiming, AccountsDb, AccountsDbConfig,
-            IncludeSlotInHash, LoadHint, LoadedAccount, ScanStorageResult,
-            ACCOUNTS_DB_CONFIG_FOR_BENCHMARKS, ACCOUNTS_DB_CONFIG_FOR_TESTING,
+            BankHashLamportsVerifyConfig, IncludeSlotInHash, LoadHint, LoadedAccount,
+            ScanStorageResult, ACCOUNTS_DB_CONFIG_FOR_BENCHMARKS, ACCOUNTS_DB_CONFIG_FOR_TESTING,
         },
         accounts_index::{
             AccountSecondaryIndexes, IndexKey, ScanConfig, ScanError, ScanResult, ZeroLamport,
@@ -49,7 +49,7 @@ use {
         saturating_add_assign,
         slot_hashes::SlotHashes,
         system_program,
-        sysvar::{self, epoch_schedule::EpochSchedule, instructions::construct_instructions_data},
+        sysvar::{self, instructions::construct_instructions_data},
         transaction::{Result, SanitizedTransaction, TransactionAccountLocks, TransactionError},
         transaction_context::{IndexOfAccount, TransactionAccount},
     },
@@ -142,10 +142,7 @@ pub enum AccountAddressFilter {
 
 impl Accounts {
     pub fn default_for_tests() -> Self {
-        Self {
-            accounts_db: Arc::new(AccountsDb::default_for_tests()),
-            account_locks: Mutex::default(),
-        }
+        Self::new_empty(AccountsDb::default_for_tests())
     }
 
     pub fn new_with_config_for_tests(
@@ -191,32 +188,30 @@ impl Accounts {
         accounts_update_notifier: Option<AccountsUpdateNotifier>,
         exit: &Arc<AtomicBool>,
     ) -> Self {
-        Self {
-            accounts_db: Arc::new(AccountsDb::new_with_config(
-                paths,
-                cluster_type,
-                account_indexes,
-                shrink_ratio,
-                accounts_db_config,
-                accounts_update_notifier,
-                exit,
-            )),
-            account_locks: Mutex::new(AccountLocks::default()),
-        }
+        Self::new_empty(AccountsDb::new_with_config(
+            paths,
+            cluster_type,
+            account_indexes,
+            shrink_ratio,
+            accounts_db_config,
+            accounts_update_notifier,
+            exit,
+        ))
     }
 
     pub fn new_from_parent(parent: &Accounts, slot: Slot, parent_slot: Slot) -> Self {
         let accounts_db = parent.accounts_db.clone();
         accounts_db.insert_default_bank_hash_stats(slot, parent_slot);
-        Self {
-            accounts_db,
-            account_locks: Mutex::new(AccountLocks::default()),
-        }
+        Self::new(accounts_db)
     }
 
     pub(crate) fn new_empty(accounts_db: AccountsDb) -> Self {
+        Self::new(Arc::new(accounts_db))
+    }
+
+    fn new(accounts_db: Arc<AccountsDb>) -> Self {
         Self {
-            accounts_db: Arc::new(accounts_db),
+            accounts_db,
             account_locks: Mutex::new(AccountLocks::default()),
         }
     }
@@ -803,30 +798,16 @@ impl Accounts {
 
     /// Only called from startup or test code.
     #[must_use]
-    #[allow(clippy::too_many_arguments)]
     pub fn verify_bank_hash_and_lamports(
         &self,
         slot: Slot,
-        ancestors: &Ancestors,
         total_lamports: u64,
-        test_hash_calculation: bool,
-        epoch_schedule: &EpochSchedule,
-        rent_collector: &RentCollector,
-        ignore_mismatch: bool,
-        store_detailed_debug_info: bool,
-        use_bg_thread_pool: bool,
+        config: BankHashLamportsVerifyConfig,
     ) -> bool {
-        if let Err(err) = self.accounts_db.verify_bank_hash_and_lamports(
-            slot,
-            ancestors,
-            total_lamports,
-            test_hash_calculation,
-            epoch_schedule,
-            rent_collector,
-            ignore_mismatch,
-            store_detailed_debug_info,
-            use_bg_thread_pool,
-        ) {
+        if let Err(err) =
+            self.accounts_db
+                .verify_bank_hash_and_lamports(slot, total_lamports, config)
+        {
             warn!("verify_bank_hash failed: {:?}, slot: {}", err, slot);
             false
         } else {

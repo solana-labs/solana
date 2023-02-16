@@ -537,7 +537,7 @@ impl ServeRepair {
                 stats.err_unsigned += 1;
             }
             _ => {
-                debug_assert!(false, "unhandled error {:?}", error);
+                debug_assert!(false, "unhandled error {error:?}");
             }
         }
     }
@@ -838,8 +838,7 @@ impl ServeRepair {
                     None => {
                         debug_assert!(
                             false,
-                            "request should have failed deserialization: {:?}",
-                            request
+                            "request should have failed deserialization: {request:?}",
                         );
                         return Err(Error::from(RepairVerifyError::Malformed));
                     }
@@ -849,8 +848,7 @@ impl ServeRepair {
                     None => {
                         debug_assert!(
                             false,
-                            "request should have failed deserialization: {:?}",
-                            request
+                            "request should have failed deserialization: {request:?}",
                         );
                         return Err(Error::from(RepairVerifyError::Malformed));
                     }
@@ -1584,7 +1582,7 @@ mod tests {
             );
             let slot = 239847;
             let request = RepairProtocol::Orphan { header, slot };
-            let mut packet = Packet::from_data(None, &request).unwrap();
+            let mut packet = Packet::from_data(None, request).unwrap();
             sign_packet(&mut packet, &my_keypair);
             packet
         };
@@ -1603,7 +1601,7 @@ mod tests {
             );
             let slot = 239847;
             let request = RepairProtocol::Orphan { header, slot };
-            let mut packet = Packet::from_data(None, &request).unwrap();
+            let mut packet = Packet::from_data(None, request).unwrap();
             sign_packet(&mut packet, &my_keypair);
             packet
         };
@@ -1625,7 +1623,7 @@ mod tests {
             );
             let slot = 239847;
             let request = RepairProtocol::Orphan { header, slot };
-            let mut packet = Packet::from_data(None, &request).unwrap();
+            let mut packet = Packet::from_data(None, request).unwrap();
             sign_packet(&mut packet, &my_keypair);
             packet
         };
@@ -1645,7 +1643,7 @@ mod tests {
             );
             let slot = 239847;
             let request = RepairProtocol::Orphan { header, slot };
-            let mut packet = Packet::from_data(None, &request).unwrap();
+            let mut packet = Packet::from_data(None, request).unwrap();
             sign_packet(&mut packet, &other_keypair);
             packet
         };

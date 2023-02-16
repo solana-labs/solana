@@ -5,6 +5,7 @@ use {
             AccountShrinkThreshold, AccountStorageEntry, AccountsDb, AccountsDbConfig, AppendVecId,
             AtomicAppendVecId, BankHashStats, IndexGenerationInfo,
         },
+        accounts_file::AccountsFile,
         accounts_hash::{AccountsDeltaHash, AccountsHash},
         accounts_index::AccountSecondaryIndexes,
         accounts_update_notifier_interface::AccountsUpdateNotifier,
@@ -419,8 +420,7 @@ pub fn reserialize_bank_with_new_accounts_hash(
 ) -> bool {
     let bank_post = snapshot_utils::get_bank_snapshots_dir(bank_snapshots_dir, slot);
     let bank_post = bank_post.join(snapshot_utils::get_snapshot_file_name(slot));
-    let mut bank_pre = bank_post.clone();
-    bank_pre.set_extension(BANK_SNAPSHOT_PRE_FILENAME_EXTENSION);
+    let bank_pre = bank_post.with_extension(BANK_SNAPSHOT_PRE_FILENAME_EXTENSION);
 
     let mut found = false;
     {
@@ -574,11 +574,12 @@ fn reconstruct_single_storage(
     current_len: usize,
     append_vec_id: AppendVecId,
 ) -> io::Result<Arc<AccountStorageEntry>> {
-    let (accounts, num_accounts) = AppendVec::new_from_file(append_vec_path, current_len)?;
+    let (append_vec, num_accounts) = AppendVec::new_from_file(append_vec_path, current_len)?;
+    let accounts_file = AccountsFile::AppendVec(append_vec);
     Ok(Arc::new(AccountStorageEntry::new_existing(
         *slot,
         append_vec_id,
-        accounts,
+        accounts_file,
         num_accounts,
     )))
 }

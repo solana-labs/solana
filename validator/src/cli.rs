@@ -174,26 +174,26 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
         )
         .arg(
             Arg::with_name("full_rpc_api")
-                .long("--full-rpc-api")
+                .long("full-rpc-api")
                 .conflicts_with("minimal_rpc_api")
                 .takes_value(false)
                 .help("Expose RPC methods for querying chain state and transaction history"),
         )
         .arg(
             Arg::with_name("obsolete_v1_7_rpc_api")
-                .long("--enable-rpc-obsolete_v1_7")
+                .long("enable-rpc-obsolete_v1_7")
                 .takes_value(false)
                 .help("Enable the obsolete RPC methods removed in v1.7"),
         )
         .arg(
             Arg::with_name("private_rpc")
-                .long("--private-rpc")
+                .long("private-rpc")
                 .takes_value(false)
                 .help("Do not publish the RPC port for use by others")
         )
         .arg(
             Arg::with_name("no_port_check")
-                .long("--no-port-check")
+                .long("no-port-check")
                 .takes_value(false)
                 .help("Do not perform TCP/UDP reachable port checks at start-up")
         )
@@ -486,6 +486,7 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
         .arg(
             Arg::with_name("no_poh_speed_test")
                 .long("no-poh-speed-test")
+                .hidden(true)
                 .help("Skip the check for PoH speed."),
         )
         .arg(
@@ -497,21 +498,25 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
         .arg(
             Arg::with_name("no_os_memory_stats_reporting")
                 .long("no-os-memory-stats-reporting")
+                .hidden(true)
                 .help("Disable reporting of OS memory statistics.")
         )
         .arg(
             Arg::with_name("no_os_network_stats_reporting")
                 .long("no-os-network-stats-reporting")
+                .hidden(true)
                 .help("Disable reporting of OS network statistics.")
         )
         .arg(
             Arg::with_name("no_os_cpu_stats_reporting")
                 .long("no-os-cpu-stats-reporting")
+                .hidden(true)
                 .help("Disable reporting of OS CPU statistics.")
         )
         .arg(
             Arg::with_name("no_os_disk_stats_reporting")
                 .long("no-os-disk-stats-reporting")
+                .hidden(true)
                 .help("Disable reporting of OS disk statistics.")
         )
         .arg(
@@ -1604,7 +1609,7 @@ fn get_deprecated_arguments() -> Vec<Arg<'static, 'static>> {
                    interval, use --full-snapshot-interval-slots.",
             ),
         Arg::with_name("minimal_rpc_api")
-            .long("--minimal-rpc-api")
+            .long("minimal-rpc-api")
             .takes_value(false)
             .hidden(true)
             .help("Only expose the RPC methods required to serve snapshots to other nodes"),
@@ -2154,6 +2159,20 @@ pub fn test_app<'a>(version: &'a str, default_args: &'a DefaultTestArgs) -> App<
                 .help(
                     "Copy an account from the cluster referenced by the --url argument, \
                      skipping it if it doesn't exist. \
+                     If the ledger already exists then this parameter is silently ignored",
+                ),
+        )
+        .arg(
+            Arg::with_name("clone_upgradeable_program")
+                .long("clone-upgradeable-program")
+                .value_name("ADDRESS")
+                .takes_value(true)
+                .validator(is_pubkey_or_keypair)
+                .multiple(true)
+                .requires("json_rpc_url")
+                .help(
+                    "Copy an upgradeable program and its executable data from the cluster \
+                     referenced by the --url argument the genesis configuration. \
                      If the ledger already exists then this parameter is silently ignored",
                 ),
         )

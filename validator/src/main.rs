@@ -1503,7 +1503,7 @@ pub fn main() {
         if SystemMonitorService::check_os_network_limits() {
             info!("OS network limits test passed.");
         } else {
-            eprintln!("OS network limit test failed. solana-sys-tuner may be used to configure OS network limits. Bypass check with --no-os-network-limits-test.");
+            eprintln!("OS network limit test failed. See: https://docs.solana.com/running-validator/validator-start#system-tuning");
             exit(1);
         }
     }

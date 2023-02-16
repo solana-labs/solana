@@ -559,11 +559,7 @@ impl fmt::Display for CliValidators {
             }
             CliValidatorsSortOrder::Version => {
                 sorted_validators.sort_by(|a, b| {
-                    use std::cmp::Ordering;
-                    match a.version.cmp(&b.version) {
-                        Ordering::Equal => a.activated_stake.cmp(&b.activated_stake),
-                        ordering => ordering,
-                    }
+                    (&a.version, a.activated_stake).cmp(&(&b.version, b.activated_stake))
                 });
             }
         }

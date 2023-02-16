@@ -7,6 +7,7 @@ use {
         },
         accounts_index::AccountSecondaryIndexes,
         accounts_update_notifier_interface::AccountsUpdateNotifier,
+        append_vec::AppendVec,
         bank::{Bank, BankFieldsToDeserialize, BankSlotDelta},
         builtins::Builtins,
         hardened_unpack::{
@@ -69,6 +70,8 @@ mod snapshot_storage_rebuilder;
 pub use archive_format::*;
 
 pub const SNAPSHOT_STATUS_CACHE_FILENAME: &str = "status_cache";
+pub const SNAPSHOT_VERSION_FILENAME: &str = "version";
+pub const SNAPSHOT_STATE_COMPLETE_FILENAME: &str = "state_complete";
 pub const SNAPSHOT_ARCHIVE_DOWNLOAD_DIR: &str = "remote";
 pub const DEFAULT_FULL_SNAPSHOT_ARCHIVE_INTERVAL_SLOTS: Slot = 25_000;
 pub const DEFAULT_INCREMENTAL_SNAPSHOT_ARCHIVE_INTERVAL_SLOTS: Slot = 100;
@@ -164,8 +167,8 @@ impl BankSnapshotInfo {
         // BankSnapshotPost file
         let bank_snapshot_dir = get_bank_snapshots_dir(&bank_snapshots_dir, slot);
         let bank_snapshot_post_path = bank_snapshot_dir.join(get_snapshot_file_name(slot));
-        let mut bank_snapshot_pre_path = bank_snapshot_post_path.clone();
-        bank_snapshot_pre_path.set_extension(BANK_SNAPSHOT_PRE_FILENAME_EXTENSION);
+        let bank_snapshot_pre_path =
+            bank_snapshot_post_path.with_extension(BANK_SNAPSHOT_PRE_FILENAME_EXTENSION);
 
         if bank_snapshot_pre_path.is_file() {
             return Some(BankSnapshotInfo {
@@ -290,6 +293,9 @@ pub enum SnapshotError {
 
     #[error("snapshot slot deltas are invalid: {0}")]
     VerifySlotDeltas(#[from] VerifySlotDeltasError),
+
+    #[error("invalid AppendVec path: {}", .0.display())]
+    InvalidAppendVecPath(PathBuf),
 }
 pub type Result<T> = std::result::Result<T, SnapshotError>;
 
@@ -426,6 +432,18 @@ pub fn remove_tmp_snapshot_archives(snapshot_archives_dir: impl AsRef<Path>) {
     }
 }
 
+/// Write the snapshot version as a file into the bank snapshot directory
+pub fn write_snapshot_version_file(
+    version_file: impl AsRef<Path>,
+    version: SnapshotVersion,
+) -> Result<()> {
+    let mut f = fs::File::create(version_file)
+        .map_err(|e| SnapshotError::IoWithSource(e, "create version file"))?;
+    f.write_all(version.as_str().as_bytes())
+        .map_err(|e| SnapshotError::IoWithSource(e, "write version file"))?;
+    Ok(())
+}
+
 /// Make a snapshot archive out of the snapshot package
 pub fn archive_snapshot_package(
     snapshot_package: &SnapshotPackage,
@@ -462,7 +480,7 @@ pub fn archive_snapshot_package(
 
     let staging_accounts_dir = staging_dir.path().join("accounts");
     let staging_snapshots_dir = staging_dir.path().join("snapshots");
-    let staging_version_file = staging_dir.path().join("version");
+    let staging_version_file = staging_dir.path().join(SNAPSHOT_VERSION_FILENAME);
     fs::create_dir_all(&staging_accounts_dir).map_err(|e| {
         SnapshotError::IoWithSourceAndFile(e, "create staging path", staging_accounts_dir.clone())
     })?;
@@ -494,14 +512,7 @@ pub fn archive_snapshot_package(
         }
     }
 
-    // Write version file
-    {
-        let mut f = fs::File::create(&staging_version_file).map_err(|e| {
-            SnapshotError::IoWithSourceAndFile(e, "create version file", staging_version_file)
-        })?;
-        f.write_all(snapshot_package.snapshot_version.as_str().as_bytes())
-            .map_err(|e| SnapshotError::IoWithSource(e, "write version file"))?;
-    }
+    write_snapshot_version_file(staging_version_file, snapshot_package.snapshot_version)?;
 
     // Tar the staging directory into the archive at `archive_path`
     let archive_path = tar_dir.join(format!(
@@ -518,7 +529,10 @@ pub fn archive_snapshot_package(
             let mut archive = tar::Builder::new(encoder);
             // Serialize the version and snapshots files before accounts so we can quickly determine the version
             // and other bank fields. This is necessary if we want to interleave unpacking with reconstruction
-            archive.append_path_with_name(staging_dir.as_ref().join("version"), "version")?;
+            archive.append_path_with_name(
+                staging_dir.as_ref().join(SNAPSHOT_VERSION_FILENAME),
+                SNAPSHOT_VERSION_FILENAME,
+            )?;
             for dir in ["snapshots", "accounts"] {
                 archive.append_dir_all(dir, staging_dir.as_ref().join(dir))?;
             }
@@ -877,6 +891,105 @@ pub fn create_accounts_run_and_snapshot_dirs(
     Ok((run_path, snapshot_path))
 }
 
+/// Return account path from the appendvec path after checking its format.
+fn get_account_path_from_appendvec_path(appendvec_path: &Path) -> Option<PathBuf> {
+    let run_path = appendvec_path.parent()?;
+    let run_file_name = run_path.file_name()?;
+    // All appendvec files should be under <account_path>/run/.
+    // When generating the bank snapshot directory, they are hardlinked to <account_path>/snapshot/<slot>/
+    if run_file_name != "run" {
+        error!(
+            "The account path {} does not have run/ as its immediate parent directory.",
+            run_path.display()
+        );
+        return None;
+    }
+    let account_path = run_path.parent()?;
+    Some(account_path.to_path_buf())
+}
+
+/// From an appendvec path, derive the snapshot hardlink path.  If the corresponding snapshot hardlink
+/// directory does not exist, create it.
+fn get_snapshot_accounts_hardlink_dir(
+    appendvec_path: &Path,
+    bank_slot: Slot,
+    account_paths: &mut HashSet<PathBuf>,
+    hardlinks_dir: impl AsRef<Path>,
+) -> Result<PathBuf> {
+    let account_path = get_account_path_from_appendvec_path(appendvec_path)
+        .ok_or_else(|| SnapshotError::InvalidAppendVecPath(appendvec_path.to_path_buf()))?;
+
+    let snapshot_hardlink_dir = account_path.join("snapshot").join(bank_slot.to_string());
+
+    // Use the hashset to track, to avoid checking the file system.  Only set up the hardlink directory
+    // and the symlink to it at the first time of seeing the account_path.
+    if !account_paths.contains(&account_path) {
+        let idx = account_paths.len();
+        debug!(
+            "for appendvec_path {}, create hard-link path {}",
+            appendvec_path.display(),
+            snapshot_hardlink_dir.display()
+        );
+        fs::create_dir_all(&snapshot_hardlink_dir).map_err(|e| {
+            SnapshotError::IoWithSourceAndFile(
+                e,
+                "create hard-link dir",
+                snapshot_hardlink_dir.clone(),
+            )
+        })?;
+        let symlink_path = hardlinks_dir.as_ref().join(format!("account_path_{idx}"));
+        symlink::symlink_dir(&snapshot_hardlink_dir, symlink_path).map_err(|e| {
+            SnapshotError::IoWithSourceAndFile(
+                e,
+                "simlink the hard-link dir",
+                snapshot_hardlink_dir.clone(),
+            )
+        })?;
+        account_paths.insert(account_path);
+    };
+
+    Ok(snapshot_hardlink_dir)
+}
+
+/// Hard-link the files from accounts/ to snapshot/<bank_slot>/accounts/
+/// This keeps the appendvec files alive and with the bank snapshot.  The slot and id
+/// in the file names are also updated in case its file is a recycled one with inconsistent slot
+/// and id.
+fn hard_link_storages_to_snapshot(
+    bank_snapshot_dir: impl AsRef<Path>,
+    bank_slot: Slot,
+    snapshot_storages: &[Arc<AccountStorageEntry>],
+) -> Result<()> {
+    let accounts_hardlinks_dir = bank_snapshot_dir.as_ref().join("accounts_hardlinks");
+    fs::create_dir_all(&accounts_hardlinks_dir)?;
+
+    let mut account_paths: HashSet<PathBuf> = HashSet::new();
+    for storage in snapshot_storages {
+        storage.flush()?;
+        let storage_path = storage.accounts.get_path();
+        let snapshot_hardlink_dir = get_snapshot_accounts_hardlink_dir(
+            &storage_path,
+            bank_slot,
+            &mut account_paths,
+            &accounts_hardlinks_dir,
+        )?;
+        // The appendvec could be recycled, so its filename may not be consistent to the slot and id.
+        // Use the storage slot and id to compose a consistent file name for the hard-link file.
+        let hardlink_filename = AppendVec::file_name(storage.slot(), storage.append_vec_id());
+        let hard_link_path = snapshot_hardlink_dir.join(hardlink_filename);
+        fs::hard_link(&storage_path, &hard_link_path).map_err(|e| {
+            let err_msg = format!(
+                "hard-link appendvec file {} to {} failed.  Error: {}",
+                storage_path.display(),
+                hard_link_path.display(),
+                e,
+            );
+            SnapshotError::Io(IoError::new(ErrorKind::Other, err_msg))
+        })?;
+    }
+    Ok(())
+}
+
 /// Serialize a bank to a snapshot
 ///
 /// **DEVELOPER NOTE** Any error that is returned from this function may bring down the node!  This
@@ -893,18 +1006,33 @@ pub fn add_bank_snapshot(
     let mut add_snapshot_time = Measure::start("add-snapshot-ms");
     let slot = bank.slot();
     // bank_snapshots_dir/slot
-    let bank_snapshot_dir = get_bank_snapshots_dir(bank_snapshots_dir, slot);
+    let bank_snapshot_dir = get_bank_snapshots_dir(&bank_snapshots_dir, slot);
+    if bank_snapshot_dir.is_dir() {
+        // There is a time window from when a snapshot directory is created to when its content
+        // is fully filled to become a full state good to construct a bank from.  At the init time,
+        // the system may not be booted from the latest snapshot directory, but an older and complete
+        // directory.  Then, when adding new snapshots, the newer incomplete snapshot directory could
+        // be found.  If so, it should be removed.
+        remove_bank_snapshot(slot, &bank_snapshots_dir)?;
+    }
     fs::create_dir_all(&bank_snapshot_dir)?;
 
     // the bank snapshot is stored as bank_snapshots_dir/slot/slot.BANK_SNAPSHOT_PRE_FILENAME_EXTENSION
-    let mut bank_snapshot_path = bank_snapshot_dir.join(get_snapshot_file_name(slot));
-    bank_snapshot_path.set_extension(BANK_SNAPSHOT_PRE_FILENAME_EXTENSION);
+    let bank_snapshot_path = bank_snapshot_dir
+        .join(get_snapshot_file_name(slot))
+        .with_extension(BANK_SNAPSHOT_PRE_FILENAME_EXTENSION);
 
     info!(
         "Creating bank snapshot for slot {}, path: {}",
         slot,
         bank_snapshot_path.display(),
     );
+
+    // We are contructing the snapshot directory to contain the full snapshot state information to allow
+    // constructing a bank from this directory.  It acts like an archive to include the full state.
+    // The set of the account appendvec files is the necessary part of this snapshot state.  Hard-link them
+    // from the operational accounts/ directory to here.
+    hard_link_storages_to_snapshot(&bank_snapshot_dir, slot, snapshot_storages)?;
 
     let mut bank_serialize = Measure::start("bank-serialize-ms");
     let bank_snapshot_serializer = move |stream: &mut BufWriter<File>| -> Result<()> {
@@ -926,6 +1054,13 @@ pub fn add_bank_snapshot(
 
     let status_cache_path = bank_snapshot_dir.join(SNAPSHOT_STATUS_CACHE_FILENAME);
     serialize_status_cache(slot, &slot_deltas, &status_cache_path)?;
+
+    let version_path = bank_snapshot_dir.join(SNAPSHOT_VERSION_FILENAME);
+    write_snapshot_version_file(version_path, snapshot_version).unwrap();
+
+    // Mark this directory complete so it can be used.  Check this flag first before selecting for deserialization.
+    let state_complete_path = bank_snapshot_dir.join(SNAPSHOT_STATE_COMPLETE_FILENAME);
+    fs::File::create(state_complete_path)?;
 
     // Monitor sizes because they're capped to MAX_SNAPSHOT_DATA_FILE_SIZE
     datapoint_info!(
@@ -994,6 +1129,15 @@ where
     P: AsRef<Path>,
 {
     let bank_snapshot_dir = get_bank_snapshots_dir(&bank_snapshots_dir, slot);
+    let accounts_hardlinks_dir = bank_snapshot_dir.join("accounts_hardlinks");
+    if fs::metadata(&accounts_hardlinks_dir).is_ok() {
+        // This directory contain symlinks to all accounts snapshot directories.
+        // They should all be removed.
+        for entry in fs::read_dir(accounts_hardlinks_dir)? {
+            let dst_path = fs::read_link(entry?.path())?;
+            fs::remove_dir_all(dst_path)?;
+        }
+    }
     fs::remove_dir_all(bank_snapshot_dir)?;
     Ok(())
 }
@@ -2186,9 +2330,9 @@ pub fn verify_snapshot_archive<P, Q, R>(
     if let VerifyBank::NonDeterministic(slot) = verify_bank {
         // file contents may be different, but deserialized structs should be equal
         let slot = slot.to_string();
+        let snapshot_slot_dir = snapshots_to_verify.as_ref().join(&slot);
         let p1 = snapshots_to_verify.as_ref().join(&slot).join(&slot);
         let p2 = unpacked_snapshots.join(&slot).join(&slot);
-
         assert!(crate::serde_snapshot::compare_two_serialized_banks(&p1, &p2).unwrap());
         std::fs::remove_file(p1).unwrap();
         std::fs::remove_file(p2).unwrap();
@@ -2208,6 +2352,27 @@ pub fn verify_snapshot_archive<P, Q, R>(
             new_unpacked_status_cache_file,
         )
         .unwrap();
+
+        let accounts_hardlinks_dir = snapshot_slot_dir.join("accounts_hardlinks");
+        if accounts_hardlinks_dir.is_dir() {
+            // This directory contain symlinks to all <account_path>/snapshot/<slot> directories.
+            // They should all be removed.
+            for entry in fs::read_dir(&accounts_hardlinks_dir).unwrap() {
+                let dst_path = fs::read_link(entry.unwrap().path()).unwrap();
+                fs::remove_dir_all(dst_path).unwrap();
+            }
+            std::fs::remove_dir_all(accounts_hardlinks_dir).unwrap();
+        }
+
+        let version_path = snapshot_slot_dir.join(SNAPSHOT_VERSION_FILENAME);
+        if version_path.is_file() {
+            std::fs::remove_file(version_path).unwrap();
+        }
+
+        let state_complete_path = snapshot_slot_dir.join(SNAPSHOT_STATE_COMPLETE_FILENAME);
+        if state_complete_path.is_file() {
+            std::fs::remove_file(state_complete_path).unwrap();
+        }
     }
 
     assert!(!dir_diff::is_different(&snapshots_to_verify, unpacked_snapshots).unwrap());
@@ -2223,13 +2388,16 @@ pub fn verify_snapshot_archive<P, Q, R>(
 }
 
 /// Remove outdated bank snapshots
-pub fn purge_old_bank_snapshots(bank_snapshots_dir: impl AsRef<Path>) {
+pub fn purge_old_bank_snapshots(
+    bank_snapshots_dir: impl AsRef<Path>,
+    num_bank_snapshots_to_retain: usize,
+) {
     let do_purge = |mut bank_snapshots: Vec<BankSnapshotInfo>| {
         bank_snapshots.sort_unstable();
         bank_snapshots
             .into_iter()
             .rev()
-            .skip(MAX_BANK_SNAPSHOTS_TO_RETAIN)
+            .skip(num_bank_snapshots_to_retain)
             .for_each(|bank_snapshot| {
                 let r = remove_bank_snapshot(bank_snapshot.slot, &bank_snapshots_dir);
                 if r.is_err() {
@@ -3936,7 +4104,7 @@ mod tests {
         )
         .unwrap();
         let (deserialized_bank, _) = bank_from_snapshot_archives(
-            &[accounts_dir.as_path().to_path_buf()],
+            &[accounts_dir.clone()],
             bank_snapshots_dir.path(),
             &full_snapshot_archive_info,
             Some(&incremental_snapshot_archive_info),
@@ -4001,7 +4169,7 @@ mod tests {
         .unwrap();
 
         let (deserialized_bank, _) = bank_from_snapshot_archives(
-            &[accounts_dir.as_path().to_path_buf()],
+            &[accounts_dir],
             bank_snapshots_dir.path(),
             &full_snapshot_archive_info,
             Some(&incremental_snapshot_archive_info),
@@ -4248,5 +4416,91 @@ mod tests {
             result,
             Err(VerifySlotDeltasError::SlotNotFoundInDeltas(333)),
         );
+    }
+
+    #[test]
+    fn test_bank_snapshot_dir_accounts_hardlinks() {
+        solana_logger::setup();
+        let genesis_config = GenesisConfig::default();
+        let bank = Bank::new_for_tests(&genesis_config);
+
+        bank.fill_bank_with_ticks_for_tests();
+
+        let bank_snapshots_dir = tempfile::TempDir::new().unwrap();
+
+        bank.squash();
+        bank.force_flush_accounts_cache();
+
+        let snapshot_version = SnapshotVersion::default();
+        let snapshot_storages = bank.get_snapshot_storages(None);
+        let slot_deltas = bank.status_cache.read().unwrap().root_slot_deltas();
+        add_bank_snapshot(
+            &bank_snapshots_dir,
+            &bank,
+            &snapshot_storages,
+            snapshot_version,
+            slot_deltas,
+        )
+        .unwrap();
+
+        let accounts_hardlinks_dir =
+            get_bank_snapshots_dir(&bank_snapshots_dir, bank.slot()).join("accounts_hardlinks");
+        assert!(fs::metadata(&accounts_hardlinks_dir).is_ok());
+
+        let mut hardlink_dirs: Vec<PathBuf> = Vec::new();
+        // This directory contain symlinks to all accounts snapshot directories.
+        for entry in fs::read_dir(accounts_hardlinks_dir).unwrap() {
+            let entry = entry.unwrap();
+            let symlink = entry.path();
+            let dst_path = fs::read_link(symlink).unwrap();
+            assert!(fs::metadata(&dst_path).is_ok());
+            hardlink_dirs.push(dst_path);
+        }
+
+        assert!(remove_bank_snapshot(bank.slot(), bank_snapshots_dir).is_ok());
+
+        // When the bank snapshot is removed, all the snapshot hardlink directories should be removed.
+        assert!(hardlink_dirs.iter().all(|dir| fs::metadata(dir).is_err()));
+    }
+
+    #[test]
+    fn test_get_snapshot_accounts_hardlink_dir() {
+        solana_logger::setup();
+
+        let slot: Slot = 1;
+
+        let mut account_paths_set: HashSet<PathBuf> = HashSet::new();
+
+        let bank_snapshots_dir_tmp = tempfile::TempDir::new().unwrap();
+        let bank_snapshot_dir = bank_snapshots_dir_tmp.path().join(slot.to_string());
+        let accounts_hardlinks_dir = bank_snapshot_dir.join("accounts_hardlinks");
+        fs::create_dir_all(&accounts_hardlinks_dir).unwrap();
+
+        let (_tmp_dir, accounts_dir) = create_tmp_accounts_dir_for_tests();
+        let appendvec_filename = format!("{slot}.0");
+        let appendvec_path = accounts_dir.join(appendvec_filename);
+
+        let ret = get_snapshot_accounts_hardlink_dir(
+            &appendvec_path,
+            slot,
+            &mut account_paths_set,
+            &accounts_hardlinks_dir,
+        );
+        assert!(ret.is_ok());
+
+        let wrong_appendvec_path = appendvec_path
+            .parent()
+            .unwrap()
+            .parent()
+            .unwrap()
+            .join(appendvec_path.file_name().unwrap());
+        let ret = get_snapshot_accounts_hardlink_dir(
+            &wrong_appendvec_path,
+            slot,
+            &mut account_paths_set,
+            accounts_hardlinks_dir,
+        );
+
+        assert!(matches!(ret, Err(SnapshotError::InvalidAppendVecPath(_))));
     }
 }

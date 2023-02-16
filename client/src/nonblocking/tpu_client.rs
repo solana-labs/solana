@@ -13,7 +13,7 @@ use {
         transaction::{Transaction, TransactionError},
         transport::Result as TransportResult,
     },
-    solana_tpu_client::nonblocking::tpu_client::{temporary_pub::*, TpuClient as BackendTpuClient},
+    solana_tpu_client::nonblocking::tpu_client::{Result, TpuClient as BackendTpuClient},
     std::sync::Arc,
 };
 

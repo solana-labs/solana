@@ -12,7 +12,7 @@ use {
         transaction::{Transaction, TransactionError},
         transport::Result as TransportResult,
     },
-    solana_tpu_client::tpu_client::{temporary_pub::Result, TpuClient as BackendTpuClient},
+    solana_tpu_client::tpu_client::{Result, TpuClient as BackendTpuClient},
     std::sync::Arc,
 };
 pub use {

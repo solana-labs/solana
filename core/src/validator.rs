@@ -405,9 +405,7 @@ impl Validator {
 
         if !config.no_os_network_stats_reporting {
             if let Err(e) = verify_net_stats_access() {
-                return Err(format!(
-                    "Failed to access Network stats: {e}. Bypass check with --no-os-network-stats-reporting.",
-                ));
+                return Err(format!("Failed to access Network stats: {e}",));
             }
         }
 
@@ -1267,8 +1265,7 @@ fn check_poh_speed(
             info!("PoH speed check: Will sleep {}ns per slot.", extra_ns);
         } else {
             return Err(format!(
-                "PoH is slower than cluster target tick rate! mine: {my_ns_per_slot} cluster: {target_ns_per_slot}. \
-                If you wish to continue, try --no-poh-speed-test",
+                "PoH is slower than cluster target tick rate! mine: {my_ns_per_slot} cluster: {target_ns_per_slot}.",
             ));
         }
     }
