@@ -1,7 +1,6 @@
 #![allow(clippy::integer_arithmetic)]
 
 use {
-    bincode::deserialize,
     log::*,
     solana_cli_output::CliAccount,
     solana_client::rpc_request::MAX_MULTIPLE_ACCOUNTS,
@@ -320,18 +319,18 @@ impl TestValidatorGenesis {
         rpc_client: &RpcClient,
     ) -> Result<&mut Self, String>
     where
-        T: IntoIterator<Item = Pubkey> + Clone,
+        T: IntoIterator<Item = Pubkey>,
     {
+        let addresses: Vec<Pubkey> = addresses.into_iter().collect();
         self.clone_accounts(addresses.clone(), rpc_client, false)?;
 
         let mut programdata_addresses: HashSet<Pubkey> = HashSet::new();
         for address in addresses {
-            let account_shared = self.accounts.get(&address).unwrap();
-            let account = Account::from(account_shared.clone());
+            let account = self.accounts.get(&address).unwrap();
 
             if let Ok(UpgradeableLoaderState::Program {
                 programdata_address,
-            }) = deserialize(&account.data)
+            }) = account.deserialize_data()
             {
                 programdata_addresses.insert(programdata_address);
             } else {

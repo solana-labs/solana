@@ -463,7 +463,7 @@ fn main() {
                 .as_ref()
                 .expect("bug: --url argument missing?"),
         ) {
-            println!("Error: clone_accounts failed: {e}");
+            println!("Error: clone_upgradeable_programs failed: {e}");
             exit(1);
         }
     }
