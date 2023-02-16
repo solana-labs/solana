@@ -2163,6 +2163,20 @@ pub fn test_app<'a>(version: &'a str, default_args: &'a DefaultTestArgs) -> App<
                 ),
         )
         .arg(
+            Arg::with_name("clone_upgradeable_program")
+                .long("clone-upgradeable-program")
+                .value_name("ADDRESS")
+                .takes_value(true)
+                .validator(is_pubkey_or_keypair)
+                .multiple(true)
+                .requires("json_rpc_url")
+                .help(
+                    "Copy an upgradeable program and its executable data from the cluster \
+                     referenced by the --url argument the genesis configuration. \
+                     If the ledger already exists then this parameter is silently ignored",
+                ),
+        )
+        .arg(
             Arg::with_name("warp_slot")
                 .required(false)
                 .long("warp-slot")
