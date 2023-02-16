@@ -564,6 +564,56 @@ impl Accounts {
         )
     }
 
+    /// Returns a hash map of executable program accounts (program accounts that are not writable
+    /// in the given transactions), and their owners, for the transactions with a valid
+    /// blockhash or nonce.
+    pub fn filter_executable_program_accounts<'a>(
+        &self,
+        ancestors: &Ancestors,
+        txs: &[SanitizedTransaction],
+        lock_results: &mut [TransactionCheckResult],
+        program_owners: &[&'a Pubkey],
+        hash_queue: &BlockhashQueue,
+    ) -> HashMap<Pubkey, &'a Pubkey> {
+        let mut result = HashMap::new();
+        lock_results.iter_mut().zip(txs).for_each(|etx| {
+            if let ((Ok(()), nonce), tx) = etx {
+                if nonce
+                    .as_ref()
+                    .map(|nonce| nonce.lamports_per_signature())
+                    .unwrap_or_else(|| {
+                        hash_queue.get_lamports_per_signature(tx.message().recent_blockhash())
+                    })
+                    .is_some()
+                {
+                    tx.message()
+                        .account_keys()
+                        .iter()
+                        .enumerate()
+                        .for_each(|(i, key)| {
+                            if !tx.message().is_writable(i) && !result.contains_key(key) {
+                                if let Ok(index) = self.accounts_db.account_matches_owners(
+                                    ancestors,
+                                    key,
+                                    program_owners,
+                                ) {
+                                    program_owners
+                                        .get(index)
+                                        .and_then(|owner| result.insert(*key, *owner));
+                                }
+                            }
+                        });
+                } else {
+                    // If the transaction's nonce account was not valid, and blockhash is not found,
+                    // the transaction will fail to process. Let's not load any programs from the
+                    // transaction, and update the status of the transaction.
+                    *etx.0 = (Err(TransactionError::BlockhashNotFound), None);
+                }
+            }
+        });
+        result
+    }
+
     #[allow(clippy::too_many_arguments)]
     pub fn load_accounts(
         &self,
@@ -1862,6 +1912,218 @@ mod tests {
             loaded_accounts[0],
             (Err(TransactionError::InvalidProgramForExecution), None,)
         );
+    }
+
+    #[test]
+    fn test_filter_executable_program_accounts() {
+        let mut tx_accounts: Vec<TransactionAccount> = Vec::new();
+
+        let keypair1 = Keypair::new();
+        let keypair2 = Keypair::new();
+
+        let non_program_pubkey1 = Pubkey::new_unique();
+        let non_program_pubkey2 = Pubkey::new_unique();
+        let program1_pubkey = Pubkey::new_unique();
+        let program2_pubkey = Pubkey::new_unique();
+        let account1_pubkey = Pubkey::new_unique();
+        let account2_pubkey = Pubkey::new_unique();
+        let account3_pubkey = Pubkey::new_unique();
+        let account4_pubkey = Pubkey::new_unique();
+
+        let account5_pubkey = Pubkey::new_unique();
+
+        tx_accounts.push((
+            non_program_pubkey1,
+            AccountSharedData::new(1, 10, &account5_pubkey),
+        ));
+        tx_accounts.push((
+            non_program_pubkey2,
+            AccountSharedData::new(1, 10, &account5_pubkey),
+        ));
+        tx_accounts.push((
+            program1_pubkey,
+            AccountSharedData::new(40, 1, &account5_pubkey),
+        ));
+        tx_accounts.push((
+            program2_pubkey,
+            AccountSharedData::new(40, 1, &account5_pubkey),
+        ));
+        tx_accounts.push((
+            account1_pubkey,
+            AccountSharedData::new(1, 10, &non_program_pubkey1),
+        ));
+        tx_accounts.push((
+            account2_pubkey,
+            AccountSharedData::new(1, 10, &non_program_pubkey2),
+        ));
+        tx_accounts.push((
+            account3_pubkey,
+            AccountSharedData::new(40, 1, &program1_pubkey),
+        ));
+        tx_accounts.push((
+            account4_pubkey,
+            AccountSharedData::new(40, 1, &program2_pubkey),
+        ));
+
+        let accounts = Accounts::new_with_config_for_tests(
+            Vec::new(),
+            &ClusterType::Development,
+            AccountSecondaryIndexes::default(),
+            AccountShrinkThreshold::default(),
+        );
+        for tx_account in tx_accounts.iter() {
+            accounts.store_for_tests(0, &tx_account.0, &tx_account.1);
+        }
+
+        let mut hash_queue = BlockhashQueue::new(100);
+
+        let tx1 = Transaction::new_with_compiled_instructions(
+            &[&keypair1],
+            &[non_program_pubkey1],
+            Hash::new_unique(),
+            vec![account1_pubkey, account2_pubkey, account3_pubkey],
+            vec![CompiledInstruction::new(1, &(), vec![0])],
+        );
+        hash_queue.register_hash(&tx1.message().recent_blockhash, 0);
+        let sanitized_tx1 = SanitizedTransaction::from_transaction_for_tests(tx1);
+
+        let tx2 = Transaction::new_with_compiled_instructions(
+            &[&keypair2],
+            &[non_program_pubkey2],
+            Hash::new_unique(),
+            vec![account4_pubkey, account3_pubkey, account2_pubkey],
+            vec![CompiledInstruction::new(1, &(), vec![0])],
+        );
+        hash_queue.register_hash(&tx2.message().recent_blockhash, 0);
+        let sanitized_tx2 = SanitizedTransaction::from_transaction_for_tests(tx2);
+
+        let ancestors = vec![(0, 0)].into_iter().collect();
+        let programs = accounts.filter_executable_program_accounts(
+            &ancestors,
+            &[sanitized_tx1, sanitized_tx2],
+            &mut [(Ok(()), None), (Ok(()), None)],
+            &[&program1_pubkey, &program2_pubkey],
+            &hash_queue,
+        );
+
+        // The result should contain only account3_pubkey, and account4_pubkey as the program accounts
+        assert_eq!(programs.len(), 2);
+        assert_eq!(
+            programs
+                .get(&account3_pubkey)
+                .expect("failed to find the program account"),
+            &&program1_pubkey
+        );
+        assert_eq!(
+            programs
+                .get(&account4_pubkey)
+                .expect("failed to find the program account"),
+            &&program2_pubkey
+        );
+    }
+
+    #[test]
+    fn test_filter_executable_program_accounts_invalid_blockhash() {
+        let mut tx_accounts: Vec<TransactionAccount> = Vec::new();
+
+        let keypair1 = Keypair::new();
+        let keypair2 = Keypair::new();
+
+        let non_program_pubkey1 = Pubkey::new_unique();
+        let non_program_pubkey2 = Pubkey::new_unique();
+        let program1_pubkey = Pubkey::new_unique();
+        let program2_pubkey = Pubkey::new_unique();
+        let account1_pubkey = Pubkey::new_unique();
+        let account2_pubkey = Pubkey::new_unique();
+        let account3_pubkey = Pubkey::new_unique();
+        let account4_pubkey = Pubkey::new_unique();
+
+        let account5_pubkey = Pubkey::new_unique();
+
+        tx_accounts.push((
+            non_program_pubkey1,
+            AccountSharedData::new(1, 10, &account5_pubkey),
+        ));
+        tx_accounts.push((
+            non_program_pubkey2,
+            AccountSharedData::new(1, 10, &account5_pubkey),
+        ));
+        tx_accounts.push((
+            program1_pubkey,
+            AccountSharedData::new(40, 1, &account5_pubkey),
+        ));
+        tx_accounts.push((
+            program2_pubkey,
+            AccountSharedData::new(40, 1, &account5_pubkey),
+        ));
+        tx_accounts.push((
+            account1_pubkey,
+            AccountSharedData::new(1, 10, &non_program_pubkey1),
+        ));
+        tx_accounts.push((
+            account2_pubkey,
+            AccountSharedData::new(1, 10, &non_program_pubkey2),
+        ));
+        tx_accounts.push((
+            account3_pubkey,
+            AccountSharedData::new(40, 1, &program1_pubkey),
+        ));
+        tx_accounts.push((
+            account4_pubkey,
+            AccountSharedData::new(40, 1, &program2_pubkey),
+        ));
+
+        let accounts = Accounts::new_with_config_for_tests(
+            Vec::new(),
+            &ClusterType::Development,
+            AccountSecondaryIndexes::default(),
+            AccountShrinkThreshold::default(),
+        );
+        for tx_account in tx_accounts.iter() {
+            accounts.store_for_tests(0, &tx_account.0, &tx_account.1);
+        }
+
+        let mut hash_queue = BlockhashQueue::new(100);
+
+        let tx1 = Transaction::new_with_compiled_instructions(
+            &[&keypair1],
+            &[non_program_pubkey1],
+            Hash::new_unique(),
+            vec![account1_pubkey, account2_pubkey, account3_pubkey],
+            vec![CompiledInstruction::new(1, &(), vec![0])],
+        );
+        hash_queue.register_hash(&tx1.message().recent_blockhash, 0);
+        let sanitized_tx1 = SanitizedTransaction::from_transaction_for_tests(tx1);
+
+        let tx2 = Transaction::new_with_compiled_instructions(
+            &[&keypair2],
+            &[non_program_pubkey2],
+            Hash::new_unique(),
+            vec![account4_pubkey, account3_pubkey, account2_pubkey],
+            vec![CompiledInstruction::new(1, &(), vec![0])],
+        );
+        // Let's not register blockhash from tx2. This should cause the tx2 to fail
+        let sanitized_tx2 = SanitizedTransaction::from_transaction_for_tests(tx2);
+
+        let ancestors = vec![(0, 0)].into_iter().collect();
+        let mut lock_results = vec![(Ok(()), None), (Ok(()), None)];
+        let programs = accounts.filter_executable_program_accounts(
+            &ancestors,
+            &[sanitized_tx1, sanitized_tx2],
+            &mut lock_results,
+            &[&program1_pubkey, &program2_pubkey],
+            &hash_queue,
+        );
+
+        // The result should contain only account3_pubkey as the program accounts
+        assert_eq!(programs.len(), 1);
+        assert_eq!(
+            programs
+                .get(&account3_pubkey)
+                .expect("failed to find the program account"),
+            &&program1_pubkey
+        );
+        assert_eq!(lock_results[1].0, Err(TransactionError::BlockhashNotFound));
     }
 
     #[test]
