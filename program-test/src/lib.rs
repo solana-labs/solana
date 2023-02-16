@@ -37,6 +37,7 @@ use {
         pubkey::Pubkey,
         rent::Rent,
         signature::{Keypair, Signer},
+        stable_layout::stable_instruction::StableInstruction,
         sysvar::{Sysvar, SysvarId},
     },
     solana_vote_program::vote_state::{VoteState, VoteStateVersions},
@@ -226,6 +227,7 @@ impl solana_sdk::program_stubs::SyscallStubs for SyscallStubs {
         account_infos: &[AccountInfo],
         signers_seeds: &[&[&[u8]]],
     ) -> ProgramResult {
+        let instruction = StableInstruction::from(instruction.clone());
         let invoke_context = get_invoke_context();
         let log_collector = invoke_context.get_log_collector();
         let transaction_context = &invoke_context.transaction_context;
@@ -248,7 +250,7 @@ impl solana_sdk::program_stubs::SyscallStubs for SyscallStubs {
             .collect::<Vec<_>>();
 
         let (instruction_accounts, program_indices) = invoke_context
-            .prepare_instruction(instruction, &signers)
+            .prepare_instruction(&instruction, &signers)
             .unwrap();
 
         // Copy caller's account_info modifications into invoke_context accounts
