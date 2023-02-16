@@ -50,8 +50,6 @@ use {
 };
 
 pub const CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS: u64 = 15000;
-// The maximum age of a value received over pull responses
-pub const CRDS_GOSSIP_PULL_MSG_TIMEOUT_MS: u64 = 60000;
 // Retention period of hashes of received outdated values.
 const FAILED_INSERTS_RETENTION_MS: u64 = 20_000;
 // Maximum number of pull requests to send out each time around.
@@ -202,7 +200,6 @@ pub struct CrdsGossipPull {
     // pull request.
     failed_inserts: RwLock<VecDeque<(Hash, /*timestamp:*/ u64)>>,
     pub crds_timeout: u64,
-    msg_timeout: u64,
     pub num_pulls: AtomicUsize,
 }
 
@@ -211,7 +208,6 @@ impl Default for CrdsGossipPull {
         Self {
             failed_inserts: RwLock::default(),
             crds_timeout: CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS,
-            msg_timeout: CRDS_GOSSIP_PULL_MSG_TIMEOUT_MS,
             num_pulls: AtomicUsize::default(),
         }
     }
@@ -327,10 +323,7 @@ impl CrdsGossipPull {
     ) -> (Vec<CrdsValue>, Vec<CrdsValue>, Vec<Hash>) {
         let mut active_values = vec![];
         let mut expired_values = vec![];
-        let default_timeout = timeouts
-            .get(&Pubkey::default())
-            .copied()
-            .unwrap_or(self.msg_timeout);
+        let default_timeout = timeouts[&Pubkey::default()];
         let crds = crds.read().unwrap();
         let upsert = |response: CrdsValue| {
             let owner = response.label().pubkey();
@@ -535,9 +528,10 @@ impl CrdsGossipPull {
         };
         stakes
             .iter()
-            .filter(|(_, stake)| **stake > 0)
-            .map(|(pubkey, _)| (*pubkey, extended_timeout))
-            .chain(vec![
+            .filter(|(_, &stake)| stake > 0u64)
+            .map(|(&pubkey, _)| pubkey)
+            .zip(repeat(extended_timeout))
+            .chain([
                 (Pubkey::default(), default_timeout),
                 (self_pubkey, u64::MAX),
             ])
@@ -605,6 +599,7 @@ pub(crate) mod tests {
         solana_sdk::{
             hash::{hash, HASH_BYTES},
             packet::PACKET_DATA_SIZE,
+            timing::timestamp,
         },
         std::time::Instant,
     };
@@ -923,29 +918,32 @@ pub(crate) mod tests {
             Duration::from_secs(20 * 60) / 64, // rate_limit_delay
             128,                               // capacity
         );
+        let now = timestamp();
         let entry = CrdsValue::new_unsigned(CrdsData::LegacyContactInfo(
-            ContactInfo::new_localhost(&node_keypair.pubkey(), 0),
+            ContactInfo::new_localhost(&node_keypair.pubkey(), now),
         ));
         let caller = entry.clone();
         let node = CrdsGossipPull::default();
         node_crds
-            .insert(entry, 0, GossipRoute::LocalMessage)
+            .insert(entry, now, GossipRoute::LocalMessage)
             .unwrap();
-        let new = ContactInfo::new_localhost(&solana_sdk::pubkey::new_rand(), 0);
+        let new = ContactInfo::new_localhost(&solana_sdk::pubkey::new_rand(), now);
         ping_cache.mock_pong(new.id, new.gossip, Instant::now());
         let new = CrdsValue::new_unsigned(CrdsData::LegacyContactInfo(new));
-        node_crds.insert(new, 0, GossipRoute::LocalMessage).unwrap();
+        node_crds
+            .insert(new, now, GossipRoute::LocalMessage)
+            .unwrap();
         let node_crds = RwLock::new(node_crds);
         let mut pings = Vec::new();
         let req = node.new_pull_request(
             &thread_pool,
             &node_crds,
             &node_keypair,
-            0,
-            0,
-            None,
-            &HashMap::new(),
-            PACKET_DATA_SIZE,
+            0, // self_shred_version
+            now,
+            None,             // gossip_validators
+            &HashMap::new(),  // stakes
+            PACKET_DATA_SIZE, // bloom_size
             &Mutex::new(ping_cache),
             &mut pings,
             &SocketAddrSpace::Unspecified,
@@ -959,24 +957,21 @@ pub(crate) mod tests {
             &dest_crds,
             &filters,
             usize::MAX, // output_size_limit
-            0,          // now
+            now,
             &GossipStats::default(),
         );
 
         assert_eq!(rsp[0].len(), 0);
 
+        let now = now + CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS;
         let new = CrdsValue::new_unsigned(CrdsData::LegacyContactInfo(ContactInfo::new_localhost(
             &solana_sdk::pubkey::new_rand(),
-            CRDS_GOSSIP_PULL_MSG_TIMEOUT_MS,
+            now,
         )));
         dest_crds
             .write()
             .unwrap()
-            .insert(
-                new,
-                CRDS_GOSSIP_PULL_MSG_TIMEOUT_MS,
-                GossipRoute::LocalMessage,
-            )
+            .insert(new, now, GossipRoute::LocalMessage)
             .unwrap();
 
         //should skip new value since caller is to old
@@ -984,15 +979,15 @@ pub(crate) mod tests {
             &thread_pool,
             &dest_crds,
             &filters,
-            usize::MAX,                      // output_size_limit
-            CRDS_GOSSIP_PULL_MSG_TIMEOUT_MS, // now
+            usize::MAX, // output_size_limit
+            now,
             &GossipStats::default(),
         );
         assert_eq!(rsp[0].len(), 0);
         assert_eq!(filters.len(), MIN_NUM_BLOOM_FILTERS);
         filters.extend({
             // Should return new value since caller is new.
-            let now = CRDS_GOSSIP_PULL_MSG_TIMEOUT_MS + 1;
+            let now = now + 1;
             let caller = ContactInfo::new_localhost(&Pubkey::new_unique(), now);
             let caller = CrdsValue::new_unsigned(CrdsData::LegacyContactInfo(caller));
             filters
@@ -1005,7 +1000,7 @@ pub(crate) mod tests {
             &dest_crds,
             &filters,
             usize::MAX, // output_size_limit
-            CRDS_GOSSIP_PULL_MSG_TIMEOUT_MS,
+            now,
             &GossipStats::default(),
         );
         assert_eq!(rsp.len(), 2 * MIN_NUM_BLOOM_FILTERS);
@@ -1340,7 +1335,7 @@ pub(crate) mod tests {
         ));
         let mut timeouts = HashMap::new();
         timeouts.insert(Pubkey::default(), node.crds_timeout);
-        timeouts.insert(peer_pubkey, node.msg_timeout + 1);
+        timeouts.insert(peer_pubkey, node.crds_timeout + 1);
         // inserting a fresh value should be fine.
         assert_eq!(
             node.process_pull_response(
@@ -1365,7 +1360,7 @@ pub(crate) mod tests {
                 &peer_pubkey,
                 &timeouts,
                 vec![peer_entry.clone(), unstaked_peer_entry],
-                node.msg_timeout + 100,
+                node.crds_timeout + 100,
             )
             .0,
             4
@@ -1379,7 +1374,7 @@ pub(crate) mod tests {
                 &peer_pubkey,
                 &timeouts,
                 vec![peer_entry],
-                node.msg_timeout + 1,
+                node.crds_timeout + 1,
             )
             .0,
             0
@@ -1396,7 +1391,7 @@ pub(crate) mod tests {
                 &peer_pubkey,
                 &timeouts,
                 vec![peer_vote.clone()],
-                node.msg_timeout + 1,
+                node.crds_timeout + 1,
             )
             .0,
             0
@@ -1410,7 +1405,7 @@ pub(crate) mod tests {
                 &peer_pubkey,
                 &timeouts,
                 vec![peer_vote],
-                node.msg_timeout + 2,
+                node.crds_timeout + 2,
             )
             .0,
             2
