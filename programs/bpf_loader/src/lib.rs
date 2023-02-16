@@ -681,7 +681,7 @@ fn process_loader_upgradeable_instruction(
                 new_program_id,
                 &owner_id,
                 UpgradeableLoaderState::size_of_program().saturating_add(programdata_len),
-                0,
+                clock.slot,
                 {
                     drop(buffer);
                 },
@@ -829,7 +829,7 @@ fn process_loader_upgradeable_instruction(
                 );
                 return Err(InstructionError::InsufficientFunds);
             }
-            if let UpgradeableLoaderState::ProgramData {
+            let deployment_slot = if let UpgradeableLoaderState::ProgramData {
                 slot,
                 upgrade_authority_address,
             } = programdata.get_state()?
@@ -854,10 +854,11 @@ fn process_loader_upgradeable_instruction(
                     ic_logger_msg!(log_collector, "Upgrade authority did not sign");
                     return Err(InstructionError::MissingRequiredSignature);
                 }
+                slot
             } else {
                 ic_logger_msg!(log_collector, "Invalid ProgramData account");
                 return Err(InstructionError::InvalidAccountData);
-            }
+            };
             let programdata_len = programdata.get_data().len();
             drop(programdata);
 
@@ -870,7 +871,7 @@ fn process_loader_upgradeable_instruction(
                 new_program_id,
                 program_id,
                 UpgradeableLoaderState::size_of_program().saturating_add(programdata_len),
-                0,
+                deployment_slot,
                 {
                     drop(buffer);
                 },
