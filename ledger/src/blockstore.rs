@@ -1801,7 +1801,6 @@ impl Blockstore {
     fn find_missing_indexes<C>(
         db_iterator: &mut DBRawIterator,
         slot: Slot,
-        now_timestamp: u64,
         first_timestamp: u64,
         defer_threshold_ticks: u64,
         start_index: u64,
@@ -1816,8 +1815,9 @@ impl Blockstore {
         }
 
         let mut missing_indexes = vec![];
+        // System time is not monotonic
         let ticks_since_first_insert =
-            DEFAULT_TICKS_PER_SECOND * (now_timestamp - first_timestamp) / 1000;
+            DEFAULT_TICKS_PER_SECOND * timestamp().saturating_sub(first_timestamp) / 1000;
 
         // Seek to the first shred with index >= start_index
         db_iterator.seek(&C::key((slot, start_index)));
@@ -1877,7 +1877,6 @@ impl Blockstore {
     pub fn find_missing_data_indexes(
         &self,
         slot: Slot,
-        now_timestamp: u64,
         first_timestamp: u64,
         defer_threshold_ticks: u64,
         start_index: u64,
@@ -1891,7 +1890,6 @@ impl Blockstore {
             Self::find_missing_indexes::<cf::ShredData>(
                 &mut db_iterator,
                 slot,
-                now_timestamp,
                 first_timestamp,
                 defer_threshold_ticks,
                 start_index,
@@ -5916,7 +5914,6 @@ pub mod tests {
         assert_eq!(
             blockstore.find_missing_data_indexes(
                 slot,
-                timestamp(),
                 0,            // first_timestamp
                 0,            // defer_threshold_ticks
                 0,            // start_index
@@ -5928,7 +5925,6 @@ pub mod tests {
         assert_eq!(
             blockstore.find_missing_data_indexes(
                 slot,
-                timestamp(),
                 0,                  // first_timestamp
                 0,                  // defer_threshold_ticks
                 1,                  // start_index
@@ -5940,7 +5936,6 @@ pub mod tests {
         assert_eq!(
             blockstore.find_missing_data_indexes(
                 slot,
-                timestamp(),
                 0,                  // first_timestmap
                 0,                  // defer_threshold_ticks
                 0,                  // start_index
@@ -5952,7 +5947,6 @@ pub mod tests {
         assert_eq!(
             blockstore.find_missing_data_indexes(
                 slot,
-                timestamp(),
                 0,            // first_timestmap
                 0,            // defer_threshold_ticks
                 gap - 2,      // start_index
@@ -5963,8 +5957,7 @@ pub mod tests {
         );
         assert_eq!(
             blockstore.find_missing_data_indexes(
-                slot,
-                timestamp(),
+                slot,    // slot
                 0,       // first_timestamp
                 0,       // defer_threshold_ticks
                 gap - 2, // start_index
@@ -5975,13 +5968,12 @@ pub mod tests {
         );
         assert_eq!(
             blockstore.find_missing_data_indexes(
-                slot,
-                timestamp(),
-                0,   // first_timestamp
-                0,   // defer_threshold_ticks
-                0,   // start_index
-                gap, // end_index
-                1,   // max_missing
+                slot, // slot
+                0,    // first_timestamp
+                0,    // defer_threshold_ticks
+                0,    // start_index
+                gap,  // end_index
+                1,    // max_missing
             ),
             vec![1],
         );
@@ -5993,7 +5985,6 @@ pub mod tests {
         assert_eq!(
             blockstore.find_missing_data_indexes(
                 slot,
-                timestamp(),
                 0,                  // first_timestamp
                 0,                  // defer_threshold_ticks
                 0,                  // start_index
@@ -6005,7 +5996,6 @@ pub mod tests {
         assert_eq!(
             blockstore.find_missing_data_indexes(
                 slot,
-                timestamp(),
                 0,                  // first_timestamp
                 0,                  // defer_threshold_ticks
                 0,                  // start_index
@@ -6027,7 +6017,6 @@ pub mod tests {
                 assert_eq!(
                     blockstore.find_missing_data_indexes(
                         slot,
-                        timestamp(),
                         0,                        // first_timestamp
                         0,                        // defer_threshold_ticks
                         j * gap,                  // start_index
@@ -6068,7 +6057,6 @@ pub mod tests {
         assert_eq!(
             blockstore.find_missing_data_indexes(
                 slot,
-                timestamp(),
                 timestamp(), // first_timestamp
                 0,           // defer_threshold_ticks
                 0,           // start_index
@@ -6081,7 +6069,6 @@ pub mod tests {
         assert_eq!(
             blockstore.find_missing_data_indexes(
                 slot,
-                timestamp(),
                 timestamp() - 400, // first_timestamp
                 0,                 // defer_threshold_ticks
                 0,                 // start_index
@@ -6103,49 +6090,45 @@ pub mod tests {
         let empty: Vec<u64> = vec![];
         assert_eq!(
             blockstore.find_missing_data_indexes(
-                slot,
-                timestamp(),
-                0, // first_timestamp
-                0, // defer_threshold_ticks
-                0, // start_index
-                0, // end_index
-                1, // max_missing
+                slot, // slot
+                0,    // first_timestamp
+                0,    // defer_threshold_ticks
+                0,    // start_index
+                0,    // end_index
+                1,    // max_missing
             ),
             empty
         );
         assert_eq!(
             blockstore.find_missing_data_indexes(
-                slot,
-                timestamp(),
-                0, // first_timestamp
-                0, // defer_threshold_ticks
-                5, // start_index
-                5, // end_index
-                1, // max_missing
+                slot, // slot
+                0,    // first_timestamp
+                0,    // defer_threshold_ticks
+                5,    // start_index
+                5,    // end_index
+                1,    // max_missing
             ),
             empty
         );
         assert_eq!(
             blockstore.find_missing_data_indexes(
-                slot,
-                timestamp(),
-                0, // first_timestamp
-                0, // defer_threshold_ticks
-                4, // start_index
-                3, // end_index
-                1, // max_missing
+                slot, // slot
+                0,    // first_timestamp
+                0,    // defer_threshold_ticks
+                4,    // start_index
+                3,    // end_index
+                1,    // max_missing
             ),
             empty
         );
         assert_eq!(
             blockstore.find_missing_data_indexes(
-                slot,
-                timestamp(),
-                0, // first_timestamp
-                0, // defer_threshold_ticks
-                1, // start_index
-                2, // end_index
-                0, // max_missing
+                slot, // slot
+                0,    // first_timestamp
+                0,    // defer_threshold_ticks
+                1,    // start_index
+                2,    // end_index
+                0,    // max_missing
             ),
             empty
         );
@@ -6173,8 +6156,7 @@ pub mod tests {
         // [i, first_index - 1]
         for start in 0..STARTS {
             let result = blockstore.find_missing_data_indexes(
-                slot,
-                timestamp(),
+                slot,  // slot
                 0,     // first_timestamp
                 0,     // defer_threshold_ticks
                 start, // start_index
@@ -6207,7 +6189,6 @@ pub mod tests {
                 assert_eq!(
                     blockstore.find_missing_data_indexes(
                         slot,
-                        timestamp(),
                         0,                // first_timestamp
                         0,                // defer_threshold_ticks
                         j,                // start_index

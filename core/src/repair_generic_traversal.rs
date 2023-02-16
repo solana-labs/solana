@@ -114,7 +114,6 @@ pub fn get_closest_completion(
     slot_meta_cache: &mut HashMap<Slot, Option<SlotMeta>>,
     processed_slots: &mut HashSet<Slot>,
     limit: usize,
-    now_timestamp: u64,
 ) -> Vec<ShredRepairType> {
     let mut v: Vec<(Slot, u64)> = Vec::default();
     let iter = GenericTraversal::new(tree);
@@ -188,7 +187,6 @@ pub fn get_closest_completion(
                 slot,
                 slot_meta,
                 limit - repairs.len(),
-                now_timestamp,
             );
             repairs.extend(new_repairs);
         }
@@ -201,9 +199,9 @@ pub fn get_closest_completion(
 pub mod test {
     use {
         super::*,
-        crate::repair_service::post_shred_deferment_timestamp,
+        crate::repair_service::sleep_shred_deferment_period,
         solana_ledger::{blockstore::Blockstore, get_tmp_ledger_path},
-        solana_sdk::{hash::Hash, timing::timestamp},
+        solana_sdk::hash::Hash,
         trees::{tr, Tree, TreeWalk},
     };
 
@@ -240,7 +238,6 @@ pub mod test {
             &mut slot_meta_cache,
             &mut processed_slots,
             10,
-            timestamp(),
         );
         assert_eq!(repairs, []);
 
@@ -258,13 +255,13 @@ pub mod test {
         let heaviest_subtree_fork_choice = HeaviestSubtreeForkChoice::new_from_tree(forks);
         let mut slot_meta_cache = HashMap::default();
         let mut processed_slots = HashSet::default();
+        sleep_shred_deferment_period();
         let repairs = get_closest_completion(
             &heaviest_subtree_fork_choice,
             &blockstore,
             &mut slot_meta_cache,
             &mut processed_slots,
             2,
-            post_shred_deferment_timestamp(),
         );
         assert_eq!(
             repairs,
