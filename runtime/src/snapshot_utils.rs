@@ -71,7 +71,7 @@ pub use archive_format::*;
 
 pub const SNAPSHOT_STATUS_CACHE_FILENAME: &str = "status_cache";
 pub const SNAPSHOT_VERSION_FILENAME: &str = "version";
-pub const SNAPSHOT_COMPLETE_STATE_FILENAME: &str = "state_complete";
+pub const SNAPSHOT_STATE_COMPLETE_FILENAME: &str = "state_complete";
 pub const SNAPSHOT_ARCHIVE_DOWNLOAD_DIR: &str = "remote";
 pub const DEFAULT_FULL_SNAPSHOT_ARCHIVE_INTERVAL_SLOTS: Slot = 25_000;
 pub const DEFAULT_INCREMENTAL_SNAPSHOT_ARCHIVE_INTERVAL_SLOTS: Slot = 100;
@@ -1059,7 +1059,7 @@ pub fn add_bank_snapshot(
     write_snapshot_version_file(version_path, SnapshotVersion::default()).unwrap();
 
     // Mark this directory complete so it can be used.  Check this flag first before selecting for deserialization.
-    let state_complete_path = bank_snapshot_dir.join(SNAPSHOT_COMPLETE_STATE_FILENAME);
+    let state_complete_path = bank_snapshot_dir.join(SNAPSHOT_STATE_COMPLETE_FILENAME);
     fs::File::create(state_complete_path)?;
 
     // Monitor sizes because they're capped to MAX_SNAPSHOT_DATA_FILE_SIZE
@@ -2369,7 +2369,7 @@ pub fn verify_snapshot_archive<P, Q, R>(
             std::fs::remove_file(version_path).unwrap();
         }
 
-        let state_complete_path = snapshot_slot_dir.join(SNAPSHOT_COMPLETE_STATE_FILENAME);
+        let state_complete_path = snapshot_slot_dir.join(SNAPSHOT_STATE_COMPLETE_FILENAME);
         if state_complete_path.is_file() {
             std::fs::remove_file(state_complete_path).unwrap();
         }
