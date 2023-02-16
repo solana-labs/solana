@@ -3303,7 +3303,9 @@ RPC Enabled Nodes: 1"#;
         });
         let entrypoint_pubkey = solana_sdk::pubkey::new_rand();
         let data = test_crds_values(entrypoint_pubkey);
-        let timeouts = HashMap::new();
+        let timeouts = [(Pubkey::default(), CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS)]
+            .into_iter()
+            .collect();
         assert_eq!(
             (0, 0, 1),
             ClusterInfo::handle_pull_response(
