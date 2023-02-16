@@ -1887,9 +1887,8 @@ pub fn get_highest_incremental_snapshot_archive_slot(
 pub fn get_highest_full_snapshot(snapshots_dir: impl AsRef<Path>) -> Result<BankSnapshotInfo> {
     let bank_snapshots = get_bank_snapshots(&snapshots_dir);
 
-    do_get_highest_bank_snapshot(bank_snapshots).ok_or_else(|| SnapshotError::NoSnapshotSlotDir(
-        snapshots_dir.as_ref().to_path_buf(),
-    ))
+    do_get_highest_bank_snapshot(bank_snapshots)
+        .ok_or_else(|| SnapshotError::NoSnapshotSlotDir(snapshots_dir.as_ref().to_path_buf()))
 }
 
 pub fn get_highest_incremental_snapshot(
