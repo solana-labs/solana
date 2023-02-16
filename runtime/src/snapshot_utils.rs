@@ -3130,6 +3130,16 @@ mod tests {
             let snapshot_filename = get_snapshot_file_name(slot);
             let snapshot_path = snapshot_dir.join(snapshot_filename);
             File::create(snapshot_path).unwrap();
+
+            let status_cache_file = snapshot_dir.join(SNAPSHOT_STATUS_CACHE_FILENAME);
+            File::create(status_cache_file).unwrap();
+
+            let version_path = snapshot_dir.join(SNAPSHOT_VERSION_FILENAME);
+            write_snapshot_version_file(version_path, SnapshotVersion::default()).unwrap();
+
+            // Mark this directory complete so it can be used.  Check this flag first before selecting for deserialization.
+            let state_complete_path = snapshot_dir.join(SNAPSHOT_STATE_COMPLETE_FILENAME);
+            fs::File::create(state_complete_path).unwrap();
         }
     }
 
