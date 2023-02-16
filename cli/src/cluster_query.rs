@@ -433,6 +433,13 @@ impl ClusterQuerySubCommands for App<'_, '_> {
                         .help("Start with the first signature older than this one"),
                 )
                 .arg(
+                    Arg::with_name("until")
+                        .long("until")
+                        .value_name("TRANSACTION_SIGNATURE")
+                        .takes_value(true)
+                        .help("List until this transaction signature, if found before limit reached"),
+                )
+                .arg(
                     Arg::with_name("show_transactions")
                         .long("show-transactions")
                         .takes_value(false)
