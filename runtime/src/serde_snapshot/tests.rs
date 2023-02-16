@@ -8,6 +8,7 @@ use {
         accounts_db::{
             get_temp_accounts_paths, test_utils::create_test_accounts, AccountShrinkThreshold,
         },
+        accounts_file::AccountsFile,
         accounts_hash::{AccountsDeltaHash, AccountsHash},
         append_vec::AppendVec,
         bank::{Bank, BankTestConfig},
@@ -56,10 +57,11 @@ fn copy_append_vecs<P: AsRef<Path>>(
         // Read new file into append-vec and build new entry
         let (append_vec, num_accounts) =
             AppendVec::new_from_file(output_path, storage_entry.accounts.len())?;
+        let accounts_file = AccountsFile::AppendVec(append_vec);
         let new_storage_entry = AccountStorageEntry::new_existing(
             storage_entry.slot(),
             storage_entry.append_vec_id(),
-            append_vec,
+            accounts_file,
             num_accounts,
         );
         next_append_vec_id = next_append_vec_id.max(new_storage_entry.append_vec_id());

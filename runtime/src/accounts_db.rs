@@ -24,6 +24,7 @@ use {
         account_storage::{AccountStorage, AccountStorageStatus, ShrinkInProgress},
         accounts_background_service::{DroppedSlotsSender, SendDroppedBankCallback},
         accounts_cache::{AccountsCache, CachedAccount, SlotCache},
+        accounts_file::AccountsFile,
         accounts_hash::{
             AccountsDeltaHash, AccountsHash, AccountsHasher, CalcAccountsHashConfig,
             CalculateHashIntermediate, HashStats, ZeroLamportAccounts,
@@ -1008,7 +1009,7 @@ pub struct AccountStorageEntry {
     pub(crate) slot: AtomicU64,
 
     /// storage holding the accounts
-    pub(crate) accounts: AppendVec,
+    pub(crate) accounts: AccountsFile,
 
     /// Keeps track of the number of accounts stored in a specific AppendVec.
     ///  This is periodically checked to reuse the stores that do not have
@@ -1030,9 +1031,9 @@ pub struct AccountStorageEntry {
 
 impl AccountStorageEntry {
     pub fn new(path: &Path, slot: Slot, id: AppendVecId, file_size: u64) -> Self {
-        let tail = AppendVec::file_name(slot, id);
+        let tail = AccountsFile::file_name(slot, id);
         let path = Path::new(path).join(tail);
-        let accounts = AppendVec::new(&path, true, file_size as usize);
+        let accounts = AccountsFile::AppendVec(AppendVec::new(&path, true, file_size as usize));
 
         Self {
             id: AtomicAppendVecId::new(id),
@@ -1047,7 +1048,7 @@ impl AccountStorageEntry {
     pub(crate) fn new_existing(
         slot: Slot,
         id: AppendVecId,
-        accounts: AppendVec,
+        accounts: AccountsFile,
         num_accounts: usize,
     ) -> Self {
         Self {
@@ -10336,7 +10337,7 @@ pub mod tests {
         let slot_expected: Slot = 0;
         let size: usize = 123;
         let mut data = AccountStorageEntry::new(&paths[0], slot_expected, 0, size as u64);
-        let av = AppendVec::new(&tf.path, true, 1024 * 1024);
+        let av = AccountsFile::AppendVec(AppendVec::new(&tf.path, true, 1024 * 1024));
         data.accounts = av;
 
         let storage = Arc::new(data);
@@ -10450,7 +10451,7 @@ pub mod tests {
         let slot_expected: Slot = 0;
         let size: usize = 123;
         let mut data = AccountStorageEntry::new(&paths[0], slot_expected, 0, size as u64);
-        let av = AppendVec::new(&tf.path, true, 1024 * 1024);
+        let av = AccountsFile::AppendVec(AppendVec::new(&tf.path, true, 1024 * 1024));
         data.accounts = av;
 
         let storage = Arc::new(data);
@@ -10527,7 +10528,7 @@ pub mod tests {
         let (_temp_dirs, paths) = get_temp_accounts_paths(1).unwrap();
         let size: usize = aligned_stored_size(account_data_size.unwrap_or(123) as usize);
         let mut data = AccountStorageEntry::new(&paths[0], slot, id, size as u64);
-        let av = AppendVec::new(&tf.path, true, (1024 * 1024).max(size));
+        let av = AccountsFile::AppendVec(AppendVec::new(&tf.path, true, (1024 * 1024).max(size)));
         data.accounts = av;
 
         let arc = Arc::new(data);

@@ -5,6 +5,7 @@ use {
             AccountShrinkThreshold, AccountStorageEntry, AccountsDb, AccountsDbConfig, AppendVecId,
             AtomicAppendVecId, BankHashStats, IndexGenerationInfo,
         },
+        accounts_file::AccountsFile,
         accounts_hash::{AccountsDeltaHash, AccountsHash},
         accounts_index::AccountSecondaryIndexes,
         accounts_update_notifier_interface::AccountsUpdateNotifier,
@@ -573,11 +574,12 @@ fn reconstruct_single_storage(
     current_len: usize,
     append_vec_id: AppendVecId,
 ) -> io::Result<Arc<AccountStorageEntry>> {
-    let (accounts, num_accounts) = AppendVec::new_from_file(append_vec_path, current_len)?;
+    let (append_vec, num_accounts) = AppendVec::new_from_file(append_vec_path, current_len)?;
+    let accounts_file = AccountsFile::AppendVec(append_vec);
     Ok(Arc::new(AccountStorageEntry::new_existing(
         *slot,
         append_vec_id,
-        accounts,
+        accounts_file,
         num_accounts,
     )))
 }
