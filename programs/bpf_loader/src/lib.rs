@@ -18,7 +18,6 @@ use {
     solana_measure::measure::Measure,
     solana_program_runtime::{
         compute_budget::ComputeBudget,
-        executor::CreateMetrics,
         executor_cache::TransactionExecutorCache,
         ic_logger_msg, ic_msg,
         invoke_context::InvokeContext,
@@ -125,7 +124,7 @@ pub fn load_program_from_bytes(
     feature_set: &FeatureSet,
     compute_budget: &ComputeBudget,
     log_collector: Option<Rc<RefCell<LogCollector>>>,
-    create_executor_metrics: &mut CreateMetrics,
+    load_program_metrics: &mut LoadProgramMetrics,
     programdata: &[u8],
     loader_key: &Pubkey,
     account_size: usize,
@@ -148,44 +147,21 @@ pub fn load_program_from_bytes(
         InstructionError::ProgramEnvironmentSetupFailure
     })?;
     register_syscalls_time.stop();
-    create_executor_metrics.register_syscalls_us = register_syscalls_time.as_us();
+    load_program_metrics.register_syscalls_us = register_syscalls_time.as_us();
 
-    let mut loaded_program_metrics = LoadProgramMetrics::default();
-    // Allowing mut here, since it may be needed for jit compile, which is under a config flag
-    #[allow(unused_mut)]
-    let mut loaded_program = LoadedProgram::new(
+    let loaded_program = LoadedProgram::new(
         loader_key,
         loader,
         deployment_slot,
         programdata,
         account_size,
-        &mut loaded_program_metrics,
+        use_jit,
+        load_program_metrics,
     )
     .map_err(|err| {
         ic_logger_msg!(log_collector, "{}", err);
         InstructionError::InvalidAccountData
     })?;
-    create_executor_metrics.load_elf_us = loaded_program_metrics.load_elf_us;
-    create_executor_metrics.verify_code_us = loaded_program_metrics.verify_code_us;
-
-    if use_jit {
-        #[cfg(all(not(target_os = "windows"), target_arch = "x86_64"))]
-        {
-            let mut jit_compile_time = Measure::start("jit_compile_time");
-            let jit_compile_result = match &mut loaded_program.program {
-                LoadedProgramType::Invalid => Err(EbpfError::JitNotCompiled),
-                LoadedProgramType::LegacyV0(executable) => executable.jit_compile(),
-                LoadedProgramType::LegacyV1(executable) => executable.jit_compile(),
-                LoadedProgramType::BuiltIn(_) => Err(EbpfError::JitNotCompiled),
-            };
-            jit_compile_time.stop();
-            create_executor_metrics.jit_compile_us = jit_compile_time.as_us();
-            if let Err(err) = jit_compile_result {
-                ic_logger_msg!(log_collector, "Failed to compile program {:?}", err);
-                return Err(InstructionError::ProgramFailedToCompile);
-            }
-        }
-    }
     Ok(loaded_program)
 }
 
@@ -226,7 +202,7 @@ pub fn load_program_from_account(
     program: &BorrowedAccount,
     programdata: &BorrowedAccount,
     use_jit: bool,
-) -> Result<(Arc<LoadedProgram>, Option<CreateMetrics>), InstructionError> {
+) -> Result<(Arc<LoadedProgram>, Option<LoadProgramMetrics>), InstructionError> {
     if !check_loader_id(program.get_owner()) {
         ic_logger_msg!(
             log_collector,
@@ -243,16 +219,16 @@ pub fn load_program_from_account(
         0
     };
 
-    let mut create_executor_metrics = CreateMetrics {
+    let mut load_program_metrics = LoadProgramMetrics {
         program_id: program.get_key().to_string(),
-        ..CreateMetrics::default()
+        ..LoadProgramMetrics::default()
     };
 
     let loaded_program = Arc::new(load_program_from_bytes(
         feature_set,
         compute_budget,
         log_collector,
-        &mut create_executor_metrics,
+        &mut load_program_metrics,
         programdata
             .get_data()
             .get(programdata_offset..)
@@ -272,7 +248,7 @@ pub fn load_program_from_account(
         );
     }
 
-    Ok((loaded_program, Some(create_executor_metrics)))
+    Ok((loaded_program, Some(load_program_metrics)))
 }
 
 macro_rules! deploy_program {
@@ -281,12 +257,12 @@ macro_rules! deploy_program {
         let delay_visibility_of_program_deployment = $invoke_context
             .feature_set
             .is_active(&delay_visibility_of_program_deployment::id());
-        let mut create_executor_metrics = CreateMetrics::default();
+        let mut load_program_metrics = LoadProgramMetrics::default();
         let executor = load_program_from_bytes(
             &$invoke_context.feature_set,
             $invoke_context.get_compute_budget(),
             $invoke_context.get_log_collector(),
-            &mut create_executor_metrics,
+            &mut load_program_metrics,
             $new_programdata,
             $loader_key,
             $account_size,
@@ -295,8 +271,8 @@ macro_rules! deploy_program {
             true,
         )?;
         $drop
-        create_executor_metrics.program_id = $program_id.to_string();
-        create_executor_metrics.submit_datapoint(&mut $invoke_context.timings);
+        load_program_metrics.program_id = $program_id.to_string();
+        load_program_metrics.submit_datapoint(&mut $invoke_context.timings);
         $invoke_context.tx_executor_cache.borrow_mut().set(
             $program_id,
             Arc::new(executor),
@@ -466,7 +442,7 @@ fn process_instruction_common(
             )?)
         };
         let mut get_or_create_executor_time = Measure::start("get_or_create_executor_time");
-        let (executor, create_executor_metrics) = load_program_from_account(
+        let (executor, load_program_metrics) = load_program_from_account(
             &invoke_context.feature_set,
             invoke_context.get_compute_budget(),
             log_collector,
@@ -482,8 +458,8 @@ fn process_instruction_common(
             invoke_context.timings.get_or_create_executor_us,
             get_or_create_executor_time.as_us()
         );
-        if let Some(create_executor_metrics) = create_executor_metrics {
-            create_executor_metrics.submit_datapoint(&mut invoke_context.timings);
+        if let Some(load_program_metrics) = load_program_metrics {
+            load_program_metrics.submit_datapoint(&mut invoke_context.timings);
         }
         match &executor.program {
             LoadedProgramType::Invalid => Err(InstructionError::InvalidAccountData),
