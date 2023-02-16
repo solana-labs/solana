@@ -148,7 +148,7 @@ fn test_account_subscription() {
         OptimisticallyConfirmedBank::locked_from_bank_forks_root(&bank_forks),
     ));
     let (trigger, pubsub_service) =
-        PubSubService::new(PubSubConfig::default(), &subscriptions, pubsub_addr);
+        PubSubService::new(PubSubConfig::default(), &subscriptions, pubsub_addr, None);
 
     check_server_is_ready_or_panic(&pubsub_addr, 10, Duration::from_millis(300));
 
@@ -270,7 +270,7 @@ fn test_block_subscription() {
         enable_block_subscription: true,
         ..PubSubConfig::default()
     };
-    let (trigger, pubsub_service) = PubSubService::new(pub_cfg, &subscriptions, pubsub_addr);
+    let (trigger, pubsub_service) = PubSubService::new(pub_cfg, &subscriptions, pubsub_addr, None);
 
     check_server_is_ready_or_panic(&pubsub_addr, 10, Duration::from_millis(300));
 
@@ -350,7 +350,7 @@ fn test_program_subscription() {
         OptimisticallyConfirmedBank::locked_from_bank_forks_root(&bank_forks),
     ));
     let (trigger, pubsub_service) =
-        PubSubService::new(PubSubConfig::default(), &subscriptions, pubsub_addr);
+        PubSubService::new(PubSubConfig::default(), &subscriptions, pubsub_addr, None);
 
     check_server_is_ready_or_panic(&pubsub_addr, 10, Duration::from_millis(300));
 
@@ -434,7 +434,7 @@ fn test_root_subscription() {
         OptimisticallyConfirmedBank::locked_from_bank_forks_root(&bank_forks),
     ));
     let (trigger, pubsub_service) =
-        PubSubService::new(PubSubConfig::default(), &subscriptions, pubsub_addr);
+        PubSubService::new(PubSubConfig::default(), &subscriptions, pubsub_addr, None);
 
     check_server_is_ready_or_panic(&pubsub_addr, 10, Duration::from_millis(300));
 
@@ -483,7 +483,7 @@ fn test_slot_subscription() {
         optimistically_confirmed_bank,
     ));
     let (trigger, pubsub_service) =
-        PubSubService::new(PubSubConfig::default(), &subscriptions, pubsub_addr);
+        PubSubService::new(PubSubConfig::default(), &subscriptions, pubsub_addr, None);
 
     check_server_is_ready_or_panic(&pubsub_addr, 10, Duration::from_millis(300));
 
@@ -557,7 +557,7 @@ async fn test_slot_subscription_async() {
             optimistically_confirmed_bank,
         ));
         let (trigger, pubsub_service) =
-            PubSubService::new(PubSubConfig::default(), &subscriptions, pubsub_addr);
+            PubSubService::new(PubSubConfig::default(), &subscriptions, pubsub_addr, None);
 
         check_server_is_ready_or_panic(&pubsub_addr, 10, Duration::from_millis(100));
 

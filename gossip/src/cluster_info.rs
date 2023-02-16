@@ -2806,6 +2806,7 @@ pub struct Sockets {
     pub tpu_quic: UdpSocket,
     pub tpu_forwards_quic: UdpSocket,
     pub rpc: Option<UdpSocket>,
+    pub rpc_pubsub: Option<UdpSocket>,
 }
 
 #[derive(Debug)]
@@ -2879,6 +2880,7 @@ impl Node {
             "serve-repair"
         );
         let rpc = solana_net_utils::bind_to(bind_ip_addr, rpc_port, false).unwrap();
+        let rpc_pubsub = solana_net_utils::bind_to(bind_ip_addr, rpc_pubsub_port, false).unwrap();
         Node {
             info,
             sockets: Sockets {
@@ -2897,6 +2899,7 @@ impl Node {
                 tpu_quic,
                 tpu_forwards_quic,
                 rpc: Some(rpc),
+                rpc_pubsub: Some(rpc_pubsub),
             },
         }
     }
@@ -2942,8 +2945,7 @@ impl Node {
         let (_, broadcast) = Self::bind(bind_ip_addr, port_range);
         let (_, ancestor_hashes_requests) = Self::bind(bind_ip_addr, port_range);
         let (rpc_port, rpc) = Self::bind(bind_ip_addr, port_range);
-
-        let rpc_pubsub_port = find_available_port_in_range(bind_ip_addr, port_range).unwrap();
+        let (rpc_pubsub_port, rpc_pubsub) = Self::bind(bind_ip_addr, port_range);
 
         let addr = gossip_addr.ip();
         let mut info = ContactInfo::new(
@@ -2989,6 +2991,7 @@ impl Node {
                 tpu_quic,
                 tpu_forwards_quic,
                 rpc: Some(rpc),
+                rpc_pubsub: Some(rpc_pubsub),
             },
         }
     }
@@ -3076,6 +3079,7 @@ impl Node {
                 tpu_quic,
                 tpu_forwards_quic,
                 rpc: None,
+                rpc_pubsub: None,
             },
         }
     }
@@ -3267,6 +3271,7 @@ mod tests {
                     tpu_quic: UdpSocket::bind("0.0.0.0:0").unwrap(),
                     tpu_forwards_quic: UdpSocket::bind("0.0.0.0:0").unwrap(),
                     rpc: None,
+                    rpc_pubsub: None,
                 },
             }
         };

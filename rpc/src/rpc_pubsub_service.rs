@@ -14,7 +14,7 @@ use {
     solana_metrics::TokenCounter,
     std::{
         io,
-        net::SocketAddr,
+        net::{SocketAddr, UdpSocket},
         str,
         sync::Arc,
         thread::{self, Builder, JoinHandle},
@@ -79,6 +79,7 @@ impl PubSubService {
         pubsub_config: PubSubConfig,
         subscriptions: &Arc<RpcSubscriptions>,
         pubsub_addr: SocketAddr,
+        rpc_pubsub: Option<UdpSocket>,
     ) -> (Trigger, Self) {
         let subscription_control = subscriptions.control().clone();
         info!("rpc_pubsub bound to {:?}", pubsub_addr);
@@ -92,6 +93,11 @@ impl PubSubService {
                     .enable_all()
                     .build()
                     .expect("runtime creation failed");
+                if let Some(rpc_pubsub) = rpc_pubsub {
+                    // This RPC socket was only to prevent other applications (e.g. parallel
+                    // unit tests) from stealing the port we bookmarked earlier.
+                    drop(rpc_pubsub);
+                }
                 if let Err(err) = runtime.block_on(listen(
                     pubsub_addr,
                     pubsub_config,
@@ -414,7 +420,7 @@ mod tests {
             optimistically_confirmed_bank,
         ));
         let (_trigger, pubsub_service) =
-            PubSubService::new(PubSubConfig::default(), &subscriptions, pubsub_addr);
+            PubSubService::new(PubSubConfig::default(), &subscriptions, pubsub_addr, None);
         let thread = pubsub_service.thread_hdl.thread();
         assert_eq!(thread.name().unwrap(), "solRpcPubSub");
     }

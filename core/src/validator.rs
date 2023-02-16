@@ -837,6 +837,7 @@ impl Validator {
                         config.pubsub_config.clone(),
                         &rpc_subscriptions,
                         rpc_pubsub_addr,
+                        node.sockets.rpc_pubsub,
                     );
                     config
                         .validator_exit
