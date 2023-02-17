@@ -92,10 +92,9 @@ use {
     solana_program_runtime::{
         accounts_data_meter::MAX_ACCOUNTS_DATA_LEN,
         compute_budget::{self, ComputeBudget},
-        executor::Executor,
         executor_cache::{BankExecutorCache, TransactionExecutorCache, MAX_CACHED_EXECUTORS},
         invoke_context::{BuiltinProgram, ProcessInstructionWithContext},
-        loaded_programs::{LoadedPrograms, WorkingSlot},
+        loaded_programs::{LoadedProgram, LoadedPrograms, WorkingSlot},
         log_collector::LogCollector,
         sysvar_cache::SysvarCache,
         timings::{ExecuteTimingType, ExecuteTimings},
@@ -4056,8 +4055,13 @@ impl Bank {
         }
     }
 
+    /// Remove an executor from the bank's cache
+    fn remove_executor(&self, pubkey: &Pubkey) {
+        let _ = self.executor_cache.write().unwrap().remove(pubkey);
+    }
+
     #[allow(dead_code)] // Preparation for BankExecutorCache rework
-    fn create_executor(&self, pubkey: &Pubkey) -> Result<Arc<dyn Executor>> {
+    fn load_program(&self, pubkey: &Pubkey) -> Result<Arc<LoadedProgram>> {
         let program = if let Some(program) = self.get_account_with_fixed_root(pubkey) {
             program
         } else {
@@ -4110,22 +4114,17 @@ impl Bank {
         } else {
             None
         };
-        solana_bpf_loader_program::create_executor_from_account(
+        solana_bpf_loader_program::load_program_from_account(
             &self.feature_set,
             &self.runtime_config.compute_budget.unwrap_or_default(),
             None, // log_collector
-            None, // tx_executor_cache
+            None,
             &program,
             programdata.as_ref().unwrap_or(&program),
             self.runtime_config.bpf_jit,
         )
-        .map(|(executor, _create_executor_metrics)| executor)
+        .map(|(loaded_program, _create_executor_metrics)| loaded_program)
         .map_err(|err| TransactionError::InstructionError(0, err))
-    }
-
-    /// Remove an executor from the bank's cache
-    fn remove_executor(&self, pubkey: &Pubkey) {
-        let _ = self.executor_cache.write().unwrap().remove(pubkey);
     }
 
     pub fn clear_executors(&self) {

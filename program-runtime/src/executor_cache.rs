@@ -1,5 +1,5 @@
 use {
-    crate::executor::Executor,
+    crate::loaded_programs::LoadedProgram,
     log::*,
     rand::Rng,
     solana_sdk::{pubkey::Pubkey, saturating_add_assign, slot_history::Slot, stake_history::Epoch},
@@ -21,36 +21,35 @@ use {
 #[derive(Default, Debug)]
 pub struct TransactionExecutorCache {
     /// Executors or tombstones which are visible during the transaction
-    pub visible: HashMap<Pubkey, Option<Arc<dyn Executor>>>,
+    pub visible: HashMap<Pubkey, Arc<LoadedProgram>>,
     /// Executors of programs which were re-/deploymed during the transaction
-    pub deployments: HashMap<Pubkey, Arc<dyn Executor>>,
+    pub deployments: HashMap<Pubkey, Arc<LoadedProgram>>,
     /// Executors which were missing in the cache and not re-/deploymed during the transaction
-    pub add_to_cache: HashMap<Pubkey, Arc<dyn Executor>>,
+    pub add_to_cache: HashMap<Pubkey, Arc<LoadedProgram>>,
 }
 
 impl TransactionExecutorCache {
-    pub fn new(executable_keys: impl Iterator<Item = (Pubkey, Arc<dyn Executor>)>) -> Self {
+    pub fn new(executable_keys: impl Iterator<Item = (Pubkey, Arc<LoadedProgram>)>) -> Self {
         Self {
-            visible: executable_keys
-                .map(|(id, executor)| (id, Some(executor)))
-                .collect(),
+            visible: executable_keys.collect(),
             deployments: HashMap::new(),
             add_to_cache: HashMap::new(),
         }
     }
 
-    pub fn get(&self, key: &Pubkey) -> Option<Option<Arc<dyn Executor>>> {
+    pub fn get(&self, key: &Pubkey) -> Option<Arc<LoadedProgram>> {
         self.visible.get(key).cloned()
     }
 
     pub fn set_tombstone(&mut self, key: Pubkey) {
-        self.visible.insert(key, None);
+        self.visible
+            .insert(key, Arc::new(LoadedProgram::new_tombstone()));
     }
 
     pub fn set(
         &mut self,
         key: Pubkey,
-        executor: Arc<dyn Executor>,
+        executor: Arc<LoadedProgram>,
         upgrade: bool,
         delay_visibility_of_program_deployment: bool,
     ) {
@@ -60,22 +59,22 @@ impl TransactionExecutorCache {
                 // we don't load the new version from the database as it should remain invisible
                 self.set_tombstone(key);
             } else {
-                self.visible.insert(key, Some(executor.clone()));
+                self.visible.insert(key, executor.clone());
             }
             self.deployments.insert(key, executor);
         } else {
-            self.visible.insert(key, Some(executor.clone()));
+            self.visible.insert(key, executor.clone());
             self.add_to_cache.insert(key, executor);
         }
     }
 
-    pub fn get_executors_added_to_the_cache(&mut self) -> HashMap<Pubkey, Arc<dyn Executor>> {
+    pub fn get_executors_added_to_the_cache(&mut self) -> HashMap<Pubkey, Arc<LoadedProgram>> {
         let mut executors = HashMap::new();
         std::mem::swap(&mut executors, &mut self.add_to_cache);
         executors
     }
 
-    pub fn get_executors_which_were_deployed(&mut self) -> HashMap<Pubkey, Arc<dyn Executor>> {
+    pub fn get_executors_which_were_deployed(&mut self) -> HashMap<Pubkey, Arc<LoadedProgram>> {
         let mut executors = HashMap::new();
         std::mem::swap(&mut executors, &mut self.deployments);
         executors
@@ -90,7 +89,7 @@ pub const MAX_CACHED_EXECUTORS: usize = 256;
 pub struct BankExecutorCacheEntry {
     prev_epoch_count: u64,
     epoch_count: AtomicU64,
-    executor: Arc<dyn Executor>,
+    executor: Arc<LoadedProgram>,
     pub hit_count: AtomicU64,
 }
 
@@ -175,7 +174,7 @@ impl BankExecutorCache {
         }
     }
 
-    pub fn get(&self, pubkey: &Pubkey) -> Option<Arc<dyn Executor>> {
+    pub fn get(&self, pubkey: &Pubkey) -> Option<Arc<LoadedProgram>> {
         if let Some(entry) = self.executors.get(pubkey) {
             self.stats.hits.fetch_add(1, Relaxed);
             entry.epoch_count.fetch_add(1, Relaxed);
@@ -187,12 +186,12 @@ impl BankExecutorCache {
         }
     }
 
-    pub fn put(&mut self, executors: impl Iterator<Item = (Pubkey, Arc<dyn Executor>)>) {
+    pub fn put(&mut self, executors: impl Iterator<Item = (Pubkey, Arc<LoadedProgram>)>) {
         let mut new_executors: Vec<_> = executors
             .filter_map(|(key, executor)| {
                 if let Some(mut entry) = self.remove(&key) {
                     self.stats.replacements.fetch_add(1, Relaxed);
-                    entry.executor = executor.clone();
+                    entry.executor = executor;
                     let _ = self.executors.insert(key, entry);
                     None
                 } else {
@@ -353,20 +352,7 @@ impl Stats {
 #[allow(clippy::indexing_slicing)]
 #[cfg(test)]
 mod tests {
-    use {
-        super::*, crate::invoke_context::InvokeContext, solana_sdk::instruction::InstructionError,
-    };
-
-    #[derive(Debug)]
-    struct TestExecutor {}
-    impl Executor for TestExecutor {
-        fn execute(
-            &self,
-            _invoke_context: &mut InvokeContext,
-        ) -> std::result::Result<(), InstructionError> {
-            Ok(())
-        }
-    }
+    use super::*;
 
     #[test]
     fn test_executor_cache() {
@@ -374,7 +360,7 @@ mod tests {
         let key2 = solana_sdk::pubkey::new_rand();
         let key3 = solana_sdk::pubkey::new_rand();
         let key4 = solana_sdk::pubkey::new_rand();
-        let executor: Arc<dyn Executor> = Arc::new(TestExecutor {});
+        let executor = Arc::new(LoadedProgram::default());
         let mut cache = BankExecutorCache::new(3, 0);
 
         cache.put([(key1, executor.clone())].into_iter());
@@ -398,7 +384,7 @@ mod tests {
         assert!(cache.get(&key4).is_some());
         assert!(cache.get(&key4).is_some());
         assert!(cache.get(&key4).is_some());
-        cache.put([(key3, executor.clone())].into_iter());
+        cache.put([(key3, executor)].into_iter());
         assert!(cache.get(&key3).is_some());
         let num_retained = [&key1, &key2, &key4]
             .iter()
@@ -413,7 +399,7 @@ mod tests {
         let key2 = solana_sdk::pubkey::new_rand();
         let key3 = solana_sdk::pubkey::new_rand();
         let key4 = solana_sdk::pubkey::new_rand();
-        let executor: Arc<dyn Executor> = Arc::new(TestExecutor {});
+        let executor = Arc::new(LoadedProgram::default());
         let mut cache = BankExecutorCache::new(3, 0);
         assert!(cache.current_epoch == 0);
 
@@ -452,7 +438,7 @@ mod tests {
         cache = BankExecutorCache::new_from_parent_bank_executors(&cache, 2);
         assert!(cache.current_epoch == 2);
 
-        cache.put([(key3, executor.clone())].into_iter());
+        cache.put([(key3, executor)].into_iter());
         assert!(cache.get(&key3).is_some());
     }
 
@@ -461,7 +447,7 @@ mod tests {
         let key1 = solana_sdk::pubkey::new_rand();
         let key2 = solana_sdk::pubkey::new_rand();
         let key3 = solana_sdk::pubkey::new_rand();
-        let executor: Arc<dyn Executor> = Arc::new(TestExecutor {});
+        let executor = Arc::new(LoadedProgram::default());
         let mut cache = BankExecutorCache::new(2, 0);
 
         cache.put([(key1, executor.clone())].into_iter());
@@ -480,7 +466,7 @@ mod tests {
         entries.sort_by_key(|(_, v)| *v);
         assert!(entries[0].1 < entries[1].1);
 
-        cache.put([(key3, executor.clone())].into_iter());
+        cache.put([(key3, executor)].into_iter());
         assert!(cache.get(&entries[0].0).is_none());
         assert!(cache.get(&entries[1].0).is_some());
     }
@@ -491,7 +477,7 @@ mod tests {
 
         let one_hit_wonder = Pubkey::new_unique();
         let popular = Pubkey::new_unique();
-        let executor: Arc<dyn Executor> = Arc::new(TestExecutor {});
+        let executor = Arc::new(LoadedProgram::default());
 
         // make sure we're starting from where we think we are
         assert_eq!(cache.stats.one_hit_wonders.load(Relaxed), 0);
@@ -511,7 +497,7 @@ mod tests {
         assert_eq!(cache.executors[&popular].hit_count.load(Relaxed), 2);
 
         // evict "popular program"
-        cache.put([(one_hit_wonder, executor.clone())].into_iter());
+        cache.put([(one_hit_wonder, executor)].into_iter());
         assert_eq!(cache.executors[&one_hit_wonder].hit_count.load(Relaxed), 1);
 
         // one-hit-wonder counter not incremented
@@ -576,7 +562,7 @@ mod tests {
 
         let program_id1 = Pubkey::new_unique();
         let program_id2 = Pubkey::new_unique();
-        let executor: Arc<dyn Executor> = Arc::new(TestExecutor {});
+        let executor = Arc::new(LoadedProgram::default());
 
         // make sure we're starting from where we think we are
         assert_eq!(ComparableStats::from(&cache.stats), expected_stats,);
@@ -606,7 +592,7 @@ mod tests {
         assert_eq!(ComparableStats::from(&cache.stats), expected_stats);
 
         // evict an executor
-        cache.put([(Pubkey::new_unique(), executor.clone())].into_iter());
+        cache.put([(Pubkey::new_unique(), executor)].into_iter());
         expected_stats.insertions += 1;
         expected_stats.evictions.insert(program_id2, 1);
         assert_eq!(ComparableStats::from(&cache.stats), expected_stats);

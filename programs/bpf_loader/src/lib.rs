@@ -18,11 +18,10 @@ use {
     solana_measure::measure::Measure,
     solana_program_runtime::{
         compute_budget::ComputeBudget,
-        executor::{CreateMetrics, Executor},
         executor_cache::TransactionExecutorCache,
         ic_logger_msg, ic_msg,
         invoke_context::InvokeContext,
-        loaded_programs::LoadedProgram,
+        loaded_programs::{LoadProgramMetrics, LoadedProgram, LoadedProgramType},
         log_collector::LogCollector,
         stable_log,
         sysvar_cache::get_sysvar_with_account_check,
@@ -30,7 +29,6 @@ use {
     solana_rbpf::{
         aligned_memory::AlignedMemory,
         ebpf::{HOST_ALIGN, MM_HEAP_START},
-        elf::Executable,
         error::{EbpfError, UserDefinedError},
         memory_region::MemoryRegion,
         verifier::{RequisiteVerifier, VerifierError},
@@ -121,15 +119,19 @@ fn try_borrow_account<'a>(
     }
 }
 
-fn create_executor_from_bytes(
+#[allow(clippy::too_many_arguments)]
+pub fn load_program_from_bytes(
     feature_set: &FeatureSet,
     compute_budget: &ComputeBudget,
     log_collector: Option<Rc<RefCell<LogCollector>>>,
-    create_executor_metrics: &mut CreateMetrics,
+    load_program_metrics: &mut LoadProgramMetrics,
     programdata: &[u8],
+    loader_key: &Pubkey,
+    account_size: usize,
+    deployment_slot: Slot,
     use_jit: bool,
     reject_deployment_of_broken_elfs: bool,
-) -> Result<Arc<BpfExecutor>, InstructionError> {
+) -> Result<LoadedProgram, InstructionError> {
     let mut register_syscalls_time = Measure::start("register_syscalls_time");
     let disable_deploy_of_alloc_free_syscall = reject_deployment_of_broken_elfs
         && feature_set.is_active(&disable_deploy_of_alloc_free_syscall::id());
@@ -145,41 +147,22 @@ fn create_executor_from_bytes(
         InstructionError::ProgramEnvironmentSetupFailure
     })?;
     register_syscalls_time.stop();
-    create_executor_metrics.register_syscalls_us = register_syscalls_time.as_us();
-    let mut load_elf_time = Measure::start("load_elf_time");
-    let executable = Executable::<InvokeContext>::from_elf(programdata, loader).map_err(|err| {
+    load_program_metrics.register_syscalls_us = register_syscalls_time.as_us();
+
+    let loaded_program = LoadedProgram::new(
+        loader_key,
+        loader,
+        deployment_slot,
+        programdata,
+        account_size,
+        use_jit,
+        load_program_metrics,
+    )
+    .map_err(|err| {
         ic_logger_msg!(log_collector, "{}", err);
         InstructionError::InvalidAccountData
-    });
-    load_elf_time.stop();
-    create_executor_metrics.load_elf_us = load_elf_time.as_us();
-    let executable = executable?;
-    let mut verify_code_time = Measure::start("verify_code_time");
-    #[allow(unused_mut)]
-    let mut verified_executable =
-        VerifiedExecutable::<RequisiteVerifier, InvokeContext>::from_executable(executable)
-            .map_err(|err| {
-                ic_logger_msg!(log_collector, "{}", err);
-                InstructionError::InvalidAccountData
-            })?;
-    verify_code_time.stop();
-    create_executor_metrics.verify_code_us = verify_code_time.as_us();
-    if use_jit {
-        #[cfg(all(not(target_os = "windows"), target_arch = "x86_64"))]
-        {
-            let mut jit_compile_time = Measure::start("jit_compile_time");
-            let jit_compile_result = verified_executable.jit_compile();
-            jit_compile_time.stop();
-            create_executor_metrics.jit_compile_us = jit_compile_time.as_us();
-            if let Err(err) = jit_compile_result {
-                ic_logger_msg!(log_collector, "Failed to compile program {:?}", err);
-                return Err(InstructionError::ProgramFailedToCompile);
-            }
-        }
-    }
-    Ok(Arc::new(BpfExecutor {
-        verified_executable,
-    }))
+    })?;
+    Ok(loaded_program)
 }
 
 fn get_programdata_offset_and_depoyment_offset(
@@ -215,9 +198,11 @@ pub fn load_program_from_account(
     feature_set: &FeatureSet,
     compute_budget: &ComputeBudget,
     log_collector: Option<Rc<RefCell<LogCollector>>>,
+    tx_executor_cache: Option<RefMut<TransactionExecutorCache>>,
     program: &BorrowedAccount,
     programdata: &BorrowedAccount,
-) -> Result<(LoadedProgram, Option<CreateMetrics>), InstructionError> {
+    use_jit: bool,
+) -> Result<(Arc<LoadedProgram>, Option<LoadProgramMetrics>), InstructionError> {
     if !check_loader_id(program.get_owner()) {
         ic_logger_msg!(
             log_collector,
@@ -228,128 +213,82 @@ pub fn load_program_from_account(
 
     let (programdata_offset, deployment_slot) =
         get_programdata_offset_and_depoyment_offset(&log_collector, program, programdata)?;
+
+    if let Some(ref tx_executor_cache) = tx_executor_cache {
+        if let Some(loaded_program) = tx_executor_cache.get(program.get_key()) {
+            if loaded_program.is_tombstone() {
+                // We cached that the Executor does not exist, abort
+                // This case can only happen once delay_visibility_of_program_deployment is active.
+                return Err(InstructionError::InvalidAccountData);
+            }
+            // Executor exists and is cached, use it
+            return Ok((loaded_program, None));
+        }
+    }
+
     let programdata_size = if programdata_offset != 0 {
         programdata.get_data().len()
     } else {
         0
     };
 
-    let mut create_executor_metrics = CreateMetrics {
+    let mut load_program_metrics = LoadProgramMetrics {
         program_id: program.get_key().to_string(),
-        ..CreateMetrics::default()
+        ..LoadProgramMetrics::default()
     };
 
-    let mut register_syscalls_time = Measure::start("register_syscalls_time");
-    let loader = syscalls::create_loader(feature_set, compute_budget, false, false, false)
-        .map_err(|e| {
-            ic_logger_msg!(log_collector, "Failed to register syscalls: {}", e);
-            InstructionError::ProgramEnvironmentSetupFailure
-        })?;
-    register_syscalls_time.stop();
-    create_executor_metrics.register_syscalls_us = register_syscalls_time.as_us();
-
-    let mut load_elf_time = Measure::start("load_elf_time");
-    let loaded_program = LoadedProgram::new(
-        program.get_owner(),
-        loader,
-        deployment_slot,
-        programdata
-            .get_data()
-            .get(programdata_offset..)
-            .ok_or(InstructionError::AccountDataTooSmall)?,
-        program.get_data().len().saturating_add(programdata_size),
-    )
-    .map_err(|err| {
-        ic_logger_msg!(log_collector, "{}", err);
-        InstructionError::InvalidAccountData
-    })?;
-    load_elf_time.stop();
-    create_executor_metrics.load_elf_us = load_elf_time.as_us();
-
-    Ok((loaded_program, Some(create_executor_metrics)))
-}
-
-pub fn create_executor_from_account(
-    feature_set: &FeatureSet,
-    compute_budget: &ComputeBudget,
-    log_collector: Option<Rc<RefCell<LogCollector>>>,
-    tx_executor_cache: Option<RefMut<TransactionExecutorCache>>,
-    program: &BorrowedAccount,
-    programdata: &BorrowedAccount,
-    use_jit: bool,
-) -> Result<(Arc<dyn Executor>, Option<CreateMetrics>), InstructionError> {
-    if !check_loader_id(program.get_owner()) {
-        ic_logger_msg!(
-            log_collector,
-            "Executable account not owned by the BPF loader"
-        );
-        return Err(InstructionError::IncorrectProgramId);
-    }
-
-    let (programdata_offset, _) =
-        get_programdata_offset_and_depoyment_offset(&log_collector, program, programdata)?;
-
-    if let Some(ref tx_executor_cache) = tx_executor_cache {
-        match tx_executor_cache.get(program.get_key()) {
-            // Executor exists and is cached, use it
-            Some(Some(executor)) => return Ok((executor, None)),
-            // We cached that the Executor does not exist, abort
-            // This case can only happen once delay_visibility_of_program_deployment is active.
-            Some(None) => return Err(InstructionError::InvalidAccountData),
-            // Nothing cached, try to load from account instead
-            None => {}
-        }
-    }
-
-    let mut create_executor_metrics = CreateMetrics {
-        program_id: program.get_key().to_string(),
-        ..CreateMetrics::default()
-    };
-    let executor = create_executor_from_bytes(
+    let loaded_program = Arc::new(load_program_from_bytes(
         feature_set,
         compute_budget,
         log_collector,
-        &mut create_executor_metrics,
+        &mut load_program_metrics,
         programdata
             .get_data()
             .get(programdata_offset..)
             .ok_or(InstructionError::AccountDataTooSmall)?,
+        program.get_owner(),
+        program.get_data().len().saturating_add(programdata_size),
+        deployment_slot,
         use_jit,
         false, /* reject_deployment_of_broken_elfs */
-    )?;
+    )?);
     if let Some(mut tx_executor_cache) = tx_executor_cache {
         tx_executor_cache.set(
             *program.get_key(),
-            executor.clone(),
+            loaded_program.clone(),
             false,
             feature_set.is_active(&delay_visibility_of_program_deployment::id()),
         );
     }
-    Ok((executor, Some(create_executor_metrics)))
+
+    Ok((loaded_program, Some(load_program_metrics)))
 }
 
 macro_rules! deploy_program {
-    ($invoke_context:expr, $use_jit:expr, $program_id:expr,
-     $drop:expr, $new_programdata:expr $(,)?) => {{
+    ($invoke_context:expr, $use_jit:expr, $program_id:expr, $loader_key:expr,
+     $account_size:expr, $slot:expr, $drop:expr, $new_programdata:expr $(,)?) => {{
         let delay_visibility_of_program_deployment = $invoke_context
             .feature_set
             .is_active(&delay_visibility_of_program_deployment::id());
-        let mut create_executor_metrics = CreateMetrics::default();
-        let executor = create_executor_from_bytes(
+        let mut load_program_metrics = LoadProgramMetrics::default();
+        let executor = load_program_from_bytes(
             &$invoke_context.feature_set,
             $invoke_context.get_compute_budget(),
             $invoke_context.get_log_collector(),
-            &mut create_executor_metrics,
+            &mut load_program_metrics,
             $new_programdata,
+            $loader_key,
+            $account_size,
+            $slot,
             $use_jit,
             true,
         )?;
         $drop
-        create_executor_metrics.program_id = $program_id.to_string();
-        create_executor_metrics.submit_datapoint(&mut $invoke_context.timings);
+        load_program_metrics.program_id = $program_id.to_string();
+        load_program_metrics.submit_datapoint(&mut $invoke_context.timings);
         $invoke_context.tx_executor_cache.borrow_mut().set(
             $program_id,
-            executor,
+            Arc::new(executor),
             true,
             delay_visibility_of_program_deployment,
         );
@@ -516,7 +455,7 @@ fn process_instruction_common(
             )?)
         };
         let mut get_or_create_executor_time = Measure::start("get_or_create_executor_time");
-        let (executor, create_executor_metrics) = create_executor_from_account(
+        let (executor, load_program_metrics) = load_program_from_account(
             &invoke_context.feature_set,
             invoke_context.get_compute_budget(),
             log_collector,
@@ -532,11 +471,15 @@ fn process_instruction_common(
             invoke_context.timings.get_or_create_executor_us,
             get_or_create_executor_time.as_us()
         );
-        if let Some(create_executor_metrics) = create_executor_metrics {
-            create_executor_metrics.submit_datapoint(&mut invoke_context.timings);
+        if let Some(load_program_metrics) = load_program_metrics {
+            load_program_metrics.submit_datapoint(&mut invoke_context.timings);
         }
-
-        executor.execute(invoke_context)
+        match &executor.program {
+            LoadedProgramType::Invalid => Err(InstructionError::InvalidAccountData),
+            LoadedProgramType::LegacyV0(executable) => execute(executable, invoke_context),
+            LoadedProgramType::LegacyV1(executable) => execute(executable, invoke_context),
+            LoadedProgramType::BuiltIn(_) => Err(InstructionError::IncorrectProgramId),
+        }
     } else {
         drop(program);
         debug_assert_eq!(first_instruction_account, 1);
@@ -715,6 +658,7 @@ fn process_loader_upgradeable_instruction(
                 buffer.set_lamports(0)?;
             }
 
+            let owner_id = *program_id;
             let mut instruction = system_instruction::create_account(
                 &payer_key,
                 &programdata_key,
@@ -747,6 +691,9 @@ fn process_loader_upgradeable_instruction(
                 invoke_context,
                 use_jit,
                 new_program_id,
+                &owner_id,
+                UpgradeableLoaderState::size_of_program().saturating_add(programdata_len),
+                clock.slot,
                 {
                     drop(buffer);
                 },
@@ -894,7 +841,7 @@ fn process_loader_upgradeable_instruction(
                 );
                 return Err(InstructionError::InsufficientFunds);
             }
-            if let UpgradeableLoaderState::ProgramData {
+            let deployment_slot = if let UpgradeableLoaderState::ProgramData {
                 slot,
                 upgrade_authority_address,
             } = programdata.get_state()?
@@ -919,10 +866,12 @@ fn process_loader_upgradeable_instruction(
                     ic_logger_msg!(log_collector, "Upgrade authority did not sign");
                     return Err(InstructionError::MissingRequiredSignature);
                 }
+                slot
             } else {
                 ic_logger_msg!(log_collector, "Invalid ProgramData account");
                 return Err(InstructionError::InvalidAccountData);
-            }
+            };
+            let programdata_len = programdata.get_data().len();
             drop(programdata);
 
             // Load and verify the program bits
@@ -932,6 +881,9 @@ fn process_loader_upgradeable_instruction(
                 invoke_context,
                 use_jit,
                 new_program_id,
+                program_id,
+                UpgradeableLoaderState::size_of_program().saturating_add(programdata_len),
+                deployment_slot,
                 {
                     drop(buffer);
                 },
@@ -1457,6 +1409,9 @@ fn process_loader_instruction(
                 invoke_context,
                 use_jit,
                 *program.get_key(),
+                program.get_owner(),
+                program.get_data().len(),
+                0,
                 {},
                 program.get_data(),
             );
@@ -1468,161 +1423,145 @@ fn process_loader_instruction(
     Ok(())
 }
 
-/// BPF Loader's Executor implementation
-pub struct BpfExecutor {
-    verified_executable: VerifiedExecutable<RequisiteVerifier, InvokeContext<'static>>,
-}
+fn execute(
+    executable: &VerifiedExecutable<RequisiteVerifier, InvokeContext<'static>>,
+    invoke_context: &mut InvokeContext,
+) -> Result<(), InstructionError> {
+    let log_collector = invoke_context.get_log_collector();
+    let stack_height = invoke_context.get_stack_height();
+    let transaction_context = &invoke_context.transaction_context;
+    let instruction_context = transaction_context.get_current_instruction_context()?;
+    let program_id = *instruction_context.get_last_program_key(transaction_context)?;
+    #[cfg(any(target_os = "windows", not(target_arch = "x86_64")))]
+    let use_jit = false;
+    #[cfg(all(not(target_os = "windows"), target_arch = "x86_64"))]
+    let use_jit = executable.get_executable().get_compiled_program().is_some();
 
-// Well, implement Debug for solana_rbpf::vm::Executable in solana-rbpf...
-impl Debug for BpfExecutor {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(f, "BpfExecutor({self:p})")
-    }
-}
+    let mut serialize_time = Measure::start("serialize");
+    let (parameter_bytes, regions, account_lengths) = serialize_parameters(
+        invoke_context.transaction_context,
+        instruction_context,
+        invoke_context
+            .feature_set
+            .is_active(&cap_bpf_program_instruction_accounts::ID),
+    )?;
+    serialize_time.stop();
 
-impl Executor for BpfExecutor {
-    fn execute(&self, invoke_context: &mut InvokeContext) -> Result<(), InstructionError> {
-        let log_collector = invoke_context.get_log_collector();
-        let stack_height = invoke_context.get_stack_height();
-        let transaction_context = &invoke_context.transaction_context;
-        let instruction_context = transaction_context.get_current_instruction_context()?;
-        let program_id = *instruction_context.get_last_program_key(transaction_context)?;
-        #[cfg(any(target_os = "windows", not(target_arch = "x86_64")))]
-        let use_jit = false;
-        #[cfg(all(not(target_os = "windows"), target_arch = "x86_64"))]
-        let use_jit = self
-            .verified_executable
-            .get_executable()
-            .get_compiled_program()
-            .is_some();
-
-        let mut serialize_time = Measure::start("serialize");
-        let (parameter_bytes, regions, account_lengths) = serialize_parameters(
-            invoke_context.transaction_context,
-            instruction_context,
-            invoke_context
-                .feature_set
-                .is_active(&cap_bpf_program_instruction_accounts::ID),
-        )?;
-        serialize_time.stop();
-
-        let mut create_vm_time = Measure::start("create_vm");
-        let mut execute_time;
-        let execution_result = {
-            let compute_meter_prev = invoke_context.get_remaining();
-            let mut vm = match create_vm(
-                // We dropped the lifetime tracking in the Executor by setting it to 'static,
-                // thus we need to reintroduce the correct lifetime of InvokeContext here again.
-                unsafe { std::mem::transmute(&self.verified_executable) },
-                regions,
-                account_lengths,
-                invoke_context,
-            ) {
-                Ok(info) => info,
-                Err(e) => {
-                    ic_logger_msg!(log_collector, "Failed to create SBF VM: {}", e);
-                    return Err(InstructionError::ProgramEnvironmentSetupFailure);
-                }
-            };
-            create_vm_time.stop();
-
-            execute_time = Measure::start("execute");
-            stable_log::program_invoke(&log_collector, &program_id, stack_height);
-            let (compute_units_consumed, result) = vm.execute_program(!use_jit);
-            drop(vm);
-            ic_logger_msg!(
-                log_collector,
-                "Program {} consumed {} of {} compute units",
-                &program_id,
-                compute_units_consumed,
-                compute_meter_prev
-            );
-            let (_returned_from_program_id, return_data) =
-                invoke_context.transaction_context.get_return_data();
-            if !return_data.is_empty() {
-                stable_log::program_return(&log_collector, &program_id, return_data);
-            }
-            match result {
-                ProgramResult::Ok(status) if status != SUCCESS => {
-                    let error: InstructionError = if (status
-                        == MAX_ACCOUNTS_DATA_ALLOCATIONS_EXCEEDED
-                        && !invoke_context
-                            .feature_set
-                            .is_active(&cap_accounts_data_allocations_per_transaction::id()))
-                        || (status == MAX_INSTRUCTION_TRACE_LENGTH_EXCEEDED
-                            && !invoke_context
-                                .feature_set
-                                .is_active(&limit_max_instruction_trace_length::id()))
-                    {
-                        // Until the cap_accounts_data_allocations_per_transaction feature is
-                        // enabled, map the `MAX_ACCOUNTS_DATA_ALLOCATIONS_EXCEEDED` error to `InvalidError`.
-                        // Until the limit_max_instruction_trace_length feature is
-                        // enabled, map the `MAX_INSTRUCTION_TRACE_LENGTH_EXCEEDED` error to `InvalidError`.
-                        InstructionError::InvalidError
-                    } else {
-                        status.into()
-                    };
-                    stable_log::program_failure(&log_collector, &program_id, &error);
-                    Err(error)
-                }
-                ProgramResult::Err(error) => {
-                    let error = match error {
-                        /*EbpfError::UserError(user_error) if let BpfError::SyscallError(
-                            SyscallError::InstructionError(instruction_error),
-                        ) = user_error.downcast_ref::<BpfError>().unwrap() => instruction_error.clone(),*/
-                        EbpfError::UserError(user_error)
-                            if matches!(
-                                user_error.downcast_ref::<BpfError>().unwrap(),
-                                BpfError::SyscallError(SyscallError::InstructionError(_)),
-                            ) =>
-                        {
-                            match user_error.downcast_ref::<BpfError>().unwrap() {
-                                BpfError::SyscallError(SyscallError::InstructionError(
-                                    instruction_error,
-                                )) => instruction_error.clone(),
-                                _ => unreachable!(),
-                            }
-                        }
-                        err => {
-                            ic_logger_msg!(log_collector, "Program failed to complete: {}", err);
-                            InstructionError::ProgramFailedToComplete
-                        }
-                    };
-                    stable_log::program_failure(&log_collector, &program_id, &error);
-                    Err(error)
-                }
-                _ => Ok(()),
+    let mut create_vm_time = Measure::start("create_vm");
+    let mut execute_time;
+    let execution_result = {
+        let compute_meter_prev = invoke_context.get_remaining();
+        let mut vm = match create_vm(
+            // We dropped the lifetime tracking in the Executor by setting it to 'static,
+            // thus we need to reintroduce the correct lifetime of InvokeContext here again.
+            unsafe { std::mem::transmute(executable) },
+            regions,
+            account_lengths,
+            invoke_context,
+        ) {
+            Ok(info) => info,
+            Err(e) => {
+                ic_logger_msg!(log_collector, "Failed to create SBF VM: {}", e);
+                return Err(InstructionError::ProgramEnvironmentSetupFailure);
             }
         };
-        execute_time.stop();
+        create_vm_time.stop();
 
-        let mut deserialize_time = Measure::start("deserialize");
-        let execute_or_deserialize_result = execution_result.and_then(|_| {
-            deserialize_parameters(
-                invoke_context.transaction_context,
-                invoke_context
-                    .transaction_context
-                    .get_current_instruction_context()?,
-                parameter_bytes.as_slice(),
-                invoke_context.get_orig_account_lengths()?,
-            )
-        });
-        deserialize_time.stop();
-
-        // Update the timings
-        let timings = &mut invoke_context.timings;
-        timings.serialize_us = timings.serialize_us.saturating_add(serialize_time.as_us());
-        timings.create_vm_us = timings.create_vm_us.saturating_add(create_vm_time.as_us());
-        timings.execute_us = timings.execute_us.saturating_add(execute_time.as_us());
-        timings.deserialize_us = timings
-            .deserialize_us
-            .saturating_add(deserialize_time.as_us());
-
-        if execute_or_deserialize_result.is_ok() {
-            stable_log::program_success(&log_collector, &program_id);
+        execute_time = Measure::start("execute");
+        stable_log::program_invoke(&log_collector, &program_id, stack_height);
+        let (compute_units_consumed, result) = vm.execute_program(!use_jit);
+        drop(vm);
+        ic_logger_msg!(
+            log_collector,
+            "Program {} consumed {} of {} compute units",
+            &program_id,
+            compute_units_consumed,
+            compute_meter_prev
+        );
+        let (_returned_from_program_id, return_data) =
+            invoke_context.transaction_context.get_return_data();
+        if !return_data.is_empty() {
+            stable_log::program_return(&log_collector, &program_id, return_data);
         }
-        execute_or_deserialize_result
+        match result {
+            ProgramResult::Ok(status) if status != SUCCESS => {
+                let error: InstructionError = if (status == MAX_ACCOUNTS_DATA_ALLOCATIONS_EXCEEDED
+                    && !invoke_context
+                        .feature_set
+                        .is_active(&cap_accounts_data_allocations_per_transaction::id()))
+                    || (status == MAX_INSTRUCTION_TRACE_LENGTH_EXCEEDED
+                        && !invoke_context
+                            .feature_set
+                            .is_active(&limit_max_instruction_trace_length::id()))
+                {
+                    // Until the cap_accounts_data_allocations_per_transaction feature is
+                    // enabled, map the `MAX_ACCOUNTS_DATA_ALLOCATIONS_EXCEEDED` error to `InvalidError`.
+                    // Until the limit_max_instruction_trace_length feature is
+                    // enabled, map the `MAX_INSTRUCTION_TRACE_LENGTH_EXCEEDED` error to `InvalidError`.
+                    InstructionError::InvalidError
+                } else {
+                    status.into()
+                };
+                stable_log::program_failure(&log_collector, &program_id, &error);
+                Err(error)
+            }
+            ProgramResult::Err(error) => {
+                let error = match error {
+                    /*EbpfError::UserError(user_error) if let BpfError::SyscallError(
+                        SyscallError::InstructionError(instruction_error),
+                    ) = user_error.downcast_ref::<BpfError>().unwrap() => instruction_error.clone(),*/
+                    EbpfError::UserError(user_error)
+                        if matches!(
+                            user_error.downcast_ref::<BpfError>().unwrap(),
+                            BpfError::SyscallError(SyscallError::InstructionError(_)),
+                        ) =>
+                    {
+                        match user_error.downcast_ref::<BpfError>().unwrap() {
+                            BpfError::SyscallError(SyscallError::InstructionError(
+                                instruction_error,
+                            )) => instruction_error.clone(),
+                            _ => unreachable!(),
+                        }
+                    }
+                    err => {
+                        ic_logger_msg!(log_collector, "Program failed to complete: {}", err);
+                        InstructionError::ProgramFailedToComplete
+                    }
+                };
+                stable_log::program_failure(&log_collector, &program_id, &error);
+                Err(error)
+            }
+            _ => Ok(()),
+        }
+    };
+    execute_time.stop();
+
+    let mut deserialize_time = Measure::start("deserialize");
+    let execute_or_deserialize_result = execution_result.and_then(|_| {
+        deserialize_parameters(
+            invoke_context.transaction_context,
+            invoke_context
+                .transaction_context
+                .get_current_instruction_context()?,
+            parameter_bytes.as_slice(),
+            invoke_context.get_orig_account_lengths()?,
+        )
+    });
+    deserialize_time.stop();
+
+    // Update the timings
+    let timings = &mut invoke_context.timings;
+    timings.serialize_us = timings.serialize_us.saturating_add(serialize_time.as_us());
+    timings.create_vm_us = timings.create_vm_us.saturating_add(create_vm_time.as_us());
+    timings.execute_us = timings.execute_us.saturating_add(execute_time.as_us());
+    timings.deserialize_us = timings
+        .deserialize_us
+        .saturating_add(deserialize_time.as_us());
+
+    if execute_or_deserialize_result.is_ok() {
+        stable_log::program_success(&log_collector, &program_id);
     }
+    execute_or_deserialize_result
 }
 
 #[cfg(test)]
@@ -1633,6 +1572,7 @@ mod tests {
         solana_program_runtime::invoke_context::mock_process_instruction,
         solana_rbpf::{
             ebpf::MM_INPUT_START,
+            elf::Executable,
             verifier::Verifier,
             vm::{BuiltInProgram, Config, ContextObject, FunctionRegistry},
         },

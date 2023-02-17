@@ -33,9 +33,9 @@ use {
     solana_logger,
     solana_program_runtime::{
         compute_budget::{self, ComputeBudget, MAX_COMPUTE_UNIT_LIMIT},
-        executor::Executor,
         executor_cache::TransactionExecutorCache,
         invoke_context::{mock_process_instruction, InvokeContext},
+        loaded_programs::{LoadedProgram, LoadedProgramType},
         prioritization_fee::{PrioritizationFeeDetails, PrioritizationFeeType},
         timings::ExecuteTimings,
     },
@@ -7663,17 +7663,6 @@ fn test_reconfigure_token2_native_mint() {
     assert_eq!(native_mint_account.owner(), &inline_spl_token::id());
 }
 
-#[derive(Debug)]
-struct TestExecutor {}
-impl Executor for TestExecutor {
-    fn execute(
-        &self,
-        _invoke_context: &mut InvokeContext,
-    ) -> std::result::Result<(), InstructionError> {
-        Ok(())
-    }
-}
-
 #[test]
 fn test_bank_executor_cache() {
     solana_logger::setup();
@@ -7686,7 +7675,7 @@ fn test_bank_executor_cache() {
     let key3 = solana_sdk::pubkey::new_rand();
     let key4 = solana_sdk::pubkey::new_rand();
     let key5 = solana_sdk::pubkey::new_rand();
-    let executor: Arc<dyn Executor> = Arc::new(TestExecutor {});
+    let executor = Arc::new(LoadedProgram::default());
 
     fn new_executable_account(owner: Pubkey) -> AccountSharedData {
         AccountSharedData::from(Account {
@@ -7719,7 +7708,7 @@ fn test_bank_executor_cache() {
     executors.set(key1, executor.clone(), false, true);
     executors.set(key2, executor.clone(), false, true);
     executors.set(key3, executor.clone(), true, true);
-    executors.set(key4, executor.clone(), false, true);
+    executors.set(key4, executor, false, true);
     let executors = Rc::new(RefCell::new(executors));
 
     // store Missing
@@ -7776,7 +7765,6 @@ fn test_bank_executor_cache() {
     programdata_account.set_rent_epoch(1);
     bank.store_account_and_update_capitalization(&key1, &program_account);
     bank.store_account_and_update_capitalization(&programdata_key, &programdata_account);
-    bank.create_executor(&key1).unwrap();
 
     // Remove all
     bank.remove_executor(&key1);
@@ -7788,6 +7776,55 @@ fn test_bank_executor_cache() {
 }
 
 #[test]
+fn test_bank_load_program() {
+    solana_logger::setup();
+
+    let (genesis_config, _) = create_genesis_config(1);
+    let bank = Bank::new_for_tests(&genesis_config);
+
+    let key1 = solana_sdk::pubkey::new_rand();
+
+    let mut file = File::open("../programs/bpf_loader/test_elfs/out/noop_aligned.so").unwrap();
+    let mut elf = Vec::new();
+    file.read_to_end(&mut elf).unwrap();
+    let programdata_key = solana_sdk::pubkey::new_rand();
+    let mut program_account = AccountSharedData::new_data(
+        40,
+        &UpgradeableLoaderState::Program {
+            programdata_address: programdata_key,
+        },
+        &bpf_loader_upgradeable::id(),
+    )
+    .unwrap();
+    program_account.set_executable(true);
+    program_account.set_rent_epoch(1);
+    let programdata_data_offset = UpgradeableLoaderState::size_of_programdata_metadata();
+    let mut programdata_account = AccountSharedData::new(
+        40,
+        programdata_data_offset + elf.len(),
+        &bpf_loader_upgradeable::id(),
+    );
+    programdata_account
+        .set_state(&UpgradeableLoaderState::ProgramData {
+            slot: 42,
+            upgrade_authority_address: None,
+        })
+        .unwrap();
+    programdata_account.data_mut()[programdata_data_offset..].copy_from_slice(&elf);
+    programdata_account.set_rent_epoch(1);
+    bank.store_account_and_update_capitalization(&key1, &program_account);
+    bank.store_account_and_update_capitalization(&programdata_key, &programdata_account);
+    let program = bank.load_program(&key1);
+    assert!(program.is_ok());
+    let program = program.unwrap();
+    assert!(matches!(program.program, LoadedProgramType::LegacyV1(_)));
+    assert_eq!(
+        program.account_size,
+        program_account.data().len() + programdata_account.data().len()
+    );
+}
+
+#[test]
 fn test_bank_executor_cow() {
     solana_logger::setup();
 
@@ -7796,7 +7833,7 @@ fn test_bank_executor_cow() {
 
     let key1 = solana_sdk::pubkey::new_rand();
     let key2 = solana_sdk::pubkey::new_rand();
-    let executor: Arc<dyn Executor> = Arc::new(TestExecutor {});
+    let executor = Arc::new(LoadedProgram::default());
     let executable_account = AccountSharedData::from(Account {
         owner: bpf_loader_upgradeable::id(),
         executable: true,
@@ -7825,7 +7862,7 @@ fn test_bank_executor_cow() {
     assert_eq!(executors.borrow().visible.len(), 1);
 
     let mut executors = TransactionExecutorCache::default();
-    executors.set(key2, executor.clone(), false, true);
+    executors.set(key2, executor, false, true);
     let executors = Rc::new(RefCell::new(executors));
     fork1.store_executors_which_added_to_the_cache(&executors);
 
