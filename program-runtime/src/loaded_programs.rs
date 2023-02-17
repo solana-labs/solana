@@ -48,8 +48,10 @@ pub trait WorkingSlot {
     fn is_ancestor(&self, other: Slot) -> bool;
 }
 
+#[derive(Default)]
 pub enum LoadedProgramType {
     /// Tombstone for undeployed, closed or unloadable programs
+    #[default]
     Invalid,
     LegacyV0(VerifiedExecutable<RequisiteVerifier, InvokeContext<'static>>),
     LegacyV1(VerifiedExecutable<RequisiteVerifier, InvokeContext<'static>>),
@@ -65,12 +67,6 @@ impl Debug for LoadedProgramType {
             LoadedProgramType::LegacyV1(_) => write!(f, "LoadedProgramType::LegacyV1"),
             LoadedProgramType::BuiltIn(_) => write!(f, "LoadedProgramType::BuiltIn"),
         }
-    }
-}
-
-impl Default for LoadedProgramType {
-    fn default() -> Self {
-        LoadedProgramType::Invalid
     }
 }
 
