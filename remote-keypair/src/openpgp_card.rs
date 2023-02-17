@@ -92,6 +92,7 @@ pub struct OpenpgpCardInfo {
     serial: u32,
     cardholder_name: String,
     signing_uif: Option<UIF>,
+    pin_cds_valid_once: bool,
 }
 
 impl TryFrom<&mut OpenPgpTransaction<'_>> for OpenpgpCardInfo {
@@ -107,6 +108,7 @@ impl TryFrom<&mut OpenPgpTransaction<'_>> for OpenpgpCardInfo {
             serial: ard.application_id()?.serial(),
             cardholder_name: String::from_utf8_lossy(cardholder_info.name().get_or_insert(b"null")).to_string(),
             signing_uif: ard.uif_pso_cds()?,
+            pin_cds_valid_once: ard.pw_status_bytes()?.pw1_cds_valid_once(),
         })
     }
 }
@@ -126,6 +128,7 @@ impl OpenpgpCardInfo {
 pub struct OpenpgpCardKeypair {
     pgp: RefCell<OpenPgp>,
     pubkey: Pubkey,
+    pin_verified: RefCell<bool>,
 }
 
 impl OpenpgpCardKeypair {
@@ -180,6 +183,7 @@ impl OpenpgpCardKeypair {
         Ok(Self {
             pgp: RefCell::new(pgp),
             pubkey: Pubkey::from(pubkey),
+            pin_verified: RefCell::new(false),
         })
     }
 }
@@ -205,45 +209,52 @@ impl Signer for OpenpgpCardKeypair {
             )
         };
 
-        // Prompt user for PIN verification
-        let description = format!(
-            "\
-                Please unlock the card%0A\
-                %0A\
-                Manufacturer: {}%0A\
-                Serial: {:X}%0A\
-                Cardholder: {}\
-            ",
-            card_info.manufacturer,
-            card_info.serial,
-            card_info.cardholder_name,
-        );
-        let pin = 
-            if let Some(mut input) = PassphraseInput::with_default_binary() {
-                input
-                    .with_description(description.as_str())
-                    .with_prompt("PIN")
-                    .interact()
-            } else {
-                return Err(
-                    SignerError::Custom(String::from("pinentry binary not found, please install"))
-                )
+        // Prompt user for PIN verification if and only if
+        //   * Card indicates PIN is only valid for one PSO:CDS command at a time, or
+        //   * PIN has not yet been entered for the first time.
+        if card_info.pin_cds_valid_once || !*self.pin_verified.borrow() {
+            let description = format!(
+                "\
+                    Please unlock the card%0A\
+                    %0A\
+                    Manufacturer: {}%0A\
+                    Serial: {:X}%0A\
+                    Cardholder: {}\
+                ",
+                card_info.manufacturer,
+                card_info.serial,
+                card_info.cardholder_name,
+            );
+            let pin = 
+                if let Some(mut input) = PassphraseInput::with_default_binary() {
+                    input
+                        .with_description(description.as_str())
+                        .with_prompt("PIN")
+                        .interact()
+                } else {
+                    return Err(
+                        SignerError::Custom(String::from("pinentry binary not found, please install"))
+                    )
+                };
+            let pin = match pin {
+                Ok(secret) => secret,
+                Err(e) => return Err(
+                    SignerError::InvalidInput(format!("cannot read PIN from user: {}", e))
+                ),
             };
-        let pin = match pin {
-            Ok(secret) => secret,
-            Err(e) => return Err(
-                SignerError::InvalidInput(format!("cannot read PIN from user: {}", e))
-            ),
-        };
-        match opt.verify_pw1_sign(pin.expose_secret().as_bytes()) {
-            Err(e) => return Err(
-                SignerError::InvalidInput(format!("invalid PIN: {}", e))
-            ),
-            _ => (),
+            match opt.verify_pw1_sign(pin.expose_secret().as_bytes()) {
+                Ok(_) => {
+                    *self.pin_verified.borrow_mut() = true;
+                },
+                Err(e) => return Err(
+                    SignerError::InvalidInput(format!("invalid PIN: {}", e))
+                ),
+            }
         }
 
-        // Await user touch confirmation if and only if card supports touch
-        // and touch policy set anything other than "off"
+        // Await user touch confirmation if and only if
+        //   * Card supports touch confirmation, and
+        //   * Touch policy set anything other than "off".
         if let Some(signing_uif) = card_info.signing_uif {
             if signing_uif.touch_policy().touch_required() {
                 println!("Awaiting touch confirmation...");
@@ -258,7 +269,6 @@ impl Signer for OpenpgpCardKeypair {
                 SignerError::Protocol(format!("card failed to sign message: {}", e))
             ),
         };
-        println!("Message signed");
 
         Ok(Signature::new(&sig[..]))
     }

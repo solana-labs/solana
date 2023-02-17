@@ -8796,6 +8796,7 @@ dependencies = [
  "solana-program 1.16.0",
  "solana-remote-keypair",
  "solana-sdk 1.16.0",
+ "uriparse",
 ]
 
 [[package]]

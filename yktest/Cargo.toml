@@ -10,3 +10,4 @@ solana-client = { version = "1.16.0", path = "../client" }
 solana-program = { version = "1.16.0", path = "../sdk/program" }
 solana-remote-keypair = { version = "1.16.0", path = "../remote-keypair" }
 solana-sdk = { version = "1.16.0", path = "../sdk" }
+uriparse = "0.6.4"
