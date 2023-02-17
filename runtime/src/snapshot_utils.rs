@@ -1589,6 +1589,39 @@ fn streaming_unarchive_snapshot(
         .collect()
 }
 
+/// BankSnapshotInfo::new_from_dir() requires a few meta files to accept a snapshot dir
+/// as a valid one.  A dir unpacked from an archive lacks these files.  Fill them here to
+/// allow new_from_dir() checks to pass.  These checks are not needed for unpacked dirs,
+/// but it is not clean to add another flag to new_from_dir() to skip them.
+fn fill_snapshot_meta_files_for_unchived_snapshot(unpack_dir: impl AsRef<Path>) -> Result<()> {
+    let snapshots_dir = unpack_dir.as_ref().join("snapshots");
+    if !snapshots_dir.is_dir() {
+        return Err(SnapshotError::NoSnapshotSlotDir(snapshots_dir));
+    }
+
+    // The unpacked dir has a single slot dir, which is the snapshot slot dir.
+    let slot_dir = fs::read_dir(&snapshots_dir)
+        .unwrap()
+        .find(|entry| entry.as_ref().unwrap().path().is_dir())
+        .unwrap()
+        .unwrap()
+        .path();
+
+    let version_file = unpack_dir.as_ref().join(SNAPSHOT_VERSION_FILENAME);
+    fs::hard_link(version_file, slot_dir.join(SNAPSHOT_VERSION_FILENAME))?;
+
+    let status_cache_file = snapshots_dir.join(SNAPSHOT_STATUS_CACHE_FILENAME);
+    fs::hard_link(
+        status_cache_file,
+        slot_dir.join(SNAPSHOT_STATUS_CACHE_FILENAME),
+    )?;
+
+    let state_complete_file = slot_dir.join(SNAPSHOT_STATE_COMPLETE_FILENAME);
+    fs::File::create(state_complete_file)?;
+
+    Ok(())
+}
+
 /// Perform the common tasks when unarchiving a snapshot.  Handles creating the temporary
 /// directories, untaring, reading the version file, and then returning those fields plus the
 /// rebuilt storage
@@ -1633,6 +1666,8 @@ where
         measure_name
     );
     info!("{}", measure_untar);
+
+    fill_snapshot_meta_files_for_unchived_snapshot(&unpack_dir)?;
 
     let RebuiltSnapshotStorage {
         snapshot_version,
