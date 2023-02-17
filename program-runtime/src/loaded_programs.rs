@@ -193,6 +193,10 @@ impl LoadedProgram {
             usage_counter: AtomicU64::default(),
         }
     }
+
+    pub fn is_tombstone(&self) -> bool {
+        matches!(self.program, LoadedProgramType::Invalid)
+    }
 }
 
 #[derive(Debug, Default)]
@@ -322,6 +326,7 @@ mod tests {
     fn test_tombstone() {
         let tombstone = LoadedProgram::new_tombstone();
         assert!(matches!(tombstone.program, LoadedProgramType::Invalid));
+        assert!(tombstone.is_tombstone());
     }
 
     struct TestForkGraph {

@@ -213,6 +213,19 @@ pub fn load_program_from_account(
 
     let (programdata_offset, deployment_slot) =
         get_programdata_offset_and_depoyment_offset(&log_collector, program, programdata)?;
+
+    if let Some(ref tx_executor_cache) = tx_executor_cache {
+        if let Some(loaded_program) = tx_executor_cache.get(program.get_key()) {
+            if loaded_program.is_tombstone() {
+                // We cached that the Executor does not exist, abort
+                // This case can only happen once delay_visibility_of_program_deployment is active.
+                return Err(InstructionError::InvalidAccountData);
+            }
+            // Executor exists and is cached, use it
+            return Ok((loaded_program, None));
+        }
+    }
+
     let programdata_size = if programdata_offset != 0 {
         programdata.get_data().len()
     } else {
