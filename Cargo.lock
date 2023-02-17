@@ -5244,6 +5244,7 @@ version = "1.16.0"
 dependencies = [
  "chrono",
  "clap 2.34.0",
+ "openpgp-card",
  "rpassword",
  "solana-perf",
  "solana-remote-keypair",

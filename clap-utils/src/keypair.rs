@@ -1133,6 +1133,8 @@ fn sanitize_seed_phrase(seed_phrase: &str) -> String {
 
 #[cfg(test)]
 mod tests {
+    use openpgp_card::card_do::ApplicationIdentifier;
+
     use {
         super::*,
         crate::offline::OfflineArgs,
@@ -1246,6 +1248,7 @@ mod tests {
             } if p == relative_path_str)
         );
 
+        // ledger signer source tests
         let usb = "usb://ledger".to_string();
         let expected_locator = RemoteWalletLocator {
             manufacturer: Manufacturer::Ledger,
@@ -1255,7 +1258,8 @@ mod tests {
                 kind: SignerSourceKind::Usb(u),
                 derivation_path: None,
                 legacy: false,
-            } if u == expected_locator));
+            } if u == expected_locator)
+        );
         let usb = "usb://ledger?key=0/0".to_string();
         let expected_locator = RemoteWalletLocator {
             manufacturer: Manufacturer::Ledger,
@@ -1266,7 +1270,39 @@ mod tests {
                 kind: SignerSourceKind::Usb(u),
                 derivation_path: d,
                 legacy: false,
-            } if u == expected_locator && d == expected_derivation_path));
+            } if u == expected_locator && d == expected_derivation_path)
+        );
+
+        // pgpcard signer source tests
+        let pgpcard = "pgpcard://".to_string();
+        let expected_locator = OpenpgpCardLocator {
+            aid: None
+        };
+        assert!(matches!(parse_signer_source(pgpcard).unwrap(), SignerSource {
+                kind: SignerSourceKind::Pgpcard(p),
+                derivation_path: None,
+                legacy: false,
+            } if p == expected_locator)
+        );
+        let pgpcard = "pgpcard://D2760001240103040006123456780000".to_string();
+        let expected_ident_bytes: [u8; 16] = [
+            0xD2, 0x76, 0x00, 0x01, 0x24,   // preamble
+            0x01,                           // application id (OpenPGP)
+            0x03, 0x04,                     // version
+            0x00, 0x06,                     // manufacturer id
+            0x12, 0x34, 0x56, 0x78,         // serial number
+            0x00, 0x00                      // reserved
+        ];
+        let expected_locator = OpenpgpCardLocator {
+            aid: Some(ApplicationIdentifier::try_from(&expected_ident_bytes[..]).unwrap())
+        };
+        assert!(matches!(parse_signer_source(pgpcard).unwrap(), SignerSource {
+                kind: SignerSourceKind::Pgpcard(p),
+                derivation_path: None,
+                legacy: false,
+            } if p == expected_locator)
+        );
+
         // Catchall into SignerSource::Filepath fails
         let junk = "sometextthatisnotapubkeyorfile".to_string();
         assert!(Pubkey::from_str(&junk).is_err());

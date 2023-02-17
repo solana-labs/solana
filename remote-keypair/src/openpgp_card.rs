@@ -36,8 +36,9 @@ impl From<Infallible> for LocatorError {
     }
 }
 
+#[derive(Debug, PartialEq, Eq)]
 pub struct Locator {
-    aid: Option<ApplicationIdentifier>,
+    pub aid: Option<ApplicationIdentifier>,
 }
 
 impl Locator {
