@@ -2571,7 +2571,7 @@ pub fn package_and_archive_full_snapshot(
         None,
     );
 
-    let snapshot_package = SnapshotPackage::new(accounts_package, accounts_hash);
+    let snapshot_package = SnapshotPackage::new(accounts_package, accounts_hash.into());
     archive_snapshot_package(
         &snapshot_package,
         full_snapshot_archives_dir,
@@ -2625,7 +2625,7 @@ pub fn package_and_archive_incremental_snapshot(
         None,
     );
 
-    let snapshot_package = SnapshotPackage::new(accounts_package, accounts_hash);
+    let snapshot_package = SnapshotPackage::new(accounts_package, accounts_hash.into());
     archive_snapshot_package(
         &snapshot_package,
         full_snapshot_archives_dir,

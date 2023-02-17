@@ -7023,7 +7023,7 @@ impl Bank {
             .get_accounts_hash()
             .expect("accounts hash is required to get snapshot hash");
         let epoch_accounts_hash = self.get_epoch_accounts_hash_to_serialize();
-        SnapshotHash::new(&accounts_hash, epoch_accounts_hash.as_ref())
+        SnapshotHash::new(&accounts_hash.into(), epoch_accounts_hash.as_ref())
     }
 
     pub fn get_thread_pool(&self) -> &ThreadPool {

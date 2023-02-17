@@ -1111,7 +1111,36 @@ pub enum ZeroLamportAccounts {
 
 /// Hash of accounts
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
+pub enum AccountsHashEnum {
+    Full(AccountsHash),
+    Incremental(IncrementalAccountsHash),
+}
+impl AccountsHashEnum {
+    pub fn as_hash(&self) -> &Hash {
+        match self {
+            AccountsHashEnum::Full(AccountsHash(hash))
+            | AccountsHashEnum::Incremental(IncrementalAccountsHash(hash)) => hash,
+        }
+    }
+}
+impl From<AccountsHash> for AccountsHashEnum {
+    fn from(accounts_hash: AccountsHash) -> Self {
+        AccountsHashEnum::Full(accounts_hash)
+    }
+}
+impl From<IncrementalAccountsHash> for AccountsHashEnum {
+    fn from(incremental_accounts_hash: IncrementalAccountsHash) -> Self {
+        AccountsHashEnum::Incremental(incremental_accounts_hash)
+    }
+}
+
+/// Hash of accounts
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub struct AccountsHash(pub Hash);
+/// Hash of accounts that includes zero-lamport accounts
+/// Used with incremental snapshots
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+pub struct IncrementalAccountsHash(pub Hash);
 
 /// Hash of accounts written in a single slot
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]

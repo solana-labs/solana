@@ -2,7 +2,7 @@ use {
     crate::{
         accounts::Accounts,
         accounts_db::AccountStorageEntry,
-        accounts_hash::AccountsHash,
+        accounts_hash::{AccountsHash, AccountsHashEnum},
         bank::Bank,
         epoch_accounts_hash::EpochAccountsHash,
         rent_collector::RentCollector,
@@ -251,7 +251,7 @@ pub struct SnapshotPackage {
 }
 
 impl SnapshotPackage {
-    pub fn new(accounts_package: AccountsPackage, accounts_hash: AccountsHash) -> Self {
+    pub fn new(accounts_package: AccountsPackage, accounts_hash: AccountsHashEnum) -> Self {
         let AccountsPackageType::Snapshot(snapshot_type) = accounts_package.package_type else {
             panic!("The AccountsPackage must be of type Snapshot in order to make a SnapshotPackage!");
         };
