@@ -180,12 +180,12 @@ impl LoadedProgram {
         }
     }
 
-    pub fn new_tombstone() -> Self {
+    pub fn new_tombstone(deployment_slot: Slot) -> Self {
         Self {
             program: LoadedProgramType::Invalid,
             account_size: 0,
-            deployment_slot: 0,
-            effective_slot: 0,
+            deployment_slot,
+            effective_slot: deployment_slot,
             usage_counter: AtomicU64::default(),
         }
     }
@@ -219,12 +219,8 @@ pub enum LoadedProgramEntry {
 }
 
 impl LoadedPrograms {
-    /// Inserts a single entry wrapped in an Arc
-    pub fn insert_entry_arc(
-        &mut self,
-        key: Pubkey,
-        entry: Arc<LoadedProgram>,
-    ) -> LoadedProgramEntry {
+    /// Inserts a single entry
+    pub fn insert_entry(&mut self, key: Pubkey, entry: Arc<LoadedProgram>) -> LoadedProgramEntry {
         let second_level = self.entries.entry(key).or_insert_with(Vec::new);
         let index = second_level
             .iter()
@@ -243,9 +239,29 @@ impl LoadedPrograms {
         LoadedProgramEntry::WasVacant(entry)
     }
 
-    /// Inserts a single entry
-    pub fn insert_entry(&mut self, key: Pubkey, entry: LoadedProgram) -> LoadedProgramEntry {
-        self.insert_entry_arc(key, Arc::new(entry))
+    /// Insert or replace the current entry with a tombstone.
+    /// This behaves differently than `insert_entry()` in case there's currently a program at the
+    /// `deploytment_slot`. It'll replace the current entry with a tombstone, whereas `insert_entry()`
+    /// would retain and return the current entry.
+    pub fn set_tombstone(&mut self, key: Pubkey, deployment_slot: Slot) -> Arc<LoadedProgram> {
+        let tombstone = Arc::new(LoadedProgram::new_tombstone(deployment_slot));
+        let second_level = self.entries.entry(key).or_insert_with(Vec::new);
+        let index = second_level
+            .iter()
+            .position(|at| at.effective_slot >= tombstone.effective_slot);
+        if let Some(index) = index {
+            let existing = second_level
+                .get(index)
+                .expect("Missing entry, even though position was found");
+            if existing.deployment_slot == tombstone.deployment_slot
+                && existing.effective_slot >= tombstone.effective_slot
+            {
+                second_level.splice(index..=index, [tombstone.clone()]);
+                return tombstone;
+            }
+        }
+        second_level.insert(index.unwrap_or(second_level.len()), tombstone.clone());
+        tombstone
     }
 
     /// Before rerooting the blockstore this removes all programs of orphan forks
@@ -313,6 +329,7 @@ impl LoadedPrograms {
 
 #[cfg(test)]
 mod tests {
+    use solana_rbpf::vm::BuiltInProgram;
     use {
         crate::loaded_programs::{
             BlockRelation, ForkGraph, LoadedProgram, LoadedProgramEntry, LoadedProgramType,
@@ -326,11 +343,67 @@ mod tests {
         },
     };
 
+    fn new_test_builtin_program(deployment_slot: Slot, effective_slot: Slot) -> Arc<LoadedProgram> {
+        Arc::new(LoadedProgram {
+            program: LoadedProgramType::BuiltIn(BuiltInProgram::default()),
+            account_size: 0,
+            deployment_slot,
+            effective_slot,
+            usage_counter: AtomicU64::default(),
+        })
+    }
+
     #[test]
     fn test_tombstone() {
-        let tombstone = LoadedProgram::new_tombstone();
+        let tombstone = LoadedProgram::new_tombstone(0);
         assert!(matches!(tombstone.program, LoadedProgramType::Invalid));
         assert!(tombstone.is_tombstone());
+        assert_eq!(tombstone.deployment_slot, 0);
+        assert_eq!(tombstone.effective_slot, 0);
+
+        let tombstone = LoadedProgram::new_tombstone(100);
+        assert!(matches!(tombstone.program, LoadedProgramType::Invalid));
+        assert!(tombstone.is_tombstone());
+        assert_eq!(tombstone.deployment_slot, 100);
+        assert_eq!(tombstone.effective_slot, 100);
+
+        let mut cache = LoadedPrograms::default();
+        let program1 = Pubkey::new_unique();
+        let tombstone = cache.set_tombstone(program1, 10);
+        let second_level = &cache.entries[&program1];
+        assert_eq!(second_level.len(), 1);
+        assert!(second_level[0].is_tombstone());
+        assert_eq!(tombstone.deployment_slot, 10);
+        assert_eq!(tombstone.effective_slot, 10);
+
+        // Add a program at slot 50, and a tombstone for the program at slot 60
+        let program2 = Pubkey::new_unique();
+        assert!(matches!(
+            cache.insert_entry(program2, new_test_builtin_program(50, 51)),
+            LoadedProgramEntry::WasVacant(_)
+        ));
+        let second_level = &cache.entries[&program2];
+        assert_eq!(second_level.len(), 1);
+        assert!(!second_level[0].is_tombstone());
+
+        let tombstone = cache.set_tombstone(program2, 60);
+        let second_level = &cache.entries[&program2];
+        assert_eq!(second_level.len(), 2);
+        assert!(!second_level[0].is_tombstone());
+        assert!(second_level[1].is_tombstone());
+        assert!(tombstone.is_tombstone());
+        assert_eq!(tombstone.deployment_slot, 60);
+        assert_eq!(tombstone.effective_slot, 60);
+
+        // Replace the program at slot 50 with a tombstone
+        let tombstone = cache.set_tombstone(program2, 50);
+        let second_level = &cache.entries[&program2];
+        assert_eq!(second_level.len(), 2);
+        assert!(second_level[0].is_tombstone());
+        assert!(second_level[1].is_tombstone());
+        assert!(tombstone.is_tombstone());
+        assert_eq!(tombstone.deployment_slot, 50);
+        assert_eq!(tombstone.effective_slot, 50);
     }
 
     struct TestForkGraph {
@@ -472,14 +545,14 @@ mod tests {
         }
     }
 
-    fn new_test_loaded_program(deployment_slot: Slot, effective_slot: Slot) -> LoadedProgram {
-        LoadedProgram {
+    fn new_test_loaded_program(deployment_slot: Slot, effective_slot: Slot) -> Arc<LoadedProgram> {
+        Arc::new(LoadedProgram {
             program: LoadedProgramType::Invalid,
             account_size: 0,
             deployment_slot,
             effective_slot,
             usage_counter: AtomicU64::default(),
-        }
+        })
     }
 
     fn match_slot(

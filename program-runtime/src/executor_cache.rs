@@ -43,7 +43,7 @@ impl TransactionExecutorCache {
 
     pub fn set_tombstone(&mut self, key: Pubkey) {
         self.visible
-            .insert(key, Arc::new(LoadedProgram::new_tombstone()));
+            .insert(key, Arc::new(LoadedProgram::new_tombstone(0)));
     }
 
     pub fn set(

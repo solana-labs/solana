@@ -4360,7 +4360,7 @@ impl Bank {
         filter_programs_time.stop();
 
         let mut filter_missing_programs_time = Measure::start("filter_missing_programs_accounts");
-        let (mut loaded_programs, missing_programs) = self
+        let (mut loaded_programs_for_txs, missing_programs) = self
             .loaded_programs_cache
             .read()
             .unwrap()
@@ -4375,30 +4375,30 @@ impl Bank {
                         .loaded_programs_cache
                         .write()
                         .unwrap()
-                        .insert_entry_arc(*pubkey, program)
+                        .insert_entry(*pubkey, program)
                     {
                         LoadedProgramEntry::WasOccupied(entry) => {
-                            loaded_programs.insert(*pubkey, entry);
+                            loaded_programs_for_txs.insert(*pubkey, entry);
                         }
                         LoadedProgramEntry::WasVacant(new_entry) => {
-                            loaded_programs.insert(*pubkey, new_entry);
+                            loaded_programs_for_txs.insert(*pubkey, new_entry);
                         }
                     }
                 }
 
                 Err(e) => {
-                    // Create a tombstone for the program in the cache??
+                    // Create a tombstone for the program in the cache
                     debug!("Failed to load program {}, error {:?}", pubkey, e);
-                    let tombstone = Arc::new(LoadedProgram::new_tombstone());
-                    self.loaded_programs_cache
+                    let tombstone = self
+                        .loaded_programs_cache
                         .write()
                         .unwrap()
-                        .insert_entry_arc(*pubkey, tombstone.clone());
-                    loaded_programs.insert(*pubkey, tombstone);
+                        .set_tombstone(*pubkey, self.slot);
+                    loaded_programs_for_txs.insert(*pubkey, tombstone);
                 }
             });
 
-        (program_accounts_map, loaded_programs)
+        (program_accounts_map, loaded_programs_for_txs)
     }
 
     #[allow(clippy::type_complexity)]
