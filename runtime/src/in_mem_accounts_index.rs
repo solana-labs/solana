@@ -230,7 +230,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
     // only called in debug code paths
     pub fn keys(&self) -> Vec<Pubkey> {
         Self::update_stat(&self.stats().keys, 1);
-        // easiest implementation is to load evrything from disk into cache and return the keys
+        // easiest implementation is to load everything from disk into cache and return the keys
         let evictions_guard = EvictionsGuard::lock(self);
         self.put_range_in_cache(&None::<&RangeInclusive<Pubkey>>, &evictions_guard);
         let keys = self.map_internal.read().unwrap().keys().cloned().collect();
