@@ -188,7 +188,7 @@ fn test_accounts_serialize_style(serde_style: SerdeStyle) {
     let accounts_hash = AccountsHash(Hash::new_unique());
     accounts
         .accounts_db
-        .set_accounts_hash_from_snapshot(slot, accounts_hash);
+        .set_accounts_hash_for_tests(slot, accounts_hash);
 
     let mut writer = Cursor::new(vec![]);
     accountsdb_to_stream(
@@ -521,11 +521,11 @@ fn test_extra_fields_eof() {
     bank.rc
         .accounts
         .accounts_db
-        .set_accounts_delta_hash_from_snapshot(bank.slot(), AccountsDeltaHash(Hash::new_unique()));
+        .set_accounts_delta_hash_for_tests(bank.slot(), AccountsDeltaHash(Hash::new_unique()));
     bank.rc
         .accounts
         .accounts_db
-        .set_accounts_hash_from_snapshot(bank.slot(), AccountsHash(Hash::new_unique()));
+        .set_accounts_hash_for_tests(bank.slot(), AccountsHash(Hash::new_unique()));
 
     // Set extra fields
     bank.fee_rate_governor.lamports_per_signature = 7000;
@@ -657,11 +657,11 @@ fn test_blank_extra_fields() {
     bank.rc
         .accounts
         .accounts_db
-        .set_accounts_delta_hash_from_snapshot(bank.slot(), AccountsDeltaHash(Hash::new_unique()));
+        .set_accounts_delta_hash_for_tests(bank.slot(), AccountsDeltaHash(Hash::new_unique()));
     bank.rc
         .accounts
         .accounts_db
-        .set_accounts_hash_from_snapshot(bank.slot(), AccountsHash(Hash::new_unique()));
+        .set_accounts_hash_for_tests(bank.slot(), AccountsHash(Hash::new_unique()));
 
     // Set extra fields
     bank.fee_rate_governor.lamports_per_signature = 7000;
@@ -733,14 +733,11 @@ mod test_bank_serialize {
         bank.rc
             .accounts
             .accounts_db
-            .set_accounts_delta_hash_from_snapshot(
-                bank.slot(),
-                AccountsDeltaHash(Hash::new_unique()),
-            );
+            .set_accounts_delta_hash_for_tests(bank.slot(), AccountsDeltaHash(Hash::new_unique()));
         bank.rc
             .accounts
             .accounts_db
-            .set_accounts_hash_from_snapshot(bank.slot(), AccountsHash(Hash::new_unique()));
+            .set_accounts_hash_for_tests(bank.slot(), AccountsHash(Hash::new_unique()));
         let snapshot_storages = bank
             .rc
             .accounts

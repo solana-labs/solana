@@ -9501,6 +9501,15 @@ pub mod tests {
         pub fn set_accounts_hash_for_tests(&self, slot: Slot, accounts_hash: AccountsHash) {
             self.set_accounts_hash(slot, accounts_hash);
         }
+
+        // used by serde_snapshot tests
+        pub fn set_accounts_delta_hash_for_tests(
+            &self,
+            slot: Slot,
+            accounts_delta_hash: AccountsDeltaHash,
+        ) {
+            self.set_accounts_delta_hash(slot, accounts_delta_hash);
+        }
     }
 
     /// This impl exists until this feature is activated:
