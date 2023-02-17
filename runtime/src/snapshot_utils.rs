@@ -199,9 +199,7 @@ impl BankSnapshotInfo {
         } else if bank_snapshot_post_path.is_file() {
             BankSnapshotType::Post
         } else {
-            return Err(SnapshotError::MissingSnapshotFile(
-                bank_snapshot_dir.clone(),
-            ));
+            return Err(SnapshotError::MissingSnapshotFile(bank_snapshot_dir));
         };
 
         Ok(BankSnapshotInfo {
@@ -1919,18 +1917,10 @@ pub fn get_highest_incremental_snapshot_archive_slot(
 /// Get the full snapshot with the highest slot in a directory
 /// Assume every bank snapshot directory is a full snapshot for now.  Will support incremental sanpshot
 /// later.
-pub fn get_highest_full_snapshot(snapshots_dir: impl AsRef<Path>) -> Result<BankSnapshotInfo> {
+pub fn get_highest_bank_snapshot(snapshots_dir: impl AsRef<Path>) -> Result<BankSnapshotInfo> {
     let bank_snapshots = get_bank_snapshots(&snapshots_dir);
-
     do_get_highest_bank_snapshot(bank_snapshots)
         .ok_or_else(|| SnapshotError::NoSnapshotSlotDir(snapshots_dir.as_ref().to_path_buf()))
-}
-
-pub fn get_highest_incremental_snapshot(
-    _snapshots_dir: impl AsRef<Path>,
-    _full_snapshot_slot: Slot,
-) -> Option<BankSnapshotInfo> {
-    None // Will handle the incremental case later
 }
 
 /// Get the path (and metadata) for the full snapshot archive with the highest slot in a directory
@@ -4630,7 +4620,7 @@ mod tests {
     }
 
     #[test]
-    fn test_get_highest_full_snapshot() {
+    fn test_get_highest_bank_snapshot() {
         solana_logger::setup();
 
         let genesis_config = GenesisConfig::default();
@@ -4665,15 +4655,22 @@ mod tests {
             bank_forks.insert(bank);
         }
 
-        let snapshot = get_highest_full_snapshot(bank_snapshots_dir).unwrap();
-
+        let snapshot = get_highest_bank_snapshot(bank_snapshots_dir).unwrap();
         assert_eq!(snapshot.slot, 4);
 
         let complete_flag_file = snapshot.snapshot_dir.join(SNAPSHOT_STATE_COMPLETE_FILENAME);
         fs::remove_file(complete_flag_file).unwrap();
-
-        let snapshot = get_highest_full_snapshot(bank_snapshots_dir).unwrap();
-
+        let snapshot = get_highest_bank_snapshot(bank_snapshots_dir).unwrap();
         assert_eq!(snapshot.slot, 3);
+
+        let snapshot_version_file = snapshot.snapshot_dir.join(SNAPSHOT_VERSION_FILENAME);
+        fs::remove_file(snapshot_version_file).unwrap();
+        let snapshot = get_highest_bank_snapshot(bank_snapshots_dir).unwrap();
+        assert_eq!(snapshot.slot, 2);
+
+        let status_cache_file = snapshot.snapshot_dir.join(SNAPSHOT_STATUS_CACHE_FILENAME);
+        fs::remove_file(status_cache_file).unwrap();
+        let snapshot = get_highest_bank_snapshot(bank_snapshots_dir).unwrap();
+        assert_eq!(snapshot.slot, 1);
     }
 }
