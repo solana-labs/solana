@@ -46,6 +46,9 @@ mod decision_maker;
 mod forwarder;
 mod packet_receiver;
 
+#[allow(dead_code)]
+mod metrics_reporter_service;
+
 // Fixed thread size seems to be fastest on GCP setup
 pub const NUM_THREADS: u32 = 6;
 
