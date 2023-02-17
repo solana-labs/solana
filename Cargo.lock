@@ -6479,6 +6479,7 @@ dependencies = [
 name = "solana-sbpf-loader-program"
 version = "1.16.0"
 dependencies = [
+ "bincode",
  "log",
  "rand 0.8.5",
  "solana-measure",

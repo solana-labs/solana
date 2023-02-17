@@ -546,3 +546,743 @@ pub fn process_instruction(
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use {
+        super::*,
+        solana_sdk::{
+            account::{
+                create_account_shared_data_for_test, AccountSharedData, ReadableAccount,
+                WritableAccount,
+            },
+            account_utils::StateMut,
+            native_loader,
+            sysvar::{clock, rent},
+            transaction_context::{IndexOfAccount, InstructionAccount, TransactionContext},
+        },
+        std::{fs::File, io::Read, path::Path},
+    };
+
+    fn process_instruction(
+        mut program_indices: Vec<IndexOfAccount>,
+        instruction_data: &[u8],
+        mut transaction_accounts: Vec<(Pubkey, AccountSharedData)>,
+        instruction_accounts: &[(IndexOfAccount, bool, bool)],
+        expected_result: Result<(), InstructionError>,
+    ) -> Vec<AccountSharedData> {
+        program_indices.insert(0, transaction_accounts.len() as IndexOfAccount);
+        let processor_account = AccountSharedData::new(0, 0, &native_loader::id());
+        transaction_accounts.push((sbpf_loader::id(), processor_account));
+        let compute_budget = ComputeBudget::default();
+        let mut transaction_context = TransactionContext::new(
+            transaction_accounts,
+            Some(rent::Rent::default()),
+            compute_budget.max_invoke_stack_height,
+            compute_budget.max_instruction_trace_length,
+        );
+        transaction_context.enable_cap_accounts_data_allocations_per_transaction();
+        let instruction_accounts = instruction_accounts
+            .iter()
+            .enumerate()
+            .map(
+                |(instruction_account_index, (index_in_transaction, is_signer, is_writable))| {
+                    InstructionAccount {
+                        index_in_transaction: *index_in_transaction,
+                        index_in_caller: *index_in_transaction,
+                        index_in_callee: instruction_account_index as IndexOfAccount,
+                        is_signer: *is_signer,
+                        is_writable: *is_writable,
+                    }
+                },
+            )
+            .collect::<Vec<_>>();
+        let mut invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
+        invoke_context
+            .transaction_context
+            .get_next_instruction_context()
+            .unwrap()
+            .configure(&program_indices, &instruction_accounts, instruction_data);
+        let result = invoke_context
+            .push()
+            .and_then(|_| super::process_instruction(1, &mut invoke_context));
+        let pop_result = invoke_context.pop();
+        assert_eq!(result.and(pop_result), expected_result);
+        let mut transaction_accounts = transaction_context.deconstruct_without_keys().unwrap();
+        transaction_accounts.pop();
+        transaction_accounts
+    }
+
+    fn load_program_account_from_elf(
+        is_deployed: bool,
+        authority_address: Option<Pubkey>,
+        path: &str,
+    ) -> AccountSharedData {
+        let path = Path::new("test_elfs/out/").join(path).with_extension("so");
+        let mut file = File::open(path).expect("file open failed");
+        let mut elf_bytes = Vec::new();
+        file.read_to_end(&mut elf_bytes).unwrap();
+        let rent = rent::Rent::default();
+        let account_size =
+            sbpf_loader::SbfLoaderState::program_data_offset().saturating_add(elf_bytes.len());
+        let mut program_account = AccountSharedData::new(
+            rent.minimum_balance(account_size),
+            account_size,
+            &sbpf_loader::id(),
+        );
+        program_account
+            .set_state(&sbpf_loader::SbfLoaderState {
+                slot: 0,
+                is_deployed,
+                authority_address,
+            })
+            .unwrap();
+        program_account.data_mut()[sbpf_loader::SbfLoaderState::program_data_offset()..]
+            .copy_from_slice(&elf_bytes);
+        program_account
+    }
+
+    fn clock() -> AccountSharedData {
+        let clock = clock::Clock {
+            slot: 1000,
+            ..clock::Clock::default()
+        };
+        create_account_shared_data_for_test(&clock)
+    }
+
+    #[test]
+    fn test_loader_instruction_general_errors() {
+        let authority_address = Pubkey::new_unique();
+        let transaction_accounts = vec![
+            (
+                Pubkey::new_unique(),
+                load_program_account_from_elf(true, Some(authority_address), "noop"),
+            ),
+            (
+                authority_address,
+                AccountSharedData::new(0, 0, &Pubkey::new_unique()),
+            ),
+            (
+                Pubkey::new_unique(),
+                AccountSharedData::new(0, 0, &sbpf_loader::id()),
+            ),
+            (
+                Pubkey::new_unique(),
+                load_program_account_from_elf(false, None, "noop"),
+            ),
+            (
+                clock::id(),
+                create_account_shared_data_for_test(&clock::Clock::default()),
+            ),
+            (
+                rent::id(),
+                create_account_shared_data_for_test(&rent::Rent::default()),
+            ),
+        ];
+
+        // Error: Missing program account
+        process_instruction(
+            vec![],
+            &bincode::serialize(&SbfLoaderInstruction::Retract).unwrap(),
+            transaction_accounts.clone(),
+            &[],
+            Err(InstructionError::NotEnoughAccountKeys),
+        );
+
+        // Error: Missing authority account
+        process_instruction(
+            vec![],
+            &bincode::serialize(&SbfLoaderInstruction::Retract).unwrap(),
+            transaction_accounts.clone(),
+            &[(0, false, true)],
+            Err(InstructionError::NotEnoughAccountKeys),
+        );
+
+        // Error: Program not owned by loader
+        process_instruction(
+            vec![],
+            &bincode::serialize(&SbfLoaderInstruction::Retract).unwrap(),
+            transaction_accounts.clone(),
+            &[(1, false, true), (1, true, false)],
+            Err(InstructionError::InvalidAccountOwner),
+        );
+
+        // Error: Program is uninitialized
+        process_instruction(
+            vec![],
+            &bincode::serialize(&SbfLoaderInstruction::Retract).unwrap(),
+            transaction_accounts.clone(),
+            &[(2, false, true), (1, true, false)],
+            Err(InstructionError::InvalidAccountData),
+        );
+
+        // Error: Program is not writeable
+        process_instruction(
+            vec![],
+            &bincode::serialize(&SbfLoaderInstruction::Retract).unwrap(),
+            transaction_accounts.clone(),
+            &[(0, false, false), (1, true, false)],
+            Err(InstructionError::InvalidArgument),
+        );
+
+        // Error: Authority did not sign
+        process_instruction(
+            vec![],
+            &bincode::serialize(&SbfLoaderInstruction::Retract).unwrap(),
+            transaction_accounts.clone(),
+            &[(0, false, true), (1, false, false)],
+            Err(InstructionError::MissingRequiredSignature),
+        );
+
+        // Error: Program is finalized
+        process_instruction(
+            vec![],
+            &bincode::serialize(&SbfLoaderInstruction::Retract).unwrap(),
+            transaction_accounts.clone(),
+            &[(3, false, true), (1, true, false)],
+            Err(InstructionError::Immutable),
+        );
+
+        // Error: Incorrect authority provided
+        process_instruction(
+            vec![],
+            &bincode::serialize(&SbfLoaderInstruction::Retract).unwrap(),
+            transaction_accounts,
+            &[(0, false, true), (2, true, false)],
+            Err(InstructionError::IncorrectAuthority),
+        );
+    }
+
+    #[test]
+    fn test_loader_instruction_write() {
+        let authority_address = Pubkey::new_unique();
+        let mut transaction_accounts = vec![
+            (
+                Pubkey::new_unique(),
+                AccountSharedData::new(0, 0, &sbpf_loader::id()),
+            ),
+            (
+                authority_address,
+                AccountSharedData::new(0, 0, &Pubkey::new_unique()),
+            ),
+            (
+                Pubkey::new_unique(),
+                AccountSharedData::new(10000000, 0, &sbpf_loader::id()),
+            ),
+            (
+                Pubkey::new_unique(),
+                load_program_account_from_elf(true, Some(authority_address), "noop"),
+            ),
+            (
+                clock::id(),
+                create_account_shared_data_for_test(&clock::Clock::default()),
+            ),
+            (
+                rent::id(),
+                create_account_shared_data_for_test(&rent::Rent::default()),
+            ),
+        ];
+
+        // Initialize account by first write
+        let accounts = process_instruction(
+            vec![],
+            &bincode::serialize(&SbfLoaderInstruction::Write {
+                offset: 0,
+                bytes: vec![0, 1, 2, 3],
+            })
+            .unwrap(),
+            transaction_accounts.clone(),
+            &[(0, false, true), (1, true, false), (2, true, true)],
+            Ok(()),
+        );
+        assert_eq!(
+            accounts[0].data().len(),
+            sbpf_loader::SbfLoaderState::program_data_offset().saturating_add(4),
+        );
+        assert_eq!(accounts[0].lamports(), 1252800);
+        assert_eq!(
+            accounts[2].lamports(),
+            transaction_accounts[2]
+                .1
+                .lamports()
+                .saturating_sub(accounts[0].lamports()),
+        );
+
+        // Extend account by writing at the end
+        transaction_accounts[0].1 = accounts[0].clone();
+        let accounts = process_instruction(
+            vec![],
+            &bincode::serialize(&SbfLoaderInstruction::Write {
+                offset: 4,
+                bytes: vec![4, 5, 6, 7],
+            })
+            .unwrap(),
+            transaction_accounts.clone(),
+            &[(0, false, true), (1, true, false), (2, true, true)],
+            Ok(()),
+        );
+        assert_eq!(
+            accounts[0].data().len(),
+            sbpf_loader::SbfLoaderState::program_data_offset().saturating_add(8),
+        );
+        assert_eq!(
+            accounts[0].lamports(),
+            transaction_accounts[0].1.lamports().saturating_add(27840),
+        );
+        assert_eq!(
+            accounts[2].lamports(),
+            transaction_accounts[2].1.lamports().saturating_sub(
+                accounts[0]
+                    .lamports()
+                    .saturating_sub(transaction_accounts[0].1.lamports()),
+            ),
+        );
+
+        // Overwrite existing data (no payer required)
+        transaction_accounts[0].1 = accounts[0].clone();
+        let accounts = process_instruction(
+            vec![],
+            &bincode::serialize(&SbfLoaderInstruction::Write {
+                offset: 2,
+                bytes: vec![8, 8, 8, 8],
+            })
+            .unwrap(),
+            transaction_accounts.clone(),
+            &[(0, false, true), (1, true, false)],
+            Ok(()),
+        );
+        assert_eq!(
+            accounts[0].data().len(),
+            sbpf_loader::SbfLoaderState::program_data_offset().saturating_add(8),
+        );
+        assert_eq!(accounts[0].lamports(), transaction_accounts[0].1.lamports());
+
+        // Error: Program is not retracted
+        process_instruction(
+            vec![],
+            &bincode::serialize(&SbfLoaderInstruction::Write {
+                offset: 8,
+                bytes: vec![8, 8, 8, 8],
+            })
+            .unwrap(),
+            transaction_accounts.clone(),
+            &[(3, false, true), (1, true, false), (2, true, true)],
+            Err(InstructionError::InvalidArgument),
+        );
+
+        // Error: Payer did not sign
+        process_instruction(
+            vec![],
+            &bincode::serialize(&SbfLoaderInstruction::Write {
+                offset: 8,
+                bytes: vec![8, 8, 8, 8],
+            })
+            .unwrap(),
+            transaction_accounts.clone(),
+            &[(0, false, true), (1, true, false), (2, false, true)],
+            Err(InstructionError::MissingRequiredSignature),
+        );
+
+        // Error: Payer is not writeable
+        process_instruction(
+            vec![],
+            &bincode::serialize(&SbfLoaderInstruction::Write {
+                offset: 8,
+                bytes: vec![8, 8, 8, 8],
+            })
+            .unwrap(),
+            transaction_accounts.clone(),
+            &[(0, false, true), (1, true, false), (2, true, false)],
+            Err(InstructionError::InvalidArgument),
+        );
+
+        // Error: Write out of bounds
+        process_instruction(
+            vec![],
+            &bincode::serialize(&SbfLoaderInstruction::Write {
+                offset: 9,
+                bytes: vec![8, 8, 8, 8],
+            })
+            .unwrap(),
+            transaction_accounts.clone(),
+            &[(0, false, true), (1, true, false), (2, true, true)],
+            Err(InstructionError::AccountDataTooSmall),
+        );
+
+        // Error: Insufficient funds (Bankrupt payer account)
+        process_instruction(
+            vec![],
+            &bincode::serialize(&SbfLoaderInstruction::Write {
+                offset: 8,
+                bytes: vec![8, 8, 8, 8],
+            })
+            .unwrap(),
+            transaction_accounts.clone(),
+            &[(0, false, true), (1, true, false), (1, true, true)],
+            Err(InstructionError::InsufficientFunds),
+        );
+
+        // Error: Insufficient funds (No payer account)
+        process_instruction(
+            vec![],
+            &bincode::serialize(&SbfLoaderInstruction::Write {
+                offset: 8,
+                bytes: vec![8, 8, 8, 8],
+            })
+            .unwrap(),
+            transaction_accounts.clone(),
+            &[(0, false, true), (1, true, false)],
+            Err(InstructionError::InsufficientFunds),
+        );
+    }
+
+    #[test]
+    fn test_loader_instruction_truncate() {
+        let authority_address = Pubkey::new_unique();
+        let transaction_accounts = vec![
+            (
+                Pubkey::new_unique(),
+                load_program_account_from_elf(false, Some(authority_address), "noop"),
+            ),
+            (
+                authority_address,
+                AccountSharedData::new(0, 0, &Pubkey::new_unique()),
+            ),
+            (
+                Pubkey::new_unique(),
+                AccountSharedData::new(0, 0, &sbpf_loader::id()),
+            ),
+            (
+                Pubkey::new_unique(),
+                load_program_account_from_elf(true, Some(authority_address), "noop"),
+            ),
+            (
+                Pubkey::new_unique(),
+                AccountSharedData::new(0, 0, &sbpf_loader::id()),
+            ),
+            (clock::id(), clock()),
+            (
+                rent::id(),
+                create_account_shared_data_for_test(&rent::Rent::default()),
+            ),
+        ];
+
+        // Cut the end off
+        let accounts = process_instruction(
+            vec![],
+            &bincode::serialize(&SbfLoaderInstruction::Truncate { offset: 4 }).unwrap(),
+            transaction_accounts.clone(),
+            &[(0, false, true), (1, true, false), (2, false, true)],
+            Ok(()),
+        );
+        assert_eq!(
+            accounts[0].data().len(),
+            sbpf_loader::SbfLoaderState::program_data_offset().saturating_add(4),
+        );
+        assert_eq!(accounts[0].lamports(), 1252800);
+        assert_eq!(
+            accounts[2].lamports(),
+            transaction_accounts[0]
+                .1
+                .lamports()
+                .saturating_sub(accounts[0].lamports()),
+        );
+
+        // Close program account
+        let accounts = process_instruction(
+            vec![],
+            &bincode::serialize(&SbfLoaderInstruction::Truncate { offset: 0 }).unwrap(),
+            transaction_accounts.clone(),
+            &[(0, false, true), (1, true, false), (2, false, true)],
+            Ok(()),
+        );
+        assert_eq!(accounts[0].data().len(), 0);
+        assert_eq!(
+            accounts[2].lamports(),
+            transaction_accounts[0]
+                .1
+                .lamports()
+                .saturating_sub(accounts[0].lamports()),
+        );
+
+        // Error: Program is not retracted
+        process_instruction(
+            vec![],
+            &bincode::serialize(&SbfLoaderInstruction::Truncate { offset: 0 }).unwrap(),
+            transaction_accounts.clone(),
+            &[(3, false, true), (1, true, false), (2, false, true)],
+            Err(InstructionError::InvalidArgument),
+        );
+
+        // Error: Truncate out of bounds
+        process_instruction(
+            vec![],
+            &bincode::serialize(&SbfLoaderInstruction::Truncate { offset: 10000 }).unwrap(),
+            transaction_accounts,
+            &[(0, false, true), (1, true, false), (2, false, true)],
+            Err(InstructionError::AccountDataTooSmall),
+        );
+    }
+
+    #[test]
+    fn test_loader_instruction_deploy() {
+        let authority_address = Pubkey::new_unique();
+        let mut transaction_accounts = vec![
+            (
+                Pubkey::new_unique(),
+                load_program_account_from_elf(false, Some(authority_address), "rodata"),
+            ),
+            (
+                authority_address,
+                AccountSharedData::new(0, 0, &Pubkey::new_unique()),
+            ),
+            (
+                Pubkey::new_unique(),
+                load_program_account_from_elf(false, Some(authority_address), "noop"),
+            ),
+            (
+                Pubkey::new_unique(),
+                load_program_account_from_elf(true, Some(authority_address), "noop"),
+            ),
+            (clock::id(), clock()),
+            (
+                rent::id(),
+                create_account_shared_data_for_test(&rent::Rent::default()),
+            ),
+        ];
+
+        // Deploy from its own data
+        let accounts = process_instruction(
+            vec![],
+            &bincode::serialize(&SbfLoaderInstruction::Deploy).unwrap(),
+            transaction_accounts.clone(),
+            &[(0, false, true), (1, true, false)],
+            Ok(()),
+        );
+        assert_eq!(
+            accounts[0].data().len(),
+            transaction_accounts[0].1.data().len(),
+        );
+        assert_eq!(accounts[0].lamports(), transaction_accounts[0].1.lamports());
+
+        // Deploy by replacing data by other source
+        let accounts = process_instruction(
+            vec![],
+            &bincode::serialize(&SbfLoaderInstruction::Deploy).unwrap(),
+            transaction_accounts.clone(),
+            &[(0, false, true), (1, true, false), (2, false, true)],
+            Ok(()),
+        );
+        assert_eq!(
+            accounts[0].data().len(),
+            transaction_accounts[2].1.data().len(),
+        );
+        assert_eq!(accounts[2].data().len(), 0,);
+        assert_eq!(
+            accounts[2].lamports(),
+            transaction_accounts[2].1.lamports().saturating_sub(
+                accounts[0]
+                    .lamports()
+                    .saturating_sub(transaction_accounts[0].1.lamports())
+            ),
+        );
+
+        // Error: Source program is not retracted
+        process_instruction(
+            vec![],
+            &bincode::serialize(&SbfLoaderInstruction::Deploy).unwrap(),
+            transaction_accounts.clone(),
+            &[(0, false, true), (1, true, false), (3, false, true)],
+            Err(InstructionError::InvalidArgument),
+        );
+
+        // Error: Program is deployed already
+        process_instruction(
+            vec![],
+            &bincode::serialize(&SbfLoaderInstruction::Deploy).unwrap(),
+            transaction_accounts.clone(),
+            &[(3, false, true), (1, true, false)],
+            Err(InstructionError::InvalidArgument),
+        );
+
+        // Error: Program was deployed recently, cooldown still in effect
+        transaction_accounts[0].1 = accounts[0].clone();
+        process_instruction(
+            vec![],
+            &bincode::serialize(&SbfLoaderInstruction::Deploy).unwrap(),
+            transaction_accounts.clone(),
+            &[(0, false, true), (1, true, false)],
+            Err(InstructionError::InvalidArgument),
+        );
+    }
+
+    #[test]
+    fn test_loader_instruction_retract() {
+        let authority_address = Pubkey::new_unique();
+        let transaction_accounts = vec![
+            (
+                Pubkey::new_unique(),
+                load_program_account_from_elf(true, Some(authority_address), "rodata"),
+            ),
+            (
+                authority_address,
+                AccountSharedData::new(0, 0, &Pubkey::new_unique()),
+            ),
+            (
+                Pubkey::new_unique(),
+                load_program_account_from_elf(false, Some(authority_address), "rodata"),
+            ),
+            (clock::id(), clock()),
+            (
+                rent::id(),
+                create_account_shared_data_for_test(&rent::Rent::default()),
+            ),
+        ];
+
+        // Retract program
+        let accounts = process_instruction(
+            vec![],
+            &bincode::serialize(&SbfLoaderInstruction::Retract).unwrap(),
+            transaction_accounts.clone(),
+            &[(0, false, true), (1, true, false)],
+            Ok(()),
+        );
+        assert_eq!(
+            accounts[0].data().len(),
+            transaction_accounts[0].1.data().len(),
+        );
+        assert_eq!(accounts[0].lamports(), transaction_accounts[0].1.lamports());
+
+        // Error: Program is not deployed
+        process_instruction(
+            vec![],
+            &bincode::serialize(&SbfLoaderInstruction::Retract).unwrap(),
+            transaction_accounts,
+            &[(2, false, true), (1, true, false)],
+            Err(InstructionError::InvalidArgument),
+        );
+    }
+
+    #[test]
+    fn test_loader_instruction_transfer_authority() {
+        let authority_address = Pubkey::new_unique();
+        let transaction_accounts = vec![
+            (
+                Pubkey::new_unique(),
+                load_program_account_from_elf(true, Some(authority_address), "rodata"),
+            ),
+            (
+                authority_address,
+                AccountSharedData::new(0, 0, &Pubkey::new_unique()),
+            ),
+            (
+                Pubkey::new_unique(),
+                AccountSharedData::new(0, 0, &Pubkey::new_unique()),
+            ),
+            (
+                clock::id(),
+                create_account_shared_data_for_test(&clock::Clock::default()),
+            ),
+            (
+                rent::id(),
+                create_account_shared_data_for_test(&rent::Rent::default()),
+            ),
+        ];
+
+        // Transfer authority
+        let accounts = process_instruction(
+            vec![],
+            &bincode::serialize(&SbfLoaderInstruction::TransferAuthority).unwrap(),
+            transaction_accounts.clone(),
+            &[(0, false, true), (1, true, false), (2, true, false)],
+            Ok(()),
+        );
+        assert_eq!(
+            accounts[0].data().len(),
+            transaction_accounts[0].1.data().len(),
+        );
+        assert_eq!(accounts[0].lamports(), transaction_accounts[0].1.lamports());
+
+        // Finalize program
+        let accounts = process_instruction(
+            vec![],
+            &bincode::serialize(&SbfLoaderInstruction::TransferAuthority).unwrap(),
+            transaction_accounts.clone(),
+            &[(0, false, true), (1, true, false)],
+            Ok(()),
+        );
+        assert_eq!(
+            accounts[0].data().len(),
+            transaction_accounts[0].1.data().len(),
+        );
+        assert_eq!(accounts[0].lamports(), transaction_accounts[0].1.lamports());
+
+        // Error: New authority did not sign
+        process_instruction(
+            vec![],
+            &bincode::serialize(&SbfLoaderInstruction::TransferAuthority).unwrap(),
+            transaction_accounts,
+            &[(0, false, true), (1, true, false), (2, false, false)],
+            Err(InstructionError::MissingRequiredSignature),
+        );
+    }
+
+    #[test]
+    fn test_invoke_program() {
+        let program_address = Pubkey::new_unique();
+        let transaction_accounts = vec![
+            (
+                program_address,
+                load_program_account_from_elf(true, None, "rodata"),
+            ),
+            (
+                Pubkey::new_unique(),
+                AccountSharedData::new(10000000, 32, &program_address),
+            ),
+            (
+                Pubkey::new_unique(),
+                AccountSharedData::new(0, 0, &sbpf_loader::id()),
+            ),
+            (
+                Pubkey::new_unique(),
+                load_program_account_from_elf(false, None, "rodata"),
+            ),
+        ];
+
+        // Invoke program
+        process_instruction(
+            vec![0],
+            &[0, 1, 2, 3],
+            transaction_accounts.clone(),
+            &[(1, false, true)],
+            Err(InstructionError::Custom(42)),
+        );
+
+        // Error: Program not owned by loader
+        process_instruction(
+            vec![1],
+            &[0, 1, 2, 3],
+            transaction_accounts.clone(),
+            &[(1, false, true)],
+            Err(InstructionError::InvalidAccountOwner),
+        );
+
+        // Error: Program is uninitialized
+        process_instruction(
+            vec![2],
+            &[0, 1, 2, 3],
+            transaction_accounts.clone(),
+            &[(1, false, true)],
+            Err(InstructionError::InvalidAccountData),
+        );
+
+        // Error: Program is not deployed
+        process_instruction(
+            vec![3],
+            &[0, 1, 2, 3],
+            transaction_accounts,
+            &[(1, false, true)],
+            Err(InstructionError::InvalidArgument),
+        );
+    }
+}
