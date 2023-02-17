@@ -60,6 +60,24 @@ const CONNECTION_CLOSE_REASON_TOO_MANY: &[u8] = b"too_many";
 
 const PACKET_BATCH_SIZE: usize = 64;
 
+// A sequence of bytes that is part of a packet
+// along with where in the packet it is
+struct PacketBytes {
+    pub bytes: Bytes,
+    pub offset: u64,
+    pub end_of_chunk: usize,
+}
+
+// A struct to accumulate the bytes making up
+// a packet, along with their offsets, and the
+// packet metadata. We use this accumulator to avoid
+// multiple copies of the Bytes (when building up
+// the Packet then sending the Packet to packet_batch_sender)
+struct PacketAccumulator {
+    pub meta: Meta,
+    pub bytes: Vec<PacketBytes>,
+}
+
 #[allow(clippy::too_many_arguments)]
 pub fn spawn_server(
     sock: UdpSocket,
@@ -248,7 +266,7 @@ struct NewConnectionHandlerParams {
     // but I've found that it's simply too easy to accidentally block
     // in async code when using the crossbeam channel, so for the sake of maintainability,
     // we're sticking with an async channel
-    packet_sender: AsyncSender<(Meta, Vec<(Bytes, u64, usize)>)>,
+    packet_sender: AsyncSender<PacketAccumulator>,
     remote_pubkey: Option<Pubkey>,
     stake: u64,
     total_stake: u64,
@@ -260,7 +278,7 @@ struct NewConnectionHandlerParams {
 
 impl NewConnectionHandlerParams {
     fn new_unstaked(
-        packet_sender: AsyncSender<(Meta, Vec<(Bytes, u64, usize)>)>,
+        packet_sender: AsyncSender<PacketAccumulator>,
         max_connections_per_peer: usize,
         stats: Arc<StreamStats>,
     ) -> NewConnectionHandlerParams {
@@ -434,7 +452,7 @@ async fn setup_connection(
     connecting: Connecting,
     unstaked_connection_table: Arc<Mutex<ConnectionTable>>,
     staked_connection_table: Arc<Mutex<ConnectionTable>>,
-    packet_sender: AsyncSender<(Meta, Vec<(Bytes, u64, usize)>)>,
+    packet_sender: AsyncSender<PacketAccumulator>,
     max_connections_per_peer: usize,
     staked_nodes: Arc<RwLock<StakedNodes>>,
     max_staked_connections: usize,
@@ -540,7 +558,7 @@ async fn setup_connection(
 
 async fn packet_batch_sender(
     packet_sender: Sender<PacketBatch>,
-    packet_receiver: AsyncReceiver<(Meta, Vec<(Bytes, u64, usize)>)>,
+    packet_receiver: AsyncReceiver<PacketAccumulator>,
     exit: Arc<AtomicBool>,
     stats: Arc<StreamStats>,
 ) {
@@ -577,15 +595,15 @@ async fn packet_batch_sender(
             }
 
             let res = packet_receiver.try_recv();
-            if res.is_ok() {
-                let (meta, bytes_vec) = res.unwrap();
+            if let Ok(packet_accumulator) = res {
                 let mut packet = Packet::default();
-                *packet.meta_mut() = meta;
+                *packet.meta_mut() = packet_accumulator.meta;
                 packet_batch.push(packet);
                 let i = packet_batch.len() - 1;
-                for (bytes, offset, end_of_chunk) in bytes_vec {
-                    packet_batch[i].buffer_mut()[offset as usize..end_of_chunk]
-                        .copy_from_slice(&bytes);
+                for packet_bytes in packet_accumulator.bytes {
+                    packet_batch[i].buffer_mut()
+                        [packet_bytes.offset as usize..packet_bytes.end_of_chunk]
+                        .copy_from_slice(&packet_bytes.bytes);
                 }
 
                 if packet_batch.len() == 1 {
@@ -601,7 +619,7 @@ async fn packet_batch_sender(
 #[allow(clippy::too_many_arguments)]
 async fn handle_connection(
     connection: Connection,
-    packet_sender: AsyncSender<(Meta, Vec<(Bytes, u64, usize)>)>,
+    packet_sender: AsyncSender<PacketAccumulator>,
     remote_addr: SocketAddr,
     remote_pubkey: Option<Pubkey>,
     last_update: Arc<AtomicU64>,
@@ -708,9 +726,9 @@ async fn handle_connection(
 // Return true if the server should drop the stream
 async fn handle_chunk(
     chunk: Result<Option<quinn::Chunk>, quinn::ReadError>,
-    packet_accum: &mut Option<(Meta, Vec<(Bytes, u64, usize)>)>,
+    packet_accum: &mut Option<PacketAccumulator>,
     remote_addr: &SocketAddr,
-    packet_sender: &AsyncSender<(Meta, Vec<(Bytes, u64, usize)>)>,
+    packet_sender: &AsyncSender<PacketAccumulator>,
     stats: Arc<StreamStats>,
     stake: u64,
     peer_type: ConnectionPeerType,
@@ -742,19 +760,26 @@ async fn handle_chunk(
                     let mut meta = Meta::default();
                     meta.set_socket_addr(remote_addr);
                     meta.sender_stake = stake;
-                    *packet_accum = Some((meta, Vec::new()));
+                    *packet_accum = Some(PacketAccumulator {
+                        meta,
+                        bytes: Vec::new(),
+                    });
                 }
 
-                if let Some((meta, chunks)) = packet_accum.as_mut() {
+                if let Some(accum) = packet_accum.as_mut() {
                     let offset = chunk.offset;
                     let end_of_chunk = match (chunk.offset as usize).checked_add(chunk.bytes.len())
                     {
                         Some(end) => end,
                         None => return true,
                     };
-                    chunks.push((chunk.bytes, offset, end_of_chunk));
+                    accum.bytes.push(PacketBytes {
+                        bytes: chunk.bytes,
+                        offset,
+                        end_of_chunk,
+                    });
 
-                    meta.size = std::cmp::max(meta.size, end_of_chunk);
+                    accum.meta.size = std::cmp::max(accum.meta.size, end_of_chunk);
                 }
 
                 match peer_type {
@@ -774,9 +799,9 @@ async fn handle_chunk(
                 trace!("chunk is none");
                 if let Some(accum) = packet_accum.take() {
                     let len = accum
-                        .1
+                        .bytes
                         .iter()
-                        .map(|(bytes, _, _)| bytes.len())
+                        .map(|packet_bytes| packet_bytes.bytes.len())
                         .sum::<usize>();
                     if let Err(err) = packet_sender.send(accum).await {
                         stats
@@ -1319,10 +1344,15 @@ pub mod test {
             let bytes = Bytes::from("Hello world");
             let offset = 0;
             let size = bytes.len();
-            ptk_sender
-                .send((meta, vec![(bytes, offset, size)]))
-                .await
-                .unwrap();
+            let packet_accum = PacketAccumulator {
+                meta,
+                bytes: vec![PacketBytes {
+                    bytes,
+                    offset,
+                    end_of_chunk: size,
+                }],
+            };
+            ptk_sender.send(packet_accum).await.unwrap();
         }
         let mut i = 0;
         while i < 1000 {
