@@ -9,6 +9,7 @@ use {
         repair_response,
         repair_service::{DumpedSlotsReceiver, OutstandingShredRepairs, RepairInfo, RepairService},
         result::{Error, Result},
+        tvu::RepairQuicConfig,
     },
     crossbeam_channel::{unbounded, Receiver, RecvTimeoutError, Sender},
     quinn::Endpoint,
@@ -23,8 +24,7 @@ use {
     solana_metrics::inc_new_counter_error,
     solana_perf::packet::{Packet, PacketBatch},
     solana_rayon_threadlimit::get_thread_count,
-    solana_sdk::{clock::Slot, signature::Keypair},
-    solana_streamer::streamer::StakedNodes,
+    solana_sdk::clock::Slot,
     std::{
         cmp::Reverse,
         collections::{HashMap, HashSet},
@@ -311,7 +311,7 @@ impl WindowService {
         verified_receiver: Receiver<Vec<PacketBatch>>,
         retransmit_sender: Sender<Vec<ShredPayload>>,
         repair_socket: Arc<UdpSocket>,
-        quic_repair_endpoint: Option<Endpoint>,
+        quic_repair_option: Option<(Endpoint, RepairQuicConfig)>,
         ancestor_hashes_socket: Arc<UdpSocket>,
         exit: Arc<AtomicBool>,
         repair_info: RepairInfo,
@@ -321,8 +321,6 @@ impl WindowService {
         duplicate_slots_sender: DuplicateSlotSender,
         ancestor_hashes_replay_update_receiver: AncestorHashesReplayUpdateReceiver,
         dumped_slots_receiver: DumpedSlotsReceiver,
-        identity_keypair: Arc<Keypair>,
-        staked_nodes: Arc<RwLock<StakedNodes>>,
     ) -> WindowService {
         let outstanding_requests = Arc::<RwLock<OutstandingShredRepairs>>::default();
 
@@ -332,9 +330,7 @@ impl WindowService {
             blockstore.clone(),
             exit.clone(),
             repair_socket,
-            quic_repair_endpoint,
-            identity_keypair,
-            staked_nodes,
+            quic_repair_option,
             ancestor_hashes_socket,
             repair_info,
             verified_vote_receiver,

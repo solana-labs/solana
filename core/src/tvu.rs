@@ -94,6 +94,14 @@ pub struct TvuConfig {
     pub replay_slots_concurrently: bool,
 }
 
+#[derive(Clone)]
+pub struct RepairQuicConfig {
+    pub repair_address: Arc<UdpSocket>,
+    pub identity_keypair: Arc<Keypair>,
+    pub staked_nodes: Arc<RwLock<StakedNodes>>,
+    pub wait_for_chunk_timeout_ms: u64,
+}
+
 impl Tvu {
     /// This service receives messages from a leader in the network and processes the transactions
     /// on the bank state.
@@ -138,8 +146,7 @@ impl Tvu {
         connection_cache: &Arc<ConnectionCache>,
         prioritization_fee_cache: &Arc<PrioritizationFeeCache>,
         banking_tracer: Arc<BankingTracer>,
-        identity_keypair: Arc<Keypair>,
-        staked_nodes: Arc<RwLock<StakedNodes>>,
+        repair_quic_config: Option<RepairQuicConfig>,
     ) -> Result<Self, String> {
         let TvuSockets {
             repair: repair_socket,
@@ -160,6 +167,7 @@ impl Tvu {
             fetch_sockets,
             forward_sockets,
             repair_socket.clone(),
+            repair_quic_config.clone(),
             fetch_sender,
             tvu_config.shred_version,
             bank_forks.clone(),
@@ -206,12 +214,20 @@ impl Tvu {
                 cluster_info: cluster_info.clone(),
                 cluster_slots: cluster_slots.clone(),
             };
+
+            let quic_repair_option = repair_quic_config.map(|config| {
+                (
+                    fetch_stage.get_quic_repair_endpoint().clone().unwrap(),
+                    config,
+                )
+            });
+
             WindowService::new(
                 blockstore.clone(),
                 verified_receiver,
                 retransmit_sender,
                 repair_socket,
-                fetch_stage.get_quic_repair_endpoint(),
+                quic_repair_option,
                 ancestor_hashes_socket,
                 exit.clone(),
                 repair_info,
@@ -221,8 +237,6 @@ impl Tvu {
                 duplicate_slots_sender,
                 ancestor_hashes_replay_update_receiver,
                 dumped_slots_receiver,
-                identity_keypair,
-                staked_nodes,
             )
         };
 
@@ -485,8 +499,7 @@ pub mod tests {
             &Arc::new(ConnectionCache::default()),
             &_ignored_prioritization_fee_cache,
             BankingTracer::new_disabled(),
-            keypair,
-            Arc::new(RwLock::new(StakedNodes::default())),
+            None,
         )
         .expect("assume success");
         exit.store(true, Ordering::Relaxed);
