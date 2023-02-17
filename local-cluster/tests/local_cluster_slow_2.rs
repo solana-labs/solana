@@ -90,7 +90,7 @@ fn test_consistency_halt() {
 
     sleep(Duration::from_millis(5000));
     let cluster_nodes = discover_cluster(
-        &cluster.entry_point_info.gossip,
+        &cluster.entry_point_info.gossip().unwrap(),
         1,
         SocketAddrSpace::Unspecified,
     )
@@ -123,7 +123,7 @@ fn test_consistency_halt() {
     let num_nodes = 2;
     assert_eq!(
         discover_cluster(
-            &cluster.entry_point_info.gossip,
+            &cluster.entry_point_info.gossip().unwrap(),
             num_nodes,
             SocketAddrSpace::Unspecified
         )
@@ -136,7 +136,7 @@ fn test_consistency_halt() {
     let mut encountered_error = false;
     loop {
         let discover = discover_cluster(
-            &cluster.entry_point_info.gossip,
+            &cluster.entry_point_info.gossip().unwrap(),
             2,
             SocketAddrSpace::Unspecified,
         );
@@ -154,7 +154,7 @@ fn test_consistency_halt() {
             }
         }
         let client = cluster
-            .get_validator_client(&cluster.entry_point_info.id)
+            .get_validator_client(cluster.entry_point_info.pubkey())
             .unwrap();
         if let Ok(slot) = client.get_slot() {
             if slot > 210 {
@@ -187,7 +187,7 @@ fn test_leader_failure_4() {
         &local.entry_point_info,
         &local
             .validators
-            .get(&local.entry_point_info.id)
+            .get(local.entry_point_info.pubkey())
             .unwrap()
             .config
             .validator_exit,

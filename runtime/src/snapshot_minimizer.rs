@@ -374,7 +374,7 @@ impl<'a> SnapshotMinimizer<'a> {
                     crate::accounts_db::INCLUDE_SLOT_IN_HASH_IRRELEVANT_APPEND_VEC_OPERATION,
                 ),
                 Some(hashes),
-                Some(new_storage),
+                new_storage,
                 Some(Box::new(write_versions.into_iter())),
                 StoreReclaims::Ignore,
             );
@@ -386,6 +386,7 @@ impl<'a> SnapshotMinimizer<'a> {
             slot,
             true, // add_dirty_stores
             shrink_in_progress,
+            false,
         );
         dead_storages
             .lock()

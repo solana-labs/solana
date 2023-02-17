@@ -141,6 +141,7 @@ pub fn get_best_repair_shreds<'a>(
 pub mod test {
     use {
         super::*,
+        crate::repair_service::sleep_shred_deferment_period,
         solana_ledger::{
             get_tmp_ledger_path,
             shred::{Shred, ShredFlags},
@@ -225,6 +226,8 @@ pub mod test {
         let mut repairs = vec![];
         let mut slot_meta_cache = HashMap::default();
         let last_shred = blockstore.meta(0).unwrap().unwrap().received;
+
+        sleep_shred_deferment_period();
         get_best_repair_shreds(
             &heaviest_subtree_fork_choice,
             &blockstore,
@@ -254,6 +257,7 @@ pub mod test {
             2,
             Hash::default(),
         );
+        sleep_shred_deferment_period();
         get_best_repair_shreds(
             &heaviest_subtree_fork_choice,
             &blockstore,
@@ -294,6 +298,7 @@ pub mod test {
         blockstore
             .insert_shreds(completed_shreds, None, false)
             .unwrap();
+        sleep_shred_deferment_period();
         get_best_repair_shreds(
             &heaviest_subtree_fork_choice,
             &blockstore,
@@ -315,6 +320,7 @@ pub mod test {
         repairs = vec![];
         slot_meta_cache = HashMap::default();
         blockstore.add_tree(tr(2) / (tr(8)), true, false, 2, Hash::default());
+        sleep_shred_deferment_period();
         get_best_repair_shreds(
             &heaviest_subtree_fork_choice,
             &blockstore,
@@ -338,6 +344,8 @@ pub mod test {
         // Add a branch to slot 2, make sure it doesn't repair child
         // 4 again when the Unvisited(2) event happens
         blockstore.add_tree(tr(2) / (tr(6) / tr(7)), true, false, 2, Hash::default());
+
+        sleep_shred_deferment_period();
         let mut repairs = vec![];
         let mut slot_meta_cache = HashMap::default();
         get_best_repair_shreds(
@@ -361,6 +369,7 @@ pub mod test {
     #[test]
     fn test_get_best_repair_shreds_ignore() {
         let (blockstore, heaviest_subtree_fork_choice) = setup_forks();
+        sleep_shred_deferment_period();
 
         // Adding slots to ignore should remove them from the repair set, but
         // should not remove their children
@@ -390,6 +399,7 @@ pub mod test {
         slot_meta_cache = HashMap::default();
         blockstore.add_tree(tr(2) / (tr(6) / tr(7)), true, false, 2, Hash::default());
         ignore_set.insert(2);
+        sleep_shred_deferment_period();
         get_best_repair_shreds(
             &heaviest_subtree_fork_choice,
             &blockstore,

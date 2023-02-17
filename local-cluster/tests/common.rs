@@ -21,7 +21,9 @@ use {
         validator_configs::*,
     },
     solana_rpc_client::rpc_client::RpcClient,
-    solana_runtime::snapshot_config::SnapshotConfig,
+    solana_runtime::{
+        snapshot_config::SnapshotConfig, snapshot_utils::create_accounts_run_and_snapshot_dirs,
+    },
     solana_sdk::{
         account::AccountSharedData,
         clock::{self, Slot, DEFAULT_MS_PER_SLOT, DEFAULT_TICKS_PER_SLOT},
@@ -341,7 +343,7 @@ pub fn run_cluster_partition<C>(
     );
 
     let cluster_nodes = discover_cluster(
-        &cluster.entry_point_info.gossip,
+        &cluster.entry_point_info.gossip().unwrap(),
         num_nodes,
         SocketAddrSpace::Unspecified,
     )
@@ -389,22 +391,34 @@ pub fn test_faulty_node(
 ) -> (LocalCluster, Vec<Arc<Keypair>>) {
     solana_logger::setup_with_default("solana_local_cluster=info");
     let num_nodes = node_stakes.len();
+    let mut validator_keys = Vec::with_capacity(num_nodes);
+    validator_keys.resize_with(num_nodes, || (Arc::new(Keypair::new()), true));
+    assert_eq!(node_stakes.len(), num_nodes);
+    assert_eq!(validator_keys.len(), num_nodes);
+
+    // Use a fixed leader schedule so that only the faulty node gets leader slots.
+    let validator_to_slots = vec![(
+        validator_keys[0].0.as_ref().pubkey(),
+        solana_sdk::clock::DEFAULT_DEV_SLOTS_PER_EPOCH as usize,
+    )];
+    let leader_schedule = create_custom_leader_schedule(validator_to_slots.into_iter());
+    let fixed_leader_schedule = Some(FixedSchedule {
+        leader_schedule: Arc::new(leader_schedule),
+    });
 
     let error_validator_config = ValidatorConfig {
         broadcast_stage_type: faulty_node_type,
+        fixed_leader_schedule: fixed_leader_schedule.clone(),
         ..ValidatorConfig::default_for_test()
     };
     let mut validator_configs = Vec::with_capacity(num_nodes);
 
     // First validator is the bootstrap leader with the malicious broadcast logic.
     validator_configs.push(error_validator_config);
-    validator_configs.resize_with(num_nodes, ValidatorConfig::default_for_test);
-
-    let mut validator_keys = Vec::with_capacity(num_nodes);
-    validator_keys.resize_with(num_nodes, || (Arc::new(Keypair::new()), true));
-
-    assert_eq!(node_stakes.len(), num_nodes);
-    assert_eq!(validator_keys.len(), num_nodes);
+    validator_configs.resize_with(num_nodes, || ValidatorConfig {
+        fixed_leader_schedule: fixed_leader_schedule.clone(),
+        ..ValidatorConfig::default_for_test()
+    });
 
     let mut cluster_config = ClusterConfig {
         cluster_lamports: 10_000,
@@ -436,7 +450,7 @@ pub fn generate_account_paths(num_account_paths: usize) -> (Vec<TempDir>, Vec<Pa
         .collect();
     let account_storage_paths: Vec<_> = account_storage_dirs
         .iter()
-        .map(|a| a.path().to_path_buf())
+        .map(|a| create_accounts_run_and_snapshot_dirs(a.path()).unwrap().0)
         .collect();
     (account_storage_dirs, account_storage_paths)
 }

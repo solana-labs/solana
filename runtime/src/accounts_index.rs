@@ -1343,7 +1343,7 @@ impl<T: IndexValue> AccountsIndex<T> {
     ///   apply 'avoid_callback_result' if specified.
     ///   otherwise, call `callback`
     pub(crate) fn scan<'a, F, I>(
-        &'a self,
+        &self,
         pubkeys: I,
         mut callback: F,
         avoid_callback_result: Option<AccountsIndexScanResult>,
@@ -1484,6 +1484,27 @@ impl<T: IndexValue> AccountsIndex<T> {
                 .index
                 .get(index_key)
                 .map(|x| x.len()),
+        }
+    }
+
+    pub fn get_largest_keys(
+        &self,
+        index: &AccountIndex,
+        max_entries: usize,
+    ) -> Vec<(usize, Pubkey)> {
+        match index {
+            AccountIndex::ProgramId => self
+                .program_id_index
+                .key_size_index
+                .get_largest_keys(max_entries),
+            AccountIndex::SplTokenOwner => self
+                .spl_token_owner_index
+                .key_size_index
+                .get_largest_keys(max_entries),
+            AccountIndex::SplTokenMint => self
+                .spl_token_mint_index
+                .key_size_index
+                .get_largest_keys(max_entries),
         }
     }
 
