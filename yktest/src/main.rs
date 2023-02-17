@@ -11,7 +11,7 @@ use solana_sdk::{
 };
 use solana_client::rpc_client::RpcClient;
 use solana_program::pubkey::Pubkey;
-use solana_remote_wallet::openpgp_card_keypair::{OpenpgpCardKeypair, OpenpgpCardInfo};
+use solana_remote_keypair::openpgp_card::{OpenpgpCardKeypair, OpenpgpCardInfo};
 
 fn _test_sig() {
     println!("Hello from Solana sdk!");
@@ -72,7 +72,7 @@ fn yubi_transact() -> Result<(), Box<dyn Error>> {
     let rpc_client = RpcClient::new("https://api.devnet.solana.com");
 
     //let sk = "5mU6wMD64nQ8AwjFrkL2qQnoyvQcJNEE8K5GUQ1GcyCysZWYWxqSxPsLdi16nCT7hyLvHrhWMjeTfp9A9AJWUi7a";
-    let payer = OpenpgpCardKeypair::new(None)?;
+    let payer = OpenpgpCardKeypair::new_from_identifier(None)?;
     let new_account = Keypair::new();
 
     println!("--------------------------------------------------------------------------------");

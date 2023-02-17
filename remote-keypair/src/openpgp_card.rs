@@ -1,24 +1,91 @@
-use std::{cell::RefCell};
-
-use openpgp_card::{
-    crypto_data::{PublicKeyMaterial, Hash},
-    OpenPgp,
-    SmartcardError,
-    card_do::UIF,
-    OpenPgpTransaction
-};
-use openpgp_card_pcsc::PcscBackend;
-use pinentry::PassphraseInput;
-use secrecy::ExposeSecret;
-
 use {
+    openpgp_card::{
+        crypto_data::{PublicKeyMaterial, Hash},
+        OpenPgp,
+        SmartcardError,
+        card_do::{UIF, ApplicationIdentifier},
+        OpenPgpTransaction
+    },
+    openpgp_card_pcsc::PcscBackend,
+    pinentry::PassphraseInput,
+    secrecy::ExposeSecret,
     solana_sdk::{
         pubkey::Pubkey,
         signature::{Signature, Signer, SignerError},
     },
+    std::{cell::RefCell, convert::Infallible},
+    thiserror::Error,
+    uriparse::{URIReference, URIReferenceError},
 };
 
+#[derive(Clone, Debug, Error, PartialEq, Eq)]
+pub enum LocatorError {
+    #[error("failed to parse OpenPGP AID: {0}")]
+    IdentifierParseError(String),
+    #[error(transparent)]
+    UriReferenceError(#[from] URIReferenceError),
+    #[error("mismatched scheme")]
+    MismatchedScheme,
+    #[error("infallible")]
+    Infallible,
+}
+
+impl From<Infallible> for LocatorError {
+    fn from(_: Infallible) -> Self {
+        Self::Infallible
+    }
+}
+
+pub struct Locator {
+    aid: Option<ApplicationIdentifier>,
+}
+
+impl Locator {
+    pub fn new_from_uri(uri: &URIReference<'_>) -> Result<Self, LocatorError> {
+        let scheme = uri.scheme().map(|s| s.as_str().to_ascii_lowercase());
+        let ident = uri.host().map(|h| h.to_string());
+        
+        match (scheme, ident) {
+            (Some(scheme), Some(ident)) if scheme == "pgpcard" => {
+                if ident.is_empty() {
+                    return Ok(Self {
+                        aid: None,
+                    });
+                }
+
+                if ident.len() % 2 != 0 {
+                    return Err(LocatorError::IdentifierParseError(String::from("OpenPGP AID must have even length")));
+                }
+                
+                let mut ident_bytes = Vec::<u8>::new();
+                for i in (0..ident.len()).step_by(2) {
+                    ident_bytes.push(
+                        u8::from_str_radix(&ident[i..i + 2], 16)
+                            .map_err(|e| LocatorError::IdentifierParseError(e.to_string()))?
+                    );
+                }
+
+                Ok(Self {
+                    aid: Some(
+                        ident_bytes
+                            .as_slice()
+                            .try_into()
+                            .map_err(|e: openpgp_card::Error| LocatorError::IdentifierParseError(e.to_string()))?
+                    ),
+                })
+            },
+            (Some(scheme), None) if scheme == "pgpcard" => {
+                Ok(Self {
+                    aid: None,
+                })
+            },
+            _ => Err(LocatorError::MismatchedScheme),
+        }
+    }
+}
+
 #[derive(Debug)]
+#[allow(dead_code)]
 pub struct OpenpgpCardInfo {
     pcsc_identifier: String,
     manufacturer: String,
@@ -62,11 +129,19 @@ pub struct OpenpgpCardKeypair {
 }
 
 impl OpenpgpCardKeypair {
-    pub fn new(
-        pcsc_identifier: Option<&str>
+    pub fn new_from_locator(
+        locator: Locator,
+    ) -> Result<Self, openpgp_card::Error> {
+        Ok(Self::new_from_identifier(
+            locator.aid.map(|x| x.ident())
+        )?)
+    }
+
+    pub fn new_from_identifier(
+        pcsc_identifier: Option<String>,
     ) -> Result<Self, openpgp_card::Error> {
         let backend = match pcsc_identifier {
-            Some(ident) => PcscBackend::open_by_ident(ident, None)?,
+            Some(ident) => PcscBackend::open_by_ident(&ident, None)?,
             None => {
                 let mut cards = PcscBackend::cards(None)?;
                 if cards.is_empty() {
