@@ -18,6 +18,13 @@ case "${unameOut}" in
     criterion_suffix=
     machine=linux
 esac
+unameOut="$(uname -m)"
+case "${unameOut}" in
+  arm64*)
+    arch=aarch64;;
+  *)
+    arch=x86_64
+esac
 
 download() {
   declare url="$1/$2/$3"
@@ -102,7 +109,7 @@ if [[ ! -e criterion-$version.md || ! -e criterion ]]; then
 fi
 
 # Install Rust-BPF
-version=v1.33
+version=v1.34
 if [[ ! -e bpf-tools-$version.md || ! -e bpf-tools ]]; then
   (
     set -e
@@ -111,7 +118,7 @@ if [[ ! -e bpf-tools-$version.md || ! -e bpf-tools ]]; then
     job="download \
            https://github.com/solana-labs/bpf-tools/releases/download \
            $version \
-           solana-bpf-tools-$machine.tar.bz2 \
+           solana-bpf-tools-${machine}-${arch}.tar.bz2 \
            bpf-tools"
     get $version bpf-tools "$job"
   )

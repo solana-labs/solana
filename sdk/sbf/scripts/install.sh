@@ -18,6 +18,13 @@ case "${unameOut}" in
     criterion_suffix=
     machine=linux
 esac
+unameOut="$(uname -m)"
+case "${unameOut}" in
+  arm64*)
+    arch=aarch64;;
+  *)
+    arch=x86_64
+esac
 
 download() {
   declare url="$1/$2/$3"
@@ -102,7 +109,7 @@ if [[ ! -e criterion-$version.md || ! -e criterion ]]; then
 fi
 
 # Install Rust-SBF
-version=v1.33
+version=v1.34
 if [[ ! -e sbf-tools-$version.md || ! -e sbf-tools ]]; then
   (
     set -e
@@ -110,7 +117,7 @@ if [[ ! -e sbf-tools-$version.md || ! -e sbf-tools ]]; then
     job="download \
            https://github.com/solana-labs/sbf-tools/releases/download \
            $version \
-           solana-sbf-tools-$machine.tar.bz2 \
+           solana-sbf-tools-${machine}-${arch}.tar.bz2 \
            sbf-tools"
     get $version sbf-tools "$job"
   )
