@@ -58,7 +58,6 @@ fn find_node_activated_stake(
     let total_active_stake: u64 = vote_accounts
         .current
         .iter()
-        .chain(vote_accounts.delinquent.iter())
         .map(|vote_account| vote_account.activated_stake)
         .sum();
 
