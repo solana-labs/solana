@@ -329,12 +329,12 @@ impl LoadedPrograms {
 
 #[cfg(test)]
 mod tests {
-    use solana_rbpf::vm::BuiltInProgram;
     use {
         crate::loaded_programs::{
             BlockRelation, ForkGraph, LoadedProgram, LoadedProgramEntry, LoadedProgramType,
             LoadedPrograms, WorkingSlot,
         },
+        solana_rbpf::vm::BuiltInProgram,
         solana_sdk::{clock::Slot, pubkey::Pubkey},
         std::{
             collections::HashMap,
@@ -370,9 +370,12 @@ mod tests {
         let mut cache = LoadedPrograms::default();
         let program1 = Pubkey::new_unique();
         let tombstone = cache.set_tombstone(program1, 10);
-        let second_level = &cache.entries[&program1];
+        let second_level = &cache
+            .entries
+            .get(&program1)
+            .expect("Failed to find the entry");
         assert_eq!(second_level.len(), 1);
-        assert!(second_level[0].is_tombstone());
+        assert!(second_level.get(0).unwrap().is_tombstone());
         assert_eq!(tombstone.deployment_slot, 10);
         assert_eq!(tombstone.effective_slot, 10);
 
@@ -382,25 +385,34 @@ mod tests {
             cache.insert_entry(program2, new_test_builtin_program(50, 51)),
             LoadedProgramEntry::WasVacant(_)
         ));
-        let second_level = &cache.entries[&program2];
+        let second_level = &cache
+            .entries
+            .get(&program2)
+            .expect("Failed to find the entry");
         assert_eq!(second_level.len(), 1);
-        assert!(!second_level[0].is_tombstone());
+        assert!(!second_level.get(0).unwrap().is_tombstone());
 
         let tombstone = cache.set_tombstone(program2, 60);
-        let second_level = &cache.entries[&program2];
+        let second_level = &cache
+            .entries
+            .get(&program2)
+            .expect("Failed to find the entry");
         assert_eq!(second_level.len(), 2);
-        assert!(!second_level[0].is_tombstone());
-        assert!(second_level[1].is_tombstone());
+        assert!(!second_level.get(0).unwrap().is_tombstone());
+        assert!(second_level.get(1).unwrap().is_tombstone());
         assert!(tombstone.is_tombstone());
         assert_eq!(tombstone.deployment_slot, 60);
         assert_eq!(tombstone.effective_slot, 60);
 
         // Replace the program at slot 50 with a tombstone
         let tombstone = cache.set_tombstone(program2, 50);
-        let second_level = &cache.entries[&program2];
+        let second_level = &cache
+            .entries
+            .get(&program2)
+            .expect("Failed to find the entry");
         assert_eq!(second_level.len(), 2);
-        assert!(second_level[0].is_tombstone());
-        assert!(second_level[1].is_tombstone());
+        assert!(second_level.get(0).unwrap().is_tombstone());
+        assert!(second_level.get(0).unwrap().is_tombstone());
         assert!(tombstone.is_tombstone());
         assert_eq!(tombstone.deployment_slot, 50);
         assert_eq!(tombstone.effective_slot, 50);
