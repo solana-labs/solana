@@ -9,6 +9,8 @@
 [![Build status](https://badge.buildkite.com/8cc350de251d61483db98bdfc895b9ea0ac8ffa4a32ee850ed.svg?branch=master)](https://buildkite.com/solana-labs/solana/builds?branch=master)
 [![codecov](https://codecov.io/gh/solana-labs/solana/branch/master/graph/badge.svg)](https://codecov.io/gh/solana-labs/solana)
 
+# test
+
 # Building
 
 ## **1. Install rustc, cargo and rustfmt.**
@@ -136,10 +138,10 @@ reader is or is working on behalf of a Specially Designated National
 (SDN) or a person subject to similar blocking or denied party
 prohibitions.
 
-The reader should be aware that U.S. export control and sanctions laws prohibit 
-U.S. persons (and other persons that are subject to such laws) from transacting 
-with persons in certain countries and territories or that are on the SDN list. 
-Accordingly, there is a risk to individuals that other persons using any of the 
-code contained in this repo, or a derivation thereof, may be sanctioned persons 
-and that transactions with such persons would be a violation of U.S. export 
+The reader should be aware that U.S. export control and sanctions laws prohibit
+U.S. persons (and other persons that are subject to such laws) from transacting
+with persons in certain countries and territories or that are on the SDN list.
+Accordingly, there is a risk to individuals that other persons using any of the
+code contained in this repo, or a derivation thereof, may be sanctioned persons
+and that transactions with such persons would be a violation of U.S. export
 controls and sanctions law.
