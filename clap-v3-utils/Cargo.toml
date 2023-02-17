@@ -14,6 +14,7 @@ chrono = "0.4"
 clap = { version = "3.1.5", features = ["cargo"] }
 rpassword = "7.0"
 solana-perf = { path = "../perf", version = "=1.16.0" }
+solana-remote-keypair = { path = "../remote-keypair", version = "=1.16.0" }
 solana-remote-wallet = { path = "../remote-wallet", version = "=1.16.0", default-features = false }
 solana-sdk = { path = "../sdk", version = "=1.16.0" }
 thiserror = "1.0.31"

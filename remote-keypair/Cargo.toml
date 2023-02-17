@@ -1,0 +1,19 @@
+[package]
+authors = ["Solana Labs Maintainers <maintainers@solanalabs.com>"]
+edition = "2021"
+name = "solana-remote-keypair"
+description = "Blockchain, Rebuilt for Scale"
+version = "1.16.0"
+repository = "https://github.com/solana-labs/solana"
+license = "Apache-2.0"
+homepage = "https://solana.com/"
+documentation = "https://docs.rs/solana-remote-keypair"
+
+[dependencies]
+openpgp-card = "0.3.3"
+openpgp-card-pcsc = "0.3.0"
+pinentry = "0.3.0"
+secrecy = "0.7.0"
+solana-sdk = { path = "../sdk", version = "=1.16.0" }
+thiserror = "1.0"
+uriparse = "0.6.4"

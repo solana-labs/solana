@@ -18,6 +18,11 @@ use {
     bip39::{Language, Mnemonic, Seed},
     clap::ArgMatches,
     rpassword::prompt_password,
+    solana_remote_keypair::openpgp_card::{
+        Locator as OpenpgpCardLocator,
+        LocatorError as OpenpgpCardLocatorError,
+        OpenpgpCardKeypair
+    },
     solana_remote_wallet::{
         locator::{Locator as RemoteWalletLocator, LocatorError as RemoteWalletLocatorError},
         remote_keypair::generate_remote_keypair,
@@ -173,13 +178,13 @@ impl DefaultSigner {
                         Ok(())
                     }
                 })
-                .map_err(|_| {
+                .map_err(|e| {
                     std::io::Error::new(
                         std::io::ErrorKind::Other,
                         format!(
-                        "No default signer found, run \"solana-keygen new -o {}\" to create a new one",
-                        self.path
-                    ),
+                            "Could not find default signer: {}. Run \"solana-keygen new -o {}\" to create a new one.",
+                            e, self.path
+                        ),
                     )
                 })?;
             *self.is_path_checked.borrow_mut() = true;
@@ -399,6 +404,7 @@ const SIGNER_SOURCE_FILEPATH: &str = "file";
 const SIGNER_SOURCE_USB: &str = "usb";
 const SIGNER_SOURCE_STDIN: &str = "stdin";
 const SIGNER_SOURCE_PUBKEY: &str = "pubkey";
+const SIGNER_SOURCE_PGPCARD: &str = "pgpcard";
 
 pub(crate) enum SignerSourceKind {
     Prompt,
@@ -406,6 +412,7 @@ pub(crate) enum SignerSourceKind {
     Usb(RemoteWalletLocator),
     Stdin,
     Pubkey(Pubkey),
+    Pgpcard(OpenpgpCardLocator),
 }
 
 impl AsRef<str> for SignerSourceKind {
@@ -416,6 +423,7 @@ impl AsRef<str> for SignerSourceKind {
             Self::Usb(_) => SIGNER_SOURCE_USB,
             Self::Stdin => SIGNER_SOURCE_STDIN,
             Self::Pubkey(_) => SIGNER_SOURCE_PUBKEY,
+            Self::Pgpcard(_) => SIGNER_SOURCE_PGPCARD,
         }
     }
 }
@@ -437,6 +445,8 @@ pub(crate) enum SignerSourceError {
     DerivationPathError(#[from] DerivationPathError),
     #[error(transparent)]
     IoError(#[from] std::io::Error),
+    #[error(transparent)]
+    OpenpgpCardLocatorError(#[from] OpenpgpCardLocatorError),
 }
 
 pub(crate) fn parse_signer_source<S: AsRef<str>>(
@@ -482,6 +492,9 @@ pub(crate) fn parse_signer_source<S: AsRef<str>>(
                         legacy: false,
                     }),
                     SIGNER_SOURCE_STDIN => Ok(SignerSource::new(SignerSourceKind::Stdin)),
+                    SIGNER_SOURCE_PGPCARD => Ok(SignerSource::new(SignerSourceKind::Pgpcard(
+                        OpenpgpCardLocator::new_from_uri(&uri)?
+                    ))),
                     _ => {
                         #[cfg(target_family = "windows")]
                         // On Windows, an absolute path's drive letter will be parsed as the URI
@@ -815,6 +828,9 @@ pub fn signer_from_path_with_config(
                 )
                 .into())
             }
+        }
+        SignerSourceKind::Pgpcard(locator) => {
+            Ok(Box::new(OpenpgpCardKeypair::new_from_locator(locator)?))
         }
     }
 }

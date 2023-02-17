@@ -66,6 +66,7 @@ members = [
     "quic-client",
     "rayon-threadlimit",
     "rbpf-cli",
+    "remote-keypair",
     "remote-wallet",
     "rpc",
     "rpc-client",
