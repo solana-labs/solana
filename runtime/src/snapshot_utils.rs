@@ -174,8 +174,8 @@ impl BankSnapshotInfo {
         }
 
         let status_cache_file = bank_snapshot_dir.join(SNAPSHOT_STATUS_CACHE_FILENAME);
-        if fs::metadata(status_cache_file).is_err() {
-            return Err(SnapshotError::MissingStatusCacheFile(bank_snapshot_dir));
+        if !fs::metadata(&status_cache_file)?.is_file() {
+            return Err(SnapshotError::MissingStatusCacheFile(status_cache_file));
         }
 
         let version_path = bank_snapshot_dir.join(SNAPSHOT_VERSION_FILENAME);
@@ -186,23 +186,23 @@ impl BankSnapshotInfo {
         // There is a time window from the slot directory being created, and the content being completely
         // filled.  Check the completion to avoid using a highest found slot directory with missing content.
         let completion_flag_file = bank_snapshot_dir.join(SNAPSHOT_STATE_COMPLETE_FILENAME);
-        if fs::metadata(completion_flag_file).is_err() {
-            return Err(SnapshotError::DirIncomplete(bank_snapshot_dir));
+        if !fs::metadata(&completion_flag_file)?.is_file() {
+            return Err(SnapshotError::DirIncomplete(completion_flag_file));
         }
 
         let bank_snapshot_post_path = bank_snapshot_dir.join(get_snapshot_file_name(slot));
         let bank_snapshot_pre_path =
             bank_snapshot_post_path.with_extension(BANK_SNAPSHOT_PRE_FILENAME_EXTENSION);
 
-        let snapshot_type: Option<BankSnapshotType> = if bank_snapshot_pre_path.is_file() {
-            Some(BankSnapshotType::Pre)
+        let snapshot_type = if bank_snapshot_pre_path.is_file() {
+            BankSnapshotType::Pre
         } else if bank_snapshot_post_path.is_file() {
-            Some(BankSnapshotType::Post)
+            BankSnapshotType::Post
         } else {
-            None
+            return Err(SnapshotError::MissingSnapshotFile(
+                bank_snapshot_dir.clone(),
+            ));
         };
-        let snapshot_type = snapshot_type
-            .ok_or_else(|| SnapshotError::MissingSnapshotFile(bank_snapshot_dir.clone()))?;
 
         Ok(BankSnapshotInfo {
             slot,
@@ -1593,7 +1593,7 @@ fn streaming_unarchive_snapshot(
 /// as a valid one.  A dir unpacked from an archive lacks these files.  Fill them here to
 /// allow new_from_dir() checks to pass.  These checks are not needed for unpacked dirs,
 /// but it is not clean to add another flag to new_from_dir() to skip them.
-fn fill_snapshot_meta_files_for_unchived_snapshot(unpack_dir: impl AsRef<Path>) -> Result<()> {
+fn fill_snapshot_meta_files_for_unarchived_snapshot(unpack_dir: impl AsRef<Path>) -> Result<()> {
     let snapshots_dir = unpack_dir.as_ref().join("snapshots");
     if !snapshots_dir.is_dir() {
         return Err(SnapshotError::NoSnapshotSlotDir(snapshots_dir));
@@ -1667,7 +1667,7 @@ where
     );
     info!("{}", measure_untar);
 
-    fill_snapshot_meta_files_for_unchived_snapshot(&unpack_dir)?;
+    fill_snapshot_meta_files_for_unarchived_snapshot(&unpack_dir)?;
 
     let RebuiltSnapshotStorage {
         snapshot_version,
