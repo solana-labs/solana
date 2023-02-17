@@ -54,6 +54,7 @@ use {
         read_only_accounts_cache::ReadOnlyAccountsCache,
         rent_collector::RentCollector,
         rent_paying_accounts_by_partition::RentPayingAccountsByPartition,
+        serde_snapshot::{SerdeAccountsDeltaHash, SerdeAccountsHash},
         snapshot_utils::create_accounts_run_and_snapshot_dirs,
         sorted_storages::SortedStorages,
         storable_accounts::StorableAccounts,
@@ -7325,12 +7326,13 @@ impl AccountsDb {
             .insert(slot, accounts_hash)
     }
 
+    /// After deserializing a snapshot, set the accounts hash for the new AccountsDb
     pub fn set_accounts_hash_from_snapshot(
-        &self,
+        &mut self,
         slot: Slot,
-        accounts_hash: AccountsHash,
+        accounts_hash: SerdeAccountsHash,
     ) -> Option<AccountsHash> {
-        self.set_accounts_hash(slot, accounts_hash)
+        self.set_accounts_hash(slot, accounts_hash.into())
     }
 
     /// Get the accounts hash for `slot` in the `accounts_hashes` map
@@ -7729,12 +7731,13 @@ impl AccountsDb {
             .insert(slot, accounts_delta_hash)
     }
 
+    /// After deserializing a snapshot, set the accounts delta hash for the new AccountsDb
     pub fn set_accounts_delta_hash_from_snapshot(
-        &self,
+        &mut self,
         slot: Slot,
-        accounts_delta_hash: AccountsDeltaHash,
+        accounts_delta_hash: SerdeAccountsDeltaHash,
     ) -> Option<AccountsDeltaHash> {
-        self.set_accounts_delta_hash(slot, accounts_delta_hash)
+        self.set_accounts_delta_hash(slot, accounts_delta_hash.into())
     }
 
     /// Get the accounts delta hash for `slot` in the `accounts_delta_hashes` map
@@ -7756,7 +7759,7 @@ impl AccountsDb {
     /// snapshot--the bank hash stats map is populated with a default entry at slot 0.  Remove the
     /// default entry at slot 0, and then insert the new value at `slot`.
     pub fn update_bank_hash_stats_from_snapshot(
-        &self,
+        &mut self,
         slot: Slot,
         stats: BankHashStats,
     ) -> Option<BankHashStats> {

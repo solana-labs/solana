@@ -83,9 +83,38 @@ pub struct AccountsDbFields<T>(
 
 #[derive(Clone, Default, Debug, Serialize, Deserialize, PartialEq, Eq, AbiExample)]
 struct BankHashInfo {
-    accounts_delta_hash: AccountsDeltaHash,
-    accounts_hash: AccountsHash,
+    accounts_delta_hash: SerdeAccountsDeltaHash,
+    accounts_hash: SerdeAccountsHash,
     stats: BankHashStats,
+}
+
+/// Snapshot serde-safe accounts delta hash
+#[derive(Clone, Default, Debug, Serialize, Deserialize, PartialEq, Eq, AbiExample)]
+pub struct SerdeAccountsDeltaHash(pub Hash);
+
+impl From<SerdeAccountsDeltaHash> for AccountsDeltaHash {
+    fn from(accounts_delta_hash: SerdeAccountsDeltaHash) -> Self {
+        Self(accounts_delta_hash.0)
+    }
+}
+impl From<AccountsDeltaHash> for SerdeAccountsDeltaHash {
+    fn from(accounts_delta_hash: AccountsDeltaHash) -> Self {
+        Self(accounts_delta_hash.0)
+    }
+}
+
+/// Snapshot serde-safe accounts hash
+#[derive(Clone, Default, Debug, Serialize, Deserialize, PartialEq, Eq, AbiExample)]
+pub struct SerdeAccountsHash(pub Hash);
+impl From<SerdeAccountsHash> for AccountsHash {
+    fn from(accounts_hash: SerdeAccountsHash) -> Self {
+        Self(accounts_hash.0)
+    }
+}
+impl From<AccountsHash> for SerdeAccountsHash {
+    fn from(accounts_hash: AccountsHash) -> Self {
+        Self(accounts_hash.0)
+    }
 }
 
 /// Helper type to wrap BufReader streams when deserializing and reconstructing from either just a
