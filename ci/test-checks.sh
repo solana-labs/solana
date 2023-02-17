@@ -81,7 +81,13 @@ nightly_clippy_allows=()
    --deny=clippy::integer_arithmetic \
    "${nightly_clippy_allows[@]}"
 
-_ scripts/cargo-for-all-lock-files.sh -- "+${rust_nightly}" sort --workspace --check
+if [[ -n $CI ]]; then
+  # exclude from printing "Checking xxx ..."
+  _ scripts/cargo-for-all-lock-files.sh -- "+${rust_nightly}" sort --workspace --check > /dev/null
+else
+  _ scripts/cargo-for-all-lock-files.sh -- "+${rust_nightly}" sort --workspace --check
+fi
+
 _ scripts/cargo-for-all-lock-files.sh -- "+${rust_nightly}" fmt --all -- --check
 
  _ ci/do-audit.sh
