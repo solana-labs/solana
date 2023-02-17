@@ -2805,6 +2805,8 @@ pub struct Sockets {
     pub ancestor_hashes_requests: UdpSocket,
     pub tpu_quic: UdpSocket,
     pub tpu_forwards_quic: UdpSocket,
+    pub repair_quic: UdpSocket,
+    pub serve_repair_quic: UdpSocket,
 }
 
 #[derive(Debug)]
@@ -2834,14 +2836,16 @@ impl Node {
         let ((_tpu_forwards_port, tpu_forwards), (_tpu_forwards_quic_port, tpu_forwards_quic)) =
             bind_two_in_range_with_offset(localhost_ip_addr, port_range, QUIC_PORT_OFFSET).unwrap();
         let tpu_vote = UdpSocket::bind(&localhost_bind_addr).unwrap();
-        let repair = UdpSocket::bind(&localhost_bind_addr).unwrap();
+        let ((_repair_port, repair), (_repair_quic_port, repair_quic)) =
+            bind_two_in_range_with_offset(bind_ip_addr, port_range, QUIC_PORT_OFFSET).unwrap();
         let rpc_port = find_available_port_in_range(localhost_ip_addr, port_range).unwrap();
         let rpc_addr = SocketAddr::new(localhost_ip_addr, rpc_port);
         let rpc_pubsub_port = find_available_port_in_range(localhost_ip_addr, port_range).unwrap();
         let rpc_pubsub_addr = SocketAddr::new(localhost_ip_addr, rpc_pubsub_port);
         let broadcast = vec![UdpSocket::bind(&unspecified_bind_addr).unwrap()];
         let retransmit_socket = UdpSocket::bind(&unspecified_bind_addr).unwrap();
-        let serve_repair = UdpSocket::bind(&localhost_bind_addr).unwrap();
+        let ((_serve_repair_port, serve_repair), (_serve_repair_quic_port, serve_repair_quic)) =
+            bind_two_in_range_with_offset(bind_ip_addr, port_range, QUIC_PORT_OFFSET).unwrap();
         let ancestor_hashes_requests = UdpSocket::bind(&unspecified_bind_addr).unwrap();
 
         let mut info = ContactInfo::new(
@@ -2896,6 +2900,8 @@ impl Node {
                 ancestor_hashes_requests,
                 tpu_quic,
                 tpu_forwards_quic,
+                repair_quic,
+                serve_repair_quic,
             },
         }
     }
@@ -2936,8 +2942,12 @@ impl Node {
             bind_two_in_range_with_offset(bind_ip_addr, port_range, QUIC_PORT_OFFSET).unwrap();
         let (tpu_vote_port, tpu_vote) = Self::bind(bind_ip_addr, port_range);
         let (_, retransmit_socket) = Self::bind(bind_ip_addr, port_range);
-        let (repair_port, repair) = Self::bind(bind_ip_addr, port_range);
-        let (serve_repair_port, serve_repair) = Self::bind(bind_ip_addr, port_range);
+        let ((repair_port, repair), (_repair_quic_port, repair_quic)) =
+            bind_two_in_range_with_offset(bind_ip_addr, port_range, QUIC_PORT_OFFSET).unwrap();
+
+        let ((serve_repair_port, serve_repair), (_serve_repair_quic_port, serve_repair_quic)) =
+            bind_two_in_range_with_offset(bind_ip_addr, port_range, QUIC_PORT_OFFSET).unwrap();
+
         let (_, broadcast) = Self::bind(bind_ip_addr, port_range);
         let (_, ancestor_hashes_requests) = Self::bind(bind_ip_addr, port_range);
 
@@ -2987,6 +2997,8 @@ impl Node {
                 ancestor_hashes_requests,
                 tpu_quic,
                 tpu_forwards_quic,
+                repair_quic,
+                serve_repair_quic,
             },
         }
     }
@@ -3035,6 +3047,22 @@ impl Node {
         let (repair_port, repair) = Self::bind(bind_ip_addr, port_range);
         let (serve_repair_port, serve_repair) = Self::bind(bind_ip_addr, port_range);
 
+        let (_repair_port_quic, repair_quic) = Self::bind(
+            bind_ip_addr,
+            (
+                repair_port + QUIC_PORT_OFFSET,
+                repair_port + QUIC_PORT_OFFSET + 1,
+            ),
+        );
+
+        let (_serve_repair_port_quic, serve_repair_quic) = Self::bind(
+            bind_ip_addr,
+            (
+                serve_repair_port + QUIC_PORT_OFFSET,
+                serve_repair_port + QUIC_PORT_OFFSET + 1,
+            ),
+        );
+
         let (_, broadcast) =
             multi_bind_in_range(bind_ip_addr, port_range, 4).expect("broadcast multi_bind");
 
@@ -3073,6 +3101,8 @@ impl Node {
                 ancestor_hashes_requests,
                 tpu_quic,
                 tpu_forwards_quic,
+                repair_quic,
+                serve_repair_quic,
             },
         }
     }

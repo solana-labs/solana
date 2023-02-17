@@ -25,7 +25,7 @@ use {
         },
         tower_storage::TowerStorage,
         tpu::{Tpu, TpuSockets, DEFAULT_TPU_COALESCE_MS},
-        tvu::{Tvu, TvuConfig, TvuSockets},
+        tvu::{RepairQuicConfig, Tvu, TvuConfig, TvuSockets},
     },
     crossbeam_channel::{bounded, unbounded, Receiver},
     rand::{thread_rng, Rng},
@@ -101,7 +101,10 @@ use {
         timing::timestamp,
     },
     solana_send_transaction_service::send_transaction_service,
-    solana_streamer::{socket::SocketAddrSpace, streamer::StakedNodes},
+    solana_streamer::{
+        nonblocking::quic::DEFAULT_WAIT_FOR_CHUNK_TIMEOUT_MS, socket::SocketAddrSpace,
+        streamer::StakedNodes,
+    },
     solana_vote_program::vote_state,
     std::{
         collections::{HashMap, HashSet},
@@ -118,6 +121,8 @@ use {
 
 const MAX_COMPLETED_DATA_SETS_IN_CHANNEL: usize = 100_000;
 const WAIT_FOR_SUPERMAJORITY_THRESHOLD_PERCENT: u64 = 80;
+
+pub const DEFAULT_REPAIR_USE_QUIC: bool = false;
 
 pub struct ValidatorConfig {
     pub halt_at_slot: Option<Slot>,
@@ -393,10 +398,11 @@ impl Validator {
         should_check_duplicate_instance: bool,
         start_progress: Arc<RwLock<ValidatorStartProgress>>,
         socket_addr_space: SocketAddrSpace,
-        use_quic: bool,
+        tpu_use_quic: bool,
         tpu_connection_pool_size: usize,
         tpu_enable_udp: bool,
         admin_rpc_service_post_init: Arc<RwLock<Option<AdminRpcRequestMetadataPostInit>>>,
+        repair_use_quic: bool,
     ) -> Result<Self, String> {
         let id = identity_keypair.pubkey();
         assert_eq!(&id, node.info.pubkey());
@@ -760,7 +766,7 @@ impl Validator {
 
         let staked_nodes = Arc::new(RwLock::new(StakedNodes::default()));
 
-        let connection_cache = match use_quic {
+        let connection_cache = match tpu_use_quic {
             true => {
                 let connection_cache = ConnectionCache::new_with_client_options(
                     tpu_connection_pool_size,
@@ -1030,8 +1036,12 @@ impl Validator {
             &connection_cache,
             &prioritization_fee_cache,
             banking_tracer.clone(),
-            identity_keypair.clone(),
-            staked_nodes.clone(),
+            repair_use_quic.then_some(RepairQuicConfig {
+                repair_address: Arc::new(node.sockets.repair_quic),
+                identity_keypair: identity_keypair.clone(),
+                staked_nodes: staked_nodes.clone(),
+                wait_for_chunk_timeout_ms: DEFAULT_WAIT_FOR_CHUNK_TIMEOUT_MS,
+            }),
         )?;
 
         let tpu = Tpu::new(

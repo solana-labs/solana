@@ -13,6 +13,7 @@ use {
         outstanding_requests::OutstandingRequests,
         repair_weight::RepairWeight,
         serve_repair::{ServeRepair, ShredRepairType, REPAIR_PEERS_CACHE_CAPACITY},
+        tvu::RepairQuicConfig,
     },
     crossbeam_channel::{Receiver as CrossbeamReceiver, Sender as CrossbeamSender},
     lru::LruCache,
@@ -36,10 +37,7 @@ use {
         signer::{keypair::Keypair, Signer},
         timing::timestamp,
     },
-    solana_streamer::{
-        sendmmsg::{batch_send, SendPktsError},
-        streamer::StakedNodes,
-    },
+    solana_streamer::sendmmsg::{batch_send, SendPktsError},
     std::{
         collections::{HashMap, HashSet},
         iter::Iterator,
@@ -236,9 +234,7 @@ impl RepairService {
         blockstore: Arc<Blockstore>,
         exit: Arc<AtomicBool>,
         repair_socket: Arc<UdpSocket>,
-        quic_repair_endpoint: Option<Endpoint>,
-        identity_keypair: Arc<Keypair>,
-        staked_nodes: Arc<RwLock<StakedNodes>>,
+        quic_repair_option: Option<(Endpoint, RepairQuicConfig)>,
         ancestor_hashes_socket: Arc<UdpSocket>,
         repair_info: RepairInfo,
         verified_vote_receiver: VerifiedVoteReceiver,
@@ -257,9 +253,7 @@ impl RepairService {
                         &blockstore,
                         &exit,
                         &repair_socket,
-                        quic_repair_endpoint,
-                        identity_keypair,
-                        staked_nodes,
+                        quic_repair_option,
                         repair_info,
                         verified_vote_receiver,
                         &outstanding_requests,
@@ -287,9 +281,7 @@ impl RepairService {
         blockstore: &Blockstore,
         exit: &AtomicBool,
         repair_socket: &UdpSocket,
-        quic_repair_endpoint: Option<Endpoint>,
-        identity_keypair: Arc<Keypair>,
-        staked_nodes: Arc<RwLock<StakedNodes>>,
+        quic_repair_option: Option<(Endpoint, RepairQuicConfig)>,
         repair_info: RepairInfo,
         verified_vote_receiver: VerifiedVoteReceiver,
         outstanding_requests: &RwLock<OutstandingShredRepairs>,
@@ -308,16 +300,19 @@ impl RepairService {
         let mut last_stats = Instant::now();
         let mut peers_cache = LruCache::new(REPAIR_PEERS_CACHE_CAPACITY);
 
-        let connection_cache = quic_repair_endpoint.map(|client_endpoint| {
+        let connection_cache = quic_repair_option.map(|(client_endpoint, repair_quic_config)| {
             let cert_info = Some((
-                &*identity_keypair,
+                &*repair_quic_config.identity_keypair,
                 client_endpoint.local_addr().unwrap().ip(),
             ));
             ConnectionCache::new_with_client_options(
                 1,
                 Some(client_endpoint),
                 cert_info,
-                Some((&staked_nodes, &identity_keypair.pubkey())),
+                Some((
+                    &repair_quic_config.staked_nodes,
+                    &repair_quic_config.identity_keypair.pubkey(),
+                )),
             )
         });
 
