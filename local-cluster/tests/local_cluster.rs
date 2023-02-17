@@ -1187,18 +1187,7 @@ fn test_incremental_snapshot_download_with_crossing_full_snapshot_interval_at_st
         num_account_paths,
     );
 
-    // Copy over the snapshots to the new node, but need to remove the tmp snapshot dir so it
-    // doesn't break the simple copy_files closure.
-    snapshot_utils::remove_tmp_snapshot_archives(
-        validator_snapshot_test_config
-            .full_snapshot_archives_dir
-            .path(),
-    );
-    snapshot_utils::remove_tmp_snapshot_archives(
-        validator_snapshot_test_config
-            .incremental_snapshot_archives_dir
-            .path(),
-    );
+    // Copy over the snapshots to the new node that it will boot from
     copy_files(
         validator_snapshot_test_config
             .full_snapshot_archives_dir
