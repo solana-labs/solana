@@ -164,30 +164,36 @@ impl BankSnapshotInfo {
     pub fn new_from_dir(
         bank_snapshots_dir: impl AsRef<Path>,
         slot: Slot,
-    ) -> Result<BankSnapshotInfo> {
+    ) -> std::result::Result<BankSnapshotInfo, SnapshotNewFromDirError> {
         // check this directory to see if there is a BankSnapshotPre and/or
         // BankSnapshotPost file
         let bank_snapshot_dir = get_bank_snapshots_dir(&bank_snapshots_dir, slot);
 
         if !bank_snapshot_dir.is_dir() {
-            return Err(SnapshotError::InvalidBankSnapshotDir(bank_snapshot_dir));
+            return Err(SnapshotNewFromDirError::InvalidBankSnapshotDir(
+                bank_snapshot_dir,
+            ));
         }
 
         let status_cache_file = bank_snapshot_dir.join(SNAPSHOT_STATUS_CACHE_FILENAME);
         if !fs::metadata(&status_cache_file)?.is_file() {
-            return Err(SnapshotError::MissingStatusCacheFile(status_cache_file));
+            return Err(SnapshotNewFromDirError::MissingStatusCacheFile(
+                status_cache_file,
+            ));
         }
 
         let version_path = bank_snapshot_dir.join(SNAPSHOT_VERSION_FILENAME);
-        let version_str = snapshot_version_from_file(version_path)?;
+        let version_str = snapshot_version_from_file(&version_path).or(Err(
+            SnapshotNewFromDirError::MissingVersionFile(version_path),
+        ))?;
         let snapshot_version = SnapshotVersion::from_str(version_str.as_str())
-            .or(Err(SnapshotError::InvalidVersion))?;
+            .or(Err(SnapshotNewFromDirError::InvalidVersion))?;
 
         // There is a time window from the slot directory being created, and the content being completely
         // filled.  Check the completion to avoid using a highest found slot directory with missing content.
         let completion_flag_file = bank_snapshot_dir.join(SNAPSHOT_STATE_COMPLETE_FILENAME);
         if !fs::metadata(&completion_flag_file)?.is_file() {
-            return Err(SnapshotError::DirIncomplete(completion_flag_file));
+            return Err(SnapshotNewFromDirError::DirIncomplete(completion_flag_file));
         }
 
         let bank_snapshot_post_path = bank_snapshot_dir.join(get_snapshot_file_name(slot));
@@ -199,7 +205,9 @@ impl BankSnapshotInfo {
         } else if bank_snapshot_post_path.is_file() {
             BankSnapshotType::Post
         } else {
-            return Err(SnapshotError::MissingSnapshotFile(bank_snapshot_dir));
+            return Err(SnapshotNewFromDirError::MissingSnapshotFile(
+                bank_snapshot_dir,
+            ));
         };
 
         Ok(BankSnapshotInfo {
@@ -323,12 +331,20 @@ pub enum SnapshotError {
 
     #[error("no valid snapshot dir found under {}", .0.display())]
     NoSnapshotSlotDir(PathBuf),
+}
+#[derive(Error, Debug)]
+pub enum SnapshotNewFromDirError {
+    #[error("I/O error: {0}")]
+    Io(#[from] std::io::Error),
 
     #[error("invalid bank snapshot directory {}", .0.display())]
     InvalidBankSnapshotDir(PathBuf),
 
     #[error("missing status cache file {}", .0.display())]
     MissingStatusCacheFile(PathBuf),
+
+    #[error("missing version file {}", .0.display())]
+    MissingVersionFile(PathBuf),
 
     #[error("invalid snapshot version")]
     InvalidVersion,
@@ -339,6 +355,7 @@ pub enum SnapshotError {
     #[error("missing snapshotfile {}", .0.display())]
     MissingSnapshotFile(PathBuf),
 }
+
 pub type Result<T> = std::result::Result<T, SnapshotError>;
 
 /// Errors that can happen in `verify_slot_deltas()`
@@ -683,12 +700,16 @@ pub fn get_bank_snapshots(bank_snapshots_dir: impl AsRef<Path>) -> Vec<BankSnaps
                             .and_then(|file_name| file_name.parse::<Slot>().ok())
                     })
             })
-            .for_each(|slot| {
-                if let Ok(snapshot_info) = BankSnapshotInfo::new_from_dir(&bank_snapshots_dir, slot)
-                {
-                    bank_snapshots.push(snapshot_info);
-                }
-            }),
+            .for_each(
+                |slot| match BankSnapshotInfo::new_from_dir(&bank_snapshots_dir, slot) {
+                    Ok(snapshot_info) => {
+                        bank_snapshots.push(snapshot_info);
+                    }
+                    Err(err) => {
+                        error!("Unable to read bank snapshot for slot {}: {}", slot, err);
+                    }
+                },
+            ),
     }
     bank_snapshots
 }
