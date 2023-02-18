@@ -563,28 +563,19 @@ mod tests {
             net::{Ipv4Addr, SocketAddr},
             time::Duration,
         },
+        tempfile::tempdir,
     };
-
-    fn make_tmp_path(name: &str) -> String {
-        let out_dir = std::env::var("FARF_DIR").unwrap_or_else(|_| "farf".to_string());
-        let keypair = Keypair::new();
-
-        let path = format!("{}/tmp/{}-{}", out_dir, name, keypair.pubkey());
-
-        // whack any possible collision
-        let _ = std::fs::remove_dir_all(&path);
-        // whack any possible collision
-        let _ = std::fs::remove_file(&path);
-
-        path
-    }
 
     #[test]
     #[allow(clippy::cognitive_complexity)]
     fn test_cli_parse() {
         // always specify identity in these tests because otherwise a random one will be used
         let keypair = Keypair::new();
-        let keypair_file_name = make_tmp_path("keypair_file");
+        let out_dir = tempdir().unwrap();
+        let file_path = out_dir
+            .path()
+            .join(format!("keypair_file-{}", keypair.pubkey()));
+        let keypair_file_name = file_path.into_os_string().into_string().unwrap();
         write_keypair_file(&keypair, &keypair_file_name).unwrap();
 
         // parse provided rpc address, check that default ws address is correct

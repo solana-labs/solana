@@ -4926,6 +4926,7 @@ dependencies = [
  "solana-tpu-client",
  "solana-version",
  "spl-instruction-padding",
+ "tempfile",
  "thiserror",
 ]
 
