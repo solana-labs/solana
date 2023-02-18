@@ -908,6 +908,15 @@ impl Validator {
             bank_forks.clone(),
             config.repair_whitelist.clone(),
         );
+
+        let repair_quic_config = RepairQuicConfig {
+            repair_address: Arc::new(node.sockets.repair_quic),
+            serve_repair_address: Arc::new(node.sockets.serve_repair_quic),
+            identity_keypair: identity_keypair.clone(),
+            staked_nodes: staked_nodes.clone(),
+            wait_for_chunk_timeout_ms: DEFAULT_WAIT_FOR_CHUNK_TIMEOUT_MS,
+        };
+
         let serve_repair_service = ServeRepairService::new(
             serve_repair,
             blockstore.clone(),
@@ -1036,12 +1045,7 @@ impl Validator {
             &connection_cache,
             &prioritization_fee_cache,
             banking_tracer.clone(),
-            repair_use_quic.then_some(RepairQuicConfig {
-                repair_address: Arc::new(node.sockets.repair_quic),
-                identity_keypair: identity_keypair.clone(),
-                staked_nodes: staked_nodes.clone(),
-                wait_for_chunk_timeout_ms: DEFAULT_WAIT_FOR_CHUNK_TIMEOUT_MS,
-            }),
+            repair_use_quic.then_some(repair_quic_config.clone()),
         )?;
 
         let tpu = Tpu::new(
