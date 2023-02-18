@@ -96,7 +96,10 @@ pub struct TvuConfig {
 
 #[derive(Clone)]
 pub struct RepairQuicConfig {
+    /// The address from which to send repair request via quic
     pub repair_address: Arc<UdpSocket>,
+    /// The address at which to serve repair request via quic
+    pub serve_repair_address: Arc<UdpSocket>,
     pub identity_keypair: Arc<Keypair>,
     pub staked_nodes: Arc<RwLock<StakedNodes>>,
     pub wait_for_chunk_timeout_ms: u64,

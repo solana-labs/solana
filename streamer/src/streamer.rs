@@ -4,11 +4,14 @@
 use {
     crate::{
         packet::{self, PacketBatch, PacketBatchRecycler, PACKETS_PER_BATCH},
-        sendmmsg::{batch_send, SendPktsError},
+        sendmmsg::{batch_send, batch_send_with_connection_cache, SendPktsError},
         socket::SocketAddrSpace,
     },
     crossbeam_channel::{Receiver, RecvTimeoutError, SendError, Sender},
     histogram::Histogram,
+    solana_connection_cache::connection_cache::{
+        ConnectionCache, ConnectionManager, ConnectionPool, NewConnectionConfig,
+    },
     solana_sdk::{packet::Packet, pubkey::Pubkey, timing::timestamp},
     std::{
         cmp::Reverse,
@@ -293,12 +296,17 @@ impl StreamerSendStats {
     }
 }
 
-fn recv_send(
-    sock: &UdpSocket,
+fn recv_send<P, M, C>(
+    sock: &ResponderOption<P, M, C>,
     r: &PacketBatchReceiver,
     socket_addr_space: &SocketAddrSpace,
     stats: &mut Option<StreamerSendStats>,
-) -> Result<()> {
+) -> Result<()>
+where
+    P: ConnectionPool<NewConnectionConfig = C>,
+    M: ConnectionManager<ConnectionPool = P, NewConnectionConfig = C>,
+    C: NewConnectionConfig,
+{
     let timer = Duration::new(1, 0);
     let packet_batch = r.recv_timeout(timer)?;
     if let Some(stats) = stats {
@@ -309,7 +317,16 @@ fn recv_send(
         let data = pkt.data(..)?;
         socket_addr_space.check(&addr).then_some((data, addr))
     });
-    batch_send(sock, &packets.collect::<Vec<_>>())?;
+
+    match sock {
+        ResponderOption::Socket(sock) => {
+            batch_send(sock, &packets.collect::<Vec<_>>())?;
+        }
+        ResponderOption::ConnectionCache(connection_cache) => {
+            batch_send_with_connection_cache(&packets.collect::<Vec<_>>(), connection_cache)?;
+        }
+    }
+
     Ok(())
 }
 
@@ -364,13 +381,28 @@ pub fn recv_packet_batches(
     Ok((packet_batches, num_packets, recv_duration))
 }
 
-pub fn responder(
+pub enum ResponderOption<P, M, C>
+where
+    P: ConnectionPool<NewConnectionConfig = C> + 'static,
+    M: ConnectionManager<ConnectionPool = P, NewConnectionConfig = C> + 'static,
+    C: NewConnectionConfig + 'static,
+{
+    Socket(Arc<UdpSocket>),
+    ConnectionCache(Arc<ConnectionCache<P, M, C>>),
+}
+
+pub fn responder<P, M, C>(
     name: &'static str,
-    sock: Arc<UdpSocket>,
+    sock: ResponderOption<P, M, C>,
     r: PacketBatchReceiver,
     socket_addr_space: SocketAddrSpace,
     stats_reporter_sender: Option<Sender<Box<dyn FnOnce() + Send>>>,
-) -> JoinHandle<()> {
+) -> JoinHandle<()>
+where
+    P: ConnectionPool<NewConnectionConfig = C> + 'static,
+    M: ConnectionManager<ConnectionPool = P, NewConnectionConfig = C> + 'static,
+    C: NewConnectionConfig + 'static,
+{
     Builder::new()
         .name(format!("solRspndr{name}"))
         .spawn(move || {

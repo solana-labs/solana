@@ -63,6 +63,7 @@ pub mod retransmit_stage;
 pub mod rewards_recorder_service;
 pub mod sample_performance_service;
 pub mod serve_repair;
+pub mod serve_repair_quic_service;
 pub mod serve_repair_service;
 mod shred_fetch_stage;
 pub mod sigverify;
