@@ -520,13 +520,12 @@ pub fn parse_args(matches: &ArgMatches) -> Result<Config, &'static str> {
             .value_of("instruction_padding_program_id")
             .map(|target_str| target_str.parse().unwrap())
             .unwrap_or_else(|| FromOtherSolana::from(spl_instruction_padding::ID));
-        let parsed_data_size = data_size
-            .to_string()
+        let data_size = data_size
             .parse()
             .map_err(|_| "Can't parse padded instruction data size")?;
         args.instruction_padding_config = Some(InstructionPaddingConfig {
             program_id,
-            data_size: parsed_data_size,
+            data_size,
         });
     }
 
