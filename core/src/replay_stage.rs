@@ -2589,10 +2589,6 @@ impl ReplayStage {
                             // bank is completed
                             continue;
                         },
-                        solana_scheduler_pool::Mode::Banking => {
-                            // propagate timings for Err case for tpu bank
-                            info!("discarding harmless transaction error for tpu bank({}): {:?}", bank.slot(), err);
-                        }
                     }
                     },
                     Ok(cumulative_timings) => {
