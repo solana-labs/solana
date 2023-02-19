@@ -357,8 +357,9 @@ pub fn initialize_state(
         bank0.transfer(10_000, &mint_keypair, pubkey).unwrap();
     }
 
+    let slot0 = bank0.slot();
     let bank_forks = BankForks::new(bank0);
-    let bank0 = bank_forks.get(bank0.slot()).unwrap();
+    let bank0 = bank_forks.get(slot0).unwrap();
     while bank0.tick_height() < bank0.max_tick_height() {
         bank0.register_tick(&Hash::new_unique());
     }
