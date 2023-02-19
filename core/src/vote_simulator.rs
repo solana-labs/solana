@@ -66,9 +66,72 @@ impl VoteSimulator {
         forks: Tree<u64>,
         cluster_votes: &HashMap<Pubkey, Vec<u64>>,
         is_frozen: bool,
-    ) 
-    {
-        panic!();
+    ) {
+        let root = *forks.root().data();
+        assert!(self.bank_forks.read().unwrap().get(root).is_some());
+
+        let mut walk = TreeWalk::from(forks);
+
+        while let Some(visit) = walk.get() {
+            let slot = *visit.node().data();
+            if self.bank_forks.read().unwrap().get(slot).is_some() {
+                walk.forward();
+                continue;
+            }
+            let parent = *walk.get_parent().unwrap().data();
+            let parent_bank = self.bank_forks.read().unwrap().get(parent).unwrap();
+            let new_bank = Bank::new_from_parent(&parent_bank, &Pubkey::default(), slot);
+            self.progress
+                .entry(slot)
+                .or_insert_with(|| ForkProgress::new(Hash::default(), None, None, 0, 0));
+            for (pubkey, vote) in cluster_votes.iter() {
+                if vote.contains(&parent) {
+                    let keypairs = self.validator_keypairs.get(pubkey).unwrap();
+                    let latest_blockhash = parent_bank.last_blockhash();
+                    let vote_tx = vote_transaction::new_vote_transaction(
+                        // Must vote > root to be processed
+                        vec![parent],
+                        parent_bank.hash(),
+                        latest_blockhash,
+                        &keypairs.node_keypair,
+                        &keypairs.vote_keypair,
+                        &keypairs.vote_keypair,
+                        None,
+                    );
+                    info!("voting {} {}", parent_bank.slot(), parent_bank.hash());
+                    new_bank.process_transaction(&vote_tx).unwrap();
+
+                    // Check the vote landed
+                    let vote_account = new_bank
+                        .get_vote_account(&keypairs.vote_keypair.pubkey())
+                        .unwrap();
+                    let state = vote_account.vote_state();
+                    assert!(state
+                        .as_ref()
+                        .unwrap()
+                        .votes
+                        .iter()
+                        .any(|lockout| lockout.slot() == parent));
+                }
+            }
+            while new_bank.tick_height() < new_bank.max_tick_height() {
+                new_bank.register_tick(&Hash::new_unique());
+            }
+            if !visit.node().has_no_child() || is_frozen {
+                new_bank.freeze();
+                self.progress
+                    .get_fork_stats_mut(new_bank.slot())
+                    .expect("All frozen banks must exist in the Progress map")
+                    .bank_hash = Some(new_bank.hash());
+                self.heaviest_subtree_fork_choice.add_new_leaf_slot(
+                    (new_bank.slot(), new_bank.hash()),
+                    Some((new_bank.parent_slot(), new_bank.parent_hash())),
+                );
+            }
+            self.bank_forks.write().unwrap().insert(new_bank);
+
+            walk.forward();
+        }
     }
 
     pub fn simulate_vote(
@@ -276,6 +339,34 @@ pub fn initialize_state(
     validator_keypairs_map: &HashMap<Pubkey, ValidatorVoteKeypairs>,
     stake: u64,
 ) -> (BankForks, ProgressMap, HeaviestSubtreeForkChoice) {
-    panic!();
-}
+    let validator_keypairs: Vec<_> = validator_keypairs_map.values().collect();
+    let GenesisConfigInfo {
+        mut genesis_config,
+        mint_keypair,
+        ..
+    } = create_genesis_config_with_vote_accounts(
+        1_000_000_000,
+        &validator_keypairs,
+        vec![stake; validator_keypairs.len()],
+    );
 
+    genesis_config.poh_config.hashes_per_tick = Some(2);
+    let bank0 = Bank::new_for_tests(&genesis_config);
+
+    for pubkey in validator_keypairs_map.keys() {
+        bank0.transfer(10_000, &mint_keypair, pubkey).unwrap();
+    }
+
+    while bank0.tick_height() < bank0.max_tick_height() {
+        bank0.register_tick(&Hash::new_unique());
+    }
+    bank0.freeze();
+    let mut progress = ProgressMap::default();
+    progress.insert(
+        0,
+        ForkProgress::new_from_bank(&bank0, bank0.collector_id(), &Pubkey::default(), None, 0, 0),
+    );
+    let bank_forks = BankForks::new(bank0);
+    let heaviest_subtree_fork_choice = HeaviestSubtreeForkChoice::new_from_bank_forks(&bank_forks);
+    (bank_forks, progress, heaviest_subtree_fork_choice)
+}
