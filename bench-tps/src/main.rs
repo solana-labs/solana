@@ -69,7 +69,7 @@ fn find_node_activated_stake(
     match find_result {
         Some(value) => Ok((value.activated_stake, total_active_stake)),
         None => {
-            error!("failed to find stake for requested node");
+            error!("Failed to find stake for requested node");
             Err(())
         }
     }
