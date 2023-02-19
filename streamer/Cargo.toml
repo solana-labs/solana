@@ -37,6 +37,7 @@ x509-parser = { workspace = true }
 
 [dev-dependencies]
 solana-logger = { workspace = true }
+solana-udp-client = { workspace = true }
 
 [lib]
 crate-type = ["lib"]
