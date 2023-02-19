@@ -418,9 +418,7 @@ impl AddressBook {
             .task_ids
             .heaviest_task_id();
 
-        let strictly_lockable = if mode == Mode::Banking {
-            true
-        } else if tcuw.is_none() {
+        let strictly_lockable = if tcuw.is_none() {
             true
         } else if tcuw.unwrap() == *unique_weight {
             true
@@ -697,7 +695,6 @@ impl Task {
     pub fn transaction_index(&self, mode: Mode) -> u64 {
         match mode {
             Mode::Replaying => (UniqueWeight::max_value() - self.unique_weight).try_into().unwrap(),
-            Mode::Banking => (u64::max_value() as u128 & self.unique_weight).try_into().unwrap(),
         }
     }
 
@@ -909,7 +906,6 @@ use enum_dispatch::enum_dispatch;
 
 #[enum_dispatch]
 enum ModeSpecificTaskQueue<C, B> {
-    Banking(TaskQueue),
     Replaying(ChannelBackedTaskQueue<C, B>),
 }
 
@@ -1272,7 +1268,7 @@ impl ScheduleStage {
                             if runnable_queue.is_backed_by_channel() {
                                 Mode::Replaying
                             } else {
-                                Mode::Banking
+                                panic!()
                             }
                         )
                     );
@@ -1823,7 +1819,6 @@ impl ScheduleStage {
                                            if !force_channel_backed {
                                                runnable_queue = match new_mode {
                                                    Mode::Replaying => ModeSpecificTaskQueue::Replaying(ChannelBackedTaskQueue::new(from_prev)),
-                                                   Mode::Banking => ModeSpecificTaskQueue::Banking(TaskQueue::default()),
                                                };
                                            }
                                            mode = Some(new_mode);
