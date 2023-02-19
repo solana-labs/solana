@@ -349,17 +349,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "atomic_enum"
-version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6227a8d6fdb862bcb100c4314d0d9579e5cd73fa6df31a2e6f6e1acd3c5f1207"
-dependencies = [
- "proc-macro2 1.0.50",
- "quote 1.0.23",
- "syn 1.0.107",
-]
-
-[[package]]
 name = "atty"
 version = "0.2.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5371,7 +5360,6 @@ dependencies = [
  "tempfile",
  "test-case",
  "thiserror",
- "thread-priority",
  "tokio",
  "trees",
 ]
@@ -6444,14 +6432,12 @@ version = "1.16.0"
 dependencies = [
  "arrayref",
  "assert_matches",
- "atomic_enum",
  "bincode",
  "blake3",
  "bv",
  "bytemuck",
  "byteorder",
  "bzip2",
- "cpu-time",
  "crossbeam-channel",
  "dashmap 4.0.2",
  "dir-diff",
@@ -6485,7 +6471,6 @@ dependencies = [
  "solana-bucket-map",
  "solana-compute-budget-program",
  "solana-config-program",
- "solana-entry",
  "solana-frozen-abi 1.16.0",
  "solana-frozen-abi-macro 1.16.0",
  "solana-logger 1.16.0",
