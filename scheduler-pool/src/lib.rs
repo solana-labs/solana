@@ -247,8 +247,6 @@ impl Scheduler {
             c
         };
 
-        let send_metrics = std::env::var("SOLANA_TRANSACTION_TIMINGS").is_ok();
-
         let max_thread_priority = std::env::var("MAX_THREAD_PRIORITY").is_ok();
         let commit_status = Arc::new(CommitStatus::new());
 
@@ -489,30 +487,6 @@ impl Scheduler {
                     match r {
                         solana_scheduler::ExaminablePayload(solana_scheduler::Flushable::Payload((mut ee, timings))) => {
                             cumulative_timings.accumulate(&timings);
-
-                            if send_metrics && ee.finish_time.is_some() {
-                                let sig = ee.task.tx.0.signature().to_string();
-
-                                datapoint_info_at!(
-                                    ee.finish_time.unwrap(),
-                                    "transaction_timings",
-                                    ("slot", latest_scheduler_context.as_ref().unwrap().slot(), i64),
-                                    ("index", ee.task.transaction_index(latest_scheduler_context.as_ref().unwrap().mode), i64),
-                                    ("thread", format!("solScExLane{:02}", ee.thx), String),
-                                    ("signature", &sig, String),
-                                    ("account_locks_in_json", serde_json::to_string(&ee.task.tx.0.get_account_locks_unchecked()).unwrap(), String),
-                                    (
-                                        "status",
-                                        format!("{:?}", ee.execution_result.as_ref().unwrap()),
-                                        String
-                                    ),
-                                    ("duration", ee.execution_us, i64),
-                                    ("cpu_duration", ee.execution_cpu_us, i64),
-                                    ("compute_units", ee.cu, i64),
-                                    ("priority", ee.task.tx.0.get_transaction_priority_details().map(|d| d.priority).unwrap_or_default(), i64),
-                                );
-                                info!("execute_substage: slot: {} transaction_index: {} timings: {:?}", latest_scheduler_context.as_ref().unwrap().slot(), ee.task.transaction_index(latest_scheduler_context.as_ref().unwrap().mode), timings);
-                            }
 
                             if let Some(result) = ee.execution_result.take() {
                                 match result {

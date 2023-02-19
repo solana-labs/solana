@@ -2428,7 +2428,6 @@ dependencies = [
  "autocfg",
  "hashbrown 0.12.3",
  "rayon",
- "serde",
 ]
 
 [[package]]
@@ -4582,14 +4581,8 @@ version = "2.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "30d904179146de381af4c93d3af6ca4984b3152db687dacb9c3c35e86f39809c"
 dependencies = [
- "base64 0.13.0",
- "chrono",
- "hex",
- "indexmap",
  "serde",
- "serde_json",
  "serde_with_macros",
- "time 0.3.17",
 ]
 
 [[package]]
