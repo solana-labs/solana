@@ -137,7 +137,7 @@ impl Forwarder {
 
     /// Forwards all valid, unprocessed packets in the buffer, up to a rate limit. Returns
     /// the number of successfully forwarded packets in second part of tuple
-    pub(crate) fn forward_buffered_packets<'a>(
+    fn forward_buffered_packets<'a>(
         &self,
         forward_option: &ForwardOption,
         forwardable_packets: impl Iterator<Item = &'a Packet>,

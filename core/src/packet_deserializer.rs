@@ -25,7 +25,7 @@ pub struct ReceivePacketResults {
 
 pub struct PacketDeserializer {
     /// Receiver for packet batches from sigverify stage
-    pub packet_batch_receiver: BankingPacketReceiver,
+    packet_batch_receiver: BankingPacketReceiver,
 }
 
 impl PacketDeserializer {
@@ -50,7 +50,7 @@ impl PacketDeserializer {
 
     /// Deserialize packet batches, aggregates tracer packet stats, and collect
     /// them into ReceivePacketResults
-    pub fn deserialize_and_collect_packets(
+    fn deserialize_and_collect_packets(
         packet_count: usize,
         banking_batches: &[BankingPacketBatch],
     ) -> ReceivePacketResults {
@@ -98,6 +98,7 @@ impl PacketDeserializer {
         packet_count_upperbound: usize,
     ) -> Result<(usize, Vec<BankingPacketBatch>), RecvTimeoutError> {
         let start = Instant::now();
+
         let message = self.packet_batch_receiver.recv_timeout(recv_timeout)?;
         let packet_batches = &message.0;
         let mut num_packets_received = packet_batches
@@ -105,6 +106,7 @@ impl PacketDeserializer {
             .map(|batch| batch.len())
             .sum::<usize>();
         let mut messages = vec![message];
+
         while let Ok(message) = self.packet_batch_receiver.try_recv() {
             let packet_batches = &message.0;
             trace!("got more packet batches in packet deserializer");
@@ -122,7 +124,7 @@ impl PacketDeserializer {
         Ok((num_packets_received, messages))
     }
 
-    pub fn generate_packet_indexes(packet_batch: &PacketBatch) -> Vec<usize> {
+    fn generate_packet_indexes(packet_batch: &PacketBatch) -> Vec<usize> {
         packet_batch
             .iter()
             .enumerate()
@@ -131,7 +133,7 @@ impl PacketDeserializer {
             .collect()
     }
 
-    pub fn deserialize_packets<'a>(
+    fn deserialize_packets<'a>(
         packet_batch: &'a PacketBatch,
         packet_indexes: &'a [usize],
     ) -> impl Iterator<Item = ImmutableDeserializedPacket> + 'a {

@@ -81,7 +81,7 @@ impl DecisionMaker {
         } else if would_be_leader {
             // Node will be leader within ~20 slots, hold the transactions in
             // case it is the only node which produces an accepted slot.
-            BufferedPacketsDecision::Forward
+            BufferedPacketsDecision::ForwardAndHold
         } else if let Some(x) = leader_pubkey {
             if x != *my_pubkey {
                 // If the current node is not the leader, forward the buffered packets

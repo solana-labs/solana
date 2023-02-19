@@ -14,7 +14,7 @@ use {
         io::{self, Write},
         path::PathBuf,
         sync::{
-            atomic::{AtomicBool, AtomicUsize, Ordering},
+            atomic::{AtomicBool, Ordering},
             Arc,
         },
         thread::{self, sleep, JoinHandle},
@@ -66,9 +66,6 @@ pub struct BankingTracer {
     active_tracer: Option<ActiveTracer>,
 }
 
-// Not all of TracedEvents need to be timed for proper simulation functioning; however, do so for
-// consistency, implementation simplicity, and direct human inspection of trace files for
-// debugging.
 #[derive(Serialize, Deserialize, Debug)]
 pub struct TimedTracedEvent(std::time::SystemTime, TracedEvent);
 
@@ -76,7 +73,6 @@ pub struct TimedTracedEvent(std::time::SystemTime, TracedEvent);
 enum TracedEvent {
     PacketBatch(ChannelLabel, BankingPacketBatch),
     BlockAndBankHash(Slot, Hash, Hash),
-    OriginalBlockAndBankHash(Slot, Hash, Hash),
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, Copy)]
@@ -166,7 +162,6 @@ pub fn receiving_loop_with_minimized_sender_overhead<T, E, const SLEEP_MS: u64>(
                 Ok(message) => on_recv(message)?,
                 Err(TryRecvError::Empty) => break 'inner,
                 Err(TryRecvError::Disconnected) => {
-                    info!("disconnected!");
                     break 'outer;
                 }
             };
@@ -247,15 +242,6 @@ impl BankingTracer {
         })
     }
 
-    pub fn original_hash_event(&self, slot: Slot, blockhash: Hash, bank_hash: Hash) {
-        self.trace_event(|| {
-            TimedTracedEvent(
-                SystemTime::now(),
-                TracedEvent::OriginalBlockAndBankHash(slot, blockhash, bank_hash),
-            )
-        })
-    }
-
     fn trace_event(&self, on_trace: impl Fn() -> TimedTracedEvent) {
         if let Some(ActiveTracer { trace_sender, exit }) = &self.active_tracer {
             if !exit.load(Ordering::Relaxed) {
@@ -323,7 +309,6 @@ impl BankingTracer {
                         Ok(())
                     },
                 )?;
-                info!("flushed!");
                 file_appender.flush()?;
                 Ok(())
             },
@@ -333,7 +318,6 @@ impl BankingTracer {
     }
 }
 
-#[derive(Debug)]
 pub struct TracedSender {
     label: ChannelLabel,
     sender: Sender<BankingPacketBatch>,

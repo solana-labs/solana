@@ -14,7 +14,7 @@ use {
         banking_trace::BankingPacketReceiver,
         immutable_deserialized_packet::ImmutableDeserializedPacket,
         latest_unprocessed_votes::{LatestUnprocessedVotes, VoteSource},
-        leader_slot_banking_stage_metrics::{LeaderSlotMetricsTracker, MetricsTrackerAction, ProcessTransactionsSummary},
+        leader_slot_banking_stage_metrics::{LeaderSlotMetricsTracker, ProcessTransactionsSummary},
         leader_slot_banking_stage_timing_metrics::{
             LeaderExecuteAndCommitTimings, RecordTransactionsTimings,
         },
@@ -348,21 +348,6 @@ pub struct FilterForwardingResults {
     pub(crate) total_filter_packets_us: u64,
 }
 
-struct MonotonicIdGenerator {
-    next_task_id: AtomicUsize,
-}
-
-impl MonotonicIdGenerator {
-    fn new() -> Arc<Self> {
-        Arc::new(Self{next_task_id: Default::default()})
-    }
-
-    fn bulk_assign_task_ids(&self, count: usize) -> usize {
-        self.next_task_id
-            .fetch_add(count, Ordering::AcqRel)
-    }
-}
-
 impl BankingStage {
     /// Create the stage using `bank`. Exit when `verified_receiver` is dropped.
     #[allow(clippy::too_many_arguments)]
@@ -416,10 +401,14 @@ impl BankingStage {
             TOTAL_BUFFERED_PACKETS / ((num_threads - NUM_VOTE_PROCESSING_THREADS) as usize);
         // Keeps track of extraneous vote transactions for the vote threads
         let latest_unprocessed_votes = Arc::new(LatestUnprocessedVotes::new());
-        let mut should_split_voting_threads = false;
-        info!("should_split_voting_threads: {}", should_split_voting_threads);
-        //should_split_voting_threads = false;
-        let id_generator = MonotonicIdGenerator::new();
+        let should_split_voting_threads = bank_forks
+            .read()
+            .map(|bank_forks| {
+                let bank = bank_forks.root_bank();
+                bank.feature_set
+                    .is_active(&allow_votes_to_directly_update_vote_state::id())
+            })
+            .unwrap_or(false);
         // Many banks that process transactions in parallel.
         let bank_thread_hdls: Vec<JoinHandle<()>> = (0..num_threads)
             .map(|i| {
@@ -475,11 +464,9 @@ impl BankingStage {
                     connection_cache.clone(),
                     data_budget.clone(),
                 );
-                let thread_name = format!("solBanknStgTx{i:02}");
-                let id_generator = id_generator.clone();
 
                 Builder::new()
-                    .name(thread_name.clone())
+                    .name(format!("solBanknStgTx{i:02}"))
                     .spawn(move || {
                         Self::process_loop(
                             &mut packet_deserializer,
@@ -491,14 +478,11 @@ impl BankingStage {
                             replay_vote_sender,
                             log_messages_bytes_limit,
                             unprocessed_transaction_storage,
-                            id_generator,
                         );
-                        info!("banking thread ended: {}!", thread_name);
                     })
                     .unwrap()
             })
             .collect();
-
         Self { bank_thread_hdls }
     }
 
@@ -659,8 +643,6 @@ impl BankingStage {
         slot_metrics_tracker: &mut LeaderSlotMetricsTracker,
         log_messages_bytes_limit: Option<usize>,
         tracer_packet_stats: &mut TracerPacketStats,
-        packet_deserializer: &mut PacketDeserializer,
-        id_generator: &MonotonicIdGenerator,
     ) {
         if unprocessed_transaction_storage.should_not_process() {
             return;
@@ -671,26 +653,11 @@ impl BankingStage {
 
         match decision {
             BufferedPacketsDecision::Consume(bank_start) => {
-                let bank = bank_start.working_bank;
-                match &metrics_action {
-                   MetricsTrackerAction::NewTracker(_) => {
-                       if std::env::var("DISCARD_BUFFERED").is_ok() {
-                           let mut count = 0;
-                           // discard buffered
-                           while let Ok(aaa) = packet_deserializer.packet_batch_receiver.try_recv() {
-                               count += aaa.0.len();
-                           }
-                           info!("discarded {count} transactions... slot: {}", bank.slot());
-                       }
-                   },
-                   _ => {},
-                }
                 // Take metrics action before consume packets (potentially resetting the
                 // slot metrics tracker to the next slot) so that we don't count the
                 // packet processing metrics from the next slot towards the metrics
                 // of the previous slot
                 slot_metrics_tracker.apply_action(metrics_action);
-                /*
                 let (_, consume_buffered_packets_time) = measure!(
                     Self::consume_buffered_packets(
                         &bank_start,
@@ -708,46 +675,8 @@ impl BankingStage {
                 );
                 slot_metrics_tracker
                     .increment_consume_buffered_packets_us(consume_buffered_packets_time.as_us());
-                */
-
-
-                let recv_timeout = Duration::from_millis(10);
-
-                let start = Instant::now();
-
-                while let Ok(aaa) = packet_deserializer.packet_batch_receiver.recv_timeout(recv_timeout) {
-                    for pp in &aaa.0 {
-                        // over-provision
-                        let mut task_id = id_generator.bulk_assign_task_ids(pp.len());
-
-                        let indexes = PacketDeserializer::generate_packet_indexes(&pp);
-                        for p in PacketDeserializer::deserialize_packets(&pp, &indexes) {
-                            if let Some(t) = p.build_sanitized_transaction(&bank.feature_set, bank.vote_only_bank(), bank.as_ref()) {
-                                bank.schedule_and_commit_transactions_as_banking(&[t], vec![task_id].into_iter());
-                                task_id += 1;
-                            }
-                        }
-                    }
-
-                    if start.elapsed() >= recv_timeout {
-                        break;
-                    }
-                }
             }
             BufferedPacketsDecision::Forward => {
-                let recv_timeout = Duration::from_millis(10);
-                let start = Instant::now();
-                let forward_option = unprocessed_transaction_storage.forward_option();
-                while let Ok(aaa) = packet_deserializer.packet_batch_receiver.recv_timeout(recv_timeout) {
-                    for pp in &aaa.0 {
-                       forwarder.forward_buffered_packets(&forward_option, pp.iter(), banking_stage_stats);
-                    }
-
-                    if start.elapsed() >= recv_timeout {
-                        break;
-                    }
-                }
-                /*
                 let ((), forward_us) = measure_us!(forwarder.handle_forwarding(
                     unprocessed_transaction_storage,
                     false,
@@ -758,11 +687,9 @@ impl BankingStage {
                 slot_metrics_tracker.increment_forward_us(forward_us);
                 // Take metrics action after forwarding packets to include forwarded
                 // metrics into current slot
-                */
                 slot_metrics_tracker.apply_action(metrics_action);
             }
             BufferedPacketsDecision::ForwardAndHold => {
-                /*
                 let ((), forward_and_hold_us) = measure_us!(forwarder.handle_forwarding(
                     unprocessed_transaction_storage,
                     true,
@@ -772,12 +699,9 @@ impl BankingStage {
                 ));
                 slot_metrics_tracker.increment_forward_and_hold_us(forward_and_hold_us);
                 // Take metrics action after forwarding packets
-                */
                 slot_metrics_tracker.apply_action(metrics_action);
             }
-            BufferedPacketsDecision::Hold => {
-                slot_metrics_tracker.apply_action(metrics_action);
-            }
+            _ => (),
         }
     }
 
@@ -792,7 +716,6 @@ impl BankingStage {
         replay_vote_sender: ReplayVoteSender,
         log_messages_bytes_limit: Option<usize>,
         mut unprocessed_transaction_storage: UnprocessedTransactionStorage,
-        id_generator: Arc<MonotonicIdGenerator>,
     ) {
         let recorder = poh_recorder.read().unwrap().recorder();
         let mut banking_stage_stats = BankingStageStats::new(id);
@@ -802,9 +725,10 @@ impl BankingStage {
         let mut slot_metrics_tracker = LeaderSlotMetricsTracker::new(id);
         let mut last_metrics_update = Instant::now();
 
-        let mut last_len = 0;
         loop {
-            if true {
+            if !unprocessed_transaction_storage.is_empty()
+                || last_metrics_update.elapsed() >= SLOT_BOUNDARY_CHECK_PERIOD
+            {
                 let (_, process_buffered_packets_time) = measure!(
                     Self::process_buffered_packets(
                         decision_maker,
@@ -818,8 +742,6 @@ impl BankingStage {
                         &mut slot_metrics_tracker,
                         log_messages_bytes_limit,
                         &mut tracer_packet_stats,
-                        packet_deserializer,
-                        &id_generator,
                     ),
                     "process_buffered_packets",
                 );
@@ -830,7 +752,6 @@ impl BankingStage {
 
             tracer_packet_stats.report(1000);
 
-            /*
             match PacketReceiver::receive_and_buffer_packets(
                 packet_deserializer,
                 id,
@@ -842,16 +763,7 @@ impl BankingStage {
                 Ok(()) | Err(RecvTimeoutError::Timeout) => (),
                 Err(RecvTimeoutError::Disconnected) => break,
             }
-            */
-
-            let len = packet_deserializer.packet_batch_receiver.len();
             banking_stage_stats.report(1000);
-            if packet_deserializer.packet_batch_receiver.is_disconnected() {
-                break;
-            } else if len == last_len {
-                std::thread::sleep(SLOT_BOUNDARY_CHECK_PERIOD);
-            }
-            last_len = len;
         }
     }
 
@@ -3096,7 +3008,7 @@ mod tests {
                 &BankingStageStats::default(),
                 &recorder,
                 &QosService::new(1),
-                &mut LeaderSlotMetricsTracker::new_for_test(),
+                &mut LeaderSlotMetricsTracker::new(0),
                 None,
             );
             assert!(buffered_packet_batches.is_empty());
@@ -3154,7 +3066,7 @@ mod tests {
                 &BankingStageStats::default(),
                 &recorder,
                 &QosService::new(1),
-                &mut LeaderSlotMetricsTracker::new_for_test(),
+                &mut LeaderSlotMetricsTracker::new(0),
                 None,
             );
             assert!(buffered_packet_batches.is_empty());
@@ -3216,7 +3128,7 @@ mod tests {
                         &BankingStageStats::default(),
                         &recorder,
                         &QosService::new(1),
-                        &mut LeaderSlotMetricsTracker::new_for_test(),
+                        &mut LeaderSlotMetricsTracker::new(0),
                         None,
                     );
 
