@@ -114,7 +114,7 @@ impl VoteSimulator {
                         .any(|lockout| lockout.slot() == parent));
                 }
             }
-            let new_bank = self.bank_forks.write().unwrap().insert(new_bank);
+            let new_bank = self.bank_forks.write().unwrap().add_new_bank_for_replaying(new_bank);
             while new_bank.tick_height() < new_bank.max_tick_height() {
                 new_bank.register_tick(&Hash::new_unique());
             }
