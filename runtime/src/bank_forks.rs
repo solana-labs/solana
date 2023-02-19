@@ -246,8 +246,8 @@ impl BankForks {
         self.scheduler_pool = Some(pool);
     }
 
-    pub fn add_new_bank_for_banking(&mut self, bank: Bank, inherited_scheduler: Option<Box<dyn LikeScheduler>>) -> Arc<Bank> {
-        self.add_new_bank(bank, solana_scheduler::Mode::Banking, inherited_scheduler)
+    pub fn add_new_bank_for_banking(&mut self, bank: Bank) -> Arc<Bank> {
+        self.add_new_bank_for_replaying(bank)
     }
 
     pub fn add_new_bank_for_replaying(&mut self, bank: Bank) -> Arc<Bank> {
