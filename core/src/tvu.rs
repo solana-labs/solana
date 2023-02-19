@@ -421,7 +421,7 @@ pub mod tests {
         //start cluster_info1
         let cluster_info1 = ClusterInfo::new(
             target1.info.clone(),
-            keypair.clone(),
+            keypair,
             SocketAddrSpace::Unspecified,
         );
         cluster_info1.insert_info(leader.info);
