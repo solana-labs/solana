@@ -423,11 +423,6 @@ impl ClusterInfoVoteListener {
                         verified_packets_sender,
                         &verified_vote_packets,
                     )?;
-                } else {
-                    if let Some(bank_vote_sender_state) = bank_vote_sender_state_option.take() {
-                        info!("dropping bank_vote_sender_state_option... slot: {}", bank_vote_sender_state.bank.slot());
-                        drop(bank_vote_sender_state);
-                    }
                 }
             }
         }
