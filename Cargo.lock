@@ -5818,6 +5818,7 @@ dependencies = [
  "solana-logger 1.16.0",
  "solana-measure",
  "solana-runtime",
+ "solana-scheduler-pool",
  "solana-sdk 1.16.0",
  "solana-stake-program",
  "solana-storage-bigtable",
