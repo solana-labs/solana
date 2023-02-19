@@ -125,31 +125,27 @@ fn get_first_error(
 }
 
 fn execute_batch(
-    transactions: &[SanitizedTransaction],
-    transaction_indexes: impl Iterator<Item = usize>,
+    batch: &TransactionBatchWithIndexes,
     bank: &Arc<Bank>,
+    transaction_status_sender: Option<&TransactionStatusSender>,
+    replay_vote_sender: Option<&ReplayVoteSender>,
+    timings: &mut ExecuteTimings,
+    log_messages_bytes_limit: Option<usize>,
 ) -> Result<()> {
-    //let record_token_balances = transaction_status_sender.is_some();
+    let TransactionBatchWithIndexes {
+        batch,
+        transaction_indexes,
+    } = batch;
+    let record_token_balances = transaction_status_sender.is_some();
 
-    //let mut mint_decimals: HashMap<Pubkey, u8> = HashMap::new();
+    let mut mint_decimals: HashMap<Pubkey, u8> = HashMap::new();
 
-    /*
     let pre_token_balances = if record_token_balances {
         collect_token_balances(bank, batch, &mut mint_decimals)
     } else {
         vec![]
     };
-    */
 
-    bank.schedule_and_commit_transactions_as_replaying(transactions, transaction_indexes);
-    /*
-    if let Some(first_error_from_scheduler) = bank.handle_aborted_transactions().into_iter().next() {
-        first_error_from_scheduler?
-    }
-    */
-    return Ok(());
-
-    /*
     let (tx_results, balances) = batch.bank().load_execute_and_commit_transactions(
         batch,
         MAX_PROCESSING_AGE,
@@ -198,39 +194,91 @@ fn execute_batch(
 
     let first_err = get_first_error(batch, fee_collection_results);
     first_err.map(|(result, _)| result).unwrap_or(Ok(()))
-    */
 }
 
 #[derive(Default)]
-pub struct ExecuteBatchesInternalMetrics {
-    pub execution_timings_per_thread: HashMap<usize, ThreadExecuteTimings>,
+struct ExecuteBatchesInternalMetrics {
+    execution_timings_per_thread: HashMap<usize, ThreadExecuteTimings>,
     total_batches_len: u64,
     execute_batches_us: u64,
 }
 
 fn execute_batches_internal(
     bank: &Arc<Bank>,
-    transactions: &[SanitizedTransaction],
-    transaction_indexes: impl Iterator<Item = usize>,
+    batches: &[TransactionBatchWithIndexes],
     entry_callback: Option<&ProcessCallback>,
+    transaction_status_sender: Option<&TransactionStatusSender>,
+    replay_vote_sender: Option<&ReplayVoteSender>,
+    log_messages_bytes_limit: Option<usize>,
 ) -> Result<ExecuteBatchesInternalMetrics> {
-    let mut execute_batches_elapsed = Measure::start("execute_batches_elapsed");
-    let result = execute_batch(transactions, transaction_indexes, bank);
-    if let Some(entry_callback) = entry_callback {
-        entry_callback(bank);
-    }
-    result?;
+    assert!(!batches.is_empty());
+    inc_new_counter_debug!("bank-par_execute_entries-count", batches.len());
+    let execution_timings_per_thread: Mutex<HashMap<usize, ThreadExecuteTimings>> =
+        Mutex::new(HashMap::new());
 
+    let mut execute_batches_elapsed = Measure::start("execute_batches_elapsed");
+    let results: Vec<Result<()>> = PAR_THREAD_POOL.install(|| {
+        batches
+            .into_par_iter()
+            .map(|transaction_batch| {
+                let transaction_count =
+                    transaction_batch.batch.sanitized_transactions().len() as u64;
+                let mut timings = ExecuteTimings::default();
+                let (result, execute_batches_time): (Result<()>, Measure) = measure!(
+                    {
+                        let result = execute_batch(
+                            transaction_batch,
+                            bank,
+                            transaction_status_sender,
+                            replay_vote_sender,
+                            &mut timings,
+                            log_messages_bytes_limit,
+                        );
+                        if let Some(entry_callback) = entry_callback {
+                            entry_callback(bank);
+                        }
+                        result
+                    },
+                    "execute_batch",
+                );
+
+                let thread_index = PAR_THREAD_POOL.current_thread_index().unwrap();
+                execution_timings_per_thread
+                    .lock()
+                    .unwrap()
+                    .entry(thread_index)
+                    .and_modify(|thread_execution_time| {
+                        let ThreadExecuteTimings {
+                            total_thread_us,
+                            total_transactions_executed,
+                            execute_timings: total_thread_execute_timings,
+                        } = thread_execution_time;
+                        *total_thread_us += execute_batches_time.as_us();
+                        *total_transactions_executed += transaction_count;
+                        total_thread_execute_timings
+                            .saturating_add_in_place(ExecuteTimingType::TotalBatchesLen, 1);
+                        total_thread_execute_timings.accumulate(&timings);
+                    })
+                    .or_insert(ThreadExecuteTimings {
+                        total_thread_us: execute_batches_time.as_us(),
+                        total_transactions_executed: transaction_count,
+                        execute_timings: timings,
+                    });
+                result
+            })
+            .collect()
+    });
     execute_batches_elapsed.stop();
 
+    first_err(&results)?;
+
     Ok(ExecuteBatchesInternalMetrics {
-        execution_timings_per_thread: Default::default(),
-        total_batches_len: 1,
+        execution_timings_per_thread: execution_timings_per_thread.into_inner().unwrap(),
+        total_batches_len: batches.len() as u64,
         execute_batches_us: execute_batches_elapsed.as_us(),
     })
 }
 
-#[inline(never)]
 fn rebatch_transactions<'a>(
     lock_results: &'a [Result<()>],
     bank: &'a Arc<Bank>,
@@ -251,18 +299,85 @@ fn rebatch_transactions<'a>(
     }
 }
 
-#[inline(never)]
 fn execute_batches(
     bank: &Arc<Bank>,
-    transactions: &[SanitizedTransaction],
-    transaction_indexes: impl Iterator<Item = usize>,
+    batches: &[TransactionBatchWithIndexes],
     entry_callback: Option<&ProcessCallback>,
     transaction_status_sender: Option<&TransactionStatusSender>,
     replay_vote_sender: Option<&ReplayVoteSender>,
     confirmation_timing: &mut ConfirmationTiming,
+    log_messages_bytes_limit: Option<usize>,
 ) -> Result<()> {
-    let execute_batches_internal_metrics =
-        execute_batches_internal(bank, transactions, transaction_indexes, entry_callback)?;
+    if batches.is_empty() {
+        return Ok(());
+    }
+
+    let ((lock_results, sanitized_txs), transaction_indexes): ((Vec<_>, Vec<_>), Vec<_>) = batches
+        .iter()
+        .flat_map(|batch| {
+            batch
+                .batch
+                .lock_results()
+                .iter()
+                .cloned()
+                .zip(batch.batch.sanitized_transactions().to_vec())
+                .zip(batch.transaction_indexes.to_vec())
+        })
+        .unzip();
+
+    let mut minimal_tx_cost = u64::MAX;
+    let mut total_cost: u64 = 0;
+    // Allowing collect here, since it also computes the minimal tx cost, and aggregate cost.
+    // These two values are later used for checking if the tx_costs vector needs to be iterated over.
+    #[allow(clippy::needless_collect)]
+    let tx_costs = sanitized_txs
+        .iter()
+        .map(|tx| {
+            let tx_cost = CostModel::calculate_cost(tx, &bank.feature_set);
+            let cost = tx_cost.sum();
+            minimal_tx_cost = std::cmp::min(minimal_tx_cost, cost);
+            total_cost = total_cost.saturating_add(cost);
+            cost
+        })
+        .collect::<Vec<_>>();
+
+    let target_batch_count = get_thread_count() as u64;
+
+    let mut tx_batches: Vec<TransactionBatchWithIndexes> = vec![];
+    let rebatched_txs = if total_cost > target_batch_count.saturating_mul(minimal_tx_cost) {
+        let target_batch_cost = total_cost / target_batch_count;
+        let mut batch_cost: u64 = 0;
+        let mut slice_start = 0;
+        tx_costs.into_iter().enumerate().for_each(|(index, cost)| {
+            let next_index = index + 1;
+            batch_cost = batch_cost.saturating_add(cost);
+            if batch_cost >= target_batch_cost || next_index == sanitized_txs.len() {
+                let tx_batch = rebatch_transactions(
+                    &lock_results,
+                    bank,
+                    &sanitized_txs,
+                    slice_start,
+                    index,
+                    &transaction_indexes,
+                );
+                slice_start = next_index;
+                tx_batches.push(tx_batch);
+                batch_cost = 0;
+            }
+        });
+        &tx_batches[..]
+    } else {
+        batches
+    };
+
+    let execute_batches_internal_metrics = execute_batches_internal(
+        bank,
+        rebatched_txs,
+        entry_callback,
+        transaction_status_sender,
+        replay_vote_sender,
+        log_messages_bytes_limit,
+    )?;
 
     confirmation_timing.process_execute_batches_internal_metrics(execute_batches_internal_metrics);
     Ok(())
@@ -338,9 +453,9 @@ fn process_entries_with_callback(
     prioritization_fee_cache: &PrioritizationFeeCache,
 ) -> Result<()> {
     // accumulator for entries that can be processed in parallel
+    let mut batches = vec![];
     let mut tick_hashes = vec![];
-    let mut started = std::time::Instant::now();
-    let mut tx_count = 0;
+    let mut rng = thread_rng();
 
     for ReplayEntry {
         entry,
@@ -352,10 +467,18 @@ fn process_entries_with_callback(
                 // If it's a tick, save it for later
                 tick_hashes.push(hash);
                 if bank.is_block_boundary(bank.tick_height() + tick_hashes.len() as u64) {
-                    trace!("process_entries_with_callback(): slot: {} idx: {} scheduled {} txs so far in {}us (still in loop)", bank.slot(), starting_index, tx_count, started.elapsed().as_micros());
-                    started = std::time::Instant::now();
-                    tx_count = 0;
-
+                    // If it's a tick that will cause a new blockhash to be created,
+                    // execute the group and register the tick
+                    execute_batches(
+                        bank,
+                        &batches,
+                        entry_callback,
+                        transaction_status_sender,
+                        replay_vote_sender,
+                        confirmation_timing,
+                        log_messages_bytes_limit,
+                    )?;
+                    batches.clear();
                     for hash in &tick_hashes {
                         bank.register_tick(hash);
                     }
@@ -364,29 +487,78 @@ fn process_entries_with_callback(
             }
             EntryType::Transactions(transactions) => {
                 let starting_index = *starting_index;
-                let transaction_indexes =
-                    (starting_index..starting_index.saturating_add(transactions.len())).into_iter();
-                tx_count += transactions.len();
+                let transaction_indexes = if randomize {
+                    let mut transactions_and_indexes: Vec<(SanitizedTransaction, usize)> =
+                        transactions.drain(..).zip(starting_index..).collect();
+                    transactions_and_indexes.shuffle(&mut rng);
+                    let (txs, indexes): (Vec<_>, Vec<_>) =
+                        transactions_and_indexes.into_iter().unzip();
+                    *transactions = txs;
+                    indexes
+                } else {
+                    (starting_index..starting_index.saturating_add(transactions.len())).collect()
+                };
 
-                execute_batches(
-                    bank,
-                    transactions,
-                    transaction_indexes,
-                    entry_callback,
-                    transaction_status_sender,
-                    replay_vote_sender,
-                    confirmation_timing,
-                )?;
+                loop {
+                    // try to lock the accounts
+                    let batch = bank.prepare_sanitized_batch(transactions);
+                    let first_lock_err = first_err(batch.lock_results());
+
+                    // if locking worked
+                    if first_lock_err.is_ok() {
+                        batches.push(TransactionBatchWithIndexes {
+                            batch,
+                            transaction_indexes,
+                        });
+                        // entry is scheduled to be processed, transactions in it can be used to
+                        // update prioritization fee cache asynchronously.
+                        prioritization_fee_cache.update(bank.clone(), transactions.iter());
+                        // done with this entry
+                        break;
+                    }
+                    // else we failed to lock, 2 possible reasons
+                    if batches.is_empty() {
+                        // An entry has account lock conflicts with *itself*, which should not happen
+                        // if generated by a properly functioning leader
+                        datapoint_error!(
+                            "validator_process_entry_error",
+                            (
+                                "error",
+                                format!(
+                                    "Lock accounts error, entry conflicts with itself, txs: {transactions:?}"
+                                ),
+                                String
+                            )
+                        );
+                        // bail
+                        first_lock_err?;
+                    } else {
+                        // else we have an entry that conflicts with a prior entry
+                        // execute the current queue and try to process this entry again
+                        execute_batches(
+                            bank,
+                            &batches,
+                            entry_callback,
+                            transaction_status_sender,
+                            replay_vote_sender,
+                            confirmation_timing,
+                            log_messages_bytes_limit,
+                        )?;
+                        batches.clear();
+                    }
+                }
             }
         }
     }
-    trace!(
-        "process_entries_with_callback(): slot: {} scheduled {} txs so far in {}us (after loop)",
-        bank.slot(),
-        tx_count,
-        started.elapsed().as_micros()
-    );
-    started = std::time::Instant::now();
+    execute_batches(
+        bank,
+        &batches,
+        entry_callback,
+        transaction_status_sender,
+        replay_vote_sender,
+        confirmation_timing,
+        log_messages_bytes_limit,
+    )?;
     for hash in tick_hashes {
         bank.register_tick(hash);
     }
@@ -752,7 +924,7 @@ pub struct ConfirmationTiming {
 }
 
 impl ConfirmationTiming {
-    pub fn process_execute_batches_internal_metrics(
+    fn process_execute_batches_internal_metrics(
         &mut self,
         execute_batches_internal_metrics: ExecuteBatchesInternalMetrics,
     ) {
@@ -970,7 +1142,6 @@ fn confirm_slot_entries(
         Arc::new(verify_transaction),
     );
     let transaction_cpu_duration_us = timing::duration_as_us(&check_start.elapsed());
-    let disable_randomize = std::env::var("DISABLE_RANDOMIZE").is_ok();
 
     match check_result {
         Ok(mut check_result) => {
@@ -991,7 +1162,7 @@ fn confirm_slot_entries(
             let process_result = process_entries_with_callback(
                 bank,
                 &mut replay_entries,
-                !disable_randomize, // shuffle transactions.
+                true, // shuffle transactions.
                 entry_callback,
                 transaction_status_sender,
                 replay_vote_sender,
@@ -1065,7 +1236,6 @@ fn process_bank_0(
         &mut ExecuteTimings::default(),
     )
     .expect("Failed to process bank 0 from ledger. Did you forget to provide a snapshot?");
-    bank0.wait_for_scheduler(false, false).0.unwrap();
     bank0.freeze();
     if blockstore.is_primary_access() {
         blockstore.insert_bank_hash(bank0.slot(), bank0.hash(), false);
@@ -1202,7 +1372,7 @@ fn load_frozen_forks(
             let mut progress = ConfirmationProgress::new(last_entry_hash);
 
             let mut m = Measure::start("process_single_slot");
-            let bank = bank_forks.write().unwrap().add_new_bank_for_replaying(bank);
+            let bank = bank_forks.write().unwrap().insert(bank);
             if process_single_slot(
                 blockstore,
                 &bank,
@@ -1453,7 +1623,6 @@ fn process_single_slot(
         err
     })?;
 
-    bank.wait_for_scheduler(false, false).0?;
     bank.freeze(); // all banks handled by this routine are created from complete slots
     if blockstore.is_primary_access() {
         blockstore.insert_bank_hash(bank.slot(), bank.hash(), false);
@@ -1479,7 +1648,7 @@ pub struct TransactionStatusBatch {
     pub transaction_indexes: Vec<usize>,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct TransactionStatusSender {
     pub sender: Sender<TransactionStatusMessage>,
 }
