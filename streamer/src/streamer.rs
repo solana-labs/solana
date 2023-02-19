@@ -451,13 +451,21 @@ mod test {
             packet::{Packet, PacketBatch, PACKET_DATA_SIZE},
             streamer::{receiver, responder},
         },
+        async_trait::async_trait,
         crossbeam_channel::unbounded,
+        solana_connection_cache::{
+            client_connection::ClientConnection as BlockingClientConnection,
+            connection_cache::{BaseClientConnection, ClientError, ConnectionPoolError},
+            connection_cache_stats::ConnectionCacheStats,
+            nonblocking::client_connection::ClientConnection as NonblockingClientConnection,
+        },
         solana_perf::recycler::Recycler,
-        solana_udp_client::{UdpConfig, UdpConnectionManager, UdpPool},
+        solana_sdk::transport::Result as TransportResult,
         std::{
             io,
             io::Write,
-            net::UdpSocket,
+            net::{SocketAddr, UdpSocket},
+            result::Result,
             sync::{
                 atomic::{AtomicBool, Ordering},
                 Arc,
@@ -486,6 +494,118 @@ mod test {
         write!(io::sink(), "{:?}", Packet::default()).unwrap();
         write!(io::sink(), "{:?}", PacketBatch::default()).unwrap();
     }
+
+    struct MockUdpPool {}
+    impl ConnectionPool for MockUdpPool {
+        type NewConnectionConfig = MockUdpConfig;
+        type BaseClientConnection = MockUdp;
+
+        fn add_connection(&mut self, _config: &Self::NewConnectionConfig, _addr: &SocketAddr) {
+            unimplemented!()
+        }
+        fn num_connections(&self) -> usize {
+            unimplemented!()
+        }
+        fn get(
+            &self,
+            _index: usize,
+        ) -> Result<Arc<Self::BaseClientConnection>, ConnectionPoolError> {
+            unimplemented!()
+        }
+        fn create_pool_entry(
+            &self,
+            _config: &Self::NewConnectionConfig,
+            _addr: &SocketAddr,
+        ) -> Arc<Self::BaseClientConnection> {
+            unimplemented!()
+        }
+    }
+
+    struct MockUdpConfig {}
+
+    impl Default for MockUdpConfig {
+        fn default() -> Self {
+            unimplemented!()
+        }
+    }
+
+    impl NewConnectionConfig for MockUdpConfig {
+        fn new() -> Result<Self, ClientError> {
+            unimplemented!()
+        }
+    }
+
+    struct MockUdp(Arc<UdpSocket>);
+    impl BaseClientConnection for MockUdp {
+        type BlockingClientConnection = MockUdpConnection;
+        type NonblockingClientConnection = MockUdpConnection;
+
+        fn new_blocking_connection(
+            &self,
+            _addr: SocketAddr,
+            _stats: Arc<ConnectionCacheStats>,
+        ) -> Arc<Self::BlockingClientConnection> {
+            unimplemented!()
+        }
+        fn new_nonblocking_connection(
+            &self,
+            _addr: SocketAddr,
+            _stats: Arc<ConnectionCacheStats>,
+        ) -> Arc<Self::NonblockingClientConnection> {
+            unimplemented!()
+        }
+    }
+
+    struct MockUdpConnection {}
+
+    #[derive(Default)]
+    struct MockConnectionManager {}
+
+    impl ConnectionManager for MockConnectionManager {
+        type ConnectionPool = MockUdpPool;
+        type NewConnectionConfig = MockUdpConfig;
+        fn new_connection_pool(&self) -> Self::ConnectionPool {
+            unimplemented!()
+        }
+        fn new_connection_config(&self) -> Self::NewConnectionConfig {
+            unimplemented!()
+        }
+        fn get_port_offset(&self) -> u16 {
+            unimplemented!()
+        }
+    }
+
+    impl BlockingClientConnection for MockUdpConnection {
+        fn server_addr(&self) -> &SocketAddr {
+            unimplemented!()
+        }
+        fn send_data(&self, _buffer: &[u8]) -> TransportResult<()> {
+            unimplemented!()
+        }
+        fn send_data_async(&self, _data: Vec<u8>) -> TransportResult<()> {
+            unimplemented!()
+        }
+        fn send_data_batch(&self, _buffers: &[Vec<u8>]) -> TransportResult<()> {
+            unimplemented!()
+        }
+        fn send_data_batch_async(&self, _buffers: Vec<Vec<u8>>) -> TransportResult<()> {
+            unimplemented!()
+        }
+    }
+
+    #[async_trait]
+    impl NonblockingClientConnection for MockUdpConnection {
+        fn server_addr(&self) -> &SocketAddr {
+            unimplemented!()
+        }
+        async fn send_data(&self, _data: &[u8]) -> TransportResult<()> {
+            unimplemented!()
+        }
+        async fn send_data_batch(&self, _buffers: &[Vec<u8>]) -> TransportResult<()> {
+            unimplemented!()
+        }
+    }
+
     #[test]
     fn streamer_send_test() {
         let read = UdpSocket::bind("127.0.0.1:0").expect("bind");
@@ -509,7 +629,7 @@ mod test {
         const NUM_PACKETS: usize = 5;
         let t_responder = {
             let (s_responder, r_responder) = unbounded();
-            let t_responder = responder::<UdpPool, UdpConnectionManager, UdpConfig>(
+            let t_responder = responder::<MockUdpPool, MockConnectionManager, MockUdpConfig>(
                 "SendTest",
                 ResponderOption::Socket(Arc::new(send)),
                 r_responder,
