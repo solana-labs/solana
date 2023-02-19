@@ -571,7 +571,6 @@ impl Accounts {
     }
 
     #[allow(clippy::too_many_arguments)]
-    #[inline(never)]
     pub fn load_accounts(
         &self,
         ancestors: &Ancestors,
@@ -583,7 +582,6 @@ impl Accounts {
         feature_set: &FeatureSet,
         fee_structure: &FeeStructure,
         account_overrides: Option<&AccountOverrides>,
-        lamports_per_signature_override: Option<u64>,
     ) -> Vec<TransactionLoadResult> {
         txs.iter()
             .zip(lock_results)
@@ -595,9 +593,7 @@ impl Accounts {
                         .unwrap_or_else(|| {
                             hash_queue.get_lamports_per_signature(tx.message().recent_blockhash())
                         });
-                    let fee = if let Some(lamports_per_signature) =
-                        lamports_per_signature.or(lamports_per_signature_override)
-                    {
+                    let fee = if let Some(lamports_per_signature) = lamports_per_signature {
                         Bank::calculate_fee(
                             tx.message(),
                             lamports_per_signature,
@@ -1455,7 +1451,6 @@ mod tests {
             rent_collector,
             feature_set,
             fee_structure,
-            None,
             None,
         )
     }
@@ -3021,7 +3016,6 @@ mod tests {
             &FeatureSet::all_enabled(),
             &FeeStructure::default(),
             account_overrides,
-            None,
         )
     }
 
