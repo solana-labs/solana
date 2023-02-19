@@ -274,6 +274,10 @@ impl Scheduler {
                     latest_scheduler_context = latest_checkpoint.clone_context_value();
                     mode = Some(latest_scheduler_context.as_ref().unwrap().mode);
                 }
+                let Some(bank) = latest_scheduler_context.as_ref().unwrap().bank() else {
+                    processed_ee_sender.send(solana_scheduler::UnlockablePayload(ee, Default::default())).unwrap();
+                    continue 'recv;
+                };
                 let mode = mode.unwrap();
 
                 let (mut wall_time, cpu_time) = (Measure::start("process_message_time"), cpu_time::ThreadTime::now());
