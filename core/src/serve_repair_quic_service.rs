@@ -53,14 +53,14 @@ impl ServeRepairService {
         let (serve_repair_endpoint, repair_quic_t) = spawn_server(
             repair_quic_config.serve_repair_address.try_clone().unwrap(),
             &repair_quic_config.identity_keypair,
-            host.clone(),
+            host,
             request_sender_quic,
             exit.clone(),
             MAX_QUIC_CONNECTIONS_PER_PEER,
             repair_quic_config.staked_nodes.clone(),
             MAX_STAKED_CONNECTIONS,
             MAX_UNSTAKED_CONNECTIONS,
-            stats.clone(),
+            stats,
             repair_quic_config.wait_for_chunk_timeout_ms,
         )
         .unwrap();

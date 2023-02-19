@@ -38,7 +38,7 @@ impl ServeRepairService {
         let t_receiver = streamer::receiver(
             serve_repair_socket.clone(),
             exit.clone(),
-            request_sender.clone(),
+            request_sender,
             Recycler::default(),
             Arc::new(StreamerReceiveStats::new("serve_repair_receiver")),
             1,
@@ -55,8 +55,7 @@ impl ServeRepairService {
             Some(stats_reporter_sender),
         );
 
-        let t_listen =
-            serve_repair.listen(blockstore, request_receiver, response_sender, exit.clone());
+        let t_listen = serve_repair.listen(blockstore, request_receiver, response_sender, exit);
         let thread_hdls = vec![t_receiver, t_responder, t_listen];
         Self { thread_hdls }
     }
