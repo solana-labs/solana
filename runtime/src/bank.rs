@@ -1999,7 +1999,6 @@ impl Bank {
             accounts_data_size_delta_off_chain: AtomicI64::new(0),
             fee_structure: FeeStructure::default(),
             scheduler: RwLock::new(None),
-            blockhash_override: RwLock::new(Default::default()),
         };
         bank.finish_init(
             genesis_config,
@@ -3726,9 +3725,6 @@ impl Bank {
         );
 
         let mut blockhash = *blockhash;
-        if let Some(aa) = self.blockhash_override.write().unwrap().as_mut() {
-            std::mem::swap(aa, &mut blockhash);
-        }
         w_blockhash_queue.register_hash(&blockhash, self.fee_rate_governor.lamports_per_signature);
         self.update_recent_blockhashes_locked(&w_blockhash_queue);
     }
