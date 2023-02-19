@@ -1531,7 +1531,7 @@ impl Bank {
         new_bank_options: NewBankOptions,
     ) -> Self {
         let mut time = Measure::start("bank::new_from_parent");
-        let NewBankOptions { vote_only_bank, blockhash_override } = new_bank_options;
+        let NewBankOptions { vote_only_bank } = new_bank_options;
 
         parent.freeze();
         assert_ne!(slot, parent.slot());
@@ -1704,7 +1704,6 @@ impl Bank {
             accounts_data_size_delta_off_chain: AtomicI64::new(0),
             fee_structure: parent.fee_structure.clone(),
             scheduler: RwLock::new(None),
-            blockhash_override: RwLock::new(blockhash_override),
         };
 
         let (_, ancestors_time_us) = measure_us!({
