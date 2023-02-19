@@ -3685,12 +3685,6 @@ impl Bank {
                 //*self.scheduler.write().unwrap() = new_scheduler;
                 w_blockhash_queue
             },
-            solana_scheduler::Mode::Banking => {
-                // Only acquire the write lock for the blockhash queue on block boundaries because
-                // readers can starve this write lock acquisition and ticks would be slowed down too
-                // much if the write lock is acquired for each tick.
-                self.blockhash_queue.write().unwrap()
-            }
         };
 
         debug!(
@@ -6121,14 +6115,6 @@ impl Bank {
         self.schedule_and_commit_transactions(transactions, transaction_indexes, solana_scheduler::Mode::Replaying)
     }
 
-    pub fn schedule_and_commit_transactions_as_banking(
-        self: &Arc<Bank>,
-        transactions: &[SanitizedTransaction],
-        transaction_indexes: impl Iterator<Item = usize>,
-    ) {
-        self.schedule_and_commit_transactions(transactions, transaction_indexes, solana_scheduler::Mode::Banking)
-    }
-
     /*
     pub fn handle_aborted_transactions(&self) -> Vec<Result<Option<ExecuteTimings>>> {
         let s = self.scheduler2.read().unwrap();
@@ -6136,20 +6122,6 @@ impl Bank {
         scheduler.handle_aborted_executions()
     }
     */
-
-    pub fn resume_banking_commit(self: &Arc<Self>) {
-        use assert_matches::assert_matches;
-        match self.scheduler_mode() {
-            solana_scheduler::Mode::Banking => {
-                let s = self.scheduler.read().unwrap();
-                let scheduler = s.as_ref().unwrap();
-                scheduler.resume_commit_into_bank();
-            },
-            solana_scheduler::Mode::Replaying => {
-                info!("maybe isolated banking?");
-            },
-        }
-    }
 
     pub fn scheduler_mode(&self) -> solana_scheduler::Mode {
         let s = self.scheduler.read().unwrap();
@@ -7902,10 +7874,6 @@ impl Bank {
             let scheduler_mode = scheduler.current_scheduler_mode();
             if matches!(scheduler_mode, solana_scheduler::Mode::Replaying) || via_drop {
                 info!("wait_for_scheduler({scheduler_mode:?}/{via_drop}): gracefully stopping bank ({})... take_next: {take_next} from_internal: {from_internal} by {current_thread_name}", self.slot());
-                if matches!(scheduler_mode, solana_scheduler::Mode::Banking) {
-                    assert!(via_drop);
-                    scheduler.resume_commit_into_bank();
-                }
 
                 let next_context = if take_next {
                     Some(scheduler.scheduler_context().unwrap())
@@ -7923,17 +7891,7 @@ impl Bank {
                 pool.return_to_pool(scheduler);
                 (Some(true), (e, next_context.map(|c| pool.take_from_pool(c))))
             } else {
-                info!("wait_for_scheduler(Banking): pausing commit into bank ({})...  take_next: {take_next}", self.slot());
-                assert!(!take_next);
-                scheduler.pause_commit_into_bank();
-                /* proper per-slot metrics reporting is needed...
-                scheduler
-                    .handle_aborted_executions()
-                    .into_iter()
-                    .next()
-                    .unwrap()
-                */
-                (None, (Ok(Default::default()), None))
+                panic!();
             }
         } else {
             warn!(
