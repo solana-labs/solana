@@ -182,7 +182,6 @@ fn bench_sigverify_stage(bencher: &mut Bencher, use_same_tx: bool) {
         let mut received = 0;
         let mut total_tracer_packets_received_in_sigverify_stage = 0;
         trace!("sent: {}", sent_len);
-        let mut messages = vec![];
         loop {
             if let Ok(message) = verified_r.recv_timeout(Duration::from_millis(10)) {
                 let (verifieds, tracer_packet_stats) = (&message.0, message.1.as_ref().unwrap());
@@ -196,7 +195,6 @@ fn bench_sigverify_stage(bencher: &mut Bencher, use_same_tx: bool) {
             }
         }
         trace!("received: {}", received);
-        test::black_box(messages);
     });
     stage.join().unwrap();
 }

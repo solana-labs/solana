@@ -103,7 +103,7 @@ fn bench_consume_buffered(bencher: &mut Bencher) {
                 &BankingStageStats::default(),
                 &recorder,
                 &QosService::new(1),
-                &mut LeaderSlotMetricsTracker::new_for_test(),
+                &mut LeaderSlotMetricsTracker::new(0),
                 None,
             );
         });
@@ -290,7 +290,6 @@ fn bench_banking(bencher: &mut Bencher, tx_type: TransactionType) {
             None,
             Arc::new(ConnectionCache::default()),
             bank_forks,
-            banking_tracer,
         );
         poh_recorder.write().unwrap().set_bank(&bank, false);
 
