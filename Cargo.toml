@@ -11,7 +11,6 @@ members = [
     "bench-tps",
     "bloom",
     "bucket_map",
-    "channel-latency",
     "clap-utils",
     "clap-v3-utils",
     "cli",
