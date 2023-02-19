@@ -3293,6 +3293,8 @@ mod tests {
                     ancestor_hashes_requests: UdpSocket::bind("0.0.0.0:0").unwrap(),
                     tpu_quic: UdpSocket::bind("0.0.0.0:0").unwrap(),
                     tpu_forwards_quic: UdpSocket::bind("0.0.0.0:0").unwrap(),
+                    repair_quic: UdpSocket::bind("0.0.0.0:0").unwrap(),
+                    serve_repair_quic: UdpSocket::bind("0.0.0.0:0").unwrap(),
                 },
             }
         };

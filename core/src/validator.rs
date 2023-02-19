@@ -2219,6 +2219,7 @@ mod tests {
             DEFAULT_TPU_CONNECTION_POOL_SIZE,
             DEFAULT_TPU_ENABLE_UDP,
             Arc::new(RwLock::new(None)),
+            DEFAULT_REPAIR_USE_QUIC,
         )
         .expect("assume successful validator start");
         assert_eq!(
@@ -2317,6 +2318,7 @@ mod tests {
                     DEFAULT_TPU_CONNECTION_POOL_SIZE,
                     DEFAULT_TPU_ENABLE_UDP,
                     Arc::new(RwLock::new(None)),
+                    DEFAULT_REPAIR_USE_QUIC,
                 )
                 .expect("assume successful validator start")
             })

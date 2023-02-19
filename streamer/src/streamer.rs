@@ -453,6 +453,7 @@ mod test {
         },
         crossbeam_channel::unbounded,
         solana_perf::recycler::Recycler,
+        solana_udp_client::{UdpConfig, UdpConnectionManager, UdpPool},
         std::{
             io,
             io::Write,
@@ -508,9 +509,9 @@ mod test {
         const NUM_PACKETS: usize = 5;
         let t_responder = {
             let (s_responder, r_responder) = unbounded();
-            let t_responder = responder(
+            let t_responder = responder::<UdpPool, UdpConnectionManager, UdpConfig>(
                 "SendTest",
-                Arc::new(send),
+                ResponderOption::Socket(Arc::new(send)),
                 r_responder,
                 SocketAddrSpace::Unspecified,
                 None,
