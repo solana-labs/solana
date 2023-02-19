@@ -97,7 +97,6 @@ members = [
     "tpu-client",
     "transaction-dos",
     "transaction-status",
-    "transaction-scheduler-bench",
     "udp-client",
     "upload-perf",
     "validator",
