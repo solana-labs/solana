@@ -3840,20 +3840,6 @@ impl Bank {
         TransactionBatch::new(lock_results, self, Cow::Borrowed(txs))
     }
 
-    pub fn prepare_sanitized_batch_noop<'a, 'b>(
-        &'a self,
-        txs: &'b [SanitizedTransaction],
-    ) -> TransactionBatch<'a, 'b> {
-        let tx_account_lock_limit = self.get_transaction_account_lock_limit();
-        let lock_results: Vec<Result<_>> = txs
-            .iter()
-            .map(|tx| tx.get_account_locks(tx_account_lock_limit).map(|_| ()))
-            .collect();
-        let mut batch = TransactionBatch::new(lock_results, self, Cow::Borrowed(txs));
-        batch.set_needs_unlock(false);
-        batch
-    }
-
     /// Prepare a locked transaction batch from a list of sanitized transactions, and their cost
     /// limited packing status
     pub fn prepare_sanitized_batch_with_results<'a, 'b>(

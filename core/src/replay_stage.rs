@@ -442,11 +442,6 @@ impl ReplayStage {
             rpc_subscriptions.clone(),
         );
         let run_replay = move || {
-            let max_thread_priority = std::env::var("MAX_THREAD_PRIORITY").is_ok();
-            if max_thread_priority {
-                thread_priority::set_current_thread_priority(thread_priority::ThreadPriority::Max).unwrap();
-            }
-            let ledger_signal_timeout = Duration::from_millis(std::env::var("REPLAY_LEDGER_SIGNAL_TIMEOUT").ok().and_then(|x| x.parse::<u64>().ok()).unwrap_or(100));
             let verify_recyclers = VerifyRecyclers::default();
             let _exit = Finalizer::new(exit.clone());
             let mut identity_keypair = cluster_info.keypair().clone();
@@ -971,7 +966,7 @@ impl ReplayStage {
                 if !did_complete_bank {
                     // only wait for the signal if we did not just process a bank; maybe there are more slots available
 
-                    let timer = ledger_signal_timeout;
+                    let timer = Duration::from_millis(100);
                     let result = ledger_signal_receiver.recv_timeout(timer);
                     match result {
                         Err(RecvTimeoutError::Timeout) => (),
@@ -1781,7 +1776,7 @@ impl ReplayStage {
                 root_slot,
                 my_pubkey,
                 rpc_subscriptions,
-                NewBankOptions { vote_only_bank, ..Default::default() },
+                NewBankOptions { vote_only_bank },
             );
             // make sure parent is frozen for finalized hashes via the above
             // new()-ing of its child bank
@@ -2305,7 +2300,7 @@ impl ReplayStage {
             .reset(bank.clone(), next_leader_slot);
 
         let next_leader_msg = if let Some(next_leader_slot) = next_leader_slot {
-            format!("My next leader slot is {} (in {} slots)", next_leader_slot.0, next_leader_slot.0 - bank.slot())
+            format!("My next leader slot is {}", next_leader_slot.0)
         } else {
             "I am not in the leader schedule yet".to_owned()
         };
@@ -2564,7 +2559,6 @@ impl ReplayStage {
 
             assert_eq!(bank_slot, bank.slot());
             if bank.is_complete() {
-                info!("waiting for completed bank: slot: {}", bank.slot());
                 let cumulative_timings = bank.wait_for_scheduler(false, false).0;
                 let bank_progress = progress
                     .get_mut(&bank.slot())
