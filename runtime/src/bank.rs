@@ -4541,9 +4541,6 @@ impl Bank {
             &self.feature_set,
             &self.fee_structure,
             account_overrides,
-            self.runtime_config
-                .is_check_age_skipped()
-                .then(|| self.get_lamports_per_signature()),
         );
         load_time.stop();
 
@@ -4923,12 +4920,7 @@ impl Bank {
                     .map(|maybe_lamports_per_signature| (maybe_lamports_per_signature, true))
                     .unwrap_or_else(|| {
                         (
-                            (if self.runtime_config.is_check_age_skipped() {
-                                Some(self.get_lamports_per_signature())
-                            } else {
-                                hash_queue
-                                    .get_lamports_per_signature(tx.message().recent_blockhash())
-                            }),
+                            hash_queue.get_lamports_per_signature(tx.message().recent_blockhash())
                             false,
                         )
                     });
