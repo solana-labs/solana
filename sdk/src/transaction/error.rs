@@ -153,9 +153,6 @@ pub enum TransactionError {
     /// Transaction exceeded max loaded accounts data size cap
     #[error("Transaction exceeded max loaded accounts data size cap")]
     MaxLoadedAccountsDataSizeExceeded,
-
-    //#[error("not commitable to poh")]
-    //NotCommitable,
 }
 
 impl From<SanitizeError> for TransactionError {

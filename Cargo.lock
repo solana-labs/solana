@@ -7067,26 +7067,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "solana-transaction-scheduler-bench"
-version = "1.11.5"
-dependencies = [
- "bincode",
- "clap 3.2.23",
- "crossbeam-channel",
- "itertools",
- "log",
- "rand 0.8.5",
- "solana-core",
- "solana-logger 1.16.0",
- "solana-measure",
- "solana-perf",
- "solana-program-runtime",
- "solana-runtime",
- "solana-scheduler",
- "solana-sdk 1.16.0",
-]
-
-[[package]]
 name = "solana-transaction-status"
 version = "1.16.0"
 dependencies = [
