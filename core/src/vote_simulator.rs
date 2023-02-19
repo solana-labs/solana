@@ -357,6 +357,8 @@ pub fn initialize_state(
         bank0.transfer(10_000, &mint_keypair, pubkey).unwrap();
     }
 
+    let bank_forks = BankForks::new(bank0);
+    let bank0 = bank_forks.get(bank0.slot());
     while bank0.tick_height() < bank0.max_tick_height() {
         bank0.register_tick(&Hash::new_unique());
     }
@@ -366,7 +368,6 @@ pub fn initialize_state(
         0,
         ForkProgress::new_from_bank(&bank0, bank0.collector_id(), &Pubkey::default(), None, 0, 0),
     );
-    let bank_forks = BankForks::new(bank0);
     let heaviest_subtree_fork_choice = HeaviestSubtreeForkChoice::new_from_bank_forks(&bank_forks);
     (bank_forks, progress, heaviest_subtree_fork_choice)
 }
