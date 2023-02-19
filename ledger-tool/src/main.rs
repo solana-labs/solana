@@ -24,10 +24,7 @@ use {
         },
     },
     solana_cli_output::{CliAccount, CliAccountNewConfig, OutputFormat},
-    solana_core::{
-        banking_trace::BankingSimulator,
-        system_monitor_service::{SystemMonitorService, SystemMonitorStatsReportConfig},
-    },
+    solana_core::system_monitor_service::{SystemMonitorService, SystemMonitorStatsReportConfig},
     solana_entry::entry::Entry,
     solana_geyser_plugin_manager::geyser_plugin_service::GeyserPluginService,
     solana_ledger::{
@@ -68,9 +65,6 @@ use {
             self, create_accounts_run_and_snapshot_dirs, move_and_async_delete_path, ArchiveFormat,
             SnapshotVersion, DEFAULT_ARCHIVE_COMPRESSION, SUPPORTED_ARCHIVE_COMPRESSION,
         },
-    },
-    solana_scheduler::{
-        AddressBook, LockAttempt, Preloader, RequestedUsage, ScheduleStage, TaskQueue, Weight,
     },
     solana_sdk::{
         account::{AccountSharedData, ReadableAccount, WritableAccount},
@@ -170,13 +164,9 @@ fn output_entry(
     slot: Slot,
     entry_index: usize,
     entry: Entry,
-    preloader: &Preloader,
-    to_schedule_stage: &mut Vec<Box<(SanitizedTransaction, Vec<LockAttempt>)>>,
-    skip_voting: bool,
 ) {
     match method {
         LedgerOutputMethod::Print => {
-            /*
             println!(
                 "  Entry {} - num_hashes: {}, hash: {}, transactions: {}",
                 entry_index,
@@ -184,33 +174,7 @@ fn output_entry(
                 entry.hash,
                 entry.transactions.len()
             );
-            */
             for (transactions_index, transaction) in entry.transactions.into_iter().enumerate() {
-                //println!("    Transaction {}", transactions_index);
-                let sanitized_tx = SanitizedTransaction::try_create(
-                    transaction.clone(),
-                    MessageHash::Compute,
-                    None,
-                    SimpleAddressLoader::Disabled,
-                    true, // require_static_program_ids
-                )
-                .unwrap();
-                if !skip_voting
-                    || !solana_runtime::vote_parser::is_simple_vote_transaction(&sanitized_tx)
-                {
-                    let locks = sanitized_tx.get_account_locks(usize::max_value()).unwrap();
-                    let writable_lock_iter = locks.writable.iter().map(|address| {
-                        LockAttempt::new(preloader.load(**address), RequestedUsage::Writable)
-                    });
-                    let readonly_lock_iter = locks.readonly.iter().map(|address| {
-                        LockAttempt::new(preloader.load(**address), RequestedUsage::Readonly)
-                    });
-                    let locks = writable_lock_iter
-                        .chain(readonly_lock_iter)
-                        .collect::<Vec<_>>();
-                    to_schedule_stage.push(Box::new((sanitized_tx, locks)));
-                }
-                /*
                 println!("    Transaction {transactions_index}");
                 let tx_signature = transaction.signatures[0];
                 let tx_status_meta = blockstore
@@ -231,7 +195,6 @@ fn output_entry(
                     None,
                     None,
                 );
-                */
             }
         }
         LedgerOutputMethod::Json => {
@@ -281,219 +244,10 @@ fn output_slot(
         }
     }
 
-    #[derive(Clone)]
-    struct A;
-    impl solana_scheduler::WithMode for A {
-        fn mode(&self) -> solana_scheduler::Mode { panic!() }
-        fn drop_cyclically(self) -> bool { todo!() }
-    }
-    let (muxed_sender, muxed_receiver) =
-        crossbeam_channel::unbounded::<solana_scheduler::SchedulablePayload<(), A>>();
-
-    // this should be target number of saturated cpu cores
-    let lane_count = std::env::var("EXECUTION_LANE_COUNT")
-        .unwrap_or(format!("{}", std::thread::available_parallelism().unwrap()))
-        .parse::<usize>()
-        .unwrap();
-    let lane_channel_factor = std::env::var("LANE_CHANNEL_FACTOR")
-        .unwrap_or(format!("{}", std::thread::available_parallelism().unwrap()))
-        .parse::<usize>()
-        .unwrap();
-    //let (pre_execute_env_sender, pre_execute_env_receiver) = crossbeam_channel::bounded(lane_count * lane_channel_factor);
-    let (pre_execute_env_sender, pre_execute_env_receiver) = crossbeam_channel::unbounded();
-
-    //let (pre_execute_env_sender, pre_execute_env_receiver) = crossbeam_channel::unbounded();
-    let (post_execute_env_sender, post_execute_env_receiver) = crossbeam_channel::unbounded();
-    //
-    let (post_schedule_env_sender, post_schedule_env_receiver) = crossbeam_channel::unbounded();
-    let mut runnable_queue = TaskQueue::default();
-    let mut address_book = AddressBook::default();
-    let preloader = address_book.preloader();
-    let t1 = std::thread::Builder::new()
-        .name("sol-scheduler".to_string())
-        .spawn(move || {
-            use rand::Rng;
-            loop {
-                ScheduleStage::run(
-                    &mut None,
-                    lane_count * lane_channel_factor,
-                    &mut runnable_queue,
-                    &mut address_book,
-                    &muxed_receiver,
-                    &pre_execute_env_sender,
-                    None,
-                    &post_execute_env_receiver,
-                    Some(&post_schedule_env_sender),
-                    |_| "".into()
-                );
-            }
-        })
-        .unwrap();
-    let handles = (0..lane_count)
-        .map(|thx| {
-            let pre_execute_env_receiver = pre_execute_env_receiver.clone();
-            let post_execute_env_sender = post_execute_env_sender.clone();
-            //let muxed_sender = muxed_sender.clone();
-
-            let t2 = std::thread::Builder::new()
-                //.name(format!("blockstore_processor_{}", thx))
-                .name(format!("sol-lane{}", thx))
-                .spawn(move || {
-                    use solana_metrics::datapoint_info;
-                    let current_thread_name = std::thread::current().name().unwrap().to_string();
-                    let send_metrics = std::env::var("SOLANA_TRANSACTION_TIMINGS").is_ok();
-
-                    for step in 0.. {
-                        let solana_scheduler::Flushable::Payload(mut ee) = pre_execute_env_receiver.recv().unwrap().0 else { continue };
-                        if step % 1966 == 0 {
-                            error!("executing!: {} {}", step, pre_execute_env_receiver.len());
-                        }
-
-                        if send_metrics {
-                            let mut process_message_time = Measure::start("process_message_time");
-                            let sig = ee.task.tx.0.signature().to_string();
-                            trace!("execute substage: #{} {:#?}", step, &sig);
-                            std::thread::sleep(std::time::Duration::from_micros(
-                                ee.cu.try_into().unwrap(),
-                            ));
-
-                            process_message_time.stop();
-                            let duration_with_overhead = process_message_time.as_us();
-
-                            datapoint_info!(
-                                "individual_tx_stats",
-                                ("slot", 33333, i64),
-                                ("thread", current_thread_name, String),
-                                ("signature", &sig, String),
-                                ("account_locks_in_json", "{}", String),
-                                ("status", "Ok", String),
-                                ("duration", duration_with_overhead, i64),
-                                ("compute_units", ee.cu, i64),
-                            );
-                        }
-
-                        /*
-                        muxed_sender
-                            .send(solana_scheduler::Multiplexed::FromExecute(ee))
-                            .unwrap();
-                        */
-                        // ee.reindex_with_address_book();
-                        todo!("contended_write_task_count");
-                        post_execute_env_sender
-                            .send(solana_scheduler::UnlockablePayload(ee, ()))
-                            .unwrap();
-                    }
-                })
-                .unwrap();
-            t2
-        })
-        .collect::<Vec<_>>();
-
-    let depth = Arc::new(std::sync::atomic::AtomicUsize::default());
-
-    let d = depth.clone();
-    let consumer_count = std::env::var("CONSUMER_COUNT")
-        .unwrap_or(format!("{}", 4))
-        .parse::<usize>()
-        .unwrap();
-    let step = Arc::new(std::sync::atomic::AtomicUsize::default());
-    let handles3 = (0..consumer_count)
-        .map(|thx| {
-            let post_schedule_env_receiver = post_schedule_env_receiver.clone();
-            let d = d.clone();
-            let step = step.clone();
-
-            let t3 = std::thread::Builder::new()
-                .name(format!("sol-consumer{}", thx))
-                .spawn(move || loop {
-                    /*
-                    let ee = post_schedule_env_receiver.recv().unwrap().0;
-                    d.fetch_sub(1, Ordering::Relaxed);
-                    let step = step.fetch_add(1, Ordering::Relaxed);
-                    trace!(
-                        "post schedule stage: #{} {:#?}",
-                        step,
-                        ee.task.tx.0.signature()
-                    );
-                    if step % 1966 == 0 {
-                        error!("finished!: {} {}", step, post_schedule_env_receiver.len());
-                    }
-                    */
-                    todo!();
-                })
-                .unwrap();
-            t3
-        })
-        .collect::<Vec<_>>();
-
     if verbose_level >= 2 {
-        let mut txes = Vec::new();
-        let skip_voting = std::env::var("SKIP_VOTING").is_ok();
         for (entry_index, entry) in entries.into_iter().enumerate() {
-            output_entry(
-                blockstore,
-                method,
-                slot,
-                entry_index,
-                entry,
-                &preloader,
-                &mut txes,
-                skip_voting,
-            );
+            output_entry(blockstore, method, slot, entry_index, entry);
         }
-        let txes = Arc::new(txes);
-
-        let mut weight = 10_000_000;
-        let loop_count = if std::env::var("INFINITE").is_ok() {
-            100000
-        } else {
-            100
-        };
-        let producer_count = std::env::var("PRODUCER_COUNT")
-            .unwrap_or(format!("{}", 4))
-            .parse::<usize>()
-            .unwrap();
-        let handles2 = (0..producer_count)
-            .map(|thx| {
-                let depth = depth.clone();
-                let txes = txes.clone();
-                let muxed_sender = muxed_sender.clone();
-                let t1 = std::thread::Builder::new()
-                    .name(format!("sol-producer{}", thx))
-                    .spawn(move || {
-                        #[derive(Clone, Copy, Debug)]
-                        struct NotAtTopOfScheduleThread;
-                        unsafe impl solana_scheduler::NotAtScheduleThread for NotAtTopOfScheduleThread {}
-                        let nast = NotAtTopOfScheduleThread;
-
-                        for i in 0..loop_count {
-                            error!("started!: {} {}", i, txes.len());
-                            for tx in txes.iter().map(|t| (t.0.clone(), t.1.iter().map(|l| l.clone_for_test()).collect::<Vec<_>>())) {
-                                while depth.load(Ordering::Relaxed) > 10_000 {
-                                    std::thread::sleep(std::time::Duration::from_micros(10));
-                                }
-
-                                todo!();
-                                /*
-                                let t = solana_scheduler::Task::new_for_queue(nast, weight, tx);
-                                //for lock_attempt in t.tx.1.iter() {
-                                //    lock_attempt.contended_unique_weights().insert_task(weight, solana_scheduler::TaskInQueue::clone(&t));
-                                //}
-
-                                muxed_sender.send(solana_scheduler::SchedulablePayload(solana_scheduler::Flushable::Payload(t))).unwrap();
-                                depth.fetch_add(1, Ordering::Relaxed);
-                                weight -= 1;
-                                */
-                            }
-                        }
-                    }).unwrap();
-                t1
-        }).collect::<Vec<_>>();
-
-        t1.join().unwrap();
-        handles.into_iter().for_each(|t| t.join().unwrap());
-        handles2.into_iter().for_each(|t| t.join().unwrap());
-        handles3.into_iter().for_each(|t| t.join().unwrap());
 
         output_slot_rewards(blockstore, slot, method);
     } else if verbose_level >= 1 {
@@ -1141,6 +895,15 @@ fn open_blockstore(
     wal_recovery_mode: Option<BlockstoreRecoveryMode>,
     force_update_to_open: bool,
 ) -> Blockstore {
+    let shred_storage_type = get_shred_storage_type(
+        ledger_path,
+        &format!(
+            "Shred stroage type cannot be inferred for ledger at {:?}, \
+         using default RocksLevel",
+            ledger_path
+        ),
+    );
+
     match Blockstore::open_with_options(
         ledger_path,
         BlockstoreOptions {
@@ -1148,6 +911,7 @@ fn open_blockstore(
             recovery_mode: wal_recovery_mode.clone(),
             enforce_ulimit_nofile: true,
             column_options: LedgerColumnOptions {
+                shred_storage_type,
                 ..LedgerColumnOptions::default()
             },
         },
@@ -1495,7 +1259,7 @@ fn load_bank_forks(
     .map(|_| (bank_forks, starting_snapshot_hashes));
 
     exit.store(true, Ordering::Relaxed);
-    //accounts_background_service.join().unwrap();
+    accounts_background_service.join().unwrap();
 
     result
 }
@@ -2326,11 +2090,6 @@ fn main() {
                     .help("Snapshot archive format to use.")
                     .conflicts_with("no_snapshot")
             )
-        ).subcommand(
-            SubCommand::with_name("simulate-leader-blocks")
-            .about("Simulate recreating blocks with banking trace as if a leader")
-            .arg(&halt_at_slot_arg)
-            .arg(&max_genesis_archive_unpacked_size_arg)
         ).subcommand(
             SubCommand::with_name("accounts")
             .about("Print account stats and contents after processing the ledger")
@@ -3573,101 +3332,6 @@ fn main() {
                         exit(1);
                     }
                 }
-            }
-            ("simulate-leader-blocks", Some(arg_matches)) => {
-                let simulator = BankingSimulator::new(PathBuf::new().join("/dev/stdin"));
-
-                if std::env::var("DUMP").is_ok() {
-                    simulator.dump(None);
-                    return
-                }
-
-                let mut accounts_index_config = AccountsIndexConfig::default();
-                if let Some(bins) = value_t!(arg_matches, "accounts_index_bins", usize).ok() {
-                    accounts_index_config.bins = Some(bins);
-                }
-
-                accounts_index_config.index_limit_mb = if let Some(limit) =
-                    value_t!(arg_matches, "accounts_index_memory_limit_mb", usize).ok()
-                {
-                    IndexLimitMb::Limit(limit)
-                } else if arg_matches.is_present("disable_accounts_disk_index") {
-                    IndexLimitMb::InMemOnly
-                } else {
-                    IndexLimitMb::Unspecified
-                };
-
-                {
-                    let mut accounts_index_paths: Vec<PathBuf> =
-                        if arg_matches.is_present("accounts_index_path") {
-                            values_t_or_exit!(arg_matches, "accounts_index_path", String)
-                                .into_iter()
-                                .map(PathBuf::from)
-                                .collect()
-                        } else {
-                            vec![]
-                        };
-                    if accounts_index_paths.is_empty() {
-                        accounts_index_paths = vec![ledger_path.join("accounts_index")];
-                    }
-                    accounts_index_config.drives = Some(accounts_index_paths);
-                }
-
-                let accounts_db_config = Some(AccountsDbConfig {
-                    ancient_append_vec_offset: value_t!(
-                        matches,
-                        "accounts_db_ancient_append_vecs",
-                        i64
-                    )
-                    .ok(),
-                    skip_initial_hash_calc: arg_matches
-                        .is_present("accounts_db_skip_initial_hash_calculation"),
-                    ..AccountsDbConfig::default()
-                });
-
-                let halt_at_slot = value_t!(arg_matches, "halt_at_slot", Slot).ok().unwrap();
-                let process_options = ProcessOptions {
-                    poh_verify: false,
-                    halt_at_slot: Some(halt_at_slot),
-                    accounts_db_config,
-                    ..ProcessOptions::default()
-                };
-
-                let blockstore = open_blockstore(
-                    &ledger_path,
-                    AccessType::Primary,
-                    wal_recovery_mode,
-                    force_update_to_open,
-                );
-                let first_simulated_slot = halt_at_slot + 1;
-                if let Some(end_slot) = blockstore.slot_meta_iterator(first_simulated_slot).unwrap().map(|(s, _)| s).last() {
-                    info!("purging slots {first_simulated_slot}, {end_slot}");
-
-                    blockstore.purge_from_next_slots(first_simulated_slot, end_slot);
-                    blockstore.purge_slots(first_simulated_slot, end_slot, PurgeType::Exact);
-                    info!("done: purging");
-                } else {
-                    info!("skipping purging...");
-                }
-
-                let genesis_config = open_genesis_config_by(&ledger_path, arg_matches);
-                let (bank_forks, ..) = load_bank_forks(
-                    arg_matches,
-                    &genesis_config,
-                    &blockstore,
-                    process_options,
-                    snapshot_archive_path,
-                    incremental_snapshot_archive_path,
-                )
-                .unwrap_or_else(|err| {
-                    eprintln!("Ledger verification failed: {:?}", err);
-                    exit(1);
-                });
-
-                //simulator.seek(bank); => Ok or Err("no BankStart")
-                simulator.simulate(&genesis_config, bank_forks, Arc::new(blockstore));
-
-                println!("Ok");
             }
             ("accounts", Some(arg_matches)) => {
                 let halt_at_slot = value_t!(arg_matches, "halt_at_slot", Slot).ok();
