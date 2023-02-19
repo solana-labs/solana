@@ -634,7 +634,6 @@ struct Bundle {
 
 #[derive(Debug, PartialEq, Clone, Copy)]
 pub enum Mode {
-    Banking,
     Replaying,
 }
 
