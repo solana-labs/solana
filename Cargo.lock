@@ -6788,6 +6788,7 @@ name = "solana-streamer"
 version = "1.16.0"
 dependencies = [
  "async-channel",
+ "async-trait",
  "bytes",
  "crossbeam-channel",
  "futures-util",
