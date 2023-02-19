@@ -30,6 +30,19 @@ use {
 
 const DEFAULT_LRU_SIZE: usize = 10_000;
 
+struct RepairContext {
+    repair_socket: Arc<UdpSocket>,
+    cluster_info: Arc<ClusterInfo>,
+    repair_quic_config: Option<RepairQuicConfig>,
+}
+
+struct ModiferResult {
+    streamers: Vec<JoinHandle<()>>,
+    modifier_hdl: JoinHandle<()>,
+    quic_repair_endpoint: Option<Endpoint>,
+    quic_repair_t: Option<JoinHandle<()>>,
+}
+
 pub(crate) struct ShredFetchStage {
     thread_hdls: Vec<JoinHandle<()>>,
     quic_repair_endpoint: Option<Endpoint>,
@@ -130,13 +143,8 @@ impl ShredFetchStage {
         shred_version: u16,
         name: &'static str,
         flags: PacketFlags,
-        repair_context: Option<(Arc<UdpSocket>, Arc<ClusterInfo>, Option<RepairQuicConfig>)>,
-    ) -> (
-        Vec<JoinHandle<()>>,
-        JoinHandle<()>,
-        Option<Endpoint>,
-        Option<JoinHandle<()>>,
-    ) {
+        repair_context: Option<RepairContext>,
+    ) -> ModiferResult {
         let (packet_sender, packet_receiver) = unbounded();
         let streamers = sockets
             .into_iter()
@@ -155,26 +163,25 @@ impl ShredFetchStage {
             .collect();
 
         let (socket, cluster_info, repair_quic_config) = repair_context
-            .map(|(socket, cluster_info, repair_quic_config)| {
-                (Some(socket), Some(cluster_info), Some(repair_quic_config))
+            .map(|c| {
+                (
+                    Some(c.repair_socket),
+                    Some(c.cluster_info),
+                    Some(c.repair_quic_config),
+                )
             })
             .unwrap_or((None, None, None));
         let stats = Arc::new(StreamStats::default());
         let repair_context = socket.zip(cluster_info);
         let repair_quic_config = repair_quic_config.flatten();
-        let (quic_repair_endpoint, quic_repair_thread) =
+        let (quic_repair_endpoint, quic_repair_t) =
             if let Some(repair_quic_config) = repair_quic_config {
-                let host = repair_quic_config
-                    .repair_address
-                    .local_addr()
-                    .unwrap()
-                    .ip()
-                    .clone();
+                let host = repair_quic_config.repair_address.local_addr().unwrap().ip();
                 let (endpoint, repair_quic_t) = spawn_server(
                     repair_quic_config.repair_address.try_clone().unwrap(),
                     &repair_quic_config.identity_keypair,
                     host,
-                    packet_sender.clone(),
+                    packet_sender,
                     exit.clone(),
                     MAX_QUIC_CONNECTIONS_PER_PEER,
                     repair_quic_config.staked_nodes,
@@ -206,12 +213,13 @@ impl ShredFetchStage {
                 )
             })
             .unwrap();
-        (
+
+        ModiferResult {
             streamers,
             modifier_hdl,
             quic_repair_endpoint,
-            quic_repair_thread,
-        )
+            quic_repair_t,
+        }
     }
 
     pub(crate) fn new(
@@ -227,7 +235,7 @@ impl ShredFetchStage {
     ) -> Self {
         let recycler = PacketBatchRecycler::warmed(100, 1024);
 
-        let (mut tvu_threads, tvu_filter, _, _) = Self::packet_modifier(
+        let tvu_modifier = Self::packet_modifier(
             sockets,
             exit,
             sender.clone(),
@@ -239,7 +247,7 @@ impl ShredFetchStage {
             None, // repair_context
         );
 
-        let (tvu_forwards_threads, fwd_thread_hdl, _, _) = Self::packet_modifier(
+        let tvu_forward_modifier = Self::packet_modifier(
             forward_sockets,
             exit,
             sender.clone(),
@@ -251,30 +259,40 @@ impl ShredFetchStage {
             None, // repair_context
         );
 
-        let (repair_receiver, repair_handler, quic_repair_endpoint, quic_repair_thread) =
-            Self::packet_modifier(
-                vec![repair_socket.clone()],
-                exit,
-                sender,
-                recycler,
-                bank_forks,
-                shred_version,
-                "shred_fetch_repair",
-                PacketFlags::REPAIR,
-                Some((repair_socket, cluster_info, repair_quic_config)),
-            );
+        let repair_modifier = Self::packet_modifier(
+            vec![repair_socket.clone()],
+            exit,
+            sender,
+            recycler,
+            bank_forks,
+            shred_version,
+            "shred_fetch_repair",
+            PacketFlags::REPAIR,
+            Some(RepairContext {
+                repair_socket,
+                cluster_info,
+                repair_quic_config,
+            }),
+        );
 
-        tvu_threads.extend(tvu_forwards_threads.into_iter());
-        tvu_threads.extend(repair_receiver.into_iter());
+        let ModiferResult {
+            streamers: mut tvu_threads,
+            modifier_hdl: tvu_filter,
+            quic_repair_endpoint: _,
+            quic_repair_t: _,
+        } = tvu_modifier;
+
+        tvu_threads.extend(tvu_forward_modifier.streamers.into_iter());
+        tvu_threads.extend(repair_modifier.streamers.into_iter());
         tvu_threads.push(tvu_filter);
-        tvu_threads.push(fwd_thread_hdl);
-        tvu_threads.push(repair_handler);
-        if let Some(quic_repair_thread) = quic_repair_thread {
-            tvu_threads.push(quic_repair_thread);
+        tvu_threads.push(tvu_forward_modifier.modifier_hdl);
+        tvu_threads.push(repair_modifier.modifier_hdl);
+        if let Some(quic_repair_t) = repair_modifier.quic_repair_t {
+            tvu_threads.push(quic_repair_t);
         }
         Self {
             thread_hdls: tvu_threads,
-            quic_repair_endpoint,
+            quic_repair_endpoint: repair_modifier.quic_repair_endpoint,
         }
     }
 

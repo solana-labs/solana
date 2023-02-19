@@ -16,6 +16,7 @@ use {
         rewards_recorder_service::{RewardsRecorderSender, RewardsRecorderService},
         sample_performance_service::SamplePerformanceService,
         serve_repair::ServeRepair,
+        serve_repair_quic_service::ServeRepairService as ServeRepairQuicService,
         serve_repair_service::ServeRepairService,
         sigverify,
         snapshot_packager_service::SnapshotPackagerService,
@@ -369,6 +370,7 @@ pub struct Validator {
     stats_reporter_service: StatsReporterService,
     gossip_service: GossipService,
     serve_repair_service: ServeRepairService,
+    serve_repair_quic_service: ServeRepairQuicService,
     completed_data_sets_service: CompletedDataSetsService,
     snapshot_packager_service: Option<SnapshotPackagerService>,
     poh_recorder: Arc<RwLock<PohRecorder>>,
@@ -909,6 +911,21 @@ impl Validator {
             config.repair_whitelist.clone(),
         );
 
+        let serve_repair_service = ServeRepairService::new(
+            serve_repair,
+            blockstore.clone(),
+            node.sockets.serve_repair,
+            socket_addr_space,
+            stats_reporter_sender.clone(),
+            exit.clone(),
+        );
+
+        let serve_repair_quic = ServeRepair::new(
+            cluster_info.clone(),
+            bank_forks.clone(),
+            config.repair_whitelist.clone(),
+        );
+
         let repair_quic_config = RepairQuicConfig {
             repair_address: Arc::new(node.sockets.repair_quic),
             serve_repair_address: Arc::new(node.sockets.serve_repair_quic),
@@ -917,10 +934,10 @@ impl Validator {
             wait_for_chunk_timeout_ms: DEFAULT_WAIT_FOR_CHUNK_TIMEOUT_MS,
         };
 
-        let serve_repair_service = ServeRepairService::new(
-            serve_repair,
+        let serve_repair_quic_service = ServeRepairQuicService::new(
+            serve_repair_quic,
             blockstore.clone(),
-            node.sockets.serve_repair,
+            repair_quic_config.clone(),
             socket_addr_space,
             stats_reporter_sender,
             exit.clone(),
@@ -1045,7 +1062,7 @@ impl Validator {
             &connection_cache,
             &prioritization_fee_cache,
             banking_tracer.clone(),
-            repair_use_quic.then_some(repair_quic_config.clone()),
+            repair_use_quic.then_some(repair_quic_config),
         )?;
 
         let tpu = Tpu::new(
@@ -1097,6 +1114,7 @@ impl Validator {
             stats_reporter_service,
             gossip_service,
             serve_repair_service,
+            serve_repair_quic_service,
             json_rpc_service,
             pubsub_service,
             rpc_completed_slots_service,
@@ -1228,6 +1246,9 @@ impl Validator {
         self.serve_repair_service
             .join()
             .expect("serve_repair_service");
+        self.serve_repair_quic_service
+            .join()
+            .expect("serve_repair_quic_service");
         self.stats_reporter_service
             .join()
             .expect("stats_reporter_service");

@@ -230,6 +230,7 @@ pub struct RepairService {
 }
 
 impl RepairService {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         blockstore: Arc<Blockstore>,
         exit: Arc<AtomicBool>,
