@@ -43,7 +43,6 @@ pub use solana_scheduler::Mode;
 #[derive(Debug)]
 pub struct SchedulerPool {
     schedulers: std::sync::Mutex<Vec<Box<dyn LikeScheduler>>>,
-    transaction_recorder: Option<TransactionRecorder>,
     log_messages_bytes_limit: Option<usize>,
     transaction_status_sender: Option<TransactionStatusSender>,
 }
@@ -52,10 +51,6 @@ impl SchedulerPool {
     fn new(poh_recorder: Option<&Arc<RwLock<PohRecorder>>>, log_messages_bytes_limit: Option<usize>, transaction_status_sender: Option<TransactionStatusSender>) -> Self {
         Self {
             schedulers: std::sync::Mutex::new(Vec::new()),
-            transaction_recorder: poh_recorder.map(|poh_recorder| {
-                let poh_recorder = poh_recorder.read().unwrap();
-                poh_recorder.recorder()
-            }),
             log_messages_bytes_limit,
             transaction_status_sender,
         }
@@ -342,35 +337,7 @@ impl Scheduler {
                         Some(ee.task.transaction_index(mode) as usize)
                    },
                     solana_scheduler::Mode::Banking => {
-                        //info!("banking commit! {slot}");
-                        let executed_transactions: Vec<_> = execution_results
-                                .iter()
-                                .zip(batch.sanitized_transactions())
-                                .filter_map(|(execution_result, tx)| {
-                                    if execution_result.was_executed() {
-                                        Some(tx.to_versioned_transaction())
-                                    } else {
-                                        None
-                                    }
-                                })
-                                .collect();
-                        if !executed_transactions.is_empty() {
-                            let hash = solana_entry::entry::hash_transactions(&executed_transactions);
-                            //info!("scEx: {current_thread_name} committing.. {} txes", transactions.len());
-                            let res = scheduler_pool.transaction_recorder.as_ref().unwrap().record(slot, hash, executed_transactions);
-                            match res {
-                                Ok(maybe_index) => maybe_index,
-                                Err(e) => {
-                                    trace!("{thread_name} pausing due to poh error until resumed...: {:?}", e);
-                                    // this is needed so that we don't enter busy loop
-                                    commit_status.notify_as_paused();
-                                    // meddle with checkpoint/context
-                                    continue 'retry;
-                                },
-                            }
-                        } else {
-                            None
-                        }
+                        panic!();
                     },
                 };
 
