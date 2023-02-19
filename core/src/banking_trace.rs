@@ -1049,7 +1049,6 @@ impl BankingSimulator {
         }
         if std::env::var("SKIP_CHECK_AGE").is_ok() {
             warn!("skipping check age as requested....");
-            bank.skip_check_age();
         }
 
         let no_fake_hash = std::env::var("NO_FAKE_HASH").is_ok();

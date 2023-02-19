@@ -4024,11 +4024,6 @@ impl Bank {
         self.rc.accounts.accounts_db.set_shrink_paths(paths);
     }
 
-    // danger
-    pub fn skip_check_age(&self) {
-        self.runtime_config.skip_check_age();
-    }
-
     pub fn check_age_tx(&self, tx: &SanitizedTransaction) -> (Result<()>, std::option::Option<NoncePartial>) {
         let max_age = MAX_PROCESSING_AGE;
         let hash_queue = self.blockhash_queue.read().unwrap();
