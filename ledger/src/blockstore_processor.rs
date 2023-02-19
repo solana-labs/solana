@@ -924,7 +924,7 @@ pub struct ConfirmationTiming {
 }
 
 impl ConfirmationTiming {
-    fn process_execute_batches_internal_metrics(
+    pub fn process_execute_batches_internal_metrics(
         &mut self,
         execute_batches_internal_metrics: ExecuteBatchesInternalMetrics,
     ) {
