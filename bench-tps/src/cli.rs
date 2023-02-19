@@ -11,7 +11,6 @@ use {
     solana_tpu_client::tpu_client::{DEFAULT_TPU_CONNECTION_POOL_SIZE, DEFAULT_TPU_USE_QUIC},
     std::{
         net::{IpAddr, Ipv4Addr, SocketAddr},
-        process::exit,
         time::Duration,
     },
 };
@@ -537,18 +536,14 @@ pub fn parse_args(matches: &ArgMatches) -> Result<Config, &'static str> {
     }
 
     if let Some(addr) = matches.value_of("bind_address") {
-        args.bind_address = solana_net_utils::parse_host(addr).unwrap_or_else(|e| {
-            eprintln!("Failed to parse bind_address: {e}");
-            exit(1)
-        });
+        args.bind_address =
+            solana_net_utils::parse_host(addr).map_err(|_| "Failed to parse bind_address")?;
     }
-    let (_, node_id_path) = ConfigInput::compute_keypair_path_setting(
-        matches.value_of("client_node_id").unwrap_or(""),
-        &config.keypair_path,
-    );
-    // error is checked by arg validator
-    if let Ok(node_id) = read_keypair_file(node_id_path) {
-        args.client_node_id = Some(node_id);
+
+    if let Some(client_node_id_filename) = matches.value_of("client_node_id") {
+        // error is checked by arg validator
+        let client_node_id = read_keypair_file(client_node_id_filename).map_err(|_| "")?;
+        args.client_node_id = Some(client_node_id);
     }
 
     Ok(args)
@@ -560,25 +555,33 @@ mod tests {
         crate::cli::{build_args, parse_args, Config, ExternalClientType},
         solana_sdk::signature::{read_keypair_file, write_keypair_file, Keypair, Signer},
         std::{
-            net::{Ipv4Addr, SocketAddr},
+            net::{IpAddr, Ipv4Addr, SocketAddr},
             time::Duration,
         },
-        tempfile::tempdir,
+        tempfile::{tempdir, TempDir},
     };
 
-    #[test]
-    #[allow(clippy::cognitive_complexity)]
-    fn test_cli_parse() {
-        // always specify identity in these tests because otherwise a random one will be used
+    /// create a keypair and write it to json file in temporary directory
+    /// return both generated keypair and full file name
+    fn write_tmp_keypair(out_dir: &TempDir) -> (Keypair, String) {
         let keypair = Keypair::new();
-        let out_dir = tempdir().unwrap();
         let file_path = out_dir
             .path()
             .join(format!("keypair_file-{}", keypair.pubkey()));
         let keypair_file_name = file_path.into_os_string().into_string().unwrap();
         write_keypair_file(&keypair, &keypair_file_name).unwrap();
+        (keypair, keypair_file_name)
+    }
+
+    #[test]
+    #[allow(clippy::cognitive_complexity)]
+    fn test_cli_parse() {
+        // create a directory inside of std::env::temp_dir(), removed when out_dir goes out of scope
+        let out_dir = tempdir().unwrap();
+        let (keypair, keypair_file_name) = write_tmp_keypair(&out_dir);
 
         // parse provided rpc address, check that default ws address is correct
+        // always specify identity in these tests because otherwise a random one will be used
         let matches = build_args("1.0.0").get_matches_from(vec![
             "solana-bench-tps",
             "--identity",
@@ -650,6 +653,33 @@ mod tests {
                 websocket_url: "ws://123.4.5.6:8900/".to_string(),
                 id: keypair,
                 external_client_type: ExternalClientType::TpuClient,
+                ..Config::default()
+            }
+        );
+
+        // with client node id
+        let keypair = read_keypair_file(&keypair_file_name).unwrap();
+        let (client_id, client_id_file_name) = write_tmp_keypair(&out_dir);
+        let matches = build_args("1.0.0").get_matches_from(vec![
+            "solana-bench-tps",
+            "--identity",
+            &keypair_file_name,
+            "-u",
+            "http://192.0.0.1:8899",
+            "--bind-address",
+            "192.9.8.7",
+            "--client-node-id",
+            &client_id_file_name,
+        ]);
+        let actual = parse_args(&matches).unwrap();
+        assert_eq!(
+            actual,
+            Config {
+                json_rpc_url: "http://192.0.0.1:8899".to_string(),
+                websocket_url: "ws://192.0.0.1:8900/".to_string(),
+                id: keypair,
+                bind_address: IpAddr::V4(Ipv4Addr::new(192, 9, 8, 7)),
+                client_node_id: Some(client_id),
                 ..Config::default()
             }
         );
