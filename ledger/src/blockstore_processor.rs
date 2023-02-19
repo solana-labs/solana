@@ -1648,7 +1648,7 @@ pub struct TransactionStatusBatch {
     pub transaction_indexes: Vec<usize>,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct TransactionStatusSender {
     pub sender: Sender<TransactionStatusMessage>,
 }
