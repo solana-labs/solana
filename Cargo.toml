@@ -75,6 +75,7 @@ members = [
     "runtime",
     "runtime/store-tool",
     "scheduler",
+    "scheduler-pool",
     "sdk",
     "sdk/cargo-build-bpf",
     "sdk/cargo-build-sbf",
