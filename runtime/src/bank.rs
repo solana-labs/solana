@@ -1596,32 +1596,6 @@ impl Bank {
         let (feature_set, feature_set_time_us) = measure_us!(parent.feature_set.clone());
 
         let accounts_data_size_initial = parent.load_accounts_data_size();
-        /*
-        let commit_mode = if !banking || std::env::var("ISOLATED_BANKING_LIKE_REPLAY").is_ok() {
-            CommitMode::Replaying
-        } else {
-            CommitMode::Banking
-        };
-
-        let scheduler = match commit_mode {
-            CommitMode::Replaying => {
-                RwLock::new(Some(SCHEDULER_POOL.lock().unwrap().take_from_pool()))
-            },
-            CommitMode::Banking => {
-                let s: Option<Box<Scheduler<ExecuteTimings>>> = parent.scheduler2.write().unwrap().take();
-                if let Some(scheduler) = s {
-                    use assert_matches::assert_matches;
-                    assert_matches!(parent.commit_mode(), CommitMode::Banking);
-                    info!("bank (slot: {}) inheriting {}'s scheduler..", slot, parent.slot());
-                    RwLock::new(Some(scheduler))
-                } else {
-                    info!("bank (slot: {}) NOT inheriting {}'s scheduler..", slot, parent.slot());
-                    RwLock::new(Some(SCHEDULER_POOL.lock().unwrap().take_from_pool()))
-                }
-            },
-        };
-        */
-
         let mut new = Bank {
             incremental_snapshot_persistence: None,
             rc,
@@ -1795,8 +1769,8 @@ impl Bank {
 
         report_new_bank_metrics(
             slot,
-            parent.slot(),
             new.block_height,
+            parent.slot(),
             NewBankTimings {
                 bank_rc_creation_time_us,
                 total_elapsed_time_us: time.as_us(),
@@ -4965,8 +4939,7 @@ impl Bank {
     ) -> TransactionResults {
         assert!(
             !self.freeze_started(),
-            "commit_transactions() working on a bank(slot: {}) that is already frozen or is undergoing freezing!",
-            self.slot(),
+            "commit_transactions() working on a bank that is already frozen or is undergoing freezing!"
         );
 
         let CommitTransactionCounts {
@@ -6195,7 +6168,6 @@ impl Bank {
 
     /// Process a batch of transactions.
     #[must_use]
-    #[inline(never)]
     pub fn load_execute_and_commit_transactions(
         &self,
         batch: &TransactionBatch,
@@ -6846,10 +6818,6 @@ impl Bank {
     /// Hash the `accounts` HashMap. This represents a validator's interpretation
     ///  of the delta of the ledger since the last vote and up to now
     fn hash_internal_state(&self) -> Hash {
-        self._hash_internal_state(&mut None)
-    }
-
-    fn _hash_internal_state(&self, bank_hash_override: &mut Option<Hash>) -> Hash {
         let slot = self.slot();
         let accounts_delta_hash = self
             .rc
@@ -6891,7 +6859,7 @@ impl Bank {
             .get_bank_hash_stats(slot)
             .expect("No bank hash stats were found for this bank, that should not be possible");
         info!(
-            "bank frozen: {slot} hash: {hash} accounts_delta: {} sigs: {} txs: {}, last_blockhash: {} capitalization: {}{}, stats: {bank_hash_stats:?}",
+            "bank frozen: {slot} hash: {hash} accounts_delta: {} signature_count: {} last_blockhash: {} capitalization: {}{}, stats: {bank_hash_stats:?}",
             bank_hash_override.map(|new_hash| format!("{new_hash} (was: {hash})")).unwrap_or_else(|| format!("{hash}")),
             accounts_delta_hash.0,
             self.signature_count(),
