@@ -1782,8 +1782,7 @@ impl ReplayStage {
             // new()-ing of its child bank
             banking_tracer.hash_event(parent.slot(), &parent.last_blockhash(), &parent.hash());
 
-            let tpu_bank = bank_forks.write().unwrap().add_new_bank_for_banking(tpu_bank, parent.uninstall_scheduler());
-            tpu_bank.resume_banking_commit();
+            let tpu_bank = bank_forks.write().unwrap().add_new_bank_for_banking(tpu_bank);
             poh_recorder
                 .write()
                 .unwrap()
