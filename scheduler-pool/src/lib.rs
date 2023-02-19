@@ -26,7 +26,6 @@ use solana_sdk::transaction::VersionedTransaction;
 use solana_metrics::inc_new_counter_info;
 use solana_metrics::inc_new_counter;
 use solana_metrics::inc_counter;
-use solana_metrics::datapoint_info_at;
 use solana_metrics::create_counter;
 use solana_measure::measure::Measure;
 use std::sync::RwLock;
