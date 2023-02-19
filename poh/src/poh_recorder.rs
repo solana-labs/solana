@@ -61,19 +61,10 @@ type Result<T> = std::result::Result<T, PohRecorderError>;
 
 pub type WorkingBankEntry = (Arc<Bank>, (Entry, u64));
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct BankStart {
     pub working_bank: Arc<Bank>,
     pub bank_creation_time: Arc<Instant>,
-}
-
-impl std::fmt::Debug for BankStart {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("BankStart")
-            .field("working_bank", &format!("Bank slot: {}", &self.working_bank.slot()))
-            .field("bank_creation_time", &self.bank_creation_time)
-            .finish_non_exhaustive()
-    }
 }
 
 impl BankStart {
@@ -119,7 +110,6 @@ impl Record {
     }
 }
 
-#[derive(Debug)]
 pub struct TransactionRecorder {
     // shared by all users of PohRecorder
     pub record_sender: Sender<Record>,
@@ -162,17 +152,15 @@ impl TransactionRecorder {
         let mut is_exited = false;
         loop {
             let res = result_receiver.recv_timeout(Duration::from_millis(1000));
-            //let current_thread_name = std::thread::current().name().unwrap().to_string();
-            //info!("scEx: {current_thread_name} {res:?}");
             match res {
                 Err(RecvTimeoutError::Timeout) => {
-                    //if is_exited {
+                    if is_exited {
                         return Err(PohRecorderError::MaxHeightReached);
-                    //} else {
+                    } else {
                         // A result may have come in between when we timed out checking this
                         // bool, so check the channel again, even if is_exited == true
-                    //    is_exited = self.is_exited.load(Ordering::SeqCst);
-                    //}
+                        is_exited = self.is_exited.load(Ordering::SeqCst);
+                    }
                 }
                 Err(RecvTimeoutError::Disconnected) => {
                     return Err(PohRecorderError::MaxHeightReached);
@@ -361,10 +349,6 @@ impl PohRecorder {
 
     pub fn ticks_per_slot(&self) -> u64 {
         self.ticks_per_slot
-    }
-
-    pub fn slot(&self) -> Slot {
-        self.tick_height() / self.ticks_per_slot()
     }
 
     pub fn recorder(&self) -> TransactionRecorder {

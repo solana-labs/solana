@@ -302,7 +302,6 @@ impl PohService {
                     }
                     // check to see if a record request has been sent
                     if let Ok(record) = record_receiver.try_recv() {
-                        assert!(next_record.is_none());
                         // remember the record we just received as the next record to occur
                         *next_record = Some(record);
                         break;
@@ -343,7 +342,6 @@ impl PohService {
         let poh = poh_recorder.read().unwrap().poh.clone();
         let mut timing = PohTiming::new();
         let mut next_record = None;
-        info!("starting tick producer at {}ns/(1slot={}ticks):", target_ns_per_tick * ticks_per_slot, ticks_per_slot);
         loop {
             let should_tick = Self::record_or_hash(
                 &mut next_record,
