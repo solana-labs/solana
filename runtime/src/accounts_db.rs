@@ -20,7 +20,7 @@
 
 use {
     crate::{
-        account_info::{AccountInfo, Offset, StorageLocation, StoredSize},
+        account_info::{AccountInfo, StorageLocation, StoredSize},
         account_storage::{AccountStorage, AccountStorageStatus, ShrinkInProgress},
         accounts_background_service::{DroppedSlotsSender, SendDroppedBankCallback},
         accounts_cache::{AccountsCache, CachedAccount, SlotCache},
@@ -128,11 +128,8 @@ pub const PUBKEY_BINS_FOR_CALCULATING_HASHES: usize = 65536;
 // Metrics indicate a sweet spot in the 2.5k-5k range for mnb.
 const MAX_ITEMS_PER_CHUNK: Slot = 2_500;
 
-// A specially reserved offset (represents an offset into an AppendVec)
-// for entries in the cache, so that  operations that take a storage entry can maintain
-// a common interface when interacting with cached accounts. This version is "virtual" in
-// that it doesn't actually map to an entry in an AppendVec.
-pub(crate) const CACHE_VIRTUAL_OFFSET: Offset = 0;
+/// A place holder stored size for a cached entry. We don't need to store the size for cached entries, but we have to pass something.
+/// stored size is only used for shrinking. We don't shrink items in the write cache.
 const CACHE_VIRTUAL_STORED_SIZE: StoredSize = 0;
 
 // When getting accounts for shrinking from the index, this is the # of accounts to lookup per thread.

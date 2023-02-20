@@ -6434,6 +6434,7 @@ dependencies = [
  "lz4",
  "memmap2",
  "memoffset 0.8.0",
+ "modular-bitfield",
  "num-derive",
  "num-traits",
  "num_cpus",
