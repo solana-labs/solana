@@ -425,7 +425,6 @@ pub fn process_entries_for_tests(
         transaction_status_sender,
         replay_vote_sender,
         &mut confirmation_timing,
-        None,
         &_ignored_prioritization_fee_cache,
     );
 
