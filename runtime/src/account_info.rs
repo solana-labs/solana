@@ -86,6 +86,7 @@ const ALL_FLAGS: StoredSize = IS_ZERO_LAMPORT_FLAG | IS_CACHED_STORE_ID_FLAG;
 
 impl ZeroLamport for AccountInfo {
     fn is_zero_lamport(&self) -> bool {
+        panic!("");
         self.stored_size_mask & IS_ZERO_LAMPORT_FLAG == IS_ZERO_LAMPORT_FLAG
     }
 }
