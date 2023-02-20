@@ -1110,11 +1110,11 @@ pub enum ZeroLamportAccounts {
 }
 
 /// Hash of accounts
-#[derive(Debug, Default, Copy, Clone, Eq, PartialEq, Serialize, Deserialize, AbiExample)]
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub struct AccountsHash(pub Hash);
 
 /// Hash of accounts written in a single slot
-#[derive(Debug, Default, Copy, Clone, Eq, PartialEq, Serialize, Deserialize, AbiExample)]
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub struct AccountsDeltaHash(pub Hash);
 
 #[cfg(test)]

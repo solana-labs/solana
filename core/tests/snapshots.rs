@@ -540,10 +540,11 @@ fn test_concurrent_snapshot_packaging(
             solana_runtime::serde_snapshot::reserialize_bank_with_new_accounts_hash(
                 accounts_package.snapshot_links_dir(),
                 accounts_package.slot,
-                &AccountsHash::default(),
+                &AccountsHash(Hash::default()),
                 None,
             );
-            let snapshot_package = SnapshotPackage::new(accounts_package, AccountsHash::default());
+            let snapshot_package =
+                SnapshotPackage::new(accounts_package, AccountsHash(Hash::default()));
             pending_snapshot_package
                 .lock()
                 .unwrap()
@@ -570,7 +571,7 @@ fn test_concurrent_snapshot_packaging(
     solana_runtime::serde_snapshot::reserialize_bank_with_new_accounts_hash(
         saved_snapshots_dir.path(),
         saved_slot,
-        &AccountsHash::default(),
+        &AccountsHash(Hash::default()),
         None,
     );
 
