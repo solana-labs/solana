@@ -13,7 +13,6 @@ mod tests {
             nonblocking::quic::DEFAULT_WAIT_FOR_CHUNK_TIMEOUT_MS, quic::StreamStats,
             streamer::StakedNodes, tls_certificates::new_self_signed_tls_certificate,
         },
-        tokio::time::sleep,
         std::{
             net::{IpAddr, Ipv4Addr, SocketAddr, UdpSocket},
             sync::{
@@ -22,6 +21,7 @@ mod tests {
             },
             time::{Duration, Instant},
         },
+        tokio::time::sleep,
     };
 
     fn check_packets(
