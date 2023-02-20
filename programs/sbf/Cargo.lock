@@ -6042,6 +6042,7 @@ name = "solana-test-validator"
 version = "1.16.0"
 dependencies = [
  "base64 0.13.0",
+ "bincode",
  "log",
  "serde_derive",
  "serde_json",
