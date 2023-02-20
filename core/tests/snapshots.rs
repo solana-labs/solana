@@ -28,10 +28,7 @@ use {
         snapshot_archive_info::FullSnapshotArchiveInfo,
         snapshot_config::SnapshotConfig,
         snapshot_hash::SnapshotHash,
-        snapshot_package::{
-            AccountsPackage, AccountsPackageType, PendingSnapshotPackage, SnapshotPackage,
-            SnapshotType,
-        },
+        snapshot_package::{AccountsPackage, AccountsPackageType, SnapshotPackage, SnapshotType},
         snapshot_utils::{
             self, ArchiveFormat,
             SnapshotVersion::{self, V1_2_0},
@@ -523,9 +520,10 @@ fn test_concurrent_snapshot_packaging(
         ClusterInfo::new(contact_info, keypair, SocketAddrSpace::Unspecified)
     });
 
-    let pending_snapshot_package = PendingSnapshotPackage::default();
+    let (snapshot_package_sender, snapshot_package_receiver) = crossbeam_channel::unbounded();
     let snapshot_packager_service = SnapshotPackagerService::new(
-        pending_snapshot_package.clone(),
+        snapshot_package_sender.clone(),
+        snapshot_package_receiver,
         None,
         &exit,
         &cluster_info,
@@ -535,28 +533,32 @@ fn test_concurrent_snapshot_packaging(
 
     let _package_receiver = std::thread::Builder::new()
         .name("package-receiver".to_string())
-        .spawn(move || {
-            let accounts_package = real_accounts_package_receiver.try_recv().unwrap();
-            solana_runtime::serde_snapshot::reserialize_bank_with_new_accounts_hash(
-                accounts_package.snapshot_links_dir(),
-                accounts_package.slot,
-                &AccountsHash(Hash::default()),
-                None,
-            );
-            let snapshot_package =
-                SnapshotPackage::new(accounts_package, AccountsHash(Hash::default()).into());
-            pending_snapshot_package
-                .lock()
-                .unwrap()
-                .replace(snapshot_package);
+        .spawn({
+            let full_snapshot_archives_dir = full_snapshot_archives_dir.clone();
+            move || {
+                let accounts_package = real_accounts_package_receiver.try_recv().unwrap();
+                let accounts_hash = AccountsHash(Hash::default());
+                solana_runtime::serde_snapshot::reserialize_bank_with_new_accounts_hash(
+                    accounts_package.snapshot_links_dir(),
+                    accounts_package.slot,
+                    &accounts_hash,
+                    None,
+                );
+                let snapshot_package = SnapshotPackage::new(accounts_package, accounts_hash.into());
+                snapshot_package_sender.send(snapshot_package).unwrap();
 
-            // Wait until the package is consumed by SnapshotPackagerService
-            while pending_snapshot_package.lock().unwrap().is_some() {
-                std::thread::sleep(Duration::from_millis(100));
+                // Wait until the package has been archived by SnapshotPackagerService
+                while snapshot_utils::get_highest_full_snapshot_archive_slot(
+                    &full_snapshot_archives_dir,
+                )
+                .is_none()
+                {
+                    std::thread::sleep(Duration::from_millis(100));
+                }
+
+                // Shutdown SnapshotPackagerService
+                exit.store(true, Ordering::Relaxed);
             }
-
-            // Shutdown SnapshotPackagerService
-            exit.store(true, Ordering::Relaxed);
         })
         .unwrap();
 
@@ -987,7 +989,7 @@ fn test_snapshots_with_background_services(
     let (pruned_banks_sender, pruned_banks_receiver) = unbounded();
     let (snapshot_request_sender, snapshot_request_receiver) = unbounded();
     let (accounts_package_sender, accounts_package_receiver) = unbounded();
-    let pending_snapshot_package = PendingSnapshotPackage::default();
+    let (snapshot_package_sender, snapshot_package_receiver) = unbounded();
 
     let bank_forks = Arc::new(RwLock::new(snapshot_test_config.bank_forks));
     let callback = bank_forks
@@ -1019,7 +1021,8 @@ fn test_snapshots_with_background_services(
 
     let exit = Arc::new(AtomicBool::new(false));
     let snapshot_packager_service = SnapshotPackagerService::new(
-        pending_snapshot_package.clone(),
+        snapshot_package_sender.clone(),
+        snapshot_package_receiver,
         None,
         &exit,
         &cluster_info,
@@ -1030,7 +1033,7 @@ fn test_snapshots_with_background_services(
     let accounts_hash_verifier = AccountsHashVerifier::new(
         accounts_package_sender,
         accounts_package_receiver,
-        Some(pending_snapshot_package),
+        Some(snapshot_package_sender),
         &exit,
         &cluster_info,
         None,

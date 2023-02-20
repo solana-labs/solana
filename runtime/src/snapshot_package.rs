@@ -18,7 +18,7 @@ use {
     std::{
         fs,
         path::{Path, PathBuf},
-        sync::{Arc, Mutex},
+        sync::Arc,
         time::Instant,
     },
     tempfile::TempDir,
@@ -26,10 +26,6 @@ use {
 
 mod compare;
 pub use compare::*;
-
-/// The PendingSnapshotPackage passes a SnapshotPackage from AccountsHashVerifier to
-/// SnapshotPackagerService for archiving
-pub type PendingSnapshotPackage = Arc<Mutex<Option<SnapshotPackage>>>;
 
 /// This struct packages up fields to send from AccountsBackgroundService to AccountsHashVerifier
 pub struct AccountsPackage {
@@ -241,6 +237,7 @@ pub enum AccountsPackageType {
     EpochAccountsHash,
 }
 
+/// This struct packages up fields to send from AccountsHashVerifier to SnapshotPackagerService
 pub struct SnapshotPackage {
     pub snapshot_archive_info: SnapshotArchiveInfo,
     pub block_height: Slot,
@@ -248,6 +245,10 @@ pub struct SnapshotPackage {
     pub snapshot_storages: Vec<Arc<AccountStorageEntry>>,
     pub snapshot_version: SnapshotVersion,
     pub snapshot_type: SnapshotType,
+
+    /// The instant this snapshot package was sent to the queue.
+    /// Used to track how long snapshot packages wait before handling.
+    pub enqueued: Instant,
 }
 
 impl SnapshotPackage {
@@ -296,7 +297,18 @@ impl SnapshotPackage {
             snapshot_storages,
             snapshot_version: snapshot_info.snapshot_version,
             snapshot_type,
+            enqueued: Instant::now(),
         }
+    }
+}
+
+impl std::fmt::Debug for SnapshotPackage {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("SnapshotPackage")
+            .field("type", &self.snapshot_type)
+            .field("slot", &self.slot())
+            .field("block_height", &self.block_height)
+            .finish_non_exhaustive()
     }
 }
 
