@@ -2022,6 +2022,20 @@ pub fn test_app<'a>(version: &'a str, default_args: &'a DefaultTestArgs) -> App<
                 ),
         )
         .arg(
+            Arg::with_name("upgradeable_program")
+                .long("upgradeable-program")
+                .value_names(&["ADDRESS_OR_KEYPAIR", "SBF_PROGRAM.SO", "UPGRADE_AUTHORITY"])
+                .takes_value(true)
+                .number_of_values(3)
+                .multiple(true)
+                .help(
+                    "Add an upgradeable SBF program to the genesis configuration. \
+                       If the ledger already exists then this parameter is silently ignored. \
+                       First and third arguments can be a pubkey string or path to a keypair. \
+                       Upgrade authority set to \"none\" disables upgrades",
+                ),
+        )
+        .arg(
             Arg::with_name("account")
                 .long("account")
                 .value_names(&["ADDRESS", "DUMP.JSON"])
