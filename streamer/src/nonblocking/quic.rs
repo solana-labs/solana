@@ -598,10 +598,12 @@ async fn packet_batch_sender(
 
             let res = packet_receiver.try_recv();
             if let Ok(packet_accumulator) = res {
-                let mut packet = Packet::default();
-                *packet.meta_mut() = packet_accumulator.meta;
-                packet_batch.push(packet);
+                unsafe {
+                    packet_batch.set_len(packet_batch.len() + 1);
+                }
+
                 let i = packet_batch.len() - 1;
+                *packet_batch[i].meta_mut() = packet_accumulator.meta;
                 for packet_bytes in packet_accumulator.bytes {
                     packet_batch[i].buffer_mut()
                         [packet_bytes.offset as usize..packet_bytes.end_of_chunk]
