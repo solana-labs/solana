@@ -103,6 +103,8 @@ pub struct RepairQuicConfig {
     pub identity_keypair: Arc<Keypair>,
     pub staked_nodes: Arc<RwLock<StakedNodes>>,
     pub wait_for_chunk_timeout_ms: u64,
+    /// The connection cache used to send repair requests
+    pub connection_cache: Option<Arc<ConnectionCache>>,
 }
 
 impl Tvu {
@@ -170,7 +172,7 @@ impl Tvu {
             fetch_sockets,
             forward_sockets,
             repair_socket.clone(),
-            repair_quic_config.clone(),
+            repair_quic_config,
             fetch_sender,
             tvu_config.shred_version,
             bank_forks.clone(),
@@ -218,13 +220,7 @@ impl Tvu {
                 cluster_slots: cluster_slots.clone(),
             };
 
-            let quic_repair_option = repair_quic_config.map(|config| {
-                (
-                    fetch_stage.get_quic_repair_endpoint().clone().unwrap(),
-                    config,
-                )
-            });
-
+            let quic_repair_option = fetch_stage.get_connection_cache();
             WindowService::new(
                 blockstore.clone(),
                 verified_receiver,
