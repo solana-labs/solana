@@ -59,6 +59,8 @@ const CONNECTION_CLOSE_CODE_TOO_MANY: u32 = 4;
 const CONNECTION_CLOSE_REASON_TOO_MANY: &[u8] = b"too_many";
 
 const PACKET_BATCH_SIZE: usize = 64;
+// todo: make this configurable
+const COALESCE_MS: u128 = 5;
 
 // A sequence of bytes that is part of a packet
 // along with where in the packet it is
@@ -577,7 +579,7 @@ async fn packet_batch_sender(
             }
             let elapsed = last_sent.elapsed();
             if packet_batch.len() >= PACKET_BATCH_SIZE
-                || (!packet_batch.is_empty() && elapsed.as_millis() >= 1)
+                || (!packet_batch.is_empty() && elapsed.as_millis() >= COALESCE_MS)
             {
                 let len = packet_batch.len();
                 if let Err(e) = packet_sender.send(packet_batch) {
