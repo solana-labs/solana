@@ -13,11 +13,9 @@ use {
         outstanding_requests::OutstandingRequests,
         repair_weight::RepairWeight,
         serve_repair::{ServeRepair, ShredRepairType, REPAIR_PEERS_CACHE_CAPACITY},
-        tvu::RepairQuicConfig,
     },
     crossbeam_channel::{Receiver as CrossbeamReceiver, Sender as CrossbeamSender},
     lru::LruCache,
-    quinn::Endpoint,
     solana_client::{
         connection_cache::ConnectionCache,
         quic_sendmmsg::{self, SendPktsError as QuicSendPktsError},
@@ -34,7 +32,7 @@ use {
         epoch_schedule::EpochSchedule,
         hash::Hash,
         pubkey::Pubkey,
-        signer::{keypair::Keypair, Signer},
+        signer::keypair::Keypair,
         timing::timestamp,
     },
     solana_streamer::sendmmsg::{batch_send, SendPktsError},
@@ -224,6 +222,11 @@ impl Default for RepairSlotRange {
     }
 }
 
+pub(crate) enum RepairTransportConfig<'a> {
+    Udp(&'a UdpSocket),
+    Quic(Arc<ConnectionCache>),
+}
+
 pub struct RepairService {
     t_repair: JoinHandle<()>,
     ancestor_hashes_service: AncestorHashesService,
@@ -235,7 +238,7 @@ impl RepairService {
         blockstore: Arc<Blockstore>,
         exit: Arc<AtomicBool>,
         repair_socket: Arc<UdpSocket>,
-        quic_repair_option: Option<(Endpoint, RepairQuicConfig)>,
+        quic_repair_option: Option<Arc<ConnectionCache>>,
         ancestor_hashes_socket: Arc<UdpSocket>,
         repair_info: RepairInfo,
         verified_vote_receiver: VerifiedVoteReceiver,
@@ -282,7 +285,7 @@ impl RepairService {
         blockstore: &Blockstore,
         exit: &AtomicBool,
         repair_socket: &UdpSocket,
-        quic_repair_option: Option<(Endpoint, RepairQuicConfig)>,
+        quic_repair_option: Option<Arc<ConnectionCache>>,
         repair_info: RepairInfo,
         verified_vote_receiver: VerifiedVoteReceiver,
         outstanding_requests: &RwLock<OutstandingShredRepairs>,
@@ -300,22 +303,6 @@ impl RepairService {
         let mut best_repairs_stats = BestRepairsStats::default();
         let mut last_stats = Instant::now();
         let mut peers_cache = LruCache::new(REPAIR_PEERS_CACHE_CAPACITY);
-
-        let connection_cache = quic_repair_option.map(|(client_endpoint, repair_quic_config)| {
-            let cert_info = Some((
-                &*repair_quic_config.identity_keypair,
-                client_endpoint.local_addr().unwrap().ip(),
-            ));
-            ConnectionCache::new_with_client_options(
-                1,
-                Some(client_endpoint),
-                cert_info,
-                Some((
-                    &repair_quic_config.staked_nodes,
-                    &repair_quic_config.identity_keypair.pubkey(),
-                )),
-            )
-        });
 
         loop {
             if exit.load(Ordering::Relaxed) {
@@ -419,7 +406,7 @@ impl RepairService {
 
             let mut batch_send_repairs_elapsed = Measure::start("batch_send_repairs_elapsed");
             if !batch.is_empty() {
-                if let Some(connection_cache) = &connection_cache {
+                if let Some(connection_cache) = &quic_repair_option {
                     let result = quic_sendmmsg::batch_send(connection_cache, &batch);
                     if let Err(QuicSendPktsError::TransportError(err, num_failed)) = result {
                         error!(

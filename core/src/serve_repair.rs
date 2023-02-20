@@ -3,7 +3,7 @@ use {
         cluster_slots::ClusterSlots,
         duplicate_repair_status::ANCESTOR_HASH_REPAIR_SAMPLE_SIZE,
         repair_response,
-        repair_service::{OutstandingShredRepairs, RepairStats, REPAIR_MS},
+        repair_service::{OutstandingShredRepairs, RepairStats, RepairTransportConfig, REPAIR_MS},
         request_response::RequestResponse,
         result::{Error, Result},
     },
@@ -12,6 +12,9 @@ use {
     rand::{
         distributions::{Distribution, WeightedError, WeightedIndex},
         Rng,
+    },
+    solana_client::quic_sendmmsg::{
+        batch_send as batch_send_quic, SendPktsError as QuicSendPktsError,
     },
     solana_gossip::{
         cluster_info::{ClusterInfo, ClusterInfoError},
@@ -48,7 +51,7 @@ use {
     std::{
         cmp::Reverse,
         collections::{HashMap, HashSet},
-        net::{SocketAddr, UdpSocket},
+        net::SocketAddr,
         sync::{
             atomic::{AtomicBool, Ordering},
             Arc, RwLock,
@@ -1122,7 +1125,7 @@ impl ServeRepair {
     /// Distinguish and process `RepairResponse` ping packets ignoring other
     /// packets in the batch.
     pub(crate) fn handle_repair_response_pings(
-        repair_socket: &UdpSocket,
+        repair_socket: &RepairTransportConfig,
         keypair: &Keypair,
         packet_batch: &mut PacketBatch,
         stats: &mut ShredFetchStats,
@@ -1155,15 +1158,31 @@ impl ServeRepair {
             }
         }
         if !pending_pongs.is_empty() {
-            if let Err(SendPktsError::IoError(err, num_failed)) =
-                batch_send(repair_socket, &pending_pongs)
-            {
-                warn!(
-                    "batch_send failed to send {}/{} packets. First error: {:?}",
-                    num_failed,
-                    pending_pongs.len(),
-                    err
-                );
+            match repair_socket {
+                RepairTransportConfig::Udp(repair_socket) => {
+                    if let Err(SendPktsError::IoError(err, num_failed)) =
+                        batch_send(repair_socket, &pending_pongs)
+                    {
+                        warn!(
+                            "batch_send failed to send {}/{} packets. First error: {:?}",
+                            num_failed,
+                            pending_pongs.len(),
+                            err
+                        );
+                    }
+                }
+                RepairTransportConfig::Quic(connection_cache) => {
+                    if let Err(QuicSendPktsError::TransportError(err, num_failed)) =
+                        batch_send_quic(connection_cache.as_ref(), &pending_pongs)
+                    {
+                        warn!(
+                            "batch_send failed to send {}/{} packets first error {:?}",
+                            num_failed,
+                            pending_pongs.len(),
+                            err
+                        );
+                    }
+                }
             }
         }
     }

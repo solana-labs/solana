@@ -932,6 +932,7 @@ impl Validator {
             identity_keypair: identity_keypair.clone(),
             staked_nodes: staked_nodes.clone(),
             wait_for_chunk_timeout_ms: DEFAULT_WAIT_FOR_CHUNK_TIMEOUT_MS,
+            connection_cache: None, // to be populated later once endpoint is decided
         };
 
         let serve_repair_quic_service = ServeRepairQuicService::new(
