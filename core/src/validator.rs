@@ -123,7 +123,7 @@ use {
 const MAX_COMPLETED_DATA_SETS_IN_CHANNEL: usize = 100_000;
 const WAIT_FOR_SUPERMAJORITY_THRESHOLD_PERCENT: u64 = 80;
 
-pub const DEFAULT_REPAIR_USE_QUIC: bool = true;
+pub const DEFAULT_REPAIR_USE_QUIC: bool = false;
 
 pub struct ValidatorConfig {
     pub halt_at_slot: Option<Slot>,
