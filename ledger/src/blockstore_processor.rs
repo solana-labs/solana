@@ -206,7 +206,6 @@ pub struct ExecuteBatchesInternalMetrics {
 fn execute_batches_internal(
     bank: &Arc<Bank>,
     batches: &[TransactionBatchWithIndexes],
-    entry_callback: Option<&ProcessCallback>,
     transaction_status_sender: Option<&TransactionStatusSender>,
     replay_vote_sender: Option<&ReplayVoteSender>,
     log_messages_bytes_limit: Option<usize>,
@@ -234,9 +233,6 @@ fn execute_batches_internal(
                             &mut timings,
                             log_messages_bytes_limit,
                         );
-                        if let Some(entry_callback) = entry_callback {
-                            entry_callback(bank);
-                        }
                         result
                     },
                     "execute_batch",
@@ -302,7 +298,6 @@ fn rebatch_transactions<'a>(
 fn execute_batches(
     bank: &Arc<Bank>,
     batches: &[TransactionBatchWithIndexes],
-    entry_callback: Option<&ProcessCallback>,
     transaction_status_sender: Option<&TransactionStatusSender>,
     replay_vote_sender: Option<&ReplayVoteSender>,
     confirmation_timing: &mut ConfirmationTiming,
@@ -373,7 +368,6 @@ fn execute_batches(
     let execute_batches_internal_metrics = execute_batches_internal(
         bank,
         rebatched_txs,
-        entry_callback,
         transaction_status_sender,
         replay_vote_sender,
         log_messages_bytes_limit,
@@ -445,7 +439,6 @@ fn process_entries_with_callback(
     bank: &Arc<Bank>,
     entries: &mut [ReplayEntry],
     randomize: bool,
-    entry_callback: Option<&ProcessCallback>,
     transaction_status_sender: Option<&TransactionStatusSender>,
     replay_vote_sender: Option<&ReplayVoteSender>,
     confirmation_timing: &mut ConfirmationTiming,
@@ -472,7 +465,6 @@ fn process_entries_with_callback(
                     execute_batches(
                         bank,
                         &batches,
-                        entry_callback,
                         transaction_status_sender,
                         replay_vote_sender,
                         confirmation_timing,
@@ -538,7 +530,6 @@ fn process_entries_with_callback(
                         execute_batches(
                             bank,
                             &batches,
-                            entry_callback,
                             transaction_status_sender,
                             replay_vote_sender,
                             confirmation_timing,
@@ -553,7 +544,6 @@ fn process_entries_with_callback(
     execute_batches(
         bank,
         &batches,
-        entry_callback,
         transaction_status_sender,
         replay_vote_sender,
         confirmation_timing,
@@ -597,7 +587,6 @@ pub struct ProcessOptions {
     pub poh_verify: bool,
     pub full_leader_cache: bool,
     pub halt_at_slot: Option<Slot>,
-    pub entry_callback: Option<ProcessCallback>,
     pub new_hard_forks: Option<Vec<Slot>>,
     pub debug_keys: Option<Arc<HashSet<Pubkey>>>,
     pub account_indexes: AccountSecondaryIndexes,
@@ -892,7 +881,6 @@ fn confirm_full_slot(
         skip_verification,
         transaction_status_sender,
         replay_vote_sender,
-        opts.entry_callback.as_ref(),
         recyclers,
         opts.allow_dead_slots,
         opts.runtime_config.log_messages_bytes_limit,
@@ -1019,7 +1007,6 @@ pub fn confirm_slot(
     skip_verification: bool,
     transaction_status_sender: Option<&TransactionStatusSender>,
     replay_vote_sender: Option<&ReplayVoteSender>,
-    entry_callback: Option<&ProcessCallback>,
     recyclers: &VerifyRecyclers,
     allow_dead_slots: bool,
     log_messages_bytes_limit: Option<usize>,
@@ -1049,7 +1036,6 @@ pub fn confirm_slot(
         skip_verification,
         transaction_status_sender,
         replay_vote_sender,
-        entry_callback,
         recyclers,
         log_messages_bytes_limit,
         prioritization_fee_cache,
@@ -1065,7 +1051,6 @@ fn confirm_slot_entries(
     skip_verification: bool,
     transaction_status_sender: Option<&TransactionStatusSender>,
     replay_vote_sender: Option<&ReplayVoteSender>,
-    entry_callback: Option<&ProcessCallback>,
     recyclers: &VerifyRecyclers,
     log_messages_bytes_limit: Option<usize>,
     prioritization_fee_cache: &PrioritizationFeeCache,
@@ -1163,7 +1148,6 @@ fn confirm_slot_entries(
                 bank,
                 &mut replay_entries,
                 true, // shuffle transactions.
-                entry_callback,
                 transaction_status_sender,
                 replay_vote_sender,
                 timing,
