@@ -1361,8 +1361,7 @@ pub mod test {
         let mut i = 0;
         while i < 1000 {
             let res = pkt_batch_receiver.try_recv();
-            if res.is_ok() {
-                let len = res.unwrap().len();
+            if Ok(_) = res {
                 i += len;
             } else {
                 sleep(Duration::from_millis(1)).await;
