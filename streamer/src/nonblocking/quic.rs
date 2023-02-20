@@ -16,7 +16,7 @@ use {
     rand::{thread_rng, Rng},
     solana_perf::packet::PacketBatch,
     solana_sdk::{
-        packet::{Meta, Packet, PACKET_DATA_SIZE},
+        packet::{Meta, PACKET_DATA_SIZE},
         pubkey::Pubkey,
         quic::{
             QUIC_CONNECTION_HANDSHAKE_TIMEOUT_MS, QUIC_MAX_STAKED_CONCURRENT_STREAMS,
