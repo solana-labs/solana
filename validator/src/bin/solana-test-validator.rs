@@ -213,6 +213,56 @@ fn main() {
         }
     }
 
+    let mut upgradeable_programs_to_load = vec![];
+    if let Some(values) = matches.values_of("upgradeable_program") {
+        let values: Vec<&str> = values.collect::<Vec<_>>();
+        for address_program_upgrade_authority in values.chunks(3) {
+            match address_program_upgrade_authority {
+                [address, program, upgrade_authority] => {
+                    let address = address
+                        .parse::<Pubkey>()
+                        .or_else(|_| read_keypair_file(address).map(|keypair| keypair.pubkey()))
+                        .unwrap_or_else(|err| {
+                            println!("Error: invalid address {address}: {err}");
+                            exit(1);
+                        });
+                    let upgrade_authority_address = if *upgrade_authority == "none" {
+                        Pubkey::default()
+                    } else {
+                        upgrade_authority
+                            .parse::<Pubkey>()
+                            .or_else(|_| {
+                                read_keypair_file(upgrade_authority).map(|keypair| keypair.pubkey())
+                            })
+                            .unwrap_or_else(|err| {
+                                println!(
+                                    "Error: invalid upgrade_authority {upgrade_authority}: {err}"
+                                );
+                                exit(1);
+                            })
+                    };
+
+                    let program_path = PathBuf::from(program);
+                    if !program_path.exists() {
+                        println!(
+                            "Error: program file does not exist: {}",
+                            program_path.display()
+                        );
+                        exit(1);
+                    }
+
+                    upgradeable_programs_to_load.push(UpgradeableProgramInfo {
+                        program_id: address,
+                        loader: solana_sdk::bpf_loader_upgradeable::id(),
+                        upgrade_authority: upgrade_authority_address,
+                        program_path,
+                    });
+                }
+                _ => unreachable!(),
+            }
+        }
+    }
+
     let mut accounts_to_load = vec![];
     if let Some(values) = matches.values_of("account") {
         let values: Vec<&str> = values.collect::<Vec<_>>();
@@ -409,6 +459,7 @@ fn main() {
         .bpf_jit(!matches.is_present("no_bpf_jit"))
         .rpc_port(rpc_port)
         .add_programs_with_path(&programs_to_load)
+        .add_upgradeable_programs_with_path(&upgradeable_programs_to_load)
         .add_accounts_from_json_files(&accounts_to_load)
         .unwrap_or_else(|e| {
             println!("Error: add_accounts_from_json_files failed: {e}");
