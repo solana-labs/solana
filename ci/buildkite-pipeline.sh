@@ -142,6 +142,10 @@ all_test_steps() {
   command_step checks ". ci/rust-version.sh; ci/docker-run.sh \$\$rust_nightly_docker_image ci/test-checks.sh" 20 check
   wait_step
 
+  # Stable
+  command_step stable ". ci/rust-version.sh; ci/docker-run.sh \$\$rust_stable_docker_image ci/test-stable.sh" 70
+  wait_step
+
   # Coverage...
   if affects \
              .rs$ \
@@ -152,14 +156,10 @@ all_test_steps() {
              ^scripts/coverage.sh \
       ; then
     command_step coverage ". ci/rust-version.sh; ci/docker-run.sh \$\$rust_nightly_docker_image ci/test-coverage.sh" 80
-    wait_step
   else
     annotate --style info --context test-coverage \
       "Coverage skipped as no .rs files were modified"
   fi
-
-  # Full test suite
-  command_step stable ". ci/rust-version.sh; ci/docker-run.sh \$\$rust_stable_docker_image ci/test-stable.sh" 70
 
   # Docs tests
   if affects \
@@ -172,7 +172,6 @@ all_test_steps() {
     annotate --style info --context test-docs \
       "Docs skipped as no .rs files were modified"
   fi
-  wait_step
 
   # SBF test suite
   if affects \
