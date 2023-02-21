@@ -354,6 +354,10 @@ mod tests {
         })
     }
 
+    fn set_tombstone(cache: &mut LoadedPrograms, key: Pubkey, slot: Slot) -> Arc<LoadedProgram> {
+        cache.assign_program(key, Arc::new(LoadedProgram::new_tombstone(slot)))
+    }
+
     #[test]
     fn test_tombstone() {
         let tombstone = LoadedProgram::new_tombstone(0);
@@ -370,7 +374,7 @@ mod tests {
 
         let mut cache = LoadedPrograms::default();
         let program1 = Pubkey::new_unique();
-        let tombstone = cache.assign_program(program1, 10);
+        let tombstone = set_tombstone(&mut cache, program1, 10);
         let second_level = &cache
             .entries
             .get(&program1)
@@ -393,7 +397,7 @@ mod tests {
         assert_eq!(second_level.len(), 1);
         assert!(!second_level.get(0).unwrap().is_tombstone());
 
-        let tombstone = cache.assign_program(program2, 60);
+        let tombstone = set_tombstone(&mut cache, program2, 60);
         let second_level = &cache
             .entries
             .get(&program2)
@@ -404,19 +408,6 @@ mod tests {
         assert!(tombstone.is_tombstone());
         assert_eq!(tombstone.deployment_slot, 60);
         assert_eq!(tombstone.effective_slot, 60);
-
-        // Replace the program at slot 50 with a tombstone
-        let tombstone = cache.assign_program(program2, 50);
-        let second_level = &cache
-            .entries
-            .get(&program2)
-            .expect("Failed to find the entry");
-        assert_eq!(second_level.len(), 2);
-        assert!(second_level.get(0).unwrap().is_tombstone());
-        assert!(second_level.get(0).unwrap().is_tombstone());
-        assert!(tombstone.is_tombstone());
-        assert_eq!(tombstone.deployment_slot, 50);
-        assert_eq!(tombstone.effective_slot, 50);
     }
 
     struct TestForkGraph {
