@@ -20,7 +20,7 @@
 
 use {
     crate::{
-        account_info::{AccountInfo, StorageLocation, StoredSize},
+        account_info::{AccountInfo, StorageLocation},
         account_storage::{AccountStorage, AccountStorageStatus, ShrinkInProgress},
         accounts_background_service::{DroppedSlotsSender, SendDroppedBankCallback},
         accounts_cache::{AccountsCache, CachedAccount, SlotCache},
@@ -128,10 +128,6 @@ pub const PUBKEY_BINS_FOR_CALCULATING_HASHES: usize = 65536;
 // If this is too small, then we produce too many output vectors to iterate.
 // Metrics indicate a sweet spot in the 2.5k-5k range for mnb.
 const MAX_ITEMS_PER_CHUNK: Slot = 2_500;
-
-/// A place holder stored size for a cached entry. We don't need to store the size for cached entries, but we have to pass something.
-/// stored size is only used for shrinking. We don't shrink items in the write cache.
-const CACHE_VIRTUAL_STORED_SIZE: StoredSize = 0;
 
 // When getting accounts for shrinking from the index, this is the # of accounts to lookup per thread.
 // This allows us to split up accounts index accesses across multiple threads.
@@ -6175,7 +6171,6 @@ impl AccountsDb {
 
                 infos.push(AccountInfo::new(
                     StorageLocation::AppendVec(storage.append_vec_id(), offsets[0]),
-                    stored_size as StoredSize, // stored_size should never exceed StoredSize::MAX because of max data len const
                     accounts_and_meta_to_store
                         .account(i)
                         .map(|account| account.lamports())
@@ -6608,11 +6603,7 @@ impl AccountsDb {
                     .account_default_if_zero_lamport(i)
                     .map(|account| account.to_account_shared_data())
                     .unwrap_or_default();
-                let account_info = AccountInfo::new(
-                    StorageLocation::Cached,
-                    CACHE_VIRTUAL_STORED_SIZE,
-                    account.lamports(),
-                );
+                let account_info = AccountInfo::new(StorageLocation::Cached, account.lamports());
 
                 self.notify_account_at_accounts_update(
                     slot,
@@ -7936,17 +7927,10 @@ impl AccountsDb {
                     "AccountsDB::accounts_index corrupted. Storage pointed to: {}, expected: {}, should only point to one slot",
                     store.slot(), *slot
                 );
-                let account = store.accounts.get_account(account_info.offset()).unwrap();
-                if account.1
-                    != account_info
-                        .offset()
-                        .saturating_add(account_info.stored_size() as usize)
-                {
-                    // this should never happen. This is a metrics based assert at the moment.
-                    inc_new_counter_info!("remove_dead_accounts-stored_size_mismatch", 1);
-                }
-                let count =
-                    store.remove_account(account_info.stored_size() as usize, reset_accounts);
+                let offset = account_info.offset();
+                let account = store.accounts.get_account(offset).unwrap();
+                let stored_size = account.1.saturating_sub(offset);
+                let count = store.remove_account(stored_size, reset_accounts);
                 if count == 0 {
                     self.dirty_stores
                         .insert((*slot, store.append_vec_id()), store.clone());
@@ -8695,7 +8679,6 @@ impl AccountsDb {
                     pubkey,
                     AccountInfo::new(
                         StorageLocation::AppendVec(store_id, stored_account.offset), // will never be cached
-                        stored_account.stored_size as StoredSize, // stored_size should never exceed StoredSize::MAX because of max data len const
                         stored_account.account_meta.lamports,
                     ),
                 )
@@ -8930,7 +8913,6 @@ impl AccountsDb {
                                                 account_info.store_id,
                                                 account_info.stored_account.offset,
                                             ), // will never be cached
-                                            account_info.stored_account.stored_size as StoredSize, // stored_size should never exceed StoredSize::MAX because of max data len const
                                             account_info.stored_account.account_meta.lamports,
                                         );
                                         assert_eq!(&ai, account_info2);
@@ -9418,6 +9400,7 @@ pub mod tests {
     use {
         super::*,
         crate::{
+            account_info::StoredSize,
             accounts::Accounts,
             accounts_hash::MERKLE_FANOUT,
             accounts_index::{
@@ -10439,7 +10422,6 @@ pub mod tests {
         if let Some(index) = add_to_index {
             let account_info = AccountInfo::new(
                 StorageLocation::AppendVec(storage.append_vec_id(), offsets[0]),
-                (offsets[1] - offsets[0]).try_into().unwrap(),
                 account.lamports(),
             );
             index.upsert(
@@ -12339,6 +12321,10 @@ pub mod tests {
         assert!(accounts_equal(&account, &stored_account));
     }
 
+    /// A place holder stored size for a cached entry. We don't need to store the size for cached entries, but we have to pass something.
+    /// stored size is only used for shrinking. We don't shrink items in the write cache.
+    const CACHE_VIRTUAL_STORED_SIZE: StoredSize = 0;
+
     #[test]
     fn test_hash_stored_account() {
         // This test uses some UNSAFE tricks to detect most of account's field
@@ -13580,10 +13566,10 @@ pub mod tests {
         let key0 = Pubkey::new_from_array([0u8; 32]);
         let key1 = Pubkey::new_from_array([1u8; 32]);
         let key2 = Pubkey::new_from_array([2u8; 32]);
-        let info0 = AccountInfo::new(StorageLocation::AppendVec(0, 0), 0, 0);
-        let info1 = AccountInfo::new(StorageLocation::AppendVec(1, 0), 0, 0);
-        let info2 = AccountInfo::new(StorageLocation::AppendVec(2, 0), 0, 0);
-        let info3 = AccountInfo::new(StorageLocation::AppendVec(3, 0), 0, 0);
+        let info0 = AccountInfo::new(StorageLocation::AppendVec(0, 0), 0);
+        let info1 = AccountInfo::new(StorageLocation::AppendVec(1, 0), 0);
+        let info2 = AccountInfo::new(StorageLocation::AppendVec(2, 0), 0);
+        let info3 = AccountInfo::new(StorageLocation::AppendVec(3, 0), 0);
         let mut reclaims = vec![];
         accounts_index.upsert(
             0,
@@ -14598,10 +14584,6 @@ pub mod tests {
                     locked_entry.slot_list()[0]
                 })
                 .unwrap();
-            let removed_data_size = account_info.1.stored_size();
-            // Fetching the account from storage should return the same
-            // stored size as in the index.
-            assert_eq!(removed_data_size, account.stored_size as StoredSize);
             assert_eq!(account_info.0, slot);
             let reclaims = vec![account_info];
             accounts_db.remove_dead_accounts(reclaims.iter(), None, None, true);
@@ -16035,7 +16017,7 @@ pub mod tests {
         }
 
         let do_test = |test_params: TestParameters| {
-            let account_info = AccountInfo::new(StorageLocation::AppendVec(42, 128), 234, 0);
+            let account_info = AccountInfo::new(StorageLocation::AppendVec(42, 128), 0);
             let pubkey = solana_sdk::pubkey::new_rand();
             let mut key_set = HashSet::default();
             key_set.insert(pubkey);
@@ -17608,7 +17590,6 @@ pub mod tests {
                 storage.accounts.account_iter().for_each(|account| {
                     let info = AccountInfo::new(
                         StorageLocation::AppendVec(storage.append_vec_id(), account.offset),
-                        account.stored_size as u32,
                         account.lamports(),
                     );
                     db.accounts_index.upsert(
