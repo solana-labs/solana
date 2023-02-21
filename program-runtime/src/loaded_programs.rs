@@ -180,12 +180,12 @@ impl LoadedProgram {
         }
     }
 
-    pub fn new_tombstone(deployment_slot: Slot) -> Self {
+    pub fn new_tombstone(slot: Slot) -> Self {
         Self {
             program: LoadedProgramType::Invalid,
             account_size: 0,
-            deployment_slot,
-            effective_slot: deployment_slot,
+            deployment_slot: slot,
+            effective_slot: slot,
             usage_counter: AtomicU64::default(),
         }
     }
@@ -219,8 +219,10 @@ pub enum LoadedProgramEntry {
 }
 
 impl LoadedPrograms {
-    /// Inserts a single entry
-    pub fn insert_entry(&mut self, key: Pubkey, entry: Arc<LoadedProgram>) -> LoadedProgramEntry {
+    /// Refill the cache with a single entry. It's typically called during transaction processing,
+    /// when the cache doesn't contain the entry corresponding to program `key`.
+    /// The function dedupes the cache, in case some other thread replenished the the entry in parallel.
+    pub fn replenish(&mut self, key: Pubkey, entry: Arc<LoadedProgram>) -> LoadedProgramEntry {
         let second_level = self.entries.entry(key).or_insert_with(Vec::new);
         let index = second_level
             .iter()
@@ -239,29 +241,28 @@ impl LoadedPrograms {
         LoadedProgramEntry::WasVacant(entry)
     }
 
-    /// Insert or replace the current entry with a tombstone.
-    /// This behaves differently than `insert_entry()` in case there's currently a program at the
-    /// `deploytment_slot`. It'll replace the current entry with a tombstone, whereas `insert_entry()`
-    /// would retain and return the current entry.
-    pub fn set_tombstone(&mut self, key: Pubkey, deployment_slot: Slot) -> Arc<LoadedProgram> {
-        let tombstone = Arc::new(LoadedProgram::new_tombstone(deployment_slot));
+    /// Assign the program `entry` to the given `key` in the cache.
+    /// This is typically called when a deployed program is managed (upgraded/un/reddeployed) via
+    /// bpf loader instructions.
+    /// The program management is not expected to overlap with initial program deployment slot.
+    /// Note: Do not call this function to replenish cache with a missing entry. As that use-case can
+    ///       cause the cache to have duplicates. Use `replenish()` API for that use-case.
+    pub fn assign_program(&mut self, key: Pubkey, entry: Arc<LoadedProgram>) -> Arc<LoadedProgram> {
         let second_level = self.entries.entry(key).or_insert_with(Vec::new);
         let index = second_level
             .iter()
-            .position(|at| at.effective_slot >= tombstone.effective_slot);
+            .position(|at| at.effective_slot >= entry.effective_slot);
         if let Some(index) = index {
             let existing = second_level
                 .get(index)
                 .expect("Missing entry, even though position was found");
-            if existing.deployment_slot == tombstone.deployment_slot
-                && existing.effective_slot >= tombstone.effective_slot
-            {
-                second_level.splice(index..=index, [tombstone.clone()]);
-                return tombstone;
-            }
+            assert!(
+                existing.deployment_slot != entry.deployment_slot
+                    || existing.effective_slot != entry.effective_slot
+            );
         }
-        second_level.insert(index.unwrap_or(second_level.len()), tombstone.clone());
-        tombstone
+        second_level.insert(index.unwrap_or(second_level.len()), entry.clone());
+        entry
     }
 
     /// Before rerooting the blockstore this removes all programs of orphan forks
@@ -369,7 +370,7 @@ mod tests {
 
         let mut cache = LoadedPrograms::default();
         let program1 = Pubkey::new_unique();
-        let tombstone = cache.set_tombstone(program1, 10);
+        let tombstone = cache.assign_program(program1, 10);
         let second_level = &cache
             .entries
             .get(&program1)
@@ -382,7 +383,7 @@ mod tests {
         // Add a program at slot 50, and a tombstone for the program at slot 60
         let program2 = Pubkey::new_unique();
         assert!(matches!(
-            cache.insert_entry(program2, new_test_builtin_program(50, 51)),
+            cache.replenish(program2, new_test_builtin_program(50, 51)),
             LoadedProgramEntry::WasVacant(_)
         ));
         let second_level = &cache
@@ -392,7 +393,7 @@ mod tests {
         assert_eq!(second_level.len(), 1);
         assert!(!second_level.get(0).unwrap().is_tombstone());
 
-        let tombstone = cache.set_tombstone(program2, 60);
+        let tombstone = cache.assign_program(program2, 60);
         let second_level = &cache
             .entries
             .get(&program2)
@@ -405,7 +406,7 @@ mod tests {
         assert_eq!(tombstone.effective_slot, 60);
 
         // Replace the program at slot 50 with a tombstone
-        let tombstone = cache.set_tombstone(program2, 50);
+        let tombstone = cache.assign_program(program2, 50);
         let second_level = &cache
             .entries
             .get(&program2)
@@ -604,52 +605,52 @@ mod tests {
 
         let program1 = Pubkey::new_unique();
         assert!(matches!(
-            cache.insert_entry(program1, new_test_loaded_program(0, 1)),
+            cache.replenish(program1, new_test_loaded_program(0, 1)),
             LoadedProgramEntry::WasVacant(_)
         ));
         assert!(matches!(
-            cache.insert_entry(program1, new_test_loaded_program(10, 11)),
+            cache.replenish(program1, new_test_loaded_program(10, 11)),
             LoadedProgramEntry::WasVacant(_)
         ));
         assert!(matches!(
-            cache.insert_entry(program1, new_test_loaded_program(20, 21)),
+            cache.replenish(program1, new_test_loaded_program(20, 21)),
             LoadedProgramEntry::WasVacant(_)
         ));
 
         // Test: inserting duplicate entry return pre existing entry from the cache
         assert!(matches!(
-            cache.insert_entry(program1, new_test_loaded_program(20, 21)),
+            cache.replenish(program1, new_test_loaded_program(20, 21)),
             LoadedProgramEntry::WasOccupied(_)
         ));
 
         let program2 = Pubkey::new_unique();
         assert!(matches!(
-            cache.insert_entry(program2, new_test_loaded_program(5, 6)),
+            cache.replenish(program2, new_test_loaded_program(5, 6)),
             LoadedProgramEntry::WasVacant(_)
         ));
         assert!(matches!(
-            cache.insert_entry(program2, new_test_loaded_program(11, 12)),
+            cache.replenish(program2, new_test_loaded_program(11, 12)),
             LoadedProgramEntry::WasVacant(_)
         ));
 
         let program3 = Pubkey::new_unique();
         assert!(matches!(
-            cache.insert_entry(program3, new_test_loaded_program(25, 26)),
+            cache.replenish(program3, new_test_loaded_program(25, 26)),
             LoadedProgramEntry::WasVacant(_)
         ));
 
         let program4 = Pubkey::new_unique();
         assert!(matches!(
-            cache.insert_entry(program4, new_test_loaded_program(0, 1)),
+            cache.replenish(program4, new_test_loaded_program(0, 1)),
             LoadedProgramEntry::WasVacant(_)
         ));
         assert!(matches!(
-            cache.insert_entry(program4, new_test_loaded_program(5, 6)),
+            cache.replenish(program4, new_test_loaded_program(5, 6)),
             LoadedProgramEntry::WasVacant(_)
         ));
         // The following is a special case, where effective slot is 4 slots in the future
         assert!(matches!(
-            cache.insert_entry(program4, new_test_loaded_program(15, 19)),
+            cache.replenish(program4, new_test_loaded_program(15, 19)),
             LoadedProgramEntry::WasVacant(_)
         ));
 

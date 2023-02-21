@@ -4375,7 +4375,7 @@ impl Bank {
                         .loaded_programs_cache
                         .write()
                         .unwrap()
-                        .insert_entry(*pubkey, program)
+                        .replenish(*pubkey, program)
                     {
                         LoadedProgramEntry::WasOccupied(entry) => {
                             loaded_programs_for_txs.insert(*pubkey, entry);
@@ -4393,7 +4393,7 @@ impl Bank {
                         .loaded_programs_cache
                         .write()
                         .unwrap()
-                        .set_tombstone(*pubkey, self.slot);
+                        .assign_program(*pubkey, Arc::new(LoadedProgram::new_tombstone(self.slot)));
                     loaded_programs_for_txs.insert(*pubkey, tombstone);
                 }
             });
