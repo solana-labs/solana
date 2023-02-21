@@ -1458,12 +1458,41 @@ mod tests {
     }
 
     #[test]
+    fn test_should_evict_from_mem_ref_count() {
+        for ref_count in [0, 1, 2] {
+            let bucket = new_for_test::<u64>();
+            let startup = false;
+            let current_age = 0;
+            let one_element_slot_list = vec![(0, 0)];
+            let one_element_slot_list_entry = Arc::new(AccountMapEntryInner::new(
+                one_element_slot_list,
+                ref_count,
+                AccountMapEntryMeta::default(),
+            ));
+
+            // exceeded budget
+            assert_eq!(
+                bucket
+                    .should_evict_from_mem(
+                        current_age,
+                        &one_element_slot_list_entry,
+                        startup,
+                        false,
+                        false,
+                    )
+                    .0,
+                ref_count == 1
+            );
+        }
+    }
+
+    #[test]
     fn test_should_evict_from_mem() {
         solana_logger::setup();
         let bucket = new_for_test::<u64>();
         let mut startup = false;
         let mut current_age = 0;
-        let ref_count = 0;
+        let ref_count = 1;
         let one_element_slot_list = vec![(0, 0)];
         let one_element_slot_list_entry = Arc::new(AccountMapEntryInner::new(
             one_element_slot_list,
