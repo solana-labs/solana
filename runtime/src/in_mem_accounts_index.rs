@@ -949,6 +949,9 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
             if exceeds_budget {
                 // if we are already holding too many items in-mem, then we need to be more aggressive at kicking things out
                 (true, None)
+            } else if entry.ref_count() != 1 {
+                Self::update_stat(&self.stats().held_in_mem_ref_count, 1);
+                (false, None)
             } else {
                 // only read the slot list if we are planning to throw the item out
                 let slot_list = entry.slot_list.read().unwrap();
@@ -1136,6 +1139,8 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                                 // not evicting, so don't write, even if dirty
                                 continue;
                             }
+                        } else if v.ref_count() != 1 {
+                            continue;
                         }
                         // if we are evicting it, then we need to update disk if we're dirty
                         if v.clear_dirty() {
