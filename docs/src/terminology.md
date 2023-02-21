@@ -231,6 +231,10 @@ A [block](#block) or [slot](#slot) that has reached maximum [lockout](#lockout) 
 
 The component of a [validator](#validator) responsible for [program](#program) execution.
 
+## SBF / Solana Bytecode Format
+
+Solana's variation of the Berkeley Packet Filter (BPF) bytecode used for on-chain programs. SBF allows arbitrary memory access, indirect jumps, loops, and other useful behavior, and also removes unused BPF features.
+
 ## Sealevel
 
 Solana's parallel smart contracts run-time.
