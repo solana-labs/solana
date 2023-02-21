@@ -4401,6 +4401,50 @@ impl Bank {
         (program_accounts_map, loaded_programs_for_txs)
     }
 
+    fn replenish_executor_cache(
+        &self,
+        program_owners: &[&Pubkey],
+        sanitized_txs: &[SanitizedTransaction],
+        check_results: &mut [TransactionCheckResult],
+    ) {
+        let mut filter_programs_time = Measure::start("filter_programs_accounts");
+        let program_accounts_map = self.rc.accounts.filter_executable_program_accounts(
+            &self.ancestors,
+            sanitized_txs,
+            check_results,
+            program_owners,
+            &self.blockhash_queue.read().unwrap(),
+        );
+        filter_programs_time.stop();
+
+        let mut filter_missing_programs_time = Measure::start("filter_missing_programs_accounts");
+        let missing_executors = program_accounts_map
+            .keys()
+            .filter_map(|key| {
+                self.executor_cache
+                    .read()
+                    .unwrap()
+                    .get(key)
+                    .is_none()
+                    .then_some(key)
+            })
+            .collect::<Vec<_>>();
+        filter_missing_programs_time.stop();
+
+        let executors = missing_executors
+            .iter()
+            .map(|pubkey| match self.load_program(pubkey) {
+                Ok(program) => (**pubkey, program),
+                // Create a tombstone for the programs that failed to load
+                Err(_) => (**pubkey, Arc::new(LoadedProgram::new_tombstone(self.slot))),
+            });
+
+        // avoid locking the cache if there are no new executors
+        if executors.len() > 0 {
+            self.executor_cache.write().unwrap().put(executors);
+        }
+    }
+
     #[allow(clippy::type_complexity)]
     pub fn load_and_execute_transactions(
         &self,
@@ -4455,7 +4499,7 @@ impl Bank {
             .collect();
 
         let mut check_time = Measure::start("check_transactions");
-        let check_results = self.check_transactions(
+        let mut check_results = self.check_transactions(
             sanitized_txs,
             batch.lock_results(),
             max_age,
@@ -4470,7 +4514,7 @@ impl Bank {
             native_loader::id(),
         ];
 
-        let _program_owners_refs: Vec<&Pubkey> = program_owners.iter().collect();
+        let program_owners_refs: Vec<&Pubkey> = program_owners.iter().collect();
         // The following code is currently commented out. This is how the new cache will
         // finally be used, once rest of the code blocks are in place.
         /*
@@ -4480,6 +4524,7 @@ impl Bank {
             &check_results,
         );
         */
+        self.replenish_executor_cache(&program_owners_refs, sanitized_txs, &mut check_results);
 
         let mut load_time = Measure::start("accounts_load");
         let mut loaded_transactions = self.rc.accounts.load_accounts(
