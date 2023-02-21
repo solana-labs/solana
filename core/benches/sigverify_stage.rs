@@ -12,9 +12,8 @@ use {
         thread_rng, Rng,
     },
     solana_core::{
-        banking_trace::BankingTracer,
-        sigverify::TransactionSigVerifier,
-        sigverify_stage::{SigVerifier, SigVerifyStage},
+        banking_trace::BankingTracer, sigverify::TransactionSigVerifier,
+        sigverify_stage::SigVerifyStage,
     },
     solana_measure::measure::Measure,
     solana_perf::{

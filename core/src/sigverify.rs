@@ -10,7 +10,7 @@ pub use solana_perf::sigverify::{
 use {
     crate::{
         banking_trace::{BankingPacketBatch, BankingPacketSender},
-        sigverify_stage::{SigVerifier, SigVerifyServiceError},
+        sigverify_stage::SigVerifyServiceError,
     },
     solana_perf::{cuda_runtime::PinnedVec, packet::PacketBatch, recycler::Recycler, sigverify},
     solana_sdk::{packet::Packet, saturating_add_assign},
@@ -79,13 +79,9 @@ impl TransactionSigVerifier {
             reject_non_vote: false,
         }
     }
-}
-
-impl SigVerifier for TransactionSigVerifier {
-    type SendType = BankingPacketBatch;
 
     #[inline(always)]
-    fn process_received_packet(
+    pub fn process_received_packet(
         &mut self,
         packet: &mut Packet,
         removed_before_sigverify_stage: bool,
@@ -107,24 +103,24 @@ impl SigVerifier for TransactionSigVerifier {
     }
 
     #[inline(always)]
-    fn process_excess_packet(&mut self, packet: &Packet) {
+    pub fn process_excess_packet(&mut self, packet: &Packet) {
         if packet.meta().is_tracer_packet() {
             self.tracer_packet_stats.total_excess_tracer_packets += 1;
         }
     }
 
     #[inline(always)]
-    fn process_passed_sigverify_packet(&mut self, packet: &Packet) {
+    pub fn process_passed_sigverify_packet(&mut self, packet: &Packet) {
         if packet.meta().is_tracer_packet() {
             self.tracer_packet_stats
                 .total_tracker_packets_passed_sigverify += 1;
         }
     }
 
-    fn send_packets(
+    pub fn send_packets(
         &mut self,
         packet_batches: Vec<PacketBatch>,
-    ) -> Result<(), SigVerifyServiceError<Self::SendType>> {
+    ) -> Result<(), SigVerifyServiceError<BankingPacketBatch>> {
         let tracer_packet_stats_to_send = std::mem::take(&mut self.tracer_packet_stats);
         self.packet_sender.send(BankingPacketBatch::new((
             packet_batches,
@@ -133,7 +129,7 @@ impl SigVerifier for TransactionSigVerifier {
         Ok(())
     }
 
-    fn verify_batches(
+    pub fn verify_batches(
         &self,
         mut batches: Vec<PacketBatch>,
         valid_packets: usize,
