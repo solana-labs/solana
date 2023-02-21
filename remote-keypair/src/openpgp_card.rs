@@ -29,12 +29,39 @@ pub enum LocatorError {
     MismatchedScheme,
 }
 
+/// To locate smart cards that support OpenPGP connected to the local machine.
+/// 
+/// Field `aid` contains a data struct with fields for application ID, version,
+/// manufacturer ID (of the smart card), and serial number. An instance of
+/// `ApplicationIdentifier` is logically equivalent to an AID string as
+/// specified in the OpenPGP specification v3.4 (section 4.2.1), used to
+/// uniquely identify an instance of an OpenPGP application on a unique smart
+/// card.
+/// 
+/// A null `aid` indicates the default locator which chooses the first smart
+/// card supporting OpenPGP that it finds connected to the machine.
 #[derive(Debug, PartialEq, Eq)]
 pub struct Locator {
     pub aid: Option<ApplicationIdentifier>,
 }
 
 impl Locator {
+    /// Extract a locator from a URI.
+    /// 
+    /// "pgpcard://" => Default locator.
+    /// 
+    /// "pgpcard://D2760001240103040006123456780000" => Locator pointing to a
+    /// OpenPGP instance identifiable by AID D2760001240103040006123456780000.
+    /// As per the OpenPGP specification:
+    ///   * AID must be a 16-byte hexadecimal string (32 digits).
+    ///   * D276000124 => AID preamble, fixed across all AIDs
+    ///   * 01         => application ID, fixed to 01 == OpenPGP
+    ///   * 0304       => OpenPGP version, 3.4 in this case
+    ///   * 0006       => unique manufacturer ID, Yubico in this case
+    ///   * 12345678   => smart card serial number
+    ///   * 0000       => reserved for future use
+    /// 
+    /// No other URI formats are valid.
     pub fn new_from_uri(uri: &URIReference<'_>) -> Result<Self, LocatorError> {
         let scheme = uri.scheme().map(|s| s.as_str().to_ascii_lowercase());
         let ident = uri.host().map(|h| h.to_string());
@@ -82,6 +109,7 @@ impl Locator {
     }
 }
 
+/// Data struct for convenience.
 #[derive(Debug)]
 #[allow(dead_code)]  // unused pcsc_identifier
 pub struct OpenpgpCardInfo {
@@ -138,9 +166,21 @@ impl OpenpgpCardKeypair {
         )?)
     }
 
+    /// Create new OpenpgpCardKeypair from a openpgp-card library "ident".
+    /// 
+    /// The openpgp-card library uses shorthand AIDs to identify OpenPGP apps.
+    /// An ident takes the form `<manufacturer ID>:<serial number>`, so the
+    /// ident for AID `D2760001240103040006123456780000` would be
+    /// `0006:12345678`.
+    /// 
+    /// As per the specification, a single smart card should only run one instance
+    /// of the OpenPGP application, so uniquely identifying a smart card is
+    /// sufficient to uniquely identify a OpenPGP instance.
     pub fn new_from_identifier(
         pcsc_identifier: Option<String>,
     ) -> Result<Self, openpgp_card::Error> {
+        // Initialize long-lived PCSC backend object to interface with OpenPGP
+        // add on the card.
         let backend = match pcsc_identifier {
             Some(ident) => PcscBackend::open_by_ident(&ident, None)?,
             None => {
@@ -156,7 +196,10 @@ impl OpenpgpCardKeypair {
         
         let pubkey: [u8; 32];
         {
+            // To get pubkey (or to do any operation with the OpenPGP app on
+            // card), initialize a short-lived OpenPGP transaction object.
             let opt = &mut pgp.transaction()?;
+            // Get smart card's PGP signing key.
             let pk_material = match opt.public_key(openpgp_card::KeyType::Signing) {
                 Ok(pkm) => pkm,
                 Err(_) => return Err(
@@ -164,6 +207,8 @@ impl OpenpgpCardKeypair {
                 )
             };
 
+            // Verify signing key is an ed25519 key using EdDSA and extract
+            // the pubkey as bytes.
             pubkey = match pk_material {
                 PublicKeyMaterial::E(pk) => match pk.algo() {
                     Algo::Ecc(ecc_attrs) => {
