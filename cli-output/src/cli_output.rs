@@ -842,10 +842,10 @@ pub struct CliHistoryVerbose {
 
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct CliHistoryTransactionVec(Vec<CliHistoryTransaction>);
+pub struct CliHistoryTransactionVec(Vec<CliTransactionConfirmation>);
 
 impl CliHistoryTransactionVec {
-    pub fn new(list: Vec<CliHistoryTransaction>) -> Self {
+    pub fn new(list: Vec<CliTransactionConfirmation>) -> Self {
         Self(list)
     }
 }
@@ -856,34 +856,10 @@ impl VerboseDisplay for CliHistoryTransactionVec {}
 impl fmt::Display for CliHistoryTransactionVec {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         for transaction in &self.0 {
-            write!(f, "{transaction}")?;
+            VerboseDisplay::write_str(transaction, f)?;
             writeln!(f)?;
         }
         writeln!(f, "{} transactions found", self.0.len())
-    }
-}
-
-#[derive(Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct CliHistoryTransaction {
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub transaction: Option<CliTransaction>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub error_msg: Option<String>,
-}
-
-impl QuietDisplay for CliHistoryTransaction {}
-impl VerboseDisplay for CliHistoryTransaction {}
-
-impl fmt::Display for CliHistoryTransaction {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        if let Some(transaction) = &self.transaction {
-            write!(f, "{transaction}")
-        } else if let Some(error) = &self.error_msg {
-            writeln!(f, "{error}")
-        } else {
-            Ok(())
-        }
     }
 }
 

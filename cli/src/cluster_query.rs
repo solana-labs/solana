@@ -2061,7 +2061,9 @@ pub fn process_transaction_history(
         let mut cli_transactions = vec![];
         for result in results {
             if let Ok(signature) = result.signature.parse::<Signature>() {
-                let (transaction, error_msg) = match rpc_client.get_transaction_with_config(
+                let mut transaction = None;
+                let mut get_transaction_error = None;
+                match rpc_client.get_transaction_with_config(
                     &signature,
                     RpcTransactionConfig {
                         encoding: Some(UiTransactionEncoding::Base64),
@@ -2069,40 +2071,36 @@ pub fn process_transaction_history(
                         max_supported_transaction_version: Some(0),
                     },
                 ) {
-                    Ok(transaction) => {
+                    Ok(confirmed_transaction) => {
                         let EncodedConfirmedTransactionWithStatusMeta {
                             block_time,
                             slot,
                             transaction: transaction_with_meta,
-                        } = transaction;
+                        } = confirmed_transaction;
 
                         let decoded_transaction =
                             transaction_with_meta.transaction.decode().unwrap();
                         let json_transaction = decoded_transaction.json_encode();
 
-                        (
-                            Some(CliTransaction {
-                                transaction: json_transaction,
-                                meta: transaction_with_meta.meta,
-                                block_time,
-                                slot: Some(slot),
-                                decoded_transaction,
-                                prefix: "  ".to_string(),
-                                sigverify_status: vec![],
-                            }),
-                            None,
-                        )
+                        transaction = Some(CliTransaction {
+                            transaction: json_transaction,
+                            meta: transaction_with_meta.meta,
+                            block_time,
+                            slot: Some(slot),
+                            decoded_transaction,
+                            prefix: "  ".to_string(),
+                            sigverify_status: vec![],
+                        });
                     }
-                    Err(err) => (
-                        None,
-                        Some(format!(
-                            "Unable to get confirmed transaction details, {signature}: {err}"
-                        )),
-                    ),
+                    Err(err) => {
+                        get_transaction_error = Some(format!("{err:?}"));
+                    }
                 };
-                cli_transactions.push(CliHistoryTransaction {
+                cli_transactions.push(CliTransactionConfirmation {
+                    confirmation_status: result.confirmation_status,
                     transaction,
-                    error_msg,
+                    get_transaction_error,
+                    err: result.err,
                 });
             }
         }
