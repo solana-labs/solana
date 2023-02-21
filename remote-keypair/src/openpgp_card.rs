@@ -1,6 +1,7 @@
 use {
     openpgp_card::{
-        crypto_data::{PublicKeyMaterial, Hash},
+        algorithm::{Algo, Curve},
+        crypto_data::{EccType, PublicKeyMaterial, Hash},
         OpenPgp,
         SmartcardError,
         card_do::{UIF, ApplicationIdentifier},
@@ -163,14 +164,25 @@ impl OpenpgpCardKeypair {
                 )
             };
 
-            // TODO: check that key is ed25519 and not just ECC
             pubkey = match pk_material {
-                PublicKeyMaterial::E(pk) => match pk.data().try_into() {
-                    Ok(pk_bytes) => pk_bytes,
-                    Err(_) => return Err(
-                        openpgp_card::Error::UnsupportedAlgo("invalid pubkey format".to_string())
+                PublicKeyMaterial::E(pk) => match pk.algo() {
+                    Algo::Ecc(ecc_attrs) => {
+                        if ecc_attrs.ecc_type() != EccType::EdDSA || ecc_attrs.curve() != Curve::Ed25519 {
+                            return Err(openpgp_card::Error::UnsupportedAlgo(
+                                format!("expected Ed25519 key, got {:?}", ecc_attrs.curve())
+                            ));
+                        }
+                        match pk.data().try_into() {
+                            Ok(pk_bytes) => pk_bytes,
+                            Err(_) => return Err(
+                                openpgp_card::Error::UnsupportedAlgo("invalid pubkey format".to_string())
+                            ),
+                        }
+                    },
+                    _ => return Err(
+                        openpgp_card::Error::UnsupportedAlgo("expected ECC key, got RSA".to_string())
                     ),
-                },
+                }
                 _ => return Err(
                     openpgp_card::Error::UnsupportedAlgo("expected ECC key, got RSA".to_string())
                 ),
