@@ -677,6 +677,17 @@ impl ClusterInfo {
         self.push_self();
     }
 
+    pub fn set_tpu(&self, socket: SocketAddr) {
+        let _ = self.my_contact_info.write().unwrap().set_tpu(socket);
+
+        self.insert_self();
+        self.push_message(CrdsValue::new_signed(
+            CrdsData::Version(Version::new(self.id())),
+            &self.keypair(),
+        ));
+        self.push_self();
+    }
+
     pub fn lookup_contact_info<F, Y>(&self, id: &Pubkey, map: F) -> Option<Y>
     where
         F: FnOnce(&LegacyContactInfo) -> Y,

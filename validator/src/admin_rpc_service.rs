@@ -226,6 +226,9 @@ pub trait AdminRpc {
         secondary_index: RpcAccountIndex,
         max_entries: usize,
     ) -> Result<Vec<(String, usize)>>;
+
+    #[rpc(meta, name = "setTpu")]
+    fn set_tpu(&self, meta: Self::Metadata, tpu_socket: SocketAddr) -> Result<()>;
 }
 
 pub struct AdminRpcImpl;
@@ -586,6 +589,19 @@ impl AdminRpc for AdminRpcImpl {
                 .map(|&(x, y)| (y.to_string(), x))
                 .collect::<Vec<_>>();
             Ok(largest_keys)
+        })
+    }
+
+    fn set_tpu(&self, meta: Self::Metadata, tpu_socket: SocketAddr) -> Result<()> {
+        debug!("set_tpu rpc request received: {:?}", tpu_socket);
+
+        meta.with_post_init(|post_init| {
+            post_init.cluster_info.set_tpu(tpu_socket);
+            warn!(
+                "TPU set to {:?}",
+                post_init.cluster_info.my_contact_info().tpu()
+            );
+            Ok(())
         })
     }
 }

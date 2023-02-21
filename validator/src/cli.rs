@@ -1614,6 +1614,19 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                 )
                 .after_help("Note: If this command exits with a non-zero status \
                          then this not a good time for a restart")
+        ).
+        subcommand(
+            SubCommand::with_name("set-tpu")
+                .about("Set the validator tpu address")
+                .arg(
+                    Arg::with_name("tpu_host_port")
+                        .index(1)
+                        .value_name("HOST:PORT")
+                        .takes_value(true)
+                        .required(true)
+                        .validator(solana_net_utils::is_host_port)
+                        .help("TPU address to advertise in gossip")
+                ),
         );
 }
 

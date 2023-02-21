@@ -835,6 +835,27 @@ pub fn main() {
                 _ => unreachable!(),
             }
         }
+        ("set-tpu", Some(subcommand_matches)) => {
+            let tpu_host_port: SocketAddr = subcommand_matches
+                .value_of("tpu_host_port")
+                .map(|tpu_addr| {
+                    solana_net_utils::parse_host_port(tpu_addr).unwrap_or_else(|err| {
+                        eprintln!("Failed to parse --set-tpu HOST:PORT {err}");
+                        exit(1);
+                    })
+                })
+                .unwrap();
+
+            let admin_client = admin_rpc_service::connect(&ledger_path);
+            admin_rpc_service::runtime()
+                .block_on(async move { admin_client.await?.set_tpu(tpu_host_port).await })
+                .unwrap_or_else(|err| {
+                    println!("setTpu request failed: {err}");
+                    exit(1);
+                });
+
+            return;
+        }
         _ => unreachable!(),
     };
 
