@@ -1014,6 +1014,22 @@ pub fn add_bank_snapshot(
         // directory.  Then, when adding new snapshots, the newer incomplete snapshot directory could
         // be found.  If so, it should be removed.
         remove_bank_snapshot(slot, &bank_snapshots_dir)?;
+    } else {
+        // Even the snapshot directory is not found, still ensure the account snapshot directory
+        // is also clean.  hardlink failure could happen if an old files exist when generating a
+        // new snapshot.
+        let account_paths = &bank.accounts().accounts_db.paths;
+        for account_path in account_paths {
+            let account_snapshot_path = account_path
+                .parent()
+                .unwrap()
+                .join("snapshot")
+                .join(bank.slot().to_string());
+            if account_snapshot_path.is_dir() {
+                // remove the account snapshot directory
+                fs::remove_dir_all(&account_snapshot_path)?;
+            }
+        }
     }
     fs::create_dir_all(&bank_snapshot_dir)?;
 
