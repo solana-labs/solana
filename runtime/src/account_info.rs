@@ -2,10 +2,13 @@
 //! AccountInfo is not persisted anywhere between program runs.
 //! AccountInfo is purely runtime state.
 //! Note that AccountInfo is saved to disk buckets during runtime, but disk buckets are recreated at startup.
-use crate::{
-    accounts_db::{AppendVecId, CACHE_VIRTUAL_OFFSET},
-    accounts_index::{IsCached, ZeroLamport},
-    append_vec::ALIGN_BOUNDARY_OFFSET,
+use {
+    crate::{
+        accounts_db::AppendVecId,
+        accounts_index::{IsCached, ZeroLamport},
+        append_vec::ALIGN_BOUNDARY_OFFSET,
+    },
+    modular_bitfield::prelude::*,
 };
 
 /// offset within an append vec to account data
@@ -60,39 +63,46 @@ impl StorageLocation {
 /// AppendVecs store accounts aligned to u64, so offset is always a multiple of 8 (sizeof(u64))
 pub type OffsetReduced = u32;
 
+/// This is an illegal value for 'offset'.
+/// Account size on disk would have to be pointing to the very last 8 byte value in the max sized append vec.
+/// That would mean there was a maximum size of 8 bytes for the last entry in the append vec.
+/// A pubkey alone is 32 bytes, so there is no way for a valid offset to be this high of a value.
+/// Realistically, a max offset is (1<<31 - 156) bytes or so for an account with zero data length. Of course, this
+/// depends on the layout on disk, compression, etc. But, 8 bytes per account will never be possible.
+/// So, we use this last value as a sentinel to say that the account info refers to an entry in the write cache.
+const CACHED_OFFSET: OffsetReduced = (1 << (OffsetReduced::BITS - 1)) - 1;
+
+#[bitfield(bits = 32)]
+#[repr(C)]
+#[derive(Debug, Default, Copy, Clone, Eq, PartialEq)]
+pub struct PackedOffsetAndFlags {
+    /// this provides 2^31 bits, which when multipled by 8 (sizeof(u64)) = 16G, which is the maximum size of an append vec
+    offset_reduced: B31,
+    /// use 1 bit to specify that the entry is zero lamport
+    is_zero_lamport: bool,
+}
+
 #[derive(Default, Debug, PartialEq, Eq, Clone, Copy)]
 pub struct AccountInfo {
     /// index identifying the append storage
     store_id: AppendVecId,
 
-    /// offset = 'reduced_offset' * ALIGN_BOUNDARY_OFFSET into the storage
+    /// offset = 'packed_offset_and_flags.offset_reduced()' * ALIGN_BOUNDARY_OFFSET into the storage
     /// Note this is a smaller type than 'Offset'
-    reduced_offset: OffsetReduced,
+    packed_offset_and_flags: PackedOffsetAndFlags,
 
-    /// needed to track shrink candidacy in bytes. Used to update the number
-    /// of alive bytes in an AppendVec as newer slots purge outdated entries
-    /// Note that highest bits are used by ALL_FLAGS
-    /// So, 'stored_size' is 'stored_size_mask' with ALL_FLAGS masked out.
-    stored_size_mask: StoredSize,
+    stored_size: StoredSize,
 }
-
-/// These flags can be present in stored_size_mask to indicate additional info about the AccountInfo
-
-/// presence of this flag in stored_size_mask indicates this account info references an account with zero lamports
-const IS_ZERO_LAMPORT_FLAG: StoredSize = 1 << (StoredSize::BITS - 1);
-/// presence of this flag in stored_size_mask indicates this account info references an account stored in the cache
-const IS_CACHED_STORE_ID_FLAG: StoredSize = 1 << (StoredSize::BITS - 2);
-const ALL_FLAGS: StoredSize = IS_ZERO_LAMPORT_FLAG | IS_CACHED_STORE_ID_FLAG;
 
 impl ZeroLamport for AccountInfo {
     fn is_zero_lamport(&self) -> bool {
-        self.stored_size_mask & IS_ZERO_LAMPORT_FLAG == IS_ZERO_LAMPORT_FLAG
+        self.packed_offset_and_flags.is_zero_lamport()
     }
 }
 
 impl IsCached for AccountInfo {
     fn is_cached(&self) -> bool {
-        self.stored_size_mask & IS_CACHED_STORE_ID_FLAG == IS_CACHED_STORE_ID_FLAG
+        self.packed_offset_and_flags.offset_reduced() == CACHED_OFFSET
     }
 }
 
@@ -107,26 +117,37 @@ const CACHE_VIRTUAL_STORAGE_ID: AppendVecId = AppendVecId::MAX;
 
 impl AccountInfo {
     pub fn new(storage_location: StorageLocation, stored_size: StoredSize, lamports: u64) -> Self {
-        assert_eq!(stored_size & ALL_FLAGS, 0);
-        let mut stored_size_mask = stored_size;
-        let (store_id, raw_offset) = match storage_location {
-            StorageLocation::AppendVec(store_id, offset) => (store_id, offset),
+        let mut packed_offset_and_flags = PackedOffsetAndFlags::default();
+        let store_id = match storage_location {
+            StorageLocation::AppendVec(store_id, offset) => {
+                let reduced_offset = Self::get_reduced_offset(offset);
+                assert_ne!(
+                    CACHED_OFFSET, reduced_offset,
+                    "illegal offset for non-cached item"
+                );
+                packed_offset_and_flags.set_offset_reduced(Self::get_reduced_offset(offset));
+                assert_eq!(
+                    Self::reduced_offset_to_offset(packed_offset_and_flags.offset_reduced()),
+                    offset,
+                    "illegal offset"
+                );
+                store_id
+            }
             StorageLocation::Cached => {
-                stored_size_mask |= IS_CACHED_STORE_ID_FLAG;
-                (CACHE_VIRTUAL_STORAGE_ID, CACHE_VIRTUAL_OFFSET)
+                packed_offset_and_flags.set_offset_reduced(CACHED_OFFSET);
+                CACHE_VIRTUAL_STORAGE_ID
             }
         };
-        if lamports == 0 {
-            stored_size_mask |= IS_ZERO_LAMPORT_FLAG;
-        }
-        let reduced_offset: OffsetReduced = (raw_offset / ALIGN_BOUNDARY_OFFSET) as OffsetReduced;
-        let result = Self {
+        packed_offset_and_flags.set_is_zero_lamport(lamports == 0);
+        Self {
             store_id,
-            reduced_offset,
-            stored_size_mask,
-        };
-        assert_eq!(result.offset(), raw_offset, "illegal offset");
-        result
+            packed_offset_and_flags,
+            stored_size,
+        }
+    }
+
+    fn get_reduced_offset(offset: usize) -> OffsetReduced {
+        (offset / ALIGN_BOUNDARY_OFFSET) as OffsetReduced
     }
 
     pub fn store_id(&self) -> AppendVecId {
@@ -136,12 +157,15 @@ impl AccountInfo {
     }
 
     pub fn offset(&self) -> Offset {
-        (self.reduced_offset as Offset) * ALIGN_BOUNDARY_OFFSET
+        Self::reduced_offset_to_offset(self.packed_offset_and_flags.offset_reduced())
+    }
+
+    fn reduced_offset_to_offset(reduced_offset: OffsetReduced) -> Offset {
+        (reduced_offset as Offset) * ALIGN_BOUNDARY_OFFSET
     }
 
     pub fn stored_size(&self) -> StoredSize {
-        // elminate the special bit that indicates the info references an account with zero lamports
-        self.stored_size_mask & !ALL_FLAGS
+        self.stored_size
     }
 
     pub fn storage_location(&self) -> StorageLocation {
@@ -159,7 +183,11 @@ mod test {
     #[test]
     fn test_limits() {
         for offset in [
-            MAXIMUM_APPEND_VEC_FILE_SIZE as Offset,
+            // MAXIMUM_APPEND_VEC_FILE_SIZE is too big. That would be an offset at the first invalid byte in the max file size.
+            // MAXIMUM_APPEND_VEC_FILE_SIZE - 8 bytes would reference the very last 8 bytes in the file size. It makes no sense to reference that since element sizes are always more than 8.
+            // MAXIMUM_APPEND_VEC_FILE_SIZE - 16 bytes would reference the second to last 8 bytes in the max file size. This is still likely meaningless, but it is 'valid' as far as the index
+            // is concerned.
+            (MAXIMUM_APPEND_VEC_FILE_SIZE - 2 * (ALIGN_BOUNDARY_OFFSET as u64)) as Offset,
             0,
             ALIGN_BOUNDARY_OFFSET,
             4 * ALIGN_BOUNDARY_OFFSET,
@@ -167,6 +195,13 @@ mod test {
             let info = AccountInfo::new(StorageLocation::AppendVec(0, offset), 0, 0);
             assert!(info.offset() == offset);
         }
+    }
+
+    #[test]
+    #[should_panic(expected = "illegal offset")]
+    fn test_illegal_offset() {
+        let offset = (MAXIMUM_APPEND_VEC_FILE_SIZE - (ALIGN_BOUNDARY_OFFSET as u64)) as Offset;
+        AccountInfo::new(StorageLocation::AppendVec(0, offset), 0, 0);
     }
 
     #[test]
