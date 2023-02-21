@@ -5263,6 +5263,7 @@ version = "1.16.0"
 dependencies = [
  "chrono",
  "clap 3.2.23",
+ "openpgp-card",
  "rpassword",
  "solana-perf",
  "solana-remote-keypair",

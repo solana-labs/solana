@@ -1133,12 +1133,11 @@ fn sanitize_seed_phrase(seed_phrase: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use openpgp_card::card_do::ApplicationIdentifier;
-
     use {
         super::*,
         crate::offline::OfflineArgs,
         clap::{value_t_or_exit, App, Arg},
+        openpgp_card::card_do::ApplicationIdentifier,
         solana_remote_wallet::{locator::Manufacturer, remote_wallet::initialize_wallet_manager},
         solana_sdk::{signer::keypair::write_keypair_file, system_instruction},
         tempfile::{NamedTempFile, TempDir},

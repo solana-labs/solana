@@ -1137,6 +1137,7 @@ mod tests {
         super::*,
         crate::offline::OfflineArgs,
         clap::{Arg, Command},
+        openpgp_card::card_do::ApplicationIdentifier,
         solana_remote_wallet::{locator::Manufacturer, remote_wallet::initialize_wallet_manager},
         solana_sdk::{signer::keypair::write_keypair_file, system_instruction},
         tempfile::{NamedTempFile, TempDir},

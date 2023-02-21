@@ -23,6 +23,7 @@ uriparse = "0.6.4"
 url = "2.2.2"
 
 [dev-dependencies]
+openpgp-card = "0.3.3"
 tempfile = "3.3.0"
 
 [lib]
