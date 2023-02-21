@@ -41,9 +41,9 @@ impl TransactionExecutorCache {
         self.visible.get(key).cloned()
     }
 
-    pub fn set_tombstone(&mut self, key: Pubkey) {
+    pub fn set_tombstone(&mut self, key: Pubkey, slot: Slot) {
         self.visible
-            .insert(key, Arc::new(LoadedProgram::new_tombstone()));
+            .insert(key, Arc::new(LoadedProgram::new_tombstone(slot)));
     }
 
     pub fn set(
@@ -52,12 +52,13 @@ impl TransactionExecutorCache {
         executor: Arc<LoadedProgram>,
         upgrade: bool,
         delay_visibility_of_program_deployment: bool,
+        current_slot: Slot,
     ) {
         if upgrade {
             if delay_visibility_of_program_deployment {
                 // Place a tombstone in the cache so that
                 // we don't load the new version from the database as it should remain invisible
-                self.set_tombstone(key);
+                self.set_tombstone(key, current_slot);
             } else {
                 self.visible.insert(key, executor.clone());
             }

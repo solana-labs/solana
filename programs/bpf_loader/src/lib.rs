@@ -258,6 +258,7 @@ pub fn load_program_from_account(
             loaded_program.clone(),
             false,
             feature_set.is_active(&delay_visibility_of_program_deployment::id()),
+            deployment_slot,
         );
     }
 
@@ -291,6 +292,7 @@ macro_rules! deploy_program {
             Arc::new(executor),
             true,
             delay_visibility_of_program_deployment,
+            $slot,
         );
     }};
 }
@@ -1183,10 +1185,11 @@ fn process_loader_upgradeable_instruction(
                                 .feature_set
                                 .is_active(&delay_visibility_of_program_deployment::id())
                             {
+                                let clock = invoke_context.get_sysvar_cache().get_clock()?;
                                 invoke_context
                                     .tx_executor_cache
                                     .borrow_mut()
-                                    .set_tombstone(program_key);
+                                    .set_tombstone(program_key, clock.slot);
                             }
                         }
                         _ => {

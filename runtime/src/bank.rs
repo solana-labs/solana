@@ -94,7 +94,7 @@ use {
         compute_budget::{self, ComputeBudget},
         executor_cache::{BankExecutorCache, TransactionExecutorCache, MAX_CACHED_EXECUTORS},
         invoke_context::{BuiltinProgram, ProcessInstructionWithContext},
-        loaded_programs::{LoadedProgram, LoadedPrograms, WorkingSlot},
+        loaded_programs::{LoadedProgram, LoadedProgramEntry, LoadedPrograms, WorkingSlot},
         log_collector::LogCollector,
         sysvar_cache::SysvarCache,
         timings::{ExecuteTimingType, ExecuteTimings},
@@ -105,6 +105,7 @@ use {
             AccountSharedData, InheritableAccountFields, ReadableAccount, WritableAccount,
         },
         account_utils::StateMut,
+        bpf_loader, bpf_loader_deprecated,
         bpf_loader_upgradeable::{self, UpgradeableLoaderState},
         clock::{
             BankId, Epoch, Slot, SlotCount, SlotIndex, UnixTimestamp, DEFAULT_HASHES_PER_TICK,
@@ -4338,6 +4339,68 @@ impl Bank {
             || self.cluster_type() != ClusterType::MainnetBeta
     }
 
+    #[allow(dead_code)] // Preparation for BankExecutorCache rework
+    fn load_and_get_programs_from_cache<'a>(
+        &self,
+        program_owners: &[&'a Pubkey],
+        sanitized_txs: &[SanitizedTransaction],
+        check_results: &mut [TransactionCheckResult],
+    ) -> (
+        HashMap<Pubkey, &'a Pubkey>,
+        HashMap<Pubkey, Arc<LoadedProgram>>,
+    ) {
+        let mut filter_programs_time = Measure::start("filter_programs_accounts");
+        let program_accounts_map = self.rc.accounts.filter_executable_program_accounts(
+            &self.ancestors,
+            sanitized_txs,
+            check_results,
+            program_owners,
+            &self.blockhash_queue.read().unwrap(),
+        );
+        filter_programs_time.stop();
+
+        let mut filter_missing_programs_time = Measure::start("filter_missing_programs_accounts");
+        let (mut loaded_programs_for_txs, missing_programs) = self
+            .loaded_programs_cache
+            .read()
+            .unwrap()
+            .extract(self, program_accounts_map.keys().cloned());
+        filter_missing_programs_time.stop();
+
+        missing_programs
+            .iter()
+            .for_each(|pubkey| match self.load_program(pubkey) {
+                Ok(program) => {
+                    match self
+                        .loaded_programs_cache
+                        .write()
+                        .unwrap()
+                        .replenish(*pubkey, program)
+                    {
+                        LoadedProgramEntry::WasOccupied(entry) => {
+                            loaded_programs_for_txs.insert(*pubkey, entry);
+                        }
+                        LoadedProgramEntry::WasVacant(new_entry) => {
+                            loaded_programs_for_txs.insert(*pubkey, new_entry);
+                        }
+                    }
+                }
+
+                Err(e) => {
+                    // Create a tombstone for the program in the cache
+                    debug!("Failed to load program {}, error {:?}", pubkey, e);
+                    let tombstone = self
+                        .loaded_programs_cache
+                        .write()
+                        .unwrap()
+                        .assign_program(*pubkey, Arc::new(LoadedProgram::new_tombstone(self.slot)));
+                    loaded_programs_for_txs.insert(*pubkey, tombstone);
+                }
+            });
+
+        (program_accounts_map, loaded_programs_for_txs)
+    }
+
     #[allow(clippy::type_complexity)]
     pub fn load_and_execute_transactions(
         &self,
@@ -4399,6 +4462,24 @@ impl Bank {
             &mut error_counters,
         );
         check_time.stop();
+
+        let program_owners: Vec<Pubkey> = vec![
+            bpf_loader_upgradeable::id(),
+            bpf_loader::id(),
+            bpf_loader_deprecated::id(),
+            native_loader::id(),
+        ];
+
+        let _program_owners_refs: Vec<&Pubkey> = program_owners.iter().collect();
+        // The following code is currently commented out. This is how the new cache will
+        // finally be used, once rest of the code blocks are in place.
+        /*
+        let (program_accounts_map, loaded_programs_map) = self.load_and_get_programs_from_cache(
+            &program_owners_refs,
+            sanitized_txs,
+            &check_results,
+        );
+        */
 
         let mut load_time = Measure::start("accounts_load");
         let mut loaded_transactions = self.rc.accounts.load_accounts(
