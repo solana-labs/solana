@@ -193,7 +193,7 @@ impl BankSnapshotInfo {
         // filled.  Check the completion to avoid using a highest found slot directory with missing content.
         let completion_flag_file = bank_snapshot_dir.join(SNAPSHOT_STATE_COMPLETE_FILENAME);
         if !fs::metadata(&completion_flag_file)?.is_file() {
-            return Err(SnapshotNewFromDirError::DirIncomplete(completion_flag_file));
+            return Err(SnapshotNewFromDirError::IncompleteDir(completion_flag_file));
         }
 
         let bank_snapshot_post_path = bank_snapshot_dir.join(get_snapshot_file_name(slot));
@@ -350,9 +350,9 @@ pub enum SnapshotNewFromDirError {
     InvalidVersion,
 
     #[error("snapshot directory incomplete {}", .0.display())]
-    DirIncomplete(PathBuf),
+    IncompleteDir(PathBuf),
 
-    #[error("missing snapshotfile {}", .0.display())]
+    #[error("missing snapshot file {}", .0.display())]
     MissingSnapshotFile(PathBuf),
 }
 
@@ -748,6 +748,13 @@ pub fn get_highest_bank_snapshot_post(
     bank_snapshots_dir: impl AsRef<Path>,
 ) -> Option<BankSnapshotInfo> {
     do_get_highest_bank_snapshot(get_bank_snapshots_post(bank_snapshots_dir))
+}
+
+/// Get the bank snapshot with the highest slot in a directory
+///
+/// This function gets the highest bank snapshot of any type
+pub fn get_highest_bank_snapshot(bank_snapshots_dir: impl AsRef<Path>) -> Option<BankSnapshotInfo> {
+    do_get_highest_bank_snapshot(get_bank_snapshots(&bank_snapshots_dir))
 }
 
 fn do_get_highest_bank_snapshot(
@@ -1933,15 +1940,6 @@ pub fn get_highest_incremental_snapshot_archive_slot(
         full_snapshot_slot,
     )
     .map(|incremental_snapshot_archive_info| incremental_snapshot_archive_info.slot())
-}
-
-/// Get the full snapshot with the highest slot in a directory
-/// Assume every bank snapshot directory is a full snapshot for now.  Will support incremental sanpshot
-/// later.
-pub fn get_highest_bank_snapshot(snapshots_dir: impl AsRef<Path>) -> Result<BankSnapshotInfo> {
-    let bank_snapshots = get_bank_snapshots(&snapshots_dir);
-    do_get_highest_bank_snapshot(bank_snapshots)
-        .ok_or_else(|| SnapshotError::NoSnapshotSlotDir(snapshots_dir.as_ref().to_path_buf()))
 }
 
 /// Get the path (and metadata) for the full snapshot archive with the highest slot in a directory
