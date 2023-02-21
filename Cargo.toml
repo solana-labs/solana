@@ -101,7 +101,6 @@ members = [
     "validator",
     "version",
     "watchtower",
-    "yktest",
     "zk-token-sdk",
 ]
 
