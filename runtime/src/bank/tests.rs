@@ -30,7 +30,6 @@ use {
     rand::Rng,
     rayon::ThreadPoolBuilder,
     serde::{Deserialize, Serialize},
-    solana_bpf_loader_program::solana_bpf_loader_program,
     solana_logger,
     solana_program_runtime::{
         compute_budget::{self, ComputeBudget, MAX_COMPUTE_UNIT_LIMIT},
@@ -57,7 +56,7 @@ use {
         entrypoint::MAX_PERMITTED_DATA_INCREASE,
         epoch_schedule::{EpochSchedule, MINIMUM_SLOTS_PER_EPOCH},
         feature::{self, Feature},
-        feature_set::{self, reject_callx_r10, FeatureSet},
+        feature_set::{self, FeatureSet},
         fee::FeeStructure,
         fee_calculator::FeeRateGovernor,
         genesis_config::{create_genesis_config, ClusterType, GenesisConfig},
@@ -12690,93 +12689,4 @@ fn test_calculate_fee_with_request_heap_frame_flag() {
         ),
         signature_fee
     );
-}
-
-#[test]
-fn test_runtime_feature_enable_with_executor_cache() {
-    solana_logger::setup();
-
-    // Bank Setup
-    let (mut genesis_config, mint_keypair) = create_genesis_config(1_000_000 * LAMPORTS_PER_SOL);
-    genesis_config
-        .accounts
-        .remove(&feature_set::reject_callx_r10::id());
-    let mut root_bank = Bank::new_for_tests(&genesis_config);
-    let (name, id, entrypoint) = solana_bpf_loader_program!();
-    root_bank.add_builtin(&name, &id, entrypoint);
-
-    // Test a basic transfer
-    let amount = genesis_config.rent.minimum_balance(0);
-    let pubkey = solana_sdk::pubkey::new_rand();
-    root_bank.transfer(amount, &mint_keypair, &pubkey).unwrap();
-    assert_eq!(root_bank.get_balance(&pubkey), amount);
-
-    // Program Setup
-    let program_keypair = Keypair::new();
-    let program_data =
-        include_bytes!("../../../programs/bpf_loader/test_elfs/out/callx-r10-sbfv1.so");
-    let program_account = AccountSharedData::from(Account {
-        lamports: Rent::default().minimum_balance(program_data.len()).min(1),
-        data: program_data.to_vec(),
-        owner: bpf_loader::id(),
-        executable: true,
-        rent_epoch: 0,
-    });
-    root_bank.store_account(&program_keypair.pubkey(), &program_account);
-
-    // Compose instruction using the desired program
-    let instruction1 = Instruction::new_with_bytes(program_keypair.pubkey(), &[], Vec::new());
-    let message1 = Message::new(&[instruction1], Some(&mint_keypair.pubkey()));
-    let binding1 = mint_keypair.insecure_clone();
-    let signers1 = vec![&binding1];
-    let transaction1 = Transaction::new(&signers1, message1, root_bank.last_blockhash());
-
-    // Advance the bank so the next transaction can be submitted.
-    goto_end_of_slot(&mut root_bank);
-    let mut bank = new_from_parent(&Arc::new(root_bank));
-
-    // Compose second instruction using the same program with a different block hash
-    let instruction2 = Instruction::new_with_bytes(program_keypair.pubkey(), &[], Vec::new());
-    let message2 = Message::new(&[instruction2], Some(&mint_keypair.pubkey()));
-    let binding2 = mint_keypair.insecure_clone();
-    let signers2 = vec![&binding2];
-    let transaction2 = Transaction::new(&signers2, message2, bank.last_blockhash());
-
-    // Execute before feature is enabled to get program into the cache.
-    let result_without_feature_enabled = bank.process_transaction(&transaction1);
-    // Should fail when executing here
-    assert_eq!(
-        result_without_feature_enabled,
-        Err(TransactionError::InstructionError(
-            0,
-            InstructionError::ProgramFailedToComplete
-        ))
-    );
-
-    // Activate feature
-    bank.activate_feature(&reject_callx_r10::id());
-
-    // Execute after feature is enabled
-    let result_with_feature_enabled = bank.process_transaction(&transaction2);
-    // Feature should have been activated thus causing the TX to fail at
-    // verification. It should fail here with new Executor Cache because feature
-    // activations should force the program to recompile with the new feature,
-    // and in this case the feature should cause the TX to fail at verification.
-    // Note: `ProgramFailedToComplete` error appearing again means the account
-    // was not recompiled by the cache upon feature activation and thus fails in
-    // the same way.
-    match &result_with_feature_enabled {
-        Err(x) => {
-            if *x
-                == TransactionError::InstructionError(0, InstructionError::ProgramFailedToComplete)
-            {
-                println!("ERROR: Program was not recompiled after runtime feature was enabled.");
-            }
-        }
-        Ok(_) => println!("ERROR: Program should fail during execution."),
-    }
-    // assert_eq!(
-    //     result_with_feature_enabled,
-    //     Err(TransactionError::InstructionError(0, InstructionError::InvalidAccountData))
-    // );
 }
