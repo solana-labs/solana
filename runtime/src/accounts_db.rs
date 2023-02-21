@@ -26,8 +26,9 @@ use {
         accounts_cache::{AccountsCache, CachedAccount, SlotCache},
         accounts_file::AccountsFile,
         accounts_hash::{
-            AccountsDeltaHash, AccountsHash, AccountsHasher, CalcAccountsHashConfig,
-            CalculateHashIntermediate, HashStats, ZeroLamportAccounts,
+            AccountsDeltaHash, AccountsHash, AccountsHashEnum, AccountsHasher,
+            CalcAccountsHashConfig, CalculateHashIntermediate, HashStats, IncrementalAccountsHash,
+            ZeroLamportAccounts,
         },
         accounts_index::{
             AccountIndexGetResult, AccountSecondaryIndexes, AccountsIndex, AccountsIndexConfig,
@@ -7453,13 +7454,17 @@ impl AccountsDb {
         storages: &SortedStorages<'_>,
         stats: HashStats,
     ) -> Result<(AccountsHash, u64), BankHashVerificationError> {
-        self._calculate_accounts_hash_from_storages(
+        let (accounts_hash, capitalization) = self._calculate_accounts_hash_from_storages(
             config,
             storages,
             stats,
             CalcAccountsHashFlavor::Full,
             self.full_accounts_hash_cache_path.clone(),
-        )
+        )?;
+        let AccountsHashEnum::Full(accounts_hash) = accounts_hash else {
+            panic!("calculate_accounts_hash_from_storages must return a FullAccountsHash");
+        };
+        Ok((accounts_hash, capitalization))
     }
 
     /// Calculate the incremental accounts hash
@@ -7477,15 +7482,20 @@ impl AccountsDb {
         storages: &SortedStorages<'_>,
         base_slot: Slot,
         stats: HashStats,
-    ) -> Result<(AccountsHash, /* capitalization */ u64), BankHashVerificationError> {
+    ) -> Result<(IncrementalAccountsHash, /* capitalization */ u64), BankHashVerificationError>
+    {
         assert!(storages.range().start > base_slot, "The storages for calculating an incremental accounts hash must all be higher than the base slot");
-        self._calculate_accounts_hash_from_storages(
+        let (accounts_hash, capitalization) = self._calculate_accounts_hash_from_storages(
             config,
             storages,
             stats,
             CalcAccountsHashFlavor::Incremental,
             self.incremental_accounts_hash_cache_path.clone(),
-        )
+        )?;
+        let AccountsHashEnum::Incremental(incremental_accounts_hash) = accounts_hash else {
+            panic!("calculate_incremental_accounts_hash must return an IncrementalAccountsHash");
+        };
+        Ok((incremental_accounts_hash, capitalization))
     }
 
     fn _calculate_accounts_hash_from_storages(
@@ -7495,19 +7505,16 @@ impl AccountsDb {
         mut stats: HashStats,
         flavor: CalcAccountsHashFlavor,
         accounts_hash_cache_path: PathBuf,
-    ) -> Result<(AccountsHash, u64), BankHashVerificationError> {
+    ) -> Result<(AccountsHashEnum, u64), BankHashVerificationError> {
         let _guard = self.active_stats.activate(ActiveStatItem::Hash);
         stats.oldest_root = storages.range().start;
 
         self.mark_old_slots_as_dirty(storages, config.epoch_schedule.slots_per_epoch, &mut stats);
 
+        let slot = storages.max_slot_inclusive();
         let use_bg_thread_pool = config.use_bg_thread_pool;
         let scan_and_hash = || {
-            let cache_hash_data = Self::get_cache_hash_data(
-                accounts_hash_cache_path,
-                config,
-                storages.max_slot_inclusive(),
-            );
+            let cache_hash_data = Self::get_cache_hash_data(accounts_hash_cache_path, config, slot);
 
             let bounds = Range {
                 start: 0,
@@ -7548,14 +7555,16 @@ impl AccountsDb {
             );
 
             // turn raw data into merkle tree hashes and sum of lamports
-            let final_result = accounts_hasher.rest_of_hash_calculation(result, &mut stats);
-            info!(
-                "calculate_accounts_hash_from_storages: slot: {} {:?}",
-                storages.max_slot_inclusive(),
-                final_result
-            );
-            let final_result = (AccountsHash(final_result.0), final_result.1);
-            Ok(final_result)
+            let (accounts_hash, capitalization) =
+                accounts_hasher.rest_of_hash_calculation(result, &mut stats);
+            let accounts_hash = match flavor {
+                CalcAccountsHashFlavor::Full => AccountsHashEnum::Full(AccountsHash(accounts_hash)),
+                CalcAccountsHashFlavor::Incremental => {
+                    AccountsHashEnum::Incremental(IncrementalAccountsHash(accounts_hash))
+                }
+            };
+            info!("calculate_accounts_hash_from_storages: slot: {slot}, {accounts_hash:?}, capitalization: {capitalization}");
+            Ok((accounts_hash, capitalization))
         };
 
         let result = if use_bg_thread_pool {
@@ -7563,10 +7572,7 @@ impl AccountsDb {
         } else {
             scan_and_hash()
         };
-        self.assert_safe_squashing_accounts_hash(
-            storages.max_slot_inclusive(),
-            config.epoch_schedule,
-        );
+        self.assert_safe_squashing_accounts_hash(slot, config.epoch_schedule);
         stats.log();
         result
     }
@@ -18083,7 +18089,8 @@ pub mod tests {
                         AccountsDb::hash_account(slot, account, pubkey, INCLUDE_SLOT_IN_HASH_TESTS)
                     }
                 });
-        let expected_accounts_hash = AccountsHash(compute_merkle_root(incremental_account_hashes));
+        let expected_accounts_hash =
+            IncrementalAccountsHash(compute_merkle_root(incremental_account_hashes));
         assert_eq!(incremental_accounts_hash.0, expected_accounts_hash);
     }
 

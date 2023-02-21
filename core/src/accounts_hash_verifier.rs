@@ -387,7 +387,7 @@ impl AccountsHashVerifier {
             return;
         }
 
-        let snapshot_package = SnapshotPackage::new(accounts_package, accounts_hash);
+        let snapshot_package = SnapshotPackage::new(accounts_package, accounts_hash.into());
         let pending_snapshot_package = pending_snapshot_package.unwrap();
 
         // If the snapshot package is an Incremental Snapshot, do not submit it if there's already
