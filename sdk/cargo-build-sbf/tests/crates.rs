@@ -105,7 +105,6 @@ fn test_generate_child_script_on_failure() {
 
 #[test]
 #[serial]
-#[ignore]
 fn test_sbfv2() {
     run_cargo_build("noop", &["--arch", "sbfv2"], false);
     let cwd = env::current_dir().expect("Unable to get current working directory");
