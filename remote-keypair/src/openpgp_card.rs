@@ -242,6 +242,41 @@ impl OpenpgpCardKeypair {
     }
 }
 
+fn get_pin_from_user_as_bytes(card_info: &OpenpgpCardInfo, first_attempt: bool) -> Result<String, SignerError> {
+    let description = format!(
+        "\
+            Please unlock the card%0A\
+            %0A\
+            Manufacturer: {}%0A\
+            Serial: {:X}%0A\
+            Cardholder: {}\
+            {}\
+        ",
+        card_info.manufacturer,
+        card_info.serial,
+        card_info.cardholder_name,
+        if first_attempt { "" } else { "%0A%0A##### INVALID PIN #####" },
+    );
+    let pin = 
+        if let Some(mut input) = PassphraseInput::with_default_binary() {
+            input
+                .with_description(description.as_str())
+                .with_prompt("PIN")
+                .interact()
+        } else {
+            return Err(
+                SignerError::Custom("pinentry binary not found, please install".to_string())
+            )
+        };
+    let pin = match pin {
+        Ok(secret) => secret,
+        Err(e) => return Err(
+            SignerError::InvalidInput(format!("cannot read PIN from user: {}", e))
+        ),
+    };
+    Ok(pin.expose_secret().to_owned())
+}
+
 impl Signer for OpenpgpCardKeypair {
     fn try_pubkey(&self) -> Result<Pubkey, SignerError> {
         Ok(self.pubkey)
@@ -267,43 +302,11 @@ impl Signer for OpenpgpCardKeypair {
         //   * Card indicates PIN is only valid for one PSO:CDS command at a time, or
         //   * PIN has not yet been entered for the first time.
         if card_info.pin_cds_valid_once || !*self.pin_verified.borrow() {
-            let description = format!(
-                "\
-                    Please unlock the card%0A\
-                    %0A\
-                    Manufacturer: {}%0A\
-                    Serial: {:X}%0A\
-                    Cardholder: {}\
-                ",
-                card_info.manufacturer,
-                card_info.serial,
-                card_info.cardholder_name,
-            );
-            let pin = 
-                if let Some(mut input) = PassphraseInput::with_default_binary() {
-                    input
-                        .with_description(description.as_str())
-                        .with_prompt("PIN")
-                        .interact()
-                } else {
-                    return Err(
-                        SignerError::Custom("pinentry binary not found, please install".to_string())
-                    )
-                };
-            let pin = match pin {
-                Ok(secret) => secret,
-                Err(e) => return Err(
-                    SignerError::InvalidInput(format!("cannot read PIN from user: {}", e))
-                ),
-            };
-            match opt.verify_pw1_sign(pin.expose_secret().as_bytes()) {
-                Ok(_) => {
-                    *self.pin_verified.borrow_mut() = true;
-                },
-                Err(e) => return Err(
-                    SignerError::InvalidInput(format!("invalid PIN: {}", e))
-                ),
+            let mut pin = get_pin_from_user_as_bytes(&card_info, true)?;
+            while opt.verify_pw1_sign(pin.as_bytes()).is_err() {
+                pin = get_pin_from_user_as_bytes(&card_info, false)?;
             }
+            *self.pin_verified.borrow_mut() = true;
         }
 
         // Await user touch confirmation if and only if
