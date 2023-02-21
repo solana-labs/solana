@@ -13,7 +13,7 @@ use {
         pubkey::Pubkey,
         signature::{Signature, Signer, SignerError},
     },
-    std::{cell::RefCell, convert::Infallible},
+    std::cell::RefCell,
     thiserror::Error,
     uriparse::{URIReference, URIReferenceError},
 };
@@ -26,14 +26,6 @@ pub enum LocatorError {
     UriReferenceError(#[from] URIReferenceError),
     #[error("mismatched scheme")]
     MismatchedScheme,
-    #[error("infallible")]
-    Infallible,
-}
-
-impl From<Infallible> for LocatorError {
-    fn from(_: Infallible) -> Self {
-        Self::Infallible
-    }
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -55,14 +47,16 @@ impl Locator {
                 }
 
                 if ident.len() % 2 != 0 {
-                    return Err(LocatorError::IdentifierParseError(String::from("OpenPGP AID must have even length")));
+                    return Err(LocatorError::IdentifierParseError("OpenPGP AID must have even length".to_string()));
                 }
                 
                 let mut ident_bytes = Vec::<u8>::new();
                 for i in (0..ident.len()).step_by(2) {
                     ident_bytes.push(
                         u8::from_str_radix(&ident[i..i + 2], 16)
-                            .map_err(|e| LocatorError::IdentifierParseError(e.to_string()))?
+                            .map_err(|_| LocatorError::IdentifierParseError(
+                                "non-hex character found in identifier".to_string()
+                            ))?
                     );
                 }
 
@@ -71,7 +65,9 @@ impl Locator {
                         ident_bytes
                             .as_slice()
                             .try_into()
-                            .map_err(|e: openpgp_card::Error| LocatorError::IdentifierParseError(e.to_string()))?
+                            .map_err(|_| LocatorError::IdentifierParseError(
+                                "invalid identifier format".to_string()
+                            ))?
                     ),
                 })
             },
@@ -86,7 +82,7 @@ impl Locator {
 }
 
 #[derive(Debug)]
-#[allow(dead_code)]
+#[allow(dead_code)]  // unused pcsc_identifier
 pub struct OpenpgpCardInfo {
     pcsc_identifier: String,
     manufacturer: String,
@@ -105,7 +101,7 @@ impl TryFrom<&mut OpenPgpTransaction<'_>> for OpenpgpCardInfo {
         let cardholder_info = opt.cardholder_related_data()?;
         Ok(OpenpgpCardInfo {
             pcsc_identifier: ard.application_id()?.ident(),
-            manufacturer: String::from(card_app_info.manufacturer_name()),
+            manufacturer: card_app_info.manufacturer_name().to_string(),
             serial: ard.application_id()?.serial(),
             cardholder_name: String::from_utf8_lossy(cardholder_info.name().get_or_insert(b"null")).to_string(),
             signing_uif: ard.uif_pso_cds()?,
@@ -163,7 +159,7 @@ impl OpenpgpCardKeypair {
             let pk_material = match opt.public_key(openpgp_card::KeyType::Signing) {
                 Ok(pkm) => pkm,
                 Err(_) => return Err(
-                    openpgp_card::Error::NotFound(String::from("no valid key found on card"))
+                    openpgp_card::Error::NotFound("no valid key found on card".to_string())
                 )
             };
 
@@ -172,11 +168,11 @@ impl OpenpgpCardKeypair {
                 PublicKeyMaterial::E(pk) => match pk.data().try_into() {
                     Ok(pk_bytes) => pk_bytes,
                     Err(_) => return Err(
-                        openpgp_card::Error::UnsupportedAlgo(String::from("invalid pubkey format"))
+                        openpgp_card::Error::UnsupportedAlgo("invalid pubkey format".to_string())
                     ),
                 },
                 _ => return Err(
-                    openpgp_card::Error::UnsupportedAlgo(String::from("expected ECC key, got RSA"))
+                    openpgp_card::Error::UnsupportedAlgo("expected ECC key, got RSA".to_string())
                 ),
             };
         }
@@ -234,7 +230,7 @@ impl Signer for OpenpgpCardKeypair {
                         .interact()
                 } else {
                     return Err(
-                        SignerError::Custom(String::from("pinentry binary not found, please install"))
+                        SignerError::Custom("pinentry binary not found, please install".to_string())
                     )
                 };
             let pin = match pin {
@@ -276,5 +272,49 @@ impl Signer for OpenpgpCardKeypair {
 
     fn is_interactive(&self) -> bool {
         true
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_parse_locator() {
+        // no identifier in URI => default locator
+        let uri = URIReference::try_from("pgpcard://").unwrap();
+        assert_eq!(
+            Locator::new_from_uri(&uri),
+            Ok(Locator { aid: None }),
+        );
+
+        // valid identifier in URI
+        let uri = URIReference::try_from("pgpcard://D2760001240103040006123456780000").unwrap();
+        let expected_ident_bytes: [u8; 16] = [
+            0xD2, 0x76, 0x00, 0x01, 0x24,   // preamble
+            0x01,                           // application id (OpenPGP)
+            0x03, 0x04,                     // version
+            0x00, 0x06,                     // manufacturer id
+            0x12, 0x34, 0x56, 0x78,         // serial number
+            0x00, 0x00                      // reserved
+        ];
+        assert_eq!(
+            Locator::new_from_uri(&uri),
+            Ok(Locator { aid: Some(ApplicationIdentifier::try_from(&expected_ident_bytes[..]).unwrap()) }),
+        );
+
+        // non-hex character in identifier
+        let uri = URIReference::try_from("pgpcard://G2760001240103040006123456780000").unwrap();
+        assert_eq!(
+            Locator::new_from_uri(&uri),
+            Err(LocatorError::IdentifierParseError("non-hex character found in identifier".to_string())),
+        );
+
+        // invalid identifier length
+        let uri = URIReference::try_from("pgpcard://D27600012401030400061234567800").unwrap();
+        assert_eq!(
+            Locator::new_from_uri(&uri),
+            Err(LocatorError::IdentifierParseError("invalid identifier format".to_string())),
+        );
     }
 }
