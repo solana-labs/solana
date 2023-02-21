@@ -52,13 +52,13 @@ impl TransactionExecutorCache {
         executor: Arc<LoadedProgram>,
         upgrade: bool,
         delay_visibility_of_program_deployment: bool,
-        slot: Slot,
+        current_slot: Slot,
     ) {
         if upgrade {
             if delay_visibility_of_program_deployment {
                 // Place a tombstone in the cache so that
                 // we don't load the new version from the database as it should remain invisible
-                self.set_tombstone(key, slot);
+                self.set_tombstone(key, current_slot);
             } else {
                 self.visible.insert(key, executor.clone());
             }
