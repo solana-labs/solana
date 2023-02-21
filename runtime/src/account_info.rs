@@ -75,11 +75,11 @@ const CACHED_OFFSET: OffsetReduced = (1 << (OffsetReduced::BITS - 1)) - 1;
 #[bitfield(bits = 32)]
 #[repr(C)]
 #[derive(Debug, Default, Copy, Clone, Eq, PartialEq)]
-pub struct OffsetReducedMask {
+pub struct PackedOffsetAndFlags {
     /// this provides 2^31 bits, which when multipled by 8 (sizeof(u64)) = 16G, which is the maximum size of an append vec
     offset_reduced: B31,
     /// use 1 bit to specify that the entry is zero lamport
-    is_zero_lamport: B1,
+    is_zero_lamport: bool,
 }
 
 #[derive(Default, Debug, PartialEq, Eq, Clone, Copy)]
@@ -87,22 +87,22 @@ pub struct AccountInfo {
     /// index identifying the append storage
     store_id: AppendVecId,
 
-    /// offset = 'reduced_offset' * ALIGN_BOUNDARY_OFFSET into the storage
+    /// offset = 'packed_offset_and_flags.offset_reduced()' * ALIGN_BOUNDARY_OFFSET into the storage
     /// Note this is a smaller type than 'Offset'
-    reduced_offset_mask: OffsetReducedMask,
+    packed_offset_and_flags: PackedOffsetAndFlags,
 
-    stored_size: u32,
+    stored_size: StoredSize,
 }
 
 impl ZeroLamport for AccountInfo {
     fn is_zero_lamport(&self) -> bool {
-        self.reduced_offset_mask.is_zero_lamport() == 1
+        self.packed_offset_and_flags.is_zero_lamport()
     }
 }
 
 impl IsCached for AccountInfo {
     fn is_cached(&self) -> bool {
-        self.reduced_offset_mask.offset_reduced() == CACHED_OFFSET
+        self.packed_offset_and_flags.offset_reduced() == CACHED_OFFSET
     }
 }
 
@@ -117,7 +117,7 @@ const CACHE_VIRTUAL_STORAGE_ID: AppendVecId = AppendVecId::MAX;
 
 impl AccountInfo {
     pub fn new(storage_location: StorageLocation, stored_size: StoredSize, lamports: u64) -> Self {
-        let mut reduced_offset_mask = OffsetReducedMask::default();
+        let mut packed_offset_and_flags = PackedOffsetAndFlags::default();
         let store_id = match storage_location {
             StorageLocation::AppendVec(store_id, offset) => {
                 let reduced_offset = Self::get_reduced_offset(offset);
@@ -125,25 +125,23 @@ impl AccountInfo {
                     CACHED_OFFSET, reduced_offset,
                     "illegal offset for non-cached item"
                 );
-                reduced_offset_mask.set_offset_reduced(Self::get_reduced_offset(offset));
+                packed_offset_and_flags.set_offset_reduced(Self::get_reduced_offset(offset));
                 assert_eq!(
-                    Self::reduced_offset_to_offset(reduced_offset_mask.offset_reduced()),
+                    Self::reduced_offset_to_offset(packed_offset_and_flags.offset_reduced()),
                     offset,
                     "illegal offset"
                 );
                 store_id
             }
             StorageLocation::Cached => {
-                reduced_offset_mask.set_offset_reduced(CACHED_OFFSET);
+                packed_offset_and_flags.set_offset_reduced(CACHED_OFFSET);
                 CACHE_VIRTUAL_STORAGE_ID
             }
         };
-        if lamports == 0 {
-            reduced_offset_mask.set_is_zero_lamport(1);
-        }
+        packed_offset_and_flags.set_is_zero_lamport(lamports == 0);
         Self {
             store_id,
-            reduced_offset_mask,
+            packed_offset_and_flags,
             stored_size,
         }
     }
@@ -159,7 +157,7 @@ impl AccountInfo {
     }
 
     pub fn offset(&self) -> Offset {
-        Self::reduced_offset_to_offset(self.reduced_offset_mask.offset_reduced())
+        Self::reduced_offset_to_offset(self.packed_offset_and_flags.offset_reduced())
     }
 
     fn reduced_offset_to_offset(reduced_offset: OffsetReduced) -> Offset {
