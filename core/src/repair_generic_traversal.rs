@@ -116,12 +116,14 @@ pub fn get_closest_completion(
     processed_slots: &mut HashSet<Slot>,
     limit: usize,
 ) -> (Vec<ShredRepairType>, /* processed slots */ usize) {
-    let mut v: Vec<(Slot, u64)> = Vec::default();
+    let mut slot_dists: Vec<(Slot, u64)> = Vec::default();
+    let mut explored_slots: HashSet<Slot> = HashSet::default();
     let iter = GenericTraversal::new(tree);
     for slot in iter {
-        if processed_slots.contains(&slot) {
+        if processed_slots.contains(&slot) || explored_slots.contains(&slot) {
             continue;
         }
+        explored_slots.insert(slot);
         let slot_meta = slot_meta_cache
             .entry(slot)
             .or_insert_with(|| blockstore.meta(slot).unwrap());
@@ -163,30 +165,32 @@ pub fn get_closest_completion(
                     }
                     last_index.saturating_sub(slot_meta.consumed)
                 };
-                v.push((slot, dist));
-                processed_slots.insert(slot);
+                slot_dists.push((slot, dist));
             }
         }
     }
-    v.sort_by(|(_, d1), (_, d2)| d1.cmp(d2));
+    slot_dists.sort_by(|(_, d1), (_, d2)| d1.cmp(d2));
 
     let mut visited = HashSet::from([root_slot]);
     let mut repairs = Vec::new();
     let mut total_processed_slots = 0;
-    for (slot, _) in v {
+    for (slot, _) in slot_dists {
         if repairs.len() >= limit {
             break;
         }
         // attempt to repair heaviest slots starting with their parents
         let path = get_unrepaired_path(slot, blockstore, slot_meta_cache, &mut visited);
-        for slot in path {
+        for path_slot in path {
             if repairs.len() >= limit {
                 break;
             }
-            let slot_meta = slot_meta_cache.get(&slot).unwrap().as_ref().unwrap();
+            if !processed_slots.insert(path_slot) {
+                continue;
+            }
+            let slot_meta = slot_meta_cache.get(&path_slot).unwrap().as_ref().unwrap();
             let new_repairs = RepairService::generate_repairs_for_slot(
                 blockstore,
-                slot,
+                path_slot,
                 slot_meta,
                 limit - repairs.len(),
             );
