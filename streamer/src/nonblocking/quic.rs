@@ -478,7 +478,7 @@ async fn setup_connection(
                     stats.clone(),
                 ),
                 |(pubkey, stake, total_stake, max_stake, min_stake)| NewConnectionHandlerParams {
-                    packet_sender: packet_sender.clone(),
+                    packet_sender: packet_sender,
                     remote_pubkey: Some(pubkey),
                     stake,
                     total_stake,
