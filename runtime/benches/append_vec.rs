@@ -79,7 +79,7 @@ fn append_vec_sequential_read(bencher: &mut Bencher) {
         println!("reading pos {sample} {pos}");
         let (account, _next) = vec.get_account(pos).unwrap();
         let (_meta, test) = create_test_account(sample);
-        assert_eq!(account.data, test.data());
+        assert_eq!(account.data(), test.data());
         indexes.push((sample, pos));
     });
 }
@@ -94,7 +94,7 @@ fn append_vec_random_read(bencher: &mut Bencher) {
         let (sample, pos) = &indexes[random_index];
         let (account, _next) = vec.get_account(*pos).unwrap();
         let (_meta, test) = create_test_account(*sample);
-        assert_eq!(account.data, test.data());
+        assert_eq!(account.data(), test.data());
     });
 }
 
@@ -123,7 +123,7 @@ fn append_vec_concurrent_append_read(bencher: &mut Bencher) {
         let (sample, pos) = *indexes.lock().unwrap().get(random_index).unwrap();
         let (account, _next) = vec.get_account(pos).unwrap();
         let (_meta, test) = create_test_account(sample);
-        assert_eq!(account.data, test.data());
+        assert_eq!(account.data(), test.data());
     });
 }
 
@@ -143,7 +143,7 @@ fn append_vec_concurrent_read_append(bencher: &mut Bencher) {
         let (sample, pos) = *indexes1.lock().unwrap().get(random_index % len).unwrap();
         let (account, _next) = vec1.get_account(pos).unwrap();
         let (_meta, test) = create_test_account(sample);
-        assert_eq!(account.data, test.data());
+        assert_eq!(account.data(), test.data());
     });
     bencher.iter(|| {
         let sample: usize = thread_rng().gen_range(0, 256);
