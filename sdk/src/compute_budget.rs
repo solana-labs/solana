@@ -69,7 +69,7 @@ impl ComputeBudgetInstruction {
     }
 
     /// Create a `ComputeBudgetInstruction::SetLoadedAccountsDataSizeLimit` `Instruction`
-    pub fn set_accounts_data_size_limit(bytes: u32) -> Instruction {
+    pub fn set_loaded_accounts_data_size_limit(bytes: u32) -> Instruction {
         Instruction::new_with_borsh(id(), &Self::SetLoadedAccountsDataSizeLimit(bytes), vec![])
     }
 }

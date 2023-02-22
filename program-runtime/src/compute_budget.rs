@@ -11,10 +11,8 @@ use {
 };
 
 /// The total accounts data a transaction can load is limited to 64MiB to not break
-/// anyone in Mainnet-beta today. It can be set by set_accounts_data_size_limit instruction
-pub const MAX_ACCOUNTS_DATA_SIZE_BYTES: usize = 64 * 1024 * 1024;
-/// default data size to allow one maximum sized account
-const DEFAULT_ACCOUNTS_DATA_SIZE_BYTES: usize = 10 * 1024 * 1024;
+/// anyone in Mainnet-beta today. It can be set by set_loaded_accounts_data_size_limit instruction
+pub const MAX_LOADED_ACCOUNTS_DATA_SIZE_BYTES: usize = 64 * 1024 * 1024;
 
 pub const DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT: u32 = 200_000;
 pub const MAX_COMPUTE_UNIT_LIMIT: u32 = 1_400_000;
@@ -116,8 +114,8 @@ pub struct ComputeBudget {
     /// Big integer modular exponentiation cost
     pub big_modular_exponentiation_cost: u64,
     /// Maximum accounts data size, in bytes, that a transaction is allowed to load; The
-    /// value is capped by MAX_ACCOUNTS_DATA_SIZE_BYTES to prevent overuse of memory.
-    pub accounts_data_size_limit: usize,
+    /// value is capped by MAX_LOADED_ACCOUNTS_DATA_SIZE_BYTES to prevent overuse of memory.
+    pub loaded_accounts_data_size_limit: usize,
 }
 
 impl Default for ComputeBudget {
@@ -166,7 +164,7 @@ impl ComputeBudget {
             alt_bn128_pairing_one_pair_cost_first: 36_364,
             alt_bn128_pairing_one_pair_cost_other: 12_121,
             big_modular_exponentiation_cost: 33,
-            accounts_data_size_limit: DEFAULT_ACCOUNTS_DATA_SIZE_BYTES,
+            loaded_accounts_data_size_limit: MAX_LOADED_ACCOUNTS_DATA_SIZE_BYTES,
         }
     }
 
@@ -176,13 +174,13 @@ impl ComputeBudget {
         default_units_per_instruction: bool,
         support_request_units_deprecated: bool,
         enable_request_heap_frame_ix: bool,
-        support_set_accounts_data_size_limit_ix: bool,
+        support_set_loaded_accounts_data_size_limit_ix: bool,
     ) -> Result<PrioritizationFeeDetails, TransactionError> {
         let mut num_non_compute_budget_instructions: usize = 0;
         let mut updated_compute_unit_limit = None;
         let mut requested_heap_size = None;
         let mut prioritization_fee = None;
-        let mut updated_accounts_data_size_limit = None;
+        let mut updated_loaded_accounts_data_size_limit = None;
 
         for (i, (program_id, instruction)) in instructions.enumerate() {
             if compute_budget::check_id(program_id) {
@@ -227,12 +225,12 @@ impl ComputeBudget {
                             Some(PrioritizationFeeType::ComputeUnitPrice(micro_lamports));
                     }
                     Ok(ComputeBudgetInstruction::SetLoadedAccountsDataSizeLimit(bytes))
-                        if support_set_accounts_data_size_limit_ix =>
+                        if support_set_loaded_accounts_data_size_limit_ix =>
                     {
-                        if updated_accounts_data_size_limit.is_some() {
+                        if updated_loaded_accounts_data_size_limit.is_some() {
                             return Err(duplicate_instruction_error);
                         }
-                        updated_accounts_data_size_limit = Some(bytes as usize);
+                        updated_loaded_accounts_data_size_limit = Some(bytes as usize);
                     }
                     _ => return Err(invalid_instruction_data_error),
                 }
@@ -270,9 +268,9 @@ impl ComputeBudget {
         .unwrap_or(MAX_COMPUTE_UNIT_LIMIT)
         .min(MAX_COMPUTE_UNIT_LIMIT) as u64;
 
-        self.accounts_data_size_limit = updated_accounts_data_size_limit
-            .unwrap_or(DEFAULT_ACCOUNTS_DATA_SIZE_BYTES)
-            .min(MAX_ACCOUNTS_DATA_SIZE_BYTES);
+        self.loaded_accounts_data_size_limit = updated_loaded_accounts_data_size_limit
+            .unwrap_or(MAX_LOADED_ACCOUNTS_DATA_SIZE_BYTES)
+            .min(MAX_LOADED_ACCOUNTS_DATA_SIZE_BYTES);
 
         Ok(prioritization_fee
             .map(|fee_type| PrioritizationFeeDetails::new(fee_type, self.compute_unit_limit))
@@ -296,7 +294,7 @@ mod tests {
     };
 
     macro_rules! test {
-        ( $instructions: expr, $expected_result: expr, $expected_budget: expr, $enable_request_heap_frame_ix: expr, $support_set_accounts_data_size_limit_ix: expr ) => {
+        ( $instructions: expr, $expected_result: expr, $expected_budget: expr, $enable_request_heap_frame_ix: expr, $support_set_loaded_accounts_data_size_limit_ix: expr ) => {
             let payer_keypair = Keypair::new();
             let tx = SanitizedTransaction::from_transaction_for_tests(Transaction::new(
                 &[&payer_keypair],
@@ -309,7 +307,7 @@ mod tests {
                 true,
                 false, /*not support request_units_deprecated*/
                 $enable_request_heap_frame_ix,
-                $support_set_accounts_data_size_limit_ix,
+                $support_set_loaded_accounts_data_size_limit_ix,
             );
             assert_eq!($expected_result, result);
             assert_eq!(compute_budget, $expected_budget);
@@ -677,12 +675,12 @@ mod tests {
     }
 
     #[test]
-    fn test_process_accounts_data_size_limit_instruction() {
+    fn test_process_loaded_accounts_data_size_limit_instruction() {
         let enable_request_heap_frame_ix: bool = true;
 
-        // Assert for empty instructions, change value of support_set_accounts_data_size_limit_ix
+        // Assert for empty instructions, change value of support_set_loaded_accounts_data_size_limit_ix
         // will not change results, which should all be default
-        for support_set_accounts_data_size_limit_ix in [true, false] {
+        for support_set_loaded_accounts_data_size_limit_ix in [true, false] {
             test!(
                 &[],
                 Ok(PrioritizationFeeDetails::default()),
@@ -691,23 +689,23 @@ mod tests {
                     ..ComputeBudget::default()
                 },
                 enable_request_heap_frame_ix,
-                support_set_accounts_data_size_limit_ix
+                support_set_loaded_accounts_data_size_limit_ix
             );
         }
 
-        // Assert when set_accounts_data_size_limit presents,
-        // if support_set_accounts_data_size_limit_ix then
+        // Assert when set_loaded_accounts_data_size_limit presents,
+        // if support_set_loaded_accounts_data_size_limit_ix then
         //     budget is set with data_size
         // else
         //     return InstructionError
         let data_size: usize = 1;
-        for support_set_accounts_data_size_limit_ix in [true, false] {
-            let (expected_result, expected_budget) = if support_set_accounts_data_size_limit_ix {
+        for support_set_loaded_accounts_data_size_limit_ix in [true, false] {
+            let (expected_result, expected_budget) = if support_set_loaded_accounts_data_size_limit_ix {
                 (
                     Ok(PrioritizationFeeDetails::default()),
                     ComputeBudget {
                         compute_unit_limit: DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT as u64,
-                        accounts_data_size_limit: data_size,
+                        loaded_accounts_data_size_limit: data_size,
                         ..ComputeBudget::default()
                     },
                 )
@@ -723,29 +721,29 @@ mod tests {
 
             test!(
                 &[
-                    ComputeBudgetInstruction::set_accounts_data_size_limit(data_size as u32),
+                    ComputeBudgetInstruction::set_loaded_accounts_data_size_limit(data_size as u32),
                     Instruction::new_with_bincode(Pubkey::new_unique(), &0_u8, vec![]),
                 ],
                 expected_result,
                 expected_budget,
                 enable_request_heap_frame_ix,
-                support_set_accounts_data_size_limit_ix
+                support_set_loaded_accounts_data_size_limit_ix
             );
         }
 
-        // Assert when set_accounts_data_size_limit presents, with greater than max value
-        // if support_set_accounts_data_size_limit_ix then
+        // Assert when set_loaded_accounts_data_size_limit presents, with greater than max value
+        // if support_set_loaded_accounts_data_size_limit_ix then
         //     budget is set to max data size
         // else
         //     return InstructionError
-        let data_size: usize = MAX_ACCOUNTS_DATA_SIZE_BYTES + 1;
-        for support_set_accounts_data_size_limit_ix in [true, false] {
-            let (expected_result, expected_budget) = if support_set_accounts_data_size_limit_ix {
+        let data_size: usize = MAX_LOADED_ACCOUNTS_DATA_SIZE_BYTES + 1;
+        for support_set_loaded_accounts_data_size_limit_ix in [true, false] {
+            let (expected_result, expected_budget) = if support_set_loaded_accounts_data_size_limit_ix {
                 (
                     Ok(PrioritizationFeeDetails::default()),
                     ComputeBudget {
                         compute_unit_limit: DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT as u64,
-                        accounts_data_size_limit: MAX_ACCOUNTS_DATA_SIZE_BYTES,
+                        loaded_accounts_data_size_limit: MAX_LOADED_ACCOUNTS_DATA_SIZE_BYTES,
                         ..ComputeBudget::default()
                     },
                 )
@@ -761,27 +759,27 @@ mod tests {
 
             test!(
                 &[
-                    ComputeBudgetInstruction::set_accounts_data_size_limit(data_size as u32),
+                    ComputeBudgetInstruction::set_loaded_accounts_data_size_limit(data_size as u32),
                     Instruction::new_with_bincode(Pubkey::new_unique(), &0_u8, vec![]),
                 ],
                 expected_result,
                 expected_budget,
                 enable_request_heap_frame_ix,
-                support_set_accounts_data_size_limit_ix
+                support_set_loaded_accounts_data_size_limit_ix
             );
         }
 
-        // Assert when set_accounts_data_size_limit is not presented
-        // if support_set_accounts_data_size_limit_ix then
+        // Assert when set_loaded_accounts_data_size_limit is not presented
+        // if support_set_loaded_accounts_data_size_limit_ix then
         //     budget is set to default data size
         // else
         //     return
-        for support_set_accounts_data_size_limit_ix in [true, false] {
+        for support_set_loaded_accounts_data_size_limit_ix in [true, false] {
             let (expected_result, expected_budget) = (
                 Ok(PrioritizationFeeDetails::default()),
                 ComputeBudget {
                     compute_unit_limit: DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT as u64,
-                    accounts_data_size_limit: DEFAULT_ACCOUNTS_DATA_SIZE_BYTES,
+                    loaded_accounts_data_size_limit: MAX_LOADED_ACCOUNTS_DATA_SIZE_BYTES,
                     ..ComputeBudget::default()
                 },
             );
@@ -795,18 +793,18 @@ mod tests {
                 expected_result,
                 expected_budget,
                 enable_request_heap_frame_ix,
-                support_set_accounts_data_size_limit_ix
+                support_set_loaded_accounts_data_size_limit_ix
             );
         }
 
-        // Assert when set_accounts_data_size_limit presents more than once,
-        // if support_set_accounts_data_size_limit_ix then
+        // Assert when set_loaded_accounts_data_size_limit presents more than once,
+        // if support_set_loaded_accounts_data_size_limit_ix then
         //     return DuplicateInstruction
         // else
         //     return InstructionError
-        let data_size: usize = DEFAULT_ACCOUNTS_DATA_SIZE_BYTES;
-        for support_set_accounts_data_size_limit_ix in [true, false] {
-            let (expected_result, expected_budget) = if support_set_accounts_data_size_limit_ix {
+        let data_size: usize = MAX_LOADED_ACCOUNTS_DATA_SIZE_BYTES;
+        for support_set_loaded_accounts_data_size_limit_ix in [true, false] {
+            let (expected_result, expected_budget) = if support_set_loaded_accounts_data_size_limit_ix {
                 (
                     Err(TransactionError::DuplicateInstruction(2)),
                     ComputeBudget::default(),
@@ -824,13 +822,13 @@ mod tests {
             test!(
                 &[
                     Instruction::new_with_bincode(Pubkey::new_unique(), &0_u8, vec![]),
-                    ComputeBudgetInstruction::set_accounts_data_size_limit(data_size as u32),
-                    ComputeBudgetInstruction::set_accounts_data_size_limit(data_size as u32),
+                    ComputeBudgetInstruction::set_loaded_accounts_data_size_limit(data_size as u32),
+                    ComputeBudgetInstruction::set_loaded_accounts_data_size_limit(data_size as u32),
                 ],
                 expected_result,
                 expected_budget,
                 enable_request_heap_frame_ix,
-                support_set_accounts_data_size_limit_ix
+                support_set_loaded_accounts_data_size_limit_ix
             );
         }
     }
