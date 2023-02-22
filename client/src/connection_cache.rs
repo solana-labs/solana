@@ -8,7 +8,10 @@ use {
         },
     },
     solana_quic_client::{QuicConfig, QuicConnectionManager, QuicPool},
-    solana_sdk::{pubkey::Pubkey, signature::Keypair, transport::Result as TransportResult},
+    solana_sdk::{
+        pubkey::Pubkey, signature::Keypair,
+        transport::Result as TransportResult,
+    },
     solana_streamer::streamer::StakedNodes,
     solana_udp_client::{UdpConfig, UdpConnectionManager, UdpPool},
     std::{
@@ -204,7 +207,7 @@ mod tests {
         super::*,
         crate::connection_cache::ConnectionCache,
         crossbeam_channel::unbounded,
-        solana_sdk::{quic::QUIC_PORT_OFFSET, signature::Keypair},
+        solana_sdk::{quic::QUIC_PORT_OFFSET, signature::Keypair, net::DEFAULT_TPU_COALESCE_MS, },
         solana_streamer::{
             nonblocking::quic::DEFAULT_WAIT_FOR_CHUNK_TIMEOUT_MS, quic::StreamStats,
             streamer::StakedNodes,
@@ -263,6 +266,7 @@ mod tests {
             10,
             response_recv_stats,
             DEFAULT_WAIT_FOR_CHUNK_TIMEOUT_MS,
+            DEFAULT_TPU_COALESCE_MS,
         )
         .unwrap();
 

@@ -328,6 +328,7 @@ pub fn spawn_server(
     max_unstaked_connections: usize,
     stats: Arc<StreamStats>,
     wait_for_chunk_timeout_ms: u64,
+    coalesce_ms: u64,
 ) -> Result<(Endpoint, thread::JoinHandle<()>), QuicServerError> {
     let runtime = rt();
     let (endpoint, task) = {
@@ -344,6 +345,7 @@ pub fn spawn_server(
             max_unstaked_connections,
             stats,
             wait_for_chunk_timeout_ms,
+            coalesce_ms,
         )
     }?;
     let handle = thread::Builder::new()
@@ -363,6 +365,7 @@ mod test {
         super::*,
         crate::nonblocking::quic::{test::*, DEFAULT_WAIT_FOR_CHUNK_TIMEOUT_MS},
         crossbeam_channel::unbounded,
+        solana_sdk::net::DEFAULT_TPU_COALESCE_MS,
         std::net::SocketAddr,
     };
 
@@ -392,6 +395,7 @@ mod test {
             MAX_UNSTAKED_CONNECTIONS,
             stats,
             DEFAULT_WAIT_FOR_CHUNK_TIMEOUT_MS,
+            DEFAULT_TPU_COALESCE_MS,
         )
         .unwrap();
         (t, exit, receiver, server_address)
@@ -448,6 +452,7 @@ mod test {
             MAX_UNSTAKED_CONNECTIONS,
             stats,
             DEFAULT_WAIT_FOR_CHUNK_TIMEOUT_MS,
+            DEFAULT_TPU_COALESCE_MS,
         )
         .unwrap();
 
@@ -491,6 +496,7 @@ mod test {
             0, // Do not allow any connection from unstaked clients/nodes
             stats,
             DEFAULT_WAIT_FOR_CHUNK_TIMEOUT_MS,
+            DEFAULT_TPU_COALESCE_MS,
         )
         .unwrap();
 

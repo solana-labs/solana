@@ -59,8 +59,6 @@ const CONNECTION_CLOSE_CODE_TOO_MANY: u32 = 4;
 const CONNECTION_CLOSE_REASON_TOO_MANY: &[u8] = b"too_many";
 
 const PACKET_BATCH_SIZE: usize = 64;
-// todo: make this configurable
-const COALESCE_MS: u128 = 5;
 
 // A sequence of bytes that is part of a packet
 // along with where in the packet it is
@@ -99,6 +97,7 @@ pub fn spawn_server(
     max_unstaked_connections: usize,
     stats: Arc<StreamStats>,
     wait_for_chunk_timeout_ms: u64,
+    coalesce_ms: u64,
 ) -> Result<(Endpoint, JoinHandle<()>), QuicServerError> {
     info!("Start quic server on {:?}", sock);
     let (config, _cert) = configure_server(keypair, gossip_host)?;
@@ -118,10 +117,12 @@ pub fn spawn_server(
         max_unstaked_connections,
         stats,
         wait_for_chunk_timeout_ms,
+        coalesce_ms,
     ));
     Ok((endpoint, handle))
 }
 
+#[allow(clippy::too_many_arguments)]
 pub async fn run_server(
     incoming: Endpoint,
     packet_sender: Sender<PacketBatch>,
@@ -132,6 +133,7 @@ pub async fn run_server(
     max_unstaked_connections: usize,
     stats: Arc<StreamStats>,
     wait_for_chunk_timeout_ms: u64,
+    coalesce_ms: u64,
 ) {
     debug!("spawn quic server");
     let mut last_datapoint = Instant::now();
@@ -146,6 +148,7 @@ pub async fn run_server(
         receiver,
         exit.clone(),
         stats.clone(),
+        coalesce_ms,
     ));
     while !exit.load(Ordering::Relaxed) {
         const WAIT_FOR_CONNECTION_TIMEOUT_MS: u64 = 1000;
@@ -484,7 +487,7 @@ async fn setup_connection(
                     stats.clone(),
                 ),
                 |(pubkey, stake, total_stake, max_stake, min_stake)| NewConnectionHandlerParams {
-                    packet_sender: packet_sender,
+                    packet_sender,
                     remote_pubkey: Some(pubkey),
                     stake,
                     total_stake,
@@ -569,8 +572,10 @@ async fn packet_batch_sender(
     packet_receiver: AsyncReceiver<PacketAccumulator>,
     exit: Arc<AtomicBool>,
     stats: Arc<StreamStats>,
+    coalesce_ms: u64,
 ) {
     trace!("enter packet_batch_sender");
+    let coalesce_ms = coalesce_ms as u128;
     let mut batch_start_time = Instant::now();
     loop {
         let mut packet_batch = PacketBatch::with_capacity(PACKET_BATCH_SIZE);
@@ -584,7 +589,7 @@ async fn packet_batch_sender(
             }
             let elapsed = batch_start_time.elapsed();
             if packet_batch.len() >= PACKET_BATCH_SIZE
-                || (!packet_batch.is_empty() && elapsed.as_millis() >= COALESCE_MS)
+                || (!packet_batch.is_empty() && elapsed.as_millis() >= coalesce_ms)
             {
                 let len = packet_batch.len();
                 if let Err(e) = packet_sender.send(packet_batch) {
@@ -1074,6 +1079,7 @@ pub mod test {
         crossbeam_channel::{unbounded, Receiver},
         quinn::{ClientConfig, IdleTimeout, TransportConfig, VarInt},
         solana_sdk::{
+            net::DEFAULT_TPU_COALESCE_MS,
             quic::{QUIC_KEEP_ALIVE_MS, QUIC_MAX_TIMEOUT_MS},
             signature::Keypair,
             signer::Signer,
@@ -1159,6 +1165,7 @@ pub mod test {
             MAX_UNSTAKED_CONNECTIONS,
             stats.clone(),
             2000,
+            DEFAULT_TPU_COALESCE_MS,
         )
         .unwrap();
         (t, exit, receiver, server_address, stats)
@@ -1350,6 +1357,7 @@ pub mod test {
             pkt_receiver,
             exit.clone(),
             stats,
+            DEFAULT_TPU_COALESCE_MS,
         ));
 
         for _i in 0..1000 {
@@ -1577,6 +1585,7 @@ pub mod test {
             0, // Do not allow any connection from unstaked clients/nodes
             stats,
             DEFAULT_WAIT_FOR_CHUNK_TIMEOUT_MS,
+            DEFAULT_TPU_COALESCE_MS,
         )
         .unwrap();
 
@@ -1608,6 +1617,7 @@ pub mod test {
             MAX_UNSTAKED_CONNECTIONS,
             stats.clone(),
             DEFAULT_WAIT_FOR_CHUNK_TIMEOUT_MS,
+            DEFAULT_TPU_COALESCE_MS,
         )
         .unwrap();
 

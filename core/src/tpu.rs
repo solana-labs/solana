@@ -1,6 +1,7 @@
 //! The `tpu` module implements the Transaction Processing Unit, a
 //! multi-stage transaction processing pipeline in software.
 
+pub use solana_sdk::net::DEFAULT_TPU_COALESCE_MS;
 use {
     crate::{
         banking_stage::BankingStage,
@@ -42,8 +43,6 @@ use {
         thread,
     },
 };
-
-pub const DEFAULT_TPU_COALESCE_MS: u64 = 5;
 
 // allow multiple connections for NAT and any open/close overlap
 pub const MAX_QUIC_CONNECTIONS_PER_PEER: usize = 8;
@@ -177,6 +176,7 @@ impl Tpu {
             MAX_UNSTAKED_CONNECTIONS,
             stats.clone(),
             DEFAULT_WAIT_FOR_CHUNK_TIMEOUT_MS,
+            tpu_coalesce_ms,
         )
         .unwrap();
 
@@ -196,6 +196,7 @@ impl Tpu {
             0, // Prevent unstaked nodes from forwarding transactions
             stats,
             DEFAULT_WAIT_FOR_CHUNK_TIMEOUT_MS,
+            tpu_coalesce_ms,
         )
         .unwrap();
 
