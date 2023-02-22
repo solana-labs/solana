@@ -133,8 +133,10 @@ pub trait IsCached {
     fn is_cached(&self) -> bool;
 }
 
-pub trait IndexValue:
-    'static + IsCached + Clone + Debug + PartialEq + ZeroLamport + Copy + Default + Sync + Send
+pub trait IndexValue: 'static + IsCached + ZeroLamport + DiskIndexValue {}
+
+pub trait DiskIndexValue:
+    'static + Clone + Debug + PartialEq + Copy + Default + Sync + Send
 {
 }
 
@@ -232,7 +234,7 @@ pub struct AccountMapEntryMeta {
 }
 
 impl AccountMapEntryMeta {
-    pub fn new_dirty<T: IndexValue, U: IndexValue + From<T> + Into<T>>(
+    pub fn new_dirty<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>>(
         storage: &Arc<BucketMapHolder<T, U>>,
         is_cached: bool,
     ) -> Self {
@@ -241,7 +243,7 @@ impl AccountMapEntryMeta {
             age: AtomicU8::new(storage.future_age_to_flush(is_cached)),
         }
     }
-    pub fn new_clean<T: IndexValue, U: IndexValue + From<T> + Into<T>>(
+    pub fn new_clean<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>>(
         storage: &Arc<BucketMapHolder<T, U>>,
     ) -> Self {
         AccountMapEntryMeta {
@@ -402,7 +404,7 @@ impl<T: IndexValue> PreAllocatedAccountMapEntry<T> {
     /// 1. new empty (refcount=0, slot_list={})
     /// 2. update(slot, account_info)
     /// This code is called when the first entry [ie. (slot,account_info)] for a pubkey is inserted into the index.
-    pub fn new<U: IndexValue + From<T> + Into<T>>(
+    pub fn new<U: DiskIndexValue + From<T> + Into<T>>(
         slot: Slot,
         account_info: T,
         storage: &Arc<BucketMapHolder<T, U>>,
@@ -415,7 +417,7 @@ impl<T: IndexValue> PreAllocatedAccountMapEntry<T> {
         }
     }
 
-    fn allocate<U: IndexValue + From<T> + Into<T>>(
+    fn allocate<U: DiskIndexValue + From<T> + Into<T>>(
         slot: Slot,
         account_info: T,
         storage: &Arc<BucketMapHolder<T, U>>,
@@ -430,7 +432,7 @@ impl<T: IndexValue> PreAllocatedAccountMapEntry<T> {
         ))
     }
 
-    pub fn into_account_map_entry<U: IndexValue + From<T> + Into<T>>(
+    pub fn into_account_map_entry<U: DiskIndexValue + From<T> + Into<T>>(
         self,
         storage: &Arc<BucketMapHolder<T, U>>,
     ) -> AccountMapEntry<T> {
@@ -495,7 +497,7 @@ pub struct AccountsIndexRootsStats {
     pub clean_dead_slot_us: u64,
 }
 
-pub struct AccountsIndexIterator<'a, T: IndexValue, U: IndexValue + From<T> + Into<T>> {
+pub struct AccountsIndexIterator<'a, T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> {
     account_maps: &'a LockMapTypeSlice<T, U>,
     bin_calculator: &'a PubkeyBinCalculator24,
     start_bound: Bound<Pubkey>,
@@ -504,7 +506,7 @@ pub struct AccountsIndexIterator<'a, T: IndexValue, U: IndexValue + From<T> + In
     collect_all_unsorted: bool,
 }
 
-impl<'a, T: IndexValue, U: IndexValue + From<T> + Into<T>> AccountsIndexIterator<'a, T, U> {
+impl<'a, T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> AccountsIndexIterator<'a, T, U> {
     fn range<R>(
         map: &AccountMaps<T, U>,
         range: R,
@@ -604,7 +606,7 @@ impl<'a, T: IndexValue, U: IndexValue + From<T> + Into<T>> AccountsIndexIterator
     }
 }
 
-impl<'a, T: IndexValue, U: IndexValue + From<T> + Into<T>> Iterator
+impl<'a, T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> Iterator
     for AccountsIndexIterator<'a, T, U>
 {
     type Item = Vec<(Pubkey, AccountMapEntry<T>)>;
@@ -677,7 +679,7 @@ pub enum AccountsIndexScanResult {
 #[derive(Debug)]
 /// T: account info type to interact in in-memory items
 /// U: account info type to be persisted to disk
-pub struct AccountsIndex<T: IndexValue, U: IndexValue + From<T> + Into<T>> {
+pub struct AccountsIndex<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> {
     pub account_maps: LockMapType<T, U>,
     pub bin_calculator: PubkeyBinCalculator24,
     program_id_index: SecondaryIndex<DashMapSecondaryIndexEntry>,
@@ -715,7 +717,7 @@ pub struct AccountsIndex<T: IndexValue, U: IndexValue + From<T> + Into<T>> {
     pub rent_paying_accounts_by_partition: OnceCell<RentPayingAccountsByPartition>,
 }
 
-impl<T: IndexValue, U: IndexValue + From<T> + Into<T>> AccountsIndex<T, U> {
+impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> AccountsIndex<T, U> {
     pub fn default_for_tests() -> Self {
         Self::new(Some(ACCOUNTS_INDEX_CONFIG_FOR_TESTING), &Arc::default())
     }
@@ -2144,7 +2146,7 @@ pub mod tests {
         }
     }
 
-    impl<T: IndexValue> AccountsIndex<T, T> {
+    impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> AccountsIndex<T, U> {
         /// provides the ability to refactor this function on the api without bloody changes
         pub fn get_for_tests(
             &self,
@@ -2416,6 +2418,7 @@ pub mod tests {
     type AccountInfoTest = f64;
 
     impl IndexValue for AccountInfoTest {}
+    impl DiskIndexValue for AccountInfoTest {}
     impl IsCached for AccountInfoTest {
         fn is_cached(&self) -> bool {
             true
@@ -3930,6 +3933,8 @@ pub mod tests {
 
     impl IndexValue for bool {}
     impl IndexValue for u64 {}
+    impl DiskIndexValue for bool {}
+    impl DiskIndexValue for u64 {}
     impl IsCached for bool {
         fn is_cached(&self) -> bool {
             false
