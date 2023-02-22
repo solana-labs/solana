@@ -1499,7 +1499,7 @@ impl BankCreationFreezingProgress {
                     "difference",
                     self.bank_creation_count
                         .load(Ordering::Acquire)
-                        .saturating_sub(
+                        .wrapping_sub(
                             self.bank_freeze_or_destruction_count
                                 .load(Ordering::Acquire)
                         ),
