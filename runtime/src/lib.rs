@@ -11,6 +11,7 @@ pub mod account_storage;
 pub mod accounts;
 pub mod accounts_background_service;
 pub mod accounts_cache;
+pub mod accounts_data_storage;
 pub mod accounts_db;
 pub mod accounts_file;
 pub mod accounts_hash;
