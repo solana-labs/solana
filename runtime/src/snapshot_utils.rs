@@ -1016,8 +1016,7 @@ pub fn add_bank_snapshot(
         remove_bank_snapshot(slot, &bank_snapshots_dir)?;
     } else {
         // Even the snapshot directory is not found, still ensure the account snapshot directory
-        // is also clean.  hardlink failure could happen if an old files exist when generating a
-        // new snapshot.
+        // is also clean.  hardlink failure will happen if an old file exists.
         let account_paths = &bank.accounts().accounts_db.paths;
         for account_path in account_paths {
             let account_snapshot_path = account_path
