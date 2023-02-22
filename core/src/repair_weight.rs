@@ -215,7 +215,7 @@ impl RepairWeight {
 
         let mut get_closest_completion_elapsed = Measure::start("get_closest_completion");
         let pre_num_slots = processed_slots.len();
-        let closest_completion_repairs = self.get_best_closest_completion(
+        let (closest_completion_repairs, total_slots_processed) = self.get_best_closest_completion(
             blockstore,
             &mut slot_meta_cache,
             &mut processed_slots,
@@ -223,6 +223,8 @@ impl RepairWeight {
         );
         let num_closest_completion_repairs = closest_completion_repairs.len();
         let num_closest_completion_slots = processed_slots.len() - pre_num_slots;
+        let num_closest_completion_slots_path =
+            total_slots_processed.saturating_sub(num_closest_completion_slots);
         repairs.extend(closest_completion_repairs);
         get_closest_completion_elapsed.stop();
 
@@ -234,7 +236,9 @@ impl RepairWeight {
             num_unknown_last_index_slots as u64,
             num_unknown_last_index_repairs as u64,
             num_closest_completion_slots as u64,
+            num_closest_completion_slots_path as u64,
             num_closest_completion_repairs as u64,
+            self.trees.len() as u64,
         );
         repair_timing.get_best_orphans_elapsed += get_best_orphans_elapsed.as_us();
         repair_timing.get_best_shreds_elapsed += get_best_shreds_elapsed.as_us();
@@ -464,13 +468,14 @@ impl RepairWeight {
         slot_meta_cache: &mut HashMap<Slot, Option<SlotMeta>>,
         processed_slots: &mut HashSet<Slot>,
         max_new_repairs: usize,
-    ) -> Vec<ShredRepairType> {
+    ) -> (Vec<ShredRepairType>, /* processed slots */ usize) {
         let mut repairs = Vec::default();
+        let mut total_processed_slots = 0;
         for (_slot, tree) in self.trees.iter() {
             if repairs.len() >= max_new_repairs {
                 break;
             }
-            let new_repairs = get_closest_completion(
+            let (new_repairs, new_processed_slots) = get_closest_completion(
                 tree,
                 blockstore,
                 slot_meta_cache,
@@ -478,8 +483,9 @@ impl RepairWeight {
                 max_new_repairs - repairs.len(),
             );
             repairs.extend(new_repairs);
+            total_processed_slots += new_processed_slots;
         }
-        repairs
+        (repairs, total_processed_slots)
     }
 
     /// Attempts to chain the orphan subtree rooted at `orphan_tree_root`

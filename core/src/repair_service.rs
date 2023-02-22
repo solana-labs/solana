@@ -149,10 +149,13 @@ pub struct BestRepairsStats {
     pub num_unknown_last_index_slots: u64,
     pub num_unknown_last_index_repairs: u64,
     pub num_closest_completion_slots: u64,
+    pub num_closest_completion_slots_path: u64,
     pub num_closest_completion_repairs: u64,
+    pub num_repair_trees: u64,
 }
 
 impl BestRepairsStats {
+    #[allow(clippy::too_many_arguments)]
     pub fn update(
         &mut self,
         num_orphan_slots: u64,
@@ -162,7 +165,9 @@ impl BestRepairsStats {
         num_unknown_last_index_slots: u64,
         num_unknown_last_index_repairs: u64,
         num_closest_completion_slots: u64,
+        num_closest_completion_slots_path: u64,
         num_closest_completion_repairs: u64,
+        num_repair_trees: u64,
     ) {
         self.call_count += 1;
         self.num_orphan_slots += num_orphan_slots;
@@ -172,7 +177,9 @@ impl BestRepairsStats {
         self.num_unknown_last_index_slots += num_unknown_last_index_slots;
         self.num_unknown_last_index_repairs += num_unknown_last_index_repairs;
         self.num_closest_completion_slots += num_closest_completion_slots;
+        self.num_closest_completion_slots_path += num_closest_completion_slots_path;
         self.num_closest_completion_repairs += num_closest_completion_repairs;
+        self.num_repair_trees += num_repair_trees;
     }
 }
 
@@ -508,10 +515,16 @@ impl RepairService {
                         i64
                     ),
                     (
+                        "closest-completion-slots-path",
+                        best_repairs_stats.num_closest_completion_slots_path,
+                        i64
+                    ),
+                    (
                         "closest-completion-repairs",
                         best_repairs_stats.num_closest_completion_repairs,
                         i64
                     ),
+                    ("repair-trees", best_repairs_stats.num_repair_trees, i64),
                 );
                 repair_stats = RepairStats::default();
                 repair_timing = RepairTiming::default();
