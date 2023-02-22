@@ -35,7 +35,7 @@ FLAGS:
         --no-modify-path    Don't configure the PATH environment variable
 
 OPTIONS:
-    -d, --data_dir <PATH>    Directory to store install data
+    -d, --data-dir <PATH>    Directory to store install data
     -u, --url <URL>          JSON RPC URL for the solana cluster
     -p, --pubkey <PUBKEY>    Public key of the update manifest
 EOF
