@@ -1,4 +1,9 @@
-use {super::*, crate::declare_syscall, solana_rbpf::memory_region::MemoryRegion, std::slice};
+use {
+    super::*,
+    crate::declare_syscall,
+    solana_rbpf::{error::EbpfError, memory_region::MemoryRegion},
+    std::slice,
+};
 
 fn mem_op_consume(invoke_context: &mut InvokeContext, n: u64) -> Result<(), Error> {
     let compute_budget = invoke_context.get_compute_budget();
@@ -146,7 +151,7 @@ fn memmove(
     src_addr: u64,
     n: u64,
     memory_mapping: &MemoryMapping,
-) -> Result<u64, EbpfError> {
+) -> Result<u64, Error> {
     if invoke_context
         .feature_set
         .is_active(&feature_set::bpf_account_data_direct_mapping::id())
@@ -180,7 +185,7 @@ fn memmove_non_contiguous(
     src_addr: u64,
     n: u64,
     memory_mapping: &MemoryMapping,
-) -> Result<u64, EbpfError> {
+) -> Result<u64, Error> {
     let reverse = dst_addr.wrapping_sub(src_addr) < n;
     iter_memory_pair_chunks(
         AccessType::Load,
@@ -221,7 +226,7 @@ fn memcmp_non_contiguous(
     dst_addr: u64,
     n: u64,
     memory_mapping: &MemoryMapping,
-) -> Result<i32, EbpfError> {
+) -> Result<i32, Error> {
     match iter_memory_pair_chunks(
         AccessType::Load,
         src_addr,
@@ -241,26 +246,37 @@ fn memcmp_non_contiguous(
                 memcmp(s1, s2, chunk_len)
             };
             if res != 0 {
-                return Err(MemcmpError::Diff(res));
+                return Err(MemcmpError::Diff(res).into());
             }
             Ok(0)
         },
     ) {
         Ok(res) => Ok(res),
-        Err(MemcmpError::Diff(diff)) => Ok(diff),
-        Err(MemcmpError::Ebpf(e)) => Err(e),
+        Err(error) => match error.downcast_ref() {
+            Some(MemcmpError::Diff(diff)) => Ok(*diff),
+            _ => Err(error),
+        },
     }
 }
 
 #[derive(Debug)]
 enum MemcmpError {
-    Ebpf(EbpfError),
     Diff(i32),
 }
 
-impl From<EbpfError> for MemcmpError {
-    fn from(err: EbpfError) -> Self {
-        MemcmpError::Ebpf(err)
+impl std::fmt::Display for MemcmpError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            MemcmpError::Diff(diff) => write!(f, "memcmp diff: {}", diff),
+        }
+    }
+}
+
+impl std::error::Error for MemcmpError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            MemcmpError::Diff(_) => None,
+        }
     }
 }
 
@@ -269,7 +285,7 @@ fn memset_non_contiguous(
     c: u8,
     n: u64,
     memory_mapping: &MemoryMapping,
-) -> Result<u64, EbpfError> {
+) -> Result<u64, Error> {
     let dst_chunk_iter = MemoryChunkIterator::new(memory_mapping, AccessType::Store, dst_addr, n);
     for item in dst_chunk_iter {
         let (dst_region, dst_vm_addr, dst_len) = item?;
@@ -280,7 +296,7 @@ fn memset_non_contiguous(
     Ok(0)
 }
 
-fn iter_memory_pair_chunks<T, E, F>(
+fn iter_memory_pair_chunks<T, F>(
     src_access: AccessType,
     src_addr: u64,
     dst_access: AccessType,
@@ -289,11 +305,10 @@ fn iter_memory_pair_chunks<T, E, F>(
     memory_mapping: &MemoryMapping,
     reverse: bool,
     mut fun: F,
-) -> Result<T, E>
+) -> Result<T, Error>
 where
     T: Default,
-    E: From<EbpfError>,
-    F: FnMut(*const u8, *const u8, usize) -> Result<T, E>,
+    F: FnMut(*const u8, *const u8, usize) -> Result<T, Error>,
 {
     let mut src_chunk_iter = MemoryChunkIterator::new(memory_mapping, src_access, src_addr, n);
     loop {
@@ -372,28 +387,36 @@ impl<'a> MemoryChunkIterator<'a> {
         }
     }
 
-    fn region(&mut self, vm_addr: u64) -> Result<&'a MemoryRegion, EbpfError> {
+    fn region(&mut self, vm_addr: u64) -> Result<&'a MemoryRegion, Error> {
         match self.memory_mapping.region(self.access_type, vm_addr) {
             Ok(region) => Ok(region),
-            Err(EbpfError::AccessViolation(pc, access_type, _vm_addr, _len, name)) => Err(
-                EbpfError::AccessViolation(pc, access_type, self.initial_vm_addr, self.len, name),
-            ),
-            Err(EbpfError::StackAccessViolation(pc, access_type, _vm_addr, _len, frame)) => {
-                Err(EbpfError::StackAccessViolation(
-                    pc,
-                    access_type,
-                    self.initial_vm_addr,
-                    self.len,
-                    frame,
-                ))
-            }
-            Err(e) => Err(e),
+            Err(error) => match error.downcast_ref() {
+                Some(EbpfError::AccessViolation(pc, access_type, _vm_addr, _len, name)) => {
+                    Err(Box::new(EbpfError::AccessViolation(
+                        *pc,
+                        *access_type,
+                        self.initial_vm_addr,
+                        self.len,
+                        name,
+                    )))
+                }
+                Some(EbpfError::StackAccessViolation(pc, access_type, _vm_addr, _len, frame)) => {
+                    Err(Box::new(EbpfError::StackAccessViolation(
+                        *pc,
+                        *access_type,
+                        self.initial_vm_addr,
+                        self.len,
+                        *frame,
+                    )))
+                }
+                _ => Err(error),
+            },
         }
     }
 }
 
 impl<'a> Iterator for MemoryChunkIterator<'a> {
-    type Item = Result<(&'a MemoryRegion, u64, usize), EbpfError>;
+    type Item = Result<(&'a MemoryRegion, u64, usize), Error>;
 
     fn next(&mut self) -> Option<Self::Item> {
         if self.vm_addr_start == self.vm_addr_end {
@@ -473,7 +496,7 @@ mod tests {
     }
 
     fn to_chunk_vec<'a>(
-        iter: impl Iterator<Item = Result<(&'a MemoryRegion, u64, usize), EbpfError>>,
+        iter: impl Iterator<Item = Result<(&'a MemoryRegion, u64, usize), Error>>,
     ) -> Vec<(u64, usize)> {
         iter.flat_map(|res| res.map(|(_, vm_addr, len)| (vm_addr, len)))
             .collect::<Vec<_>>()

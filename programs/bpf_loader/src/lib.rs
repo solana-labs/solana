@@ -26,10 +26,11 @@ use {
         vm::{ContextObject, EbpfVm, ProgramResult, VerifiedExecutable},
     },
     solana_sdk::{
+        account::WritableAccount,
         bpf_loader, bpf_loader_deprecated,
         bpf_loader_upgradeable::{self, UpgradeableLoaderState},
         clock::Slot,
-        entrypoint::SUCCESS,
+        entrypoint::{MAX_PERMITTED_DATA_INCREASE, SUCCESS},
         feature_set::{
             bpf_account_data_direct_mapping, cap_accounts_data_allocations_per_transaction,
             cap_bpf_program_instruction_accounts, delay_visibility_of_program_deployment,
@@ -304,8 +305,31 @@ pub fn create_vm<'a, 'b>(
 ) -> Result<EbpfVm<'a, RequisiteVerifier, InvokeContext<'b>>, Box<dyn std::error::Error>> {
     let stack_size = stack.len();
     let heap_size = heap.len();
-    let memory_mapping =
-        create_memory_mapping(program.get_executable(), stack, heap, regions, None)?;
+    let accounts = Arc::clone(invoke_context.transaction_context.accounts());
+    let memory_mapping = create_memory_mapping(
+        program.get_executable(),
+        stack,
+        heap,
+        regions,
+        Some(Box::new(move |index_in_transaction| {
+            // The two calls below can't relly fail. If they fail because of a bug,
+            // whatever is writing will trigger an EbpfError::AccessViolation like
+            // if the region was readonly, and the transaction will fail gracefully.
+            let mut account = accounts
+                .try_borrow_mut(index_in_transaction as IndexOfAccount)
+                .map_err(|_| ())?;
+            accounts
+                .touch(index_in_transaction as IndexOfAccount)
+                .map_err(|_| ())?;
+
+            if account.is_shared() {
+                // See BorrowedAccount::make_data_mut() as to why we reserve extra
+                // MAX_PERMITTED_DATA_INCREASE bytes here.
+                account.reserve(MAX_PERMITTED_DATA_INCREASE);
+            }
+            Ok(account.data_as_mut_slice().as_mut_ptr() as u64)
+        })),
+    )?;
     invoke_context.set_syscall_context(SyscallContext {
         allocator: BpfAllocator::new(heap_size as u64),
         orig_account_lengths,
