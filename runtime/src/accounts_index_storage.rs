@@ -16,18 +16,18 @@ use {
 };
 
 /// Manages the lifetime of the background processing threads.
-pub struct AccountsIndexStorage<T: IndexValue> {
+pub struct AccountsIndexStorage<T: IndexValue, U: IndexValue + From<T> + Into<T>> {
     _bg_threads: BgThreads,
 
-    pub storage: Arc<BucketMapHolder<T>>,
-    pub in_mem: Vec<Arc<InMemAccountsIndex<T>>>,
+    pub storage: Arc<BucketMapHolder<T, U>>,
+    pub in_mem: Vec<Arc<InMemAccountsIndex<T, U>>>,
     exit: Arc<AtomicBool>,
 
     /// set_startup(true) creates bg threads which are kept alive until set_startup(false)
     startup_worker_threads: Mutex<Option<BgThreads>>,
 }
 
-impl<T: IndexValue> Debug for AccountsIndexStorage<T> {
+impl<T: IndexValue, U: IndexValue + From<T> + Into<T>> Debug for AccountsIndexStorage<T, U> {
     fn fmt(&self, _f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         Ok(())
     }
@@ -53,9 +53,9 @@ impl Drop for BgThreads {
 }
 
 impl BgThreads {
-    fn new<T: IndexValue>(
-        storage: &Arc<BucketMapHolder<T>>,
-        in_mem: &[Arc<InMemAccountsIndex<T>>],
+    fn new<T: IndexValue, U: IndexValue + From<T> + Into<T>>(
+        storage: &Arc<BucketMapHolder<T, U>>,
+        in_mem: &[Arc<InMemAccountsIndex<T, U>>],
         threads: usize,
         can_advance_age: bool,
         exit: &Arc<AtomicBool>,
@@ -109,7 +109,7 @@ pub enum Startup {
     StartupWithExtraThreads,
 }
 
-impl<T: IndexValue> AccountsIndexStorage<T> {
+impl<T: IndexValue, U: IndexValue + From<T> + Into<T>> AccountsIndexStorage<T, U> {
     /// startup=true causes:
     ///      in mem to act in a way that flushes to disk asap
     ///      also creates some additional bg threads to facilitate flushing to disk asap
