@@ -1,11 +1,15 @@
 //! The `repair_service` module implements the tools necessary to generate a thread which
 //! regularly finds missing shreds in the ledger and sends repair requests for those shreds
+#[cfg(test)]
+use {
+    crate::duplicate_repair_status::DuplicateSlotRepairStatus, solana_ledger::shred::Nonce,
+    solana_sdk::clock::DEFAULT_MS_PER_SLOT,
+};
 use {
     crate::{
         ancestor_hashes_service::{AncestorHashesReplayUpdateReceiver, AncestorHashesService},
         cluster_info_vote_listener::VerifiedVoteReceiver,
         cluster_slots::ClusterSlots,
-        duplicate_repair_status::DuplicateSlotRepairStatus,
         outstanding_requests::OutstandingRequests,
         repair_weight::RepairWeight,
         serve_repair::{ServeRepair, ShredRepairType, REPAIR_PEERS_CACHE_CAPACITY},
@@ -18,7 +22,7 @@ use {
         shred,
     },
     solana_measure::measure::Measure,
-    solana_runtime::{bank_forks::BankForks, contains::Contains},
+    solana_runtime::bank_forks::BankForks,
     solana_sdk::{
         clock::{Slot, DEFAULT_TICKS_PER_SECOND, MS_PER_TICK},
         epoch_schedule::EpochSchedule,
@@ -40,8 +44,6 @@ use {
         time::{Duration, Instant},
     },
 };
-#[cfg(test)]
-use {solana_ledger::shred::Nonce, solana_sdk::clock::DEFAULT_MS_PER_SLOT};
 
 // Time to defer repair requests to allow for turbine propagation
 const DEFER_REPAIR_THRESHOLD: Duration = Duration::from_millis(200);
@@ -280,8 +282,6 @@ impl RepairService {
         let mut repair_timing = RepairTiming::default();
         let mut best_repairs_stats = BestRepairsStats::default();
         let mut last_stats = Instant::now();
-        let duplicate_slot_repair_statuses: HashMap<Slot, DuplicateSlotRepairStatus> =
-            HashMap::new();
         let mut peers_cache = LruCache::new(REPAIR_PEERS_CACHE_CAPACITY);
 
         loop {
@@ -352,7 +352,6 @@ impl RepairService {
                     MAX_REPAIR_LENGTH,
                     MAX_UNKNOWN_LAST_INDEX_REPAIRS,
                     MAX_CLOSEST_COMPLETION_REPAIRS,
-                    &duplicate_slot_repair_statuses,
                     &mut repair_timing,
                     &mut best_repairs_stats,
                 );
@@ -569,20 +568,15 @@ impl RepairService {
     }
 
     /// Repairs any fork starting at the input slot (uses blockstore for fork info)
-    pub fn generate_repairs_for_fork<'a>(
+    pub fn generate_repairs_for_fork(
         blockstore: &Blockstore,
         repairs: &mut Vec<ShredRepairType>,
         max_repairs: usize,
         slot: Slot,
-        duplicate_slot_repair_statuses: &impl Contains<'a, Slot>,
     ) {
         let mut pending_slots = vec![slot];
         while repairs.len() < max_repairs && !pending_slots.is_empty() {
             let slot = pending_slots.pop().unwrap();
-            if duplicate_slot_repair_statuses.contains(&slot) {
-                // These are repaired through a different path
-                continue;
-            }
             if let Some(slot_meta) = blockstore.meta(slot).unwrap() {
                 let new_repairs = Self::generate_repairs_for_slot(
                     blockstore,
@@ -844,7 +838,6 @@ mod test {
                     MAX_REPAIR_LENGTH,
                     MAX_UNKNOWN_LAST_INDEX_REPAIRS,
                     MAX_CLOSEST_COMPLETION_REPAIRS,
-                    &HashSet::default(),
                     &mut RepairTiming::default(),
                     &mut BestRepairsStats::default(),
                 ),
@@ -881,7 +874,6 @@ mod test {
                     MAX_REPAIR_LENGTH,
                     MAX_UNKNOWN_LAST_INDEX_REPAIRS,
                     MAX_CLOSEST_COMPLETION_REPAIRS,
-                    &HashSet::default(),
                     &mut RepairTiming::default(),
                     &mut BestRepairsStats::default(),
                 ),
@@ -942,7 +934,6 @@ mod test {
                     MAX_REPAIR_LENGTH,
                     MAX_UNKNOWN_LAST_INDEX_REPAIRS,
                     MAX_CLOSEST_COMPLETION_REPAIRS,
-                    &HashSet::default(),
                     &mut RepairTiming::default(),
                     &mut BestRepairsStats::default(),
                 ),
@@ -958,7 +949,6 @@ mod test {
                     expected.len() - 2,
                     MAX_UNKNOWN_LAST_INDEX_REPAIRS,
                     MAX_CLOSEST_COMPLETION_REPAIRS,
-                    &HashSet::default(),
                     &mut RepairTiming::default(),
                     &mut BestRepairsStats::default(),
                 )[..],
@@ -1005,7 +995,6 @@ mod test {
                     MAX_REPAIR_LENGTH,
                     MAX_UNKNOWN_LAST_INDEX_REPAIRS,
                     MAX_CLOSEST_COMPLETION_REPAIRS,
-                    &HashSet::default(),
                     &mut RepairTiming::default(),
                     &mut BestRepairsStats::default(),
                 ),

@@ -11,7 +11,7 @@ use {
         ancestor_iterator::AncestorIterator, blockstore::Blockstore, blockstore_meta::SlotMeta,
     },
     solana_measure::measure::Measure,
-    solana_runtime::{contains::Contains, epoch_stakes::EpochStakes},
+    solana_runtime::epoch_stakes::EpochStakes,
     solana_sdk::{
         clock::Slot,
         epoch_schedule::{Epoch, EpochSchedule},
@@ -147,7 +147,7 @@ impl RepairWeight {
     }
 
     #[allow(clippy::too_many_arguments)]
-    pub fn get_best_weighted_repairs<'a>(
+    pub fn get_best_weighted_repairs(
         &mut self,
         blockstore: &Blockstore,
         epoch_stakes: &HashMap<Epoch, EpochStakes>,
@@ -156,7 +156,6 @@ impl RepairWeight {
         max_new_shreds: usize,
         max_unknown_last_index_repairs: usize,
         max_closest_completion_repairs: usize,
-        ignore_slots: &impl Contains<'a, Slot>,
         repair_timing: &mut RepairTiming,
         stats: &mut BestRepairsStats,
     ) -> Vec<ShredRepairType> {
@@ -186,7 +185,6 @@ impl RepairWeight {
             &mut slot_meta_cache,
             &mut best_shreds_repairs,
             max_new_shreds,
-            ignore_slots,
         );
         let num_best_shreds_repairs = best_shreds_repairs.len();
         let repair_slots_set: HashSet<Slot> =
@@ -343,13 +341,12 @@ impl RepairWeight {
     }
 
     // Generate shred repairs for main subtree rooted at `self.root`
-    fn get_best_shreds<'a>(
+    fn get_best_shreds(
         &mut self,
         blockstore: &Blockstore,
         slot_meta_cache: &mut HashMap<Slot, Option<SlotMeta>>,
         repairs: &mut Vec<ShredRepairType>,
         max_new_shreds: usize,
-        ignore_slots: &impl Contains<'a, Slot>,
     ) {
         let root_tree = self.trees.get(&self.root).expect("Root tree must exist");
         repair_weighted_traversal::get_best_repair_shreds(
@@ -358,7 +355,6 @@ impl RepairWeight {
             slot_meta_cache,
             repairs,
             max_new_shreds,
-            ignore_slots,
         );
     }
 
