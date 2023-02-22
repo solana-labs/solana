@@ -1,7 +1,7 @@
 use {
     crate::{
         heaviest_subtree_fork_choice::HeaviestSubtreeForkChoice,
-        repair_generic_traversal::{get_closest_completion, get_unknown_last_index},
+        repair_generic_traversal::get_closest_completion,
         repair_service::{BestRepairsStats, RepairTiming},
         repair_weighted_traversal,
         serve_repair::ShredRepairType,
@@ -154,7 +154,6 @@ impl RepairWeight {
         epoch_schedule: &EpochSchedule,
         max_new_orphans: usize,
         max_new_shreds: usize,
-        max_unknown_last_index_repairs: usize,
         max_closest_completion_repairs: usize,
         ignore_slots: &impl Contains<'a, Slot>,
         repair_timing: &mut RepairTiming,
@@ -198,22 +197,8 @@ impl RepairWeight {
 
         // Although we have generated repairs for orphan roots and slots in the rooted subtree,
         // if we have space we should generate repairs for slots in orphan trees in preparation for
-        // when they are no longer rooted. Here we generate repairs for slots with unknown last
-        // indices as well as slots that are close to completion.
-
-        let mut get_unknown_last_index_elapsed = Measure::start("get_unknown_last_index");
-        let pre_num_slots = processed_slots.len();
-        let unknown_last_index_repairs = self.get_best_unknown_last_index(
-            blockstore,
-            &mut slot_meta_cache,
-            &mut processed_slots,
-            max_unknown_last_index_repairs,
-        );
-        let num_unknown_last_index_repairs = unknown_last_index_repairs.len();
-        let num_unknown_last_index_slots = processed_slots.len() - pre_num_slots;
-        repairs.extend(unknown_last_index_repairs);
-        get_unknown_last_index_elapsed.stop();
-
+        // when they are no longer rooted. Here we generate repairs for slots that are close to
+        // completion.
         let mut get_closest_completion_elapsed = Measure::start("get_closest_completion");
         let pre_num_slots = processed_slots.len();
         let closest_completion_repairs = self.get_best_closest_completion(
@@ -232,14 +217,11 @@ impl RepairWeight {
             num_orphan_repairs as u64,
             num_best_shreds_slots as u64,
             num_best_shreds_repairs as u64,
-            num_unknown_last_index_slots as u64,
-            num_unknown_last_index_repairs as u64,
             num_closest_completion_slots as u64,
             num_closest_completion_repairs as u64,
         );
         repair_timing.get_best_orphans_elapsed += get_best_orphans_elapsed.as_us();
         repair_timing.get_best_shreds_elapsed += get_best_shreds_elapsed.as_us();
-        repair_timing.get_unknown_last_index_elapsed += get_unknown_last_index_elapsed.as_us();
         repair_timing.get_closest_completion_elapsed += get_closest_completion_elapsed.as_us();
 
         repairs
@@ -431,32 +413,6 @@ impl RepairWeight {
         }
     }
 
-    /// For all remaining trees (orphan and rooted), generate repairs for slots missing last_index info
-    /// prioritized by # shreds received.
-    fn get_best_unknown_last_index(
-        &mut self,
-        blockstore: &Blockstore,
-        slot_meta_cache: &mut HashMap<Slot, Option<SlotMeta>>,
-        processed_slots: &mut HashSet<Slot>,
-        max_new_repairs: usize,
-    ) -> Vec<ShredRepairType> {
-        let mut repairs = Vec::default();
-        for (_slot, tree) in self.trees.iter() {
-            if repairs.len() >= max_new_repairs {
-                break;
-            }
-            let new_repairs = get_unknown_last_index(
-                tree,
-                blockstore,
-                slot_meta_cache,
-                processed_slots,
-                max_new_repairs - repairs.len(),
-            );
-            repairs.extend(new_repairs);
-        }
-        repairs
-    }
-
     /// For all remaining trees (orphan and rooted), generate repairs for subtrees that have last
     /// index info but are missing shreds prioritized by how close to completion they are. These
     /// repairs are also prioritized by age of ancestors, so slots close to completion will first
@@ -476,6 +432,7 @@ impl RepairWeight {
             let new_repairs = get_closest_completion(
                 tree,
                 blockstore,
+                self.root,
                 slot_meta_cache,
                 processed_slots,
                 max_new_repairs - repairs.len(),
