@@ -2,7 +2,7 @@ use {
     crate::{
         accounts_index::{
             AccountMapEntry, AccountMapEntryInner, AccountMapEntryMeta, IndexValue,
-            PreAllocatedAccountMapEntry, RefCount, SlotList, SlotSlice, UpsertReclaim, ZeroLamport,
+            PreAllocatedAccountMapEntry, RefCount, SlotList, UpsertReclaim, ZeroLamport,
         },
         bucket_map_holder::{Age, BucketMapHolder},
         bucket_map_holder_stats::BucketMapHolderStats,
@@ -348,8 +348,8 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
         })
     }
 
-    fn remove_if_slot_list_empty_value(&self, slot_list: SlotSlice<T>) -> bool {
-        if slot_list.is_empty() {
+    fn remove_if_slot_list_empty_value(&self, is_empty: bool) -> bool {
+        if is_empty {
             self.stats().inc_delete();
             true
         } else {
@@ -368,8 +368,9 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
     fn remove_if_slot_list_empty_entry(&self, entry: Entry<K, AccountMapEntry<T>>) -> bool {
         match entry {
             Entry::Occupied(occupied) => {
-                let result =
-                    self.remove_if_slot_list_empty_value(&occupied.get().slot_list.read().unwrap());
+                let result = self.remove_if_slot_list_empty_value(
+                    occupied.get().slot_list.read().unwrap().is_empty(),
+                );
                 if result {
                     // note there is a potential race here that has existed.
                     // if someone else holds the arc,
@@ -389,7 +390,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                 match entry_disk {
                     Some(entry_disk) => {
                         // on disk
-                        if self.remove_if_slot_list_empty_value(&entry_disk.0) {
+                        if self.remove_if_slot_list_empty_value(entry_disk.0.is_empty()) {
                             // not in cache, but on disk, so just delete from disk
                             self.delete_disk_key(vacant.key());
                             true
