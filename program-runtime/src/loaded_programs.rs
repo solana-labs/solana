@@ -1,5 +1,6 @@
 use {
-    crate::invoke_context::InvokeContext,
+    crate::{invoke_context::InvokeContext, timings::ExecuteDetailsTimings},
+    solana_measure::measure::Measure,
     solana_rbpf::{
         elf::Executable,
         error::EbpfError,
@@ -8,6 +9,7 @@ use {
     },
     solana_sdk::{
         bpf_loader, bpf_loader_deprecated, bpf_loader_upgradeable, clock::Slot, pubkey::Pubkey,
+        saturating_add_assign,
     },
     std::{
         collections::HashMap,
@@ -46,8 +48,10 @@ pub trait WorkingSlot {
     fn is_ancestor(&self, other: Slot) -> bool;
 }
 
+#[derive(Default)]
 pub enum LoadedProgramType {
     /// Tombstone for undeployed, closed or unloadable programs
+    #[default]
     Invalid,
     LegacyV0(VerifiedExecutable<RequisiteVerifier, InvokeContext<'static>>),
     LegacyV1(VerifiedExecutable<RequisiteVerifier, InvokeContext<'static>>),
@@ -66,16 +70,47 @@ impl Debug for LoadedProgramType {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct LoadedProgram {
     /// The program of this entry
     pub program: LoadedProgramType,
+    /// Size of account that stores the program and program data
+    pub account_size: usize,
     /// Slot in which the program was (re)deployed
     pub deployment_slot: Slot,
     /// Slot in which this entry will become active (can be in the future)
     pub effective_slot: Slot,
     /// How often this entry was used
     pub usage_counter: AtomicU64,
+}
+
+#[derive(Debug, Default)]
+pub struct LoadProgramMetrics {
+    pub program_id: String,
+    pub register_syscalls_us: u64,
+    pub load_elf_us: u64,
+    pub verify_code_us: u64,
+    pub jit_compile_us: u64,
+}
+
+impl LoadProgramMetrics {
+    pub fn submit_datapoint(&self, timings: &mut ExecuteDetailsTimings) {
+        saturating_add_assign!(
+            timings.create_executor_register_syscalls_us,
+            self.register_syscalls_us
+        );
+        saturating_add_assign!(timings.create_executor_load_elf_us, self.load_elf_us);
+        saturating_add_assign!(timings.create_executor_verify_code_us, self.verify_code_us);
+        saturating_add_assign!(timings.create_executor_jit_compile_us, self.jit_compile_us);
+        datapoint_trace!(
+            "create_executor_trace",
+            ("program_id", self.program_id, String),
+            ("register_syscalls_us", self.register_syscalls_us, i64),
+            ("load_elf_us", self.load_elf_us, i64),
+            ("verify_code_us", self.verify_code_us, i64),
+            ("jit_compile_us", self.jit_compile_us, i64),
+        );
+    }
 }
 
 impl LoadedProgram {
@@ -85,18 +120,46 @@ impl LoadedProgram {
         loader: Arc<BuiltInProgram<InvokeContext<'static>>>,
         deployment_slot: Slot,
         elf_bytes: &[u8],
+        account_size: usize,
+        use_jit: bool,
+        metrics: &mut LoadProgramMetrics,
     ) -> Result<Self, EbpfError> {
-        let program = if bpf_loader_deprecated::check_id(loader_key) {
-            let executable = Executable::load(elf_bytes, loader.clone())?;
+        let mut load_elf_time = Measure::start("load_elf_time");
+        let executable = Executable::load(elf_bytes, loader.clone())?;
+        load_elf_time.stop();
+        metrics.load_elf_us = load_elf_time.as_us();
+
+        let mut verify_code_time = Measure::start("verify_code_time");
+
+        // Allowing mut here, since it may be needed for jit compile, which is under a config flag
+        #[allow(unused_mut)]
+        let mut program = if bpf_loader_deprecated::check_id(loader_key) {
             LoadedProgramType::LegacyV0(VerifiedExecutable::from_executable(executable)?)
         } else if bpf_loader::check_id(loader_key) || bpf_loader_upgradeable::check_id(loader_key) {
-            let executable = Executable::load(elf_bytes, loader.clone())?;
             LoadedProgramType::LegacyV1(VerifiedExecutable::from_executable(executable)?)
         } else {
             panic!();
         };
+        verify_code_time.stop();
+        metrics.verify_code_us = verify_code_time.as_us();
+
+        if use_jit {
+            #[cfg(all(not(target_os = "windows"), target_arch = "x86_64"))]
+            {
+                let mut jit_compile_time = Measure::start("jit_compile_time");
+                match &mut program {
+                    LoadedProgramType::LegacyV0(executable) => executable.jit_compile(),
+                    LoadedProgramType::LegacyV1(executable) => executable.jit_compile(),
+                    _ => Err(EbpfError::JitNotCompiled),
+                }?;
+                jit_compile_time.stop();
+                metrics.jit_compile_us = jit_compile_time.as_us();
+            }
+        }
+
         Ok(Self {
             deployment_slot,
+            account_size,
             effective_slot: deployment_slot.saturating_add(1),
             usage_counter: AtomicU64::new(0),
             program,
@@ -110,10 +173,25 @@ impl LoadedProgram {
     ) -> Self {
         Self {
             deployment_slot,
+            account_size: 0,
             effective_slot: deployment_slot.saturating_add(1),
             usage_counter: AtomicU64::new(0),
             program: LoadedProgramType::BuiltIn(program),
         }
+    }
+
+    pub fn new_tombstone(slot: Slot) -> Self {
+        Self {
+            program: LoadedProgramType::Invalid,
+            account_size: 0,
+            deployment_slot: slot,
+            effective_slot: slot,
+            usage_counter: AtomicU64::default(),
+        }
+    }
+
+    pub fn is_tombstone(&self) -> bool {
+        matches!(self.program, LoadedProgramType::Invalid)
     }
 }
 
@@ -135,9 +213,16 @@ impl solana_frozen_abi::abi_example::AbiExample for LoadedPrograms {
     }
 }
 
+pub enum LoadedProgramEntry {
+    WasOccupied(Arc<LoadedProgram>),
+    WasVacant(Arc<LoadedProgram>),
+}
+
 impl LoadedPrograms {
-    /// Inserts a single entry
-    pub fn insert_entry(&mut self, key: Pubkey, entry: LoadedProgram) -> bool {
+    /// Refill the cache with a single entry. It's typically called during transaction processing,
+    /// when the cache doesn't contain the entry corresponding to program `key`.
+    /// The function dedupes the cache, in case some other thread replenished the the entry in parallel.
+    pub fn replenish(&mut self, key: Pubkey, entry: Arc<LoadedProgram>) -> LoadedProgramEntry {
         let second_level = self.entries.entry(key).or_insert_with(Vec::new);
         let index = second_level
             .iter()
@@ -149,11 +234,35 @@ impl LoadedPrograms {
             if existing.deployment_slot == entry.deployment_slot
                 && existing.effective_slot == entry.effective_slot
             {
-                return false;
+                return LoadedProgramEntry::WasOccupied(existing.clone());
             }
         }
-        second_level.insert(index.unwrap_or(second_level.len()), Arc::new(entry));
-        true
+        second_level.insert(index.unwrap_or(second_level.len()), entry.clone());
+        LoadedProgramEntry::WasVacant(entry)
+    }
+
+    /// Assign the program `entry` to the given `key` in the cache.
+    /// This is typically called when a deployed program is managed (upgraded/un/reddeployed) via
+    /// bpf loader instructions.
+    /// The program management is not expected to overlap with initial program deployment slot.
+    /// Note: Do not call this function to replenish cache with a missing entry. As that use-case can
+    ///       cause the cache to have duplicates. Use `replenish()` API for that use-case.
+    pub fn assign_program(&mut self, key: Pubkey, entry: Arc<LoadedProgram>) -> Arc<LoadedProgram> {
+        let second_level = self.entries.entry(key).or_insert_with(Vec::new);
+        let index = second_level
+            .iter()
+            .position(|at| at.effective_slot >= entry.effective_slot);
+        if let Some(index) = index {
+            let existing = second_level
+                .get(index)
+                .expect("Missing entry, even though position was found");
+            assert!(
+                existing.deployment_slot != entry.deployment_slot
+                    || existing.effective_slot != entry.effective_slot
+            );
+        }
+        second_level.insert(index.unwrap_or(second_level.len()), entry.clone());
+        entry
     }
 
     /// Before rerooting the blockstore this removes all programs of orphan forks
@@ -223,8 +332,10 @@ impl LoadedPrograms {
 mod tests {
     use {
         crate::loaded_programs::{
-            BlockRelation, ForkGraph, LoadedProgram, LoadedProgramType, LoadedPrograms, WorkingSlot,
+            BlockRelation, ForkGraph, LoadedProgram, LoadedProgramEntry, LoadedProgramType,
+            LoadedPrograms, WorkingSlot,
         },
+        solana_rbpf::vm::BuiltInProgram,
         solana_sdk::{clock::Slot, pubkey::Pubkey},
         std::{
             collections::HashMap,
@@ -232,6 +343,72 @@ mod tests {
             sync::{atomic::AtomicU64, Arc},
         },
     };
+
+    fn new_test_builtin_program(deployment_slot: Slot, effective_slot: Slot) -> Arc<LoadedProgram> {
+        Arc::new(LoadedProgram {
+            program: LoadedProgramType::BuiltIn(BuiltInProgram::default()),
+            account_size: 0,
+            deployment_slot,
+            effective_slot,
+            usage_counter: AtomicU64::default(),
+        })
+    }
+
+    fn set_tombstone(cache: &mut LoadedPrograms, key: Pubkey, slot: Slot) -> Arc<LoadedProgram> {
+        cache.assign_program(key, Arc::new(LoadedProgram::new_tombstone(slot)))
+    }
+
+    #[test]
+    fn test_tombstone() {
+        let tombstone = LoadedProgram::new_tombstone(0);
+        assert!(matches!(tombstone.program, LoadedProgramType::Invalid));
+        assert!(tombstone.is_tombstone());
+        assert_eq!(tombstone.deployment_slot, 0);
+        assert_eq!(tombstone.effective_slot, 0);
+
+        let tombstone = LoadedProgram::new_tombstone(100);
+        assert!(matches!(tombstone.program, LoadedProgramType::Invalid));
+        assert!(tombstone.is_tombstone());
+        assert_eq!(tombstone.deployment_slot, 100);
+        assert_eq!(tombstone.effective_slot, 100);
+
+        let mut cache = LoadedPrograms::default();
+        let program1 = Pubkey::new_unique();
+        let tombstone = set_tombstone(&mut cache, program1, 10);
+        let second_level = &cache
+            .entries
+            .get(&program1)
+            .expect("Failed to find the entry");
+        assert_eq!(second_level.len(), 1);
+        assert!(second_level.get(0).unwrap().is_tombstone());
+        assert_eq!(tombstone.deployment_slot, 10);
+        assert_eq!(tombstone.effective_slot, 10);
+
+        // Add a program at slot 50, and a tombstone for the program at slot 60
+        let program2 = Pubkey::new_unique();
+        assert!(matches!(
+            cache.replenish(program2, new_test_builtin_program(50, 51)),
+            LoadedProgramEntry::WasVacant(_)
+        ));
+        let second_level = &cache
+            .entries
+            .get(&program2)
+            .expect("Failed to find the entry");
+        assert_eq!(second_level.len(), 1);
+        assert!(!second_level.get(0).unwrap().is_tombstone());
+
+        let tombstone = set_tombstone(&mut cache, program2, 60);
+        let second_level = &cache
+            .entries
+            .get(&program2)
+            .expect("Failed to find the entry");
+        assert_eq!(second_level.len(), 2);
+        assert!(!second_level.get(0).unwrap().is_tombstone());
+        assert!(second_level.get(1).unwrap().is_tombstone());
+        assert!(tombstone.is_tombstone());
+        assert_eq!(tombstone.deployment_slot, 60);
+        assert_eq!(tombstone.effective_slot, 60);
+    }
 
     struct TestForkGraph {
         relation: BlockRelation,
@@ -375,6 +552,7 @@ mod tests {
     fn new_test_loaded_program(deployment_slot: Slot, effective_slot: Slot) -> Arc<LoadedProgram> {
         Arc::new(LoadedProgram {
             program: LoadedProgramType::Invalid,
+            account_size: 0,
             deployment_slot,
             effective_slot,
             usage_counter: AtomicU64::default(),
@@ -417,39 +595,55 @@ mod tests {
         fork_graph.insert_fork(&[0, 5, 11, 25, 27]);
 
         let program1 = Pubkey::new_unique();
-        cache.entries.insert(
-            program1,
-            vec![
-                new_test_loaded_program(0, 1),
-                new_test_loaded_program(10, 11),
-                new_test_loaded_program(20, 21),
-            ],
-        );
+        assert!(matches!(
+            cache.replenish(program1, new_test_loaded_program(0, 1)),
+            LoadedProgramEntry::WasVacant(_)
+        ));
+        assert!(matches!(
+            cache.replenish(program1, new_test_loaded_program(10, 11)),
+            LoadedProgramEntry::WasVacant(_)
+        ));
+        assert!(matches!(
+            cache.replenish(program1, new_test_loaded_program(20, 21)),
+            LoadedProgramEntry::WasVacant(_)
+        ));
+
+        // Test: inserting duplicate entry return pre existing entry from the cache
+        assert!(matches!(
+            cache.replenish(program1, new_test_loaded_program(20, 21)),
+            LoadedProgramEntry::WasOccupied(_)
+        ));
 
         let program2 = Pubkey::new_unique();
-        cache.entries.insert(
-            program2,
-            vec![
-                new_test_loaded_program(5, 6),
-                new_test_loaded_program(11, 12),
-            ],
-        );
+        assert!(matches!(
+            cache.replenish(program2, new_test_loaded_program(5, 6)),
+            LoadedProgramEntry::WasVacant(_)
+        ));
+        assert!(matches!(
+            cache.replenish(program2, new_test_loaded_program(11, 12)),
+            LoadedProgramEntry::WasVacant(_)
+        ));
 
         let program3 = Pubkey::new_unique();
-        cache
-            .entries
-            .insert(program3, vec![new_test_loaded_program(25, 26)]);
+        assert!(matches!(
+            cache.replenish(program3, new_test_loaded_program(25, 26)),
+            LoadedProgramEntry::WasVacant(_)
+        ));
 
         let program4 = Pubkey::new_unique();
-        cache.entries.insert(
-            program4,
-            vec![
-                new_test_loaded_program(0, 1),
-                new_test_loaded_program(5, 6),
-                // The following is a special case, where effective slot is 4 slots in the future
-                new_test_loaded_program(15, 19),
-            ],
-        );
+        assert!(matches!(
+            cache.replenish(program4, new_test_loaded_program(0, 1)),
+            LoadedProgramEntry::WasVacant(_)
+        ));
+        assert!(matches!(
+            cache.replenish(program4, new_test_loaded_program(5, 6)),
+            LoadedProgramEntry::WasVacant(_)
+        ));
+        // The following is a special case, where effective slot is 4 slots in the future
+        assert!(matches!(
+            cache.replenish(program4, new_test_loaded_program(15, 19)),
+            LoadedProgramEntry::WasVacant(_)
+        ));
 
         // Current fork graph
         //                   0

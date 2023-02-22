@@ -606,22 +606,27 @@ fn build_sbf_package(config: &Config, target_directory: &Path, package: &cargo_m
     if legacy_program_feature_present {
         info!("Legacy program feature detected");
     }
+    let arch = if cfg!(target_arch = "aarch64") {
+        "aarch64"
+    } else {
+        "x86_64"
+    };
     let sbf_tools_download_file_name = if cfg!(target_os = "windows") {
         if config.arch == "bpf" {
-            "solana-bpf-tools-windows.tar.bz2"
+            format!("solana-bpf-tools-windows-{arch}.tar.bz2")
         } else {
-            "solana-sbf-tools-windows.tar.bz2"
+            format!("solana-sbf-tools-windows-{arch}.tar.bz2")
         }
     } else if cfg!(target_os = "macos") {
         if config.arch == "bpf" {
-            "solana-bpf-tools-osx.tar.bz2"
+            format!("solana-bpf-tools-osx-{arch}.tar.bz2")
         } else {
-            "solana-sbf-tools-osx.tar.bz2"
+            format!("solana-sbf-tools-osx-{arch}.tar.bz2")
         }
     } else if config.arch == "bpf" {
-        "solana-bpf-tools-linux.tar.bz2"
+        format!("solana-bpf-tools-linux-{arch}.tar.bz2")
     } else {
-        "solana-sbf-tools-linux.tar.bz2"
+        format!("solana-sbf-tools-linux-{arch}.tar.bz2")
     };
     let package = if config.arch == "bpf" {
         "bpf-tools"
@@ -633,7 +638,7 @@ fn build_sbf_package(config: &Config, target_directory: &Path, package: &cargo_m
         config,
         package,
         "https://github.com/solana-labs/sbf-tools/releases/download",
-        sbf_tools_download_file_name,
+        sbf_tools_download_file_name.as_str(),
         &target_path,
     )
     .unwrap_or_else(|err| {
@@ -936,7 +941,7 @@ fn main() {
 
     // The following line is scanned by CI configuration script to
     // separate cargo caches according to the version of sbf-tools.
-    let sbf_tools_version = String::from("v1.33");
+    let sbf_tools_version = String::from("v1.34");
     let version = format!("{}\nsbf-tools {}", crate_version!(), sbf_tools_version);
     let matches = clap::Command::new(crate_name!())
         .about(crate_description!())

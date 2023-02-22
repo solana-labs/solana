@@ -772,7 +772,7 @@ mod test {
         },
         solana_gossip::{
             cluster_info::{ClusterInfo, Node},
-            legacy_contact_info::LegacyContactInfo as ContactInfo,
+            contact_info::ContactInfo,
         },
         solana_ledger::{blockstore::make_many_slot_entries, get_tmp_ledger_path, shred::Nonce},
         solana_runtime::{accounts_background_service::AbsRequestSender, bank_forks::BankForks},
@@ -1151,13 +1151,13 @@ mod test {
     ) {
         let request_bytes = requester_serve_repair.ancestor_repair_request_bytes(
             &requester_cluster_info.keypair(),
-            &responder_info.id,
+            responder_info.pubkey(),
             dead_slot,
             nonce,
         );
         if let Ok(request_bytes) = request_bytes {
-            let _ =
-                ancestor_hashes_request_socket.send_to(&request_bytes, responder_info.serve_repair);
+            let socket = responder_info.serve_repair().unwrap();
+            let _ = ancestor_hashes_request_socket.send_to(&request_bytes, socket);
         }
     }
 
@@ -1225,7 +1225,7 @@ mod test {
         let packet = &mut response_packet[0];
         packet
             .meta_mut()
-            .set_socket_addr(&responder_info.serve_repair);
+            .set_socket_addr(&responder_info.serve_repair().unwrap());
         let decision = AncestorHashesService::verify_and_process_ancestor_response(
             packet,
             &ancestor_hashes_request_statuses,
@@ -1239,7 +1239,7 @@ mod test {
         assert_eq!(decision, None);
 
         // Add the responder to the eligible list for requests
-        let responder_id = responder_info.id;
+        let responder_id = *responder_info.pubkey();
         cluster_slots.insert_node_id(dead_slot, responder_id);
         requester_cluster_info.insert_info(responder_info.clone());
         // Now the request should actually be made
@@ -1265,7 +1265,7 @@ mod test {
         let packet = &mut response_packet[0];
         packet
             .meta_mut()
-            .set_socket_addr(&responder_info.serve_repair);
+            .set_socket_addr(&responder_info.serve_repair().unwrap());
         let decision = AncestorHashesService::verify_and_process_ancestor_response(
             packet,
             &ancestor_hashes_request_statuses,
@@ -1588,7 +1588,7 @@ mod test {
         let (dumped_slots_sender, _dumped_slots_receiver) = unbounded();
 
         // Add the responder to the eligible list for requests
-        let responder_id = responder_info.id;
+        let responder_id = *responder_info.pubkey();
         cluster_slots.insert_node_id(dead_slot, responder_id);
         requester_cluster_info.insert_info(responder_info.clone());
 
@@ -1608,7 +1608,7 @@ mod test {
         let packet = &mut response_packet[0];
         packet
             .meta_mut()
-            .set_socket_addr(&responder_info.serve_repair);
+            .set_socket_addr(&responder_info.serve_repair().unwrap());
         let decision = AncestorHashesService::verify_and_process_ancestor_response(
             packet,
             &ancestor_hashes_request_statuses,
@@ -1670,7 +1670,7 @@ mod test {
         let packet = &mut response_packet[0];
         packet
             .meta_mut()
-            .set_socket_addr(&responder_info.serve_repair);
+            .set_socket_addr(&responder_info.serve_repair().unwrap());
         let decision = AncestorHashesService::verify_and_process_ancestor_response(
             packet,
             &ancestor_hashes_request_statuses,

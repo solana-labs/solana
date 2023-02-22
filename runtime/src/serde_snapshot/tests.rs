@@ -8,6 +8,7 @@ use {
         accounts_db::{
             get_temp_accounts_paths, test_utils::create_test_accounts, AccountShrinkThreshold,
         },
+        accounts_file::AccountsFile,
         accounts_hash::{AccountsDeltaHash, AccountsHash},
         append_vec::AppendVec,
         bank::{Bank, BankTestConfig},
@@ -56,10 +57,11 @@ fn copy_append_vecs<P: AsRef<Path>>(
         // Read new file into append-vec and build new entry
         let (append_vec, num_accounts) =
             AppendVec::new_from_file(output_path, storage_entry.accounts.len())?;
+        let accounts_file = AccountsFile::AppendVec(append_vec);
         let new_storage_entry = AccountStorageEntry::new_existing(
             storage_entry.slot(),
             storage_entry.append_vec_id(),
-            append_vec,
+            accounts_file,
             num_accounts,
         );
         next_append_vec_id = next_append_vec_id.max(new_storage_entry.append_vec_id());
@@ -186,7 +188,7 @@ fn test_accounts_serialize_style(serde_style: SerdeStyle) {
     let accounts_hash = AccountsHash(Hash::new_unique());
     accounts
         .accounts_db
-        .set_accounts_hash_from_snapshot(slot, accounts_hash);
+        .set_accounts_hash_for_tests(slot, accounts_hash);
 
     let mut writer = Cursor::new(vec![]);
     accountsdb_to_stream(
@@ -318,11 +320,10 @@ fn test_bank_serialize_style(
         let temp_dir = TempDir::new().unwrap();
         let slot_dir = temp_dir.path().join(slot.to_string());
         let post_path = slot_dir.join(slot.to_string());
-        let mut pre_path = post_path.clone();
-        pre_path.set_extension(BANK_SNAPSHOT_PRE_FILENAME_EXTENSION);
+        let pre_path = post_path.with_extension(BANK_SNAPSHOT_PRE_FILENAME_EXTENSION);
         std::fs::create_dir(&slot_dir).unwrap();
         {
-            let mut f = std::fs::File::create(&pre_path).unwrap();
+            let mut f = std::fs::File::create(pre_path).unwrap();
             f.write_all(&buf).unwrap();
         }
 
@@ -520,11 +521,11 @@ fn test_extra_fields_eof() {
     bank.rc
         .accounts
         .accounts_db
-        .set_accounts_delta_hash_from_snapshot(bank.slot(), AccountsDeltaHash(Hash::new_unique()));
+        .set_accounts_delta_hash_for_tests(bank.slot(), AccountsDeltaHash(Hash::new_unique()));
     bank.rc
         .accounts
         .accounts_db
-        .set_accounts_hash_from_snapshot(bank.slot(), AccountsHash(Hash::new_unique()));
+        .set_accounts_hash_for_tests(bank.slot(), AccountsHash(Hash::new_unique()));
 
     // Set extra fields
     bank.fee_rate_governor.lamports_per_signature = 7000;
@@ -656,11 +657,11 @@ fn test_blank_extra_fields() {
     bank.rc
         .accounts
         .accounts_db
-        .set_accounts_delta_hash_from_snapshot(bank.slot(), AccountsDeltaHash(Hash::new_unique()));
+        .set_accounts_delta_hash_for_tests(bank.slot(), AccountsDeltaHash(Hash::new_unique()));
     bank.rc
         .accounts
         .accounts_db
-        .set_accounts_hash_from_snapshot(bank.slot(), AccountsHash(Hash::new_unique()));
+        .set_accounts_hash_for_tests(bank.slot(), AccountsHash(Hash::new_unique()));
 
     // Set extra fields
     bank.fee_rate_governor.lamports_per_signature = 7000;
@@ -718,7 +719,7 @@ mod test_bank_serialize {
 
     // This some what long test harness is required to freeze the ABI of
     // Bank's serialization due to versioned nature
-    #[frozen_abi(digest = "Eg6gt9thiY8Sn6gDKvpyyHADtWpSt6ur9Z4Zwh1BrCgv")]
+    #[frozen_abi(digest = "FeRj6jpfB3n6FvX2edAhdwYhnBkYZgsqHufd7weFWTfx")]
     #[derive(Serialize, AbiExample)]
     pub struct BankAbiTestWrapperNewer {
         #[serde(serialize_with = "wrapper_newer")]
@@ -732,14 +733,11 @@ mod test_bank_serialize {
         bank.rc
             .accounts
             .accounts_db
-            .set_accounts_delta_hash_from_snapshot(
-                bank.slot(),
-                AccountsDeltaHash(Hash::new_unique()),
-            );
+            .set_accounts_delta_hash_for_tests(bank.slot(), AccountsDeltaHash(Hash::new_unique()));
         bank.rc
             .accounts
             .accounts_db
-            .set_accounts_hash_from_snapshot(bank.slot(), AccountsHash(Hash::new_unique()));
+            .set_accounts_hash_for_tests(bank.slot(), AccountsHash(Hash::new_unique()));
         let snapshot_storages = bank
             .rc
             .accounts

@@ -344,6 +344,10 @@ A digitally transferable asset.
 
 [Transactions](#transaction) per second.
 
+## tpu
+
+[Transaction processing unit](validator/tpu.md).
+
 ## transaction
 
 One or more [instructions](#instruction) signed by a [client](#client) using one or more [keypairs](#keypair) and executed atomically with only two possible outcomes: success or failure.
@@ -359,6 +363,10 @@ The number of [confirmed blocks](#confirmed-block) since the transaction was acc
 ## transactions entry
 
 A set of [transactions](#transaction) that may be executed in parallel.
+
+## tvu
+
+[Transaction validation unit](validator/tvu.md).
 
 ## validator
 

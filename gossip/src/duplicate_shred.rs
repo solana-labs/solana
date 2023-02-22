@@ -24,10 +24,6 @@ const DUPLICATE_SHRED_HEADER_SIZE: usize = 63;
 pub(crate) type DuplicateShredIndex = u16;
 pub(crate) const MAX_DUPLICATE_SHREDS: DuplicateShredIndex = 512;
 
-/// Function returning leader at a given slot.
-pub trait LeaderScheduleFn: FnOnce(Slot) -> Option<Pubkey> {}
-impl<F> LeaderScheduleFn for F where F: FnOnce(Slot) -> Option<Pubkey> {}
-
 #[derive(Clone, Debug, PartialEq, Eq, AbiExample, Deserialize, Serialize)]
 pub struct DuplicateShred {
     pub(crate) from: Pubkey,
@@ -93,11 +89,10 @@ pub enum Error {
 // Asserts that the two shreds can indicate duplicate proof for
 // the same triplet of (slot, shred-index, and shred-type_), and
 // that they have valid signatures from the slot leader.
-fn check_shreds(
-    leader_schedule: Option<impl LeaderScheduleFn>,
-    shred1: &Shred,
-    shred2: &Shred,
-) -> Result<(), Error> {
+fn check_shreds<F>(leader_schedule: Option<F>, shred1: &Shred, shred2: &Shred) -> Result<(), Error>
+where
+    F: FnOnce(Slot) -> Option<Pubkey>,
+{
     if shred1.slot() != shred2.slot() {
         Err(Error::SlotMismatch)
     } else if shred1.index() != shred2.index() {
@@ -120,54 +115,17 @@ fn check_shreds(
     }
 }
 
-/// Splits a DuplicateSlotProof into DuplicateShred
-/// chunks with a size limit on each chunk.
-pub fn from_duplicate_slot_proof(
-    proof: &DuplicateSlotProof,
-    self_pubkey: Pubkey, // Pubkey of my node broadcasting crds value.
-    leader_schedule: Option<impl LeaderScheduleFn>,
-    wallclock: u64,
-    max_size: usize, // Maximum serialized size of each DuplicateShred.
-) -> Result<impl Iterator<Item = DuplicateShred>, Error> {
-    if proof.shred1 == proof.shred2 {
-        return Err(Error::InvalidDuplicateSlotProof);
-    }
-    let shred1 = Shred::new_from_serialized_shred(proof.shred1.clone())?;
-    let shred2 = Shred::new_from_serialized_shred(proof.shred2.clone())?;
-    check_shreds(leader_schedule, &shred1, &shred2)?;
-    let (slot, shred_index, shred_type) = (shred1.slot(), shred1.index(), shred1.shred_type());
-    let data = bincode::serialize(proof)?;
-    let chunk_size = if DUPLICATE_SHRED_HEADER_SIZE < max_size {
-        max_size - DUPLICATE_SHRED_HEADER_SIZE
-    } else {
-        return Err(Error::InvalidSizeLimit);
-    };
-    let chunks: Vec<_> = data.chunks(chunk_size).map(Vec::from).collect();
-    let num_chunks = u8::try_from(chunks.len())?;
-    let chunks = chunks
-        .into_iter()
-        .enumerate()
-        .map(move |(i, chunk)| DuplicateShred {
-            from: self_pubkey,
-            wallclock,
-            slot,
-            shred_index,
-            shred_type,
-            num_chunks,
-            chunk_index: i as u8,
-            chunk,
-        });
-    Ok(chunks)
-}
-
-pub(crate) fn from_shred(
+pub(crate) fn from_shred<F>(
     shred: Shred,
     self_pubkey: Pubkey, // Pubkey of my node broadcasting crds value.
     other_payload: Vec<u8>,
-    leader_schedule: Option<impl LeaderScheduleFn>,
+    leader_schedule: Option<F>,
     wallclock: u64,
     max_size: usize, // Maximum serialized size of each DuplicateShred.
-) -> Result<impl Iterator<Item = DuplicateShred>, Error> {
+) -> Result<impl Iterator<Item = DuplicateShred>, Error>
+where
+    F: FnOnce(Slot) -> Option<Pubkey>,
+{
     if shred.payload() == &other_payload {
         return Err(Error::InvalidDuplicateShreds);
     }
@@ -333,7 +291,7 @@ pub(crate) mod tests {
         );
     }
 
-    pub fn new_rand_shred<R: Rng>(
+    pub(crate) fn new_rand_shred<R: Rng>(
         rng: &mut R,
         next_shred_index: u32,
         shredder: &Shredder,

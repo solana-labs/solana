@@ -68,7 +68,9 @@ jobs:
   build_and_deploy:
     needs:
       - check
-    if: ${{ needs.check.outputs.continue == 1 }}
+    if: >
+      github.repository == 'solana-labs/solana' &&
+      needs.check.outputs.continue == 1
     # the name is used by .mergify.yml as well
     name: build & deploy docs
     runs-on: ubuntu-20.04

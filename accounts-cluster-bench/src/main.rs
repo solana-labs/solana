@@ -740,7 +740,7 @@ pub mod test {
         let num_instructions = 2;
         let mut start = Measure::start("total accounts run");
         run_accounts_bench(
-            cluster.entry_point_info.rpc,
+            cluster.entry_point_info.rpc().unwrap(),
             faucet_addr,
             &[&cluster.funding_keypair],
             iterations,

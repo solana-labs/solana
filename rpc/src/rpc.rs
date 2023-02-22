@@ -16,9 +16,7 @@ use {
     solana_client::connection_cache::ConnectionCache,
     solana_entry::entry::Entry,
     solana_faucet::faucet::request_airdrop_transaction,
-    solana_gossip::{
-        cluster_info::ClusterInfo, legacy_contact_info::LegacyContactInfo as ContactInfo,
-    },
+    solana_gossip::{cluster_info::ClusterInfo, contact_info::ContactInfo},
     solana_ledger::{
         blockstore::{Blockstore, SignatureInfosForAddress},
         blockstore_db::BlockstoreError,
@@ -348,13 +346,13 @@ impl JsonRpcRequestProcessor {
         let exit = Arc::new(AtomicBool::new(false));
         let cluster_info = Arc::new({
             let keypair = Arc::new(Keypair::new());
-            let contact_info = ContactInfo {
-                id: keypair.pubkey(),
-                ..ContactInfo::default()
-            };
+            let contact_info = ContactInfo::new_localhost(
+                &keypair.pubkey(),
+                solana_sdk::timing::timestamp(), // wallclock
+            );
             ClusterInfo::new(contact_info, keypair, socket_addr_space)
         });
-        let tpu_address = cluster_info.my_contact_info().tpu;
+        let tpu_address = cluster_info.my_contact_info().tpu().unwrap();
         let (sender, receiver) = unbounded();
         SendTransactionService::new::<NullTpuInfo>(
             tpu_address,
@@ -3444,11 +3442,7 @@ pub mod rpc_full {
             let cluster_info = &meta.cluster_info;
             let socket_addr_space = cluster_info.socket_addr_space();
             let valid_address_or_none = |addr: &SocketAddr| -> Option<SocketAddr> {
-                if ContactInfo::is_valid_address(addr, socket_addr_space) {
-                    Some(*addr)
-                } else {
-                    None
-                }
+                ContactInfo::is_valid_address(addr, socket_addr_space).then_some(*addr)
             };
             let my_shred_version = cluster_info.my_shred_version();
             Ok(cluster_info
@@ -4686,10 +4680,10 @@ pub mod tests {
 
     pub(crate) fn new_test_cluster_info() -> ClusterInfo {
         let keypair = Arc::new(Keypair::new());
-        let contact_info = ContactInfo {
-            id: keypair.pubkey(),
-            ..ContactInfo::default()
-        };
+        let contact_info = ContactInfo::new_localhost(
+            &keypair.pubkey(),
+            solana_sdk::timing::timestamp(), // wallclock
+        );
         ClusterInfo::new(contact_info, keypair, SocketAddrSpace::Unspecified)
     }
 
@@ -5123,6 +5117,15 @@ pub mod tests {
         let request = create_test_request("getClusterNodes", None);
         let result: Value = parse_success_result(rpc.handle_request_sync(request));
         let expected = json!([{
+            "pubkey": rpc.identity.to_string(),
+            "gossip": "127.0.0.1:8000",
+            "shredVersion": 0u16,
+            "tpu": "127.0.0.1:8003",
+            "rpc": format!("127.0.0.1:{}", rpc_port::DEFAULT_RPC_PORT),
+            "pubsub": format!("127.0.0.1:{}", rpc_port::DEFAULT_RPC_PUBSUB_PORT),
+            "version": null,
+            "featureSet": null,
+        }, {
             "pubkey": rpc.leader_pubkey().to_string(),
             "gossip": "127.0.0.1:1235",
             "shredVersion": 0u16,
@@ -6390,7 +6393,7 @@ pub mod tests {
             );
             ClusterInfo::new(contact_info, keypair, SocketAddrSpace::Unspecified)
         });
-        let tpu_address = cluster_info.my_contact_info().tpu;
+        let tpu_address = cluster_info.my_contact_info().tpu().unwrap();
         let (meta, receiver) = JsonRpcRequestProcessor::new(
             JsonRpcConfig::default(),
             None,
@@ -6657,7 +6660,7 @@ pub mod tests {
         )));
 
         let cluster_info = Arc::new(new_test_cluster_info());
-        let tpu_address = cluster_info.my_contact_info().tpu;
+        let tpu_address = cluster_info.my_contact_info().tpu().unwrap();
         let (request_processor, receiver) = JsonRpcRequestProcessor::new(
             JsonRpcConfig::default(),
             None,

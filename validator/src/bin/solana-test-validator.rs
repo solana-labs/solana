@@ -204,7 +204,7 @@ fn main() {
 
                     programs_to_load.push(ProgramInfo {
                         program_id: address,
-                        loader: solana_sdk::bpf_loader_upgradeable::id(),
+                        loader: solana_sdk::bpf_loader::id(),
                         program_path,
                     });
                 }
@@ -247,6 +247,11 @@ fn main() {
     let accounts_to_maybe_clone: HashSet<_> = pubkeys_of(&matches, "maybe_clone_account")
         .map(|v| v.into_iter().collect())
         .unwrap_or_default();
+
+    let upgradeable_programs_to_clone: HashSet<_> =
+        pubkeys_of(&matches, "clone_upgradeable_program")
+            .map(|v| v.into_iter().collect())
+            .unwrap_or_default();
 
     let warp_slot = if matches.is_present("warp_slot") {
         Some(match matches.value_of("warp_slot") {
@@ -447,6 +452,18 @@ fn main() {
             true,
         ) {
             println!("Error: clone_accounts failed: {e}");
+            exit(1);
+        }
+    }
+
+    if !upgradeable_programs_to_clone.is_empty() {
+        if let Err(e) = genesis.clone_upgradeable_programs(
+            upgradeable_programs_to_clone,
+            cluster_rpc_client
+                .as_ref()
+                .expect("bug: --url argument missing?"),
+        ) {
+            println!("Error: clone_upgradeable_programs failed: {e}");
             exit(1);
         }
     }

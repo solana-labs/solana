@@ -163,7 +163,7 @@ fn do_verify_reachable_ports(
                     "Received no response at tcp/{}, check your port configuration: {}",
                     port, err
                 );
-                // Ugh, std rustc doesn't provide acceptng with timeout or restoring original
+                // Ugh, std rustc doesn't provide accepting with timeout or restoring original
                 // nonblocking-status of sockets because of lack of getter, only the setter...
                 // So, to close the thread cleanly, just connect from here.
                 // ref: https://github.com/rust-lang/rust/issues/31615

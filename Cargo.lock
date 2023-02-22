@@ -5058,6 +5058,7 @@ dependencies = [
  "byteorder",
  "libsecp256k1",
  "log",
+ "memoffset 0.8.0",
  "rand 0.7.3",
  "solana-measure",
  "solana-program-runtime",
@@ -6554,6 +6555,7 @@ dependencies = [
  "lz4",
  "memmap2",
  "memoffset 0.8.0",
+ "modular-bitfield",
  "num-derive",
  "num-traits",
  "num_cpus",
@@ -7106,6 +7108,7 @@ dependencies = [
  "solana-vote-program",
  "spl-token-2022",
  "symlink",
+ "thiserror",
  "tikv-jemallocator",
 ]
 
@@ -7239,9 +7242,9 @@ dependencies = [
 
 [[package]]
 name = "solana_rbpf"
-version = "0.2.38"
+version = "0.2.39"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a4e9e5085099858adba23d0a0b5298da8803f89999cb567ecafab9c916cdf53d"
+checksum = "199a2e8ced67a32b47695256509d5a62b39cb7340f52f0a5d8de99f4dc2aeb43"
 dependencies = [
  "byteorder",
  "combine",

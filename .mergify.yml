@@ -58,10 +58,6 @@ pull_request_rules:
           # only require docs checks if docs files changed
           - -files~=^docs/
           - status-success=build & deploy docs
-        - or:
-          # only require explorer checks if explorer files changed
-          - status-success=check-explorer
-          - -files~=^explorer/
     actions:
       merge:
         method: squash

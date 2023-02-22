@@ -612,20 +612,26 @@ impl AppendVec {
         Some(account_meta)
     }
 
-    /// Return Some(true) if the account owner at `offset` is one of the pubkeys in `owners`.
-    /// Return Some(false) if the account owner is not one of the pubkeys in `owners`.
-    /// It returns None if the `offset` value causes a data overrun.
+    /// Return Ok(index_of_matching_owner) if the account owner at `offset` is one of the pubkeys in `owners`.
+    /// Return Err(MatchAccountOwnerError::NoMatch) if the account has 0 lamports or the owner is not one of
+    /// the pubkeys in `owners`.
+    /// Return Err(MatchAccountOwnerError::UnableToLoad) if the `offset` value causes a data overrun.
     pub fn account_matches_owners(
         &self,
         offset: usize,
         owners: &[&Pubkey],
-    ) -> Result<(), MatchAccountOwnerError> {
+    ) -> Result<usize, MatchAccountOwnerError> {
         let account_meta = self
             .get_account_meta(offset)
             .ok_or(MatchAccountOwnerError::UnableToLoad)?;
-        (account_meta.lamports != 0 && owners.contains(&&account_meta.owner))
-            .then_some(())
-            .ok_or(MatchAccountOwnerError::NoMatch)
+        if account_meta.lamports == 0 {
+            Err(MatchAccountOwnerError::NoMatch)
+        } else {
+            owners
+                .iter()
+                .position(|entry| &&account_meta.owner == entry)
+                .ok_or(MatchAccountOwnerError::NoMatch)
+        }
     }
 
     #[cfg(test)]
@@ -1091,13 +1097,13 @@ pub mod tests {
         let mut account = create_test_account(5);
         account.1.set_owner(owners[0]);
         let index = av.append_account_test(&account).unwrap();
-        assert_eq!(av.account_matches_owners(index, &owners_refs), Ok(()));
+        assert_eq!(av.account_matches_owners(index, &owners_refs), Ok(0));
 
         let mut account1 = create_test_account(6);
         account1.1.set_owner(owners[1]);
         let index1 = av.append_account_test(&account1).unwrap();
-        assert_eq!(av.account_matches_owners(index1, &owners_refs), Ok(()));
-        assert_eq!(av.account_matches_owners(index, &owners_refs), Ok(()));
+        assert_eq!(av.account_matches_owners(index1, &owners_refs), Ok(1));
+        assert_eq!(av.account_matches_owners(index, &owners_refs), Ok(0));
 
         let mut account2 = create_test_account(6);
         account2.1.set_owner(Pubkey::new_unique());
