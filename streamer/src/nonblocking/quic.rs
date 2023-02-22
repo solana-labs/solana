@@ -69,7 +69,7 @@ struct PacketBytes {
     // The offset of these bytes in the Quic stream
     // and thus the beginning offset in the slice of the
     // Packet data array into which the bytes will be copied
-    pub offset: u64,
+    pub offset: usize,
     // The end offset of these bytes in the Quic stream
     // and thus the end of the slice in the Packet data array
     // into which the bytes will be copied
@@ -615,8 +615,7 @@ async fn packet_batch_sender(
                 let i = packet_batch.len() - 1;
                 *packet_batch[i].meta_mut() = packet_accumulator.meta;
                 for packet_bytes in packet_accumulator.bytes {
-                    packet_batch[i].buffer_mut()
-                        [packet_bytes.offset as usize..packet_bytes.end_of_chunk]
+                    packet_batch[i].buffer_mut()[packet_bytes.offset..packet_bytes.end_of_chunk]
                         .copy_from_slice(&packet_bytes.bytes);
                 }
 
@@ -789,7 +788,7 @@ async fn handle_chunk(
                     };
                     accum.bytes.push(PacketBytes {
                         bytes: chunk.bytes,
-                        offset,
+                        offset: offset as usize,
                         end_of_chunk,
                     });
 
