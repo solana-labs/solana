@@ -35,7 +35,7 @@ use {
     solana_sdk::{
         commitment_config::CommitmentConfig,
         message::Message,
-        offchain_message::{OffchainMessage, Version as OffchainMessageVersion},
+        offchain_message::{ApplicationDomain, OffchainMessage, Version as OffchainMessageVersion},
         pubkey::Pubkey,
         signature::Signature,
         stake,
@@ -332,6 +332,14 @@ impl WalletSubCommands for App<'_, '_> {
                         .help("The message text to be signed"),
                 )
                 .arg(
+                    Arg::with_name("application_domain")
+                        .long("application-domain")
+                        .takes_value(true)
+                        .value_name("APPLICATION_DOMAIN")
+                        .required(true)
+                        .help("32byte application identifier, base58 encoded")
+                )
+                .arg(
                     Arg::with_name("version")
                         .long("version")
                         .takes_value(true)
@@ -363,6 +371,14 @@ impl WalletSubCommands for App<'_, '_> {
                         .takes_value(true)
                         .required(true)
                         .help("The message signature to verify"),
+                )
+                .arg(
+                    Arg::with_name("application_domain")
+                        .long("application-domain")
+                        .takes_value(true)
+                        .value_name("APPLICATION_DOMAIN")
+                        .required(true)
+                        .help("32byte application identifier, base58 encoded")
                 )
                 .arg(
                     Arg::with_name("version")
@@ -612,12 +628,18 @@ pub fn parse_sign_offchain_message(
     let version: OffchainMessageVersion = value_of(matches, "version").unwrap();
     let message_text: String = value_of(matches, "message")
         .ok_or_else(|| CliError::BadParameter("MESSAGE".to_string()))?;
-    let message = OffchainMessage::new(version, message_text.as_str())
+    let application_domain = value_of::<String>(matches, "application_domain").unwrap();
+    let application_domain = ApplicationDomain::from_slice(
+        &bs58::decode(application_domain).into_vec()
+            .map_err(|_| CliError::BadParameter("move me to inputvalidator".to_string()))?
+    );
+    let signer = default_signer.signer_from_path(matches, wallet_manager)?;
+    let message = OffchainMessage::new(version, message_text.as_str(), application_domain, vec![signer.pubkey()])
         .map_err(|_| CliError::BadParameter("MESSAGE".to_string()))?;
 
     Ok(CliCommandInfo {
         command: CliCommand::SignOffchainMessage { message },
-        signers: vec![default_signer.signer_from_path(matches, wallet_manager)?],
+        signers: vec![signer],
     })
 }
 
@@ -629,7 +651,13 @@ pub fn parse_verify_offchain_signature(
     let version: OffchainMessageVersion = value_of(matches, "version").unwrap();
     let message_text: String = value_of(matches, "message")
         .ok_or_else(|| CliError::BadParameter("MESSAGE".to_string()))?;
-    let message = OffchainMessage::new(version, message_text.as_str())
+    let application_domain = value_of::<String>(matches, "application_domain").unwrap();
+    let application_domain = ApplicationDomain::from_slice(
+        &bs58::decode(application_domain).into_vec()
+            .map_err(|_| CliError::BadParameter("move me to inputvalidator".to_string()))?
+    );
+    let signer = default_signer.signer_from_path(matches, wallet_manager)?;
+    let message = OffchainMessage::new(version, message_text.as_str(), application_domain, vec![signer.pubkey()])
         .map_err(|_| CliError::BadParameter("MESSAGE".to_string()))?;
 
     let signer_pubkey = pubkey_of_signer(matches, "signer", wallet_manager)?;

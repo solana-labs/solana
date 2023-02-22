@@ -525,15 +525,6 @@ impl RemoteWallet<hidapi::DeviceInfo> for LedgerWallet {
         derivation_path: &DerivationPath,
         message: &[u8],
     ) -> Result<Signature, RemoteWalletError> {
-        if message.len()
-            > solana_sdk::offchain_message::v0::OffchainMessage::MAX_LEN_LEDGER
-                + solana_sdk::offchain_message::v0::OffchainMessage::HEADER_LEN
-        {
-            return Err(RemoteWalletError::InvalidInput(
-                "Off-chain message to sign is too long".to_string(),
-            ));
-        }
-
         let mut data = extend_and_serialize_multiple(&[derivation_path]);
         data.extend_from_slice(message);
 
