@@ -50,6 +50,7 @@ const BLOCKSTORE_METRICS_ERROR: i64 = -1;
 
 const MAX_WRITE_BUFFER_SIZE: u64 = 256 * 1024 * 1024; // 256MB
 const FIFO_WRITE_BUFFER_SIZE: u64 = 2 * MAX_WRITE_BUFFER_SIZE;
+const UNIV_WRITE_BUFFER_SIZE: u64 = 4 * MAX_WRITE_BUFFER_SIZE;
 
 // Column family for metadata about a leader slot
 const META_CF: &str = "meta";
@@ -430,8 +431,8 @@ impl Rocks {
             new_cf_descriptor::<Index>(options, oldest_slot),
             cf_descriptor_shred_data,
             cf_descriptor_shred_code,
-            new_cf_descriptor::<TransactionStatus>(options, oldest_slot),
-            new_cf_descriptor::<AddressSignatures>(options, oldest_slot),
+            new_cf_descriptor_universal::<TransactionStatus>(options, oldest_slot),
+            new_cf_descriptor_universal::<AddressSignatures>(options, oldest_slot),
             new_cf_descriptor::<TransactionMemos>(options, oldest_slot),
             new_cf_descriptor::<TransactionStatusIndex>(options, oldest_slot),
             new_cf_descriptor::<Rewards>(options, oldest_slot),
@@ -1801,6 +1802,76 @@ fn get_cf_options_fifo<C: 'static + Column + ColumnName>(
     process_cf_options_advanced::<C>(&mut options, column_options);
 
     options
+}
+
+fn new_cf_descriptor_universal<C: 'static + Column + ColumnName>(
+    options: &BlockstoreOptions,
+    oldest_slot: &OldestSlot,
+) -> ColumnFamilyDescriptor {
+    ColumnFamilyDescriptor::new(C::NAME, get_cf_options_universal::<C>(options, oldest_slot))
+}
+
+/// Universal compaction uses minimum number of compactions to keep
+/// the database stored in the specified sorted runs.  It is more
+/// suitable for write heavy workload while keys are not naturally
+/// increasing over time (if it is the case, then FIFO should be used).
+fn get_cf_options_universal<C: 'static + Column + ColumnName>(
+    options: &BlockstoreOptions,
+    oldest_slot: &OldestSlot,
+) -> Options {
+    let mut cf_options = Options::default();
+
+    cf_options.set_compaction_style(DBCompactionStyle::Universal);
+
+    // The level_zero_file_num_compaction_trigger of the universal compaction
+    // determines the read amplification and the ideal capacity of the column
+    // family.
+    //
+    // Assuming the size of write_buffer is 1 GB, then setting L0 file
+    // compaction trigger to 10 will give us the following LSM shape at the
+    // stable state if the column family size is smaller than 500x (or 2^9)
+    // of the write buffer size.
+    //
+    // 1GB, 1GB, 2GB, 4GB, 8GB, 16GB, 32GB, 64GB, 128GB, 256GB
+    //
+    // Note that as universal compaction runs more efficient when the of
+    // a SST file at a logical level is 2x of its previous one, it is
+    // suggested to specify the write buffer size to be 2^N larger than
+    // the expected column family size where N is the L0 file compaction
+    // trigger.
+    cf_options.set_level_zero_file_num_compaction_trigger(9);
+    cf_options.set_num_levels(9);
+    cf_options.set_write_buffer_size(UNIV_WRITE_BUFFER_SIZE as usize);
+    cf_options.set_max_write_buffer_number(2);
+
+    // having >1 max_subcompactions will allow rocksdb to break one big
+    // compaction into multiple smaller compactions running in parallel.
+    cf_options.set_max_subcompactions(8);
+
+    // Assuming all 10 logical levels are compacting, we give extra 3 logical
+    // levels as a buffer, and slow-down writes once the number of logical
+    // levels above that.
+    cf_options.set_level_zero_slowdown_writes_trigger(12);
+    cf_options.set_level_zero_stop_writes_trigger(20);
+
+    cf_options.set_target_file_size_base((4 * UNIV_WRITE_BUFFER_SIZE).try_into().unwrap());
+
+    let disable_auto_compactions = should_disable_auto_compactions(&options.access_type);
+    if disable_auto_compactions {
+        cf_options.set_disable_auto_compactions(true);
+    }
+
+    if !disable_auto_compactions && !should_exclude_from_compaction(C::NAME) {
+        cf_options.set_compaction_filter_factory(PurgedSlotFilterFactory::<C> {
+            oldest_slot: oldest_slot.clone(),
+            name: CString::new(format!("purged_slot_filter_factory({})", C::NAME)).unwrap(),
+            _phantom: PhantomData::default(),
+        });
+    }
+
+    process_cf_options_advanced::<C>(&mut cf_options, &options.column_options);
+
+    cf_options
 }
 
 fn get_db_options(access_type: &AccessType) -> Options {
