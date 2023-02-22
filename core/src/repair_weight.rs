@@ -473,6 +473,7 @@ impl RepairWeight {
             let new_repairs = get_closest_completion(
                 tree,
                 blockstore,
+                self.root,
                 slot_meta_cache,
                 processed_slots,
                 max_new_repairs - repairs.len(),
