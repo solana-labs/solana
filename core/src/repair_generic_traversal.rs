@@ -111,6 +111,7 @@ fn get_unrepaired_path(
 pub fn get_closest_completion(
     tree: &HeaviestSubtreeForkChoice,
     blockstore: &Blockstore,
+    root_slot: Slot,
     slot_meta_cache: &mut HashMap<Slot, Option<SlotMeta>>,
     processed_slots: &mut HashSet<Slot>,
     limit: usize,
@@ -169,22 +170,26 @@ pub fn get_closest_completion(
     }
     v.sort_by(|(_, d1), (_, d2)| d1.cmp(d2));
 
-    let mut visited = HashSet::new();
+    let mut visited = HashSet::from([root_slot]);
     let mut repairs = Vec::new();
-    for (slot, _) in v {
+    for (outer_slot, _) in v {
         if repairs.len() >= limit {
             break;
         }
         // attempt to repair heaviest slots starting with their parents
-        let path = get_unrepaired_path(slot, blockstore, slot_meta_cache, &mut visited);
-        for slot in path {
+        let path = get_unrepaired_path(outer_slot, blockstore, slot_meta_cache, &mut visited);
+        for path_slot in path {
             if repairs.len() >= limit {
                 break;
             }
-            let slot_meta = slot_meta_cache.get(&slot).unwrap().as_ref().unwrap();
+            if path_slot != outer_slot && processed_slots.contains(&path_slot) {
+                continue;
+            }
+            processed_slots.insert(path_slot);
+            let slot_meta = slot_meta_cache.get(&path_slot).unwrap().as_ref().unwrap();
             let new_repairs = RepairService::generate_repairs_for_slot(
                 blockstore,
-                slot,
+                path_slot,
                 slot_meta,
                 limit - repairs.len(),
             );
@@ -235,6 +240,7 @@ pub mod test {
         let repairs = get_closest_completion(
             &heaviest_subtree_fork_choice,
             &blockstore,
+            0, // root_slot
             &mut slot_meta_cache,
             &mut processed_slots,
             10,
@@ -259,14 +265,12 @@ pub mod test {
         let repairs = get_closest_completion(
             &heaviest_subtree_fork_choice,
             &blockstore,
+            0, // root_slot
             &mut slot_meta_cache,
             &mut processed_slots,
-            2,
+            1,
         );
-        assert_eq!(
-            repairs,
-            [ShredRepairType::Shred(0, 3), ShredRepairType::Shred(1, 3)]
-        );
+        assert_eq!(repairs, [ShredRepairType::Shred(1, 3)]);
     }
 
     fn add_tree_with_missing_shreds(
