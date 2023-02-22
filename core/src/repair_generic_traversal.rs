@@ -114,7 +114,7 @@ pub fn get_closest_completion(
     slot_meta_cache: &mut HashMap<Slot, Option<SlotMeta>>,
     processed_slots: &mut HashSet<Slot>,
     limit: usize,
-) -> Vec<ShredRepairType> {
+) -> (Vec<ShredRepairType>, /* processed slots */ usize) {
     let mut v: Vec<(Slot, u64)> = Vec::default();
     let iter = GenericTraversal::new(tree);
     for slot in iter {
@@ -171,6 +171,7 @@ pub fn get_closest_completion(
 
     let mut visited = HashSet::new();
     let mut repairs = Vec::new();
+    let mut total_processed_slots = 0;
     for (slot, _) in v {
         if repairs.len() >= limit {
             break;
@@ -189,10 +190,11 @@ pub fn get_closest_completion(
                 limit - repairs.len(),
             );
             repairs.extend(new_repairs);
+            total_processed_slots += 1;
         }
     }
 
-    repairs
+    (repairs, total_processed_slots)
 }
 
 #[cfg(test)]
@@ -232,7 +234,7 @@ pub mod test {
         let (blockstore, heaviest_subtree_fork_choice) = setup_forks();
         let mut slot_meta_cache = HashMap::default();
         let mut processed_slots = HashSet::default();
-        let repairs = get_closest_completion(
+        let (repairs, _) = get_closest_completion(
             &heaviest_subtree_fork_choice,
             &blockstore,
             &mut slot_meta_cache,
@@ -256,7 +258,7 @@ pub mod test {
         let mut slot_meta_cache = HashMap::default();
         let mut processed_slots = HashSet::default();
         sleep_shred_deferment_period();
-        let repairs = get_closest_completion(
+        let (repairs, _) = get_closest_completion(
             &heaviest_subtree_fork_choice,
             &blockstore,
             &mut slot_meta_cache,
