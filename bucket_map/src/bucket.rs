@@ -76,7 +76,7 @@ pub struct Bucket<T> {
     pub reallocated: Reallocated,
 }
 
-impl<T: Clone + Copy> Bucket<T> {
+impl<'b, T: Clone + Copy + 'b> Bucket<T> {
     pub fn new(
         drives: Arc<Vec<PathBuf>>,
         max_search: MaxSearch,
@@ -268,10 +268,11 @@ impl<T: Clone + Copy> Bucket<T> {
     pub fn try_write(
         &mut self,
         key: &Pubkey,
-        data: &[T],
+        data: impl Iterator<Item = &'b T>,
+        data_len: usize,
         ref_count: RefCount,
     ) -> Result<(), BucketMapError> {
-        let best_fit_bucket = IndexEntry::data_bucket_from_num_slots(data.len() as u64);
+        let best_fit_bucket = IndexEntry::data_bucket_from_num_slots(data_len as u64);
         if self.data.get(best_fit_bucket as usize).is_none() {
             // fail early if the data bucket we need doesn't exist - we don't want the index entry partially allocated
             return Err(BucketMapError::DataNoSpace((best_fit_bucket, 0)));
@@ -289,14 +290,17 @@ impl<T: Clone + Copy> Bucket<T> {
         let elem_uid = self.index.uid_unchecked(elem_ix);
         let bucket_ix = elem.data_bucket_ix();
         let current_bucket = &self.data[bucket_ix as usize];
-        let num_slots = data.len() as u64;
+        let num_slots = data_len as u64;
         if best_fit_bucket == bucket_ix && elem.num_slots > 0 {
             // in place update
             let elem_loc = elem.data_loc(current_bucket);
-            let slice: &mut [T] = current_bucket.get_mut_cell_slice(elem_loc, data.len() as u64);
+            let slice: &mut [T] = current_bucket.get_mut_cell_slice(elem_loc, data_len as u64);
             assert_eq!(current_bucket.uid(elem_loc), Some(elem_uid));
             elem.num_slots = num_slots;
-            slice.copy_from_slice(data);
+
+            slice.iter_mut().zip(data).for_each(|(dest, src)| {
+                *dest = *src;
+            });
             Ok(())
         } else {
             // need to move the allocation to a best fit spot
@@ -321,7 +325,9 @@ impl<T: Clone + Copy> Bucket<T> {
                         let best_bucket = &mut self.data[best_fit_bucket as usize];
                         best_bucket.allocate(ix, elem_uid, false).unwrap();
                         let slice = best_bucket.get_mut_cell_slice(ix, num_slots);
-                        slice.copy_from_slice(data);
+                        slice.iter_mut().zip(data).for_each(|(dest, src)| {
+                            *dest = *src;
+                        });
                     }
                     return Ok(());
                 }
@@ -498,7 +504,7 @@ impl<T: Clone + Copy> Bucket<T> {
     pub fn insert(&mut self, key: &Pubkey, value: (&[T], RefCount)) {
         let (new, refct) = value;
         loop {
-            let rv = self.try_write(key, new, refct);
+            let rv = self.try_write(key, new.iter(), new.len(), refct);
             match rv {
                 Ok(_) => return,
                 Err(err) => {
