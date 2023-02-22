@@ -1709,6 +1709,13 @@ fn maybe_warp_slot(
         info!("warping to slot {}", warp_slot);
 
         let root_bank = bank_forks.root_bank();
+
+        // An accounts hash calculation from storages will occur in warp_from_parent() below.  This
+        // requires that the accounts cache has been flushed, which requires the parent slot to be
+        // rooted.
+        root_bank.squash();
+        root_bank.force_flush_accounts_cache();
+
         bank_forks.insert(Bank::warp_from_parent(
             &root_bank,
             &Pubkey::default(),
