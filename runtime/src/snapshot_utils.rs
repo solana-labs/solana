@@ -296,6 +296,9 @@ pub enum SnapshotError {
 
     #[error("invalid AppendVec path: {}", .0.display())]
     InvalidAppendVecPath(PathBuf),
+
+    #[error("invalid account path: {}", .0.display())]
+    InvalidAccountPath(PathBuf),
 }
 pub type Result<T> = std::result::Result<T, SnapshotError>;
 
@@ -1022,7 +1025,7 @@ pub fn add_bank_snapshot(
         for account_path in account_paths {
             let account_snapshot_path = account_path
                 .parent()
-                .ok_or(SnapshotError::InvalidAppendVecPath(account_path.clone()))?
+                .ok_or(SnapshotError::InvalidAccountPath(account_path.clone()))?
                 .join("snapshot")
                 .join(&slot_str);
             if account_snapshot_path.is_dir() {
