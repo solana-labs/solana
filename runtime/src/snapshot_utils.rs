@@ -1018,12 +1018,13 @@ pub fn add_bank_snapshot(
         // Even the snapshot directory is not found, still ensure the account snapshot directory
         // is also clean.  hardlink failure will happen if an old file exists.
         let account_paths = &bank.accounts().accounts_db.paths;
+        let slot_str = slot.to_string();
         for account_path in account_paths {
             let account_snapshot_path = account_path
                 .parent()
-                .unwrap()
+                .ok_or(SnapshotError::InvalidAppendVecPath(account_path.clone()))?
                 .join("snapshot")
-                .join(bank.slot().to_string());
+                .join(slot_str.clone());
             if account_snapshot_path.is_dir() {
                 // remove the account snapshot directory
                 fs::remove_dir_all(&account_snapshot_path)?;
