@@ -323,6 +323,9 @@ pub enum SnapshotError {
     #[error("snapshot slot deltas are invalid: {0}")]
     VerifySlotDeltas(#[from] VerifySlotDeltasError),
 
+    #[error("bank_snapshot_info new_from_dir failed: {0}")]
+    NewFromDir(#[from] SnapshotNewFromDirError),
+
     #[error("invalid AppendVec path: {}", .0.display())]
     InvalidAppendVecPath(PathBuf),
 
