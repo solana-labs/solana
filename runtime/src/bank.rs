@@ -1337,6 +1337,7 @@ impl Bank {
             loaded_programs_cache: Arc::<RwLock<LoadedPrograms>>::default(),
         };
 
+        bank.bank_created();
         let accounts_data_size_initial = bank.get_total_accounts_stats().unwrap().data_len as u64;
         bank.accounts_data_size_initial = accounts_data_size_initial;
 
@@ -1548,14 +1549,8 @@ impl Bank {
         let (feature_set, feature_set_time_us) = measure_us!(parent.feature_set.clone());
 
         let accounts_data_size_initial = parent.load_accounts_data_size();
-        parent
-            .rc
-            .accounts
-            .accounts_db
-            .bank_progress
-            .bank_creation_count
-            .fetch_add(1, Release);
-        let mut new = Bank {
+        parent.bank_created();
+        let mut new = Self {
             bank_freeze_or_destruction_incremented: AtomicBool::default(),
             incremental_snapshot_persistence: None,
             rc,
@@ -1790,6 +1785,15 @@ impl Bank {
         self.vote_only_bank
     }
 
+    fn bank_created(&self) {
+        self.rc
+            .accounts
+            .accounts_db
+            .bank_progress
+            .bank_creation_count
+            .fetch_add(1, Release);
+    }
+
     fn bank_frozen_or_destroyed(&self) {
         if !self
             .bank_freeze_or_destruction_incremented
@@ -1949,6 +1953,8 @@ impl Bank {
             fee_structure: FeeStructure::default(),
             loaded_programs_cache: Arc::<RwLock<LoadedPrograms>>::default(),
         };
+        bank.bank_created();
+
         bank.finish_init(
             genesis_config,
             additional_builtins,
