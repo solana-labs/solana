@@ -2,7 +2,7 @@
 name = "solana-test-validator"
 description = "Blockchain, Rebuilt for Scale"
 version = "1.16.0"
-homepage = "https://solana.com/"
+homepage = "https://solanalabs.com/"
 documentation = "https://docs.rs/solana-test-validator"
 readme = "../README.md"
 repository = "https://github.com/solana-labs/solana"

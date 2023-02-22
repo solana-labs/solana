@@ -2,7 +2,7 @@
 name = "solana-compute-budget-program"
 description = "Solana Compute Budget program"
 version = "1.16.0"
-homepage = "https://solana.com/"
+homepage = "https://solanalabs.com/"
 documentation = "https://docs.rs/solana-compute-budget-program"
 repository = "https://github.com/solana-labs/solana"
 authors = ["Solana Labs Maintainers <maintainers@solanalabs.com>"]
