@@ -1024,7 +1024,7 @@ pub fn add_bank_snapshot(
                 .parent()
                 .ok_or(SnapshotError::InvalidAppendVecPath(account_path.clone()))?
                 .join("snapshot")
-                .join(slot_str.clone());
+                .join(&slot_str);
             if account_snapshot_path.is_dir() {
                 // remove the account snapshot directory
                 fs::remove_dir_all(&account_snapshot_path)?;
