@@ -7,6 +7,8 @@ use {
     std::sync::Arc,
 };
 
+pub mod meta;
+
 #[derive(Clone, Debug)]
 pub struct AccountStorageReference {
     /// the single storage for a given slot
