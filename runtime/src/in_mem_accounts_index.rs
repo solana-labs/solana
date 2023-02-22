@@ -1,7 +1,7 @@
 use {
     crate::{
         accounts_index::{
-            AccountMapEntry, AccountMapEntryInner, AccountMapEntryMeta, IndexValue,
+            AccountMapEntry, AccountMapEntryInner, AccountMapEntryMeta, DiskIndexValue, IndexValue,
             PreAllocatedAccountMapEntry, RefCount, SlotList, UpsertReclaim, ZeroLamport,
         },
         bucket_map_holder::{Age, BucketMapHolder},
@@ -83,7 +83,7 @@ impl<T: IndexValue> PossibleEvictions<T> {
 }
 
 // one instance of this represents one bin of the accounts index.
-pub struct InMemAccountsIndex<T: IndexValue, U: IndexValue + From<T> + Into<T>> {
+pub struct InMemAccountsIndex<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> {
     last_age_flushed: AtomicU8,
 
     // backing store
@@ -112,7 +112,7 @@ pub struct InMemAccountsIndex<T: IndexValue, U: IndexValue + From<T> + Into<T>> 
     age_to_flush_bin_mod: Age,
 }
 
-impl<T: IndexValue, U: IndexValue + From<T> + Into<T>> Debug for InMemAccountsIndex<T, U> {
+impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> Debug for InMemAccountsIndex<T, U> {
     fn fmt(&self, _f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         Ok(())
     }
@@ -141,7 +141,7 @@ struct FlushScanResult<T> {
     evictions_random: Vec<(Pubkey, AccountMapEntry<T>)>,
 }
 
-impl<T: IndexValue, U: IndexValue + From<T> + Into<T>> InMemAccountsIndex<T, U> {
+impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> InMemAccountsIndex<T, U> {
     pub fn new(storage: &Arc<BucketMapHolder<T, U>>, bin: usize) -> Self {
         let ages_to_stay_in_cache = storage.ages_to_stay_in_cache;
         Self {
@@ -1397,7 +1397,7 @@ struct EvictionsGuard<'a> {
 
 impl<'a> EvictionsGuard<'a> {
     #[must_use = "if unused, this evictions lock will be immediately unlocked"]
-    fn lock<T: IndexValue, U: IndexValue + From<T> + Into<T>>(
+    fn lock<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>>(
         in_mem_accounts_index: &'a InMemAccountsIndex<T, U>,
     ) -> Self {
         Self::lock_with(

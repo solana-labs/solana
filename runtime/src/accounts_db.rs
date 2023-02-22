@@ -20,7 +20,7 @@
 
 use {
     crate::{
-        account_info::{AccountInfo, StorageLocation},
+        account_info::{AccountInfo, AccountOffsetAndFlags, StorageLocation},
         account_storage::{
             meta::{
                 StorableAccountsWithHashesAndWriteVersions, StoredAccountMeta,
@@ -38,8 +38,8 @@ use {
         },
         accounts_index::{
             AccountIndexGetResult, AccountSecondaryIndexes, AccountsIndex, AccountsIndexConfig,
-            AccountsIndexRootsStats, AccountsIndexScanResult, IndexKey, IndexValue, IsCached,
-            RefCount, ScanConfig, ScanResult, SlotList, UpsertReclaim, ZeroLamport,
+            AccountsIndexRootsStats, AccountsIndexScanResult, DiskIndexValue, IndexKey, IndexValue,
+            IsCached, RefCount, ScanConfig, ScanResult, SlotList, UpsertReclaim, ZeroLamport,
             ACCOUNTS_INDEX_CONFIG_FOR_BENCHMARKS, ACCOUNTS_INDEX_CONFIG_FOR_TESTING,
         },
         accounts_index_storage::Startup,
@@ -676,6 +676,8 @@ impl GenerateIndexTimings {
 }
 
 impl IndexValue for AccountInfo {}
+impl DiskIndexValue for AccountInfo {}
+impl DiskIndexValue for AccountOffsetAndFlags {}
 
 impl ZeroLamport for AccountSharedData {
     fn is_zero_lamport(&self) -> bool {
@@ -1344,7 +1346,7 @@ struct RemoveUnrootedSlotsSynchronization {
     signal: Condvar,
 }
 
-type AccountInfoAccountsIndex = AccountsIndex<AccountInfo, AccountInfo>;
+type AccountInfoAccountsIndex = AccountsIndex<AccountInfo, AccountOffsetAndFlags>;
 
 // This structure handles the load/store of the accounts
 #[derive(Debug)]

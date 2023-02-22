@@ -1,6 +1,6 @@
 use {
     crate::{
-        accounts_index::{AccountsIndexConfig, IndexLimitMb, IndexValue},
+        accounts_index::{AccountsIndexConfig, DiskIndexValue, IndexLimitMb, IndexValue},
         bucket_map_holder_stats::BucketMapHolderStats,
         in_mem_accounts_index::InMemAccountsIndex,
         waitable_condvar::WaitableCondvar,
@@ -28,7 +28,7 @@ const AGE_MS: u64 = DEFAULT_MS_PER_SLOT; // match one age per slot time
 // 10 GB limit for in-mem idx. In practice, we don't get this high. This tunes how aggressively to save items we expect to use soon.
 pub const DEFAULT_DISK_INDEX: Option<usize> = Some(10_000);
 
-pub struct BucketMapHolder<T: IndexValue, U: IndexValue + From<T> + Into<T>> {
+pub struct BucketMapHolder<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> {
     pub disk: Option<BucketMap<(Slot, U)>>,
 
     pub count_buckets_flushed: AtomicUsize,
@@ -70,14 +70,14 @@ pub struct BucketMapHolder<T: IndexValue, U: IndexValue + From<T> + Into<T>> {
     _phantom: PhantomData<T>,
 }
 
-impl<T: IndexValue, U: IndexValue + From<T> + Into<T>> Debug for BucketMapHolder<T, U> {
+impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> Debug for BucketMapHolder<T, U> {
     fn fmt(&self, _f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         Ok(())
     }
 }
 
 #[allow(clippy::mutex_atomic)]
-impl<T: IndexValue, U: IndexValue + From<T> + Into<T>> BucketMapHolder<T, U> {
+impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> BucketMapHolder<T, U> {
     /// is the accounts index using disk as a backing store
     pub fn is_disk_index_enabled(&self) -> bool {
         self.disk.is_some()

@@ -97,6 +97,23 @@ pub struct AccountOffsetAndFlags {
     packed_offset_and_flags: PackedOffsetAndFlags,
 }
 
+impl From<AccountOffsetAndFlags> for AccountInfo {
+    fn from(account_offset_and_flags: AccountOffsetAndFlags) -> Self {
+        Self {
+            store_id: 0,
+            account_offset_and_flags,
+        }
+    }
+}
+
+impl From<AccountInfo> for AccountOffsetAndFlags {
+    fn from(info: AccountInfo) -> Self {
+        Self {
+            packed_offset_and_flags: info.account_offset_and_flags.packed_offset_and_flags,
+        }
+    }
+}
+
 impl ZeroLamport for AccountInfo {
     fn is_zero_lamport(&self) -> bool {
         self.account_offset_and_flags
