@@ -66,7 +66,13 @@ const COALESCE_MS: u128 = 5;
 // along with where in the packet it is
 struct PacketBytes {
     pub bytes: Bytes,
+    // The offset of these bytes in the Quic stream
+    // and thus the beginning offset in the slice of the
+    // Packet data array into which the bytes will be copied
     pub offset: u64,
+    // The end offset of these bytes in the Quic stream
+    // and thus the end of the slice in the Packet data array
+    // into which the bytes will be copied
     pub end_of_chunk: usize,
 }
 
