@@ -223,7 +223,8 @@ impl RepairWeight {
         );
         let num_closest_completion_repairs = closest_completion_repairs.len();
         let num_closest_completion_slots = processed_slots.len() - pre_num_slots;
-        let num_closest_completion_slots_path = total_slots_processed.saturating_sub(num_closest_completion_slots);
+        let num_closest_completion_slots_path =
+            total_slots_processed.saturating_sub(num_closest_completion_slots);
         repairs.extend(closest_completion_repairs);
         get_closest_completion_elapsed.stop();
 

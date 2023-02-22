@@ -155,6 +155,7 @@ pub struct BestRepairsStats {
 }
 
 impl BestRepairsStats {
+    #[allow(clippy::too_many_arguments)]
     pub fn update(
         &mut self,
         num_orphan_slots: u64,
@@ -523,11 +524,7 @@ impl RepairService {
                         best_repairs_stats.num_closest_completion_repairs,
                         i64
                     ),
-                    (
-                        "repair-trees",
-                        best_repairs_stats.num_repair_trees,
-                        i64
-                    ),
+                    ("repair-trees", best_repairs_stats.num_repair_trees, i64),
                 );
                 repair_stats = RepairStats::default();
                 repair_timing = RepairTiming::default();
