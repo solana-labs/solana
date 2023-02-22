@@ -160,11 +160,11 @@ impl RepairWeight {
         stats: &mut BestRepairsStats,
     ) -> Vec<ShredRepairType> {
         let mut repairs = vec![];
-        let mut processed_slots: HashSet<Slot> = vec![self.root].into_iter().collect();
+        let mut processed_slots = HashSet::from([self.root]);
         let mut slot_meta_cache = HashMap::default();
 
         let mut get_best_orphans_elapsed = Measure::start("get_best_orphans");
-        // Update the orphans in order from heaviest to least heavy
+        // Find the best orphans in order from heaviest stake to least heavy
         self.get_best_orphans(
             blockstore,
             &mut processed_slots,
@@ -173,6 +173,7 @@ impl RepairWeight {
             epoch_schedule,
             max_new_orphans,
         );
+        // Subtract 1 because the root is not processed as an orphan
         let num_orphan_slots = processed_slots.len() - 1;
         let num_orphan_repairs = repairs.len();
         get_best_orphans_elapsed.stop();
