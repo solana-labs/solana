@@ -154,9 +154,9 @@ let instruction = ComputeBudgetInstruction::set_compute_unit_price(1);
 ### Accounts data size limit
 
 A transaction should request the maximum bytes of accounts data it is
-allowed to load by including a `SetAccountsDataSizeLimit` instruction, requested
+allowed to load by including a `SetLoadedAccountsDataSizeLimit` instruction, requested
 limit is capped by `MAX_ACCOUNTS_DATA_SIZE_BYTES`. If no
-`SetAccountsDataSizeLimit` is provided, the transaction is defaulted to
+`SetLoadedAccountsDataSizeLimit` is provided, the transaction is defaulted to
 have limit of `DEFAULT_ACCOUNTS_DATA_SIZE_BYTES`.
 
 The `ComputeBudgetInstruction::set_accounts_data_size_limit` function can be used

@@ -226,7 +226,7 @@ impl ComputeBudget {
                         prioritization_fee =
                             Some(PrioritizationFeeType::ComputeUnitPrice(micro_lamports));
                     }
-                    Ok(ComputeBudgetInstruction::SetAccountsDataSizeLimit(bytes))
+                    Ok(ComputeBudgetInstruction::SetLoadedAccountsDataSizeLimit(bytes))
                         if support_set_accounts_data_size_limit_ix =>
                     {
                         if updated_accounts_data_size_limit.is_some() {
