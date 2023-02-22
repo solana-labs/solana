@@ -949,6 +949,9 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
             if exceeds_budget {
                 // if we are already holding too many items in-mem, then we need to be more aggressive at kicking things out
                 (true, None)
+            } else if entry.ref_count() != 1 {
+                Self::update_stat(&self.stats().held_in_mem_ref_count, 1);
+                (false, None)
             } else {
                 // only read the slot list if we are planning to throw the item out
                 let slot_list = entry.slot_list.read().unwrap();
@@ -1136,6 +1139,8 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                                 // not evicting, so don't write, even if dirty
                                 continue;
                             }
+                        } else if v.ref_count() != 1 {
+                            continue;
                         }
                         // if we are evicting it, then we need to update disk if we're dirty
                         if v.clear_dirty() {
@@ -1453,12 +1458,41 @@ mod tests {
     }
 
     #[test]
+    fn test_should_evict_from_mem_ref_count() {
+        for ref_count in [0, 1, 2] {
+            let bucket = new_for_test::<u64>();
+            let startup = false;
+            let current_age = 0;
+            let one_element_slot_list = vec![(0, 0)];
+            let one_element_slot_list_entry = Arc::new(AccountMapEntryInner::new(
+                one_element_slot_list,
+                ref_count,
+                AccountMapEntryMeta::default(),
+            ));
+
+            // exceeded budget
+            assert_eq!(
+                bucket
+                    .should_evict_from_mem(
+                        current_age,
+                        &one_element_slot_list_entry,
+                        startup,
+                        false,
+                        false,
+                    )
+                    .0,
+                ref_count == 1
+            );
+        }
+    }
+
+    #[test]
     fn test_should_evict_from_mem() {
         solana_logger::setup();
         let bucket = new_for_test::<u64>();
         let mut startup = false;
         let mut current_age = 0;
-        let ref_count = 0;
+        let ref_count = 1;
         let one_element_slot_list = vec![(0, 0)];
         let one_element_slot_list_entry = Arc::new(AccountMapEntryInner::new(
             one_element_slot_list,
