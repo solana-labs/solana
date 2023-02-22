@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 /// Managing the Geyser plugins
 use {
     libloading::{Library, Symbol},
@@ -9,7 +11,8 @@ use {
 #[derive(Default, Debug)]
 pub struct GeyserPluginManager {
     pub plugins: Vec<Box<dyn GeyserPlugin>>,
-    libs: Vec<Library>,
+    pub libs: Vec<Library>,
+    pub libpaths: Vec<PathBuf>,
 }
 
 impl GeyserPluginManager {
@@ -17,6 +20,7 @@ impl GeyserPluginManager {
         GeyserPluginManager {
             plugins: Vec::default(),
             libs: Vec::default(),
+            libpaths: Vec::default(),
         }
     }
 
@@ -37,6 +41,7 @@ impl GeyserPluginManager {
         plugin.on_load(config_file)?;
         self.plugins.push(plugin);
         self.libs.push(lib);
+        self.libpaths.push(libpath.into());
         Ok(())
     }
 
@@ -71,5 +76,21 @@ impl GeyserPluginManager {
             }
         }
         false
+    }
+
+    // Get a mutable reference to a particular plugin and library
+    pub fn get_plugin_and_lib_mut(
+        &mut self,
+        index: usize,
+    ) -> Option<(&mut Box<dyn GeyserPlugin>, &mut Library)> {
+        // Lengths should always be the same, so only need to check one
+        if index < self.plugins.len() {
+            Some((
+                self.plugins.get_mut(index).unwrap(),
+                self.libs.get_mut(index).unwrap(),
+            ))
+        } else {
+            None
+        }
     }
 }
