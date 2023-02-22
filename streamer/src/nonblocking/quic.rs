@@ -14,7 +14,7 @@ use {
     quinn::{Connecting, Connection, Endpoint, EndpointConfig, TokioRuntime, VarInt},
     quinn_proto::VarIntBoundsExceeded,
     rand::{thread_rng, Rng},
-    solana_perf::packet::PacketBatch,
+    solana_perf::packet::{PacketBatch, PACKETS_PER_BATCH},
     solana_sdk::{
         packet::{Meta, PACKET_DATA_SIZE},
         pubkey::Pubkey,
@@ -57,8 +57,6 @@ const CONNECTION_CLOSE_REASON_EXCEED_MAX_STREAM_COUNT: &[u8] = b"exceed_max_stre
 
 const CONNECTION_CLOSE_CODE_TOO_MANY: u32 = 4;
 const CONNECTION_CLOSE_REASON_TOO_MANY: &[u8] = b"too_many";
-
-const PACKET_BATCH_SIZE: usize = 64;
 
 // A sequence of bytes that is part of a packet
 // along with where in the packet it is
@@ -578,17 +576,17 @@ async fn packet_batch_sender(
     let coalesce_ms = coalesce_ms as u128;
     let mut batch_start_time = Instant::now();
     loop {
-        let mut packet_batch = PacketBatch::with_capacity(PACKET_BATCH_SIZE);
+        let mut packet_batch = PacketBatch::with_capacity(PACKETS_PER_BATCH);
 
         stats
             .total_packets_allocated
-            .fetch_add(PACKET_BATCH_SIZE, Ordering::Relaxed);
+            .fetch_add(PACKETS_PER_BATCH, Ordering::Relaxed);
         loop {
             if exit.load(Ordering::Relaxed) {
                 return;
             }
             let elapsed = batch_start_time.elapsed();
-            if packet_batch.len() >= PACKET_BATCH_SIZE
+            if packet_batch.len() >= PACKETS_PER_BATCH
                 || (!packet_batch.is_empty() && elapsed.as_millis() >= coalesce_ms)
             {
                 let len = packet_batch.len();
