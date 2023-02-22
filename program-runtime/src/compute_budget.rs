@@ -700,24 +700,25 @@ mod tests {
         //     return InstructionError
         let data_size: usize = 1;
         for support_set_loaded_accounts_data_size_limit_ix in [true, false] {
-            let (expected_result, expected_budget) = if support_set_loaded_accounts_data_size_limit_ix {
-                (
-                    Ok(PrioritizationFeeDetails::default()),
-                    ComputeBudget {
-                        compute_unit_limit: DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT as u64,
-                        loaded_accounts_data_size_limit: data_size,
-                        ..ComputeBudget::default()
-                    },
-                )
-            } else {
-                (
-                    Err(TransactionError::InstructionError(
-                        0,
-                        InstructionError::InvalidInstructionData,
-                    )),
-                    ComputeBudget::default(),
-                )
-            };
+            let (expected_result, expected_budget) =
+                if support_set_loaded_accounts_data_size_limit_ix {
+                    (
+                        Ok(PrioritizationFeeDetails::default()),
+                        ComputeBudget {
+                            compute_unit_limit: DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT as u64,
+                            loaded_accounts_data_size_limit: data_size,
+                            ..ComputeBudget::default()
+                        },
+                    )
+                } else {
+                    (
+                        Err(TransactionError::InstructionError(
+                            0,
+                            InstructionError::InvalidInstructionData,
+                        )),
+                        ComputeBudget::default(),
+                    )
+                };
 
             test!(
                 &[
@@ -738,24 +739,25 @@ mod tests {
         //     return InstructionError
         let data_size: usize = MAX_LOADED_ACCOUNTS_DATA_SIZE_BYTES + 1;
         for support_set_loaded_accounts_data_size_limit_ix in [true, false] {
-            let (expected_result, expected_budget) = if support_set_loaded_accounts_data_size_limit_ix {
-                (
-                    Ok(PrioritizationFeeDetails::default()),
-                    ComputeBudget {
-                        compute_unit_limit: DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT as u64,
-                        loaded_accounts_data_size_limit: MAX_LOADED_ACCOUNTS_DATA_SIZE_BYTES,
-                        ..ComputeBudget::default()
-                    },
-                )
-            } else {
-                (
-                    Err(TransactionError::InstructionError(
-                        0,
-                        InstructionError::InvalidInstructionData,
-                    )),
-                    ComputeBudget::default(),
-                )
-            };
+            let (expected_result, expected_budget) =
+                if support_set_loaded_accounts_data_size_limit_ix {
+                    (
+                        Ok(PrioritizationFeeDetails::default()),
+                        ComputeBudget {
+                            compute_unit_limit: DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT as u64,
+                            loaded_accounts_data_size_limit: MAX_LOADED_ACCOUNTS_DATA_SIZE_BYTES,
+                            ..ComputeBudget::default()
+                        },
+                    )
+                } else {
+                    (
+                        Err(TransactionError::InstructionError(
+                            0,
+                            InstructionError::InvalidInstructionData,
+                        )),
+                        ComputeBudget::default(),
+                    )
+                };
 
             test!(
                 &[
@@ -804,20 +806,21 @@ mod tests {
         //     return InstructionError
         let data_size: usize = MAX_LOADED_ACCOUNTS_DATA_SIZE_BYTES;
         for support_set_loaded_accounts_data_size_limit_ix in [true, false] {
-            let (expected_result, expected_budget) = if support_set_loaded_accounts_data_size_limit_ix {
-                (
-                    Err(TransactionError::DuplicateInstruction(2)),
-                    ComputeBudget::default(),
-                )
-            } else {
-                (
-                    Err(TransactionError::InstructionError(
-                        1,
-                        InstructionError::InvalidInstructionData,
-                    )),
-                    ComputeBudget::default(),
-                )
-            };
+            let (expected_result, expected_budget) =
+                if support_set_loaded_accounts_data_size_limit_ix {
+                    (
+                        Err(TransactionError::DuplicateInstruction(2)),
+                        ComputeBudget::default(),
+                    )
+                } else {
+                    (
+                        Err(TransactionError::InstructionError(
+                            1,
+                            InstructionError::InvalidInstructionData,
+                        )),
+                        ComputeBudget::default(),
+                    )
+                };
 
             test!(
                 &[
