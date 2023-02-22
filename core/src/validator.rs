@@ -86,7 +86,6 @@ use {
         snapshot_archive_info::SnapshotArchiveInfoGetter,
         snapshot_config::SnapshotConfig,
         snapshot_hash::StartingSnapshotHashes,
-        snapshot_package::PendingSnapshotPackage,
         snapshot_utils::{self, move_and_async_delete_path},
     },
     solana_sdk::{
@@ -594,7 +593,7 @@ impl Validator {
             config.accounts_hash_interval_slots,
         ));
 
-        let (pending_snapshot_package, snapshot_packager_service) =
+        let (snapshot_package_sender, snapshot_packager_service) =
             if config.snapshot_config.should_generate_snapshots() {
                 // filler accounts make snapshots invalid for use
                 // so, do not publish that we have snapshots
@@ -603,9 +602,11 @@ impl Validator {
                     .as_ref()
                     .map(|config| config.filler_accounts_config.count == 0)
                     .unwrap_or(true);
-                let pending_snapshot_package = PendingSnapshotPackage::default();
+                let (snapshot_package_sender, snapshot_package_receiver) =
+                    crossbeam_channel::unbounded();
                 let snapshot_packager_service = SnapshotPackagerService::new(
-                    pending_snapshot_package.clone(),
+                    snapshot_package_sender.clone(),
+                    snapshot_package_receiver,
                     starting_snapshot_hashes,
                     &exit,
                     &cluster_info,
@@ -613,7 +614,7 @@ impl Validator {
                     enable_gossip_push,
                 );
                 (
-                    Some(pending_snapshot_package),
+                    Some(snapshot_package_sender),
                     Some(snapshot_packager_service),
                 )
             } else {
@@ -624,7 +625,7 @@ impl Validator {
         let accounts_hash_verifier = AccountsHashVerifier::new(
             accounts_package_sender.clone(),
             accounts_package_receiver,
-            pending_snapshot_package,
+            snapshot_package_sender,
             &exit,
             &cluster_info,
             config.known_validators.clone(),

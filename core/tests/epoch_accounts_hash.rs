@@ -22,7 +22,6 @@ use {
         runtime_config::RuntimeConfig,
         snapshot_archive_info::SnapshotArchiveInfoGetter,
         snapshot_config::SnapshotConfig,
-        snapshot_package::PendingSnapshotPackage,
         snapshot_utils,
     },
     solana_sdk::{
@@ -180,9 +179,10 @@ impl BackgroundServices {
     ) -> Self {
         info!("Starting background services...");
 
-        let pending_snapshot_package = PendingSnapshotPackage::default();
+        let (snapshot_package_sender, snapshot_package_receiver) = crossbeam_channel::unbounded();
         let snapshot_packager_service = SnapshotPackagerService::new(
-            pending_snapshot_package.clone(),
+            snapshot_package_sender.clone(),
+            snapshot_package_receiver,
             None,
             &exit,
             &cluster_info,
@@ -194,7 +194,7 @@ impl BackgroundServices {
         let accounts_hash_verifier = AccountsHashVerifier::new(
             accounts_package_sender.clone(),
             accounts_package_receiver,
-            Some(pending_snapshot_package),
+            Some(snapshot_package_sender),
             &exit,
             &cluster_info,
             None,

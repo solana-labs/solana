@@ -13,8 +13,7 @@ use {
         epoch_accounts_hash::EpochAccountsHash,
         snapshot_config::SnapshotConfig,
         snapshot_package::{
-            self, retain_max_n_elements, AccountsPackage, AccountsPackageType,
-            PendingSnapshotPackage, SnapshotPackage, SnapshotType,
+            self, retain_max_n_elements, AccountsPackage, AccountsPackageType, SnapshotPackage,
         },
         sorted_storages::SortedStorages,
     },
@@ -42,7 +41,7 @@ impl AccountsHashVerifier {
     pub fn new(
         accounts_package_sender: Sender<AccountsPackage>,
         accounts_package_receiver: Receiver<AccountsPackage>,
-        pending_snapshot_package: Option<PendingSnapshotPackage>,
+        snapshot_package_sender: Option<Sender<SnapshotPackage>>,
         exit: &Arc<AtomicBool>,
         cluster_info: &Arc<ClusterInfo>,
         known_validators: Option<HashSet<Pubkey>>,
@@ -79,7 +78,7 @@ impl AccountsHashVerifier {
                             &cluster_info,
                             known_validators.as_ref(),
                             halt_on_known_validators_accounts_hash_mismatch,
-                            pending_snapshot_package.as_ref(),
+                            snapshot_package_sender.as_ref(),
                             &mut hashes,
                             &exit,
                             fault_injection_rate_slots,
@@ -180,7 +179,7 @@ impl AccountsHashVerifier {
         cluster_info: &ClusterInfo,
         known_validators: Option<&HashSet<Pubkey>>,
         halt_on_known_validator_accounts_hash_mismatch: bool,
-        pending_snapshot_package: Option<&PendingSnapshotPackage>,
+        snapshot_package_sender: Option<&Sender<SnapshotPackage>>,
         hashes: &mut Vec<(Slot, Hash)>,
         exit: &Arc<AtomicBool>,
         fault_injection_rate_slots: u64,
@@ -203,7 +202,7 @@ impl AccountsHashVerifier {
 
         Self::submit_for_packaging(
             accounts_package,
-            pending_snapshot_package,
+            snapshot_package_sender,
             snapshot_config,
             accounts_hash,
         );
@@ -373,12 +372,11 @@ impl AccountsHashVerifier {
 
     fn submit_for_packaging(
         accounts_package: AccountsPackage,
-        pending_snapshot_package: Option<&PendingSnapshotPackage>,
+        snapshot_package_sender: Option<&Sender<SnapshotPackage>>,
         snapshot_config: &SnapshotConfig,
         accounts_hash: AccountsHash,
     ) {
-        if pending_snapshot_package.is_none()
-            || !snapshot_config.should_generate_snapshots()
+        if !snapshot_config.should_generate_snapshots()
             || !matches!(
                 accounts_package.package_type,
                 AccountsPackageType::Snapshot(_)
@@ -386,26 +384,14 @@ impl AccountsHashVerifier {
         {
             return;
         }
-
-        let snapshot_package = SnapshotPackage::new(accounts_package, accounts_hash.into());
-        let pending_snapshot_package = pending_snapshot_package.unwrap();
-
-        // If the snapshot package is an Incremental Snapshot, do not submit it if there's already
-        // a pending Full Snapshot.
-        let can_submit = match snapshot_package.snapshot_type {
-            SnapshotType::FullSnapshot => true,
-            SnapshotType::IncrementalSnapshot(_) => pending_snapshot_package
-                .lock()
-                .unwrap()
-                .as_ref()
-                .map_or(true, |snapshot_package| {
-                    snapshot_package.snapshot_type.is_incremental_snapshot()
-                }),
+        let Some(snapshot_package_sender) = snapshot_package_sender else {
+            return;
         };
 
-        if can_submit {
-            *pending_snapshot_package.lock().unwrap() = Some(snapshot_package);
-        }
+        let snapshot_package = SnapshotPackage::new(accounts_package, accounts_hash.into());
+        snapshot_package_sender
+            .send(snapshot_package)
+            .expect("send snapshot package");
     }
 
     fn should_halt(
@@ -465,6 +451,7 @@ mod tests {
         super::*,
         rand::seq::SliceRandom,
         solana_gossip::{cluster_info::make_accounts_hashes_message, contact_info::ContactInfo},
+        solana_runtime::snapshot_package::SnapshotType,
         solana_sdk::{
             hash::hash,
             signature::{Keypair, Signer},
