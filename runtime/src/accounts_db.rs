@@ -1344,7 +1344,7 @@ struct RemoveUnrootedSlotsSynchronization {
     signal: Condvar,
 }
 
-type AccountInfoAccountsIndex = AccountsIndex<AccountInfo>;
+type AccountInfoAccountsIndex = AccountsIndex<AccountInfo, AccountInfo>;
 
 // This structure handles the load/store of the accounts
 #[derive(Debug)]
@@ -13593,7 +13593,7 @@ pub mod tests {
 
     // returns the rooted entries and the storage ref count
     fn roots_and_ref_count<T: IndexValue>(
-        index: &AccountsIndex<T>,
+        index: &AccountsIndex<T, T>,
         locked_account_entry: &ReadAccountMapEntry<T>,
         max_inclusive: Option<Slot>,
     ) -> (SlotList<T>, RefCount) {

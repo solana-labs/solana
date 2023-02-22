@@ -99,7 +99,11 @@ impl BucketMapHolderStats {
         per_bucket.map(|stat| stat.fetch_sub(count, Ordering::Relaxed));
     }
 
-    fn ms_per_age<T: IndexValue>(&self, storage: &BucketMapHolder<T>, elapsed_ms: u64) -> u64 {
+    fn ms_per_age<T: IndexValue, U: IndexValue + From<T> + Into<T>>(
+        &self,
+        storage: &BucketMapHolder<T, U>,
+        elapsed_ms: u64,
+    ) -> u64 {
         let age_now = storage.current_age();
         let ages_flushed = storage.count_buckets_flushed() as u64;
         let last_age = self.last_age.swap(age_now, Ordering::Relaxed) as u64;
@@ -172,7 +176,10 @@ impl BucketMapHolderStats {
         in_mem.saturating_sub(held_in_mem) as usize
     }
 
-    pub fn report_stats<T: IndexValue>(&self, storage: &BucketMapHolder<T>) {
+    pub fn report_stats<T: IndexValue, U: IndexValue + From<T> + Into<T>>(
+        &self,
+        storage: &BucketMapHolder<T, U>,
+    ) {
         let elapsed_ms = self.last_time.elapsed_ms();
         if elapsed_ms < STATS_INTERVAL_MS {
             return;
