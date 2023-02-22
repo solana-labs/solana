@@ -130,6 +130,7 @@ pub struct StreamStats {
     pub(crate) total_packet_batches_sent: AtomicUsize,
     pub(crate) total_packet_batches_none: AtomicUsize,
     pub(crate) total_packets_sent_for_batching: AtomicUsize,
+    pub(crate) total_packets_sent_to_consumer: AtomicUsize,
     pub(crate) total_stream_read_errors: AtomicUsize,
     pub(crate) total_stream_read_timeouts: AtomicUsize,
     pub(crate) num_evictions: AtomicUsize,
@@ -254,6 +255,12 @@ impl StreamStats {
             (
                 "packets_sent_for_batching",
                 self.total_packets_sent_for_batching
+                    .swap(0, Ordering::Relaxed),
+                i64
+            ),
+            (
+                "packets_sent_to_consumer",
+                self.total_packets_sent_to_consumer
                     .swap(0, Ordering::Relaxed),
                 i64
             ),

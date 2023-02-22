@@ -590,6 +590,11 @@ async fn packet_batch_sender(
                     stats
                         .total_packet_batches_sent
                         .fetch_add(1, Ordering::Relaxed);
+
+                    stats
+                        .total_packets_sent_to_consumer
+                        .fetch_add(len, Ordering::Relaxed);
+
                     trace!("Sent {} packet batch", len);
                 }
                 break;
