@@ -565,19 +565,18 @@ async fn packet_batch_sender(
     stats: Arc<StreamStats>,
 ) {
     trace!("enter packet_batch_sender");
+    let mut batch_start_time = Instant::now();
     loop {
         let mut packet_batch = PacketBatch::with_capacity(PACKET_BATCH_SIZE);
 
         stats
             .total_packets_allocated
             .fetch_add(PACKET_BATCH_SIZE, Ordering::Relaxed);
-
-        let mut last_sent = Instant::now();
         loop {
             if exit.load(Ordering::Relaxed) {
                 return;
             }
-            let elapsed = last_sent.elapsed();
+            let elapsed = batch_start_time.elapsed();
             if packet_batch.len() >= PACKET_BATCH_SIZE
                 || (!packet_batch.is_empty() && elapsed.as_millis() >= COALESCE_MS)
             {
@@ -611,7 +610,7 @@ async fn packet_batch_sender(
                 }
 
                 if packet_batch.len() == 1 {
-                    last_sent = Instant::now();
+                    batch_start_time = Instant::now();
                 }
             } else {
                 sleep(Duration::from_micros(250)).await;
