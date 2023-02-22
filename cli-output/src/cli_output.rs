@@ -2600,7 +2600,7 @@ pub struct CliTransaction {
     pub transaction: EncodedTransaction,
     pub meta: Option<UiTransactionStatusMeta>,
     pub block_time: Option<UnixTimestamp>,
-    #[serde(skip_serializing)]
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub slot: Option<Slot>,
     #[serde(skip_serializing)]
     pub decoded_transaction: VersionedTransaction,
