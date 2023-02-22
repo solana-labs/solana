@@ -1,5 +1,6 @@
 //! The `validator` module hosts all the validator microservices.
 
+use solana_geyser_plugin_manager::geyser_plugin_manager::GeyserPluginManager;
 pub use solana_perf::report_target_features;
 use {
     crate::{
@@ -127,7 +128,10 @@ pub struct ValidatorConfig {
     pub account_paths: Vec<PathBuf>,
     pub account_shrink_paths: Option<Vec<PathBuf>>,
     pub rpc_config: JsonRpcConfig,
-    pub geyser_plugin_config_files: Option<Vec<PathBuf>>,
+    /// Specifies which plugins to start up with
+    pub on_start_geyser_plugin_config_files: Option<Vec<PathBuf>>,
+    /// Shared across plugin service and admin rpc service
+    pub geyser_plugin_manager: Arc<RwLock<GeyserPluginManager>>,
     pub rpc_addrs: Option<(SocketAddr, SocketAddr)>, // (JsonRpc, JsonRpcPubSub)
     pub pubsub_config: PubSubConfig,
     pub snapshot_config: SnapshotConfig,
@@ -191,7 +195,7 @@ impl Default for ValidatorConfig {
             account_paths: Vec::new(),
             account_shrink_paths: None,
             rpc_config: JsonRpcConfig::default(),
-            geyser_plugin_config_files: None,
+            on_start_geyser_plugin_config_files: None,
             rpc_addrs: None,
             pubsub_config: PubSubConfig::default(),
             snapshot_config: SnapshotConfig::new_load_only(),
@@ -240,6 +244,7 @@ impl Default for ValidatorConfig {
             runtime_config: RuntimeConfig::default(),
             replay_slots_concurrently: false,
             banking_trace_dir_byte_limit: 0,
+            geyser_plugin_manager: Arc::new(RwLock::new(GeyserPluginManager::new())),
         }
     }
 }
@@ -411,11 +416,14 @@ impl Validator {
         let mut bank_notification_senders = Vec::new();
 
         let geyser_plugin_service =
-            if let Some(geyser_plugin_config_files) = &config.geyser_plugin_config_files {
+            if let Some(geyser_plugin_config_files) = &config.on_start_geyser_plugin_config_files {
                 let (confirmed_bank_sender, confirmed_bank_receiver) = unbounded();
                 bank_notification_senders.push(confirmed_bank_sender);
-                let result =
-                    GeyserPluginService::new(confirmed_bank_receiver, geyser_plugin_config_files);
+                let result = GeyserPluginService::new(
+                    confirmed_bank_receiver,
+                    geyser_plugin_config_files,
+                    Arc::clone(&config.geyser_plugin_manager),
+                );
                 match result {
                     Ok(geyser_plugin_service) => Some(geyser_plugin_service),
                     Err(err) => {

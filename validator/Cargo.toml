@@ -24,6 +24,7 @@ jsonrpc-derive = "18.0.0"
 jsonrpc-ipc-server = "18.0.0"
 jsonrpc-server-utils = "18.0.0"
 lazy_static = "1.4.0"
+libloading = "0.7.3"
 log = "0.4.17"
 num_cpus = "1.13.1"
 rand = "0.7.0"
@@ -37,6 +38,8 @@ solana-core = { path = "../core", version = "=1.16.0" }
 solana-download-utils = { path = "../download-utils", version = "=1.16.0" }
 solana-entry = { path = "../entry", version = "=1.16.0" }
 solana-faucet = { path = "../faucet", version = "=1.16.0" }
+solana-geyser-plugin-interface = { path = "../geyser-plugin-interface", version = "=1.16.0" }
+solana-geyser-plugin-manager = { path = "../geyser-plugin-manager", version = "=1.16.0" }
 solana-genesis-utils = { path = "../genesis-utils", version = "=1.16.0" }
 solana-gossip = { path = "../gossip", version = "=1.16.0" }
 solana-ledger = { path = "../ledger", version = "=1.16.0" }

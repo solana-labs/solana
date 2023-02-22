@@ -70,26 +70,28 @@ impl GeyserPluginService {
     pub fn new(
         confirmed_bank_receiver: Receiver<BankNotification>,
         geyser_plugin_config_files: &[PathBuf],
+        shared_geyser_plugin_manager: Arc<RwLock<GeyserPluginManager>>,
     ) -> Result<Self, GeyserPluginServiceError> {
         info!(
             "Starting GeyserPluginService from config files: {:?}",
             geyser_plugin_config_files
         );
-        let mut plugin_manager = GeyserPluginManager::new();
+        let mut plugin_manager_lock = shared_geyser_plugin_manager.write().unwrap();
 
         for geyser_plugin_config_file in geyser_plugin_config_files {
-            Self::load_plugin(&mut plugin_manager, geyser_plugin_config_file)?;
+            Self::load_plugin(&mut plugin_manager_lock, geyser_plugin_config_file)?;
         }
-        let account_data_notifications_enabled =
-            plugin_manager.account_data_notifications_enabled();
-        let transaction_notifications_enabled = plugin_manager.transaction_notifications_enabled();
 
-        let plugin_manager = Arc::new(RwLock::new(plugin_manager));
+        let account_data_notifications_enabled =
+            plugin_manager_lock.account_data_notifications_enabled();
+        let transaction_notifications_enabled =
+            plugin_manager_lock.transaction_notifications_enabled();
+        drop(plugin_manager_lock);
 
         let accounts_update_notifier: Option<AccountsUpdateNotifier> =
             if account_data_notifications_enabled {
                 let accounts_update_notifier =
-                    AccountsUpdateNotifierImpl::new(plugin_manager.clone());
+                    AccountsUpdateNotifierImpl::new(shared_geyser_plugin_manager.clone());
                 Some(Arc::new(RwLock::new(accounts_update_notifier)))
             } else {
                 None
@@ -97,7 +99,8 @@ impl GeyserPluginService {
 
         let transaction_notifier: Option<TransactionNotifierLock> =
             if transaction_notifications_enabled {
-                let transaction_notifier = TransactionNotifierImpl::new(plugin_manager.clone());
+                let transaction_notifier =
+                    TransactionNotifierImpl::new(shared_geyser_plugin_manager.clone());
                 Some(Arc::new(RwLock::new(transaction_notifier)))
             } else {
                 None
@@ -107,7 +110,8 @@ impl GeyserPluginService {
             Option<SlotStatusObserver>,
             Option<BlockMetadataNotifierLock>,
         ) = if account_data_notifications_enabled || transaction_notifications_enabled {
-            let slot_status_notifier = SlotStatusNotifierImpl::new(plugin_manager.clone());
+            let slot_status_notifier =
+                SlotStatusNotifierImpl::new(shared_geyser_plugin_manager.clone());
             let slot_status_notifier = Arc::new(RwLock::new(slot_status_notifier));
             (
                 Some(SlotStatusObserver::new(
@@ -115,7 +119,7 @@ impl GeyserPluginService {
                     slot_status_notifier,
                 )),
                 Some(Arc::new(RwLock::new(BlockMetadataNotifierImpl::new(
-                    plugin_manager.clone(),
+                    shared_geyser_plugin_manager.clone(),
                 )))),
             )
         } else {
@@ -125,7 +129,7 @@ impl GeyserPluginService {
         info!("Started GeyserPluginService");
         Ok(GeyserPluginService {
             slot_status_observer,
-            plugin_manager,
+            plugin_manager: shared_geyser_plugin_manager,
             accounts_update_notifier,
             transaction_notifier,
             block_metadata_notifier,

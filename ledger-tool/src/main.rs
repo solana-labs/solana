@@ -1222,13 +1222,18 @@ fn load_bank_forks(
 
         let (confirmed_bank_sender, confirmed_bank_receiver) = unbounded();
         drop(confirmed_bank_sender);
-        let geyser_service =
-            GeyserPluginService::new(confirmed_bank_receiver, &geyser_config_files).unwrap_or_else(
-                |err| {
-                    eprintln!("Failed to setup Geyser service: {err:?}");
-                    exit(1);
-                },
-            );
+
+        // solana-ledger-tool doesn't need to share plugin manager so just make a new one here
+        let plugin_manager = Arc::new(RwLock::new(GeyserPluginManager::new()));
+        let geyser_service = GeyserPluginService::new(
+            confirmed_bank_receiver,
+            &geyser_config_files,
+            plugin_manager,
+        )
+        .unwrap_or_else(|err| {
+            eprintln!("Failed to setup Geyser service: {err:?}");
+            exit(1);
+        });
         accounts_update_notifier = geyser_service.get_accounts_update_notifier();
         transaction_notifier = geyser_service.get_transaction_notifier();
     }
@@ -1405,6 +1410,7 @@ fn assert_capitalization(bank: &Bank) {
 }
 #[cfg(not(target_env = "msvc"))]
 use jemallocator::Jemalloc;
+use solana_geyser_plugin_manager::geyser_plugin_manager::GeyserPluginManager;
 
 #[cfg(not(target_env = "msvc"))]
 #[global_allocator]

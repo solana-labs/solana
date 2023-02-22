@@ -1,5 +1,4 @@
 #![allow(clippy::integer_arithmetic)]
-
 use {
     log::*,
     solana_cli_output::CliAccount,
@@ -8,6 +7,7 @@ use {
         tower_storage::TowerStorage,
         validator::{Validator, ValidatorConfig, ValidatorStartProgress},
     },
+    solana_geyser_plugin_manager::geyser_plugin_manager::GeyserPluginManager,
     solana_gossip::{
         cluster_info::{ClusterInfo, Node},
         gossip_service::discover_cluster,
@@ -126,6 +126,7 @@ pub struct TestValidatorGenesis {
     pub log_messages_bytes_limit: Option<usize>,
     pub transaction_account_lock_limit: Option<usize>,
     pub tpu_enable_udp: bool,
+    pub geyser_plugin_manager: Arc<RwLock<GeyserPluginManager>>,
 }
 
 impl Default for TestValidatorGenesis {
@@ -157,6 +158,7 @@ impl Default for TestValidatorGenesis {
             log_messages_bytes_limit: Option::<usize>::default(),
             transaction_account_lock_limit: Option::<usize>::default(),
             tpu_enable_udp: DEFAULT_TPU_ENABLE_UDP,
+            geyser_plugin_manager: Arc::new(RwLock::new(GeyserPluginManager::new())),
         }
     }
 }
@@ -824,7 +826,7 @@ impl TestValidator {
         };
 
         let mut validator_config = ValidatorConfig {
-            geyser_plugin_config_files: config.geyser_plugin_config_files.clone(),
+            on_start_geyser_plugin_config_files: config.geyser_plugin_config_files.clone(),
             rpc_addrs: Some((
                 SocketAddr::new(
                     IpAddr::V4(Ipv4Addr::UNSPECIFIED),

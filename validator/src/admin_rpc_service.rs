@@ -1,3 +1,8 @@
+use jsonrpc_core::ErrorCode;
+use libloading::{Library, Symbol};
+use solana_geyser_plugin_interface::geyser_plugin_interface::GeyserPlugin;
+use solana_geyser_plugin_manager::geyser_plugin_manager::GeyserPluginManager;
+
 use {
     jsonrpc_core::{MetaIoHandler, Metadata, Result},
     jsonrpc_core_client::{transports::ipc, RpcError},
@@ -30,6 +35,8 @@ use {
     },
 };
 
+type PluginConstructor = unsafe fn() -> *mut dyn GeyserPlugin;
+
 #[derive(Clone)]
 pub struct AdminRpcRequestMetadataPostInit {
     pub cluster_info: Arc<ClusterInfo>,
@@ -48,6 +55,7 @@ pub struct AdminRpcRequestMetadata {
     pub tower_storage: Arc<dyn TowerStorage>,
     pub staked_nodes_overrides: Arc<RwLock<HashMap<Pubkey, u64>>>,
     pub post_init: Arc<RwLock<Option<AdminRpcRequestMetadataPostInit>>>,
+    pub plugin_manager: Arc<RwLock<GeyserPluginManager>>,
 }
 impl Metadata for AdminRpcRequestMetadata {}
 
@@ -146,6 +154,14 @@ pub trait AdminRpc {
     #[rpc(meta, name = "exit")]
     fn exit(&self, meta: Self::Metadata) -> Result<()>;
 
+    #[rpc(meta, name = "reloadPlugin")]
+    fn reload_plugin(
+        &self,
+        meta: Self::Metadata,
+        libpath: String,
+        config_file: String,
+    ) -> Result<()>;
+
     #[rpc(meta, name = "rpcAddress")]
     fn rpc_addr(&self, meta: Self::Metadata) -> Result<Option<SocketAddr>>;
 
@@ -238,6 +254,118 @@ impl AdminRpc for AdminRpcImpl {
                 std::process::exit(0);
             })
             .unwrap();
+        Ok(())
+    }
+
+    fn reload_plugin(
+        &self,
+        meta: Self::Metadata,
+        libpath: String,
+        config_file: String,
+    ) -> Result<()> {
+        // If the validator is requesting reload_plugin, they will likely want
+        // it to reload and begin processing notifies as soon as possible. ASAP here
+        // does not refer to realtime but rather slot/cluster time (i.e the next slot).
+        // So, we interrupt plugin service by taking a write lock ASAP
+        let mut plugin_manager = meta.plugin_manager.write().unwrap();
+
+        // Check if any libpaths match this one
+        let Some(idx) = plugin_manager.libpaths.iter().position(|path| path.eq(&PathBuf::from(&libpath))) else {
+            // If we don't find one, drop write lock ASAP and return an error
+            drop(plugin_manager);
+            return Err(jsonrpc_core::error::Error {
+                code: ErrorCode::InvalidRequest,
+                message: String::from("plugin requested to reload is not loaded"),
+                data: None,
+            })
+        };
+
+        // Get current plugin and library
+        let (current_plugin, current_lib) = plugin_manager
+            .get_plugin_and_lib_mut(idx)
+            .expect("just checked for existence of libpath");
+
+        // Unload first in case plugin requires exclusive access to resource,
+        // such as a particular port or database.
+        current_plugin.on_unload();
+
+        // Try to load plugin, library
+        // SAFETY: It is up the validator to ensure this is a valid plugin library.
+        let (mut new_plugin, new_lib): (Box<dyn GeyserPlugin>, Library) = {
+            #[cfg(not(test))]
+            unsafe {
+                // Attempt to load Library
+                let lib = Library::new(libpath).map_err(|e| {
+                    jsonrpc_core::error::Error::invalid_params(format!(
+                        "invalid geyser plugin, failed to load: {e}"
+                    ))
+                })?;
+
+                // Attempt to retrieve GeyserPlugin constructor
+                let constructor: Symbol<PluginConstructor> =
+                    lib.get(b"_create_plugin").map_err(|e| {
+                        jsonrpc_core::error::Error::invalid_params(format!(
+                            "invalid geyser plugin, failed to construct plugin: {e}"
+                        ))
+                    })?;
+
+                // Attempt to construct raw *mut dyn GeyserPlugin
+                let plugin_raw = constructor();
+
+                (Box::from_raw(plugin_raw), lib)
+            }
+
+            // This is mocked for tests to avoid having to do IO with a dynamically linked library
+            // across different architectures.
+            #[cfg(test)]
+            {
+                tests::dummy_plugin_and_library()
+            }
+        };
+
+        // Try unload, on_load
+        // Attempt to load new plugin
+        match new_plugin.on_load(&config_file) {
+            // On success, replace plugin and library
+            // Note: don't need to replace libpath since it matches
+            Ok(()) => {
+                *current_plugin = new_plugin;
+                *current_lib = new_lib;
+            }
+
+            // On failure, attempt to revert and return error
+            // Note that here we are using the same config file as for the new file
+            Err(e) => {
+                return match current_plugin.on_load(&config_file) {
+                    // Failed to load plugin but successfully reverted
+                    Ok(()) => Err(jsonrpc_core::error::Error::invalid_params(format!(
+                        "failed to start new plugin, reverted to current plugin: {e}"
+                    ))),
+
+                    // Failed to load plugin and failed to revert.
+                    //
+                    // Note that many plugin impls don't do anything for on_load or on_unload
+                    // so this should not happen very often
+                    Err(revert_err) => {
+                        // If we failed to revert, unload plugin
+                        // First drop mutable references
+                        drop(current_plugin);
+                        drop(current_lib);
+                        // Then drop plugin, lib, and path
+                        drop(plugin_manager.plugins.remove(idx));
+                        drop(plugin_manager.libs.remove(idx));
+                        drop(plugin_manager.libpaths.remove(idx));
+
+                        Err(jsonrpc_core::error::Error::invalid_params(format!(
+                            "failed to start new plugin, and failed to revert to old plugin. \
+                            The old plugin was dropped. Try to load a plugin with load_plugin. \
+                            new plugin startup error: {e}. old plugin re-startup error: {revert_err}"
+                        )))
+                    }
+                };
+            }
+        }
+
         Ok(())
     }
 
@@ -675,6 +803,27 @@ mod tests {
         bank_forks: Arc<RwLock<BankForks>>,
     }
 
+    // do not use anything from this library
+    pub(super) fn dummy_plugin_and_library() -> (Box<dyn GeyserPlugin>, Library) {
+        let plugin = Box::new(TestPlugin);
+        let lib = {
+            let handle: *mut std::os::raw::c_void = &mut () as *mut _ as *mut std::os::raw::c_void;
+            // SAFETY: all calls to get Symbols should fail, so this is actually safe
+            let inner_lib = unsafe { libloading::os::unix::Library::from_raw(handle) };
+            Library::from(inner_lib)
+        };
+        (plugin, lib)
+    }
+
+    #[derive(Debug)]
+    pub(super) struct TestPlugin;
+
+    impl GeyserPlugin for TestPlugin {
+        fn name(&self) -> &'static str {
+            "test"
+        }
+    }
+
     impl RpcHandler {
         fn _start() -> Self {
             Self::start_with_config(TestConfig::default())
@@ -713,6 +862,9 @@ mod tests {
                     repair_whitelist,
                 }))),
                 staked_nodes_overrides: Arc::new(RwLock::new(HashMap::new())),
+                // For tests, just use an empty manager. In prod, this would be
+                // a shared GeyserPluginManager with the plugin service
+                plugin_manager: Arc::new(RwLock::new(GeyserPluginManager::new())),
             };
             let mut io = MetaIoHandler::default();
             io.extend_with(AdminRpcImpl.to_delegate());
@@ -1228,5 +1380,61 @@ mod tests {
                 }
             }
         }
+    }
+
+    #[test]
+    fn test_geyser_reload() {
+        let RpcHandler { io, mut meta, .. } = RpcHandler::_start();
+
+        // The geyser plugin which we will reload
+        const DUMMY_CONFIG_FILE: &'static str = "dummy_config";
+        const DUMMY_LIBRARY: &'static str = "dummy_lib";
+
+        // No plugins are loaded, this should fail
+        let req = format!(
+            r#"{{"jsonrpc":"2.0","id":1,"method":"reloadPlugin","params":["{}", "{}"]}}"#,
+            DUMMY_LIBRARY, DUMMY_CONFIG_FILE,
+        );
+        let response = io.handle_request_sync(&req, meta.clone());
+        let result: Value = serde_json::from_str(&response.expect("actual response"))
+            .expect("actual response deserialization");
+        assert_eq!(
+            result["error"]["message"],
+            "plugin requested to reload is not loaded"
+        );
+
+        // Mock having loaded pluggin
+        let mut plugin_manager = meta.plugin_manager.write().unwrap();
+        let (plugin, lib) = dummy_plugin_and_library();
+        plugin_manager.plugins.push(plugin);
+        plugin_manager.libs.push(lib);
+        plugin_manager.libpaths.push(DUMMY_LIBRARY.into());
+        drop(plugin_manager);
+
+        // Try wrong libpath (same error)
+        const WRONG_LIB: &'static str = "wrong_lib";
+        let req = format!(
+            r#"{{"jsonrpc":"2.0","id":1,"method":"reloadPlugin","params":["{}", "{}"]}}"#,
+            WRONG_LIB, DUMMY_CONFIG_FILE,
+        );
+        let response = io.handle_request_sync(&req, meta.clone());
+        let result: Value = serde_json::from_str(&response.expect("actual response"))
+            .expect("actual response deserialization");
+        assert_eq!(
+            result["error"]["message"],
+            "plugin requested to reload is not loaded"
+        );
+
+        // Now try a (dummy) reload
+        let req = format!(
+            r#"{{"jsonrpc":"2.0","id":1,"method":"reloadPlugin","params":["{}", "{}"]}}"#,
+            DUMMY_LIBRARY, DUMMY_CONFIG_FILE,
+        );
+        let response = io.handle_request_sync(&req, meta.clone());
+        let result: Value = serde_json::from_str(&response.expect("actual response"))
+            .expect("actual response deserialization");
+        println!("{result:?}");
+        // Ok(()) --> Value::Null result
+        assert_eq!(result["result"], Value::Null);
     }
 }

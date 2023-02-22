@@ -14,7 +14,7 @@ pub fn safe_clone_config(config: &ValidatorConfig) -> ValidatorConfig {
         account_paths: config.account_paths.clone(),
         account_shrink_paths: config.account_shrink_paths.clone(),
         rpc_config: config.rpc_config.clone(),
-        geyser_plugin_config_files: config.geyser_plugin_config_files.clone(),
+        on_start_geyser_plugin_config_files: config.on_start_geyser_plugin_config_files.clone(),
         rpc_addrs: config.rpc_addrs,
         pubsub_config: config.pubsub_config.clone(),
         snapshot_config: config.snapshot_config.clone(),
@@ -65,6 +65,7 @@ pub fn safe_clone_config(config: &ValidatorConfig) -> ValidatorConfig {
         runtime_config: config.runtime_config.clone(),
         replay_slots_concurrently: config.replay_slots_concurrently,
         banking_trace_dir_byte_limit: config.banking_trace_dir_byte_limit,
+        geyser_plugin_manager: Arc::clone(&config.geyser_plugin_manager),
     }
 }
 
