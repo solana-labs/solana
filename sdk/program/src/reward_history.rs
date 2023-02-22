@@ -16,14 +16,16 @@ pub struct RewardHistoryEntry {
     pub total: u64,       // total rewards at this epoch
     pub distributed: u64, // already distributed reward amount
     pub remaining: u64,   // remaining reward amount
+    pub root_hash: Hash,
 }
 
 impl RewardHistoryEntry {
-    pub fn new(total: u64) -> Self {
+    pub fn new(total: u64, root_hash: Hash) -> Self {
         Self {
             total,
             distributed: 0,
             remaining: total,
+            root_hash,
         }
     }
 }
