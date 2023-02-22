@@ -758,6 +758,111 @@ impl CliValidator {
     }
 }
 
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CliHistorySignatureVec(Vec<CliHistorySignature>);
+
+impl CliHistorySignatureVec {
+    pub fn new(list: Vec<CliHistorySignature>) -> Self {
+        Self(list)
+    }
+}
+
+impl QuietDisplay for CliHistorySignatureVec {}
+impl VerboseDisplay for CliHistorySignatureVec {
+    fn write_str(&self, w: &mut dyn std::fmt::Write) -> std::fmt::Result {
+        for signature in &self.0 {
+            VerboseDisplay::write_str(signature, w)?;
+        }
+        writeln!(w, "{} transactions found", self.0.len())
+    }
+}
+
+impl fmt::Display for CliHistorySignatureVec {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        for signature in &self.0 {
+            write!(f, "{signature}")?;
+        }
+        writeln!(f, "{} transactions found", self.0.len())
+    }
+}
+
+#[derive(Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct CliHistorySignature {
+    pub signature: String,
+    #[serde(flatten, skip_serializing_if = "Option::is_none")]
+    pub verbose: Option<CliHistoryVerbose>,
+}
+
+impl QuietDisplay for CliHistorySignature {}
+impl VerboseDisplay for CliHistorySignature {
+    fn write_str(&self, w: &mut dyn std::fmt::Write) -> std::fmt::Result {
+        let verbose = self
+            .verbose
+            .as_ref()
+            .expect("should have verbose.is_some()");
+        writeln!(
+            w,
+            "{} [slot={} {}status={}] {}",
+            self.signature,
+            verbose.slot,
+            match verbose.block_time {
+                None => "".to_string(),
+                Some(block_time) => format!("timestamp={} ", unix_timestamp_to_string(block_time)),
+            },
+            if let Some(err) = &verbose.err {
+                format!("Failed: {err:?}")
+            } else {
+                match &verbose.confirmation_status {
+                    None => "Finalized".to_string(),
+                    Some(status) => format!("{status:?}"),
+                }
+            },
+            verbose.memo.clone().unwrap_or_default(),
+        )
+    }
+}
+
+impl fmt::Display for CliHistorySignature {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        writeln!(f, "{}", self.signature)
+    }
+}
+
+#[derive(Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct CliHistoryVerbose {
+    pub slot: Slot,
+    pub block_time: Option<UnixTimestamp>,
+    pub err: Option<TransactionError>,
+    pub confirmation_status: Option<TransactionConfirmationStatus>,
+    pub memo: Option<String>,
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CliHistoryTransactionVec(Vec<CliTransactionConfirmation>);
+
+impl CliHistoryTransactionVec {
+    pub fn new(list: Vec<CliTransactionConfirmation>) -> Self {
+        Self(list)
+    }
+}
+
+impl QuietDisplay for CliHistoryTransactionVec {}
+impl VerboseDisplay for CliHistoryTransactionVec {}
+
+impl fmt::Display for CliHistoryTransactionVec {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        for transaction in &self.0 {
+            VerboseDisplay::write_str(transaction, f)?;
+            writeln!(f)?;
+        }
+        writeln!(f, "{} transactions found", self.0.len())
+    }
+}
+
 #[derive(Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CliNonceAccount {
