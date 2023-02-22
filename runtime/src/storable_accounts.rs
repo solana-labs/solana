@@ -1,6 +1,6 @@
 //! trait for abstracting underlying storage of pubkey and account pairs to be written
 use {
-    crate::{accounts_db::IncludeSlotInHash, append_vec::StoredAccountMeta},
+    crate::{account_storage::meta::StoredAccountMeta, accounts_db::IncludeSlotInHash},
     solana_sdk::{account::ReadableAccount, clock::Slot, hash::Hash, pubkey::Pubkey},
 };
 
@@ -148,10 +148,10 @@ impl<'a> StorableAccounts<'a, StoredAccountMeta<'a>>
         true
     }
     fn hash(&self, index: usize) -> &Hash {
-        self.account(index).hash
+        self.account(index).hash()
     }
     fn write_version(&self, index: usize) -> u64 {
-        self.account(index).meta.write_version_obsolete
+        self.account(index).write_version()
     }
 }
 
@@ -252,10 +252,10 @@ impl<'a> StorableAccounts<'a, StoredAccountMeta<'a>> for StorableAccountsBySlot<
         true
     }
     fn hash(&self, index: usize) -> &Hash {
-        self.account(index).hash
+        self.account(index).hash()
     }
     fn write_version(&self, index: usize) -> u64 {
-        self.account(index).meta.write_version_obsolete
+        self.account(index).write_version()
     }
 }
 
@@ -292,10 +292,10 @@ impl<'a> StorableAccounts<'a, StoredAccountMeta<'a>>
         true
     }
     fn hash(&self, index: usize) -> &Hash {
-        self.account(index).hash
+        self.account(index).hash()
     }
     fn write_version(&self, index: usize) -> u64 {
-        self.account(index).meta.write_version_obsolete
+        self.account(index).write_version()
     }
 }
 
@@ -304,8 +304,8 @@ pub mod tests {
     use {
         super::*,
         crate::{
+            account_storage::meta::{AccountMeta, StoredAccountMeta, StoredMeta},
             accounts_db::INCLUDE_SLOT_IN_HASH_TESTS,
-            append_vec::{AccountMeta, StoredAccountMeta, StoredMeta},
         },
         solana_sdk::{
             account::{accounts_equal, AccountSharedData, WritableAccount},
@@ -556,12 +556,9 @@ pub mod tests {
                             let index = index as usize;
                             assert_eq!(storable.account(index), &raw2[index]);
                             assert_eq!(storable.pubkey(index), raw2[index].pubkey());
-                            assert_eq!(storable.hash(index), raw2[index].hash);
+                            assert_eq!(storable.hash(index), raw2[index].hash());
                             assert_eq!(storable.slot(index), expected_slots[index]);
-                            assert_eq!(
-                                storable.write_version(index),
-                                raw2[index].meta.write_version_obsolete
-                            );
+                            assert_eq!(storable.write_version(index), raw2[index].write_version());
                         })
                     }
                 }

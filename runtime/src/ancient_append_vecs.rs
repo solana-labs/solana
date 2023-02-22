@@ -5,7 +5,7 @@
 //! Otherwise, an ancient append vec is the same as any other append vec
 use {
     crate::{
-        account_storage::ShrinkInProgress,
+        account_storage::{meta::StoredAccountMeta, ShrinkInProgress},
         accounts_db::{
             AccountStorageEntry, AccountsDb, AliveAccounts, GetUniqueAccountsResult, ShrinkCollect,
             ShrinkCollectAliveSeparatedByRefs, ShrinkStatsSub, StoreReclaims,
@@ -14,7 +14,7 @@ use {
         accounts_file::AccountsFile,
         accounts_index::ZeroLamport,
         active_stats::ActiveStatItem,
-        append_vec::{aligned_stored_size, StoredAccountMeta},
+        append_vec::aligned_stored_size,
         storable_accounts::{StorableAccounts, StorableAccountsBySlot},
     },
     rand::{thread_rng, Rng},
@@ -706,7 +706,7 @@ impl<'a> AccountsToStore<'a> {
         if alive_total_bytes > available_bytes as usize {
             // not all the alive bytes fit, so we have to find how many accounts fit within available_bytes
             for (i, account) in accounts.iter().enumerate() {
-                let account_size = account.stored_size as u64;
+                let account_size = account.stored_size() as u64;
                 if available_bytes >= account_size {
                     available_bytes = available_bytes.saturating_sub(account_size);
                 } else if index_first_item_overflow == num_accounts {
@@ -760,6 +760,7 @@ pub mod tests {
     use {
         super::*,
         crate::{
+            account_storage::meta::{AccountMeta, StoredAccountMeta, StoredMeta},
             accounts_db::{
                 get_temp_accounts_paths,
                 tests::{
@@ -769,9 +770,7 @@ pub mod tests {
                 },
                 INCLUDE_SLOT_IN_HASH_TESTS,
             },
-            append_vec::{
-                aligned_stored_size, AccountMeta, AppendVec, StoredAccountMeta, StoredMeta,
-            },
+            append_vec::{aligned_stored_size, AppendVec},
             storable_accounts::StorableAccountsBySlot,
         },
         solana_sdk::{
