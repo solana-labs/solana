@@ -706,7 +706,7 @@ impl<'a> AccountsToStore<'a> {
         if alive_total_bytes > available_bytes as usize {
             // not all the alive bytes fit, so we have to find how many accounts fit within available_bytes
             for (i, account) in accounts.iter().enumerate() {
-                let account_size = account.stored_size as u64;
+                let account_size = account.stored_size() as u64;
                 if available_bytes >= account_size {
                     available_bytes = available_bytes.saturating_sub(account_size);
                 } else if index_first_item_overflow == num_accounts {

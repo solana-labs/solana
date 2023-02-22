@@ -98,13 +98,13 @@ impl<'a: 'b, 'b, T: ReadableAccount + Sync + 'b, U: StorableAccounts<'a, T>, V: 
 /// (see `StoredAccountMeta::clone_account()`).
 #[derive(PartialEq, Eq, Debug)]
 pub struct StoredAccountMeta<'a> {
-    pub meta: &'a StoredMeta,
+    pub(crate) meta: &'a StoredMeta,
     /// account data
-    pub account_meta: &'a AccountMeta,
-    pub data: &'a [u8],
-    pub offset: usize,
-    pub stored_size: usize,
-    pub hash: &'a Hash,
+    pub(crate) account_meta: &'a AccountMeta,
+    pub(crate) data: &'a [u8],
+    pub(crate) offset: usize,
+    pub(crate) stored_size: usize,
+    pub(crate) hash: &'a Hash,
 }
 
 impl<'a> StoredAccountMeta<'a> {
@@ -121,6 +121,30 @@ impl<'a> StoredAccountMeta<'a> {
 
     pub fn pubkey(&self) -> &Pubkey {
         &self.meta.pubkey
+    }
+
+    pub fn hash(&self) -> &Hash {
+        self.hash
+    }
+
+    pub fn stored_size(&self) -> usize {
+        self.stored_size
+    }
+
+    pub fn offset(&self) -> usize {
+        self.offset
+    }
+
+    pub fn data(&self) -> &[u8] {
+        &self.data
+    }
+
+    pub fn data_len(&self) -> u64 {
+        self.meta.data_len
+    }
+
+    pub fn write_version(&self) -> StoredMetaWriteVersion {
+        self.meta.write_version_obsolete
     }
 
     pub(crate) fn sanitize(&self) -> bool {
@@ -144,6 +168,24 @@ impl<'a> StoredAccountMeta<'a> {
         // UNSAFE: Force to interpret mmap-backed bool as u8 to really read the actual memory content
         let executable_byte: &u8 = unsafe { &*(executable_bool as *const bool as *const u8) };
         executable_byte
+    }
+}
+
+impl<'a> ReadableAccount for StoredAccountMeta<'a> {
+    fn lamports(&self) -> u64 {
+        self.account_meta.lamports
+    }
+    fn data(&self) -> &[u8] {
+        self.data()
+    }
+    fn owner(&self) -> &Pubkey {
+        &self.account_meta.owner
+    }
+    fn executable(&self) -> bool {
+        self.account_meta.executable
+    }
+    fn rent_epoch(&self) -> Epoch {
+        self.account_meta.rent_epoch
     }
 }
 

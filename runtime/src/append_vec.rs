@@ -589,12 +589,12 @@ pub mod tests {
         fn set_data_len_unsafe(&self, new_data_len: u64) {
             // UNSAFE: cast away & (= const ref) to &mut to force to mutate append-only (=read-only) AppendVec
             unsafe {
-                *(&self.meta.data_len as *const u64 as *mut u64) = new_data_len;
+                *(&self.data_len() as *const u64 as *mut u64) = new_data_len;
             }
         }
 
         fn get_executable_byte(&self) -> u8 {
-            let executable_bool: bool = self.account_meta.executable;
+            let executable_bool: bool = self.executable();
             // UNSAFE: Force to interpret mmap-backed bool as u8 to really read the actual memory content
             let executable_byte: u8 = unsafe { std::mem::transmute::<bool, u8>(executable_bool) };
             executable_byte
@@ -604,7 +604,7 @@ pub mod tests {
         fn set_executable_as_byte(&self, new_executable_byte: u8) {
             // UNSAFE: Force to interpret mmap-backed &bool as &u8 to write some crafted value;
             unsafe {
-                *(&self.account_meta.executable as *const bool as *mut u8) = new_executable_byte;
+                *(&self.executable() as *const bool as *mut u8) = new_executable_byte;
             }
         }
     }
@@ -1065,12 +1065,12 @@ pub mod tests {
         let accounts = av.accounts(0);
         let account = accounts.first().unwrap();
         account.set_data_len_unsafe(crafted_data_len);
-        assert_eq!(account.meta.data_len, crafted_data_len);
+        assert_eq!(account.data_len(), crafted_data_len);
 
         // Reload accounts and observe crafted_data_len
         let accounts = av.accounts(0);
         let account = accounts.first().unwrap();
-        assert_eq!(account.meta.data_len, crafted_data_len);
+        assert_eq!(account.data_len(), crafted_data_len);
 
         av.flush().unwrap();
         let accounts_len = av.len();
@@ -1092,7 +1092,7 @@ pub mod tests {
         let accounts = av.accounts(0);
         let account = accounts.first().unwrap();
         account.set_data_len_unsafe(too_large_data_len);
-        assert_eq!(account.meta.data_len, too_large_data_len);
+        assert_eq!(account.data_len(), too_large_data_len);
 
         // Reload accounts and observe no account with bad offset
         let accounts = av.accounts(0);
@@ -1139,7 +1139,7 @@ pub mod tests {
 
         // we can observe crafted value by ref
         {
-            let executable_bool: &bool = &account.account_meta.executable;
+            let executable_bool: &bool = &account.executable();
             // Depending on use, *executable_bool can be truthy or falsy due to direct memory manipulation
             // assert_eq! thinks *executable_bool is equal to false but the if condition thinks it's not, contradictorily.
             assert!(!*executable_bool);
@@ -1155,7 +1155,7 @@ pub mod tests {
 
         // we can NOT observe crafted value by value
         {
-            let executable_bool: bool = account.account_meta.executable;
+            let executable_bool: bool = account.executable();
             assert!(!executable_bool);
             assert_eq!(account.get_executable_byte(), 0); // Wow, not crafted_executable!
         }
