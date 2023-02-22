@@ -111,6 +111,7 @@ fn get_unrepaired_path(
 pub fn get_closest_completion(
     tree: &HeaviestSubtreeForkChoice,
     blockstore: &Blockstore,
+    root_slot: Slot,
     slot_meta_cache: &mut HashMap<Slot, Option<SlotMeta>>,
     processed_slots: &mut HashSet<Slot>,
     limit: usize,
@@ -169,7 +170,7 @@ pub fn get_closest_completion(
     }
     v.sort_by(|(_, d1), (_, d2)| d1.cmp(d2));
 
-    let mut visited = HashSet::new();
+    let mut visited = HashSet::from([root_slot]);
     let mut repairs = Vec::new();
     let mut total_processed_slots = 0;
     for (slot, _) in v {
@@ -237,6 +238,7 @@ pub mod test {
         let (repairs, _) = get_closest_completion(
             &heaviest_subtree_fork_choice,
             &blockstore,
+            0, // root_slot
             &mut slot_meta_cache,
             &mut processed_slots,
             10,
@@ -261,14 +263,12 @@ pub mod test {
         let (repairs, _) = get_closest_completion(
             &heaviest_subtree_fork_choice,
             &blockstore,
+            0, // root_slot
             &mut slot_meta_cache,
             &mut processed_slots,
-            2,
+            1,
         );
-        assert_eq!(
-            repairs,
-            [ShredRepairType::Shred(0, 3), ShredRepairType::Shred(1, 3)]
-        );
+        assert_eq!(repairs, [ShredRepairType::Shred(1, 3)]);
     }
 
     fn add_tree_with_missing_shreds(
