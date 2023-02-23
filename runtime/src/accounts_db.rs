@@ -740,8 +740,8 @@ pub type AtomicAppendVecId = AtomicU32;
 pub type AppendVecId = u32;
 
 type AccountSlots = HashMap<Pubkey, HashSet<Slot>>;
-type AppendVecOffsets = HashMap<AppendVecId, HashSet<usize>>;
-type ReclaimResult = (AccountSlots, AppendVecOffsets);
+type SlotOffsets = HashMap<Slot, HashSet<usize>>;
+type ReclaimResult = (AccountSlots, SlotOffsets);
 type PubkeysRemovedFromAccountsIndex = HashSet<Pubkey>;
 type ShrinkCandidates = HashMap<Slot, Arc<AccountStorageEntry>>;
 
@@ -3371,7 +3371,7 @@ impl AccountsDb {
                 // Check if this update in `slot` to the account with `key` was reclaimed earlier by
                 // `clean_accounts_older_than_root()`
                 let was_reclaimed = removed_accounts
-                    .get(&account_info.store_id())
+                    .get(slot)
                     .map(|store_removed| store_removed.contains(&account_info.offset()))
                     .unwrap_or(false);
                 if was_reclaimed {
@@ -7941,12 +7941,14 @@ impl AccountsDb {
         &'a self,
         reclaims: I,
         expected_slot: Option<Slot>,
-        mut reclaimed_offsets: Option<&mut AppendVecOffsets>,
+        mut reclaimed_offsets: Option<&mut SlotOffsets>,
         reset_accounts: bool,
     ) -> HashSet<Slot>
     where
         I: Iterator<Item = &'a (Slot, AccountInfo)>,
     {
+        self.storage.assert_no_shrink_in_progress();
+
         let mut dead_slots = HashSet::new();
         let mut new_shrink_candidates: ShrinkCandidates = HashMap::new();
         let mut measure = Measure::start("remove");
@@ -7955,7 +7957,7 @@ impl AccountsDb {
             assert!(!account_info.is_cached());
             if let Some(ref mut reclaimed_offsets) = reclaimed_offsets {
                 reclaimed_offsets
-                    .entry(account_info.store_id())
+                    .entry(*slot)
                     .or_default()
                     .insert(account_info.offset());
             }
