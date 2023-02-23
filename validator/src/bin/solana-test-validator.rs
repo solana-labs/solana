@@ -398,6 +398,14 @@ fn main() {
     let tower_storage = Arc::new(FileTowerStorage::new(ledger_path.clone()));
 
     let admin_service_post_init = Arc::new(RwLock::new(None));
+    // If geyser_plugin_config value is invalid, the validator will exit when the values are extracted below
+    let (rpc_to_plugin_manager_tx, rpc_to_plugin_manager_rx) =
+        if matches.is_present("geyser_plugin_config") {
+            let (tx, rx) = unbounded();
+            (Some(tx), Some(rx))
+        } else {
+            (None, None)
+        };
     admin_rpc_service::run(
         &ledger_path,
         admin_rpc_service::AdminRpcRequestMetadata {
@@ -409,7 +417,7 @@ fn main() {
             staked_nodes_overrides: genesis.staked_nodes_overrides.clone(),
             post_init: admin_service_post_init.clone(),
             tower_storage: tower_storage.clone(),
-            plugin_manager: Arc::clone(&genesis.geyser_plugin_manager),
+            rpc_to_plugin_manager_tx,
         },
     );
     let dashboard = if output == Output::Dashboard {
@@ -560,7 +568,8 @@ fn main() {
         genesis.compute_unit_limit(compute_unit_limit);
     }
 
-    match genesis.start_with_mint_address(mint_address, socket_addr_space) {
+    match genesis.start_with_mint_address(mint_address, socket_addr_space, rpc_to_plugin_manager_rx)
+    {
         Ok(test_validator) => {
             *admin_service_post_init.write().unwrap() =
                 Some(admin_rpc_service::AdminRpcRequestMetadataPostInit {
@@ -568,6 +577,7 @@ fn main() {
                     cluster_info: test_validator.cluster_info(),
                     vote_account: test_validator.vote_account_address(),
                     repair_whitelist: test_validator.repair_whitelist(),
+                    manager_handle: test_validator.plugin_manager_handle(),
                 });
             if let Some(dashboard) = dashboard {
                 dashboard.run(Duration::from_millis(250));
