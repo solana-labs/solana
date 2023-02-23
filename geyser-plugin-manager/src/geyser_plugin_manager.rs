@@ -11,8 +11,6 @@ use {
 #[derive(Default, Debug)]
 pub struct GeyserPluginManager {
     pub plugins: Vec<Box<dyn GeyserPlugin>>,
-    pub libs: Vec<Library>,
-    pub libpaths: Vec<PathBuf>,
 }
 
 type PluginConstructor = unsafe fn() -> *mut dyn GeyserPlugin;
@@ -21,8 +19,6 @@ impl GeyserPluginManager {
     pub fn new() -> Self {
         GeyserPluginManager {
             plugins: Vec::default(),
-            libs: Vec::default(),
-            libpaths: Vec::default(),
         }
     }
 
@@ -41,8 +37,6 @@ impl GeyserPluginManager {
         let mut plugin = Box::from_raw(plugin_raw);
         plugin.on_load(config_file)?;
         self.plugins.push(plugin);
-        self.libs.push(lib);
-        self.libpaths.push(libpath.into());
         Ok(())
     }
 
@@ -52,10 +46,6 @@ impl GeyserPluginManager {
         for mut plugin in self.plugins.drain(..) {
             info!("Unloading plugin for {:?}", plugin.name());
             plugin.on_unload();
-        }
-
-        for lib in self.libs.drain(..) {
-            drop(lib);
         }
     }
 
