@@ -1492,15 +1492,15 @@ impl Bank {
         let epoch_schedule = parent.epoch_schedule;
         let epoch = epoch_schedule.get_epoch(slot);
 
-        let (rc, bank_rc_creation_time_us) = measure_us!(BankRc {
-            accounts: Arc::new(Accounts::new_from_parent(
-                &parent.rc.accounts,
+        let (rc, bank_rc_creation_time_us) = measure_us!({
+            let accounts_db = Arc::clone(&parent.rc.accounts.accounts_db);
+            accounts_db.insert_default_bank_hash_stats(slot, parent.slot());
+            BankRc {
+                accounts: Arc::new(Accounts::new(accounts_db)),
+                parent: RwLock::new(Some(Arc::clone(parent))),
                 slot,
-                parent.slot(),
-            )),
-            parent: RwLock::new(Some(parent.clone())),
-            slot,
-            bank_id_generator: parent.rc.bank_id_generator.clone(),
+                bank_id_generator: Arc::clone(&parent.rc.bank_id_generator),
+            }
         });
 
         let (status_cache, status_cache_time_us) = measure_us!(Arc::clone(&parent.status_cache));

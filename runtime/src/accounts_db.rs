@@ -4978,10 +4978,10 @@ impl AccountsDb {
     /// Insert a default bank hash stats for `slot`
     ///
     /// This fn is called when creating a new bank from parent.
-    pub fn insert_default_bank_hash_stats(&self, slot: Slot, parent_slot: Slot) {
+    pub(crate) fn insert_default_bank_hash_stats(&self, slot: Slot, parent_slot: Slot) {
         let mut bank_hash_stats = self.bank_hash_stats.lock().unwrap();
         if bank_hash_stats.get(&slot).is_some() {
-            error!( "set_hash: already exists; multiple forks with shared slot {slot} as child (parent: {parent_slot})!?");
+            error!("set_hash: already exists; multiple forks with shared slot {slot} as child (parent: {parent_slot})!?");
             return;
         }
         bank_hash_stats.insert(slot, BankHashStats::default());

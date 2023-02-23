@@ -199,17 +199,11 @@ impl Accounts {
         ))
     }
 
-    pub fn new_from_parent(parent: &Accounts, slot: Slot, parent_slot: Slot) -> Self {
-        let accounts_db = parent.accounts_db.clone();
-        accounts_db.insert_default_bank_hash_stats(slot, parent_slot);
-        Self::new(accounts_db)
-    }
-
     pub(crate) fn new_empty(accounts_db: AccountsDb) -> Self {
         Self::new(Arc::new(accounts_db))
     }
 
-    fn new(accounts_db: Arc<AccountsDb>) -> Self {
+    pub(crate) fn new(accounts_db: Arc<AccountsDb>) -> Self {
         Self {
             accounts_db,
             account_locks: Mutex::new(AccountLocks::default()),
