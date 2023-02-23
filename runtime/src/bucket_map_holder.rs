@@ -258,7 +258,7 @@ impl<T: IndexValue, U: IndexValue + From<T> + Into<T>> BucketMapHolder<T, U> {
             startup: AtomicBool::default(),
             mem_budget_mb,
             threads,
-            _phantom: PhantomData::default(),
+            _phantom: PhantomData,
         }
     }
 
