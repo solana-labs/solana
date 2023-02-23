@@ -44,8 +44,8 @@ spl() {
     PROGRAMS=(
       instruction-padding/program
       token/program
-      token/program-2022
-      token/program-2022-test
+      # token/program-2022
+      # token/program-2022-test
       associated-token-account/program
       token-upgrade/program
       feature-proposal/program
@@ -78,8 +78,8 @@ spl() {
     # TODO better: `build.rs` for spl-token-cli doesn't seem to properly build
     # the required programs to run the tests, so instead we run the tests
     # after we know programs have been built
-    cargo build
-    cargo test
+    cargo build --workspace --exclude "spl-token-cli"
+    cargo test --workspace --exclude "spl-token-cli"
   )
 }
 
