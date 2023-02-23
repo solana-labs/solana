@@ -157,7 +157,6 @@ pub trait AdminRpc {
         &self,
         meta: Self::Metadata,
         name: String,
-        libpath: String,
         config_file: String,
     ) -> BoxFuture<Result<()>>;
 
@@ -165,12 +164,7 @@ pub trait AdminRpc {
     fn unload_plugin(&self, meta: Self::Metadata, name: String) -> BoxFuture<Result<()>>;
 
     #[rpc(meta, name = "loadPlugin")]
-    fn load_plugin(
-        &self,
-        meta: Self::Metadata,
-        libpath: String,
-        config_file: String,
-    ) -> BoxFuture<Result<String>>;
+    fn load_plugin(&self, meta: Self::Metadata, config_file: String) -> BoxFuture<Result<String>>;
 
     #[rpc(meta, name = "listPlugins")]
     fn list_plugins(&self, meta: Self::Metadata) -> BoxFuture<Result<Vec<String>>>;
@@ -274,7 +268,6 @@ impl AdminRpc for AdminRpcImpl {
         &self,
         meta: Self::Metadata,
         name: String,
-        libpath: String,
         config_file: String,
     ) -> BoxFuture<Result<()>> {
         Box::pin(async move {
@@ -286,7 +279,6 @@ impl AdminRpc for AdminRpcImpl {
                 rpc_to_manager_sender
                     .send(PluginManagerRequest::ReloadPlugin {
                         name,
-                        libpath,
                         config_file,
                         response_sender,
                     })
@@ -320,12 +312,7 @@ impl AdminRpc for AdminRpcImpl {
         })
     }
 
-    fn load_plugin(
-        &self,
-        meta: Self::Metadata,
-        libpath: String,
-        config_file: String,
-    ) -> BoxFuture<Result<String>> {
+    fn load_plugin(&self, meta: Self::Metadata, config_file: String) -> BoxFuture<Result<String>> {
         Box::pin(async move {
             // Construct channel for plugin to respond to this particular rpc request instance
             let (response_sender, response_receiver) = oneshot_channel();
@@ -334,7 +321,6 @@ impl AdminRpc for AdminRpcImpl {
             if let Some(ref rpc_to_manager_sender) = meta.rpc_to_plugin_manager_sender {
                 rpc_to_manager_sender
                     .send(PluginManagerRequest::LoadPlugin {
-                        libpath,
                         config_file,
                         response_sender,
                     })
@@ -374,10 +360,14 @@ impl AdminRpc for AdminRpcImpl {
             let (response_sender, response_receiver) = oneshot_channel();
 
             // Send request to plugin manager if there is a geyser service
-                rpc_to_manager_sender
             if let Some(ref rpc_to_manager_sender) = meta.rpc_to_plugin_manager_sender {
                 rpc_to_manager_sender
+                    .send(PluginManagerRequest::UnloadPlugin {
+                        name,
                         response_sender,
+                    })
+                    .expect("plugin manager should never drop request rx");
+            } else {
                 return Err(jsonrpc_core::Error {
                     code: ErrorCode::InvalidRequest,
                     message: "no geyser plugin service".to_string(),
@@ -842,9 +832,6 @@ pub fn load_staked_nodes_overrides(
 
 #[cfg(test)]
 mod tests {
-    use crossbeam_channel::unbounded;
-    use jsonrpc_ipc_server::tokio::sync::mpsc::channel;
-
     use {
         super::*,
         rand::{distributions::Uniform, thread_rng, Rng},
