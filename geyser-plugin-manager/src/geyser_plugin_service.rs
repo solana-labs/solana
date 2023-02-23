@@ -130,13 +130,13 @@ impl GeyserPluginService {
             (None, None)
         };
 
-        let rpc_handler_thread = rpc_to_plugin_manager_receiver.map(|rx| {
+        let rpc_handler_thread = rpc_to_plugin_manager_receiver.map(|request_receiver| {
             let rpc_plugin_manager = plugin_manager.clone();
             Arc::new(std::thread::spawn(move || loop {
                 std::thread::park();
                 info!("we've been awakened");
                 // Wait 3 seconds to receive message after being awoken
-                if let Ok(request) = rx.recv_timeout(Duration::from_secs(3)) {
+                if let Ok(request) = request_receiver.recv_timeout(Duration::from_secs(3)) {
                     match request {
                         PluginManagerRequest::ListPlugins { response_sender } => {
                             let plugin_manager = rpc_plugin_manager.read().unwrap();
