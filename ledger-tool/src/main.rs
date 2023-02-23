@@ -1410,7 +1410,6 @@ fn assert_capitalization(bank: &Bank) {
 }
 #[cfg(not(target_env = "msvc"))]
 use jemallocator::Jemalloc;
-use solana_geyser_plugin_manager::geyser_plugin_manager::GeyserPluginManager;
 
 #[cfg(not(target_env = "msvc"))]
 #[global_allocator]
