@@ -393,7 +393,7 @@ impl Validator {
         cluster_entrypoints: Vec<ContactInfo>,
         config: &ValidatorConfig,
         should_check_duplicate_instance: bool,
-        rpc_to_plugin_manager_rx: Option<Receiver<PluginManagerRequest>>,
+        rpc_to_plugin_manager_receiver: Option<Receiver<PluginManagerRequest>>,
         start_progress: Arc<RwLock<ValidatorStartProgress>>,
         socket_addr_space: SocketAddrSpace,
         use_quic: bool,
@@ -421,7 +421,7 @@ impl Validator {
                 let result = GeyserPluginService::new(
                     confirmed_bank_receiver,
                     geyser_plugin_config_files,
-                    rpc_to_plugin_manager_rx,
+                    rpc_to_plugin_manager_receiver,
                 );
                 match result {
                     Ok(geyser_plugin_service) => Some(geyser_plugin_service),

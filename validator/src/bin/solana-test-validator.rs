@@ -355,10 +355,10 @@ fn main() {
 
     let admin_service_post_init = Arc::new(RwLock::new(None));
     // If geyser_plugin_config value is invalid, the validator will exit when the values are extracted below
-    let (rpc_to_plugin_manager_tx, rpc_to_plugin_manager_rx) =
+    let (rpc_to_plugin_manager_sender, rpc_to_plugin_manager_receiver) =
         if matches.is_present("geyser_plugin_config") {
-            let (tx, rx) = unbounded();
-            (Some(tx), Some(rx))
+            let (sender, receiver) = unbounded();
+            (Some(sender), Some(receiver))
         } else {
             (None, None)
         };
@@ -373,7 +373,7 @@ fn main() {
             staked_nodes_overrides: genesis.staked_nodes_overrides.clone(),
             post_init: admin_service_post_init.clone(),
             tower_storage: tower_storage.clone(),
-            rpc_to_plugin_manager_tx,
+            rpc_to_plugin_manager_sender,
         },
     );
     let dashboard = if output == Output::Dashboard {
@@ -524,8 +524,11 @@ fn main() {
         genesis.compute_unit_limit(compute_unit_limit);
     }
 
-    match genesis.start_with_mint_address(mint_address, socket_addr_space, rpc_to_plugin_manager_rx)
-    {
+    match genesis.start_with_mint_address(
+        mint_address,
+        socket_addr_space,
+        rpc_to_plugin_manager_receiver,
+    ) {
         Ok(test_validator) => {
             *admin_service_post_init.write().unwrap() =
                 Some(admin_rpc_service::AdminRpcRequestMetadataPostInit {
