@@ -52,7 +52,7 @@ pub struct AdminRpcRequestMetadata {
     pub tower_storage: Arc<dyn TowerStorage>,
     pub staked_nodes_overrides: Arc<RwLock<HashMap<Pubkey, u64>>>,
     pub post_init: Arc<RwLock<Option<AdminRpcRequestMetadataPostInit>>>,
-    pub rpc_to_plugin_manager_tx: Option<Sender<PluginManagerRequest>>,
+    pub rpc_to_plugin_manager_sender: Option<Sender<PluginManagerRequest>>,
 }
 
 impl Metadata for AdminRpcRequestMetadata {}
@@ -279,16 +279,16 @@ impl AdminRpc for AdminRpcImpl {
     ) -> BoxFuture<Result<()>> {
         Box::pin(async move {
             // Construct channel for plugin to respond to this particular rpc request instance
-            let (tx, rx) = oneshot_channel();
+            let (response_sender, response_receiver) = oneshot_channel();
 
             // Send request to plugin manager if there is a geyser service
-            if let Some(ref rpc_tx) = meta.rpc_to_plugin_manager_tx {
-                rpc_tx
+            if let Some(ref rpc_to_manager_sender) = meta.rpc_to_plugin_manager_sender {
+                rpc_to_manager_sender
                     .send(PluginManagerRequest::ReloadPlugin {
                         name,
                         libpath,
                         config_file,
-                        tx,
+                        response_sender,
                     })
                     .expect("plugin manager should never drop request rx");
             } else {
@@ -314,7 +314,8 @@ impl AdminRpc for AdminRpcImpl {
             })?;
 
             // Await response from plugin manager
-            rx.await
+            response_receiver
+                .await
                 .expect("plugin manager's oneshot sender shouldn't drop early")
         })
     }
@@ -327,15 +328,15 @@ impl AdminRpc for AdminRpcImpl {
     ) -> BoxFuture<Result<String>> {
         Box::pin(async move {
             // Construct channel for plugin to respond to this particular rpc request instance
-            let (tx, rx) = oneshot_channel();
+            let (response_sender, response_receiver) = oneshot_channel();
 
             // Send request to plugin manager if there is a geyser service
-            if let Some(ref rpc_tx) = meta.rpc_to_plugin_manager_tx {
-                rpc_tx
+            if let Some(ref rpc_to_manager_sender) = meta.rpc_to_plugin_manager_sender {
+                rpc_to_manager_sender
                     .send(PluginManagerRequest::LoadPlugin {
                         libpath,
                         config_file,
-                        tx,
+                        response_sender,
                     })
                     .expect("plugin manager should never drop request rx");
             } else {
@@ -361,7 +362,8 @@ impl AdminRpc for AdminRpcImpl {
             })?;
 
             // Await response from plugin manager
-            rx.await
+            response_receiver
+                .await
                 .expect("plugin manager's oneshot sender shouldn't drop early")
         })
     }
@@ -369,14 +371,13 @@ impl AdminRpc for AdminRpcImpl {
     fn unload_plugin(&self, meta: Self::Metadata, name: String) -> BoxFuture<Result<()>> {
         Box::pin(async move {
             // Construct channel for plugin to respond to this particular rpc request instance
-            let (tx, rx) = oneshot_channel();
+            let (response_sender, response_receiver) = oneshot_channel();
 
             // Send request to plugin manager if there is a geyser service
-            if let Some(ref rpc_tx) = meta.rpc_to_plugin_manager_tx {
-                rpc_tx
-                    .send(PluginManagerRequest::UnloadPlugin { name, tx })
-                    .expect("plugin manager should never drop request rx");
-            } else {
+                rpc_to_manager_sender
+            if let Some(ref rpc_to_manager_sender) = meta.rpc_to_plugin_manager_sender {
+                rpc_to_manager_sender
+                        response_sender,
                 return Err(jsonrpc_core::Error {
                     code: ErrorCode::InvalidRequest,
                     message: "no geyser plugin service".to_string(),
@@ -399,19 +400,21 @@ impl AdminRpc for AdminRpcImpl {
             })?;
 
             // Await response from plugin manager
-            rx.await
+            response_receiver
+                .await
                 .expect("plugin manager's oneshot sender shouldn't drop early")
         })
     }
 
     fn list_plugins(&self, meta: Self::Metadata) -> BoxFuture<Result<Vec<String>>> {
         Box::pin(async move {
-            let (tx, rx) = oneshot_channel();
+            // Construct channel for plugin to respond to this particular rpc request instance
+            let (response_sender, response_receiver) = oneshot_channel();
 
             // Send request to plugin manager
-            if let Some(ref rpc_tx) = meta.rpc_to_plugin_manager_tx {
-                rpc_tx
-                    .send(PluginManagerRequest::ListPlugins { tx })
+            if let Some(ref rpc_to_manager_sender) = meta.rpc_to_plugin_manager_sender {
+                rpc_to_manager_sender
+                    .send(PluginManagerRequest::ListPlugins { response_sender })
                     .expect("plugin manager should never drop request rx");
             } else {
                 return Err(jsonrpc_core::Error {
@@ -436,7 +439,8 @@ impl AdminRpc for AdminRpcImpl {
             })?;
 
             // Await response from plugin manager
-            rx.await
+            response_receiver
+                .await
                 .expect("plugin manager's oneshot sender shouldn't drop early")
         })
     }
@@ -918,9 +922,7 @@ mod tests {
                     manager_handle: None, // no plugin manager thread for tests
                 }))),
                 staked_nodes_overrides: Arc::new(RwLock::new(HashMap::new())),
-                // Discard rx channel for tests, since we don't test plugin manager functionality
-                // in this crate
-                rpc_to_plugin_manager_tx: unbounded().0,
+                rpc_to_plugin_manager_sender: None,
             };
             let mut io = MetaIoHandler::default();
             io.extend_with(AdminRpcImpl.to_delegate());

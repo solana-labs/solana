@@ -531,13 +531,13 @@ impl TestValidatorGenesis {
         &self,
         mint_address: Pubkey,
         socket_addr_space: SocketAddrSpace,
-        rpc_to_plugin_manager_rx: Option<Receiver<PluginManagerRequest>>,
+        rpc_to_plugin_manager_receiver: Option<Receiver<PluginManagerRequest>>,
     ) -> Result<TestValidator, Box<dyn std::error::Error>> {
         TestValidator::start(
             mint_address,
             self,
             socket_addr_space,
-            rpc_to_plugin_manager_rx,
+            rpc_to_plugin_manager_receiver,
         )
         .map(|test_validator| {
             let runtime = tokio::runtime::Builder::new_current_thread()
@@ -844,7 +844,7 @@ impl TestValidator {
         mint_address: Pubkey,
         config: &TestValidatorGenesis,
         socket_addr_space: SocketAddrSpace,
-        rpc_to_plugin_manager_rx: Option<Receiver<PluginManagerRequest>>,
+        rpc_to_plugin_manager_receiver: Option<Receiver<PluginManagerRequest>>,
     ) -> Result<Self, Box<dyn std::error::Error>> {
         let preserve_ledger = config.ledger_path.is_some();
         let ledger_path = TestValidator::initialize_ledger(mint_address, config)?;
@@ -959,7 +959,7 @@ impl TestValidator {
             vec![],
             &validator_config,
             true, // should_check_duplicate_instance
-            rpc_to_plugin_manager_rx,
+            rpc_to_plugin_manager_receiver,
             config.start_progress.clone(),
             socket_addr_space,
             DEFAULT_TPU_USE_QUIC,
