@@ -21,7 +21,7 @@ pub type StoredSize = u32;
 /// specify where account data is located
 #[derive(Debug, PartialEq, Eq)]
 pub enum StorageLocation {
-    AppendVec(AppendVecId, Offset),
+    AppendVec(Option<AppendVecId>, Offset),
     Cached,
 }
 
@@ -84,8 +84,9 @@ pub struct PackedOffsetAndFlags {
 
 #[derive(Default, Debug, PartialEq, Eq, Clone, Copy)]
 pub struct AccountInfo {
-    /// index identifying the append storage
-    store_id: AppendVecId,
+    /// index identifying the append vec storage
+    /// None means the default one associated with the slot
+    store_id: Option<AppendVecId>,
 
     account_offset_and_flags: AccountOffsetAndFlags,
 }
@@ -100,7 +101,7 @@ pub struct AccountOffsetAndFlags {
 impl From<AccountOffsetAndFlags> for AccountInfo {
     fn from(account_offset_and_flags: AccountOffsetAndFlags) -> Self {
         Self {
-            store_id: 0,
+            store_id: None,
             account_offset_and_flags,
         }
     }
@@ -137,9 +138,6 @@ impl IsCached for StorageLocation {
     }
 }
 
-/// We have to have SOME value for store_id when we are cached
-const CACHE_VIRTUAL_STORAGE_ID: AppendVecId = AppendVecId::MAX;
-
 impl AccountInfo {
     pub fn new(storage_location: StorageLocation, lamports: u64) -> Self {
         let mut packed_offset_and_flags = PackedOffsetAndFlags::default();
@@ -160,7 +158,7 @@ impl AccountInfo {
             }
             StorageLocation::Cached => {
                 packed_offset_and_flags.set_offset_reduced(CACHED_OFFSET);
-                CACHE_VIRTUAL_STORAGE_ID
+                None
             }
         };
         let account_offset_and_flags = AccountOffsetAndFlags {
@@ -177,7 +175,7 @@ impl AccountInfo {
         (offset / ALIGN_BOUNDARY_OFFSET) as OffsetReduced
     }
 
-    pub fn store_id(&self) -> AppendVecId {
+    pub fn store_id(&self) -> Option<AppendVecId> {
         // if the account is in a cached store, the store_id is meaningless
         assert!(!self.is_cached());
         self.store_id

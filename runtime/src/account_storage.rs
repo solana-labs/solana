@@ -50,21 +50,28 @@ impl AccountStorage {
     pub(crate) fn get_account_storage_entry(
         &self,
         slot: Slot,
-        store_id: AppendVecId,
+        store_id: Option<AppendVecId>,
     ) -> Option<Arc<AccountStorageEntry>> {
         let lookup_in_map = || {
-            self.map
-                .get(&slot)
-                .and_then(|r| (r.id == store_id).then_some(Arc::clone(&r.storage)))
+            self.map.get(&slot).and_then(|r| {
+                Self::match_store_id(store_id, r.id).then_some(Arc::clone(&r.storage))
+            })
         };
 
         lookup_in_map()
             .or_else(|| {
                 self.shrink_in_progress_map.get(&slot).and_then(|entry| {
-                    (entry.value().append_vec_id() == store_id).then(|| Arc::clone(entry.value()))
+                    Self::match_store_id(store_id, entry.value().append_vec_id())
+                        .then(|| Arc::clone(entry.value()))
                 })
             })
             .or_else(lookup_in_map)
+    }
+
+    fn match_store_id(expected: Option<AppendVecId>, store_id: AppendVecId) -> bool {
+        expected
+            .map(|expected| expected == store_id)
+            .unwrap_or(true)
     }
 
     /// assert if shrink in progress is active

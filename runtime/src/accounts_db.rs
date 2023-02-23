@@ -3401,7 +3401,7 @@ impl AccountsDb {
                         "store_counts, inserting slot: {}, store id: {}, count: {}",
                         slot, account_info.store_id(), count
                     );
-                    store_counts.insert(account_info.store_id(), (count, key_set));
+                    store_counts.insert(Some(account_info.store_id()), (count, key_set));
                 }
                 true
             });
@@ -3706,7 +3706,8 @@ impl AccountsDb {
             // Only keep purges_zero_lamports where the entire history of the account in the root set
             // can be purged. All AppendVecs for those updates are dead.
             for (_slot, account_info) in slot_account_infos.iter() {
-                if let Some(store_count) = store_counts.get(&account_info.store_id()) {
+                todo!();
+                if let Some(store_count) = store_counts.get(&account_info.store_id().unwrap()) {
                     if store_count.0 != 0 {
                         // one store this pubkey is in is not being removed, so this pubkey cannot be removed at all
                         return false;
@@ -6216,7 +6217,7 @@ impl AccountsDb {
                 storage.add_account(stored_size);
 
                 infos.push(AccountInfo::new(
-                    StorageLocation::AppendVec(storage.append_vec_id(), offsets[0]),
+                    StorageLocation::AppendVec(Some(storage.append_vec_id()), offsets[0]),
                     accounts_and_meta_to_store
                         .account(i)
                         .map(|account| account.lamports())
@@ -7958,6 +7959,7 @@ impl AccountsDb {
             // No cached accounts should make it here
             assert!(!account_info.is_cached());
             if let Some(ref mut reclaimed_offsets) = reclaimed_offsets {
+                todo!();
                 reclaimed_offsets
                     .entry(*slot)
                     .or_default()
@@ -8726,7 +8728,7 @@ impl AccountsDb {
                 (
                     pubkey,
                     AccountInfo::new(
-                        StorageLocation::AppendVec(store_id, stored_account.offset), // will never be cached
+                        StorageLocation::AppendVec(None, stored_account.offset), // will never be cached
                         stored_account.account_meta.lamports,
                     ),
                 )
@@ -8958,7 +8960,7 @@ impl AccountsDb {
                                         count += 1;
                                         let ai = AccountInfo::new(
                                             StorageLocation::AppendVec(
-                                                account_info.store_id,
+                                                None,
                                                 account_info.stored_account.offset,
                                             ), // will never be cached
                                             account_info.stored_account.account_meta.lamports,
