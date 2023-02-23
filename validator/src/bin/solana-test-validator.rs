@@ -179,28 +179,36 @@ fn main() {
 
     let faucet_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::UNSPECIFIED), faucet_port);
 
+    let parse_address = |address: &str, input_type: &str| {
+        address
+            .parse::<Pubkey>()
+            .or_else(|_| read_keypair_file(address).map(|keypair| keypair.pubkey()))
+            .unwrap_or_else(|err| {
+                println!("Error: invalid {input_type} {address}: {err}");
+                exit(1);
+            })
+    };
+
+    let parse_program_path = |program: &str| {
+        let program_path = PathBuf::from(program);
+        if !program_path.exists() {
+            println!(
+                "Error: program file does not exist: {}",
+                program_path.display()
+            );
+            exit(1);
+        }
+        program_path
+    };
+
     let mut programs_to_load = vec![];
     if let Some(values) = matches.values_of("bpf_program") {
         let values: Vec<&str> = values.collect::<Vec<_>>();
         for address_program in values.chunks(2) {
             match address_program {
                 [address, program] => {
-                    let address = address
-                        .parse::<Pubkey>()
-                        .or_else(|_| read_keypair_file(address).map(|keypair| keypair.pubkey()))
-                        .unwrap_or_else(|err| {
-                            println!("Error: invalid address {address}: {err}");
-                            exit(1);
-                        });
-
-                    let program_path = PathBuf::from(program);
-                    if !program_path.exists() {
-                        println!(
-                            "Error: program file does not exist: {}",
-                            program_path.display()
-                        );
-                        exit(1);
-                    }
+                    let address = parse_address(address, "address");
+                    let program_path = parse_program_path(program);
 
                     programs_to_load.push(ProgramInfo {
                         program_id: address,
@@ -219,13 +227,8 @@ fn main() {
         for address_program_upgrade_authority in values.chunks(3) {
             match address_program_upgrade_authority {
                 [address, program, upgrade_authority] => {
-                    let address = address
-                        .parse::<Pubkey>()
-                        .or_else(|_| read_keypair_file(address).map(|keypair| keypair.pubkey()))
-                        .unwrap_or_else(|err| {
-                            println!("Error: invalid address {address}: {err}");
-                            exit(1);
-                        });
+                    let address = parse_address(address, "address");
+                    let program_path = parse_program_path(program);
                     let upgrade_authority_address = if *upgrade_authority == "none" {
                         Pubkey::default()
                     } else {
@@ -241,15 +244,6 @@ fn main() {
                                 exit(1);
                             })
                     };
-
-                    let program_path = PathBuf::from(program);
-                    if !program_path.exists() {
-                        println!(
-                            "Error: program file does not exist: {}",
-                            program_path.display()
-                        );
-                        exit(1);
-                    }
 
                     upgradeable_programs_to_load.push(UpgradeableProgramInfo {
                         program_id: address,
