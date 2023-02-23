@@ -1223,12 +1223,12 @@ fn load_bank_forks(
         let (confirmed_bank_sender, confirmed_bank_receiver) = unbounded();
         drop(confirmed_bank_sender);
 
-        // solana-ledger-tool doesn't need to share plugin manager so just make a new one here
-        let plugin_manager = Arc::new(RwLock::new(GeyserPluginManager::new()));
+        // solana-ledger-tool doesn't run an admin_rpc service, so just pass in a dummy rx
+        let rpc_to_plugin_manager_rx = None;
         let geyser_service = GeyserPluginService::new(
             confirmed_bank_receiver,
             &geyser_config_files,
-            plugin_manager,
+            rpc_to_plugin_manager_rx,
         )
         .unwrap_or_else(|err| {
             eprintln!("Failed to setup Geyser service: {err:?}");

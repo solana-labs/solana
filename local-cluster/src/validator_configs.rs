@@ -65,7 +65,6 @@ pub fn safe_clone_config(config: &ValidatorConfig) -> ValidatorConfig {
         runtime_config: config.runtime_config.clone(),
         replay_slots_concurrently: config.replay_slots_concurrently,
         banking_trace_dir_byte_limit: config.banking_trace_dir_byte_limit,
-        geyser_plugin_manager: Arc::clone(&config.geyser_plugin_manager),
     }
 }
 

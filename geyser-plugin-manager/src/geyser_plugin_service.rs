@@ -1,3 +1,7 @@
+use std::{thread::JoinHandle, time::Duration};
+
+use crate::PluginManagerRequest;
+
 use {
     crate::{
         accounts_update_notifier::AccountsUpdateNotifierImpl,
@@ -51,6 +55,8 @@ pub struct GeyserPluginService {
     accounts_update_notifier: Option<AccountsUpdateNotifier>,
     transaction_notifier: Option<TransactionNotifierLock>,
     block_metadata_notifier: Option<BlockMetadataNotifierLock>,
+    #[allow(unused)]
+    rpc_handler_thread: Option<Arc<JoinHandle<()>>>,
 }
 
 impl GeyserPluginService {
@@ -70,28 +76,27 @@ impl GeyserPluginService {
     pub fn new(
         confirmed_bank_receiver: Receiver<BankNotification>,
         geyser_plugin_config_files: &[PathBuf],
-        shared_geyser_plugin_manager: Arc<RwLock<GeyserPluginManager>>,
+        rpc_to_plugin_manager_rx: Option<Receiver<PluginManagerRequest>>,
     ) -> Result<Self, GeyserPluginServiceError> {
         info!(
             "Starting GeyserPluginService from config files: {:?}",
             geyser_plugin_config_files
         );
-        let mut plugin_manager_lock = shared_geyser_plugin_manager.write().unwrap();
+        let mut plugin_manager = GeyserPluginManager::new();
 
         for geyser_plugin_config_file in geyser_plugin_config_files {
-            Self::load_plugin(&mut plugin_manager_lock, geyser_plugin_config_file)?;
+            Self::load_plugin(&mut plugin_manager, geyser_plugin_config_file)?;
         }
 
         let account_data_notifications_enabled =
-            plugin_manager_lock.account_data_notifications_enabled();
-        let transaction_notifications_enabled =
-            plugin_manager_lock.transaction_notifications_enabled();
-        drop(plugin_manager_lock);
+            plugin_manager.account_data_notifications_enabled();
+        let transaction_notifications_enabled = plugin_manager.transaction_notifications_enabled();
+        let plugin_manager = Arc::new(RwLock::new(plugin_manager));
 
         let accounts_update_notifier: Option<AccountsUpdateNotifier> =
             if account_data_notifications_enabled {
                 let accounts_update_notifier =
-                    AccountsUpdateNotifierImpl::new(shared_geyser_plugin_manager.clone());
+                    AccountsUpdateNotifierImpl::new(plugin_manager.clone());
                 Some(Arc::new(RwLock::new(accounts_update_notifier)))
             } else {
                 None
@@ -99,8 +104,7 @@ impl GeyserPluginService {
 
         let transaction_notifier: Option<TransactionNotifierLock> =
             if transaction_notifications_enabled {
-                let transaction_notifier =
-                    TransactionNotifierImpl::new(shared_geyser_plugin_manager.clone());
+                let transaction_notifier = TransactionNotifierImpl::new(plugin_manager.clone());
                 Some(Arc::new(RwLock::new(transaction_notifier)))
             } else {
                 None
@@ -110,8 +114,7 @@ impl GeyserPluginService {
             Option<SlotStatusObserver>,
             Option<BlockMetadataNotifierLock>,
         ) = if account_data_notifications_enabled || transaction_notifications_enabled {
-            let slot_status_notifier =
-                SlotStatusNotifierImpl::new(shared_geyser_plugin_manager.clone());
+            let slot_status_notifier = SlotStatusNotifierImpl::new(plugin_manager.clone());
             let slot_status_notifier = Arc::new(RwLock::new(slot_status_notifier));
             (
                 Some(SlotStatusObserver::new(
@@ -119,20 +122,72 @@ impl GeyserPluginService {
                     slot_status_notifier,
                 )),
                 Some(Arc::new(RwLock::new(BlockMetadataNotifierImpl::new(
-                    shared_geyser_plugin_manager.clone(),
+                    plugin_manager.clone(),
                 )))),
             )
         } else {
             (None, None)
         };
 
+        let rpc_handler_thread = rpc_to_plugin_manager_rx.map(|rx| {
+            let rpc_plugin_manager = plugin_manager.clone();
+            Arc::new(std::thread::spawn(move || loop {
+                std::thread::park();
+                info!("we've been awakened");
+                // Wait 3 seconds to receive message after being awoken
+                if let Ok(request) = rx.recv_timeout(Duration::from_secs(3)) {
+                    match request {
+                        PluginManagerRequest::ListPlugins { tx } => {
+                            info!("received request to list plugins");
+                            tx.send(rpc_plugin_manager.read().unwrap().list_plugins_rpc())
+                                .expect("admin rpc service will be waiting for response");
+                        }
+
+                        PluginManagerRequest::ReloadPlugin {
+                            ref name,
+                            ref libpath,
+                            ref config_file,
+                            tx,
+                        } => {
+                            tx.send(rpc_plugin_manager.write().unwrap().reload_plugin_rpc(
+                                name,
+                                libpath,
+                                config_file,
+                            ))
+                            .expect("admin rpc service will be waiting for response");
+                        }
+
+                        PluginManagerRequest::LoadPlugin {
+                            ref libpath,
+                            ref config_file,
+                            tx,
+                        } => {
+                            tx.send(
+                                rpc_plugin_manager
+                                    .write()
+                                    .unwrap()
+                                    .load_plugin_rpc(libpath, config_file),
+                            )
+                            .expect("admin rpc service will be waiting for response");
+                        }
+
+                        PluginManagerRequest::UnloadPlugin { ref name, tx } => {
+                            tx.send(rpc_plugin_manager.write().unwrap().unload_plugin_rpc(name))
+                                .expect("admin rpc service will be waiting for response");
+                        }
+                    }
+                }
+            }))
+        });
+
         info!("Started GeyserPluginService");
         Ok(GeyserPluginService {
             slot_status_observer,
-            plugin_manager: shared_geyser_plugin_manager,
+            plugin_manager,
             accounts_update_notifier,
             transaction_notifier,
             block_metadata_notifier,
+            rpc_handler_thread,
         })
     }
 
@@ -211,5 +266,11 @@ impl GeyserPluginService {
         }
         self.plugin_manager.write().unwrap().unload();
         Ok(())
+    }
+
+    pub fn plugin_manager_join_handle(&self) -> Arc<JoinHandle<()>> {
+        // This is only called after the initialization of a solana-test-validator or a solana-validator
+        // which has a geyser plugin service
+        Arc::clone(self.rpc_handler_thread.as_ref().unwrap())
     }
 }
