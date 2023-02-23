@@ -537,8 +537,8 @@ pub fn main() {
                 _ => unreachable!(),
             }
         }
-        ("plugin", Some(authorized_voter_subcommand_matches)) => {
-            match authorized_voter_subcommand_matches.subcommand() {
+        ("plugin", Some(plugin_subcommand_matches)) => {
+            match plugin_subcommand_matches.subcommand() {
                 ("list", _) => {
                     let admin_client = admin_rpc_service::connect(&ledger_path);
                     let plugins = admin_rpc_service::runtime()
