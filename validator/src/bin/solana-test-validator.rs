@@ -201,7 +201,7 @@ fn main() {
         program_path
     };
 
-    let mut programs_to_load = vec![];
+    let mut upgradeable_programs_to_load = vec![];
     if let Some(values) = matches.values_of("bpf_program") {
         let values: Vec<&str> = values.collect::<Vec<_>>();
         for address_program in values.chunks(2) {
@@ -210,9 +210,10 @@ fn main() {
                     let address = parse_address(address, "address");
                     let program_path = parse_program_path(program);
 
-                    programs_to_load.push(ProgramInfo {
+                    upgradeable_programs_to_load.push(UpgradeableProgramInfo {
                         program_id: address,
-                        loader: solana_sdk::bpf_loader::id(),
+                        loader: solana_sdk::bpf_loader_upgradeable::id(),
+                        upgrade_authority: Pubkey::default(),
                         program_path,
                     });
                 }
@@ -221,7 +222,6 @@ fn main() {
         }
     }
 
-    let mut upgradeable_programs_to_load = vec![];
     if let Some(values) = matches.values_of("upgradeable_program") {
         let values: Vec<&str> = values.collect::<Vec<_>>();
         for address_program_upgrade_authority in values.chunks(3) {
@@ -452,7 +452,6 @@ fn main() {
         })
         .bpf_jit(!matches.is_present("no_bpf_jit"))
         .rpc_port(rpc_port)
-        .add_programs_with_path(&programs_to_load)
         .add_upgradeable_programs_with_path(&upgradeable_programs_to_load)
         .add_accounts_from_json_files(&accounts_to_load)
         .unwrap_or_else(|e| {

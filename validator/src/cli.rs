@@ -2016,7 +2016,7 @@ pub fn test_app<'a>(version: &'a str, default_args: &'a DefaultTestArgs) -> App<
                 .number_of_values(2)
                 .multiple(true)
                 .help(
-                    "Add a SBF program to the genesis configuration. \
+                    "Add a SBF program to the genesis configuration with upgrades disabled. \
                        If the ledger already exists then this parameter is silently ignored. \
                        First argument can be a pubkey string or path to a keypair",
                 ),
