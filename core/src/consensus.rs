@@ -1147,6 +1147,11 @@ impl Tower {
         Ok(self)
     }
 
+    pub fn adjust_lockouts_after_warp(&mut self, warp_slot: Slot) {
+        self.initialize_root(warp_slot);
+        self.initialize_lockouts(|v| v.slot() > warp_slot);
+    }
+
     fn adjust_lockouts_with_slot_history(&mut self, slot_history: &SlotHistory) -> Result<()> {
         let tower_root = self.root();
         // retained slots will be consisted only from divergent slots

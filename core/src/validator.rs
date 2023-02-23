@@ -1359,7 +1359,11 @@ fn post_process_restored_tower(
                 );
             }
 
-            Tower::new_from_bankforks(bank_forks, validator_identity, vote_account)
+            let mut tower = Tower::new_from_bankforks(bank_forks, validator_identity, vote_account);
+            if let Some(warp_slot) = config.warp_slot {
+                tower.adjust_lockouts_after_warp(warp_slot);
+            }
+            tower
         }
     };
 
