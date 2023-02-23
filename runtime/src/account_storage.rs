@@ -35,7 +35,7 @@ impl AccountStorage {
     /// can look in 'map' and 'shrink_in_progress_map' to find the specified append vec
     /// when shrinking begins, shrinking_in_progress is called.
     /// This fn looks in 'map' first, then in 'shrink_in_progress_map', then in 'map' again because
-    /// 'shrink_in_progress' first inserts the new append vec into 'shrink_in_progress_map'
+    /// 'shrinking_in_progress' first inserts the new append vec into 'shrink_in_progress_map'
     /// Then, when 'shrink_in_progress' is dropped,
     /// the old append vec is replaced in 'map' with the new append vec
     /// then the new append vec is dropped from 'shrink_in_progress_map'.
