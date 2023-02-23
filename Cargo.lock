@@ -5857,6 +5857,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "solana-loader-v3-program"
+version = "1.16.0"
+dependencies = [
+ "bincode",
+ "log",
+ "rand 0.7.3",
+ "solana-measure",
+ "solana-program-runtime",
+ "solana-sdk 1.16.0",
+ "solana_rbpf",
+]
+
+[[package]]
 name = "solana-local-cluster"
 version = "1.16.0"
 dependencies = [

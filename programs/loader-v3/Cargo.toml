@@ -17,6 +17,9 @@ solana-program-runtime = { workspace = true }
 solana-sdk = { workspace = true }
 solana_rbpf = { workspace = true }
 
+[dev-dependencies]
+bincode = { workspace = true }
+
 [lib]
 crate-type = ["lib"]
 name = "solana_loader_v3_program"
