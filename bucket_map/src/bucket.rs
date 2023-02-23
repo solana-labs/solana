@@ -96,7 +96,7 @@ impl<'b, T: Clone + Copy + 'b> Bucket<T> {
             drives,
             index,
             data: vec![],
-            _phantom: PhantomData::default(),
+            _phantom: PhantomData,
             stats,
             reallocated: Reallocated::default(),
         }
