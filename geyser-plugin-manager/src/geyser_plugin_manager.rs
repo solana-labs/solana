@@ -189,18 +189,26 @@ impl GeyserPluginManager {
     }
 }
 
-// Encapsulates all possible errors that can occurr when dynamically managing plugins.
-//
-// Note: This is here:
-// 1) to avoid adding jsoncore_rpc as a dependency to this crate
-// 2) in case these these methods are called outside of an rpc context in the future.
-#[derive(Debug, PartialEq)]
-pub enum PluginManagerError {
-    PluginNotFoundDuringReload,
-    FailedToLoadNewLibrary { err: String },
-    FailedToGetConstructorFromLibrary { err: String },
-    FailedReloadRevertedToOldPlugin { err: String },
-    FailedReloadFailedReverted { err: String, revert_err: String },
+#[derive(Debug)]
+pub enum PluginManagerRequest {
+    ReloadPlugin {
+        name: String,
+        libpath: String,
+        config_file: String,
+        tx: OneShotSender<JsonRpcResult<()>>,
+    },
+    UnloadPlugin {
+        name: String,
+        tx: OneShotSender<JsonRpcResult<()>>,
+    },
+    LoadPlugin {
+        libpath: String,
+        config_file: String,
+        tx: OneShotSender<JsonRpcResult<String>>,
+    },
+    ListPlugins {
+        tx: OneShotSender<JsonRpcResult<Vec<String>>>,
+    },
 }
 
 #[cfg(test)]
