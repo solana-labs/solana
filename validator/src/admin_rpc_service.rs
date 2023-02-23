@@ -1,19 +1,17 @@
-use jsonrpc_core::ErrorCode;
-use solana_geyser_plugin_manager::geyser_plugin_manager::{
-    GeyserPluginManager, PluginManagerError,
-};
-
 use {
     jsonrpc_core::{ErrorCode, MetaIoHandler, Metadata, Result},
     jsonrpc_core_client::{transports::ipc, RpcError},
     jsonrpc_derive::rpc,
-    jsonrpc_ipc_server::{RequestContext, ServerBuilder},
+    jsonrpc_ipc_server::{
+        tokio::sync::oneshot::channel as oneshot_channel, RequestContext, ServerBuilder,
+    },
     jsonrpc_server_utils::tokio,
     log::*,
     serde::{de::Deserializer, Deserialize, Serialize},
     solana_core::{
         consensus::Tower, tower_storage::TowerStorage, validator::ValidatorStartProgress,
     },
+    solana_geyser_plugin_manager::PluginManagerRequest,
     solana_gossip::{cluster_info::ClusterInfo, contact_info::ContactInfo},
     solana_rpc::rpc::verify_pubkey,
     solana_rpc_client_api::{config::RpcAccountIndex, custom_error::RpcCustomError},
@@ -30,7 +28,7 @@ use {
         net::{IpAddr, Ipv4Addr, SocketAddr},
         path::{Path, PathBuf},
         sync::{Arc, RwLock},
-        thread::{self, Builder},
+        thread::{self, Builder, JoinHandle},
         time::{Duration, SystemTime},
     },
 };
@@ -41,6 +39,7 @@ pub struct AdminRpcRequestMetadataPostInit {
     pub bank_forks: Arc<RwLock<BankForks>>,
     pub vote_account: Pubkey,
     pub repair_whitelist: Arc<RwLock<HashSet<Pubkey>>>,
+    pub manager_handle: Option<Arc<JoinHandle<()>>>,
 }
 
 #[derive(Clone)]
@@ -53,8 +52,9 @@ pub struct AdminRpcRequestMetadata {
     pub tower_storage: Arc<dyn TowerStorage>,
     pub staked_nodes_overrides: Arc<RwLock<HashMap<Pubkey, u64>>>,
     pub post_init: Arc<RwLock<Option<AdminRpcRequestMetadataPostInit>>>,
-    pub plugin_manager: Arc<RwLock<GeyserPluginManager>>,
+    pub rpc_to_plugin_manager_tx: Option<Sender<PluginManagerRequest>>,
 }
+
 impl Metadata for AdminRpcRequestMetadata {}
 
 impl AdminRpcRequestMetadata {
@@ -156,9 +156,24 @@ pub trait AdminRpc {
     fn reload_plugin(
         &self,
         meta: Self::Metadata,
+        name: String,
         libpath: String,
         config_file: String,
-    ) -> Result<()>;
+    ) -> BoxFuture<Result<()>>;
+
+    #[rpc(meta, name = "unloadPlugin")]
+    fn unload_plugin(&self, meta: Self::Metadata, name: String) -> BoxFuture<Result<()>>;
+
+    #[rpc(meta, name = "loadPlugin")]
+    fn load_plugin(
+        &self,
+        meta: Self::Metadata,
+        libpath: String,
+        config_file: String,
+    ) -> BoxFuture<Result<String>>;
+
+    #[rpc(meta, name = "listPlugins")]
+    fn list_plugins(&self, meta: Self::Metadata) -> BoxFuture<Result<Vec<String>>>;
 
     #[rpc(meta, name = "rpcAddress")]
     fn rpc_addr(&self, meta: Self::Metadata) -> Result<Option<SocketAddr>>;
@@ -258,71 +273,172 @@ impl AdminRpc for AdminRpcImpl {
     fn reload_plugin(
         &self,
         meta: Self::Metadata,
+        name: String,
         libpath: String,
         config_file: String,
-    ) -> Result<()> {
-        // If the validator is requesting reload_plugin, they will likely want
-        // it to reload and begin processing notifies as soon as possible. ASAP here
-        // does not refer to realtime but rather slot/cluster time (i.e the next slot).
-        // So, we interrupt plugin service by taking a write lock ASAP
-        let plugin_manager = meta.plugin_manager.write().unwrap();
+    ) -> BoxFuture<Result<()>> {
+        Box::pin(async move {
+            // Construct channel for plugin to respond to this particular rpc request instance
+            let (tx, rx) = oneshot_channel();
 
-        match GeyserPluginManager::reload_plugin(plugin_manager, libpath, config_file) {
-            // Successful reload
-            Ok(()) => Ok(()),
-
-            // The plugin that the user requested to reload was not found
-            Err(PluginManagerError::PluginNotFoundDuringReload) => {
-                Err(jsonrpc_core::error::Error {
+            // Send request to plugin manager if there is a geyser service
+            if let Some(ref rpc_tx) = meta.rpc_to_plugin_manager_tx {
+                rpc_tx
+                    .send(PluginManagerRequest::ReloadPlugin {
+                        name,
+                        libpath,
+                        config_file,
+                        tx,
+                    })
+                    .expect("plugin manager should never drop request rx");
+            } else {
+                return Err(jsonrpc_core::Error {
                     code: ErrorCode::InvalidRequest,
-                    message: String::from("plugin requested to reload is not loaded"),
+                    message: "no geyser plugin service".to_string(),
                     data: None,
-                })
+                });
             }
 
-            // The library provided could not be loaded
-            Err(PluginManagerError::FailedToLoadNewLibrary { err }) => {
-                Err(jsonrpc_core::error::Error {
+            // Wake handler thread
+            meta.with_post_init(|post_init| {
+                if let Some(ref thread) = post_init.manager_handle.as_ref().map(|h| h.thread()) {
+                    thread.unpark();
+                    Ok(())
+                } else {
+                    Err(jsonrpc_core::Error {
+                        code: ErrorCode::InvalidRequest,
+                        message: "no geyser plugin service".to_string(),
+                        data: None,
+                    })
+                }
+            })?;
+
+            // Await response from plugin manager
+            rx.await
+                .expect("plugin manager's oneshot sender shouldn't drop early")
+        })
+    }
+
+    fn load_plugin(
+        &self,
+        meta: Self::Metadata,
+        libpath: String,
+        config_file: String,
+    ) -> BoxFuture<Result<String>> {
+        Box::pin(async move {
+            // Construct channel for plugin to respond to this particular rpc request instance
+            let (tx, rx) = oneshot_channel();
+
+            // Send request to plugin manager if there is a geyser service
+            if let Some(ref rpc_tx) = meta.rpc_to_plugin_manager_tx {
+                rpc_tx
+                    .send(PluginManagerRequest::LoadPlugin {
+                        libpath,
+                        config_file,
+                        tx,
+                    })
+                    .expect("plugin manager should never drop request rx");
+            } else {
+                return Err(jsonrpc_core::Error {
                     code: ErrorCode::InvalidRequest,
-                    message: format!("failed to load geyser plugin library: {err}"),
+                    message: "no geyser plugin service".to_string(),
                     data: None,
-                })
+                });
             }
 
-            // Failed to retrieve _create_plugin symbol from library
-            Err(PluginManagerError::FailedToGetConstructorFromLibrary { err }) => {
-                Err(jsonrpc_core::error::Error {
+            // Wake handler thread
+            meta.with_post_init(|post_init| {
+                if let Some(ref thread) = post_init.manager_handle.as_ref().map(|h| h.thread()) {
+                    thread.unpark();
+                    Ok(())
+                } else {
+                    Err(jsonrpc_core::Error {
+                        code: ErrorCode::InvalidRequest,
+                        message: "no geyser plugin service".to_string(),
+                        data: None,
+                    })
+                }
+            })?;
+
+            // Await response from plugin manager
+            rx.await
+                .expect("plugin manager's oneshot sender shouldn't drop early")
+        })
+    }
+
+    fn unload_plugin(&self, meta: Self::Metadata, name: String) -> BoxFuture<Result<()>> {
+        Box::pin(async move {
+            // Construct channel for plugin to respond to this particular rpc request instance
+            let (tx, rx) = oneshot_channel();
+
+            // Send request to plugin manager if there is a geyser service
+            if let Some(ref rpc_tx) = meta.rpc_to_plugin_manager_tx {
+                rpc_tx
+                    .send(PluginManagerRequest::UnloadPlugin { name, tx })
+                    .expect("plugin manager should never drop request rx");
+            } else {
+                return Err(jsonrpc_core::Error {
                     code: ErrorCode::InvalidRequest,
-                    message: format!(
-                        "failed to get plugin constructor _create_plugin from library: {err}"
-                    ),
+                    message: "no geyser plugin service".to_string(),
                     data: None,
-                })
+                });
             }
 
-            // Failed to load new plugin but successfully reverted to old plugin
-            Err(PluginManagerError::FailedReloadRevertedToOldPlugin { err }) => {
-                Err(jsonrpc_core::error::Error {
+            // Wake handler thread
+            meta.with_post_init(|post_init| {
+                if let Some(ref thread) = post_init.manager_handle.as_ref().map(|h| h.thread()) {
+                    thread.unpark();
+                    Ok(())
+                } else {
+                    Err(jsonrpc_core::Error {
+                        code: ErrorCode::InvalidRequest,
+                        message: "no geyser plugin service".to_string(),
+                        data: None,
+                    })
+                }
+            })?;
+
+            // Await response from plugin manager
+            rx.await
+                .expect("plugin manager's oneshot sender shouldn't drop early")
+        })
+    }
+
+    fn list_plugins(&self, meta: Self::Metadata) -> BoxFuture<Result<Vec<String>>> {
+        Box::pin(async move {
+            let (tx, rx) = oneshot_channel();
+
+            // Send request to plugin manager
+            if let Some(ref rpc_tx) = meta.rpc_to_plugin_manager_tx {
+                rpc_tx
+                    .send(PluginManagerRequest::ListPlugins { tx })
+                    .expect("plugin manager should never drop request rx");
+            } else {
+                return Err(jsonrpc_core::Error {
                     code: ErrorCode::InvalidRequest,
-                    message: format!(
-                        "failed to start new plugin, reverted to current plugin: {err}"
-                    ),
+                    message: "no geyser plugin service".to_string(),
                     data: None,
-                })
+                });
             }
 
-            // Failed to load new plugin and failed to revert to old plugin
-            Err(PluginManagerError::FailedReloadFailedReverted { err, revert_err }) => {
-                Err(jsonrpc_core::error::Error {
-                    code: ErrorCode::InvalidRequest,
-                    message: format!(
-                        "failed to start new plugin, reverted to current plugin. \
-                        new plugin error: {err}. revert error: {revert_err}"
-                    ),
-                    data: None,
-                })
-            }
-        }
+            // Wake handler thread
+            meta.with_post_init(|post_init| {
+                if let Some(ref thread) = post_init.manager_handle.as_ref().map(|h| h.thread()) {
+                    thread.unpark();
+                    Ok(())
+                } else {
+                    Err(jsonrpc_core::Error {
+                        code: ErrorCode::InvalidRequest,
+                        message: "there is no plugin manager loaded".to_string(),
+                        data: None,
+                    })
+                }
+            })?;
+
+            // Await response from plugin manager
+            rx.await
+                .expect("plugin manager's oneshot sender shouldn't drop early")
+        })
     }
 
     fn rpc_addr(&self, meta: Self::Metadata) -> Result<Option<SocketAddr>> {
@@ -635,6 +751,7 @@ pub fn run(ledger_path: &Path, metadata: AdminRpcRequestMetadata) {
                     warn!("Unable to start admin rpc service: {:?}", err);
                 }
                 Ok(server) => {
+                    info!("started admin rpc service!");
                     let close_handle = server.close_handle();
                     validator_exit
                         .write()
@@ -721,6 +838,9 @@ pub fn load_staked_nodes_overrides(
 
 #[cfg(test)]
 mod tests {
+    use crossbeam_channel::unbounded;
+    use jsonrpc_ipc_server::tokio::sync::mpsc::channel;
+
     use {
         super::*,
         rand::{distributions::Uniform, thread_rng, Rng},
@@ -795,11 +915,12 @@ mod tests {
                     bank_forks: bank_forks.clone(),
                     vote_account,
                     repair_whitelist,
+                    manager_handle: None, // no plugin manager thread for tests
                 }))),
                 staked_nodes_overrides: Arc::new(RwLock::new(HashMap::new())),
-                // For tests, just use an empty manager. In prod, this would be
-                // a shared GeyserPluginManager with the plugin service
-                plugin_manager: Arc::new(RwLock::new(GeyserPluginManager::new())),
+                // Discard rx channel for tests, since we don't test plugin manager functionality
+                // in this crate
+                rpc_to_plugin_manager_tx: unbounded().0,
             };
             let mut io = MetaIoHandler::default();
             io.extend_with(AdminRpcImpl.to_delegate());
