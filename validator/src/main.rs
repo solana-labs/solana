@@ -4,6 +4,7 @@ use jemallocator::Jemalloc;
 use {
     clap::{crate_name, value_t, value_t_or_exit, values_t, values_t_or_exit, ArgMatches},
     console::style,
+    crossbeam_channel::unbounded,
     log::*,
     rand::{seq::SliceRandom, thread_rng},
     solana_clap_utils::input_parsers::{keypair_of, keypairs_of, pubkey_of, value_of},
@@ -1068,6 +1069,7 @@ pub fn main() {
     } else {
         None
     };
+    let starting_with_geyser_plugins: bool = on_start_geyser_plugin_config_files.is_some();
 
     let rpc_bigtable_config = if matches.is_present("enable_rpc_bigtable_ledger_storage")
         || matches.is_present("enable_bigtable_ledger_upload")
@@ -1513,6 +1515,12 @@ pub fn main() {
 
     let start_progress = Arc::new(RwLock::new(ValidatorStartProgress::default()));
     let admin_service_post_init = Arc::new(RwLock::new(None));
+    let (rpc_to_plugin_manager_tx, rpc_to_plugin_manager_rx) = if starting_with_geyser_plugins {
+        let (tx, rx) = unbounded();
+        (Some(tx), Some(rx))
+    } else {
+        (None, None)
+    };
     admin_rpc_service::run(
         &ledger_path,
         admin_rpc_service::AdminRpcRequestMetadata {
@@ -1524,7 +1532,7 @@ pub fn main() {
             post_init: admin_service_post_init.clone(),
             tower_storage: validator_config.tower_storage.clone(),
             staked_nodes_overrides,
-            plugin_manager: Arc::clone(&validator_config.geyser_plugin_manager),
+            rpc_to_plugin_manager_tx,
         },
     );
 
@@ -1683,6 +1691,7 @@ pub fn main() {
         cluster_entrypoints,
         &validator_config,
         should_check_duplicate_instance,
+        rpc_to_plugin_manager_rx,
         start_progress,
         socket_addr_space,
         tpu_use_quic,
@@ -1699,6 +1708,7 @@ pub fn main() {
             cluster_info: validator.cluster_info.clone(),
             vote_account,
             repair_whitelist,
+            manager_handle: validator.plugin_manager_handle(),
         });
 
     if let Some(filename) = init_complete_file {
