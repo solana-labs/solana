@@ -296,6 +296,9 @@ pub enum SnapshotError {
 
     #[error("invalid AppendVec path: {}", .0.display())]
     InvalidAppendVecPath(PathBuf),
+
+    #[error("invalid account path: {}", .0.display())]
+    InvalidAccountPath(PathBuf),
 }
 pub type Result<T> = std::result::Result<T, SnapshotError>;
 
@@ -1014,6 +1017,22 @@ pub fn add_bank_snapshot(
         // directory.  Then, when adding new snapshots, the newer incomplete snapshot directory could
         // be found.  If so, it should be removed.
         remove_bank_snapshot(slot, &bank_snapshots_dir)?;
+    } else {
+        // Even the snapshot directory is not found, still ensure the account snapshot directory
+        // is also clean.  hardlink failure will happen if an old file exists.
+        let account_paths = &bank.accounts().accounts_db.paths;
+        let slot_str = slot.to_string();
+        for account_path in account_paths {
+            let account_snapshot_path = account_path
+                .parent()
+                .ok_or(SnapshotError::InvalidAccountPath(account_path.clone()))?
+                .join("snapshot")
+                .join(&slot_str);
+            if account_snapshot_path.is_dir() {
+                // remove the account snapshot directory
+                fs::remove_dir_all(&account_snapshot_path)?;
+            }
+        }
     }
     fs::create_dir_all(&bank_snapshot_dir)?;
 
