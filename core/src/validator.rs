@@ -1924,7 +1924,8 @@ fn wait_for_supermajority(
             }
 
             for i in 1.. {
-                if i % 10 == 1 {
+                let logging = i % 10 == 1;
+                if logging {
                     info!(
                         "Waiting for {}% of activated stake at slot {} to be in gossip...",
                         WAIT_FOR_SUPERMAJORITY_THRESHOLD_PERCENT,
@@ -1933,7 +1934,7 @@ fn wait_for_supermajority(
                 }
 
                 let gossip_stake_percent =
-                    get_stake_percent_in_gossip(&bank, cluster_info, i % 10 == 0);
+                    get_stake_percent_in_gossip(&bank, cluster_info, logging);
 
                 *start_progress.write().unwrap() =
                     ValidatorStartProgress::WaitingForSupermajority {
