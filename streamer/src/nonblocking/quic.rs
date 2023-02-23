@@ -60,7 +60,7 @@ const CONNECTION_CLOSE_REASON_TOO_MANY: &[u8] = b"too_many";
 
 // A sequence of bytes that is part of a packet
 // along with where in the packet it is
-struct PacketBytes {
+struct PacketChunk {
     pub bytes: Bytes,
     // The offset of these bytes in the Quic stream
     // and thus the beginning offset in the slice of the
@@ -79,7 +79,7 @@ struct PacketBytes {
 // the Packet then sending the Packet to packet_batch_sender)
 struct PacketAccumulator {
     pub meta: Meta,
-    pub bytes: Vec<PacketBytes>,
+    pub chunks: Vec<PacketChunk>,
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -617,9 +617,9 @@ async fn packet_batch_sender(
 
                 let i = packet_batch.len() - 1;
                 *packet_batch[i].meta_mut() = packet_accumulator.meta;
-                for packet_bytes in packet_accumulator.bytes {
-                    packet_batch[i].buffer_mut()[packet_bytes.offset..packet_bytes.end_of_chunk]
-                        .copy_from_slice(&packet_bytes.bytes);
+                for chunk in packet_accumulator.chunks {
+                    packet_batch[i].buffer_mut()[chunk.offset..chunk.end_of_chunk]
+                        .copy_from_slice(&chunk.bytes);
                 }
 
                 if packet_batch.len() == 1 {
@@ -778,7 +778,7 @@ async fn handle_chunk(
                     meta.sender_stake = stake;
                     *packet_accum = Some(PacketAccumulator {
                         meta,
-                        bytes: Vec::new(),
+                        chunks: Vec::new(),
                     });
                 }
 
@@ -789,7 +789,7 @@ async fn handle_chunk(
                         Some(end) => end,
                         None => return true,
                     };
-                    accum.bytes.push(PacketBytes {
+                    accum.chunks.push(PacketChunk {
                         bytes: chunk.bytes,
                         offset: offset as usize,
                         end_of_chunk,
@@ -815,7 +815,7 @@ async fn handle_chunk(
                 trace!("chunk is none");
                 if let Some(accum) = packet_accum.take() {
                     let len = accum
-                        .bytes
+                        .chunks
                         .iter()
                         .map(|packet_bytes| packet_bytes.bytes.len())
                         .sum::<usize>();
@@ -1365,7 +1365,7 @@ pub mod test {
             let size = bytes.len();
             let packet_accum = PacketAccumulator {
                 meta,
-                bytes: vec![PacketBytes {
+                chunks: vec![PacketChunk {
                     bytes,
                     offset,
                     end_of_chunk: size,
@@ -1375,8 +1375,7 @@ pub mod test {
         }
         let mut i = 0;
         while i < 1000 {
-            let res = pkt_batch_receiver.try_recv();
-            if let Ok(batch) = res {
+            if let Ok(batch) = pkt_batch_receiver.try_recv() {
                 i += batch.len();
             } else {
                 sleep(Duration::from_millis(1)).await;
