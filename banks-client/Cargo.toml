@@ -1,28 +1,27 @@
 [package]
 name = "solana-banks-client"
-version = "1.16.0"
-description = "Solana banks client"
-authors = ["Solana Labs Maintainers <maintainers@solanalabs.com>"]
-repository = "https://github.com/solana-labs/solana"
-license = "Apache-2.0"
-homepage = "https://solanalabs.com/"
 documentation = "https://docs.rs/solana-banks-client"
-edition = "2021"
+version = { workspace = true }
+authors = { workspace = true }
+repository = { workspace = true }
+homepage = { workspace = true }
+license = { workspace = true }
+edition = { workspace = true }
 
 [dependencies]
-borsh = "0.9.3"
-futures = "0.3"
-solana-banks-interface = { path = "../banks-interface", version = "=1.16.0" }
-solana-program = { path = "../sdk/program", version = "=1.16.0" }
-solana-sdk = { path = "../sdk", version = "=1.16.0" }
-tarpc = { version = "0.29.0", features = ["full"] }
-thiserror = "1.0"
-tokio = { version = "~1.14.1", features = ["full"] }
-tokio-serde = { version = "0.8", features = ["bincode"] }
+borsh = { workspace = true }
+futures = { workspace = true }
+solana-banks-interface = { workspace = true }
+solana-program = { workspace = true }
+solana-sdk = { workspace = true }
+tarpc = { workspace = true, features = ["full"] }
+thiserror = { workspace = true }
+tokio = { workspace = true, features = ["full"] }
+tokio-serde = { workspace = true, features = ["bincode"] }
 
 [dev-dependencies]
-solana-banks-server = { path = "../banks-server", version = "=1.16.0" }
-solana-runtime = { path = "../runtime", version = "=1.16.0" }
+solana-banks-server = { workspace = true }
+solana-runtime = { workspace = true }
 
 [lib]
 crate-type = ["lib"]

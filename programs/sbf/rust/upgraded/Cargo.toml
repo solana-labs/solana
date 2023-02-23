@@ -1,16 +1,16 @@
 [package]
 name = "solana-sbf-rust-upgraded"
-version = "1.16.0"
-description = "Solana SBF test program written in Rust"
-authors = ["Solana Labs Maintainers <maintainers@solanalabs.com>"]
-repository = "https://github.com/solana-labs/solana"
-license = "Apache-2.0"
-homepage = "https://solanalabs.com/"
 documentation = "https://docs.rs/solana-sbf-rust-upgraded"
-edition = "2021"
+version = { workspace = true }
+description = { workspace = true }
+authors = { workspace = true }
+repository = { workspace = true }
+homepage = { workspace = true }
+license = { workspace = true }
+edition = { workspace = true }
 
 [dependencies]
-solana-program = { path = "../../../../sdk/program", version = "=1.16.0" }
+solana-program = { workspace = true }
 
 [lib]
 name = "solana_sbf_rust_upgraded"

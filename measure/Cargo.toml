@@ -1,18 +1,18 @@
 [package]
 name = "solana-measure"
 description = "Blockchain, Rebuilt for Scale"
-version = "1.16.0"
-homepage = "https://solanalabs.com/"
 documentation = "https://docs.rs/solana-measure"
 readme = "../README.md"
-repository = "https://github.com/solana-labs/solana"
-authors = ["Solana Labs Maintainers <maintainers@solanalabs.com>"]
-license = "Apache-2.0"
-edition = "2021"
+version = { workspace = true }
+authors = { workspace = true }
+repository = { workspace = true }
+homepage = { workspace = true }
+license = { workspace = true }
+edition = { workspace = true }
 
 [dependencies]
-log = "0.4.17"
-solana-sdk = { path = "../sdk", version = "=1.16.0" }
+log = { workspace = true }
+solana-sdk = { workspace = true }
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]

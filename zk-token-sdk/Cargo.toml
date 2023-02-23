@@ -1,38 +1,38 @@
 [package]
 name = "solana-zk-token-sdk"
-description = "Solana Zk Token SDK"
-authors = ["Solana Labs Maintainers <maintainers@solanalabs.com>"]
-repository = "https://github.com/solana-labs/solana"
-version = "1.16.0"
-license = "Apache-2.0"
-edition = "2021"
+version = { workspace = true }
+authors = { workspace = true }
+repository = { workspace = true }
+homepage = { workspace = true }
+license = { workspace = true }
+edition = { workspace = true }
 
 [dependencies]
-base64 = "0.13"
-bytemuck = { version = "1.11.0", features = ["derive"] }
-num-derive = "0.3"
-num-traits = "0.2"
-solana-program = { path = "../sdk/program", version = "=1.16.0" }
+base64 = { workspace = true }
+bytemuck = { workspace = true, features = ["derive"] }
+num-derive = { workspace = true }
+num-traits = { workspace = true }
+solana-program = { workspace = true }
 
 [target.'cfg(not(target_os = "solana"))'.dependencies]
-aes-gcm-siv = "0.10.3"
-arrayref = "0.3.6"
+aes-gcm-siv = { workspace = true }
+arrayref = { workspace = true }
 bincode = "1"
-byteorder = "1"
-cipher = "0.4"
-curve25519-dalek = { version = "3.2.1", features = ["serde"] }
-getrandom = { version = "0.1", features = ["dummy"] }
-itertools = "0.10.5"
-lazy_static = "1.4.0"
-merlin = "3"
-rand = "0.7"
-serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
+byteorder = { workspace = true }
+cipher = { workspace = true }
+curve25519-dalek = { workspace = true, features = ["serde"] }
+getrandom = { workspace = true, features = ["dummy"] }
+itertools = { workspace = true }
+lazy_static = { workspace = true }
+merlin = { workspace = true }
+rand = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
 sha3 = "0.9"
-solana-sdk = { path = "../sdk", version = "=1.16.0" }
-subtle = "2"
-thiserror = "1.0"
-zeroize = { version = "1.3", default-features = false, features = ["zeroize_derive"] }
+solana-sdk = { workspace = true }
+subtle = { workspace = true }
+thiserror = { workspace = true }
+zeroize = { workspace = true, features = ["zeroize_derive"] }
 
 [lib]
 crate-type = ["cdylib", "rlib"]

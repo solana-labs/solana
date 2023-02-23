@@ -1,29 +1,29 @@
 [package]
-authors = ["Solana Labs Maintainers <maintainers@solanalabs.com>"]
-edition = "2021"
 name = "solana-geyser-plugin-manager"
 description = "The Solana Geyser plugin manager."
-version = "1.16.0"
-repository = "https://github.com/solana-labs/solana"
-license = "Apache-2.0"
-homepage = "https://solanalabs.com/"
 documentation = "https://docs.rs/solana-geyser-plugin-manager"
+version = { workspace = true }
+authors = { workspace = true }
+repository = { workspace = true }
+homepage = { workspace = true }
+license = { workspace = true }
+edition = { workspace = true }
 
 [dependencies]
-bs58 = "0.4.0"
-crossbeam-channel = "0.5"
-json5 = "0.4.1"
-libloading = "0.7.4"
-log = "0.4.17"
-serde_json = "1.0.83"
-solana-geyser-plugin-interface = { path = "../geyser-plugin-interface", version = "=1.16.0" }
-solana-measure = { path = "../measure", version = "=1.16.0" }
-solana-metrics = { path = "../metrics", version = "=1.16.0" }
-solana-rpc = { path = "../rpc", version = "=1.16.0" }
-solana-runtime = { path = "../runtime", version = "=1.16.0" }
-solana-sdk = { path = "../sdk", version = "=1.16.0" }
-solana-transaction-status = { path = "../transaction-status", version = "=1.16.0" }
-thiserror = "1.0.31"
+bs58 = { workspace = true }
+crossbeam-channel = { workspace = true }
+json5 = { workspace = true }
+libloading = { workspace = true }
+log = { workspace = true }
+serde_json = { workspace = true }
+solana-geyser-plugin-interface = { workspace = true }
+solana-measure = { workspace = true }
+solana-metrics = { workspace = true }
+solana-rpc = { workspace = true }
+solana-runtime = { workspace = true }
+solana-sdk = { workspace = true }
+solana-transaction-status = { workspace = true }
+thiserror = { workspace = true }
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
