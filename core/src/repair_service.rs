@@ -112,7 +112,6 @@ pub struct RepairTiming {
     pub add_votes_elapsed: u64,
     pub get_best_orphans_elapsed: u64,
     pub get_best_shreds_elapsed: u64,
-    pub get_unknown_last_index_elapsed: u64,
     pub get_closest_completion_elapsed: u64,
     pub send_repairs_elapsed: u64,
     pub build_repairs_batch_elapsed: u64,
@@ -146,8 +145,6 @@ pub struct BestRepairsStats {
     pub num_orphan_repairs: u64,
     pub num_best_shreds_slots: u64,
     pub num_best_shreds_repairs: u64,
-    pub num_unknown_last_index_slots: u64,
-    pub num_unknown_last_index_repairs: u64,
     pub num_closest_completion_slots: u64,
     pub num_closest_completion_slots_path: u64,
     pub num_closest_completion_repairs: u64,
@@ -162,8 +159,6 @@ impl BestRepairsStats {
         num_orphan_repairs: u64,
         num_best_shreds_slots: u64,
         num_best_shreds_repairs: u64,
-        num_unknown_last_index_slots: u64,
-        num_unknown_last_index_repairs: u64,
         num_closest_completion_slots: u64,
         num_closest_completion_slots_path: u64,
         num_closest_completion_repairs: u64,
@@ -174,8 +169,6 @@ impl BestRepairsStats {
         self.num_orphan_repairs += num_orphan_repairs;
         self.num_best_shreds_slots += num_best_shreds_slots;
         self.num_best_shreds_repairs += num_best_shreds_repairs;
-        self.num_unknown_last_index_slots += num_unknown_last_index_slots;
-        self.num_unknown_last_index_repairs += num_unknown_last_index_repairs;
         self.num_closest_completion_slots += num_closest_completion_slots;
         self.num_closest_completion_slots_path += num_closest_completion_slots_path;
         self.num_closest_completion_repairs += num_closest_completion_repairs;
@@ -188,7 +181,6 @@ pub const MAX_REPAIR_PER_DUPLICATE: usize = 20;
 pub const MAX_DUPLICATE_WAIT_MS: usize = 10_000;
 pub const REPAIR_MS: u64 = 100;
 pub const MAX_ORPHANS: usize = 5;
-pub const MAX_UNKNOWN_LAST_INDEX_REPAIRS: usize = 10;
 pub const MAX_CLOSEST_COMPLETION_REPAIRS: usize = 100;
 
 #[derive(Clone)]
@@ -357,7 +349,6 @@ impl RepairService {
                     root_bank.epoch_schedule(),
                     MAX_ORPHANS,
                     MAX_REPAIR_LENGTH,
-                    MAX_UNKNOWN_LAST_INDEX_REPAIRS,
                     MAX_CLOSEST_COMPLETION_REPAIRS,
                     &mut repair_timing,
                     &mut best_repairs_stats,
@@ -459,11 +450,6 @@ impl RepairService {
                         i64
                     ),
                     (
-                        "get-unknown-last-index-elapsed",
-                        repair_timing.get_unknown_last_index_elapsed,
-                        i64
-                    ),
-                    (
                         "get-closest-completion-elapsed",
                         repair_timing.get_closest_completion_elapsed,
                         i64
@@ -497,16 +483,6 @@ impl RepairService {
                     (
                         "best-shreds-repairs",
                         best_repairs_stats.num_best_shreds_repairs,
-                        i64
-                    ),
-                    (
-                        "unknown-last-index-slots",
-                        best_repairs_stats.num_unknown_last_index_slots,
-                        i64
-                    ),
-                    (
-                        "unknown-last-index-repairs",
-                        best_repairs_stats.num_unknown_last_index_repairs,
                         i64
                     ),
                     (
@@ -849,7 +825,6 @@ mod test {
                     &EpochSchedule::default(),
                     MAX_ORPHANS,
                     MAX_REPAIR_LENGTH,
-                    MAX_UNKNOWN_LAST_INDEX_REPAIRS,
                     MAX_CLOSEST_COMPLETION_REPAIRS,
                     &mut RepairTiming::default(),
                     &mut BestRepairsStats::default(),
@@ -885,7 +860,6 @@ mod test {
                     &EpochSchedule::default(),
                     MAX_ORPHANS,
                     MAX_REPAIR_LENGTH,
-                    MAX_UNKNOWN_LAST_INDEX_REPAIRS,
                     MAX_CLOSEST_COMPLETION_REPAIRS,
                     &mut RepairTiming::default(),
                     &mut BestRepairsStats::default(),
@@ -945,7 +919,6 @@ mod test {
                     &EpochSchedule::default(),
                     MAX_ORPHANS,
                     MAX_REPAIR_LENGTH,
-                    MAX_UNKNOWN_LAST_INDEX_REPAIRS,
                     MAX_CLOSEST_COMPLETION_REPAIRS,
                     &mut RepairTiming::default(),
                     &mut BestRepairsStats::default(),
@@ -960,7 +933,6 @@ mod test {
                     &EpochSchedule::default(),
                     MAX_ORPHANS,
                     expected.len() - 2,
-                    MAX_UNKNOWN_LAST_INDEX_REPAIRS,
                     MAX_CLOSEST_COMPLETION_REPAIRS,
                     &mut RepairTiming::default(),
                     &mut BestRepairsStats::default(),
@@ -1006,7 +978,6 @@ mod test {
                     &EpochSchedule::default(),
                     MAX_ORPHANS,
                     MAX_REPAIR_LENGTH,
-                    MAX_UNKNOWN_LAST_INDEX_REPAIRS,
                     MAX_CLOSEST_COMPLETION_REPAIRS,
                     &mut RepairTiming::default(),
                     &mut BestRepairsStats::default(),

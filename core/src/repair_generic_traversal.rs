@@ -39,46 +39,6 @@ impl<'a> Iterator for GenericTraversal<'a> {
     }
 }
 
-/// Does a generic traversal and inserts all slots that have a missing last index prioritized by how
-/// many shreds have been received
-pub fn get_unknown_last_index(
-    tree: &HeaviestSubtreeForkChoice,
-    blockstore: &Blockstore,
-    slot_meta_cache: &mut HashMap<Slot, Option<SlotMeta>>,
-    processed_slots: &mut HashSet<Slot>,
-    limit: usize,
-) -> Vec<ShredRepairType> {
-    let iter = GenericTraversal::new(tree);
-    let mut unknown_last = Vec::new();
-    for slot in iter {
-        if processed_slots.contains(&slot) {
-            continue;
-        }
-        let slot_meta = slot_meta_cache
-            .entry(slot)
-            .or_insert_with(|| blockstore.meta(slot).unwrap());
-        if let Some(slot_meta) = slot_meta {
-            if slot_meta.last_index.is_none() {
-                let shred_index = blockstore.get_index(slot).unwrap();
-                let num_processed_shreds = if let Some(shred_index) = shred_index {
-                    shred_index.data().num_shreds() as u64
-                } else {
-                    slot_meta.consumed
-                };
-                unknown_last.push((slot, slot_meta.received, num_processed_shreds));
-                processed_slots.insert(slot);
-            }
-        }
-    }
-    // prioritize slots with more received shreds
-    unknown_last.sort_by(|(_, _, count1), (_, _, count2)| count2.cmp(count1));
-    unknown_last
-        .iter()
-        .take(limit)
-        .map(|(slot, received, _)| ShredRepairType::HighestShred(*slot, *received))
-        .collect()
-}
-
 /// Path of broken parents from start_slot to earliest ancestor not yet seen
 /// Uses blockstore for fork information
 fn get_unrepaired_path(
@@ -211,28 +171,6 @@ pub mod test {
         solana_sdk::hash::Hash,
         trees::{tr, Tree, TreeWalk},
     };
-
-    #[test]
-    fn test_get_unknown_last_index() {
-        let (blockstore, heaviest_subtree_fork_choice) = setup_forks();
-        let last_shred = blockstore.meta(0).unwrap().unwrap().received;
-        let mut slot_meta_cache = HashMap::default();
-        let mut processed_slots = HashSet::default();
-        let repairs = get_unknown_last_index(
-            &heaviest_subtree_fork_choice,
-            &blockstore,
-            &mut slot_meta_cache,
-            &mut processed_slots,
-            10,
-        );
-        assert_eq!(
-            repairs,
-            [0, 1, 3, 5, 2, 4]
-                .iter()
-                .map(|slot| ShredRepairType::HighestShred(*slot, last_shred))
-                .collect::<Vec<_>>()
-        );
-    }
 
     #[test]
     fn test_get_closest_completion() {
