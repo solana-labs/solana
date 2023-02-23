@@ -770,8 +770,8 @@ where
         old_accounts_hash.is_none(),
         "There should not already be an AccountsHash at slot {snapshot_slot}: {old_accounts_hash:?}",
     );
-    let old_stats = accounts_db
-        .update_bank_hash_stats_from_snapshot(snapshot_slot, snapshot_bank_hash_info.stats);
+    let old_stats =
+        accounts_db.set_bank_hash_stats_from_snapshot(snapshot_slot, snapshot_bank_hash_info.stats);
     assert!(
         old_stats.is_none(),
         "There should not already be a BankHashStats at slot {snapshot_slot}: {old_stats:?}",

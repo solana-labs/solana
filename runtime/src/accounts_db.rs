@@ -2430,9 +2430,6 @@ impl AccountsDb {
                 .to_path_buf()
         });
 
-        let mut bank_hash_stats = HashMap::new();
-        bank_hash_stats.insert(0, BankHashStats::default());
-
         // Increase the stack for accounts threads
         // rayon needs a lot of stack
         const ACCOUNTS_STACK_SIZE: usize = 8 * 1024 * 1024;
@@ -2475,7 +2472,7 @@ impl AccountsDb {
             thread_pool_clean: make_min_priority_thread_pool(),
             accounts_delta_hashes: Mutex::new(HashMap::new()),
             accounts_hashes: Mutex::new(HashMap::new()),
-            bank_hash_stats: Mutex::new(bank_hash_stats),
+            bank_hash_stats: Mutex::new(HashMap::new()),
             external_purge_slots_stats: PurgeStats::default(),
             clean_accounts_stats: CleanAccountsStats::default(),
             shrink_stats: ShrinkStats::default(),
@@ -4973,18 +4970,6 @@ impl AccountsDb {
 
             ScanStorageResult::Stored(retval)
         }
-    }
-
-    /// Insert a default bank hash stats for `slot`
-    ///
-    /// This fn is called when creating a new bank from parent.
-    pub(crate) fn insert_default_bank_hash_stats(&self, slot: Slot, parent_slot: Slot) {
-        let mut bank_hash_stats = self.bank_hash_stats.lock().unwrap();
-        if bank_hash_stats.get(&slot).is_some() {
-            error!("set_hash: already exists; multiple forks with shared slot {slot} as child (parent: {parent_slot})!?");
-            return;
-        }
-        bank_hash_stats.insert(slot, BankHashStats::default());
     }
 
     pub fn load(
@@ -7782,22 +7767,13 @@ impl AccountsDb {
             .cloned()
     }
 
-    /// When reconstructing AccountsDb from a snapshot, insert the `bank_hash_stats` into the
-    /// internal bank hash stats map.
-    ///
-    /// This fn is only called when loading from a snapshot, which means AccountsDb is new and its
-    /// bank hash stats map is unpopulated.  Except for slot 0.
-    ///
-    /// Slot 0 is a special case.  When a new AccountsDb is created--like when loading from a
-    /// snapshot--the bank hash stats map is populated with a default entry at slot 0.  Remove the
-    /// default entry at slot 0, and then insert the new value at `slot`.
-    pub fn update_bank_hash_stats_from_snapshot(
+    /// After deserializing a snapshot, set the bank hash stats for the new AccountsDb
+    pub fn set_bank_hash_stats_from_snapshot(
         &mut self,
         slot: Slot,
         stats: BankHashStats,
     ) -> Option<BankHashStats> {
         let mut bank_hash_stats = self.bank_hash_stats.lock().unwrap();
-        bank_hash_stats.remove(&0);
         bank_hash_stats.insert(slot, stats)
     }
 

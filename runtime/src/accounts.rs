@@ -2627,7 +2627,7 @@ mod tests {
             AccountSecondaryIndexes::default(),
             AccountShrinkThreshold::default(),
         );
-        assert!(accounts.accounts_db.get_bank_hash_stats(0).is_some());
+        assert!(accounts.accounts_db.get_bank_hash_stats(0).is_none());
         assert!(accounts.accounts_db.get_bank_hash_stats(1).is_none());
     }
 

@@ -1494,8 +1494,11 @@ impl Bank {
         let epoch = epoch_schedule.get_epoch(slot);
 
         let (rc, bank_rc_creation_time_us) = measure_us!({
+            let parent_slot = parent.slot();
             let accounts_db = Arc::clone(&parent.rc.accounts.accounts_db);
-            accounts_db.insert_default_bank_hash_stats(slot, parent.slot());
+            if accounts_db.get_bank_hash_stats(slot).is_some() {
+                error!("set_hash: already exists; multiple forks with shared slot {slot} as child (parent: {parent_slot})!?");
+            }
             BankRc {
                 accounts: Arc::new(Accounts::new(accounts_db)),
                 parent: RwLock::new(Some(Arc::clone(parent))),
@@ -6885,7 +6888,7 @@ impl Bank {
             .accounts
             .accounts_db
             .get_bank_hash_stats(slot)
-            .expect("No bank hash stats were found for this bank, that should not be possible");
+            .unwrap_or_default();
         info!(
             "bank frozen: {slot} hash: {hash} accounts_delta: {} signature_count: {} last_blockhash: {} capitalization: {}{}, stats: {bank_hash_stats:?}",
             accounts_delta_hash.0,
