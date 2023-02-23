@@ -87,6 +87,7 @@ impl MessageProcessor {
             .zip(program_indices.iter())
             .enumerate()
         {
+            //let program_indices = &[instruction.program_id_index as IndexOfAccount];
             let is_precompile =
                 is_precompile(program_id, |id| invoke_context.feature_set.is_active(id));
 
