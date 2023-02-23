@@ -7976,7 +7976,7 @@ impl AccountsDb {
                 );
                 let offset = account_info.offset();
                 let account = store.accounts.get_account(offset).unwrap();
-                let stored_size = account.0.stored_size;
+                let stored_size = account.0.stored_size();
                 let count = store.remove_account(stored_size, reset_accounts);
                 if count == 0 {
                     self.dirty_stores.insert(*slot, store.clone());
@@ -9454,7 +9454,7 @@ pub mod tests {
                 tests::*, AccountIndex, AccountSecondaryIndexes,
                 AccountSecondaryIndexesIncludeExclude, ReadAccountMapEntry, RefCount,
             },
-            append_vec::test_utils::TempFile,
+            append_vec::{test_utils::TempFile, AppendVecStoredAccountMeta},
             cache_hash_data_stats::CacheHashDataStats,
             inline_spl_token,
             secondary_index::MAX_NUM_LARGEST_INDEX_KEYS_RETURNED,
@@ -9664,7 +9664,7 @@ pub mod tests {
             pubkey,
             data_len: 43,
         };
-        let account = StoredAccountMeta {
+        let account = StoredAccountMeta::AppendVec(AppendVecStoredAccountMeta {
             meta: &stored_meta,
             /// account data
             account_meta: &account_meta,
@@ -9672,7 +9672,7 @@ pub mod tests {
             offset,
             stored_size: account_size,
             hash: &hash,
-        };
+        });
         let map = vec![&account];
         let alive_total_bytes = account.stored_size();
         let to_store = AccountsToStore::new(available_bytes, &map, alive_total_bytes, slot0);
@@ -9760,38 +9760,38 @@ pub mod tests {
         let offset = 99;
         let stored_size = 101;
         let hash = Hash::new_unique();
-        let stored_account = StoredAccountMeta {
+        let stored_account = StoredAccountMeta::AppendVec(AppendVecStoredAccountMeta {
             meta: &meta,
             account_meta: &account_meta,
             data: &data,
             offset,
             stored_size,
             hash: &hash,
-        };
-        let stored_account2 = StoredAccountMeta {
+        });
+        let stored_account2 = StoredAccountMeta::AppendVec(AppendVecStoredAccountMeta {
             meta: &meta2,
             account_meta: &account_meta,
             data: &data,
             offset,
             stored_size,
             hash: &hash,
-        };
-        let stored_account3 = StoredAccountMeta {
+        });
+        let stored_account3 = StoredAccountMeta::AppendVec(AppendVecStoredAccountMeta {
             meta: &meta3,
             account_meta: &account_meta,
             data: &data,
             offset,
             stored_size,
             hash: &hash,
-        };
-        let stored_account4 = StoredAccountMeta {
+        });
+        let stored_account4 = StoredAccountMeta::AppendVec(AppendVecStoredAccountMeta {
             meta: &meta4,
             account_meta: &account_meta,
             data: &data,
             offset,
             stored_size,
             hash: &hash,
-        };
+        });
         let mut existing_ancient_pubkeys = HashSet::default();
         let accounts = [&stored_account];
         // pubkey NOT in existing_ancient_pubkeys, so do NOT unref, but add to existing_ancient_pubkeys
@@ -12382,14 +12382,14 @@ pub mod tests {
         let offset = 99;
         let stored_size = 101;
         let hash = Hash::new_unique();
-        let stored_account = StoredAccountMeta {
+        let stored_account = StoredAccountMeta::AppendVec(AppendVecStoredAccountMeta {
             meta: &meta,
             account_meta: &account_meta,
             data: &data,
             offset,
             stored_size,
             hash: &hash,
-        };
+        });
         assert!(accounts_equal(&account, &stored_account));
     }
 
@@ -12426,14 +12426,14 @@ pub mod tests {
         let (slot, meta, account_meta, data, offset, hash): InputTuple =
             unsafe { std::mem::transmute::<InputBlob, InputTuple>(blob) };
 
-        let stored_account = StoredAccountMeta {
+        let stored_account = StoredAccountMeta::AppendVec(AppendVecStoredAccountMeta {
             meta: &meta,
             account_meta: &account_meta,
             data: &data,
             offset,
             stored_size: CACHE_VIRTUAL_STORED_SIZE as usize,
             hash: &hash,
-        };
+        });
         let account = stored_account.clone_account();
 
         let expected_account_hash = if cfg!(debug_assertions) {
