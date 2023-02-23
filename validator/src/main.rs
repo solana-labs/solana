@@ -1588,9 +1588,10 @@ pub fn main() {
 
     let start_progress = Arc::new(RwLock::new(ValidatorStartProgress::default()));
     let admin_service_post_init = Arc::new(RwLock::new(None));
-    let (rpc_to_plugin_manager_tx, rpc_to_plugin_manager_rx) = if starting_with_geyser_plugins {
-        let (tx, rx) = unbounded();
-        (Some(tx), Some(rx))
+    let (rpc_to_plugin_manager_tx, rpc_to_plugin_manager_receiver) = if starting_with_geyser_plugins
+    {
+        let (sender, receiver) = unbounded();
+        (Some(sender), Some(receiver))
     } else {
         (None, None)
     };
@@ -1764,7 +1765,7 @@ pub fn main() {
         cluster_entrypoints,
         &validator_config,
         should_check_duplicate_instance,
-        rpc_to_plugin_manager_rx,
+        rpc_to_plugin_manager_receiver,
         start_progress,
         socket_addr_space,
         tpu_use_quic,

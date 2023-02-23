@@ -282,7 +282,7 @@ impl AdminRpc for AdminRpcImpl {
                         config_file,
                         response_sender,
                     })
-                    .expect("plugin manager should never drop request rx");
+                    .expect("plugin manager should never drop request receiver");
             } else {
                 return Err(jsonrpc_core::Error {
                     code: ErrorCode::InvalidRequest,
@@ -324,7 +324,7 @@ impl AdminRpc for AdminRpcImpl {
                         config_file,
                         response_sender,
                     })
-                    .expect("plugin manager should never drop request rx");
+                    .expect("plugin manager should never drop request receiver");
             } else {
                 return Err(jsonrpc_core::Error {
                     code: ErrorCode::InvalidRequest,
@@ -366,7 +366,7 @@ impl AdminRpc for AdminRpcImpl {
                         name,
                         response_sender,
                     })
-                    .expect("plugin manager should never drop request rx");
+                    .expect("plugin manager should never drop request receiver");
             } else {
                 return Err(jsonrpc_core::Error {
                     code: ErrorCode::InvalidRequest,
@@ -405,7 +405,7 @@ impl AdminRpc for AdminRpcImpl {
             if let Some(ref rpc_to_manager_sender) = meta.rpc_to_plugin_manager_sender {
                 rpc_to_manager_sender
                     .send(PluginManagerRequest::ListPlugins { response_sender })
-                    .expect("plugin manager should never drop request rx");
+                    .expect("plugin manager should never drop request receiver");
             } else {
                 return Err(jsonrpc_core::Error {
                     code: ErrorCode::InvalidRequest,
