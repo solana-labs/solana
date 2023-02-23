@@ -573,42 +573,36 @@ pub fn main() {
                     return;
                 }
                 ("load", Some(subcommand_matches)) => {
-                    if let Some(lib) = value_t!(subcommand_matches, "lib", String).ok() {
-                        if let Some(config) = value_t!(subcommand_matches, "config", String).ok() {
-                            let admin_client = admin_rpc_service::connect(&ledger_path);
-                            let name = admin_rpc_service::runtime()
-                                .block_on(async {
-                                    admin_client.await?.load_plugin(lib, config.clone()).await
-                                })
-                                .unwrap_or_else(|err| {
-                                    println!("failed to load plugin {config}: {err:?}");
-                                    exit(1);
-                                });
-                            println!("Successfully loaded plugin: {name}");
-                        }
+                    if let Some(config) = value_t!(subcommand_matches, "config", String).ok() {
+                        let admin_client = admin_rpc_service::connect(&ledger_path);
+                        let name = admin_rpc_service::runtime()
+                            .block_on(async {
+                                admin_client.await?.load_plugin(config.clone()).await
+                            })
+                            .unwrap_or_else(|err| {
+                                println!("failed to load plugin {config}: {err:?}");
+                                exit(1);
+                            });
+                        println!("Successfully loaded plugin: {name}");
                     }
                     return;
                 }
                 ("reload", Some(subcommand_matches)) => {
                     if let Some(name) = value_t!(subcommand_matches, "name", String).ok() {
-                        if let Some(lib) = value_t!(subcommand_matches, "lib", String).ok() {
-                            if let Some(config) =
-                                value_t!(subcommand_matches, "config", String).ok()
-                            {
-                                let admin_client = admin_rpc_service::connect(&ledger_path);
-                                admin_rpc_service::runtime()
-                                    .block_on(async {
-                                        admin_client
-                                            .await?
-                                            .reload_plugin(name.clone(), lib, config.clone())
-                                            .await
-                                    })
-                                    .unwrap_or_else(|err| {
-                                        println!("failed to reload plugin {name}: {err:?}");
-                                        exit(1);
-                                    });
-                                println!("Successfully reloaded plugin: {name}");
-                            }
+                        if let Some(config) = value_t!(subcommand_matches, "config", String).ok() {
+                            let admin_client = admin_rpc_service::connect(&ledger_path);
+                            admin_rpc_service::runtime()
+                                .block_on(async {
+                                    admin_client
+                                        .await?
+                                        .reload_plugin(name.clone(), config.clone())
+                                        .await
+                                })
+                                .unwrap_or_else(|err| {
+                                    println!("failed to reload plugin {name}: {err:?}");
+                                    exit(1);
+                                });
+                            println!("Successfully reloaded plugin: {name}");
                         }
                     }
                     return;
@@ -1611,7 +1605,7 @@ pub fn main() {
             post_init: admin_service_post_init.clone(),
             tower_storage: validator_config.tower_storage.clone(),
             staked_nodes_overrides,
-            rpc_to_plugin_manager_tx,
+            rpc_to_plugin_manager_sender: rpc_to_plugin_manager_tx,
         },
     );
 
