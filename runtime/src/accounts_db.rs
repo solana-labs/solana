@@ -1491,6 +1491,43 @@ pub struct AccountsDb {
     /// Some time later (to allow for slow calculation time), the bank hash at a slot calculated using 'M' includes the full accounts hash.
     /// Thus, the state of all accounts on a validator is known to be correct at least once per epoch.
     pub epoch_accounts_hash_manager: EpochAccountsHashManager,
+
+    pub bank_progress: BankCreationFreezingProgress,
+}
+
+impl BankCreationFreezingProgress {
+    fn report(&self) {
+        if self.last_report.should_update(60_000) {
+            datapoint_info!(
+                "bank_progress",
+                (
+                    "difference",
+                    self.bank_creation_count
+                        .load(Ordering::Acquire)
+                        .wrapping_sub(
+                            self.bank_freeze_or_destruction_count
+                                .load(Ordering::Acquire)
+                        ),
+                    i64
+                )
+            );
+        }
+    }
+}
+
+#[derive(Debug, Default)]
+/// Keeps track of when all banks that were started as of a known point in time have been frozen or otherwise destroyed.
+/// When 'bank_freeze_or_destruction_count' exceeds a prior value of 'bank_creation_count',
+/// this means that we can know all banks that began loading accounts have completed as of the prior value of 'bank_creation_count'.
+pub struct BankCreationFreezingProgress {
+    /// Incremented each time a bank is created.
+    /// Starting now, this bank could be finding accounts in the index and loading them from accounts db.
+    pub bank_creation_count: AtomicU32,
+    /// Incremented each time a bank is frozen or destroyed.
+    /// At this point, this bank has completed all account loading.
+    pub bank_freeze_or_destruction_count: AtomicU32,
+
+    last_report: AtomicInterval,
 }
 
 #[derive(Debug, Default)]
@@ -2401,6 +2438,7 @@ impl AccountsDb {
 
         AccountsDb {
             assert_stakes_cache_consistency: false,
+            bank_progress: BankCreationFreezingProgress::default(),
             create_ancient_storage: CreateAncientStorage::Append,
             verify_accounts_hash_in_bg: VerifyAccountsHashInBackground::default(),
             filler_accounts_per_slot: AtomicU64::default(),
@@ -4046,6 +4084,7 @@ impl AccountsDb {
 
         Self::update_shrink_stats(&self.shrink_stats, stats_sub);
         self.shrink_stats.report();
+        self.bank_progress.report();
     }
 
     pub(crate) fn update_shrink_stats(shrink_stats: &ShrinkStats, stats_sub: ShrinkStatsSub) {
