@@ -537,6 +537,85 @@ pub fn main() {
                 _ => unreachable!(),
             }
         }
+        ("plugin", Some(authorized_voter_subcommand_matches)) => {
+            match authorized_voter_subcommand_matches.subcommand() {
+                ("list", _) => {
+                    let admin_client = admin_rpc_service::connect(&ledger_path);
+                    let plugins = admin_rpc_service::runtime()
+                        .block_on(async move { admin_client.await?.list_plugins().await })
+                        .unwrap_or_else(|err| {
+                            println!("failed to list plugins: {err}");
+                            exit(1);
+                        });
+                    if !plugins.is_empty() {
+                        println!("Currently the following plugins are loaded:");
+                        for (plugin, i) in plugins.into_iter().zip(1..) {
+                            println!("  {i}) {plugin}");
+                        }
+                    } else {
+                        println!("There are currently no plugins loaded");
+                    }
+                    return;
+                }
+                ("unload", Some(subcommand_matches)) => {
+                    if let Some(name) = value_t!(subcommand_matches, "name", String).ok() {
+                        let admin_client = admin_rpc_service::connect(&ledger_path);
+                        admin_rpc_service::runtime()
+                            .block_on(async {
+                                admin_client.await?.unload_plugin(name.clone()).await
+                            })
+                            .unwrap_or_else(|err| {
+                                println!("failed to unload plugin {name}: {err:?}");
+                                exit(1);
+                            });
+                        println!("Successfully unloaded plugin: {name}");
+                    }
+                    return;
+                }
+                ("load", Some(subcommand_matches)) => {
+                    if let Some(lib) = value_t!(subcommand_matches, "lib", String).ok() {
+                        if let Some(config) = value_t!(subcommand_matches, "config", String).ok() {
+                            let admin_client = admin_rpc_service::connect(&ledger_path);
+                            let name = admin_rpc_service::runtime()
+                                .block_on(async {
+                                    admin_client.await?.load_plugin(lib, config.clone()).await
+                                })
+                                .unwrap_or_else(|err| {
+                                    println!("failed to load plugin {config}: {err:?}");
+                                    exit(1);
+                                });
+                            println!("Successfully loaded plugin: {name}");
+                        }
+                    }
+                    return;
+                }
+                ("reload", Some(subcommand_matches)) => {
+                    if let Some(name) = value_t!(subcommand_matches, "name", String).ok() {
+                        if let Some(lib) = value_t!(subcommand_matches, "lib", String).ok() {
+                            if let Some(config) =
+                                value_t!(subcommand_matches, "config", String).ok()
+                            {
+                                let admin_client = admin_rpc_service::connect(&ledger_path);
+                                admin_rpc_service::runtime()
+                                    .block_on(async {
+                                        admin_client
+                                            .await?
+                                            .reload_plugin(name.clone(), lib, config.clone())
+                                            .await
+                                    })
+                                    .unwrap_or_else(|err| {
+                                        println!("failed to reload plugin {name}: {err:?}");
+                                        exit(1);
+                                    });
+                                println!("Successfully reloaded plugin: {name}");
+                            }
+                        }
+                    }
+                    return;
+                }
+                _ => unreachable!(),
+            }
+        }
         ("contact-info", Some(subcommand_matches)) => {
             let output_mode = subcommand_matches.value_of("output");
             let admin_client = admin_rpc_service::connect(&ledger_path);
