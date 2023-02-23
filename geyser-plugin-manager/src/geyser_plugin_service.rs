@@ -19,8 +19,6 @@ use {
     },
     solana_runtime::accounts_update_notifier_interface::AccountsUpdateNotifier,
     std::{
-        fs::File,
-        io::Read,
         path::{Path, PathBuf},
         sync::{Arc, RwLock},
         thread,
@@ -243,13 +241,12 @@ impl GeyserPluginService {
         config_file: &str,
     ) -> JsonRpcResult<String> {
         // Load plugin
-        let mut new_plugin: Box<dyn GeyserPlugin> = unsafe {
-            load_plugin_from_config(Path::new(config_file)).map_err(|err| jsonrpc_core::Error {
+        let mut new_plugin: Box<dyn GeyserPlugin> = load_plugin_from_config(Path::new(config_file))
+            .map_err(|err| jsonrpc_core::Error {
                 code: ErrorCode::InternalError,
                 message: err.to_string(),
                 data: None,
-            })?
-        };
+            })?;
 
         // Then see if a plugin with this name already exists. If so, abort
         if plugin_manager
@@ -333,13 +330,12 @@ impl GeyserPluginService {
 
         // Try to load plugin, library
         // SAFETY: It is up to the validator to ensure this is a valid plugin library.
-        let mut new_plugin: Box<dyn GeyserPlugin> = unsafe {
-            load_plugin_from_config(Path::new(config_file)).map_err(|err| jsonrpc_core::Error {
+        let mut new_plugin: Box<dyn GeyserPlugin> = load_plugin_from_config(Path::new(config_file))
+            .map_err(|err| jsonrpc_core::Error {
                 code: ErrorCode::InternalError,
                 message: err.to_string(),
                 data: None,
-            })?
-        };
+            })?;
 
         // Attempt to on_load with new plugin
         match new_plugin.on_load(&config_file) {
@@ -368,6 +364,9 @@ impl GeyserPluginService {
 fn load_plugin_from_config(
     geyser_plugin_config_file: &Path,
 ) -> Result<Box<dyn GeyserPlugin>, GeyserPluginServiceError> {
+    use std::fs::File;
+    use std::io::Read;
+
     let mut file = match File::open(geyser_plugin_config_file) {
         Ok(file) => file,
         Err(err) => {
@@ -423,7 +422,7 @@ fn load_plugin_from_config(
 // across different architectures at test time
 #[cfg(test)]
 fn load_plugin_from_config(
-    geyser_plugin_config_file: &Path,
+    _geyser_plugin_config_file: &Path,
 ) -> Result<Box<dyn GeyserPlugin>, GeyserPluginServiceError> {
     Ok(tests::dummy_plugin())
 }
@@ -494,16 +493,9 @@ mod tests {
         plugin
     }
 
-    pub(super) fn dummy_plugin3() -> Box<dyn GeyserPlugin> {
-        let plugin = Box::new(TestPlugin3);
-        plugin
-    }
-
     const DUMMY_NAME: &'static str = "dummy";
     const DUMMY_CONFIG_FILE: &'static str = "dummy_config";
-    const DUMMY_LIBRARY: &'static str = "dummy_lib";
     const ANOTHER_DUMMY_NAME: &'static str = "another_dummy";
-    const YET_ANOTHER_DUMMY_NAME: &'static str = "another_dummy";
 
     #[derive(Debug)]
     pub(super) struct TestPlugin;
@@ -520,15 +512,6 @@ mod tests {
     impl GeyserPlugin for TestPlugin2 {
         fn name(&self) -> &'static str {
             ANOTHER_DUMMY_NAME
-        }
-    }
-
-    #[derive(Debug)]
-    pub(super) struct TestPlugin3;
-
-    impl GeyserPlugin for TestPlugin3 {
-        fn name(&self) -> &'static str {
-            YET_ANOTHER_DUMMY_NAME
         }
     }
 
@@ -590,14 +573,14 @@ mod tests {
         plugin.on_load(DUMMY_CONFIG_FILE).unwrap();
         plugin_manager_lock.plugins.push(plugin);
         // Second
-        let mut plugin = dummy_plugin3();
+        let mut plugin = dummy_plugin2();
         plugin.on_load(DUMMY_CONFIG_FILE).unwrap();
         plugin_manager_lock.plugins.push(plugin);
 
         // Check that both plugins are returned in the list
         let plugins = GeyserPluginService::list_plugins_rpc(&plugin_manager_lock).unwrap();
         assert!(plugins.iter().any(|name| name.eq(DUMMY_NAME)));
-        assert!(plugins.iter().any(|name| name.eq(YET_ANOTHER_DUMMY_NAME)));
+        assert!(plugins.iter().any(|name| name.eq(ANOTHER_DUMMY_NAME)));
     }
 
     #[test]
