@@ -770,7 +770,7 @@ pub mod tests {
                 },
                 INCLUDE_SLOT_IN_HASH_TESTS,
             },
-            append_vec::{aligned_stored_size, AppendVec},
+            append_vec::{aligned_stored_size, AppendVec, AppendVecAccountMeta},
             storable_accounts::StorableAccountsBySlot,
         },
         solana_sdk::{
@@ -1618,7 +1618,7 @@ pub mod tests {
             pubkey,
             data_len: 43,
         };
-        let account = StoredAccountMeta {
+        let account = StoredAccountMeta::AppendVec(AppendVecAccountMeta {
             meta: &stored_meta,
             /// account data
             account_meta: &account_meta,
@@ -1626,7 +1626,7 @@ pub mod tests {
             offset,
             stored_size: account_size,
             hash: &hash,
-        };
+        });
         let map = vec![&account];
         for (selector, available_bytes) in [
             (StorageSelector::Primary, account_size),

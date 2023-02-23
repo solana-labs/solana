@@ -306,6 +306,7 @@ pub mod tests {
         crate::{
             account_storage::meta::{AccountMeta, StoredAccountMeta, StoredMeta},
             accounts_db::INCLUDE_SLOT_IN_HASH_TESTS,
+            append_vec::AppendVecAccountMeta,
         },
         solana_sdk::{
             account::{accounts_equal, AccountSharedData, WritableAccount},
@@ -353,14 +354,14 @@ pub mod tests {
         let offset = 99;
         let stored_size = 101;
         let hash = Hash::new_unique();
-        let stored_account = StoredAccountMeta {
+        let stored_account = StoredAccountMeta::AppendVec(AppendVecAccountMeta {
             meta: &meta,
             account_meta: &account_meta,
             data: &data,
             offset,
             stored_size,
             hash: &hash,
-        };
+        });
 
         let test3 = (
             slot,
@@ -411,14 +412,14 @@ pub mod tests {
                     for entry in 0..entries {
                         let offset = 99;
                         let stored_size = 101;
-                        raw2.push(StoredAccountMeta {
+                        raw2.push(StoredAccountMeta::AppendVec(AppendVecAccountMeta {
                             meta: &raw[entry as usize].3,
                             account_meta: &raw[entry as usize].4,
                             data: &data,
                             offset,
                             stored_size,
                             hash: &hash,
-                        });
+                        }));
                     }
 
                     let mut two = Vec::new();
@@ -508,14 +509,14 @@ pub mod tests {
             for entry in 0..entries {
                 let offset = 99;
                 let stored_size = 101;
-                raw2.push(StoredAccountMeta {
+                raw2.push(StoredAccountMeta::AppendVec(AppendVecAccountMeta {
                     meta: &raw[entry as usize].2,
                     account_meta: &raw[entry as usize].3,
                     data: &data,
                     offset,
                     stored_size,
                     hash: &hashes[entry as usize],
-                });
+                }));
             }
             let raw2_refs = raw2.iter().collect::<Vec<_>>();
 
