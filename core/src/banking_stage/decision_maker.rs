@@ -1,5 +1,4 @@
 use {
-    crate::leader_slot_banking_stage_metrics::{LeaderSlotMetricsTracker, MetricsTrackerAction},
     solana_poh::poh_recorder::{BankStart, PohRecorder},
     solana_sdk::{
         clock::{
@@ -32,10 +31,7 @@ impl DecisionMaker {
         }
     }
 
-    pub(crate) fn make_consume_or_forward_decision(
-        &self,
-        slot_metrics_tracker: &mut LeaderSlotMetricsTracker,
-    ) -> (MetricsTrackerAction, BufferedPacketsDecision) {
+    pub(crate) fn make_consume_or_forward_decision(&self) -> BufferedPacketsDecision {
         let (leader_at_slot_offset, bank_start, would_be_leader, would_be_leader_shortly) = {
             let poh = self.poh_recorder.read().unwrap();
             let bank_start = poh
@@ -51,15 +47,12 @@ impl DecisionMaker {
             )
         };
 
-        (
-            slot_metrics_tracker.check_leader_slot_boundary(&bank_start),
-            Self::consume_or_forward_packets(
-                &self.my_pubkey,
-                leader_at_slot_offset,
-                bank_start,
-                would_be_leader,
-                would_be_leader_shortly,
-            ),
+        Self::consume_or_forward_packets(
+            &self.my_pubkey,
+            leader_at_slot_offset,
+            bank_start,
+            would_be_leader,
+            would_be_leader_shortly,
         )
     }
 
