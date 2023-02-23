@@ -1,6 +1,5 @@
 //! The `validator` module hosts all the validator microservices.
 
-use solana_geyser_plugin_manager::geyser_plugin_manager::GeyserPluginManager;
 pub use solana_perf::report_target_features;
 use {
     crate::{
@@ -31,7 +30,9 @@ use {
     rand::{thread_rng, Rng},
     solana_client::connection_cache::ConnectionCache,
     solana_entry::poh::compute_hash_time_ns,
-    solana_geyser_plugin_manager::geyser_plugin_service::GeyserPluginService,
+    solana_geyser_plugin_manager::{
+        geyser_plugin_service::GeyserPluginService, PluginManagerRequest,
+    },
     solana_gossip::{
         cluster_info::{
             ClusterInfo, Node, DEFAULT_CONTACT_DEBUG_INTERVAL_MILLIS,
@@ -130,8 +131,6 @@ pub struct ValidatorConfig {
     pub rpc_config: JsonRpcConfig,
     /// Specifies which plugins to start up with
     pub on_start_geyser_plugin_config_files: Option<Vec<PathBuf>>,
-    /// Shared across plugin service and admin rpc service
-    pub geyser_plugin_manager: Arc<RwLock<GeyserPluginManager>>,
     pub rpc_addrs: Option<(SocketAddr, SocketAddr)>, // (JsonRpc, JsonRpcPubSub)
     pub pubsub_config: PubSubConfig,
     pub snapshot_config: SnapshotConfig,
@@ -244,7 +243,6 @@ impl Default for ValidatorConfig {
             runtime_config: RuntimeConfig::default(),
             replay_slots_concurrently: false,
             banking_trace_dir_byte_limit: 0,
-            geyser_plugin_manager: Arc::new(RwLock::new(GeyserPluginManager::new())),
         }
     }
 }
@@ -395,6 +393,7 @@ impl Validator {
         cluster_entrypoints: Vec<ContactInfo>,
         config: &ValidatorConfig,
         should_check_duplicate_instance: bool,
+        rpc_to_plugin_manager_rx: Option<Receiver<PluginManagerRequest>>,
         start_progress: Arc<RwLock<ValidatorStartProgress>>,
         socket_addr_space: SocketAddrSpace,
         use_quic: bool,
@@ -422,7 +421,7 @@ impl Validator {
                 let result = GeyserPluginService::new(
                     confirmed_bank_receiver,
                     geyser_plugin_config_files,
-                    Arc::clone(&config.geyser_plugin_manager),
+                    rpc_to_plugin_manager_rx,
                 );
                 match result {
                     Ok(geyser_plugin_service) => Some(geyser_plugin_service),
@@ -1118,6 +1117,12 @@ impl Validator {
     pub fn close(mut self) {
         self.exit();
         self.join();
+    }
+
+    pub fn plugin_manager_handle(&self) -> Option<Arc<JoinHandle<()>>> {
+        self.geyser_plugin_service
+            .as_ref()
+            .map(|gps| gps.plugin_manager_join_handle())
     }
 
     fn print_node_info(node: &Node) {
@@ -2149,6 +2154,7 @@ mod tests {
             vec![LegacyContactInfo::try_from(&leader_node.info).unwrap()],
             &config,
             true, // should_check_duplicate_instance
+            None, // rpc_to_plugin_manager_rx
             start_progress.clone(),
             SocketAddrSpace::Unspecified,
             DEFAULT_TPU_USE_QUIC,
@@ -2243,7 +2249,8 @@ mod tests {
                     Arc::new(RwLock::new(vec![Arc::new(vote_account_keypair)])),
                     vec![LegacyContactInfo::try_from(&leader_node.info).unwrap()],
                     &config,
-                    true, // should_check_duplicate_instance
+                    true, // should_check_duplicate_instance.
+                    None, // rpc_to_plugin_manager_rx
                     Arc::new(RwLock::new(ValidatorStartProgress::default())),
                     SocketAddrSpace::Unspecified,
                     DEFAULT_TPU_USE_QUIC,

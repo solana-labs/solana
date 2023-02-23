@@ -1,5 +1,6 @@
 #![allow(clippy::integer_arithmetic)]
 use {
+    crossbeam_channel::Receiver,
     log::*,
     solana_cli_output::CliAccount,
     solana_client::rpc_request::MAX_MULTIPLE_ACCOUNTS,
@@ -7,7 +8,9 @@ use {
         tower_storage::TowerStorage,
         validator::{Validator, ValidatorConfig, ValidatorStartProgress},
     },
-    solana_geyser_plugin_manager::geyser_plugin_manager::GeyserPluginManager,
+    solana_geyser_plugin_manager::{
+        geyser_plugin_manager::GeyserPluginManager, PluginManagerRequest,
+    },
     solana_gossip::{
         cluster_info::{ClusterInfo, Node},
         gossip_service::discover_cluster,
@@ -58,6 +61,7 @@ use {
         path::{Path, PathBuf},
         str::FromStr,
         sync::{Arc, RwLock},
+        thread::JoinHandle,
         time::Duration,
     },
     tokio::time::sleep,
@@ -527,8 +531,15 @@ impl TestValidatorGenesis {
         &self,
         mint_address: Pubkey,
         socket_addr_space: SocketAddrSpace,
+        rpc_to_plugin_manager_rx: Option<Receiver<PluginManagerRequest>>,
     ) -> Result<TestValidator, Box<dyn std::error::Error>> {
-        TestValidator::start(mint_address, self, socket_addr_space).map(|test_validator| {
+        TestValidator::start(
+            mint_address,
+            self,
+            socket_addr_space,
+            rpc_to_plugin_manager_rx,
+        )
+        .map(|test_validator| {
             let runtime = tokio::runtime::Builder::new_current_thread()
                 .enable_io()
                 .enable_time()
@@ -560,7 +571,7 @@ impl TestValidatorGenesis {
         socket_addr_space: SocketAddrSpace,
     ) -> (TestValidator, Keypair) {
         let mint_keypair = Keypair::new();
-        self.start_with_mint_address(mint_keypair.pubkey(), socket_addr_space)
+        self.start_with_mint_address(mint_keypair.pubkey(), socket_addr_space, None)
             .map(|test_validator| (test_validator, mint_keypair))
             .unwrap_or_else(|err| panic!("Test validator failed to start: {err}"))
     }
@@ -577,7 +588,7 @@ impl TestValidatorGenesis {
         socket_addr_space: SocketAddrSpace,
     ) -> (TestValidator, Keypair) {
         let mint_keypair = Keypair::new();
-        match TestValidator::start(mint_keypair.pubkey(), self, socket_addr_space) {
+        match TestValidator::start(mint_keypair.pubkey(), self, socket_addr_space, None) {
             Ok(test_validator) => {
                 test_validator.wait_for_nonzero_fees().await;
                 (test_validator, mint_keypair)
@@ -616,7 +627,7 @@ impl TestValidator {
                 ..Rent::default()
             })
             .faucet_addr(faucet_addr)
-            .start_with_mint_address(mint_address, socket_addr_space)
+            .start_with_mint_address(mint_address, socket_addr_space, None)
             .expect("validator start failed")
     }
 
@@ -635,7 +646,7 @@ impl TestValidator {
                 ..Rent::default()
             })
             .faucet_addr(faucet_addr)
-            .start_with_mint_address(mint_address, socket_addr_space)
+            .start_with_mint_address(mint_address, socket_addr_space, None)
             .expect("validator start failed")
     }
 
@@ -657,7 +668,7 @@ impl TestValidator {
                 ..Rent::default()
             })
             .faucet_addr(faucet_addr)
-            .start_with_mint_address(mint_address, socket_addr_space)
+            .start_with_mint_address(mint_address, socket_addr_space, None)
             .expect("validator start failed")
     }
 
@@ -833,6 +844,7 @@ impl TestValidator {
         mint_address: Pubkey,
         config: &TestValidatorGenesis,
         socket_addr_space: SocketAddrSpace,
+        rpc_to_plugin_manager_rx: Option<Receiver<PluginManagerRequest>>,
     ) -> Result<Self, Box<dyn std::error::Error>> {
         let preserve_ledger = config.ledger_path.is_some();
         let ledger_path = TestValidator::initialize_ledger(mint_address, config)?;
@@ -947,6 +959,7 @@ impl TestValidator {
             vec![],
             &validator_config,
             true, // should_check_duplicate_instance
+            rpc_to_plugin_manager_rx,
             config.start_progress.clone(),
             socket_addr_space,
             DEFAULT_TPU_USE_QUIC,
@@ -1043,6 +1056,11 @@ impl TestValidator {
     /// Return the validator's vote account address
     pub fn vote_account_address(&self) -> Pubkey {
         self.vote_account_address
+    }
+
+    /// After initialization, return the plugin manager thread handle
+    pub fn plugin_manager_handle(&self) -> Option<Arc<JoinHandle<()>>> {
+        self.validator.as_ref().unwrap().plugin_manager_handle()
     }
 
     /// Return an RpcClient for the validator.  As a convenience, also return a recent blockhash and
