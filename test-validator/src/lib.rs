@@ -76,6 +76,14 @@ pub struct ProgramInfo {
     pub program_path: PathBuf,
 }
 
+#[derive(Clone)]
+pub struct UpgradeableProgramInfo {
+    pub program_id: Pubkey,
+    pub loader: Pubkey,
+    pub upgrade_authority: Pubkey,
+    pub program_path: PathBuf,
+}
+
 #[derive(Debug)]
 pub struct TestValidatorNodeConfig {
     gossip_addr: SocketAddr,
@@ -111,6 +119,7 @@ pub struct TestValidatorGenesis {
     no_bpf_jit: bool,
     accounts: HashMap<Pubkey, AccountSharedData>,
     programs: Vec<ProgramInfo>,
+    upgradeable_programs: Vec<UpgradeableProgramInfo>,
     ticks_per_slot: Option<u64>,
     epoch_schedule: Option<EpochSchedule>,
     node_config: TestValidatorNodeConfig,
@@ -142,6 +151,7 @@ impl Default for TestValidatorGenesis {
             no_bpf_jit: bool::default(),
             accounts: HashMap::<Pubkey, AccountSharedData>::default(),
             programs: Vec::<ProgramInfo>::default(),
+            upgradeable_programs: Vec::<UpgradeableProgramInfo>::default(),
             ticks_per_slot: Option::<u64>::default(),
             epoch_schedule: Option::<EpochSchedule>::default(),
             node_config: TestValidatorNodeConfig::default(),
@@ -488,6 +498,17 @@ impl TestValidatorGenesis {
         self
     }
 
+    /// Add a list of upgradeable programs to the test environment.
+    pub fn add_upgradeable_programs_with_path(
+        &mut self,
+        programs: &[UpgradeableProgramInfo],
+    ) -> &mut Self {
+        for program in programs {
+            self.upgradeable_programs.push(program.clone());
+        }
+        self
+    }
+
     /// Start a test validator with the address of the mint account that will receive tokens
     /// created at genesis.
     ///
@@ -667,6 +688,44 @@ impl TestValidator {
                     lamports: Rent::default().minimum_balance(data.len()).max(1),
                     data,
                     owner: program.loader,
+                    executable: true,
+                    rent_epoch: 0,
+                }),
+            );
+        }
+        for upgradeable_program in &config.upgradeable_programs {
+            let data = solana_program_test::read_file(&upgradeable_program.program_path);
+            let (programdata_address, _) = Pubkey::find_program_address(
+                &[upgradeable_program.program_id.as_ref()],
+                &upgradeable_program.loader,
+            );
+            let mut program_data = bincode::serialize(&UpgradeableLoaderState::ProgramData {
+                slot: 0,
+                upgrade_authority_address: Some(upgradeable_program.upgrade_authority),
+            })
+            .unwrap();
+            program_data.extend_from_slice(&data);
+            accounts.insert(
+                programdata_address,
+                AccountSharedData::from(Account {
+                    lamports: Rent::default().minimum_balance(program_data.len()).max(1),
+                    data: program_data,
+                    owner: upgradeable_program.loader,
+                    executable: true,
+                    rent_epoch: 0,
+                }),
+            );
+
+            let data = bincode::serialize(&UpgradeableLoaderState::Program {
+                programdata_address,
+            })
+            .unwrap();
+            accounts.insert(
+                upgradeable_program.program_id,
+                AccountSharedData::from(Account {
+                    lamports: Rent::default().minimum_balance(data.len()).max(1),
+                    data,
+                    owner: upgradeable_program.loader,
                     executable: true,
                     rent_epoch: 0,
                 }),
