@@ -1469,6 +1469,64 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                 .about("Run the validator")
         )
         .subcommand(
+            SubCommand::with_name("plugin")
+                .about("Manage and view plugins")
+                .setting(AppSettings::SubcommandRequiredElseHelp)
+                .setting(AppSettings::InferSubcommands)
+                .subcommand(
+                    SubCommand::with_name("list")
+                        .about("List all current running plugins")
+                )
+                .subcommand(
+                    SubCommand::with_name("unload")
+                        .about("Unload a particular plugin by specifying the plugin name")
+                        .arg(
+                            Arg::with_name("name")
+                                .required(true)
+                                .takes_value(true)
+                        )
+                )
+                .subcommand(
+                    SubCommand::with_name("reload")
+                        .about("Reload a particular plugin. Specify the plugin name, and the new config/library paths.")
+                        .arg(
+                            Arg::with_name("name")
+                                .long("name")
+                                .short("n")
+                                .required(true)
+                                .takes_value(true)
+                        )
+                        .arg(
+                            Arg::with_name("lib")
+                                .long("lib")
+                                .short("l")
+                                .required(true)
+                                .takes_value(true)
+                        )
+                        .arg(
+                            Arg::with_name("config")
+                                .long("config")
+                                .short("c")
+                                .required(true)
+                                .takes_value(true)
+                        )
+                )
+                .subcommand(
+                    SubCommand::with_name("load")
+                        .about("Load a new plugin. Specify the plugin name, and the new config/library paths. Fails if overwriting (use reload)")
+                        .arg(
+                            Arg::with_name("lib")
+                                .required(true)
+                                .takes_value(true)
+                        )
+                        .arg(
+                            Arg::with_name("config")
+                                .required(true)
+                                .takes_value(true)
+                        )
+                )
+        )
+        .subcommand(
             SubCommand::with_name("set-identity")
                 .about("Set the validator identity")
                 .arg(
