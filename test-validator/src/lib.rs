@@ -482,9 +482,10 @@ impl TestValidatorGenesis {
         let program_path = solana_program_test::find_file(&format!("{program_name}.so"))
             .unwrap_or_else(|| panic!("Unable to locate program {program_name}"));
 
-        self.programs.push(ProgramInfo {
+        self.upgradeable_programs.push(UpgradeableProgramInfo {
             program_id,
-            loader: solana_sdk::bpf_loader::id(),
+            loader: solana_sdk::bpf_loader_upgradeable::id(),
+            upgrade_authority: Pubkey::default(),
             program_path,
         });
         self
