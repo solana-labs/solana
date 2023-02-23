@@ -76,7 +76,7 @@ struct PacketChunk {
 // a packet, along with their offsets, and the
 // packet metadata. We use this accumulator to avoid
 // multiple copies of the Bytes (when building up
-// the Packet then sending the Packet to packet_batch_sender)
+// the Packet and then when copying the Packet into a PacketBatch)
 struct PacketAccumulator {
     pub meta: Meta,
     pub chunks: Vec<PacketChunk>,
