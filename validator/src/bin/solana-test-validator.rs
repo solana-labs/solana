@@ -48,6 +48,8 @@ enum Output {
     Dashboard,
 }
 
+use itertools::Itertools;
+
 fn main() {
     let default_args = cli::DefaultTestArgs::new();
     let version = solana_version::version!();
@@ -181,107 +183,89 @@ fn main() {
 
     let mut programs_to_load = vec![];
     if let Some(values) = matches.values_of("bpf_program") {
-        let values: Vec<&str> = values.collect::<Vec<_>>();
-        for address_program in values.chunks(2) {
-            match address_program {
-                [address, program] => {
-                    let address = address
-                        .parse::<Pubkey>()
-                        .or_else(|_| read_keypair_file(address).map(|keypair| keypair.pubkey()))
-                        .unwrap_or_else(|err| {
-                            println!("Error: invalid address {address}: {err}");
-                            exit(1);
-                        });
+        for (address, program) in values.into_iter().tuples() {
+            let address = address
+                .parse::<Pubkey>()
+                .or_else(|_| read_keypair_file(address).map(|keypair| keypair.pubkey()))
+                .unwrap_or_else(|err| {
+                    println!("Error: invalid address {address}: {err}");
+                    exit(1);
+                });
 
-                    let program_path = PathBuf::from(program);
-                    if !program_path.exists() {
-                        println!(
-                            "Error: program file does not exist: {}",
-                            program_path.display()
-                        );
-                        exit(1);
-                    }
-
-                    programs_to_load.push(ProgramInfo {
-                        program_id: address,
-                        loader: solana_sdk::bpf_loader::id(),
-                        program_path,
-                    });
-                }
-                _ => unreachable!(),
+            let program_path = PathBuf::from(program);
+            if !program_path.exists() {
+                println!(
+                    "Error: program file does not exist: {}",
+                    program_path.display()
+                );
+                exit(1);
             }
+
+            programs_to_load.push(ProgramInfo {
+                program_id: address,
+                loader: solana_sdk::bpf_loader::id(),
+                program_path,
+            });
         }
     }
 
     let mut upgradeable_programs_to_load = vec![];
     if let Some(values) = matches.values_of("upgradeable_program") {
-        let values: Vec<&str> = values.collect::<Vec<_>>();
-        for address_program_upgrade_authority in values.chunks(3) {
-            match address_program_upgrade_authority {
-                [address, program, upgrade_authority] => {
-                    let address = address
-                        .parse::<Pubkey>()
-                        .or_else(|_| read_keypair_file(address).map(|keypair| keypair.pubkey()))
-                        .unwrap_or_else(|err| {
-                            println!("Error: invalid address {address}: {err}");
-                            exit(1);
-                        });
-                    let upgrade_authority_address = if *upgrade_authority == "none" {
-                        Pubkey::default()
-                    } else {
-                        upgrade_authority
-                            .parse::<Pubkey>()
-                            .or_else(|_| {
-                                read_keypair_file(upgrade_authority).map(|keypair| keypair.pubkey())
-                            })
-                            .unwrap_or_else(|err| {
-                                println!(
-                                    "Error: invalid upgrade_authority {upgrade_authority}: {err}"
-                                );
-                                exit(1);
-                            })
-                    };
-
-                    let program_path = PathBuf::from(program);
-                    if !program_path.exists() {
-                        println!(
-                            "Error: program file does not exist: {}",
-                            program_path.display()
-                        );
+        for (address, program, upgrade_authority) in
+            values.into_iter().tuples::<(&str, &str, &str)>()
+        {
+            let address = address
+                .parse::<Pubkey>()
+                .or_else(|_| read_keypair_file(address).map(|keypair| keypair.pubkey()))
+                .unwrap_or_else(|err| {
+                    println!("Error: invalid address {address}: {err}");
+                    exit(1);
+                });
+            let upgrade_authority_address = if upgrade_authority == "none" {
+                Pubkey::default()
+            } else {
+                upgrade_authority
+                    .parse::<Pubkey>()
+                    .or_else(|_| {
+                        read_keypair_file(upgrade_authority).map(|keypair| keypair.pubkey())
+                    })
+                    .unwrap_or_else(|err| {
+                        println!("Error: invalid upgrade_authority {upgrade_authority}: {err}");
                         exit(1);
-                    }
+                    })
+            };
 
-                    upgradeable_programs_to_load.push(UpgradeableProgramInfo {
-                        program_id: address,
-                        loader: solana_sdk::bpf_loader_upgradeable::id(),
-                        upgrade_authority: upgrade_authority_address,
-                        program_path,
-                    });
-                }
-                _ => unreachable!(),
+            let program_path = PathBuf::from(program);
+            if !program_path.exists() {
+                println!(
+                    "Error: program file does not exist: {}",
+                    program_path.display()
+                );
+                exit(1);
             }
+
+            upgradeable_programs_to_load.push(UpgradeableProgramInfo {
+                program_id: address,
+                loader: solana_sdk::bpf_loader_upgradeable::id(),
+                upgrade_authority: upgrade_authority_address,
+                program_path,
+            });
         }
     }
 
     let mut accounts_to_load = vec![];
     if let Some(values) = matches.values_of("account") {
-        let values: Vec<&str> = values.collect::<Vec<_>>();
-        for address_filename in values.chunks(2) {
-            match address_filename {
-                [address, filename] => {
-                    let address = if *address == "-" {
-                        None
-                    } else {
-                        Some(address.parse::<Pubkey>().unwrap_or_else(|err| {
-                            println!("Error: invalid address {address}: {err}");
-                            exit(1);
-                        }))
-                    };
+        for (address, filename) in values.into_iter().tuples() {
+            let address = if address == "-" {
+                None
+            } else {
+                Some(address.parse::<Pubkey>().unwrap_or_else(|err| {
+                    println!("Error: invalid address {address}: {err}");
+                    exit(1);
+                }))
+            };
 
-                    accounts_to_load.push(AccountInfo { address, filename });
-                }
-                _ => unreachable!(),
-            }
+            accounts_to_load.push(AccountInfo { address, filename });
         }
     }
 
