@@ -21,7 +21,13 @@
 use {
     crate::{
         account_info::{AccountInfo, StorageLocation},
-        account_storage::{AccountStorage, AccountStorageStatus, ShrinkInProgress},
+        account_storage::{
+            meta::{
+                StorableAccountsWithHashesAndWriteVersions, StoredAccountMeta,
+                StoredMetaWriteVersion,
+            },
+            AccountStorage, AccountStorageStatus, ShrinkInProgress,
+        },
         accounts_background_service::{DroppedSlotsSender, SendDroppedBankCallback},
         accounts_cache::{AccountsCache, CachedAccount, SlotCache},
         accounts_file::AccountsFile,
@@ -44,9 +50,8 @@ use {
             get_ancient_append_vec_capacity, is_ancient, AccountsToStore, StorageSelector,
         },
         append_vec::{
-            aligned_stored_size, AppendVec, MatchAccountOwnerError,
-            StorableAccountsWithHashesAndWriteVersions, StoredAccountMeta, StoredMetaWriteVersion,
-            APPEND_VEC_MMAPPED_FILES_OPEN, STORE_META_OVERHEAD,
+            aligned_stored_size, AppendVec, MatchAccountOwnerError, APPEND_VEC_MMAPPED_FILES_OPEN,
+            STORE_META_OVERHEAD,
         },
         cache_hash_data::{CacheHashData, CacheHashDataFile},
         contains::Contains,
@@ -9401,13 +9406,14 @@ pub mod tests {
         super::*,
         crate::{
             account_info::StoredSize,
+            account_storage::meta::{AccountMeta, StoredMeta},
             accounts::Accounts,
             accounts_hash::MERKLE_FANOUT,
             accounts_index::{
                 tests::*, AccountIndex, AccountSecondaryIndexes,
                 AccountSecondaryIndexesIncludeExclude, ReadAccountMapEntry, RefCount,
             },
-            append_vec::{test_utils::TempFile, AccountMeta, StoredMeta},
+            append_vec::test_utils::TempFile,
             cache_hash_data_stats::CacheHashDataStats,
             inline_spl_token,
             secondary_index::MAX_NUM_LARGEST_INDEX_KEYS_RETURNED,
@@ -12153,8 +12159,7 @@ pub mod tests {
         let slot = 42;
         let num_threads = 2;
 
-        let min_file_bytes = std::mem::size_of::<StoredMeta>()
-            + std::mem::size_of::<crate::append_vec::AccountMeta>();
+        let min_file_bytes = std::mem::size_of::<StoredMeta>() + std::mem::size_of::<AccountMeta>();
 
         let db = Arc::new(AccountsDb::new_sized(Vec::new(), min_file_bytes as u64));
 

@@ -5,7 +5,7 @@
 //! Otherwise, an ancient append vec is the same as any other append vec
 use {
     crate::{
-        account_storage::ShrinkInProgress,
+        account_storage::{meta::StoredAccountMeta, ShrinkInProgress},
         accounts_db::{
             AccountStorageEntry, AccountsDb, AliveAccounts, GetUniqueAccountsResult, ShrinkCollect,
             ShrinkCollectAliveSeparatedByRefs, ShrinkStatsSub, StoreReclaims,
@@ -14,7 +14,7 @@ use {
         accounts_file::AccountsFile,
         accounts_index::ZeroLamport,
         active_stats::ActiveStatItem,
-        append_vec::{aligned_stored_size, StoredAccountMeta},
+        append_vec::aligned_stored_size,
         storable_accounts::{StorableAccounts, StorableAccountsBySlot},
     },
     rand::{thread_rng, Rng},
@@ -760,6 +760,7 @@ pub mod tests {
     use {
         super::*,
         crate::{
+            account_storage::meta::{AccountMeta, StoredAccountMeta, StoredMeta},
             accounts_db::{
                 get_temp_accounts_paths,
                 tests::{
@@ -769,9 +770,7 @@ pub mod tests {
                 },
                 INCLUDE_SLOT_IN_HASH_TESTS,
             },
-            append_vec::{
-                aligned_stored_size, AccountMeta, AppendVec, StoredAccountMeta, StoredMeta,
-            },
+            append_vec::{aligned_stored_size, AppendVec},
             storable_accounts::StorableAccountsBySlot,
         },
         solana_sdk::{

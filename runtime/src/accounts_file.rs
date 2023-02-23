@@ -1,9 +1,7 @@
 use {
     crate::{
-        append_vec::{
-            AppendVec, MatchAccountOwnerError, StorableAccountsWithHashesAndWriteVersions,
-            StoredAccountMeta,
-        },
+        account_storage::meta::{StorableAccountsWithHashesAndWriteVersions, StoredAccountMeta},
+        append_vec::{AppendVec, MatchAccountOwnerError},
         storable_accounts::StorableAccounts,
     },
     solana_sdk::{account::ReadableAccount, clock::Slot, hash::Hash, pubkey::Pubkey},
