@@ -442,25 +442,26 @@ pub(crate) mod tests {
         // already called 'shrink_in_progress' on this slot, but it finished, so we succeed
         // verify data structures during and after shrink and then with subsequent shrink call
         let storage = AccountStorage::default();
+        let slot = 0;
         let id_to_shrink = 1;
         let id_shrunk = 0;
         let sample_to_shrink = storage.get_test_storage_with_id(id_to_shrink);
         let sample = storage.get_test_storage();
         storage.map.insert(
-            0,
+            slot,
             AccountStorageReference {
                 id: id_to_shrink,
                 storage: sample_to_shrink,
             },
         );
-        let shrinking_in_progress = storage.shrinking_in_progress(0, sample.clone());
-        assert!(storage.map.contains_key(&0));
+        let shrinking_in_progress = storage.shrinking_in_progress(slot, sample.clone());
+        assert!(storage.map.contains_key(&slot));
         assert_eq!(
             id_shrunk,
-            storage.map.get(&0).unwrap().storage.append_vec_id()
+            storage.map.get(&slot).unwrap().storage.append_vec_id()
         );
         assert_eq!(
-            (0, id_to_shrink),
+            (slot, id_to_shrink),
             storage
                 .shrink_in_progress_map
                 .iter()
@@ -469,13 +470,13 @@ pub(crate) mod tests {
                 .unwrap()
         );
         drop(shrinking_in_progress);
-        assert!(storage.map.contains_key(&0));
+        assert!(storage.map.contains_key(&slot));
         assert_eq!(
             id_shrunk,
-            storage.map.get(&0).unwrap().storage.append_vec_id()
+            storage.map.get(&slot).unwrap().storage.append_vec_id()
         );
         assert!(storage.shrink_in_progress_map.is_empty());
-        storage.shrinking_in_progress(0, sample);
+        storage.shrinking_in_progress(slot, sample);
     }
 
     #[test]
