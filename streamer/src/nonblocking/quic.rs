@@ -1358,7 +1358,9 @@ pub mod test {
             DEFAULT_TPU_COALESCE_MS,
         ));
 
-        for _i in 0..1000 {
+        let num_packets = 1000;
+
+        for _i in 0..num_packets {
             let meta = Meta::default();
             let bytes = Bytes::from("Hello world");
             let offset = 0;
@@ -1374,13 +1376,15 @@ pub mod test {
             ptk_sender.send(packet_accum).await.unwrap();
         }
         let mut i = 0;
-        while i < 1000 {
+        let start = Instant::now();
+        while i < num_packets && start.elapsed().as_secs() < 2 {
             if let Ok(batch) = pkt_batch_receiver.try_recv() {
                 i += batch.len();
             } else {
                 sleep(Duration::from_millis(1)).await;
             }
         }
+        assert_eq!(i, num_packets);
         exit.store(true, Ordering::Relaxed);
         handle.await.unwrap();
     }
