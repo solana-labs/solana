@@ -284,19 +284,13 @@ impl Signer for OpenpgpCardKeypair {
 
     fn try_sign_message(&self, message: &[u8]) -> Result<Signature, SignerError> {
         let mut pgp_mut = self.pgp.borrow_mut();
-        let opt = &mut match pgp_mut.transaction() {
-            Ok(opt) => opt,
-            Err(e) => return Err(
-                SignerError::Connection(format!("could not start transaction with card: {}", e))
-            )
-        };
+        let opt = &mut pgp_mut.transaction().map_err(
+            |e| SignerError::Connection(format!("could not start transaction with card: {}", e))
+        )?;
 
-        let card_info: OpenpgpCardInfo = match opt.try_into() {
-            Ok(info) => info,
-            Err(e) => return Err(
-                SignerError::Connection(format!("could not get card info: {}", e))
-            )
-        };
+        let card_info: OpenpgpCardInfo = opt.try_into().map_err(
+            |e| SignerError::Connection(format!("could not get card info: {}", e))
+        )?;
 
         // Prompt user for PIN verification if and only if
         //   * Card indicates PIN is only valid for one PSO:CDS command at a time, or
@@ -320,12 +314,9 @@ impl Signer for OpenpgpCardKeypair {
 
         // Delegate message signing to card
         let hash = Hash::EdDSA(message);
-        let sig = match opt.signature_for_hash(hash) {
-            Ok(sig) => sig,
-            Err(e) => return Err(
-                SignerError::Protocol(format!("card failed to sign message: {}", e))
-            ),
-        };
+        let sig = opt.signature_for_hash(hash).map_err(
+            |e| SignerError::Protocol(format!("card failed to sign message: {}", e))
+        )?;
 
         Ok(Signature::new(&sig[..]))
     }
