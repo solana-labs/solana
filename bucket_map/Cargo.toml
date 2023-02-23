@@ -2,7 +2,7 @@
 name = "solana-bucket-map"
 version = "1.16.0"
 description = "solana-bucket-map"
-homepage = "https://solana.com/"
+homepage = "https://solanalabs.com/"
 documentation = "https://docs.rs/solana-bucket-map"
 readme = "../README.md"
 repository = "https://github.com/solana-labs/solana"
