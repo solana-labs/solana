@@ -67,10 +67,15 @@ impl AccountStorage {
             .or_else(lookup_in_map)
     }
 
+    /// assert if shrink in progress is active
+    pub(crate) fn assert_no_shrink_in_progress(&self) {
+        assert!(self.shrink_in_progress_map.is_empty());
+    }
+
     /// return the append vec for 'slot' if it exists
     /// This is only ever called when shrink is not possibly running and there is a max of 1 append vec per slot.
     pub(crate) fn get_slot_storage_entry(&self, slot: Slot) -> Option<Arc<AccountStorageEntry>> {
-        assert!(self.shrink_in_progress_map.is_empty());
+        self.assert_no_shrink_in_progress();
         self.get_slot_storage_entry_shrinking_in_progress_ok(slot)
     }
 
@@ -83,21 +88,21 @@ impl AccountStorage {
     }
 
     pub(crate) fn all_slots(&self) -> Vec<Slot> {
-        assert!(self.shrink_in_progress_map.is_empty());
+        self.assert_no_shrink_in_progress();
         self.map.iter().map(|iter_item| *iter_item.key()).collect()
     }
 
     /// returns true if there is no entry for 'slot'
     #[cfg(test)]
     pub(crate) fn is_empty_entry(&self, slot: Slot) -> bool {
-        assert!(self.shrink_in_progress_map.is_empty());
+        self.assert_no_shrink_in_progress();
         self.map.get(&slot).is_none()
     }
 
     /// initialize the storage map to 'all_storages'
     pub(crate) fn initialize(&mut self, all_storages: AccountStorageMap) {
         assert!(self.map.is_empty());
-        assert!(self.shrink_in_progress_map.is_empty());
+        self.assert_no_shrink_in_progress();
         self.map.extend(all_storages.into_iter())
     }
 
@@ -114,12 +119,12 @@ impl AccountStorage {
 
     /// iterate through all (slot, append-vec)
     pub(crate) fn iter(&self) -> AccountStorageIter<'_> {
-        assert!(self.shrink_in_progress_map.is_empty());
+        self.assert_no_shrink_in_progress();
         AccountStorageIter::new(self)
     }
 
     pub(crate) fn insert(&self, slot: Slot, store: Arc<AccountStorageEntry>) {
-        assert!(self.shrink_in_progress_map.is_empty());
+        self.assert_no_shrink_in_progress();
         assert!(self
             .map
             .insert(
