@@ -10402,7 +10402,7 @@ pub mod tests {
         account: &AccountSharedData,
         write_version: StoredMetaWriteVersion,
         mark_alive: bool,
-        add_to_index: Option<&AccountsIndex<AccountInfo>>,
+        add_to_index: Option<&AccountInfoAccountsIndex>,
     ) {
         let slot = storage.slot();
         let accounts = [(pubkey, account)];
