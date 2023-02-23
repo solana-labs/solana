@@ -8,8 +8,8 @@ use {
     solana_measure::measure::Measure,
     solana_metrics::*,
     solana_runtime::{
+        account_storage::meta::StoredAccountMeta,
         accounts_update_notifier_interface::AccountsUpdateNotifierInterface,
-        append_vec::StoredAccountMeta,
     },
     solana_sdk::{
         account::{AccountSharedData, ReadableAccount},

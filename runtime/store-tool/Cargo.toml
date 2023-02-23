@@ -6,7 +6,7 @@ description = "Tool to inspect append vecs"
 version = "1.16.0"
 repository = "https://github.com/solana-labs/solana"
 license = "Apache-2.0"
-homepage = "https://solana.com/"
+homepage = "https://solanalabs.com/"
 publish = false
 
 [dependencies]

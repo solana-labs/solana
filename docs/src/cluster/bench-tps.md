@@ -75,12 +75,6 @@ NDEBUG=1 SOLANA_CUDA=1 ./multinode-demo/bootstrap-validator.sh
 NDEBUG=1 SOLANA_CUDA=1 ./multinode-demo/validator.sh
 ```
 
-To run multiple nodes on the same machine using loopback IP address, pass parameter to allow private addresses
-
-```bash
-NDEBUG=1 ./multinode-demo/bootstrap-validator.sh --allow-private-addr
-NDEBUG=1 ./multinode-demo/validator-x.sh --allow-private-addr
-```
 
 ### Testnet Client Demo
 

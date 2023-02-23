@@ -90,8 +90,6 @@ pub struct AccountInfo {
     /// offset = 'packed_offset_and_flags.offset_reduced()' * ALIGN_BOUNDARY_OFFSET into the storage
     /// Note this is a smaller type than 'Offset'
     packed_offset_and_flags: PackedOffsetAndFlags,
-
-    stored_size: StoredSize,
 }
 
 impl ZeroLamport for AccountInfo {
@@ -116,7 +114,7 @@ impl IsCached for StorageLocation {
 const CACHE_VIRTUAL_STORAGE_ID: AppendVecId = AppendVecId::MAX;
 
 impl AccountInfo {
-    pub fn new(storage_location: StorageLocation, stored_size: StoredSize, lamports: u64) -> Self {
+    pub fn new(storage_location: StorageLocation, lamports: u64) -> Self {
         let mut packed_offset_and_flags = PackedOffsetAndFlags::default();
         let store_id = match storage_location {
             StorageLocation::AppendVec(store_id, offset) => {
@@ -142,7 +140,6 @@ impl AccountInfo {
         Self {
             store_id,
             packed_offset_and_flags,
-            stored_size,
         }
     }
 
@@ -162,10 +159,6 @@ impl AccountInfo {
 
     fn reduced_offset_to_offset(reduced_offset: OffsetReduced) -> Offset {
         (reduced_offset as Offset) * ALIGN_BOUNDARY_OFFSET
-    }
-
-    pub fn stored_size(&self) -> StoredSize {
-        self.stored_size
     }
 
     pub fn storage_location(&self) -> StorageLocation {
@@ -192,7 +185,7 @@ mod test {
             ALIGN_BOUNDARY_OFFSET,
             4 * ALIGN_BOUNDARY_OFFSET,
         ] {
-            let info = AccountInfo::new(StorageLocation::AppendVec(0, offset), 0, 0);
+            let info = AccountInfo::new(StorageLocation::AppendVec(0, offset), 0);
             assert!(info.offset() == offset);
         }
     }
@@ -201,13 +194,13 @@ mod test {
     #[should_panic(expected = "illegal offset")]
     fn test_illegal_offset() {
         let offset = (MAXIMUM_APPEND_VEC_FILE_SIZE - (ALIGN_BOUNDARY_OFFSET as u64)) as Offset;
-        AccountInfo::new(StorageLocation::AppendVec(0, offset), 0, 0);
+        AccountInfo::new(StorageLocation::AppendVec(0, offset), 0);
     }
 
     #[test]
     #[should_panic(expected = "illegal offset")]
     fn test_alignment() {
         let offset = 1; // not aligned
-        AccountInfo::new(StorageLocation::AppendVec(0, offset), 0, 0);
+        AccountInfo::new(StorageLocation::AppendVec(0, offset), 0);
     }
 }

@@ -2,7 +2,7 @@
 authors = ["Solana Labs Maintainers <maintainers@solanalabs.com>"]
 description = "Blockchain, Rebuilt for Scale"
 edition = "2021"
-homepage = "https://solana.com/"
+homepage = "https://solanalabs.com/"
 license = "Apache-2.0"
 name = "proto"
 publish = false
