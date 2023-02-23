@@ -69,6 +69,7 @@ pub struct AccountInfo<'a> {
     pub filename: &'a str,
 }
 
+#[deprecated(since = "1.16.0", note = "Please use `UpgradeableProgramInfo` instead")]
 #[derive(Clone)]
 pub struct ProgramInfo {
     pub program_id: Pubkey,
@@ -118,6 +119,7 @@ pub struct TestValidatorGenesis {
     warp_slot: Option<Slot>,
     no_bpf_jit: bool,
     accounts: HashMap<Pubkey, AccountSharedData>,
+    #[allow(deprecated)]
     programs: Vec<ProgramInfo>,
     upgradeable_programs: Vec<UpgradeableProgramInfo>,
     ticks_per_slot: Option<u64>,
@@ -150,6 +152,7 @@ impl Default for TestValidatorGenesis {
             warp_slot: Option::<Slot>::default(),
             no_bpf_jit: bool::default(),
             accounts: HashMap::<Pubkey, AccountSharedData>::default(),
+            #[allow(deprecated)]
             programs: Vec::<ProgramInfo>::default(),
             upgradeable_programs: Vec::<UpgradeableProgramInfo>::default(),
             ticks_per_slot: Option::<u64>::default(),
@@ -492,6 +495,11 @@ impl TestValidatorGenesis {
     }
 
     /// Add a list of programs to the test environment.
+    #[deprecated(
+        since = "1.16.0",
+        note = "Please use `add_upgradeable_programs_with_path()` instead"
+    )]
+    #[allow(deprecated)]
     pub fn add_programs_with_path(&mut self, programs: &[ProgramInfo]) -> &mut Self {
         for program in programs {
             self.programs.push(program.clone());
@@ -681,6 +689,7 @@ impl TestValidator {
         for (address, account) in solana_program_test::programs::spl_programs(&config.rent) {
             accounts.entry(address).or_insert(account);
         }
+        #[allow(deprecated)]
         for program in &config.programs {
             let data = solana_program_test::read_file(&program.program_path);
             accounts.insert(
