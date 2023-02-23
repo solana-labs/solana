@@ -28,7 +28,7 @@ fi
 cat > "$CONFIG_FILE" <<EOF
 {
   "name": "$PROJECT_NAME",
-  "scope": "solana-labs",
+  "scope": "$VERCEL_SCOPE",
   "redirects": [
     { "source": "/apps", "destination": "/developers" },
     { "source": "/developing/programming-model/overview", "destination": "/developers" },
