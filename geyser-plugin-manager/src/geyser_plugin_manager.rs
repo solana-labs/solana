@@ -1,7 +1,6 @@
-use std::{path::PathBuf, sync::RwLockWriteGuard};
-
-/// Managing the Geyser plugins
 use {
+    jsonrpc_core::{ErrorCode, Result as JsonRpcResult},
+    jsonrpc_server_utils::tokio::sync::oneshot::Sender as OneShotSender,
     libloading::{Library, Symbol},
     log::*,
     solana_geyser_plugin_interface::geyser_plugin_interface::GeyserPlugin,
@@ -69,123 +68,160 @@ impl GeyserPluginManager {
         false
     }
 
-    // Get a mutable reference to a particular plugin and library
-    fn get_plugin_and_lib_mut(
-        &mut self,
-        index: usize,
-    ) -> Option<(&mut Box<dyn GeyserPlugin>, &mut Library)> {
-        // Lengths should always be the same, so only need to check one
-        if index < self.plugins.len() {
-            Some((
-                self.plugins.get_mut(index).unwrap(),
-                self.libs.get_mut(index).unwrap(),
-            ))
-        } else {
-            None
-        }
+    pub fn list_plugins_rpc(&self) -> JsonRpcResult<Vec<String>> {
+        Ok(self.plugins.iter().map(|p| p.name().to_owned()).collect())
     }
 
-    pub fn reload_plugin(
-        mut plugin_manager: RwLockWriteGuard<GeyserPluginManager>,
-        name: &str,
-        libpath: &str,
-        config_file: &str,
-    ) -> Result<(), PluginManagerError> {
+    pub fn load_plugin_rpc(&mut self, libpath: &str, config_file: &str) -> JsonRpcResult<String> {
+        // First load plugin
+        let mut new_plugin: Box<dyn GeyserPlugin> = unsafe { load_plugin(libpath)? };
+
+        // Then see if a plugin with this name already exists. If so, abort
+        if self
+            .plugins
+            .iter()
+            .any(|plugin| plugin.name().eq(new_plugin.name()))
+        {
+            return Err(jsonrpc_core::Error {
+                code: ErrorCode::InternalError,
+                message: format!(
+                    "There already exists a plugin {} loaded. Did not load requested plugin",
+                    new_plugin.name()
+                ),
+                data: None,
+            });
+        }
+
+        // Call on_load and push plugin
+        new_plugin
+            .on_load(config_file)
+            .map_err(|on_load_err| jsonrpc_core::Error {
+                code: ErrorCode::InternalError,
+                message: format!("on_load method of plugin failed: {on_load_err}",),
+                data: None,
+            })?;
+        let name = new_plugin.name().to_string();
+        self.plugins.push(new_plugin);
+
+        Ok(name)
+    }
+
+    pub fn unload_plugin_rpc(&mut self, name: &str) -> JsonRpcResult<()> {
         // Check if any plugin names match this one
-        let Some(idx) = plugin_manager.plugins.iter().position(|plugin| plugin.name().eq(name)) else {
-            // If we don't find one, drop write lock ASAP and return an error
-            drop(plugin_manager);
-            return Err(PluginManagerError::PluginNotFoundDuringReload)
+        let Some(idx) = self.plugins.iter().position(|plugin| plugin.name().eq(name)) else {
+            // If we don't find one return an error
+            return Err(
+                jsonrpc_core::error::Error {
+                    code: ErrorCode::InternalError,
+                    message: String::from("plugin requested to reload is not loaded"),
+                    data: None,
+                }
+            )
         };
 
-        // Get current plugin and library
-        let (current_plugin, current_lib) = plugin_manager
-            .get_plugin_and_lib_mut(idx)
-            .expect("just checked for existence of libpath");
-
-        // Unload first in case plugin requires exclusive access to resource,
-        // such as a particular port or database.
+        // Unload and drop plugin
+        let mut current_plugin = self.plugins.remove(idx);
         current_plugin.on_unload();
+        drop(current_plugin);
+
+        Ok(())
+    }
+
+    /// Checks for a plugin with a given `name`.
+    /// If it exists, first unload it.
+    /// Then, attempt to load a new plugin
+    pub fn reload_plugin_rpc(
+        &mut self,
+        name: &str,
+        #[cfg_attr(test, allow(unused_variables))] libpath: &str,
+        config_file: &str,
+    ) -> JsonRpcResult<()> {
+        // Check if any plugin names match this one
+        let Some(idx) = self.plugins.iter().position(|plugin| plugin.name().eq(name)) else {
+            // If we don't find one return an error
+            return Err(
+                jsonrpc_core::error::Error {
+                    code: ErrorCode::InternalError,
+                    message: String::from("plugin requested to reload is not loaded"),
+                    data: None,
+                }
+            )
+        };
+
+        // Unload and drop current plugin first in case plugin requires exclusive access to resource,
+        // such as a particular port or database.
+        let mut current_plugin = self.plugins.remove(idx);
+        current_plugin.on_unload();
+        drop(current_plugin);
 
         // Try to load plugin, library
-        // SAFETY: It is up the validator to ensure this is a valid plugin library.
-        let (mut new_plugin, new_lib): (Box<dyn GeyserPlugin>, Library) = {
-            #[cfg(not(test))]
-            unsafe {
-                // Attempt to load Library
-                let lib = Library::new(libpath).map_err(|e| {
-                    PluginManagerError::FailedToLoadNewLibrary {
-                        err: format!("{e}"),
-                    }
-                })?;
+        // SAFETY: It is up to the validator to ensure this is a valid plugin library.
+        let mut new_plugin: Box<dyn GeyserPlugin> = unsafe { load_plugin(libpath)? };
 
-                // Attempt to retrieve GeyserPlugin constructor
-                let constructor: Symbol<PluginConstructor> =
-                    lib.get(b"_create_plugin").map_err(|e| {
-                        PluginManagerError::FailedToGetConstructorFromLibrary {
-                            err: format!("{e}"),
-                        }
-                    })?;
-
-                // Attempt to construct raw *mut dyn GeyserPlugin
-                let plugin_raw = constructor();
-
-                (Box::from_raw(plugin_raw), lib)
-            }
-
-            #[cfg(test)]
-            {
-                // This is mocked for tests to avoid having to do IO with a dynamically linked library
-                // across different architectures at test time
-                tests::dummy_plugin_and_library()
-            }
-        };
-
-        // Try unload, on_load
-        // Attempt to load new plugin
+        // Attempt to on_load with new plugin
         match new_plugin.on_load(&config_file) {
             // On success, replace plugin and library
-            // Note: don't need to replace libpath since it matches
             Ok(()) => {
-                *current_plugin = new_plugin;
-                *current_lib = new_lib;
+                self.plugins.push(new_plugin);
             }
 
-            // On failure, attempt to revert and return error
-            // Note that here we are using the same config file as for the new file
+            // On success, replace plugin and library
             Err(err) => {
-                match current_plugin.on_load(&config_file) {
-                    // Failed to load plugin but successfully reverted
-                    Ok(()) => {
-                        return Err(PluginManagerError::FailedReloadRevertedToOldPlugin {
-                            err: format!("{err}"),
-                        })
-                    }
-
-                    // Failed to load plugin and failed to revert.
-                    //
-                    // Note that many plugin impls don't do anything fallible
-                    // for on_load or on_unload so this should not happen very often
-                    Err(revert_err) => {
-                        // If we failed to revert, unload plugin
-                        // First drop mutable references
-                        drop(current_plugin);
-                        drop(current_lib);
-                        // Then drop plugin, lib, and path
-                        drop(plugin_manager.plugins.remove(idx));
-                        drop(plugin_manager.libs.remove(idx));
-                        drop(plugin_manager.libpaths.remove(idx));
-
-                        return Err(PluginManagerError::FailedReloadFailedReverted {
-                            err: err.to_string(),
-                            revert_err: revert_err.to_string(),
-                        });
-                    }
-                };
+                return Err(jsonrpc_core::error::Error {
+                    code: ErrorCode::InternalError,
+                    message: format!(
+                        "failed to start new plugin (previous plugin was dropped!): {err}"
+                    ),
+                    data: None,
+                });
             }
         }
 
         Ok(())
+    }
+}
+
+/// This function is used both in the load and reload admin rpc calls
+#[inline(always)]
+unsafe fn load_plugin(libpath: &str) -> JsonRpcResult<Box<dyn GeyserPlugin>> {
+    // This is mocked for tests to avoid having to do IO with a dynamically linked library
+    // across different architectures at test time
+    #[cfg(test)]
+    {
+        Ok(tests::dummy_plugin())
+    }
+
+    #[cfg(not(test))]
+    {
+        // Attempt to load Library
+        let lib = Library::new(libpath).map_err(|e| jsonrpc_core::error::Error {
+            code: ErrorCode::InternalError,
+            message: format!("failed to load geyser plugin library: {e}"),
+            data: None,
+        })?;
+
+        // Attempt to retrieve GeyserPlugin constructor
+        let constructor: Symbol<PluginConstructor> =
+            lib.get(b"_create_plugin")
+                .map_err(|e| jsonrpc_core::error::Error {
+                    code: ErrorCode::InternalError,
+                    message: format!(
+                        "failed to get plugin constructor _create_plugin from library: {e}"
+                    ),
+                    data: None,
+                })?;
+
+        // Attempt to construct raw *mut dyn GeyserPlugin
+        // This may fail with bad plugin constructor, with e.g. unwraps.
+        // Let's catch panic and propagate error instead of crashing entire validator
+        let plugin_raw =
+            std::panic::catch_unwind(|| constructor()).map_err(|e| jsonrpc_core::error::Error {
+                code: ErrorCode::InternalError,
+                message: format!("failed to start new plugin, previous plugin was dropped: {e:?}"),
+                data: None,
+            })?;
+
+        Ok(Box::from_raw(plugin_raw))
     }
 }
 
@@ -215,10 +251,12 @@ pub enum PluginManagerRequest {
 mod tests {
     use std::sync::{Arc, RwLock};
 
-    use crate::geyser_plugin_manager::{GeyserPluginManager, PluginManagerError};
+    use crate::geyser_plugin_manager::GeyserPluginManager;
     use libloading::Library;
     use solana_geyser_plugin_interface::geyser_plugin_interface::GeyserPlugin;
 
+    #[allow(unused)]
+    /// This is here in case more tests are written which need a dummy library
     pub(super) fn dummy_plugin_and_library() -> (Box<dyn GeyserPlugin>, Library) {
         let plugin = Box::new(TestPlugin);
         let lib = {
@@ -230,6 +268,8 @@ mod tests {
         (plugin, lib)
     }
 
+    #[allow(unused)]
+    /// This is here in case more tests are written which need a dummy library
     pub(super) fn dummy_plugin_and_library2() -> (Box<dyn GeyserPlugin>, Library) {
         let plugin = Box::new(TestPlugin2);
         let lib = {
@@ -241,27 +281,33 @@ mod tests {
         (plugin, lib)
     }
 
+    pub(super) fn dummy_plugin() -> Box<dyn GeyserPlugin> {
+        let plugin = Box::new(TestPlugin);
+        plugin
+    }
+
+    pub(super) fn dummy_plugin2() -> Box<dyn GeyserPlugin> {
+        let plugin = Box::new(TestPlugin2);
+        plugin
+    }
+
+    pub(super) fn dummy_plugin3() -> Box<dyn GeyserPlugin> {
+        let plugin = Box::new(TestPlugin3);
+        plugin
+    }
+
     const DUMMY_NAME: &'static str = "dummy";
+    const DUMMY_CONFIG_FILE: &'static str = "dummy_config";
+    const DUMMY_LIBRARY: &'static str = "dummy_lib";
+    const ANOTHER_DUMMY_NAME: &'static str = "another_dummy";
+    const YET_ANOTHER_DUMMY_NAME: &'static str = "another_dummy";
 
     #[derive(Debug)]
     pub(super) struct TestPlugin;
 
-    // A global variable which helps track which plugin is loaded
-    static TEST_UTIL: RwLock<Option<&'static str>> = RwLock::new(None);
-    static PLUGIN_1_LOADED: &'static str = "plugin 1 loaded";
-    static PLUGIN_2_LOADED: &'static str = "plugin 2 loaded";
-
     impl GeyserPlugin for TestPlugin {
         fn name(&self) -> &'static str {
             DUMMY_NAME
-        }
-        fn on_load(
-            &mut self,
-            _config_file: &str,
-        ) -> solana_geyser_plugin_interface::geyser_plugin_interface::Result<()> {
-            // Update global tracker
-            *TEST_UTIL.write().unwrap() = Some(PLUGIN_1_LOADED);
-            Ok(())
         }
     }
 
@@ -270,15 +316,16 @@ mod tests {
 
     impl GeyserPlugin for TestPlugin2 {
         fn name(&self) -> &'static str {
-            DUMMY_NAME
+            ANOTHER_DUMMY_NAME
         }
-        fn on_load(
-            &mut self,
-            _config_file: &str,
-        ) -> solana_geyser_plugin_interface::geyser_plugin_interface::Result<()> {
-            // Update global tracker
-            *TEST_UTIL.write().unwrap() = Some(PLUGIN_2_LOADED);
-            Ok(())
+    }
+
+    #[derive(Debug)]
+    pub(super) struct TestPlugin3;
+
+    impl GeyserPlugin for TestPlugin3 {
+        fn name(&self) -> &'static str {
+            YET_ANOTHER_DUMMY_NAME
         }
     }
 
@@ -287,59 +334,74 @@ mod tests {
         // Initialize empty manager
         let plugin_manager = Arc::new(RwLock::new(GeyserPluginManager::new()));
 
-        // The geyser plugin which we will reload
-        const DUMMY_CONFIG_FILE: &'static str = "dummy_config";
-        const DUMMY_LIBRARY: &'static str = "dummy_lib";
-
         // No plugins are loaded, this should fail
-        let plugin_manager_lock = plugin_manager.write().unwrap();
-        let reload_result = GeyserPluginManager::reload_plugin(
-            plugin_manager_lock,
-            DUMMY_NAME,
-            DUMMY_LIBRARY,
-            DUMMY_CONFIG_FILE,
-        );
+        let mut plugin_manager_lock = plugin_manager.write().unwrap();
+        let reload_result =
+            plugin_manager_lock.reload_plugin_rpc(DUMMY_NAME, DUMMY_LIBRARY, DUMMY_CONFIG_FILE);
         assert_eq!(
-            reload_result,
-            Err(PluginManagerError::PluginNotFoundDuringReload)
+            reload_result.unwrap_err().message,
+            "plugin requested to reload is not loaded"
         );
 
-        // Mock having loaded plugin (TestPlugin2)
-        let mut plugin_manager_lock = plugin_manager.write().unwrap();
-        let (mut plugin, lib) = dummy_plugin_and_library2();
-        plugin.on_load("");
-        assert_eq!(*TEST_UTIL.read().unwrap(), Some(PLUGIN_2_LOADED));
+        // Mock having loaded plugin (TestPlugin)
+        let mut plugin = dummy_plugin();
+        plugin.on_load("").unwrap();
         plugin_manager_lock.plugins.push(plugin);
-        plugin_manager_lock.libs.push(lib);
-        plugin_manager_lock.libpaths.push(DUMMY_LIBRARY.into());
-        // This is a GeyserPlugin trait method
+        // plugin_manager_lock.libs.push(lib);
         assert_eq!(plugin_manager_lock.plugins[0].name(), DUMMY_NAME);
         plugin_manager_lock.plugins[0].name();
-        drop(plugin_manager_lock);
 
         // Try wrong name (same error)
         const WRONG_NAME: &'static str = "wrong_name";
-        let mut plugin_manager_lock = plugin_manager.write().unwrap();
-        let reload_result = GeyserPluginManager::reload_plugin(
-            plugin_manager_lock,
-            WRONG_NAME,
-            DUMMY_LIBRARY,
-            DUMMY_CONFIG_FILE,
-        );
+        let reload_result =
+            plugin_manager_lock.reload_plugin_rpc(WRONG_NAME, DUMMY_LIBRARY, DUMMY_CONFIG_FILE);
         assert_eq!(
-            reload_result,
-            Err(PluginManagerError::PluginNotFoundDuringReload)
+            reload_result.unwrap_err().message,
+            "plugin requested to reload is not loaded"
         );
 
-        // Now try a (dummy) reload, replacing TestPlugin2 with TestPlugin
-        let plugin_manager_lock = plugin_manager.write().unwrap();
-        let reload_result = GeyserPluginManager::reload_plugin(
-            plugin_manager_lock,
-            DUMMY_NAME,
-            DUMMY_LIBRARY,
-            DUMMY_CONFIG_FILE,
-        );
-        assert_eq!(*TEST_UTIL.read().unwrap(), Some(PLUGIN_1_LOADED));
+        // Now try a (dummy) reload, replacing TestPlugin with TestPlugin2
+        let reload_result =
+            plugin_manager_lock.reload_plugin_rpc(DUMMY_NAME, DUMMY_LIBRARY, DUMMY_CONFIG_FILE);
         assert!(reload_result.is_ok());
+    }
+
+    #[test]
+    fn test_plugin_list() {
+        // Initialize empty manager
+        let plugin_manager = Arc::new(RwLock::new(GeyserPluginManager::new()));
+        let mut plugin_manager_lock = plugin_manager.write().unwrap();
+
+        // Load two plugins
+        // First
+        let mut plugin = dummy_plugin();
+        plugin.on_load(DUMMY_CONFIG_FILE).unwrap();
+        plugin_manager_lock.plugins.push(plugin);
+        // Second
+        let mut plugin = dummy_plugin3();
+        plugin.on_load(DUMMY_CONFIG_FILE).unwrap();
+        plugin_manager_lock.plugins.push(plugin);
+
+        // Check that both plugins are returned in the list
+        let plugins = plugin_manager_lock.list_plugins_rpc().unwrap();
+        assert!(plugins.iter().any(|name| name.eq(DUMMY_NAME)));
+        assert!(plugins.iter().any(|name| name.eq(YET_ANOTHER_DUMMY_NAME)));
+    }
+
+    #[test]
+    fn test_plugin_load_unload() {
+        // Initialize empty manager
+        let plugin_manager = Arc::new(RwLock::new(GeyserPluginManager::new()));
+        let mut plugin_manager_lock = plugin_manager.write().unwrap();
+
+        // Load rpc call
+        let load_result = plugin_manager_lock.load_plugin_rpc(DUMMY_LIBRARY, DUMMY_CONFIG_FILE);
+        assert!(load_result.is_ok());
+        assert_eq!(plugin_manager_lock.plugins.len(), 1);
+
+        // Unload rpc call
+        let unload_result = plugin_manager_lock.unload_plugin_rpc(DUMMY_NAME);
+        assert!(unload_result.is_ok());
+        assert_eq!(plugin_manager_lock.plugins.len(), 0);
     }
 }
