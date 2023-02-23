@@ -1361,10 +1361,11 @@ pub mod test {
         let num_packets = 1000;
 
         for _i in 0..num_packets {
-            let meta = Meta::default();
+            let mut meta = Meta::default();
             let bytes = Bytes::from("Hello world");
             let offset = 0;
             let size = bytes.len();
+            meta.size = size;
             let packet_accum = PacketAccumulator {
                 meta,
                 chunks: vec![PacketChunk {
