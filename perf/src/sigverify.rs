@@ -362,9 +362,7 @@ fn check_for_simple_vote_transaction(
     let msg_start = (packet_offsets.msg_start as usize)
         .checked_sub(current_offset)
         .ok_or(PacketError::InvalidLen)?;
-    let message_prefix = *packet
-        .data(msg_start)
-        .ok_or(PacketError::InvalidSignatureLen)?;
+    let message_prefix = *packet.data(msg_start).ok_or(PacketError::InvalidLen)?;
     if message_prefix & MESSAGE_VERSION_PREFIX != 0 {
         return Ok(());
     }
