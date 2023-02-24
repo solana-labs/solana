@@ -6204,12 +6204,13 @@ impl AccountsDb {
                 continue;
             }
 
+            let store_id = storage.append_vec_id();
             for (i, offsets) in rvs.unwrap().windows(2).enumerate() {
                 let stored_size = offsets[1] - offsets[0];
                 storage.add_account(stored_size);
 
                 infos.push(AccountInfo::new(
-                    StorageLocation::AppendVec(storage.append_vec_id(), offsets[0]),
+                    StorageLocation::AppendVec(store_id, offsets[0]),
                     accounts_and_meta_to_store
                         .account(i)
                         .map(|account| account.lamports())
