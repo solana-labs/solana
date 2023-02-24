@@ -29,7 +29,7 @@ use {
         net::{IpAddr, Ipv4Addr, SocketAddr},
         path::{Path, PathBuf},
         sync::{Arc, RwLock},
-        thread::{self, Builder, JoinHandle},
+        thread::{self, Builder},
         time::{Duration, SystemTime},
     },
 };
@@ -40,7 +40,6 @@ pub struct AdminRpcRequestMetadataPostInit {
     pub bank_forks: Arc<RwLock<BankForks>>,
     pub vote_account: Pubkey,
     pub repair_whitelist: Arc<RwLock<HashSet<Pubkey>>>,
-    pub manager_handle: Option<Arc<JoinHandle<()>>>,
 }
 
 #[derive(Clone)]
@@ -292,20 +291,6 @@ impl AdminRpc for AdminRpcImpl {
                 });
             }
 
-            // Wake handler thread
-            meta.with_post_init(|post_init| {
-                if let Some(ref thread) = post_init.manager_handle.as_ref().map(|h| h.thread()) {
-                    thread.unpark();
-                    Ok(())
-                } else {
-                    Err(jsonrpc_core::Error {
-                        code: ErrorCode::InvalidRequest,
-                        message: "no geyser plugin service".to_string(),
-                        data: None,
-                    })
-                }
-            })?;
-
             // Await response from plugin manager
             response_receiver
                 .await
@@ -333,20 +318,6 @@ impl AdminRpc for AdminRpcImpl {
                     data: None,
                 });
             }
-
-            // Wake handler thread
-            meta.with_post_init(|post_init| {
-                if let Some(ref thread) = post_init.manager_handle.as_ref().map(|h| h.thread()) {
-                    thread.unpark();
-                    Ok(())
-                } else {
-                    Err(jsonrpc_core::Error {
-                        code: ErrorCode::InvalidRequest,
-                        message: "no geyser plugin service".to_string(),
-                        data: None,
-                    })
-                }
-            })?;
 
             // Await response from plugin manager
             response_receiver
@@ -376,20 +347,6 @@ impl AdminRpc for AdminRpcImpl {
                 });
             }
 
-            // Wake handler thread
-            meta.with_post_init(|post_init| {
-                if let Some(ref thread) = post_init.manager_handle.as_ref().map(|h| h.thread()) {
-                    thread.unpark();
-                    Ok(())
-                } else {
-                    Err(jsonrpc_core::Error {
-                        code: ErrorCode::InvalidRequest,
-                        message: "no geyser plugin service".to_string(),
-                        data: None,
-                    })
-                }
-            })?;
-
             // Await response from plugin manager
             response_receiver
                 .await
@@ -414,20 +371,6 @@ impl AdminRpc for AdminRpcImpl {
                     data: None,
                 });
             }
-
-            // Wake handler thread
-            meta.with_post_init(|post_init| {
-                if let Some(ref thread) = post_init.manager_handle.as_ref().map(|h| h.thread()) {
-                    thread.unpark();
-                    Ok(())
-                } else {
-                    Err(jsonrpc_core::Error {
-                        code: ErrorCode::InvalidRequest,
-                        message: "there is no plugin manager loaded".to_string(),
-                        data: None,
-                    })
-                }
-            })?;
 
             // Await response from plugin manager
             response_receiver
@@ -907,7 +850,6 @@ mod tests {
                     bank_forks: bank_forks.clone(),
                     vote_account,
                     repair_whitelist,
-                    manager_handle: None, // no plugin manager thread for tests
                 }))),
                 staked_nodes_overrides: Arc::new(RwLock::new(HashMap::new())),
                 rpc_to_plugin_manager_sender: None,
