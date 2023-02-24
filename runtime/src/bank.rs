@@ -63,6 +63,7 @@ use {
         message_processor::MessageProcessor,
         rent_collector::{CollectedInfo, RentCollector},
         runtime_config::RuntimeConfig,
+        serde_snapshot::{SerdeAccountsHash, SerdeIncrementalAccountsHash},
         snapshot_hash::SnapshotHash,
         stake_account::{self, StakeAccount},
         stake_weighted_timestamp::{
@@ -242,11 +243,11 @@ pub struct BankIncrementalSnapshotPersistence {
     /// slot of full snapshot
     pub full_slot: Slot,
     /// accounts hash from the full snapshot
-    pub full_hash: Hash,
+    pub full_hash: SerdeAccountsHash,
     /// capitalization from the full snapshot
     pub full_capitalization: u64,
     /// hash of the accounts in the incremental snapshot slot range, including zero-lamport accounts
-    pub incremental_hash: Hash,
+    pub incremental_hash: SerdeIncrementalAccountsHash,
     /// capitalization of the accounts in the incremental snapshot slot range
     pub incremental_capitalization: u64,
 }
