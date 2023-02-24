@@ -1702,8 +1702,6 @@ fn maybe_warp_slot(
             abort();
         });
 
-        process_blockstore.process();
-
         let mut bank_forks = bank_forks.write().unwrap();
 
         let working_bank = bank_forks.working_bank();
@@ -1749,6 +1747,11 @@ fn maybe_warp_slot(
             "created snapshot: {}",
             full_snapshot_archive_info.path().display()
         );
+
+        drop(bank_forks);
+        // Process blockstore after warping bank forks to make sure tower and
+        // bank forks are in sync.
+        process_blockstore.process();
     }
 }
 
