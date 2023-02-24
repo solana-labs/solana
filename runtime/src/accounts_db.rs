@@ -2768,7 +2768,7 @@ impl AccountsDb {
     /// 2. a pubkey we were planning to remove is not removing all stores that contain the account
     fn calc_delete_dependencies(
         purges: &HashMap<Pubkey, (SlotList<AccountInfo>, RefCount)>,
-        store_counts: &mut HashMap<AppendVecId, (usize, HashSet<Pubkey>)>,
+        store_counts: &mut HashMap<Slot, (usize, HashSet<Pubkey>)>,
         min_slot: Option<Slot>,
     ) {
         // Another pass to check if there are some filtered accounts which
@@ -2781,14 +2781,12 @@ impl AccountsDb {
                 account_infos.len() as RefCount == *ref_count_from_storage;
             if all_stores_being_deleted {
                 let mut delete = true;
-                for (slot, account_info) in account_infos {
-                    let store_id = account_info.store_id();
-                    if let Some(count) = store_counts.get(&store_id).map(|s| s.0) {
+                for (slot, _account_info) in account_infos {
+                    if let Some(count) = store_counts.get(slot).map(|s| s.0) {
                         debug!(
                             "calc_delete_dependencies()
-                            storage id: {},
-                            count len: {}",
-                            store_id, count,
+                            slot: {slot},
+                            count len: {count}"
                         );
                         if count == 0 {
                             // this store CAN be removed
@@ -2821,34 +2819,34 @@ impl AccountsDb {
             }
 
             // increment store_counts to non-zero for all stores that can not be deleted.
-            let mut pending_store_ids = HashSet::new();
-            for (slot, account_info) in account_infos {
+            let mut pending_stores = HashSet::new();
+            for (slot, _account_info) in account_infos {
                 if !already_counted.contains(slot) {
-                    pending_store_ids.insert((*slot, account_info.store_id()));
+                    pending_stores.insert(*slot);
                 }
             }
-            while !pending_store_ids.is_empty() {
-                let (slot, id) = pending_store_ids.iter().next().cloned().unwrap();
+            while !pending_stores.is_empty() {
+                let slot = pending_stores.iter().next().cloned().unwrap();
                 if Some(slot) == min_slot {
                     if let Some(failed_slot) = failed_slot.take() {
-                        info!("calc_delete_dependencies, oldest store is not able to be deleted because of {pubkey} in slot {failed_slot}");
+                        info!("calc_delete_dependencies, oldest slot is not able to be deleted because of {pubkey} in slot {failed_slot}");
                     } else {
-                        info!("calc_delete_dependencies, oldest store is not able to be deleted because of {pubkey}, account infos len: {}, ref count: {ref_count_from_storage}", account_infos.len());
+                        info!("calc_delete_dependencies, oldest slot is not able to be deleted because of {pubkey}, account infos len: {}, ref count: {ref_count_from_storage}", account_infos.len());
                     }
                 }
 
-                pending_store_ids.remove(&(slot, id));
+                pending_stores.remove(&slot);
                 if !already_counted.insert(slot) {
                     continue;
                 }
                 // the point of all this code: remove the store count for all stores we cannot remove
-                if let Some(store_count) = store_counts.remove(&id) {
+                if let Some(store_count) = store_counts.remove(&slot) {
                     // all pubkeys in this store also cannot be removed from all stores they are in
                     let affected_pubkeys = &store_count.1;
                     for key in affected_pubkeys {
-                        for (slot, account_info) in &purges.get(key).unwrap().0 {
+                        for (slot, _account_info) in &purges.get(key).unwrap().0 {
                             if !already_counted.contains(slot) {
-                                pending_store_ids.insert((*slot, account_info.store_id()));
+                                pending_stores.insert(*slot);
                             }
                         }
                     }
@@ -3353,7 +3351,7 @@ impl AccountsDb {
 
         // Calculate store counts as if everything was purged
         // Then purge if we can
-        let mut store_counts: HashMap<AppendVecId, (usize, HashSet<Pubkey>)> = HashMap::new();
+        let mut store_counts: HashMap<Slot, (usize, HashSet<Pubkey>)> = HashMap::new();
         for (key, (account_infos, ref_count)) in purges_zero_lamports.iter_mut() {
             if purged_account_slots.contains_key(key) {
                 *ref_count = self.accounts_index.ref_count_from_storage(key);
@@ -3377,7 +3375,7 @@ impl AccountsDb {
                 if was_reclaimed {
                     return false;
                 }
-                if let Some(store_count) = store_counts.get_mut(&account_info.store_id()) {
+                if let Some(store_count) = store_counts.get_mut(slot) {
                     store_count.0 -= 1;
                     store_count.1.insert(*key);
                 } else {
@@ -3399,7 +3397,7 @@ impl AccountsDb {
                         "store_counts, inserting slot: {}, store id: {}, count: {}",
                         slot, account_info.store_id(), count
                     );
-                    store_counts.insert(account_info.store_id(), (count, key_set));
+                    store_counts.insert(*slot, (count, key_set));
                 }
                 true
             });
@@ -3686,7 +3684,7 @@ impl AccountsDb {
         &self,
         max_clean_root_inclusive: Option<Slot>,
         last_full_snapshot_slot: Option<Slot>,
-        store_counts: &HashMap<AppendVecId, (usize, HashSet<Pubkey>)>,
+        store_counts: &HashMap<Slot, (usize, HashSet<Pubkey>)>,
         purges_zero_lamports: &mut HashMap<Pubkey, (SlotList<AccountInfo>, RefCount)>,
     ) {
         let should_filter_for_incremental_snapshots = max_clean_root_inclusive.unwrap_or(Slot::MAX)
@@ -3699,8 +3697,8 @@ impl AccountsDb {
         purges_zero_lamports.retain(|pubkey, (slot_account_infos, _ref_count)| {
             // Only keep purges_zero_lamports where the entire history of the account in the root set
             // can be purged. All AppendVecs for those updates are dead.
-            for (_slot, account_info) in slot_account_infos.iter() {
-                if let Some(store_count) = store_counts.get(&account_info.store_id()) {
+            for (slot, _account_info) in slot_account_infos.iter() {
+                if let Some(store_count) = store_counts.get(slot) {
                     if store_count.0 != 0 {
                         // one store this pubkey is in is not being removed, so this pubkey cannot be removed at all
                         return false;
@@ -16062,7 +16060,7 @@ pub mod tests {
             key_set.insert(pubkey);
             let store_count = 0;
             let mut store_counts = HashMap::default();
-            store_counts.insert(account_info.store_id(), (store_count, key_set));
+            store_counts.insert(slot, (store_count, key_set));
             let mut purges_zero_lamports = HashMap::default();
             purges_zero_lamports.insert(pubkey, (vec![(slot, account_info)], 1));
 
