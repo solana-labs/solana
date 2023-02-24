@@ -57,12 +57,13 @@ mod tests;
 mod types;
 mod utils;
 
-pub(crate) use types::{SerdeAccountsDeltaHash, SerdeAccountsHash};
-
-pub(crate) use storage::SerializedAppendVecId;
 // a number of test cases in accounts_db use this
 #[cfg(test)]
 pub(crate) use tests::reconstruct_accounts_db_via_serialization;
+pub(crate) use {
+    storage::SerializedAppendVecId,
+    types::{SerdeAccountsDeltaHash, SerdeAccountsHash},
+};
 
 #[derive(Copy, Clone, Eq, PartialEq)]
 pub(crate) enum SerdeStyle {
