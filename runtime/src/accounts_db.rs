@@ -20,7 +20,7 @@
 
 use {
     crate::{
-        account_info::{AccountInfo, StorageLocation},
+        account_info::{AccountInfo, AccountOffsetAndFlags, StorageLocation},
         account_storage::{
             meta::{
                 StorableAccountsWithHashesAndWriteVersions, StoredAccountMeta,
@@ -684,6 +684,7 @@ impl GenerateIndexTimings {
 
 impl IndexValue for AccountInfo {}
 impl DiskIndexValue for AccountInfo {}
+impl DiskIndexValue for AccountOffsetAndFlags {}
 
 impl ZeroLamport for AccountSharedData {
     fn is_zero_lamport(&self) -> bool {
@@ -1352,7 +1353,7 @@ struct RemoveUnrootedSlotsSynchronization {
     signal: Condvar,
 }
 
-type AccountInfoAccountsIndex = AccountsIndex<AccountInfo, AccountInfo>;
+type AccountInfoAccountsIndex = AccountsIndex<AccountInfo, AccountOffsetAndFlags>;
 
 // This structure handles the load/store of the accounts
 #[derive(Debug)]
@@ -3367,7 +3368,7 @@ impl AccountsDb {
                         .unwrap()
                         - 1;
                     debug!(
-                        "store_counts, inserting slot: {}, store id: {}, count: {}",
+                        "store_counts, inserting slot: {}, store id: {:?}, count: {}",
                         slot, account_info.store_id(), count
                     );
                     store_counts.insert(*slot, (count, key_set));
@@ -6194,7 +6195,7 @@ impl AccountsDb {
                 storage.add_account(stored_size);
 
                 infos.push(AccountInfo::new(
-                    StorageLocation::AppendVec(store_id, offsets[0]),
+                    StorageLocation::AppendVec(Some(store_id), offsets[0]),
                     accounts_and_meta_to_store
                         .account(i)
                         .map(|account| account.lamports())
@@ -8675,7 +8676,7 @@ impl AccountsDb {
                 pubkey,
                 IndexAccountMapEntry {
                     write_version: _write_version,
-                    store_id,
+                    store_id: _store_id,
                     stored_account,
                 },
             )| {
@@ -8702,7 +8703,7 @@ impl AccountsDb {
                 (
                     pubkey,
                     AccountInfo::new(
-                        StorageLocation::AppendVec(store_id, stored_account.offset), // will never be cached
+                        StorageLocation::AppendVec(None, stored_account.offset), // will never be cached
                         stored_account.account_meta.lamports,
                     ),
                 )
@@ -8934,7 +8935,7 @@ impl AccountsDb {
                                         count += 1;
                                         let ai = AccountInfo::new(
                                             StorageLocation::AppendVec(
-                                                account_info.store_id,
+                                                None,
                                                 account_info.stored_account.offset,
                                             ), // will never be cached
                                             account_info.stored_account.account_meta.lamports,
@@ -9350,7 +9351,9 @@ impl AccountsDb {
     pub fn get_append_vec_id(&self, pubkey: &Pubkey, slot: Slot) -> Option<AppendVecId> {
         let ancestors = vec![(slot, 1)].into_iter().collect();
         let result = self.accounts_index.get(pubkey, Some(&ancestors), None);
-        result.map(|(list, index)| list.slot_list()[index].1.store_id())
+        result
+            .map(|(list, index)| list.slot_list()[index].1.store_id())
+            .flatten()
     }
 
     pub fn alive_account_count_in_slot(&self, slot: Slot) -> usize {
@@ -10446,7 +10449,7 @@ pub mod tests {
 
         if let Some(index) = add_to_index {
             let account_info = AccountInfo::new(
-                StorageLocation::AppendVec(storage.append_vec_id(), offsets[0]),
+                StorageLocation::AppendVec(Some(storage.append_vec_id()), offsets[0]),
                 account.lamports(),
             );
             index.upsert(
@@ -11246,11 +11249,13 @@ pub mod tests {
 
         //slot is still there, since gc is lazy
         assert_eq!(
-            accounts
-                .storage
-                .get_slot_storage_entry(0)
-                .unwrap()
-                .append_vec_id(),
+            Some(
+                accounts
+                    .storage
+                    .get_slot_storage_entry(0)
+                    .unwrap()
+                    .append_vec_id()
+            ),
             id
         );
 
@@ -13590,10 +13595,10 @@ pub mod tests {
         let key0 = Pubkey::new_from_array([0u8; 32]);
         let key1 = Pubkey::new_from_array([1u8; 32]);
         let key2 = Pubkey::new_from_array([2u8; 32]);
-        let info0 = AccountInfo::new(StorageLocation::AppendVec(0, 0), 0);
-        let info1 = AccountInfo::new(StorageLocation::AppendVec(1, 0), 0);
-        let info2 = AccountInfo::new(StorageLocation::AppendVec(2, 0), 0);
-        let info3 = AccountInfo::new(StorageLocation::AppendVec(3, 0), 0);
+        let info0 = AccountInfo::new(StorageLocation::AppendVec(None, 0), 0);
+        let info1 = AccountInfo::new(StorageLocation::AppendVec(None, 0), 0);
+        let info2 = AccountInfo::new(StorageLocation::AppendVec(None, 0), 0);
+        let info3 = AccountInfo::new(StorageLocation::AppendVec(None, 0), 0);
         let mut reclaims = vec![];
         accounts_index.upsert(
             0,
@@ -16041,7 +16046,7 @@ pub mod tests {
         }
 
         let do_test = |test_params: TestParameters| {
-            let account_info = AccountInfo::new(StorageLocation::AppendVec(42, 128), 0);
+            let account_info = AccountInfo::new(StorageLocation::AppendVec(None, 128), 0);
             let pubkey = solana_sdk::pubkey::new_rand();
             let mut key_set = HashSet::default();
             key_set.insert(pubkey);
@@ -17613,7 +17618,7 @@ pub mod tests {
             if let Some(storage) = db.get_storage_for_slot(slot) {
                 storage.accounts.account_iter().for_each(|account| {
                     let info = AccountInfo::new(
-                        StorageLocation::AppendVec(storage.append_vec_id(), account.offset),
+                        StorageLocation::AppendVec(None, account.offset),
                         account.lamports(),
                     );
                     db.accounts_index.upsert(

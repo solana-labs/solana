@@ -50,21 +50,28 @@ impl AccountStorage {
     pub(crate) fn get_account_storage_entry(
         &self,
         slot: Slot,
-        store_id: AppendVecId,
+        store_id: Option<AppendVecId>,
     ) -> Option<Arc<AccountStorageEntry>> {
         let lookup_in_map = || {
-            self.map
-                .get(&slot)
-                .and_then(|r| (r.id == store_id).then_some(Arc::clone(&r.storage)))
+            self.map.get(&slot).and_then(|r| {
+                Self::match_store_id(store_id, r.id).then_some(Arc::clone(&r.storage))
+            })
         };
 
         lookup_in_map()
             .or_else(|| {
                 self.shrink_in_progress_map.get(&slot).and_then(|entry| {
-                    (entry.value().append_vec_id() == store_id).then(|| Arc::clone(entry.value()))
+                    Self::match_store_id(store_id, entry.value().append_vec_id())
+                        .then(|| Arc::clone(entry.value()))
                 })
             })
             .or_else(lookup_in_map)
+    }
+
+    fn match_store_id(expected: Option<AppendVecId>, store_id: AppendVecId) -> bool {
+        expected
+            .map(|expected| expected == store_id)
+            .unwrap_or(true)
     }
 
     /// assert if shrink in progress is active
@@ -276,7 +283,7 @@ pub(crate) mod tests {
         let slot = 0;
         let id = 0;
         // empty everything
-        assert!(storage.get_account_storage_entry(slot, id).is_none());
+        assert!(storage.get_account_storage_entry(slot, None).is_none());
 
         // add a map store
         let common_store_path = Path::new("");
@@ -299,11 +306,12 @@ pub(crate) mod tests {
             .map
             .insert(slot, AccountStorageReference { id, storage: entry });
 
+        //todo not sure about these append vec id values
         // look in map
         assert_eq!(
             store_file_size,
             storage
-                .get_account_storage_entry(slot, id)
+                .get_account_storage_entry(slot, None)
                 .map(|entry| entry.accounts.capacity())
                 .unwrap_or_default()
         );
@@ -315,7 +323,7 @@ pub(crate) mod tests {
         assert_eq!(
             store_file_size,
             storage
-                .get_account_storage_entry(slot, id)
+                .get_account_storage_entry(slot, None)
                 .map(|entry| entry.accounts.capacity())
                 .unwrap_or_default()
         );
@@ -327,7 +335,7 @@ pub(crate) mod tests {
         assert_eq!(
             store_file_size2,
             storage
-                .get_account_storage_entry(slot, id)
+                .get_account_storage_entry(slot, None)
                 .map(|entry| entry.accounts.capacity())
                 .unwrap_or_default()
         );
@@ -515,10 +523,10 @@ pub(crate) mod tests {
         let missing_id = 9999;
         let slot = sample.slot();
         // id is missing since not in maps at all
-        assert!(storage.get_account_storage_entry(slot, id).is_none());
+        assert!(storage.get_account_storage_entry(slot, None).is_none());
         // missing should always be missing
         assert!(storage
-            .get_account_storage_entry(slot, missing_id)
+            .get_account_storage_entry(slot, Some(missing_id))
             .is_none());
         storage.map.insert(
             slot,
@@ -528,23 +536,23 @@ pub(crate) mod tests {
             },
         );
         // id is found in map
-        assert!(storage.get_account_storage_entry(slot, id).is_some());
+        assert!(storage.get_account_storage_entry(slot, None).is_some());
         assert!(storage
-            .get_account_storage_entry(slot, missing_id)
+            .get_account_storage_entry(slot, Some(missing_id))
             .is_none());
         storage
             .shrink_in_progress_map
             .insert(slot, Arc::clone(&sample));
         // id is found in map
         assert!(storage
-            .get_account_storage_entry(slot, missing_id)
+            .get_account_storage_entry(slot, Some(missing_id))
             .is_none());
-        assert!(storage.get_account_storage_entry(slot, id).is_some());
+        assert!(storage.get_account_storage_entry(slot, None).is_some());
         storage.map.remove(&slot);
         // id is found in shrink_in_progress_map
         assert!(storage
-            .get_account_storage_entry(slot, missing_id)
+            .get_account_storage_entry(slot, Some(missing_id))
             .is_none());
-        assert!(storage.get_account_storage_entry(slot, id).is_some());
+        assert!(storage.get_account_storage_entry(slot, None).is_some());
     }
 }

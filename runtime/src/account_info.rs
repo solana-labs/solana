@@ -21,7 +21,7 @@ pub type StoredSize = u32;
 /// specify where account data is located
 #[derive(Debug, PartialEq, Eq)]
 pub enum StorageLocation {
-    AppendVec(AppendVecId, Offset),
+    AppendVec(Option<AppendVecId>, Offset),
     Cached,
 }
 
@@ -84,8 +84,9 @@ pub struct PackedOffsetAndFlags {
 
 #[derive(Default, Debug, PartialEq, Eq, Clone, Copy)]
 pub struct AccountInfo {
-    /// index identifying the append storage
-    store_id: AppendVecId,
+    /// index identifying the append vec storage
+    /// None means the default one associated with the slot
+    store_id: Option<AppendVecId>,
 
     account_offset_and_flags: AccountOffsetAndFlags,
 }
@@ -95,6 +96,23 @@ pub struct AccountOffsetAndFlags {
     /// offset = 'packed_offset_and_flags.offset_reduced()' * ALIGN_BOUNDARY_OFFSET into the storage
     /// Note this is a smaller type than 'Offset'
     packed_offset_and_flags: PackedOffsetAndFlags,
+}
+
+impl From<AccountOffsetAndFlags> for AccountInfo {
+    fn from(account_offset_and_flags: AccountOffsetAndFlags) -> Self {
+        Self {
+            store_id: None,
+            account_offset_and_flags,
+        }
+    }
+}
+
+impl From<AccountInfo> for AccountOffsetAndFlags {
+    fn from(info: AccountInfo) -> Self {
+        Self {
+            packed_offset_and_flags: info.account_offset_and_flags.packed_offset_and_flags,
+        }
+    }
 }
 
 impl ZeroLamport for AccountInfo {
@@ -120,9 +138,6 @@ impl IsCached for StorageLocation {
     }
 }
 
-/// We have to have SOME value for store_id when we are cached
-const CACHE_VIRTUAL_STORAGE_ID: AppendVecId = AppendVecId::MAX;
-
 impl AccountInfo {
     pub fn new(storage_location: StorageLocation, lamports: u64) -> Self {
         let mut packed_offset_and_flags = PackedOffsetAndFlags::default();
@@ -143,7 +158,7 @@ impl AccountInfo {
             }
             StorageLocation::Cached => {
                 packed_offset_and_flags.set_offset_reduced(CACHED_OFFSET);
-                CACHE_VIRTUAL_STORAGE_ID
+                None
             }
         };
         packed_offset_and_flags.set_is_zero_lamport(lamports == 0);
@@ -160,7 +175,7 @@ impl AccountInfo {
         (offset / ALIGN_BOUNDARY_OFFSET) as OffsetReduced
     }
 
-    pub fn store_id(&self) -> AppendVecId {
+    pub fn store_id(&self) -> Option<AppendVecId> {
         // if the account is in a cached store, the store_id is meaningless
         assert!(!self.is_cached());
         self.store_id
@@ -202,7 +217,7 @@ mod test {
             ALIGN_BOUNDARY_OFFSET,
             4 * ALIGN_BOUNDARY_OFFSET,
         ] {
-            let info = AccountInfo::new(StorageLocation::AppendVec(0, offset), 0);
+            let info = AccountInfo::new(StorageLocation::AppendVec(None, offset), 0);
             assert!(info.offset() == offset);
         }
     }
@@ -211,13 +226,13 @@ mod test {
     #[should_panic(expected = "illegal offset")]
     fn test_illegal_offset() {
         let offset = (MAXIMUM_APPEND_VEC_FILE_SIZE - (ALIGN_BOUNDARY_OFFSET as u64)) as Offset;
-        AccountInfo::new(StorageLocation::AppendVec(0, offset), 0);
+        AccountInfo::new(StorageLocation::AppendVec(None, offset), 0);
     }
 
     #[test]
     #[should_panic(expected = "illegal offset")]
     fn test_alignment() {
         let offset = 1; // not aligned
-        AccountInfo::new(StorageLocation::AppendVec(0, offset), 0);
+        AccountInfo::new(StorageLocation::AppendVec(None, offset), 0);
     }
 }
