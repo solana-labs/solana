@@ -1633,7 +1633,7 @@ pub fn bank_from_latest_snapshot_archives(
 /// snapshot and an incremental snapshot.
 /// Note that incremental snaphot not tested yet.
 #[allow(clippy::too_many_arguments)]
-pub fn bank_from_snapshot_dir(
+pub fn bank_from_snapshot(
     account_paths: &[PathBuf],
     bank_snapshot: &BankSnapshotInfo,
     genesis_config: &GenesisConfig,
@@ -1664,7 +1664,7 @@ pub fn bank_from_snapshot_dir(
         next_append_vec_id,
     };
     let mut measure_rebuild = Measure::start("rebuild bank from snapshots");
-    let bank = rebuild_bank_from_snapshot_dir(
+    let bank = rebuild_bank_from_snapshot(
         bank_snapshot,
         account_paths,
         storage_and_next_append_vec_id,
@@ -2578,7 +2578,7 @@ fn rebuild_bank_from_unarchived_snapshots(
 }
 
 #[allow(clippy::too_many_arguments)]
-fn rebuild_bank_from_snapshot_dir(
+fn rebuild_bank_from_snapshot(
     bank_snapshot: &BankSnapshotInfo,
     account_paths: &[PathBuf],
     storage_and_next_append_vec_id: StorageAndNextAppendVecId,
@@ -5403,7 +5403,7 @@ mod tests {
             delete_contents_of_path(path);
         }
 
-        let (bank_constructed, ..) = bank_from_snapshot_dir(
+        let (bank_constructed, ..) = bank_from_snapshot(
             account_paths,
             &bank_snapshot,
             &genesis_config,
