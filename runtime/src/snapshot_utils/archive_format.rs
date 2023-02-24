@@ -19,7 +19,7 @@ pub enum ArchiveFormat {
     TarGzip,
     TarZstd,
     TarLz4,
-    Tar,  // tar only, uncompressed
+    Tar, // tar only, uncompressed
 }
 
 impl ArchiveFormat {

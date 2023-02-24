@@ -346,21 +346,6 @@ pub enum SnapshotError {
     #[error("no valid snapshot dir found under {}", .0.display())]
     NoSnapshotSlotDir(PathBuf),
 
-    #[error("invalid bank snapshot directory {}", .0.display())]
-    InvalidBankSnapshotDir(PathBuf),
-
-    #[error("missing status cache file {}", .0.display())]
-    MissingStatusCacheFile(PathBuf),
-
-    #[error("invalid snapshot version")]
-    InvalidVersion,
-
-    #[error("snapshot directory incomplete {}", .0.display())]
-    DirIncomplete(PathBuf),
-
-    #[error("missing snapshotfile {}", .0.display())]
-    MissingSnapshotFile(PathBuf),
-
     #[error("snapshot dir account paths mismatching")]
     AccountPathsMismatch,
 }
@@ -5169,17 +5154,6 @@ mod tests {
         let (_tmp_dir, accounts_dir) = create_tmp_accounts_dir_for_tests();
         let appendvec_filename = format!("{slot}.0");
         let appendvec_path = accounts_dir.join(appendvec_filename);
-        // generate the bank snapshot directory for slot+1
-        let snapshot_storages = bank.get_snapshot_storages(None);
-        let slot_deltas = bank.status_cache.read().unwrap().root_slot_deltas();
-        add_bank_snapshot(
-            &bank_snapshots_dir,
-            &bank,
-            &snapshot_storages,
-            snapshot_version,
-            slot_deltas,
-        )
-        .unwrap();
 
         let ret = get_snapshot_accounts_hardlink_dir(
             &appendvec_path,
@@ -5537,5 +5511,67 @@ mod tests {
             )
             .unwrap();
         assert_eq!(other_incremental_accounts_hash, incremental_accounts_hash);
+    }
+
+    #[test]
+    fn test_bank_from_snapshot_dirs() {
+        solana_logger::setup();
+
+        let genesis_config = GenesisConfig::default();
+        let bank0 = Arc::new(Bank::new_for_tests(&genesis_config));
+        let account_paths = &bank0.rc.accounts.accounts_db.paths;
+
+        let tmp_dir = tempfile::TempDir::new().unwrap();
+        let bank_snapshots_dir = tmp_dir.path();
+        let collecter_id = Pubkey::new_unique();
+        let snapshot_version = SnapshotVersion::default();
+
+        let bank = Arc::new(Bank::new_from_parent(&bank0, &collecter_id, 1));
+        bank.fill_bank_with_ticks_for_tests();
+        bank.squash();
+        bank.force_flush_accounts_cache();
+
+        // generate the bank snapshot directory for slot 1
+        let snapshot_storages = bank.get_snapshot_storages(None);
+        let slot_deltas = bank.status_cache.read().unwrap().root_slot_deltas();
+        add_bank_snapshot(
+            bank_snapshots_dir,
+            &bank,
+            &snapshot_storages,
+            snapshot_version,
+            slot_deltas,
+        )
+        .unwrap();
+
+        let full_snapshot = get_highest_full_snapshot(bank_snapshots_dir).unwrap();
+
+        // Clear the contents of the account paths run directories.  When constructing the bank, the appendvec
+        // files will be extracted from the snapshot hardlink directories into these run/ directories.
+        for path in account_paths {
+            delete_contents_of_path(path);
+        }
+
+        let (bank_constructed, ..) = bank_from_snapshot_dirs(
+            account_paths,
+            &full_snapshot,
+            None, // Option<&IncrementalSnapshotArchiveInfo>,
+            &genesis_config,
+            &RuntimeConfig::default(),
+            None, // Option<Arc<HashSet<Pubkey>>>,
+            None, // additional_builtins: Option<&Builtins>,
+            AccountSecondaryIndexes::default(),
+            None, // limit_load_slot_count_from_snapshot: Option<usize>,
+            AccountShrinkThreshold::default(), // shrink_ratio: AccountShrinkThreshold,
+            false, // test_hash_calculation: bool,
+            false, // accounts_db_skip_shrink: bool,
+            false, // verify_index: bool,
+            Some(ACCOUNTS_DB_CONFIG_FOR_TESTING), // accounts_db_config: Option<AccountsDbConfig>,
+            None, // accounts_update_notifier: Option<AccountsUpdateNotifier>,
+            &Arc::default(), // exit: &Arc<AtomicBool>,
+        )
+        .unwrap();
+
+        bank_constructed.wait_for_initial_accounts_hash_verification_completed_for_tests();
+        assert_eq!(bank_constructed, *bank);
     }
 }
