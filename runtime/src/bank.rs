@@ -281,7 +281,7 @@ impl RentDebits {
 }
 
 pub type BankStatusCache = StatusCache<Result<()>>;
-#[frozen_abi(digest = "AwRx17Bgesvvu9NZVwAoqofq7MU52gkwvjLvjVQpW64S")]
+#[frozen_abi(digest = "3qia1Zm8X66bzFaBuC8ahz3hADRRATyUPRV36ZzrSois")]
 pub type BankSlotDelta = SlotDelta<Result<()>>;
 
 // Eager rent collection repeats in cyclic manner.
