@@ -310,9 +310,9 @@ fn test_bank_serialize_style(
     let incremental =
         incremental_snapshot_persistence.then(|| BankIncrementalSnapshotPersistence {
             full_slot: slot + 1,
-            full_hash: Hash::new(&[1; 32]),
+            full_hash: SerdeAccountsHash(Hash::new(&[1; 32])),
             full_capitalization: 31,
-            incremental_hash: Hash::new(&[2; 32]),
+            incremental_hash: SerdeIncrementalAccountsHash(Hash::new(&[2; 32])),
             incremental_capitalization: 32,
         });
 
