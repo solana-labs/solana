@@ -9,7 +9,7 @@ use {
         validator::{Validator, ValidatorConfig, ValidatorStartProgress},
     },
     solana_geyser_plugin_manager::{
-        geyser_plugin_manager::GeyserPluginManager, PluginManagerRequest,
+        geyser_plugin_manager::GeyserPluginManager, GeyserPluginManagerRequest,
     },
     solana_gossip::{
         cluster_info::{ClusterInfo, Node},
@@ -61,7 +61,6 @@ use {
         path::{Path, PathBuf},
         str::FromStr,
         sync::{Arc, RwLock},
-        thread::JoinHandle,
         time::Duration,
     },
     tokio::time::sleep,
@@ -501,7 +500,7 @@ impl TestValidatorGenesis {
         &self,
         mint_address: Pubkey,
         socket_addr_space: SocketAddrSpace,
-        rpc_to_plugin_manager_receiver: Option<Receiver<PluginManagerRequest>>,
+        rpc_to_plugin_manager_receiver: Option<Receiver<GeyserPluginManagerRequest>>,
     ) -> Result<TestValidator, Box<dyn std::error::Error>> {
         TestValidator::start(
             mint_address,
@@ -775,7 +774,7 @@ impl TestValidator {
         mint_address: Pubkey,
         config: &TestValidatorGenesis,
         socket_addr_space: SocketAddrSpace,
-        rpc_to_plugin_manager_receiver: Option<Receiver<PluginManagerRequest>>,
+        rpc_to_plugin_manager_receiver: Option<Receiver<GeyserPluginManagerRequest>>,
     ) -> Result<Self, Box<dyn std::error::Error>> {
         let preserve_ledger = config.ledger_path.is_some();
         let ledger_path = TestValidator::initialize_ledger(mint_address, config)?;
@@ -987,11 +986,6 @@ impl TestValidator {
     /// Return the validator's vote account address
     pub fn vote_account_address(&self) -> Pubkey {
         self.vote_account_address
-    }
-
-    /// After initialization, return the plugin manager thread handle
-    pub fn plugin_manager_handle(&self) -> Option<Arc<JoinHandle<()>>> {
-        self.validator.as_ref().unwrap().plugin_manager_handle()
     }
 
     /// Return an RpcClient for the validator.  As a convenience, also return a recent blockhash and

@@ -12,7 +12,7 @@ use {
     solana_core::{
         consensus::Tower, tower_storage::TowerStorage, validator::ValidatorStartProgress,
     },
-    solana_geyser_plugin_manager::PluginManagerRequest,
+    solana_geyser_plugin_manager::GeyserPluginManagerRequest,
     solana_gossip::{cluster_info::ClusterInfo, contact_info::ContactInfo},
     solana_rpc::rpc::verify_pubkey,
     solana_rpc_client_api::{config::RpcAccountIndex, custom_error::RpcCustomError},
@@ -53,7 +53,7 @@ pub struct AdminRpcRequestMetadata {
     pub tower_storage: Arc<dyn TowerStorage>,
     pub staked_nodes_overrides: Arc<RwLock<HashMap<Pubkey, u64>>>,
     pub post_init: Arc<RwLock<Option<AdminRpcRequestMetadataPostInit>>>,
-    pub rpc_to_plugin_manager_sender: Option<Sender<PluginManagerRequest>>,
+    pub rpc_to_plugin_manager_sender: Option<Sender<GeyserPluginManagerRequest>>,
 }
 
 impl Metadata for AdminRpcRequestMetadata {}
@@ -278,7 +278,7 @@ impl AdminRpc for AdminRpcImpl {
             // Send request to plugin manager if there is a geyser service
             if let Some(ref rpc_to_manager_sender) = meta.rpc_to_plugin_manager_sender {
                 rpc_to_manager_sender
-                    .send(PluginManagerRequest::ReloadPlugin {
+                    .send(GeyserPluginManagerRequest::ReloadPlugin {
                         name,
                         config_file,
                         response_sender,
@@ -321,7 +321,7 @@ impl AdminRpc for AdminRpcImpl {
             // Send request to plugin manager if there is a geyser service
             if let Some(ref rpc_to_manager_sender) = meta.rpc_to_plugin_manager_sender {
                 rpc_to_manager_sender
-                    .send(PluginManagerRequest::LoadPlugin {
+                    .send(GeyserPluginManagerRequest::LoadPlugin {
                         config_file,
                         response_sender,
                     })
@@ -363,7 +363,7 @@ impl AdminRpc for AdminRpcImpl {
             // Send request to plugin manager if there is a geyser service
             if let Some(ref rpc_to_manager_sender) = meta.rpc_to_plugin_manager_sender {
                 rpc_to_manager_sender
-                    .send(PluginManagerRequest::UnloadPlugin {
+                    .send(GeyserPluginManagerRequest::UnloadPlugin {
                         name,
                         response_sender,
                     })
@@ -405,7 +405,7 @@ impl AdminRpc for AdminRpcImpl {
             // Send request to plugin manager
             if let Some(ref rpc_to_manager_sender) = meta.rpc_to_plugin_manager_sender {
                 rpc_to_manager_sender
-                    .send(PluginManagerRequest::ListPlugins { response_sender })
+                    .send(GeyserPluginManagerRequest::ListPlugins { response_sender })
                     .expect("plugin manager should never drop request receiver");
             } else {
                 return Err(jsonrpc_core::Error {

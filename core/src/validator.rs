@@ -31,7 +31,7 @@ use {
     solana_client::connection_cache::ConnectionCache,
     solana_entry::poh::compute_hash_time_ns,
     solana_geyser_plugin_manager::{
-        geyser_plugin_service::GeyserPluginService, PluginManagerRequest,
+        geyser_plugin_service::GeyserPluginService, GeyserPluginManagerRequest,
     },
     solana_gossip::{
         cluster_info::{
@@ -393,7 +393,7 @@ impl Validator {
         cluster_entrypoints: Vec<ContactInfo>,
         config: &ValidatorConfig,
         should_check_duplicate_instance: bool,
-        rpc_to_plugin_manager_receiver: Option<Receiver<PluginManagerRequest>>,
+        rpc_to_plugin_manager_receiver: Option<Receiver<GeyserPluginManagerRequest>>,
         start_progress: Arc<RwLock<ValidatorStartProgress>>,
         socket_addr_space: SocketAddrSpace,
         use_quic: bool,
@@ -1117,12 +1117,6 @@ impl Validator {
     pub fn close(mut self) {
         self.exit();
         self.join();
-    }
-
-    pub fn plugin_manager_handle(&self) -> Option<Arc<JoinHandle<()>>> {
-        self.geyser_plugin_service
-            .as_ref()
-            .map(|gps| gps.plugin_manager_join_handle())
     }
 
     fn print_node_info(node: &Node) {
@@ -2151,7 +2145,7 @@ mod tests {
             vec![LegacyContactInfo::try_from(&leader_node.info).unwrap()],
             &config,
             true, // should_check_duplicate_instance
-            None, // rpc_to_plugin_manager_rx
+            None, // rpc_to_plugin_manager_receiver
             start_progress.clone(),
             SocketAddrSpace::Unspecified,
             DEFAULT_TPU_USE_QUIC,
@@ -2247,7 +2241,7 @@ mod tests {
                     vec![LegacyContactInfo::try_from(&leader_node.info).unwrap()],
                     &config,
                     true, // should_check_duplicate_instance.
-                    None, // rpc_to_plugin_manager_rx
+                    None, // rpc_to_plugin_manager_receiver
                     Arc::new(RwLock::new(ValidatorStartProgress::default())),
                     SocketAddrSpace::Unspecified,
                     DEFAULT_TPU_USE_QUIC,
