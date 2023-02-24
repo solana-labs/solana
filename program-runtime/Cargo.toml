@@ -15,7 +15,7 @@ bincode = { workspace = true }
 eager = { workspace = true }
 enum-iterator = { workspace = true }
 itertools = { workspace = true }
-libc = "0.2.101"
+libc = { workspace = true }
 libloading = { workspace = true }
 log = { workspace = true }
 num-derive = { workspace = true }
