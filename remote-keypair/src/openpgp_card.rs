@@ -104,19 +104,12 @@ impl TryFrom<&URIReference<'_>> for Locator {
 /// OpenPgpTransaction objects that are instantiated from `OpenPgp` on an ad
 /// hoc basis. There should only exist one active OpenPgpTransaction at a time.
 /// 
-/// Field `verified_for_signing` indicates whether there is a valid ed25519
-/// signing key on the card so that the card can be used to sign transactions.
-/// It is valid for `OpenpgpCard` to point to a card that does not have signing
-/// capabilities; this is the case when `OpenpgpCard` is used to connect to a
-/// card on which a new keypair will be generated or imported.
-/// 
 /// Field `pin_verified` indicates whether a successful PIN verification has
 /// already happened in the past (specifically for PW1 used to authorize
 /// signing). This allows redundant PIN verification to be skipped for cards
 /// that require only a single successful PIN entry per session.
 pub struct OpenpgpCard {
     pgp: RefCell<OpenPgp>,
-    verified_for_signing: RefCell<bool>,
     pin_verified: RefCell<bool>,
 }
 
@@ -143,7 +136,6 @@ impl TryFrom<&Locator> for OpenpgpCard {
 
         Ok(Self {
             pgp: RefCell::new(pgp),
-            verified_for_signing: RefCell::new(false),
             pin_verified: RefCell::new(false),
         })
     }
@@ -182,12 +174,8 @@ impl Signer for OpenpgpCard {
     }
 
     fn try_sign_message(&self, message: &[u8]) -> Result<Signature, SignerError> {
-        // Verify that card is ready to sign
-        let mut verified = self.verified_for_signing.borrow_mut();
-        if !*verified {
-            self.try_pubkey()?;
-            *verified = true;
-        }
+        // Verify that card has valid signing key
+        self.try_pubkey()?;
 
         let mut pgp_mut = self.pgp.borrow_mut();
         let opt = &mut pgp_mut.transaction().map_err(
