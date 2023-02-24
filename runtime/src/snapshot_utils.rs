@@ -1622,7 +1622,7 @@ fn streaming_unarchive_snapshot(
 /// as a valid one.  A dir unpacked from an archive lacks these files.  Fill them here to
 /// allow new_from_dir() checks to pass.  These checks are not needed for unpacked dirs,
 /// but it is not clean to add another flag to new_from_dir() to skip them.
-fn fill_snapshot_meta_files_for_unarchived_snapshot(unpack_dir: impl AsRef<Path>) -> Result<()> {
+fn create_snapshot_meta_files_for_unarchived_snapshot(unpack_dir: impl AsRef<Path>) -> Result<()> {
     let snapshots_dir = unpack_dir.as_ref().join("snapshots");
     if !snapshots_dir.is_dir() {
         return Err(SnapshotError::NoSnapshotSlotDir(snapshots_dir));
@@ -1696,7 +1696,7 @@ where
     );
     info!("{}", measure_untar);
 
-    fill_snapshot_meta_files_for_unarchived_snapshot(&unpack_dir)?;
+    create_snapshot_meta_files_for_unarchived_snapshot(&unpack_dir)?;
 
     let RebuiltSnapshotStorage {
         snapshot_version,
