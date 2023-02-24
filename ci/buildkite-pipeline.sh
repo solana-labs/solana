@@ -245,19 +245,14 @@ EOF
              ^fetch-perf-libs.sh \
              ^programs/ \
              ^sdk/ \
-             ^scripts/build-downstream-projects.sh \
              cargo-build-bpf$ \
              cargo-test-bpf$ \
              cargo-build-sbf$ \
              cargo-test-sbf$ \
+             ^ci/downstream-projects \
+             .buildkite/scripts/build-downstream-projects.sh \
       ; then
-    cat >> "$output_file" <<"EOF"
-  - command: "scripts/build-downstream-projects.sh"
-    name: "downstream-projects"
-    timeout_in_minutes: 35
-    agents:
-      queue: "solana"
-EOF
+    .buildkite/scripts/build-downstream-projects.sh >> "$output_file"
   else
     annotate --style info \
       "downstream-projects skipped as no relevant files were modified"

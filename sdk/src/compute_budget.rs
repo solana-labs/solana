@@ -41,6 +41,8 @@ pub enum ComputeBudgetInstruction {
     /// Set a compute unit price in "micro-lamports" to pay a higher transaction
     /// fee for higher transaction prioritization.
     SetComputeUnitPrice(u64),
+    /// Set a specific transaction-wide account data size limit, in bytes, is allowed to load.
+    SetLoadedAccountsDataSizeLimit(u32),
 }
 
 impl ComputeBudgetInstruction {
@@ -64,5 +66,10 @@ impl ComputeBudgetInstruction {
     // #[cfg(test)]
     pub fn pack(self) -> Result<Vec<u8>, std::io::Error> {
         self.try_to_vec()
+    }
+
+    /// Create a `ComputeBudgetInstruction::SetLoadedAccountsDataSizeLimit` `Instruction`
+    pub fn set_loaded_accounts_data_size_limit(bytes: u32) -> Instruction {
+        Instruction::new_with_borsh(id(), &Self::SetLoadedAccountsDataSizeLimit(bytes), vec![])
     }
 }

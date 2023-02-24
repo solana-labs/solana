@@ -618,6 +618,10 @@ pub mod apply_cost_tracker_during_replay {
     solana_sdk::declare_id!("2ry7ygxiYURULZCrypHhveanvP5tzZ4toRwVp89oCNSj");
 }
 
+pub mod add_set_tx_loaded_accounts_data_size_instruction {
+    solana_sdk::declare_id!("G6vbf1UBok8MWb8m25ex86aoQHeKTzDKzuZADHkShqm6");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -767,6 +771,7 @@ lazy_static! {
         (prevent_rent_paying_rent_recipients::id(), "prevent recipients of rent rewards from ending in rent-paying state #30151"),
         (delay_visibility_of_program_deployment::id(), "delay visibility of program upgrades #30085"),
         (apply_cost_tracker_during_replay::id(), "apply cost tracker to blocks during replay #29595"),
+        (add_set_tx_loaded_accounts_data_size_instruction::id(), "add compute budget instruction for setting account data size per transaction #30366"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()

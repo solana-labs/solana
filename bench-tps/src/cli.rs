@@ -11,13 +11,13 @@ use {
     solana_tpu_client::tpu_client::{DEFAULT_TPU_CONNECTION_POOL_SIZE, DEFAULT_TPU_USE_QUIC},
     std::{
         net::{IpAddr, Ipv4Addr, SocketAddr},
-        process::exit,
         time::Duration,
     },
 };
 
 const NUM_LAMPORTS_PER_ACCOUNT_DEFAULT: u64 = solana_sdk::native_token::LAMPORTS_PER_SOL;
 
+#[derive(Eq, PartialEq, Debug)]
 pub enum ExternalClientType {
     // Submits transactions to an Rpc node using an RpcClient
     RpcClient,
@@ -35,12 +35,14 @@ impl Default for ExternalClientType {
     }
 }
 
+#[derive(Eq, PartialEq, Debug)]
 pub struct InstructionPaddingConfig {
     pub program_id: Pubkey,
     pub data_size: u32,
 }
 
 /// Holds the configuration for a single run of the benchmark
+#[derive(PartialEq, Debug)]
 pub struct Config {
     pub entrypoint_addr: SocketAddr,
     pub json_rpc_url: String,
@@ -71,6 +73,8 @@ pub struct Config {
     pub bind_address: IpAddr,
     pub client_node_id: Option<Keypair>,
 }
+
+impl Eq for Config {}
 
 impl Default for Config {
     fn default() -> Config {
@@ -378,11 +382,7 @@ pub fn build_args<'a>(version: &'_ str) -> App<'a, '_> {
 }
 
 /// Parses a clap `ArgMatches` structure into a `Config`
-/// # Arguments
-/// * `matches` - command line arguments parsed by clap
-/// # Panics
-/// Panics if there is trouble parsing any of the arguments
-pub fn extract_args(matches: &ArgMatches) -> Config {
+pub fn parse_args(matches: &ArgMatches) -> Result<Config, &'static str> {
     let mut args = Config::default();
 
     let config = if let Some(config_file) = matches.value_of("config_file") {
@@ -411,7 +411,7 @@ pub fn extract_args(matches: &ArgMatches) -> Config {
     if let Ok(id) = read_keypair_file(id_path) {
         args.id = id;
     } else if matches.is_present("identity") {
-        panic!("could not parse identity path");
+        return Err("could not parse identity path");
     }
 
     if matches.is_present("tpu_client") {
@@ -427,49 +427,50 @@ pub fn extract_args(matches: &ArgMatches) -> Config {
     if let Some(v) = matches.value_of("tpu_connection_pool_size") {
         args.tpu_connection_pool_size = v
             .to_string()
-            .parse()
-            .expect("can't parse tpu_connection_pool_size");
+            .parse::<usize>()
+            .map_err(|_| "can't parse tpu-connection-pool-size")?;
     }
 
     if let Some(addr) = matches.value_of("entrypoint") {
-        args.entrypoint_addr = solana_net_utils::parse_host_port(addr).unwrap_or_else(|e| {
-            eprintln!("failed to parse entrypoint address: {e}");
-            exit(1)
-        });
+        args.entrypoint_addr = solana_net_utils::parse_host_port(addr)
+            .map_err(|_| "failed to parse entrypoint address")?;
     }
 
     if let Some(t) = matches.value_of("threads") {
-        args.threads = t.to_string().parse().expect("can't parse threads");
+        args.threads = t.to_string().parse().map_err(|_| "can't parse threads")?;
     }
 
     if let Some(n) = matches.value_of("num-nodes") {
-        args.num_nodes = n.to_string().parse().expect("can't parse num-nodes");
+        args.num_nodes = n.to_string().parse().map_err(|_| "can't parse num-nodes")?;
     }
 
     if let Some(duration) = matches.value_of("duration") {
-        args.duration = Duration::new(
-            duration.to_string().parse().expect("can't parse duration"),
-            0,
-        );
+        let seconds = duration
+            .to_string()
+            .parse()
+            .map_err(|_| "can't parse duration")?;
+        args.duration = Duration::new(seconds, 0);
     }
 
     if let Some(s) = matches.value_of("tx_count") {
-        args.tx_count = s.to_string().parse().expect("can't parse tx_count");
+        args.tx_count = s.to_string().parse().map_err(|_| "can't parse tx_count")?;
     }
 
     if let Some(s) = matches.value_of("keypair_multiplier") {
         args.keypair_multiplier = s
             .to_string()
             .parse()
-            .expect("can't parse keypair-multiplier");
-        assert!(args.keypair_multiplier >= 2);
+            .map_err(|_| "can't parse keypair-multiplier")?;
+        if args.keypair_multiplier >= 2 {
+            return Err("args.keypair_multiplier must be lower than 2");
+        }
     }
 
     if let Some(t) = matches.value_of("thread-batch-sleep-ms") {
         args.thread_batch_sleep_ms = t
             .to_string()
             .parse()
-            .expect("can't parse thread-batch-sleep-ms");
+            .map_err(|_| "can't parse thread-batch-sleep-ms")?;
     }
 
     args.sustained = matches.is_present("sustained");
@@ -486,23 +487,31 @@ pub fn extract_args(matches: &ArgMatches) -> Config {
     }
 
     if let Some(v) = matches.value_of("target_lamports_per_signature") {
-        args.target_lamports_per_signature = v.to_string().parse().expect("can't parse lamports");
+        args.target_lamports_per_signature = v
+            .to_string()
+            .parse()
+            .map_err(|_| "can't parse target-lamports-per-signature")?;
     }
 
     args.multi_client = !matches.is_present("no-multi-client");
     args.target_node = matches
         .value_of("target_node")
-        .map(|target_str| target_str.parse().unwrap());
+        .map(|target_str| target_str.parse::<Pubkey>())
+        .transpose()
+        .map_err(|_| "Failed to parse target-node")?;
 
     if let Some(v) = matches.value_of("num_lamports_per_account") {
-        args.num_lamports_per_account = v.to_string().parse().expect("can't parse lamports");
+        args.num_lamports_per_account = v
+            .to_string()
+            .parse()
+            .map_err(|_| "can't parse num-lamports-per-account")?;
     }
 
     if let Some(t) = matches.value_of("target_slots_per_epoch") {
         args.target_slots_per_epoch = t
             .to_string()
             .parse()
-            .expect("can't parse target slots per epoch");
+            .map_err(|_| "can't parse target-slots-per-epoch")?;
     }
 
     if matches.is_present("use_randomized_compute_unit_price") {
@@ -518,71 +527,169 @@ pub fn extract_args(matches: &ArgMatches) -> Config {
             .value_of("instruction_padding_program_id")
             .map(|target_str| target_str.parse().unwrap())
             .unwrap_or_else(|| FromOtherSolana::from(spl_instruction_padding::ID));
+        let data_size = data_size
+            .parse()
+            .map_err(|_| "Can't parse padded instruction data size")?;
         args.instruction_padding_config = Some(InstructionPaddingConfig {
             program_id,
-            data_size: data_size
-                .to_string()
-                .parse()
-                .expect("Can't parse padded instruction data size"),
+            data_size,
         });
     }
 
     if let Some(num_conflict_groups) = matches.value_of("num_conflict_groups") {
-        args.num_conflict_groups = Some(
-            num_conflict_groups
-                .parse()
-                .expect("Can't parse conflict groups"),
-        );
+        let parsed_num_conflict_groups = num_conflict_groups
+            .parse()
+            .map_err(|_| "Can't parse num-conflict-groups")?;
+        args.num_conflict_groups = Some(parsed_num_conflict_groups);
     }
 
     if let Some(addr) = matches.value_of("bind_address") {
-        args.bind_address = solana_net_utils::parse_host(addr).unwrap_or_else(|e| {
-            eprintln!("Failed to parse bind_address: {e}");
-            exit(1)
-        });
-    }
-    let (_, node_id_path) = ConfigInput::compute_keypair_path_setting(
-        matches.value_of("client_node_id").unwrap_or(""),
-        &config.keypair_path,
-    );
-    // error is checked by arg validator
-    if let Ok(node_id) = read_keypair_file(node_id_path) {
-        args.client_node_id = Some(node_id);
+        args.bind_address =
+            solana_net_utils::parse_host(addr).map_err(|_| "Failed to parse bind-address")?;
     }
 
-    args
+    if let Some(client_node_id_filename) = matches.value_of("client_node_id") {
+        // error is checked by arg validator
+        let client_node_id = read_keypair_file(client_node_id_filename).map_err(|_| "")?;
+        args.client_node_id = Some(client_node_id);
+    }
+
+    Ok(args)
 }
 
 #[cfg(test)]
 mod tests {
     use {
         super::*,
-        std::{fs::File, io::prelude::*, path::Path},
+        solana_sdk::signature::{read_keypair_file, write_keypair_file, Keypair, Signer},
+        std::{
+            net::{IpAddr, Ipv4Addr, SocketAddr},
+            time::Duration,
+        },
+        tempfile::{tempdir, TempDir},
     };
 
-    fn write_keypair_to_file(keypair: &Keypair, file_name: &str) {
-        let serialized = serde_json::to_string(&keypair.to_bytes().to_vec()).unwrap();
-        let path = Path::new(file_name);
-        let mut file = File::create(path).unwrap();
-        file.write_all(&serialized.into_bytes()).unwrap();
+    /// create a keypair and write it to json file in temporary directory
+    /// return both generated keypair and full file name
+    fn write_tmp_keypair(out_dir: &TempDir) -> (Keypair, String) {
+        let keypair = Keypair::new();
+        let file_path = out_dir
+            .path()
+            .join(format!("keypair_file-{}", keypair.pubkey()));
+        let keypair_file_name = file_path.into_os_string().into_string().unwrap();
+        write_keypair_file(&keypair, &keypair_file_name).unwrap();
+        (keypair, keypair_file_name)
     }
 
     #[test]
-    fn test_cli_parse_with_client_node_id() {
-        let keypair = Keypair::new();
-        let keypair_file_name = "./keypair.json";
-        write_keypair_to_file(&keypair, keypair_file_name);
+    #[allow(clippy::cognitive_complexity)]
+    fn test_cli_parse() {
+        // create a directory inside of std::env::temp_dir(), removed when out_dir goes out of scope
+        let out_dir = tempdir().unwrap();
+        let (keypair, keypair_file_name) = write_tmp_keypair(&out_dir);
 
+        // parse provided rpc address, check that default ws address is correct
+        // always specify identity in these tests because otherwise a random one will be used
         let matches = build_args("1.0.0").get_matches_from(vec![
             "solana-bench-tps",
-            "-u http://192.0.0.1:8899",
-            "--bind-address",
-            "192.0.0.1",
-            "--client-node-id",
-            keypair_file_name,
+            "--identity",
+            &keypair_file_name,
+            "-u",
+            "http://123.4.5.6:8899",
         ]);
-        let result = extract_args(&matches);
-        assert_eq!(result.bind_address, IpAddr::V4(Ipv4Addr::new(192, 0, 0, 1)));
-        assert_eq!(result.client_node_id, Some(keypair));
+        let actual = parse_args(&matches).unwrap();
+        assert_eq!(
+            actual,
+            Config {
+                json_rpc_url: "http://123.4.5.6:8899".to_string(),
+                websocket_url: "ws://123.4.5.6:8900/".to_string(),
+                id: keypair,
+                ..Config::default()
+            }
+        );
+
+        // parse cli args typical for private cluster tests
+        let keypair = read_keypair_file(&keypair_file_name).unwrap();
+        let matches = build_args("1.0.0").get_matches_from(vec![
+            "solana-bench-tps",
+            "--identity",
+            &keypair_file_name,
+            "-u",
+            "http://123.4.5.6:8899",
+            "--duration",
+            "1000",
+            "--sustained",
+            "--threads",
+            "4",
+            "--read-client-keys",
+            "./client-accounts.yml",
+            "--entrypoint",
+            "192.1.2.3:8001",
+        ]);
+        let actual = parse_args(&matches).unwrap();
+        assert_eq!(
+            actual,
+            Config {
+                json_rpc_url: "http://123.4.5.6:8899".to_string(),
+                websocket_url: "ws://123.4.5.6:8900/".to_string(),
+                id: keypair,
+                duration: Duration::new(1000, 0),
+                sustained: true,
+                threads: 4,
+                read_from_client_file: true,
+                client_ids_and_stake_file: "./client-accounts.yml".to_string(),
+                entrypoint_addr: SocketAddr::from((Ipv4Addr::new(192, 1, 2, 3), 8001)),
+                ..Config::default()
+            }
+        );
+
+        // select different client type
+        let keypair = read_keypair_file(&keypair_file_name).unwrap();
+        let matches = build_args("1.0.0").get_matches_from(vec![
+            "solana-bench-tps",
+            "--identity",
+            &keypair_file_name,
+            "-u",
+            "http://123.4.5.6:8899",
+            "--use-tpu-client",
+        ]);
+        let actual = parse_args(&matches).unwrap();
+        assert_eq!(
+            actual,
+            Config {
+                json_rpc_url: "http://123.4.5.6:8899".to_string(),
+                websocket_url: "ws://123.4.5.6:8900/".to_string(),
+                id: keypair,
+                external_client_type: ExternalClientType::TpuClient,
+                ..Config::default()
+            }
+        );
+
+        // with client node id
+        let keypair = read_keypair_file(&keypair_file_name).unwrap();
+        let (client_id, client_id_file_name) = write_tmp_keypair(&out_dir);
+        let matches = build_args("1.0.0").get_matches_from(vec![
+            "solana-bench-tps",
+            "--identity",
+            &keypair_file_name,
+            "-u",
+            "http://192.0.0.1:8899",
+            "--bind-address",
+            "192.9.8.7",
+            "--client-node-id",
+            &client_id_file_name,
+        ]);
+        let actual = parse_args(&matches).unwrap();
+        assert_eq!(
+            actual,
+            Config {
+                json_rpc_url: "http://192.0.0.1:8899".to_string(),
+                websocket_url: "ws://192.0.0.1:8900/".to_string(),
+                id: keypair,
+                bind_address: IpAddr::V4(Ipv4Addr::new(192, 9, 8, 7)),
+                client_node_id: Some(client_id),
+                ..Config::default()
+            }
+        );
     }
 }

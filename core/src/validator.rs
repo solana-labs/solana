@@ -1693,8 +1693,6 @@ fn maybe_warp_slot(
     accounts_background_request_sender: &AbsRequestSender,
 ) -> Result<(), String> {
     if let Some(warp_slot) = config.warp_slot {
-        process_blockstore.process()?;
-
         let mut bank_forks = bank_forks.write().unwrap();
 
         let working_bank = bank_forks.working_bank();
@@ -1709,6 +1707,13 @@ fn maybe_warp_slot(
         info!("warping to slot {}", warp_slot);
 
         let root_bank = bank_forks.root_bank();
+
+        // An accounts hash calculation from storages will occur in warp_from_parent() below.  This
+        // requires that the accounts cache has been flushed, which requires the parent slot to be
+        // rooted.
+        root_bank.squash();
+        root_bank.force_flush_accounts_cache();
+
         bank_forks.insert(Bank::warp_from_parent(
             &root_bank,
             &Pubkey::default(),
@@ -1743,6 +1748,11 @@ fn maybe_warp_slot(
             "created snapshot: {}",
             full_snapshot_archive_info.path().display()
         );
+
+        drop(bank_forks);
+        // Process blockstore after warping bank forks to make sure tower and
+        // bank forks are in sync.
+        process_blockstore.process()?;
     }
     Ok(())
 }

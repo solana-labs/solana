@@ -1,5 +1,8 @@
 use {
-    crate::{accounts_index::IndexValue, bucket_map_holder::BucketMapHolder},
+    crate::{
+        accounts_index::{DiskIndexValue, IndexValue},
+        bucket_map_holder::BucketMapHolder,
+    },
     solana_sdk::timing::AtomicInterval,
     std::{
         fmt::Debug,
@@ -12,6 +15,7 @@ const STATS_INTERVAL_MS: u64 = 10_000;
 
 #[derive(Debug, Default)]
 pub struct BucketMapHolderStats {
+    pub held_in_mem_ref_count: AtomicU64,
     pub held_in_mem_slot_list_len: AtomicU64,
     pub held_in_mem_slot_list_cached: AtomicU64,
     pub get_mem_us: AtomicU64,
@@ -98,7 +102,11 @@ impl BucketMapHolderStats {
         per_bucket.map(|stat| stat.fetch_sub(count, Ordering::Relaxed));
     }
 
-    fn ms_per_age<T: IndexValue>(&self, storage: &BucketMapHolder<T>, elapsed_ms: u64) -> u64 {
+    fn ms_per_age<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>>(
+        &self,
+        storage: &BucketMapHolder<T, U>,
+        elapsed_ms: u64,
+    ) -> u64 {
         let age_now = storage.current_age();
         let ages_flushed = storage.count_buckets_flushed() as u64;
         let last_age = self.last_age.swap(age_now, Ordering::Relaxed) as u64;
@@ -171,7 +179,10 @@ impl BucketMapHolderStats {
         in_mem.saturating_sub(held_in_mem) as usize
     }
 
-    pub fn report_stats<T: IndexValue>(&self, storage: &BucketMapHolder<T>) {
+    pub fn report_stats<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>>(
+        &self,
+        storage: &BucketMapHolder<T, U>,
+    ) {
         let elapsed_ms = self.last_time.elapsed_ms();
         if elapsed_ms < STATS_INTERVAL_MS {
             return;
@@ -250,6 +261,11 @@ impl BucketMapHolderStats {
                 (
                     "held_in_mem_slot_list_len",
                     self.held_in_mem_slot_list_len.swap(0, Ordering::Relaxed),
+                    i64
+                ),
+                (
+                    "held_in_mem_ref_count",
+                    self.held_in_mem_ref_count.swap(0, Ordering::Relaxed),
                     i64
                 ),
                 (

@@ -35,6 +35,6 @@ RUN set -x \
  && cargo install mdbook \
  && cargo install mdbook-linkcheck \
  && cargo install svgbob_cli \
- && cargo install wasm-pack \
+ && cargo install --git https://github.com/rustwasm/wasm-pack --rev b4e619c8a13a8441b804895348afbfd4fb1a68a3 \
  && rustc --version \
  && cargo --version

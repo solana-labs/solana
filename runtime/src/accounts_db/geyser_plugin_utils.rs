@@ -1,7 +1,7 @@
 use {
     crate::{
+        account_storage::meta::{StoredAccountMeta, StoredMeta},
         accounts_db::AccountsDb,
-        append_vec::{StoredAccountMeta, StoredMeta},
     },
     solana_measure::measure::Measure,
     solana_metrics::*,
@@ -162,11 +162,11 @@ impl AccountsDb {
 pub mod tests {
     use {
         crate::{
+            account_storage::meta::StoredAccountMeta,
             accounts_db::AccountsDb,
             accounts_update_notifier_interface::{
                 AccountsUpdateNotifier, AccountsUpdateNotifierInterface,
             },
-            append_vec::StoredAccountMeta,
         },
         dashmap::DashMap,
         solana_sdk::{

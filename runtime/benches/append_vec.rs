@@ -4,10 +4,11 @@ extern crate test;
 use {
     rand::{thread_rng, Rng},
     solana_runtime::{
+        account_storage::meta::{StorableAccountsWithHashesAndWriteVersions, StoredMeta},
         accounts_db::INCLUDE_SLOT_IN_HASH_TESTS,
         append_vec::{
             test_utils::{create_test_account, get_append_vec_path},
-            AppendVec, StorableAccountsWithHashesAndWriteVersions, StoredMeta,
+            AppendVec,
         },
     },
     solana_sdk::{
