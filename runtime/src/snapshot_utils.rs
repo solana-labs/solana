@@ -2790,10 +2790,7 @@ pub fn create_tmp_accounts_dir_for_tests() -> (TempDir, PathBuf) {
 mod tests {
     use {
         super::*,
-        crate::{
-            accounts_db::ACCOUNTS_DB_CONFIG_FOR_TESTING, bank_forks::BankForks,
-            status_cache::Status,
-        },
+        crate::{accounts_db::ACCOUNTS_DB_CONFIG_FOR_TESTING, status_cache::Status},
         assert_matches::assert_matches,
         bincode::{deserialize_from, serialize_into},
         solana_sdk::{
@@ -4646,18 +4643,16 @@ mod tests {
         solana_logger::setup();
 
         let genesis_config = GenesisConfig::default();
-        let bank0 = Bank::new_for_tests(&genesis_config);
-        let mut bank_forks = BankForks::new(bank0);
+        let mut bank = Arc::new(Bank::new_for_tests(&genesis_config));
 
         let tmp_dir = tempfile::TempDir::new().unwrap();
         let bank_snapshots_dir = tmp_dir.path();
         let collecter_id = Pubkey::new_unique();
         let snapshot_version = SnapshotVersion::default();
 
-        for slot in 0..4 {
+        for _ in 0..4 {
             // prepare the bank
-            let parent_bank = bank_forks.get(slot).unwrap();
-            let bank = Bank::new_from_parent(&parent_bank, &collecter_id, slot + 1);
+            bank = Arc::new(Bank::new_from_parent(&bank, &collecter_id, bank.slot() + 1));
             bank.fill_bank_with_ticks_for_tests();
             bank.squash();
             bank.force_flush_accounts_cache();
@@ -4673,8 +4668,6 @@ mod tests {
                 slot_deltas,
             )
             .unwrap();
-
-            bank_forks.insert(bank);
         }
 
         let snapshot = get_highest_bank_snapshot(bank_snapshots_dir).unwrap();
