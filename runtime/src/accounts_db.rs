@@ -1456,7 +1456,7 @@ pub struct AccountsDb {
     /// Set of stores which are recently rooted or had accounts removed
     /// such that potentially a 0-lamport account update could be present which
     /// means we can remove the account from the index entirely.
-    dirty_stores: DashMap<(Slot, AppendVecId), Arc<AccountStorageEntry>>,
+    dirty_stores: DashMap<Slot, Arc<AccountStorageEntry>>,
 
     /// Zero-lamport accounts that are *not* purged during clean because they need to stay alive
     /// for incremental snapshot support.
@@ -3016,7 +3016,7 @@ impl AccountsDb {
         // find the oldest append vec older than one epoch old
         // we'll add logging if that append vec cannot be marked dead
         let mut min_dirty_slot = self.get_accounts_hash_complete_one_epoch_old();
-        self.dirty_stores.retain(|(slot, _store_id), store| {
+        self.dirty_stores.retain(|slot, store| {
             if *slot > max_slot_inclusive {
                 true
             } else {
@@ -4122,8 +4122,7 @@ impl AccountsDb {
 
         let mut not_retaining_store = |store: &Arc<AccountStorageEntry>| {
             if add_dirty_stores {
-                self.dirty_stores
-                    .insert((slot, store.append_vec_id()), store.clone());
+                self.dirty_stores.insert(slot, store.clone());
             }
             dead_storages.push(store.clone());
         };
@@ -7233,8 +7232,7 @@ impl AccountsDb {
                     // ancient stores are managed separately - we expect them to be old and keeping accounts
                     // We can expect the normal processes will keep them cleaned.
                     // If we included them here then ALL accounts in ALL ancient append vecs will be visited by clean each time.
-                    self.dirty_stores
-                        .insert((slot, storage.append_vec_id()), storage.clone());
+                    self.dirty_stores.insert(slot, storage.clone());
                     num_dirty_slots += 1;
                 }
             }
@@ -7973,8 +7971,7 @@ impl AccountsDb {
                 let stored_size = account.0.stored_size;
                 let count = store.remove_account(stored_size, reset_accounts);
                 if count == 0 {
-                    self.dirty_stores
-                        .insert((*slot, store.append_vec_id()), store.clone());
+                    self.dirty_stores.insert(*slot, store.clone());
                     dead_slots.insert(*slot);
                 } else if Self::is_shrinking_productive(*slot, &store)
                     && self.is_candidate_for_shrink(&store, false)
@@ -8554,8 +8551,7 @@ impl AccountsDb {
             .storage
             .get_slot_storage_entry_shrinking_in_progress_ok(slot)
         {
-            self.dirty_stores
-                .insert((slot, store.append_vec_id()), store);
+            self.dirty_stores.insert(slot, store);
         }
         store_time.stop();
 
@@ -16475,7 +16471,7 @@ pub mod tests {
             assert_eq!(dead_storages.first().unwrap().append_vec_id(), old_id);
             if add_dirty_stores {
                 assert_eq!(1, db.dirty_stores.len());
-                let dirty_store = db.dirty_stores.get(&(slot, old_id)).unwrap();
+                let dirty_store = db.dirty_stores.get(&slot).unwrap();
                 assert_eq!(dirty_store.append_vec_id(), old_id);
             } else {
                 assert!(db.dirty_stores.is_empty());
@@ -16502,7 +16498,7 @@ pub mod tests {
             assert_eq!(dead_storages.first().unwrap().append_vec_id(), old_id);
             if add_dirty_stores {
                 assert_eq!(1, db.dirty_stores.len());
-                let dirty_store = db.dirty_stores.get(&(slot, old_id)).unwrap();
+                let dirty_store = db.dirty_stores.get(&slot).unwrap();
                 assert_eq!(dirty_store.append_vec_id(), old_id);
             } else {
                 assert!(db.dirty_stores.is_empty());
