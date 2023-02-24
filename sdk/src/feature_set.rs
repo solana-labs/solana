@@ -618,6 +618,10 @@ pub mod apply_cost_tracker_during_replay {
     solana_sdk::declare_id!("2ry7ygxiYURULZCrypHhveanvP5tzZ4toRwVp89oCNSj");
 }
 
+pub mod switch_to_new_elf_parser {
+    solana_sdk::declare_id!("Cdkc8PPTeTNUPoZEfCY5AyetUrEdkZtNPMgz58nqyaHD");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -767,6 +771,7 @@ lazy_static! {
         (prevent_rent_paying_rent_recipients::id(), "prevent recipients of rent rewards from ending in rent-paying state #30151"),
         (delay_visibility_of_program_deployment::id(), "delay visibility of program upgrades #30085"),
         (apply_cost_tracker_during_replay::id(), "apply cost tracker to blocks during replay #29595"),
+        (switch_to_new_elf_parser::id(), "switch to new ELF parser #30497"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()
