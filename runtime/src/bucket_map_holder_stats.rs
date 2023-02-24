@@ -1,5 +1,8 @@
 use {
-    crate::{accounts_index::IndexValue, bucket_map_holder::BucketMapHolder},
+    crate::{
+        accounts_index::{DiskIndexValue, IndexValue},
+        bucket_map_holder::BucketMapHolder,
+    },
     solana_sdk::timing::AtomicInterval,
     std::{
         fmt::Debug,
@@ -99,7 +102,7 @@ impl BucketMapHolderStats {
         per_bucket.map(|stat| stat.fetch_sub(count, Ordering::Relaxed));
     }
 
-    fn ms_per_age<T: IndexValue, U: IndexValue + From<T> + Into<T>>(
+    fn ms_per_age<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>>(
         &self,
         storage: &BucketMapHolder<T, U>,
         elapsed_ms: u64,
@@ -176,7 +179,7 @@ impl BucketMapHolderStats {
         in_mem.saturating_sub(held_in_mem) as usize
     }
 
-    pub fn report_stats<T: IndexValue, U: IndexValue + From<T> + Into<T>>(
+    pub fn report_stats<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>>(
         &self,
         storage: &BucketMapHolder<T, U>,
     ) {

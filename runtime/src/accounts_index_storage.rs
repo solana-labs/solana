@@ -1,6 +1,6 @@
 use {
     crate::{
-        accounts_index::{AccountsIndexConfig, IndexValue},
+        accounts_index::{AccountsIndexConfig, DiskIndexValue, IndexValue},
         bucket_map_holder::BucketMapHolder,
         in_mem_accounts_index::InMemAccountsIndex,
         waitable_condvar::WaitableCondvar,
@@ -16,7 +16,7 @@ use {
 };
 
 /// Manages the lifetime of the background processing threads.
-pub struct AccountsIndexStorage<T: IndexValue, U: IndexValue + From<T> + Into<T>> {
+pub struct AccountsIndexStorage<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> {
     _bg_threads: BgThreads,
 
     pub storage: Arc<BucketMapHolder<T, U>>,
@@ -27,7 +27,7 @@ pub struct AccountsIndexStorage<T: IndexValue, U: IndexValue + From<T> + Into<T>
     startup_worker_threads: Mutex<Option<BgThreads>>,
 }
 
-impl<T: IndexValue, U: IndexValue + From<T> + Into<T>> Debug for AccountsIndexStorage<T, U> {
+impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> Debug for AccountsIndexStorage<T, U> {
     fn fmt(&self, _f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         Ok(())
     }
@@ -53,7 +53,7 @@ impl Drop for BgThreads {
 }
 
 impl BgThreads {
-    fn new<T: IndexValue, U: IndexValue + From<T> + Into<T>>(
+    fn new<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>>(
         storage: &Arc<BucketMapHolder<T, U>>,
         in_mem: &[Arc<InMemAccountsIndex<T, U>>],
         threads: usize,
@@ -109,7 +109,7 @@ pub enum Startup {
     StartupWithExtraThreads,
 }
 
-impl<T: IndexValue, U: IndexValue + From<T> + Into<T>> AccountsIndexStorage<T, U> {
+impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> AccountsIndexStorage<T, U> {
     /// startup=true causes:
     ///      in mem to act in a way that flushes to disk asap
     ///      also creates some additional bg threads to facilitate flushing to disk asap
