@@ -2294,17 +2294,6 @@ pub fn get_highest_incremental_snapshot_archive_slot(
     .map(|incremental_snapshot_archive_info| incremental_snapshot_archive_info.slot())
 }
 
-/// Get the full snapshot with the highest slot in a directory
-/// Assume every bank snapshot directory is a full snapshot for now.  Will support incremental sanpshot
-/// later.
-pub fn get_highest_full_snapshot(snapshots_dir: impl AsRef<Path>) -> Result<BankSnapshotInfo> {
-    let bank_snapshots = get_bank_snapshots(&snapshots_dir);
-
-    do_get_highest_bank_snapshot(bank_snapshots).ok_or(SnapshotError::NoSnapshotSlotDir(
-        snapshots_dir.as_ref().to_path_buf(),
-    ))
-}
-
 /// Get the path (and metadata) for the full snapshot archive with the highest slot in a directory
 pub fn get_highest_full_snapshot_archive_info(
     full_snapshot_archives_dir: impl AsRef<Path>,
@@ -2332,13 +2321,6 @@ pub fn get_highest_incremental_snapshot_archive_info(
             .collect::<Vec<_>>();
     incremental_snapshot_archives.sort_unstable();
     incremental_snapshot_archives.into_iter().rev().next()
-}
-
-pub fn get_highest_incremental_snapshot(
-    _snapshots_dir: impl AsRef<Path>,
-    _full_snapshot_slot: Slot,
-) -> Option<BankSnapshotInfo> {
-    None // Will handle the incremental case later
 }
 
 pub fn purge_old_snapshot_archives(
@@ -2504,7 +2486,6 @@ fn verify_unpacked_snapshots_dir_and_version(
     );
 
     let snapshot_version = unpacked_snapshots_dir_and_version.snapshot_version;
-
     let mut bank_snapshots =
         get_bank_snapshots_post(&unpacked_snapshots_dir_and_version.unpacked_snapshots_dir);
     if bank_snapshots.len() > 1 {
@@ -2513,7 +2494,6 @@ fn verify_unpacked_snapshots_dir_and_version(
     let root_paths = bank_snapshots
         .pop()
         .ok_or_else(|| get_io_error("No snapshots found in snapshots directory"))?;
-
     Ok((snapshot_version, root_paths))
 }
 
