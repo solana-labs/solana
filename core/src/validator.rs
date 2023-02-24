@@ -1697,16 +1697,11 @@ fn maybe_warp_slot(
     leader_schedule_cache: &LeaderScheduleCache,
 ) {
     if let Some(warp_slot) = config.warp_slot {
-<<<<<<< HEAD
         let snapshot_config = config.snapshot_config.as_ref().unwrap_or_else(|| {
             error!("warp slot requires a snapshot config");
             abort();
         });
 
-        process_blockstore.process();
-
-=======
->>>>>>> 784766151 (Process tower after warping bank forks (#30467))
         let mut bank_forks = bank_forks.write().unwrap();
 
         let working_bank = bank_forks.working_bank();
@@ -1756,7 +1751,7 @@ fn maybe_warp_slot(
         drop(bank_forks);
         // Process blockstore after warping bank forks to make sure tower and
         // bank forks are in sync.
-        process_blockstore.process()?;
+        process_blockstore.process();
     }
 }
 
