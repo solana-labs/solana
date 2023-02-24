@@ -13,7 +13,8 @@ use {
     },
     solana_sdk::{
         feature_set::{
-            remove_deprecated_request_unit_ix, use_default_units_in_fee_calculation, FeatureSet,
+            add_set_tx_loaded_accounts_data_size_instruction, remove_deprecated_request_unit_ix,
+            use_default_units_in_fee_calculation, FeatureSet,
         },
         instruction::CompiledInstruction,
         program_utils::limited_deserialize,
@@ -155,6 +156,7 @@ impl CostModel {
             feature_set.is_active(&use_default_units_in_fee_calculation::id()),
             !feature_set.is_active(&remove_deprecated_request_unit_ix::id()),
             enable_request_heap_frame_ix,
+            feature_set.is_active(&add_set_tx_loaded_accounts_data_size_instruction::id()),
         );
 
         // if tx contained user-space instructions and a more accurate estimate available correct it
