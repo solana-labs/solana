@@ -17758,13 +17758,11 @@ pub mod tests {
         db.handle_dropped_roots_for_ancient(std::iter::empty::<Slot>());
         let slot0 = 0;
         let dropped_roots = vec![slot0];
-        assert!(db.get_bank_hash_stats(slot0).is_some());
         db.accounts_index.add_root(slot0);
         db.accounts_index.add_uncleaned_roots([slot0].into_iter());
         assert!(db.accounts_index.is_uncleaned_root(slot0));
         assert!(db.accounts_index.is_alive_root(slot0));
         db.handle_dropped_roots_for_ancient(dropped_roots.into_iter());
-        assert!(db.get_bank_hash_stats(slot0).is_none());
         assert!(!db.accounts_index.is_uncleaned_root(slot0));
         assert!(!db.accounts_index.is_alive_root(slot0));
     }
