@@ -282,11 +282,11 @@ impl AdminRpc for AdminRpcImpl {
                         config_file,
                         response_sender,
                     })
-                    .expect("plugin manager should never drop request receiver");
+                    .expect("GeyerPluginService should never drop request receiver");
             } else {
                 return Err(jsonrpc_core::Error {
                     code: ErrorCode::InvalidRequest,
-                    message: "no geyser plugin service".to_string(),
+                    message: "No geyser plugin service".to_string(),
                     data: None,
                 });
             }
@@ -294,7 +294,7 @@ impl AdminRpc for AdminRpcImpl {
             // Await response from plugin manager
             response_receiver
                 .await
-                .expect("plugin manager's oneshot sender shouldn't drop early")
+                .expect("GeyerPluginService's oneshot sender shouldn't drop early")
         })
     }
 
@@ -310,11 +310,11 @@ impl AdminRpc for AdminRpcImpl {
                         config_file,
                         response_sender,
                     })
-                    .expect("plugin manager should never drop request receiver");
+                    .expect("GeyerPluginService should never drop request receiver");
             } else {
                 return Err(jsonrpc_core::Error {
                     code: ErrorCode::InvalidRequest,
-                    message: "no geyser plugin service".to_string(),
+                    message: "No geyser plugin service".to_string(),
                     data: None,
                 });
             }
@@ -322,7 +322,7 @@ impl AdminRpc for AdminRpcImpl {
             // Await response from plugin manager
             response_receiver
                 .await
-                .expect("plugin manager's oneshot sender shouldn't drop early")
+                .expect("GeyerPluginService's oneshot sender shouldn't drop early")
         })
     }
 
@@ -338,11 +338,11 @@ impl AdminRpc for AdminRpcImpl {
                         name,
                         response_sender,
                     })
-                    .expect("plugin manager should never drop request receiver");
+                    .expect("GeyerPluginService should never drop request receiver");
             } else {
                 return Err(jsonrpc_core::Error {
                     code: ErrorCode::InvalidRequest,
-                    message: "no geyser plugin service".to_string(),
+                    message: "No geyser plugin service".to_string(),
                     data: None,
                 });
             }
@@ -350,7 +350,7 @@ impl AdminRpc for AdminRpcImpl {
             // Await response from plugin manager
             response_receiver
                 .await
-                .expect("plugin manager's oneshot sender shouldn't drop early")
+                .expect("GeyerPluginService's oneshot sender shouldn't drop early")
         })
     }
 
@@ -363,11 +363,11 @@ impl AdminRpc for AdminRpcImpl {
             if let Some(ref rpc_to_manager_sender) = meta.rpc_to_plugin_manager_sender {
                 rpc_to_manager_sender
                     .send(GeyserPluginManagerRequest::ListPlugins { response_sender })
-                    .expect("plugin manager should never drop request receiver");
+                    .expect("GeyerPluginService should never drop request receiver");
             } else {
                 return Err(jsonrpc_core::Error {
                     code: ErrorCode::InvalidRequest,
-                    message: "no geyser plugin service".to_string(),
+                    message: "No geyser plugin service".to_string(),
                     data: None,
                 });
             }
@@ -375,7 +375,7 @@ impl AdminRpc for AdminRpcImpl {
             // Await response from plugin manager
             response_receiver
                 .await
-                .expect("plugin manager's oneshot sender shouldn't drop early")
+                .expect("GeyerPluginService's oneshot sender shouldn't drop early")
         })
     }
 
