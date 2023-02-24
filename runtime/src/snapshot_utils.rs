@@ -1629,9 +1629,7 @@ pub fn bank_from_latest_snapshot_archives(
     ))
 }
 
-/// Rebuild bank from snapshot files.  Handles either just a full snapshot, or both a full
-/// snapshot and an incremental snapshot.
-/// Note that incremental snaphot not tested yet.
+/// Build bank from a snapshot (a snapshot directory, not a snapshot archive)
 #[allow(clippy::too_many_arguments)]
 pub fn bank_from_snapshot(
     account_paths: &[PathBuf],
@@ -1887,9 +1885,9 @@ where
     })
 }
 
-/// Streams unpacked files across channel
-/// Follow the flow of streaming_unarchive_snapshot(), but handle the non-archive case.
-fn streaming_snapshot_and_account_files<P>(
+/// Streams snapshot dir files across channel
+/// Follow the flow of streaming_unarchive_snapshot(), but handle the from_dir case.
+fn streaming_snapshot_dir_files<P>(
     file_sender: Sender<PathBuf>,
     snapshot_file_path: P,
     snapshot_version_path: P,
@@ -1961,7 +1959,7 @@ fn build_storage_from_snapshot_dir(
         }
     }
 
-    streaming_snapshot_and_account_files(
+    streaming_snapshot_dir_files(
         file_sender,
         snapshot_file_path,
         &snapshot_version_path,
@@ -2624,8 +2622,6 @@ fn rebuild_bank_from_snapshot(
         )?)
     })?;
 
-    // The status cache is rebuilt from the latest snapshot.  So, if there's an incremental
-    // snapshot, use that.  Otherwise use the full snapshot.
     let status_cache_path = bank_snapshot
         .snapshot_dir
         .join(SNAPSHOT_STATUS_CACHE_FILENAME);
