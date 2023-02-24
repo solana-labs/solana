@@ -53,6 +53,7 @@ use {
             aligned_stored_size, AppendVec, MatchAccountOwnerError, APPEND_VEC_MMAPPED_FILES_OPEN,
             STORE_META_OVERHEAD,
         },
+        bank_creation_freezing_progress::BankCreationFreezingProgress,
         cache_hash_data::{CacheHashData, CacheHashDataFile},
         contains::Contains,
         epoch_accounts_hash::EpochAccountsHashManager,
@@ -1493,42 +1494,7 @@ pub struct AccountsDb {
     /// Thus, the state of all accounts on a validator is known to be correct at least once per epoch.
     pub epoch_accounts_hash_manager: EpochAccountsHashManager,
 
-    pub bank_progress: BankCreationFreezingProgress,
-}
-
-impl BankCreationFreezingProgress {
-    fn report(&self) {
-        if self.last_report.should_update(60_000) {
-            datapoint_info!(
-                "bank_progress",
-                (
-                    "difference",
-                    self.bank_creation_count
-                        .load(Ordering::Acquire)
-                        .wrapping_sub(
-                            self.bank_freeze_or_destruction_count
-                                .load(Ordering::Acquire)
-                        ),
-                    i64
-                )
-            );
-        }
-    }
-}
-
-#[derive(Debug, Default)]
-/// Keeps track of when all banks that were started as of a known point in time have been frozen or otherwise destroyed.
-/// When 'bank_freeze_or_destruction_count' exceeds a prior value of 'bank_creation_count',
-/// this means that we can know all banks that began loading accounts have completed as of the prior value of 'bank_creation_count'.
-pub struct BankCreationFreezingProgress {
-    /// Incremented each time a bank is created.
-    /// Starting now, this bank could be finding accounts in the index and loading them from accounts db.
-    pub bank_creation_count: AtomicU32,
-    /// Incremented each time a bank is frozen or destroyed.
-    /// At this point, this bank has completed all account loading.
-    pub bank_freeze_or_destruction_count: AtomicU32,
-
-    last_report: AtomicInterval,
+    pub(crate) bank_progress: BankCreationFreezingProgress,
 }
 
 #[derive(Debug, Default)]

@@ -23,6 +23,7 @@ mod ancient_append_vecs;
 pub mod append_vec;
 pub mod bank;
 pub mod bank_client;
+mod bank_creation_freezing_progress;
 pub mod bank_forks;
 pub mod bank_utils;
 pub mod block_cost_limits;
