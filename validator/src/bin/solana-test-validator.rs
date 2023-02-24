@@ -580,7 +580,6 @@ fn main() {
                     cluster_info: test_validator.cluster_info(),
                     vote_account: test_validator.vote_account_address(),
                     repair_whitelist: test_validator.repair_whitelist(),
-                    manager_handle: test_validator.plugin_manager_handle(),
                 });
             if let Some(dashboard) = dashboard {
                 dashboard.run(Duration::from_millis(250));

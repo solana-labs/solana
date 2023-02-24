@@ -1782,7 +1782,6 @@ pub fn main() {
             cluster_info: validator.cluster_info.clone(),
             vote_account,
             repair_whitelist,
-            manager_handle: validator.plugin_manager_handle(),
         });
 
     if let Some(filename) = init_complete_file {
