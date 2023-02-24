@@ -630,6 +630,20 @@ pub struct SignerFromPathConfig {
 ///   - `usb://ledger/9rPVSygg3brqghvdZ6wsL2i5YNQTGhXGdJzF65YxaCQd`
 ///   - `usb://ledger/9rPVSygg3brqghvdZ6wsL2i5YNQTGhXGdJzF65YxaCQd?key=0/0`
 ///
+/// - `pgpcard:` &mdash; Use a connected OpenPGP smart card as the signer.
+///   In particular, use the key in the signing slot of the OpenPGP application
+///   on the card.
+///
+///   The URI host is the 16-byte OpenPGP AID in its standard hexadecimal form
+///   (32 digits). (For details, see section 4.2.1 of the
+///   [OpenPGP specification][pgpspec].) The URI host may also be omitted, in
+///   which case the first connected smart card that is found is used.
+///
+///   Examples:
+///
+///   - `pgpcard://`
+///   - `pgpcard://D2760001240103040006123456780000`
+///
 /// Next the `path` argument may be one of the following strings:
 ///
 /// - `-` &mdash; Read the keypair from stdin. This is the same as the `stdin:`
@@ -662,6 +676,7 @@ pub struct SignerFromPathConfig {
 /// [dp]: https://github.com/bitcoin/bips/blob/master/bip-0044.mediawiki
 /// [URI]: https://en.wikipedia.org/wiki/Uniform_Resource_Identifier
 /// ["hardened"]: https://wiki.trezor.io/Hardened_and_non-hardened_derivation
+/// [pgpspec]: https://gnupg.org/ftp/specs/OpenPGP-smart-card-application-3.4.pdf
 ///
 /// # Examples
 ///
