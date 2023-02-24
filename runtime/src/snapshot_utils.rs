@@ -1630,10 +1630,10 @@ fn create_snapshot_meta_files_for_unarchived_snapshot(unpack_dir: impl AsRef<Pat
 
     // The unpacked dir has a single slot dir, which is the snapshot slot dir.
     let slot_dir = fs::read_dir(&snapshots_dir)
-        .unwrap()
+        .map_err(|_| SnapshotError::NoSnapshotSlotDir(snapshots_dir.clone()))?
         .find(|entry| entry.as_ref().unwrap().path().is_dir())
-        .unwrap()
-        .unwrap()
+        .ok_or_else(|| SnapshotError::NoSnapshotSlotDir(snapshots_dir.clone()))?
+        .map_err(|_| SnapshotError::NoSnapshotSlotDir(snapshots_dir.clone()))?
         .path();
 
     let version_file = unpack_dir.as_ref().join(SNAPSHOT_VERSION_FILENAME);
