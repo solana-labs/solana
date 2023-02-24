@@ -239,6 +239,8 @@ num_enum = "0.5.7"
 num-derive = "0.3"
 num-traits = "0.2"
 once_cell = "1.13.0"
+openpgp-card = "0.3.3"
+openpgp-card-pcsc = "0.3.0"
 openssl = "0.10"
 ouroboros = "0.15.0"
 parking_lot = "0.12"
@@ -246,6 +248,7 @@ pbkdf2 = { version = "0.11.0", default-features = false }
 pem = "1.1.1"
 percentage = "0.1.0"
 pickledb = { version = "0.5.1", default-features = false }
+pinentry = "0.3.0"
 pkcs8 = "0.8.0"
 predicates = "2.1"
 pretty-hex = "0.3.0"
@@ -274,6 +277,7 @@ rustc_version = "0.4"
 rustls = { version = "0.20.6", default-features = false }
 rustversion = "1.0.11"
 scopeguard = "1.1.0"
+secrecy = "0.7.0"
 semver = "1.0.16"
 serde = "1.0.152"
 serde_bytes = "0.11.9"
@@ -334,6 +338,7 @@ solana-program-test = { path = "program-test", version = "=1.16.0" }
 solana-pubsub-client = { path = "pubsub-client", version = "=1.16.0" }
 solana-quic-client = { path = "quic-client", version = "=1.16.0" }
 solana-rayon-threadlimit = { path = "rayon-threadlimit", version = "=1.16.0" }
+solana-remote-keypair = { path = "remote-keypair", version = "=1.16.0" }
 solana-remote-wallet = { path = "remote-wallet", version = "=1.16.0", default-features = false }
 solana-rpc = { path = "rpc", version = "=1.16.0" }
 solana-rpc-client = { path = "rpc-client", version = "=1.16.0", default-features = false }
