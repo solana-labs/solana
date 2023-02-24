@@ -2784,9 +2784,8 @@ impl AccountsDb {
                     if let Some(count) = store_counts.get(slot).map(|s| s.0) {
                         debug!(
                             "calc_delete_dependencies()
-                            slot: {},
-                            count len: {}",
-                            slot, count,
+                            slot: {slot},
+                            count len: {count}"
                         );
                         if count == 0 {
                             // this store CAN be removed
