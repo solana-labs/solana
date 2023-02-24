@@ -17,7 +17,7 @@ use {
 
 const NUM_LAMPORTS_PER_ACCOUNT_DEFAULT: u64 = solana_sdk::native_token::LAMPORTS_PER_SOL;
 
-#[derive(PartialEq, Debug)]
+#[derive(Eq, PartialEq, Debug)]
 pub enum ExternalClientType {
     // Submits transactions to an Rpc node using an RpcClient
     RpcClient,
@@ -35,7 +35,7 @@ impl Default for ExternalClientType {
     }
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(Eq, PartialEq, Debug)]
 pub struct InstructionPaddingConfig {
     pub program_id: Pubkey,
     pub data_size: u32,
@@ -73,6 +73,8 @@ pub struct Config {
     pub bind_address: IpAddr,
     pub client_node_id: Option<Keypair>,
 }
+
+impl Eq for Config {}
 
 impl Default for Config {
     fn default() -> Config {
@@ -426,7 +428,7 @@ pub fn parse_args(matches: &ArgMatches) -> Result<Config, &'static str> {
         args.tpu_connection_pool_size = v
             .to_string()
             .parse::<usize>()
-            .map_err(|_| "can't parse tpu_connection_pool_size")?;
+            .map_err(|_| "can't parse tpu-connection-pool-size")?;
     }
 
     if let Some(addr) = matches.value_of("entrypoint") {
@@ -485,8 +487,10 @@ pub fn parse_args(matches: &ArgMatches) -> Result<Config, &'static str> {
     }
 
     if let Some(v) = matches.value_of("target_lamports_per_signature") {
-        args.target_lamports_per_signature =
-            v.to_string().parse().map_err(|_| "can't parse lamports")?;
+        args.target_lamports_per_signature = v
+            .to_string()
+            .parse()
+            .map_err(|_| "can't parse target-lamports-per-signature")?;
     }
 
     args.multi_client = !matches.is_present("no-multi-client");
@@ -552,7 +556,7 @@ pub fn parse_args(matches: &ArgMatches) -> Result<Config, &'static str> {
 #[cfg(test)]
 mod tests {
     use {
-        crate::cli::{build_args, parse_args, Config, ExternalClientType},
+        super::*,
         solana_sdk::signature::{read_keypair_file, write_keypair_file, Keypair, Signer},
         std::{
             net::{IpAddr, Ipv4Addr, SocketAddr},
