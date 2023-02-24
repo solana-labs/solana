@@ -496,18 +496,22 @@ pub fn parse_args(matches: &ArgMatches) -> Result<Config, &'static str> {
     args.multi_client = !matches.is_present("no-multi-client");
     args.target_node = matches
         .value_of("target_node")
-        .map(|target_str| target_str.parse::<Pubkey>().unwrap());
+        .map(|target_str| target_str.parse::<Pubkey>())
+        .transpose()
+        .map_err(|_| "Failed to parse target-node")?;
 
     if let Some(v) = matches.value_of("num_lamports_per_account") {
-        args.num_lamports_per_account =
-            v.to_string().parse().map_err(|_| "can't parse lamports")?;
+        args.num_lamports_per_account = v
+            .to_string()
+            .parse()
+            .map_err(|_| "can't parse num-lamports-per-account")?;
     }
 
     if let Some(t) = matches.value_of("target_slots_per_epoch") {
         args.target_slots_per_epoch = t
             .to_string()
             .parse()
-            .map_err(|_| "can't parse target slots per epoch")?;
+            .map_err(|_| "can't parse target-slots-per-epoch")?;
     }
 
     if matches.is_present("use_randomized_compute_unit_price") {
@@ -535,13 +539,13 @@ pub fn parse_args(matches: &ArgMatches) -> Result<Config, &'static str> {
     if let Some(num_conflict_groups) = matches.value_of("num_conflict_groups") {
         let parsed_num_conflict_groups = num_conflict_groups
             .parse()
-            .map_err(|_| "Can't parse conflict groups")?;
+            .map_err(|_| "Can't parse num-conflict-groups")?;
         args.num_conflict_groups = Some(parsed_num_conflict_groups);
     }
 
     if let Some(addr) = matches.value_of("bind_address") {
         args.bind_address =
-            solana_net_utils::parse_host(addr).map_err(|_| "Failed to parse bind_address")?;
+            solana_net_utils::parse_host(addr).map_err(|_| "Failed to parse bind-address")?;
     }
 
     if let Some(client_node_id_filename) = matches.value_of("client_node_id") {
