@@ -45,7 +45,7 @@ bitflags = { workspace = true }
 base64 = { workspace = true, features = ["alloc", "std"] }
 curve25519-dalek = { workspace = true, features = ["serde"] }
 itertools = { workspace = true }
-libc = { version = "0.2.126", features = ["extra_traits"] }
+libc = { workspace = true, features = ["extra_traits"] }
 libsecp256k1 = { workspace = true }
 num-bigint = { workspace = true }
 rand = { workspace = true }
