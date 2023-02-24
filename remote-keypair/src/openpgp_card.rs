@@ -19,17 +19,7 @@ use {
     uriparse::{URIReference, URIReferenceError},
 };
 
-#[derive(Clone, Debug, Error, PartialEq, Eq)]
-pub enum LocatorError {
-    #[error("failed to parse OpenPGP AID: {0}")]
-    IdentifierParseError(String),
-    #[error(transparent)]
-    UriReferenceError(#[from] URIReferenceError),
-    #[error("mismatched scheme")]
-    MismatchedScheme,
-}
-
-/// To locate smart cards that support OpenPGP connected to the local machine.
+/// Locator for smart cards supporting OpenPGP connected to the local machine.
 /// 
 /// Field `aid` contains a data struct with fields for application ID, version,
 /// manufacturer ID (of the smart card), and serial number. An instance of
@@ -45,7 +35,19 @@ pub struct Locator {
     pub aid: Option<ApplicationIdentifier>,
 }
 
-impl Locator {
+#[derive(Clone, Debug, Error, PartialEq, Eq)]
+pub enum LocatorError {
+    #[error("failed to parse OpenPGP AID: {0}")]
+    IdentifierParseError(String),
+    #[error(transparent)]
+    UriReferenceError(#[from] URIReferenceError),
+    #[error("mismatched scheme")]
+    MismatchedScheme,
+}
+
+impl TryFrom<&URIReference<'_>> for Locator {
+    type Error = LocatorError;
+
     /// Extract a locator from a URI.
     /// 
     /// "pgpcard://" => Default locator.
@@ -62,125 +64,67 @@ impl Locator {
     ///   * 0000       => reserved for future use
     /// 
     /// No other URI formats are valid.
-    pub fn new_from_uri(uri: &URIReference<'_>) -> Result<Self, LocatorError> {
+    fn try_from(uri: &URIReference<'_>) -> Result<Self, Self::Error> {
         let scheme = uri.scheme().map(|s| s.as_str().to_ascii_lowercase());
         let ident = uri.host().map(|h| h.to_string());
         
         match (scheme, ident) {
             (Some(scheme), Some(ident)) if scheme == "pgpcard" => {
                 if ident.is_empty() {
-                    return Ok(Self {
-                        aid: None,
-                    });
+                    return Ok(Self { aid: None });
                 }
-
                 if ident.len() % 2 != 0 {
                     return Err(LocatorError::IdentifierParseError("OpenPGP AID must have even length".to_string()));
                 }
-                
                 let mut ident_bytes = Vec::<u8>::new();
                 for i in (0..ident.len()).step_by(2) {
-                    ident_bytes.push(
-                        u8::from_str_radix(&ident[i..i + 2], 16)
-                            .map_err(|_| LocatorError::IdentifierParseError(
-                                "non-hex character found in identifier".to_string()
-                            ))?
-                    );
+                    ident_bytes.push(u8::from_str_radix(&ident[i..i + 2], 16).map_err(
+                        |_| LocatorError::IdentifierParseError("non-hex character found in identifier".to_string())
+                    )?);
                 }
-
                 Ok(Self {
-                    aid: Some(
-                        ident_bytes
-                            .as_slice()
-                            .try_into()
-                            .map_err(|_| LocatorError::IdentifierParseError(
-                                "invalid identifier format".to_string()
-                            ))?
-                    ),
+                    aid: Some(ident_bytes.as_slice().try_into().map_err(
+                        |_| LocatorError::IdentifierParseError("invalid identifier format".to_string())
+                    )?),
                 })
             },
-            (Some(scheme), None) if scheme == "pgpcard" => {
-                Ok(Self {
-                    aid: None,
-                })
-            },
+            (Some(scheme), None) if scheme == "pgpcard" => Ok(Self { aid: None }),
             _ => Err(LocatorError::MismatchedScheme),
         }
     }
 }
 
-/// Data struct for convenience.
-#[derive(Debug)]
-#[allow(dead_code)]  // unused pcsc_identifier
-pub struct OpenpgpCardInfo {
-    pcsc_identifier: String,
-    manufacturer: String,
-    serial: u32,
-    cardholder_name: String,
-    signing_uif: Option<UIF>,
-    pin_cds_valid_once: bool,
-}
-
-impl TryFrom<&mut OpenPgpTransaction<'_>> for OpenpgpCardInfo {
-    type Error = openpgp_card::Error;
-
-    fn try_from(opt: &mut OpenPgpTransaction) -> Result<Self, Self::Error> {
-        let ard = opt.application_related_data()?;
-        let card_app_info = ard.application_id()?;
-        let cardholder_info = opt.cardholder_related_data()?;
-        Ok(OpenpgpCardInfo {
-            pcsc_identifier: ard.application_id()?.ident(),
-            manufacturer: card_app_info.manufacturer_name().to_string(),
-            serial: ard.application_id()?.serial(),
-            cardholder_name: String::from_utf8_lossy(cardholder_info.name().get_or_insert(b"null")).to_string(),
-            signing_uif: ard.uif_pso_cds()?,
-            pin_cds_valid_once: ard.pw_status_bytes()?.pw1_cds_valid_once(),
-        })
-    }
-}
-
-impl OpenpgpCardInfo {
-    pub fn find_cards() -> Result<Vec<OpenpgpCardInfo>, openpgp_card::Error> {
-        let mut card_infos = Vec::<OpenpgpCardInfo>::new();
-        for backend in PcscBackend::cards(None)? {
-            let mut pgp = OpenPgp::new::<PcscBackend>(backend.into());
-            let opt = &mut pgp.transaction()?;
-            card_infos.push(opt.try_into()?);
-        }
-        Ok(card_infos)
-    }
-}
-
-pub struct OpenpgpCardKeypair {
+/// An ongoing connection to the OpenPGP application on a smart card.
+/// 
+/// Field `pgp: OpenPgp` is a long-lived card access object. When OpenpgpCard
+/// is initialized via TryFrom<&Locator>, this object contains a `PcscBackend`
+/// connector object that communicates with the card using PC/SC.
+/// 
+/// Actual operations on the card are done through short-lived 
+/// OpenPgpTransaction objects that are instantiated from `OpenPgp` on an ad
+/// hoc basis. There should only exist one active OpenPgpTransaction at a time.
+/// 
+/// Field `verified_for_signing` indicates whether there is a valid ed25519
+/// signing key on the card so that the card can be used to sign transactions.
+/// It is valid for `OpenpgpCard` to point to a card that does not have signing
+/// capabilities; this is the case when `OpenpgpCard` is used to connect to a
+/// card on which a new keypair will be generated or imported.
+/// 
+/// Field `pin_verified` indicates whether a successful PIN verification has
+/// already happened in the past (specifically for PW1 used to authorize
+/// signing). This allows redundant PIN verification to be skipped for cards
+/// that require only a single successful PIN entry per session.
+pub struct OpenpgpCard {
     pgp: RefCell<OpenPgp>,
-    pubkey: Pubkey,
+    verified_for_signing: RefCell<bool>,
     pin_verified: RefCell<bool>,
 }
 
-impl OpenpgpCardKeypair {
-    pub fn new_from_locator(
-        locator: Locator,
-    ) -> Result<Self, openpgp_card::Error> {
-        Ok(Self::new_from_identifier(
-            locator.aid.map(|x| x.ident())
-        )?)
-    }
+impl TryFrom<&Locator> for OpenpgpCard {
+    type Error = openpgp_card::Error;
 
-    /// Create new OpenpgpCardKeypair from a openpgp-card library "ident".
-    /// 
-    /// The openpgp-card library uses shorthand AIDs to identify OpenPGP apps.
-    /// An ident takes the form `<manufacturer ID>:<serial number>`, so the
-    /// ident for AID `D2760001240103040006123456780000` would be
-    /// `0006:12345678`.
-    /// 
-    /// As per the specification, a single smart card should only run one instance
-    /// of the OpenPGP application, so uniquely identifying a smart card is
-    /// sufficient to uniquely identify a OpenPGP instance.
-    pub fn new_from_identifier(
-        pcsc_identifier: Option<String>,
-    ) -> Result<Self, openpgp_card::Error> {
-        // Initialize long-lived PCSC backend object to interface with OpenPGP
-        // add on the card.
+    fn try_from(locator: &Locator) -> Result<Self, Self::Error> {
+        let pcsc_identifier = locator.aid.as_ref().map(|x| x.ident());
         let backend = match pcsc_identifier {
             Some(ident) => PcscBackend::open_by_ident(&ident, None)?,
             None => {
@@ -192,102 +136,63 @@ impl OpenpgpCardKeypair {
                 }
             }
         };
-        let mut pgp = OpenPgp::new::<PcscBackend>(backend.into());
-        
-        let pubkey: [u8; 32];
-        {
-            // To get pubkey (or to do any operation with the OpenPGP app on
-            // card), initialize a short-lived OpenPGP transaction object.
-            let opt = &mut pgp.transaction()?;
-            // Get smart card's PGP signing key.
-            let pk_material = match opt.public_key(openpgp_card::KeyType::Signing) {
-                Ok(pkm) => pkm,
-                Err(_) => return Err(
-                    openpgp_card::Error::NotFound("no valid key found on card".to_string())
-                )
-            };
 
-            // Verify signing key is an ed25519 key using EdDSA and extract
-            // the pubkey as bytes.
-            pubkey = match pk_material {
-                PublicKeyMaterial::E(pk) => match pk.algo() {
-                    Algo::Ecc(ecc_attrs) => {
-                        if ecc_attrs.ecc_type() != EccType::EdDSA || ecc_attrs.curve() != Curve::Ed25519 {
-                            return Err(openpgp_card::Error::UnsupportedAlgo(
-                                format!("expected Ed25519 key, got {:?}", ecc_attrs.curve())
-                            ));
-                        }
-                        match pk.data().try_into() {
-                            Ok(pk_bytes) => pk_bytes,
-                            Err(_) => return Err(
-                                openpgp_card::Error::UnsupportedAlgo("invalid pubkey format".to_string())
-                            ),
-                        }
-                    },
-                    _ => return Err(
-                        openpgp_card::Error::UnsupportedAlgo("expected ECC key, got RSA".to_string())
-                    ),
-                }
-                _ => return Err(
-                    openpgp_card::Error::UnsupportedAlgo("expected ECC key, got RSA".to_string())
-                ),
-            };
-        }
+        // Start up the long-lived OpenPgp backend connection object which will
+        // be persisted as a field in the `OpenpgpCard` struct.
+        let pgp = OpenPgp::new::<PcscBackend>(backend.into());
 
         Ok(Self {
             pgp: RefCell::new(pgp),
-            pubkey: Pubkey::from(pubkey),
+            verified_for_signing: RefCell::new(false),
             pin_verified: RefCell::new(false),
         })
     }
 }
 
-fn get_pin_from_user_as_bytes(card_info: &OpenpgpCardInfo, first_attempt: bool) -> Result<String, SignerError> {
-    let description = format!(
-        "\
-            Please unlock the card%0A\
-            %0A\
-            Manufacturer: {}%0A\
-            Serial: {:X}%0A\
-            Cardholder: {}\
-            {}\
-        ",
-        card_info.manufacturer,
-        card_info.serial,
-        card_info.cardholder_name,
-        if first_attempt { "" } else { "%0A%0A##### INVALID PIN #####" },
-    );
-    let pin = 
-        if let Some(mut input) = PassphraseInput::with_default_binary() {
-            input
-                .with_description(description.as_str())
-                .with_prompt("PIN")
-                .interact()
-        } else {
-            return Err(
-                SignerError::Custom("pinentry binary not found, please install".to_string())
-            )
-        };
-    let pin = match pin {
-        Ok(secret) => secret,
-        Err(e) => return Err(
-            SignerError::InvalidInput(format!("cannot read PIN from user: {}", e))
-        ),
-    };
-    Ok(pin.expose_secret().to_owned())
-}
-
-impl Signer for OpenpgpCardKeypair {
+impl Signer for OpenpgpCard {
     fn try_pubkey(&self) -> Result<Pubkey, SignerError> {
-        Ok(self.pubkey)
-    }
-
-    fn try_sign_message(&self, message: &[u8]) -> Result<Signature, SignerError> {
         let mut pgp_mut = self.pgp.borrow_mut();
         let opt = &mut pgp_mut.transaction().map_err(
             |e| SignerError::Connection(format!("could not start transaction with card: {}", e))
         )?;
 
+        // Verify smart card's PGP signing key is an ed25519 key using EdDSA
+        // and extract the pubkey as bytes.
+        let pk_material = opt.public_key(openpgp_card::KeyType::Signing).map_err(
+            |e| SignerError::Connection(format!("could not find signing keypair on card: {}", e))
+        )?;
+        let pk_bytes: [u8; 32] = match pk_material {
+            PublicKeyMaterial::E(pk) => match pk.algo() {
+                Algo::Ecc(ecc_attrs) => {
+                    if ecc_attrs.ecc_type() != EccType::EdDSA || ecc_attrs.curve() != Curve::Ed25519 {
+                        return Err(SignerError::Connection(
+                            format!("expected Ed25519 key, got {:?}", ecc_attrs.curve())
+                        ));
+                    }
+                    pk.data().try_into().map_err(
+                        |e| SignerError::Connection(format!("key on card is malformed: {}", e))
+                    )?
+                },
+                _ => return Err(SignerError::Connection("expected ECC key, got RSA".to_string())),
+            }
+            _ => return Err(SignerError::Connection("expected ECC key, got RSA".to_string())),
+        };
+
+        Ok(Pubkey::from(pk_bytes))
+    }
+
+    fn try_sign_message(&self, message: &[u8]) -> Result<Signature, SignerError> {
+        // Verify that card is ready to sign
+        let mut verified = self.verified_for_signing.borrow_mut();
+        if !*verified {
+            self.try_pubkey()?;
+            *verified = true;
+        }
+
+        let mut pgp_mut = self.pgp.borrow_mut();
+        let opt = &mut pgp_mut.transaction().map_err(
+            |e| SignerError::Connection(format!("could not start transaction with card: {}", e))
+        )?;
         let card_info: OpenpgpCardInfo = opt.try_into().map_err(
             |e| SignerError::Connection(format!("could not get card info: {}", e))
         )?;
@@ -324,6 +229,56 @@ impl Signer for OpenpgpCardKeypair {
     fn is_interactive(&self) -> bool {
         true
     }
+}
+
+/// Data struct for convenience.
+#[derive(Debug)]
+struct OpenpgpCardInfo {
+    aid: ApplicationIdentifier,
+    cardholder_name: String,
+    signing_uif: Option<UIF>,
+    pin_cds_valid_once: bool,
+}
+
+impl TryFrom<&mut OpenPgpTransaction<'_>> for OpenpgpCardInfo {
+    type Error = openpgp_card::Error;
+
+    fn try_from(opt: &mut OpenPgpTransaction) -> Result<Self, Self::Error> {
+        let ard = opt.application_related_data()?;
+        Ok(OpenpgpCardInfo {
+            aid: ard.application_id()?,
+            cardholder_name: String::from_utf8_lossy(
+                opt.cardholder_related_data()?.name().get_or_insert(b"null")
+            ).to_string(),
+            signing_uif: ard.uif_pso_cds()?,
+            pin_cds_valid_once: ard.pw_status_bytes()?.pw1_cds_valid_once(),
+        })
+    }
+}
+
+fn get_pin_from_user_as_bytes(card_info: &OpenpgpCardInfo, first_attempt: bool) -> Result<String, SignerError> {
+    let description = format!(
+        "\
+            Please unlock the card%0A\
+            %0A\
+            Manufacturer: {}%0A\
+            Serial: {:X}%0A\
+            Cardholder: {}\
+            {}\
+        ",
+        card_info.aid.manufacturer_name(),
+        card_info.aid.serial(),
+        card_info.cardholder_name,
+        if first_attempt { "" } else { "%0A%0A##### INVALID PIN #####" },
+    );
+    let pin = if let Some(mut input) = PassphraseInput::with_default_binary() {
+        input.with_description(description.as_str()).with_prompt("PIN").interact().map_err(
+            |e| SignerError::InvalidInput(format!("cannot read PIN from user: {}", e))
+        )?
+    } else {
+        return Err(SignerError::Custom("pinentry binary not found, please install".to_string()));
+    };
+    Ok(pin.expose_secret().to_owned())
 }
 
 #[cfg(test)]
