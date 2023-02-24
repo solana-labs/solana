@@ -17,7 +17,7 @@ solana-program = { workspace = true }
 [target.'cfg(not(target_os = "solana"))'.dependencies]
 aes-gcm-siv = { workspace = true }
 arrayref = { workspace = true }
-bincode = "1"
+bincode = { workspace = true }
 byteorder = { workspace = true }
 cipher = { workspace = true }
 curve25519-dalek = { workspace = true, features = ["serde"] }
