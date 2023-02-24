@@ -117,13 +117,11 @@ pub fn get_closest_completion(
     limit: usize,
 ) -> (Vec<ShredRepairType>, /* processed slots */ usize) {
     let mut slot_dists: Vec<(Slot, u64)> = Vec::default();
-    let mut explored_slots: HashSet<Slot> = HashSet::default();
     let iter = GenericTraversal::new(tree);
     for slot in iter {
-        if processed_slots.contains(&slot) || explored_slots.contains(&slot) {
+        if processed_slots.contains(&slot) {
             continue;
         }
-        explored_slots.insert(slot);
         let slot_meta = slot_meta_cache
             .entry(slot)
             .or_insert_with(|| blockstore.meta(slot).unwrap());
