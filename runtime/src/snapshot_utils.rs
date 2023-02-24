@@ -1372,47 +1372,6 @@ fn verify_and_unarchive_snapshots(
     ))
 }
 
-/// Follow the flow of verify_and_unarchive_snapshots()
-fn build_storage_from_full_and_incremental_snapshot_dirs(
-    full_snapshot_info: &BankSnapshotInfo,
-    incremental_snapshot_info: Option<&BankSnapshotInfo>,
-    account_paths: &[PathBuf],
-) -> Result<(AccountStorageMap, Measure, Option<Measure>, AtomicU32)> {
-    // TBD check_are_snapshots_compatible(full_snapshot_info, incremental_snapshot_info)?;
-
-    let next_append_vec_id = Arc::new(AtomicU32::new(0));
-    let (full_storage, measure_full_storage) = build_storage_from_snapshot_dir(
-        full_snapshot_info,
-        "full snapshot deserialize",
-        account_paths,
-        next_append_vec_id.clone(),
-    )?;
-
-    let mut storage = full_storage;
-
-    let measure_incr_storage = if let Some(incremental_snapshot_info) = incremental_snapshot_info {
-        let (incr_storage, measure_incr_storage) = build_storage_from_snapshot_dir(
-            incremental_snapshot_info,
-            "incremental snapshot deserialize",
-            account_paths,
-            next_append_vec_id.clone(),
-        )?;
-
-        storage.extend(incr_storage.into_iter());
-
-        Some(measure_incr_storage)
-    } else {
-        None
-    };
-
-    Ok((
-        storage,
-        measure_full_storage,
-        measure_incr_storage,
-        Arc::try_unwrap(next_append_vec_id).unwrap(),
-    ))
-}
-
 /// Utility for parsing out bank specific information from a snapshot archive. This utility can be used
 /// to parse out bank specific information like the leader schedule, epoch schedule, etc.
 pub fn bank_fields_from_snapshot_archives(
@@ -1674,10 +1633,9 @@ pub fn bank_from_latest_snapshot_archives(
 /// snapshot and an incremental snapshot.
 /// Note that incremental snaphot not tested yet.
 #[allow(clippy::too_many_arguments)]
-pub fn bank_from_snapshot_dirs(
+pub fn bank_from_snapshot_dir(
     account_paths: &[PathBuf],
-    full_snapshot_info: &BankSnapshotInfo,
-    incremental_snapshot_info: Option<&BankSnapshotInfo>,
+    bank_snapshot: &BankSnapshotInfo,
     genesis_config: &GenesisConfig,
     runtime_config: &RuntimeConfig,
     debug_keys: Option<Arc<HashSet<Pubkey>>>,
@@ -1692,22 +1650,22 @@ pub fn bank_from_snapshot_dirs(
     accounts_update_notifier: Option<AccountsUpdateNotifier>,
     exit: &Arc<AtomicBool>,
 ) -> Result<(Bank, BankFromArchiveTimings)> {
-    let (storage, measure_full_storage, measure_incremental_storage, next_append_vec_id) =
-        build_storage_from_full_and_incremental_snapshot_dirs(
-            full_snapshot_info,
-            incremental_snapshot_info,
-            account_paths,
-        )?;
+    let next_append_vec_id = Arc::new(AtomicU32::new(0));
+    let (storage, measure_build_storage) = build_storage_from_snapshot_dir(
+        bank_snapshot,
+        "build storage",
+        account_paths,
+        next_append_vec_id.clone(),
+    )?;
 
+    let next_append_vec_id = Arc::try_unwrap(next_append_vec_id).unwrap();
     let storage_and_next_append_vec_id = StorageAndNextAppendVecId {
         storage,
         next_append_vec_id,
     };
-
     let mut measure_rebuild = Measure::start("rebuild bank from snapshots");
-    let bank = rebuild_bank_from_snapshot_dirs(
-        full_snapshot_info,
-        incremental_snapshot_info,
+    let bank = rebuild_bank_from_snapshot_dir(
+        bank_snapshot,
         account_paths,
         storage_and_next_append_vec_id,
         genesis_config,
@@ -1729,7 +1687,7 @@ pub fn bank_from_snapshot_dirs(
     if !bank.verify_snapshot_bank(
         test_hash_calculation,
         accounts_db_skip_shrink,
-        full_snapshot_info.slot,
+        bank_snapshot.slot,
         true, // When constructing from the files, ignore the hash mismatch.
     ) && limit_load_slot_count_from_snapshot.is_none()
     {
@@ -1739,9 +1697,8 @@ pub fn bank_from_snapshot_dirs(
 
     let timings = BankFromArchiveTimings {
         rebuild_bank_from_snapshots_us: measure_rebuild.as_us(),
-        full_snapshot_untar_us: measure_full_storage.as_us(),
-        incremental_snapshot_untar_us: measure_incremental_storage
-            .map_or(0, |incr_result| incr_result.as_us()),
+        full_snapshot_untar_us: measure_build_storage.as_us(),
+        incremental_snapshot_untar_us: 0,
         verify_snapshot_bank_us: measure_verify.as_us(),
     };
     Ok((bank, timings))
@@ -1750,7 +1707,7 @@ pub fn bank_from_snapshot_dirs(
 /// Rebuild bank from snapshot files.  This function searches snapshot/ files for the
 /// highest full snapshot and highest corresponding incremental snapshot, then rebuilds the bank.
 #[allow(clippy::too_many_arguments)]
-pub fn bank_from_latest_snapshot_dirs(
+pub fn bank_from_latest_snapshot_dir(
     bank_snapshots_dir: impl AsRef<Path>,
     account_paths: &[PathBuf],
     genesis_config: &GenesisConfig,
@@ -1766,24 +1723,20 @@ pub fn bank_from_latest_snapshot_dirs(
     accounts_db_config: Option<AccountsDbConfig>,
     accounts_update_notifier: Option<AccountsUpdateNotifier>,
     exit: &Arc<AtomicBool>,
-) -> Result<(Bank, BankSnapshotInfo, Option<BankSnapshotInfo>)> {
-    let full_snapshot_info = get_highest_full_snapshot(bank_snapshots_dir.as_ref())?;
-
-    let incremental_snapshot_info =
-        get_highest_incremental_snapshot(&bank_snapshots_dir, full_snapshot_info.slot);
+) -> Result<(Bank, BankSnapshotInfo)> {
+    let bank_snapshot =
+        get_highest_bank_snapshot(bank_snapshots_dir.as_ref()).ok_or_else(|| {
+            SnapshotError::NoSnapshotSlotDir(bank_snapshots_dir.as_ref().to_path_buf())
+        })?;
 
     info!(
-        "Loading bank from full bank snapshot: {}, and incremental snapshot: {:?}",
-        full_snapshot_info.snapshot_dir.display(),
-        incremental_snapshot_info
-            .as_ref()
-            .map(|incremental_snapshot_info| incremental_snapshot_info.snapshot_dir.display())
+        "Loading bank from bank snapshot: {}",
+        bank_snapshot.snapshot_dir.display()
     );
 
-    let (bank, timings) = bank_from_snapshot_dirs(
+    let (bank, timings) = bank_from_snapshot_dir(
         account_paths,
-        &full_snapshot_info,
-        incremental_snapshot_info.as_ref(),
+        &bank_snapshot,
         genesis_config,
         runtime_config,
         debug_keys,
@@ -1800,7 +1753,7 @@ pub fn bank_from_latest_snapshot_dirs(
     )?;
 
     datapoint_info!(
-        "bank_from_snapshot_dirs",
+        "bank_from_snapshot_dir",
         (
             "full_snapshot_untar_us",
             timings.full_snapshot_untar_us,
@@ -1823,7 +1776,7 @@ pub fn bank_from_latest_snapshot_dirs(
         ),
     );
 
-    Ok((bank, full_snapshot_info, incremental_snapshot_info))
+    Ok((bank, bank_snapshot))
 }
 
 /// Check to make sure the deserialized bank's slot and hash matches the snapshot archive's slot
@@ -2720,9 +2673,8 @@ fn rebuild_bank_from_unarchived_snapshots(
 }
 
 #[allow(clippy::too_many_arguments)]
-fn rebuild_bank_from_snapshot_dirs(
-    full_snapshot: &BankSnapshotInfo,
-    incremental_snapshot: Option<&BankSnapshotInfo>,
+fn rebuild_bank_from_snapshot_dir(
+    bank_snapshot: &BankSnapshotInfo,
     account_paths: &[PathBuf],
     storage_and_next_append_vec_id: StorageAndNextAppendVecId,
     genesis_config: &GenesisConfig,
@@ -2738,17 +2690,13 @@ fn rebuild_bank_from_snapshot_dirs(
     exit: &Arc<AtomicBool>,
 ) -> Result<Bank> {
     info!(
-        "Rebuilding bank from full snapshot {} and incremental snapshot {:?}",
-        full_snapshot.snapshot_path().display(),
-        incremental_snapshot
-            .as_ref()
-            .map(|snapshot| snapshot.snapshot_path()),
+        "Rebuilding bank from snapshot {}",
+        bank_snapshot.snapshot_dir.display(),
     );
 
     let snapshot_root_paths = SnapshotRootPaths {
-        full_snapshot_root_file_path: full_snapshot.snapshot_path(),
-        incremental_snapshot_root_file_path: incremental_snapshot
-            .map(|snapshot| snapshot.snapshot_path()),
+        full_snapshot_root_file_path: bank_snapshot.snapshot_path(),
+        incremental_snapshot_root_file_path: None,
     };
 
     let bank = deserialize_snapshot_data_files(&snapshot_root_paths, |snapshot_streams| {
@@ -2773,8 +2721,7 @@ fn rebuild_bank_from_snapshot_dirs(
 
     // The status cache is rebuilt from the latest snapshot.  So, if there's an incremental
     // snapshot, use that.  Otherwise use the full snapshot.
-    let status_cache_path = incremental_snapshot
-        .unwrap_or(full_snapshot)
+    let status_cache_path = bank_snapshot
         .snapshot_dir
         .join(SNAPSHOT_STATUS_CACHE_FILENAME);
     let slot_deltas = deserialize_snapshot_data_file(&status_cache_path, |stream| {
@@ -5514,7 +5461,7 @@ mod tests {
     }
 
     #[test]
-    fn test_bank_from_snapshot_dirs() {
+    fn test_bank_from_snapshot_dir() {
         solana_logger::setup();
 
         let genesis_config = GenesisConfig::default();
@@ -5543,7 +5490,7 @@ mod tests {
         )
         .unwrap();
 
-        let full_snapshot = get_highest_full_snapshot(bank_snapshots_dir).unwrap();
+        let bank_snapshot = get_highest_bank_snapshot(bank_snapshots_dir).unwrap();
 
         // Clear the contents of the account paths run directories.  When constructing the bank, the appendvec
         // files will be extracted from the snapshot hardlink directories into these run/ directories.
@@ -5551,10 +5498,9 @@ mod tests {
             delete_contents_of_path(path);
         }
 
-        let (bank_constructed, ..) = bank_from_snapshot_dirs(
+        let (bank_constructed, ..) = bank_from_snapshot_dir(
             account_paths,
-            &full_snapshot,
-            None, // Option<&IncrementalSnapshotArchiveInfo>,
+            &bank_snapshot,
             &genesis_config,
             &RuntimeConfig::default(),
             None, // Option<Arc<HashSet<Pubkey>>>,
