@@ -41,6 +41,7 @@ solana-faucet = { workspace = true }
 solana-geyser-plugin-interface = { workspace = true }
 solana-geyser-plugin-manager = { workspace = true }
 solana-genesis-utils = { workspace = true }
+solana-geyser-plugin-manager = { workspace = true }
 solana-gossip = { workspace = true }
 solana-ledger = { workspace = true }
 solana-logger = { workspace = true }

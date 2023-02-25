@@ -10,6 +10,7 @@ license = { workspace = true }
 edition = { workspace = true }
 
 [dependencies]
+
 base64 = { workspace = true }
 bincode = { workspace = true }
 log = { workspace = true }
@@ -20,6 +21,7 @@ solana-client = { workspace = true }
 solana-core = { workspace = true }
 solana-geyser-plugin-manager = { workspace = true }
 solana-gossip = { workspace = true }
+solana-geyser-plugin-manager = { workspace = true }
 solana-ledger = { workspace = true }
 solana-logger = { workspace = true }
 solana-net-utils = { workspace = true }

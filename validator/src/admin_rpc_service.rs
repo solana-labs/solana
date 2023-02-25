@@ -1,5 +1,6 @@
 use {
-    jsonrpc_core::{ErrorCode, MetaIoHandler, Metadata, Result},
+    crossbeam_channel::Sender,
+    jsonrpc_core::{BoxFuture, ErrorCode, MetaIoHandler, Metadata, Result},
     jsonrpc_core_client::{transports::ipc, RpcError},
     jsonrpc_derive::rpc,
     jsonrpc_ipc_server::{
