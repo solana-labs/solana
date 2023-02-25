@@ -77,7 +77,6 @@ use {
         transaction_batch::TransactionBatch,
         transaction_error_metrics::TransactionErrorMetrics,
         vote_account::{VoteAccount, VoteAccountsHashMap},
-        vote_parser,
     },
     byteorder::{ByteOrder, LittleEndian},
     dashmap::{DashMap, DashSet},
@@ -4672,7 +4671,7 @@ impl Bank {
                 }
             }
 
-            let is_vote = vote_parser::is_simple_vote_transaction(tx);
+            let is_vote = tx.is_simple_vote_transaction();
 
             if execution_result.was_executed() // Skip log collection for unprocessed transactions
                 && transaction_log_collector_config.filter != TransactionLogCollectorFilter::None
