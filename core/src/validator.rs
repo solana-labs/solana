@@ -932,6 +932,7 @@ impl Validator {
 
         let repair_quic_config = RepairQuicConfig {
             repair_address: Arc::new(node.sockets.repair_quic),
+            ancestor_hash_address: Arc::new(node.sockets.ancestor_hashes_requests_quic),
             serve_repair_address: Arc::new(node.sockets.serve_repair_quic),
             identity_keypair: identity_keypair.clone(),
             staked_nodes: staked_nodes.clone(),

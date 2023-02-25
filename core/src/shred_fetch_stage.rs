@@ -181,7 +181,7 @@ impl ShredFetchStage {
         name: &'static str,
         flags: PacketFlags,
         cluster_info: Arc<ClusterInfo>,
-        repair_quic_config: RepairQuicConfig,
+        repair_quic_config: &RepairQuicConfig,
     ) -> (Arc<ConnectionCache>, JoinHandle<()>, JoinHandle<()>) {
         let (packet_sender, packet_receiver) = unbounded();
 
@@ -206,12 +206,12 @@ impl ShredFetchStage {
             &*repair_quic_config.identity_keypair,
             endpoint.local_addr().unwrap().ip(),
         ));
-        let staked_nodes = repair_quic_config.staked_nodes;
+        let staked_nodes = &repair_quic_config.staked_nodes;
         let connection_cache = Arc::new(ConnectionCache::new_with_client_options(
             1,
             Some(endpoint),
             cert_info,
-            Some((&staked_nodes, &repair_quic_config.identity_keypair.pubkey())),
+            Some((staked_nodes, &repair_quic_config.identity_keypair.pubkey())),
         ));
 
         let connection_cache_clone = connection_cache.clone();
@@ -241,7 +241,7 @@ impl ShredFetchStage {
         sockets: Vec<Arc<UdpSocket>>,
         forward_sockets: Vec<Arc<UdpSocket>>,
         repair_socket: Arc<UdpSocket>,
-        repair_quic_config: Option<RepairQuicConfig>,
+        repair_quic_config: Option<&RepairQuicConfig>,
         sender: Sender<PacketBatch>,
         shred_version: u16,
         bank_forks: Arc<RwLock<BankForks>>,

@@ -1,6 +1,7 @@
 //! `window_service` handles the data plane incoming shreds, storing them in
 //!   blockstore and retransmitting where required
 //!
+
 use {
     crate::{
         ancestor_hashes_service::AncestorHashesReplayUpdateReceiver,
@@ -9,6 +10,7 @@ use {
         repair_response,
         repair_service::{DumpedSlotsReceiver, OutstandingShredRepairs, RepairInfo, RepairService},
         result::{Error, Result},
+        tvu::RepairQuicConfig,
     },
     crossbeam_channel::{unbounded, Receiver, RecvTimeoutError, Sender},
     rayon::{prelude::*, ThreadPool},
@@ -310,7 +312,7 @@ impl WindowService {
         verified_receiver: Receiver<Vec<PacketBatch>>,
         retransmit_sender: Sender<Vec<ShredPayload>>,
         repair_socket: Arc<UdpSocket>,
-        quic_repair_option: Option<Arc<ConnectionCache>>,
+        quic_repair_option: Option<(&RepairQuicConfig, Arc<ConnectionCache>)>,
         ancestor_hashes_socket: Arc<UdpSocket>,
         exit: Arc<AtomicBool>,
         repair_info: RepairInfo,

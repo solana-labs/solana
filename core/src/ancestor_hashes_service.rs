@@ -10,10 +10,14 @@ use {
         serve_repair::{
             AncestorHashesRepairType, AncestorHashesResponse, RepairProtocol, ServeRepair,
         },
+        tpu::MAX_QUIC_CONNECTIONS_PER_PEER,
+        tvu::RepairQuicConfig,
     },
     bincode::serialize,
     crossbeam_channel::{unbounded, Receiver, Sender},
     dashmap::{mapref::entry::Entry::Occupied, DashMap},
+    solana_client::connection_cache::ConnectionCache,
+    solana_connection_cache::client_connection::ClientConnection,
     solana_gossip::{cluster_info::ClusterInfo, ping_pong::Pong},
     solana_ledger::blockstore::Blockstore,
     solana_perf::{
@@ -24,11 +28,14 @@ use {
     solana_sdk::{
         clock::{Slot, DEFAULT_MS_PER_SLOT},
         pubkey::Pubkey,
-        signature::Signable,
+        signature::{Signable, Signer},
         signer::keypair::Keypair,
         timing::timestamp,
     },
-    solana_streamer::streamer::{self, PacketBatchReceiver, StreamerReceiveStats},
+    solana_streamer::{
+        quic::{spawn_server, StreamStats, MAX_UNSTAKED_CONNECTIONS},
+        streamer::{self, PacketBatchReceiver, StreamerReceiveStats},
+    },
     std::{
         collections::HashSet,
         io::{Cursor, Read},
@@ -145,6 +152,7 @@ impl AncestorHashesService {
         exit: Arc<AtomicBool>,
         blockstore: Arc<Blockstore>,
         ancestor_hashes_request_socket: Arc<UdpSocket>,
+        repair_quic_config: Option<&RepairQuicConfig>,
         repair_info: RepairInfo,
         ancestor_hashes_replay_update_receiver: AncestorHashesReplayUpdateReceiver,
     ) -> Self {
@@ -154,7 +162,7 @@ impl AncestorHashesService {
         let t_receiver = streamer::receiver(
             ancestor_hashes_request_socket.clone(),
             exit.clone(),
-            response_sender,
+            response_sender.clone(),
             Recycler::default(),
             Arc::new(StreamerReceiveStats::new(
                 "ancestor_hashes_response_receiver",
@@ -164,6 +172,48 @@ impl AncestorHashesService {
             None,
         );
 
+        let (ancestor_connection_cache, ancestor_hash_quic_t) =
+            if let Some(repair_quic_config) = repair_quic_config {
+                let host = repair_quic_config.repair_address.local_addr().unwrap().ip();
+                let stats = Arc::new(StreamStats::default());
+
+                let (endpoint, ancestor_hash_quic_t) = spawn_server(
+                    repair_quic_config
+                        .ancestor_hash_address
+                        .try_clone()
+                        .unwrap(),
+                    &repair_quic_config.identity_keypair,
+                    host,
+                    response_sender,
+                    exit.clone(),
+                    MAX_QUIC_CONNECTIONS_PER_PEER,
+                    repair_quic_config.staked_nodes.clone(),
+                    solana_streamer::quic::MAX_STAKED_CONNECTIONS,
+                    MAX_UNSTAKED_CONNECTIONS,
+                    stats,
+                    repair_quic_config.wait_for_chunk_timeout_ms,
+                )
+                .unwrap();
+
+                let cert_info = Some((
+                    &*repair_quic_config.identity_keypair,
+                    endpoint.local_addr().unwrap().ip(),
+                ));
+
+                let connection_cache = Arc::new(ConnectionCache::new_with_client_options(
+                    1,
+                    Some(endpoint),
+                    cert_info,
+                    Some((
+                        &repair_quic_config.staked_nodes,
+                        &repair_quic_config.identity_keypair.pubkey(),
+                    )),
+                ));
+
+                (Some(connection_cache), Some(ancestor_hash_quic_t))
+            } else {
+                (None, None)
+            };
         let ancestor_hashes_request_statuses: Arc<DashMap<Slot, DeadSlotAncestorRequestStatus>> =
             Arc::new(DashMap::new());
         let (retryable_slots_sender, retryable_slots_receiver) = unbounded();
@@ -179,19 +229,24 @@ impl AncestorHashesService {
             retryable_slots_sender,
             repair_info.cluster_info.clone(),
             ancestor_hashes_request_socket.clone(),
+            ancestor_connection_cache.clone(),
         );
 
         // Generate ancestor requests for dead slots that are repairable
         let t_ancestor_requests = Self::run_manage_ancestor_requests(
             ancestor_hashes_request_statuses,
             ancestor_hashes_request_socket,
+            ancestor_connection_cache,
             repair_info,
             outstanding_requests,
             exit,
             ancestor_hashes_replay_update_receiver,
             retryable_slots_receiver,
         );
-        let thread_hdls = vec![t_receiver, t_ancestor_hashes_responses, t_ancestor_requests];
+        let mut thread_hdls = vec![t_receiver, t_ancestor_hashes_responses, t_ancestor_requests];
+        if let Some(ancestor_hash_quic_t) = ancestor_hash_quic_t {
+            thread_hdls.push(ancestor_hash_quic_t);
+        }
         Self { thread_hdls }
     }
 
@@ -213,6 +268,7 @@ impl AncestorHashesService {
         retryable_slots_sender: RetryableSlotsSender,
         cluster_info: Arc<ClusterInfo>,
         ancestor_socket: Arc<UdpSocket>,
+        ancestore_connection_cache: Option<Arc<ConnectionCache>>,
     ) -> JoinHandle<()> {
         Builder::new()
             .name("solAncHashesSvc".to_string())
@@ -233,6 +289,7 @@ impl AncestorHashesService {
                         &retryable_slots_sender,
                         &keypair,
                         &ancestor_socket,
+                        &ancestore_connection_cache,
                     );
                     match result {
                         Err(Error::RecvTimeout(_)) | Ok(_) => {}
@@ -263,6 +320,7 @@ impl AncestorHashesService {
         retryable_slots_sender: &RetryableSlotsSender,
         keypair: &Keypair,
         ancestor_socket: &UdpSocket,
+        ancestore_connection_cache: &Option<Arc<ConnectionCache>>,
     ) -> Result<()> {
         let timeout = Duration::new(1, 0);
         let mut packet_batches = vec![response_receiver.recv_timeout(timeout)?];
@@ -293,6 +351,7 @@ impl AncestorHashesService {
                 retryable_slots_sender,
                 keypair,
                 ancestor_socket,
+                ancestore_connection_cache,
             );
         }
         packet_threshold.update(total_packets, timer.elapsed());
@@ -309,6 +368,7 @@ impl AncestorHashesService {
         retryable_slots_sender: &RetryableSlotsSender,
         keypair: &Keypair,
         ancestor_socket: &UdpSocket,
+        ancestore_connection_cache: &Option<Arc<ConnectionCache>>,
     ) {
         packet_batch.iter().for_each(|packet| {
             let decision = Self::verify_and_process_ancestor_response(
@@ -319,6 +379,7 @@ impl AncestorHashesService {
                 blockstore,
                 keypair,
                 ancestor_socket,
+                ancestore_connection_cache,
             );
             if let Some((slot, decision)) = decision {
                 Self::handle_ancestor_request_decision(
@@ -342,6 +403,7 @@ impl AncestorHashesService {
         blockstore: &Blockstore,
         keypair: &Keypair,
         ancestor_socket: &UdpSocket,
+        ancestore_connection_cache: &Option<Arc<ConnectionCache>>,
     ) -> Option<(Slot, DuplicateAncestorDecision)> {
         let from_addr = packet.meta().socket_addr();
         let packet_data = match packet.data(..) {
@@ -433,7 +495,12 @@ impl AncestorHashesService {
                 if let Ok(pong) = Pong::new(&ping, keypair) {
                     let pong = RepairProtocol::Pong(pong);
                     if let Ok(pong_bytes) = serialize(&pong) {
-                        let _ignore = ancestor_socket.send_to(&pong_bytes[..], from_addr);
+                        if let Some(connection_cache) = ancestore_connection_cache {
+                            let connection = connection_cache.get_connection(&from_addr);
+                            let _ignore = connection.send_data(&pong_bytes[..]);
+                        } else {
+                            let _ignore = ancestor_socket.send_to(&pong_bytes[..], from_addr);
+                        }
                     }
                 }
                 None
@@ -514,6 +581,7 @@ impl AncestorHashesService {
     fn run_manage_ancestor_requests(
         ancestor_hashes_request_statuses: Arc<DashMap<Slot, DeadSlotAncestorRequestStatus>>,
         ancestor_hashes_request_socket: Arc<UdpSocket>,
+        ancestor_hashes_request_connection_cache: Option<Arc<ConnectionCache>>,
         repair_info: RepairInfo,
         outstanding_requests: Arc<RwLock<OutstandingAncestorHashesRepairs>>,
         exit: Arc<AtomicBool>,
@@ -543,6 +611,7 @@ impl AncestorHashesService {
                 Self::manage_ancestor_requests(
                     &ancestor_hashes_request_statuses,
                     &ancestor_hashes_request_socket,
+                    &ancestor_hashes_request_connection_cache,
                     &repair_info,
                     &outstanding_requests,
                     &ancestor_hashes_replay_update_receiver,
@@ -563,6 +632,7 @@ impl AncestorHashesService {
     fn manage_ancestor_requests(
         ancestor_hashes_request_statuses: &DashMap<Slot, DeadSlotAncestorRequestStatus>,
         ancestor_hashes_request_socket: &UdpSocket,
+        ancestor_hashes_request_connection_cache: &Option<Arc<ConnectionCache>>,
         repair_info: &RepairInfo,
         outstanding_requests: &RwLock<OutstandingAncestorHashesRepairs>,
         ancestor_hashes_replay_update_receiver: &AncestorHashesReplayUpdateReceiver,
@@ -632,6 +702,7 @@ impl AncestorHashesService {
                 if Self::initiate_ancestor_hashes_requests_for_duplicate_slot(
                     ancestor_hashes_request_statuses,
                     ancestor_hashes_request_socket,
+                    ancestor_hashes_request_connection_cache,
                     &repair_info.cluster_slots,
                     serve_repair,
                     &repair_info.repair_validators,
@@ -707,6 +778,7 @@ impl AncestorHashesService {
     fn initiate_ancestor_hashes_requests_for_duplicate_slot(
         ancestor_hashes_request_statuses: &DashMap<Slot, DeadSlotAncestorRequestStatus>,
         ancestor_hashes_request_socket: &UdpSocket,
+        ancestor_hashes_request_connection_cache: &Option<Arc<ConnectionCache>>,
         cluster_slots: &ClusterSlots,
         serve_repair: &ServeRepair,
         repair_validators: &Option<HashSet<Pubkey>>,
@@ -737,6 +809,12 @@ impl AncestorHashesService {
                     nonce,
                 );
                 if let Ok(request_bytes) = request_bytes {
+                    if let Some(conenection_cache) =
+                        ancestor_hashes_request_connection_cache.as_ref()
+                    {
+                        let connection = conenection_cache.get_connection(socket_addr);
+                        let _ = connection.send_data(&request_bytes);
+                    }
                     let _ = ancestor_hashes_request_socket.send_to(&request_bytes, socket_addr);
                 }
             }
