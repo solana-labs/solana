@@ -221,8 +221,8 @@ impl PrioritizationFeeCache {
                     }
                     let priority_details = priority_details.unwrap();
 
-                    // filter out transaction that requests zero compute_unit_limit from updating
-                    // cache since it shall fail at runtime
+                    // filter out any transaction that requests zero compute_unit_limit
+                    // since its priority fee amount is not instructive
                     if priority_details.compute_unit_limit == 0 {
                         continue;
                     }
