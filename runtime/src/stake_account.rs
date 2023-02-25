@@ -69,7 +69,7 @@ impl TryFrom<AccountSharedData> for StakeAccount<()> {
         Ok(Self {
             account,
             stake_state,
-            _phantom: PhantomData::default(),
+            _phantom: PhantomData,
         })
     }
 }
@@ -86,7 +86,7 @@ impl TryFrom<AccountSharedData> for StakeAccount<Delegation> {
         Ok(Self {
             account: stake_account.account,
             stake_state: stake_account.stake_state,
-            _phantom: PhantomData::default(),
+            _phantom: PhantomData,
         })
     }
 }
@@ -97,7 +97,7 @@ impl From<StakeAccount<Delegation>> for StakeAccount<()> {
         Self {
             account: stake_account.account,
             stake_state: stake_account.stake_state,
-            _phantom: PhantomData::default(),
+            _phantom: PhantomData,
         }
     }
 }

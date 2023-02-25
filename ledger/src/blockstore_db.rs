@@ -1653,7 +1653,7 @@ impl<C: Column + ColumnName> CompactionFilterFactory for PurgedSlotFilterFactory
                 copied_oldest_slot
             ))
             .unwrap(),
-            _phantom: PhantomData::default(),
+            _phantom: PhantomData,
         }
     }
 
@@ -1696,7 +1696,7 @@ fn get_cf_options<C: 'static + Column + ColumnName>(
         cf_options.set_compaction_filter_factory(PurgedSlotFilterFactory::<C> {
             oldest_slot: oldest_slot.clone(),
             name: CString::new(format!("purged_slot_filter_factory({})", C::NAME)).unwrap(),
-            _phantom: PhantomData::default(),
+            _phantom: PhantomData,
         });
     }
 
@@ -1878,7 +1878,7 @@ pub mod tests {
         let mut factory = PurgedSlotFilterFactory::<ShredData> {
             oldest_slot: oldest_slot.clone(),
             name: CString::new("test compaction filter").unwrap(),
-            _phantom: PhantomData::default(),
+            _phantom: PhantomData,
         };
         let mut compaction_filter = factory.create(dummy_compaction_filter_context());
 

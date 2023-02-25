@@ -1,31 +1,31 @@
 [package]
 name = "solana-account-decoder"
-version = "1.16.0"
 description = "Solana account decoder"
-authors = ["Solana Labs Maintainers <maintainers@solanalabs.com>"]
-repository = "https://github.com/solana-labs/solana"
-homepage = "https://solanalabs.com/"
 documentation = "https://docs.rs/solana-account-decoder"
-license = "Apache-2.0"
-edition = "2021"
+version = { workspace = true }
+authors = { workspace = true }
+repository = { workspace = true }
+homepage = { workspace = true }
+license = { workspace = true }
+edition = { workspace = true }
 
 [dependencies]
-Inflector = "0.11.4"
-base64 = "0.13.0"
-bincode = "1.3.3"
-bs58 = "0.4.0"
-bv = "0.11.1"
-lazy_static = "1.4.0"
-serde = "1.0.152"
-serde_derive = "1.0.103"
-serde_json = "1.0.83"
-solana-address-lookup-table-program = { path = "../programs/address-lookup-table", version = "=1.16.0" }
-solana-config-program = { path = "../programs/config", version = "=1.16.0" }
-solana-sdk = { path = "../sdk", version = "=1.16.0" }
-spl-token = { version = "=3.5.0", features = ["no-entrypoint"] }
-spl-token-2022 = { version = "=0.5.0", features = ["no-entrypoint"] }
-thiserror = "1.0"
-zstd = "0.11.2"
+Inflector = { workspace = true }
+base64 = { workspace = true }
+bincode = { workspace = true }
+bs58 = { workspace = true }
+bv = { workspace = true }
+lazy_static = { workspace = true }
+serde = { workspace = true }
+serde_derive = { workspace = true }
+serde_json = { workspace = true }
+solana-address-lookup-table-program = { workspace = true }
+solana-config-program = { workspace = true }
+solana-sdk = { workspace = true }
+spl-token = { workspace = true, features = ["no-entrypoint"] }
+spl-token-2022 = { workspace = true, features = ["no-entrypoint"] }
+thiserror = { workspace = true }
+zstd = { workspace = true }
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
