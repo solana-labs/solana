@@ -219,6 +219,13 @@ impl PrioritizationFeeCache {
                     if priority_details.is_none() || account_locks.is_err() {
                         continue;
                     }
+                    let priority_details = priority_details.unwrap();
+
+                    // filter out any transaction that requests zero compute_unit_limit
+                    // since its priority fee amount is not instructive
+                    if priority_details.compute_unit_limit == 0 {
+                        continue;
+                    }
 
                     let writable_accounts = Arc::new(
                         account_locks
@@ -232,7 +239,7 @@ impl PrioritizationFeeCache {
                     self.sender
                         .send(CacheServiceUpdate::TransactionUpdate {
                             slot: bank.slot(),
-                            transaction_fee: priority_details.unwrap().priority,
+                            transaction_fee: priority_details.priority,
                             writable_accounts,
                         })
                         .unwrap_or_else(|err| {
