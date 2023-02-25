@@ -98,6 +98,8 @@ pub struct TvuConfig {
 pub struct RepairQuicConfig {
     /// The address from which to send repair request via quic
     pub repair_address: Arc<UdpSocket>,
+    /// The address from which to send AncestorHash requests via quic
+    pub ancestor_hash_address: Arc<UdpSocket>,
     /// The address at which to serve repair request via quic
     pub serve_repair_address: Arc<UdpSocket>,
     pub identity_keypair: Arc<Keypair>,
@@ -172,7 +174,7 @@ impl Tvu {
             fetch_sockets,
             forward_sockets,
             repair_socket.clone(),
-            repair_quic_config,
+            repair_quic_config.as_ref(),
             fetch_sender,
             tvu_config.shred_version,
             bank_forks.clone(),
@@ -220,7 +222,9 @@ impl Tvu {
                 cluster_slots: cluster_slots.clone(),
             };
 
-            let quic_repair_option = fetch_stage.get_connection_cache();
+            let quic_repair_option = repair_quic_config
+                .as_ref()
+                .zip(fetch_stage.get_connection_cache());
             WindowService::new(
                 blockstore.clone(),
                 verified_receiver,

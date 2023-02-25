@@ -13,6 +13,7 @@ use {
         outstanding_requests::OutstandingRequests,
         repair_weight::RepairWeight,
         serve_repair::{ServeRepair, ShredRepairType, REPAIR_PEERS_CACHE_CAPACITY},
+        tvu::RepairQuicConfig,
     },
     crossbeam_channel::{Receiver as CrossbeamReceiver, Sender as CrossbeamSender},
     lru::LruCache,
@@ -238,7 +239,7 @@ impl RepairService {
         blockstore: Arc<Blockstore>,
         exit: Arc<AtomicBool>,
         repair_socket: Arc<UdpSocket>,
-        quic_repair_option: Option<Arc<ConnectionCache>>,
+        quic_repair_option: Option<(&RepairQuicConfig, Arc<ConnectionCache>)>,
         ancestor_hashes_socket: Arc<UdpSocket>,
         repair_info: RepairInfo,
         verified_vote_receiver: VerifiedVoteReceiver,
@@ -246,6 +247,9 @@ impl RepairService {
         ancestor_hashes_replay_update_receiver: AncestorHashesReplayUpdateReceiver,
         dumped_slots_receiver: DumpedSlotsReceiver,
     ) -> Self {
+        let (repair_quic_config, connection_cache) = quic_repair_option
+            .map(|(config, option)| (Some(config), Some(option)))
+            .unwrap_or((None, None));
         let t_repair = {
             let blockstore = blockstore.clone();
             let exit = exit.clone();
@@ -257,7 +261,7 @@ impl RepairService {
                         &blockstore,
                         &exit,
                         &repair_socket,
-                        quic_repair_option,
+                        connection_cache,
                         repair_info,
                         verified_vote_receiver,
                         &outstanding_requests,
@@ -271,6 +275,7 @@ impl RepairService {
             exit,
             blockstore,
             ancestor_hashes_socket,
+            repair_quic_config,
             repair_info,
             ancestor_hashes_replay_update_receiver,
         );

@@ -2803,6 +2803,7 @@ pub struct Sockets {
     pub retransmit_sockets: Vec<UdpSocket>,
     pub serve_repair: UdpSocket,
     pub ancestor_hashes_requests: UdpSocket,
+    pub ancestor_hashes_requests_quic: UdpSocket,
     pub tpu_quic: UdpSocket,
     pub tpu_forwards_quic: UdpSocket,
     pub repair_quic: UdpSocket,
@@ -2846,7 +2847,11 @@ impl Node {
         let retransmit_socket = UdpSocket::bind(&unspecified_bind_addr).unwrap();
         let ((_serve_repair_port, serve_repair), (_serve_repair_quic_port, serve_repair_quic)) =
             bind_two_in_range_with_offset(localhost_ip_addr, port_range, QUIC_PORT_OFFSET).unwrap();
-        let ancestor_hashes_requests = UdpSocket::bind(&unspecified_bind_addr).unwrap();
+
+        let (
+            (_ancestor_hashes_requests_port, ancestor_hashes_requests),
+            (_ancestor_hashes_requests_quic_port, ancestor_hashes_requests_quic),
+        ) = bind_two_in_range_with_offset(localhost_ip_addr, port_range, QUIC_PORT_OFFSET).unwrap();
 
         let mut info = ContactInfo::new(
             *pubkey,
@@ -2898,6 +2903,7 @@ impl Node {
                 retransmit_sockets: vec![retransmit_socket],
                 serve_repair,
                 ancestor_hashes_requests,
+                ancestor_hashes_requests_quic,
                 tpu_quic,
                 tpu_forwards_quic,
                 repair_quic,
@@ -2949,7 +2955,9 @@ impl Node {
             bind_two_in_range_with_offset(bind_ip_addr, port_range, QUIC_PORT_OFFSET).unwrap();
 
         let (_, broadcast) = Self::bind(bind_ip_addr, port_range);
-        let (_, ancestor_hashes_requests) = Self::bind(bind_ip_addr, port_range);
+
+        let ((_, ancestor_hashes_requests), (_, ancestor_hashes_requests_quic)) =
+            bind_two_in_range_with_offset(bind_ip_addr, port_range, QUIC_PORT_OFFSET).unwrap();
 
         let rpc_port = find_available_port_in_range(bind_ip_addr, port_range).unwrap();
         let rpc_pubsub_port = find_available_port_in_range(bind_ip_addr, port_range).unwrap();
@@ -2995,6 +3003,7 @@ impl Node {
                 retransmit_sockets: vec![retransmit_socket],
                 serve_repair,
                 ancestor_hashes_requests,
+                ancestor_hashes_requests_quic,
                 tpu_quic,
                 tpu_forwards_quic,
                 repair_quic,
@@ -3066,7 +3075,16 @@ impl Node {
         let (_, broadcast) =
             multi_bind_in_range(bind_ip_addr, port_range, 4).expect("broadcast multi_bind");
 
-        let (_, ancestor_hashes_requests) = Self::bind(bind_ip_addr, port_range);
+        let (ancestor_hashes_requests_port, ancestor_hashes_requests) =
+            Self::bind(bind_ip_addr, port_range);
+
+        let (_, ancestor_hashes_requests_quic) = Self::bind(
+            bind_ip_addr,
+            (
+                ancestor_hashes_requests_port + QUIC_PORT_OFFSET,
+                ancestor_hashes_requests_port + QUIC_PORT_OFFSET + 1,
+            ),
+        );
 
         let mut info = ContactInfo::new(
             *pubkey,
@@ -3099,6 +3117,7 @@ impl Node {
                 serve_repair,
                 ip_echo: Some(ip_echo),
                 ancestor_hashes_requests,
+                ancestor_hashes_requests_quic,
                 tpu_quic,
                 tpu_forwards_quic,
                 repair_quic,
