@@ -22,7 +22,7 @@ pub(crate) struct BankCreationFreezingProgress {
     bank_freeze_or_destruction_count: AtomicU32,
 
     /// enable waiting for bank_freeze_or_destruction_count to increment
-    bank_frozen_or_destroyed: Arc<WaitableCondvar>,
+    pub(crate) bank_frozen_or_destroyed: Arc<WaitableCondvar>,
 
     last_report: AtomicInterval,
 }
