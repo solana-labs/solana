@@ -27,6 +27,7 @@ scopeguard = { workspace = true }
 semver = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_yaml = { workspace = true }
+serde_yaml_08 = { package = "serde_yaml", version = "0.8.26" }
 solana-clap-utils = { workspace = true }
 solana-config-program = { workspace = true }
 solana-logger = { workspace = true }

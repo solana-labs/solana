@@ -5675,6 +5675,7 @@ dependencies = [
  "scopeguard",
  "semver 1.0.16",
  "serde",
+ "serde_yaml 0.8.26",
  "serde_yaml 0.9.13",
  "solana-clap-utils",
  "solana-config-program",
