@@ -310,9 +310,9 @@ fn test_bank_serialize_style(
     let incremental =
         incremental_snapshot_persistence.then(|| BankIncrementalSnapshotPersistence {
             full_slot: slot + 1,
-            full_hash: Hash::new(&[1; 32]),
+            full_hash: SerdeAccountsHash(Hash::new(&[1; 32])),
             full_capitalization: 31,
-            incremental_hash: Hash::new(&[2; 32]),
+            incremental_hash: SerdeIncrementalAccountsHash(Hash::new(&[2; 32])),
             incremental_capitalization: 32,
         });
 
@@ -719,7 +719,7 @@ mod test_bank_serialize {
 
     // This some what long test harness is required to freeze the ABI of
     // Bank's serialization due to versioned nature
-    #[frozen_abi(digest = "2TmCWJdi5zt6Y46PiNcfStrmW8ogqKut2ttRahD3SzMG")]
+    #[frozen_abi(digest = "6JEjZCVdbC7CgpEexb9BKEtyMBL6aTHNZrjEWmhzmgp3")]
     #[derive(Serialize, AbiExample)]
     pub struct BankAbiTestWrapperNewer {
         #[serde(serialize_with = "wrapper_newer")]

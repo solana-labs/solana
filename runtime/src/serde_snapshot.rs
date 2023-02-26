@@ -62,7 +62,7 @@ mod utils;
 pub(crate) use tests::reconstruct_accounts_db_via_serialization;
 pub(crate) use {
     storage::SerializedAppendVecId,
-    types::{SerdeAccountsDeltaHash, SerdeAccountsHash},
+    types::{SerdeAccountsDeltaHash, SerdeAccountsHash, SerdeIncrementalAccountsHash},
 };
 
 #[derive(Copy, Clone, Eq, PartialEq)]
