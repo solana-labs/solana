@@ -8,6 +8,7 @@ use {
     rand::{seq::SliceRandom, thread_rng},
     solana_clap_utils::input_parsers::{keypair_of, keypairs_of, pubkey_of, value_of},
     solana_core::{
+        admin_rpc_post_init::AdminRpcRequestMetadataPostInit,
         banking_trace::DISABLED_BAKING_TRACE_DIR,
         ledger_cleanup_service::{DEFAULT_MAX_LEDGER_SHREDS, DEFAULT_MIN_MAX_LEDGER_SHREDS},
         system_monitor_service::SystemMonitorService,
@@ -1692,13 +1693,12 @@ pub fn main() {
         error!("Failed to start validator: {:?}", e);
         exit(1);
     });
-    *admin_service_post_init.write().unwrap() =
-        Some(admin_rpc_service::AdminRpcRequestMetadataPostInit {
-            bank_forks: validator.bank_forks.clone(),
-            cluster_info: validator.cluster_info.clone(),
-            vote_account,
-            repair_whitelist,
-        });
+    *admin_service_post_init.write().unwrap() = Some(AdminRpcRequestMetadataPostInit {
+        bank_forks: validator.bank_forks.clone(),
+        cluster_info: validator.cluster_info.clone(),
+        vote_account,
+        repair_whitelist,
+    });
 
     if let Some(filename) = init_complete_file {
         File::create(filename).unwrap_or_else(|_| {
