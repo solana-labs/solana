@@ -191,10 +191,6 @@ mod target_arch {
             .serialize_with_mode(&mut result_point_data[32..], Compress::No)
             .map_err(|_| AltBn128Error::InvalidInputData)?;
 
-        // TODO: double check that I can omit this
-        // if result_point == G1::zero() {
-        //     return Ok([0u8; ALT_BN128_ADDITION_OUTPUT_LEN].to_vec());
-        // }
         Ok(convert_edianness_64(&result_point_data[..]).to_vec())
     }
 
@@ -230,10 +226,6 @@ mod target_arch {
             .serialize_with_mode(&mut result_point_data[32..], Compress::No)
             .map_err(|_| AltBn128Error::InvalidInputData)?;
 
-        // TODO: double check that I can omit this
-        // if result_point == G1::zero() {
-        //     return Ok([0u8; ALT_BN128_MULTIPLICATION_OUTPUT_LEN].to_vec());
-        // }
         Ok(
             convert_edianness_64(&result_point_data[..ALT_BN128_MULTIPLICATION_OUTPUT_LEN])
                 .to_vec(),
