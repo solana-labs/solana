@@ -7,7 +7,7 @@ use {
 // Represents the results of trying to lock a set of accounts
 pub struct TransactionBatch<'a, 'b> {
     lock_results: Vec<Result<()>>,
-    bank: &'a Arc<Bank>,
+    bank: &'a std::sync::Arc<Bank>,
     sanitized_txs: Cow<'b, [SanitizedTransaction]>,
     needs_unlock: bool,
 }
