@@ -3777,7 +3777,7 @@ impl Bank {
                     tx,
                     MessageHash::Compute,
                     None,
-                    &*self,
+                    &**self,
                     self.feature_set
                         .is_active(&feature_set::require_static_program_ids_in_transaction::ID),
                 )
