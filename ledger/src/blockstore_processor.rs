@@ -516,13 +516,12 @@ fn process_entries_with_callback(
                         // execute the current queue and try to process this entry again
                         execute_batches(
                             bank,
-                            &batches,
+                            batches.drain(..),
                             transaction_status_sender,
                             replay_vote_sender,
                             confirmation_timing,
                             log_messages_bytes_limit,
                         )?;
-                        batches.clear();
                     }
                 }
             }
