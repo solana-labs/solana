@@ -290,6 +290,16 @@ fn rebatch_transactions<'a>(
         transaction_indexes,
     }
 }
+fn process_batches(
+    bank: &Arc<Bank>,
+    batches: &[TransactionBatchWithIndexes],
+    transaction_status_sender: Option<&TransactionStatusSender>,
+    replay_vote_sender: Option<&ReplayVoteSender>,
+    confirmation_timing: &mut ConfirmationTiming,
+    log_messages_bytes_limit: Option<usize>,
+) -> Result<()> {
+    panic!();
+}
 
 fn execute_batches(
     bank: &Arc<Bank>,
@@ -451,7 +461,7 @@ fn process_entries_with_callback(
                 if bank.is_block_boundary(bank.tick_height() + tick_hashes.len() as u64) {
                     // If it's a tick that will cause a new blockhash to be created,
                     // execute the group and register the tick
-                    execute_batches(
+                    process_batches(
                         bank,
                         &batches,
                         transaction_status_sender,
@@ -505,7 +515,7 @@ fn process_entries_with_callback(
                     } else {
                         // else we have an entry that conflicts with a prior entry
                         // execute the current queue and try to process this entry again
-                        execute_batches(
+                        process_batches(
                             bank,
                             &batches,
                             transaction_status_sender,
@@ -519,7 +529,7 @@ fn process_entries_with_callback(
             }
         }
     }
-    execute_batches(
+    process_batches(
         bank,
         &batches,
         transaction_status_sender,
