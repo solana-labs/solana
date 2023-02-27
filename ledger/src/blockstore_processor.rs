@@ -305,7 +305,7 @@ fn process_batches(
             batch,
             transaction_indexes,
         } = batch;
-        bank.schedule_and_commit_transactions_as_replaying(batch.sanitized_transactions(), transaction_indexes);
+        bank.schedule_and_commit_transactions_as_replaying(batch.sanitized_transactions(), transaction_indexes.into_iter());
         Ok(())
     }
 }
