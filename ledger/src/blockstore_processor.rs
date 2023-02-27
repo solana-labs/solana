@@ -305,7 +305,7 @@ fn process_batches(
     }
 }
 
-fn send_batches_to_replay_backend() -> Result<()> {
+fn send_batches_to_replay_backend(bank: &Arc<Bank>, batches: &[TransactionBatchWithIndexes]) -> Result<()> {
     for batch in batches {
         let TransactionBatchWithIndexes {
             batch,
