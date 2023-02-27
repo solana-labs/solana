@@ -1605,6 +1605,9 @@ fn main() {
             .about("Create a new ledger snapshot")
             .arg(&no_snapshot_arg)
             .arg(&account_paths_arg)
+            .arg(&accounts_index_limit)
+            .arg(&disable_disk_index)
+            .arg(&enable_disk_index)
             .arg(&skip_rewrites_arg)
             .arg(&accounts_db_skip_initial_hash_calc_arg)
             .arg(&ancient_append_vecs)
@@ -2726,7 +2729,24 @@ fn main() {
                     output_directory.display()
                 );
 
+                let accounts_index_config = AccountsIndexConfig {
+                    index_limit_mb: if let Some(limit) =
+                        value_t!(matches, "accounts_index_memory_limit_mb", usize).ok()
+                    {
+                        IndexLimitMb::Limit(limit)
+                    } else if matches.is_present("enable_accounts_disk_index") {
+                        IndexLimitMb::Unspecified
+                    } else {
+                        if matches.is_present("disable_accounts_disk_index") {
+                            warn!("ignoring `--disable-accounts-disk-index` as it specifies default behavior");
+                        }
+                        IndexLimitMb::InMemOnly
+                    },
+                    ..AccountsIndexConfig::default()
+                };
+
                 let accounts_db_config = Some(AccountsDbConfig {
+                    index: Some(accounts_index_config),
                     skip_rewrites: arg_matches.is_present("accounts_db_skip_rewrites"),
                     ancient_append_vecs: arg_matches.is_present("accounts_db_ancient_append_vecs"),
                     skip_initial_hash_calc: arg_matches
