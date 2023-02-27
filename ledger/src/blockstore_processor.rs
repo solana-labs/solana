@@ -213,7 +213,7 @@ fn execute_batches_internal<'a>(
         Mutex::new(HashMap::new());
 
     let mut execute_batches_elapsed = Measure::start("execute_batches_elapsed");
-    let results: Vec<Result<()>> = PAR_THREAD_POOL.install(|| {
+    let results: Vec<Result<()>> = {
         batches
             .map(|transaction_batch| {
                 let transaction_count =
@@ -259,7 +259,7 @@ fn execute_batches_internal<'a>(
                 result
             })
             .collect()
-    });
+    };
     execute_batches_elapsed.stop();
 
     first_err(&results)?;
