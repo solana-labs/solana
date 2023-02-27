@@ -353,7 +353,7 @@ fn execute_batches<'a>(
         });
         tx_batches.drain(..)
     } else {
-        batches
+        panic!(); //batches
     };
 
     let execute_batches_internal_metrics = execute_batches_internal(
