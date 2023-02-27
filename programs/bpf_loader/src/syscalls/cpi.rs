@@ -1736,8 +1736,7 @@ mod tests {
                 let spare_capacity = &original_data_slice[original_data_len - data_len..];
                 assert!(
                     is_zeroed(spare_capacity),
-                    "dirty account spare capacity {:?}",
-                    spare_capacity
+                    "dirty account spare capacity {spare_capacity:?}",
                 );
             }
 
@@ -1751,8 +1750,7 @@ mod tests {
             // the unused realloc padding is always zeroed
             assert!(
                 is_zeroed(&realloc_area[expected_realloc_used..]),
-                "dirty realloc padding {:?}",
-                realloc_area
+                "dirty realloc padding {realloc_area:?}",
             );
         }
 

@@ -7496,7 +7496,7 @@ fn test_bank_load_program() {
             upgrade_authority_address: None,
         })
         .unwrap();
-    programdata_account.data_mut()[programdata_data_offset..].copy_from_slice(&elf);
+    programdata_account.data_as_mut_slice()[programdata_data_offset..].copy_from_slice(&elf);
     programdata_account.set_rent_epoch(1);
     bank.store_account_and_update_capitalization(&key1, &program_account);
     bank.store_account_and_update_capitalization(&programdata_key, &programdata_account);
