@@ -304,7 +304,7 @@ fn execute_batches<'a>(
             batch
                 .batch
                 .lock_results()
-                .iter()
+                .into_iter()
                 .cloned()
                 .zip(batch.batch.sanitized_transactions().to_vec())
                 .zip(batch.transaction_indexes.to_vec())
