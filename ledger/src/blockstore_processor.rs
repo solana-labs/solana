@@ -387,7 +387,6 @@ fn execute_batches(
 pub fn process_entries_for_tests(
     bank: &Arc<Bank>,
     entries: Vec<Entry>,
-    randomize: bool,
     transaction_status_sender: Option<&TransactionStatusSender>,
     replay_vote_sender: Option<&ReplayVoteSender>,
 ) -> Result<()> {
@@ -418,7 +417,6 @@ pub fn process_entries_for_tests(
     let result = process_entries_with_callback(
         bank,
         &mut replay_entries,
-        randomize,
         transaction_status_sender,
         replay_vote_sender,
         &mut confirmation_timing,
