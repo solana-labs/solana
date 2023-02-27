@@ -303,6 +303,7 @@ fn execute_batches<'a>(
         .flat_map(|batch| {
             batch
                 .batch
+                .clone()
                 .lock_results()
                 .iter()
                 .cloned()
