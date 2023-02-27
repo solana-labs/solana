@@ -2,12 +2,12 @@
 use {
     bincode::serialize,
     quinn::SendStream,
+    serde::{Deserialize, Serialize},
     solana_perf::packet::{Packet, PacketBatch},
     solana_sdk::{pubkey::Pubkey, signature::Signature, slot_history::Slot},
     std::{
         collections::HashMap,
         net::SocketAddr,
-        str::FromStr,
         sync::{
             atomic::{AtomicBool, AtomicU64, Ordering},
             Arc,
@@ -21,121 +21,39 @@ use {
             RwLock,
         },
     },
-    x509_parser::nom::AsBytes,
 };
 
 // This message size if fixed so that we know we that we have recieved a new message after getting QUIC_REPLY_MESSAGE_SIZE bytes
-#[derive(Clone)]
-pub struct QuicReplyMessage {
-    sender_identity: Pubkey,
-    transaction_signature: Signature,
-    message: [u8; 128],
-    approximate_slot: Slot, // slot when the validator was leader
+// when you add any new message type please make sure that it is exactly of size QUIC_REPLY_MESSAGE_SIZE
+#[derive(Clone, Serialize, Deserialize)]
+pub enum QuicReplyMessage {
+    TransactionExecutionMessage {
+        leader_identity: Pubkey,
+        transaction_signature: Signature,
+        message: Vec<u8>,
+        approximate_slot: Slot,
+        unused: [u8;12],
+    },
 }
-// header + signature + 128 bytes for message
-pub const QUIC_REPLY_MESSAGE_IDENTITY_OFFSET: usize = 8;
-pub const QUIC_REPLY_MESSAGE_SIGNATURE_OFFSET: usize = 8 + 32;
-pub const QUIC_REPLY_MESSAGE_OFFSET: usize = 8 + 32 + 64;
-pub const QUIC_REPLY_SLOT_OFFSET: usize = QUIC_REPLY_MESSAGE_OFFSET + 128;
-pub const QUIC_REPLY_MESSAGE_SIZE: usize = QUIC_REPLY_SLOT_OFFSET + 8;
+pub const QUIC_REPLY_MESSAGE_STRING_SIZE: usize = 128;
+pub const QUIC_REPLY_MESSAGE_SIZE: usize = 256;
 
 impl QuicReplyMessage {
-    pub fn new(
+    pub fn new_transaction_execution_message(
         identity: Pubkey,
         transaction_signature: Signature,
         message: String,
         slot: Slot,
     ) -> Self {
-        let message = message.as_bytes();
-        let message: [u8; 128] = if message.len() >= 128 {
-            message[..128].try_into().unwrap()
-        } else {
-            let mut array: [u8; 128] = [0; 128];
-            array[0..message.len()].copy_from_slice(message.as_bytes());
-            array
-        };
-        Self {
-            sender_identity: identity,
-            message: message,
+        let mut message = message.as_bytes().to_vec();
+        message.resize(QUIC_REPLY_MESSAGE_STRING_SIZE, 0);
+        Self::TransactionExecutionMessage {
+            leader_identity: identity,
+            message,
             transaction_signature: transaction_signature,
             approximate_slot: slot,
+            unused: [0;12],
         }
-    }
-
-    pub fn message(&self) -> String {
-        let index_end = match self.message.iter().position(|x| *x == 0) {
-            Some(x) => x,
-            None => 128,
-        };
-        match String::from_utf8(self.message[0..index_end].to_vec()) {
-            Ok(x) => x,
-            Err(_) => String::from_str("").unwrap(),
-        }
-    }
-
-    pub fn signature(&self) -> Signature {
-        self.transaction_signature
-    }
-
-    pub fn identity(&self) -> Pubkey {
-        self.sender_identity
-    }
-
-    pub fn deserialize(bytes: &[u8]) -> Option<QuicReplyMessage> {
-        let identity = bincode::deserialize::<Pubkey>(
-            &bytes[QUIC_REPLY_MESSAGE_IDENTITY_OFFSET..QUIC_REPLY_MESSAGE_SIGNATURE_OFFSET],
-        );
-        if let Ok(identity) = identity {
-            let signature = bincode::deserialize::<Signature>(
-                &bytes[QUIC_REPLY_MESSAGE_SIGNATURE_OFFSET..QUIC_REPLY_MESSAGE_OFFSET],
-            );
-            if let Ok(signature) = signature {
-                let message: [u8; 128] = bytes[QUIC_REPLY_MESSAGE_OFFSET..QUIC_REPLY_SLOT_OFFSET]
-                    .try_into()
-                    .unwrap();
-                let slot_bytes: [u8; 8] = bytes[QUIC_REPLY_SLOT_OFFSET..QUIC_REPLY_MESSAGE_SIZE]
-                    .try_into()
-                    .unwrap();
-                let slot = u64::from_le_bytes(slot_bytes);
-                Some(QuicReplyMessage {
-                    sender_identity: identity,
-                    transaction_signature: signature,
-                    message,
-                    approximate_slot: slot,
-                })
-            } else {
-                None
-            }
-        } else {
-            None
-        }
-    }
-
-    pub fn approximate_slot(&self) -> Slot {
-        self.approximate_slot
-    }
-}
-
-impl serde::Serialize for QuicReplyMessage {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        let mut identity_bytes = self.identity().to_bytes().to_vec();
-
-        let mut sig_bytes = match bincode::serialize(&self.transaction_signature) {
-            Ok(bytes) => bytes,
-            Err(_) => {
-                // invalid signature / should not really happen
-                [0; 64].to_vec()
-            }
-        };
-        identity_bytes.append(&mut sig_bytes);
-        let message = &mut self.message.to_vec();
-        identity_bytes.append(message);
-        let mut slot_bytes = self.approximate_slot.to_le_bytes().to_vec();
-        identity_bytes.append(&mut slot_bytes);
-        serializer.serialize_bytes(identity_bytes.as_slice())
     }
 }
 
@@ -250,8 +168,12 @@ impl QuicBidirectionalReplyService {
     pub fn send_message(&self, transaction_signature: &Signature, message: String) {
         if let Some(sender) = &self.service_sender {
             let current_slot = self.last_known_slot.load(Ordering::Relaxed);
-            let message =
-                QuicReplyMessage::new(self.identity, *transaction_signature, message, current_slot);
+            let message = QuicReplyMessage::new_transaction_execution_message(
+                self.identity,
+                *transaction_signature,
+                message,
+                current_slot,
+            );
             match sender.send(message) {
                 Err(e) => {
                     debug!("send error {}", e);
@@ -470,23 +392,31 @@ impl QuicBidirectionalReplyService {
                 let message = bidirectional_message.unwrap();
 
                 let data = runtime.block_on(subscription_data.read());
-                // if the message has transaction signature then find stream from transaction signature
-                // else find stream by packet hash
-                let send_stream_ids = data
-                    .transaction_signature_map
-                    .get(&message.transaction_signature)
-                    .map(|x| x);
-                if let Some(send_stream_ids) = send_stream_ids {
-                    for send_stream_id in send_stream_ids {
-                        if let Some(send_stream) = data.sender_ids_map.get(&send_stream_id) {
-                            match send_stream.send(message.clone()) {
-                                Err(e) => {
-                                    warn!(
-                                        "Error sending a bidirectional message {}",
-                                        e.to_string()
-                                    );
+                match message {
+                    QuicReplyMessage::TransactionExecutionMessage {
+                        transaction_signature,
+                        ..
+                    } => {
+                        // if the message has transaction signature then find stream from transaction signature
+                        // else find stream by packet hash
+                        let send_stream_ids = data
+                            .transaction_signature_map
+                            .get(&transaction_signature)
+                            .map(|x| x);
+                        if let Some(send_stream_ids) = send_stream_ids {
+                            for send_stream_id in send_stream_ids {
+                                if let Some(send_stream) = data.sender_ids_map.get(&send_stream_id)
+                                {
+                                    match send_stream.send(message.clone()) {
+                                        Err(e) => {
+                                            warn!(
+                                                "Error sending a bidirectional message {}",
+                                                e.to_string()
+                                            );
+                                        }
+                                        Ok(_) => {}
+                                    }
                                 }
-                                Ok(_) => {}
                             }
                         }
                     }
@@ -503,7 +433,8 @@ pub mod test {
         super::QuicReplyMessage,
         crate::{
             bidirectional_channel::{
-                get_signature_from_packet, QuicBidirectionalReplyService, TRANSACTION_TIMEOUT,
+                get_signature_from_packet, QuicBidirectionalReplyService, QUIC_REPLY_MESSAGE_SIZE,
+                TRANSACTION_TIMEOUT,
             },
             nonblocking::quic::{spawn_server, test::get_client_config},
             quic::{StreamStats, MAX_UNSTAKED_CONNECTIONS},
@@ -524,6 +455,7 @@ pub mod test {
         solana_perf::packet::{Packet, PacketBatch},
         solana_sdk::{
             message::Message,
+            pubkey::Pubkey,
             signature::{Keypair, Signature},
             signer::Signer,
             system_instruction,
@@ -538,6 +470,10 @@ pub mod test {
         },
         tokio::task::JoinHandle,
     };
+
+    const MESSAGE_OF_EXACT_SIZE: &str = "abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwx";
+    const LONGER_MESSAGE: &str = "abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijkl\
+    mnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyz";
 
     fn create_dummy_transaction(index: u8) -> Transaction {
         let k1 = Keypair::new();
@@ -591,17 +527,44 @@ pub mod test {
             .await;
     }
 
+    #[tokio::test]
+    async fn test_size_of_quic_reply_message_is_fixed() {
+        let bidirectional_replay_service = QuicBidirectionalReplyService::disabled();
+        let socket = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 20000);
+        let batch = create_dummy_packet_batch(5);
+        bidirectional_replay_service
+            .add_packets(&socket, &batch)
+            .await;
+    }
+
     #[test]
     fn test_quic_reply_message_serialize_and_deserialize() {
-        let k1 = Keypair::new();
-        let signature = Signature::new_unique();
-        let message = QuicReplyMessage::new(k1.pubkey(), signature, "toto".to_string(), 1234);
-        let buffer = bincode::serialize(&message).unwrap();
-        let des_message = QuicReplyMessage::deserialize(buffer.as_slice()).unwrap();
-        assert_eq!(des_message.identity(), message.identity());
-        assert_eq!(des_message.signature(), message.signature());
-        assert_eq!(des_message.message(), message.message());
-        assert_eq!(des_message.approximate_slot, 1234);
+        let message = QuicReplyMessage::new_transaction_execution_message(
+            Pubkey::new_unique(),
+            Signature::new_unique(),
+            "Some short message".to_string(),
+            1,
+        );
+        let bincode_message = bincode::serialize::<QuicReplyMessage>(&message).unwrap();
+        assert_eq!(bincode_message.len(), QUIC_REPLY_MESSAGE_SIZE);
+
+        let message = QuicReplyMessage::new_transaction_execution_message(
+            Pubkey::new_unique(),
+            Signature::new_unique(),
+            MESSAGE_OF_EXACT_SIZE.to_string(),
+            1,
+        );
+        let bincode_message = bincode::serialize::<QuicReplyMessage>(&message).unwrap();
+        assert_eq!(bincode_message.len(), QUIC_REPLY_MESSAGE_SIZE);
+
+        let message = QuicReplyMessage::new_transaction_execution_message(
+            Pubkey::new_unique(),
+            Signature::new_unique(),
+            LONGER_MESSAGE.to_string(),
+            1,
+        );
+        let bincode_message = bincode::serialize::<QuicReplyMessage>(&message).unwrap();
+        assert_eq!(bincode_message.len(), QUIC_REPLY_MESSAGE_SIZE);
     }
 
     fn setup_quic_server(
@@ -928,7 +891,7 @@ pub mod test {
             assert!(signatures.contains(&message.signature()));
             assert_eq!(
                 message.message(),
-                "abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwx".to_string() // only 128 chars
+                MESSAGE_OF_EXACT_SIZE.to_string() // only 128 chars
             );
         }
         exit.store(true, std::sync::atomic::Ordering::Relaxed);

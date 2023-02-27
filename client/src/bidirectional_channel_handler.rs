@@ -28,6 +28,32 @@ pub struct QuicHandlerMessage {
 }
 
 impl QuicHandlerMessage {
+    pub fn new(message:QuicReplyMessage) -> Self {
+        match message {
+            QuicReplyMessage::TransactionExecutionMessage { leader_identity, transaction_signature, message, approximate_slot, .. } => {
+                Self {
+                    transaction_signature,
+                    server_identity: Some(leader_identity),
+                    message: Self::decode_vec_char_to_message(message),
+                    approximate_slot,
+                    quic_connection_error: false,
+                    server_socket: None,
+                }
+            }
+        }
+    }
+
+    fn decode_vec_char_to_message(message: Vec<u8>) -> String {
+        let index_end = match message.iter().position(|x| *x == 0) {
+            Some(x) => x,
+            None => 128,
+        };
+        match String::from_utf8(message[0..index_end].to_vec()) {
+            Ok(x) => x,
+            Err(_) => "".to_string(),
+        }
+    }
+
     pub fn signature(&self) -> Signature {
         self.transaction_signature
     }
@@ -126,18 +152,12 @@ impl BidirectionalChannelHandler {
                                     buffer_written = buffer_written + chunk.bytes.len();
 
                                     while buffer_written >= QUIC_REPLY_MESSAGE_SIZE {
-                                        let message =
-                                            QuicReplyMessage::deserialize(buffer.as_slice());
-                                        if let Some(message) = message {
-                                            let message = QuicHandlerMessage {
-                                                transaction_signature: message.signature(),
-                                                server_identity: Some(message.identity()),
-                                                message: message.message(),
-                                                server_socket: None,
-                                                quic_connection_error: false,
-                                                approximate_slot: message.approximate_slot(),
-                                            };
-                                            if let Err(_) = sender.send(message) {
+                                        let message = bincode::deserialize::<QuicReplyMessage>(
+                                            &buffer.as_slice(),
+                                        );
+                                        if let Ok(message) = message {
+                                            let handler_message = QuicHandlerMessage::new(message);
+                                            if let Err(_) = sender.send(handler_message) {
                                                 // crossbeam channel closed
                                                 break;
                                             }
