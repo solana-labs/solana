@@ -22,12 +22,23 @@ pub(crate) struct BankCreationFreezingProgress {
     bank_freeze_or_destruction_count: AtomicU32,
 
     /// enable waiting for bank_freeze_or_destruction_count to increment
-    bank_frozen_or_destroyed: Arc<WaitableCondvar>,
+    pub(crate) bank_frozen_or_destroyed: Arc<WaitableCondvar>,
 
     last_report: AtomicInterval,
+
+    #[allow(dead_code)]
+    /// if we are running tests and foreground account processing will not occur.
+    /// Otherwise, shrink tests could wait forever.
+    pub(crate) tests_with_no_foreground_account_processing: bool,
 }
 
 impl BankCreationFreezingProgress {
+    pub(crate) fn new(tests_with_no_foreground_account_processing: bool) -> Self {
+        Self {
+            tests_with_no_foreground_account_processing,
+            ..Self::default()
+        }
+    }
     pub(crate) fn increment_bank_frozen_or_destroyed(&self) {
         self.bank_freeze_or_destruction_count
             .fetch_add(1, Ordering::Release);
