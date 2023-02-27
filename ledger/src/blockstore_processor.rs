@@ -311,7 +311,7 @@ fn send_batches_to_replay_backend(bank: &Arc<Bank>, batches: &[TransactionBatchW
             batch,
             transaction_indexes,
         } = batch;
-        bank.schedule_and_commit_transactions_as_replaying(batch.sanitized_transactions(), transaction_indexes.into_iter());
+        bank.schedule_transactions_to_commit_as_replaying(batch.sanitized_transactions(), transaction_indexes.into_iter());
     }
     Ok(())
 }

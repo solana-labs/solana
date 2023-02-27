@@ -6107,7 +6107,7 @@ impl Bank {
         }
     }
 
-    pub fn schedule_and_commit_transactions_as_replaying<'a>(
+    pub fn schedule_transactions_to_commit_as_replaying<'a>(
         self: &Arc<Bank>,
         transactions: &[SanitizedTransaction],
         transaction_indexes: impl Iterator<Item = &'a usize>,
