@@ -12,8 +12,8 @@ use {
         with_mock_invoke_context,
     },
     solana_rbpf::{
-        aligned_memory::AlignedMemory, assembler::assemble, ebpf::HOST_ALIGN, elf::Executable,
-        static_analysis::Analysis, verifier::RequisiteVerifier, vm::VerifiedExecutable,
+        assembler::assemble, elf::Executable, static_analysis::Analysis,
+        verifier::RequisiteVerifier, vm::VerifiedExecutable,
     },
     solana_sdk::{
         account::AccountSharedData,
