@@ -302,8 +302,8 @@ fn execute_batches<'a>(
     let ((lock_results, sanitized_txs), transaction_indexes): ((Vec<_>, Vec<_>), Vec<_>) = batches
         .flat_map(|batch| {
             batch
-                .batch
                 .clone()
+                .batch
                 .lock_results()
                 .iter()
                 .cloned()
