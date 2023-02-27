@@ -202,19 +202,22 @@ pub struct ExecuteBatchesInternalMetrics {
     execute_batches_us: u64,
 }
 
-fn execute_batches_internal<'a>(
+fn execute_batches_internal(
     bank: &Arc<Bank>,
-    batches: impl Iterator<Item = TransactionBatchWithIndexes<'a, 'a>>,
+    batches: &[TransactionBatchWithIndexes],
     transaction_status_sender: Option<&TransactionStatusSender>,
     replay_vote_sender: Option<&ReplayVoteSender>,
     log_messages_bytes_limit: Option<usize>,
 ) -> Result<ExecuteBatchesInternalMetrics> {
+    assert!(!batches.is_empty());
+    inc_new_counter_debug!("bank-par_execute_entries-count", batches.len());
     let execution_timings_per_thread: Mutex<HashMap<usize, ThreadExecuteTimings>> =
         Mutex::new(HashMap::new());
 
     let mut execute_batches_elapsed = Measure::start("execute_batches_elapsed");
-    let results: Vec<Result<()>> = {
+    let results: Vec<Result<()>> = PAR_THREAD_POOL.install(|| {
         batches
+            .into_par_iter()
             .map(|transaction_batch| {
                 let transaction_count =
                     transaction_batch.batch.sanitized_transactions().len() as u64;
@@ -222,7 +225,7 @@ fn execute_batches_internal<'a>(
                 let (result, execute_batches_time): (Result<()>, Measure) = measure!(
                     {
                         let result = execute_batch(
-                            &transaction_batch,
+                            transaction_batch,
                             bank,
                             transaction_status_sender,
                             replay_vote_sender,
@@ -259,14 +262,14 @@ fn execute_batches_internal<'a>(
                 result
             })
             .collect()
-    };
+    });
     execute_batches_elapsed.stop();
 
     first_err(&results)?;
 
     Ok(ExecuteBatchesInternalMetrics {
         execution_timings_per_thread: execution_timings_per_thread.into_inner().unwrap(),
-        total_batches_len: 0 as u64,
+        total_batches_len: batches.len() as u64,
         execute_batches_us: execute_batches_elapsed.as_us(),
     })
 }
@@ -291,20 +294,24 @@ fn rebatch_transactions<'a>(
     }
 }
 
-fn execute_batches<'a>(
+fn execute_batches(
     bank: &Arc<Bank>,
-    batches: std::vec::Drain<'_, TransactionBatchWithIndexes<'a, 'a>>,
+    batches: &[TransactionBatchWithIndexes],
     transaction_status_sender: Option<&TransactionStatusSender>,
     replay_vote_sender: Option<&ReplayVoteSender>,
     confirmation_timing: &mut ConfirmationTiming,
     log_messages_bytes_limit: Option<usize>,
 ) -> Result<()> {
+    if batches.is_empty() {
+        return Ok(());
+    }
+
     let ((lock_results, sanitized_txs), transaction_indexes): ((Vec<_>, Vec<_>), Vec<_>) = batches
+        .iter()
         .flat_map(|batch| {
             batch
                 .batch
                 .lock_results()
-                .clone()
                 .iter()
                 .cloned()
                 .zip(batch.batch.sanitized_transactions().to_vec())
@@ -352,9 +359,9 @@ fn execute_batches<'a>(
                 batch_cost = 0;
             }
         });
-        tx_batches.drain(..)
+        &tx_batches[..]
     } else {
-        panic!(); //batches
+        batches
     };
 
     let execute_batches_internal_metrics = execute_batches_internal(
@@ -452,7 +459,7 @@ fn process_entries_with_callback(
                     // execute the group and register the tick
                     execute_batches(
                         bank,
-                        batches.drain(..),
+                        &batches,
                         transaction_status_sender,
                         replay_vote_sender,
                         confirmation_timing,
@@ -514,12 +521,13 @@ fn process_entries_with_callback(
                         // execute the current queue and try to process this entry again
                         execute_batches(
                             bank,
-                            batches.drain(..),
+                            &batches,
                             transaction_status_sender,
                             replay_vote_sender,
                             confirmation_timing,
                             log_messages_bytes_limit,
                         )?;
+                        batches.clear();
                     }
                 }
             }
@@ -527,7 +535,7 @@ fn process_entries_with_callback(
     }
     execute_batches(
         bank,
-        batches.drain(..),
+        &batches,
         transaction_status_sender,
         replay_vote_sender,
         confirmation_timing,
