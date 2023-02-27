@@ -529,7 +529,7 @@ fn process_entries_with_callback(
     }
     execute_batches(
         bank,
-        &batches,
+        batches.drain(..),
         transaction_status_sender,
         replay_vote_sender,
         confirmation_timing,
