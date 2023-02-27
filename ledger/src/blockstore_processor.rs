@@ -204,7 +204,7 @@ pub struct ExecuteBatchesInternalMetrics {
 
 fn execute_batches_internal(
     bank: &Arc<Bank>,
-    batches: &[TransactionBatchWithIndexes],
+    batches: impl Iterator<Item = TransactionBatchWithIndexes<'a, 'a>>,
     transaction_status_sender: Option<&TransactionStatusSender>,
     replay_vote_sender: Option<&ReplayVoteSender>,
     log_messages_bytes_limit: Option<usize>,
