@@ -459,7 +459,7 @@ fn process_entries_with_callback(
                     // execute the group and register the tick
                     execute_batches(
                         bank,
-                        &batches.retain(..),
+                        &batches.drain(..),
                         transaction_status_sender,
                         replay_vote_sender,
                         confirmation_timing,
