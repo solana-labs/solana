@@ -3769,7 +3769,7 @@ impl Bank {
 
     /// Prepare a transaction batch from a list of versioned transactions from
     /// an entry. Used for tests only.
-    pub fn prepare_entry_batch<'a>(&'a self, txs: Vec<VersionedTransaction>) -> Result<TransactionBatch<'a, 'a>> {
+    pub fn prepare_entry_batch<'a>(self: &'a Arc<Self>, txs: Vec<VersionedTransaction>) -> Result<TransactionBatch<'a, 'a>> {
         let sanitized_txs = txs
             .into_iter()
             .map(|tx| {
