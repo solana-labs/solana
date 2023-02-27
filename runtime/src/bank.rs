@@ -3826,10 +3826,10 @@ impl Bank {
     }
 
     /// Prepare a transaction batch without locking accounts for transaction simulation.
-    pub(crate) fn prepare_simulation_batch(
-        self: &Arc<Self>,
+    pub(crate) fn prepare_simulation_batch<'a>(
+        self: &'a Arc<Self>,
         transaction: SanitizedTransaction,
-    ) -> TransactionBatch<'_, '_> {
+    ) -> TransactionBatch<'a, 'a> {
         let tx_account_lock_limit = self.get_transaction_account_lock_limit();
         let lock_result = transaction
             .get_account_locks(tx_account_lock_limit)
