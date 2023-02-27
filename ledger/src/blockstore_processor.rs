@@ -299,7 +299,7 @@ fn process_batches(
     log_messages_bytes_limit: Option<usize>,
 ) -> Result<()> {
     if !bank.unified_scheduler_enabled() {
-        execute_batches(bank, batches, transaction_status_sender, replay_vote_sender, confirmation_timing, log_messages_bytes_limit);
+        execute_batches(bank, batches, transaction_status_sender, replay_vote_sender, confirmation_timing, log_messages_bytes_limit)
     } else {
     }
 }
