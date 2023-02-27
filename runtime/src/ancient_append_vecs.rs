@@ -173,6 +173,7 @@ impl AncientSlotInfos {
         self.shrink_indexes.clear();
         let total_storages = self.all_infos.len();
         let mut cumulative_bytes = 0u64;
+        let mut limit = max_storages;
         for (i, info) in self.all_infos.iter().enumerate() {
             saturating_add_assign!(cumulative_bytes, info.alive_bytes);
             let ancient_storages_required = (cumulative_bytes / ideal_storage_size + 1) as usize;
@@ -181,9 +182,18 @@ impl AncientSlotInfos {
             // combined ancient storages is less than the threshold, then
             // we've gone too far, so get rid of this entry and all after it.
             // Every storage after this one is larger.
-            if storages_remaining + ancient_storages_required < max_storages {
+            let remaining_after = storages_remaining.saturating_add(ancient_storages_required);
+            if remaining_after < limit {
                 self.all_infos.truncate(i);
                 break;
+            }
+
+            if i == 0 {
+                // once we have exceeded the max storages, we combine up to 20% below that max
+                limit = max_storages * 80 / 100;
+                if limit <= 1 {
+                    return;
+                }
             }
         }
     }
@@ -2036,7 +2046,11 @@ pub mod tests {
                         .iter()
                         .map(|info| info.slot)
                         .collect::<Vec<_>>(),
-                    if reorder { vec![3, 0, 1] } else { vec![0, 1] },
+                    if reorder {
+                        vec![3, 0, 1, 2]
+                    } else {
+                        vec![0, 1, 2, 3]
+                    },
                     "reorder: {reorder}"
                 );
             }
@@ -2116,14 +2130,14 @@ pub mod tests {
                 assert_eq!(infos.all_infos.len(), 2);
             }
 
-            // max is 3
-            // 4 storages
-            // storage[3] is big enough to cause us to need another storage
-            // so, storage[0] and [1] can be combined into 1, resulting in 3 remaining storages, which is
-            // the goal, so we only have to combine the first 2 to hit the goal
-            let mut infos = create_test_infos(4);
-            infos.all_infos[3].alive_bytes = ideal_storage_size_large;
-            let max_storages = 3;
+            // max is 10
+            // 14 storages
+            // storage[10] is big enough to cause us to need another storage
+            // so, we exceed the max threshold.
+            // once that is exceeded, we shrink until we are below 8 (80% of max)
+            let mut infos = create_test_infos(14);
+            infos.all_infos[10].alive_bytes = ideal_storage_size_large;
+            let max_storages = 10;
             test(
                 &mut infos,
                 max_storages,
@@ -2135,7 +2149,7 @@ pub mod tests {
                     .iter()
                     .map(|info| info.slot)
                     .collect::<Vec<_>>(),
-                vec![0, 1]
+                (0..7).collect::<Vec<_>>()
             );
         }
     }
@@ -2515,13 +2529,18 @@ pub mod tests {
                 let active_slots = (0..num_slots)
                     .filter_map(|slot| db.storage.get_slot_storage_entry((slot as Slot) + slot1))
                     .count();
-                let mut expected_slots = max_ancient_slots.min(num_slots);
+                let mut limit = max_ancient_slots;
+                let mut expected_slots = limit.min(num_slots);
                 if max_ancient_slots == 0 {
                     expected_slots = 1;
+                } else if num_slots > max_ancient_slots {
+                    // if initially we exceed count, then we combine until we're at 80%
+                    limit = max_ancient_slots * 80 / 100;
+                    expected_slots = limit.min(num_slots).max(1);
                 }
                 assert_eq!(
                     active_slots, expected_slots,
-                    "slots: {num_slots}, max_ancient_slots: {max_ancient_slots}, alive: {alive}"
+                    "slots: {num_slots}, max_ancient_slots: {max_ancient_slots}, alive: {alive}, limit: {limit}"
                 );
                 assert_eq!(
                     expected_slots,
