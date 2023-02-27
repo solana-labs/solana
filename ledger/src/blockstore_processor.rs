@@ -202,7 +202,7 @@ pub struct ExecuteBatchesInternalMetrics {
     execute_batches_us: u64,
 }
 
-fn execute_batches_internal(
+fn execute_batches_internal<'a>(
     bank: &Arc<Bank>,
     batches: impl Iterator<Item = TransactionBatchWithIndexes<'a, 'a>>,
     transaction_status_sender: Option<&TransactionStatusSender>,
