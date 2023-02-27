@@ -172,7 +172,7 @@ use {
         sync::{
             atomic::{
                 AtomicBool, AtomicI64, AtomicU64, AtomicUsize,
-                Ordering::{AcqRel, Acquire, Relaxed, Release},
+                Ordering::{AcqRel, Acquire, Relaxed},
             },
             Arc, LockResult, RwLock, RwLockReadGuard, RwLockWriteGuard,
         },
@@ -1791,8 +1791,7 @@ impl Bank {
             .accounts
             .accounts_db
             .bank_progress
-            .bank_creation_count
-            .fetch_add(1, Release);
+            .increment_bank_creation_count();
     }
 
     fn bank_frozen_or_destroyed(&self) {
@@ -1804,8 +1803,7 @@ impl Bank {
                 .accounts
                 .accounts_db
                 .bank_progress
-                .bank_freeze_or_destruction_count
-                .fetch_add(1, Release);
+                .increment_bank_frozen_or_destroyed();
         }
     }
 
