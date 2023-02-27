@@ -3310,6 +3310,7 @@ mod tests {
                     retransmit_sockets: vec![],
                     serve_repair: UdpSocket::bind("0.0.0.0:0").unwrap(),
                     ancestor_hashes_requests: UdpSocket::bind("0.0.0.0:0").unwrap(),
+                    ancestor_hashes_requests_quic: UdpSocket::bind("0.0.0.0:0").unwrap(),
                     tpu_quic: UdpSocket::bind("0.0.0.0:0").unwrap(),
                     tpu_forwards_quic: UdpSocket::bind("0.0.0.0:0").unwrap(),
                     repair_quic: UdpSocket::bind("0.0.0.0:0").unwrap(),
