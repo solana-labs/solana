@@ -3811,7 +3811,7 @@ impl Bank {
     /// Prepare a locked transaction batch from a list of sanitized transactions, and their cost
     /// limited packing status
     pub fn prepare_sanitized_batch_with_results<'a, 'b>(
-        &'a self,
+        self: &'a Arc<Self>,
         transactions: &'b [SanitizedTransaction],
         transaction_results: impl Iterator<Item = &'b Result<()>>,
     ) -> TransactionBatch<'a, 'b> {
