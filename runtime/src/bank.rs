@@ -3797,7 +3797,7 @@ impl Bank {
 
     /// Prepare a locked transaction batch from a list of sanitized transactions.
     pub fn prepare_sanitized_batch<'a, 'b>(
-        &'a self,
+        self: &'a Arc<Self>,
         txs: &'b [SanitizedTransaction],
     ) -> TransactionBatch<'a, 'b> {
         let tx_account_lock_limit = self.get_transaction_account_lock_limit();
