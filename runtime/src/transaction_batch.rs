@@ -15,7 +15,7 @@ pub struct TransactionBatch<'a, 'b> {
 impl<'a, 'b> TransactionBatch<'a, 'b> {
     pub fn new(
         lock_results: Vec<Result<()>>,
-        bank: &'a Bank,
+        bank: &'a std::sync::Arc<Bank>,
         sanitized_txs: Cow<'b, [SanitizedTransaction]>,
     ) -> Self {
         assert_eq!(lock_results.len(), sanitized_txs.len());
