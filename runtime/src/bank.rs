@@ -6138,7 +6138,7 @@ impl Bank {
         }
     }
 
-    pub fn with_scheduler() -> bool {
+    pub fn with_scheduler(&self) -> bool {
         self.scheduler.read().unwrap().is_some()
     }
 
