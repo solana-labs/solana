@@ -108,3 +108,156 @@ To turn on SBF interpreter trace messages in a local cluster configure the
 `solana_rbpf` level in `RUST_LOG` to `trace`. For example:
 
 `export RUST_LOG=solana_rbpf=trace`
+
+
+## Source level debugging
+
+Source level debugging of on-chain programs written in Rust or C can
+be done using the stand-alone tool rbpf-cli, included in the SDK, and
+lldb, distrubuted with Solana Rust and Clang compiler binary package
+sbf-tools.
+
+The rbpf-cli tool loads a compiled on-chain program, executes it in
+RBPF virtual machine and runs a gdb server that accepts incoming
+connections from LLDB or GDB.  Once lldb is connected to rbpf-cli
+gdbserver, it can control execution of an on-chain program.  The
+execution environment of rbpf-cli is limited to the loaded program and
+the input data only.  Run `rbpf-cli --help` for an example of
+specifying input data for parameters of the program entrypoint
+function.  Any information that exists on a blockchain is not
+available to the program when executed in rbpf-cli. For example, CPI
+calls don't work, reading any information from blockchain doesn't
+work, etc.
+
+To compile a program for debugging use cargo-build-sbf build utility
+with the command line option `--debug`. The utility will generate two
+loadable files, one a usual loadable module with the extension `.so`,
+and another the same loadable module but containing Dwarf debug
+information, a file with extension `.debug`.
+
+To execute a program in debugger, run rbpf-cli with `-u debugger`
+command line option. For example, a crate named 'helloworld' is
+compiled and an executable program is built in `target/deploy`
+directory. There should be three files in that directory
+- helloworld-keypair.json -- a keypair for deploying the program,
+- helloworld.debug -- a binary file containg debug information,
+- helloworld.so -- an executable file loadable into the virtual machine.
+The command line for running rbp-cli would be something like this
+```
+rbpf-cli -u debugger target/deploy/helloworld.so
+```
+
+In debugger mode rbpf-cli loads an `.so` file and starts listening for
+an incoming connection from a debugger
+```
+Waiting for a Debugger connection on "127.0.0.1:9001"...
+```
+
+To connect to rbpf-cli and execute the program, run lldb. For
+debugging rust programs it may be beneficial to run solana-lldb
+wrapper to lldb, i.e. at a new shell prompt (other than the one used
+to run rbpf-cli) run the command
+
+```
+solana-lldb
+```
+
+This script is installed in sbf-tools path. If that path is not added
+to `PATH` environment variable, it may be necessary to specify the
+full path, e.g.
+```
+~/.cache/solana/v1.35/sbf-tools/llvm/bin/solana-lldb
+```
+After starting the debugger, load the .debug file by entering the
+following command at the debugger prompt
+```
+(lldb) file target/deploy/helloworld.debug
+```
+If the debugger finds the file, it will print something like this
+```
+Current executable set to '/path/helloworld.debug' (bpf).
+```
+
+Now, connect to the gdb server that rbpf-cli implements, and debug the
+program as usual. Enter the following command at lldb prompt
+```
+(lldb) gdb-remote 127.0.0.1:9001
+```
+If the debugger and the gdb server establish a connection, the
+execution of the program will be stopped at the entrypoint function,
+and lldb should print several lines of the source code around the
+entrypoint function signature.  From this point on, normal lldb
+commands can be used to control execution of the program being
+debugged.
+
+
+### Debugging in an IDE
+
+To debug on-chain programs in Visual Studio IDE, install the CodeLLDB
+extension. Open CodeLLDB Extension Settings. In
+Advanced settings change the value of `Lldb: Library` field to the
+path of `liblldb.so` (or liblldb.dylib on macOS). For example on Linux a
+possible path to Solana customized lldb can be
+`/home/<user>/.cache/solana/v1.33/sbf-tools/llvm/lib/liblldb.so.`
+where `<user>` is your Linux system username. This can also be added
+directly to `~/.config/Code/User/settings.json` file, e.g.
+```
+{
+    "lldb.library": "/home/<user>/.cache/solana/v1.35/sbf-tools/llvm/lib/liblldb.so"
+}
+```
+
+In `.vscode` subdirectory of your on-chain project, create two files
+
+First file is `tasks.json` with the following content
+```
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "build",
+            "type": "shell",
+            "command": "cargo build-sbf --debug",
+            "problemMatcher": [],
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            }
+        },
+        {
+            "label": "rbpf",
+            "type": "shell",
+            "command": "rbpf-cli -u debugger ${workspaceFolder}/target/deploy/helloworld.so"
+        }
+    ]
+}
+```
+The first task is to build the on-chain program using cargo-build-sbf
+utility. The second task is to run rbpf-cli in debugger mode.
+
+Another file is `launch.json` with the following content
+```
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "type": "lldb",
+            "request": "custom",
+            "name": "Debug",
+            "targetCreateCommands": ["target create ${workspaceFolder}/target/deploy/helloworld.debug"],
+            "processCreateCommands": ["gdb-remote 127.0.0.1:9001"]
+        }
+    ]
+}
+```
+This file specifies how to run debugger and to connect it to the gdb
+server implemented by rbpf-cli.
+
+To start debugging a program, first build it by running the build
+task. The next step is to run rbpf task. The tasks specified in
+`tasks.json` file are started from `Terminal >> Run Task...` menu of
+VSCode. When rbpf-cli is running and listening from incoming
+connections, it's time to start the debugger.  Launch it from VSCode
+`Run and Debug` menu.  If everything is set up correctly, VSCode will
+start a debugging session and the porogram execution should stop on
+the entrance into the `entrypoint` function.
