@@ -302,10 +302,6 @@ fn execute_batches<'a>(
     confirmation_timing: &mut ConfirmationTiming,
     log_messages_bytes_limit: Option<usize>,
 ) -> Result<()> {
-    if batches.is_empty() {
-        return Ok(());
-    }
-
     let ((lock_results, sanitized_txs), transaction_indexes): ((Vec<_>, Vec<_>), Vec<_>) = batches
         .iter()
         .flat_map(|batch| {
