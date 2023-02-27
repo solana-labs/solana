@@ -6138,6 +6138,10 @@ impl Bank {
         }
     }
 
+    pub fn with_scheduler() -> bool {
+        self.scheduler.read().unwrap().is_some()
+    }
+
     /// Process a batch of transactions.
     #[must_use]
     pub fn load_execute_and_commit_transactions(
