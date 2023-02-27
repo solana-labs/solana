@@ -1366,6 +1366,15 @@ fn post_process_restored_tower(
     Ok(restored_tower)
 }
 
+fn blockstore_options_from_config(config: &ValidatorConfig) -> BlockstoreOptions {
+    BlockstoreOptions {
+        recovery_mode: config.wal_recovery_mode.clone(),
+        column_options: config.ledger_column_options.clone(),
+        enforce_ulimit_nofile: config.enforce_ulimit_nofile,
+        ..BlockstoreOptions::default()
+    }
+}
+
 #[allow(clippy::type_complexity)]
 fn load_blockstore(
     config: &ValidatorConfig,
@@ -1423,16 +1432,8 @@ fn load_blockstore(
         ledger_signal_receiver,
         completed_slots_receiver,
         ..
-    } = Blockstore::open_with_signal(
-        ledger_path,
-        BlockstoreOptions {
-            recovery_mode: config.wal_recovery_mode.clone(),
-            column_options: config.ledger_column_options.clone(),
-            enforce_ulimit_nofile: config.enforce_ulimit_nofile,
-            ..BlockstoreOptions::default()
-        },
-    )
-    .expect("Failed to open ledger database");
+    } = Blockstore::open_with_signal(ledger_path, blockstore_options_from_config(config))
+        .expect("Failed to open ledger database");
     blockstore.shred_timing_point_sender = poh_timing_point_sender;
     // following boot sequence (esp BankForks) could set root. so stash the original value
     // of blockstore root away here as soon as possible.
