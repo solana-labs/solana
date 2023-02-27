@@ -301,7 +301,7 @@ fn process_batches(
     if !bank.with_scheduler() {
         execute_batches_as_replay_backend(bank, batches, transaction_status_sender, replay_vote_sender, confirmation_timing, log_messages_bytes_limit)
     } else {
-        send_batches_to_replay_backend()
+        send_batches_to_replay_backend(bank, batches)
     }
 }
 
