@@ -6218,7 +6218,7 @@ impl Bank {
     /// replicates the vector Bank::process_transaction method with metadata recording enabled.
     #[must_use]
     pub fn process_transaction_with_metadata(
-        &self,
+        self: &Arc<Self>,
         tx: impl Into<VersionedTransaction>,
     ) -> TransactionExecutionResult {
         let txs = vec![tx.into()];
