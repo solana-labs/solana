@@ -354,7 +354,7 @@ fn execute_batches<'a>(
                 batch_cost = 0;
             }
         });
-        &tx_batches[..]
+        tx_batches.drain()
     } else {
         batches
     };
