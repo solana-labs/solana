@@ -296,7 +296,7 @@ fn rebatch_transactions<'a>(
 
 fn execute_batches<'a>(
     bank: &Arc<Bank>,
-    batches: impl Iterator<Type = TransactionBatchWithIndexes<'a, 'a>>,
+    batches: impl Iterator<Item = TransactionBatchWithIndexes<'a, 'a>>,
     transaction_status_sender: Option<&TransactionStatusSender>,
     replay_vote_sender: Option<&ReplayVoteSender>,
     confirmation_timing: &mut ConfirmationTiming,
