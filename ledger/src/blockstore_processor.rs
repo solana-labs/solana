@@ -301,11 +301,13 @@ fn process_batches(
     if !bank.unified_scheduler_enabled() {
         execute_batches(bank, batches, transaction_status_sender, replay_vote_sender, confirmation_timing, log_messages_bytes_limit)
     } else {
-        let TransactionBatchWithIndexes {
-            batch,
-            transaction_indexes,
-        } = batch;
-        bank.schedule_and_commit_transactions_as_replaying(batch.sanitized_transactions(), transaction_indexes.into_iter());
+        for batch in batches {
+            let TransactionBatchWithIndexes {
+                batch,
+                transaction_indexes,
+            } = batch;
+            bank.schedule_and_commit_transactions_as_replaying(batch.sanitized_transactions(), transaction_indexes.into_iter());
+        }
         Ok(())
     }
 }
