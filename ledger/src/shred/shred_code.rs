@@ -1,20 +1,17 @@
 use {
-    crate::{
-        shred::{
-            common::dispatch,
-            legacy, merkle,
-            traits::{Shred, ShredCode as ShredCodeTrait},
-            CodingShredHeader, Error, ShredCommonHeader, ShredType, SignedData,
-            DATA_SHREDS_PER_FEC_BLOCK, MAX_DATA_SHREDS_PER_SLOT, SIZE_OF_NONCE,
-        },
-        shredder::ERASURE_BATCH_SIZE,
+    crate::shred::{
+        common::dispatch,
+        legacy, merkle,
+        traits::{Shred, ShredCode as ShredCodeTrait},
+        CodingShredHeader, Error, ShredCommonHeader, ShredType, SignedData,
+        DATA_SHREDS_PER_FEC_BLOCK, MAX_DATA_SHREDS_PER_SLOT, SIZE_OF_NONCE,
     },
     solana_sdk::{clock::Slot, packet::PACKET_DATA_SIZE, signature::Signature},
     static_assertions::const_assert_eq,
 };
 
-const_assert_eq!(MAX_CODE_SHREDS_PER_SLOT, 32_768 * 17);
-pub const MAX_CODE_SHREDS_PER_SLOT: usize = MAX_DATA_SHREDS_PER_SLOT * (ERASURE_BATCH_SIZE[1] - 1);
+const_assert_eq!(MAX_CODE_SHREDS_PER_SLOT, 32_768);
+pub const MAX_CODE_SHREDS_PER_SLOT: usize = MAX_DATA_SHREDS_PER_SLOT;
 
 const_assert_eq!(ShredCode::SIZE_OF_PAYLOAD, 1228);
 
