@@ -298,7 +298,10 @@ fn process_batches(
     confirmation_timing: &mut ConfirmationTiming,
     log_messages_bytes_limit: Option<usize>,
 ) -> Result<()> {
-    panic!();
+    if !bank.unified_scheduler_enabled() {
+        execute_batches(bank, batches, transaction_status_sender, replay_vote_sender, confirmation_timing, log_messages_bytes_limit);
+    } else {
+    }
 }
 
 fn execute_batches(
