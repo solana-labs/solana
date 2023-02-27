@@ -224,7 +224,7 @@ fn execute_batches_internal<'a>(
                 let (result, execute_batches_time): (Result<()>, Measure) = measure!(
                     {
                         let result = execute_batch(
-                            transaction_batch,
+                            &transaction_batch,
                             bank,
                             transaction_status_sender,
                             replay_vote_sender,
