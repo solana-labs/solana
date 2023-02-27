@@ -415,7 +415,6 @@ pub fn process_entries_for_tests(
             })
             .collect();
 
-    let _ignored_prioritization_fee_cache = PrioritizationFeeCache::new(0u64);
     let result = process_entries_with_callback(
         bank,
         &mut replay_entries,
@@ -424,7 +423,6 @@ pub fn process_entries_for_tests(
         replay_vote_sender,
         &mut confirmation_timing,
         None,
-        &_ignored_prioritization_fee_cache,
     );
 
     debug!("process_entries: {:?}", confirmation_timing);
