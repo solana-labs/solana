@@ -223,17 +223,14 @@ fn execute_batches_internal(
                     transaction_batch.batch.sanitized_transactions().len() as u64;
                 let mut timings = ExecuteTimings::default();
                 let (result, execute_batches_time): (Result<()>, Measure) = measure!(
-                    {
-                        let result = execute_batch(
-                            transaction_batch,
-                            bank,
-                            transaction_status_sender,
-                            replay_vote_sender,
-                            &mut timings,
-                            log_messages_bytes_limit,
-                        );
-                        result
-                    },
+                    execute_batch(
+                        transaction_batch,
+                        bank,
+                        transaction_status_sender,
+                        replay_vote_sender,
+                        &mut timings,
+                        log_messages_bytes_limit,
+                    ),
                     "execute_batch",
                 );
 
