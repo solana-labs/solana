@@ -217,7 +217,6 @@ fn execute_batches_internal<'a>(
     let mut execute_batches_elapsed = Measure::start("execute_batches_elapsed");
     let results: Vec<Result<()>> = PAR_THREAD_POOL.install(|| {
         batches
-            .into_par_iter()
             .map(|transaction_batch| {
                 let transaction_count =
                     transaction_batch.batch.sanitized_transactions().len() as u64;
