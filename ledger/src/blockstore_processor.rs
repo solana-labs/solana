@@ -31,7 +31,6 @@ use {
         commitment::VOTE_THRESHOLD_SIZE,
         cost_model::CostModel,
         epoch_accounts_hash::EpochAccountsHash,
-        prioritization_fee_cache::PrioritizationFeeCache,
         runtime_config::RuntimeConfig,
         transaction_batch::TransactionBatch,
         vote_account::VoteAccountsHashMap,
@@ -442,7 +441,6 @@ fn process_entries_with_callback(
     replay_vote_sender: Option<&ReplayVoteSender>,
     confirmation_timing: &mut ConfirmationTiming,
     log_messages_bytes_limit: Option<usize>,
-    prioritization_fee_cache: &PrioritizationFeeCache,
 ) -> Result<()> {
     // accumulator for entries that can be processed in parallel
     let mut batches = vec![];
@@ -501,9 +499,6 @@ fn process_entries_with_callback(
                             batch,
                             transaction_indexes,
                         });
-                        // entry is scheduled to be processed, transactions in it can be used to
-                        // update prioritization fee cache asynchronously.
-                        prioritization_fee_cache.update(bank.clone(), transactions.iter());
                         // done with this entry
                         break;
                     }
@@ -1009,7 +1004,6 @@ pub fn confirm_slot(
     recyclers: &VerifyRecyclers,
     allow_dead_slots: bool,
     log_messages_bytes_limit: Option<usize>,
-    prioritization_fee_cache: &PrioritizationFeeCache,
 ) -> result::Result<(), BlockstoreProcessorError> {
     let slot = bank.slot();
 
@@ -1037,7 +1031,6 @@ pub fn confirm_slot(
         replay_vote_sender,
         recyclers,
         log_messages_bytes_limit,
-        prioritization_fee_cache,
     )
 }
 
@@ -1052,7 +1045,6 @@ fn confirm_slot_entries(
     replay_vote_sender: Option<&ReplayVoteSender>,
     recyclers: &VerifyRecyclers,
     log_messages_bytes_limit: Option<usize>,
-    prioritization_fee_cache: &PrioritizationFeeCache,
 ) -> result::Result<(), BlockstoreProcessorError> {
     let slot = bank.slot();
     let (entries, num_shreds, slot_full) = slot_entries_load_result;
@@ -1151,7 +1143,6 @@ fn confirm_slot_entries(
                 replay_vote_sender,
                 timing,
                 log_messages_bytes_limit,
-                prioritization_fee_cache,
             )
             .map_err(BlockstoreProcessorError::from);
             replay_elapsed.stop();
