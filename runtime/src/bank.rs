@@ -3842,7 +3842,7 @@ impl Bank {
 
     /// Run transactions against a frozen bank without committing the results
     pub fn simulate_transaction(
-        &self,
+        self: &Arc<Self>,
         transaction: SanitizedTransaction,
     ) -> TransactionSimulationResult {
         assert!(self.is_frozen(), "simulation bank must be frozen");
