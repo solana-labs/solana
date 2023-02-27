@@ -6091,7 +6091,7 @@ impl Bank {
     fn schedule_and_commit_transactions(
         self: &Arc<Bank>,
         transactions: &[SanitizedTransaction],
-        transaction_indexes: impl Iterator<Item = usize>,
+        transaction_indexes: impl Iterator<Item = &usize>,
         mode: solana_scheduler::Mode,
     ) {
         trace!(
@@ -6110,7 +6110,7 @@ impl Bank {
     pub fn schedule_and_commit_transactions_as_replaying(
         self: &Arc<Bank>,
         transactions: &[SanitizedTransaction],
-        transaction_indexes: impl Iterator<Item = usize>,
+        transaction_indexes: impl Iterator<Item = &usize>,
     ) {
         self.schedule_and_commit_transactions(transactions, transaction_indexes, solana_scheduler::Mode::Replaying)
     }
