@@ -9,9 +9,12 @@ use {
         broadcast_stage::broadcast_utils::UnfinishedSlotInfo, cluster_nodes::ClusterNodesCache,
     },
     solana_entry::entry::Entry,
-    solana_ledger::shred::{
-        ProcessShredsStats, Shred, Shredder, MAX_DATA_SHREDS_PER_FEC_BLOCK,
-        SHRED_TICK_REFERENCE_MASK,
+    solana_ledger::{
+        blockstore,
+        shred::{
+            ProcessShredsStats, Shred, Shredder, MAX_DATA_SHREDS_PER_FEC_BLOCK,
+            SHRED_TICK_REFERENCE_MASK,
+        },
     },
     solana_sdk::{
         signature::Keypair,
@@ -32,6 +35,11 @@ pub struct StandardBroadcastRun {
     last_datapoint_submit: Arc<AtomicInterval>,
     num_batches: usize,
     cluster_nodes_cache: Arc<ClusterNodesCache<BroadcastStage>>,
+}
+
+#[derive(Debug)]
+enum BroadcastError {
+    TooManyShreds,
 }
 
 impl StandardBroadcastRun {
@@ -99,6 +107,7 @@ impl StandardBroadcastRun {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn entries_to_data_shreds(
         &mut self,
         keypair: &Keypair,
@@ -107,7 +116,8 @@ impl StandardBroadcastRun {
         reference_tick: u8,
         is_slot_end: bool,
         process_stats: &mut ProcessShredsStats,
-    ) -> Vec<Shred> {
+        max_data_shreds_per_slot: u32,
+    ) -> std::result::Result<Vec<Shred>, BroadcastError> {
         let (slot, parent_slot) = self.current_slot_and_parent.unwrap();
         let (next_shred_index, fec_set_offset) = match &self.unfinished_slot {
             Some(state) => (state.next_shred_index, state.fec_set_offset),
@@ -141,10 +151,16 @@ impl StandardBroadcastRun {
             Some(index) => index + 1,
             None => next_shred_index,
         };
+        if next_shred_index > max_data_shreds_per_slot {
+            return Err(BroadcastError::TooManyShreds);
+        }
         let next_code_index = match &self.unfinished_slot {
             Some(state) => state.next_code_index,
             None => 0,
         };
+        if next_code_index > max_data_shreds_per_slot {
+            return Err(BroadcastError::TooManyShreds);
+        }
         self.unfinished_slot = Some(UnfinishedSlotInfo {
             next_shred_index,
             next_code_index,
@@ -153,7 +169,7 @@ impl StandardBroadcastRun {
             data_shreds_buffer,
             fec_set_offset,
         });
-        data_shreds
+        Ok(data_shreds)
     }
 
     #[cfg(test)]
@@ -219,14 +235,17 @@ impl StandardBroadcastRun {
         // 2) Convert entries to shreds and coding shreds
         let is_last_in_slot = last_tick_height == bank.max_tick_height();
         let reference_tick = bank.tick_height() % bank.ticks_per_slot();
-        let data_shreds = self.entries_to_data_shreds(
-            keypair,
-            &receive_results.entries,
-            blockstore,
-            reference_tick as u8,
-            is_last_in_slot,
-            &mut process_stats,
-        );
+        let data_shreds = self
+            .entries_to_data_shreds(
+                keypair,
+                &receive_results.entries,
+                blockstore,
+                reference_tick as u8,
+                is_last_in_slot,
+                &mut process_stats,
+                blockstore::MAX_DATA_SHREDS_PER_SLOT as u32,
+            )
+            .unwrap();
         // Insert the first data shred synchronously so that blockstore stores
         // that the leader started this block. This must be done before the
         // blocks are sent out over the wire. By contrast Self::insert skips
@@ -811,5 +830,39 @@ mod test {
             )
             .unwrap();
         assert!(standard_broadcast_run.unfinished_slot.is_none())
+    }
+
+    #[test]
+    fn entries_to_shreds_max() {
+        solana_logger::setup();
+        let mut bs = StandardBroadcastRun::new(0);
+        bs.current_slot_and_parent = Some((1, 0));
+        let keypair = Keypair::new();
+        let entries = create_ticks(10_000, 1, solana_sdk::hash::Hash::default());
+
+        let ledger_path = get_tmp_ledger_path!();
+        let blockstore = Arc::new(
+            Blockstore::open(&ledger_path).expect("Expected to be able to open database ledger"),
+        );
+        let mut stats = ProcessShredsStats::default();
+
+        let data = bs
+            .entries_to_data_shreds(
+                &keypair,
+                &entries[0..entries.len() - 2],
+                &blockstore,
+                0,
+                false,
+                &mut stats,
+                1000,
+            )
+            .unwrap();
+        info!("{}", data.len());
+        assert!(!data.is_empty());
+
+        let r =
+            bs.entries_to_data_shreds(&keypair, &entries, &blockstore, 0, false, &mut stats, 10);
+        info!("{:?}", r);
+        assert_matches!(r, Err(BroadcastError::TooManyShreds));
     }
 }
