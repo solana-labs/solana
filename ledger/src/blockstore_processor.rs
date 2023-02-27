@@ -266,7 +266,6 @@ fn execute_batches_internal<'a>(
 
     Ok(ExecuteBatchesInternalMetrics {
         execution_timings_per_thread: execution_timings_per_thread.into_inner().unwrap(),
-        total_batches_len: batches.len() as u64,
         execute_batches_us: execute_batches_elapsed.as_us(),
     })
 }
