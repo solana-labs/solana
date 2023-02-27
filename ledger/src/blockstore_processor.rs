@@ -865,7 +865,6 @@ fn confirm_full_slot(
 ) -> result::Result<(), BlockstoreProcessorError> {
     let mut confirmation_timing = ConfirmationTiming::default();
     let skip_verification = !opts.poh_verify;
-    let _ignored_prioritization_fee_cache = PrioritizationFeeCache::new(0u64);
 
     confirm_slot(
         blockstore,
@@ -878,7 +877,6 @@ fn confirm_full_slot(
         recyclers,
         opts.allow_dead_slots,
         opts.runtime_config.log_messages_bytes_limit,
-        &_ignored_prioritization_fee_cache,
     )?;
 
     timing.accumulate(&confirmation_timing.execute_timings);
