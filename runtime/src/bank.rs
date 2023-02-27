@@ -3853,7 +3853,7 @@ impl Bank {
     /// Run transactions against a bank without committing the results; does not check if the bank
     /// is frozen, enabling use in single-Bank test frameworks
     pub fn simulate_transaction_unchecked(
-        self: &'a Arc<Self>,
+        self: &Arc<Self>,
         transaction: SanitizedTransaction,
     ) -> TransactionSimulationResult {
         let account_keys = transaction.message().account_keys();
