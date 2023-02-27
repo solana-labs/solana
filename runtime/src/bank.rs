@@ -6088,10 +6088,10 @@ impl Bank {
         self.cluster_type.unwrap()
     }
 
-    fn schedule_and_commit_transactions(
+    fn schedule_and_commit_transactions<'a>(
         self: &Arc<Bank>,
         transactions: &[SanitizedTransaction],
-        transaction_indexes: impl Iterator<Item = &usize>,
+        transaction_indexes: impl Iterator<Item = &'a usize>,
         mode: solana_scheduler::Mode,
     ) {
         trace!(
@@ -6107,10 +6107,10 @@ impl Bank {
         }
     }
 
-    pub fn schedule_and_commit_transactions_as_replaying(
+    pub fn schedule_and_commit_transactions_as_replaying<'a>(
         self: &Arc<Bank>,
         transactions: &[SanitizedTransaction],
-        transaction_indexes: impl Iterator<Item = &usize>,
+        transaction_indexes: impl Iterator<Item = &'a usize>,
     ) {
         self.schedule_and_commit_transactions(transactions, transaction_indexes, solana_scheduler::Mode::Replaying)
     }
