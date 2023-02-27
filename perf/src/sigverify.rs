@@ -1507,13 +1507,13 @@ mod tests {
             let msg_start = packet_offsets.msg_start as usize;
             let msg_bytes = packet.data(msg_start..).unwrap().to_vec();
             packet.buffer_mut()[msg_start] = MESSAGE_VERSION_PREFIX;
-            packet.meta_mut().size += 1;
-            let msg_end = packet.meta().size;
+            packet.meta.size += 1;
+            let msg_end = packet.meta.size;
             packet.buffer_mut()[msg_start + 1..msg_end].copy_from_slice(&msg_bytes);
 
             packet_offsets = do_get_packet_offsets(&packet, 0).unwrap();
             check_for_simple_vote_transaction(&mut packet, &packet_offsets, 0).ok();
-            assert!(!packet.meta().is_simple_vote_tx());
+            assert!(!packet.meta.is_simple_vote_tx());
         }
 
         // multiple mixed tx is not
@@ -1543,21 +1543,6 @@ mod tests {
         solana_logger::setup();
         let mut rng = rand::thread_rng();
 
-<<<<<<< HEAD
-        let mut current_offset = 0usize;
-        let mut batch = PacketBatch::default();
-        batch.push(Packet::from_data(None, test_tx()).unwrap());
-        let tx = new_test_vote_tx(&mut rng);
-        batch.push(Packet::from_data(None, tx).unwrap());
-        batch.iter_mut().enumerate().for_each(|(index, packet)| {
-            let packet_offsets = do_get_packet_offsets(packet, current_offset).unwrap();
-            check_for_simple_vote_transaction(packet, &packet_offsets, current_offset).ok();
-            if index == 1 {
-                assert!(packet.meta.is_simple_vote_tx());
-            } else {
-                assert!(!packet.meta.is_simple_vote_tx());
-            }
-=======
         // batch of legacy messages
         {
             let mut current_offset = 0usize;
@@ -1569,11 +1554,10 @@ mod tests {
                 let packet_offsets = do_get_packet_offsets(packet, current_offset).unwrap();
                 check_for_simple_vote_transaction(packet, &packet_offsets, current_offset).ok();
                 if index == 1 {
-                    assert!(packet.meta().is_simple_vote_tx());
+                    assert!(packet.meta.is_simple_vote_tx());
                 } else {
-                    assert!(!packet.meta().is_simple_vote_tx());
+                    assert!(!packet.meta.is_simple_vote_tx());
                 }
->>>>>>> ee8167980 (Not to tag versioned transaction as simple_vote_tx (#30517))
 
                 current_offset = current_offset.saturating_add(size_of::<Packet>());
             });
@@ -1592,15 +1576,15 @@ mod tests {
             let msg_start = packet_offsets.msg_start as usize;
             let msg_bytes = packet.data(msg_start..).unwrap().to_vec();
             packet.buffer_mut()[msg_start] = MESSAGE_VERSION_PREFIX;
-            packet.meta_mut().size += 1;
-            let msg_end = packet.meta().size;
+            packet.meta.size += 1;
+            let msg_end = packet.meta.size;
             packet.buffer_mut()[msg_start + 1..msg_end].copy_from_slice(&msg_bytes);
             batch.push(packet);
 
             batch.iter_mut().for_each(|packet| {
                 let packet_offsets = do_get_packet_offsets(packet, current_offset).unwrap();
                 check_for_simple_vote_transaction(packet, &packet_offsets, current_offset).ok();
-                assert!(!packet.meta().is_simple_vote_tx());
+                assert!(!packet.meta.is_simple_vote_tx());
 
                 current_offset = current_offset.saturating_add(size_of::<Packet>());
             });
