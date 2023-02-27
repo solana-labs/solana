@@ -1820,7 +1820,6 @@ impl ReplayStage {
             verify_recyclers,
             false,
             log_messages_bytes_limit,
-            prioritization_fee_cache,
         )?;
         let tx_count_after = w_replay_progress.num_txs;
         let tx_count = tx_count_after - tx_count_before;
