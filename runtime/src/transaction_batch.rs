@@ -7,7 +7,7 @@ use {
 // Represents the results of trying to lock a set of accounts
 pub struct TransactionBatch<'a, 'b> {
     lock_results: Vec<Result<()>>,
-    bank: &'a std::sync::Arc<Bank>,
+    bank: &'a Bank,
     sanitized_txs: Cow<'b, [SanitizedTransaction]>,
     needs_unlock: bool,
 }
@@ -15,7 +15,7 @@ pub struct TransactionBatch<'a, 'b> {
 impl<'a, 'b> TransactionBatch<'a, 'b> {
     pub fn new(
         lock_results: Vec<Result<()>>,
-        bank: &'a std::sync::Arc<Bank>,
+        bank: &'a Bank,
         sanitized_txs: Cow<'b, [SanitizedTransaction]>,
     ) -> Self {
         assert_eq!(lock_results.len(), sanitized_txs.len());

@@ -3754,7 +3754,7 @@ impl Bank {
     }
 
     /// Prepare a transaction batch from a list of legacy transactions. Used for tests only.
-    pub fn prepare_batch_for_tests<'a>(self: &'a Arc<Self>, txs: Vec<Transaction>) -> TransactionBatch<'a, 'a> {
+    pub fn prepare_batch_for_tests(&self, txs: Vec<Transaction>) -> TransactionBatch {
         let transaction_account_lock_limit = self.get_transaction_account_lock_limit();
         let sanitized_txs = txs
             .into_iter()
@@ -3769,7 +3769,7 @@ impl Bank {
 
     /// Prepare a transaction batch from a list of versioned transactions from
     /// an entry. Used for tests only.
-    pub fn prepare_entry_batch<'a>(self: &'a Arc<Self>, txs: Vec<VersionedTransaction>) -> Result<TransactionBatch<'a, 'a>> {
+    pub fn prepare_entry_batch(&self, txs: Vec<VersionedTransaction>) -> Result<TransactionBatch> {
         let sanitized_txs = txs
             .into_iter()
             .map(|tx| {
@@ -3777,7 +3777,7 @@ impl Bank {
                     tx,
                     MessageHash::Compute,
                     None,
-                    &**self,
+                    self,
                     self.feature_set
                         .is_active(&feature_set::require_static_program_ids_in_transaction::ID),
                 )
@@ -3797,7 +3797,7 @@ impl Bank {
 
     /// Prepare a locked transaction batch from a list of sanitized transactions.
     pub fn prepare_sanitized_batch<'a, 'b>(
-        self: &'a Arc<Self>,
+        &'a self,
         txs: &'b [SanitizedTransaction],
     ) -> TransactionBatch<'a, 'b> {
         let tx_account_lock_limit = self.get_transaction_account_lock_limit();
@@ -3811,7 +3811,7 @@ impl Bank {
     /// Prepare a locked transaction batch from a list of sanitized transactions, and their cost
     /// limited packing status
     pub fn prepare_sanitized_batch_with_results<'a, 'b>(
-        self: &'a Arc<Self>,
+        &'a self,
         transactions: &'b [SanitizedTransaction],
         transaction_results: impl Iterator<Item = &'b Result<()>>,
     ) -> TransactionBatch<'a, 'b> {
@@ -3826,10 +3826,10 @@ impl Bank {
     }
 
     /// Prepare a transaction batch without locking accounts for transaction simulation.
-    pub(crate) fn prepare_simulation_batch<'a>(
-        self: &'a Arc<Self>,
+    pub(crate) fn prepare_simulation_batch(
+        &self,
         transaction: SanitizedTransaction,
-    ) -> TransactionBatch<'a, 'a> {
+    ) -> TransactionBatch<'_, '_> {
         let tx_account_lock_limit = self.get_transaction_account_lock_limit();
         let lock_result = transaction
             .get_account_locks(tx_account_lock_limit)
@@ -3842,7 +3842,7 @@ impl Bank {
 
     /// Run transactions against a frozen bank without committing the results
     pub fn simulate_transaction(
-        self: &Arc<Self>,
+        &self,
         transaction: SanitizedTransaction,
     ) -> TransactionSimulationResult {
         assert!(self.is_frozen(), "simulation bank must be frozen");
@@ -3853,7 +3853,7 @@ impl Bank {
     /// Run transactions against a bank without committing the results; does not check if the bank
     /// is frozen, enabling use in single-Bank test frameworks
     pub fn simulate_transaction_unchecked(
-        self: &Arc<Self>,
+        &self,
         transaction: SanitizedTransaction,
     ) -> TransactionSimulationResult {
         let account_keys = transaction.message().account_keys();
@@ -6218,7 +6218,7 @@ impl Bank {
     /// replicates the vector Bank::process_transaction method with metadata recording enabled.
     #[must_use]
     pub fn process_transaction_with_metadata(
-        self: &Arc<Self>,
+        &self,
         tx: impl Into<VersionedTransaction>,
     ) -> TransactionExecutionResult {
         let txs = vec![tx.into()];
@@ -6263,7 +6263,7 @@ impl Bank {
     /// Process multiple transaction in a single batch. This is used for benches and unit tests.
     /// Short circuits if any of the transactions do not pass sanitization checks.
     pub fn try_process_transactions<'a>(
-        self: &Arc<Self>,
+        &self,
         txs: impl Iterator<Item = &'a Transaction>,
     ) -> Result<Vec<Result<()>>> {
         let txs = txs
@@ -6285,7 +6285,7 @@ impl Bank {
     /// Process multiple transaction in a single batch. This is used for benches and unit tests.
     /// Short circuits if any of the transactions do not pass sanitization checks.
     pub fn try_process_entry_transactions(
-        self: &Arc<Self>,
+        &self,
         txs: Vec<VersionedTransaction>,
     ) -> Result<Vec<Result<()>>> {
         let batch = self.prepare_entry_batch(txs)?;
