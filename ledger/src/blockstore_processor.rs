@@ -434,7 +434,6 @@ pub fn process_entries_for_tests(
 fn process_entries_with_callback(
     bank: &Arc<Bank>,
     entries: &mut [ReplayEntry],
-    randomize: bool,
     transaction_status_sender: Option<&TransactionStatusSender>,
     replay_vote_sender: Option<&ReplayVoteSender>,
     confirmation_timing: &mut ConfirmationTiming,
@@ -474,17 +473,9 @@ fn process_entries_with_callback(
             }
             EntryType::Transactions(transactions) => {
                 let starting_index = *starting_index;
-                let transaction_indexes = if randomize {
-                    let mut transactions_and_indexes: Vec<(SanitizedTransaction, usize)> =
-                        transactions.drain(..).zip(starting_index..).collect();
-                    transactions_and_indexes.shuffle(&mut rng);
-                    let (txs, indexes): (Vec<_>, Vec<_>) =
-                        transactions_and_indexes.into_iter().unzip();
-                    *transactions = txs;
-                    indexes
-                } else {
+                let transaction_indexes = 
                     (starting_index..starting_index.saturating_add(transactions.len())).collect()
-                };
+                ;
 
                 loop {
                     // try to lock the accounts
@@ -1134,7 +1125,6 @@ fn confirm_slot_entries(
             let process_result = process_entries_with_callback(
                 bank,
                 &mut replay_entries,
-                true, // shuffle transactions.
                 transaction_status_sender,
                 replay_vote_sender,
                 timing,
