@@ -1221,7 +1221,12 @@ fn load_bank_forks(
             accounts_update_notifier,
             &Arc::default(),
         );
-    bank_forks.write().unwrap().install_scheduler_pool(solana_scheduler_pool::SchedulerPool::new_boxed(None, None, None));
+    let replaying_backend = arg_matches
+        .value_of("replaying_backend")
+        .map(ReplayingBackend::from);
+    if matches!(replaying_backend, UnifiedScheduler) {
+        bank_forks.write().unwrap().install_scheduler_pool(solana_scheduler_pool::SchedulerPool::new_boxed(None, None, None));
+    }
 
     let (snapshot_request_sender, snapshot_request_receiver) = crossbeam_channel::unbounded();
     let (accounts_package_sender, _accounts_package_receiver) = crossbeam_channel::unbounded();
