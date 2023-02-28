@@ -201,4 +201,75 @@ active_release_dir: {root_dir}/active_release
             ),
         );
     }
+
+    #[test]
+    fn test_load_serde_yaml_v_0_8_config() {
+        let file_name = "config.yml";
+        let mut file = File::create(file_name).unwrap();
+        defer! {
+            remove_file(file_name).unwrap();
+        }
+
+        let root_dir = "/home/sol/.local/share/solana/install";
+
+        writeln!(
+            file,
+            "---
+json_rpc_url: \"http://api.devnet.solana.com\"
+update_manifest_pubkey:
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+current_update_manifest: ~
+update_poll_secs: 3600
+explicit_release:
+  Semver: 1.13.6
+releases_dir: {root_dir}/releases
+active_release_dir: {root_dir}/active_release
+"
+        )
+        .unwrap();
+        let config = Config::load(file_name).unwrap();
+        assert_eq!(
+            config,
+            Config {
+                json_rpc_url: String::from("http://api.devnet.solana.com"),
+                update_manifest_pubkey: Pubkey::default(),
+                current_update_manifest: None,
+                update_poll_secs: 3600,
+                explicit_release: Some(ExplicitRelease::Semver(String::from("1.13.6"))),
+                releases_dir: PathBuf::from(format!("{root_dir}/releases")),
+                active_release_dir: PathBuf::from(format!("{root_dir}/active_release")),
+            },
+        );
+    }
 }
