@@ -290,6 +290,7 @@ fn rebatch_transactions<'a>(
         transaction_indexes,
     }
 }
+
 fn process_batches(
     bank: &Arc<Bank>,
     batches: &[TransactionBatchWithIndexes],
