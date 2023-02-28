@@ -87,7 +87,7 @@ impl std::ops::Deref for SchedulableBank {
 #[derive(Default)]
 enum InstalledSchedulerPool {
     #[default]
-    Disabled,
+    NotInstalled,
     ReplayOnly(Box<dyn LikeSchedulerPool>),
     Full(Box<dyn LikeSchedulerPool>),
 }
@@ -251,7 +251,7 @@ impl BankForks {
     }
 
     pub fn install_scheduler_pool(&mut self, pool: Box<dyn LikeSchedulerPool>) {
-        assert_matches!(self.scheduler_pool, Disabled);
+        assert_matches!(self.scheduler_pool, NotInstalled);
         info!("Installed new scheduler_pool into bank_forks: {:?}", pool);
         self.scheduler_pool = Some(pool);
     }
