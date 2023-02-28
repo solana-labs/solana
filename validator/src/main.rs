@@ -1588,13 +1588,13 @@ pub fn main() {
 
     let start_progress = Arc::new(RwLock::new(ValidatorStartProgress::default()));
     let admin_service_post_init = Arc::new(RwLock::new(None));
-    let (rpc_to_plugin_manager_tx, rpc_to_plugin_manager_receiver) = if starting_with_geyser_plugins
-    {
-        let (sender, receiver) = unbounded();
-        (Some(sender), Some(receiver))
-    } else {
-        (None, None)
-    };
+    let (rpc_to_plugin_manager_sender, rpc_to_plugin_manager_receiver) =
+        if starting_with_geyser_plugins {
+            let (sender, receiver) = unbounded();
+            (Some(sender), Some(receiver))
+        } else {
+            (None, None)
+        };
     admin_rpc_service::run(
         &ledger_path,
         admin_rpc_service::AdminRpcRequestMetadata {
@@ -1606,7 +1606,7 @@ pub fn main() {
             post_init: admin_service_post_init.clone(),
             tower_storage: validator_config.tower_storage.clone(),
             staked_nodes_overrides,
-            rpc_to_plugin_manager_sender: rpc_to_plugin_manager_tx,
+            rpc_to_plugin_manager_sender,
         },
     );
 
