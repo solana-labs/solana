@@ -381,6 +381,8 @@ pub fn recv_packet_batches(
     Ok((packet_batches, num_packets, recv_duration))
 }
 
+/// Option for Responder to either send the responses using a UDP
+/// socket or a ConnectionCache.
 pub enum ResponderOption<P, M, C>
 where
     P: ConnectionPool<NewConnectionConfig = C> + 'static,
