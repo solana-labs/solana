@@ -131,7 +131,7 @@ pub enum ReplayingBackend {
 
 impl ReplayingBackend {
     const fn const_default() -> Self {
-        Self::BlockstoreProcessor
+        Self::BlockstoreProcessor::default()
     }
 }
 
