@@ -128,7 +128,7 @@ pub enum ReplayingBackend {
 }
 
 impl ReplayingBackend {
-    const fn to_str(&self) -> &'static str {
+    const fn to_str2(&self) -> &'static str {
         self.to_str()
     }
 }
