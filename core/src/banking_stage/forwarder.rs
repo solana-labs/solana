@@ -2,11 +2,13 @@ use {
     super::{BankingStageStats, ForwardOption},
     crate::{
         forward_packet_batches_by_accounts::ForwardPacketBatchesByAccounts,
+        immutable_deserialized_packet::ImmutableDeserializedPacket,
         leader_slot_banking_stage_metrics::LeaderSlotMetricsTracker,
         next_leader::{next_leader_tpu_forwards, next_leader_tpu_vote},
         tracer_packet_stats::TracerPacketStats,
         unprocessed_transaction_storage::UnprocessedTransactionStorage,
     },
+    crossbeam_channel::Receiver,
     solana_client::{connection_cache::ConnectionCache, tpu_connection::TpuConnection},
     solana_gossip::cluster_info::ClusterInfo,
     solana_measure::measure::Measure,
@@ -19,8 +21,75 @@ use {
         iter::repeat,
         net::UdpSocket,
         sync::{atomic::Ordering, Arc, RwLock},
+        thread::JoinHandle,
     },
 };
+
+/// Service that performs forwarding of packets sent via channel to the service.
+#[allow(dead_code)]
+pub struct ForwardingService {
+    thread_hdls: Vec<JoinHandle<()>>,
+}
+
+#[allow(dead_code)]
+impl ForwardingService {
+    pub fn new(
+        num_threads: usize,
+        receiver: Receiver<Vec<ImmutableDeserializedPacket>>,
+        forward_option: ForwardOption,
+        poh_recorder: Arc<RwLock<PohRecorder>>,
+        bank_forks: Arc<RwLock<BankForks>>,
+        cluster_info: Arc<ClusterInfo>,
+        connection_cache: Arc<ConnectionCache>,
+        data_budget: Arc<DataBudget>,
+    ) -> Self {
+        let thread_hdls = (0..num_threads)
+            .map(|idx| {
+                Self::run_thread(
+                    idx,
+                    receiver.clone(),
+                    forward_option.clone(),
+                    poh_recorder.clone(),
+                    bank_forks.clone(),
+                    cluster_info.clone(),
+                    connection_cache.clone(),
+                    data_budget.clone(),
+                )
+            })
+            .collect();
+        Self { thread_hdls }
+    }
+
+    fn run_thread(
+        idx: usize,
+        receiver: Receiver<Vec<ImmutableDeserializedPacket>>,
+        forward_option: ForwardOption,
+        poh_recorder: Arc<RwLock<PohRecorder>>,
+        bank_forks: Arc<RwLock<BankForks>>,
+        cluster_info: Arc<ClusterInfo>,
+        connection_cache: Arc<ConnectionCache>,
+        data_budget: Arc<DataBudget>,
+    ) -> JoinHandle<()> {
+        let forwarder = Forwarder::new(
+            poh_recorder,
+            bank_forks,
+            cluster_info,
+            connection_cache,
+            data_budget,
+        );
+        std::thread::Builder::new()
+            .name(format!("solFwdSrv{idx:02}"))
+            .spawn(move || {
+                while let Ok(forwardable_packets) = receiver.recv() {
+                    let _res = forwarder.forward_packets(
+                        &forward_option,
+                        forwardable_packets.iter().map(|p| p.original_packet()),
+                    );
+                }
+            })
+            .unwrap()
+    }
+}
 
 pub(crate) struct Forwarder {
     poh_recorder: Arc<RwLock<PohRecorder>>,
@@ -147,6 +216,35 @@ impl Forwarder {
         usize,
         Option<Pubkey>,
     ) {
+        let res = self.forward_packets(forward_option, forwardable_packets);
+        match (forward_option, &res) {
+            (_, (Err(_), _, _)) => {} // Don't increment stats on error
+            (ForwardOption::ForwardTpuVote, (Ok(_), forwarded_count, _)) => {
+                banking_stage_stats
+                    .forwarded_vote_count
+                    .fetch_add(*forwarded_count, Ordering::Relaxed);
+            }
+            (ForwardOption::ForwardTransaction, (Ok(_), forwarded_count, _)) => {
+                banking_stage_stats
+                    .forwarded_transaction_count
+                    .fetch_add(*forwarded_count, Ordering::Relaxed);
+            }
+            (_, (Ok(_), _, _)) => {
+                unreachable!("Should not succeed forwarding packets without ForwardTransacton or ForwardTpuVote");
+            }
+        }
+        res
+    }
+
+    fn forward_packets<'a>(
+        &self,
+        forward_option: &ForwardOption,
+        forwardable_packets: impl Iterator<Item = &'a Packet>,
+    ) -> (
+        std::result::Result<(), TransportError>,
+        usize,
+        Option<Pubkey>,
+    ) {
         let leader_and_addr = match forward_option {
             ForwardOption::NotForward => return (Ok(()), 0, None),
             ForwardOption::ForwardTransaction => {
@@ -196,17 +294,11 @@ impl Forwarder {
 
             let res = if let ForwardOption::ForwardTpuVote = forward_option {
                 // The vote must be forwarded using only UDP.
-                banking_stage_stats
-                    .forwarded_vote_count
-                    .fetch_add(packet_vec_len, Ordering::Relaxed);
                 let pkts: Vec<_> = packet_vec.into_iter().zip(repeat(addr)).collect();
                 batch_send(&self.socket, &pkts).map_err(|err| err.into())
             } else {
                 // All other transactions can be forwarded using QUIC, get_connection() will use
                 // system wide setting to pick the correct connection object.
-                banking_stage_stats
-                    .forwarded_transaction_count
-                    .fetch_add(packet_vec_len, Ordering::Relaxed);
                 let conn = self.connection_cache.get_connection(&addr);
                 conn.send_data_batch_async(packet_vec)
             };
