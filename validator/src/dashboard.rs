@@ -113,7 +113,7 @@ impl Dashboard {
                     println_name_value("JSON RPC URL:", &format!("http://{rpc}"));
                 }
                 if let Some(pubsub) = contact_info.pubsub {
-                    println_name_value("WebSocket PubSub URL:", &format!("ws://{}", pubsub));
+                    println_name_value("WebSocket PubSub URL:", &format!("ws://{pubsub}"));
                 }
             }
 

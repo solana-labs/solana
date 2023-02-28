@@ -14,7 +14,6 @@ use {
     solana_sdk::{
         clock::{Slot, DEFAULT_MS_PER_SLOT},
         feature_set,
-        genesis_config::ClusterType,
     },
     solana_streamer::streamer::{self, PacketBatchReceiver, StreamerReceiveStats},
     std::{
@@ -265,17 +264,15 @@ fn should_discard_packet(
 
 #[must_use]
 fn should_drop_merkle_shreds(shred_slot: Slot, root_bank: &Bank) -> bool {
-    root_bank.cluster_type() == ClusterType::Testnet
-        && check_feature_activation(
-            &feature_set::drop_merkle_shreds::id(),
-            shred_slot,
-            root_bank,
-        )
-        && !check_feature_activation(
-            &feature_set::keep_merkle_shreds::id(),
-            shred_slot,
-            root_bank,
-        )
+    check_feature_activation(
+        &feature_set::drop_merkle_shreds::id(),
+        shred_slot,
+        root_bank,
+    ) && !check_feature_activation(
+        &feature_set::keep_merkle_shreds::id(),
+        shred_slot,
+        root_bank,
+    )
 }
 
 #[cfg(test)]

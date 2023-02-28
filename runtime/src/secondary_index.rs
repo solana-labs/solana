@@ -12,6 +12,9 @@ use {
     },
 };
 
+pub const MAX_NUM_LARGEST_INDEX_KEYS_RETURNED: usize = 20;
+pub const NUM_LARGEST_INDEX_KEYS_CACHED: usize = 200;
+
 // The only cases where an inner key should map to a different outer key is
 // if the key had different account data for the indexed key across different
 // slots. As this is rare, it should be ok to use a Vec here over a HashSet, even
@@ -100,11 +103,111 @@ impl SecondaryIndexEntry for RwLockSecondaryIndexEntry {
 }
 
 #[derive(Debug, Default)]
+struct HierarchicalOrderedMap<K, V>
+where
+    K: Default + PartialEq + Ord + Clone,
+    V: Default + PartialEq + Ord + Clone,
+{
+    capacity: usize,
+    map: Vec<(K, V)>,
+}
+
+impl<K, V> HierarchicalOrderedMap<K, V>
+where
+    K: Default + PartialEq + Ord + Clone,
+    V: Default + PartialEq + Ord + Clone,
+{
+    pub fn new(capacity: usize) -> Self {
+        Self {
+            capacity,
+            map: Vec::new(),
+        }
+    }
+    fn get_map(&self) -> &Vec<(K, V)> {
+        &self.map
+    }
+    fn sort_slice_by_value(&mut self, slice_key: &K) {
+        // Obtain a slice of mutable references to all elements with the same key
+        for sub_slice in self.map.split_mut(|(k, _)| k != slice_key) {
+            // Sort them
+            if !sub_slice.is_empty() {
+                sub_slice.sort_unstable_by_key(|(_, v)| v.clone());
+            }
+        }
+    }
+    fn update_map(&mut self, key: &K, value: &V) {
+        // Check if the value already exists.
+        let existing_value_position = self.map.iter().position(|(_, y)| y == value);
+        // Remove it if it does.
+        // Note: Removal maintains sorted order, updating would require a re-sort.
+        // Thus, since we have to search to find the new position anyways,
+        // just throw it away and re-insert as if its a new element.
+        if let Some(position) = existing_value_position {
+            self.map.remove(position);
+        }
+        // If its a new value...
+        else {
+            // Check if the list is full, and if the key is less than the smallest element, if so exit early.
+            if self.map.len() >= self.capacity && self.map[0].0 > *key {
+                return;
+            }
+        };
+        // Find where the new entry goes and insert it.
+        // Also report if there are more elements in the list with the same key => they need sorting.
+        let (key_position, needs_sort) =
+            match self.map.binary_search_by_key(key, |(k, _)| k.clone()) {
+                Ok(found_position) => (found_position, true),
+                Err(woudbe_position) => (woudbe_position, false),
+            };
+        self.map.insert(key_position, (key.clone(), value.clone()));
+        // If there were indeed more elements with the same key sort them by value
+        if needs_sort {
+            self.sort_slice_by_value(key);
+        }
+        // Prune list if too big
+        while self.map.len() > self.capacity {
+            self.map.remove(0);
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct SecondaryIndexLargestKeys(RwLock<HierarchicalOrderedMap<usize, Pubkey>>);
+impl Default for SecondaryIndexLargestKeys {
+    fn default() -> Self {
+        let container = HierarchicalOrderedMap::<usize, Pubkey>::new(NUM_LARGEST_INDEX_KEYS_CACHED);
+        SecondaryIndexLargestKeys(RwLock::new(container))
+    }
+}
+impl SecondaryIndexLargestKeys {
+    pub fn get_largest_keys(&self, max_entries: usize) -> Vec<(usize, Pubkey)> {
+        // Obtain the shared resource.
+        let largest_key_list = self.0.read().unwrap();
+        // Collect elements into a vector.
+        let num_entries = std::cmp::min(MAX_NUM_LARGEST_INDEX_KEYS_RETURNED, max_entries);
+        largest_key_list
+            .get_map()
+            .iter()
+            .rev()
+            .take(num_entries)
+            .copied()
+            .collect::<Vec<(usize, Pubkey)>>()
+    }
+    pub fn update(&self, key_size: &usize, pubkey: &Pubkey) {
+        // Obtain the shared resource.
+        let mut largest_key_list = self.0.write().unwrap();
+        // Update the list
+        largest_key_list.update_map(key_size, pubkey);
+    }
+}
+
+#[derive(Debug, Default)]
 pub struct SecondaryIndex<SecondaryIndexEntryType: SecondaryIndexEntry + Default + Sync + Send> {
     metrics_name: &'static str,
     // Map from index keys to index values
     pub index: DashMap<Pubkey, SecondaryIndexEntryType>,
     pub reverse_index: DashMap<Pubkey, SecondaryReverseIndexEntry>,
+    pub key_size_index: SecondaryIndexLargestKeys,
     stats: SecondaryIndexStats,
 }
 
@@ -125,7 +228,11 @@ impl<SecondaryIndexEntryType: SecondaryIndexEntry + Default + Sync + Send>
                 .get(key)
                 .unwrap_or_else(|| self.index.entry(*key).or_default().downgrade());
 
+            let key_size_cache = pubkeys_map.len();
             pubkeys_map.insert_if_not_exists(inner_key, &self.stats.num_inner_keys);
+            if key_size_cache != pubkeys_map.len() {
+                self.key_size_index.update(&pubkeys_map.len(), key);
+            }
         }
 
         {
@@ -173,6 +280,7 @@ impl<SecondaryIndexEntryType: SecondaryIndexEntry + Default + Sync + Send>
             // If we deleted a pubkey from the reverse_index, then the corresponding entry
             // better exist in this index as well or the two indexes are out of sync!
             assert!(inner_key_map.value().remove_inner_key(removed_inner_key));
+            self.key_size_index.update(&inner_key_map.len(), outer_key);
             inner_key_map.is_empty()
         };
 

@@ -521,9 +521,13 @@ pub(crate) mod tests {
         let vote_pubkey = solana_sdk::pubkey::new_rand();
         let vote_account =
             vote_state::create_account(&vote_pubkey, &solana_sdk::pubkey::new_rand(), 0, 1);
+        let stake_pubkey = solana_sdk::pubkey::new_rand();
         (
             (vote_pubkey, vote_account),
-            create_stake_account(stake, &vote_pubkey),
+            (
+                stake_pubkey,
+                create_stake_account(stake, &vote_pubkey, &stake_pubkey),
+            ),
         )
     }
 
@@ -531,17 +535,14 @@ pub(crate) mod tests {
     pub(crate) fn create_stake_account(
         stake: u64,
         vote_pubkey: &Pubkey,
-    ) -> (Pubkey, AccountSharedData) {
-        let stake_pubkey = solana_sdk::pubkey::new_rand();
-        (
+        stake_pubkey: &Pubkey,
+    ) -> AccountSharedData {
+        stake_state::create_account(
             stake_pubkey,
-            stake_state::create_account(
-                &stake_pubkey,
-                vote_pubkey,
-                &vote_state::create_account(vote_pubkey, &solana_sdk::pubkey::new_rand(), 0, 1),
-                &Rent::free(),
-                stake,
-            ),
+            vote_pubkey,
+            &vote_state::create_account(vote_pubkey, &solana_sdk::pubkey::new_rand(), 0, 1),
+            &Rent::free(),
+            stake,
         )
     }
 
@@ -615,7 +616,8 @@ pub(crate) mod tests {
             }
 
             // activate more
-            let (_stake_pubkey, mut stake_account) = create_stake_account(42, &vote_pubkey);
+            let mut stake_account =
+                create_stake_account(42, &vote_pubkey, &solana_sdk::pubkey::new_rand());
             stakes_cache.check_and_store(&stake_pubkey, &stake_account);
             let stake = stake_state::stake_from(&stake_account).unwrap();
             {
@@ -799,7 +801,8 @@ pub(crate) mod tests {
         let ((vote_pubkey, vote_account), (stake_pubkey, stake_account)) =
             create_staked_node_accounts(10);
 
-        let (stake_pubkey2, stake_account2) = create_stake_account(10, &vote_pubkey);
+        let stake_pubkey2 = solana_sdk::pubkey::new_rand();
+        let stake_account2 = create_stake_account(10, &vote_pubkey, &stake_pubkey2);
 
         stakes_cache.check_and_store(&vote_pubkey, &vote_account);
 

@@ -74,15 +74,11 @@ impl TransactionCost {
     }
 
     pub fn sum(&self) -> u64 {
-        self.sum_without_bpf()
-            .saturating_add(self.bpf_execution_cost)
-    }
-
-    pub fn sum_without_bpf(&self) -> u64 {
         self.signature_cost
             .saturating_add(self.write_lock_cost)
             .saturating_add(self.data_bytes_cost)
             .saturating_add(self.builtins_execution_cost)
+            .saturating_add(self.bpf_execution_cost)
     }
 }
 
@@ -388,7 +384,12 @@ mod tests {
             &token_transaction,
             &FeatureSet::all_enabled(),
         );
-        assert_eq!(0, tx_cost.builtins_execution_cost);
+        assert_eq!(
+            *BUILT_IN_INSTRUCTION_COSTS
+                .get(&compute_budget::id())
+                .unwrap(),
+            tx_cost.builtins_execution_cost
+        );
         assert_eq!(12_345, tx_cost.bpf_execution_cost);
         assert_eq!(1, tx_cost.data_bytes_cost);
     }

@@ -371,7 +371,7 @@ startNode() {
         timeout 30s scp "${sshOptions[@]}" "$localArchive" "$ipAddress:letsencrypt.tgz"
       fi
       ssh "${sshOptions[@]}" -n "$ipAddress" \
-        "sudo -H /certbot-restore.sh $letsEncryptDomainName maintainers@solana.foundation"
+        "sudo -H /certbot-restore.sh $letsEncryptDomainName maintainers@solanalabs.com"
       rm -f letsencrypt.tgz
       timeout 30s scp "${sshOptions[@]}" "$ipAddress:/letsencrypt.tgz" letsencrypt.tgz
       test -s letsencrypt.tgz # Ensure non-empty before overwriting $localArchive

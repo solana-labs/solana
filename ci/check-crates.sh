@@ -72,7 +72,7 @@ or
     name = \"<PACKAGE_NAME>\"
     version = \"0.0.1\"
     description = \"<PACKAGE_DESC>\"
-    authors = [\"Solana Maintainers <maintainers@solana.foundation>\"]
+    authors = [\"Solana Labs Maintainers <maintainers@solanalabs.com>\"]
     repository = \"https://github.com/solana-labs/solana\"
     license = \"Apache-2.0\"
     homepage = \"https://solana.com/\"

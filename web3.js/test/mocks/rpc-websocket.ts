@@ -1,8 +1,8 @@
-import {Client as LiveClient} from 'rpc-websockets';
 import {expect} from 'chai';
 import {createSandbox} from 'sinon';
 
 import {Connection} from '../../src';
+import LiveClient from '../../src/rpc-websocket';
 
 type RpcRequest = {
   method: string;
@@ -55,6 +55,7 @@ export const stubRpcWebSocket = (connection: Connection) => {
     .callsFake((method: string, params: any) => {
       return mockClient.call(method, params);
     });
+  sandbox.stub(rpcWebSocket, 'notify');
 };
 
 export const restoreRpcWebSocket = (connection: Connection) => {

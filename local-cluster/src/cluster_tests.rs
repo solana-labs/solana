@@ -10,13 +10,15 @@ use {
     solana_core::consensus::VOTE_THRESHOLD_DEPTH,
     solana_entry::entry::{Entry, EntrySlice},
     solana_gossip::{
-        cluster_info,
-        crds_value::{self, CrdsData, CrdsValue},
+        cluster_info::{self, ClusterInfo},
+        crds::Cursor,
+        crds_value::{self, CrdsData, CrdsValue, CrdsValueLabel},
         gossip_error::GossipError,
-        gossip_service::discover_cluster,
+        gossip_service::{self, discover_cluster, GossipService},
         legacy_contact_info::LegacyContactInfo as ContactInfo,
     },
     solana_ledger::blockstore::Blockstore,
+    solana_runtime::vote_transaction::VoteTransaction,
     solana_sdk::{
         client::SyncClient,
         clock::{self, Slot, NUM_CONSECUTIVE_LEADER_SLOTS},
@@ -29,16 +31,20 @@ use {
         signature::{Keypair, Signature, Signer},
         system_transaction,
         timing::{duration_as_ms, timestamp},
+        transaction::Transaction,
         transport::TransportError,
     },
     solana_streamer::socket::SocketAddrSpace,
     solana_vote_program::vote_transaction,
     std::{
         collections::{HashMap, HashSet},
-        net::{IpAddr, Ipv4Addr, SocketAddr},
+        net::{IpAddr, Ipv4Addr, SocketAddr, TcpListener},
         path::Path,
-        sync::{Arc, RwLock},
-        thread::sleep,
+        sync::{
+            atomic::{AtomicBool, Ordering},
+            Arc, RwLock,
+        },
+        thread::{sleep, JoinHandle},
         time::{Duration, Instant},
     },
 };
@@ -427,6 +433,102 @@ fn poll_all_nodes_for_signature(
     }
 
     Ok(())
+}
+
+pub struct GossipVoter {
+    pub gossip_service: GossipService,
+    pub tcp_listener: Option<TcpListener>,
+    pub cluster_info: Arc<ClusterInfo>,
+    pub t_voter: JoinHandle<()>,
+    pub exit: Arc<AtomicBool>,
+}
+
+impl GossipVoter {
+    pub fn close(self) {
+        self.exit.store(true, Ordering::Relaxed);
+        self.t_voter.join().unwrap();
+        self.gossip_service.join().unwrap();
+    }
+}
+
+/// Reads votes from gossip and runs them through `vote_filter` to filter votes that then
+/// get passed to `generate_vote_tx` to create votes that are then pushed into gossip as if
+/// sent by a node with identity `node_keypair`.
+pub fn start_gossip_voter(
+    gossip_addr: &SocketAddr,
+    node_keypair: &Keypair,
+    vote_filter: impl Fn((CrdsValueLabel, Transaction)) -> Option<(VoteTransaction, Transaction)>
+        + std::marker::Send
+        + 'static,
+    mut process_vote_tx: impl FnMut(Slot, &Transaction, &VoteTransaction, &ClusterInfo)
+        + std::marker::Send
+        + 'static,
+    sleep_ms: u64,
+) -> GossipVoter {
+    let exit = Arc::new(AtomicBool::new(false));
+    let (gossip_service, tcp_listener, cluster_info) = gossip_service::make_gossip_node(
+        // Need to use our validator's keypair to gossip EpochSlots and votes for our
+        // node later.
+        node_keypair.insecure_clone(),
+        Some(gossip_addr),
+        &exit,
+        None,
+        0,
+        false,
+        SocketAddrSpace::Unspecified,
+    );
+
+    let t_voter = {
+        let exit = exit.clone();
+        let cluster_info = cluster_info.clone();
+        std::thread::spawn(move || {
+            let mut cursor = Cursor::default();
+            loop {
+                if exit.load(Ordering::Relaxed) {
+                    return;
+                }
+
+                let (labels, votes) = cluster_info.get_votes_with_labels(&mut cursor);
+                let mut parsed_vote_iter: Vec<_> = labels
+                    .into_iter()
+                    .zip(votes.into_iter())
+                    .filter_map(&vote_filter)
+                    .collect();
+
+                parsed_vote_iter.sort_by(|(vote, _), (vote2, _)| {
+                    vote.last_voted_slot()
+                        .unwrap()
+                        .cmp(&vote2.last_voted_slot().unwrap())
+                });
+
+                for (parsed_vote, leader_vote_tx) in &parsed_vote_iter {
+                    if let Some(latest_vote_slot) = parsed_vote.last_voted_slot() {
+                        info!("received vote for {}", latest_vote_slot);
+                        process_vote_tx(
+                            latest_vote_slot,
+                            leader_vote_tx,
+                            parsed_vote,
+                            &cluster_info,
+                        )
+                    }
+                    // Give vote some time to propagate
+                    sleep(Duration::from_millis(sleep_ms));
+                }
+
+                if parsed_vote_iter.is_empty() {
+                    sleep(Duration::from_millis(sleep_ms));
+                }
+            }
+        })
+    };
+
+    GossipVoter {
+        gossip_service,
+        tcp_listener,
+        cluster_info,
+        t_voter,
+        exit,
+    }
 }
 
 fn get_and_verify_slot_entries(

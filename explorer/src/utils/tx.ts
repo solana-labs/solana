@@ -37,6 +37,7 @@ export enum PROGRAM_NAMES {
 
   // spl
   ASSOCIATED_TOKEN = "Associated Token Program",
+  ACCOUNT_COMPRESSION = "Account Compression Program",
   FEATURE_PROPOSAL = "Feature Proposal Program",
   LENDING = "Lending Program",
   MEMO = "Memo Program",
@@ -158,6 +159,10 @@ export const PROGRAM_INFO_BY_ID: { [address: string]: ProgramInfo } = {
   ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL: {
     name: PROGRAM_NAMES.ASSOCIATED_TOKEN,
     deployments: ALL_CLUSTERS,
+  },
+  cmtDvXumGCrqC1Age74AVPhSRVXJMd8PJS91L8KbNCK: {
+    name: PROGRAM_NAMES.ACCOUNT_COMPRESSION,
+    deployments: [Cluster.Devnet, Cluster.MainnetBeta],
   },
   Feat1YXHhH6t1juaWF74WLcfv4XoNocjXA6sPWHNgAse: {
     name: PROGRAM_NAMES.FEATURE_PROPOSAL,

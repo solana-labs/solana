@@ -54,7 +54,7 @@ fn main() {
     solana_logger::setup();
     let matches = Command::new("Solana SBF CLI")
         .version(crate_version!())
-        .author("Solana Maintainers <maintainers@solana.foundation>")
+        .author("Solana Labs Maintainers <maintainers@solanalabs.com>")
         .about(
             r##"CLI to test and analyze SBF programs.
 

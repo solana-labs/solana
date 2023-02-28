@@ -157,8 +157,8 @@ impl RepairWeight {
         max_unknown_last_index_repairs: usize,
         max_closest_completion_repairs: usize,
         ignore_slots: &impl Contains<'a, Slot>,
-        repair_timing: Option<&mut RepairTiming>,
-        stats: Option<&mut BestRepairsStats>,
+        repair_timing: &mut RepairTiming,
+        stats: &mut BestRepairsStats,
     ) -> Vec<ShredRepairType> {
         let mut repairs = vec![];
         let mut processed_slots: HashSet<Slot> = vec![self.root].into_iter().collect();
@@ -227,24 +227,21 @@ impl RepairWeight {
         repairs.extend(closest_completion_repairs);
         get_closest_completion_elapsed.stop();
 
-        if let Some(stats) = stats {
-            stats.update(
-                num_orphan_slots as u64,
-                num_orphan_repairs as u64,
-                num_best_shreds_slots as u64,
-                num_best_shreds_repairs as u64,
-                num_unknown_last_index_slots as u64,
-                num_unknown_last_index_repairs as u64,
-                num_closest_completion_slots as u64,
-                num_closest_completion_repairs as u64,
-            );
-        }
-        if let Some(repair_timing) = repair_timing {
-            repair_timing.get_best_orphans_elapsed += get_best_orphans_elapsed.as_us();
-            repair_timing.get_best_shreds_elapsed += get_best_shreds_elapsed.as_us();
-            repair_timing.get_unknown_last_index_elapsed += get_unknown_last_index_elapsed.as_us();
-            repair_timing.get_closest_completion_elapsed += get_closest_completion_elapsed.as_us();
-        }
+        stats.update(
+            num_orphan_slots as u64,
+            num_orphan_repairs as u64,
+            num_best_shreds_slots as u64,
+            num_best_shreds_repairs as u64,
+            num_unknown_last_index_slots as u64,
+            num_unknown_last_index_repairs as u64,
+            num_closest_completion_slots as u64,
+            num_closest_completion_repairs as u64,
+        );
+        repair_timing.get_best_orphans_elapsed += get_best_orphans_elapsed.as_us();
+        repair_timing.get_best_shreds_elapsed += get_best_shreds_elapsed.as_us();
+        repair_timing.get_unknown_last_index_elapsed += get_unknown_last_index_elapsed.as_us();
+        repair_timing.get_closest_completion_elapsed += get_closest_completion_elapsed.as_us();
+
         repairs
     }
 

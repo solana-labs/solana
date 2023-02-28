@@ -83,6 +83,9 @@ impl ReceivedCacheEntry {
             *score = score.saturating_add(1);
         } else if self.nodes.len() < Self::CAPACITY {
             // Ensure that node is inserted into the cache for later pruning.
+            // This intentionally does not negatively impact node's score, in
+            // order to prevent replayed messages with spoofed addresses force
+            // pruning a good node.
             let _ = self.nodes.entry(node).or_default();
         }
     }
