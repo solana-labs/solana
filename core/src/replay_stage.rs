@@ -2556,13 +2556,15 @@ impl ReplayStage {
 
             assert_eq!(bank_slot, bank.slot());
             if bank.is_complete() {
-                let cumulative_timings = bank.wait_for_scheduler(false, false).0;
+                let mut bank_complete_time = Measure::start("bank_complete_time");
                 let bank_progress = progress
                     .get_mut(&bank.slot())
                     .expect("Bank fork progress entry missing for completed bank");
 
                 let replay_stats = bank_progress.replay_stats.clone();
                 let mut r_replay_stats = replay_stats.write().unwrap();
+
+                let cumulative_timings = bank.wait_for_scheduler(false, false).0;
                 match cumulative_timings {
                     Err(err) => {
                         match bank.scheduler_mode() {
@@ -2602,8 +2604,6 @@ impl ReplayStage {
                         r_replay_stats.process_execute_batches_internal_metrics(metrics);
                     },
                 };
-
-                let mut bank_complete_time = Measure::start("bank_complete_time");
 
                 let replay_progress = bank_progress.replay_progress.clone();
                 let r_replay_progress = replay_progress.read().unwrap();
