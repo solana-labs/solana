@@ -130,7 +130,7 @@ pub enum ReplayingBackend {
 impl From<&str> for ReplayingBackend {
     fn from(string: &str) -> Self {
         match string {
-            "blockstore_processor" => BlockstoreProcessor, 
+            "blockstore_processor" => Self::BlockstoreProcessor, 
             "unified_scheduler" => UnifiedScheduler,
             bad_backend => panic!("Invalid replaying backend: {bad_backend}"),
         }
