@@ -46,9 +46,6 @@ const DEFAULT_MIN_SNAPSHOT_DOWNLOAD_SPEED: u64 = 10485760;
 // The maximum times of snapshot download abort and retry
 const MAX_SNAPSHOT_DOWNLOAD_ABORT: u32 = 5;
 
-const DEFAULT_REPLAYING_BACKEND: &str = "blockstore_processor";
-const DEFAULT_BANKING_BACKEND: &str = "multi_iterator";
-
 pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
     return App::new(crate_name!()).about(crate_description!())
         .version(version)

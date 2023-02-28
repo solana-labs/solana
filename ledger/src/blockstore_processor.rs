@@ -608,6 +608,9 @@ pub struct ProcessOptions {
     pub run_final_accounts_hash_calc: bool,
 }
 
+pub const DEFAULT_REPLAYING_BACKEND: &str = "blockstore_processor";
+pub const DEFAULT_BANKING_BACKEND: &str = "multi_iterator";
+
 pub fn test_process_blockstore(
     genesis_config: &GenesisConfig,
     blockstore: &Blockstore,
