@@ -84,6 +84,14 @@ impl std::ops::Deref for SchedulableBank {
     }
 }
 
+#[derive(Default)]
+enum InstalledSchedulerPool {
+    #[default]
+    Disabled,
+    ReplayOnly(Box<dyn LikeSchedulerPool>),
+    Full(Box<dyn LikeSchedulerPool>),
+}
+
 pub struct BankForks {
     banks: HashMap<Slot, SchedulableBank>,
     descendants: HashMap<Slot, HashSet<Slot>>,
@@ -94,7 +102,7 @@ pub struct BankForks {
     pub accounts_hash_interval_slots: Slot,
     last_accounts_hash_slot: Slot,
     in_vote_only_mode: Arc<AtomicBool>,
-    scheduler_pool: Option<Box<dyn LikeSchedulerPool>>,
+    scheduler_pool: InstalledSchedulerPool,
 }
 
 pub trait LikeSchedulerPool: Send + Sync + std::fmt::Debug {
@@ -230,7 +238,7 @@ impl BankForks {
         for parent in bank.proper_ancestors() {
             self.descendants.entry(parent).or_default().insert(slot);
         }
-        if let Some(scheduler_pool) = &self.scheduler_pool {
+        if let Some(scheduler_pool) = &self.get_scheduler_pool(mode) {
             let new_context = SchedulerContext::new(Some(&bank), mode);
             if let Some(inherited_scheduler) = inherited_scheduler {
                 inherited_scheduler.replace_scheduler_context(new_context);
