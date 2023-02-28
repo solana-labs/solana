@@ -130,7 +130,7 @@ pub enum ReplayingBackend {
 }
 
 impl ReplayingBackend {
-    fn const_default() -> Self {
+    const fn const_default() -> Self {
         panic!();
     }
 }
