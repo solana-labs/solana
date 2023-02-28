@@ -1456,6 +1456,10 @@ pub fn main() {
         .value_of("replaying_backend")
         .map(ReplayingBackend::from)
         .unwrap();
+    validator_config.banking_backend = matches
+        .value_of("banking_backend")
+        .map(BankingBackend::from)
+        .unwrap();
 
     validator_config.ledger_column_options = LedgerColumnOptions {
         compression_type: match matches.value_of("rocksdb_ledger_compression") {
