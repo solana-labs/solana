@@ -3655,37 +3655,40 @@ impl Bank {
         );
 
 
-        let scheduler_mode = self.scheduler_mode();
-        let mut w_blockhash_queue = match scheduler_mode {
-            solana_scheduler::Mode::Replaying => {
-                let (last_result, next_scheduler) = self.wait_for_scheduler(false, true);
-                let next_scheduler = next_scheduler.unwrap();
-                let mut s2 = self.scheduler.write().unwrap();
-                *s2 = Some(next_scheduler);
+        let mut w_blockhash_queue = if !self.with_scheduler() {
+            self.blockhash_queue.write().unwrap()
+        } else {
+            match self.scheduler_mode {
+                solana_scheduler::Mode::Replaying => {
+                    let (last_result, next_scheduler) = self.wait_for_scheduler(false, true);
+                    let next_scheduler = next_scheduler.unwrap();
+                    let mut s2 = self.scheduler.write().unwrap();
+                    *s2 = Some(next_scheduler);
 
-                // Only acquire the write lock for the blockhash queue on block boundaries because
-                // readers can starve this write lock acquisition and ticks would be slowed down too
-                // much if the write lock is acquired for each tick.
-                let w_blockhash_queue = self.blockhash_queue.write().unwrap();
-                //let new_scheduler = Scheduler::default();
-                if last_result.is_err() {
-                    warn!(
-                        "register_recent_blockhash: carrying over this error: {:?}",
-                        last_result
-                    );
-                }
-                //new_scheduler.collected_results.lock().unwrap().push(maybe_last_error);
-                s2.as_ref()
-                    .unwrap()
-                    .collected_results()
-                    .lock()
-                    .unwrap()
-                    .push(last_result);
-                drop(s2);
-                //*self.scheduler.write().unwrap() = new_scheduler;
-                w_blockhash_queue
-            },
-        };
+                    // Only acquire the write lock for the blockhash queue on block boundaries because
+                    // readers can starve this write lock acquisition and ticks would be slowed down too
+                    // much if the write lock is acquired for each tick.
+                    let w_blockhash_queue = self.blockhash_queue.write().unwrap();
+                    //let new_scheduler = Scheduler::default();
+                    if last_result.is_err() {
+                        warn!(
+                            "register_recent_blockhash: carrying over this error: {:?}",
+                            last_result
+                        );
+                    }
+                    //new_scheduler.collected_results.lock().unwrap().push(maybe_last_error);
+                    s2.as_ref()
+                        .unwrap()
+                        .collected_results()
+                        .lock()
+                        .unwrap()
+                        .push(last_result);
+                    drop(s2);
+                    //*self.scheduler.write().unwrap() = new_scheduler;
+                    w_blockhash_queue
+                },
+            };
+        }
 
         debug!(
             "register_recent_blockhash: slot: {} reinitializing the scheduler: end",
