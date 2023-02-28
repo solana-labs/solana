@@ -127,6 +127,9 @@ pub enum ReplayingBackend {
     UnifiedScheduler,
 }
 
+const fn a() -> &str {
+}
+
 impl From<&str> for ReplayingBackend {
     fn from(string: &str) -> Self {
         match string {
