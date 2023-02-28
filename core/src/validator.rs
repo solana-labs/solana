@@ -127,6 +127,12 @@ pub enum ReplayingBackend {
     UnifiedScheduler,
 }
 
+impl Default for ReplayingBackend {
+    fn default() -> Self {
+        Self::from(DEFAULT_REPLAYING_BACKEND)
+    }
+}
+
 impl ReplayingBackend {
     const fn const_from_str(string: &str) -> Self {
         match string {
