@@ -1336,8 +1336,8 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                 .value_name("BACKEND")
                 .takes_value(true)
                 .possible_values(&[
-                    "blockstore_processor",
-                    "unified_scheduler",
+                    "blockstore-processor",
+                    "unified-scheduler",
                     ])
                 .default_value(&default_args.replaying_backend)
                 .help(
@@ -1350,7 +1350,7 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                 .value_name("BACKEND")
                 .takes_value(true)
                 .possible_values(&[
-                    "multi_iterator",
+                    "multi-iterator",
                     ])
                 .default_value(&default_args.banking_backend)
                 .help(

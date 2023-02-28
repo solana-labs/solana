@@ -1657,8 +1657,8 @@ fn main() {
                 .value_name("BACKEND")
                 .takes_value(true)
                 .possible_values(&[
-                    "blockstore_processor",
-                    "unified_scheduler",
+                    "blockstore-processor",
+                    "unified-scheduler",
                     ])
                 .default_value(DEFAULT_REPLAYING_BACKEND)
                 .global(true)
@@ -1672,7 +1672,7 @@ fn main() {
                 .value_name("BACKEND")
                 .takes_value(true)
                 .possible_values(&[
-                    "multi_iterator",
+                    "multi-iterator",
                     ])
                 .default_value(DEFAULT_BANKING_BACKEND)
                 .global(true)

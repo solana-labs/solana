@@ -119,8 +119,8 @@ use {
 const MAX_COMPLETED_DATA_SETS_IN_CHANNEL: usize = 100_000;
 const WAIT_FOR_SUPERMAJORITY_THRESHOLD_PERCENT: u64 = 80;
 
-pub const DEFAULT_REPLAYING_BACKEND: &str = "blockstore_processor";
-pub const DEFAULT_BANKING_BACKEND: &str = "multi_iterator";
+pub const DEFAULT_REPLAYING_BACKEND: &str = "blockstore-processor";
+pub const DEFAULT_BANKING_BACKEND: &str = "multi-iterator";
 
 pub enum ReplayingBackend {
     BlockstoreProcessor,
@@ -136,8 +136,8 @@ impl Default for ReplayingBackend {
 impl From<&str> for ReplayingBackend {
     fn from(string: &str) -> Self {
         match string {
-            "blockstore_processor" => Self::BlockstoreProcessor, 
-            "unified_scheduler" => Self::UnifiedScheduler,
+            "blockstore-processor" => Self::BlockstoreProcessor, 
+            "unified-scheduler" => Self::UnifiedScheduler,
             bad_backend => panic!("Invalid replaying backend: {bad_backend}"),
         }
     }
@@ -156,7 +156,7 @@ impl Default for BankingBackend {
 impl From<&str> for BankingBackend {
     fn from(string: &str) -> Self {
         match string {
-            "multi_iterator" => Self::MultiIterator, 
+            "multi-iterator" => Self::MultiIterator, 
             bad_backend => panic!("Invalid banking backend: {bad_backend}"),
         }
     }
