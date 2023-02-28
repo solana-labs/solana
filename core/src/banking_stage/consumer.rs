@@ -218,7 +218,7 @@ impl Consumer {
         slot_metrics_tracker: &mut LeaderSlotMetricsTracker,
     ) -> ProcessTransactionsSummary {
         let (mut process_transactions_summary, process_transactions_us) = measure_us!(
-            self.process_transactions(bank, bank_creation_time, sanitized_transactions,)
+            self.process_transactions(bank, bank_creation_time, sanitized_transactions)
         );
         slot_metrics_tracker.increment_process_transactions_us(process_transactions_us);
         banking_stage_stats
