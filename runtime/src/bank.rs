@@ -3687,7 +3687,7 @@ impl Bank {
                     //*self.scheduler.write().unwrap() = new_scheduler;
                     w_blockhash_queue
                 },
-            };
+            }
         };
 
         debug!(
