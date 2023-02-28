@@ -129,8 +129,8 @@ pub enum ReplayingBackend {
     UnifiedScheduler,
 }
 
-impl Default for ReplayingBackend {
-    const fn default() -> Self {
+impl ReplayingBackend {
+    fn const_default() -> Self {
         panic!();
     }
 }
