@@ -173,7 +173,7 @@ impl GeyserPluginManager {
             })?;
 
         // Attempt to on_load with new plugin
-        match new_plugin.on_load(&new_parsed_config_file) {
+        match new_plugin.on_load(new_parsed_config_file) {
             // On success, push plugin and library
             Ok(()) => {
                 self.plugins.push(new_plugin);
@@ -411,9 +411,9 @@ mod tests {
         (plugin, lib, DUMMY_CONFIG)
     }
 
-    const DUMMY_NAME: &'static str = "dummy";
-    pub(super) const DUMMY_CONFIG: &'static str = "dummy_config";
-    const ANOTHER_DUMMY_NAME: &'static str = "another_dummy";
+    const DUMMY_NAME: &str = "dummy";
+    pub(super) const DUMMY_CONFIG: &str = "dummy_config";
+    const ANOTHER_DUMMY_NAME: &str = "another_dummy";
 
     #[derive(Debug)]
     pub(super) struct TestPlugin;
@@ -456,7 +456,7 @@ mod tests {
         plugin_manager_lock.plugins[0].name();
 
         // Try wrong name (same error)
-        const WRONG_NAME: &'static str = "wrong_name";
+        const WRONG_NAME: &str = "wrong_name";
         let reload_result = plugin_manager_lock.reload_plugin(WRONG_NAME, DUMMY_CONFIG);
         assert_eq!(
             reload_result.unwrap_err().message,
