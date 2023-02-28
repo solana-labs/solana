@@ -1804,7 +1804,7 @@ impl DefaultArgs {
             wait_for_restart_window_min_idle_time: "10".to_string(),
             wait_for_restart_window_max_delinquent_stake: "5".to_string(),
             banking_trace_dir_byte_limit: BANKING_TRACE_DIR_DEFAULT_BYTE_LIMIT.to_string(),
-            banking_trace_dir_byte_limit: DEFAULT_REPLAYING_BACKEND.to_string(),
+            replaying_backend: DEFAULT_REPLAYING_BACKEND.to_string(),
         }
     }
 }
