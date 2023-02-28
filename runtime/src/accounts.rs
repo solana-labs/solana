@@ -394,11 +394,12 @@ impl Accounts {
                     }
 
                     if bpf_loader_upgradeable::check_id(account.owner()) {
-                        if !feature_set.is_active(&simplify_writable_program_account_check::id()) {
-                            if message.is_writable(i) && !message.is_upgradeable_loader_present() {
-                                error_counters.invalid_writable_account += 1;
-                                return Err(TransactionError::InvalidWritableAccount);
-                            }
+                        if !feature_set.is_active(&simplify_writable_program_account_check::id())
+                            && message.is_writable(i)
+                            && !message.is_upgradeable_loader_present()
+                        {
+                            error_counters.invalid_writable_account += 1;
+                            return Err(TransactionError::InvalidWritableAccount);
                         }
 
                         if account.executable() {
