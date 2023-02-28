@@ -1641,6 +1641,33 @@ fn main() {
                 .help("Use DIR for separate incremental snapshot location"),
         )
         .arg(
+            Arg::with_name("replaying_backend")
+                .long("replaying-backend")
+                .value_name("BACKEND")
+                .takes_value(true)
+                .possible_values(&[
+                    "blockstore_processor",
+                    "unified_scheduler",
+                    ])
+                .default_value(DEFAULT_BANKING_BACKEND),
+                .help(
+                    "Switch ReplayStage's backend to schedule transaction executions"
+                ),
+        )
+        .arg(
+            Arg::with_name("banking_backend")
+                .long("banking-backend")
+                .value_name("BACKEND")
+                .takes_value(true)
+                .possible_values(&[
+                    "multi_iterator",
+                    ])
+                .default_value(&default_args.banking_backend)
+                .help(
+                    "Switch BankingStage's backend to schedule transaction executions"
+                ),
+        )
+        .arg(
             Arg::with_name("output_format")
                 .long("output")
                 .value_name("FORMAT")
