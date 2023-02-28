@@ -1649,7 +1649,7 @@ fn main() {
                     "blockstore_processor",
                     "unified_scheduler",
                     ])
-                .default_value(DEFAULT_BANKING_BACKEND),
+                .default_value(DEFAULT_BANKING_BACKEND)
                 .help(
                     "Switch ReplayStage's backend to schedule transaction executions"
                 ),
