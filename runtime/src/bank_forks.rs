@@ -251,6 +251,7 @@ impl BankForks {
     }
 
     pub fn install_scheduler_pool(&mut self, pool: Box<dyn LikeSchedulerPool>) {
+        use assert_matches::assert_matches;
         assert_matches!(self.scheduler_pool, NotInstalled);
         info!("Installed new scheduler_pool into bank_forks: {:?}", pool);
         self.scheduler_pool = Some(pool);
