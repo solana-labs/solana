@@ -119,7 +119,7 @@ use {
 const MAX_COMPLETED_DATA_SETS_IN_CHANNEL: usize = 100_000;
 const WAIT_FOR_SUPERMAJORITY_THRESHOLD_PERCENT: u64 = 80;
 
-pub const DEFAULT_REPLAYING_BACKEND: &str = ReplayingBackend::default().to_str();
+pub const DEFAULT_REPLAYING_BACKEND: &str = ReplayingBackend::const_default().to_str();
 pub const DEFAULT_BANKING_BACKEND: &str = BankingBackend::default().to_str();
 
 #[derive(Default)]
