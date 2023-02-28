@@ -956,6 +956,8 @@ impl Validator {
             };
             let scheduler_pool = SchedulerPool::new_boxed(Some(&poh_recorder), config.runtime_config.log_messages_bytes_limit, transaction_status_sender.clone());
             bank_forks.write().unwrap().install_scheduler_pool(scheduler_pool, false);
+        } else {
+            info!("not installing scheduler pool...");
         }
 
         let waited_for_supermajority = match wait_for_supermajority(
