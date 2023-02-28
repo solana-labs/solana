@@ -172,7 +172,7 @@ impl AncestorHashesService {
             None,
         );
 
-        let (ancestor_connection_cache, ancestor_quic_t) =
+        let (ancestor_quic_t, ancestor_connection_cache) =
             spawn_ancestor_hashes_quic_server(repair_quic_config, response_sender, &exit);
         let ancestor_hashes_request_statuses: Arc<DashMap<Slot, DeadSlotAncestorRequestStatus>> =
             Arc::new(DashMap::new());
@@ -204,8 +204,8 @@ impl AncestorHashesService {
             retryable_slots_receiver,
         );
         let mut thread_hdls = vec![t_receiver, t_ancestor_hashes_responses, t_ancestor_requests];
-        if let Some(ancestor_hash_quic_t) = ancestor_quic_t {
-            thread_hdls.push(ancestor_hash_quic_t);
+        if let Some(ancestor_quic_t) = ancestor_quic_t {
+            thread_hdls.push(ancestor_quic_t);
         }
         Self { thread_hdls }
     }
@@ -803,13 +803,13 @@ fn spawn_ancestor_hashes_quic_server(
     repair_quic_config: Option<&RepairQuicConfig>,
     response_sender: Sender<PacketBatch>,
     exit: &Arc<AtomicBool>,
-) -> (Option<Arc<ConnectionCache>>, Option<JoinHandle<()>>) {
+) -> (Option<JoinHandle<()>>, Option<Arc<ConnectionCache>>) {
     let (ancestor_connection_cache, ancestor_quic_t) =
         if let Some(repair_quic_config) = repair_quic_config {
             let host = repair_quic_config.repair_address.local_addr().unwrap().ip();
             let stats = Arc::new(StreamStats::default());
 
-            let (endpoint, ancestor_hash_quic_t) = spawn_server(
+            let (endpoint, ancestor_quic_t) = spawn_server(
                 repair_quic_config
                     .ancestor_hash_address
                     .try_clone()
@@ -842,7 +842,7 @@ fn spawn_ancestor_hashes_quic_server(
                 )),
             ));
 
-            (Some(connection_cache), Some(ancestor_hash_quic_t))
+            (Some(ancestor_quic_t), Some(connection_cache))
         } else {
             (None, None)
         };
