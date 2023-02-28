@@ -127,7 +127,7 @@ pub enum ReplayingBackend {
     UnifiedScheduler,
 }
 
-    fn from2(string: &str) -> ReplayingBackend {
+    const fn from2(string: &str) -> ReplayingBackend {
         use ReplayingBackend::*;
         match string {
             "blockstore_processor" => BlockstoreProcessor, 
