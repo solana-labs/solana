@@ -172,7 +172,7 @@ impl AncestorHashesService {
             None,
         );
 
-        let (ancestor_connection_cache, ancestor_hash_quic_t) =
+        let (ancestor_connection_cache, ancestor_quic_t) =
             spawn_ancestor_hashes_quic_server(repair_quic_config, response_sender, &exit);
         let ancestor_hashes_request_statuses: Arc<DashMap<Slot, DeadSlotAncestorRequestStatus>> =
             Arc::new(DashMap::new());
@@ -204,7 +204,7 @@ impl AncestorHashesService {
             retryable_slots_receiver,
         );
         let mut thread_hdls = vec![t_receiver, t_ancestor_hashes_responses, t_ancestor_requests];
-        if let Some(ancestor_hash_quic_t) = ancestor_hash_quic_t {
+        if let Some(ancestor_hash_quic_t) = ancestor_quic_t {
             thread_hdls.push(ancestor_hash_quic_t);
         }
         Self { thread_hdls }
