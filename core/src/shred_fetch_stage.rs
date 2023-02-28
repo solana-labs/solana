@@ -34,6 +34,9 @@ const DEFAULT_LRU_SIZE: usize = 10_000;
 
 pub(crate) struct ShredFetchStage {
     thread_hdls: Vec<JoinHandle<()>>,
+    /// The Quic ConnectonCache using the same Quic Endpoint of the Quic based
+    /// streamer receiving shreds. The connection cache can be used for sending
+    /// repair requests.
     connection_cache: Option<Arc<ConnectionCache>>,
 }
 
@@ -173,6 +176,10 @@ impl ShredFetchStage {
         (streamers, modifier_hdl)
     }
 
+    /// This creates a Quic based streamer and a packet modifier. The streamer forwards PacketBatch to
+    /// the packet modifier which in turn sends out the PacketBatch via 'sender'.
+    /// In addition, it also creates a connection cache using the same Quic endpoint of the
+    /// streamer.
     fn packet_modifier_quic(
         exit: &Arc<AtomicBool>,
         sender: Sender<PacketBatch>,
@@ -182,7 +189,7 @@ impl ShredFetchStage {
         flags: PacketFlags,
         cluster_info: Arc<ClusterInfo>,
         repair_quic_config: &RepairQuicConfig,
-    ) -> (Arc<ConnectionCache>, JoinHandle<()>, JoinHandle<()>) {
+    ) -> (JoinHandle<()>, JoinHandle<()>, Arc<ConnectionCache>) {
         let (packet_sender, packet_receiver) = unbounded();
 
         let stats = Arc::new(StreamStats::default());
@@ -234,7 +241,7 @@ impl ShredFetchStage {
             })
             .unwrap();
 
-        (connection_cache, repair_quic_t, modifier_hdl)
+        (repair_quic_t, modifier_hdl, connection_cache)
     }
 
     pub(crate) fn new(
@@ -288,13 +295,13 @@ impl ShredFetchStage {
 
         let (connection_cache, repair_quic_t, quic_repair_modifier_t) =
             if let Some(repair_quic_config) = repair_quic_config {
-                let (connection_cache, repair_quic_t, quic_repair_modifier_t) =
+                let (repair_quic_t, quic_repair_modifier_t, connection_cache) =
                     Self::packet_modifier_quic(
                         exit,
                         sender,
                         bank_forks,
                         shred_version,
-                        "shred_fetch_repair",
+                        "shred_fetch_repair_quic",
                         PacketFlags::REPAIR,
                         cluster_info,
                         repair_quic_config,
