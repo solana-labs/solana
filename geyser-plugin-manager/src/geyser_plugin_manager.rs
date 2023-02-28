@@ -443,7 +443,7 @@ mod tests {
         let reload_result = plugin_manager_lock.reload_plugin(DUMMY_NAME, DUMMY_CONFIG);
         assert_eq!(
             reload_result.unwrap_err().message,
-            "plugin requested to reload is not loaded"
+            "Plugin requested to reload is not loaded"
         );
 
         // Mock having loaded plugin (TestPlugin)
@@ -460,7 +460,7 @@ mod tests {
         let reload_result = plugin_manager_lock.reload_plugin(WRONG_NAME, DUMMY_CONFIG);
         assert_eq!(
             reload_result.unwrap_err().message,
-            "plugin requested to reload is not loaded"
+            "Plugin requested to reload is not loaded"
         );
 
         // Now try a (dummy) reload, replacing TestPlugin with TestPlugin2
