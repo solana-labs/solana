@@ -250,7 +250,7 @@ impl BankForks {
         bank
     }
 
-    fn get_scheduler_pool(&self, mode: solana_scheduler::Mode) -> Option<Box<(dyn LikeSchedulerPool)>> {
+    fn get_scheduler_pool(&self, mode: solana_scheduler::Mode) -> Option<&Box<(dyn LikeSchedulerPool)>> {
         match mode {
             solana_scheduler::Mode::Replaying => {
                 match &self.scheduler_pool {
