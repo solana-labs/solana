@@ -133,19 +133,13 @@ impl Default for ReplayingBackend {
     }
 }
 
-impl ReplayingBackend {
-    const fn const_from_str(string: &str) -> Self {
+impl From<&str> for ReplayingBackend {
+    fn from(string: &str) -> Self {
         match string {
             "blockstore_processor" => Self::BlockstoreProcessor, 
             "unified_scheduler" => Self::UnifiedScheduler,
             bad_backend => panic!("Invalid replaying backend: {bad_backend}"),
         }
-    }
-}
-
-impl From<&str> for ReplayingBackend {
-    fn from(string: &str) -> Self {
-        Self::const_from_str(string)
     }
 }
 
