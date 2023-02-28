@@ -1176,7 +1176,7 @@ impl ServeRepair {
                         batch_send_quic(connection_cache.as_ref(), &pending_pongs)
                     {
                         warn!(
-                            "batch_send failed to send {}/{} packets first error {:?}",
+                            "batch_send failed to send {}/{} packets using connection cache. First error {:?}",
                             num_failed,
                             pending_pongs.len(),
                             err

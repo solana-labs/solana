@@ -223,6 +223,8 @@ impl Default for RepairSlotRange {
     }
 }
 
+/// Modelling either using a UDP socket or Quic connection cache for sending
+/// repair requests.
 pub(crate) enum RepairTransportConfig<'a> {
     Udp(&'a UdpSocket),
     Quic(Arc<ConnectionCache>),
@@ -423,7 +425,7 @@ impl RepairService {
                     let result = quic_sendmmsg::batch_send(connection_cache, &batch);
                     if let Err(QuicSendPktsError::TransportError(err, num_failed)) = result {
                         error!(
-                            "{} batch_send failed to send {}/{} packets first error {:?}",
+                            "{} batch_send failed to send {}/{} packets using connection cache, first error {:?}",
                             id,
                             num_failed,
                             batch.len(),

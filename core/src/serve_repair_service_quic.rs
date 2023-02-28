@@ -21,6 +21,9 @@ pub struct ServeRepairService {
 }
 
 impl ServeRepairService {
+    /// Creates Quic based server serving repair requests. It starts a Quic server which forwards
+    /// received PacketBatch to the ServeRepair which in turns sends responses to the
+    /// Quic based responder.
     pub fn new(
         serve_repair: ServeRepair,
         blockstore: Arc<Blockstore>,
@@ -65,6 +68,7 @@ impl ServeRepairService {
         )
         .unwrap();
 
+        // The connection cache used to send to repair responses back to the client.
         let connection_cache = ConnectionCache::new_with_client_options(
             1,
             Some(serve_repair_endpoint),
