@@ -271,26 +271,6 @@ fn execute_batches_internal(
     })
 }
 
-fn rebatch_transactions<'a>(
-    lock_results: &'a [Result<()>],
-    bank: &'a Arc<Bank>,
-    sanitized_txs: &'a [SanitizedTransaction],
-    start: usize,
-    end: usize,
-    transaction_indexes: &'a [usize],
-) -> TransactionBatchWithIndexes<'a, 'a> {
-    let txs = &sanitized_txs[start..=end];
-    let results = &lock_results[start..=end];
-    let mut tx_batch = TransactionBatch::new(results.to_vec(), bank, Cow::from(txs));
-    tx_batch.set_needs_unlock(false);
-
-    let transaction_indexes = transaction_indexes[start..=end].to_vec();
-    TransactionBatchWithIndexes {
-        batch: tx_batch,
-        transaction_indexes,
-    }
-}
-
 fn process_batches(
     bank: &Arc<Bank>,
     batches: &[TransactionBatchWithIndexes],
@@ -315,6 +295,26 @@ fn send_batches_to_replay_backend(bank: &Arc<Bank>, batches: &[TransactionBatchW
         bank.schedule_transactions_to_commit_as_replaying(batch.sanitized_transactions(), transaction_indexes.into_iter());
     }
     Ok(())
+}
+
+fn rebatch_transactions<'a>(
+    lock_results: &'a [Result<()>],
+    bank: &'a Arc<Bank>,
+    sanitized_txs: &'a [SanitizedTransaction],
+    start: usize,
+    end: usize,
+    transaction_indexes: &'a [usize],
+) -> TransactionBatchWithIndexes<'a, 'a> {
+    let txs = &sanitized_txs[start..=end];
+    let results = &lock_results[start..=end];
+    let mut tx_batch = TransactionBatch::new(results.to_vec(), bank, Cow::from(txs));
+    tx_batch.set_needs_unlock(false);
+
+    let transaction_indexes = transaction_indexes[start..=end].to_vec();
+    TransactionBatchWithIndexes {
+        batch: tx_batch,
+        transaction_indexes,
+    }
 }
 
 fn execute_batches_as_replay_backend(
