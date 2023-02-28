@@ -3688,7 +3688,7 @@ impl Bank {
                     w_blockhash_queue
                 },
             };
-        }
+        };
 
         debug!(
             "register_recent_blockhash: slot: {} reinitializing the scheduler: end",
