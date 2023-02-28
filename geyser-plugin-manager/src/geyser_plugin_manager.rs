@@ -373,9 +373,7 @@ pub(crate) fn load_plugin_from_config(
 mod tests {
     use std::sync::{Arc, RwLock};
 
-    use crate::{
-        geyser_plugin_manager::GeyserPluginManager, geyser_plugin_service::GeyserPluginService,
-    };
+    use crate::geyser_plugin_manager::GeyserPluginManager;
     use libloading::Library;
     use solana_geyser_plugin_interface::geyser_plugin_interface::GeyserPlugin;
 
