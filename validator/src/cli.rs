@@ -1337,7 +1337,7 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                     "blockstore_processor",
                     "unified_scheduler",
                     ])
-                .default_value(&"default"),
+                .default_value(&"default")
                 .help(
                     "Backend to replay the ledger entries"
                 ),
