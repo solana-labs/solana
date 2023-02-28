@@ -120,7 +120,7 @@ const MAX_COMPLETED_DATA_SETS_IN_CHANNEL: usize = 100_000;
 const WAIT_FOR_SUPERMAJORITY_THRESHOLD_PERCENT: u64 = 80;
 
 pub const DEFAULT_REPLAYING_BACKEND: &str = ReplayingBackend::default().to_str();
-pub const DEFAULT_BANKING_BACKEND: &str = "multi_iterator";
+pub const DEFAULT_BANKING_BACKEND: &str = BankingBackend::default().to_str();
 
 #[derive(Default)]
 pub enum ReplayingBackend {
@@ -150,6 +150,14 @@ impl From<&str> for ReplayingBackend {
 
 pub enum BankingBackend {
     MultiIterator,
+}
+
+impl BankingBackend {
+    const fn to_str(&self) -> &'static str {
+        match self {
+            MultiIterator => "multi_iterator",
+        }
+    }
 }
 
 impl From<&str> for BankingBackend {
