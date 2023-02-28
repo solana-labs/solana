@@ -609,24 +609,25 @@ async fn packet_batch_sender(
                 break;
             }
 
-            let res = packet_receiver.try_recv();
-            if let Ok(packet_accumulator) = res {
-                unsafe {
-                    packet_batch.set_len(packet_batch.len() + 1);
-                }
+            let timeout_res = timeout(Duration::from_micros(250), packet_receiver.recv()).await;
 
-                let i = packet_batch.len() - 1;
-                *packet_batch[i].meta_mut() = packet_accumulator.meta;
-                for chunk in packet_accumulator.chunks {
-                    packet_batch[i].buffer_mut()[chunk.offset..chunk.end_of_chunk]
-                        .copy_from_slice(&chunk.bytes);
+            if let Ok(res) = timeout_res {
+                if let Ok(packet_accumulator) = res {
+                    unsafe {
+                        packet_batch.set_len(packet_batch.len() + 1);
+                    }
+    
+                    let i = packet_batch.len() - 1;
+                    *packet_batch[i].meta_mut() = packet_accumulator.meta;
+                    for chunk in packet_accumulator.chunks {
+                        packet_batch[i].buffer_mut()[chunk.offset..chunk.end_of_chunk]
+                            .copy_from_slice(&chunk.bytes);
+                    }
+    
+                    if packet_batch.len() == 1 {
+                        batch_start_time = Instant::now();
+                    }
                 }
-
-                if packet_batch.len() == 1 {
-                    batch_start_time = Instant::now();
-                }
-            } else {
-                sleep(Duration::from_micros(250)).await;
             }
         }
     }
