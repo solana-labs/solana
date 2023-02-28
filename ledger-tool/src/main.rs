@@ -1652,7 +1652,7 @@ fn main() {
                     "blockstore_processor",
                     "unified_scheduler",
                     ])
-                .default_value(DEFAULT_BANKING_BACKEND)
+                .default_value(DEFAULT_REPLAYING_BACKEND)
                 .help(
                     "Switch ReplayStage's backend to schedule transaction executions"
                 ),
@@ -1665,7 +1665,7 @@ fn main() {
                 .possible_values(&[
                     "multi_iterator",
                     ])
-                .default_value(DEFAULT_REPLAYING_BACKEND)
+                .default_value(DEFAULT_BANKING_BACKEND)
                 .help(
                     "Switch BankingStage's backend to schedule transaction executions"
                 ),

@@ -122,6 +122,34 @@ const WAIT_FOR_SUPERMAJORITY_THRESHOLD_PERCENT: u64 = 80;
 pub const DEFAULT_REPLAYING_BACKEND: &str = "blockstore_processor";
 pub const DEFAULT_BANKING_BACKEND: &str = "multi_iterator";
 
+pub enum ReplayingBackend {
+    BlockstoreProcessor,
+    UnifiedScheduler,
+}
+
+impl From<&str> for ReplayingBackend {
+    fn from(string: &str) -> Self {
+        match string {
+            "blockstore_processor" => BlockstoreProcessor, 
+            "unified_scheduler" => UnifiedScheduler,
+            bad_backend => panic!("Invalid replaying backend: {bad_backend}"),
+        }
+    }
+}
+
+pub enum BankingBackend {
+    MultiIterator,
+}
+
+impl From<&str> for BankingBackend {
+    fn from(string: &str) -> Self {
+        match string {
+            "multi_iterator" => MultiIterator, 
+            bad_backend => panic!("Invalid banking backend: {bad_backend}"),
+        }
+    }
+}
+
 pub struct ValidatorConfig {
     pub halt_at_slot: Option<Slot>,
     pub expected_genesis_hash: Option<Hash>,
@@ -181,6 +209,8 @@ pub struct ValidatorConfig {
     pub runtime_config: RuntimeConfig,
     pub replay_slots_concurrently: bool,
     pub banking_trace_dir_byte_limit: banking_trace::DirByteLimit,
+    pub replaying_backend: ReplayingBackend,
+    pub banking_backend: BankingBackend,
 }
 
 impl Default for ValidatorConfig {
