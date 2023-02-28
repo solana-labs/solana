@@ -6760,7 +6760,6 @@ dependencies = [
  "solana-metrics",
  "solana-perf",
  "solana-sdk 1.16.0",
- "solana-udp-client",
  "thiserror",
  "tokio",
  "x509-parser",

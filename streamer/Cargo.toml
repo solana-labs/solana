@@ -38,7 +38,6 @@ x509-parser = { workspace = true }
 [dev-dependencies]
 async-trait = { workspace = true }
 solana-logger = { workspace = true }
-solana-udp-client = { workspace = true }
 
 [lib]
 crate-type = ["lib"]
