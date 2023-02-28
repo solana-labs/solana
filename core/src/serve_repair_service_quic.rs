@@ -83,7 +83,7 @@ impl ServeRepairService {
             ConnectionCache::Quic(connection_cache) => connection_cache,
             ConnectionCache::Udp(_) => panic!("Do not expect UDP connection cache in this case"),
         };
-        let t_responder_quic = streamer::responder::<QuicPool, QuicConnectionManager, QuicConfig>(
+        let responder_quic_t = streamer::responder::<QuicPool, QuicConnectionManager, QuicConfig>(
             "RepairQuic",
             ResponderOption::ConnectionCache(connection_cache),
             response_receiver_quic,
@@ -91,14 +91,14 @@ impl ServeRepairService {
             Some(stats_reporter_sender),
         );
 
-        let t_listen_quic = serve_repair.listen(
+        let listen_quic_t = serve_repair.listen(
             blockstore,
             request_receiver_quic,
             response_sender_quic,
             exit,
         );
 
-        let thread_hdls = vec![repair_quic_t, t_responder_quic, t_listen_quic];
+        let thread_hdls = vec![repair_quic_t, responder_quic_t, listen_quic_t];
         Self { thread_hdls }
     }
 
