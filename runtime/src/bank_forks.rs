@@ -255,9 +255,9 @@ impl BankForks {
         assert_matches!(self.scheduler_pool, NotInstalled);
         info!("Installed new scheduler_pool into bank_forks: {:?}", pool);
         if replay_only {
-            self.scheduler_pool = ReplayOnly(pool);
+            self.scheduler_pool = InstalledSchedulerPool::ReplayOnly(pool);
         } else {
-            self.scheduler_pool = Full(pool);
+            self.scheduler_pool = InstalledSchedulerPool::Full(pool);
         }
     }
 
