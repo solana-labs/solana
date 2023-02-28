@@ -248,6 +248,8 @@ pub(crate) fn load_plugin_from_config(
 ) -> Result<(Box<dyn GeyserPlugin>, Library, &str), GeyserPluginManagerError> {
     use std::fs::File;
     use std::io::Read;
+    type PluginConstructor = unsafe fn() -> *mut dyn GeyserPlugin;
+    use libloading::Symbol;
 
     let mut file = match File::open(geyser_plugin_config_file) {
         Ok(file) => file,
