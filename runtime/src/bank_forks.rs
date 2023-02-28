@@ -254,7 +254,7 @@ impl BankForks {
         match mode {
             solana_scheduler::Mode::Replaying => {
                 match &self.scheduler_pool {
-                    InstalledSchedulerPool::ReplayOnly(scheduler_pool) => Some(scheduler_pool)
+                    InstalledSchedulerPool::ReplayOnly(scheduler_pool) | InstalledSchedulerPool::Full(scheduler_pool) => Some(scheduler_pool)
                 }
             }
         }
