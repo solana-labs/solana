@@ -29,6 +29,10 @@ impl GeyserPluginManager {
             info!("Unloading plugin for {:?}", plugin.name());
             plugin.on_unload();
         }
+
+        for lib in self.libs.drain(..) {
+            drop(lib);
+        }
     }
 
     /// Check if there is any plugin interested in account data
