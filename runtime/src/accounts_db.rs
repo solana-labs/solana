@@ -38,8 +38,8 @@ use {
         },
         accounts_index::{
             AccountIndexGetResult, AccountSecondaryIndexes, AccountsIndex, AccountsIndexConfig,
-            AccountsIndexRootsStats, AccountsIndexScanResult, IndexKey, IndexValue, IsCached,
-            RefCount, ScanConfig, ScanResult, SlotList, UpsertReclaim, ZeroLamport,
+            AccountsIndexRootsStats, AccountsIndexScanResult, DiskIndexValue, IndexKey, IndexValue,
+            IsCached, RefCount, ScanConfig, ScanResult, SlotList, UpsertReclaim, ZeroLamport,
             ACCOUNTS_INDEX_CONFIG_FOR_BENCHMARKS, ACCOUNTS_INDEX_CONFIG_FOR_TESTING,
         },
         accounts_index_storage::Startup,
@@ -53,6 +53,7 @@ use {
             aligned_stored_size, AppendVec, MatchAccountOwnerError, APPEND_VEC_MMAPPED_FILES_OPEN,
             STORE_META_OVERHEAD,
         },
+        bank_creation_freezing_progress::BankCreationFreezingProgress,
         cache_hash_data::{CacheHashData, CacheHashDataFile},
         contains::Contains,
         epoch_accounts_hash::EpochAccountsHashManager,
@@ -236,7 +237,7 @@ impl<'a> ShrinkCollectRefs<'a> for AliveAccounts<'a> {
     }
     fn add(&mut self, _ref_count: u64, account: &'a StoredAccountMeta<'a>) {
         self.accounts.push(account);
-        self.bytes = self.bytes.saturating_add(account.stored_size);
+        self.bytes = self.bytes.saturating_add(account.stored_size());
     }
     fn len(&self) -> usize {
         self.accounts.len()
@@ -676,6 +677,7 @@ impl GenerateIndexTimings {
 }
 
 impl IndexValue for AccountInfo {}
+impl DiskIndexValue for AccountInfo {}
 
 impl ZeroLamport for AccountSharedData {
     fn is_zero_lamport(&self) -> bool {
@@ -880,7 +882,7 @@ pub enum LoadedAccount<'a> {
 impl<'a> LoadedAccount<'a> {
     pub fn loaded_hash(&self) -> Hash {
         match self {
-            LoadedAccount::Stored(stored_account_meta) => *stored_account_meta.hash,
+            LoadedAccount::Stored(stored_account_meta) => *stored_account_meta.hash(),
             LoadedAccount::Cached(cached_account) => cached_account.hash(),
         }
     }
@@ -932,36 +934,32 @@ impl<'a> LoadedAccount<'a> {
 impl<'a> ReadableAccount for LoadedAccount<'a> {
     fn lamports(&self) -> u64 {
         match self {
-            LoadedAccount::Stored(stored_account_meta) => stored_account_meta.account_meta.lamports,
+            LoadedAccount::Stored(stored_account_meta) => stored_account_meta.lamports(),
             LoadedAccount::Cached(cached_account) => cached_account.account.lamports(),
         }
     }
 
     fn data(&self) -> &[u8] {
         match self {
-            LoadedAccount::Stored(stored_account_meta) => stored_account_meta.data,
+            LoadedAccount::Stored(stored_account_meta) => stored_account_meta.data(),
             LoadedAccount::Cached(cached_account) => cached_account.account.data(),
         }
     }
     fn owner(&self) -> &Pubkey {
         match self {
-            LoadedAccount::Stored(stored_account_meta) => &stored_account_meta.account_meta.owner,
+            LoadedAccount::Stored(stored_account_meta) => stored_account_meta.owner(),
             LoadedAccount::Cached(cached_account) => cached_account.account.owner(),
         }
     }
     fn executable(&self) -> bool {
         match self {
-            LoadedAccount::Stored(stored_account_meta) => {
-                stored_account_meta.account_meta.executable
-            }
+            LoadedAccount::Stored(stored_account_meta) => stored_account_meta.executable(),
             LoadedAccount::Cached(cached_account) => cached_account.account.executable(),
         }
     }
     fn rent_epoch(&self) -> Epoch {
         match self {
-            LoadedAccount::Stored(stored_account_meta) => {
-                stored_account_meta.account_meta.rent_epoch
-            }
+            LoadedAccount::Stored(stored_account_meta) => stored_account_meta.rent_epoch(),
             LoadedAccount::Cached(cached_account) => cached_account.account.rent_epoch(),
         }
     }
@@ -1456,7 +1454,7 @@ pub struct AccountsDb {
     /// Set of stores which are recently rooted or had accounts removed
     /// such that potentially a 0-lamport account update could be present which
     /// means we can remove the account from the index entirely.
-    dirty_stores: DashMap<(Slot, AppendVecId), Arc<AccountStorageEntry>>,
+    dirty_stores: DashMap<Slot, Arc<AccountStorageEntry>>,
 
     /// Zero-lamport accounts that are *not* purged during clean because they need to stay alive
     /// for incremental snapshot support.
@@ -1492,42 +1490,7 @@ pub struct AccountsDb {
     /// Thus, the state of all accounts on a validator is known to be correct at least once per epoch.
     pub epoch_accounts_hash_manager: EpochAccountsHashManager,
 
-    pub bank_progress: BankCreationFreezingProgress,
-}
-
-impl BankCreationFreezingProgress {
-    fn report(&self) {
-        if self.last_report.should_update(60_000) {
-            datapoint_info!(
-                "bank_progress",
-                (
-                    "difference",
-                    self.bank_creation_count
-                        .load(Ordering::Acquire)
-                        .wrapping_sub(
-                            self.bank_freeze_or_destruction_count
-                                .load(Ordering::Acquire)
-                        ),
-                    i64
-                )
-            );
-        }
-    }
-}
-
-#[derive(Debug, Default)]
-/// Keeps track of when all banks that were started as of a known point in time have been frozen or otherwise destroyed.
-/// When 'bank_freeze_or_destruction_count' exceeds a prior value of 'bank_creation_count',
-/// this means that we can know all banks that began loading accounts have completed as of the prior value of 'bank_creation_count'.
-pub struct BankCreationFreezingProgress {
-    /// Incremented each time a bank is created.
-    /// Starting now, this bank could be finding accounts in the index and loading them from accounts db.
-    pub bank_creation_count: AtomicU32,
-    /// Incremented each time a bank is frozen or destroyed.
-    /// At this point, this bank has completed all account loading.
-    pub bank_freeze_or_destruction_count: AtomicU32,
-
-    last_report: AtomicInterval,
+    pub(crate) bank_progress: BankCreationFreezingProgress,
 }
 
 #[derive(Debug, Default)]
@@ -2286,24 +2249,6 @@ impl<'a> ZeroLamport for StoredAccountMeta<'a> {
     }
 }
 
-impl<'a> ReadableAccount for StoredAccountMeta<'a> {
-    fn lamports(&self) -> u64 {
-        self.account_meta.lamports
-    }
-    fn data(&self) -> &[u8] {
-        self.data
-    }
-    fn owner(&self) -> &Pubkey {
-        &self.account_meta.owner
-    }
-    fn executable(&self) -> bool {
-        self.account_meta.executable
-    }
-    fn rent_epoch(&self) -> Epoch {
-        self.account_meta.rent_epoch
-    }
-}
-
 struct IndexAccountMapEntry<'a> {
     pub write_version: StoredMetaWriteVersion,
     pub store_id: AppendVecId,
@@ -2767,7 +2712,7 @@ impl AccountsDb {
     /// 2. a pubkey we were planning to remove is not removing all stores that contain the account
     fn calc_delete_dependencies(
         purges: &HashMap<Pubkey, (SlotList<AccountInfo>, RefCount)>,
-        store_counts: &mut HashMap<AppendVecId, (usize, HashSet<Pubkey>)>,
+        store_counts: &mut HashMap<Slot, (usize, HashSet<Pubkey>)>,
         min_slot: Option<Slot>,
     ) {
         // Another pass to check if there are some filtered accounts which
@@ -2780,14 +2725,12 @@ impl AccountsDb {
                 account_infos.len() as RefCount == *ref_count_from_storage;
             if all_stores_being_deleted {
                 let mut delete = true;
-                for (slot, account_info) in account_infos {
-                    let store_id = account_info.store_id();
-                    if let Some(count) = store_counts.get(&store_id).map(|s| s.0) {
+                for (slot, _account_info) in account_infos {
+                    if let Some(count) = store_counts.get(slot).map(|s| s.0) {
                         debug!(
                             "calc_delete_dependencies()
-                            storage id: {},
-                            count len: {}",
-                            store_id, count,
+                            slot: {slot},
+                            count len: {count}"
                         );
                         if count == 0 {
                             // this store CAN be removed
@@ -2820,34 +2763,34 @@ impl AccountsDb {
             }
 
             // increment store_counts to non-zero for all stores that can not be deleted.
-            let mut pending_store_ids = HashSet::new();
-            for (slot, account_info) in account_infos {
+            let mut pending_stores = HashSet::new();
+            for (slot, _account_info) in account_infos {
                 if !already_counted.contains(slot) {
-                    pending_store_ids.insert((*slot, account_info.store_id()));
+                    pending_stores.insert(*slot);
                 }
             }
-            while !pending_store_ids.is_empty() {
-                let (slot, id) = pending_store_ids.iter().next().cloned().unwrap();
+            while !pending_stores.is_empty() {
+                let slot = pending_stores.iter().next().cloned().unwrap();
                 if Some(slot) == min_slot {
                     if let Some(failed_slot) = failed_slot.take() {
-                        info!("calc_delete_dependencies, oldest store is not able to be deleted because of {pubkey} in slot {failed_slot}");
+                        info!("calc_delete_dependencies, oldest slot is not able to be deleted because of {pubkey} in slot {failed_slot}");
                     } else {
-                        info!("calc_delete_dependencies, oldest store is not able to be deleted because of {pubkey}, account infos len: {}, ref count: {ref_count_from_storage}", account_infos.len());
+                        info!("calc_delete_dependencies, oldest slot is not able to be deleted because of {pubkey}, account infos len: {}, ref count: {ref_count_from_storage}", account_infos.len());
                     }
                 }
 
-                pending_store_ids.remove(&(slot, id));
+                pending_stores.remove(&slot);
                 if !already_counted.insert(slot) {
                     continue;
                 }
                 // the point of all this code: remove the store count for all stores we cannot remove
-                if let Some(store_count) = store_counts.remove(&id) {
+                if let Some(store_count) = store_counts.remove(&slot) {
                     // all pubkeys in this store also cannot be removed from all stores they are in
                     let affected_pubkeys = &store_count.1;
                     for key in affected_pubkeys {
-                        for (slot, account_info) in &purges.get(key).unwrap().0 {
+                        for (slot, _account_info) in &purges.get(key).unwrap().0 {
                             if !already_counted.contains(slot) {
-                                pending_store_ids.insert((*slot, account_info.store_id()));
+                                pending_stores.insert(*slot);
                             }
                         }
                     }
@@ -3016,7 +2959,7 @@ impl AccountsDb {
         // find the oldest append vec older than one epoch old
         // we'll add logging if that append vec cannot be marked dead
         let mut min_dirty_slot = self.get_accounts_hash_complete_one_epoch_old();
-        self.dirty_stores.retain(|(slot, _store_id), store| {
+        self.dirty_stores.retain(|slot, store| {
             if *slot > max_slot_inclusive {
                 true
             } else {
@@ -3352,7 +3295,7 @@ impl AccountsDb {
 
         // Calculate store counts as if everything was purged
         // Then purge if we can
-        let mut store_counts: HashMap<AppendVecId, (usize, HashSet<Pubkey>)> = HashMap::new();
+        let mut store_counts: HashMap<Slot, (usize, HashSet<Pubkey>)> = HashMap::new();
         for (key, (account_infos, ref_count)) in purges_zero_lamports.iter_mut() {
             if purged_account_slots.contains_key(key) {
                 *ref_count = self.accounts_index.ref_count_from_storage(key);
@@ -3376,7 +3319,7 @@ impl AccountsDb {
                 if was_reclaimed {
                     return false;
                 }
-                if let Some(store_count) = store_counts.get_mut(&account_info.store_id()) {
+                if let Some(store_count) = store_counts.get_mut(slot) {
                     store_count.0 -= 1;
                     store_count.1.insert(*key);
                 } else {
@@ -3398,7 +3341,7 @@ impl AccountsDb {
                         "store_counts, inserting slot: {}, store id: {}, count: {}",
                         slot, account_info.store_id(), count
                     );
-                    store_counts.insert(account_info.store_id(), (count, key_set));
+                    store_counts.insert(*slot, (count, key_set));
                 }
                 true
             });
@@ -3685,7 +3628,7 @@ impl AccountsDb {
         &self,
         max_clean_root_inclusive: Option<Slot>,
         last_full_snapshot_slot: Option<Slot>,
-        store_counts: &HashMap<AppendVecId, (usize, HashSet<Pubkey>)>,
+        store_counts: &HashMap<Slot, (usize, HashSet<Pubkey>)>,
         purges_zero_lamports: &mut HashMap<Pubkey, (SlotList<AccountInfo>, RefCount)>,
     ) {
         let should_filter_for_incremental_snapshots = max_clean_root_inclusive.unwrap_or(Slot::MAX)
@@ -3698,8 +3641,8 @@ impl AccountsDb {
         purges_zero_lamports.retain(|pubkey, (slot_account_infos, _ref_count)| {
             // Only keep purges_zero_lamports where the entire history of the account in the root set
             // can be purged. All AppendVecs for those updates are dead.
-            for (_slot, account_info) in slot_account_infos.iter() {
-                if let Some(store_count) = store_counts.get(&account_info.store_id()) {
+            for (slot, _account_info) in slot_account_infos.iter() {
+                if let Some(store_count) = store_counts.get(slot) {
                     if store_count.0 != 0 {
                         // one store this pubkey is in is not being removed, so this pubkey cannot be removed at all
                         return false;
@@ -4122,8 +4065,7 @@ impl AccountsDb {
 
         let mut not_retaining_store = |store: &Arc<AccountStorageEntry>| {
             if add_dirty_stores {
-                self.dirty_stores
-                    .insert((slot, store.append_vec_id()), store.clone());
+                self.dirty_stores.insert(slot, store.clone());
             }
             dead_storages.push(store.clone());
         };
@@ -4366,7 +4308,7 @@ impl AccountsDb {
                 storage
                     .accounts
                     .account_iter()
-                    .map(|account| account.stored_size)
+                    .map(|account| account.stored_size())
                     .collect()
             })
             .unwrap_or_default()
@@ -6204,12 +6146,13 @@ impl AccountsDb {
                 continue;
             }
 
+            let store_id = storage.append_vec_id();
             for (i, offsets) in rvs.unwrap().windows(2).enumerate() {
                 let stored_size = offsets[1] - offsets[0];
                 storage.add_account(stored_size);
 
                 infos.push(AccountInfo::new(
-                    StorageLocation::AppendVec(storage.append_vec_id(), offsets[0]),
+                    StorageLocation::AppendVec(store_id, offsets[0]),
                     accounts_and_meta_to_store
                         .account(i)
                         .map(|account| account.lamports())
@@ -7233,8 +7176,7 @@ impl AccountsDb {
                     // ancient stores are managed separately - we expect them to be old and keeping accounts
                     // We can expect the normal processes will keep them cleaned.
                     // If we included them here then ALL accounts in ALL ancient append vecs will be visited by clean each time.
-                    self.dirty_stores
-                        .insert((slot, storage.append_vec_id()), storage.clone());
+                    self.dirty_stores.insert(slot, storage.clone());
                     num_dirty_slots += 1;
                 }
             }
@@ -7973,8 +7915,7 @@ impl AccountsDb {
                 let stored_size = account.0.stored_size;
                 let count = store.remove_account(stored_size, reset_accounts);
                 if count == 0 {
-                    self.dirty_stores
-                        .insert((*slot, store.append_vec_id()), store.clone());
+                    self.dirty_stores.insert(*slot, store.clone());
                     dead_slots.insert(*slot);
                 } else if Self::is_shrinking_productive(*slot, &store)
                     && self.is_candidate_for_shrink(&store, false)
@@ -8554,8 +8495,7 @@ impl AccountsDb {
             .storage
             .get_slot_storage_entry_shrinking_in_progress_ok(slot)
         {
-            self.dirty_stores
-                .insert((slot, store.append_vec_id()), store);
+            self.dirty_stores.insert(slot, store);
         }
         store_time.stop();
 
@@ -8637,7 +8577,7 @@ impl AccountsDb {
         let num_accounts = storage.approx_stored_count();
         let mut accounts_map = GenerateIndexAccountsMap::with_capacity(num_accounts);
         storage.accounts.account_iter().for_each(|stored_account| {
-            let this_version = stored_account.meta.write_version_obsolete;
+            let this_version = stored_account.write_version();
             let pubkey = stored_account.pubkey();
             assert!(!self.is_filler_account(pubkey));
             accounts_map.insert(
@@ -8719,8 +8659,8 @@ impl AccountsDb {
                 (
                     pubkey,
                     AccountInfo::new(
-                        StorageLocation::AppendVec(store_id, stored_account.offset), // will never be cached
-                        stored_account.account_meta.lamports,
+                        StorageLocation::AppendVec(store_id, stored_account.offset()), // will never be cached
+                        stored_account.lamports(),
                     ),
                 )
             },
@@ -8952,9 +8892,9 @@ impl AccountsDb {
                                         let ai = AccountInfo::new(
                                             StorageLocation::AppendVec(
                                                 account_info.store_id,
-                                                account_info.stored_account.offset,
+                                                account_info.stored_account.offset(),
                                             ), // will never be cached
-                                            account_info.stored_account.account_meta.lamports,
+                                            account_info.stored_account.lamports(),
                                         );
                                         assert_eq!(&ai, account_info2);
                                     }
@@ -9186,7 +9126,7 @@ impl AccountsDb {
             let mut info = storage_info_local
                 .entry(v.store_id)
                 .or_insert_with(StorageSizeAndCount::default);
-            info.stored_size += v.stored_account.stored_size;
+            info.stored_size += v.stored_account.stored_size();
             info.count += 1;
         }
         storage_size_accounts_map_time.stop();
@@ -9669,7 +9609,7 @@ pub mod tests {
             hash: &hash,
         };
         let map = vec![&account];
-        let alive_total_bytes = account.stored_size;
+        let alive_total_bytes = account.stored_size();
         let to_store = AccountsToStore::new(available_bytes, &map, alive_total_bytes, slot0);
         // Done: setup 'to_store'
 
@@ -14629,7 +14569,7 @@ pub mod tests {
             let reclaims = vec![account_info];
             accounts_db.remove_dead_accounts(reclaims.iter(), None, None, true);
             let after_size = storage0.alive_bytes.load(Ordering::Acquire);
-            assert_eq!(before_size, after_size + account.stored_size);
+            assert_eq!(before_size, after_size + account.stored_size());
         }
     }
 
@@ -16064,7 +16004,7 @@ pub mod tests {
             key_set.insert(pubkey);
             let store_count = 0;
             let mut store_counts = HashMap::default();
-            store_counts.insert(account_info.store_id(), (store_count, key_set));
+            store_counts.insert(slot, (store_count, key_set));
             let mut purges_zero_lamports = HashMap::default();
             purges_zero_lamports.insert(pubkey, (vec![(slot, account_info)], 1));
 
@@ -16475,7 +16415,7 @@ pub mod tests {
             assert_eq!(dead_storages.first().unwrap().append_vec_id(), old_id);
             if add_dirty_stores {
                 assert_eq!(1, db.dirty_stores.len());
-                let dirty_store = db.dirty_stores.get(&(slot, old_id)).unwrap();
+                let dirty_store = db.dirty_stores.get(&slot).unwrap();
                 assert_eq!(dirty_store.append_vec_id(), old_id);
             } else {
                 assert!(db.dirty_stores.is_empty());
@@ -16502,7 +16442,7 @@ pub mod tests {
             assert_eq!(dead_storages.first().unwrap().append_vec_id(), old_id);
             if add_dirty_stores {
                 assert_eq!(1, db.dirty_stores.len());
-                let dirty_store = db.dirty_stores.get(&(slot, old_id)).unwrap();
+                let dirty_store = db.dirty_stores.get(&slot).unwrap();
                 assert_eq!(dirty_store.append_vec_id(), old_id);
             } else {
                 assert!(db.dirty_stores.is_empty());
@@ -17630,7 +17570,7 @@ pub mod tests {
             if let Some(storage) = db.get_storage_for_slot(slot) {
                 storage.accounts.account_iter().for_each(|account| {
                     let info = AccountInfo::new(
-                        StorageLocation::AppendVec(storage.append_vec_id(), account.offset),
+                        StorageLocation::AppendVec(storage.append_vec_id(), account.offset()),
                         account.lamports(),
                     );
                     db.accounts_index.upsert(
@@ -17761,13 +17701,11 @@ pub mod tests {
         db.handle_dropped_roots_for_ancient(std::iter::empty::<Slot>());
         let slot0 = 0;
         let dropped_roots = vec![slot0];
-        assert!(db.get_bank_hash_stats(slot0).is_some());
         db.accounts_index.add_root(slot0);
         db.accounts_index.add_uncleaned_roots([slot0].into_iter());
         assert!(db.accounts_index.is_uncleaned_root(slot0));
         assert!(db.accounts_index.is_alive_root(slot0));
         db.handle_dropped_roots_for_ancient(dropped_roots.into_iter());
-        assert!(db.get_bank_hash_stats(slot0).is_none());
         assert!(!db.accounts_index.is_uncleaned_root(slot0));
         assert!(!db.accounts_index.is_alive_root(slot0));
     }

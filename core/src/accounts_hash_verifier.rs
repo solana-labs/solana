@@ -9,8 +9,7 @@ use {
     solana_gossip::cluster_info::{ClusterInfo, MAX_SNAPSHOT_HASHES},
     solana_measure::{measure, measure::Measure},
     solana_runtime::{
-        accounts_hash::{AccountsHash, CalcAccountsHashConfig, HashStats},
-        epoch_accounts_hash::EpochAccountsHash,
+        accounts_hash::{AccountsHashEnum, CalcAccountsHashConfig, HashStats},
         snapshot_config::SnapshotConfig,
         snapshot_package::{
             self, retain_max_n_elements, AccountsPackage, AccountsPackageType, SnapshotPackage,
@@ -209,7 +208,7 @@ impl AccountsHashVerifier {
     }
 
     /// returns calculated accounts hash
-    fn calculate_and_verify_accounts_hash(accounts_package: &AccountsPackage) -> AccountsHash {
+    fn calculate_and_verify_accounts_hash(accounts_package: &AccountsPackage) -> AccountsHashEnum {
         let mut measure_hash = Measure::start("hash");
         let mut sort_time = Measure::start("sort_storages");
         let sorted_storages = SortedStorages::new(&accounts_package.snapshot_storages);
@@ -306,21 +305,26 @@ impl AccountsHashVerifier {
             "accounts_hash_verifier",
             ("calculate_hash", measure_hash.as_us(), i64),
         );
-        accounts_hash
+        accounts_hash.into()
     }
 
-    fn save_epoch_accounts_hash(accounts_package: &AccountsPackage, accounts_hash: AccountsHash) {
+    fn save_epoch_accounts_hash(
+        accounts_package: &AccountsPackage,
+        accounts_hash: AccountsHashEnum,
+    ) {
         if accounts_package.package_type == AccountsPackageType::EpochAccountsHash {
+            let AccountsHashEnum::Full(accounts_hash) = accounts_hash else {
+                panic!("EAH requires a full accounts hash!");
+            };
             info!(
                 "saving epoch accounts hash, slot: {}, hash: {}",
                 accounts_package.slot, accounts_hash.0,
             );
-            let epoch_accounts_hash = EpochAccountsHash::from(accounts_hash);
             accounts_package
                 .accounts
                 .accounts_db
                 .epoch_accounts_hash_manager
-                .set_valid(epoch_accounts_hash, accounts_package.slot);
+                .set_valid(accounts_hash.into(), accounts_package.slot);
         }
     }
 
@@ -342,17 +346,17 @@ impl AccountsHashVerifier {
         hashes: &mut Vec<(Slot, Hash)>,
         exit: &Arc<AtomicBool>,
         fault_injection_rate_slots: u64,
-        accounts_hash: AccountsHash,
+        accounts_hash: AccountsHashEnum,
     ) {
         if fault_injection_rate_slots != 0
             && accounts_package.slot % fault_injection_rate_slots == 0
         {
             // For testing, publish an invalid hash to gossip.
-            let fault_hash = Self::generate_fault_hash(&accounts_hash.0);
+            let fault_hash = Self::generate_fault_hash(accounts_hash.as_hash());
             warn!("inserting fault at slot: {}", accounts_package.slot);
             hashes.push((accounts_package.slot, fault_hash));
         } else {
-            hashes.push((accounts_package.slot, accounts_hash.0));
+            hashes.push((accounts_package.slot, *accounts_hash.as_hash()));
         }
 
         retain_max_n_elements(hashes, MAX_SNAPSHOT_HASHES);
@@ -374,7 +378,7 @@ impl AccountsHashVerifier {
         accounts_package: AccountsPackage,
         snapshot_package_sender: Option<&Sender<SnapshotPackage>>,
         snapshot_config: &SnapshotConfig,
-        accounts_hash: AccountsHash,
+        accounts_hash: AccountsHashEnum,
     ) {
         if !snapshot_config.should_generate_snapshots()
             || !matches!(
@@ -388,7 +392,7 @@ impl AccountsHashVerifier {
             return;
         };
 
-        let snapshot_package = SnapshotPackage::new(accounts_package, accounts_hash.into());
+        let snapshot_package = SnapshotPackage::new(accounts_package, accounts_hash);
         snapshot_package_sender
             .send(snapshot_package)
             .expect("send snapshot package");

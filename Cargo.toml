@@ -268,7 +268,7 @@ reed-solomon-erasure = "6.0.0"
 regex = "1.6.0"
 rolling-file = "0.2.0"
 reqwest = { version = "0.11.12", default-features = false }
-rpassword = "7.0"
+rpassword = "7.2"
 rustc_version = "0.4"
 rustls = { version = "0.20.6", default-features = false }
 rustversion = "1.0.11"

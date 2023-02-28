@@ -26,6 +26,9 @@ pub struct Config {
     active_release_dir: PathBuf,
 }
 
+const LEGACY_FMT_LOAD_ERR: &str =
+    "explicit_release: invalid type: map, expected a YAML tag starting with '!'";
+
 impl Config {
     pub fn new(
         data_dir: &str,
@@ -46,9 +49,47 @@ impl Config {
 
     fn _load(config_file: &str) -> Result<Self, io::Error> {
         let file = File::open(config_file)?;
-        let config = serde_yaml::from_reader(file)
-            .map_err(|err| io::Error::new(io::ErrorKind::Other, format!("{err:?}")))?;
-        Ok(config)
+        serde_yaml::from_reader(file).or_else(|err| {
+            let err_string = format!("{err:?}");
+            if err_string.contains(LEGACY_FMT_LOAD_ERR) {
+                // looks like a config written by serde_yaml <0.9.0.
+                // let's try to upgrade it
+                Self::try_migrate_08(config_file)
+                    .map_err(|_| io::Error::new(io::ErrorKind::Other, err_string))
+            } else {
+                Err(io::Error::new(io::ErrorKind::Other, err_string))
+            }
+        })
+    }
+
+    fn try_migrate_08(config_file: &str) -> Result<Self, io::Error> {
+        eprintln!("attempting to upgrade legacy config file");
+        let bak_filename = config_file.to_string() + ".bak";
+        std::fs::copy(config_file, &bak_filename)?;
+        let result = File::open(config_file).and_then(|file| {
+            serde_yaml_08::from_reader(file)
+                .map_err(|err| io::Error::new(io::ErrorKind::Other, format!("{err:?}")))
+                .and_then(|config_08: Self| {
+                    let save = config_08._save(config_file).map(|_| config_08);
+                    if save.is_ok() {
+                        let _ = std::fs::remove_file(&bak_filename);
+                    }
+                    save
+                })
+        });
+        if result.is_err() {
+            eprintln!("config upgrade failed! restoring orignal");
+            let restored = std::fs::copy(&bak_filename, config_file)
+                .and_then(|_| std::fs::remove_file(&bak_filename));
+            if restored.is_err() {
+                eprintln!("restoration failed! original: `{bak_filename}`");
+            } else {
+                eprintln!("restoration succeeded!");
+            }
+        } else {
+            eprintln!("config upgrade succeeded!");
+        }
+        result
     }
 
     pub fn load(config_file: &str) -> Result<Self, String> {
