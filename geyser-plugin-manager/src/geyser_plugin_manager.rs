@@ -3,7 +3,7 @@ use std::path::{Path, PathBuf};
 use {
     jsonrpc_core::{ErrorCode, Result as JsonRpcResult},
     jsonrpc_server_utils::tokio::sync::oneshot::Sender as OneShotSender,
-    libloading::{Library, Symbol},
+    libloading::Library,
     log::*,
     solana_geyser_plugin_interface::geyser_plugin_interface::GeyserPlugin,
 };
@@ -13,8 +13,6 @@ pub struct GeyserPluginManager {
     pub plugins: Vec<Box<dyn GeyserPlugin>>,
     libs: Vec<Library>,
 }
-
-type PluginConstructor = unsafe fn() -> *mut dyn GeyserPlugin;
 
 impl GeyserPluginManager {
     pub fn new() -> Self {
