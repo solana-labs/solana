@@ -84,7 +84,7 @@ impl std::ops::Deref for SchedulableBank {
     }
 }
 
-#[derive(Default)]
+#[derive(Debug, Default)]
 enum InstalledSchedulerPool {
     #[default]
     NotInstalled,
