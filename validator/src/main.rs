@@ -544,7 +544,7 @@ pub fn main() {
                     let plugins = admin_rpc_service::runtime()
                         .block_on(async move { admin_client.await?.list_plugins().await })
                         .unwrap_or_else(|err| {
-                            println!("failed to list plugins: {err}");
+                            println!("Failed to list plugins: {err}");
                             exit(1);
                         });
                     if !plugins.is_empty() {
@@ -565,7 +565,7 @@ pub fn main() {
                                 admin_client.await?.unload_plugin(name.clone()).await
                             })
                             .unwrap_or_else(|err| {
-                                println!("failed to unload plugin {name}: {err:?}");
+                                println!("Failed to unload plugin {name}: {err:?}");
                                 exit(1);
                             });
                         println!("Successfully unloaded plugin: {name}");
@@ -580,7 +580,7 @@ pub fn main() {
                                 admin_client.await?.load_plugin(config.clone()).await
                             })
                             .unwrap_or_else(|err| {
-                                println!("failed to load plugin {config}: {err:?}");
+                                println!("Failed to load plugin {config}: {err:?}");
                                 exit(1);
                             });
                         println!("Successfully loaded plugin: {name}");
@@ -599,7 +599,7 @@ pub fn main() {
                                         .await
                                 })
                                 .unwrap_or_else(|err| {
-                                    println!("failed to reload plugin {name}: {err:?}");
+                                    println!("Failed to reload plugin {name}: {err:?}");
                                     exit(1);
                                 });
                             println!("Successfully reloaded plugin: {name}");
