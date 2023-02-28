@@ -1661,6 +1661,7 @@ fn main() {
                     "unified_scheduler",
                     ])
                 .default_value(DEFAULT_REPLAYING_BACKEND)
+                .global(true)
                 .help(
                     "Switch transaction scheduling backend for validating ledger entries"
                 ),
@@ -1674,6 +1675,7 @@ fn main() {
                     "multi_iterator",
                     ])
                 .default_value(DEFAULT_BANKING_BACKEND)
+                .global(true)
                 .help(
                     "Switch transaction scheduling backend for generating ledger entries"
                 ),
