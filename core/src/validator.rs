@@ -144,7 +144,7 @@ pub enum BankingBackend {
 impl From<&str> for BankingBackend {
     fn from(string: &str) -> Self {
         match string {
-            "multi_iterator" => MultiIterator, 
+            "multi_iterator" => Self::MultiIterator, 
             bad_backend => panic!("Invalid banking backend: {bad_backend}"),
         }
     }
