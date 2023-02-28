@@ -262,7 +262,7 @@ impl BankForks {
 
     pub fn install_scheduler_pool(&mut self, pool: Box<dyn LikeSchedulerPool>, replay_only: bool) {
         use assert_matches::assert_matches;
-        assert_matches!(self.scheduler_pool, NotInstalled);
+        assert_matches!(&self.scheduler_pool, NotInstalled);
         info!("Installed new scheduler_pool into bank_forks: {:?}", pool);
         if replay_only {
             self.scheduler_pool = InstalledSchedulerPool::ReplayOnly(pool);
