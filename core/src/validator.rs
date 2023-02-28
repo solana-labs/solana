@@ -950,7 +950,7 @@ impl Validator {
             stats_reporter_sender,
             exit.clone(),
         );
-        if matches!(config.replaying_backend, UnifiedScheduler) {
+        if matches!(&config.replaying_backend, UnifiedScheduler) {
             use solana_scheduler_pool::{
                 SchedulerPool,
             };
