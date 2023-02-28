@@ -129,6 +129,12 @@ pub enum ReplayingBackend {
     UnifiedScheduler,
 }
 
+impl Default for ReplayingBackend {
+    const fn default() -> Self {
+        panic!();
+    }
+}
+
 impl ReplayingBackend {
     const fn to_str(&self) -> &'static str {
         match self {
