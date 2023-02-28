@@ -47,6 +47,7 @@ const DEFAULT_MIN_SNAPSHOT_DOWNLOAD_SPEED: u64 = 10485760;
 const MAX_SNAPSHOT_DOWNLOAD_ABORT: u32 = 5;
 
 const DEFAULT_REPLAYING_BACKEND: &str = "blockstore_processor";
+const DEFAULT_BANKING_BACKEND: &str = "multi_iterator";
 
 pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
     return App::new(crate_name!()).about(crate_description!())
@@ -1740,6 +1741,7 @@ pub struct DefaultArgs {
 
     pub banking_trace_dir_byte_limit: String,
     pub replaying_backend: String,
+    pub banking_backend: String,
 }
 
 impl DefaultArgs {
@@ -1820,6 +1822,7 @@ impl DefaultArgs {
             wait_for_restart_window_max_delinquent_stake: "5".to_string(),
             banking_trace_dir_byte_limit: BANKING_TRACE_DIR_DEFAULT_BYTE_LIMIT.to_string(),
             replaying_backend: DEFAULT_REPLAYING_BACKEND.to_string(),
+            banking_backend: DEFAULT_BANKING_BACKEND.to_string(),
         }
     }
 }
