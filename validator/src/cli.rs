@@ -1340,7 +1340,20 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                     ])
                 .default_value(&default_args.replaying_backend)
                 .help(
-                    "Backend to replay the ledger entries"
+                    "Switch ReplayStage's backend to schedule transaction executions"
+                ),
+        )
+        .arg(
+            Arg::with_name("banking_backend")
+                .long("banking-backend")
+                .value_name("BACKEND")
+                .takes_value(true)
+                .possible_values(&[
+                    "multi_iterator",
+                    ])
+                .default_value(&default_args.banking_backend)
+                .help(
+                    "Switch BankingStage's backend to schedule transaction executions"
                 ),
         )
         .args(&get_deprecated_arguments())
