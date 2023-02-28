@@ -120,7 +120,7 @@ impl GeyserPluginManager {
             return Err(
                 jsonrpc_core::error::Error {
                     code: ErrorCode::InternalError,
-                    message: String::from("plugin requested to unload is not loaded"),
+                    message: String::from("Plugin requested to unload is not loaded"),
                     data: None,
                 }
             )
@@ -146,7 +146,7 @@ impl GeyserPluginManager {
             return Err(
                 jsonrpc_core::error::Error {
                     code: ErrorCode::InternalError,
-                    message: String::from("plugin requested to reload is not loaded"),
+                    message: String::from("Plugin requested to reload is not loaded"),
                     data: None,
                 }
             )
@@ -182,7 +182,7 @@ impl GeyserPluginManager {
                 return Err(jsonrpc_core::error::Error {
                     code: ErrorCode::InternalError,
                     message: format!(
-                        "failed to start new plugin (previous plugin was dropped!): {err}"
+                        "Failed to start new plugin (previous plugin was dropped!): {err}"
                     ),
                     data: None,
                 });
