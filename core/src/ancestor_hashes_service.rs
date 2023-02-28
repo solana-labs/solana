@@ -173,47 +173,7 @@ impl AncestorHashesService {
         );
 
         let (ancestor_connection_cache, ancestor_hash_quic_t) =
-            if let Some(repair_quic_config) = repair_quic_config {
-                let host = repair_quic_config.repair_address.local_addr().unwrap().ip();
-                let stats = Arc::new(StreamStats::default());
-
-                let (endpoint, ancestor_hash_quic_t) = spawn_server(
-                    repair_quic_config
-                        .ancestor_hash_address
-                        .try_clone()
-                        .unwrap(),
-                    &repair_quic_config.identity_keypair,
-                    host,
-                    response_sender,
-                    exit.clone(),
-                    MAX_QUIC_CONNECTIONS_PER_PEER,
-                    repair_quic_config.staked_nodes.clone(),
-                    solana_streamer::quic::MAX_STAKED_CONNECTIONS,
-                    MAX_UNSTAKED_CONNECTIONS,
-                    stats,
-                    repair_quic_config.wait_for_chunk_timeout_ms,
-                )
-                .unwrap();
-
-                let cert_info = Some((
-                    &*repair_quic_config.identity_keypair,
-                    endpoint.local_addr().unwrap().ip(),
-                ));
-
-                let connection_cache = Arc::new(ConnectionCache::new_with_client_options(
-                    1,
-                    Some(endpoint),
-                    cert_info,
-                    Some((
-                        &repair_quic_config.staked_nodes,
-                        &repair_quic_config.identity_keypair.pubkey(),
-                    )),
-                ));
-
-                (Some(connection_cache), Some(ancestor_hash_quic_t))
-            } else {
-                (None, None)
-            };
+            spawn_ancestor_hashes_quic_server(repair_quic_config, response_sender, &exit);
         let ancestor_hashes_request_statuses: Arc<DashMap<Slot, DeadSlotAncestorRequestStatus>> =
             Arc::new(DashMap::new());
         let (retryable_slots_sender, retryable_slots_receiver) = unbounded();
@@ -834,6 +794,59 @@ impl AncestorHashesService {
             false
         }
     }
+}
+
+/// This spawns an ancestor hashes response handler server and creates the corresponding connection cache
+/// used for sending requests to the request handler server. Returns the connection cache and the handle to the
+/// response handler server.
+fn spawn_ancestor_hashes_quic_server(
+    repair_quic_config: Option<&RepairQuicConfig>,
+    response_sender: Sender<PacketBatch>,
+    exit: &Arc<AtomicBool>,
+) -> (Option<Arc<ConnectionCache>>, Option<JoinHandle<()>>) {
+    let (ancestor_connection_cache, ancestor_quic_t) =
+        if let Some(repair_quic_config) = repair_quic_config {
+            let host = repair_quic_config.repair_address.local_addr().unwrap().ip();
+            let stats = Arc::new(StreamStats::default());
+
+            let (endpoint, ancestor_hash_quic_t) = spawn_server(
+                repair_quic_config
+                    .ancestor_hash_address
+                    .try_clone()
+                    .unwrap(),
+                &repair_quic_config.identity_keypair,
+                host,
+                response_sender,
+                exit.clone(),
+                MAX_QUIC_CONNECTIONS_PER_PEER,
+                repair_quic_config.staked_nodes.clone(),
+                solana_streamer::quic::MAX_STAKED_CONNECTIONS,
+                MAX_UNSTAKED_CONNECTIONS,
+                stats,
+                repair_quic_config.wait_for_chunk_timeout_ms,
+            )
+            .unwrap();
+
+            let cert_info = Some((
+                &*repair_quic_config.identity_keypair,
+                endpoint.local_addr().unwrap().ip(),
+            ));
+
+            let connection_cache = Arc::new(ConnectionCache::new_with_client_options(
+                1,
+                Some(endpoint),
+                cert_info,
+                Some((
+                    &repair_quic_config.staked_nodes,
+                    &repair_quic_config.identity_keypair.pubkey(),
+                )),
+            ));
+
+            (Some(connection_cache), Some(ancestor_hash_quic_t))
+        } else {
+            (None, None)
+        };
+    (ancestor_connection_cache, ancestor_quic_t)
 }
 
 #[cfg(test)]
