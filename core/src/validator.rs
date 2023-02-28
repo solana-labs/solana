@@ -128,8 +128,11 @@ pub enum ReplayingBackend {
 }
 
 impl ReplayingBackend {
-    const fn to_str2(&self) -> &'static str {
-        self.to_str()
+    const fn to_str(&self) -> &'static str {
+        match self {
+            BlockstoreProcessor => "blockstore_processor",
+            UnifiedScheduler => "unified_scheduler",
+        }
     }
 }
 
