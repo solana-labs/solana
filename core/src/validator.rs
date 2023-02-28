@@ -131,7 +131,7 @@ const fn a() -> &'static str {
 }
 
 impl From<&str> for ReplayingBackend {
-    fn from(string: &str) -> Self {
+    const fn from(string: &str) -> Self {
         match string {
             "blockstore_processor" => Self::BlockstoreProcessor, 
             "unified_scheduler" => Self::UnifiedScheduler,
