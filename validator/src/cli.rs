@@ -1341,7 +1341,7 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                     ])
                 .default_value(&default_args.replaying_backend)
                 .help(
-                    "Switch transaction scheduling backend to validate ledger entries"
+                    "Switch transaction scheduling backend for validating ledger entries"
                 ),
         )
         .arg(
@@ -1354,7 +1354,7 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                     ])
                 .default_value(&default_args.banking_backend)
                 .help(
-                    "Switch transaction scheduling backend to generate ledger entries"
+                    "Switch transaction scheduling backend for generating ledger entries"
                 ),
         )
         .args(&get_deprecated_arguments())

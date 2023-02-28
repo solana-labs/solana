@@ -26,7 +26,7 @@ use {
     solana_cli_output::{CliAccount, CliAccountNewConfig, OutputFormat},
     solana_core::{
         system_monitor_service::{SystemMonitorService, SystemMonitorStatsReportConfig},
-        validator::{DEFAULT_BANKING_BACKEND, DEFAULT_REPLAYING_BACKEND},
+        validator::{ReplayingBackend, DEFAULT_BANKING_BACKEND, DEFAULT_REPLAYING_BACKEND},
     },
     solana_entry::entry::Entry,
     solana_geyser_plugin_manager::geyser_plugin_service::GeyserPluginService,
@@ -1659,7 +1659,7 @@ fn main() {
                     ])
                 .default_value(DEFAULT_REPLAYING_BACKEND)
                 .help(
-                    "Switch ReplayStage's backend to schedule transaction executions"
+                    "Switch transaction scheduling backend for validating ledger entries"
                 ),
         )
         .arg(
@@ -1672,7 +1672,7 @@ fn main() {
                     ])
                 .default_value(DEFAULT_BANKING_BACKEND)
                 .help(
-                    "Switch BankingStage's backend to schedule transaction executions"
+                    "Switch transaction scheduling backend for generating ledger entries"
                 ),
         )
         .arg(
