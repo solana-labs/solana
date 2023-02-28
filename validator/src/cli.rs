@@ -1327,6 +1327,20 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                        up to the default or specified total bytes in the \
                        ledger")
         )
+        .arg(
+            Arg::with_name("replaying-backend")
+                .long("replaying-backend")
+                .value_name("BACKEND")
+                .takes_value(true)
+                .possible_values(&[
+                    "default",
+                    "blockstore_processor",
+                    "unified_scheduler",
+                    ])
+                .help(
+                    "Backend to replay the ledger entries"
+                ),
+        )
         .args(&get_deprecated_arguments())
         .after_help("The default subcommand is run")
         .subcommand(
