@@ -950,11 +950,13 @@ impl Validator {
             stats_reporter_sender,
             exit.clone(),
         );
-        use solana_scheduler_pool::{
-            SchedulerPool,
-        };
-        let scheduler_pool = SchedulerPool::new_boxed(Some(&poh_recorder), config.runtime_config.log_messages_bytes_limit, transaction_status_sender.clone());
-        bank_forks.write().unwrap().install_scheduler_pool(scheduler_pool);
+        if matches!(config.replaying_backend, UnifiedScheduler) {
+            use solana_scheduler_pool::{
+                SchedulerPool,
+            };
+            let scheduler_pool = SchedulerPool::new_boxed(Some(&poh_recorder), config.runtime_config.log_messages_bytes_limit, transaction_status_sender.clone());
+            bank_forks.write().unwrap().install_scheduler_pool(scheduler_pool);
+        }
 
         let waited_for_supermajority = match wait_for_supermajority(
             config,
