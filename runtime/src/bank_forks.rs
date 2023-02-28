@@ -252,7 +252,7 @@ impl BankForks {
 
     fn get_scheduler_pool(&self, mode: solana_scheduler::Mode) -> Some<&usize> {
         match mode {
-            mode::Replaying {
+            mode::Replaying => {
                 match self.scheduler_pool {
                     ReplayOnly(scheduler_pool) => scheduler_pool
                 }
