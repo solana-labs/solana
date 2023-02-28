@@ -3658,7 +3658,7 @@ impl Bank {
         let mut w_blockhash_queue = if !self.with_scheduler() {
             self.blockhash_queue.write().unwrap()
         } else {
-            match self.scheduler_mode {
+            match self.scheduler_mode() {
                 solana_scheduler::Mode::Replaying => {
                     let (last_result, next_scheduler) = self.wait_for_scheduler(false, true);
                     let next_scheduler = next_scheduler.unwrap();
