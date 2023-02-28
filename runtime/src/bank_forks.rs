@@ -250,6 +250,16 @@ impl BankForks {
         bank
     }
 
+    fn get_scheduler_pool(&self, mode: solana_scheduler::Mode) -> Some<&usize> {
+        match mode {
+            mode::Replaying {
+                match self.scheduler_pool {
+                    ReplayOnly(scheduler_pool) => scheduler_pool
+                }
+            }
+        }
+    }
+
     pub fn install_scheduler_pool(&mut self, pool: Box<dyn LikeSchedulerPool>, replay_only: bool) {
         use assert_matches::assert_matches;
         assert_matches!(self.scheduler_pool, NotInstalled);
@@ -262,6 +272,7 @@ impl BankForks {
     }
 
     pub fn add_new_bank_for_banking(&mut self, bank: Bank) -> Arc<Bank> {
+        // todo!
         self.add_new_bank_for_replaying(bank)
     }
 
