@@ -17,7 +17,7 @@ borsh = { workspace = true }
 borsh-derive = { workspace = true }
 bs58 = { workspace = true }
 bv = { workspace = true, features = ["serde"] }
-bytemuck = { version = "1.8.0", features = ["derive"] }
+bytemuck = { workspace = true, features = ["derive"] }
 itertools =  { workspace = true }
 lazy_static = { workspace = true }
 log = { workspace = true }
@@ -30,7 +30,7 @@ serde_bytes = { workspace = true }
 serde_derive = { workspace = true }
 serde_json = { workspace = true }
 sha2 = { workspace = true }
-sha3 = "0.10.0"
+sha3 = { workspace = true }
 solana-frozen-abi = { workspace = true }
 solana-frozen-abi-macro = { workspace = true }
 solana-sdk-macro = { workspace = true }
@@ -60,7 +60,7 @@ solana-logger = { workspace = true }
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 console_error_panic_hook = { workspace = true }
 console_log = { workspace = true }
-js-sys = "0.3.55"
+js-sys = { workspace = true }
 getrandom = { version = "0.2", features = ["js", "wasm-bindgen"] }
 
 [target.'cfg(not(target_pointer_width = "64"))'.dependencies]

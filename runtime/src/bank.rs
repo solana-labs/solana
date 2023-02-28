@@ -77,7 +77,6 @@ use {
         transaction_batch::TransactionBatch,
         transaction_error_metrics::TransactionErrorMetrics,
         vote_account::{VoteAccount, VoteAccountsHashMap},
-        vote_parser,
     },
     byteorder::{ByteOrder, LittleEndian},
     dashmap::{DashMap, DashSet},
@@ -173,7 +172,7 @@ use {
         sync::{
             atomic::{
                 AtomicBool, AtomicI64, AtomicU64, AtomicUsize,
-                Ordering::{AcqRel, Acquire, Relaxed, Release},
+                Ordering::{AcqRel, Acquire, Relaxed},
             },
             Arc, LockResult, RwLock, RwLockReadGuard, RwLockWriteGuard,
         },
@@ -1792,8 +1791,7 @@ impl Bank {
             .accounts
             .accounts_db
             .bank_progress
-            .bank_creation_count
-            .fetch_add(1, Release);
+            .increment_bank_creation_count();
     }
 
     fn bank_frozen_or_destroyed(&self) {
@@ -1805,8 +1803,7 @@ impl Bank {
                 .accounts
                 .accounts_db
                 .bank_progress
-                .bank_freeze_or_destruction_count
-                .fetch_add(1, Release);
+                .increment_bank_frozen_or_destroyed();
         }
     }
 
@@ -4672,7 +4669,7 @@ impl Bank {
                 }
             }
 
-            let is_vote = vote_parser::is_simple_vote_transaction(tx);
+            let is_vote = tx.is_simple_vote_transaction();
 
             if execution_result.was_executed() // Skip log collection for unprocessed transactions
                 && transaction_log_collector_config.filter != TransactionLogCollectorFilter::None

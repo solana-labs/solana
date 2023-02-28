@@ -2,7 +2,11 @@ use {
     clap::{crate_description, crate_name, value_t, value_t_or_exit, App, Arg},
     log::*,
     solana_runtime::{account_storage::meta::StoredAccountMeta, append_vec::AppendVec},
-    solana_sdk::{account::AccountSharedData, hash::Hash, pubkey::Pubkey},
+    solana_sdk::{
+        account::{AccountSharedData, ReadableAccount},
+        hash::Hash,
+        pubkey::Pubkey,
+    },
 };
 
 fn main() {
@@ -42,13 +46,13 @@ fn main() {
         info!(
             "  account: {:?} version: {} lamports: {} data: {} hash: {:?}",
             account.pubkey(),
-            account.meta.write_version_obsolete,
-            account.account_meta.lamports,
-            account.meta.data_len,
-            account.hash
+            account.write_version(),
+            account.lamports(),
+            account.data_len(),
+            account.hash()
         );
         num_accounts = num_accounts.saturating_add(1);
-        stored_accounts_len = stored_accounts_len.saturating_add(account.stored_size);
+        stored_accounts_len = stored_accounts_len.saturating_add(account.stored_size());
     }
     info!(
         "num_accounts: {} stored_accounts_len: {}",
@@ -57,9 +61,9 @@ fn main() {
 }
 
 fn is_account_zeroed(account: &StoredAccountMeta) -> bool {
-    account.hash == &Hash::default()
-        && account.meta.data_len == 0
-        && account.meta.write_version_obsolete == 0
+    account.hash() == &Hash::default()
+        && account.data_len() == 0
+        && account.write_version() == 0
         && account.pubkey() == &Pubkey::default()
         && account.clone_account() == AccountSharedData::default()
 }

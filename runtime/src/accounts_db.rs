@@ -237,7 +237,7 @@ impl<'a> ShrinkCollectRefs<'a> for AliveAccounts<'a> {
     }
     fn add(&mut self, _ref_count: u64, account: &'a StoredAccountMeta<'a>) {
         self.accounts.push(account);
-        self.bytes = self.bytes.saturating_add(account.stored_size);
+        self.bytes = self.bytes.saturating_add(account.stored_size());
     }
     fn len(&self) -> usize {
         self.accounts.len()
@@ -882,7 +882,7 @@ pub enum LoadedAccount<'a> {
 impl<'a> LoadedAccount<'a> {
     pub fn loaded_hash(&self) -> Hash {
         match self {
-            LoadedAccount::Stored(stored_account_meta) => *stored_account_meta.hash,
+            LoadedAccount::Stored(stored_account_meta) => *stored_account_meta.hash(),
             LoadedAccount::Cached(cached_account) => cached_account.hash(),
         }
     }
@@ -934,36 +934,32 @@ impl<'a> LoadedAccount<'a> {
 impl<'a> ReadableAccount for LoadedAccount<'a> {
     fn lamports(&self) -> u64 {
         match self {
-            LoadedAccount::Stored(stored_account_meta) => stored_account_meta.account_meta.lamports,
+            LoadedAccount::Stored(stored_account_meta) => stored_account_meta.lamports(),
             LoadedAccount::Cached(cached_account) => cached_account.account.lamports(),
         }
     }
 
     fn data(&self) -> &[u8] {
         match self {
-            LoadedAccount::Stored(stored_account_meta) => stored_account_meta.data,
+            LoadedAccount::Stored(stored_account_meta) => stored_account_meta.data(),
             LoadedAccount::Cached(cached_account) => cached_account.account.data(),
         }
     }
     fn owner(&self) -> &Pubkey {
         match self {
-            LoadedAccount::Stored(stored_account_meta) => &stored_account_meta.account_meta.owner,
+            LoadedAccount::Stored(stored_account_meta) => stored_account_meta.owner(),
             LoadedAccount::Cached(cached_account) => cached_account.account.owner(),
         }
     }
     fn executable(&self) -> bool {
         match self {
-            LoadedAccount::Stored(stored_account_meta) => {
-                stored_account_meta.account_meta.executable
-            }
+            LoadedAccount::Stored(stored_account_meta) => stored_account_meta.executable(),
             LoadedAccount::Cached(cached_account) => cached_account.account.executable(),
         }
     }
     fn rent_epoch(&self) -> Epoch {
         match self {
-            LoadedAccount::Stored(stored_account_meta) => {
-                stored_account_meta.account_meta.rent_epoch
-            }
+            LoadedAccount::Stored(stored_account_meta) => stored_account_meta.rent_epoch(),
             LoadedAccount::Cached(cached_account) => cached_account.account.rent_epoch(),
         }
     }
@@ -2250,24 +2246,6 @@ impl solana_frozen_abi::abi_example::AbiExample for AccountsDb {
 impl<'a> ZeroLamport for StoredAccountMeta<'a> {
     fn is_zero_lamport(&self) -> bool {
         self.lamports() == 0
-    }
-}
-
-impl<'a> ReadableAccount for StoredAccountMeta<'a> {
-    fn lamports(&self) -> u64 {
-        self.account_meta.lamports
-    }
-    fn data(&self) -> &[u8] {
-        self.data
-    }
-    fn owner(&self) -> &Pubkey {
-        &self.account_meta.owner
-    }
-    fn executable(&self) -> bool {
-        self.account_meta.executable
-    }
-    fn rent_epoch(&self) -> Epoch {
-        self.account_meta.rent_epoch
     }
 }
 
@@ -4330,7 +4308,7 @@ impl AccountsDb {
                 storage
                     .accounts
                     .account_iter()
-                    .map(|account| account.stored_size)
+                    .map(|account| account.stored_size())
                     .collect()
             })
             .unwrap_or_default()
@@ -8599,7 +8577,7 @@ impl AccountsDb {
         let num_accounts = storage.approx_stored_count();
         let mut accounts_map = GenerateIndexAccountsMap::with_capacity(num_accounts);
         storage.accounts.account_iter().for_each(|stored_account| {
-            let this_version = stored_account.meta.write_version_obsolete;
+            let this_version = stored_account.write_version();
             let pubkey = stored_account.pubkey();
             assert!(!self.is_filler_account(pubkey));
             accounts_map.insert(
@@ -8681,8 +8659,8 @@ impl AccountsDb {
                 (
                     pubkey,
                     AccountInfo::new(
-                        StorageLocation::AppendVec(store_id, stored_account.offset), // will never be cached
-                        stored_account.account_meta.lamports,
+                        StorageLocation::AppendVec(store_id, stored_account.offset()), // will never be cached
+                        stored_account.lamports(),
                     ),
                 )
             },
@@ -8914,9 +8892,9 @@ impl AccountsDb {
                                         let ai = AccountInfo::new(
                                             StorageLocation::AppendVec(
                                                 account_info.store_id,
-                                                account_info.stored_account.offset,
+                                                account_info.stored_account.offset(),
                                             ), // will never be cached
-                                            account_info.stored_account.account_meta.lamports,
+                                            account_info.stored_account.lamports(),
                                         );
                                         assert_eq!(&ai, account_info2);
                                     }
@@ -9148,7 +9126,7 @@ impl AccountsDb {
             let mut info = storage_info_local
                 .entry(v.store_id)
                 .or_insert_with(StorageSizeAndCount::default);
-            info.stored_size += v.stored_account.stored_size;
+            info.stored_size += v.stored_account.stored_size();
             info.count += 1;
         }
         storage_size_accounts_map_time.stop();
@@ -9631,7 +9609,7 @@ pub mod tests {
             hash: &hash,
         };
         let map = vec![&account];
-        let alive_total_bytes = account.stored_size;
+        let alive_total_bytes = account.stored_size();
         let to_store = AccountsToStore::new(available_bytes, &map, alive_total_bytes, slot0);
         // Done: setup 'to_store'
 
@@ -14591,7 +14569,7 @@ pub mod tests {
             let reclaims = vec![account_info];
             accounts_db.remove_dead_accounts(reclaims.iter(), None, None, true);
             let after_size = storage0.alive_bytes.load(Ordering::Acquire);
-            assert_eq!(before_size, after_size + account.stored_size);
+            assert_eq!(before_size, after_size + account.stored_size());
         }
     }
 
@@ -17592,7 +17570,7 @@ pub mod tests {
             if let Some(storage) = db.get_storage_for_slot(slot) {
                 storage.accounts.account_iter().for_each(|account| {
                     let info = AccountInfo::new(
-                        StorageLocation::AppendVec(storage.append_vec_id(), account.offset),
+                        StorageLocation::AppendVec(storage.append_vec_id(), account.offset()),
                         account.lamports(),
                     );
                     db.accounts_index.upsert(
