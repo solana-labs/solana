@@ -24,7 +24,10 @@ use {
         },
     },
     solana_cli_output::{CliAccount, CliAccountNewConfig, OutputFormat},
-    solana_core::system_monitor_service::{SystemMonitorService, SystemMonitorStatsReportConfig},
+    solana_core::{
+        system_monitor_service::{SystemMonitorService, SystemMonitorStatsReportConfig},
+        validator::{DEFAULT_BANKING_BACKEND, DEFAULT_REPLAYING_BACKEND},
+    },
     solana_entry::entry::Entry,
     solana_geyser_plugin_manager::geyser_plugin_service::GeyserPluginService,
     solana_ledger::{
