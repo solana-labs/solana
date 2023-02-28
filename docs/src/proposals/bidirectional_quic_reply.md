@@ -68,7 +68,7 @@ pub enum QuicReplyMessage {
 ```
 
 In the above structure we have given an example for a QuicReplyMessage for a transaction, the message
-length should be exactly 128 chars before serialization. A serialized message for type QuicReplyMessage
+length should be exactly 128 chars. A serialized message for type QuicReplyMessage
 should have exact length of QUIC_REPLY_MESSAGE_SIZE which is set to be 256 bytes at this time. If the
 message is larger than 128 characters then it will be truncated and if it is smaller then the rest of characters
 will be set to `0`.
