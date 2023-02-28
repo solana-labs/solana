@@ -100,7 +100,10 @@ impl GeyserPluginManager {
             .on_load(new_config_file)
             .map_err(|on_load_err| jsonrpc_core::Error {
                 code: ErrorCode::InternalError,
-                message: format!("on_load method of plugin failed: {on_load_err}",),
+                message: format!(
+                    "on_load method of plugin {} failed: {on_load_err}",
+                    new_plugin.name()
+                ),
                 data: None,
             })?;
         let name = new_plugin.name().to_string();
