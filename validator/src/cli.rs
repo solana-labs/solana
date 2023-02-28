@@ -1333,11 +1333,10 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                 .value_name("BACKEND")
                 .takes_value(true)
                 .possible_values(&[
-                    "default",
                     "blockstore_processor",
                     "unified_scheduler",
                     ])
-                .default_value(&"default")
+                .default_value(&default_args.replaying_backend)
                 .help(
                     "Backend to replay the ledger entries"
                 ),
