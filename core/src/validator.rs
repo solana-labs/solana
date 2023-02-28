@@ -295,6 +295,8 @@ impl Default for ValidatorConfig {
             runtime_config: RuntimeConfig::default(),
             replay_slots_concurrently: false,
             banking_trace_dir_byte_limit: 0,
+            replaying_backend: ReplayingBackend::default(),
+            banking_backend: BankingBackend::default(),
         }
     }
 }
