@@ -239,6 +239,9 @@ pub enum GeyserPluginManagerError {
 ///
 /// This function loads the dynamically linked library specified in the path. The library
 /// must do necessary initializations.
+///
+/// This returns the geyser plugin, the dynamic library, and the parsed config file as a &str.
+/// (The geyser plugin interface requires a &str for the on_load method).
 #[cfg(not(test))]
 pub(crate) fn load_plugin_from_config(
     geyser_plugin_config_file: &Path,
@@ -354,6 +357,9 @@ pub fn parse_config_file(
 
 // This is mocked for tests to avoid having to do IO with a dynamically linked library
 // across different architectures at test time
+//
+/// This returns mocked values for the geyser plugin, the dynamic library, and the parsed config file as a &str.
+/// (The geyser plugin interface requires a &str for the on_load method).
 #[cfg(test)]
 pub(crate) fn load_plugin_from_config(
     _geyser_plugin_config_file: &Path,
