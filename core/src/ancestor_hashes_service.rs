@@ -258,6 +258,7 @@ impl AncestorHashesService {
     }
 
     /// Listen for responses to our ancestors hashes repair requests
+    #[allow(clippy::too_many_arguments)]
     fn run_responses_listener(
         ancestor_hashes_request_statuses: Arc<DashMap<Slot, DeadSlotAncestorRequestStatus>>,
         response_receiver: PacketBatchReceiver,
@@ -358,6 +359,7 @@ impl AncestorHashesService {
         Ok(())
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn process_packet_batch(
         ancestor_hashes_request_statuses: &DashMap<Slot, DeadSlotAncestorRequestStatus>,
         packet_batch: PacketBatch,
