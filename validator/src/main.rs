@@ -13,7 +13,7 @@ use {
         system_monitor_service::SystemMonitorService,
         tower_storage,
         tpu::DEFAULT_TPU_COALESCE_MS,
-        validator::{is_snapshot_config_valid, ReplayingBackend, Validator, ValidatorConfig, ValidatorStartProgress},
+        validator::{is_snapshot_config_valid, BankingBackend, ReplayingBackend, Validator, ValidatorConfig, ValidatorStartProgress},
     },
     solana_gossip::{cluster_info::Node, legacy_contact_info::LegacyContactInfo as ContactInfo},
     solana_ledger::blockstore_options::{
