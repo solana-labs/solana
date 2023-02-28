@@ -65,6 +65,9 @@ impl GeyserPluginManager {
     ///
     /// This function loads the dynamically linked library specified in the path. The library
     /// must do necessary initializations.
+    ///
+    /// The string returned is the name of the plugin loaded, which can only be accessed once
+    /// the plugin has been loaded and calling the name method.
     pub(crate) fn load_plugin(
         &mut self,
         geyser_plugin_config_file: impl AsRef<Path>,
