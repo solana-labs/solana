@@ -127,14 +127,11 @@ pub enum ReplayingBackend {
     UnifiedScheduler,
 }
 
-    const fn from2(string: &str) -> ReplayingBackend {
-        use ReplayingBackend::*;
-        match string {
-            "blockstore_processor" => BlockstoreProcessor, 
-            "unified_scheduler" => UnifiedScheduler,
-            bad_backend => panic!("Invalid replaying backend: {bad_backend}"),
-        }
+impl ReplayingBackend {
+    const fn to_str(&self) -> &'static str {
+        self.to_str()
     }
+}
 
 impl From<&str> for ReplayingBackend {
     fn from(string: &str) -> Self {
