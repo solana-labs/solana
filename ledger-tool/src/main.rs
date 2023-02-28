@@ -1665,7 +1665,7 @@ fn main() {
                 .possible_values(&[
                     "multi_iterator",
                     ])
-                .default_value(&default_args.banking_backend)
+                .default_value(DEFAULT_REPLAYING_BACKEND)
                 .help(
                     "Switch BankingStage's backend to schedule transaction executions"
                 ),
