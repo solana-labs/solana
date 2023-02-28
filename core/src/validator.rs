@@ -127,7 +127,7 @@ pub enum ReplayingBackend {
     UnifiedScheduler,
 }
 
-const fn a() -> &str {
+const fn a() -> &'static str {
 }
 
 impl From<&str> for ReplayingBackend {
