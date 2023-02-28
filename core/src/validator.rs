@@ -148,6 +148,7 @@ impl From<&str> for ReplayingBackend {
     }
 }
 
+#[derive(Default)]
 pub enum BankingBackend {
     MultiIterator,
 }
