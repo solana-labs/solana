@@ -250,11 +250,15 @@ impl BankForks {
         bank
     }
 
-    pub fn install_scheduler_pool(&mut self, pool: Box<dyn LikeSchedulerPool>) {
+    pub fn install_scheduler_pool(&mut self, pool: Box<dyn LikeSchedulerPool>, replay_only: bool) {
         use assert_matches::assert_matches;
         assert_matches!(self.scheduler_pool, NotInstalled);
         info!("Installed new scheduler_pool into bank_forks: {:?}", pool);
-        self.scheduler_pool = Some(pool);
+        if replay_only {
+            self.scheduler_pool = ReplayOnly(pool);
+        } else {
+            self.scheduler_pool = Full(pool);
+        }
     }
 
     pub fn add_new_bank_for_banking(&mut self, bank: Bank) -> Arc<Bank> {
