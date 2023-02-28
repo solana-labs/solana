@@ -94,19 +94,21 @@ pub struct TvuConfig {
     pub replay_slots_concurrently: bool,
 }
 
+/// Configuration for repair using Quic
 #[derive(Clone)]
 pub struct RepairQuicConfig {
-    /// The address from which to send repair request via quic
+    /// The address from which to send repair request via Quic
     pub repair_address: Arc<UdpSocket>,
-    /// The address from which to send AncestorHash requests via quic
+    /// The address from which to send AncestorHash requests via Quic
     pub ancestor_hash_address: Arc<UdpSocket>,
-    /// The address at which to serve repair request via quic
+    /// The address at which to serve repair request via Quic
     pub serve_repair_address: Arc<UdpSocket>,
+    /// Used for identifying the Quic client
     pub identity_keypair: Arc<Keypair>,
+    /// Used for QOS control based on stakes using Quic
     pub staked_nodes: Arc<RwLock<StakedNodes>>,
+    /// Timeout for the quic server waiting for a chunk.
     pub wait_for_chunk_timeout_ms: u64,
-    /// The connection cache used to send repair requests
-    pub connection_cache: Option<Arc<ConnectionCache>>,
 }
 
 impl Tvu {

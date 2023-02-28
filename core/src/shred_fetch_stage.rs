@@ -342,8 +342,8 @@ impl ShredFetchStage {
         Ok(())
     }
 
-    /// Obtain the quic based repair endpoint which receives
-    /// the repair responses
+    /// Obtain the quic based ConnectionCache which used the same
+    /// Endpoint receiving the repair responses to send repair requests.
     pub(crate) fn get_connection_cache(&self) -> Option<Arc<ConnectionCache>> {
         self.connection_cache.clone()
     }
