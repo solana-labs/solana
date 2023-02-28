@@ -1226,7 +1226,7 @@ fn load_bank_forks(
         .map(ReplayingBackend::from)
         .unwrap();
     if matches!(replaying_backend, UnifiedScheduler) {
-        bank_forks.write().unwrap().install_scheduler_pool(solana_scheduler_pool::SchedulerPool::new_boxed(None, None, None));
+        bank_forks.write().unwrap().install_scheduler_pool(solana_scheduler_pool::SchedulerPool::new_boxed(None, None, None), false);
     }
 
     let (snapshot_request_sender, snapshot_request_receiver) = crossbeam_channel::unbounded();
