@@ -1330,7 +1330,7 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                        ledger")
         )
         .arg(
-            Arg::with_name("replaying-backend")
+            Arg::with_name("replaying_backend")
                 .long("replaying-backend")
                 .value_name("BACKEND")
                 .takes_value(true)
