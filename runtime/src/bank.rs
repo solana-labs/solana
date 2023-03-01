@@ -946,7 +946,7 @@ impl AbiExample for BuiltinPrograms {
 
 #[derive(Clone, Debug)]
 pub struct SchedulerContext {
-    pub bank: Option<std::sync::Arc<Bank>>,
+    pub bank: std::sync::Arc<Bank>,
     pub mode: solana_scheduler::Mode,
 }
 
