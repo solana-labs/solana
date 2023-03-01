@@ -511,7 +511,7 @@ impl Scheduler {
         let scheduler_thread_handle = std::thread::Builder::new()
             .name("solScheduler".to_string())
             .spawn({
-                let mut checkpoint = checkpoint.clone();
+                let checkpoint = checkpoint.clone();
 
                 move || {
                 let started = (cpu_time::ThreadTime::now(), std::time::Instant::now());
