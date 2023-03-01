@@ -989,7 +989,7 @@ impl TaskQueueReader for ChannelBackedTaskQueue {
     }
 
     fn take_buffered_flush(&mut self) -> Option<std::sync::Arc<usize>> {
-        self.buffered_flush.take()
+        self.buffered_flush.take().then_some(Flushable::Flush)
     }
 
     #[inline(never)]
