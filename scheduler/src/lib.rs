@@ -2091,24 +2091,18 @@ impl ScheduleStage {
         if let Some(checkpoint) = &maybe_checkpoint {
             // wake up the receiver thread immediately by not using .send_buffered!
             to_next_stage
-                .send(ExaminablePayload(Flushable::Flush(std::sync::Arc::clone(
-                    checkpoint,
-                ))))
+                .send(ExaminablePayload(Flushable::Flush))
                 .unwrap();
             for _ in 0..executing_thread_count/2 {
                 to_execute_substage
-                    .send(ExecutablePayload(Flushable::Flush(std::sync::Arc::clone(
-                        checkpoint,
-                    ))))
+                    .send(ExecutablePayload(Flushable::Flush))
                     .unwrap();
 
             }
             for _ in executing_thread_count/2..executing_thread_count {
                 to_high_execute_substage
                     .unwrap_or(to_execute_substage)
-                    .send(ExecutablePayload(Flushable::Flush(std::sync::Arc::clone(
-                        checkpoint,
-                    ))))
+                    .send(ExecutablePayload(Flushable::Flush))
                     .unwrap();
             }
         }
