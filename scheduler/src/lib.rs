@@ -949,14 +949,14 @@ impl<C, B> TaskQueueReader<C, B> for TaskQueue {
     }
 }
 
-struct ChannelBackedTaskQueue<C, B> {
-    channel: crossbeam_channel::Receiver<SchedulablePayload<C, B>>,
+struct ChannelBackedTaskQueue {
+    channel: crossbeam_channel::Receiver<SchedulablePayload>,
     buffered_task: Option<TaskInQueue>,
-    buffered_flush: Option<std::sync::Arc<Checkpoint<C, B>>>,
+    buffered_flush: Option<std::sync::Arc<Checkpoint>>,
 }
 
-impl<C, B> ChannelBackedTaskQueue<C, B> {
-    fn new(channel: &crossbeam_channel::Receiver<SchedulablePayload<C, B>>) -> Self {
+impl ChannelBackedTaskQueue {
+    fn new(channel: &crossbeam_channel::Receiver<SchedulablePayload>) -> Self {
         Self {
             channel: channel.clone(),
             buffered_task: None,
@@ -970,7 +970,7 @@ impl<C, B> ChannelBackedTaskQueue<C, B> {
     }
 }
 
-impl<C, B> TaskQueueReader<C, B> for ChannelBackedTaskQueue<C, B> {
+impl TaskQueueReader for ChannelBackedTaskQueue {
     #[inline(never)]
     fn add_to_schedule(&mut self, unique_weight: UniqueWeight, task: TaskInQueue) {
         self.buffer(task)
@@ -988,7 +988,7 @@ impl<C, B> TaskQueueReader<C, B> for ChannelBackedTaskQueue<C, B> {
         self.task_count_hint() == 0
     }
 
-    fn take_buffered_flush(&mut self) -> Option<std::sync::Arc<Checkpoint<C, B>>> {
+    fn take_buffered_flush(&mut self) -> Option<std::sync::Arc<usize>> {
         self.buffered_flush.take()
     }
 
@@ -1003,7 +1003,7 @@ impl<C, B> TaskQueueReader<C, B> for ChannelBackedTaskQueue<C, B> {
                     SchedulablePayload(Flushable::Payload(task)) => {
                         Some(task)
                     }
-                    SchedulablePayload(Flushable::Flush(f)) => {
+                    SchedulablePayload(Flushable::Flush @ f) => {
                         assert!(self.buffered_flush.is_none());
                         self.buffered_flush = Some(f);
                         None
