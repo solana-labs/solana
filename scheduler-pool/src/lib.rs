@@ -721,7 +721,7 @@ impl LikeScheduler for Scheduler {
 
     fn current_scheduler_mode(&self) -> solana_scheduler::Mode {
         self.stopped_mode.unwrap_or_else(||
-            self.checkpoint.with_context_value(|c| c.mode).unwrap()
+            self.scheduler_context().unwrap().mode
         )
     }
 
