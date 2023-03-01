@@ -275,7 +275,7 @@ impl Scheduler {
                 'retry: loop {
                 if latest_scheduler_context.is_none() {
                     latest_scheduler_context = latest_checkpoint.clone_context_value();
-                    mode = Some(latest_scheduler_context.as_ref().unwrap().mode);
+                    mode = latest_scheduler_context.as_ref().map(|sc| sc.mode);
                 }
                 let bank = mode.map(|| latest_scheduler_context.as_ref().unwrap().bank()) else {
                     processed_ee_sender.send(solana_scheduler::UnlockablePayload(ee, Default::default())).unwrap();
