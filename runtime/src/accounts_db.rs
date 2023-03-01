@@ -6511,6 +6511,56 @@ impl AccountsDb {
         self.flush_slot_cache_with_clean(&[slot], None::<&mut fn(&_, &_) -> bool>, None)
     }
 
+    /// 1.13 and some 1.14 could produce legal snapshots with more than 1 append vec per slot.
+    /// This is now illegal at runtime in the validator.
+    /// However, there is a clear path to be able to support this.
+    /// So, combine all accounts from 'slot_stores' into a new storage and return it.
+    /// This runs prior to the storages being put in AccountsDb.storage
+    pub(crate) fn combine_multiple_slots_into_one_at_startup(
+        path: &Path,
+        id: AppendVecId,
+        slot: Slot,
+        slot_stores: &HashMap<AppendVecId, Arc<AccountStorageEntry>>,
+    ) -> Arc<AccountStorageEntry> {
+        let size = slot_stores
+            .iter()
+            .map(|(_id, store)| store.accounts.capacity())
+            .sum();
+        let storage = AccountStorageEntry::new(path, slot, id, size);
+
+        // get unique accounts, most recent version by write_version
+        let mut accum = HashMap::<Pubkey, StoredAccountMeta<'_>>::default();
+        slot_stores.iter().for_each(|(_id, store)| {
+            store.accounts.account_iter().for_each(|loaded_account| {
+                let loaded_write_version = loaded_account.write_version();
+                match accum.entry(*loaded_account.pubkey()) {
+                    std::collections::hash_map::Entry::Occupied(mut occupied_entry) => {
+                        if loaded_write_version > occupied_entry.get().write_version() {
+                            occupied_entry.insert(loaded_account);
+                        }
+                    }
+
+                    std::collections::hash_map::Entry::Vacant(vacant_entry) => {
+                        vacant_entry.insert(loaded_account);
+                    }
+                }
+            });
+        });
+
+        // store all unique accounts into new storage
+        let accounts = accum.values().collect::<Vec<_>>();
+        let to_store = (
+            slot,
+            &accounts[..],
+            INCLUDE_SLOT_IN_HASH_IRRELEVANT_APPEND_VEC_OPERATION,
+        );
+        let storable =
+            StorableAccountsWithHashesAndWriteVersions::<'_, '_, _, _, &Hash>::new(&to_store);
+        storage.accounts.append_accounts(&storable, 0);
+
+        Arc::new(storage)
+    }
+
     /// `should_flush_f` is an optional closure that determines whether a given
     /// account should be flushed. Passing `None` will by default flush all
     /// accounts
@@ -9948,6 +9998,31 @@ pub mod tests {
                 "bins: {bins}, start_bin_index: {start_bin_index}"
             );
         }
+    }
+
+    #[test]
+    fn test_combine_multiple_slots_into_one_at_startup() {
+        solana_logger::setup();
+        let (db, slot1) = create_db_with_storages_and_index(false, 2, None);
+        let slot2 = slot1 + 1;
+
+        let initial_accounts = get_all_accounts(&db, slot1..(slot2 + 1));
+
+        let tf = TempDir::new().unwrap();
+        let stores = db
+            .storage
+            .all_slots()
+            .into_iter()
+            .map(|slot| {
+                let storage = db.storage.get_slot_storage_entry(slot).unwrap();
+                (storage.append_vec_id(), storage)
+            })
+            .collect::<HashMap<_, _>>();
+        AccountsDb::combine_multiple_slots_into_one_at_startup(tf.path(), 1000, slot1, &stores);
+
+        //db.storage.remove(&slot2, false);
+
+        compare_all_accounts(&initial_accounts, &get_all_accounts(&db, slot1..slot2));
     }
 
     #[test]
