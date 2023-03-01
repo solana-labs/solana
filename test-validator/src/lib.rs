@@ -531,21 +531,7 @@ impl TestValidatorGenesis {
         mint_address: Pubkey,
         socket_addr_space: SocketAddrSpace,
     ) -> Result<TestValidator, Box<dyn std::error::Error>> {
-        TestValidator::start(
-            mint_address,
-            self,
-            socket_addr_space,
-            None, //rpc_to_plugin_manager_receiver,
-        )
-        .map(|test_validator| {
-            let runtime = tokio::runtime::Builder::new_current_thread()
-                .enable_io()
-                .enable_time()
-                .build()
-                .unwrap();
-            runtime.block_on(test_validator.wait_for_nonzero_fees());
-            test_validator
-        })
+        self.start_with_mint_address_and_geyser_plugin_rpc(mint_address, socket_addr_space, None)
     }
 
     /// Start a test validator with the address of the mint account that will receive tokens
