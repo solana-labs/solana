@@ -379,7 +379,7 @@ impl Scheduler {
                 solana_runtime::bank_utils::find_and_send_votes(
                     batch.sanitized_transactions(),
                     &tx_results,
-                    replay_vote_sender,
+                    scheduler_pool.replay_vote_sender.as_ref(),
                 );
 
                 if let Some(commited_first_transaction_index) = commited_first_transaction_index {
