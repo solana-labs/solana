@@ -1813,7 +1813,7 @@ impl ScheduleStage {
                                    if let Some(checkpoint) = checkpoint.take() {
                                        let new_runner_context = checkpoint.clone_context_value();
                                        info!("schedule_once:initial {} => {}", log_prefix(&scheduler_context), log_prefix(&new_runner_context));
-                                       scheduler_context = new_runner_context;
+                                       scheduler_context = Some(new_runner_context);
                                        let new_mode = scheduler_context.as_ref().unwrap().mode();
                                        if Some(new_mode) != mode {
                                            if !force_channel_backed {
