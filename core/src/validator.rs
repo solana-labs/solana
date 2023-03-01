@@ -414,6 +414,8 @@ impl Validator {
 
         let mut bank_notification_senders = Vec::new();
 
+        let exit = Arc::new(AtomicBool::new(false));
+
         let geyser_plugin_service =
             if let Some(geyser_plugin_config_files) = &config.on_start_geyser_plugin_config_files {
                 let (confirmed_bank_sender, confirmed_bank_receiver) = unbounded();
@@ -422,6 +424,7 @@ impl Validator {
                     confirmed_bank_receiver,
                     geyser_plugin_config_files,
                     rpc_to_plugin_manager_receiver,
+                    exit.clone(),
                 );
                 match result {
                     Ok(geyser_plugin_service) => Some(geyser_plugin_service),
@@ -486,7 +489,6 @@ impl Validator {
         start.stop();
         info!("done. {}", start);
 
-        let exit = Arc::new(AtomicBool::new(false));
         {
             let exit = exit.clone();
             config

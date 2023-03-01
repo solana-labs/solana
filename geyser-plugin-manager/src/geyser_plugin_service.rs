@@ -17,8 +17,9 @@ use {
     solana_runtime::accounts_update_notifier_interface::AccountsUpdateNotifier,
     std::{
         path::{Path, PathBuf},
-        sync::{Arc, RwLock},
+        sync::{atomic::AtomicBool, Arc, RwLock},
         thread::{self, JoinHandle},
+        time::Duration,
     },
     thiserror::Error,
 };
@@ -52,6 +53,7 @@ impl GeyserPluginService {
         confirmed_bank_receiver: Receiver<BankNotification>,
         geyser_plugin_config_files: &[PathBuf],
         rpc_to_plugin_manager_receiver: Option<Receiver<GeyserPluginManagerRequest>>,
+        exit: Arc<AtomicBool>,
     ) -> Result<Self, GeyserPluginServiceError> {
         info!(
             "Starting GeyserPluginService from config files: {:?}",
@@ -107,7 +109,7 @@ impl GeyserPluginService {
         // Initialize plugin manager rpc handler thread if needed
         let rpc_handler_thread = rpc_to_plugin_manager_receiver.map(|request_receiver| {
             let plugin_manager = plugin_manager.clone();
-            Self::start_manager_rpc_handler(plugin_manager, request_receiver)
+            Self::start_manager_rpc_handler(plugin_manager, request_receiver, exit)
         });
 
         info!("Started GeyserPluginService");
@@ -154,9 +156,10 @@ impl GeyserPluginService {
     fn start_manager_rpc_handler(
         plugin_manager: Arc<RwLock<GeyserPluginManager>>,
         request_receiver: Receiver<GeyserPluginManagerRequest>,
+        exit: Arc<AtomicBool>,
     ) -> Arc<JoinHandle<()>> {
         Arc::new(thread::spawn(move || loop {
-            if let Ok(request) = request_receiver.recv() {
+            if let Ok(request) = request_receiver.recv_timeout(Duration::from_secs(5)) {
                 match request {
                     GeyserPluginManagerRequest::ListPlugins { response_sender } => {
                         let plugin_list = plugin_manager.read().unwrap().list_plugins();
@@ -199,6 +202,10 @@ impl GeyserPluginService {
                             .expect("Admin rpc service will be waiting for response");
                     }
                 }
+            }
+
+            if exit.load(std::sync::atomic::Ordering::Relaxed) {
+                break;
             }
         }))
     }
