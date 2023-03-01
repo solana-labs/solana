@@ -204,7 +204,6 @@ mod tests {
             pubkey::Pubkey,
             secp256k1_instruction::new_secp256k1_instruction,
             secp256k1_program,
-            signature::Signature,
         },
     };
 
@@ -282,7 +281,7 @@ mod tests {
             ),
         ];
         let mut transaction_context =
-            TransactionContext::new(Signature::default(), accounts, Some(Rent::default()), 1, 3);
+            TransactionContext::new(accounts, Some(Rent::default()), 1, 3);
         let program_indices = vec![vec![2]];
         let tx_executor_cache = Rc::new(RefCell::new(TransactionExecutorCache::default()));
         let account_keys = (0..transaction_context.get_number_of_accounts())
@@ -515,7 +514,7 @@ mod tests {
             ),
         ];
         let mut transaction_context =
-            TransactionContext::new(Signature::default(), accounts, Some(Rent::default()), 1, 3);
+            TransactionContext::new(accounts, Some(Rent::default()), 1, 3);
         let program_indices = vec![vec![2]];
         let tx_executor_cache = Rc::new(RefCell::new(TransactionExecutorCache::default()));
         let account_metas = vec![
@@ -678,7 +677,7 @@ mod tests {
             (mock_program_id, mock_program_account),
         ];
         let mut transaction_context =
-            TransactionContext::new(Signature::default(), accounts, Some(Rent::default()), 1, 2);
+            TransactionContext::new(accounts, Some(Rent::default()), 1, 2);
 
         let message = SanitizedMessage::Legacy(LegacyMessage::new(Message::new(
             &[

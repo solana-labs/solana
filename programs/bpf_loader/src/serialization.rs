@@ -454,7 +454,6 @@ mod tests {
             bpf_loader,
             entrypoint::deserialize,
             instruction::AccountMeta,
-            signature::Signature,
             sysvar::rent::Rent,
         },
         std::{
@@ -572,13 +571,8 @@ mod tests {
             .instruction_accounts;
             let instruction_data = vec![];
 
-            let mut transaction_context = TransactionContext::new(
-                Signature::default(),
-                transaction_accounts,
-                Some(Rent::default()),
-                1,
-                1,
-            );
+            let mut transaction_context =
+                TransactionContext::new(transaction_accounts, Some(Rent::default()), 1, 1);
             transaction_context
                 .get_next_instruction_context()
                 .unwrap()
@@ -719,7 +713,6 @@ mod tests {
             &program_indices,
         );
         let mut transaction_context = TransactionContext::new(
-            Signature::default(),
             preparation.transaction_accounts,
             Some(Rent::default()),
             1,

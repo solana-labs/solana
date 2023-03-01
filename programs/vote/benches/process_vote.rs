@@ -111,7 +111,6 @@ fn bench_process_vote_instruction(
 ) {
     bencher.iter(|| {
         let mut transaction_context = TransactionContext::new(
-            Signature::default(),
             transaction_accounts.clone(),
             Some(sysvar::rent::Rent::default()),
             1,

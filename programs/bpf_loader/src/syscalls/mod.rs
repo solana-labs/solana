@@ -1823,7 +1823,6 @@ mod tests {
             hash::hashv,
             instruction::Instruction,
             program::check_type_assumptions,
-            signature::Signature,
             stable_layout::stable_instruction::StableInstruction,
             sysvar::{clock::Clock, epoch_schedule::EpochSchedule, rent::Rent},
             transaction_context::TransactionContext,
@@ -1856,13 +1855,8 @@ mod tests {
                 ),
                 ($program_key, AccountSharedData::new(0, 0, &$loader_key)),
             ];
-            let mut $transaction_context = TransactionContext::new(
-                Signature::default(),
-                transaction_accounts,
-                Some(Rent::default()),
-                1,
-                1,
-            );
+            let mut $transaction_context =
+                TransactionContext::new(transaction_accounts, Some(Rent::default()), 1, 1);
             let mut $invoke_context = InvokeContext::new_mock(&mut $transaction_context, &[]);
             $invoke_context
                 .transaction_context
@@ -3983,13 +3977,8 @@ mod tests {
             })
             .collect::<Vec<_>>();
         let instruction_trace = [1, 2, 3, 2, 2, 3, 4, 3];
-        let mut transaction_context = TransactionContext::new(
-            Signature::default(),
-            transaction_accounts,
-            None,
-            4,
-            instruction_trace.len(),
-        );
+        let mut transaction_context =
+            TransactionContext::new(transaction_accounts, None, 4, instruction_trace.len());
         for (index_in_trace, stack_height) in instruction_trace.into_iter().enumerate() {
             while stack_height <= transaction_context.get_instruction_context_stack_height() {
                 transaction_context.pop().unwrap();

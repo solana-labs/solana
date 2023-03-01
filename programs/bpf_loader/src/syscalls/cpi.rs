@@ -1132,7 +1132,6 @@ mod tests {
             clock::Epoch,
             instruction::Instruction,
             rent::Rent,
-            signature::Signature,
             transaction_context::{TransactionAccount, TransactionContext},
         },
         std::{
@@ -1171,13 +1170,8 @@ mod tests {
                 .collect::<Vec<TransactionAccount>>();
 
             let program_accounts = program_accounts;
-            let mut $transaction_context = TransactionContext::new(
-                Signature::default(),
-                transaction_accounts,
-                Some(Rent::default()),
-                1,
-                1,
-            );
+            let mut $transaction_context =
+                TransactionContext::new(transaction_accounts, Some(Rent::default()), 1, 1);
 
             let mut $invoke_context = InvokeContext::new_mock(&mut $transaction_context, &[]);
             $invoke_context

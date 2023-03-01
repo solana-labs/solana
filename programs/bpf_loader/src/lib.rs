@@ -1500,7 +1500,7 @@ fn execute(
     let execution_result = {
         let bpf_tracer_plugin_manager = invoke_context.bpf_tracer_plugin_manager.clone();
         let blockhash = invoke_context.blockhash;
-        let transaction_id = *transaction_context.signature();
+        let transaction_id = *transaction_context.get_signature();
         let compute_meter_prev = invoke_context.get_remaining();
         let verified_executable = loaded_program.get_verified_executable()?;
 

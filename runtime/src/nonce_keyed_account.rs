@@ -278,7 +278,6 @@ mod test {
             hash::{hash, Hash},
             nonce::{self, State},
             nonce_account::{create_account, verify_nonce_account},
-            signature::Signature,
             system_instruction::SystemError,
             system_program,
             transaction_context::{InstructionAccount, TransactionContext},
@@ -334,13 +333,8 @@ mod test {
                     is_writable: true,
                 },
             ];
-            let mut transaction_context = TransactionContext::new(
-                Signature::default(),
-                accounts,
-                Some(Rent::default()),
-                1,
-                1,
-            );
+            let mut transaction_context =
+                TransactionContext::new(accounts, Some(Rent::default()), 1, 1);
             let mut $invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
         };
     }

@@ -11729,7 +11729,6 @@ fn test_rent_state_list_len() {
         ComputeBudget::new(compute_budget::DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT as u64)
     });
     let transaction_context = TransactionContext::new(
-        Signature::default(),
         loaded_txs[0].0.as_ref().unwrap().accounts.clone(),
         Some(Rent::default()),
         compute_budget.max_invoke_stack_height,
@@ -11825,13 +11824,7 @@ fn test_skip_rewrite() {
 #[test]
 fn test_inner_instructions_list_from_instruction_trace() {
     let instruction_trace = [1, 2, 1, 1, 2, 3, 2];
-    let mut transaction_context = TransactionContext::new(
-        Signature::default(),
-        vec![],
-        None,
-        3,
-        instruction_trace.len(),
-    );
+    let mut transaction_context = TransactionContext::new(vec![], None, 3, instruction_trace.len());
     for (index_in_trace, stack_height) in instruction_trace.into_iter().enumerate() {
         while stack_height <= transaction_context.get_instruction_context_stack_height() {
             transaction_context.pop().unwrap();

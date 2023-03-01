@@ -4138,7 +4138,6 @@ impl Bank {
             }
         }
         let mut transaction_context = TransactionContext::new(
-            Signature::default(),
             transaction_accounts,
             Some(sysvar::rent::Rent::default()),
             1,
@@ -4211,7 +4210,6 @@ impl Bank {
         let prev_accounts_data_len = self.load_accounts_data_size();
         let transaction_accounts = std::mem::take(&mut loaded_transaction.accounts);
         let mut transaction_context = TransactionContext::new(
-            *tx.signature(),
             transaction_accounts,
             if self
                 .feature_set
@@ -4237,7 +4235,6 @@ impl Bank {
         {
             transaction_context.enable_cap_accounts_data_allocations_per_transaction();
         }
-        #[cfg(debug_assertions)]
         transaction_context.set_signature(tx.signature());
 
         let pre_account_state_info =

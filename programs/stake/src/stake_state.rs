@@ -1784,7 +1784,6 @@ mod tests {
             account::{create_account_shared_data_for_test, AccountSharedData},
             native_token,
             pubkey::Pubkey,
-            signature::Signature,
             sysvar::SysvarId,
             transaction_context::TransactionContext,
         },
@@ -2919,7 +2918,6 @@ mod tests {
 
     fn create_mock_tx_context() -> TransactionContext {
         TransactionContext::new(
-            Signature::default(),
             vec![(
                 Rent::id(),
                 create_account_shared_data_for_test(&Rent::default()),
@@ -3036,13 +3034,8 @@ mod tests {
 
     #[test]
     fn test_things_can_merge() {
-        let mut transaction_context = TransactionContext::new(
-            Signature::default(),
-            Vec::new(),
-            Some(Rent::default()),
-            1,
-            1,
-        );
+        let mut transaction_context =
+            TransactionContext::new(Vec::new(), Some(Rent::default()), 1, 1);
         let invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
         let good_stake = Stake {
             credits_observed: 4242,
@@ -3141,13 +3134,8 @@ mod tests {
 
     #[test]
     fn test_metas_can_merge() {
-        let mut transaction_context = TransactionContext::new(
-            Signature::default(),
-            Vec::new(),
-            Some(Rent::default()),
-            1,
-            1,
-        );
+        let mut transaction_context =
+            TransactionContext::new(Vec::new(), Some(Rent::default()), 1, 1);
         let invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
         // Identical Metas can merge
         assert!(MergeKind::metas_can_merge(
@@ -3294,13 +3282,8 @@ mod tests {
 
     #[test]
     fn test_merge_kind_get_if_mergeable() {
-        let mut transaction_context = TransactionContext::new(
-            Signature::default(),
-            Vec::new(),
-            Some(Rent::default()),
-            1,
-            1,
-        );
+        let mut transaction_context =
+            TransactionContext::new(Vec::new(), Some(Rent::default()), 1, 1);
         let invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
         let authority_pubkey = Pubkey::new_unique();
         let initial_lamports = 4242424242;
@@ -3539,13 +3522,8 @@ mod tests {
 
     #[test]
     fn test_merge_kind_merge() {
-        let mut transaction_context = TransactionContext::new(
-            Signature::default(),
-            Vec::new(),
-            Some(Rent::default()),
-            1,
-            1,
-        );
+        let mut transaction_context =
+            TransactionContext::new(Vec::new(), Some(Rent::default()), 1, 1);
         let invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
         let clock = Clock::default();
         let lamports = 424242;

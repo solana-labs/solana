@@ -69,6 +69,7 @@ pub struct TransactionContext {
     rent: Option<Rent>,
     #[cfg(not(target_os = "solana"))]
     is_cap_accounts_data_allocations_per_transaction_enabled: bool,
+    /// Useful for debugging to filter by or to look it up on the explorer
     signature: Signature,
 }
 
@@ -76,7 +77,6 @@ impl TransactionContext {
     /// Constructs a new TransactionContext
     #[cfg(not(target_os = "solana"))]
     pub fn new(
-        signature: Signature,
         transaction_accounts: Vec<TransactionAccount>,
         rent: Option<Rent>,
         instruction_stack_capacity: usize,
@@ -89,7 +89,6 @@ impl TransactionContext {
                 .unzip();
         let account_touched_flags = vec![false; accounts.len()];
         Self {
-            signature,
             account_keys: Pin::new(account_keys.into_boxed_slice()),
             accounts: Pin::new(accounts.into_boxed_slice()),
             account_touched_flags: RefCell::new(Pin::new(account_touched_flags.into_boxed_slice())),
@@ -101,6 +100,7 @@ impl TransactionContext {
             accounts_resize_delta: RefCell::new(0),
             rent,
             is_cap_accounts_data_allocations_per_transaction_enabled: false,
+            signature: Signature::default(),
         }
     }
 
@@ -116,11 +116,6 @@ impl TransactionContext {
             .collect())
     }
 
-    /// Returns first signature of transaction's message
-    pub fn signature(&self) -> &Signature {
-        &self.signature
-    }
-
     /// Returns true if `enable_early_verification_of_account_modifications` is active
     #[cfg(not(target_os = "solana"))]
     pub fn is_early_verification_of_account_modifications_enabled(&self) -> bool {
@@ -128,13 +123,11 @@ impl TransactionContext {
     }
 
     /// Stores the signature of the current transaction
-    #[cfg(all(not(target_os = "solana"), debug_assertions))]
     pub fn set_signature(&mut self, signature: &Signature) {
         self.signature = *signature;
     }
 
     /// Returns the signature of the current transaction
-    #[cfg(all(not(target_os = "solana"), debug_assertions))]
     pub fn get_signature(&self) -> &Signature {
         &self.signature
     }

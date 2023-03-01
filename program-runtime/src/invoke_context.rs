@@ -23,7 +23,6 @@ use {
         pubkey::Pubkey,
         rent::Rent,
         saturating_add_assign,
-        signature::Signature,
         stable_layout::stable_instruction::StableInstruction,
         transaction_context::{
             IndexOfAccount, InstructionAccount, TransactionAccount, TransactionContext,
@@ -969,7 +968,6 @@ pub fn with_mock_invoke_context<R, F: FnMut(&mut InvokeContext) -> R>(
         prepare_mock_invoke_context(transaction_accounts, instruction_accounts, &program_indices);
     let compute_budget = ComputeBudget::default();
     let mut transaction_context = TransactionContext::new(
-        Signature::default(),
         preparation.transaction_accounts,
         Some(Rent::default()),
         compute_budget.max_invoke_stack_height,
@@ -1006,7 +1004,6 @@ pub fn mock_process_instruction(
         .push((*loader_id, processor_account));
     let compute_budget = ComputeBudget::default();
     let mut transaction_context = TransactionContext::new(
-        Signature::default(),
         preparation.transaction_accounts,
         Some(Rent::default()),
         compute_budget.max_invoke_stack_height,
@@ -1227,7 +1224,6 @@ mod tests {
             });
         }
         let mut transaction_context = TransactionContext::new(
-            Signature::default(),
             accounts,
             Some(Rent::default()),
             ComputeBudget::default().max_invoke_stack_height,
@@ -1259,13 +1255,8 @@ mod tests {
     #[test]
     fn test_max_instruction_trace_length() {
         const MAX_INSTRUCTIONS: usize = 8;
-        let mut transaction_context = TransactionContext::new(
-            Signature::default(),
-            Vec::new(),
-            Some(Rent::default()),
-            1,
-            MAX_INSTRUCTIONS,
-        );
+        let mut transaction_context =
+            TransactionContext::new(Vec::new(), Some(Rent::default()), 1, MAX_INSTRUCTIONS);
         for _ in 0..MAX_INSTRUCTIONS {
             transaction_context.push().unwrap();
             transaction_context.pop().unwrap();
@@ -1312,7 +1303,7 @@ mod tests {
             })
             .collect::<Vec<_>>();
         let mut transaction_context =
-            TransactionContext::new(Signature::default(), accounts, Some(Rent::default()), 2, 18);
+            TransactionContext::new(accounts, Some(Rent::default()), 2, 18);
         let mut invoke_context =
             InvokeContext::new_mock(&mut transaction_context, builtin_programs);
 
@@ -1404,7 +1395,7 @@ mod tests {
         let accounts = vec![(solana_sdk::pubkey::new_rand(), AccountSharedData::default())];
 
         let mut transaction_context =
-            TransactionContext::new(Signature::default(), accounts, Some(Rent::default()), 1, 1);
+            TransactionContext::new(accounts, Some(Rent::default()), 1, 1);
         let mut invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
         invoke_context.compute_budget =
             ComputeBudget::new(compute_budget::DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT as u64);
@@ -1443,7 +1434,7 @@ mod tests {
         }];
 
         let mut transaction_context =
-            TransactionContext::new(Signature::default(), accounts, Some(Rent::default()), 1, 3);
+            TransactionContext::new(accounts, Some(Rent::default()), 1, 3);
         let mut invoke_context =
             InvokeContext::new_mock(&mut transaction_context, &builtin_programs);
 
