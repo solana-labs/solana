@@ -1212,11 +1212,11 @@ impl ScheduleStage {
     }
 
     #[inline(never)]
-    fn pop_from_queue_then_lock<AST: AtScheduleThread, C, B>(
+    fn pop_from_queue_then_lock<AST: AtScheduleThread>(
         ast: AST,
         task_sender: &crossbeam_channel::Sender<(TaskInQueue, Vec<LockAttempt>)>,
         //runnable_queue: &mut TaskQueue,
-        runnable_queue: &mut ModeSpecificTaskQueue<C, B>,
+        runnable_queue: &mut ModeSpecificTaskQueue,
         address_book: &mut AddressBook,
         contended_count: &mut usize,
         prefer_immediate: bool,
