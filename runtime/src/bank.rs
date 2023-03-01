@@ -1171,8 +1171,6 @@ pub trait LikeScheduler: Send + Sync + std::fmt::Debug {
     fn random_id(&self) -> u64;
     fn schedule_execution(&self, sanitized_tx: &SanitizedTransaction, index: usize, mode: solana_scheduler::Mode);
     fn handle_aborted_executions(&self) -> Vec<Result<ExecuteTimings>>;
-    fn pause_commit_into_bank(&self);  // pause()?
-    fn resume_commit_into_bank(&self); // resume()?
     fn trigger_stop(&mut self);
     fn gracefully_stop(&mut self, from_internal: bool) -> Result<()>; // terminate_gracefully()? or just shutdown()?
     fn current_scheduler_mode(&self) -> solana_scheduler::Mode;
