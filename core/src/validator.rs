@@ -950,11 +950,12 @@ impl Validator {
             stats_reporter_sender,
             exit.clone(),
         );
+        let (replay_vote_sender, replay_vote_receiver) = unbounded();
         if matches!(&config.replaying_backend, ReplayingBackend::UnifiedScheduler) {
             use solana_scheduler_pool::{
                 SchedulerPool,
             };
-            let scheduler_pool = SchedulerPool::new_boxed(Some(&poh_recorder), config.runtime_config.log_messages_bytes_limit, transaction_status_sender.clone());
+            let scheduler_pool = SchedulerPool::new_boxed(Some(&poh_recorder), config.runtime_config.log_messages_bytes_limit, transaction_status_sender.clone(), replay_vote_sender.clone());
             bank_forks.write().unwrap().install_scheduler_pool(scheduler_pool, false);
         } else {
             info!("not installing scheduler pool...");
@@ -1022,7 +1023,6 @@ impl Validator {
             info!("Disabled banking tracer");
         }
 
-        let (replay_vote_sender, replay_vote_receiver) = unbounded();
         let tvu = Tvu::new(
             vote_account,
             authorized_voter_keypairs,
