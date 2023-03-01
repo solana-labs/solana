@@ -238,7 +238,7 @@ impl BankForks {
         for parent in bank.proper_ancestors() {
             self.descendants.entry(parent).or_default().insert(slot);
         }
-        if let Some((mode, scheduler_pool)) = &self.get_scheduler_pool(for_replaying) {
+        if let Some((mode, scheduler_pool)) = self.get_scheduler_pool(for_replaying) {
             let new_context = SchedulerContext::new(Some(&bank), mode);
             if let Some(inherited_scheduler) = inherited_scheduler {
                 inherited_scheduler.replace_scheduler_context(new_context);
