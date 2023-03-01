@@ -2240,12 +2240,6 @@ impl<T, B: Clone> Checkpoint<T, B> {
         let (_self_remaining_threads, self_return_value, b) = &mut *g;
         b.clone()
     }
-
-    pub fn with_context_value<R>(&self, with: impl Fn(&B) -> R) -> Option<R> {
-        let mut g = self.0.lock().unwrap();
-        let (_self_remaining_threads, self_return_value, b) = &mut *g;
-        b.as_ref().map(with)
-    }
 }
 
 pub enum Flushable<T> {
