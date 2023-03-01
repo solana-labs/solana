@@ -376,6 +376,12 @@ impl Scheduler {
                 wall_time.stop();
                 ee.execution_us = wall_time.as_us();
 
+                bank_utils::find_and_send_votes(
+                    batch.sanitized_transactions(),
+                    &tx_results,
+                    replay_vote_sender,
+                );
+
                 if let Some(commited_first_transaction_index) = commited_first_transaction_index {
                     if let Some(bb) = bb {
                         assert!(send_transaction_status(scheduler_pool.transaction_status_sender.as_ref().unwrap(), bb, &bank, &batch, &mut mint_decimals, Some(tx_results), Some(commited_first_transaction_index)).is_none());
