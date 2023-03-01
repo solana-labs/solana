@@ -229,7 +229,7 @@ impl BankForks {
         }
     }
 
-    fn add_new_bank(&mut self, bank: Bank, mode: solana_scheduler::Mode, inherited_scheduler: Option<Box<dyn LikeScheduler>>) -> Arc<Bank> {
+    fn add_new_bank(&mut self, bank: Bank, for_replaying: bool, inherited_scheduler: Option<Box<dyn LikeScheduler>>) -> Arc<Bank> {
         let bank = Arc::new(bank);
         let prev = self.banks.insert(bank.slot(), SchedulableBank(bank.clone()));
         assert!(prev.is_none());
@@ -238,7 +238,7 @@ impl BankForks {
         for parent in bank.proper_ancestors() {
             self.descendants.entry(parent).or_default().insert(slot);
         }
-        if let Some(scheduler_pool) = &self.get_scheduler_pool(mode) {
+        if let Some((mode, scheduler_pool)) = &self.get_scheduler_pool(for_replaying) {
             let new_context = SchedulerContext::new(Some(&bank), mode);
             if let Some(inherited_scheduler) = inherited_scheduler {
                 inherited_scheduler.replace_scheduler_context(new_context);
@@ -250,14 +250,10 @@ impl BankForks {
         bank
     }
 
-    fn get_scheduler_pool(&self, mode: solana_scheduler::Mode) -> Option<&Box<(dyn LikeSchedulerPool)>> {
-        match mode {
-            solana_scheduler::Mode::Replaying => {
-                match &self.scheduler_pool {
-                    InstalledSchedulerPool::NotInstalled => None,
-                    InstalledSchedulerPool::ReplayOnly(scheduler_pool) | InstalledSchedulerPool::Full(scheduler_pool) => Some(scheduler_pool)
-                }
-            }
+    fn get_scheduler_pool(&self, for_replaying: bool) -> Option<&Box<(solana_scheduler::Mode, dyn LikeSchedulerPool)>> {
+        match (for_replaying, &self.scheduler_pool) {
+            (false, _) | (true, InstalledSchedulerPool::NotInstalled) => None,
+            InstalledSchedulerPool::ReplayOnly(scheduler_pool) | InstalledSchedulerPool::Full(scheduler_pool) => Some(scheduler_pool)
         }
     }
 
@@ -274,11 +270,11 @@ impl BankForks {
 
     pub fn add_new_bank_for_banking(&mut self, bank: Bank) -> Arc<Bank> {
         // todo!
-        self.add_new_bank_for_replaying(bank)
+        self.add_new_bank(bank, false, None)
     }
 
     pub fn add_new_bank_for_replaying(&mut self, bank: Bank) -> Arc<Bank> {
-        self.add_new_bank(bank, solana_scheduler::Mode::Replaying, None)
+        self.add_new_bank(bank, true, None)
     }
 
     // pub fn add_new_bank_as_{rooted/freezed}(...) { ... }
