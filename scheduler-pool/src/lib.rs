@@ -55,6 +55,7 @@ impl SchedulerPool {
             schedulers: std::sync::Mutex::new(Vec::new()),
             log_messages_bytes_limit,
             transaction_status_sender,
+            replay_vote_sender,
         }
     }
 
