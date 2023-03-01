@@ -2145,7 +2145,7 @@ pub struct UnlockablePayload<T>(pub Box<ExecutionEnvironment>, pub T);
 pub struct ExaminablePayload<T>(pub Flushable<(Box<ExecutionEnvironment>, T)>);
 
 #[derive(Debug)]
-pub struct Checkpoint<T, B>(std::sync::Mutex<(usize, Option<T>, Option<B>)>, std::sync::Condvar);
+pub struct Checkpoint<T, B>(std::sync::Mutex<(usize, Option<T>, Option<B>)>, std::sync::Condvar, usize);
 
 impl<T, B> Checkpoint<T, B> {
     pub fn wait_for_restart(&self) {
@@ -2163,6 +2163,7 @@ impl<T, B> Checkpoint<T, B> {
 
         if *self_remaining_threads == 0 {
             assert!(self_return_value.is_some());
+            *self_remaining_threads = self.2;
             drop(self_remaining_threads);
             self.1.notify_all();
             info!(
