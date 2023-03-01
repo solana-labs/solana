@@ -2264,11 +2264,7 @@ impl<T, B: WithMode> Checkpoint<T, B> {
         let mut g = self.0.lock().unwrap();
         let (_, _, b) = &mut *g;
         let mut did_dropped = false;
-        if let Some(sc) = b.take() {
-            drop(g);
-            did_dropped = sc.drop_cyclically();
-        }
-        did_dropped
+        b.drop_cyclically();
     }
 }
 
