@@ -277,7 +277,7 @@ impl Scheduler {
                 }
                 let Some(bank) = latest_scheduler_context.as_ref().map(|sc| sc.bank()) else {
                     match mode {
-                        solana_scheduler::Mode::Replaying => panic!(),
+                        Some(solana_scheduler::Mode::Replaying) => panic!(),
                         None => (),
                     };
                     processed_ee_sender.send(solana_scheduler::UnlockablePayload(ee, Default::default())).unwrap();
