@@ -1215,7 +1215,7 @@ fn load_bank_forks(
     let mut accounts_update_notifier = Option::<AccountsUpdateNotifier>::default();
     let mut transaction_notifier = Option::<TransactionNotifierLock>::default();
     if arg_matches.is_present("plugin_config") {
-        let geyser_config_files = values_t_or_exit!(arg_matches, "plugin_config", String)
+        let plugin_config_files = values_t_or_exit!(arg_matches, "plugin_config", String)
             .into_iter()
             .map(PathBuf::from)
             .collect::<Vec<_>>();

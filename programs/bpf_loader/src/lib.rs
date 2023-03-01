@@ -23,19 +23,19 @@ use {
         executor_cache::TransactionExecutorCache,
         ic_logger_msg, ic_msg,
         invoke_context::InvokeContext,
-        loaded_programs::{LoadProgramMetrics, LoadedProgram, LoadedProgramType},
+        loaded_programs::{LoadProgramMetrics, LoadedProgram},
         log_collector::LogCollector,
         stable_log,
         sysvar_cache::get_sysvar_with_account_check,
     },
     solana_rbpf::{
         aligned_memory::AlignedMemory,
-        ebpf::{Insn, HOST_ALIGN, MM_HEAP_START},
+        ebpf::{HOST_ALIGN, MM_HEAP_START},
         error::{EbpfError, UserDefinedError},
         memory_region::MemoryRegion,
-        static_analysis::{Analysis, CfgNode, TraceLogEntry},
+        static_analysis::TraceLogEntry,
         verifier::{RequisiteVerifier, VerifierError},
-        vm::{Config, ContextObject, EbpfVm, ProgramResult, VerifiedExecutable},
+        vm::{ContextObject, EbpfVm, ProgramResult, VerifiedExecutable},
     },
     solana_sdk::{
         bpf_loader, bpf_loader_deprecated,
@@ -66,7 +66,6 @@ use {
     },
     std::{
         cell::{RefCell, RefMut},
-        collections::BTreeMap,
         fmt::Debug,
         rc::Rc,
         sync::{Arc, RwLock},
@@ -291,6 +290,7 @@ macro_rules! deploy_program {
             $slot,
             $use_jit,
             true,
+            $invoke_context.has_bpf_tracing_plugins(),
         )?;
         $drop
         load_program_metrics.program_id = $program_id.to_string();
@@ -465,7 +465,7 @@ fn process_instruction_common(
             )?)
         };
         let mut get_or_create_executor_time = Measure::start("get_or_create_executor_time");
-        let (executor, load_program_metrics) = load_program_from_account(
+        let (loaded_program, load_program_metrics) = load_program_from_account(
             &invoke_context.feature_set,
             invoke_context.get_compute_budget(),
             log_collector,
@@ -485,12 +485,7 @@ fn process_instruction_common(
         if let Some(load_program_metrics) = load_program_metrics {
             load_program_metrics.submit_datapoint(&mut invoke_context.timings);
         }
-        match &executor.program {
-            LoadedProgramType::Invalid => Err(InstructionError::InvalidAccountData),
-            LoadedProgramType::LegacyV0(executable) => execute(executable, invoke_context),
-            LoadedProgramType::LegacyV1(executable) => execute(executable, invoke_context),
-            LoadedProgramType::BuiltIn(_) => Err(InstructionError::IncorrectProgramId),
-        }
+        execute(loaded_program, invoke_context)
     } else {
         drop(program);
         debug_assert_eq!(first_instruction_account, 1);
@@ -712,7 +707,6 @@ fn process_loader_upgradeable_instruction(
                     .get_data()
                     .get(buffer_data_offset..)
                     .ok_or(InstructionError::AccountDataTooSmall)?,
-                invoke_context.has_bpf_tracing_plugins(),
             );
 
             let transaction_context = &invoke_context.transaction_context;
@@ -903,7 +897,6 @@ fn process_loader_upgradeable_instruction(
                     .get_data()
                     .get(buffer_data_offset..)
                     .ok_or(InstructionError::AccountDataTooSmall)?,
-                invoke_context.has_bpf_tracing_plugins(),
             );
 
             let transaction_context = &invoke_context.transaction_context;
@@ -1428,7 +1421,6 @@ fn process_loader_instruction(
                 0,
                 {},
                 program.get_data(),
-                invoke_context.has_bpf_tracing_plugins(),
             );
             program.set_executable(true)?;
             ic_msg!(invoke_context, "Finalized account {:?}", program.get_key());
@@ -1441,7 +1433,7 @@ fn process_loader_instruction(
 fn trace_bpf(
     trace_log: &[TraceLogEntry],
     consumed_bpf_units: &[(usize, u64)],
-    bpf_executor: Arc<BpfExecutor>,
+    loaded_program: Arc<LoadedProgram>,
     bpf_tracer_plugin_manager: Option<Arc<RwLock<dyn BpfTracerPluginManager>>>,
     block_hash: &Hash,
     transaction_id: &[u8],
@@ -1471,7 +1463,7 @@ fn trace_bpf(
             transaction_id,
             trace_log,
             consumed_bpf_units,
-            Arc::clone(&bpf_executor) as Arc<dyn bpf_tracer_plugin_interface::ExecutorAdditional>,
+            Arc::clone(&loaded_program) as Arc<dyn bpf_tracer_plugin_interface::ExecutorAdditional>,
         ) {
             error!(
                 "Error running BPF tracing plugin: {} for program ID: {}. Error: {:?}",
@@ -1484,7 +1476,7 @@ fn trace_bpf(
 }
 
 fn execute(
-    executable: &VerifiedExecutable<RequisiteVerifier, InvokeContext<'static>>,
+    loaded_program: Arc<LoadedProgram>,
     invoke_context: &mut InvokeContext,
 ) -> Result<(), InstructionError> {
     let log_collector = invoke_context.get_log_collector();
@@ -1492,10 +1484,6 @@ fn execute(
     let transaction_context = &invoke_context.transaction_context;
     let instruction_context = transaction_context.get_current_instruction_context()?;
     let program_id = *instruction_context.get_last_program_key(transaction_context)?;
-    #[cfg(any(target_os = "windows", not(target_arch = "x86_64")))]
-    let use_jit = false;
-    #[cfg(all(not(target_os = "windows"), target_arch = "x86_64"))]
-    let use_jit = executable.get_executable().get_compiled_program().is_some();
 
     let mut serialize_time = Measure::start("serialize");
     let (parameter_bytes, regions, account_lengths) = serialize_parameters(
@@ -1514,6 +1502,12 @@ fn execute(
         let blockhash = invoke_context.blockhash;
         let transaction_id = *transaction_context.signature();
         let compute_meter_prev = invoke_context.get_remaining();
+        let executable = loaded_program.executable()?;
+
+        #[cfg(any(target_os = "windows", not(target_arch = "x86_64")))]
+        let use_jit = false;
+        #[cfg(all(not(target_os = "windows"), target_arch = "x86_64"))]
+        let use_jit = executable.get_executable().get_compiled_program().is_some();
         let mut vm = match create_vm(
             // We dropped the lifetime tracking in the Executor by setting it to 'static,
             // thus we need to reintroduce the correct lifetime of InvokeContext here again.
@@ -1542,17 +1536,14 @@ fn execute(
             compute_meter_prev
         );
 
+        let trace_log_stack_frame = invoke_context
+            .trace_log_stack
+            .last()
+            .expect("Inconsistent trace log stack");
         trace_bpf(
-            invoke_context
-                .trace_log_stack
-                .last()
-                .expect("Inconsistent trace log stack"),
-            invoke_context
-                .consumed_bpf_units_stack
-                .borrow()
-                .last()
-                .expect("Inconsistent consumed BPF units stack"),
-            Arc::clone(&self),
+            &trace_log_stack_frame.trace_log,
+            &trace_log_stack_frame.consumed_bpf_units.borrow(),
+            loaded_program,
             bpf_tracer_plugin_manager,
             &blockhash,
             transaction_id.as_ref(),
@@ -1643,43 +1634,6 @@ fn execute(
         stable_log::program_success(&log_collector, &program_id);
     }
     execute_or_deserialize_result
-}
-
-impl bpf_tracer_plugin_interface::ExecutorAdditional for BpfExecutor {
-    fn do_static_analysis(&self) -> Result<Analysis, EbpfError> {
-        Analysis::from_executable(self.verified_executable.get_executable())
-    }
-
-    fn get_text_section_offset(&self) -> u64 {
-        self.verified_executable.get_executable().get_text_bytes().0
-            - self
-                .verified_executable
-                .get_executable()
-                .get_ro_region()
-                .vm_addr
-    }
-
-    fn lookup_internal_function(&self, hash: u32) -> Option<usize> {
-        self.verified_executable
-            .get_executable()
-            .lookup_internal_function(hash)
-    }
-
-    fn get_config(&self) -> &Config {
-        self.verified_executable.get_executable().get_config()
-    }
-
-    fn disassemble_instruction(
-        &self,
-        ebpf_instr: &Insn,
-        cfg_nodes: &BTreeMap<usize, CfgNode>,
-    ) -> String {
-        solana_rbpf::disassembler::disassemble_instruction(
-            ebpf_instr,
-            cfg_nodes,
-            self.verified_executable.get_executable().get_loader(),
-        )
-    }
 }
 
 #[cfg(test)]

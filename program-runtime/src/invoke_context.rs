@@ -10,7 +10,7 @@ use {
         sysvar_cache::SysvarCache,
         timings::{ExecuteDetailsTimings, ExecuteTimings},
     },
-    solana_bpf_tracer_plugin_interface::BpfTracerPluginManager,
+    solana_bpf_tracer_plugin_interface::{has_bpf_tracing_plugins, BpfTracerPluginManager},
     solana_measure::measure::Measure,
     solana_rbpf::vm::ContextObject,
     solana_sdk::{
@@ -901,10 +901,7 @@ impl<'a> InvokeContext<'a> {
     }
 
     pub fn has_bpf_tracing_plugins(&self) -> bool {
-        self.bpf_tracer_plugin_manager
-            .as_ref()
-            .map(|plugins| !plugins.read().unwrap().bpf_tracer_plugins().is_empty())
-            .unwrap_or(false)
+        has_bpf_tracing_plugins(&self.bpf_tracer_plugin_manager)
     }
 }
 

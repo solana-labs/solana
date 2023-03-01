@@ -1,9 +1,8 @@
-use solana_rbpf::static_analysis::TraceLogEntry;
 use {
     solana_rbpf::{
         ebpf::Insn,
         error::EbpfError,
-        static_analysis::{Analysis, CfgNode},
+        static_analysis::{Analysis, CfgNode, TraceLogEntry},
         vm::Config,
     },
     solana_sdk::{hash::Hash, pubkey::Pubkey},
@@ -34,7 +33,7 @@ pub enum BpfTracerPluginError {
     Custom(Box<dyn error::Error + Send + Sync>),
 }
 
-/// Additional methods for `BpfExecutor`
+/// Additional methods for program executor
 pub trait ExecutorAdditional: Send + Sync {
     /// Performs static analysis of current verified executable
     fn do_static_analysis(&self) -> std::result::Result<Analysis, EbpfError>;

@@ -86,7 +86,7 @@ use {
         iter::{IntoParallelIterator, IntoParallelRefIterator, ParallelIterator},
         ThreadPool, ThreadPoolBuilder,
     },
-    solana_bpf_tracer_plugin_interface::BpfTracerPluginManager,
+    solana_bpf_tracer_plugin_interface::{has_bpf_tracing_plugins, BpfTracerPluginManager},
     solana_measure::{measure, measure::Measure, measure_us},
     solana_metrics::{inc_new_counter_debug, inc_new_counter_info},
     solana_perf::perf_libs,
@@ -4425,9 +4425,11 @@ impl Bank {
             .extract(self, program_accounts_map.keys().cloned());
         filter_missing_programs_time.stop();
 
-        missing_programs
-            .iter()
-            .for_each(|pubkey| match self.load_program(pubkey) {
+        missing_programs.iter().for_each(|pubkey| {
+            match self.load_program(
+                pubkey,
+                has_bpf_tracing_plugins(&self.bpf_tracer_plugin_manager),
+            ) {
                 Ok(program) => {
                     match self
                         .loaded_programs_cache
@@ -4454,7 +4456,8 @@ impl Bank {
                         .assign_program(*pubkey, Arc::new(LoadedProgram::new_tombstone(self.slot)));
                     loaded_programs_for_txs.insert(*pubkey, tombstone);
                 }
-            });
+            }
+        });
 
         (program_accounts_map, loaded_programs_for_txs)
     }
@@ -4489,13 +4492,16 @@ impl Bank {
             .collect::<Vec<_>>();
         filter_missing_programs_time.stop();
 
-        let executors = missing_executors
-            .iter()
-            .map(|pubkey| match self.load_program(pubkey) {
+        let executors = missing_executors.iter().map(|pubkey| {
+            match self.load_program(
+                pubkey,
+                has_bpf_tracing_plugins(&self.bpf_tracer_plugin_manager),
+            ) {
                 Ok(program) => (**pubkey, program),
                 // Create a tombstone for the programs that failed to load
                 Err(_) => (**pubkey, Arc::new(LoadedProgram::new_tombstone(self.slot))),
-            });
+            }
+        });
 
         // avoid locking the cache if there are no new executors
         if executors.len() > 0 {

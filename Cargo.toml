@@ -297,6 +297,7 @@ solana-banks-server = { path = "banks-server", version = "=1.16.0" }
 solana-bench-tps = { path = "bench-tps", version = "=1.16.0" }
 solana-bloom = { path = "bloom", version = "=1.16.0" }
 solana-bpf-loader-program = { path = "programs/bpf_loader", version = "=1.16.0" }
+solana-bpf-tracer-plugin-interface = { path = "bpf-tracer-plugin-interface", version = "=1.16.0" }
 solana-bucket-map = { path = "bucket_map", version = "=1.16.0" }
 solana-connection-cache = { path = "connection-cache", version = "=1.16.0", default-features = false }
 solana-clap-utils = { path = "clap-utils", version = "=1.16.0" }

@@ -7819,7 +7819,7 @@ fn test_bank_load_program() {
     programdata_account.set_rent_epoch(1);
     bank.store_account_and_update_capitalization(&key1, &program_account);
     bank.store_account_and_update_capitalization(&programdata_key, &programdata_account);
-    let program = bank.load_program(&key1);
+    let program = bank.load_program(&key1, false);
     assert!(program.is_ok());
     let program = program.unwrap();
     assert!(matches!(program.program, LoadedProgramType::LegacyV1(_)));
@@ -9779,6 +9779,7 @@ where
         }),
         None,
         &Arc::default(),
+        None,
     ));
     let vote_and_stake_accounts =
         load_vote_and_stake_accounts(&bank).vote_with_stake_delegations_map;
@@ -11728,6 +11729,7 @@ fn test_rent_state_list_len() {
         ComputeBudget::new(compute_budget::DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT as u64)
     });
     let transaction_context = TransactionContext::new(
+        Signature::default(),
         loaded_txs[0].0.as_ref().unwrap().accounts.clone(),
         Some(Rent::default()),
         compute_budget.max_invoke_stack_height,
@@ -11823,7 +11825,13 @@ fn test_skip_rewrite() {
 #[test]
 fn test_inner_instructions_list_from_instruction_trace() {
     let instruction_trace = [1, 2, 1, 1, 2, 3, 2];
-    let mut transaction_context = TransactionContext::new(vec![], None, 3, instruction_trace.len());
+    let mut transaction_context = TransactionContext::new(
+        Signature::default(),
+        vec![],
+        None,
+        3,
+        instruction_trace.len(),
+    );
     for (index_in_trace, stack_height) in instruction_trace.into_iter().enumerate() {
         while stack_height <= transaction_context.get_instruction_context_stack_height() {
             transaction_context.pop().unwrap();

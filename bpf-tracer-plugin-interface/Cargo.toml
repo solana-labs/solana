@@ -1,15 +1,14 @@
 [package]
-authors = ["Solana Maintainers <maintainers@solana.foundation>"]
-edition = "2021"
 name = "solana-bpf-tracer-plugin-interface"
 description = "The Solana BPF tracer plugin interface."
-version = "1.15.0"
-repository = "https://github.com/solana-labs/solana"
-license = "Apache-2.0"
-homepage = "https://solana.com/"
-publish = false
+version = { workspace = true }
+authors = { workspace = true }
+repository = { workspace = true }
+homepage = { workspace = true }
+license = { workspace = true }
+edition = { workspace = true }
 
 [dependencies]
-solana-sdk = { path = "../sdk" }
-solana_rbpf = "=0.2.38"
-thiserror = "1.0.31"
+solana-sdk = { workspace = true }
+solana_rbpf = { workspace = true }
+thiserror = { workspace = true }

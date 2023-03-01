@@ -1,18 +1,21 @@
 use {
     crate::{invoke_context::InvokeContext, timings::ExecuteDetailsTimings},
+    solana_bpf_tracer_plugin_interface::bpf_tracer_plugin_interface,
     solana_measure::measure::Measure,
     solana_rbpf::{
+        ebpf::Insn,
         elf::Executable,
         error::EbpfError,
+        static_analysis::{Analysis, CfgNode},
         verifier::RequisiteVerifier,
-        vm::{BuiltInProgram, VerifiedExecutable},
+        vm::{BuiltInProgram, Config, VerifiedExecutable},
     },
     solana_sdk::{
-        bpf_loader, bpf_loader_deprecated, bpf_loader_upgradeable, clock::Slot, pubkey::Pubkey,
-        saturating_add_assign,
+        bpf_loader, bpf_loader_deprecated, bpf_loader_upgradeable, clock::Slot,
+        instruction::InstructionError, pubkey::Pubkey, saturating_add_assign,
     },
     std::{
-        collections::HashMap,
+        collections::{BTreeMap, HashMap},
         fmt::{Debug, Formatter},
         sync::{atomic::AtomicU64, Arc},
     },
@@ -192,6 +195,64 @@ impl LoadedProgram {
 
     pub fn is_tombstone(&self) -> bool {
         matches!(self.program, LoadedProgramType::Invalid)
+    }
+
+    pub fn executable(
+        &self,
+    ) -> Result<&VerifiedExecutable<RequisiteVerifier, InvokeContext<'static>>, InstructionError>
+    {
+        match &self.program {
+            LoadedProgramType::Invalid => return Err(InstructionError::InvalidAccountData),
+            LoadedProgramType::LegacyV0(executable) | LoadedProgramType::LegacyV1(executable) => {
+                Ok(executable)
+            }
+            LoadedProgramType::BuiltIn(_) => return Err(InstructionError::IncorrectProgramId),
+        }
+    }
+}
+
+impl bpf_tracer_plugin_interface::ExecutorAdditional for LoadedProgram {
+    fn do_static_analysis(&self) -> Result<Analysis, EbpfError> {
+        Analysis::from_executable(self.executable().unwrap().get_executable())
+    }
+
+    fn get_text_section_offset(&self) -> u64 {
+        self.executable()
+            .unwrap()
+            .get_executable()
+            .get_text_bytes()
+            .0
+            - self
+                .executable()
+                .unwrap()
+                .get_executable()
+                .get_ro_region()
+                .vm_addr
+    }
+
+    fn lookup_internal_function(&self, hash: u32) -> Option<usize> {
+        self.executable()
+            .unwrap()
+            .get_executable()
+            .lookup_internal_function(hash)
+    }
+
+    fn get_config(&self) -> &Config {
+        self.executable().unwrap().get_executable().get_config()
+    }
+
+    fn disassemble_instruction(
+        &self,
+        ebpf_instr: &Insn,
+        cfg_nodes: &BTreeMap<usize, CfgNode>,
+    ) -> String {
+        let executable = self.executable().unwrap().get_executable();
+        solana_rbpf::disassembler::disassemble_instruction(
+            ebpf_instr,
+            cfg_nodes,
+            executable.get_function_registry(),
+            executable.get_loader(),
+        )
     }
 }
 
