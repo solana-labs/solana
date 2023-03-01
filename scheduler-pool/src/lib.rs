@@ -400,7 +400,7 @@ impl Scheduler {
                         false
                     };
                     if !did_drop {
-                        latest_checkpoint.wait_for_restart(None);
+                        latest_checkpoint.wait_for_restart();
                     }
                 }
                 }
@@ -491,7 +491,7 @@ impl Scheduler {
                                 false
                             };
                             if !did_drop {
-                                latest_checkpoint.wait_for_restart(None);
+                                latest_checkpoint.wait_for_restart();
                             }
                         },
                     }
@@ -535,7 +535,7 @@ impl Scheduler {
                         |context| SchedulerContext::log_prefix(random_id, context.as_ref()),
                     );
 
-                    latest_checkpoint.wait_for_restart(None);
+                    latest_checkpoint.wait_for_restart();
                     continue;
                 }
 
@@ -662,7 +662,7 @@ impl LikeScheduler for Scheduler {
         if from_internal {
             self.checkpoint.reduce_count();
         }
-        self.checkpoint.wait_for_restart(None);
+        self.checkpoint.wait_for_restart();
         let r = self.checkpoint.take_restart_value();
         self.collected_results.lock().unwrap().push(Ok(r));
 
