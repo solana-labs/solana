@@ -988,7 +988,7 @@ impl TaskQueueReader for ChannelBackedTaskQueue {
         self.task_count_hint() == 0
     }
 
-    fn take_buffered_flush(&mut self) -> Option<Flushable<usize>> {
+    fn take_buffered_flush(&mut self) -> Option<Flushable<TaskInQueue>> {
         std::mem::take(&mut self.buffered_flush).then_some(Flushable::Flush)
     }
 
