@@ -1657,14 +1657,14 @@ impl ScheduleStage {
         executing_thread_count: usize,
         _runnable_queue: &mut TaskQueue,
         address_book: &mut AddressBook,
-        mut from_prev: &'a crossbeam_channel::Receiver<SchedulablePayload<C, B>>,
-        to_execute_substage: &crossbeam_channel::Sender<ExecutablePayload<C, B>>,
-        to_high_execute_substage: Option<&crossbeam_channel::Sender<ExecutablePayload<C, B>>>,
+        mut from_prev: &'a crossbeam_channel::Receiver<SchedulablePayload>,
+        to_execute_substage: &crossbeam_channel::Sender<ExecutablePayload>,
+        to_high_execute_substage: Option<&crossbeam_channel::Sender<ExecutablePayload>>,
         from_exec: &crossbeam_channel::Receiver<UnlockablePayload<T>>,
-        maybe_to_next_stage: Option<&crossbeam_channel::Sender<ExaminablePayload<T, C, B>>>, // assume nonblocking
-        never: &'a crossbeam_channel::Receiver<SchedulablePayload<C, B>>,
+        maybe_to_next_stage: Option<&crossbeam_channel::Sender<ExaminablePayload<T>>>, // assume nonblocking
+        never: &'a crossbeam_channel::Receiver<SchedulablePayload>,
         log_prefix: impl Fn(&Option<B>) -> String,
-    ) -> Option<std::sync::Arc<Checkpoint<C, B>>> {
+    ) {
         let mut maybe_start_time = None;
         let mut mode = None;
         let (mut last_time, mut last_processed_count) = (maybe_start_time.map(|(a, b)| b).clone(), 0_usize);
@@ -1684,7 +1684,7 @@ impl ScheduleStage {
 
         assert!(executing_thread_count > 0);
 
-        let (ee_sender, ee_receiver) = crossbeam_channel::unbounded::<ExaminablePayload<T, C, B>>();
+        let (ee_sender, ee_receiver) = crossbeam_channel::unbounded::<ExaminablePayload<T>>();
 
         let (to_next_stage, maybe_reaper_thread_handle) =
             if let Some(to_next_stage) = maybe_to_next_stage {
