@@ -2045,7 +2045,7 @@ impl ScheduleStage {
                         from_len = from_len.checked_sub(1).unwrap();
                         empty_from = from_len == 0;
                         match schedulable {
-                            Flushable::Flush(checkpoint) => {
+                            Flushable::Flush => {
                                 assert_eq!((from_len, empty_from, from_prev.len(), from_disconnected, maybe_checkpoint.is_none()), (0, true, 0, false, true));
                                 from_disconnected = true;
                                 from_prev = never;
