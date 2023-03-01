@@ -60,8 +60,9 @@ to.
 As the transaction is processed compute units are consumed by its
 instruction's programs performing operations such as executing SBF instructions,
 calling syscalls, etc... When the transaction consumes its entire budget, or
-exceeds a bound such as attempting a call stack that is too deep, the runtime
-halts the transaction processing and returns an error.
+exceeds a bound such as attempting a call stack that is too deep, or loaded
+account data size exceeds limit, the runtime halts the transaction processing and
+returns an error.
 
 The following operations incur a compute cost:
 
@@ -148,6 +149,21 @@ let instruction = ComputeBudgetInstruction::set_compute_unit_limit(300_000);
 
 ```rust
 let instruction = ComputeBudgetInstruction::set_compute_unit_price(1);
+```
+
+### Accounts data size limit
+
+A transaction should request the maximum bytes of accounts data it is
+allowed to load by including a `SetLoadedAccountsDataSizeLimit` instruction, requested
+limit is capped by `MAX_LOADED_ACCOUNTS_DATA_SIZE_BYTES`. If no
+`SetLoadedAccountsDataSizeLimit` is provided, the transaction is defaulted to
+have limit of `MAX_LOADED_ACCOUNTS_DATA_SIZE_BYTES`.
+
+The `ComputeBudgetInstruction::set_loaded_accounts_data_size_limit` function can be used
+to create this instruction:
+
+```rust
+let instruction = ComputeBudgetInstruction::set_loaded_accounts_data_size_limit(100_000);
 ```
 
 ## New Features

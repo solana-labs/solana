@@ -1,9 +1,0 @@
-{
-  "compilerOptions": {
-    "composite": true
-  },
-  "references": [
-    {"path": "./tsconfig.library.json"},
-    {"path": "./tsconfig.tests.json"}
-  ]
-}

@@ -28,7 +28,10 @@ use {
     solana_rpc_client::rpc_client::RpcClient,
     solana_rpc_client_api::config::RpcLeaderScheduleConfig,
     solana_runtime::{
-        accounts_db::{AccountShrinkThreshold, AccountsDb, AccountsDbConfig, FillerAccountsConfig},
+        accounts_db::{
+            AccountShrinkThreshold, AccountsDb, AccountsDbConfig, CreateAncientStorage,
+            FillerAccountsConfig,
+        },
         accounts_index::{
             AccountIndex, AccountSecondaryIndexes, AccountSecondaryIndexesIncludeExclude,
             AccountsIndexConfig, IndexLimitMb,
@@ -48,7 +51,7 @@ use {
     },
     solana_send_transaction_service::send_transaction_service::{self},
     solana_streamer::socket::SocketAddrSpace,
-    solana_tpu_client::tpu_connection_cache::DEFAULT_TPU_ENABLE_UDP,
+    solana_tpu_client::tpu_client::DEFAULT_TPU_ENABLE_UDP,
     solana_validator::{
         admin_rpc_service,
         admin_rpc_service::{load_staked_nodes_overrides, StakedNodesOverrides},
@@ -1046,6 +1049,10 @@ pub fn main() {
             .map(|mb| mb * MB as u64),
         ancient_append_vec_offset: value_t!(matches, "accounts_db_ancient_append_vecs", i64).ok(),
         exhaustively_verify_refcounts: matches.is_present("accounts_db_verify_refcounts"),
+        create_ancient_storage: matches
+            .is_present("accounts_db_create_ancient_storage_packed")
+            .then_some(CreateAncientStorage::Pack)
+            .unwrap_or_default(),
         ..AccountsDbConfig::default()
     };
 
@@ -1496,7 +1503,7 @@ pub fn main() {
         if SystemMonitorService::check_os_network_limits() {
             info!("OS network limits test passed.");
         } else {
-            eprintln!("OS network limit test failed. solana-sys-tuner may be used to configure OS network limits. Bypass check with --no-os-network-limits-test.");
+            eprintln!("OS network limit test failed. See: https://docs.solana.com/running-validator/validator-start#system-tuning");
             exit(1);
         }
     }
@@ -1592,27 +1599,39 @@ pub fn main() {
     );
 
     if restricted_repair_only_mode {
-        let any = SocketAddr::new(IpAddr::V4(Ipv4Addr::UNSPECIFIED), 0);
         // When in --restricted_repair_only_mode is enabled only the gossip and repair ports
         // need to be reachable by the entrypoint to respond to gossip pull requests and repair
         // requests initiated by the node.  All other ports are unused.
-        node.info.tpu = any;
-        node.info.tpu_forwards = any;
-        node.info.tvu = any;
-        node.info.tvu_forwards = any;
-        node.info.serve_repair = any;
+        node.info.remove_tpu();
+        node.info.remove_tpu_forwards();
+        node.info.remove_tvu();
+        node.info.remove_tvu_forwards();
+        node.info.remove_serve_repair();
 
         // A node in this configuration shouldn't be an entrypoint to other nodes
         node.sockets.ip_echo = None;
     }
 
     if !private_rpc {
+        macro_rules! set_socket {
+            ($method:ident, $addr:expr, $name:literal) => {
+                node.info.$method($addr).expect(&format!(
+                    "Operator must spin up node with valid {} address",
+                    $name
+                ))
+            };
+        }
         if let Some(public_rpc_addr) = public_rpc_addr {
-            node.info.rpc = public_rpc_addr;
-            node.info.rpc_pubsub = public_rpc_addr;
+            set_socket!(set_rpc, public_rpc_addr, "RPC");
+            set_socket!(set_rpc_pubsub, public_rpc_addr, "RPC-pubsub");
         } else if let Some((rpc_addr, rpc_pubsub_addr)) = validator_config.rpc_addrs {
-            node.info.rpc = SocketAddr::new(node.info.gossip.ip(), rpc_addr.port());
-            node.info.rpc_pubsub = SocketAddr::new(node.info.gossip.ip(), rpc_pubsub_addr.port());
+            let addr = node
+                .info
+                .gossip()
+                .expect("Operator must spin up node with valid gossip address")
+                .ip();
+            set_socket!(set_rpc, (addr, rpc_addr.port()), "RPC");
+            set_socket!(set_rpc_pubsub, (addr, rpc_pubsub_addr.port()), "RPC-pubsub");
         }
     }
 

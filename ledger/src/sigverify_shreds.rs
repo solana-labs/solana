@@ -1,6 +1,6 @@
 #![allow(clippy::implicit_hasher)]
 use {
-    crate::shred::{self, MerkleRoot, SIZE_OF_MERKLE_ROOT},
+    crate::shred,
     itertools::{izip, Itertools},
     rayon::{prelude::*, ThreadPool},
     sha2::{Digest, Sha512},
@@ -15,18 +15,22 @@ use {
     solana_rayon_threadlimit::get_thread_count,
     solana_sdk::{
         clock::Slot,
+        hash::Hash,
         pubkey::Pubkey,
         signature::{Keypair, Signature, Signer},
     },
+    static_assertions::const_assert_eq,
     std::{collections::HashMap, fmt::Debug, iter::repeat, mem::size_of, ops::Range, sync::Arc},
 };
 
 const SIGN_SHRED_GPU_MIN: usize = 256;
+const_assert_eq!(SIZE_OF_MERKLE_ROOT, 32);
+const SIZE_OF_MERKLE_ROOT: usize = std::mem::size_of::<Hash>();
 
 lazy_static! {
     static ref SIGVERIFY_THREAD_POOL: ThreadPool = rayon::ThreadPoolBuilder::new()
         .num_threads(get_thread_count())
-        .thread_name(|ix| format!("solSvrfyShred{ix:02}"))
+        .thread_name(|i| format!("solSvrfyShred{i:02}"))
         .build()
         .unwrap();
 }
@@ -153,7 +157,7 @@ fn get_merkle_roots(
     PinnedVec<u8>,      // Merkle roots
     Vec<Option<usize>>, // Offsets
 ) {
-    let merkle_roots: Vec<Option<MerkleRoot>> = SIGVERIFY_THREAD_POOL.install(|| {
+    let merkle_roots: Vec<Option<Hash>> = SIGVERIFY_THREAD_POOL.install(|| {
         packets
             .par_iter()
             .flat_map(|packets| {
@@ -179,7 +183,7 @@ fn get_merkle_roots(
                 let root = root?;
                 let offset = next_offset;
                 next_offset += SIZE_OF_MERKLE_ROOT;
-                buffer[offset..next_offset].copy_from_slice(&root);
+                buffer[offset..next_offset].copy_from_slice(root.as_ref());
                 Some(offset)
             })
             .collect()
@@ -804,9 +808,10 @@ mod tests {
             let shred = shred.payload();
             let slot = shred::layout::get_slot(shred).unwrap();
             let signature = shred::layout::get_signature(shred).unwrap();
-            let offsets = shred::layout::get_signed_data_offsets(shred).unwrap();
             let pubkey = keypairs[&slot].pubkey();
-            assert!(signature.verify(pubkey.as_ref(), &shred[offsets]));
+            if let Some(offsets) = shred::layout::get_signed_data_offsets(shred) {
+                assert!(signature.verify(pubkey.as_ref(), &shred[offsets]));
+            }
             let data = shred::layout::get_signed_data(shred).unwrap();
             assert!(signature.verify(pubkey.as_ref(), data.as_ref()));
         }

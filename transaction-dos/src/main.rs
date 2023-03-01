@@ -707,7 +707,7 @@ pub mod test {
         let account_keypair_refs: Vec<_> = account_keypairs.iter().collect();
         let mut start = Measure::start("total accounts run");
         run_transactions_dos(
-            cluster.entry_point_info.rpc,
+            cluster.entry_point_info.rpc().unwrap(),
             faucet_addr,
             &[&cluster.funding_keypair],
             iterations,

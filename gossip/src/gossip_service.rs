@@ -331,7 +331,10 @@ pub fn make_gossip_node(
 mod tests {
     use {
         super::*,
-        crate::cluster_info::{ClusterInfo, Node},
+        crate::{
+            cluster_info::{ClusterInfo, Node},
+            contact_info::ContactInfo,
+        },
         std::sync::{atomic::AtomicBool, Arc},
     };
 
@@ -422,7 +425,7 @@ mod tests {
             None,
             TIMEOUT,
             None,
-            Some(&peer0_info.gossip),
+            Some(&peer0_info.gossip().unwrap()),
         );
         assert!(met_criteria);
 

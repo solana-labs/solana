@@ -5,7 +5,9 @@
 //!
 use {
     crate::{block_cost_limits::*, cost_model::TransactionCost},
-    solana_sdk::{clock::Slot, pubkey::Pubkey, saturating_add_assign},
+    solana_sdk::{
+        clock::Slot, pubkey::Pubkey, saturating_add_assign, transaction::TransactionError,
+    },
     std::{cmp::Ordering, collections::HashMap},
 };
 
@@ -27,6 +29,22 @@ pub enum CostTrackerError {
 
     /// would exceed account data total limit
     WouldExceedAccountDataTotalLimit,
+}
+
+impl From<CostTrackerError> for TransactionError {
+    fn from(err: CostTrackerError) -> Self {
+        match err {
+            CostTrackerError::WouldExceedBlockMaxLimit => Self::WouldExceedMaxBlockCostLimit,
+            CostTrackerError::WouldExceedVoteMaxLimit => Self::WouldExceedMaxVoteCostLimit,
+            CostTrackerError::WouldExceedAccountMaxLimit => Self::WouldExceedMaxAccountCostLimit,
+            CostTrackerError::WouldExceedAccountDataBlockLimit => {
+                Self::WouldExceedAccountDataBlockLimit
+            }
+            CostTrackerError::WouldExceedAccountDataTotalLimit => {
+                Self::WouldExceedAccountDataTotalLimit
+            }
+        }
+    }
 }
 
 #[derive(AbiExample, Debug)]

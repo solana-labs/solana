@@ -1,14 +1,16 @@
 use {
     crate::{
+        account_storage::meta::StoredMetaWriteVersion,
         accounts::Accounts,
         accounts_db::{
             AccountShrinkThreshold, AccountStorageEntry, AccountsDb, AccountsDbConfig, AppendVecId,
-            AtomicAppendVecId, BankHashInfo, IndexGenerationInfo,
+            AtomicAppendVecId, BankHashStats, IndexGenerationInfo,
         },
+        accounts_file::AccountsFile,
         accounts_hash::AccountsHash,
         accounts_index::AccountSecondaryIndexes,
         accounts_update_notifier_interface::AccountsUpdateNotifier,
-        append_vec::{AppendVec, StoredMetaWriteVersion},
+        append_vec::AppendVec,
         bank::{Bank, BankFieldsToDeserialize, BankIncrementalSnapshotPersistence, BankRc},
         blockhash_queue::BlockhashQueue,
         builtins::Builtins,
@@ -53,12 +55,16 @@ use {
 mod newer;
 mod storage;
 mod tests;
+mod types;
 mod utils;
 
-pub(crate) use storage::SerializedAppendVecId;
 // a number of test cases in accounts_db use this
 #[cfg(test)]
 pub(crate) use tests::reconstruct_accounts_db_via_serialization;
+pub(crate) use {
+    storage::SerializedAppendVecId,
+    types::{SerdeAccountsDeltaHash, SerdeAccountsHash, SerdeIncrementalAccountsHash},
+};
 
 #[derive(Copy, Clone, Eq, PartialEq)]
 pub(crate) enum SerdeStyle {
@@ -80,6 +86,13 @@ pub struct AccountsDbFields<T>(
     #[serde(deserialize_with = "default_on_eof")]
     Vec<(Slot, Hash)>,
 );
+
+#[derive(Clone, Default, Debug, Serialize, Deserialize, PartialEq, Eq, AbiExample)]
+struct BankHashInfo {
+    accounts_delta_hash: SerdeAccountsDeltaHash,
+    accounts_hash: SerdeAccountsHash,
+    stats: BankHashStats,
+}
 
 /// Helper type to wrap BufReader streams when deserializing and reconstructing from either just a
 /// full snapshot, or both a full and incremental snapshot
@@ -415,8 +428,7 @@ pub fn reserialize_bank_with_new_accounts_hash(
 ) -> bool {
     let bank_post = snapshot_utils::get_bank_snapshots_dir(bank_snapshots_dir, slot);
     let bank_post = bank_post.join(snapshot_utils::get_snapshot_file_name(slot));
-    let mut bank_pre = bank_post.clone();
-    bank_pre.set_extension(BANK_SNAPSHOT_PRE_FILENAME_EXTENSION);
+    let bank_pre = bank_post.with_extension(BANK_SNAPSHOT_PRE_FILENAME_EXTENSION);
 
     let mut found = false;
     {
@@ -572,11 +584,12 @@ fn reconstruct_single_storage(
     current_len: usize,
     append_vec_id: AppendVecId,
 ) -> io::Result<Arc<AccountStorageEntry>> {
-    let (accounts, num_accounts) = AppendVec::new_from_file(append_vec_path, current_len)?;
+    let (append_vec, num_accounts) = AppendVec::new_from_file(append_vec_path, current_len)?;
+    let accounts_file = AccountsFile::AppendVec(append_vec);
     Ok(Arc::new(AccountStorageEntry::new_existing(
         *slot,
         append_vec_id,
-        accounts,
+        accounts_file,
         num_accounts,
     )))
 }
@@ -723,7 +736,26 @@ where
     );
 
     // Process deserialized data, set necessary fields in self
-    accounts_db.set_bank_hash_info_from_snapshot(snapshot_slot, snapshot_bank_hash_info);
+    let old_accounts_delta_hash = accounts_db.set_accounts_delta_hash_from_snapshot(
+        snapshot_slot,
+        snapshot_bank_hash_info.accounts_delta_hash,
+    );
+    assert!(
+        old_accounts_delta_hash.is_none(),
+        "There should not already be an AccountsDeltaHash at slot {snapshot_slot}: {old_accounts_delta_hash:?}",
+        );
+    let old_accounts_hash = accounts_db
+        .set_accounts_hash_from_snapshot(snapshot_slot, snapshot_bank_hash_info.accounts_hash);
+    assert!(
+        old_accounts_hash.is_none(),
+        "There should not already be an AccountsHash at slot {snapshot_slot}: {old_accounts_hash:?}",
+    );
+    let old_stats = accounts_db
+        .update_bank_hash_stats_from_snapshot(snapshot_slot, snapshot_bank_hash_info.stats);
+    assert!(
+        old_stats.is_none(),
+        "There should not already be a BankHashStats at slot {snapshot_slot}: {old_stats:?}",
+    );
     accounts_db.storage.initialize(storage);
     accounts_db
         .next_id

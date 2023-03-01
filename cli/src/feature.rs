@@ -93,10 +93,7 @@ impl PartialOrd for CliFeature {
 
 impl Ord for CliFeature {
     fn cmp(&self, other: &Self) -> Ordering {
-        match self.status.cmp(&other.status) {
-            Ordering::Equal => self.id.cmp(&other.id),
-            ordering => ordering,
-        }
+        (&self.status, &self.id).cmp(&(&other.status, &other.id))
     }
 }
 

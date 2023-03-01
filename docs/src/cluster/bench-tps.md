@@ -75,6 +75,7 @@ NDEBUG=1 SOLANA_CUDA=1 ./multinode-demo/bootstrap-validator.sh
 NDEBUG=1 SOLANA_CUDA=1 ./multinode-demo/validator.sh
 ```
 
+
 ### Testnet Client Demo
 
 Now that your singlenode or multinode testnet is up and running let's send it some transactions!

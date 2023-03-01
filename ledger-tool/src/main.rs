@@ -36,10 +36,16 @@ use {
             AccessType, BlockstoreOptions, BlockstoreRecoveryMode, LedgerColumnOptions,
             ShredStorageType, BLOCKSTORE_DIRECTORY_ROCKS_FIFO,
         },
-        blockstore_processor::{self, BlockstoreProcessorError, ProcessOptions},
+        blockstore_processor::{
+            self, BlockstoreProcessorError, ProcessOptions, TransactionStatusSender,
+        },
         shred::Shred,
     },
     solana_measure::{measure, measure::Measure},
+    solana_rpc::{
+        transaction_notifier_interface::TransactionNotifierLock,
+        transaction_status_service::TransactionStatusService,
+    },
     solana_runtime::{
         accounts::Accounts,
         accounts_background_service::{
@@ -875,7 +881,7 @@ fn open_blockstore_with_temporary_primary_access(
     )
 }
 
-fn get_shred_storage_type(ledger_path: &Path, warn_message: &str) -> ShredStorageType {
+fn get_shred_storage_type(ledger_path: &Path, message: &str) -> ShredStorageType {
     // TODO: the following shred_storage_type inference must be updated once
     // the rocksdb options can be constructed via load_options_file() as the
     // value picked by passing None for `max_shred_storage_size` could affect
@@ -883,7 +889,7 @@ fn get_shred_storage_type(ledger_path: &Path, warn_message: &str) -> ShredStorag
     match ShredStorageType::from_ledger_path(ledger_path, None) {
         Some(s) => s,
         None => {
-            warn!("{}", warn_message);
+            info!("{}", message);
             ShredStorageType::RocksLevel
         }
     }
@@ -893,9 +899,16 @@ fn open_blockstore(
     ledger_path: &Path,
     access_type: AccessType,
     wal_recovery_mode: Option<BlockstoreRecoveryMode>,
-    shred_storage_type: &ShredStorageType,
     force_update_to_open: bool,
 ) -> Blockstore {
+    let shred_storage_type = get_shred_storage_type(
+        ledger_path,
+        &format!(
+            "Shred stroage type cannot be inferred for ledger at {ledger_path:?}, \
+         using default RocksLevel",
+        ),
+    );
+
     match Blockstore::open_with_options(
         ledger_path,
         BlockstoreOptions {
@@ -903,7 +916,7 @@ fn open_blockstore(
             recovery_mode: wal_recovery_mode.clone(),
             enforce_ulimit_nofile: true,
             column_options: LedgerColumnOptions {
-                shred_storage_type: shred_storage_type.clone(),
+                shred_storage_type,
                 ..LedgerColumnOptions::default()
             },
         },
@@ -1070,7 +1083,7 @@ fn get_accounts_db_config(ledger_path: &Path, arg_matches: &ArgMatches<'_>) -> A
 fn load_bank_forks(
     arg_matches: &ArgMatches,
     genesis_config: &GenesisConfig,
-    blockstore: &Blockstore,
+    blockstore: Arc<Blockstore>,
     process_options: ProcessOptions,
     snapshot_archive_path: Option<PathBuf>,
     incremental_snapshot_archive_path: Option<PathBuf>,
@@ -1135,11 +1148,31 @@ fn load_bank_forks(
     }
 
     let account_paths = if let Some(account_paths) = arg_matches.value_of("account_paths") {
+        // If this blockstore access is Primary, no other process (solana-validator) can hold
+        // Primary access. So, allow a custom accounts path without worry of wiping the accounts
+        // of solana-validator.
         if !blockstore.is_primary_access() {
-            // Be defensive, when default account dir is explicitly specified, it's still possible
-            // to wipe the dir possibly shared by the running validator!
-            eprintln!("Error: custom accounts path is not supported under secondary access");
-            exit(1);
+            // Attempt to open the Blockstore in Primary access; if successful, no other process
+            // was holding Primary so allow things to proceed with custom accounts path. Release
+            // the Primary access instead of holding it to give priority to solana-validator over
+            // solana-ledger-tool should solana-validator start before we've finished.
+            info!(
+                "Checking if another process currently holding Primary access to {:?}",
+                blockstore.ledger_path()
+            );
+            if Blockstore::open_with_options(
+                blockstore.ledger_path(),
+                BlockstoreOptions {
+                    access_type: AccessType::PrimaryForMaintenance,
+                    ..BlockstoreOptions::default()
+                },
+            )
+            .is_err()
+            {
+                // Couldn't get Primary access, error out to be defensive.
+                eprintln!("Error: custom accounts path is not supported under secondary access");
+                exit(1);
+            }
         }
         account_paths.split(',').map(PathBuf::from).collect()
     } else if blockstore.is_primary_access() {
@@ -1180,8 +1213,9 @@ fn load_bank_forks(
     info!("done. {}", measure);
 
     let mut accounts_update_notifier = Option::<AccountsUpdateNotifier>::default();
+    let mut transaction_notifier = Option::<TransactionNotifierLock>::default();
     if arg_matches.is_present("plugin_config") {
-        let plugin_config_files = values_t_or_exit!(arg_matches, "plugin_config", String)
+        let geyser_config_files = values_t_or_exit!(arg_matches, "plugin_config", String)
             .into_iter()
             .map(PathBuf::from)
             .collect::<Vec<_>>();
@@ -1196,12 +1230,13 @@ fn load_bank_forks(
                 },
             );
         accounts_update_notifier = geyser_service.get_accounts_update_notifier();
+        transaction_notifier = geyser_service.get_transaction_notifier();
     }
 
     let (bank_forks, leader_schedule_cache, starting_snapshot_hashes, ..) =
         bank_forks_utils::load_bank_forks(
             genesis_config,
-            blockstore,
+            blockstore.as_ref(),
             account_paths,
             None,
             snapshot_config.as_ref(),
@@ -1239,12 +1274,34 @@ fn load_bank_forks(
         None,
     );
 
+    let (transaction_status_sender, transaction_status_service) = if transaction_notifier.is_some()
+    {
+        let (transaction_status_sender, transaction_status_receiver) = unbounded();
+        let transaction_status_service = TransactionStatusService::new(
+            transaction_status_receiver,
+            Arc::default(),
+            false,
+            transaction_notifier,
+            blockstore.clone(),
+            false,
+            &exit,
+        );
+        (
+            Some(TransactionStatusSender {
+                sender: transaction_status_sender,
+            }),
+            Some(transaction_status_service),
+        )
+    } else {
+        (None, None)
+    };
+
     let result = blockstore_processor::process_blockstore_from_root(
-        blockstore,
+        blockstore.as_ref(),
         &bank_forks,
         &leader_schedule_cache,
         &process_options,
-        None,
+        transaction_status_sender.as_ref(),
         None,
         &accounts_background_request_sender,
     )
@@ -1252,6 +1309,9 @@ fn load_bank_forks(
 
     exit.store(true, Ordering::Relaxed);
     accounts_background_service.join().unwrap();
+    if let Some(service) = transaction_status_service {
+        service.join().unwrap();
+    }
 
     result
 }
@@ -1331,7 +1391,7 @@ fn minimize_bank_for_snapshot(
     ending_slot: Slot,
 ) {
     let (transaction_account_set, transaction_accounts_measure) = measure!(
-        blockstore.get_accounts_used_in_range(snapshot_slot, ending_slot),
+        blockstore.get_accounts_used_in_range(bank, snapshot_slot, ending_slot),
         "get transaction accounts"
     );
     let total_accounts_len = transaction_account_set.len();
@@ -1912,6 +1972,7 @@ fn main() {
             .arg(&no_snapshot_arg)
             .arg(&account_paths_arg)
             .arg(&accounts_db_skip_initial_hash_calc_arg)
+            .arg(&accountsdb_skip_shrink)
             .arg(&ancient_append_vecs)
             .arg(&hard_forks_arg)
             .arg(&max_genesis_archive_unpacked_size_arg)
@@ -2314,8 +2375,7 @@ fn main() {
 
     info!("{} {}", crate_name!(), solana_version::version!());
 
-    let ledger_path = parse_ledger_path(&matches, "ledger_path");
-
+    let ledger_path = PathBuf::from(value_t_or_exit!(matches, "ledger_path", String));
     let snapshot_archive_path = value_t!(matches, "snapshot_archive_path", String)
         .ok()
         .map(PathBuf::from);
@@ -2329,13 +2389,9 @@ fn main() {
         .map(BlockstoreRecoveryMode::from);
     let force_update_to_open = matches.is_present("force_update_to_open");
     let verbose_level = matches.occurrences_of("verbose");
-    let shred_storage_type = get_shred_storage_type(
-        &ledger_path,
-        "Shred storage type cannot be inferred, the default RocksLevel will be used",
-    );
 
     if let ("bigtable", Some(arg_matches)) = matches.subcommand() {
-        bigtable_process_command(&ledger_path, arg_matches, &shred_storage_type)
+        bigtable_process_command(&ledger_path, arg_matches)
     } else {
         let ledger_path = canonicalize_ledger_path(&ledger_path);
 
@@ -2351,7 +2407,6 @@ fn main() {
                         &ledger_path,
                         AccessType::Secondary,
                         wal_recovery_mode,
-                        &shred_storage_type,
                         force_update_to_open,
                     ),
                     starting_slot,
@@ -2367,30 +2422,31 @@ fn main() {
                 let starting_slot = value_t_or_exit!(arg_matches, "starting_slot", Slot);
                 let ending_slot = value_t_or_exit!(arg_matches, "ending_slot", Slot);
                 let target_db = PathBuf::from(value_t_or_exit!(arg_matches, "target_db", String));
-                let target_shred_storage_type = get_shred_storage_type(
-                    &target_db,
-                    &format!(
-                        "Shred storage type of target_db cannot be inferred, \
-                     the default RocksLevel will be used. \
-                     If you want to use FIFO shred_storage_type on an empty target_db, \
-                     create {BLOCKSTORE_DIRECTORY_ROCKS_FIFO} foldar the specified target_db directory.",
-                    ),
-                );
 
                 let source = open_blockstore(
                     &ledger_path,
                     AccessType::Secondary,
                     None,
-                    &shred_storage_type,
                     force_update_to_open,
                 );
-                let target = open_blockstore(
+
+                // Check if shred storage type can be inferred; if not, a new
+                // ledger is being created. open_blockstore() will attempt to
+                // to infer shred storage type as well, but this check provides
+                // extra insight to user on how to create a FIFO ledger.
+                let _ = get_shred_storage_type(
                     &target_db,
-                    AccessType::Primary,
-                    None,
-                    &target_shred_storage_type,
-                    force_update_to_open,
+                    &format!(
+                        "No --target-db ledger at {:?} was detected, default \
+                        compaction (RocksLevel) will be used. Fifo compaction \
+                        can be enabled for a new ledger by manually creating \
+                        {BLOCKSTORE_DIRECTORY_ROCKS_FIFO} directory within \
+                        the specified --target_db directory.",
+                        &target_db
+                    ),
                 );
+                let target =
+                    open_blockstore(&target_db, AccessType::Primary, None, force_update_to_open);
                 for (slot, _meta) in source.slot_meta_iterator(starting_slot).unwrap() {
                     if slot > ending_slot {
                         break;
@@ -2469,13 +2525,12 @@ fn main() {
                     &ledger_path,
                     AccessType::Secondary,
                     wal_recovery_mode,
-                    &shred_storage_type,
                     force_update_to_open,
                 );
                 match load_bank_forks(
                     arg_matches,
                     &genesis_config,
-                    &blockstore,
+                    Arc::new(blockstore),
                     process_options,
                     snapshot_archive_path,
                     incremental_snapshot_archive_path,
@@ -2522,7 +2577,6 @@ fn main() {
                     &ledger_path,
                     AccessType::Secondary,
                     None,
-                    &shred_storage_type,
                     force_update_to_open,
                 );
                 for (slot, _meta) in ledger
@@ -2562,13 +2616,12 @@ fn main() {
                     &ledger_path,
                     AccessType::Secondary,
                     wal_recovery_mode,
-                    &shred_storage_type,
                     force_update_to_open,
                 );
                 match load_bank_forks(
                     arg_matches,
                     &genesis_config,
-                    &blockstore,
+                    Arc::new(blockstore),
                     process_options,
                     snapshot_archive_path,
                     incremental_snapshot_archive_path,
@@ -2589,7 +2642,6 @@ fn main() {
                     &ledger_path,
                     AccessType::Secondary,
                     wal_recovery_mode,
-                    &shred_storage_type,
                     force_update_to_open,
                 );
                 for slot in slots {
@@ -2614,7 +2666,6 @@ fn main() {
                         &ledger_path,
                         AccessType::Secondary,
                         wal_recovery_mode,
-                        &shred_storage_type,
                         force_update_to_open,
                     ),
                     starting_slot,
@@ -2631,7 +2682,6 @@ fn main() {
                     &ledger_path,
                     AccessType::Secondary,
                     wal_recovery_mode,
-                    &shred_storage_type,
                     force_update_to_open,
                 );
                 let starting_slot = value_t_or_exit!(arg_matches, "starting_slot", Slot);
@@ -2644,7 +2694,6 @@ fn main() {
                     &ledger_path,
                     AccessType::Secondary,
                     wal_recovery_mode,
-                    &shred_storage_type,
                     force_update_to_open,
                 );
                 let starting_slot = value_t_or_exit!(arg_matches, "starting_slot", Slot);
@@ -2658,7 +2707,6 @@ fn main() {
                     &ledger_path,
                     AccessType::Primary,
                     wal_recovery_mode,
-                    &shred_storage_type,
                     force_update_to_open,
                 );
                 for slot in slots {
@@ -2674,7 +2722,6 @@ fn main() {
                     &ledger_path,
                     AccessType::Primary,
                     wal_recovery_mode,
-                    &shred_storage_type,
                     force_update_to_open,
                 );
                 for slot in slots {
@@ -2693,7 +2740,6 @@ fn main() {
                     &ledger_path,
                     AccessType::Secondary,
                     wal_recovery_mode,
-                    &shred_storage_type,
                     force_update_to_open,
                 );
                 let mut ancestors = BTreeSet::new();
@@ -2805,13 +2851,12 @@ fn main() {
                     &ledger_path,
                     AccessType::Secondary,
                     wal_recovery_mode,
-                    &shred_storage_type,
                     force_update_to_open,
                 );
                 let (bank_forks, ..) = load_bank_forks(
                     arg_matches,
                     &genesis_config,
-                    &blockstore,
+                    Arc::new(blockstore),
                     process_options,
                     snapshot_archive_path,
                     incremental_snapshot_archive_path,
@@ -2849,13 +2894,12 @@ fn main() {
                     &ledger_path,
                     AccessType::Secondary,
                     wal_recovery_mode,
-                    &shred_storage_type,
                     force_update_to_open,
                 );
                 match load_bank_forks(
                     arg_matches,
                     &open_genesis_config_by(&ledger_path, arg_matches),
-                    &blockstore,
+                    Arc::new(blockstore),
                     process_options,
                     snapshot_archive_path,
                     incremental_snapshot_archive_path,
@@ -2959,13 +3003,12 @@ fn main() {
                     usize
                 );
                 let genesis_config = open_genesis_config_by(&ledger_path, arg_matches);
-                let blockstore = open_blockstore(
+                let blockstore = Arc::new(open_blockstore(
                     &ledger_path,
                     AccessType::Secondary,
                     wal_recovery_mode,
-                    &shred_storage_type,
                     force_update_to_open,
-                );
+                ));
 
                 let snapshot_slot = if Some("ROOT") == arg_matches.value_of("snapshot_slot") {
                     blockstore
@@ -3021,12 +3064,13 @@ fn main() {
                 match load_bank_forks(
                     arg_matches,
                     &genesis_config,
-                    &blockstore,
+                    blockstore.clone(),
                     ProcessOptions {
                         new_hard_forks,
                         halt_at_slot: Some(snapshot_slot),
                         poh_verify: false,
                         accounts_db_config: Some(get_accounts_db_config(&ledger_path, arg_matches)),
+                        accounts_db_skip_shrink: arg_matches.is_present("accounts_db_skip_shrink"),
                         ..ProcessOptions::default()
                     },
                     snapshot_archive_path,
@@ -3358,13 +3402,12 @@ fn main() {
                     &ledger_path,
                     AccessType::Secondary,
                     wal_recovery_mode,
-                    &shred_storage_type,
                     force_update_to_open,
                 );
                 let (bank_forks, ..) = load_bank_forks(
                     arg_matches,
                     &genesis_config,
-                    &blockstore,
+                    Arc::new(blockstore),
                     process_options,
                     snapshot_archive_path,
                     incremental_snapshot_archive_path,
@@ -3447,13 +3490,12 @@ fn main() {
                     &ledger_path,
                     AccessType::Secondary,
                     wal_recovery_mode,
-                    &shred_storage_type,
                     force_update_to_open,
                 );
                 match load_bank_forks(
                     arg_matches,
                     &genesis_config,
-                    &blockstore,
+                    Arc::new(blockstore),
                     process_options,
                     snapshot_archive_path,
                     incremental_snapshot_archive_path,
@@ -3979,7 +4021,6 @@ fn main() {
                     &ledger_path,
                     access_type,
                     wal_recovery_mode,
-                    &shred_storage_type,
                     force_update_to_open,
                 );
 
@@ -4053,7 +4094,6 @@ fn main() {
                     &ledger_path,
                     AccessType::Secondary,
                     wal_recovery_mode,
-                    &shred_storage_type,
                     force_update_to_open,
                 );
                 let max_height = if let Some(height) = arg_matches.value_of("max_height") {
@@ -4107,7 +4147,6 @@ fn main() {
                     &ledger_path,
                     AccessType::Secondary,
                     wal_recovery_mode,
-                    &shred_storage_type,
                     force_update_to_open,
                 );
                 let num_slots = value_t_or_exit!(arg_matches, "num_slots", usize);
@@ -4132,7 +4171,6 @@ fn main() {
                     &ledger_path,
                     AccessType::Primary,
                     wal_recovery_mode,
-                    &shred_storage_type,
                     force_update_to_open,
                 );
                 let start_root = if let Some(root) = arg_matches.value_of("start_root") {
@@ -4182,7 +4220,6 @@ fn main() {
                     &ledger_path,
                     AccessType::Secondary,
                     wal_recovery_mode,
-                    &shred_storage_type,
                     force_update_to_open,
                 );
 
@@ -4255,7 +4292,6 @@ fn main() {
                         &ledger_path,
                         AccessType::Secondary,
                         wal_recovery_mode,
-                        &shred_storage_type,
                         force_update_to_open,
                     )
                     .db(),
@@ -4266,7 +4302,6 @@ fn main() {
                     &ledger_path,
                     AccessType::Secondary,
                     wal_recovery_mode,
-                    &shred_storage_type,
                     force_update_to_open,
                 );
 
@@ -4290,7 +4325,6 @@ fn main() {
                     &ledger_path,
                     AccessType::Secondary,
                     wal_recovery_mode,
-                    &shred_storage_type,
                     false,
                 );
                 let sst_file_name = arg_matches.value_of("file_name");

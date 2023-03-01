@@ -71,6 +71,39 @@ pub struct ReplicaAccountInfoV2<'a> {
     pub txn_signature: Option<&'a Signature>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+/// Information about an account being updated
+/// (extended with reference to transaction doing this update)
+pub struct ReplicaAccountInfoV3<'a> {
+    /// The Pubkey for the account
+    pub pubkey: &'a [u8],
+
+    /// The lamports for the account
+    pub lamports: u64,
+
+    /// The Pubkey of the owner program account
+    pub owner: &'a [u8],
+
+    /// This account's data contains a loaded program (and is now read-only)
+    pub executable: bool,
+
+    /// The epoch at which this account will next owe rent
+    pub rent_epoch: u64,
+
+    /// The data held in this account.
+    pub data: &'a [u8],
+
+    /// A global monotonically increasing atomic number, which can be used
+    /// to tell the order of the account update. For example, when an
+    /// account is updated in the same slot multiple times, the update
+    /// with higher write_version should supersede the one with lower
+    /// write_version.
+    pub write_version: u64,
+
+    /// Reference to transaction causing this account modification
+    pub txn: Option<&'a SanitizedTransaction>,
+}
+
 /// A wrapper to future-proof ReplicaAccountInfo handling.
 /// If there were a change to the structure of ReplicaAccountInfo,
 /// there would be new enum entry for the newer version, forcing
@@ -78,6 +111,7 @@ pub struct ReplicaAccountInfoV2<'a> {
 pub enum ReplicaAccountInfoVersions<'a> {
     V0_0_1(&'a ReplicaAccountInfo<'a>),
     V0_0_2(&'a ReplicaAccountInfoV2<'a>),
+    V0_0_3(&'a ReplicaAccountInfoV3<'a>),
 }
 
 /// Information about a transaction
@@ -234,7 +268,7 @@ pub trait GeyserPlugin: Any + Send + Sync + std::fmt::Debug {
     /// the account is updated during transaction processing.
     #[allow(unused_variables)]
     fn update_account(
-        &mut self,
+        &self,
         account: ReplicaAccountInfoVersions,
         slot: u64,
         is_startup: bool,
@@ -243,25 +277,20 @@ pub trait GeyserPlugin: Any + Send + Sync + std::fmt::Debug {
     }
 
     /// Called when all accounts are notified of during startup.
-    fn notify_end_of_startup(&mut self) -> Result<()> {
+    fn notify_end_of_startup(&self) -> Result<()> {
         Ok(())
     }
 
     /// Called when a slot status is updated
     #[allow(unused_variables)]
-    fn update_slot_status(
-        &mut self,
-        slot: u64,
-        parent: Option<u64>,
-        status: SlotStatus,
-    ) -> Result<()> {
+    fn update_slot_status(&self, slot: u64, parent: Option<u64>, status: SlotStatus) -> Result<()> {
         Ok(())
     }
 
     /// Called when a transaction is updated at a slot.
     #[allow(unused_variables)]
     fn notify_transaction(
-        &mut self,
+        &self,
         transaction: ReplicaTransactionInfoVersions,
         slot: u64,
     ) -> Result<()> {
@@ -270,7 +299,7 @@ pub trait GeyserPlugin: Any + Send + Sync + std::fmt::Debug {
 
     /// Called when block's metadata is updated.
     #[allow(unused_variables)]
-    fn notify_block_metadata(&mut self, blockinfo: ReplicaBlockInfoVersions) -> Result<()> {
+    fn notify_block_metadata(&self, blockinfo: ReplicaBlockInfoVersions) -> Result<()> {
         Ok(())
     }
 

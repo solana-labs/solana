@@ -31,11 +31,11 @@ number of samples to return (maximum 720)
 An array of `RpcPerfSample<object>` with the following fields:
 
 - `slot: <u64>` - Slot in which sample was taken at
-- `numTransactions: <u64>` - Number of transactions in sample
-- `numSlots: <u64>` - Number of slots in sample
+- `numTransactions: <u64>` - Number of transactions processed during the sample period
+- `numSlots: <u64>` - Number of slots completed during the sample period
 - `samplePeriodSecs: <u16>` - Number of seconds in a sample window
-- `numNonVoteTransaction: <u64>` - Number of non-vote transactions in
-  sample.
+- `numNonVoteTransaction: <u64>` - Number of non-vote transactions processed during the
+  sample period.
 
 :::info
 `numNonVoteTransaction` is present starting with v1.15.

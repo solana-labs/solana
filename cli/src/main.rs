@@ -17,7 +17,7 @@ use {
     },
     solana_remote_wallet::remote_wallet::RemoteWalletManager,
     solana_rpc_client_api::config::RpcSendTransactionConfig,
-    solana_tpu_client::tpu_connection_cache::DEFAULT_TPU_ENABLE_UDP,
+    solana_tpu_client::tpu_client::DEFAULT_TPU_ENABLE_UDP,
     std::{collections::HashMap, error, path::PathBuf, sync::Arc, time::Duration},
 };
 

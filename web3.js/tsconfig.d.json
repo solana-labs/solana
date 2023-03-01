@@ -1,7 +1,0 @@
-{
-  "extends": "./tsconfig.library.json",
-  "compilerOptions": {
-    "emitDeclarationOnly": true,
-    "stripInternal": true
-  }
-}

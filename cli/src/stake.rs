@@ -686,7 +686,7 @@ impl StakeSubCommands for App<'_, '_> {
                         .long("num-rewards-epochs")
                         .takes_value(true)
                         .value_name("NUM")
-                        .validator(|s| is_within_range(s, 1, 10))
+                        .validator(|s| is_within_range(s, 1..=10))
                         .default_value_if("with_rewards", None, "1")
                         .requires("with_rewards")
                         .help("Display rewards for NUM recent epochs, max 10 [default: latest epoch only]"),

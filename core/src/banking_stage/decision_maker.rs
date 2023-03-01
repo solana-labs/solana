@@ -8,7 +8,7 @@ use {
         },
         pubkey::Pubkey,
     },
-    std::sync::RwLock,
+    std::sync::{Arc, RwLock},
 };
 
 #[derive(Debug, Clone)]
@@ -19,16 +19,25 @@ pub enum BufferedPacketsDecision {
     Hold,
 }
 
-pub struct DecisionMaker;
+pub struct DecisionMaker {
+    my_pubkey: Pubkey,
+    poh_recorder: Arc<RwLock<PohRecorder>>,
+}
 
 impl DecisionMaker {
+    pub fn new(my_pubkey: Pubkey, poh_recorder: Arc<RwLock<PohRecorder>>) -> Self {
+        Self {
+            my_pubkey,
+            poh_recorder,
+        }
+    }
+
     pub(crate) fn make_consume_or_forward_decision(
-        my_pubkey: &Pubkey,
-        poh_recorder: &RwLock<PohRecorder>,
+        &self,
         slot_metrics_tracker: &mut LeaderSlotMetricsTracker,
     ) -> (MetricsTrackerAction, BufferedPacketsDecision) {
         let (leader_at_slot_offset, bank_start, would_be_leader, would_be_leader_shortly) = {
-            let poh = poh_recorder.read().unwrap();
+            let poh = self.poh_recorder.read().unwrap();
             let bank_start = poh
                 .bank_start()
                 .filter(|bank_start| bank_start.should_working_bank_still_be_processing_txs());
@@ -45,7 +54,7 @@ impl DecisionMaker {
         (
             slot_metrics_tracker.check_leader_slot_boundary(&bank_start),
             Self::consume_or_forward_packets(
-                my_pubkey,
+                &self.my_pubkey,
                 leader_at_slot_offset,
                 bank_start,
                 would_be_leader,

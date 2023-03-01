@@ -319,7 +319,7 @@ impl<'a> SnapshotMinimizer<'a> {
             let mut purge_pubkeys = Vec::with_capacity(CHUNK_SIZE);
             chunk.iter().for_each(|account| {
                 if self.minimized_account_set.contains(account.pubkey()) {
-                    chunk_bytes += account.stored_size;
+                    chunk_bytes += account.stored_size();
                     keep_accounts.push(account);
                 } else if self
                     .accounts_db()
@@ -361,8 +361,8 @@ impl<'a> SnapshotMinimizer<'a> {
 
             for alive_account in keep_accounts {
                 accounts.push(alive_account);
-                hashes.push(alive_account.hash);
-                write_versions.push(alive_account.meta.write_version_obsolete);
+                hashes.push(alive_account.hash());
+                write_versions.push(alive_account.write_version());
             }
 
             shrink_in_progress = Some(self.accounts_db().get_store_for_shrink(slot, aligned_total));
@@ -374,7 +374,7 @@ impl<'a> SnapshotMinimizer<'a> {
                     crate::accounts_db::INCLUDE_SLOT_IN_HASH_IRRELEVANT_APPEND_VEC_OPERATION,
                 ),
                 Some(hashes),
-                Some(new_storage),
+                new_storage,
                 Some(Box::new(write_versions.into_iter())),
                 StoreReclaims::Ignore,
             );
@@ -386,6 +386,7 @@ impl<'a> SnapshotMinimizer<'a> {
             slot,
             true, // add_dirty_stores
             shrink_in_progress,
+            false,
         );
         dead_storages
             .lock()

@@ -29,6 +29,7 @@ use {
     },
     solana_sdk::{
         account::{Account, AccountSharedData},
+        bpf_loader_upgradeable::UpgradeableLoaderState,
         clock::{Slot, DEFAULT_MS_PER_SLOT},
         commitment_config::CommitmentConfig,
         epoch_schedule::EpochSchedule,
@@ -44,7 +45,7 @@ use {
         signature::{read_keypair_file, write_keypair_file, Keypair, Signer},
     },
     solana_streamer::socket::SocketAddrSpace,
-    solana_tpu_client::tpu_connection_cache::{
+    solana_tpu_client::tpu_client::{
         DEFAULT_TPU_CONNECTION_POOL_SIZE, DEFAULT_TPU_ENABLE_UDP, DEFAULT_TPU_USE_QUIC,
     },
     std::{
@@ -68,10 +69,19 @@ pub struct AccountInfo<'a> {
     pub filename: &'a str,
 }
 
+#[deprecated(since = "1.16.0", note = "Please use `UpgradeableProgramInfo` instead")]
 #[derive(Clone)]
 pub struct ProgramInfo {
     pub program_id: Pubkey,
     pub loader: Pubkey,
+    pub program_path: PathBuf,
+}
+
+#[derive(Clone)]
+pub struct UpgradeableProgramInfo {
+    pub program_id: Pubkey,
+    pub loader: Pubkey,
+    pub upgrade_authority: Pubkey,
     pub program_path: PathBuf,
 }
 
@@ -91,7 +101,7 @@ impl Default for TestValidatorNodeConfig {
         let port_range = (MIN_PORT_RANGE, MAX_PORT_RANGE);
 
         Self {
-            gossip_addr: socketaddr!("127.0.0.1:0"),
+            gossip_addr: socketaddr!(Ipv4Addr::LOCALHOST, 0),
             port_range,
             bind_ip_addr,
         }
@@ -109,7 +119,9 @@ pub struct TestValidatorGenesis {
     warp_slot: Option<Slot>,
     no_bpf_jit: bool,
     accounts: HashMap<Pubkey, AccountSharedData>,
+    #[allow(deprecated)]
     programs: Vec<ProgramInfo>,
+    upgradeable_programs: Vec<UpgradeableProgramInfo>,
     ticks_per_slot: Option<u64>,
     epoch_schedule: Option<EpochSchedule>,
     node_config: TestValidatorNodeConfig,
@@ -140,7 +152,9 @@ impl Default for TestValidatorGenesis {
             warp_slot: Option::<Slot>::default(),
             no_bpf_jit: bool::default(),
             accounts: HashMap::<Pubkey, AccountSharedData>::default(),
+            #[allow(deprecated)]
             programs: Vec::<ProgramInfo>::default(),
+            upgradeable_programs: Vec::<UpgradeableProgramInfo>::default(),
             ticks_per_slot: Option::<u64>::default(),
             epoch_schedule: Option::<EpochSchedule>::default(),
             node_config: TestValidatorNodeConfig::default(),
@@ -312,6 +326,38 @@ impl TestValidatorGenesis {
         Ok(self)
     }
 
+    pub fn clone_upgradeable_programs<T>(
+        &mut self,
+        addresses: T,
+        rpc_client: &RpcClient,
+    ) -> Result<&mut Self, String>
+    where
+        T: IntoIterator<Item = Pubkey>,
+    {
+        let addresses: Vec<Pubkey> = addresses.into_iter().collect();
+        self.clone_accounts(addresses.clone(), rpc_client, false)?;
+
+        let mut programdata_addresses: HashSet<Pubkey> = HashSet::new();
+        for address in addresses {
+            let account = self.accounts.get(&address).unwrap();
+
+            if let Ok(UpgradeableLoaderState::Program {
+                programdata_address,
+            }) = account.deserialize_data()
+            {
+                programdata_addresses.insert(programdata_address);
+            } else {
+                return Err(format!(
+                    "Failed to read upgradeable program account {address}",
+                ));
+            }
+        }
+
+        self.clone_accounts(programdata_addresses, rpc_client, false)?;
+
+        Ok(self)
+    }
+
     pub fn add_accounts_from_json_files(
         &mut self,
         accounts: &[AccountInfo],
@@ -439,19 +485,35 @@ impl TestValidatorGenesis {
         let program_path = solana_program_test::find_file(&format!("{program_name}.so"))
             .unwrap_or_else(|| panic!("Unable to locate program {program_name}"));
 
-        self.programs.push(ProgramInfo {
+        self.upgradeable_programs.push(UpgradeableProgramInfo {
             program_id,
-            loader: solana_sdk::bpf_loader::id(),
+            loader: solana_sdk::bpf_loader_upgradeable::id(),
+            upgrade_authority: Pubkey::default(),
             program_path,
         });
         self
     }
 
     /// Add a list of programs to the test environment.
-    ///pub fn add_programs_with_path<'a>(&'a mut self, programs: &[ProgramInfo]) -> &'a mut Self {
+    #[deprecated(
+        since = "1.16.0",
+        note = "Please use `add_upgradeable_programs_with_path()` instead"
+    )]
+    #[allow(deprecated)]
     pub fn add_programs_with_path(&mut self, programs: &[ProgramInfo]) -> &mut Self {
         for program in programs {
             self.programs.push(program.clone());
+        }
+        self
+    }
+
+    /// Add a list of upgradeable programs to the test environment.
+    pub fn add_upgradeable_programs_with_path(
+        &mut self,
+        programs: &[UpgradeableProgramInfo],
+    ) -> &mut Self {
+        for program in programs {
+            self.upgradeable_programs.push(program.clone());
         }
         self
     }
@@ -627,14 +689,53 @@ impl TestValidator {
         for (address, account) in solana_program_test::programs::spl_programs(&config.rent) {
             accounts.entry(address).or_insert(account);
         }
+        #[allow(deprecated)]
         for program in &config.programs {
             let data = solana_program_test::read_file(&program.program_path);
             accounts.insert(
                 program.program_id,
                 AccountSharedData::from(Account {
-                    lamports: Rent::default().minimum_balance(data.len()).min(1),
+                    lamports: Rent::default().minimum_balance(data.len()).max(1),
                     data,
                     owner: program.loader,
+                    executable: true,
+                    rent_epoch: 0,
+                }),
+            );
+        }
+        for upgradeable_program in &config.upgradeable_programs {
+            let data = solana_program_test::read_file(&upgradeable_program.program_path);
+            let (programdata_address, _) = Pubkey::find_program_address(
+                &[upgradeable_program.program_id.as_ref()],
+                &upgradeable_program.loader,
+            );
+            let mut program_data = bincode::serialize(&UpgradeableLoaderState::ProgramData {
+                slot: 0,
+                upgrade_authority_address: Some(upgradeable_program.upgrade_authority),
+            })
+            .unwrap();
+            program_data.extend_from_slice(&data);
+            accounts.insert(
+                programdata_address,
+                AccountSharedData::from(Account {
+                    lamports: Rent::default().minimum_balance(program_data.len()).max(1),
+                    data: program_data,
+                    owner: upgradeable_program.loader,
+                    executable: true,
+                    rent_epoch: 0,
+                }),
+            );
+
+            let data = bincode::serialize(&UpgradeableLoaderState::Program {
+                programdata_address,
+            })
+            .unwrap();
+            accounts.insert(
+                upgradeable_program.program_id,
+                AccountSharedData::from(Account {
+                    lamports: Rent::default().minimum_balance(data.len()).max(1),
+                    data,
+                    owner: upgradeable_program.loader,
                     executable: true,
                     rent_epoch: 0,
                 }),
@@ -750,15 +851,16 @@ impl TestValidator {
             config.node_config.bind_ip_addr,
         );
         if let Some((rpc, rpc_pubsub)) = config.rpc_ports {
-            node.info.rpc = SocketAddr::new(node.info.gossip.ip(), rpc);
-            node.info.rpc_pubsub = SocketAddr::new(node.info.gossip.ip(), rpc_pubsub);
+            let addr = node.info.gossip().unwrap().ip();
+            node.info.set_rpc((addr, rpc)).unwrap();
+            node.info.set_rpc_pubsub((addr, rpc_pubsub)).unwrap();
         }
 
         let vote_account_address = validator_vote_account.pubkey();
-        let rpc_url = format!("http://{}", node.info.rpc);
-        let rpc_pubsub_url = format!("ws://{}/", node.info.rpc_pubsub);
-        let tpu = node.info.tpu;
-        let gossip = node.info.gossip;
+        let rpc_url = format!("http://{}", node.info.rpc().unwrap());
+        let rpc_pubsub_url = format!("ws://{}/", node.info.rpc_pubsub().unwrap());
+        let tpu = node.info.tpu().unwrap();
+        let gossip = node.info.gossip().unwrap();
 
         {
             let mut authorized_voter_keypairs = config.authorized_voter_keypairs.write().unwrap();
@@ -793,10 +895,13 @@ impl TestValidator {
         let mut validator_config = ValidatorConfig {
             plugin_config_files: config.geyser_plugin_config_files.clone(),
             rpc_addrs: Some((
-                SocketAddr::new(IpAddr::V4(Ipv4Addr::UNSPECIFIED), node.info.rpc.port()),
                 SocketAddr::new(
                     IpAddr::V4(Ipv4Addr::UNSPECIFIED),
-                    node.info.rpc_pubsub.port(),
+                    node.info.rpc().unwrap().port(),
+                ),
+                SocketAddr::new(
+                    IpAddr::V4(Ipv4Addr::UNSPECIFIED),
+                    node.info.rpc_pubsub().unwrap().port(),
                 ),
             )),
             rpc_config: config.rpc_config.clone(),

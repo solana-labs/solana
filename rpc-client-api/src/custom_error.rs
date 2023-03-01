@@ -7,7 +7,7 @@ use {
     thiserror::Error,
 };
 
-// Keep in sync with web3.js/src/errors.ts
+// Keep in sync with https://github.com/solana-labs/solana-web3.js/blob/master/src/errors.ts
 pub const JSON_RPC_SERVER_ERROR_BLOCK_CLEANED_UP: i64 = -32001;
 pub const JSON_RPC_SERVER_ERROR_SEND_TRANSACTION_PREFLIGHT_FAILURE: i64 = -32002;
 pub const JSON_RPC_SERVER_ERROR_TRANSACTION_SIGNATURE_VERIFICATION_FAILURE: i64 = -32003;

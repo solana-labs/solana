@@ -36,7 +36,7 @@ impl PacketDeserializer {
     }
 
     /// Handles receiving packet batches from sigverify and returns a vector of deserialized packets
-    pub fn handle_received_packets(
+    pub fn receive_packets(
         &self,
         recv_timeout: Duration,
         capacity: usize,

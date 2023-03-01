@@ -18,12 +18,13 @@ use {
         bpf_loader_upgradeable::{self, UpgradeableLoaderState},
         feature_set::{enable_early_verification_of_account_modifications, FeatureSet},
         hash::Hash,
-        instruction::{AccountMeta, Instruction, InstructionError},
+        instruction::{AccountMeta, InstructionError},
         native_loader,
         pubkey::Pubkey,
         rent::Rent,
         saturating_add_assign,
         signature::Signature,
+        stable_layout::stable_instruction::StableInstruction,
         transaction_context::{
             IndexOfAccount, InstructionAccount, TransactionAccount, TransactionContext,
         },
@@ -66,6 +67,7 @@ impl<'a> ContextObject for InvokeContext<'a> {
         self.trace_log_stack
             .last_mut()
             .expect("Inconsistent trace log stack")
+            .trace_log
             .push(state);
     }
 
@@ -104,13 +106,19 @@ struct SyscallContext {
     allocator: Rc<RefCell<dyn Alloc>>,
 }
 
+#[derive(Default)]
+pub struct TraceLogStackFrame {
+    pub trace_log: Vec<[u64; 12]>,
+    pub consumed_bpf_units: RefCell<Vec<(usize, u64)>>,
+}
+
 pub struct InvokeContext<'a> {
     pub transaction_context: &'a mut TransactionContext,
     rent: Rent,
     pre_accounts: Vec<PreAccount>,
     builtin_programs: &'a [BuiltinProgram],
     pub sysvar_cache: Cow<'a, SysvarCache>,
-    pub trace_log_stack: Vec<Vec<[u64; 12]>>,
+    pub trace_log_stack: Vec<TraceLogStackFrame>,
     log_collector: Option<Rc<RefCell<LogCollector>>>,
     compute_budget: ComputeBudget,
     current_compute_budget: ComputeBudget,
@@ -122,6 +130,7 @@ pub struct InvokeContext<'a> {
     pub blockhash: Hash,
     pub lamports_per_signature: u64,
     syscall_context: Vec<Option<SyscallContext>>,
+    pub enable_instruction_tracing: bool,
     pub bpf_tracer_plugin_manager: Option<Arc<RwLock<dyn BpfTracerPluginManager>>>,
 }
 
@@ -147,7 +156,7 @@ impl<'a> InvokeContext<'a> {
             pre_accounts: Vec::new(),
             builtin_programs,
             sysvar_cache,
-            trace_log_stack: vec![Vec::new()],
+            trace_log_stack: vec![TraceLogStackFrame::default()],
             log_collector,
             current_compute_budget: compute_budget,
             compute_budget,
@@ -159,6 +168,7 @@ impl<'a> InvokeContext<'a> {
             blockhash,
             lamports_per_signature,
             syscall_context: Vec::new(),
+            enable_instruction_tracing: false,
             bpf_tracer_plugin_manager,
         }
     }
@@ -281,7 +291,7 @@ impl<'a> InvokeContext<'a> {
             }
         }
 
-        self.trace_log_stack.push(Vec::new());
+        self.trace_log_stack.push(TraceLogStackFrame::default());
         self.syscall_context.push(None);
         self.transaction_context.push()
     }
@@ -486,7 +496,7 @@ impl<'a> InvokeContext<'a> {
     /// Entrypoint for a cross-program invocation from a builtin program
     pub fn native_invoke(
         &mut self,
-        instruction: Instruction,
+        instruction: StableInstruction,
         signers: &[Pubkey],
     ) -> Result<(), InstructionError> {
         let (instruction_accounts, program_indices) =
@@ -506,7 +516,7 @@ impl<'a> InvokeContext<'a> {
     #[allow(clippy::type_complexity)]
     pub fn prepare_instruction(
         &mut self,
-        instruction: &Instruction,
+        instruction: &StableInstruction,
         signers: &[Pubkey],
     ) -> Result<(Vec<InstructionAccount>, Vec<IndexOfAccount>), InstructionError> {
         // Finds the index of each account in the instruction by its pubkey.
@@ -876,28 +886,25 @@ impl<'a> InvokeContext<'a> {
             .ok_or(InstructionError::CallDepth)
     }
 
+    fn log_consumed_bpf_units(&self, amount: u64) {
+        if self.enable_instruction_tracing && amount != 0 {
+            let trace_log_stack_frame = self
+                .trace_log_stack
+                .last()
+                .expect("Inconsistent trace log stack");
+
+            trace_log_stack_frame.consumed_bpf_units.borrow_mut().push((
+                trace_log_stack_frame.trace_log.len().saturating_sub(1),
+                amount,
+            ));
+        }
+    }
+
     pub fn has_bpf_tracing_plugins(&self) -> bool {
         self.bpf_tracer_plugin_manager
             .as_ref()
             .map(|plugins| !plugins.read().unwrap().bpf_tracer_plugins().is_empty())
             .unwrap_or(false)
-    }
-
-    fn log_consumed_bpf_units(&self, amount: u64) {
-        if amount != 0 {
-            self.consumed_bpf_units_stack
-                .borrow_mut()
-                .last_mut()
-                .expect("Inconsistent consumed BPF units stack")
-                .push((
-                    self.trace_log_stack
-                        .last()
-                        .expect("Inconsistent trace log stack")
-                        .len()
-                        .saturating_sub(1),
-                    amount,
-                ));
-        }
     }
 }
 
@@ -1045,7 +1052,7 @@ mod tests {
         super::*,
         crate::compute_budget,
         serde::{Deserialize, Serialize},
-        solana_sdk::account::WritableAccount,
+        solana_sdk::{account::WritableAccount, instruction::Instruction},
     };
 
     #[derive(Debug, Serialize, Deserialize)]
@@ -1170,7 +1177,7 @@ mod tests {
                     assert_eq!(result, Err(InstructionError::UnbalancedInstruction));
                     result?;
                     invoke_context
-                        .native_invoke(inner_instruction, &[])
+                        .native_invoke(inner_instruction.into(), &[])
                         .and(invoke_context.pop())?;
                 }
                 MockInstruction::UnbalancedPop => instruction_context
@@ -1351,7 +1358,7 @@ mod tests {
             let inner_instruction =
                 Instruction::new_with_bincode(callee_program_id, &case.0, metas.clone());
             let result = invoke_context
-                .native_invoke(inner_instruction, &[])
+                .native_invoke(inner_instruction.into(), &[])
                 .and(invoke_context.pop());
             assert_eq!(result, case.1);
         }
@@ -1374,6 +1381,7 @@ mod tests {
                 },
                 metas.clone(),
             );
+            let inner_instruction = StableInstruction::from(inner_instruction);
             let (inner_instruction_accounts, program_indices) = invoke_context
                 .prepare_instruction(&inner_instruction, &[])
                 .unwrap();

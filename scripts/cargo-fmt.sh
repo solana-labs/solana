@@ -16,7 +16,6 @@ fmt_dirs=(
   sdk/cargo-build-sbf/tests/crates/fail
   sdk/cargo-build-sbf/tests/crates/noop
   storage-bigtable/build-proto
-  web3.js/test/fixtures/noop-program
 )
 
 for fmt_dir in "${fmt_dirs[@]}"; do

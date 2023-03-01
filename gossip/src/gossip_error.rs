@@ -1,5 +1,5 @@
 use {
-    crate::duplicate_shred,
+    crate::{contact_info, duplicate_shred},
     crossbeam_channel::{RecvTimeoutError, SendError},
     std::io,
     thiserror::Error,
@@ -11,6 +11,8 @@ pub enum GossipError {
     DuplicateNodeInstance,
     #[error(transparent)]
     DuplicateShredError(#[from] duplicate_shred::Error),
+    #[error(transparent)]
+    InvalidContactInfo(#[from] contact_info::Error),
     #[error(transparent)]
     Io(#[from] io::Error),
     #[error(transparent)]

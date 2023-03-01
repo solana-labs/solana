@@ -7,7 +7,7 @@ use {
         pubkey::{Pubkey, MAX_SEED_LEN},
         signature::{read_keypair_file, Signature},
     },
-    std::{fmt::Display, str::FromStr},
+    std::{fmt::Display, ops::RangeBounds, str::FromStr},
 };
 
 fn is_parsable_generic<U, T>(string: T) -> Result<(), String>
@@ -35,18 +35,16 @@ where
 
 // Return an error if string cannot be parsed as numeric type T, and value not within specified
 // range
-pub fn is_within_range<T>(string: String, range_min: T, range_max: T) -> Result<(), String>
+pub fn is_within_range<T, R>(string: String, range: R) -> Result<(), String>
 where
     T: FromStr + Copy + std::fmt::Debug + PartialOrd + std::ops::Add<Output = T> + From<usize>,
     T::Err: Display,
+    R: RangeBounds<T> + std::fmt::Debug,
 {
     match string.parse::<T>() {
         Ok(input) => {
-            let range = range_min..range_max + 1.into();
             if !range.contains(&input) {
-                Err(format!(
-                    "input '{input:?}' out of range ({range_min:?}..{range_max:?}]"
-                ))
+                Err(format!("input '{input:?}' out of range {range:?}"))
             } else {
                 Ok(())
             }

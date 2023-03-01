@@ -10,7 +10,7 @@ use {
     solana_entry::entry::Entry,
     solana_gossip::{
         cluster_info::{ClusterInfo, Node},
-        legacy_contact_info::LegacyContactInfo as ContactInfo,
+        contact_info::ContactInfo,
     },
     solana_ledger::{
         genesis_utils::{create_genesis_config, GenesisConfigInfo},
@@ -29,7 +29,7 @@ use {
     solana_streamer::socket::SocketAddrSpace,
     std::{
         iter::repeat_with,
-        net::UdpSocket,
+        net::{Ipv4Addr, UdpSocket},
         sync::{
             atomic::{AtomicUsize, Ordering},
             Arc, RwLock,
@@ -60,10 +60,12 @@ fn bench_retransmitter(bencher: &mut Bencher) {
         let id = Pubkey::new_unique();
         let socket = UdpSocket::bind("0.0.0.0:0").unwrap();
         let mut contact_info = ContactInfo::new_localhost(&id, timestamp());
-        contact_info.tvu = socket.local_addr().unwrap();
-        contact_info.tvu.set_ip("127.0.0.1".parse().unwrap());
-        contact_info.tvu_forwards = contact_info.tvu;
-        info!("local: {:?}", contact_info.tvu);
+        let port = socket.local_addr().unwrap().port();
+        contact_info.set_tvu((Ipv4Addr::LOCALHOST, port)).unwrap();
+        contact_info
+            .set_tvu_forwards(contact_info.tvu().unwrap())
+            .unwrap();
+        info!("local: {:?}", contact_info.tvu().unwrap());
         cluster_info.insert_info(contact_info);
         socket.set_nonblocking(true).unwrap();
         socket

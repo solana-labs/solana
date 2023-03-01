@@ -196,6 +196,7 @@ pub mod tests {
         super::*,
         crate::{
             accounts_db::{AccountStorageEntry, AppendVecId},
+            accounts_file::AccountsFile,
             append_vec::AppendVec,
         },
         std::sync::Arc,
@@ -369,7 +370,7 @@ pub mod tests {
         let size: usize = 123;
         let slot = 0;
         let mut data = AccountStorageEntry::new(&paths[0], slot, id, size as u64);
-        let av = AppendVec::new(&tf.path, true, 1024 * 1024);
+        let av = AccountsFile::AppendVec(AppendVec::new(&tf.path, true, 1024 * 1024));
         data.accounts = av;
 
         Arc::new(data)

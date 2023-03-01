@@ -2,18 +2,16 @@
 
 use {
     crate::snapshot_utils::create_tmp_accounts_dir_for_tests,
-    bincode::serialize_into,
     crossbeam_channel::unbounded,
     fs_extra::dir::CopyOptions,
     itertools::Itertools,
     log::{info, trace},
+    snapshot_utils::MAX_BANK_SNAPSHOTS_TO_RETAIN,
     solana_core::{
         accounts_hash_verifier::AccountsHashVerifier,
         snapshot_packager_service::SnapshotPackagerService,
     },
-    solana_gossip::{
-        cluster_info::ClusterInfo, legacy_contact_info::LegacyContactInfo as ContactInfo,
-    },
+    solana_gossip::{cluster_info::ClusterInfo, contact_info::ContactInfo},
     solana_runtime::{
         accounts_background_service::{
             AbsRequestHandlers, AbsRequestSender, AccountsBackgroundService,
@@ -22,7 +20,7 @@ use {
         accounts_db::{self, ACCOUNTS_DB_CONFIG_FOR_TESTING},
         accounts_hash::AccountsHash,
         accounts_index::AccountSecondaryIndexes,
-        bank::{Bank, BankSlotDelta},
+        bank::Bank,
         bank_forks::BankForks,
         epoch_accounts_hash::EpochAccountsHash,
         genesis_utils::{create_genesis_config_with_leader, GenesisConfigInfo},
@@ -30,10 +28,7 @@ use {
         snapshot_archive_info::FullSnapshotArchiveInfo,
         snapshot_config::SnapshotConfig,
         snapshot_hash::SnapshotHash,
-        snapshot_package::{
-            AccountsPackage, AccountsPackageType, PendingSnapshotPackage, SnapshotPackage,
-            SnapshotType,
-        },
+        snapshot_package::{AccountsPackage, AccountsPackageType, SnapshotPackage, SnapshotType},
         snapshot_utils::{
             self, ArchiveFormat,
             SnapshotVersion::{self, V1_2_0},
@@ -267,13 +262,11 @@ fn run_bank_forks_snapshot_n<F>(
     let bank_snapshots_dir = &snapshot_config.bank_snapshots_dir;
     let last_bank_snapshot_info = snapshot_utils::get_highest_bank_snapshot_pre(bank_snapshots_dir)
         .expect("no bank snapshots found in path");
-    let slot_deltas = last_bank.status_cache.read().unwrap().root_slot_deltas();
     let accounts_package = AccountsPackage::new_for_snapshot(
         AccountsPackageType::Snapshot(SnapshotType::FullSnapshot),
         &last_bank,
         &last_bank_snapshot_info,
         bank_snapshots_dir,
-        slot_deltas,
         &snapshot_config.full_snapshot_archives_dir,
         &snapshot_config.incremental_snapshot_archives_dir,
         last_bank.get_snapshot_storages(None),
@@ -282,14 +275,14 @@ fn run_bank_forks_snapshot_n<F>(
         None,
     )
     .unwrap();
-    let accounts_hash = last_bank.get_accounts_hash();
+    let accounts_hash = last_bank.get_accounts_hash().unwrap();
     solana_runtime::serde_snapshot::reserialize_bank_with_new_accounts_hash(
         accounts_package.snapshot_links_dir(),
         accounts_package.slot,
         &accounts_hash,
         None,
     );
-    let snapshot_package = SnapshotPackage::new(accounts_package, accounts_hash);
+    let snapshot_package = SnapshotPackage::new(accounts_package, accounts_hash.into());
     snapshot_utils::archive_snapshot_package(
         &snapshot_package,
         &snapshot_config.full_snapshot_archives_dir,
@@ -372,8 +365,15 @@ fn test_concurrent_snapshot_packaging(
     // Take snapshot of zeroth bank
     let bank0 = bank_forks.get(0).unwrap();
     let storages = bank0.get_snapshot_storages(None);
-    snapshot_utils::add_bank_snapshot(bank_snapshots_dir, &bank0, &storages, snapshot_version)
-        .unwrap();
+    let slot_deltas = bank0.status_cache.read().unwrap().root_slot_deltas();
+    snapshot_utils::add_bank_snapshot(
+        bank_snapshots_dir,
+        &bank0,
+        &storages,
+        snapshot_version,
+        slot_deltas,
+    )
+    .unwrap();
 
     // Set up snapshotting channels
     let (real_accounts_package_sender, real_accounts_package_receiver) =
@@ -417,11 +417,13 @@ fn test_concurrent_snapshot_packaging(
         };
 
         let snapshot_storages = bank.get_snapshot_storages(None);
+        let slot_deltas = bank.status_cache.read().unwrap().root_slot_deltas();
         let bank_snapshot_info = snapshot_utils::add_bank_snapshot(
             bank_snapshots_dir,
             &bank,
             &snapshot_storages,
             snapshot_config.snapshot_version,
+            slot_deltas,
         )
         .unwrap();
         let accounts_package = AccountsPackage::new_for_snapshot(
@@ -429,7 +431,6 @@ fn test_concurrent_snapshot_packaging(
             &bank,
             &bank_snapshot_info,
             bank_snapshots_dir,
-            vec![],
             full_snapshot_archives_dir,
             incremental_snapshot_archives_dir,
             snapshot_storages,
@@ -493,7 +494,7 @@ fn test_concurrent_snapshot_packaging(
 
     // Purge all the outdated snapshots, including the ones needed to generate the package
     // currently sitting in the channel
-    snapshot_utils::purge_old_bank_snapshots(bank_snapshots_dir);
+    snapshot_utils::purge_old_bank_snapshots(bank_snapshots_dir, MAX_BANK_SNAPSHOTS_TO_RETAIN);
 
     let mut bank_snapshots = snapshot_utils::get_bank_snapshots_pre(bank_snapshots_dir);
     bank_snapshots.sort_unstable();
@@ -512,16 +513,18 @@ fn test_concurrent_snapshot_packaging(
 
     let cluster_info = Arc::new({
         let keypair = Arc::new(Keypair::new());
-        let contact_info = ContactInfo {
-            id: keypair.pubkey(),
-            ..ContactInfo::default()
-        };
+        let contact_info = ContactInfo::new(
+            keypair.pubkey(),
+            timestamp(), // wallclock
+            0u16,        // shred_version
+        );
         ClusterInfo::new(contact_info, keypair, SocketAddrSpace::Unspecified)
     });
 
-    let pending_snapshot_package = PendingSnapshotPackage::default();
+    let (snapshot_package_sender, snapshot_package_receiver) = crossbeam_channel::unbounded();
     let snapshot_packager_service = SnapshotPackagerService::new(
-        pending_snapshot_package.clone(),
+        snapshot_package_sender.clone(),
+        snapshot_package_receiver,
         None,
         &exit,
         &cluster_info,
@@ -531,27 +534,32 @@ fn test_concurrent_snapshot_packaging(
 
     let _package_receiver = std::thread::Builder::new()
         .name("package-receiver".to_string())
-        .spawn(move || {
-            let accounts_package = real_accounts_package_receiver.try_recv().unwrap();
-            solana_runtime::serde_snapshot::reserialize_bank_with_new_accounts_hash(
-                accounts_package.snapshot_links_dir(),
-                accounts_package.slot,
-                &AccountsHash::default(),
-                None,
-            );
-            let snapshot_package = SnapshotPackage::new(accounts_package, AccountsHash::default());
-            pending_snapshot_package
-                .lock()
-                .unwrap()
-                .replace(snapshot_package);
+        .spawn({
+            let full_snapshot_archives_dir = full_snapshot_archives_dir.clone();
+            move || {
+                let accounts_package = real_accounts_package_receiver.try_recv().unwrap();
+                let accounts_hash = AccountsHash(Hash::default());
+                solana_runtime::serde_snapshot::reserialize_bank_with_new_accounts_hash(
+                    accounts_package.snapshot_links_dir(),
+                    accounts_package.slot,
+                    &accounts_hash,
+                    None,
+                );
+                let snapshot_package = SnapshotPackage::new(accounts_package, accounts_hash.into());
+                snapshot_package_sender.send(snapshot_package).unwrap();
 
-            // Wait until the package is consumed by SnapshotPackagerService
-            while pending_snapshot_package.lock().unwrap().is_some() {
-                std::thread::sleep(Duration::from_millis(100));
+                // Wait until the package has been archived by SnapshotPackagerService
+                while snapshot_utils::get_highest_full_snapshot_archive_slot(
+                    &full_snapshot_archives_dir,
+                )
+                .is_none()
+                {
+                    std::thread::sleep(Duration::from_millis(100));
+                }
+
+                // Shutdown SnapshotPackagerService
+                exit.store(true, Ordering::Relaxed);
             }
-
-            // Shutdown SnapshotPackagerService
-            exit.store(true, Ordering::Relaxed);
         })
         .unwrap();
 
@@ -562,25 +570,11 @@ fn test_concurrent_snapshot_packaging(
 
     // Check the archive we cached the state for earlier was generated correctly
 
-    // before we compare, stick an empty status_cache in this dir so that the package comparison works
-    // This is needed since the status_cache is added by the packager and is not collected from
-    // the source dir for snapshots
-    snapshot_utils::serialize_snapshot_data_file(
-        &saved_snapshots_dir
-            .path()
-            .join(snapshot_utils::SNAPSHOT_STATUS_CACHE_FILENAME),
-        |stream| {
-            serialize_into(stream, &[] as &[BankSlotDelta])?;
-            Ok(())
-        },
-    )
-    .unwrap();
-
     // files were saved off before we reserialized the bank in the hacked up accounts_hash_verifier stand-in.
     solana_runtime::serde_snapshot::reserialize_bank_with_new_accounts_hash(
         saved_snapshots_dir.path(),
         saved_slot,
-        &AccountsHash::default(),
+        &AccountsHash(Hash::default()),
         None,
     );
 
@@ -997,7 +991,7 @@ fn test_snapshots_with_background_services(
     let (pruned_banks_sender, pruned_banks_receiver) = unbounded();
     let (snapshot_request_sender, snapshot_request_receiver) = unbounded();
     let (accounts_package_sender, accounts_package_receiver) = unbounded();
-    let pending_snapshot_package = PendingSnapshotPackage::default();
+    let (snapshot_package_sender, snapshot_package_receiver) = unbounded();
 
     let bank_forks = Arc::new(RwLock::new(snapshot_test_config.bank_forks));
     let callback = bank_forks
@@ -1029,7 +1023,8 @@ fn test_snapshots_with_background_services(
 
     let exit = Arc::new(AtomicBool::new(false));
     let snapshot_packager_service = SnapshotPackagerService::new(
-        pending_snapshot_package.clone(),
+        snapshot_package_sender.clone(),
+        snapshot_package_receiver,
         None,
         &exit,
         &cluster_info,
@@ -1040,7 +1035,7 @@ fn test_snapshots_with_background_services(
     let accounts_hash_verifier = AccountsHashVerifier::new(
         accounts_package_sender,
         accounts_package_receiver,
-        Some(pending_snapshot_package),
+        Some(snapshot_package_sender),
         &exit,
         &cluster_info,
         None,
