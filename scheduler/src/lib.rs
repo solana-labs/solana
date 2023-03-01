@@ -2159,7 +2159,7 @@ pub struct UnlockablePayload<T>(pub Box<ExecutionEnvironment>, pub T);
 pub struct ExaminablePayload<T, C, B>(pub Flushable<(Box<ExecutionEnvironment>, T), C, B>);
 
 #[derive(Debug)]
-pub struct Checkpoint<T, B>(std::sync::Mutex<(usize, Option<T>, Option<B>)>, std::sync::Condvar);
+pub struct Checkpoint<T, B>(std::sync::Mutex<(usize, Option<T>, B)>, std::sync::Condvar);
 
 impl<T, B> Checkpoint<T, B> {
     pub fn wait_for_restart(&self, maybe_given_restart_value: Option<T>) {
@@ -2240,28 +2240,22 @@ impl<T, B> Checkpoint<T, B> {
 }
 
 impl<T, B: Clone> Checkpoint<T, B> {
-    pub fn replace_context_value(&self, new: B) {
-        let mut g = self.0.lock().unwrap();
-        let (_self_remaining_threads, self_return_value, b) = &mut *g;
-        *b = Some(new);
-    }
-
     pub fn update_context_value(&self, on_update: impl Fn(&mut B)) {
         let mut g = self.0.lock().unwrap();
         let (_self_remaining_threads, self_return_value, b) = &mut *g;
         b.as_mut().map(on_update);
     }
 
-    pub fn clone_context_value(&self) -> Option<B> {
+    pub fn clone_context_value(&self) -> B {
         let mut g = self.0.lock().unwrap();
         let (_self_remaining_threads, self_return_value, b) = &mut *g;
         b.clone()
     }
 
-    pub fn with_context_value<R>(&self, with: impl Fn(&B) -> R) -> Option<R> {
+    pub fn with_context_value<R>(&self, with: impl Fn(&B) -> R) -> R {
         let mut g = self.0.lock().unwrap();
         let (_self_remaining_threads, self_return_value, b) = &mut *g;
-        b.as_ref().map(with)
+        with(&b)
     }
 }
 
