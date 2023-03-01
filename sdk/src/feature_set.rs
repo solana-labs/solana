@@ -622,6 +622,10 @@ pub mod add_set_tx_loaded_accounts_data_size_instruction {
     solana_sdk::declare_id!("G6vbf1UBok8MWb8m25ex86aoQHeKTzDKzuZADHkShqm6");
 }
 
+pub mod switch_to_new_elf_parser {
+    solana_sdk::declare_id!("Cdkc8PPTeTNUPoZEfCY5AyetUrEdkZtNPMgz58nqyaHD");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -772,6 +776,7 @@ lazy_static! {
         (delay_visibility_of_program_deployment::id(), "delay visibility of program upgrades #30085"),
         (apply_cost_tracker_during_replay::id(), "apply cost tracker to blocks during replay #29595"),
         (add_set_tx_loaded_accounts_data_size_instruction::id(), "add compute budget instruction for setting account data size per transaction #30366"),
+        (switch_to_new_elf_parser::id(), "switch to new ELF parser #30497"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()

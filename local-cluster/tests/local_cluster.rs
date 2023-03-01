@@ -1651,7 +1651,7 @@ fn test_optimistic_confirmation_violation_detection() {
         // from resetting to the parent of `prev_voted_slot` to create an alternative fork because
         // 1) Validator can't vote on earlier ancestor of last vote due to switch threshold (can't vote
         // on ancestors of last vote)
-        // 2) Won't reset to this earlier ancestor becasue reset can only happen on same voted fork if
+        // 2) Won't reset to this earlier ancestor because reset can only happen on same voted fork if
         // it's for the last vote slot or later
         remove_tower(&exited_validator_info.info.ledger_path, &node_to_restart);
         blockstore.set_dead_slot(prev_voted_slot).unwrap();
