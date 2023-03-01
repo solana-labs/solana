@@ -1812,8 +1812,8 @@ impl ScheduleStage {
                                    last_time = maybe_start_time.map(|(a, b)| b).clone();
                                    if let Some(checkpoint) = checkpoint.take() {
                                        let new_runner_context = checkpoint.clone_context_value();
-                                       //info!("schedule_once:initial {} => {}", log_prefix(&scheduler_context), log_prefix(&Some(new_runner_context)));
-                                       scheduler_context = Some(new_runner_context);
+                                       info!("schedule_once:initial {} => {}", log_prefix(&scheduler_context), log_prefix(&new_runner_context));
+                                       scheduler_context = new_runner_context;
                                        let new_mode = scheduler_context.as_ref().unwrap().mode();
                                        if Some(new_mode) != mode {
                                            if !force_channel_backed {
@@ -2159,7 +2159,7 @@ pub struct UnlockablePayload<T>(pub Box<ExecutionEnvironment>, pub T);
 pub struct ExaminablePayload<T, C, B>(pub Flushable<(Box<ExecutionEnvironment>, T), C, B>);
 
 #[derive(Debug)]
-pub struct Checkpoint<T, B>(std::sync::Mutex<(usize, Option<T>, B)>, std::sync::Condvar);
+pub struct Checkpoint<T, B>(std::sync::Mutex<(usize, Option<T>, Option<B>)>, std::sync::Condvar);
 
 impl<T, B> Checkpoint<T, B> {
     pub fn wait_for_restart(&self, maybe_given_restart_value: Option<T>) {
@@ -2231,39 +2231,50 @@ impl<T, B> Checkpoint<T, B> {
         self_return_value.take().unwrap()
     }
 
-    pub fn new(remaining_threads: usize, context: B) -> std::sync::Arc<Self> {
+    pub fn new(remaining_threads: usize) -> std::sync::Arc<Self> {
         std::sync::Arc::new(Self(
-            std::sync::Mutex::new((remaining_threads, None, context)),
+            std::sync::Mutex::new((remaining_threads, None, None)),
             std::sync::Condvar::new(),
         ))
     }
 }
 
 impl<T, B: Clone> Checkpoint<T, B> {
+    pub fn replace_context_value(&self, new: B) {
+        let mut g = self.0.lock().unwrap();
+        let (_self_remaining_threads, self_return_value, b) = &mut *g;
+        *b = Some(new);
+    }
+
     pub fn update_context_value(&self, on_update: impl Fn(&mut B)) {
         let mut g = self.0.lock().unwrap();
         let (_self_remaining_threads, self_return_value, b) = &mut *g;
-        on_update(b);
+        b.as_mut().map(on_update);
     }
 
-    pub fn clone_context_value(&self) -> B {
+    pub fn clone_context_value(&self) -> Option<B> {
         let mut g = self.0.lock().unwrap();
         let (_self_remaining_threads, self_return_value, b) = &mut *g;
         b.clone()
     }
 
-    pub fn with_context_value<R>(&self, with: impl Fn(&B) -> R) -> R {
+    pub fn with_context_value<R>(&self, with: impl Fn(&B) -> R) -> Option<R> {
         let mut g = self.0.lock().unwrap();
         let (_self_remaining_threads, self_return_value, b) = &mut *g;
-        with(&b)
+        b.as_ref().map(with)
     }
 }
 
 impl<T, B: WithMode> Checkpoint<T, B> {
     pub fn drop_checkpoint_cyclically(self) -> bool {
-        let mut g = self.0.into_inner().unwrap();
-        let (_, _, b) = g;
-        b.drop_cyclically()
+        let mut g = self.0.lock().unwrap();
+        let (_, _, b) = &mut *g;
+        let mut did_dropped = false;
+        if let Some(sc) = b.take() {
+            drop(g);
+            did_dropped = sc.drop_cyclically();
+        }
+        did_dropped
     }
 }
 

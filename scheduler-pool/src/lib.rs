@@ -592,12 +592,17 @@ impl Scheduler {
 }
 
 impl Scheduler {
-    fn new_checkpoint(thread_count: usize, context: SchedulerContext) -> Arc<solana_scheduler::Checkpoint<ExecuteTimings, SchedulerContext>> {
-        solana_scheduler::Checkpoint::new(thread_count, context)
+    fn new_checkpoint(thread_count: usize) -> Arc<solana_scheduler::Checkpoint<ExecuteTimings, SchedulerContext>> {
+        solana_scheduler::Checkpoint::new(thread_count)
     }
 
-    fn checkpoint(&self, context: SchedulerContext) -> Arc<solana_scheduler::Checkpoint<ExecuteTimings, SchedulerContext>> {
+    fn checkpoint(&self) -> Arc<solana_scheduler::Checkpoint<ExecuteTimings, SchedulerContext>> {
         Self::new_checkpoint(self.thread_count)
+    }
+
+
+    fn replace_scheduler_context_inner(&self, context: SchedulerContext) {
+        self.current_checkpoint.replace_context_value(context);
     }
 }
 
@@ -736,7 +741,7 @@ impl LikeScheduler for Scheduler {
 
     fn current_scheduler_mode(&self) -> solana_scheduler::Mode {
         self.stopped_mode.unwrap_or_else(||
-            self.current_checkpoint.with_context_value(|c| c.mode)
+            self.current_checkpoint.with_context_value(|c| c.mode).unwrap()
         )
     }
 
@@ -748,8 +753,12 @@ impl LikeScheduler for Scheduler {
         Box::new(SchedulerPoolWrapper(self.scheduler_pool.clone()))
     }
 
-    fn scheduler_context(&self) -> SchedulerContext {
+    fn scheduler_context(&self) -> Option<SchedulerContext> {
         self.current_checkpoint.clone_context_value()
+    }
+
+    fn replace_scheduler_context(&self, context: SchedulerContext) {
+        self.replace_scheduler_context_inner(context);
     }
 }
 
