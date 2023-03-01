@@ -2170,11 +2170,6 @@ impl<T, B> Checkpoint<T, B> {
             );
         }
 
-        if let Some(given_restart_value) = maybe_given_restart_value {
-            assert!(self_return_value.is_none());
-            *self_return_value = Some(given_restart_value);
-        }
-
         if *self_remaining_threads == 0 {
             assert!(self_return_value.is_some());
             drop(self_remaining_threads);
