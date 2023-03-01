@@ -1004,7 +1004,7 @@ impl TaskQueueReader for ChannelBackedTaskQueue {
                         Some(task)
                     }
                     SchedulablePayload(Flushable::Flush) => {
-                        assert!(self.buffered_flush);
+                        assert!(!self.buffered_flush);
                         self.buffered_flush = true;
                         None
                     }

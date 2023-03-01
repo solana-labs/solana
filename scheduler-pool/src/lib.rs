@@ -579,10 +579,6 @@ impl Scheduler {
         solana_scheduler::Checkpoint::new(thread_count)
     }
 
-    fn checkpoint(&self) -> Arc<solana_scheduler::Checkpoint<ExecuteTimings, SchedulerContext>> {
-        Self::new_checkpoint(self.thread_count)
-    }
-
     fn replace_scheduler_context_inner(&self, context: SchedulerContext) {
         self.checkpoint.replace_context_value(context);
     }
