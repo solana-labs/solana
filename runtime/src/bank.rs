@@ -974,7 +974,7 @@ impl SchedulerContext {
     }
 
     pub fn slot(&self) -> Slot {
-        self.bank().map(|b| b.slot()).unwrap_or(0)
+        self.bank().slot()
     }
 
     pub fn bank(&self) -> &Bank {
