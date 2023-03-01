@@ -31,8 +31,6 @@ pub struct GeyserPluginService {
     accounts_update_notifier: Option<AccountsUpdateNotifier>,
     transaction_notifier: Option<TransactionNotifierLock>,
     block_metadata_notifier: Option<BlockMetadataNotifierLock>,
-    #[allow(unused)]
-    rpc_handler_thread: Option<Arc<JoinHandle<()>>>,
 }
 
 impl GeyserPluginService {
@@ -115,11 +113,10 @@ impl GeyserPluginService {
         };
 
         // Initialize plugin manager rpc handler thread if needed
-        let rpc_handler_thread =
-            rpc_to_plugin_manager_receiver_and_exit.map(|(request_receiver, exit)| {
-                let plugin_manager = plugin_manager.clone();
-                Self::start_manager_rpc_handler(plugin_manager, request_receiver, exit)
-            });
+        rpc_to_plugin_manager_receiver_and_exit.map(|(request_receiver, exit)| {
+            let plugin_manager = plugin_manager.clone();
+            Self::start_manager_rpc_handler(plugin_manager, request_receiver, exit)
+        });
 
         info!("Started GeyserPluginService");
         Ok(GeyserPluginService {
@@ -128,7 +125,6 @@ impl GeyserPluginService {
             accounts_update_notifier,
             transaction_notifier,
             block_metadata_notifier,
-            rpc_handler_thread,
         })
     }
 
@@ -166,57 +162,61 @@ impl GeyserPluginService {
         plugin_manager: Arc<RwLock<GeyserPluginManager>>,
         request_receiver: Receiver<GeyserPluginManagerRequest>,
         exit: Arc<AtomicBool>,
-    ) -> Arc<JoinHandle<()>> {
-        Arc::new(thread::spawn(move || loop {
-            if let Ok(request) = request_receiver.recv_timeout(Duration::from_secs(5)) {
-                match request {
-                    GeyserPluginManagerRequest::ListPlugins { response_sender } => {
-                        let plugin_list = plugin_manager.read().unwrap().list_plugins();
-                        response_sender
-                            .send(plugin_list)
-                            .expect("Admin rpc service will be waiting for response");
-                    }
+    ) {
+        thread::Builder::new()
+            .name("SolGeyserPluginRpc".to_string())
+            .spawn(move || loop {
+                if let Ok(request) = request_receiver.recv_timeout(Duration::from_secs(5)) {
+                    match request {
+                        GeyserPluginManagerRequest::ListPlugins { response_sender } => {
+                            let plugin_list = plugin_manager.read().unwrap().list_plugins();
+                            response_sender
+                                .send(plugin_list)
+                                .expect("Admin rpc service will be waiting for response");
+                        }
 
-                    GeyserPluginManagerRequest::ReloadPlugin {
-                        ref name,
-                        ref config_file,
-                        response_sender,
-                    } => {
-                        let reload_result = plugin_manager
-                            .write()
-                            .unwrap()
-                            .reload_plugin(name, config_file);
-                        response_sender
-                            .send(reload_result)
-                            .expect("Admin rpc service will be waiting for response");
-                    }
+                        GeyserPluginManagerRequest::ReloadPlugin {
+                            ref name,
+                            ref config_file,
+                            response_sender,
+                        } => {
+                            let reload_result = plugin_manager
+                                .write()
+                                .unwrap()
+                                .reload_plugin(name, config_file);
+                            response_sender
+                                .send(reload_result)
+                                .expect("Admin rpc service will be waiting for response");
+                        }
 
-                    GeyserPluginManagerRequest::LoadPlugin {
-                        ref config_file,
-                        response_sender,
-                    } => {
-                        let load_result = plugin_manager.write().unwrap().load_plugin(config_file);
-                        response_sender
-                            .send(load_result)
-                            .expect("Admin rpc service will be waiting for response");
-                    }
+                        GeyserPluginManagerRequest::LoadPlugin {
+                            ref config_file,
+                            response_sender,
+                        } => {
+                            let load_result =
+                                plugin_manager.write().unwrap().load_plugin(config_file);
+                            response_sender
+                                .send(load_result)
+                                .expect("Admin rpc service will be waiting for response");
+                        }
 
-                    GeyserPluginManagerRequest::UnloadPlugin {
-                        ref name,
-                        response_sender,
-                    } => {
-                        let unload_result = plugin_manager.write().unwrap().unload_plugin(name);
-                        response_sender
-                            .send(unload_result)
-                            .expect("Admin rpc service will be waiting for response");
+                        GeyserPluginManagerRequest::UnloadPlugin {
+                            ref name,
+                            response_sender,
+                        } => {
+                            let unload_result = plugin_manager.write().unwrap().unload_plugin(name);
+                            response_sender
+                                .send(unload_result)
+                                .expect("Admin rpc service will be waiting for response");
+                        }
                     }
                 }
-            }
 
-            if exit.load(std::sync::atomic::Ordering::Relaxed) {
-                break;
-            }
-        }))
+                if exit.load(std::sync::atomic::Ordering::Relaxed) {
+                    break;
+                }
+            })
+            .unwrap();
     }
 }
 

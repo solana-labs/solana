@@ -331,8 +331,6 @@ mod tests {
         std::sync::{Arc, RwLock},
     };
 
-    #[allow(unused)]
-    /// This is here in case more tests are written which need a dummy library
     pub(super) fn dummy_plugin_and_library() -> (Box<dyn GeyserPlugin>, Library, &'static str) {
         let plugin = Box::new(TestPlugin);
         let lib = {
@@ -344,8 +342,6 @@ mod tests {
         (plugin, lib, DUMMY_CONFIG)
     }
 
-    #[allow(unused)]
-    /// This is here in case more tests are written which need a dummy library
     pub(super) fn dummy_plugin_and_library2() -> (Box<dyn GeyserPlugin>, Library, &'static str) {
         let plugin = Box::new(TestPlugin2);
         let lib = {
