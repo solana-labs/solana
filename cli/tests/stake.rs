@@ -54,7 +54,7 @@ fn test_stake_redelegation() {
             /* enable_warmup_epochs = */ false,
         ))
         .faucet_addr(Some(faucet_addr))
-        .start_with_mint_address(mint_pubkey, SocketAddrSpace::Unspecified, None)
+        .start_with_mint_address(mint_pubkey, SocketAddrSpace::Unspecified)
         .expect("validator start failed");
 
     let rpc_client =

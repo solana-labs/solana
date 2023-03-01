@@ -568,7 +568,7 @@ fn main() {
         genesis.compute_unit_limit(compute_unit_limit);
     }
 
-    match genesis.start_with_mint_address(
+    match genesis.start_with_mint_address_and_geyser_plugin_rpc(
         mint_address,
         socket_addr_space,
         rpc_to_plugin_manager_receiver,

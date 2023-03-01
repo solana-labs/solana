@@ -420,11 +420,12 @@ impl Validator {
             if let Some(geyser_plugin_config_files) = &config.on_start_geyser_plugin_config_files {
                 let (confirmed_bank_sender, confirmed_bank_receiver) = unbounded();
                 bank_notification_senders.push(confirmed_bank_sender);
-                let result = GeyserPluginService::new(
+                let rpc_to_plugin_manager_receiver_and_exit =
+                    rpc_to_plugin_manager_receiver.map(|receiver| (receiver, exit.clone()));
+                let result = GeyserPluginService::new_with_receiver(
                     confirmed_bank_receiver,
                     geyser_plugin_config_files,
-                    rpc_to_plugin_manager_receiver,
-                    exit.clone(),
+                    rpc_to_plugin_manager_receiver_and_exit,
                 );
                 match result {
                     Ok(geyser_plugin_service) => Some(geyser_plugin_service),

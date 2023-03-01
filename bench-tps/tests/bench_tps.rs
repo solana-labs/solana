@@ -122,7 +122,7 @@ fn test_bench_tps_test_validator(config: Config) {
             "spl_instruction_padding",
             FromOtherSolana::from(spl_instruction_padding::ID),
         )
-        .start_with_mint_address(mint_pubkey, SocketAddrSpace::Unspecified, None)
+        .start_with_mint_address(mint_pubkey, SocketAddrSpace::Unspecified)
         .expect("validator start failed");
 
     let rpc_client = Arc::new(RpcClient::new_with_commitment(

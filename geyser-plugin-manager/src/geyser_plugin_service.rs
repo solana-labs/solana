@@ -48,12 +48,20 @@ impl GeyserPluginService {
     ///    shall create the implementation of `GeyserPlugin` and returns to the caller.
     ///    The rest of the JSON fields' definition is up to to the concrete plugin implementation
     ///    It is usually used to configure the connection information for the external data store.
-
     pub fn new(
         confirmed_bank_receiver: Receiver<BankNotification>,
         geyser_plugin_config_files: &[PathBuf],
-        rpc_to_plugin_manager_receiver: Option<Receiver<GeyserPluginManagerRequest>>,
-        exit: Arc<AtomicBool>,
+    ) -> Result<Self, GeyserPluginServiceError> {
+        Self::new_with_receiver(confirmed_bank_receiver, geyser_plugin_config_files, None)
+    }
+
+    pub fn new_with_receiver(
+        confirmed_bank_receiver: Receiver<BankNotification>,
+        geyser_plugin_config_files: &[PathBuf],
+        rpc_to_plugin_manager_receiver_and_exit: Option<(
+            Receiver<GeyserPluginManagerRequest>,
+            Arc<AtomicBool>,
+        )>,
     ) -> Result<Self, GeyserPluginServiceError> {
         info!(
             "Starting GeyserPluginService from config files: {:?}",
@@ -107,10 +115,11 @@ impl GeyserPluginService {
         };
 
         // Initialize plugin manager rpc handler thread if needed
-        let rpc_handler_thread = rpc_to_plugin_manager_receiver.map(|request_receiver| {
-            let plugin_manager = plugin_manager.clone();
-            Self::start_manager_rpc_handler(plugin_manager, request_receiver, exit)
-        });
+        let rpc_handler_thread =
+            rpc_to_plugin_manager_receiver_and_exit.map(|(request_receiver, exit)| {
+                let plugin_manager = plugin_manager.clone();
+                Self::start_manager_rpc_handler(plugin_manager, request_receiver, exit)
+            });
 
         info!("Started GeyserPluginService");
         Ok(GeyserPluginService {

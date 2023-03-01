@@ -530,6 +530,32 @@ impl TestValidatorGenesis {
         &self,
         mint_address: Pubkey,
         socket_addr_space: SocketAddrSpace,
+    ) -> Result<TestValidator, Box<dyn std::error::Error>> {
+        TestValidator::start(
+            mint_address,
+            self,
+            socket_addr_space,
+            None, //rpc_to_plugin_manager_receiver,
+        )
+        .map(|test_validator| {
+            let runtime = tokio::runtime::Builder::new_current_thread()
+                .enable_io()
+                .enable_time()
+                .build()
+                .unwrap();
+            runtime.block_on(test_validator.wait_for_nonzero_fees());
+            test_validator
+        })
+    }
+
+    /// Start a test validator with the address of the mint account that will receive tokens
+    /// created at genesis. Augments admin rpc service with dynamic geyser plugin manager if
+    /// the geyser plugin service is enabled at startup.
+    ///
+    pub fn start_with_mint_address_and_geyser_plugin_rpc(
+        &self,
+        mint_address: Pubkey,
+        socket_addr_space: SocketAddrSpace,
         rpc_to_plugin_manager_receiver: Option<Receiver<GeyserPluginManagerRequest>>,
     ) -> Result<TestValidator, Box<dyn std::error::Error>> {
         TestValidator::start(
@@ -570,7 +596,7 @@ impl TestValidatorGenesis {
         socket_addr_space: SocketAddrSpace,
     ) -> (TestValidator, Keypair) {
         let mint_keypair = Keypair::new();
-        self.start_with_mint_address(mint_keypair.pubkey(), socket_addr_space, None)
+        self.start_with_mint_address(mint_keypair.pubkey(), socket_addr_space)
             .map(|test_validator| (test_validator, mint_keypair))
             .unwrap_or_else(|err| panic!("Test validator failed to start: {err}"))
     }
@@ -626,7 +652,7 @@ impl TestValidator {
                 ..Rent::default()
             })
             .faucet_addr(faucet_addr)
-            .start_with_mint_address(mint_address, socket_addr_space, None)
+            .start_with_mint_address(mint_address, socket_addr_space)
             .expect("validator start failed")
     }
 
@@ -645,7 +671,7 @@ impl TestValidator {
                 ..Rent::default()
             })
             .faucet_addr(faucet_addr)
-            .start_with_mint_address(mint_address, socket_addr_space, None)
+            .start_with_mint_address(mint_address, socket_addr_space)
             .expect("validator start failed")
     }
 
@@ -667,7 +693,7 @@ impl TestValidator {
                 ..Rent::default()
             })
             .faucet_addr(faucet_addr)
-            .start_with_mint_address(mint_address, socket_addr_space, None)
+            .start_with_mint_address(mint_address, socket_addr_space)
             .expect("validator start failed")
     }
 

@@ -1224,18 +1224,13 @@ fn load_bank_forks(
         let (confirmed_bank_sender, confirmed_bank_receiver) = unbounded();
         drop(confirmed_bank_sender);
 
-        // solana-ledger-tool doesn't run an admin_rpc service, so just pass in a dummy receiver
-        let rpc_to_plugin_manager_receiver = None;
-        let geyser_service = GeyserPluginService::new(
-            confirmed_bank_receiver,
-            &geyser_config_files,
-            rpc_to_plugin_manager_receiver,
-            exit.clone(),
-        )
-        .unwrap_or_else(|err| {
-            eprintln!("Failed to setup Geyser service: {err:?}");
-            std::process::exit(1);
-        });
+        let geyser_service =
+            GeyserPluginService::new(confirmed_bank_receiver, &geyser_config_files).unwrap_or_else(
+                |err| {
+                    eprintln!("Failed to setup Geyser service: {err:?}");
+                    std::process::exit(1);
+                },
+            );
         accounts_update_notifier = geyser_service.get_accounts_update_notifier();
         transaction_notifier = geyser_service.get_transaction_notifier();
     }
