@@ -34,6 +34,7 @@ use solana_poh::poh_recorder::TransactionRecorder;
 use assert_matches::assert_matches;
 use solana_transaction_status::token_balances::TransactionTokenBalancesSet;
 use solana_runtime::bank::TransactionBalancesSet;
+use solana_runtime::vote_sender_types::ReplayVoteSender;
 use solana_ledger::blockstore_processor::TransactionStatusSender;
 use solana_ledger::token_balances::collect_token_balances;
 use solana_scheduler::WithMode;
@@ -45,10 +46,11 @@ pub struct SchedulerPool {
     schedulers: std::sync::Mutex<Vec<Box<dyn LikeScheduler>>>,
     log_messages_bytes_limit: Option<usize>,
     transaction_status_sender: Option<TransactionStatusSender>,
+    replay_vote_sender: Option<ReplayVoteSender>,
 }
 
 impl SchedulerPool {
-    fn new(poh_recorder: Option<&Arc<RwLock<PohRecorder>>>, log_messages_bytes_limit: Option<usize>, transaction_status_sender: Option<TransactionStatusSender>) -> Self {
+    fn new(poh_recorder: Option<&Arc<RwLock<PohRecorder>>>, log_messages_bytes_limit: Option<usize>, transaction_status_sender: Option<TransactionStatusSender>, replay_vote_sender: ReplayVoteSender) -> Self {
         Self {
             schedulers: std::sync::Mutex::new(Vec::new()),
             log_messages_bytes_limit,
