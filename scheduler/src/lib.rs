@@ -2243,7 +2243,7 @@ impl<T, B: Clone> Checkpoint<T, B> {
     pub fn update_context_value(&self, on_update: impl Fn(&mut B)) {
         let mut g = self.0.lock().unwrap();
         let (_self_remaining_threads, self_return_value, b) = &mut *g;
-        b.as_mut().map(on_update);
+        on_update(b);
     }
 
     pub fn clone_context_value(&self) -> B {
@@ -2263,7 +2263,6 @@ impl<T, B: WithMode> Checkpoint<T, B> {
     pub fn drop_checkpoint_cyclically(self) -> bool {
         let mut g = self.0.lock().unwrap();
         let (_, _, b) = &mut *g;
-        let mut did_dropped = false;
         b.drop_cyclically()
     }
 }
