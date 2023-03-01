@@ -168,7 +168,7 @@ impl<'a> InvokeContext<'a> {
             blockhash,
             lamports_per_signature,
             syscall_context: Vec::new(),
-            enable_instruction_tracing: false,
+            enable_instruction_tracing: has_bpf_tracing_plugins(&bpf_tracer_plugin_manager),
             bpf_tracer_plugin_manager,
         }
     }
@@ -898,10 +898,6 @@ impl<'a> InvokeContext<'a> {
                 amount,
             ));
         }
-    }
-
-    pub fn has_bpf_tracing_plugins(&self) -> bool {
-        has_bpf_tracing_plugins(&self.bpf_tracer_plugin_manager)
     }
 }
 

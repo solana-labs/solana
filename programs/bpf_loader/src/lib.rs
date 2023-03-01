@@ -290,7 +290,7 @@ macro_rules! deploy_program {
             $slot,
             $use_jit,
             true,
-            $invoke_context.has_bpf_tracing_plugins(),
+            $invoke_context.enable_instruction_tracing,
         )?;
         $drop
         load_program_metrics.program_id = $program_id.to_string();
@@ -473,7 +473,7 @@ fn process_instruction_common(
             &program,
             programdata.as_ref().unwrap_or(&program),
             use_jit,
-            invoke_context.has_bpf_tracing_plugins(),
+            invoke_context.enable_instruction_tracing,
         )?;
         drop(program);
         drop(programdata);

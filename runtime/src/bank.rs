@@ -4112,11 +4112,7 @@ impl Bank {
     }
 
     #[allow(dead_code)] // Preparation for BankExecutorCache rework
-    fn load_program(
-        &self,
-        pubkey: &Pubkey,
-        enable_instruction_tracing: bool,
-    ) -> Result<Arc<LoadedProgram>> {
+    fn load_program(&self, pubkey: &Pubkey) -> Result<Arc<LoadedProgram>> {
         let program = if let Some(program) = self.get_account_with_fixed_root(pubkey) {
             program
         } else {
@@ -4178,7 +4174,7 @@ impl Bank {
             &program,
             programdata.as_ref().unwrap_or(&program),
             self.runtime_config.bpf_jit,
-            enable_instruction_tracing,
+            has_bpf_tracing_plugins(&self.bpf_tracer_plugin_manager),
         )
         .map(|(loaded_program, _create_executor_metrics)| loaded_program)
         .map_err(|err| TransactionError::InstructionError(0, err))
@@ -4426,10 +4422,7 @@ impl Bank {
         filter_missing_programs_time.stop();
 
         missing_programs.iter().for_each(|pubkey| {
-            match self.load_program(
-                pubkey,
-                has_bpf_tracing_plugins(&self.bpf_tracer_plugin_manager),
-            ) {
+            match self.load_program(pubkey) {
                 Ok(program) => {
                     match self
                         .loaded_programs_cache
@@ -4493,10 +4486,7 @@ impl Bank {
         filter_missing_programs_time.stop();
 
         let executors = missing_executors.iter().map(|pubkey| {
-            match self.load_program(
-                pubkey,
-                has_bpf_tracing_plugins(&self.bpf_tracer_plugin_manager),
-            ) {
+            match self.load_program(pubkey) {
                 Ok(program) => (**pubkey, program),
                 // Create a tombstone for the programs that failed to load
                 Err(_) => (**pubkey, Arc::new(LoadedProgram::new_tombstone(self.slot))),
