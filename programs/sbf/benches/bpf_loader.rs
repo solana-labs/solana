@@ -5,6 +5,8 @@
 
 use {solana_rbpf::memory_region::MemoryState, std::slice};
 
+use {solana_rbpf::memory_region::MemoryState, std::slice};
+
 extern crate test;
 
 use {
