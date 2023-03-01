@@ -525,7 +525,7 @@ impl Scheduler {
                 loop {
                     let mut runnable_queue = solana_scheduler::TaskQueue::default();
                     solana_scheduler::ScheduleStage::run(
-                        &mut checkpoint,
+                        &checkpoint,
                         executing_thread_count,
                         &mut runnable_queue,
                         &mut address_book,
