@@ -1,6 +1,8 @@
 use {
     crate::{
-        account_storage::meta::{StorableAccountsWithHashesAndWriteVersions, StoredAccountMeta},
+        account_storage::meta::{
+            StorableAccountsWithHashesAndWriteVersions, StoredAccountInfo, StoredAccountMeta,
+        },
         append_vec::{AppendVec, MatchAccountOwnerError},
         storable_accounts::StorableAccounts,
     },
@@ -120,7 +122,7 @@ impl AccountsFile {
         &self,
         accounts: &StorableAccountsWithHashesAndWriteVersions<'a, 'b, T, U, V>,
         skip: usize,
-    ) -> Option<Vec<usize>> {
+    ) -> Option<Vec<StoredAccountInfo>> {
         match self {
             Self::AppendVec(av) => av.append_accounts(accounts, skip),
         }

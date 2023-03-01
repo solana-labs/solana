@@ -10,6 +10,12 @@ use {
 };
 
 pub type StoredMetaWriteVersion = u64;
+// A tuple that stores offset and size respectively
+#[derive(Debug, Clone)]
+pub struct StoredAccountInfo {
+    pub offset: usize,
+    pub size: usize,
+}
 
 /// Goal is to eliminate copies and data reshaping given various code paths that store accounts.
 /// This struct contains what is needed to store accounts to a storage
