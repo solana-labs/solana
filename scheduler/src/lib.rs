@@ -2148,18 +2148,27 @@ pub struct ExaminablePayload<T>(pub Flushable<(Box<ExecutionEnvironment>, T)>);
 pub struct Checkpoint<T, B>(std::sync::Mutex<(usize, Option<T>, Option<B>)>, std::sync::Condvar);
 
 impl<T, B> Checkpoint<T, B> {
-    pub fn wait_for_restart(&self, maybe_given_restart_value: Option<T>) {
+    fn wait_for_restart(&self, maybe_given_restart_value: Option<T>, from_internal: bool) {
         let current_thread_name = std::thread::current().name().unwrap().to_string();
         let mut g = self.0.lock().unwrap();
         let (self_remaining_threads, self_return_value, _) = &mut *g;
-        info!(
-            "Checkpoint::wait_for_restart: {} is entering at {} -> {}",
-            current_thread_name,
-            *self_remaining_threads,
-            *self_remaining_threads - 1
-        );
 
-        *self_remaining_threads = self_remaining_threads.checked_sub(1).unwrap();
+        if from_internal {
+            info!(
+                "Checkpoint::wait_for_restart: {} is entering at {} -> {}",
+                current_thread_name,
+                *self_remaining_threads,
+                *self_remaining_threads - 1
+            );
+
+            *self_remaining_threads = self_remaining_threads.checked_sub(1).unwrap();
+        } else {
+            info!(
+                "Checkpoint::wait_for_restart: {} is entering at {}",
+                current_thread_name,
+                *self_remaining_threads,
+            );
+        }
 
         if let Some(given_restart_value) = maybe_given_restart_value {
             assert!(self_return_value.is_none());
