@@ -1653,7 +1653,7 @@ impl ScheduleStage {
     #[must_use]
     fn _run<'a, AST: AtScheduleThread, T: Send, C, B: Clone + WithMode>(
         ast: AST,
-        checkpoint: &mut Option<std::sync::Arc<Checkpoint<C, B>>>,
+        checkpoint: &mut std::sync::Arc<Checkpoint<C, B>>,
         executing_thread_count: usize,
         _runnable_queue: &mut TaskQueue,
         address_book: &mut AddressBook,
