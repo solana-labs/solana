@@ -1433,7 +1433,7 @@ fn process_loader_instruction(
 fn trace_bpf(
     trace_log: &[TraceLogEntry],
     consumed_bpf_units: &[(usize, u64)],
-    loaded_program: Arc<LoadedProgram>,
+    loaded_program: &Arc<LoadedProgram>,
     bpf_tracer_plugin_manager: Option<Arc<RwLock<dyn BpfTracerPluginManager>>>,
     block_hash: &Hash,
     transaction_id: &[u8],
@@ -1463,7 +1463,7 @@ fn trace_bpf(
             transaction_id,
             trace_log,
             consumed_bpf_units,
-            Arc::clone(&loaded_program) as Arc<dyn bpf_tracer_plugin_interface::ExecutorAdditional>,
+            Arc::clone(loaded_program) as Arc<dyn bpf_tracer_plugin_interface::ExecutorAdditional>,
         ) {
             error!(
                 "Error running BPF tracing plugin: {} for program ID: {}. Error: {:?}",
@@ -1546,7 +1546,7 @@ fn execute(
         trace_bpf(
             &trace_log_stack_frame.trace_log,
             &trace_log_stack_frame.consumed_bpf_units.borrow(),
-            loaded_program,
+            &loaded_program,
             bpf_tracer_plugin_manager,
             &blockhash,
             transaction_id.as_ref(),
