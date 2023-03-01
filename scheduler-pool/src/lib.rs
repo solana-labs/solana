@@ -486,7 +486,7 @@ impl Scheduler {
                             }
                             transaction_error_counts.reset();
                             (succeeded, skipped) = (0, 0);
-                            latest_checkpoint..register_return_value(std::mem::take(&mut cumulative_timings));
+                            latest_checkpoint.register_return_value(std::mem::take(&mut cumulative_timings));
                             let did_drop = if let Some(sc) = latest_scheduler_context.take() {
                                 sc.drop_cyclically()
                             } else {
