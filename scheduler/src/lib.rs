@@ -2278,9 +2278,9 @@ impl<T, B: WithMode> Checkpoint<T, B> {
     }
 }
 
-pub enum Flushable<T, C, B> {
+pub enum Flushable<T> {
     Payload(T),
-    Flush(std::sync::Arc<Checkpoint<C, B>>),
+    Flush,
 }
 
 pub trait WithMode {
