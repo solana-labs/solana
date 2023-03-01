@@ -2217,6 +2217,7 @@ impl<T, B> Checkpoint<T, B> {
         std::sync::Arc::new(Self(
             std::sync::Mutex::new((remaining_threads, None, None)),
             std::sync::Condvar::new(),
+            remaining_threads,
         ))
     }
 }
