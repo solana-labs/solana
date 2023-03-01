@@ -726,7 +726,6 @@ impl LikeScheduler for Scheduler {
         //let transaction_sender = self.transaction_sender.take().unwrap();
 
         //drop(transaction_sender);
-        let checkpoint = self.checkpoint();
         self.transaction_sender
             .as_ref()
             .unwrap()
@@ -735,7 +734,6 @@ impl LikeScheduler for Scheduler {
             ))
             .unwrap();
         self.stopped_mode = Some(self.current_scheduler_mode());
-        self.current_checkpoint = checkpoint;
     }
 
     fn current_scheduler_mode(&self) -> solana_scheduler::Mode {
