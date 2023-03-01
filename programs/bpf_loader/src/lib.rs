@@ -1502,16 +1502,19 @@ fn execute(
         let blockhash = invoke_context.blockhash;
         let transaction_id = *transaction_context.signature();
         let compute_meter_prev = invoke_context.get_remaining();
-        let executable = loaded_program.executable()?;
+        let verified_executable = loaded_program.get_verified_executable()?;
 
         #[cfg(any(target_os = "windows", not(target_arch = "x86_64")))]
         let use_jit = false;
         #[cfg(all(not(target_os = "windows"), target_arch = "x86_64"))]
-        let use_jit = executable.get_executable().get_compiled_program().is_some();
+        let use_jit = verified_executable
+            .get_executable()
+            .get_compiled_program()
+            .is_some();
         let mut vm = match create_vm(
             // We dropped the lifetime tracking in the Executor by setting it to 'static,
             // thus we need to reintroduce the correct lifetime of InvokeContext here again.
-            unsafe { std::mem::transmute(executable) },
+            unsafe { std::mem::transmute(verified_executable) },
             regions,
             account_lengths,
             invoke_context,

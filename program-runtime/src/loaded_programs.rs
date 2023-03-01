@@ -197,48 +197,39 @@ impl LoadedProgram {
         matches!(self.program, LoadedProgramType::Invalid)
     }
 
-    pub fn executable(
+    pub fn get_verified_executable(
         &self,
     ) -> Result<&VerifiedExecutable<RequisiteVerifier, InvokeContext<'static>>, InstructionError>
     {
         match &self.program {
-            LoadedProgramType::Invalid => return Err(InstructionError::InvalidAccountData),
-            LoadedProgramType::LegacyV0(executable) | LoadedProgramType::LegacyV1(executable) => {
-                Ok(executable)
-            }
-            LoadedProgramType::BuiltIn(_) => return Err(InstructionError::IncorrectProgramId),
+            LoadedProgramType::Invalid => Err(InstructionError::InvalidAccountData),
+            LoadedProgramType::LegacyV0(executable) => Ok(executable),
+            LoadedProgramType::LegacyV1(executable) => Ok(executable),
+            LoadedProgramType::BuiltIn(_) => Err(InstructionError::IncorrectProgramId),
         }
+    }
+
+    fn get_executable(&self) -> &Executable<InvokeContext<'static>> {
+        self.get_verified_executable().unwrap().get_executable()
     }
 }
 
 impl bpf_tracer_plugin_interface::ExecutorAdditional for LoadedProgram {
     fn do_static_analysis(&self) -> Result<Analysis, EbpfError> {
-        Analysis::from_executable(self.executable().unwrap().get_executable())
+        Analysis::from_executable(self.get_executable())
     }
 
     fn get_text_section_offset(&self) -> u64 {
-        self.executable()
-            .unwrap()
-            .get_executable()
-            .get_text_bytes()
-            .0
-            - self
-                .executable()
-                .unwrap()
-                .get_executable()
-                .get_ro_region()
-                .vm_addr
+        let executable = self.get_executable();
+        executable.get_text_bytes().0 - executable.get_ro_region().vm_addr
     }
 
     fn lookup_internal_function(&self, hash: u32) -> Option<usize> {
-        self.executable()
-            .unwrap()
-            .get_executable()
-            .lookup_internal_function(hash)
+        self.get_executable().lookup_internal_function(hash)
     }
 
     fn get_config(&self) -> &Config {
-        self.executable().unwrap().get_executable().get_config()
+        self.get_executable().get_config()
     }
 
     fn disassemble_instruction(
@@ -246,7 +237,7 @@ impl bpf_tracer_plugin_interface::ExecutorAdditional for LoadedProgram {
         ebpf_instr: &Insn,
         cfg_nodes: &BTreeMap<usize, CfgNode>,
     ) -> String {
-        let executable = self.executable().unwrap().get_executable();
+        let executable = self.get_executable();
         solana_rbpf::disassembler::disassemble_instruction(
             ebpf_instr,
             cfg_nodes,
