@@ -1118,9 +1118,9 @@ impl ScheduleStage {
     }
 
     #[inline(never)]
-    fn select_next_task<'a, C, B>(
+    fn select_next_task<'a>(
         //runnable_queue: &'a mut TaskQueue,
-        runnable_queue: &'a mut ModeSpecificTaskQueue<C, B>,
+        runnable_queue: &'a mut ModeSpecificTaskQueue,
         address_book: &mut AddressBook,
         contended_count: &usize,
         task_selection: &mut TaskSelection,
