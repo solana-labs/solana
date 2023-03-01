@@ -940,7 +940,7 @@ impl TaskQueueReader for TaskQueue {
         self.tasks.is_empty()
     }
 
-    fn take_buffered_flush(&mut self) -> Option<std::sync::Arc<usize>> {
+    fn take_buffered_flush(&mut self) -> Option<Flushable<TaskInQueue>> {
         None
     }
 
