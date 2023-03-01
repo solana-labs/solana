@@ -1829,7 +1829,7 @@ impl ScheduleStage {
                                }
                                runnable_queue.add_to_schedule(task.unique_weight, task)
                            },
-                           Ok(SchedulablePayload(Flushable::Flush(checkpoint))) => {
+                           Ok(SchedulablePayload(Flushable::Flush)) => {
                                assert_eq!((from_prev.len(), from_disconnected, maybe_checkpoint.is_none()), (0, false, true));
                                from_disconnected = true;
                                from_prev = never;
