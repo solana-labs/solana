@@ -1969,7 +1969,7 @@ impl ScheduleStage {
                         }
                     }
 
-                    if let Some(checkpoint) = runnable_queue.take_buffered_flush() {
+                    if let Some(Flushable::Flush) = runnable_queue.take_buffered_flush() {
                         assert_eq!((from_prev.len(), from_disconnected, maybe_checkpoint.is_none()), (0, false, true));
                         from_disconnected = true;
                         from_prev = never;
