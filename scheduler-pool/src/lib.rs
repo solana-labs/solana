@@ -155,7 +155,7 @@ pub(crate) struct Scheduler {
     graceful_stop_initiated: bool,
     collected_results: Arc<std::sync::Mutex<Vec<Result<ExecuteTimings>>>>,
     commit_status: Arc<CommitStatus>,
-    current_checkpoint: Arc<solana_scheduler::Checkpoint<ExecuteTimings, SchedulerContext>>,
+    checkpoint: Arc<solana_scheduler::Checkpoint<ExecuteTimings, SchedulerContext>>,
     stopped_mode: Option<solana_scheduler::Mode>,
     thread_count: usize,
     scheduler_pool: Arc<SchedulerPool>, // use Weak to cut circuric dep.
@@ -559,7 +559,7 @@ impl Scheduler {
             graceful_stop_initiated: Default::default(),
             collected_results,
             commit_status,
-            current_checkpoint: initial_checkpoint,
+            checkpoint: initial_checkpoint,
             stopped_mode: Default::default(),
             thread_count,
             scheduler_pool,
@@ -584,7 +584,7 @@ impl Scheduler {
     }
 
     fn replace_scheduler_context_inner(&self, context: SchedulerContext) {
-        self.current_checkpoint.replace_context_value(context);
+        self.checkpoint.replace_context_value(context);
     }
 }
 
@@ -660,10 +660,10 @@ impl LikeScheduler for Scheduler {
         drop(self.stopped_mode.take().unwrap());
         info!("just before wait for restart...");
         if from_internal {
-            self.current_checkpoint.reduce_count();
+            self.checkpoint.reduce_count();
         }
-        self.current_checkpoint.wait_for_restart(None);
-        let r = self.current_checkpoint.take_restart_value();
+        self.checkpoint.wait_for_restart(None);
+        let r = self.checkpoint.take_restart_value();
         self.collected_results.lock().unwrap().push(Ok(r));
 
         /*
@@ -721,7 +721,7 @@ impl LikeScheduler for Scheduler {
 
     fn current_scheduler_mode(&self) -> solana_scheduler::Mode {
         self.stopped_mode.unwrap_or_else(||
-            self.current_checkpoint.with_context_value(|c| c.mode).unwrap()
+            self.checkpoint.with_context_value(|c| c.mode).unwrap()
         )
     }
 
@@ -734,7 +734,7 @@ impl LikeScheduler for Scheduler {
     }
 
     fn scheduler_context(&self) -> Option<SchedulerContext> {
-        self.current_checkpoint.clone_context_value()
+        self.checkpoint.clone_context_value()
     }
 
     fn replace_scheduler_context(&self, context: SchedulerContext) {
