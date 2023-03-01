@@ -561,7 +561,7 @@ impl Scheduler {
             graceful_stop_initiated: Default::default(),
             collected_results,
             commit_status,
-            checkpoint: initial_checkpoint,
+            checkpoint,
             stopped_mode: Default::default(),
             thread_count,
             scheduler_pool,
