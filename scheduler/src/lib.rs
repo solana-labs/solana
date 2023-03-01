@@ -905,21 +905,21 @@ type TaskQueueOccupiedEntry<'a> =
 use enum_dispatch::enum_dispatch;
 
 #[enum_dispatch]
-enum ModeSpecificTaskQueue<C, B> {
-    Replaying(ChannelBackedTaskQueue<C, B>),
+enum ModeSpecificTaskQueue {
+    Replaying(ChannelBackedTaskQueue),
 }
 
-#[enum_dispatch(ModeSpecificTaskQueue<C, B>)]
-trait TaskQueueReader<C, B> {
+#[enum_dispatch(ModeSpecificTaskQueue)]
+trait TaskQueueReader {
     fn add_to_schedule(&mut self, unique_weight: UniqueWeight, task: TaskInQueue);
     fn heaviest_entry_to_execute(&mut self) -> Option<TaskInQueue>;
     fn task_count_hint(&self) -> usize;
     fn has_no_task_hint(&self) -> bool;
-    fn take_buffered_flush(&mut self) -> Option<std::sync::Arc<Checkpoint<C, B>>>;
+    fn take_buffered_flush(&mut self) -> Option<std::sync::Arc<usize>>;
     fn is_backed_by_channel(&self) -> bool;
 }
 
-impl<C, B> TaskQueueReader<C, B> for TaskQueue {
+impl TaskQueueReader for TaskQueue {
     #[inline(never)]
     fn add_to_schedule(&mut self, unique_weight: UniqueWeight, task: TaskInQueue) {
         //trace!("TaskQueue::add(): {:?}", unique_weight);
@@ -940,7 +940,7 @@ impl<C, B> TaskQueueReader<C, B> for TaskQueue {
         self.tasks.is_empty()
     }
 
-    fn take_buffered_flush(&mut self) -> Option<std::sync::Arc<Checkpoint<C, B>>> {
+    fn take_buffered_flush(&mut self) -> Option<std::sync::Arc<usize>> {
         None
     }
 
