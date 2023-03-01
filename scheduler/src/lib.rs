@@ -1812,7 +1812,7 @@ impl ScheduleStage {
                                    last_time = maybe_start_time.map(|(a, b)| b).clone();
                                    if let Some(checkpoint) = checkpoint.take() {
                                        let new_runner_context = checkpoint.clone_context_value();
-                                       info!("schedule_once:initial {} => {}", log_prefix(&scheduler_context), log_prefix(&Some(new_runner_context)));
+                                       //info!("schedule_once:initial {} => {}", log_prefix(&scheduler_context), log_prefix(&Some(new_runner_context)));
                                        scheduler_context = Some(new_runner_context);
                                        let new_mode = scheduler_context.as_ref().unwrap().mode();
                                        if Some(new_mode) != mode {
