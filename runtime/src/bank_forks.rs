@@ -229,6 +229,7 @@ impl BankForks {
         }
     }
 
+    // take Mode when we support to use unified_scheduler for banking.
     fn add_new_bank(&mut self, bank: Bank, for_replaying: bool, inherited_scheduler: Option<Box<dyn LikeScheduler>>) -> Arc<Bank> {
         let bank = Arc::new(bank);
         let prev = self.banks.insert(bank.slot(), SchedulableBank(bank.clone()));
