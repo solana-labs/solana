@@ -1810,7 +1810,7 @@ impl ScheduleStage {
                                if maybe_start_time.is_none() {
                                    maybe_start_time = Some((cpu_time::ThreadTime::now(), std::time::Instant::now()));
                                    last_time = maybe_start_time.map(|(a, b)| b).clone();
-                                   if let Some(checkpoint) = checkpoint.take() {
+                                   if scheduler_context.is_none() {
                                        let new_runner_context = checkpoint.clone_context_value();
                                        info!("schedule_once:initial {} => {}", log_prefix(&scheduler_context), log_prefix(&new_runner_context));
                                        scheduler_context = new_runner_context;
