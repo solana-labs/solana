@@ -952,7 +952,7 @@ impl TaskQueueReader for TaskQueue {
 struct ChannelBackedTaskQueue {
     channel: crossbeam_channel::Receiver<SchedulablePayload>,
     buffered_task: Option<TaskInQueue>,
-    buffered_flush: Option<std::sync::Arc<Checkpoint>>,
+    buffered_flush: bool,
 }
 
 impl ChannelBackedTaskQueue {
