@@ -2148,7 +2148,7 @@ pub struct ExaminablePayload<T>(pub Flushable<(Box<ExecutionEnvironment>, T)>);
 pub struct Checkpoint<T, B>(std::sync::Mutex<(usize, Option<T>, Option<B>)>, std::sync::Condvar);
 
 impl<T, B> Checkpoint<T, B> {
-    fn wait_for_restart(&self, maybe_given_restart_value: Option<T>, from_internal: bool) {
+    fn wait_for_restart(&self, from_internal: bool) {
         let current_thread_name = std::thread::current().name().unwrap().to_string();
         let mut g = self.0.lock().unwrap();
         let (self_remaining_threads, self_return_value, _) = &mut *g;
@@ -2197,6 +2197,10 @@ impl<T, B> Checkpoint<T, B> {
                 current_thread_name
             );
         }
+    }
+
+    pub fn internally_wait_for_restart(&self) {
+        self.wait_for_restart(true);
     }
 
     pub fn register_return_value(&self, restart_value: T) {
