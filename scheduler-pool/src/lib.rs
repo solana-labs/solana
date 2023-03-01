@@ -539,7 +539,7 @@ impl Scheduler {
                         |context| SchedulerContext::log_prefix(random_id, context.as_ref()),
                     );
 
-                    checkpoint.wait_for_restart(None);
+                    latest_checkpoint.wait_for_restart(None);
                     continue;
                 }
 
