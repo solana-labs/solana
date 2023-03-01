@@ -24,8 +24,8 @@ jsonrpc-derive = { workspace = true }
 jsonrpc-ipc-server = { workspace = true }
 jsonrpc-server-utils = { workspace = true }
 lazy_static = { workspace = true }
-log = { workspace = true }
 libloading = { workspace = true }
+log = { workspace = true }
 num_cpus = { workspace = true }
 rand = { workspace = true }
 rayon = { workspace = true }
