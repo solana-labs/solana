@@ -376,7 +376,7 @@ impl Scheduler {
                 wall_time.stop();
                 ee.execution_us = wall_time.as_us();
 
-                solana_ledger::bank_utils::find_and_send_votes(
+                solana_runtime::bank_utils::find_and_send_votes(
                     batch.sanitized_transactions(),
                     &tx_results,
                     replay_vote_sender,
