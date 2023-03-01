@@ -1756,7 +1756,6 @@ impl ScheduleStage {
             bool,
         ) = Default::default();
 
-        let mut maybe_checkpoint = None;
         let mut runnable_queue = ModeSpecificTaskQueue::Replaying(ChannelBackedTaskQueue::new(from_prev));
 
         let max_executing_queue_count = std::env::var("MAX_EXECUTING_QUEUE_COUNT")
@@ -1830,14 +1829,13 @@ impl ScheduleStage {
                                runnable_queue.add_to_schedule(task.unique_weight, task)
                            },
                            Ok(SchedulablePayload(Flushable::Flush)) => {
-                               assert_eq!((from_prev.len(), from_disconnected, maybe_checkpoint.is_none()), (0, false, true));
+                               assert_eq!((from_prev.len(), from_disconnected), (0, false));
                                from_disconnected = true;
                                from_prev = never;
                                trace!("flushing2..: {:?} {} {} {} {}", (from_disconnected, from_exec_disconnected), runnable_queue.task_count_hint(), contended_count, executing_queue_count, provisioning_tracker_count);
-                               maybe_checkpoint = Some(checkpoint);
                            },
                            Err(_) => {
-                               assert_eq!((from_prev.len(), from_disconnected, maybe_checkpoint.is_none()), (0, false, true));
+                               assert_eq!((from_prev.len(), from_disconnected), (0, false));
                                from_disconnected = true;
                                from_prev = never;
                                trace!("flushing2..: {:?} {} {} {} {}", (from_disconnected, from_exec_disconnected), runnable_queue.task_count_hint(), contended_count, executing_queue_count, provisioning_tracker_count);
@@ -1970,10 +1968,9 @@ impl ScheduleStage {
                     }
 
                     if let Some(Flushable::Flush) = runnable_queue.take_buffered_flush() {
-                        assert_eq!((from_prev.len(), from_disconnected, maybe_checkpoint.is_none()), (0, false, true));
+                        assert_eq!((from_prev.len(), from_disconnected), (0, false));
                         from_disconnected = true;
                         from_prev = never;
-                        maybe_checkpoint = Some(checkpoint);
                         break;
                     }
 
@@ -2046,10 +2043,9 @@ impl ScheduleStage {
                         empty_from = from_len == 0;
                         match schedulable {
                             Flushable::Flush => {
-                                assert_eq!((from_len, empty_from, from_prev.len(), from_disconnected, maybe_checkpoint.is_none()), (0, true, 0, false, true));
+                                assert_eq!((from_len, empty_from, from_prev.len(), from_disconnected), (0, true, 0, false));
                                 from_disconnected = true;
                                 from_prev = never;
-                                maybe_checkpoint = Some(checkpoint);
                             }
                             Flushable::Payload(task) => {
                                 runnable_queue.add_to_schedule(task.unique_weight, task)
@@ -2088,7 +2084,6 @@ impl ScheduleStage {
         }
         drop(scheduler_context);
 
-        if let Some(checkpoint) = &maybe_checkpoint {
             // wake up the receiver thread immediately by not using .send_buffered!
             to_next_stage
                 .send(ExaminablePayload(Flushable::Flush))
@@ -2105,7 +2100,6 @@ impl ScheduleStage {
                     .send(ExecutablePayload(Flushable::Flush))
                     .unwrap();
             }
-        }
         drop(to_next_stage);
         drop(to_execute_substage);
         drop(to_high_execute_substage);
