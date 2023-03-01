@@ -1479,7 +1479,7 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                 )
                 .subcommand(
                     SubCommand::with_name("unload")
-                        .about("Unload a particular plugin by specifying the plugin name")
+                        .about("Unload a particular plugin. You must specify the plugin name")
                         .arg(
                             Arg::with_name("name")
                                 .required(true)
@@ -1488,7 +1488,7 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                 )
                 .subcommand(
                     SubCommand::with_name("reload")
-                        .about("Reload a particular plugin. Specify the plugin name, and the new config/library paths.")
+                        .about("Reload a particular plugin. You must specify the plugin name and the new config path")
                         .arg(
                             Arg::with_name("name")
                                 .required(true)
@@ -1502,7 +1502,7 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                 )
                 .subcommand(
                     SubCommand::with_name("load")
-                        .about("Load a new plugin. Specify the plugin name, and the new config/library paths. Fails if overwriting (use reload)")
+                        .about("Load a new plugin. You must specify the config path. Fails if overwriting (use reload)")
                         .arg(
                             Arg::with_name("config")
                                 .required(true)
