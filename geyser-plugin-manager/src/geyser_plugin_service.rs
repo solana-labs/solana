@@ -18,7 +18,7 @@ use {
     std::{
         path::{Path, PathBuf},
         sync::{atomic::AtomicBool, Arc, RwLock},
-        thread::{self, JoinHandle},
+        thread,
         time::Duration,
     },
     thiserror::Error,
