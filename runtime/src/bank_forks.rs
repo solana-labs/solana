@@ -270,7 +270,6 @@ impl BankForks {
     }
 
     pub fn add_new_bank_for_banking(&mut self, bank: Bank) -> Arc<Bank> {
-        // todo!
         self.add_new_bank(bank, false, None)
     }
 
