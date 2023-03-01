@@ -240,7 +240,7 @@ impl BankForks {
             self.descendants.entry(parent).or_default().insert(slot);
         }
         if let Some((mode, scheduler_pool)) = self.get_scheduler_pool(for_replaying) {
-            let new_context = SchedulerContext::new(Some(&bank), mode);
+            let new_context = SchedulerContext::new(bank.clone(), mode);
             if let Some(inherited_scheduler) = inherited_scheduler {
                 inherited_scheduler.replace_scheduler_context(new_context);
                 bank.install_scheduler(inherited_scheduler);
