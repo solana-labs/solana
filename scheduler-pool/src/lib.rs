@@ -60,6 +60,7 @@ impl SchedulerPool {
     }
 
     fn prepare_new_scheduler(self: &Arc<Self>, context: SchedulerContext) {
+        // block on some max count of borrowed schdulers!
         self.schedulers.lock().unwrap().push(Box::new(Scheduler::spawn(self.clone(), context)));
     }
 
