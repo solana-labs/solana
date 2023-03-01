@@ -50,7 +50,7 @@ pub struct SchedulerPool {
 }
 
 impl SchedulerPool {
-    fn new(poh_recorder: Option<&Arc<RwLock<PohRecorder>>>, log_messages_bytes_limit: Option<usize>, transaction_status_sender: Option<TransactionStatusSender>, replay_vote_sender: ReplayVoteSender) -> Self {
+    fn new(poh_recorder: Option<&Arc<RwLock<PohRecorder>>>, log_messages_bytes_limit: Option<usize>, transaction_status_sender: Option<TransactionStatusSender>, replay_vote_sender: Option<ReplayVoteSender>) -> Self {
         Self {
             schedulers: std::sync::Mutex::new(Vec::new()),
             log_messages_bytes_limit,
