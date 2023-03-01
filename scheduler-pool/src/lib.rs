@@ -668,15 +668,6 @@ impl LikeScheduler for Scheduler {
         std::mem::take(&mut self.collected_results.lock().unwrap())
     }
 
-    fn pause_commit_into_bank(&self) {
-        self.commit_status.notify_as_paused();
-        self.current_checkpoint.update_context_value(|c| {c.bank = None;});
-    }
-
-    fn resume_commit_into_bank(&self) {
-        self.commit_status.notify_as_resumed();
-    }
-
     fn gracefully_stop(&mut self, from_internal: bool) -> Result<()> {
         self.trigger_stop();
         let label = SchedulerContext::log_prefix(self.random_id, self.scheduler_context().as_ref());
