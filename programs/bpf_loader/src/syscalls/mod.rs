@@ -40,7 +40,7 @@ use {
             enable_early_verification_of_account_modifications,
             error_on_syscall_bpf_function_hash_collisions, libsecp256k1_0_5_upgrade_enabled,
             limit_secp256k1_recovery_id, reject_callx_r10,
-            stop_sibling_instruction_search_at_parent,
+            stop_sibling_instruction_search_at_parent, switch_to_new_elf_parser,
         },
         hash::{Hasher, HASH_BYTES},
         instruction::{
@@ -181,7 +181,7 @@ pub fn create_loader<'a>(
         static_syscalls: false,
         enable_elf_vaddr: false,
         reject_rodata_stack_overlap: false,
-        new_elf_parser: false,
+        new_elf_parser: feature_set.is_active(&switch_to_new_elf_parser::id()),
         aligned_memory_mapping: true,
         // Warning, do not use `Config::default()` so that configuration here is explicit.
     };
