@@ -250,10 +250,10 @@ impl BankForks {
         bank
     }
 
-    fn get_scheduler_pool(&self, for_replaying: bool) -> Option<&Box<(solana_scheduler::Mode, dyn LikeSchedulerPool)>> {
+    fn get_scheduler_pool(&self, for_replaying: bool) -> Option<(solana_scheduler::Mode, &Box<dyn LikeSchedulerPool>)> {
         match (for_replaying, &self.scheduler_pool) {
             (false, _) | (true, InstalledSchedulerPool::NotInstalled) => None,
-            InstalledSchedulerPool::ReplayOnly(scheduler_pool) | InstalledSchedulerPool::Full(scheduler_pool) => Some(scheduler_pool)
+            InstalledSchedulerPool::ReplayOnly(scheduler_pool) | InstalledSchedulerPool::Full(scheduler_pool) => Some((solana_scheduler::Mode::Replaying, scheduler_pool))
         }
     }
 
