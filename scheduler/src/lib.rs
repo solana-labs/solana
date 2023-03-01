@@ -2115,8 +2115,6 @@ impl ScheduleStage {
         drop(to_next_stage);
         drop(to_execute_substage);
         drop(to_high_execute_substage);
-
-        maybe_checkpoint
     }
 
     #[must_use]
