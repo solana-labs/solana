@@ -113,10 +113,10 @@ impl GeyserPluginService {
         };
 
         // Initialize plugin manager rpc handler thread if needed
-        rpc_to_plugin_manager_receiver_and_exit.map(|(request_receiver, exit)| {
+        if let Some((request_receiver, exit)) = rpc_to_plugin_manager_receiver_and_exit {
             let plugin_manager = plugin_manager.clone();
             Self::start_manager_rpc_handler(plugin_manager, request_receiver, exit)
-        });
+        };
 
         info!("Started GeyserPluginService");
         Ok(GeyserPluginService {
