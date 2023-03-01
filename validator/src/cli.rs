@@ -590,7 +590,7 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                 .takes_value(true)
                 .possible_values(&["none", "lz4", "snappy", "zlib"])
                 .default_value(&default_args.rocksdb_ledger_compression)
-                .help("The compression alrogithm that is used to compress \
+                .help("The compression algorithm that is used to compress \
                        transaction status data.  \
                        Turning on compression can save ~10% of the ledger size."),
         )
