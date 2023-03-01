@@ -731,7 +731,7 @@ impl LikeScheduler for Scheduler {
             .as_ref()
             .unwrap()
             .send(solana_scheduler::SchedulablePayload(
-                solana_scheduler::Flushable::Flush(std::sync::Arc::clone(&checkpoint)),
+                solana_scheduler::Flushable::Flush,
             ))
             .unwrap();
         self.stopped_mode = Some(self.current_scheduler_mode());
