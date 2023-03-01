@@ -433,13 +433,13 @@ impl Scheduler {
                 use variant_counter::VariantCount;
                 let mut transaction_error_counts = TransactionError::counter();
                 let (mut skipped, mut succeeded) = (0, 0);
-                let (mut latest_checkpoint, mut latest_scheduler_context) = (Some(initial_checkpoint), None);
+                let (mut latest_checkpoint, mut latest_scheduler_context) = (initial_checkpoint, None);
 
                 loop {
                 while let Ok(r) = retired_ee_receiver.recv_timeout(std::time::Duration::from_millis(20))
                 {
                     use solana_runtime::transaction_priority_details::GetTransactionPriorityDetails;
-                    if let Some(latest_checkpoint) = latest_checkpoint.take() {
+                    if latest_scheduler_context.is_none() {
                         latest_scheduler_context = latest_checkpoint.clone_context_value();
                     }
 
@@ -479,15 +479,14 @@ impl Scheduler {
                             }
                             drop(ee);
                         },
-                        solana_scheduler::ExaminablePayload(solana_scheduler::Flushable::Flush(checkpoint)) => {
+                        solana_scheduler::ExaminablePayload(solana_scheduler::Flushable::Flush) => {
                             info!("post_execution_handler: {} {:?}", SchedulerContext::log_prefix(random_id, latest_scheduler_context.as_ref()), transaction_error_counts.aggregate().into_iter().chain([("succeeded", succeeded), ("skipped", skipped)].into_iter()).filter(|&(k, v)| v > 0).collect::<std::collections::BTreeMap<_, _>>());
                             if let Some(solana_scheduler::Mode::Replaying) = latest_scheduler_context.as_ref().map(|c| c.mode) {
                                 assert_eq!(skipped, 0);
                             }
                             transaction_error_counts.reset();
                             (succeeded, skipped) = (0, 0);
-                            latest_checkpoint = Some(checkpoint);
-                            latest_checkpoint.as_ref().unwrap().register_return_value(std::mem::take(&mut cumulative_timings));
+                            latest_checkpoint..register_return_value(std::mem::take(&mut cumulative_timings));
                             let did_drop = if let Some(sc) = latest_scheduler_context.take() {
                                 sc.drop_cyclically()
                             } else {
