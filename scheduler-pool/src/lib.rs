@@ -493,7 +493,7 @@ impl Scheduler {
                                 false
                             };
                             if !did_drop {
-                                latest_checkpoint.as_ref().unwrap().wait_for_restart(None);
+                                latest_checkpoint.wait_for_restart(None);
                             }
                         },
                     }
