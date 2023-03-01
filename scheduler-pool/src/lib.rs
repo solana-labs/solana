@@ -600,7 +600,6 @@ impl Scheduler {
         Self::new_checkpoint(self.thread_count)
     }
 
-
     fn replace_scheduler_context_inner(&self, context: SchedulerContext) {
         self.current_checkpoint.replace_context_value(context);
     }
