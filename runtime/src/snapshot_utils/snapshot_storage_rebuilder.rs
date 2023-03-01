@@ -1,10 +1,12 @@
 //! Provides interfaces for rebuilding snapshot storages
 
+use crate::account_storage::AccountStorageReference;
+
 use {
     super::{get_io_error, snapshot_version_from_file, SnapshotError, SnapshotVersion},
     crate::{
-        account_storage::{AccountStorageMap, AccountStorageReference},
-        accounts_db::{AccountStorageEntry, AppendVecId, AtomicAppendVecId},
+        account_storage::AccountStorageMap,
+        accounts_db::{AccountStorageEntry, AccountsDb, AppendVecId, AtomicAppendVecId},
         serde_snapshot::{
             self, remap_and_reconstruct_single_storage, snapshot_storage_lengths_from_fields,
             SerdeStyle, SerializedAppendVecId,
@@ -317,10 +319,26 @@ impl SnapshotStorageRebuilder {
             })
             .collect::<Result<HashMap<AppendVecId, Arc<AccountStorageEntry>>, std::io::Error>>()?;
 
-        assert_eq!(slot_stores.len(), 1);
-        let (id, storage) = slot_stores.drain().next().unwrap();
-        self.storage
-            .insert(slot, AccountStorageReference { id, storage });
+        let storage = if slot_stores.len() > 1 {
+            let remapped_append_vec_id = self.next_append_vec_id.fetch_add(1, Ordering::AcqRel);
+            let remapped_append_vec_path = lock.first().unwrap().parent().unwrap();
+            AccountsDb::combine_multiple_slots_into_one_at_startup(
+                remapped_append_vec_path,
+                remapped_append_vec_id,
+                slot,
+                &slot_stores,
+            )
+        } else {
+            slot_stores.drain().next().unwrap().1
+        };
+
+        self.storage.insert(
+            slot,
+            AccountStorageReference {
+                id: storage.append_vec_id(),
+                storage,
+            },
+        );
         Ok(())
     }
 
