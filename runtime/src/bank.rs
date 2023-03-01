@@ -977,7 +977,7 @@ impl SchedulerContext {
         self.bank().slot()
     }
 
-    pub fn bank(&self) -> &Bank {
+    pub fn bank(&self) -> &Arc<Bank> {
         &self.bank
     }
 
