@@ -522,11 +522,11 @@ impl Scheduler {
                     .unwrap();
                 }
 
-                let mut latest_checkpoint = Some(initial_checkpoint);
+                let mut latest_checkpoint = initial_checkpoint;
 
                 loop {
                     let mut runnable_queue = solana_scheduler::TaskQueue::default();
-                    let maybe_checkpoint = solana_scheduler::ScheduleStage::run(
+                    solana_scheduler::ScheduleStage::run(
                         &mut latest_checkpoint,
                         executing_thread_count,
                         &mut runnable_queue,
@@ -539,21 +539,8 @@ impl Scheduler {
                         |context| SchedulerContext::log_prefix(random_id, context.as_ref()),
                     );
 
-                    if let Some(checkpoint) = maybe_checkpoint {
-                        let mut did_dropped = false;
-                        if let Some(cp) = latest_checkpoint.take() {
-                            if let Ok(cp) = Arc::try_unwrap(cp) {
-                                did_dropped = cp.drop_checkpoint_cyclically();
-                            }
-                        }
-                        if !did_dropped {
-                            checkpoint.wait_for_restart(None);
-                        }
-                        latest_checkpoint = Some(checkpoint);
-                        continue;
-                    } else {
-                        break;
-                    }
+                    checkpoint.wait_for_restart(None);
+                    continue;
                 }
 
                 drop(transaction_receiver);
