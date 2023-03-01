@@ -236,7 +236,7 @@ impl Scheduler {
             .unwrap();
         let base_thread_count = executing_thread_count / 2;
         let thread_count = 3 + executing_thread_count;
-        let initial_checkpoint = {
+        let checkpoint = {
             let mut c = Self::new_checkpoint(thread_count);
             c.replace_context_value(initial_context);
             c
@@ -251,7 +251,7 @@ impl Scheduler {
         let executing_thread_count = std::cmp::max(base_thread_count * 2, 1);
         let executing_thread_handles = (0..executing_thread_count).map(|thx| {
             let (scheduled_ee_receiver, scheduled_high_ee_receiver, processed_ee_sender) = (scheduled_ee_receiver.clone(), scheduled_high_ee_receiver.clone(), processed_ee_sender.clone());
-            let initial_checkpoint = initial_checkpoint.clone();
+            let checkpoint = checkpoint.clone();
             let commit_status = commit_status.clone();
             let scheduler_pool = scheduler_pool.clone();
             let thread_name = format!("solScExLane{:02}", thx);
@@ -264,7 +264,7 @@ impl Scheduler {
                 thread_priority::set_current_thread_priority(thread_priority::ThreadPriority::Max).unwrap();
             }
             let mut latest_seq = 0;
-            let (mut latest_checkpoint, mut latest_scheduler_context, mut mode) = (initial_checkpoint, None, None);
+            let (mut latest_scheduler_context, mut mode) = (None, None);
 
             'recv: while let Ok(r) = (if thx >= base_thread_count { scheduled_high_ee_receiver.recv() } else { scheduled_ee_receiver.recv()}) {
                 match r {
@@ -272,7 +272,7 @@ impl Scheduler {
 
                 'retry: loop {
                 if latest_scheduler_context.is_none() {
-                    latest_scheduler_context = latest_checkpoint.clone_context_value();
+                    latest_scheduler_context = checkpoint.clone_context_value();
                     mode = latest_scheduler_context.as_ref().map(|sc| sc.mode);
                 }
                 let Some(bank) = latest_scheduler_context.as_ref().map(|sc| sc.bank()) else {
@@ -404,7 +404,7 @@ impl Scheduler {
                         false
                     };
                     if !did_drop {
-                        latest_checkpoint.wait_for_restart();
+                        checkpoint.wait_for_restart();
                     }
                 }
                 }
@@ -420,7 +420,7 @@ impl Scheduler {
         let error_collector_thread_handle = std::thread::Builder::new()
             .name(format!("solScErrCol{:02}", 0))
             .spawn({
-                let initial_checkpoint = initial_checkpoint.clone();
+                let checkpoint = checkpoint.clone();
 
                 move || {
                 let started = (cpu_time::ThreadTime::now(), std::time::Instant::now());
@@ -435,14 +435,14 @@ impl Scheduler {
                 use variant_counter::VariantCount;
                 let mut transaction_error_counts = TransactionError::counter();
                 let (mut skipped, mut succeeded) = (0, 0);
-                let (mut latest_checkpoint, mut latest_scheduler_context) = (initial_checkpoint, None);
+                let mut latest_scheduler_context = None;
 
                 loop {
                 while let Ok(r) = retired_ee_receiver.recv_timeout(std::time::Duration::from_millis(20))
                 {
                     use solana_runtime::transaction_priority_details::GetTransactionPriorityDetails;
                     if latest_scheduler_context.is_none() {
-                        latest_scheduler_context = latest_checkpoint.clone_context_value();
+                        latest_scheduler_context = checkpoint.clone_context_value();
                     }
 
                     match r {
@@ -488,14 +488,14 @@ impl Scheduler {
                             }
                             transaction_error_counts.reset();
                             (succeeded, skipped) = (0, 0);
-                            latest_checkpoint.register_return_value(std::mem::take(&mut cumulative_timings));
+                            checkpoint.register_return_value(std::mem::take(&mut cumulative_timings));
                             let did_drop = if let Some(sc) = latest_scheduler_context.take() {
                                 sc.drop_cyclically()
                             } else {
                                 false
                             };
                             if !did_drop {
-                                latest_checkpoint.wait_for_restart();
+                                checkpoint.wait_for_restart();
                             }
                         },
                     }
@@ -511,7 +511,7 @@ impl Scheduler {
         let scheduler_thread_handle = std::thread::Builder::new()
             .name("solScheduler".to_string())
             .spawn({
-                let initial_checkpoint = initial_checkpoint.clone();
+                let checkpoint = checkpoint.clone();
 
                 move || {
                 let started = (cpu_time::ThreadTime::now(), std::time::Instant::now());
@@ -522,12 +522,10 @@ impl Scheduler {
                     .unwrap();
                 }
 
-                let mut latest_checkpoint = initial_checkpoint;
-
                 loop {
                     let mut runnable_queue = solana_scheduler::TaskQueue::default();
                     solana_scheduler::ScheduleStage::run(
-                        &mut latest_checkpoint,
+                        &mut checkpoint,
                         executing_thread_count,
                         &mut runnable_queue,
                         &mut address_book,
@@ -539,7 +537,7 @@ impl Scheduler {
                         |context| SchedulerContext::log_prefix(random_id, context.as_ref()),
                     );
 
-                    latest_checkpoint.wait_for_restart();
+                    checkpoint.wait_for_restart();
                     continue;
                 }
 
