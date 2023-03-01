@@ -751,10 +751,6 @@ impl LikeScheduler for Scheduler {
     fn scheduler_context(&self) -> Option<SchedulerContext> {
         self.current_checkpoint.clone_context_value()
     }
-
-    fn replace_scheduler_context(&self, context: SchedulerContext) {
-        self.replace_scheduler_context_inner(context);
-    }
 }
 
 fn send_transaction_status(sender: &TransactionStatusSender, pre: Option<(Vec<Vec<u64>>, Vec<Vec<TransactionTokenBalance>>)>, bank: &Arc<Bank>, batch: &TransactionBatch, mut mint_decimals: &mut HashMap<Pubkey, u8>, tx_results: Option<TransactionResults>, commited_first_transaction_index: Option<usize>) -> std::option::Option<(Vec<Vec<u64>>, Vec<Vec<TransactionTokenBalance>>)> {
