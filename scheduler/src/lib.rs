@@ -960,7 +960,7 @@ impl ChannelBackedTaskQueue {
         Self {
             channel: channel.clone(),
             buffered_task: None,
-            buffered_flush: None,
+            buffered_flush: false,
         }
     }
 
