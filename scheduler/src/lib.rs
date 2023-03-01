@@ -915,7 +915,7 @@ trait TaskQueueReader {
     fn heaviest_entry_to_execute(&mut self) -> Option<TaskInQueue>;
     fn task_count_hint(&self) -> usize;
     fn has_no_task_hint(&self) -> bool;
-    fn take_buffered_flush(&mut self) -> Option<std::sync::Arc<usize>>;
+    fn take_buffered_flush(&mut self) -> Option<Flushable<TaskInQueue>>;
     fn is_backed_by_channel(&self) -> bool;
 }
 
