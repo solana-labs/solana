@@ -395,8 +395,7 @@ impl Scheduler {
                 break;
                 }
                 },
-                solana_scheduler::ExecutablePayload(solana_scheduler::Flushable::Flush(checkpoint)) => {
-                    latest_checkpoint = checkpoint;
+                solana_scheduler::ExecutablePayload(solana_scheduler::Flushable::Flush) => {
                     let did_drop = if let Some(sc) = latest_scheduler_context.take() {
                         sc.drop_cyclically()
                     } else {
