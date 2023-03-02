@@ -2260,6 +2260,7 @@ impl<T, B> Checkpoint<T, B> {
         std::sync::Arc::new(Self(
             std::sync::Mutex::new((Self::initial_counts(initial_count), None, None, 0)),
             std::sync::Condvar::new(),
+            std::sync::Condvar::new(),
             initial_count,
         ))
     }
