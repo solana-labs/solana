@@ -158,6 +158,7 @@ pub(crate) struct Scheduler {
     commit_status: Arc<CommitStatus>,
     checkpoint: Arc<solana_scheduler::Checkpoint<ExecuteTimings, SchedulerContext>>,
     stopped_mode: Option<solana_scheduler::Mode>,
+    current_scheduler_context: RwLock<Option<SchedulerContext>>,
     thread_count: usize,
     scheduler_pool: Arc<SchedulerPool>, // use Weak to cut circuric dep.
 }
@@ -564,6 +565,7 @@ impl Scheduler {
             commit_status,
             checkpoint,
             stopped_mode: Default::default(),
+            current_scheduler_context: Default::default(),
             thread_count,
             scheduler_pool,
         };
