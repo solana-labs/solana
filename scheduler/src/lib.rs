@@ -2149,12 +2149,12 @@ pub struct Checkpoint<T, B>(std::sync::Mutex<(usize, Option<T>, Option<B>, usize
 
 impl<T, B> Checkpoint<T, B> {
     pub fn wait_for_restart(&self) {
-        let current_thread_name = std::thread::current().name().unwrap().to_string();
+        let current_thread_name = || std::thread::current().name().unwrap().to_string();
         let mut g = self.0.lock().unwrap();
         let (self_remaining_threads, self_return_value, ..) = &mut *g;
         info!(
             "Checkpoint::wait_for_restart: {} is entering at {} -> {}",
-            current_thread_name,
+            current_thread_name(),
             *self_remaining_threads,
             *self_remaining_threads - 1
         );
@@ -2168,12 +2168,12 @@ impl<T, B> Checkpoint<T, B> {
             self.1.notify_all();
             info!(
                 "Checkpoint::wait_for_restart: {} notified all others...",
-                current_thread_name
+                current_thread_name()
             );
         } else {
             info!(
                 "Checkpoint::wait_for_restart: {} is paused...",
-                current_thread_name
+                current_thread_name()
             );
             let _ = *self
                 .1
@@ -2181,7 +2181,7 @@ impl<T, B> Checkpoint<T, B> {
                 .unwrap();
             info!(
                 "Checkpoint::wait_for_restart: {} is started...",
-                current_thread_name
+                current_thread_name()
             );
         }
     }
