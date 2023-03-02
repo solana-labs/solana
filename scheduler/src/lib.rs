@@ -2193,7 +2193,7 @@ impl<T, B> Checkpoint<T, B> {
                 .wait_while(g, |&mut (remaining_threads, ..)| remaining_threads > 0)
                 .unwrap();
             g = self.0.lock().unwrap();
-            let (remaining_threads, self_return_value, _, remaining_contexts) = &mut *g;
+            let (remaining_threads, ..) = &mut *g;
             *remaining_threads = remaining_threads.checked_add(1).unwrap();
             if *remaining_threads == self.initial_count() {
                 self.1.notify_one();
