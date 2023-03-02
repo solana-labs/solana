@@ -2175,8 +2175,8 @@ impl<T, B> Checkpoint<T, B> {
 
         if *remaining_threads == 0 {
             assert!(self_return_value.is_some());
-            assert_eq!(*r2, 0);
-            *r2 = 1;
+            assert!(*r2 <= 1);
+            *r2 = r2.checked_add(1).unwrap();
             drop((remaining_threads, r2));
             assert_eq!(*remaining_contexts, 0);
             self.1.notify_all();
@@ -2217,6 +2217,7 @@ impl<T, B> Checkpoint<T, B> {
             g = self.0.lock().unwrap();
         }
         let (rr, ..) = &mut *g;
+        assert_eq!(rr, (0, self.initial_count()));
         *rr = Self::initial_counts(self.initial_count());
     }
 
@@ -2238,7 +2239,7 @@ impl<T, B> Checkpoint<T, B> {
     pub fn reduce_count(&self) {
         let current_thread_name = std::thread::current().name().unwrap().to_string();
         let mut g = self.0.lock().unwrap();
-        let ((remaining_threads, _), ..) = &mut *g;
+        let ((remaining_threads, r2), ..) = &mut *g;
         info!(
             "Checkpoint::reduce_count: {} is entering at {} -> {}",
             current_thread_name,
@@ -2247,6 +2248,8 @@ impl<T, B> Checkpoint<T, B> {
         );
 
         *remaining_threads = remaining_threads.checked_sub(1).unwrap();
+        assert_eq!(*r2, 0);
+        *r2 = r2.checked_add(1).unwrap();
         assert!(*remaining_threads > 0);
     }
 
