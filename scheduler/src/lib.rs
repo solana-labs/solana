@@ -2228,7 +2228,7 @@ impl<T, B> Checkpoint<T, B> {
     pub fn reduce_count(&self) {
         let current_thread_name = std::thread::current().name().unwrap().to_string();
         let mut g = self.0.lock().unwrap();
-        let (remaining_threads, ..) = &mut *g;
+        let ((remaining_threads, _), ..) = &mut *g;
         info!(
             "Checkpoint::reduce_count: {} is entering at {} -> {}",
             current_thread_name,
@@ -2236,7 +2236,8 @@ impl<T, B> Checkpoint<T, B> {
             *remaining_threads - 1
         );
 
-        *remaining_threads -= 1;
+        *remaining_threads = remaining_threads.checked_sub(1).unwrap();
+        assert!(*remaining_threads > 0);
     }
 
     pub fn take_restart_value(&self) -> T {
