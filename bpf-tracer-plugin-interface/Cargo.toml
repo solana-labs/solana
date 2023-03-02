@@ -7,6 +7,7 @@ repository = { workspace = true }
 homepage = { workspace = true }
 license = { workspace = true }
 edition = { workspace = true }
+publish = false # Will need to publish in the future
 
 [dependencies]
 solana-sdk = { workspace = true }
