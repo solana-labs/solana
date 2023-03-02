@@ -611,22 +611,20 @@ async fn packet_batch_sender(
 
             let timeout_res = timeout(Duration::from_micros(250), packet_receiver.recv()).await;
 
-            if let Ok(res) = timeout_res {
-                if let Ok(packet_accumulator) = res {
-                    unsafe {
-                        packet_batch.set_len(packet_batch.len() + 1);
-                    }
-    
-                    let i = packet_batch.len() - 1;
-                    *packet_batch[i].meta_mut() = packet_accumulator.meta;
-                    for chunk in packet_accumulator.chunks {
-                        packet_batch[i].buffer_mut()[chunk.offset..chunk.end_of_chunk]
-                            .copy_from_slice(&chunk.bytes);
-                    }
-    
-                    if packet_batch.len() == 1 {
-                        batch_start_time = Instant::now();
-                    }
+            if let Ok(Ok(packet_accumulator)) = timeout_res {
+                unsafe {
+                    packet_batch.set_len(packet_batch.len() + 1);
+                }
+
+                let i = packet_batch.len() - 1;
+                *packet_batch[i].meta_mut() = packet_accumulator.meta;
+                for chunk in packet_accumulator.chunks {
+                    packet_batch[i].buffer_mut()[chunk.offset..chunk.end_of_chunk]
+                        .copy_from_slice(&chunk.bytes);
+                }
+
+                if packet_batch.len() == 1 {
+                    batch_start_time = Instant::now();
                 }
             }
         }
