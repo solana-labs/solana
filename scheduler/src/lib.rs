@@ -2219,7 +2219,7 @@ impl<T, B> Checkpoint<T, B> {
 
     pub fn new(remaining_threads: usize) -> std::sync::Arc<Self> {
         std::sync::Arc::new(Self(
-            std::sync::Mutex::new((remaining_threads, None, None, remaining_threads)),
+            std::sync::Mutex::new((remaining_threads, None, None, 0)),
             std::sync::Condvar::new(),
             remaining_threads,
         ))
@@ -2230,14 +2230,20 @@ impl<T, B: Clone> Checkpoint<T, B> {
     pub fn replace_context_value(&self, new: B) {
         let mut g = self.0.lock().unwrap();
         let (_self_remaining_threads, self_return_value, b, context_count) = &mut *g;
+        assert_eq!(*context_count, 0);
         *context_count = self.original_count();
         *b = Some(new);
     }
 
     pub fn use_context_value(&self) -> Option<B> {
         let mut g = self.0.lock().unwrap();
-        let (_self_remaining_threads, self_return_value, b, ..) = &mut *g;
-        b.clone()
+        let (_self_remaining_threads, self_return_value, b, context_count) = &mut *g;
+        *context_count = context_count.checked_sub(1).unwrap();
+        if context_count == 0 {
+            b.take()
+        } else {
+            b.clone()
+        }
     }
 }
 
