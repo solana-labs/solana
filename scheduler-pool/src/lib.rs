@@ -712,6 +712,7 @@ impl LikeScheduler for Scheduler {
         assert!(self.graceful_stop_initiated);
         self.graceful_stop_initiated = false;
         drop(self.stopped_mode.take().unwrap());
+        assert!(self.current_scheduler_context.write().unwrap().is_none());
     }
 
     fn trigger_stop(&mut self) {
