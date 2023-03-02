@@ -9,6 +9,7 @@
 //!
 
 pub mod accounts_hash_verifier;
+pub mod admin_rpc_post_init;
 pub mod ancestor_hashes_service;
 pub mod banking_stage;
 pub mod banking_trace;
