@@ -2151,7 +2151,7 @@ impl<T, B> Checkpoint<T, B> {
     pub fn wait_for_restart(&self) {
         let mut current_thread_name = || {
             let mut a = None;
-            a.get_or_insert_with(move || std::thread::current().name().unwrap().to_string());
+            a.get_or_insert_with(move || std::thread::current().name().unwrap().to_string())
         };
         let mut g = self.0.lock().unwrap();
         let (self_remaining_threads, self_return_value, ..) = &mut *g;
