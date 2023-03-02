@@ -2246,14 +2246,14 @@ impl<T, B: Clone> Checkpoint<T, B> {
         *context_count = context_count.checked_sub(1).unwrap();
         if *context_count == 0 {
             info!(
-                "Checkpoint::use_context_value: {} took ({})"
+                "Checkpoint::use_context_value: {} took ({})",
                 current_thread_name(),
                 *context_count,
             );
             b.take()
         } else {
             info!(
-                "Checkpoint::use_context_value: {} used ({})"
+                "Checkpoint::use_context_value: {} used ({})",
                 current_thread_name(),
                 *context_count,
             );
