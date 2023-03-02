@@ -2209,11 +2209,13 @@ impl<T, B> Checkpoint<T, B> {
     pub fn reset_remaining_threads(&self) {
         let mut g = self.0.lock().unwrap();
         let ((_, r2), self_return_value, _, remaining_contexts) = &mut *g;
-        let _ = *self
-            .1
-            .wait_while(g, |&mut ((_, r2), ..)| r2 < self.initial_count())
-            .unwrap();
-        g = self.0.lock().unwrap();
+        if *r2 < self.initial_count() {
+            let _ = *self
+                .1
+                .wait_while(g, |&mut ((_, r2), ..)| r2 < self.initial_count())
+                .unwrap();
+            g = self.0.lock().unwrap();
+        }
         let (rr, ..) = &mut *g;
         *rr = Self::initial_counts(self.initial_count());
     }
