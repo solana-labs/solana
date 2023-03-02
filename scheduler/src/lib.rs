@@ -2214,12 +2214,16 @@ impl<T, B> Checkpoint<T, B> {
             .wait_while(g, |&mut ((_, r2), ..)| r2 < self.initial_count())
             .unwrap();
         g = self.0.lock().unwrap();
-        let ((_, r2), ..) = &mut *g;
-        *r2 = 0;
+        let (rr, ..) = &mut *g;
+        rr = Self::initial_counts(self.initial_count());
     }
 
     fn initial_count(&self) -> usize {
         self.2
+    }
+
+    fn initial_counts(a: usize) -> (usize, usize) {
+        (a, 0)
     }
 
     pub fn register_return_value(&self, restart_value: T) {
@@ -2252,7 +2256,7 @@ impl<T, B> Checkpoint<T, B> {
 
     pub fn new(initial_count: usize) -> std::sync::Arc<Self> {
         std::sync::Arc::new(Self(
-            std::sync::Mutex::new(((initial_count, 0), None, None, 0)),
+            std::sync::Mutex::new((Self::initial_counts(initial_count, 0), None, None, 0)),
             std::sync::Condvar::new(),
             initial_count,
         ))
