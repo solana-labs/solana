@@ -593,7 +593,15 @@ impl Scheduler {
     }
 
     fn scheduler_context_inner(&self) -> Option<SchedulerContext> {
-        self.checkpoint.clone_context_value()
+        let sc = self.current_scheduler_context.write().unwrap();
+        if let Some(sc) = sc {
+            sc.clone()
+        } else {
+            let ssc = self.checkpoint.clone_context_value()
+            assert!(ssc.is_some());
+            *sc = ssc;
+            *sc.clone()
+        }
     }
 }
 
