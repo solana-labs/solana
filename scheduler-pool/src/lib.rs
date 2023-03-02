@@ -588,8 +588,12 @@ impl Scheduler {
         self.checkpoint.replace_context_value(context);
     }
 
-    fn clear_current_scheduler_context(&self) {
+    fn clear_current_scheduler_context_inner(&self) {
         drop(self.current_scheduler_context.write().unwrap().take());
+    }
+
+    fn scheduler_context_inner(&self) -> Option<SchedulerContext> {
+        self.checkpoint.clone_context_value()
     }
 }
 
@@ -663,7 +667,7 @@ impl LikeScheduler for Scheduler {
         );
 
         drop(self.stopped_mode.take().unwrap());
-        self.clear_current_scheduler_context();
+        self.clear_current_scheduler_context_inner();
         info!("just before wait for restart...");
         if from_internal {
             self.checkpoint.reduce_count();
@@ -723,7 +727,7 @@ impl LikeScheduler for Scheduler {
             ))
             .unwrap();
         self.stopped_mode = Some(self.current_scheduler_mode());
-        self.clear_current_scheduler_context();
+        self.clear_current_scheduler_context_inner();
     }
 
     fn current_scheduler_mode(&self) -> solana_scheduler::Mode {
@@ -741,7 +745,7 @@ impl LikeScheduler for Scheduler {
     }
 
     fn scheduler_context(&self) -> Option<SchedulerContext> {
-        self.checkpoint.clone_context_value()
+        self.scheduler_context_inner()
     }
 
     fn replace_scheduler_context(&self, context: SchedulerContext) {
