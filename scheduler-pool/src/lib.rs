@@ -597,6 +597,7 @@ impl Scheduler {
         if let Some(sc) = &mut *sc {
             Some(sc.clone())
         } else {
+            assert!(self.stopped_mode.is_none());
             let ssc = self.checkpoint.use_context_value();
             assert!(ssc.is_some());
             *sc = ssc;
@@ -675,7 +676,6 @@ impl LikeScheduler for Scheduler {
         );
 
         drop(self.stopped_mode.take().unwrap());
-        self.clear_current_scheduler_context_inner();
         info!("just before wait for restart...");
         if from_internal {
             self.checkpoint.reduce_count();
