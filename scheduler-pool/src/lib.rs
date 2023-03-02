@@ -269,14 +269,14 @@ impl Scheduler {
             let (mut latest_scheduler_context, mut mode) = (None, None);
 
             'recv: while let Ok(r) = (if thx >= base_thread_count { scheduled_high_ee_receiver.recv() } else { scheduled_ee_receiver.recv()}) {
-                match r {
-                solana_scheduler::ExecutablePayload(solana_scheduler::Flushable::Payload(mut ee)) => {
-
-                'retry: loop {
                 if latest_scheduler_context.is_none() {
                     latest_scheduler_context = checkpoint.use_context_value();
                     mode = latest_scheduler_context.as_ref().map(|sc| sc.mode);
                 }
+                match r {
+                solana_scheduler::ExecutablePayload(solana_scheduler::Flushable::Payload(mut ee)) => {
+
+                'retry: loop {
                 let Some(bank) = latest_scheduler_context.as_ref().map(|sc| sc.bank()) else {
                     match mode {
                         Some(solana_scheduler::Mode::Replaying) => panic!(),
