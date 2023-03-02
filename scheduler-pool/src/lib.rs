@@ -708,6 +708,7 @@ impl LikeScheduler for Scheduler {
         self.graceful_stop_initiated = false;
         drop(self.stopped_mode.take().unwrap());
         assert!(self.current_scheduler_context.write().unwrap().is_none());
+        self.checkpoint.reset_remaining_threads();
     }
 
     fn trigger_stop(&mut self) {
