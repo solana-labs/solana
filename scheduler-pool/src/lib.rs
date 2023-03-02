@@ -587,6 +587,10 @@ impl Scheduler {
     fn replace_scheduler_context_inner(&self, context: SchedulerContext) {
         self.checkpoint.replace_context_value(context);
     }
+
+    fn clear_current_scheduler_context(&self) {
+        drop(self.current_scheduler_context.write().unwrap().take());
+    }
 }
 
 impl Drop for Scheduler {
@@ -719,6 +723,7 @@ impl LikeScheduler for Scheduler {
             ))
             .unwrap();
         self.stopped_mode = Some(self.current_scheduler_mode());
+        self.clear_current_scheduler_context();
     }
 
     fn current_scheduler_mode(&self) -> solana_scheduler::Mode {
