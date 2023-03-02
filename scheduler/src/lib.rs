@@ -2221,7 +2221,7 @@ impl<T, B> Checkpoint<T, B> {
     }
 
     fn initial_count(&self) -> usize {
-        self.2
+        self.3
     }
 
     fn initial_counts(a: usize) -> (usize, usize) {
