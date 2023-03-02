@@ -2239,7 +2239,7 @@ impl<T, B: Clone> Checkpoint<T, B> {
         let mut g = self.0.lock().unwrap();
         let (_self_remaining_threads, self_return_value, b, context_count) = &mut *g;
         *context_count = context_count.checked_sub(1).unwrap();
-        if context_count == 0 {
+        if *context_count == 0 {
             b.take()
         } else {
             b.clone()
