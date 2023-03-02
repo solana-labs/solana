@@ -1194,7 +1194,7 @@ pub fn main() {
         wait_for_supermajority: value_t!(matches, "wait_for_supermajority", Slot).ok(),
         known_validators,
         repair_validators,
-        repair_whitelist: repair_whitelist.clone(),
+        repair_whitelist,
         gossip_validators,
         wal_recovery_mode,
         poh_verify: !matches.is_present("skip_poh_verify"),
@@ -1687,18 +1687,12 @@ pub fn main() {
         tpu_use_quic,
         tpu_connection_pool_size,
         tpu_enable_udp,
+        admin_service_post_init,
     )
     .unwrap_or_else(|e| {
         error!("Failed to start validator: {:?}", e);
         exit(1);
     });
-    *admin_service_post_init.write().unwrap() =
-        Some(admin_rpc_service::AdminRpcRequestMetadataPostInit {
-            bank_forks: validator.bank_forks.clone(),
-            cluster_info: validator.cluster_info.clone(),
-            vote_account,
-            repair_whitelist,
-        });
 
     if let Some(filename) = init_complete_file {
         File::create(filename).unwrap_or_else(|_| {

@@ -407,7 +407,7 @@ fn main() {
             validator_exit: genesis.validator_exit.clone(),
             authorized_voter_keypairs: genesis.authorized_voter_keypairs.clone(),
             staked_nodes_overrides: genesis.staked_nodes_overrides.clone(),
-            post_init: admin_service_post_init.clone(),
+            post_init: admin_service_post_init,
             tower_storage: tower_storage.clone(),
         },
     );
@@ -561,13 +561,6 @@ fn main() {
 
     match genesis.start_with_mint_address(mint_address, socket_addr_space) {
         Ok(test_validator) => {
-            *admin_service_post_init.write().unwrap() =
-                Some(admin_rpc_service::AdminRpcRequestMetadataPostInit {
-                    bank_forks: test_validator.bank_forks(),
-                    cluster_info: test_validator.cluster_info(),
-                    vote_account: test_validator.vote_account_address(),
-                    repair_whitelist: test_validator.repair_whitelist(),
-                });
             if let Some(dashboard) = dashboard {
                 dashboard.run(Duration::from_millis(250));
             }
