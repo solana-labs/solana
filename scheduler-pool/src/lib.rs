@@ -675,7 +675,6 @@ impl LikeScheduler for Scheduler {
             "Scheduler::gracefully_stop(): {} {} waiting..", label, std::thread::current().name().unwrap().to_string()
         );
 
-        drop(self.stopped_mode.take().unwrap());
         info!("just before wait for restart...");
         if from_internal {
             self.checkpoint.reduce_count();
@@ -712,6 +711,7 @@ impl LikeScheduler for Scheduler {
     fn clear_stop(&mut self) {
         assert!(self.graceful_stop_initiated);
         self.graceful_stop_initiated = false;
+        drop(self.stopped_mode.take().unwrap());
     }
 
     fn trigger_stop(&mut self) {
