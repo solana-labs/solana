@@ -2163,7 +2163,7 @@ impl<T, B> Checkpoint<T, B> {
 
         if *self_remaining_threads == 0 {
             assert!(self_return_value.is_some());
-            *self_remaining_threads = self.2;
+            *self_remaining_threads = self.original_count();
             drop(self_remaining_threads);
             self.1.notify_all();
             info!(
@@ -2177,13 +2177,17 @@ impl<T, B> Checkpoint<T, B> {
             );
             let _ = *self
                 .1
-                .wait_while(g, |&mut (remaining_threads, ..)| remaining_threads < self.2)
+                .wait_while(g, |&mut (remaining_threads, ..)| remaining_threads < self.original_count())
                 .unwrap();
             info!(
                 "Checkpoint::wait_for_restart: {} is started...",
                 current_thread_name
             );
         }
+    }
+
+    fn original_count(&self) -> usize {
+        self.2
     }
 
     pub fn register_return_value(&self, restart_value: T) {
