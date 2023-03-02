@@ -55,9 +55,26 @@ impl ConnectionCache {
         cert_info: Option<(&Keypair, IpAddr)>,
         stake_info: Option<(&Arc<RwLock<StakedNodes>>, &Pubkey)>,
     ) -> Self {
+        Self::new_with_client_and_port_offset_options(
+            connection_pool_size,
+            client_endpoint,
+            cert_info,
+            stake_info,
+            true,
+        )
+    }
+
+    pub fn new_with_client_and_port_offset_options(
+        connection_pool_size: usize,
+        client_endpoint: Option<Endpoint>,
+        cert_info: Option<(&Keypair, IpAddr)>,
+        stake_info: Option<(&Arc<RwLock<StakedNodes>>, &Pubkey)>,
+        do_port_offset: bool, // controls if to do the port offset
+    ) -> Self {
         // The minimum pool size is 1.
         let connection_pool_size = 1.max(connection_pool_size);
         let mut config = QuicConfig::new().unwrap();
+        config.set_do_port_offset(do_port_offset);
         if let Some(client_endpoint) = client_endpoint {
             config.update_client_endpoint(client_endpoint);
         }
