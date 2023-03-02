@@ -597,7 +597,7 @@ impl Scheduler {
         if let Some(sc) = &mut sc {
             sc.clone()
         } else {
-            let ssc = self.checkpoint.clone_context_value()
+            let ssc = self.checkpoint.clone_context_value();
             assert!(ssc.is_some());
             *sc = ssc;
             *sc.clone()
