@@ -340,7 +340,14 @@ impl Accounts {
                         account_overrides.and_then(|overrides| overrides.get(key))
                     {
                         (account_override.data().len(), account_override.clone(), 0)
-                    } else if let Some(program) = loaded_programs.get(key) {
+                    } else if let Some(program) =
+                        loaded_programs.get(key).and_then(|maybe_program| {
+                            // Return the program if it's not a tombstone.
+                            // (If it's a tombstone let's return None, so that it can be loaded as a data account.
+                            //  Upgradeable loader could own data accounts, which do not contain executables.)
+                            (!maybe_program.is_tombstone()).then_some(maybe_program)
+                        })
+                    {
                         Self::account_shared_data_from_program(key, program, program_accounts)
                             .map(|program_account| (program.account_size, program_account, 0))?
                     } else {
