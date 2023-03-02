@@ -593,7 +593,7 @@ impl Scheduler {
     }
 
     fn scheduler_context_inner(&self) -> Option<SchedulerContext> {
-        let sc = self.current_scheduler_context.write().unwrap();
+        let mut sc = self.current_scheduler_context.write().unwrap();
         if let Some(sc) = &mut *sc {
             Some(sc.clone())
         } else {
