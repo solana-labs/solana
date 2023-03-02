@@ -2155,7 +2155,7 @@ pub struct UnlockablePayload<T>(pub Box<ExecutionEnvironment>, pub T);
 pub struct ExaminablePayload<T>(pub Flushable<(Box<ExecutionEnvironment>, T)>);
 
 #[derive(Debug)]
-pub struct Checkpoint<T, B>(std::sync::Mutex<(usize, Option<T>, Option<B>, usize)>, std::sync::Condvar, usize);
+pub struct Checkpoint<T, B>(std::sync::Mutex<((usize, usize), Option<T>, Option<B>, usize)>, std::sync::Condvar, usize);
 
 impl<T, B> Checkpoint<T, B> {
     pub fn wait_for_restart(&self) {
@@ -2163,7 +2163,7 @@ impl<T, B> Checkpoint<T, B> {
         let mut current_thread_name = || a.get_or_insert_with(|| std::thread::current().name().unwrap().to_string()).clone() ;
 
         let mut g = self.0.lock().unwrap();
-        let (remaining_threads, self_return_value, _, remaining_contexts) = &mut *g;
+        let ((remaining_threads, r2), self_return_value, _, remaining_contexts) = &mut *g;
         info!(
             "Checkpoint::wait_for_restart: {} is entering at {} -> {}",
             current_thread_name(),
@@ -2175,8 +2175,8 @@ impl<T, B> Checkpoint<T, B> {
 
         if *remaining_threads == 0 {
             assert!(self_return_value.is_some());
-            *remaining_threads = 1;
-            drop(remaining_threads);
+            *r2 = 1;
+            drop((remaining_threads, r2));
             assert_eq!(*remaining_contexts, 0);
             self.1.notify_all();
             info!(
@@ -2190,12 +2190,12 @@ impl<T, B> Checkpoint<T, B> {
             );
             let _ = *self
                 .1
-                .wait_while(g, |&mut (remaining_threads, ..)| remaining_threads > 0)
+                .wait_while(g, |&mut ((remaining_threads, ..), ..)| remaining_threads > 0)
                 .unwrap();
             g = self.0.lock().unwrap();
-            let (remaining_threads, ..) = &mut *g;
-            *remaining_threads = remaining_threads.checked_add(1).unwrap();
-            if *remaining_threads == self.initial_count() {
+            let ((_, r2), ..) = &mut *g;
+            *r2 = r2.checked_add(1).unwrap();
+            if *r2 == self.initial_count() {
                 self.1.notify_one();
             }
             info!(
@@ -2207,10 +2207,10 @@ impl<T, B> Checkpoint<T, B> {
 
     pub fn reset_remaining_threads(&self) {
         let mut g = self.0.lock().unwrap();
-        let (remaining_threads, self_return_value, _, remaining_contexts) = &mut *g;
+        let ((_, r2), self_return_value, _, remaining_contexts) = &mut *g;
         let _ = *self
             .1
-            .wait_while(g, |&mut (remaining_threads, ..)| remaining_threads < self.initial_count())
+            .wait_while(g, |&mut ((_, r2), ..)| r2 < self.initial_count())
             .unwrap();
     }
 
