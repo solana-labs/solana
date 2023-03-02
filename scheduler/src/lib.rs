@@ -2151,6 +2151,7 @@ impl<T, B> Checkpoint<T, B> {
     pub fn wait_for_restart(&self) {
         let mut a = &mut None;
         let mut current_thread_name = || a.get_or_insert_with(|| std::thread::current().name().unwrap().to_string()).clone() ;
+
         let mut g = self.0.lock().unwrap();
         let (self_remaining_threads, self_return_value, ..) = &mut *g;
         info!(
@@ -2237,12 +2238,25 @@ impl<T, B: Clone> Checkpoint<T, B> {
     }
 
     pub fn use_context_value(&self) -> Option<B> {
+        let mut a = &mut None;
+        let mut current_thread_name = || a.get_or_insert_with(|| std::thread::current().name().unwrap().to_string()).clone() ;
+
         let mut g = self.0.lock().unwrap();
         let (_self_remaining_threads, self_return_value, b, context_count) = &mut *g;
         *context_count = context_count.checked_sub(1).unwrap();
         if *context_count == 0 {
+            info!(
+                "Checkpoint::use_context_value: {} took ({})"
+                current_thread_name(),
+                *context_count,
+            );
             b.take()
         } else {
+            info!(
+                "Checkpoint::use_context_value: {} used ({})"
+                current_thread_name(),
+                *context_count,
+            );
             b.clone()
         }
     }
