@@ -2175,6 +2175,7 @@ impl<T, B> Checkpoint<T, B> {
 
         if *remaining_threads == 0 {
             assert!(self_return_value.is_some());
+            assert_eq!(*r2, 0);
             *r2 = 1;
             drop((remaining_threads, r2));
             assert_eq!(*remaining_contexts, 0);
