@@ -1356,11 +1356,13 @@ impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> AccountsIndex<T, U> {
     /// For each pubkey, find the slot list in the accounts index
     ///   apply 'avoid_callback_result' if specified.
     ///   otherwise, call `callback`
+    /// if 'provide_entry_in_callback' is true, populate callback with the Arc of the entry itself.
     pub(crate) fn scan<'a, F, I>(
         &self,
         pubkeys: I,
         mut callback: F,
         avoid_callback_result: Option<AccountsIndexScanResult>,
+        provide_entry_in_callback: bool,
     ) where
         // params:
         //  pubkey looked up
@@ -1368,9 +1370,14 @@ impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> AccountsIndex<T, U> {
         //    None if 'pubkey' is not in accounts index.
         //   slot_list: comes from accounts index for 'pubkey'
         //   ref_count: refcount of entry in index
+        //   entry, if 'provide_entry_in_callback' is true
         // if 'avoid_callback_result' is Some(_), then callback is NOT called
         //  and _ is returned as if callback were called.
-        F: FnMut(&'a Pubkey, Option<(&SlotList<T>, RefCount)>) -> AccountsIndexScanResult,
+        F: FnMut(
+            &'a Pubkey,
+            Option<(&SlotList<T>, RefCount)>,
+            Option<&AccountMapEntry<T>>,
+        ) -> AccountsIndexScanResult,
         I: Iterator<Item = &'a Pubkey>,
     {
         let mut lock = None;
@@ -1390,7 +1397,11 @@ impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> AccountsIndex<T, U> {
                             *result
                         } else {
                             let slot_list = &locked_entry.slot_list.read().unwrap();
-                            callback(pubkey, Some((slot_list, locked_entry.ref_count())))
+                            callback(
+                                pubkey,
+                                Some((slot_list, locked_entry.ref_count())),
+                                provide_entry_in_callback.then_some(locked_entry),
+                            )
                         };
                         cache = match result {
                             AccountsIndexScanResult::Unref => {
@@ -1404,7 +1415,7 @@ impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> AccountsIndex<T, U> {
                         };
                     }
                     None => {
-                        avoid_callback_result.unwrap_or_else(|| callback(pubkey, None));
+                        avoid_callback_result.unwrap_or_else(|| callback(pubkey, None, None));
                     }
                 }
                 (cache, ())
