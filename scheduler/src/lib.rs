@@ -2232,7 +2232,7 @@ impl<T, B: Clone> Checkpoint<T, B> {
     pub fn use_context_value(&self) -> Option<B> {
         let mut g = self.0.lock().unwrap();
         let (_self_remaining_threads, self_return_value, b) = &mut *g;
-        b.0.clone()
+        b.map(|t| t.0.clone())
     }
 }
 
