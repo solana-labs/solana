@@ -2217,7 +2217,7 @@ impl<T, B> Checkpoint<T, B> {
             g = self.0.lock().unwrap();
         }
         let (rr, ..) = &mut *g;
-        assert_eq!(rr, (0, self.initial_count()));
+        assert_eq!(*rr, (0, self.initial_count()));
         *rr = Self::initial_counts(self.initial_count());
     }
 
