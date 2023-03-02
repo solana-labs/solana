@@ -124,9 +124,6 @@ impl SchedulerPool {
             schedulers.len() + 1
         );
         assert!(scheduler.collected_results().lock().unwrap().is_empty());
-        //if let Some(sc) = scheduler.scheduler_context() {
-        //    panic!("bank(slot: {}) should have been emptied", sc.slot());
-        //}
         scheduler.clear_stop();
 
         schedulers.push(scheduler);
