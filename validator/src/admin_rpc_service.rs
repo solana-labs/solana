@@ -7,12 +7,13 @@ use {
     log::*,
     serde::{de::Deserializer, Deserialize, Serialize},
     solana_core::{
-        consensus::Tower, tower_storage::TowerStorage, validator::ValidatorStartProgress,
+        admin_rpc_post_init::AdminRpcRequestMetadataPostInit, consensus::Tower,
+        tower_storage::TowerStorage, validator::ValidatorStartProgress,
     },
-    solana_gossip::{cluster_info::ClusterInfo, contact_info::ContactInfo},
+    solana_gossip::contact_info::ContactInfo,
     solana_rpc::rpc::verify_pubkey,
     solana_rpc_client_api::{config::RpcAccountIndex, custom_error::RpcCustomError},
-    solana_runtime::{accounts_index::AccountIndex, bank_forks::BankForks},
+    solana_runtime::accounts_index::AccountIndex,
     solana_sdk::{
         exit::Exit,
         pubkey::Pubkey,
@@ -29,14 +30,6 @@ use {
         time::{Duration, SystemTime},
     },
 };
-
-#[derive(Clone)]
-pub struct AdminRpcRequestMetadataPostInit {
-    pub cluster_info: Arc<ClusterInfo>,
-    pub bank_forks: Arc<RwLock<BankForks>>,
-    pub vote_account: Pubkey,
-    pub repair_whitelist: Arc<RwLock<HashSet<Pubkey>>>,
-}
 
 #[derive(Clone)]
 pub struct AdminRpcRequestMetadata {
@@ -643,11 +636,13 @@ mod tests {
         serde_json::Value,
         solana_account_decoder::parse_token::spl_token_pubkey,
         solana_core::tower_storage::NullTowerStorage,
+        solana_gossip::cluster_info::ClusterInfo,
         solana_ledger::genesis_utils::{create_genesis_config, GenesisConfigInfo},
         solana_rpc::rpc::create_validator_exit,
         solana_runtime::{
             accounts_index::AccountSecondaryIndexes,
             bank::{Bank, BankTestConfig},
+            bank_forks::BankForks,
             inline_spl_token,
             secondary_index::MAX_NUM_LARGEST_INDEX_KEYS_RETURNED,
         },

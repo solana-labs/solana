@@ -4,6 +4,7 @@ pub use solana_perf::report_target_features;
 use {
     crate::{
         accounts_hash_verifier::AccountsHashVerifier,
+        admin_rpc_post_init::AdminRpcRequestMetadataPostInit,
         banking_trace::{self, BankingTracer},
         broadcast_stage::BroadcastStageType,
         cache_block_meta_service::{CacheBlockMetaSender, CacheBlockMetaService},
@@ -396,6 +397,7 @@ impl Validator {
         use_quic: bool,
         tpu_connection_pool_size: usize,
         tpu_enable_udp: bool,
+        admin_rpc_service_post_init: Arc<RwLock<Option<AdminRpcRequestMetadataPostInit>>>,
     ) -> Result<Self, String> {
         let id = identity_keypair.pubkey();
         assert_eq!(&id, node.info.pubkey());
@@ -911,6 +913,13 @@ impl Validator {
             stats_reporter_sender,
             exit.clone(),
         );
+
+        *admin_rpc_service_post_init.write().unwrap() = Some(AdminRpcRequestMetadataPostInit {
+            bank_forks: bank_forks.clone(),
+            cluster_info: cluster_info.clone(),
+            vote_account: *vote_account,
+            repair_whitelist: config.repair_whitelist.clone(),
+        });
 
         let waited_for_supermajority = match wait_for_supermajority(
             config,
@@ -1933,7 +1942,8 @@ fn wait_for_supermajority(
             }
 
             for i in 1.. {
-                if i % 10 == 1 {
+                let logging = i % 10 == 1;
+                if logging {
                     info!(
                         "Waiting for {}% of activated stake at slot {} to be in gossip...",
                         WAIT_FOR_SUPERMAJORITY_THRESHOLD_PERCENT,
@@ -1942,7 +1952,7 @@ fn wait_for_supermajority(
                 }
 
                 let gossip_stake_percent =
-                    get_stake_percent_in_gossip(&bank, cluster_info, i % 10 == 0);
+                    get_stake_percent_in_gossip(&bank, cluster_info, logging);
 
                 *start_progress.write().unwrap() =
                     ValidatorStartProgress::WaitingForSupermajority {
@@ -2152,6 +2162,7 @@ mod tests {
             DEFAULT_TPU_USE_QUIC,
             DEFAULT_TPU_CONNECTION_POOL_SIZE,
             DEFAULT_TPU_ENABLE_UDP,
+            Arc::new(RwLock::new(None)),
         )
         .expect("assume successful validator start");
         assert_eq!(
@@ -2247,6 +2258,7 @@ mod tests {
                     DEFAULT_TPU_USE_QUIC,
                     DEFAULT_TPU_CONNECTION_POOL_SIZE,
                     DEFAULT_TPU_ENABLE_UDP,
+                    Arc::new(RwLock::new(None)),
                 )
                 .expect("assume successful validator start")
             })
