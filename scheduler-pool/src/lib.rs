@@ -659,6 +659,7 @@ impl LikeScheduler for Scheduler {
         );
 
         drop(self.stopped_mode.take().unwrap());
+        self.clear_current_scheduler_context();
         info!("just before wait for restart...");
         if from_internal {
             self.checkpoint.reduce_count();
