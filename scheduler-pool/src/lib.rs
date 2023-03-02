@@ -600,7 +600,7 @@ impl Scheduler {
             let ssc = self.checkpoint.clone_context_value();
             assert!(ssc.is_some());
             *sc = ssc;
-            *sc.clone()
+            sc.clone()
         }
     }
 }
