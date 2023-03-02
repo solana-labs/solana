@@ -1664,7 +1664,7 @@ impl ScheduleStage {
         maybe_to_next_stage: Option<&crossbeam_channel::Sender<ExaminablePayload<T>>>, // assume nonblocking
         never: &'a crossbeam_channel::Receiver<SchedulablePayload>,
         log_prefix: impl Fn(&Option<B>) -> String,
-    ) -> Option<B> {
+    ) {
         let mut maybe_start_time = None;
         let mut mode = None;
         let (mut last_time, mut last_processed_count) = (maybe_start_time.map(|(a, b)| b).clone(), 0_usize);
@@ -2082,6 +2082,9 @@ impl ScheduleStage {
             };
             info!("schedule_once:final   {} (no_more_work: {}) ch(prev: {}, exec: {}|{}), runnnable: {}, contended: {}, (immediate+provisional)/max: ({}+{})/{} uncontended: {} stuck: {} miss: {}, overall: {}txs/{}us={}tps! (cpu time: {cpu_time2}us)", log_prefix(&scheduler_context), no_more_work, (if from_disconnected { "-".to_string() } else { format!("{}", from_prev.len()) }), to_execute_substage.len(), (if from_exec_disconnected { "-".to_string() } else { format!("{}", from_exec.len())}), runnable_queue.task_count_hint(), contended_count, executing_queue_count, provisioning_tracker_count, max_executing_queue_count, address_book.uncontended_task_ids.len(), address_book.stuck_tasks.len(), failed_lock_count, processed_count, elapsed.as_micros(), tps_label);
         }
+        if scheduler_context.is_none() {
+           scheduler_context = checkpoint.use_context_value();
+        }
         drop(scheduler_context);
 
             // wake up the receiver thread immediately by not using .send_buffered!
@@ -2103,8 +2106,6 @@ impl ScheduleStage {
         drop(to_next_stage);
         drop(to_execute_substage);
         drop(to_high_execute_substage);
-
-        scheduler_context
     }
 
     #[must_use]
@@ -2119,7 +2120,7 @@ impl ScheduleStage {
         from_execute_substage: &crossbeam_channel::Receiver<UnlockablePayload<T>>,
         maybe_to_next_stage: Option<&crossbeam_channel::Sender<ExaminablePayload<T>>>, // assume nonblocking
         log_prefix: impl Fn(&Option<B>) -> String,
-    ) -> Option<B> {
+    ) {
         #[derive(Clone, Copy, Debug)]
         struct AtTopOfScheduleThread;
         unsafe impl AtScheduleThread for AtTopOfScheduleThread {}
