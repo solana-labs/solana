@@ -175,7 +175,8 @@ impl BucketMapHolderStats {
     pub fn get_remaining_items_to_flush_estimate(&self) -> usize {
         let in_mem = self.count_in_mem.load(Ordering::Relaxed) as u64;
         let held_in_mem = self.held_in_mem_slot_list_cached.load(Ordering::Relaxed)
-            + self.held_in_mem_slot_list_len.load(Ordering::Relaxed);
+            + self.held_in_mem_slot_list_len.load(Ordering::Relaxed)
+            + self.held_in_mem_ref_count.load(Ordering::Relaxed);
         in_mem.saturating_sub(held_in_mem) as usize
     }
 
