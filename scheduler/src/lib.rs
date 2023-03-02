@@ -2256,7 +2256,7 @@ impl<T, B> Checkpoint<T, B> {
 
     pub fn new(initial_count: usize) -> std::sync::Arc<Self> {
         std::sync::Arc::new(Self(
-            std::sync::Mutex::new((Self::initial_counts(initial_count, 0), None, None, 0)),
+            std::sync::Mutex::new((Self::initial_counts(initial_count), None, None, 0)),
             std::sync::Condvar::new(),
             initial_count,
         ))
