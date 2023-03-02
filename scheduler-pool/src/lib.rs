@@ -669,8 +669,9 @@ impl LikeScheduler for Scheduler {
     }
 
     fn gracefully_stop(&mut self, from_internal: bool) -> Result<()> {
+        let sc = self.scheduler_context().as_ref();
         self.trigger_stop();
-        let label = SchedulerContext::log_prefix(self.random_id, self.scheduler_context().as_ref());
+        let label = SchedulerContext::log_prefix(self.random_id, sc);
         info!(
             "Scheduler::gracefully_stop(): {} {} waiting..", label, std::thread::current().name().unwrap().to_string()
         );
