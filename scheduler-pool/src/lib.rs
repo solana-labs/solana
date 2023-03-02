@@ -538,8 +538,6 @@ impl Scheduler {
                         Some(&retired_ee_sender),
                         |context| SchedulerContext::log_prefix(random_id, context.as_ref()),
                     );
-
-                    checkpoint.wait_for_restart();
                     continue;
                 }
 
