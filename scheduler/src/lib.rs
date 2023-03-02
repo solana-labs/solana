@@ -2188,7 +2188,7 @@ impl<T, B> Checkpoint<T, B> {
 
     pub fn register_return_value(&self, restart_value: T) {
         let mut g = self.0.lock().unwrap();
-        let (_, self_return_value, _) = &mut *g;
+        let (_, self_return_value, ..) = &mut *g;
         assert!(self_return_value.is_none());
         *self_return_value = Some(restart_value);
     }
