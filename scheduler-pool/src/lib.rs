@@ -274,7 +274,7 @@ impl Scheduler {
 
                 'retry: loop {
                 if latest_scheduler_context.is_none() {
-                    latest_scheduler_context = checkpoint.clone_context_value();
+                    latest_scheduler_context = checkpoint.use_context_value();
                     mode = latest_scheduler_context.as_ref().map(|sc| sc.mode);
                 }
                 let Some(bank) = latest_scheduler_context.as_ref().map(|sc| sc.bank()) else {
@@ -444,7 +444,7 @@ impl Scheduler {
                 {
                     use solana_runtime::transaction_priority_details::GetTransactionPriorityDetails;
                     if latest_scheduler_context.is_none() {
-                        latest_scheduler_context = checkpoint.clone_context_value();
+                        latest_scheduler_context = checkpoint.use_context_value();
                     }
 
                     match r {
@@ -597,7 +597,7 @@ impl Scheduler {
         if let Some(sc) = &mut *sc {
             Some(sc.clone())
         } else {
-            let ssc = self.checkpoint.clone_context_value();
+            let ssc = self.checkpoint.use_context_value();
             assert!(ssc.is_some());
             *sc = ssc;
             sc.clone()

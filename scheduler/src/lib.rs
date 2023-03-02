@@ -1810,7 +1810,7 @@ impl ScheduleStage {
                                    maybe_start_time = Some((cpu_time::ThreadTime::now(), std::time::Instant::now()));
                                    last_time = maybe_start_time.map(|(a, b)| b).clone();
                                    if scheduler_context.is_none() {
-                                       let new_runner_context = checkpoint.clone_context_value();
+                                       let new_runner_context = checkpoint.use_context_value();
                                        info!("schedule_once:initial {} => {}", log_prefix(&scheduler_context), log_prefix(&new_runner_context));
                                        scheduler_context = new_runner_context;
                                        let new_mode = scheduler_context.as_ref().unwrap().mode();
@@ -2235,7 +2235,7 @@ impl<T, B: Clone> Checkpoint<T, B> {
         *b = None;
     }
 
-    pub fn clone_context_value(&self) -> Option<B> {
+    pub fn use_context_value(&self) -> Option<B> {
         let mut g = self.0.lock().unwrap();
         let (_self_remaining_threads, self_return_value, b) = &mut *g;
         b.clone()
