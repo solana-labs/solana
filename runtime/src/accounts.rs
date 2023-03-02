@@ -313,7 +313,7 @@ impl Accounts {
         let mut tx_rent: TransactionRent = 0;
         let message = tx.message();
         let account_keys = message.account_keys();
-        let mut account_found_and_dep_index = Vec::with_capacity(account_keys.len());
+        let mut accounts_found = Vec::with_capacity(account_keys.len());
         let mut rent_debits = RentDebits::default();
 
         let set_exempt_rent_epoch_max =
@@ -336,17 +336,13 @@ impl Accounts {
                             .is_active(&feature_set::instructions_sysvar_owned_by_sysvar::id()),
                     )
                 } else {
-                    let (mut account, rent, account_size) = if let Some(account_override) =
+                    let (account_size, mut account, rent) = if let Some(account_override) =
                         account_overrides.and_then(|overrides| overrides.get(key))
                     {
-                        Ok::<(AccountSharedData, u64, usize), TransactionError>((
-                            account_override.clone(),
-                            0,
-                            account_override.data().len(),
-                        ))
+                        (account_override.data().len(), account_override.clone(), 0)
                     } else if let Some(program) = loaded_programs.get(key) {
                         Self::account_shared_data_from_program(key, program, program_accounts)
-                            .map(|program_account| (program_account, 0, program.account_size))
+                            .map(|program_account| (program.account_size, program_account, 0))?
                     } else {
                         self.accounts_db
                             .load_with_fixed_root(ancestors, key)
@@ -360,11 +356,9 @@ impl Accounts {
                                             set_exempt_rent_epoch_max,
                                         )
                                         .rent_amount;
-                                    let account_data_len = account.data().len();
-                                    Ok((account, rent_due, account_data_len))
+                                    (account.data().len(), account, rent_due)
                                 } else {
-                                    let account_data_len = account.data().len();
-                                    Ok((account, 0, account_data_len))
+                                    (account.data().len(), account, 0)
                                 }
                             })
                             .unwrap_or_else(|| {
@@ -376,10 +370,9 @@ impl Accounts {
                                     // with this field already set would allow us to skip rent collection for these accounts.
                                     default_account.set_rent_epoch(u64::MAX);
                                 }
-                                let account_data_len = default_account.data().len();
-                                Ok((default_account, 0, account_data_len))
+                                (default_account.data().len(), default_account, 0)
                             })
-                    }?;
+                    };
                     Self::accumulate_and_check_loaded_account_data_size(
                         &mut accumulated_accounts_data_size,
                         account_size,
@@ -421,7 +414,7 @@ impl Accounts {
                     account
                 };
 
-                account_found_and_dep_index.push(account_found);
+                accounts_found.push(account_found);
                 Ok((*key, account))
             })
             .collect::<Result<Vec<_>>>()?;
@@ -444,9 +437,7 @@ impl Accounts {
                     let (program_id, program_account) = accounts
                         .get(program_index)
                         .ok_or(TransactionError::ProgramAccountNotFound)?;
-                    let account_found = account_found_and_dep_index
-                        .get(program_index)
-                        .unwrap_or(&true);
+                    let account_found = accounts_found.get(program_index).unwrap_or(&true);
                     if native_loader::check_id(program_id) {
                         return Ok(account_indices);
                     }
