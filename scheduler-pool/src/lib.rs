@@ -115,17 +115,16 @@ impl SchedulerPool {
     }
 
     fn return_to_pool(self: &Arc<Self>, mut scheduler: Box<dyn LikeScheduler>) {
-        let mut schedulers = self.schedulers.lock().unwrap();
+        assert!(scheduler.collected_results().lock().unwrap().is_empty());
+        scheduler.clear_stop();
 
+        let mut schedulers = self.schedulers.lock().unwrap();
         trace!(
             "SchedulerPool: id_{:016x} is returned... len: {} => {}",
             scheduler.random_id(),
             schedulers.len(),
             schedulers.len() + 1
         );
-        assert!(scheduler.collected_results().lock().unwrap().is_empty());
-        scheduler.clear_stop();
-
         schedulers.push(scheduler);
     }
 }
