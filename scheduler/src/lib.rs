@@ -2155,7 +2155,7 @@ pub struct UnlockablePayload<T>(pub Box<ExecutionEnvironment>, pub T);
 pub struct ExaminablePayload<T>(pub Flushable<(Box<ExecutionEnvironment>, T)>);
 
 #[derive(Debug)]
-pub struct Checkpoint<T, B>(std::sync::Mutex<((usize, usize), Option<T>, Option<B>, usize)>, std::sync::Condvar, usize);
+pub struct Checkpoint<T, B>(std::sync::Mutex<((usize, usize), Option<T>, Option<B>, usize)>, std::sync::Condvar, std::sync::Condvar, usize);
 
 impl<T, B> Checkpoint<T, B> {
     pub fn wait_for_restart(&self) {
@@ -2197,7 +2197,7 @@ impl<T, B> Checkpoint<T, B> {
             let ((_, r2), ..) = &mut *g;
             *r2 = r2.checked_add(1).unwrap();
             if *r2 == self.initial_count() {
-                self.1.notify_one();
+                self.2.notify_one();
             }
             info!(
                 "Checkpoint::wait_for_restart: {} is started...",
@@ -2211,7 +2211,7 @@ impl<T, B> Checkpoint<T, B> {
         let ((_, r2), self_return_value, _, remaining_contexts) = &mut *g;
         if *r2 < self.initial_count() {
             let _ = *self
-                .1
+                .2
                 .wait_while(g, |&mut ((_, r2), ..)| r2 < self.initial_count())
                 .unwrap();
             g = self.0.lock().unwrap();
