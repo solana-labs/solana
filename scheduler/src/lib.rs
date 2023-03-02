@@ -2215,7 +2215,7 @@ impl<T, B> Checkpoint<T, B> {
             .unwrap();
         g = self.0.lock().unwrap();
         let (rr, ..) = &mut *g;
-        rr = Self::initial_counts(self.initial_count());
+        *rr = Self::initial_counts(self.initial_count());
     }
 
     fn initial_count(&self) -> usize {
