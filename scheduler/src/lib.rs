@@ -2198,7 +2198,7 @@ impl<T, B> Checkpoint<T, B> {
         }
     }
 
-    fn reset_remaining_threads(&self) {
+    pub fn reset_remaining_threads(&self) {
         let mut g = self.0.lock().unwrap();
         let (remaining_threads, self_return_value, _, remaining_contexts) = &mut *g;
         assert_eq!(*remaining_threads, 0);
