@@ -2150,7 +2150,7 @@ pub struct Checkpoint<T, B>(std::sync::Mutex<(usize, Option<T>, Option<B>, usize
 impl<T, B> Checkpoint<T, B> {
     pub fn wait_for_restart(&self) {
         let mut a = &mut None;
-        let mut current_thread_name = || a.get_or_insert_with(|| std::thread::current().name().unwrap().to_string());
+        let mut current_thread_name = || a.get_or_insert_with(|| std::thread::current().name().unwrap().to_string()).clone() ;
         let mut g = self.0.lock().unwrap();
         let (self_remaining_threads, self_return_value, ..) = &mut *g;
         info!(
