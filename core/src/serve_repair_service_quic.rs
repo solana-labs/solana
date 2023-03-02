@@ -69,7 +69,7 @@ impl ServeRepairService {
         .unwrap();
 
         // The connection cache used to send to repair responses back to the client.
-        let connection_cache = ConnectionCache::new_with_client_options(
+        let connection_cache = ConnectionCache::new_with_client_and_port_offset_options(
             1,
             Some(serve_repair_endpoint),
             Some((&repair_quic_config.identity_keypair, host)),
@@ -77,6 +77,7 @@ impl ServeRepairService {
                 &repair_quic_config.staked_nodes,
                 &repair_quic_config.identity_keypair.pubkey(),
             )),
+            false, // This is the connection cache used to sending responses back to the client, we know the exact port
         );
 
         let connection_cache = match connection_cache {
