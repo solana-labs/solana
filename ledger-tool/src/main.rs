@@ -1228,7 +1228,7 @@ fn load_bank_forks(
     let no_transaction_status_sender = None;
     if matches!(replaying_backend, ReplayingBackend::UnifiedScheduler) {
         let no_poh_recorder = None;
-        let no_replay_vote_sender = None::<usize>;
+        let no_replay_vote_sender = None::<ReplayVoteSender>;
         bank_forks.write().unwrap().install_scheduler_pool(solana_scheduler_pool::SchedulerPool::new_boxed(no_poh_recorder, None, no_transaction_status_sender.clone(), no_replay_vote_sender), false);
     } else {
         info!("not installing scheduler pool...");
