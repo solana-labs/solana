@@ -1651,7 +1651,7 @@ impl ScheduleStage {
     }
 
     #[must_use]
-    fn _run<'a, AST: AtScheduleThread, T: Send, B: Clone + WithMode>(
+    fn _run<'a, AST: AtScheduleThread, T: Send, B: WithMode>(
         ast: AST,
         checkpoint: &std::sync::Arc<impl WithContext<B>>,
         executing_thread_count: usize,
