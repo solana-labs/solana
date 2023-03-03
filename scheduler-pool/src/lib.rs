@@ -154,7 +154,7 @@ pub(crate) struct Scheduler {
     graceful_stop_initiated: bool,
     collected_results: Arc<std::sync::Mutex<Vec<Result<ExecuteTimings>>>>,
     commit_status: Arc<CommitStatus>,
-    checkpoint: Arc<Checkpoint<ExecuteTimings, SchedulerContext>>,
+    checkpoint: Arc<Checkpoint<ExecuteTimings>>,
     stopped_mode: Option<solana_scheduler::Mode>,
     current_scheduler_context: RwLock<Option<SchedulerContext>>,
     thread_count: usize,
