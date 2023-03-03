@@ -2225,7 +2225,8 @@ impl<T, B> Checkpoint<T, B> {
             true
         } else {
             false
-        }
+        };
+
         let (rr, ..) = &mut *g;
         assert_eq!(*rr, (0, self.initial_count()));
         *rr = Self::initial_counts(self.initial_count());
