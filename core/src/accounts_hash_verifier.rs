@@ -103,6 +103,7 @@ impl AccountsHashVerifier {
                         std::thread::sleep(LOOP_LIMITER);
                     }
                 }
+                info!("Accounts Hash Verifier has stopped");
             })
             .unwrap();
         Self {
