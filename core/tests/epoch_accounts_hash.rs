@@ -201,6 +201,7 @@ impl BackgroundServices {
             false,
             0,
             snapshot_config.clone(),
+            None,
         );
 
         let (snapshot_request_sender, snapshot_request_receiver) = crossbeam_channel::unbounded();

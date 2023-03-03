@@ -635,6 +635,8 @@ impl Validator {
             config.halt_on_known_validators_accounts_hash_mismatch,
             config.accounts_hash_fault_injection_slots,
             config.snapshot_config.clone(),
+            // soon; will populate the starting full snapshot information
+            None,
         );
 
         let (snapshot_request_sender, snapshot_request_receiver) = unbounded();

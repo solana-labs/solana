@@ -38,6 +38,7 @@ pub struct AccountsHashVerifier {
 }
 
 impl AccountsHashVerifier {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         accounts_package_sender: Sender<AccountsPackage>,
         accounts_package_receiver: Receiver<AccountsPackage>,
@@ -48,6 +49,7 @@ impl AccountsHashVerifier {
         halt_on_known_validators_accounts_hash_mismatch: bool,
         fault_injection_rate_slots: u64,
         snapshot_config: SnapshotConfig,
+        starting_full_snapshot: Option<FullSnapshotAccountsHashInfo>,
     ) -> Self {
         // If there are no accounts packages to process, limit how often we re-check
         const LOOP_LIMITER: Duration = Duration::from_millis(DEFAULT_MS_PER_SLOT);
@@ -56,7 +58,7 @@ impl AccountsHashVerifier {
         let t_accounts_hash_verifier = Builder::new()
             .name("solAcctHashVer".to_string())
             .spawn(move || {
-                let mut last_full_snapshot = None;
+                let mut last_full_snapshot = starting_full_snapshot;
                 let mut hashes = vec![];
                 loop {
                     if exit.load(Ordering::Relaxed) {
@@ -473,7 +475,7 @@ impl AccountsHashVerifier {
 /// snapshot verification at load time, the incremental snapshot will need to include *this*
 /// information about the full snapshot it was based on.
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
-struct FullSnapshotAccountsHashInfo {
+pub struct FullSnapshotAccountsHashInfo {
     slot: Slot,
     accounts_hash: AccountsHash,
     capitalization: u64,
