@@ -365,7 +365,7 @@ impl<T, B: Clone> Checkpoint<T, B> {
     }
 }
 
-impl<T, B: Clone> solana_scheduler::WithContext for Checkpoint<T, B> {
+impl<T, B: Clone + WithMode> solana_scheduler::WithContext for Checkpoint<T, B> {
     type Context = B;
 
     fn use_context_value(&self) -> Option<B> {
