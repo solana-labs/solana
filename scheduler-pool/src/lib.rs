@@ -38,7 +38,6 @@ use solana_runtime::vote_sender_types::ReplayVoteSender;
 use solana_ledger::blockstore_processor::TransactionStatusSender;
 use solana_ledger::token_balances::collect_token_balances;
 use solana_scheduler::WithMode;
-use solana_scheduler::Checkpoint;
 
 pub use solana_scheduler::Mode;
 
@@ -218,9 +217,177 @@ impl CommitStatus {
     }
 }
 
+#[derive(Debug)]
+pub struct Checkpoint<T, B>(std::sync::Mutex<((usize, usize), Option<T>, Option<B>, usize)>, std::sync::Condvar, std::sync::Condvar, usize);
+
+impl<T, B> Checkpoint<T, B> {
+    pub fn wait_for_restart(&self) {
+        let mut a = &mut None;
+        let mut current_thread_name = || a.get_or_insert_with(|| std::thread::current().name().unwrap().to_string()).clone() ;
+
+        let mut g = self.0.lock().unwrap();
+        let ((remaining_threads, r2), self_return_value, _, remaining_contexts) = &mut *g;
+        info!(
+            "Checkpoint::wait_for_restart: {} is entering at {} -> {}",
+            current_thread_name(),
+            *remaining_threads,
+            *remaining_threads - 1
+        );
+
+        *remaining_threads = remaining_threads.checked_sub(1).unwrap();
+
+        if *remaining_threads == 0 {
+            assert!(self_return_value.is_some());
+            assert!(*r2 <= 1);
+            *r2 = r2.checked_add(1).unwrap();
+            drop((remaining_threads, r2));
+            assert_eq!(*remaining_contexts, 0);
+            self.1.notify_all();
+            info!(
+                "Checkpoint::wait_for_restart: {} notified all others...",
+                current_thread_name()
+            );
+        } else {
+            info!(
+                "Checkpoint::wait_for_restart: {} is paused...",
+                current_thread_name()
+            );
+            let _ = *self
+                .1
+                .wait_while(g, |&mut ((remaining_threads, ..), ..)| remaining_threads > 0)
+                .unwrap();
+            g = self.0.lock().unwrap();
+            let ((_, r2), ..) = &mut *g;
+            *r2 = r2.checked_add(1).unwrap();
+            if *r2 == self.initial_count() {
+                self.2.notify_one();
+            }
+            info!(
+                "Checkpoint::wait_for_restart: {} is started... {r2}",
+                current_thread_name()
+            );
+        }
+    }
+
+    pub fn reset_remaining_threads(&self) {
+        let mut a = &mut None;
+        let mut current_thread_name = || a.get_or_insert_with(|| std::thread::current().name().unwrap().to_string()).clone() ;
+
+        let mut g = self.0.lock().unwrap();
+        let ((_, r2), self_return_value, _, remaining_contexts) = &mut *g;
+        let is_waited = if *r2 < self.initial_count() {
+            info!(
+                "Checkpoint::reset_remaining_threads: {} is waited... {r2}",
+                current_thread_name()
+            );
+            let _ = *self
+                .2
+                .wait_while(g, |&mut ((_, r2), ..)| r2 < self.initial_count())
+                .unwrap();
+            g = self.0.lock().unwrap();
+            true
+        } else {
+            false
+        };
+
+        let (rr, ..) = &mut *g;
+        assert_eq!(*rr, (0, self.initial_count()));
+        *rr = Self::initial_counts(self.initial_count());
+        if is_waited {
+            info!(
+                "Checkpoint::reset_remaining_threads: {} is notified...",
+                current_thread_name()
+            );
+        } else {
+            info!(
+                "Checkpoint::reset_remaining_threads: {} is reset",
+                current_thread_name()
+            );
+        }
+    }
+
+    fn initial_count(&self) -> usize {
+        self.3
+    }
+
+    fn initial_counts(a: usize) -> (usize, usize) {
+        (a, 0)
+    }
+
+    pub fn register_return_value(&self, restart_value: T) {
+        let mut g = self.0.lock().unwrap();
+        let (_, self_return_value, ..) = &mut *g;
+        assert!(self_return_value.is_none());
+        *self_return_value = Some(restart_value);
+    }
+
+    pub fn reduce_count(&self) {
+        let current_thread_name = std::thread::current().name().unwrap().to_string();
+        let mut g = self.0.lock().unwrap();
+        let ((remaining_threads, r2), ..) = &mut *g;
+        info!(
+            "Checkpoint::reduce_count: {} is entering at {} -> {}",
+            current_thread_name,
+            *remaining_threads,
+            *remaining_threads - 1
+        );
+
+        *remaining_threads = remaining_threads.checked_sub(1).unwrap();
+        assert_eq!(*r2, 0);
+        *r2 = r2.checked_add(1).unwrap();
+        assert!(*remaining_threads > 0);
+    }
+
+    pub fn take_restart_value(&self) -> T {
+        let mut g = self.0.lock().unwrap();
+        let (_, self_return_value, ..) = &mut *g;
+        self_return_value.take().unwrap()
+    }
+
+    pub fn new(initial_count: usize) -> std::sync::Arc<Self> {
+        std::sync::Arc::new(Self(
+            std::sync::Mutex::new((Self::initial_counts(initial_count), None, None, 0)),
+            std::sync::Condvar::new(),
+            std::sync::Condvar::new(),
+            initial_count,
+        ))
+    }
+}
 
 impl<T, B: Clone> Checkpoint<T, B> {
+    pub fn replace_context_value(&self, new: B) {
+        let mut g = self.0.lock().unwrap();
+        let (_, self_return_value, b, remaining_contexts) = &mut *g;
+        assert_eq!(*remaining_contexts, 0);
+        *remaining_contexts = self.initial_count();
+        *b = Some(new);
+    }
+
+    pub fn use_context_value(&self) -> Option<B> {
+        let mut a = &mut None;
+        let mut current_thread_name = || a.get_or_insert_with(|| std::thread::current().name().unwrap().to_string()).clone() ;
+
+        let mut g = self.0.lock().unwrap();
+        let (_, self_return_value, b, remaining_contexts) = &mut *g;
+        *remaining_contexts = remaining_contexts.checked_sub(1).unwrap();
+        if *remaining_contexts > 0 {
+            info!(
+                "Checkpoint::use_context_value: {} used ({})",
+                current_thread_name(),
+                *remaining_contexts,
+            );
+            b.clone()
+        } else {
+            info!(
+                "Checkpoint::use_context_value: {} took ({})",
+                current_thread_name(),
+                *remaining_contexts,
+            );
+            b.take()
+        }
+    }
 }
+
 
 impl Scheduler {
     fn spawn(scheduler_pool: Arc<SchedulerPool>, initial_context: SchedulerContext) -> Self {
