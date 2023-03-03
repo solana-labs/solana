@@ -2232,7 +2232,7 @@ impl<T, B> Checkpoint<T, B> {
         *rr = Self::initial_counts(self.initial_count());
         if is_waited {
             info!(
-                "Checkpoint::reset_remaining_threads: {} is notified... {r2}",
+                "Checkpoint::reset_remaining_threads: {} is notified...",
                 current_thread_name()
             );
         } else {
