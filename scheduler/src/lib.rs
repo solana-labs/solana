@@ -2102,19 +2102,6 @@ impl ScheduleStage {
         drop(to_execute_substage);
         drop(to_high_execute_substage);
 
-        /*
-        if scheduler_context.is_none() {
-           scheduler_context = checkpoint.use_context_value();
-        }
-        let did_drop = if let Some(sc) = scheduler_context {
-            sc.drop_cyclically()
-        } else {
-            false
-        };
-        if !did_drop {
-            checkpoint.wait_for_restart();
-        }
-        */
         scheduler_context
     }
 
