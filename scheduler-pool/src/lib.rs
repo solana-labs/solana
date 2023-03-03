@@ -763,7 +763,7 @@ impl Scheduler {
 }
 
 impl Scheduler {
-    fn new_checkpoint(thread_count: usize) -> Arc<Checkpoint<ExecuteTimings>> {
+    fn new_checkpoint(thread_count: usize) -> Arc<Checkpoint> {
         Checkpoint::new(thread_count)
     }
 
