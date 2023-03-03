@@ -2151,7 +2151,7 @@ pub enum Flushable<T> {
 
 pub trait WithContext {
     type Context: WithMode;
-    fn use_context_value(&self) -> Option<Context>;
+    fn use_context_value(&self) -> Option<Self::Context>;
     // add fn log_prefix?
 }
 
