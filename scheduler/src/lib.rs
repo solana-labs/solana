@@ -2149,12 +2149,12 @@ pub enum Flushable<T> {
 }
 
 pub trait WithContext<B> {
+    type Context: WithMode;
     fn use_context_value(&self) -> Option<B>;
     // add fn log_prefix?
 }
 
 pub trait WithMode {
-    type Context = usize;
     fn mode(&self) -> Mode;
     fn drop_cyclically(self: Self) -> bool;
 }
