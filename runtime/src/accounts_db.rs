@@ -477,6 +477,7 @@ pub const ACCOUNTS_DB_CONFIG_FOR_TESTING: AccountsDbConfig = AccountsDbConfig {
     exhaustively_verify_refcounts: false,
     assert_stakes_cache_consistency: true,
     create_ancient_storage: CreateAncientStorage::Append,
+    tests_with_no_foreground_account_processing: true,
 };
 pub const ACCOUNTS_DB_CONFIG_FOR_BENCHMARKS: AccountsDbConfig = AccountsDbConfig {
     index: Some(ACCOUNTS_INDEX_CONFIG_FOR_BENCHMARKS),
@@ -488,6 +489,7 @@ pub const ACCOUNTS_DB_CONFIG_FOR_BENCHMARKS: AccountsDbConfig = AccountsDbConfig
     exhaustively_verify_refcounts: false,
     assert_stakes_cache_consistency: false,
     create_ancient_storage: CreateAncientStorage::Append,
+    tests_with_no_foreground_account_processing: false,
 };
 
 pub type BinnedHashData = Vec<Vec<CalculateHashIntermediate>>;
@@ -549,6 +551,9 @@ pub struct AccountsDbConfig {
     pub assert_stakes_cache_consistency: bool,
     /// how to create ancient storages
     pub create_ancient_storage: CreateAncientStorage,
+    /// if we are running tests and foreground account processing will not occur.
+    /// Otherwise, shrink tests could wait forever.
+    pub tests_with_no_foreground_account_processing: bool,
 }
 
 #[cfg(not(test))]
@@ -1969,6 +1974,7 @@ pub(crate) struct ShrinkStats {
     dead_accounts: AtomicU64,
     alive_accounts: AtomicU64,
     accounts_loaded: AtomicU64,
+    wait_for_fg_us: AtomicU64,
 }
 
 impl ShrinkStats {
@@ -2065,6 +2071,11 @@ impl ShrinkStats {
                 (
                     "accounts_loaded",
                     self.accounts_loaded.swap(0, Ordering::Relaxed) as i64,
+                    i64
+                ),
+                (
+                    "wait_for_fg_us",
+                    self.wait_for_fg_us.swap(0, Ordering::Relaxed) as i64,
                     i64
                 ),
             );
@@ -2182,6 +2193,11 @@ impl ShrinkAncientStats {
                 (
                     "accounts_loaded",
                     self.shrink_stats.accounts_loaded.swap(0, Ordering::Relaxed) as i64,
+                    i64
+                ),
+                (
+                    "wait_for_fg_us",
+                    self.shrink_stats.wait_for_fg_us.swap(0, Ordering::Relaxed) as i64,
                     i64
                 ),
                 (
@@ -2515,6 +2531,13 @@ impl AccountsDb {
             .map(|config| config.create_ancient_storage)
             .unwrap_or(CreateAncientStorage::Append);
 
+        let tests_with_no_foreground_account_processing = accounts_db_config
+            .as_ref()
+            .map(|config| config.tests_with_no_foreground_account_processing)
+            .unwrap_or_default();
+        let bank_progress =
+            BankCreationFreezingProgress::new(tests_with_no_foreground_account_processing);
+
         let filler_account_suffix = if filler_accounts_config.count > 0 {
             Some(solana_sdk::pubkey::new_rand())
         } else {
@@ -2537,6 +2560,7 @@ impl AccountsDb {
                 .as_ref()
                 .and_then(|x| x.write_cache_limit_bytes),
             exhaustively_verify_refcounts,
+            bank_progress,
             ..Self::default_with_accounts_index(accounts_index, accounts_hash_cache_path)
         };
         if paths_is_empty {
@@ -3909,6 +3933,25 @@ impl AccountsDb {
         shrink_in_progress: Option<ShrinkInProgress>,
         shrink_can_be_active: bool,
     ) {
+        self.wait_until_foreground_processing_advances(stats);
+
+        self.remove_old_stores_shrink_internal(
+            shrink_collect,
+            stats,
+            shrink_in_progress,
+            shrink_can_be_active,
+        )
+    }
+
+    /// common code from shrink and combine_ancient_slots
+    /// get rid of all original store_ids in the slot
+    fn remove_old_stores_shrink_internal<'a, T: ShrinkCollectRefs<'a>>(
+        &self,
+        shrink_collect: &ShrinkCollect<'a, T>,
+        stats: &ShrinkStats,
+        shrink_in_progress: Option<ShrinkInProgress>,
+        shrink_can_be_active: bool,
+    ) {
         let mut time = Measure::start("remove_old_stores_shrink");
         // Purge old, overwritten storage entries
         let dead_storages = self.mark_dirty_dead_stores(
@@ -4023,6 +4066,28 @@ impl AccountsDb {
         Self::update_shrink_stats(&self.shrink_stats, stats_sub);
         self.shrink_stats.report();
         self.bank_progress.report();
+    }
+
+    /// sleep this thread until the banks that are currently created are frozen or dropped
+    fn wait_until_foreground_processing_advances(&self, stats: &ShrinkStats) {
+        let (_, wait_us) = measure_us!({
+            // now that we have created a new storage and updated the index, we need to make sure there are no fg processes which could try
+            // to load the accounts from the old storage. Any index entries loaded from the index would not have a store_id, so we might try
+            // to load from the wrong storage.
+            // So, do not release 'shrink_collect' and thus, the index entries we're moving, until the fg processes
+            // have advanced and no longer need to disambiguate between the two storages (old and newly shrunk)
+            #[cfg(test)]
+            {
+                if self
+                    .bank_progress
+                    .tests_with_no_foreground_account_processing
+                {
+                    return;
+                }
+            }
+            self.bank_progress.wait_until_banks_complete();
+        });
+        stats.wait_for_fg_us.fetch_add(wait_us, Ordering::Relaxed);
     }
 
     pub(crate) fn update_shrink_stats(shrink_stats: &ShrinkStats, stats_sub: ShrinkStatsSub) {

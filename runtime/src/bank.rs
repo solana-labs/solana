@@ -1216,7 +1216,8 @@ impl WorkingSlot for Bank {
 
 impl Bank {
     pub fn default_for_tests() -> Self {
-        Self::default_with_accounts(Accounts::default_for_tests())
+        let accounts = Accounts::default_for_tests();
+        Self::default_with_accounts(accounts)
     }
 
     pub fn new_for_benches(genesis_config: &GenesisConfig) -> Self {
@@ -1338,7 +1339,7 @@ impl Bank {
             loaded_programs_cache: Arc::<RwLock<LoadedPrograms>>::default(),
         };
 
-        bank.bank_created();
+        bank.bank_created(0);
         let accounts_data_size_initial = bank.get_total_accounts_stats().unwrap().data_len as u64;
         bank.accounts_data_size_initial = accounts_data_size_initial;
 
@@ -1550,7 +1551,8 @@ impl Bank {
         let (feature_set, feature_set_time_us) = measure_us!(parent.feature_set.clone());
 
         let accounts_data_size_initial = parent.load_accounts_data_size();
-        parent.bank_created();
+        parent.bank_created(slot);
+        error!("creating bank: {}, parent: {}", slot, parent.slot());
         let mut new = Self {
             bank_freeze_or_destruction_incremented: AtomicBool::default(),
             incremental_snapshot_persistence: None,
@@ -1786,12 +1788,15 @@ impl Bank {
         self.vote_only_bank
     }
 
-    fn bank_created(&self) {
-        self.rc
-            .accounts
+    fn _bank_created(rc: &BankRc, slot: Slot) {
+        rc.accounts
             .accounts_db
             .bank_progress
-            .increment_bank_creation_count();
+            .increment_bank_creation_count(slot)
+    }
+
+    fn bank_created(&self, slot: Slot) {
+        Self::_bank_created(&self.rc, slot)
     }
 
     fn bank_frozen_or_destroyed(&self) {
@@ -1803,7 +1808,7 @@ impl Bank {
                 .accounts
                 .accounts_db
                 .bank_progress
-                .increment_bank_frozen_or_destroyed();
+                .increment_bank_frozen_or_destroyed(self.slot());
         }
     }
 
@@ -1952,7 +1957,8 @@ impl Bank {
             fee_structure: FeeStructure::default(),
             loaded_programs_cache: Arc::<RwLock<LoadedPrograms>>::default(),
         };
-        bank.bank_created();
+        bank.bank_created(bank.slot());
+        bank.bank_frozen_or_destroyed(); // go ahead and mark this as complete. At startup, shrink does not need to wait.
 
         bank.finish_init(
             genesis_config,

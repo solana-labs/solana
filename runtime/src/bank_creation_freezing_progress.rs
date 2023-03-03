@@ -2,10 +2,10 @@
 //! This is useful to track foreground progress to understand expected access to accounts db.
 use {
     crate::waitable_condvar::WaitableCondvar,
-    solana_sdk::timing::AtomicInterval,
-    std::sync::{
-        atomic::{AtomicU32, Ordering},
-        Arc,
+    solana_sdk::{slot_history::Slot, timing::AtomicInterval},
+    std::{
+        collections::HashSet,
+        sync::{Arc, RwLock},
     },
 };
 
@@ -14,49 +14,75 @@ use {
 /// When 'bank_freeze_or_destruction_count' exceeds a prior value of 'bank_creation_count',
 /// this means that we can know all banks that began loading accounts have completed as of the prior value of 'bank_creation_count'.
 pub(crate) struct BankCreationFreezingProgress {
-    /// Incremented each time a bank is created.
-    /// Starting now, this bank could be finding accounts in the index and loading them from accounts db.
-    bank_creation_count: AtomicU32,
-    /// Incremented each time a bank is frozen or destroyed.
-    /// At this point, this bank has completed all account loading.
-    bank_freeze_or_destruction_count: AtomicU32,
+    /// current set of banks that have been created but not frozen or dropped yet
+    current_banks: RwLock<HashSet<Slot>>,
 
     /// enable waiting for bank_freeze_or_destruction_count to increment
     bank_frozen_or_destroyed: Arc<WaitableCondvar>,
 
     last_report: AtomicInterval,
+
+    #[allow(dead_code)]
+    /// if we are running tests and foreground account processing will not occur.
+    /// Otherwise, shrink tests could wait forever.
+    pub(crate) tests_with_no_foreground_account_processing: bool,
 }
 
 impl BankCreationFreezingProgress {
-    pub(crate) fn increment_bank_frozen_or_destroyed(&self) {
-        self.bank_freeze_or_destruction_count
-            .fetch_add(1, Ordering::Release);
+    pub(crate) fn new(tests_with_no_foreground_account_processing: bool) -> Self {
+        Self {
+            tests_with_no_foreground_account_processing,
+            ..Self::default()
+        }
+    }
+
+    pub(crate) fn increment_bank_frozen_or_destroyed(&self, slot: Slot) {
+        assert!(
+            self.current_banks.write().unwrap().remove(&slot),
+            "slot: {}, slots: {:?}",
+            slot,
+            self.current_banks.read().unwrap()
+        );
         self.bank_frozen_or_destroyed.notify_all();
     }
 
-    pub(crate) fn get_bank_frozen_or_destroyed_count(&self) -> u32 {
-        self.bank_freeze_or_destruction_count
-            .load(Ordering::Acquire)
+    pub(crate) fn increment_bank_creation_count(&self, slot: Slot) {
+        assert!(self.current_banks.write().unwrap().insert(slot));
     }
 
-    pub(crate) fn increment_bank_creation_count(&self) {
-        self.bank_creation_count.fetch_add(1, Ordering::Release);
-    }
+    /// note which banks are currently active.
+    /// sleep and block until all these banks have been dropped or frozen
+    pub(crate) fn wait_until_banks_complete(&self) {
+        let mut wait_on_slots = self
+            .current_banks
+            .read()
+            .unwrap()
+            .iter()
+            .cloned()
+            .collect::<Vec<_>>();
+        let timeout = std::time::Duration::from_millis(100);
 
-    pub(crate) fn get_bank_creation_count(&self) -> u32 {
-        self.bank_creation_count.load(Ordering::Acquire)
+        while !wait_on_slots.is_empty() {
+            self.bank_frozen_or_destroyed.wait_timeout(timeout);
+            let mut to_remove = 0;
+            let lock = self.current_banks.read().unwrap();
+            for slot in wait_on_slots.iter().rev() {
+                if lock.contains(slot) {
+                    // this slot is still active, so stop looking
+                    break;
+                }
+                to_remove += 1;
+            }
+            drop(lock);
+            wait_on_slots.truncate(wait_on_slots.len().saturating_sub(to_remove));
+        }
     }
 
     pub(crate) fn report(&self) {
         if self.last_report.should_update(60_000) {
             datapoint_info!(
                 "bank_progress",
-                (
-                    "difference",
-                    self.get_bank_creation_count()
-                        .wrapping_sub(self.get_bank_frozen_or_destroyed_count()),
-                    i64
-                )
+                ("num_active", self.current_banks.read().unwrap().len(), i64)
             );
         }
     }
@@ -64,20 +90,26 @@ impl BankCreationFreezingProgress {
 
 #[cfg(test)]
 pub mod tests {
-    use {super::*, solana_sdk::timing::timestamp, std::thread::Builder};
+    use {
+        super::*,
+        solana_sdk::timing::timestamp,
+        std::{
+            sync::atomic::{AtomicU32, Ordering},
+            thread::Builder,
+        },
+    };
 
     #[test]
     fn test_count() {
         solana_logger::setup();
         let progress = BankCreationFreezingProgress::default();
-        assert_eq!(progress.get_bank_creation_count(), 0);
-        assert_eq!(progress.get_bank_frozen_or_destroyed_count(), 0);
-        progress.increment_bank_creation_count();
-        assert_eq!(progress.get_bank_creation_count(), 1);
-        assert_eq!(progress.get_bank_frozen_or_destroyed_count(), 0);
-        progress.increment_bank_frozen_or_destroyed();
-        assert_eq!(progress.get_bank_creation_count(), 1);
-        assert_eq!(progress.get_bank_frozen_or_destroyed_count(), 1);
+        assert!(progress.current_banks.read().unwrap().is_empty());
+        let slot1 = 1;
+        progress.increment_bank_creation_count(slot1);
+        assert_eq!(progress.current_banks.read().unwrap().len(), 1);
+        assert!(progress.current_banks.read().unwrap().contains(&slot1));
+        progress.increment_bank_frozen_or_destroyed(slot1);
+        assert!(progress.current_banks.read().unwrap().is_empty());
     }
 
     #[test]
@@ -90,10 +122,12 @@ pub mod tests {
         let tester = Arc::new(AtomicU32::default());
         let tester2 = tester.clone();
 
+        let secs = 10;
+
         let thread = Builder::new()
             .name("test_wait".to_string())
             .spawn(move || {
-                assert!(!waiter.wait_timeout(std::time::Duration::from_secs(5)));
+                assert!(!waiter.wait_timeout(std::time::Duration::from_secs(secs)));
                 tester2.store(1, Ordering::Release);
             })
             .unwrap();
@@ -101,12 +135,12 @@ pub mod tests {
         let mut i = 0;
         while tester.load(Ordering::Acquire) == 0 {
             // keep incrementing until the waiter thread has picked up the notification that we incremented
-            progress.increment_bank_frozen_or_destroyed();
+            progress.increment_bank_creation_count(i);
+            progress.increment_bank_frozen_or_destroyed(i);
             i += 1;
-            assert_eq!(progress.get_bank_frozen_or_destroyed_count(), i);
             let now = timestamp();
             let elapsed = now.wrapping_sub(start);
-            assert!(elapsed < 5_000, "elapsed: {elapsed}");
+            assert!(elapsed < secs * 1_000, "elapsed: {elapsed}");
         }
         thread.join().expect("failed");
     }
