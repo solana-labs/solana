@@ -2156,5 +2156,4 @@ pub trait WithContext {
 
 pub trait WithMode {
     fn mode(&self) -> Mode;
-    fn drop_cyclically(self: Self) -> bool;
 }

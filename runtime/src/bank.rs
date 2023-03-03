@@ -954,15 +954,6 @@ impl solana_scheduler::WithMode for SchedulerContext {
     fn mode(&self) -> solana_scheduler::Mode {
         self.mode
     }
-
-    fn drop_cyclically(mut self) -> bool {
-        let mut did_drop = false;
-        if let Ok(bank) = Arc::try_unwrap(self.bank) {
-            did_drop = bank.drop_from_scheduler_thread();
-        }
-
-        did_drop
-    }
 }
 
 impl SchedulerContext {
@@ -983,6 +974,15 @@ impl SchedulerContext {
 
     pub fn log_prefix(random_id: u64, context: Option<&Self>) -> String {
         format!("id_{:016x}{}", random_id, context.as_ref().map(|c| format!(" slot: {}, mode: {:?}", c.slot(), c.mode)).unwrap_or("".into()))
+    }
+
+    pub fn drop_cyclically(mut self) -> bool {
+        let mut did_drop = false;
+        if let Ok(bank) = Arc::try_unwrap(self.bank) {
+            did_drop = bank.drop_from_scheduler_thread();
+        }
+
+        did_drop
     }
 }
 
