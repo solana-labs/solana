@@ -2105,8 +2105,8 @@ impl ScheduleStage {
     }
 
     #[must_use]
-    pub fn run<T: Send, B: WithMode>(
-        checkpoint: &std::sync::Arc<impl WithContext<B>>,
+    pub fn run<T: Send, B: WithMode, C: WithContext<B>>(
+        checkpoint: &std::sync::Arc<C>,
         max_executing_queue_count: usize,
         runnable_queue: &mut TaskQueue,
         address_book: &mut AddressBook,
