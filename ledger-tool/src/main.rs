@@ -1225,10 +1225,10 @@ fn load_bank_forks(
         .value_of("replaying_backend")
         .map(ReplayingBackend::from)
         .unwrap();
-    let aaa = None;
+    let no_transaction_status_sender = None;
     if matches!(replaying_backend, ReplayingBackend::UnifiedScheduler) {
         let no_poh_recorder = None;
-        bank_forks.write().unwrap().install_scheduler_pool(solana_scheduler_pool::SchedulerPool::new_boxed(no_poh_recorder, None, aaa.clone(), None), false);
+        bank_forks.write().unwrap().install_scheduler_pool(solana_scheduler_pool::SchedulerPool::new_boxed(no_poh_recorder, None, no_transaction_status_sender.clone(), None), false);
     } else {
         info!("not installing scheduler pool...");
     }
@@ -1265,7 +1265,7 @@ fn load_bank_forks(
         &bank_forks,
         &leader_schedule_cache,
         &process_options,
-        aaa.as_ref(),
+        no_transaction_status_sender.as_ref(),
         None,
         &accounts_background_request_sender,
     )
