@@ -2105,7 +2105,7 @@ impl ScheduleStage {
     }
 
     #[must_use]
-    pub fn run<T: Send, B: WithMode, C: WithContext<B>>(
+    pub fn run<T: Send, C: WithContext<B>>(
         checkpoint: &std::sync::Arc<C>,
         max_executing_queue_count: usize,
         runnable_queue: &mut TaskQueue,
@@ -2121,7 +2121,8 @@ impl ScheduleStage {
         struct AtTopOfScheduleThread;
         unsafe impl AtScheduleThread for AtTopOfScheduleThread {}
 
-        Self::_run::<AtTopOfScheduleThread, T, B>(
+        /*
+        Self::_run::<AtTopOfScheduleThread, T, C>(
             AtTopOfScheduleThread,
             checkpoint,
             max_executing_queue_count,
@@ -2134,7 +2135,7 @@ impl ScheduleStage {
             maybe_to_next_stage,
             &crossbeam_channel::never(),
             log_prefix,
-        )
+        )*/panic!();
     }
 }
 
