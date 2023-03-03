@@ -217,6 +217,10 @@ impl CommitStatus {
     }
 }
 
+
+impl<T, B: Clone> Checkpoint<T, B> {
+}
+
 impl Scheduler {
     fn spawn(scheduler_pool: Arc<SchedulerPool>, initial_context: SchedulerContext) -> Self {
         let start = Instant::now();
