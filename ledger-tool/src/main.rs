@@ -68,6 +68,7 @@ use {
             self, create_accounts_run_and_snapshot_dirs, move_and_async_delete_path, ArchiveFormat,
             SnapshotVersion, DEFAULT_ARCHIVE_COMPRESSION, SUPPORTED_ARCHIVE_COMPRESSION,
         },
+        vote_sender_types::ReplayVoteSender,
     },
     solana_sdk::{
         account::{AccountSharedData, ReadableAccount, WritableAccount},
