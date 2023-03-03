@@ -2121,7 +2121,6 @@ impl ScheduleStage {
         struct AtTopOfScheduleThread;
         unsafe impl AtScheduleThread for AtTopOfScheduleThread {}
 
-        /*
         Self::_run::<AtTopOfScheduleThread, T, C>(
             AtTopOfScheduleThread,
             checkpoint,
@@ -2135,7 +2134,7 @@ impl ScheduleStage {
             maybe_to_next_stage,
             &crossbeam_channel::never(),
             log_prefix,
-        )*/panic!();
+        )
     }
 }
 
