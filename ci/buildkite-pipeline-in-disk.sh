@@ -260,21 +260,6 @@ EOF
       "wasm skipped as no relevant files were modified"
   fi
 
-  # Benches...
-  if affects \
-             .rs$ \
-             Cargo.lock$ \
-             Cargo.toml$ \
-             ^ci/rust-version.sh \
-             ^ci/test-coverage.sh \
-             ^ci/test-bench.sh \
-      ; then
-    command_step bench "ci/test-bench.sh" 40
-  else
-    annotate --style info --context test-bench \
-      "Bench skipped as no .rs files were modified"
-  fi
-
   command_step "local-cluster" \
     ". ci/rust-version.sh; ci/docker-run.sh \$\$rust_stable_docker_image ci/test-local-cluster.sh" \
     40
