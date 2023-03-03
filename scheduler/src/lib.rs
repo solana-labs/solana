@@ -2115,6 +2115,7 @@ impl ScheduleStage {
             checkpoint.wait_for_restart();
         }
         */
+        scheduler_context
     }
 
     #[must_use]
@@ -2163,6 +2164,7 @@ pub enum Flushable<T> {
 
 pub trait WithContext<B> {
     fn use_context_value(&self) -> Option<B>;
+    // add fn log_prefix
 }
 
 pub trait WithMode {
