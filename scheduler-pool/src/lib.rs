@@ -362,7 +362,9 @@ impl<T, B: Clone> Checkpoint<T, B> {
         *remaining_contexts = self.initial_count();
         *b = Some(new);
     }
+}
 
+impl<T, B: Clone> solana_scheduler::WithMode<B> for Context<T, B> {
     pub fn use_context_value(&self) -> Option<B> {
         let mut a = &mut None;
         let mut current_thread_name = || a.get_or_insert_with(|| std::thread::current().name().unwrap().to_string()).clone() ;
