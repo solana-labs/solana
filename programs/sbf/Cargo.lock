@@ -5437,6 +5437,7 @@ dependencies = [
  "solana-measure",
  "solana-program-runtime",
  "solana-runtime",
+ "solana-sbf-rust-bench",
  "solana-sbf-rust-invoke",
  "solana-sbf-rust-realloc",
  "solana-sbf-rust-realloc-invoke",
@@ -5463,6 +5464,13 @@ dependencies = [
 
 [[package]]
 name = "solana-sbf-rust-alloc"
+version = "1.16.0"
+dependencies = [
+ "solana-program 1.16.0",
+]
+
+[[package]]
+name = "solana-sbf-rust-bench"
 version = "1.16.0"
 dependencies = [
  "solana-program 1.16.0",

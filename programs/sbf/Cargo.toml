@@ -37,6 +37,7 @@ solana-program-runtime = { path = "../../program-runtime", version = "=1.16.0" }
 solana-program-test = { path = "../../program-test", version = "=1.16.0" }
 solana-runtime = { path = "../../runtime", version = "=1.16.0" }
 solana-sbf-rust-128bit-dep = { path = "rust/128bit_dep", version = "=1.16.0" }
+solana-sbf-rust-bench = { path = "rust/bench", version = "=1.16.0" }
 solana-sbf-rust-invoke = { path = "rust/invoke", version = "=1.16.0" }
 solana-sbf-rust-invoked = { path = "rust/invoked", version = "=1.16.0", default-features = false }
 solana-sbf-rust-many-args-dep = { path = "rust/many_args_dep", version = "=1.16.0" }
@@ -85,6 +86,7 @@ solana-logger = { workspace = true }
 solana-measure = { workspace = true }
 solana-program-runtime = { workspace = true }
 solana-runtime = { workspace = true }
+solana-sbf-rust-bench = { workspace = true }
 solana-sbf-rust-invoke = { workspace = true }
 solana-sbf-rust-realloc = { workspace = true, features = ["default"] }
 solana-sbf-rust-realloc-invoke = { workspace = true }
@@ -104,6 +106,7 @@ members = [
     "rust/128bit_dep",
     "rust/alloc",
     "rust/alt_bn128",
+    "rust/bench",
     "rust/big_mod_exp",
     "rust/call_depth",
     "rust/caller_access",
