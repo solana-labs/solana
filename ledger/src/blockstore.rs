@@ -552,6 +552,16 @@ impl Blockstore {
         self.prepare_rooted_slot_iterator(slot, IteratorDirection::Reverse)
     }
 
+    pub fn reversed_optimistic_slots_iterator(
+        &self,
+    ) -> Result<impl Iterator<Item = (Slot, Hash, UnixTimestamp)> + '_> {
+        let iter = self.db.iter::<cf::OptimisticSlots>(IteratorMode::End)?;
+        Ok(iter.map(|(slot, bytes)| {
+            let meta: OptimisticSlotMetaVersioned = deserialize(&bytes).unwrap();
+            (slot, meta.hash(), meta.timestamp())
+        }))
+    }
+
     /// Determines if we can iterate from `starting_slot` to >= `ending_slot` by full slots
     /// `starting_slot` is excluded from the `is_full()` check
     pub fn slot_range_connected(&self, starting_slot: Slot, ending_slot: Slot) -> bool {
@@ -3103,15 +3113,8 @@ impl Blockstore {
         &self,
         num: usize,
     ) -> Result<Vec<(Slot, Hash, UnixTimestamp)>> {
-        Ok(self
-            .db
-            .iter::<cf::OptimisticSlots>(IteratorMode::End)?
-            .take(num)
-            .map(|(slot, data)| {
-                let meta: OptimisticSlotMetaVersioned = deserialize(&data).unwrap();
-                (slot, meta.hash(), meta.timestamp())
-            })
-            .collect())
+        let iter = self.reversed_optimistic_slots_iterator()?;
+        Ok(iter.take(num).collect())
     }
 
     pub fn set_duplicate_confirmed_slots_and_hashes(
