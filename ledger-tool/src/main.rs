@@ -1225,9 +1225,9 @@ fn load_bank_forks(
         .value_of("replaying_backend")
         .map(ReplayingBackend::from)
         .unwrap();
-    let aa = None;
+    let aaa = None;
     if matches!(replaying_backend, ReplayingBackend::UnifiedScheduler) {
-        bank_forks.write().unwrap().install_scheduler_pool(solana_scheduler_pool::SchedulerPool::new_boxed(aa, None, None, None), false);
+        bank_forks.write().unwrap().install_scheduler_pool(solana_scheduler_pool::SchedulerPool::new_boxed(aaa, None, None, None), false);
     } else {
         info!("not installing scheduler pool...");
     }
