@@ -2212,7 +2212,7 @@ impl<T, B> Checkpoint<T, B> {
 
         let mut g = self.0.lock().unwrap();
         let ((_, r2), self_return_value, _, remaining_contexts) = &mut *g;
-        if *r2 < self.initial_count() {
+        let is_waited = if *r2 < self.initial_count() {
             info!(
                 "Checkpoint::reset_remaining_threads: {} is waited... {r2}",
                 current_thread_name()
@@ -2222,19 +2222,24 @@ impl<T, B> Checkpoint<T, B> {
                 .wait_while(g, |&mut ((_, r2), ..)| r2 < self.initial_count())
                 .unwrap();
             g = self.0.lock().unwrap();
+            true
         } else {
-            info!(
-                "Checkpoint::reset_remaining_threads: {} is notified... {r2}",
-                current_thread_name()
-            );
+            false
         }
         let (rr, ..) = &mut *g;
         assert_eq!(*rr, (0, self.initial_count()));
         *rr = Self::initial_counts(self.initial_count());
-        info!(
-            "Checkpoint::reset_remaining_threads: {} is reset",
-            current_thread_name()
-        );
+        if is_waited {
+            info!(
+                "Checkpoint::reset_remaining_threads: {} is notified... {r2}",
+                current_thread_name()
+            );
+        } else {
+            info!(
+                "Checkpoint::reset_remaining_threads: {} is reset",
+                current_thread_name()
+            );
+        }
     }
 
     fn initial_count(&self) -> usize {
