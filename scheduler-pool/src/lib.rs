@@ -38,6 +38,7 @@ use solana_runtime::vote_sender_types::ReplayVoteSender;
 use solana_ledger::blockstore_processor::TransactionStatusSender;
 use solana_ledger::token_balances::collect_token_balances;
 use solana_scheduler::WithMode;
+use solana_scheduler::Checkpoint;
 
 pub use solana_scheduler::Mode;
 
