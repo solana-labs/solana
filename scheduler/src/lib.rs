@@ -1651,9 +1651,9 @@ impl ScheduleStage {
     }
 
     #[must_use]
-    fn _run<'a, AST: AtScheduleThread, T: Send, B: WithMode>(
+    fn _run<'a, AST: AtScheduleThread, T: Send, C: WithContext>(
         ast: AST,
-        checkpoint: &std::sync::Arc<impl WithContext<B>>,
+        checkpoint: &std::sync::Arc<C>,
         executing_thread_count: usize,
         _runnable_queue: &mut TaskQueue,
         address_book: &mut AddressBook,
@@ -1663,8 +1663,8 @@ impl ScheduleStage {
         from_exec: &crossbeam_channel::Receiver<UnlockablePayload<T>>,
         maybe_to_next_stage: Option<&crossbeam_channel::Sender<ExaminablePayload<T>>>, // assume nonblocking
         never: &'a crossbeam_channel::Receiver<SchedulablePayload>,
-        log_prefix: impl Fn(&Option<B>) -> String,
-    ) -> Option<B> {
+        log_prefix: impl Fn(&Option<C::Context>) -> String,
+    ) -> Option<C::Context> {
         let mut maybe_start_time = None;
         let mut mode = None;
         let (mut last_time, mut last_processed_count) = (maybe_start_time.map(|(a, b)| b).clone(), 0_usize);
