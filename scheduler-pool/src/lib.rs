@@ -219,9 +219,9 @@ impl CommitStatus {
 }
 
 #[derive(Debug)]
-pub struct Checkpoint<T>(std::sync::Mutex<((usize, usize), Option<T>, Option<SchedulerContext>, usize)>, std::sync::Condvar, std::sync::Condvar, usize);
+pub struct Checkpoint(std::sync::Mutex<((usize, usize), Option<ExecuteTimings>, Option<SchedulerContext>, usize)>, std::sync::Condvar, std::sync::Condvar, usize);
 
-impl<T> Checkpoint<T> {
+impl Checkpoint {
     pub fn wait_for_restart(&self) {
         let mut a = &mut None;
         let mut current_thread_name = || a.get_or_insert_with(|| std::thread::current().name().unwrap().to_string()).clone() ;
@@ -315,7 +315,7 @@ impl<T> Checkpoint<T> {
         (a, 0)
     }
 
-    pub fn register_return_value(&self, restart_value: T) {
+    pub fn register_return_value(&self, restart_value: ExecuteTimings) {
         let mut g = self.0.lock().unwrap();
         let (_, self_return_value, ..) = &mut *g;
         assert!(self_return_value.is_none());
@@ -339,7 +339,7 @@ impl<T> Checkpoint<T> {
         assert!(*remaining_threads > 0);
     }
 
-    pub fn take_restart_value(&self) -> T {
+    pub fn take_restart_value(&self) -> ExecuteTimings {
         let mut g = self.0.lock().unwrap();
         let (_, self_return_value, ..) = &mut *g;
         self_return_value.take().unwrap()
@@ -355,7 +355,7 @@ impl<T> Checkpoint<T> {
     }
 }
 
-impl<T> Checkpoint<T> {
+impl Checkpoint {
     pub fn replace_context_value(&self, new: SchedulerContext) {
         let mut g = self.0.lock().unwrap();
         let (_, self_return_value, b, remaining_contexts) = &mut *g;
@@ -365,7 +365,7 @@ impl<T> Checkpoint<T> {
     }
 }
 
-impl<T> solana_scheduler::WithContext for Checkpoint<T> {
+impl solana_scheduler::WithContext for Checkpoint {
     type Context = SchedulerContext;
 
     fn use_context_value(&self) -> Option<SchedulerContext> {
