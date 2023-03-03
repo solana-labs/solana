@@ -2105,7 +2105,7 @@ impl ScheduleStage {
     }
 
     #[must_use]
-    pub fn run<T: Send, C: WithContext<B>>(
+    pub fn run<T: Send, C: WithContext>(
         checkpoint: &std::sync::Arc<C>,
         max_executing_queue_count: usize,
         runnable_queue: &mut TaskQueue,
@@ -2151,7 +2151,7 @@ pub enum Flushable<T> {
 
 pub trait WithContext<B> {
     type Context: WithMode;
-    fn use_context_value(&self) -> Option<B>;
+    fn use_context_value(&self) -> Option<Context>;
     // add fn log_prefix?
 }
 
