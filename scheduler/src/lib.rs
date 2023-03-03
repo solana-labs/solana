@@ -2115,8 +2115,8 @@ impl ScheduleStage {
         to_high_execute_substage: Option<&crossbeam_channel::Sender<ExecutablePayload>>,
         from_execute_substage: &crossbeam_channel::Receiver<UnlockablePayload<T>>,
         maybe_to_next_stage: Option<&crossbeam_channel::Sender<ExaminablePayload<T>>>, // assume nonblocking
-        log_prefix: impl Fn(&Option<B>) -> String,
-    ) -> Option<B> {
+        log_prefix: impl Fn(&Option<C::Context>) -> String,
+    ) -> Option<C::Context> {
         #[derive(Clone, Copy, Debug)]
         struct AtTopOfScheduleThread;
         unsafe impl AtScheduleThread for AtTopOfScheduleThread {}
