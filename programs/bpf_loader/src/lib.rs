@@ -381,17 +381,11 @@ pub fn create_vm<'a, 'b>(
     result
 }
 
-pub fn process_instruction(
-    _first_instruction_account: IndexOfAccount,
-    invoke_context: &mut InvokeContext,
-) -> Result<(), InstructionError> {
+pub fn process_instruction(invoke_context: &mut InvokeContext) -> Result<(), InstructionError> {
     process_instruction_common(invoke_context, false)
 }
 
-pub fn process_instruction_jit(
-    _first_instruction_account: IndexOfAccount,
-    invoke_context: &mut InvokeContext,
-) -> Result<(), InstructionError> {
+pub fn process_instruction_jit(invoke_context: &mut InvokeContext) -> Result<(), InstructionError> {
     process_instruction_common(invoke_context, true)
 }
 
@@ -1904,9 +1898,9 @@ mod tests {
             None,
             None,
             Err(InstructionError::ProgramFailedToComplete),
-            |first_instruction_account: IndexOfAccount, invoke_context: &mut InvokeContext| {
+            |invoke_context: &mut InvokeContext| {
                 invoke_context.mock_set_remaining(0);
-                super::process_instruction(first_instruction_account, invoke_context)
+                super::process_instruction(invoke_context)
             },
         );
 

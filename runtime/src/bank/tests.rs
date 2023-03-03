@@ -91,7 +91,7 @@ use {
             Result, SanitizedTransaction, Transaction, TransactionError,
             TransactionVerificationMode,
         },
-        transaction_context::{IndexOfAccount, TransactionAccount, TransactionContext},
+        transaction_context::{TransactionAccount, TransactionContext},
     },
     solana_stake_program::stake_state::{self, StakeState},
     solana_vote_program::{
@@ -1341,7 +1341,6 @@ fn test_rent_complex() {
     }
 
     fn mock_process_instruction(
-        _first_instruction_account: IndexOfAccount,
         invoke_context: &mut InvokeContext,
     ) -> result::Result<(), InstructionError> {
         let transaction_context = &invoke_context.transaction_context;
@@ -5068,7 +5067,6 @@ fn test_add_builtin() {
         Pubkey::from([42u8; 32])
     }
     fn mock_vote_processor(
-        _first_instruction_account: IndexOfAccount,
         invoke_context: &mut InvokeContext,
     ) -> std::result::Result<(), InstructionError> {
         let transaction_context = &invoke_context.transaction_context;
@@ -5127,7 +5125,6 @@ fn test_add_duplicate_static_program() {
     let mut bank = Bank::new_for_tests(&genesis_config);
 
     fn mock_vote_processor(
-        _first_instruction_account: IndexOfAccount,
         _invoke_context: &mut InvokeContext,
     ) -> std::result::Result<(), InstructionError> {
         Err(InstructionError::Custom(42))
@@ -5176,7 +5173,6 @@ fn test_add_instruction_processor_for_existing_unrelated_accounts() {
         let mut bank = create_simple_test_bank(500);
 
         fn mock_ix_processor(
-            _first_instruction_account: IndexOfAccount,
             _invoke_context: &mut InvokeContext,
         ) -> std::result::Result<(), InstructionError> {
             Err(InstructionError::Custom(42))
@@ -6467,7 +6463,6 @@ fn test_transaction_with_duplicate_accounts_in_instruction() {
     let mut bank = Bank::new_for_tests(&genesis_config);
 
     fn mock_process_instruction(
-        _first_instruction_account: IndexOfAccount,
         invoke_context: &mut InvokeContext,
     ) -> result::Result<(), InstructionError> {
         let transaction_context = &invoke_context.transaction_context;
@@ -6527,7 +6522,6 @@ fn test_transaction_with_program_ids_passed_to_programs() {
 
     #[allow(clippy::unnecessary_wraps)]
     fn mock_process_instruction(
-        _first_instruction_account: IndexOfAccount,
         _invoke_context: &mut InvokeContext,
     ) -> result::Result<(), InstructionError> {
         Ok(())
@@ -6746,7 +6740,6 @@ fn test_program_id_as_payer() {
 
 #[allow(clippy::unnecessary_wraps)]
 fn mock_ok_vote_processor(
-    _first_instruction_account: IndexOfAccount,
     _invoke_context: &mut InvokeContext,
 ) -> std::result::Result<(), InstructionError> {
     Ok(())
@@ -6993,7 +6986,6 @@ fn test_bank_hash_consistency() {
 #[test]
 fn test_same_program_id_uses_unqiue_executable_accounts() {
     fn nested_processor(
-        _first_instruction_account: IndexOfAccount,
         invoke_context: &mut InvokeContext,
     ) -> result::Result<(), InstructionError> {
         let transaction_context = &invoke_context.transaction_context;
@@ -7216,7 +7208,6 @@ fn test_shrink_candidate_slots_cached() {
 fn test_add_builtin_no_overwrite() {
     #[allow(clippy::unnecessary_wraps)]
     fn mock_ix_processor(
-        _first_instruction_account: IndexOfAccount,
         _invoke_context: &mut InvokeContext,
     ) -> std::result::Result<(), InstructionError> {
         Ok(())
@@ -7248,7 +7239,6 @@ fn test_add_builtin_no_overwrite() {
 fn test_add_builtin_loader_no_overwrite() {
     #[allow(clippy::unnecessary_wraps)]
     fn mock_ix_processor(
-        _first_instruction_account: IndexOfAccount,
         _context: &mut InvokeContext,
     ) -> std::result::Result<(), InstructionError> {
         Ok(())
@@ -9998,7 +9988,6 @@ fn test_tx_return_data() {
 
     let mock_program_id = Pubkey::from([2u8; 32]);
     fn mock_process_instruction(
-        _first_instruction_account: IndexOfAccount,
         invoke_context: &mut InvokeContext,
     ) -> result::Result<(), InstructionError> {
         let mock_program_id = Pubkey::from([2u8; 32]);
@@ -10196,7 +10185,6 @@ fn test_transfer_sysvar() {
     let mut bank = Bank::new_for_tests(&genesis_config);
 
     fn mock_ix_processor(
-        _first_instruction_account: IndexOfAccount,
         invoke_context: &mut InvokeContext,
     ) -> std::result::Result<(), InstructionError> {
         let transaction_context = &invoke_context.transaction_context;
@@ -10408,7 +10396,6 @@ fn test_compute_budget_program_noop() {
     let mut bank = Bank::new_for_tests(&genesis_config);
 
     fn mock_ix_processor(
-        _first_instruction_account: IndexOfAccount,
         invoke_context: &mut InvokeContext,
     ) -> std::result::Result<(), InstructionError> {
         let compute_budget = invoke_context.get_compute_budget();
@@ -10452,7 +10439,6 @@ fn test_compute_request_instruction() {
     let mut bank = Bank::new_for_tests(&genesis_config);
 
     fn mock_ix_processor(
-        _first_instruction_account: IndexOfAccount,
         invoke_context: &mut InvokeContext,
     ) -> std::result::Result<(), InstructionError> {
         let compute_budget = invoke_context.get_compute_budget();
@@ -10503,7 +10489,6 @@ fn test_failed_compute_request_instruction() {
         .unwrap();
 
     fn mock_ix_processor(
-        _first_instruction_account: IndexOfAccount,
         invoke_context: &mut InvokeContext,
     ) -> std::result::Result<(), InstructionError> {
         let compute_budget = invoke_context.get_compute_budget();
@@ -11061,7 +11046,6 @@ enum MockTransferInstruction {
 }
 
 fn mock_transfer_process_instruction(
-    _first_instruction_account: IndexOfAccount,
     invoke_context: &mut InvokeContext,
 ) -> result::Result<(), InstructionError> {
     let transaction_context = &invoke_context.transaction_context;
@@ -11870,7 +11854,6 @@ enum MockReallocInstruction {
 }
 
 fn mock_realloc_process_instruction(
-    _first_instruction_account: IndexOfAccount,
     invoke_context: &mut InvokeContext,
 ) -> result::Result<(), InstructionError> {
     let transaction_context = &invoke_context.transaction_context;
