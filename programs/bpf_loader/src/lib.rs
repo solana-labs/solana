@@ -49,6 +49,7 @@ use {
         instruction::{AccountMeta, InstructionError},
         loader_instruction::LoaderInstruction,
         loader_upgradeable_instruction::UpgradeableLoaderInstruction,
+        native_loader,
         program_error::{
             MAX_ACCOUNTS_DATA_ALLOCATIONS_EXCEEDED, MAX_INSTRUCTION_TRACE_LENGTH_EXCEEDED,
         },
@@ -381,21 +382,20 @@ pub fn create_vm<'a, 'b>(
 }
 
 pub fn process_instruction(
-    first_instruction_account: IndexOfAccount,
+    _first_instruction_account: IndexOfAccount,
     invoke_context: &mut InvokeContext,
 ) -> Result<(), InstructionError> {
-    process_instruction_common(first_instruction_account, invoke_context, false)
+    process_instruction_common(invoke_context, false)
 }
 
 pub fn process_instruction_jit(
-    first_instruction_account: IndexOfAccount,
+    _first_instruction_account: IndexOfAccount,
     invoke_context: &mut InvokeContext,
 ) -> Result<(), InstructionError> {
-    process_instruction_common(first_instruction_account, invoke_context, true)
+    process_instruction_common(invoke_context, true)
 }
 
 fn process_instruction_common(
-    first_instruction_account: IndexOfAccount,
     invoke_context: &mut InvokeContext,
     use_jit: bool,
 ) -> Result<(), InstructionError> {
@@ -403,6 +403,17 @@ fn process_instruction_common(
     let transaction_context = &invoke_context.transaction_context;
     let instruction_context = transaction_context.get_current_instruction_context()?;
     let program_id = instruction_context.get_last_program_key(transaction_context)?;
+
+    let first_instruction_account = {
+        let borrowed_root_account =
+            instruction_context.try_borrow_program_account(transaction_context, 0)?;
+        let owner_id = borrowed_root_account.get_owner();
+        if native_loader::check_id(owner_id) {
+            1
+        } else {
+            0
+        }
+    };
     let first_account_key = transaction_context.get_key_of_account_at_index(
         get_index_in_transaction(instruction_context, first_instruction_account)?,
     )?;
