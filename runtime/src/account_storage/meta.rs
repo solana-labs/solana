@@ -119,11 +119,11 @@ impl<'a> StoredAccountMeta<'a> {
         })
     }
 
-    pub fn pubkey(&self) -> &Pubkey {
+    pub fn pubkey(&self) -> &'a Pubkey {
         &self.meta.pubkey
     }
 
-    pub fn hash(&self) -> &Hash {
+    pub fn hash(&self) -> &'a Hash {
         self.hash
     }
 
@@ -135,7 +135,7 @@ impl<'a> StoredAccountMeta<'a> {
         self.offset
     }
 
-    pub fn data(&self) -> &[u8] {
+    pub fn data(&self) -> &'a [u8] {
         self.data
     }
 
@@ -161,7 +161,7 @@ impl<'a> StoredAccountMeta<'a> {
         self.account_meta.lamports != 0 || self.clone_account() == AccountSharedData::default()
     }
 
-    pub(crate) fn ref_executable_byte(&self) -> &u8 {
+    pub(crate) fn ref_executable_byte(&self) -> &'a u8 {
         // Use extra references to avoid value silently clamped to 1 (=true) and 0 (=false)
         // Yes, this really happens; see test_new_from_file_crafted_executable
         let executable_bool: &bool = &self.account_meta.executable;
