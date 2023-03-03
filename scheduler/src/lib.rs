@@ -1651,7 +1651,7 @@ impl ScheduleStage {
     }
 
     #[must_use]
-    fn _run<'a, AST: AtScheduleThread, T: Send, C, B: Clone + WithMode>(
+    fn _run<'a, AST: AtScheduleThread, T: Send, B: Clone + WithMode>(
         ast: AST,
         checkpoint: &std::sync::Arc<impl WithContext<B>>,
         executing_thread_count: usize,
@@ -2118,7 +2118,7 @@ impl ScheduleStage {
     }
 
     #[must_use]
-    pub fn run<T: Send, C, B: Clone + WithMode>(
+    pub fn run<T: Send, B: Clone + WithMode>(
         checkpoint: &std::sync::Arc<impl WithContext<B>>,
         max_executing_queue_count: usize,
         runnable_queue: &mut TaskQueue,
@@ -2134,7 +2134,7 @@ impl ScheduleStage {
         struct AtTopOfScheduleThread;
         unsafe impl AtScheduleThread for AtTopOfScheduleThread {}
 
-        Self::_run::<AtTopOfScheduleThread, T, C, B>(
+        Self::_run::<AtTopOfScheduleThread, T, B>(
             AtTopOfScheduleThread,
             checkpoint,
             max_executing_queue_count,
