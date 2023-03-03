@@ -2117,7 +2117,7 @@ impl ScheduleStage {
 
     #[must_use]
     pub fn run<T: Send, C, B: Clone + WithMode>(
-        checkpoint: &std::sync::Arc<Checkpoint<C, B>>,
+        checkpoint: &std::sync::Arc<impl WithContext>,
         max_executing_queue_count: usize,
         runnable_queue: &mut TaskQueue,
         address_book: &mut AddressBook,
@@ -2157,6 +2157,9 @@ pub struct ExaminablePayload<T>(pub Flushable<(Box<ExecutionEnvironment>, T)>);
 pub enum Flushable<T> {
     Payload(T),
     Flush,
+}
+
+pub trait WithContext {
 }
 
 pub trait WithMode {
