@@ -327,7 +327,10 @@ impl SnapshotStorageRebuilder {
                 &slot_stores,
             )
         } else {
-            slot_stores.into_values().next().unwrap()
+            slot_stores
+                .into_values()
+                .next()
+                .expect("at least 1 storage per slot required")
         };
 
         self.storage.insert(
