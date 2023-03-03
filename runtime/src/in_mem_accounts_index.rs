@@ -954,21 +954,21 @@ impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> InMemAccountsIndex<T,
                 // if we are already holding too many items in-mem, then we need to be more aggressive at kicking things out
                 (true, None)
             } else if entry.ref_count() != 1 {
-                Self::update_stat(&self.stats().held_in_mem_ref_count, 1);
+                Self::update_stat(&self.stats().held_in_mem.ref_count, 1);
                 (false, None)
             } else {
                 // only read the slot list if we are planning to throw the item out
                 let slot_list = entry.slot_list.read().unwrap();
                 if slot_list.len() != 1 {
                     if update_stats {
-                        Self::update_stat(&self.stats().held_in_mem_slot_list_len, 1);
+                        Self::update_stat(&self.stats().held_in_mem.slot_list_len, 1);
                     }
                     (false, None) // keep 0 and > 1 slot lists in mem. They will be cleaned or shrunk soon.
                 } else {
                     // keep items with slot lists that contained cached items
                     let evict = !slot_list.iter().any(|(_, info)| info.is_cached());
                     if !evict && update_stats {
-                        Self::update_stat(&self.stats().held_in_mem_slot_list_cached, 1);
+                        Self::update_stat(&self.stats().held_in_mem.slot_list_cached, 1);
                     }
                     (evict, if evict { Some(slot_list) } else { None })
                 }
