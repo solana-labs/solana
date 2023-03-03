@@ -1653,7 +1653,7 @@ impl ScheduleStage {
     #[must_use]
     fn _run<'a, AST: AtScheduleThread, T: Send, C, B: Clone + WithMode>(
         ast: AST,
-        checkpoint: &std::sync::Arc<impl WithContext>,
+        checkpoint: &std::sync::Arc<impl WithContext<B>>,
         executing_thread_count: usize,
         _runnable_queue: &mut TaskQueue,
         address_book: &mut AddressBook,
@@ -2117,7 +2117,7 @@ impl ScheduleStage {
 
     #[must_use]
     pub fn run<T: Send, C, B: Clone + WithMode>(
-        checkpoint: &std::sync::Arc<impl WithContext>,
+        checkpoint: &std::sync::Arc<impl WithContext<B>>,
         max_executing_queue_count: usize,
         runnable_queue: &mut TaskQueue,
         address_book: &mut AddressBook,
