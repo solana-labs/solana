@@ -442,7 +442,7 @@ where
         messages: &[Message],
         signers: &T,
     ) -> Result<Vec<Option<TransactionError>>> {
-        let mut expired_blockhash_retries = 5i32;
+        let mut expired_blockhash_retries = 4;
         let progress_bar = spinner::new_progress_bar();
         progress_bar.set_message("Setting up...");
 
