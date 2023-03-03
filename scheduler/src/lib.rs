@@ -2102,6 +2102,7 @@ impl ScheduleStage {
         drop(to_execute_substage);
         drop(to_high_execute_substage);
 
+        /*
         if scheduler_context.is_none() {
            scheduler_context = checkpoint.use_context_value();
         }
@@ -2113,6 +2114,7 @@ impl ScheduleStage {
         if !did_drop {
             checkpoint.wait_for_restart();
         }
+        */
     }
 
     #[must_use]
