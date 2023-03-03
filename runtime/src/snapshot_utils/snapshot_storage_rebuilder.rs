@@ -292,7 +292,7 @@ impl SnapshotStorageRebuilder {
         let slot_storage_paths = self.storage_paths.get(&slot).unwrap();
         let lock = slot_storage_paths.lock().unwrap();
 
-        let mut slot_stores = lock
+        let slot_stores = lock
             .iter()
             .map(|path| {
                 let filename = path.file_name().unwrap().to_str().unwrap();
@@ -327,7 +327,7 @@ impl SnapshotStorageRebuilder {
                 &slot_stores,
             )
         } else {
-            slot_stores.drain().next().unwrap().1
+            slot_stores.into_values().next().unwrap()
         };
 
         self.storage.insert(
