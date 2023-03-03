@@ -1664,7 +1664,7 @@ impl ScheduleStage {
         maybe_to_next_stage: Option<&crossbeam_channel::Sender<ExaminablePayload<T>>>, // assume nonblocking
         never: &'a crossbeam_channel::Receiver<SchedulablePayload>,
         log_prefix: impl Fn(&Option<B>) -> String,
-    ) {
+    ) -> Option<B> {
         let mut maybe_start_time = None;
         let mut mode = None;
         let (mut last_time, mut last_processed_count) = (maybe_start_time.map(|(a, b)| b).clone(), 0_usize);
