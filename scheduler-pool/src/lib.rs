@@ -219,9 +219,9 @@ impl CommitStatus {
 }
 
 #[derive(Debug)]
-pub struct Checkpoint<T, B>(std::sync::Mutex<((usize, usize), Option<T>, Option<B>, usize)>, std::sync::Condvar, std::sync::Condvar, usize);
+pub struct Checkpoint<T>(std::sync::Mutex<((usize, usize), Option<T>, Option<SchedulerContext>, usize)>, std::sync::Condvar, std::sync::Condvar, usize);
 
-impl<T, B> Checkpoint<T, B> {
+impl<T> Checkpoint<T> {
     pub fn wait_for_restart(&self) {
         let mut a = &mut None;
         let mut current_thread_name = || a.get_or_insert_with(|| std::thread::current().name().unwrap().to_string()).clone() ;
@@ -355,8 +355,8 @@ impl<T, B> Checkpoint<T, B> {
     }
 }
 
-impl<T, B: Clone> Checkpoint<T, B> {
-    pub fn replace_context_value(&self, new: B) {
+impl<T> Checkpoint<T> {
+    pub fn replace_context_value(&self, new: SchedulerContext) {
         let mut g = self.0.lock().unwrap();
         let (_, self_return_value, b, remaining_contexts) = &mut *g;
         assert_eq!(*remaining_contexts, 0);
@@ -365,10 +365,10 @@ impl<T, B: Clone> Checkpoint<T, B> {
     }
 }
 
-impl<T, B: Clone + WithMode> solana_scheduler::WithContext for Checkpoint<T, B> {
-    type Context = B;
+impl<T> solana_scheduler::WithContext for Checkpoint<T> {
+    type Context = SchedulerContext;
 
-    fn use_context_value(&self) -> Option<B> {
+    fn use_context_value(&self) -> Option<SchedulerContext> {
         let mut a = &mut None;
         let mut current_thread_name = || a.get_or_insert_with(|| std::thread::current().name().unwrap().to_string()).clone() ;
 
