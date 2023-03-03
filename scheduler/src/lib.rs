@@ -1763,7 +1763,6 @@ impl ScheduleStage {
             .parse::<usize>()
             .unwrap();
 
-
         loop {
             // no execution at all => absolutely no active locks
             let select_skipped = from_disconnected && executing_queue_count == 0;
