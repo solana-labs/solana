@@ -222,7 +222,7 @@ impl CommitStatus {
 pub struct Checkpoint(std::sync::Mutex<((usize, usize), Option<ExecuteTimings>, Option<SchedulerContext>, usize)>, std::sync::Condvar, std::sync::Condvar, usize);
 
 impl Checkpoint {
-    pub fn wait_for_restart(&self) {
+    pub fn wait_for_restart_from_external_thread(&self) {
         let mut a = &mut None;
         let mut current_thread_name = || a.get_or_insert_with(|| std::thread::current().name().unwrap().to_string()).clone() ;
 
