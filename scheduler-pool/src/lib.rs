@@ -333,8 +333,8 @@ impl Checkpoint {
             *remaining_threads - 1
         );
 
-        *remaining_threads = remaining_threads.checked_sub(1).unwrap();
         assert_eq!(*r2, 0);
+        *remaining_threads = remaining_threads.checked_sub(1).unwrap();
         *r2 = r2.checked_add(1).unwrap();
         assert!(*remaining_threads > 0);
     }
