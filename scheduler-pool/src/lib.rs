@@ -270,7 +270,7 @@ impl Checkpoint {
         }
     }
 
-    pub fn wait_until_full_restart(&self) {
+    pub fn wait_for_completed_restart(&self) {
         let mut a = &mut None;
         let mut current_thread_name = || a.get_or_insert_with(|| std::thread::current().name().unwrap().to_string()).clone() ;
 
@@ -278,7 +278,7 @@ impl Checkpoint {
         let ((_, threads_after_checkpoint), self_return_value, _, context_count) = &mut *g;
         let is_waited = if *threads_after_checkpoint < self.thread_count() {
             info!(
-                "Checkpoint::wait_until_full_restart: {} is waited... {threads_after_checkpoint}",
+                "Checkpoint::wait_for_completed_restart: {} is waited... {threads_after_checkpoint}",
                 current_thread_name()
             );
             let _ = *self
@@ -296,12 +296,12 @@ impl Checkpoint {
         *rr = Self::initial_counts(self.thread_count());
         if is_waited {
             info!(
-                "Checkpoint::wait_until_full_restart: {} is notified...",
+                "Checkpoint::wait_for_completed_restart: {} is notified...",
                 current_thread_name()
             );
         } else {
             info!(
-                "Checkpoint::wait_until_full_restart: {} is reset",
+                "Checkpoint::wait_for_completed_restart: {} is reset",
                 current_thread_name()
             );
         }
@@ -894,7 +894,7 @@ impl LikeScheduler for Scheduler {
         self.graceful_stop_initiated = false;
         drop(self.stopped_mode.take().unwrap());
         assert!(self.current_scheduler_context.write().unwrap().is_none());
-        self.checkpoint.wait_until_full_restart();
+        self.checkpoint.wait_for_completed_restart();
     }
 
     fn trigger_stop(&mut self) {
