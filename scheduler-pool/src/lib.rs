@@ -580,7 +580,7 @@ impl Scheduler {
                 }
                 },
                 solana_scheduler::ExecutablePayload(solana_scheduler::Flushable::Flush) => {
-                    checkpoint.wait_for_restart_from_internal_thread(latest_scheduler_context);
+                    checkpoint.wait_for_restart_from_internal_thread(&mut latest_scheduler_context);
                 }
                 }
             }
