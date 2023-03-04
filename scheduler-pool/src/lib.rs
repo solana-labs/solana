@@ -672,7 +672,7 @@ impl Scheduler {
                             transaction_error_counts.reset();
                             (succeeded, skipped) = (0, 0);
                             checkpoint.register_return_value(std::mem::take(&mut cumulative_timings));
-                            checkpoint.wait_for_restart_from_internal_thread(latest_scheduler_context);
+                            checkpoint.wait_for_restart_from_internal_thread(latest_scheduler_context.take());
                         },
                     }
                 }
