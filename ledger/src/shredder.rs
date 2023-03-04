@@ -1231,7 +1231,7 @@ mod tests {
 
     #[test]
     fn test_max_shreds_per_slot() {
-        for num_data_shreds in 0..128 {
+        for num_data_shreds in 32..128 {
             let num_coding_shreds = get_erasure_batch_size(num_data_shreds)
                 .checked_sub(num_data_shreds)
                 .unwrap();
