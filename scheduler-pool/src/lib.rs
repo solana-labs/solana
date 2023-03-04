@@ -276,7 +276,7 @@ impl Checkpoint {
 
         let mut g = self.0.lock().unwrap();
         let ((threads_before_checkpoint, threads_after_checkpoint), self_return_value, _, context_count) = &mut *g;
-        assert_eq!(threads_before_checkpoint, 0);
+        assert_eq!(*threads_before_checkpoint, 0);
         let is_waited = if *threads_after_checkpoint < self.thread_count() {
             info!(
                 "Checkpoint::wait_for_completed_restart: {} is waited... {threads_after_checkpoint}",
