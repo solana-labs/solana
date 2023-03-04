@@ -672,14 +672,7 @@ impl Scheduler {
                             transaction_error_counts.reset();
                             (succeeded, skipped) = (0, 0);
                             checkpoint.register_return_value(std::mem::take(&mut cumulative_timings));
-                            let did_drop = if let Some(sc) = latest_scheduler_context.take() {
-                                sc.drop_cyclically()
-                            } else {
-                                false
-                            };
-                            if !did_drop {
-                                checkpoint.wait_for_restart();
-                            }
+                            checkpoint.wait_for_restart_from_internal_thread(&mut latest_scheduler_context);
                         },
                     }
                 }
