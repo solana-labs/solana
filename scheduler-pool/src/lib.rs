@@ -227,21 +227,21 @@ impl Checkpoint {
         let mut current_thread_name = || a.get_or_insert_with(|| std::thread::current().name().unwrap().to_string()).clone() ;
 
         let mut g = self.0.lock().unwrap();
-        let ((remaining_threads, r2), self_return_value, _, remaining_contexts) = &mut *g;
+        let ((runner_count, waiter_count), self_return_value, _, remaining_contexts) = &mut *g;
         info!(
             "Checkpoint::wait_for_restart: {} is entering at {} -> {}",
             current_thread_name(),
-            *remaining_threads,
-            *remaining_threads - 1
+            *runner_count,
+            *runner_count - 1
         );
 
-        *remaining_threads = remaining_threads.checked_sub(1).unwrap();
+        *runner_count = runner_count.checked_sub(1).unwrap();
 
-        if *remaining_threads == 0 {
+        if *runner_count == 0 {
             assert!(self_return_value.is_some());
-            assert!(*r2 <= 1);
-            *r2 = r2.checked_add(1).unwrap();
-            drop((remaining_threads, r2));
+            assert!(*waiter_count <= 1);
+            *waiter_count = waiter_count.checked_add(1).unwrap();
+            drop((runner_count, waiter_count));
             assert_eq!(*remaining_contexts, 0);
             self.1.notify_all();
             info!(
@@ -255,16 +255,16 @@ impl Checkpoint {
             );
             let _ = *self
                 .1
-                .wait_while(g, |&mut ((remaining_threads, ..), ..)| remaining_threads > 0)
+                .wait_while(g, |&mut ((runner_count, ..), ..)| runner_count > 0)
                 .unwrap();
             g = self.0.lock().unwrap();
-            let ((_, r2), ..) = &mut *g;
-            *r2 = r2.checked_add(1).unwrap();
-            if *r2 == self.initial_count() {
+            let ((_, waiter_count), ..) = &mut *g;
+            *waiter_count = waiter_count.checked_add(1).unwrap();
+            if *waiter_count == self.initial_count() {
                 self.2.notify_one();
             }
             info!(
-                "Checkpoint::wait_for_restart: {} is started... {r2}",
+                "Checkpoint::wait_for_restart: {} is started... {waiter_count}",
                 current_thread_name()
             );
         }
@@ -275,15 +275,15 @@ impl Checkpoint {
         let mut current_thread_name = || a.get_or_insert_with(|| std::thread::current().name().unwrap().to_string()).clone() ;
 
         let mut g = self.0.lock().unwrap();
-        let ((_, r2), self_return_value, _, remaining_contexts) = &mut *g;
-        let is_waited = if *r2 < self.initial_count() {
+        let ((_, waiter_count), self_return_value, _, remaining_contexts) = &mut *g;
+        let is_waited = if *waiter_count < self.initial_count() {
             info!(
-                "Checkpoint::reset_remaining_threads: {} is waited... {r2}",
+                "Checkpoint::reset_remaining_threads: {} is waited... {waiter_count}",
                 current_thread_name()
             );
             let _ = *self
                 .2
-                .wait_while(g, |&mut ((_, r2), ..)| r2 < self.initial_count())
+                .wait_while(g, |&mut ((_, waiter_count), ..)| waiter_count < self.initial_count())
                 .unwrap();
             g = self.0.lock().unwrap();
             true
@@ -325,18 +325,18 @@ impl Checkpoint {
     pub fn reduce_count(&self) {
         let current_thread_name = std::thread::current().name().unwrap().to_string();
         let mut g = self.0.lock().unwrap();
-        let ((remaining_threads, r2), ..) = &mut *g;
+        let ((runner_count, waiter_count), ..) = &mut *g;
         info!(
             "Checkpoint::reduce_count: {} is entering at {} -> {}",
             current_thread_name,
-            *remaining_threads,
-            *remaining_threads - 1
+            *runner_count,
+            *runner_count - 1
         );
 
-        assert_eq!(*r2, 0);
-        *remaining_threads = remaining_threads.checked_sub(1).unwrap();
-        *r2 = r2.checked_add(1).unwrap();
-        assert!(*remaining_threads > 0);
+        assert_eq!(*waiter_count, 0);
+        *runner_count = runner_count.checked_sub(1).unwrap();
+        *waiter_count = waiter_count.checked_add(1).unwrap();
+        assert!(*runner_count > 0);
     }
 
     pub fn take_restart_value(&self) -> ExecuteTimings {
