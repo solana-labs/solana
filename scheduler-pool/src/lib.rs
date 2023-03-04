@@ -292,9 +292,9 @@ impl Checkpoint {
             false
         };
 
-        let (rr, ..) = &mut *g;
-        assert_eq!(*rr, Self::final_counter_values(self.thread_count()));
-        *rr = Self::initial_counter_values(self.thread_count());
+        let (counter_values, ..) = &mut *g;
+        assert_eq!(*counter_values, Self::final_counter_values(self.thread_count()));
+        *counter_values = Self::initial_counter_values(self.thread_count());
         if is_waited {
             info!(
                 "Checkpoint::wait_for_completed_restart: {} is notified...",
