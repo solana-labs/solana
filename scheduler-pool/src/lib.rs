@@ -222,7 +222,7 @@ impl CommitStatus {
 pub struct Checkpoint(std::sync::Mutex<((usize, usize), Option<ExecuteTimings>, Option<SchedulerContext>, usize)>, std::sync::Condvar, std::sync::Condvar, usize);
 
 impl Checkpoint {
-    pub fn wait_for_restart_from_external_thread(&self) {
+    pub fn wait_for_restart(&self) {
         let mut a = &mut None;
         let mut current_thread_name = || a.get_or_insert_with(|| std::thread::current().name().unwrap().to_string()).clone() ;
 
@@ -722,14 +722,7 @@ impl Scheduler {
                     if scheduler_context.is_none() {
                        scheduler_context = checkpoint.use_context_value();
                     }
-                    let did_drop = if let Some(sc) = scheduler_context {
-                        sc.drop_cyclically()
-                    } else {
-                        false
-                    };
-                    if !did_drop {
-                        checkpoint.wait_for_restart();
-                    }
+                    checkpoint.wait_for_restart_from_internal_thread(scheduler_context);
                     continue;
                 }
 
