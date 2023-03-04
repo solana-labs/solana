@@ -227,7 +227,7 @@ impl Checkpoint {
         let mut current_thread_name = || a.get_or_insert_with(|| std::thread::current().name().unwrap().to_string()).clone() ;
 
         let mut g = self.0.lock().unwrap();
-        let ((runner_count, waiter_count), self_return_value, _, remaining_contexts) = &mut *g;
+        let ((runner_count, waiter_count), self_return_value, _, context_count) = &mut *g;
         info!(
             "Checkpoint::wait_for_restart: {} is entering at {} -> {}",
             current_thread_name(),
@@ -242,7 +242,7 @@ impl Checkpoint {
             assert!(*waiter_count <= 1);
             *waiter_count = waiter_count.checked_add(1).unwrap();
             drop((runner_count, waiter_count));
-            assert_eq!(*remaining_contexts, 0);
+            assert_eq!(*context_count, 0);
             self.1.notify_all();
             info!(
                 "Checkpoint::wait_for_restart: {} notified all others...",
@@ -260,7 +260,7 @@ impl Checkpoint {
             g = self.0.lock().unwrap();
             let ((_, waiter_count), ..) = &mut *g;
             *waiter_count = waiter_count.checked_add(1).unwrap();
-            if *waiter_count == self.initial_count() {
+            if *waiter_count == self.thread_count() {
                 self.2.notify_one();
             }
             info!(
@@ -275,15 +275,15 @@ impl Checkpoint {
         let mut current_thread_name = || a.get_or_insert_with(|| std::thread::current().name().unwrap().to_string()).clone() ;
 
         let mut g = self.0.lock().unwrap();
-        let ((_, waiter_count), self_return_value, _, remaining_contexts) = &mut *g;
-        let is_waited = if *waiter_count < self.initial_count() {
+        let ((_, waiter_count), self_return_value, _, context_count) = &mut *g;
+        let is_waited = if *waiter_count < self.thread_count() {
             info!(
                 "Checkpoint::reset_remaining_threads: {} is waited... {waiter_count}",
                 current_thread_name()
             );
             let _ = *self
                 .2
-                .wait_while(g, |&mut ((_, waiter_count), ..)| waiter_count < self.initial_count())
+                .wait_while(g, |&mut ((_, waiter_count), ..)| waiter_count < self.thread_count())
                 .unwrap();
             g = self.0.lock().unwrap();
             true
@@ -292,8 +292,8 @@ impl Checkpoint {
         };
 
         let (rr, ..) = &mut *g;
-        assert_eq!(*rr, (0, self.initial_count()));
-        *rr = Self::initial_counts(self.initial_count());
+        assert_eq!(*rr, (0, self.thread_count()));
+        *rr = Self::initial_counts(self.thread_count());
         if is_waited {
             info!(
                 "Checkpoint::reset_remaining_threads: {} is notified...",
@@ -307,7 +307,7 @@ impl Checkpoint {
         }
     }
 
-    fn initial_count(&self) -> usize {
+    fn thread_count(&self) -> usize {
         self.3
     }
 
@@ -345,20 +345,20 @@ impl Checkpoint {
         self_return_value.take().unwrap()
     }
 
-    pub fn new(initial_count: usize) -> std::sync::Arc<Self> {
+    pub fn new(thread_count: usize) -> std::sync::Arc<Self> {
         std::sync::Arc::new(Self(
-            std::sync::Mutex::new((Self::initial_counts(initial_count), None, None, 0)),
+            std::sync::Mutex::new((Self::initial_counts(thread_count), None, None, 0)),
             std::sync::Condvar::new(),
             std::sync::Condvar::new(),
-            initial_count,
+            thread_count,
         ))
     }
 
     pub fn replace_context_value(&self, new: SchedulerContext) {
         let mut g = self.0.lock().unwrap();
-        let (_, self_return_value, b, remaining_contexts) = &mut *g;
-        assert_eq!(*remaining_contexts, 0);
-        *remaining_contexts = self.initial_count();
+        let (_, self_return_value, b, context_count) = &mut *g;
+        assert_eq!(*context_count, 0);
+        *context_count = self.thread_count();
         *b = Some(new);
     }
 }
@@ -371,20 +371,20 @@ impl solana_scheduler::WithContext for Checkpoint {
         let mut current_thread_name = || a.get_or_insert_with(|| std::thread::current().name().unwrap().to_string()).clone() ;
 
         let mut g = self.0.lock().unwrap();
-        let (_, self_return_value, b, remaining_contexts) = &mut *g;
-        *remaining_contexts = remaining_contexts.checked_sub(1).unwrap();
-        if *remaining_contexts > 0 {
+        let (_, self_return_value, b, context_count) = &mut *g;
+        *context_count = context_count.checked_sub(1).unwrap();
+        if *context_count > 0 {
             info!(
                 "Checkpoint::use_context_value: {} used ({})",
                 current_thread_name(),
-                *remaining_contexts,
+                *context_count,
             );
             b.clone()
         } else {
             info!(
                 "Checkpoint::use_context_value: {} took ({})",
                 current_thread_name(),
-                *remaining_contexts,
+                *context_count,
             );
             b.take()
         }
