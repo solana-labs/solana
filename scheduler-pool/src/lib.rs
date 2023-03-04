@@ -308,7 +308,15 @@ impl Checkpoint {
         }
     }
 
-    fn wait_for_restart_from_internal_thread(&self, maybe_scheduler_context: &mut Option<SchedulerContext>) {
+    fn wait_for_restart_from_internal_thread(&self, scheduler_context: &mut Option<SchedulerContext>) {
+        let did_drop = if let Some(scheduler_context) = scheduler_context.take() {
+            scheduler_context.drop_cyclically()
+        } else {
+            false
+        };
+        if !did_drop {
+            checkpoint.wait_for_restart();
+        }
     }
 
     fn thread_count(&self) -> usize {
