@@ -978,7 +978,7 @@ impl SchedulerContext {
 
     pub fn drop_cyclically(mut self) -> bool {
         let mut did_drop = false;
-        if let Ok(bank) = Arc::try_unwrap(self.bank) {
+        if let Ok(bank) = Arc::into_inner(self.bank) {
             did_drop = bank.drop_from_scheduler_thread();
         }
 
