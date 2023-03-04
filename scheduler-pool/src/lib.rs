@@ -270,7 +270,7 @@ impl Checkpoint {
         }
     }
 
-    pub fn reset_remaining_threads(&self) {
+    pub fn wait_until_full_restart(&self) {
         let mut a = &mut None;
         let mut current_thread_name = || a.get_or_insert_with(|| std::thread::current().name().unwrap().to_string()).clone() ;
 
@@ -278,7 +278,7 @@ impl Checkpoint {
         let ((_, waiter_count), self_return_value, _, context_count) = &mut *g;
         let is_waited = if *waiter_count < self.thread_count() {
             info!(
-                "Checkpoint::reset_remaining_threads: {} is waited... {waiter_count}",
+                "Checkpoint::wait_until_full_restart: {} is waited... {waiter_count}",
                 current_thread_name()
             );
             let _ = *self
@@ -296,12 +296,12 @@ impl Checkpoint {
         *rr = Self::initial_counts(self.thread_count());
         if is_waited {
             info!(
-                "Checkpoint::reset_remaining_threads: {} is notified...",
+                "Checkpoint::wait_until_full_restart: {} is notified...",
                 current_thread_name()
             );
         } else {
             info!(
-                "Checkpoint::reset_remaining_threads: {} is reset",
+                "Checkpoint::wait_until_full_restart: {} is reset",
                 current_thread_name()
             );
         }
@@ -311,8 +311,8 @@ impl Checkpoint {
         self.3
     }
 
-    fn initial_counts(a: usize) -> (usize, usize) {
-        (a, 0)
+    fn initial_counts(thread_count: usize) -> (usize, usize) {
+        (thread_count, 0)
     }
 
     pub fn register_return_value(&self, restart_value: ExecuteTimings) {
@@ -894,7 +894,7 @@ impl LikeScheduler for Scheduler {
         self.graceful_stop_initiated = false;
         drop(self.stopped_mode.take().unwrap());
         assert!(self.current_scheduler_context.write().unwrap().is_none());
-        self.checkpoint.reset_remaining_threads();
+        self.checkpoint.wait_until_full_restart();
     }
 
     fn trigger_stop(&mut self) {
