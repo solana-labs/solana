@@ -308,6 +308,9 @@ impl Checkpoint {
         }
     }
 
+    fn wait_for_restart_from_internal_thread(&self, maybe_scheduler_context: &mut Option<SchedulerContext>) {
+    }
+
     fn thread_count(&self) -> usize {
         self.3
     }
@@ -577,14 +580,7 @@ impl Scheduler {
                 }
                 },
                 solana_scheduler::ExecutablePayload(solana_scheduler::Flushable::Flush) => {
-                    let did_drop = if let Some(sc) = latest_scheduler_context.take() {
-                        sc.drop_cyclically()
-                    } else {
-                        false
-                    };
-                    if !did_drop {
-                        checkpoint.wait_for_restart();
-                    }
+                    checkpoint.wait_for_restart_from_internal_thread(latest_scheduler_context);
                 }
                 }
             }
