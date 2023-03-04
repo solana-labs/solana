@@ -83,7 +83,7 @@ pub use {
 mod common;
 mod legacy;
 mod merkle;
-mod shred_code;
+pub mod shred_code;
 mod shred_data;
 mod stats;
 mod traits;
