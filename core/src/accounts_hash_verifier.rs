@@ -61,47 +61,47 @@ impl AccountsHashVerifier {
                         break;
                     }
 
-                    if let Some((
+                    let Some((
                         accounts_package,
                         num_outstanding_accounts_packages,
                         num_re_enqueued_accounts_packages,
                     )) = Self::get_next_accounts_package(
                         &accounts_package_sender,
                         &accounts_package_receiver,
-                    ) {
-                        info!("handling accounts package: {accounts_package:?}");
-                        let enqueued_time = accounts_package.enqueued.elapsed();
-
-                        let (_, handling_time_us) = measure_us!(Self::process_accounts_package(
-                            accounts_package,
-                            &cluster_info,
-                            known_validators.as_ref(),
-                            halt_on_known_validators_accounts_hash_mismatch,
-                            snapshot_package_sender.as_ref(),
-                            &mut hashes,
-                            &exit,
-                            fault_injection_rate_slots,
-                            &snapshot_config,
-                        ));
-
-                        datapoint_info!(
-                            "accounts_hash_verifier",
-                            (
-                                "num-outstanding-accounts-packages",
-                                num_outstanding_accounts_packages,
-                                i64
-                            ),
-                            (
-                                "num-re-enqueued-accounts-packages",
-                                num_re_enqueued_accounts_packages,
-                                i64
-                            ),
-                            ("enqueued-time-us", enqueued_time.as_micros(), i64),
-                            ("handling-time-us", handling_time_us, i64),
-                        );
-                    } else {
+                    ) else {
                         std::thread::sleep(LOOP_LIMITER);
-                    }
+                        continue;
+                    };
+                    info!("handling accounts package: {accounts_package:?}");
+                    let enqueued_time = accounts_package.enqueued.elapsed();
+
+                    let (_, handling_time_us) = measure_us!(Self::process_accounts_package(
+                        accounts_package,
+                        &cluster_info,
+                        known_validators.as_ref(),
+                        halt_on_known_validators_accounts_hash_mismatch,
+                        snapshot_package_sender.as_ref(),
+                        &mut hashes,
+                        &exit,
+                        fault_injection_rate_slots,
+                        &snapshot_config,
+                    ));
+
+                    datapoint_info!(
+                        "accounts_hash_verifier",
+                        (
+                            "num-outstanding-accounts-packages",
+                            num_outstanding_accounts_packages,
+                            i64
+                        ),
+                        (
+                            "num-re-enqueued-accounts-packages",
+                            num_re_enqueued_accounts_packages,
+                            i64
+                        ),
+                        ("enqueued-time-us", enqueued_time.as_micros(), i64),
+                        ("handling-time-us", handling_time_us, i64),
+                    );
                 }
                 info!("Accounts Hash Verifier has stopped");
             })
