@@ -315,7 +315,7 @@ impl Checkpoint {
             false
         };
         if !did_drop {
-            checkpoint.wait_for_restart();
+            self.wait_for_restart();
         }
     }
 
