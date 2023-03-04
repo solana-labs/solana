@@ -322,7 +322,7 @@ impl Checkpoint {
         *self_return_value = Some(restart_value);
     }
 
-    pub fn adjust_count_to_exclude_thread(&self) {
+    pub fn ignore_external_thread(&self) {
         let current_thread_name = std::thread::current().name().unwrap().to_string();
         let mut g = self.0.lock().unwrap();
         let ((threads_before_checkpoint, threads_after_checkpoint), ..) = &mut *g;
@@ -858,7 +858,7 @@ impl LikeScheduler for Scheduler {
 
         info!("just before wait for restart...");
         if from_internal {
-            self.checkpoint.adjust_count_to_exclude_thread();
+            self.checkpoint.ignore_external_thread();
         }
         self.checkpoint.wait_for_restart();
         let r = self.checkpoint.take_restart_value();
