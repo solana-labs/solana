@@ -1624,7 +1624,7 @@ fn unarchive_to_snapshot_dir(
     );
     measure_streaming_unarchive.stop();
     info!(
-        "xxx measure_streaming_unarchive {}",
+        "measure_streaming_unarchive {}",
         measure_streaming_unarchive.as_ms()
     );
 }
@@ -2799,10 +2799,6 @@ pub fn bank_snapshot_dir_to_archive(
         .as_ref()
         .to_path_buf()
         .join(slot.to_string());
-    println!(
-        "xxx bank_snapshot_slot_dir {}",
-        bank_snapshot_slot_dir.as_display()
-    );
 
     let archive_filename = format!("new_{:?}.{}", slot, archive_format.extension());
     let archive_path = bank_snapshots_dir
@@ -4871,6 +4867,8 @@ mod tests {
         info!("Created archive {}", archive_path.display());
 
         // archive -> unpack dir
+        // To be debugged.  /tmp/unpack works.  but any directory generated from TempDir
+        // is unstable, causing flacky crashes.
         //let unpack_dir = bank_snapshots_dir.join("unpack");
         //let unpack_dir_tmp = tempfile::TempDir::new().unwrap();
         //let unpack_dir = unpack_dir_tmp.path().to_path_buf();
