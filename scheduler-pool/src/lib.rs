@@ -308,7 +308,7 @@ impl Checkpoint {
         }
     }
 
-    fn wait_for_restart_from_internal_thread(&self, scheduler_context: &mut Option<SchedulerContext>) {
+    fn wait_for_restart_from_internal_thread(&self, scheduler_context: Option<SchedulerContext>) {
         let did_drop = if let Some(scheduler_context) = scheduler_context.take() {
             scheduler_context.drop_cyclically()
         } else {
@@ -588,7 +588,7 @@ impl Scheduler {
                 }
                 },
                 solana_scheduler::ExecutablePayload(solana_scheduler::Flushable::Flush) => {
-                    checkpoint.wait_for_restart_from_internal_thread(&mut latest_scheduler_context);
+                    checkpoint.wait_for_restart_from_internal_thread(latest_scheduler_context.take());
                 }
                 }
             }
@@ -672,7 +672,7 @@ impl Scheduler {
                             transaction_error_counts.reset();
                             (succeeded, skipped) = (0, 0);
                             checkpoint.register_return_value(std::mem::take(&mut cumulative_timings));
-                            checkpoint.wait_for_restart_from_internal_thread(&mut latest_scheduler_context);
+                            checkpoint.wait_for_restart_from_internal_thread(latest_scheduler_context.take());
                         },
                     }
                 }
@@ -715,7 +715,7 @@ impl Scheduler {
                     if scheduler_context.is_none() {
                        scheduler_context = checkpoint.use_context_value();
                     }
-                    checkpoint.wait_for_restart_from_internal_thread(&mut scheduler_context);
+                    checkpoint.wait_for_restart_from_internal_thread(scheduler_context);
                     continue;
                 }
 
