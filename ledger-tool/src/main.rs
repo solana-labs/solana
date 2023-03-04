@@ -1268,7 +1268,7 @@ fn load_bank_forks(
         &leader_schedule_cache,
         &process_options,
         no_transaction_status_sender.as_ref(),
-        None,
+        None::<usize>,
         &accounts_background_request_sender,
     )
     .map(|_| (bank_forks, starting_snapshot_hashes));
