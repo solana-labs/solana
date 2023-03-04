@@ -294,7 +294,7 @@ impl Checkpoint {
 
         let (rr, ..) = &mut *g;
         assert_eq!(*rr, (0, self.thread_count()));
-        *rr = Self::initial_counts(self.thread_count());
+        *rr = Self::initial_counter_values(self.thread_count());
         if is_waited {
             info!(
                 "Checkpoint::wait_for_completed_restart: {} is notified...",
@@ -312,7 +312,7 @@ impl Checkpoint {
         self.3
     }
 
-    fn initial_counts(thread_count: usize) -> (usize, usize) {
+    fn initial_counter_values(thread_count: usize) -> (usize, usize) {
         (thread_count, 0)
     }
 
@@ -348,7 +348,7 @@ impl Checkpoint {
 
     pub fn new(thread_count: usize) -> std::sync::Arc<Self> {
         std::sync::Arc::new(Self(
-            std::sync::Mutex::new((Self::initial_counts(thread_count), None, None, 0)),
+            std::sync::Mutex::new((Self::initial_counter_values(thread_count), None, None, 0)),
             std::sync::Condvar::new(),
             std::sync::Condvar::new(),
             thread_count,
