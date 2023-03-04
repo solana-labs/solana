@@ -270,7 +270,7 @@ impl Checkpoint {
         }
     }
 
-    pub fn wait_for_completed_restart(&self) {
+    fn wait_for_completed_restart(&self) {
         let mut a = &mut None;
         let mut current_thread_name = || a.get_or_insert_with(|| std::thread::current().name().unwrap().to_string()).clone() ;
 
