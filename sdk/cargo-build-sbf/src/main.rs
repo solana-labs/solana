@@ -699,7 +699,7 @@ fn build_sbf_package(config: &Config, target_directory: &Path, package: &cargo_m
     let target_rustflags = env::var(cargo_target).ok();
     let mut target_rustflags = Cow::Borrowed(target_rustflags.as_deref().unwrap_or_default());
     target_rustflags = Cow::Owned(format!("{} {}", &rustflags, &target_rustflags));
-    if config.remap_cwd {
+    if config.remap_cwd && !config.debug {
         target_rustflags = Cow::Owned(format!("{} -Zremap-cwd-prefix=", &target_rustflags));
     }
     if config.debug {
