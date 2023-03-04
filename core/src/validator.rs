@@ -705,6 +705,17 @@ impl Validator {
             last_full_snapshot_slot,
         );
 
+        let (replay_vote_sender, replay_vote_receiver) = unbounded();
+        if matches!(&config.replaying_backend, ReplayingBackend::UnifiedScheduler) {
+            use solana_scheduler_pool::{
+                SchedulerPool,
+            };
+            let scheduler_pool = SchedulerPool::new_boxed(Some(&poh_recorder), config.runtime_config.log_messages_bytes_limit, transaction_status_sender.clone(), Some(replay_vote_sender.clone()));
+            bank_forks.write().unwrap().install_scheduler_pool(scheduler_pool, false);
+        } else {
+            info!("not installing scheduler pool...");
+        }
+
         let leader_schedule_cache = Arc::new(leader_schedule_cache);
         let mut process_blockstore = ProcessBlockStore::new(
             &id,
@@ -950,16 +961,6 @@ impl Validator {
             stats_reporter_sender,
             exit.clone(),
         );
-        let (replay_vote_sender, replay_vote_receiver) = unbounded();
-        if matches!(&config.replaying_backend, ReplayingBackend::UnifiedScheduler) {
-            use solana_scheduler_pool::{
-                SchedulerPool,
-            };
-            let scheduler_pool = SchedulerPool::new_boxed(Some(&poh_recorder), config.runtime_config.log_messages_bytes_limit, transaction_status_sender.clone(), Some(replay_vote_sender.clone()));
-            bank_forks.write().unwrap().install_scheduler_pool(scheduler_pool, false);
-        } else {
-            info!("not installing scheduler pool...");
-        }
 
         let waited_for_supermajority = match wait_for_supermajority(
             config,
