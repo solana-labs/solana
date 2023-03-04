@@ -722,7 +722,7 @@ impl Scheduler {
                     if scheduler_context.is_none() {
                        scheduler_context = checkpoint.use_context_value();
                     }
-                    checkpoint.wait_for_restart_from_internal_thread(scheduler_context);
+                    checkpoint.wait_for_restart_from_internal_thread(&mut scheduler_context);
                     continue;
                 }
 
