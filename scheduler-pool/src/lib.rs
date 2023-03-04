@@ -227,21 +227,21 @@ impl Checkpoint {
         let mut current_thread_name = || a.get_or_insert_with(|| std::thread::current().name().unwrap().to_string()).clone() ;
 
         let mut g = self.0.lock().unwrap();
-        let ((pre_checkpoint_count, post_checkpoint_count), self_return_value, _, context_count) = &mut *g;
+        let ((threads_before_checkpoint, threads_after_checkpoint), self_return_value, _, context_count) = &mut *g;
         info!(
             "Checkpoint::wait_for_restart: {} is entering at {} -> {}",
             current_thread_name(),
-            *pre_checkpoint_count,
-            *pre_checkpoint_count - 1
+            *threads_before_checkpoint,
+            *threads_before_checkpoint - 1
         );
 
-        *pre_checkpoint_count = pre_checkpoint_count.checked_sub(1).unwrap();
+        *threads_before_checkpoint = threads_before_checkpoint.checked_sub(1).unwrap();
 
-        if *pre_checkpoint_count == 0 {
+        if *threads_before_checkpoint == 0 {
             assert!(self_return_value.is_some());
-            assert!(*post_checkpoint_count <= 1);
-            *post_checkpoint_count = post_checkpoint_count.checked_add(1).unwrap();
-            drop((pre_checkpoint_count, post_checkpoint_count));
+            assert!(*threads_after_checkpoint <= 1);
+            *threads_after_checkpoint = threads_after_checkpoint.checked_add(1).unwrap();
+            drop((threads_before_checkpoint, threads_after_checkpoint));
             assert_eq!(*context_count, 0);
             self.1.notify_all();
             info!(
@@ -255,16 +255,16 @@ impl Checkpoint {
             );
             let _ = *self
                 .1
-                .wait_while(g, |&mut ((pre_checkpoint_count, ..), ..)| pre_checkpoint_count > 0)
+                .wait_while(g, |&mut ((threads_before_checkpoint, ..), ..)| threads_before_checkpoint > 0)
                 .unwrap();
             g = self.0.lock().unwrap();
-            let ((_, post_checkpoint_count), ..) = &mut *g;
-            *post_checkpoint_count = post_checkpoint_count.checked_add(1).unwrap();
-            if *post_checkpoint_count == self.thread_count() {
+            let ((_, threads_after_checkpoint), ..) = &mut *g;
+            *threads_after_checkpoint = threads_after_checkpoint.checked_add(1).unwrap();
+            if *threads_after_checkpoint == self.thread_count() {
                 self.2.notify_one();
             }
             info!(
-                "Checkpoint::wait_for_restart: {} is started... {post_checkpoint_count}",
+                "Checkpoint::wait_for_restart: {} is started... {threads_after_checkpoint}",
                 current_thread_name()
             );
         }
@@ -275,15 +275,15 @@ impl Checkpoint {
         let mut current_thread_name = || a.get_or_insert_with(|| std::thread::current().name().unwrap().to_string()).clone() ;
 
         let mut g = self.0.lock().unwrap();
-        let ((_, post_checkpoint_count), self_return_value, _, context_count) = &mut *g;
-        let is_waited = if *post_checkpoint_count < self.thread_count() {
+        let ((_, threads_after_checkpoint), self_return_value, _, context_count) = &mut *g;
+        let is_waited = if *threads_after_checkpoint < self.thread_count() {
             info!(
-                "Checkpoint::wait_until_full_restart: {} is waited... {post_checkpoint_count}",
+                "Checkpoint::wait_until_full_restart: {} is waited... {threads_after_checkpoint}",
                 current_thread_name()
             );
             let _ = *self
                 .2
-                .wait_while(g, |&mut ((_, post_checkpoint_count), ..)| post_checkpoint_count < self.thread_count())
+                .wait_while(g, |&mut ((_, threads_after_checkpoint), ..)| threads_after_checkpoint < self.thread_count())
                 .unwrap();
             g = self.0.lock().unwrap();
             true
@@ -325,18 +325,18 @@ impl Checkpoint {
     pub fn reduce_count(&self) {
         let current_thread_name = std::thread::current().name().unwrap().to_string();
         let mut g = self.0.lock().unwrap();
-        let ((pre_checkpoint_count, post_checkpoint_count), ..) = &mut *g;
+        let ((threads_before_checkpoint, threads_after_checkpoint), ..) = &mut *g;
         info!(
             "Checkpoint::reduce_count: {} is entering at {} -> {}",
             current_thread_name,
-            *pre_checkpoint_count,
-            *pre_checkpoint_count - 1
+            *threads_before_checkpoint,
+            *threads_before_checkpoint - 1
         );
 
-        assert_eq!(*post_checkpoint_count, 0);
-        *pre_checkpoint_count = pre_checkpoint_count.checked_sub(1).unwrap();
-        *post_checkpoint_count = post_checkpoint_count.checked_add(1).unwrap();
-        assert!(*pre_checkpoint_count >= 1);
+        assert_eq!(*threads_after_checkpoint, 0);
+        *threads_before_checkpoint = threads_before_checkpoint.checked_sub(1).unwrap();
+        *threads_after_checkpoint = threads_after_checkpoint.checked_add(1).unwrap();
+        assert!(*threads_before_checkpoint >= 1);
     }
 
     pub fn take_restart_value(&self) -> ExecuteTimings {
