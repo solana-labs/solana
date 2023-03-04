@@ -327,7 +327,7 @@ impl Checkpoint {
         let mut g = self.0.lock().unwrap();
         let ((threads_before_checkpoint, threads_after_checkpoint), ..) = &mut *g;
         info!(
-            "Checkpoint::reduce_count: {} is entering at {} -> {}",
+            "Checkpoint::ignore_external_thread: {} is entering at {} -> {}",
             current_thread_name,
             *threads_before_checkpoint,
             *threads_before_checkpoint - 1
