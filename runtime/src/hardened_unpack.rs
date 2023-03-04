@@ -322,6 +322,7 @@ pub fn unpack_snapshot<A: Read>(
             unpacked_append_vec_map.insert(file.to_string(), path.join("accounts").join(file));
         },
         |_| {},
+        false,
     )
     .map(|_| unpacked_append_vec_map)
 }
@@ -333,6 +334,7 @@ pub fn streaming_unpack_snapshot<A: Read>(
     account_paths: &[PathBuf],
     parallel_selector: Option<ParallelSelector>,
     sender: &crossbeam_channel::Sender<PathBuf>,
+    unarchive_only: bool,
 ) -> Result<()> {
     unpack_snapshot_with_processors(
         archive,
@@ -342,9 +344,12 @@ pub fn streaming_unpack_snapshot<A: Read>(
         |_, _| {},
         |entry_path_buf| {
             if entry_path_buf.is_file() {
-                sender.send(entry_path_buf).unwrap();
+                if !unarchive_only {
+                    sender.send(entry_path_buf).unwrap();
+                }
             }
         },
+        unarchive_only,
     )
 }
 
@@ -355,6 +360,7 @@ fn unpack_snapshot_with_processors<A, F, G>(
     parallel_selector: Option<ParallelSelector>,
     mut accounts_path_processor: F,
     entry_processor: G,
+    from_dir: bool,
 ) -> Result<()>
 where
     A: Read,
@@ -370,7 +376,12 @@ where
         MAX_SNAPSHOT_ARCHIVE_UNPACKED_ACTUAL_SIZE,
         MAX_SNAPSHOT_ARCHIVE_UNPACKED_COUNT,
         |parts, kind| {
-            if is_valid_snapshot_archive_entry(parts, kind) {
+            let is_valid = if !from_dir {
+                is_valid_snapshot_archive_entry(parts, kind)
+            } else {
+                is_valid_snapshot_dir_archive_entry(parts, kind)
+            };
+            if is_valid {
                 i += 1;
                 match &parallel_selector {
                     Some(parallel_selector) => {
@@ -450,6 +461,14 @@ fn is_valid_snapshot_archive_entry(parts: &[&str], kind: tar::EntryType) -> bool
         (["snapshots", dir, file], Regular) if all_digits(dir) && all_digits(file) => true,
         (["snapshots", dir], Directory) if all_digits(dir) => true,
         _ => false,
+    }
+}
+
+fn is_valid_snapshot_dir_archive_entry(parts: &[&str], kind: tar::EntryType) -> bool {
+    match (parts, kind) {
+        ([dir], Directory) if all_digits(dir) => true,
+        ([dir, "status_cache"], Regular) if all_digits(dir) => true,
+        _ => true, // To be more contraining
     }
 }
 
@@ -787,7 +806,7 @@ mod tests {
 
     fn finalize_and_unpack_snapshot(archive: tar::Builder<Vec<u8>>) -> Result<()> {
         with_finalize_and_unpack(archive, |a, b| {
-            unpack_snapshot_with_processors(a, b, &[PathBuf::new()], None, |_, _| {}, |_| {})
+            unpack_snapshot_with_processors(a, b, &[PathBuf::new()], None, |_, _| {}, |_| {}, false)
         })
     }
 
