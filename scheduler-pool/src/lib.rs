@@ -353,9 +353,7 @@ impl Checkpoint {
             initial_count,
         ))
     }
-}
 
-impl Checkpoint {
     pub fn replace_context_value(&self, new: SchedulerContext) {
         let mut g = self.0.lock().unwrap();
         let (_, self_return_value, b, remaining_contexts) = &mut *g;
