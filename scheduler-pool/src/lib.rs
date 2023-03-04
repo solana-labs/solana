@@ -336,7 +336,7 @@ impl Checkpoint {
         assert_eq!(*waiter_count, 0);
         *runner_count = runner_count.checked_sub(1).unwrap();
         *waiter_count = waiter_count.checked_add(1).unwrap();
-        assert!(*runner_count > 0);
+        assert!(*runner_count >= 1);
     }
 
     pub fn take_restart_value(&self) -> ExecuteTimings {
