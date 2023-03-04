@@ -293,7 +293,7 @@ impl Checkpoint {
         };
 
         let (rr, ..) = &mut *g;
-        assert_eq!(*rr, (0, self.thread_count()));
+        assert_eq!(*rr, Self::final_counter_values(self.thread_count()));
         *rr = Self::initial_counter_values(self.thread_count());
         if is_waited {
             info!(
@@ -314,6 +314,10 @@ impl Checkpoint {
 
     fn initial_counter_values(thread_count: usize) -> (usize, usize) {
         (thread_count, 0)
+    }
+
+    fn final_counter_values(thread_count: usize) -> (usize, usize) {
+        (0, thread_count)
     }
 
     pub fn register_return_value(&self, restart_value: ExecuteTimings) {
