@@ -289,7 +289,7 @@ impl Checkpoint {
             let _ = *self
                 .2
                 .wait_while(g, |(counter_values, ..)| {
-                    let (_, threads_after_checkpoint) = &counter_values;
+                    let (_, &threads_after_checkpoint) = &counter_values;
                     if threads_after_checkpoint < self.thread_count() {
                         true
                     } else {
