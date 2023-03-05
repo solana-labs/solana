@@ -1836,7 +1836,6 @@ impl ReplayStage {
             false,
             transaction_status_sender,
             Some(replay_vote_sender),
-            None,
             verify_recyclers,
             false,
             log_messages_bytes_limit,
