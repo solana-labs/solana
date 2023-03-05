@@ -227,6 +227,9 @@ fn execute_batches_internal(
                 let mut timings = ExecuteTimings::default();
                 let (result, execute_batches_time): (Result<()>, Measure) = measure!(
                     {
+                        // suppress clippy, which is confused by the following
+                        // #[cfg(test)]-ed entry_callback code
+                        #[cfg_attr(not(test), allow(clippy::let_and_return))]
                         let result = execute_batch(
                             transaction_batch,
                             bank,
