@@ -255,7 +255,7 @@ impl Checkpoint {
             );
             let _ = *self
                 .1
-                .wait_while(g, |((threads_before_checkpoint, threads_after_checkpoint), ..)| {
+                .wait_while(g, |((&mut threads_before_checkpoint, &mut threads_after_checkpoint), ..)| {
                     if threads_before_checkpoint > 0 {
                         true
                     } else {
