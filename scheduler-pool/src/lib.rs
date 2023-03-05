@@ -259,8 +259,8 @@ impl Checkpoint {
                     if threads_before_checkpoint > 0 {
                         true
                     } else {
-                        *threads_after_checkpoint = threads_after_checkpoint.checked_add(1).unwrap();
-                        if *threads_after_checkpoint == self.thread_count() {
+                        threads_after_checkpoint = threads_after_checkpoint.checked_add(1).unwrap();
+                        if threads_after_checkpoint == self.thread_count() {
                             self.2.notify_one();
                         }
                         false
