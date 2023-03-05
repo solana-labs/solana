@@ -25,7 +25,12 @@ use {
         },
     },
     solana_cli_output::{CliAccount, CliAccountNewConfig, OutputFormat},
-    solana_core::system_monitor_service::{SystemMonitorService, SystemMonitorStatsReportConfig},
+    solana_core::{
+        system_monitor_service::{SystemMonitorService, SystemMonitorStatsReportConfig},
+        validator::{
+            BankingBackend, ReplayingBackend, DEFAULT_BANKING_BACKEND, DEFAULT_REPLAYING_BACKEND,
+        },
+    },
     solana_entry::entry::Entry,
     solana_geyser_plugin_manager::geyser_plugin_service::GeyserPluginService,
     solana_ledger::{
@@ -1244,6 +1249,18 @@ fn load_bank_forks(
             accounts_update_notifier,
             &Arc::default(),
         );
+    let replaying_backend = arg_matches
+        .value_of("replaying_backend")
+        .map(ReplayingBackend::from)
+        .unwrap();
+    let banking_backend = arg_matches
+        .value_of("banking_backend")
+        .map(BankingBackend::from)
+        .unwrap();
+    info!(
+        "Chosen backends: replaying: {:?}, banking: {:?}",
+        replaying_backend, banking_backend
+    );
 
     let (snapshot_request_sender, snapshot_request_receiver) = crossbeam_channel::unbounded();
     let (accounts_package_sender, _accounts_package_receiver) = crossbeam_channel::unbounded();
@@ -1694,6 +1711,37 @@ fn main() {
                 .takes_value(true)
                 .global(true)
                 .help("Use DIR for separate incremental snapshot location"),
+        )
+        .arg(
+            Arg::with_name("replaying_backend")
+                .long("replaying-backend")
+                .value_name("BACKEND")
+                .takes_value(true)
+                .possible_values(&[
+                    "blockstore-processor",
+                    "unified-scheduler",
+                    ])
+                .default_value(DEFAULT_REPLAYING_BACKEND)
+                .global(true)
+                .hidden(true)
+                .help(
+                    "Switch transaction scheduling backend for validating ledger entries"
+                ),
+        )
+        .arg(
+            Arg::with_name("banking_backend")
+                .long("banking-backend")
+                .value_name("BACKEND")
+                .takes_value(true)
+                .possible_values(&[
+                    "multi-iterator",
+                    ])
+                .default_value(DEFAULT_BANKING_BACKEND)
+                .global(true)
+                .hidden(true)
+                .help(
+                    "Switch transaction scheduling backend for generating ledger entries"
+                ),
         )
         .arg(
             Arg::with_name("output_format")

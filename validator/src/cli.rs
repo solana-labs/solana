@@ -11,7 +11,10 @@ use {
         },
         keypair::SKIP_SEED_PHRASE_VALIDATION_ARG,
     },
-    solana_core::banking_trace::{DirByteLimit, BANKING_TRACE_DIR_DEFAULT_BYTE_LIMIT},
+    solana_core::{
+        banking_trace::{DirByteLimit, BANKING_TRACE_DIR_DEFAULT_BYTE_LIMIT},
+        validator::{DEFAULT_BANKING_BACKEND, DEFAULT_REPLAYING_BACKEND},
+    },
     solana_faucet::faucet::{self, FAUCET_PORT},
     solana_net_utils::{MINIMUM_VALIDATOR_PORT_RANGE_WIDTH, VALIDATOR_PORT_RANGE},
     solana_rpc::{rpc::MAX_REQUEST_BODY_SIZE, rpc_pubsub_service::PubSubConfig},
@@ -1331,6 +1334,35 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                        up to the default or specified total bytes in the \
                        ledger")
         )
+        .arg(
+            Arg::with_name("replaying_backend")
+                .long("replaying-backend")
+                .hidden(true)
+                .value_name("BACKEND")
+                .takes_value(true)
+                .possible_values(&[
+                    "blockstore-processor",
+                    "unified-scheduler",
+                    ])
+                .default_value(&default_args.replaying_backend)
+                .help(
+                    "Switch transaction scheduling backend for validating ledger entries"
+                ),
+        )
+        .arg(
+            Arg::with_name("banking_backend")
+                .long("banking-backend")
+                .hidden(true)
+                .value_name("BACKEND")
+                .takes_value(true)
+                .possible_values(&[
+                    "multi-iterator",
+                    ])
+                .default_value(&default_args.banking_backend)
+                .help(
+                    "Switch transaction scheduling backend for generating ledger entries"
+                ),
+        )
         .args(&get_deprecated_arguments())
         .after_help("The default subcommand is run")
         .subcommand(
@@ -1760,6 +1792,8 @@ pub struct DefaultArgs {
     pub wait_for_restart_window_max_delinquent_stake: String,
 
     pub banking_trace_dir_byte_limit: String,
+    pub replaying_backend: String,
+    pub banking_backend: String,
 }
 
 impl DefaultArgs {
@@ -1839,6 +1873,8 @@ impl DefaultArgs {
             wait_for_restart_window_min_idle_time: "10".to_string(),
             wait_for_restart_window_max_delinquent_stake: "5".to_string(),
             banking_trace_dir_byte_limit: BANKING_TRACE_DIR_DEFAULT_BYTE_LIMIT.to_string(),
+            replaying_backend: DEFAULT_REPLAYING_BACKEND.to_string(),
+            banking_backend: DEFAULT_BANKING_BACKEND.to_string(),
         }
     }
 }

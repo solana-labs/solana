@@ -121,6 +121,51 @@ use {
 const MAX_COMPLETED_DATA_SETS_IN_CHANNEL: usize = 100_000;
 const WAIT_FOR_SUPERMAJORITY_THRESHOLD_PERCENT: u64 = 80;
 
+pub const DEFAULT_REPLAYING_BACKEND: &str = "blockstore-processor";
+pub const DEFAULT_BANKING_BACKEND: &str = "multi-iterator";
+
+#[derive(Clone, Debug)]
+pub enum ReplayingBackend {
+    BlockstoreProcessor,
+    UnifiedScheduler,
+}
+
+impl Default for ReplayingBackend {
+    fn default() -> Self {
+        Self::from(DEFAULT_REPLAYING_BACKEND)
+    }
+}
+
+impl From<&str> for ReplayingBackend {
+    fn from(string: &str) -> Self {
+        match string {
+            "blockstore-processor" => Self::BlockstoreProcessor,
+            "unified-scheduler" => Self::UnifiedScheduler,
+            bad_backend => panic!("Invalid replaying backend: {bad_backend}"),
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+pub enum BankingBackend {
+    MultiIterator,
+}
+
+impl Default for BankingBackend {
+    fn default() -> Self {
+        Self::from(DEFAULT_BANKING_BACKEND)
+    }
+}
+
+impl From<&str> for BankingBackend {
+    fn from(string: &str) -> Self {
+        match string {
+            "multi-iterator" => Self::MultiIterator,
+            bad_backend => panic!("Invalid banking backend: {bad_backend}"),
+        }
+    }
+}
+
 pub struct ValidatorConfig {
     pub halt_at_slot: Option<Slot>,
     pub expected_genesis_hash: Option<Hash>,
@@ -182,6 +227,8 @@ pub struct ValidatorConfig {
     pub runtime_config: RuntimeConfig,
     pub replay_slots_concurrently: bool,
     pub banking_trace_dir_byte_limit: banking_trace::DirByteLimit,
+    pub replaying_backend: ReplayingBackend,
+    pub banking_backend: BankingBackend,
 }
 
 impl Default for ValidatorConfig {
@@ -246,6 +293,8 @@ impl Default for ValidatorConfig {
             runtime_config: RuntimeConfig::default(),
             replay_slots_concurrently: false,
             banking_trace_dir_byte_limit: 0,
+            replaying_backend: ReplayingBackend::default(),
+            banking_backend: BankingBackend::default(),
         }
     }
 }
@@ -684,6 +733,10 @@ impl Validator {
             },
             config.accounts_db_test_hash_calculation,
             last_full_snapshot_slot,
+        );
+        info!(
+            "Chosen backends: replaying: {:?}, banking: {:?}",
+            config.replaying_backend, config.banking_backend
         );
 
         let leader_schedule_cache = Arc::new(leader_schedule_cache);
