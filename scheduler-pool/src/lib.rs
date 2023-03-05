@@ -263,14 +263,14 @@ impl Checkpoint {
                         if threads_after_checkpoint == self.thread_count() {
                             self.2.notify_one();
                         }
+                        info!(
+                            "Checkpoint::wait_for_restart: {} is started... {threads_after_checkpoint}",
+                            current_thread_name()
+                        );
                         false
                     }
                 })
                 .unwrap();
-            info!(
-                "Checkpoint::wait_for_restart: {} is started... {threads_after_checkpoint}",
-                current_thread_name()
-            );
         }
     }
 
