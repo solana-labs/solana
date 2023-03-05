@@ -281,40 +281,38 @@ impl Checkpoint {
         let mut g = self.0.lock().unwrap();
         let ((threads_before_checkpoint, threads_after_checkpoint), self_return_value, _, context_count) = &mut *g;
         assert_eq!(*threads_before_checkpoint, 0);
-        let is_waited = if *threads_after_checkpoint < self.thread_count() {
-            info!(
-                "Checkpoint::wait_for_completed_restart: {} is waited... {threads_after_checkpoint}",
-                current_thread_name()
-            );
-            let _ = *self
-                .2
-                .wait_while(g, |(counter_values, ..)| {
-                    let (_, threads_after_checkpoint) = &counter_values;
-                    if *threads_after_checkpoint < self.thread_count() {
-                        true
-                    } else {
-                        assert_eq!(*counter_values, Self::final_counter_values(self.thread_count()));
-                        *counter_values = Self::initial_counter_values(self.thread_count());
-                        false
+        let mut is_waited = false;
+        let _ = *self
+            .2
+            .wait_while(g, |(counter_values, ..)| {
+                let (_, threads_after_checkpoint) = &counter_values;
+                if *threads_after_checkpoint < self.thread_count() {
+                    if !is_waited {
+                        is_waited = true;
+                        info!(
+                            "Checkpoint::wait_for_completed_restart: {} is waited... {threads_after_checkpoint}",
+                            current_thread_name()
+                        );
                     }
-                })
-                .unwrap();
-            true
-        } else {
-            false
-        };
-
-        if is_waited {
-            info!(
-                "Checkpoint::wait_for_completed_restart: {} is notified...",
-                current_thread_name()
-            );
-        } else {
-            info!(
-                "Checkpoint::wait_for_completed_restart: {} is reset",
-                current_thread_name()
-            );
-        }
+                    true
+                } else {
+                    assert_eq!(*counter_values, Self::final_counter_values(self.thread_count()));
+                    *counter_values = Self::initial_counter_values(self.thread_count());
+                    if is_waited {
+                        info!(
+                            "Checkpoint::wait_for_completed_restart: {} is notified...",
+                            current_thread_name()
+                        );
+                    } else {
+                        info!(
+                            "Checkpoint::wait_for_completed_restart: {} is reset",
+                            current_thread_name()
+                        );
+                    }
+                    false
+                }
+            })
+            .unwrap();
     }
 
     fn wait_for_restart_from_internal_thread(&self, scheduler_context: Option<SchedulerContext>) {
