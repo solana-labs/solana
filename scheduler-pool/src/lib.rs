@@ -288,17 +288,22 @@ impl Checkpoint {
             );
             let _ = *self
                 .2
-                .wait_while(g, |&mut ((_, threads_after_checkpoint), ..)| threads_after_checkpoint < self.thread_count())
+                .wait_while(g, |(counter_values, ..)| {
+                    let (_, threads_after_checkpoint) = &counter_values;
+                    if threads_after_checkpoint < self.thread_count() {
+                        true
+                    } else {
+                        assert_eq!(*counter_values, Self::final_counter_values(self.thread_count()));
+                        *counter_values = Self::initial_counter_values(self.thread_count());
+                        false
+                    }
+                })
                 .unwrap();
-            g = self.0.lock().unwrap();
             true
         } else {
             false
         };
 
-        let (counter_values, ..) = &mut *g;
-        assert_eq!(*counter_values, Self::final_counter_values(self.thread_count()));
-        *counter_values = Self::initial_counter_values(self.thread_count());
         if is_waited {
             info!(
                 "Checkpoint::wait_for_completed_restart: {} is notified...",
