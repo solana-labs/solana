@@ -255,12 +255,12 @@ impl Checkpoint {
             );
             let _ = *self
                 .1
-                .wait_while(g, |((&mut threads_before_checkpoint, &mut threads_after_checkpoint), ..)| {
-                    if threads_before_checkpoint > 0 {
+                .wait_while(g, |((threads_before_checkpoint, threads_after_checkpoint), ..)| {
+                    if *threads_before_checkpoint > 0 {
                         true
                     } else {
-                        threads_after_checkpoint = threads_after_checkpoint.checked_add(1).unwrap();
-                        if threads_after_checkpoint == self.thread_count() {
+                        *threads_after_checkpoint = *threads_after_checkpoint.checked_add(1).unwrap();
+                        if *threads_after_checkpoint == self.thread_count() {
                             self.2.notify_one();
                         }
                         info!(
