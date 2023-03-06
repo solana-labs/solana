@@ -4,7 +4,8 @@ use {
     super::{get_io_error, snapshot_version_from_file, SnapshotError, SnapshotVersion},
     crate::{
         account_storage::{AccountStorageMap, AccountStorageReference},
-        accounts_db::{AccountStorageEntry, AppendVecId, AtomicAppendVecId},
+        accounts_db::{AccountStorageEntry, AccountsDb, AppendVecId, AtomicAppendVecId},
+        append_vec::AppendVec,
         serde_snapshot::{
             self, remap_and_reconstruct_single_storage, snapshot_storage_lengths_from_fields,
             SerdeStyle, SerializedAppendVecId,
@@ -23,7 +24,7 @@ use {
         collections::HashMap,
         fs::File,
         io::BufReader,
-        path::PathBuf,
+        path::{Path, PathBuf},
         sync::{
             atomic::{AtomicUsize, Ordering},
             Arc, Mutex,
@@ -292,7 +293,7 @@ impl SnapshotStorageRebuilder {
         let slot_storage_paths = self.storage_paths.get(&slot).unwrap();
         let lock = slot_storage_paths.lock().unwrap();
 
-        let mut slot_stores = lock
+        let slot_stores = lock
             .iter()
             .map(|path| {
                 let filename = path.file_name().unwrap().to_str().unwrap();
@@ -317,11 +318,52 @@ impl SnapshotStorageRebuilder {
             })
             .collect::<Result<HashMap<AppendVecId, Arc<AccountStorageEntry>>, std::io::Error>>()?;
 
-        assert_eq!(slot_stores.len(), 1);
-        let (id, storage) = slot_stores.drain().next().unwrap();
-        self.storage
-            .insert(slot, AccountStorageReference { id, storage });
+        let storage = if slot_stores.len() > 1 {
+            let remapped_append_vec_folder = lock.first().unwrap().parent().unwrap();
+            let remapped_append_vec_id = Self::get_unique_append_vec_id(
+                &self.next_append_vec_id,
+                remapped_append_vec_folder,
+                slot,
+            );
+            AccountsDb::combine_multiple_slots_into_one_at_startup(
+                remapped_append_vec_folder,
+                remapped_append_vec_id,
+                slot,
+                &slot_stores,
+            )
+        } else {
+            slot_stores
+                .into_values()
+                .next()
+                .expect("at least 1 storage per slot required")
+        };
+
+        self.storage.insert(
+            slot,
+            AccountStorageReference {
+                id: storage.append_vec_id(),
+                storage,
+            },
+        );
         Ok(())
+    }
+
+    /// increment `next_append_vec_id` until there is no file in `parent_folder` with this id and slot
+    /// return the id
+    fn get_unique_append_vec_id(
+        next_append_vec_id: &Arc<AtomicAppendVecId>,
+        parent_folder: &Path,
+        slot: Slot,
+    ) -> AppendVecId {
+        loop {
+            let remapped_append_vec_id = next_append_vec_id.fetch_add(1, Ordering::AcqRel);
+            let remapped_file_name = AppendVec::file_name(slot, remapped_append_vec_id);
+            let remapped_append_vec_path = parent_folder.join(remapped_file_name);
+            if std::fs::metadata(&remapped_append_vec_path).is_err() {
+                // getting an err here means that there is no existing file here
+                return remapped_append_vec_id;
+            }
+        }
     }
 
     /// Wait for the completion of the rebuilding threads
@@ -404,6 +446,27 @@ pub(crate) fn get_slot_and_append_vec_id(filename: &str) -> (Slot, usize) {
 #[cfg(test)]
 mod tests {
     use {super::*, crate::append_vec::AppendVec};
+
+    #[test]
+    fn test_get_unique_append_vec_id() {
+        let folder = tempfile::TempDir::new().unwrap();
+        let folder = folder.path();
+        let next_id = Arc::default();
+        let slot = 1;
+        let append_vec_id =
+            SnapshotStorageRebuilder::get_unique_append_vec_id(&next_id, folder, slot);
+        assert_eq!(append_vec_id, 0);
+        let file_name = AppendVec::file_name(slot, append_vec_id);
+        let append_vec_path = folder.join(file_name);
+
+        // create a file at this path
+        _ = File::create(append_vec_path).unwrap();
+        next_id.store(0, Ordering::Release);
+        let append_vec_id =
+            SnapshotStorageRebuilder::get_unique_append_vec_id(&next_id, folder, slot);
+        // should have found a conflict with 0
+        assert_eq!(append_vec_id, 1);
+    }
 
     #[test]
     fn test_get_snapshot_file_kind() {
