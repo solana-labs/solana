@@ -1153,7 +1153,7 @@ impl ServeRepair {
                     let pong = RepairProtocol::Pong(pong);
                     if let Ok(pong_bytes) = serialize(&pong) {
                         let from_addr = if matches!(repair_socket, RepairTransportConfig::Quic(_)) {
-                            // as we are using the same connection cache which is doing the port offset logic
+                            // As we are using the same connection cache which is doing the port offset logic
                             // we need to substract the offset here.
                             SocketAddr::new(
                                 packet.meta().socket_addr().ip(),
