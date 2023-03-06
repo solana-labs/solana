@@ -99,7 +99,6 @@ fn get_invoke_context<'a, 'b>() -> &'a mut InvokeContext<'b> {
 
 pub fn builtin_process_instruction(
     process_instruction: solana_sdk::entrypoint::ProcessInstruction,
-    _first_instruction_account: IndexOfAccount,
     invoke_context: &mut InvokeContext,
 ) -> Result<(), InstructionError> {
     set_invoke_context(invoke_context);
@@ -181,16 +180,9 @@ pub fn builtin_process_instruction(
 #[macro_export]
 macro_rules! processor {
     ($process_instruction:expr) => {
-        Some(
-            |first_instruction_account: $crate::IndexOfAccount,
-             invoke_context: &mut solana_program_test::InvokeContext| {
-                $crate::builtin_process_instruction(
-                    $process_instruction,
-                    first_instruction_account,
-                    invoke_context,
-                )
-            },
-        )
+        Some(|invoke_context: &mut solana_program_test::InvokeContext| {
+            $crate::builtin_process_instruction($process_instruction, invoke_context)
+        })
     };
 }
 
