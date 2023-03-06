@@ -86,40 +86,6 @@ pub enum BpfError {
 }
 impl UserDefinedError for BpfError {}
 
-// The BPF loader is special in that it is the only place in the runtime and its built-in programs,
-// where data comes not only from instruction account but also program accounts.
-// Thus, these two helper methods have to distinguish the mixed sources via index_in_instruction.
-
-fn get_index_in_transaction(
-    instruction_context: &InstructionContext,
-    index_in_instruction: IndexOfAccount,
-) -> Result<IndexOfAccount, InstructionError> {
-    if index_in_instruction < instruction_context.get_number_of_program_accounts() {
-        instruction_context.get_index_of_program_account_in_transaction(index_in_instruction)
-    } else {
-        instruction_context.get_index_of_instruction_account_in_transaction(
-            index_in_instruction
-                .saturating_sub(instruction_context.get_number_of_program_accounts()),
-        )
-    }
-}
-
-fn try_borrow_account<'a>(
-    transaction_context: &'a TransactionContext,
-    instruction_context: &'a InstructionContext,
-    index_in_instruction: IndexOfAccount,
-) -> Result<BorrowedAccount<'a>, InstructionError> {
-    if index_in_instruction < instruction_context.get_number_of_program_accounts() {
-        instruction_context.try_borrow_program_account(transaction_context, index_in_instruction)
-    } else {
-        instruction_context.try_borrow_instruction_account(
-            transaction_context,
-            index_in_instruction
-                .saturating_sub(instruction_context.get_number_of_program_accounts()),
-        )
-    }
-}
-
 #[allow(clippy::too_many_arguments)]
 pub fn load_program_from_bytes(
     feature_set: &FeatureSet,
