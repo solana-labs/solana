@@ -476,6 +476,7 @@ extern crate self as solana_program;
 
 pub mod account_info;
 pub mod address_lookup_table_account;
+pub mod address_lookup_table_program;
 pub mod alt_bn128;
 pub(crate) mod atomic_u64;
 pub mod big_mod_exp;
@@ -552,9 +553,9 @@ pub mod config {
 pub mod sdk_ids {
     use {
         crate::{
-            bpf_loader, bpf_loader_deprecated, bpf_loader_upgradeable, config, ed25519_program,
-            feature, incinerator, secp256k1_program, solana_program::pubkey::Pubkey, stake,
-            system_program, sysvar, vote,
+            address_lookup_table_program, bpf_loader, bpf_loader_deprecated,
+            bpf_loader_upgradeable, config, ed25519_program, feature, incinerator,
+            secp256k1_program, solana_program::pubkey::Pubkey, stake, system_program, sysvar, vote,
         },
         lazy_static::lazy_static,
     };
@@ -562,6 +563,7 @@ pub mod sdk_ids {
     lazy_static! {
         pub static ref SDK_IDS: Vec<Pubkey> = {
             let mut sdk_ids = vec![
+                address_lookup_table_program::id(),
                 ed25519_program::id(),
                 secp256k1_program::id(),
                 system_program::id(),
