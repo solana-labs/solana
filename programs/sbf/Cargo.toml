@@ -66,6 +66,10 @@ edition = { workspace = true }
 [features]
 sbf_c = []
 sbf_rust = []
+dummy-for-ci-check = [
+    "sbf_c",
+    "sbf_rust",
+]
 
 [build-dependencies]
 walkdir = "2"

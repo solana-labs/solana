@@ -1,5 +1,7 @@
 //! Example Rust-based SBF program that test dynamic memory allocation
 
+#![allow(clippy::integer_arithmetic)]
+
 #[macro_use]
 extern crate alloc;
 use {
@@ -37,7 +39,7 @@ pub extern "C" fn entrypoint(_input: *mut u8) -> u64 {
             *ptr.add(i) = i as u8;
         }
         for i in 0..ITERS {
-            assert_eq!(*ptr.add(i as usize), i as u8);
+            assert_eq!(*ptr.add(i), i as u8);
         }
         sol_log_64(0x3, 0, 0, 0, u64::from(*ptr.add(42)));
         assert_eq!(*ptr.add(42), 42);

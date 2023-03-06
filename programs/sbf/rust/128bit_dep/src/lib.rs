@@ -1,5 +1,7 @@
 //! Solana Rust-based SBF program utility functions and types
 
+#![allow(clippy::integer_arithmetic)]
+
 extern crate solana_program;
 
 pub fn uadd(x: u128, y: u128) -> u128 {
