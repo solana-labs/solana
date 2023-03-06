@@ -299,18 +299,13 @@ macro_rules! deploy_program {
 }
 
 fn write_program_data(
-    program_account_index: IndexOfAccount,
     program_data_offset: usize,
     bytes: &[u8],
     invoke_context: &mut InvokeContext,
 ) -> Result<(), InstructionError> {
     let transaction_context = &invoke_context.transaction_context;
     let instruction_context = transaction_context.get_current_instruction_context()?;
-    let mut program = try_borrow_account(
-        transaction_context,
-        instruction_context,
-        program_account_index,
-    )?;
+    let mut program = instruction_context.try_borrow_instruction_account(transaction_context, 0)?;
     let data = program.get_data_mut()?;
     let write_offset = program_data_offset.saturating_add(bytes.len());
     if data.len() < write_offset {
@@ -491,13 +486,9 @@ fn process_instruction_common(
         drop(program);
         debug_assert_eq!(first_instruction_account, 1);
         if bpf_loader_upgradeable::check_id(program_id) {
-            process_loader_upgradeable_instruction(
-                first_instruction_account,
-                invoke_context,
-                use_jit,
-            )
+            process_loader_upgradeable_instruction(invoke_context, use_jit)
         } else if bpf_loader::check_id(program_id) {
-            process_loader_instruction(first_instruction_account, invoke_context, use_jit)
+            process_loader_instruction(invoke_context, use_jit)
         } else if bpf_loader_deprecated::check_id(program_id) {
             ic_logger_msg!(log_collector, "Deprecated loader is no longer supported");
             Err(InstructionError::UnsupportedProgramId)
@@ -509,7 +500,6 @@ fn process_instruction_common(
 }
 
 fn process_loader_upgradeable_instruction(
-    first_instruction_account: IndexOfAccount,
     invoke_context: &mut InvokeContext,
     use_jit: bool,
 ) -> Result<(), InstructionError> {
@@ -565,7 +555,6 @@ fn process_loader_upgradeable_instruction(
             }
             drop(buffer);
             write_program_data(
-                first_instruction_account,
                 UpgradeableLoaderState::size_of_buffer_metadata().saturating_add(offset as usize),
                 &bytes,
                 invoke_context,
@@ -1377,7 +1366,6 @@ fn common_close_account(
 }
 
 fn process_loader_instruction(
-    first_instruction_account: IndexOfAccount,
     invoke_context: &mut InvokeContext,
     use_jit: bool,
 ) -> Result<(), InstructionError> {
@@ -1401,12 +1389,7 @@ fn process_loader_instruction(
                 return Err(InstructionError::MissingRequiredSignature);
             }
             drop(program);
-            write_program_data(
-                first_instruction_account,
-                offset as usize,
-                &bytes,
-                invoke_context,
-            )?;
+            write_program_data(offset as usize, &bytes, invoke_context)?;
         }
         LoaderInstruction::Finalize => {
             if !is_program_signer {
