@@ -320,7 +320,7 @@ impl RepairService {
                         // correct version.
                         for (slot, _correct_hash) in slot_hash_keys_to_dump {
                             // `slot` is dumped in blockstore wanting to be repaired, we orphan it along with
-                            // descendants while copying the weighting heurstic so that it can be
+                            // descendants while copying the weighting heuristic so that it can be
                             // repaired with correct ancestor information
                             repair_weight.split_off(slot);
                         }
