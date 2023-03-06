@@ -560,9 +560,7 @@ where
             };
             (index >> 1, parent)
         });
-    (index == 0)
-        .then_some(root)
-        .ok_or(Error::InvalidMerkleProof)
+    (index == 0).then(|| root).ok_or(Error::InvalidMerkleProof)
 }
 
 fn get_merkle_proof(
@@ -619,7 +617,7 @@ fn make_merkle_proof(
         size = (size + 1) >> 1;
         index >>= 1;
     }
-    (offset + 1 == tree.len()).then_some(proof)
+    (offset + 1 == tree.len()).then(|| proof)
 }
 
 pub(super) fn recover(

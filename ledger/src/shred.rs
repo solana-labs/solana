@@ -659,22 +659,14 @@ pub mod layout {
         match get_shred_variant(shred).ok()? {
             ShredVariant::LegacyCode | ShredVariant::LegacyData => {
                 let offsets = self::legacy::SIGNED_MESSAGE_OFFSETS;
-                (offsets.end <= shred.len()).then_some(offsets)
+                (offsets.end <= shred.len()).then(|| offsets)
             }
-<<<<<<< HEAD
-            ShredVariant::MerkleData(proof_size) => {
-                merkle::ShredData::get_signed_data_offsets(proof_size)?
-            }
-        };
-        (offsets.end <= shred.len()).then(|| offsets)
-=======
             // Merkle shreds sign merkle tree root which can be recovered from
             // the merkle proof embedded in the payload but itself is not
             // stored the payload.
             ShredVariant::MerkleCode(_) => None,
             ShredVariant::MerkleData(_) => None,
         }
->>>>>>> cf0a149ad (removes the merkle root from shreds binary (#29427))
     }
 
     pub(crate) fn get_reference_tick(shred: &[u8]) -> Result<u8, Error> {
