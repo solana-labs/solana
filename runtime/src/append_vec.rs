@@ -7,7 +7,8 @@
 use {
     crate::{
         account_storage::meta::{
-            AccountMeta, StorableAccountsWithHashesAndWriteVersions, StoredAccountMeta, StoredMeta,
+            AccountMeta, StorableAccountsWithHashesAndWriteVersions, StoredAccountInfo,
+            StoredAccountMeta, StoredMeta,
         },
         storable_accounts::StorableAccounts,
     },
@@ -489,12 +490,12 @@ impl AppendVec {
         &self,
         accounts: &StorableAccountsWithHashesAndWriteVersions<'a, 'b, T, U, V>,
         skip: usize,
-    ) -> Option<Vec<usize>> {
+    ) -> Option<Vec<StoredAccountInfo>> {
         let _lock = self.append_lock.lock().unwrap();
         let mut offset = self.len();
 
         let len = accounts.accounts.len();
-        let mut rv = Vec::with_capacity(len);
+        let mut offsets = Vec::with_capacity(len);
         for i in skip..len {
             let (account, pubkey, hash, write_version_obsolete) = accounts.get(i);
             let account_meta = account
@@ -528,18 +529,25 @@ impl AppendVec {
                 (data_ptr, data_len),
             ];
             if let Some(res) = self.append_ptrs_locked(&mut offset, &ptrs) {
-                rv.push(res)
+                offsets.push(res)
             } else {
                 break;
             }
         }
 
-        if rv.is_empty() {
+        if offsets.is_empty() {
             None
         } else {
             // The last entry in this offset needs to be the u64 aligned offset, because that's
             // where the *next* entry will begin to be stored.
-            rv.push(u64_align!(offset));
+            offsets.push(u64_align!(offset));
+            let mut rv = Vec::with_capacity(len);
+            for offsets in offsets.windows(2) {
+                rv.push(StoredAccountInfo {
+                    offset: offsets[0],
+                    size: offsets[1] - offsets[0],
+                });
+            }
 
             Some(rv)
         }
@@ -580,7 +588,7 @@ pub mod tests {
                 );
 
             self.append_accounts(&storable_accounts, 0)
-                .map(|res| res[0])
+                .map(|res| res[0].offset)
         }
     }
 

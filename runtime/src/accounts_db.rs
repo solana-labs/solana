@@ -6167,12 +6167,11 @@ impl AccountsDb {
             }
 
             let store_id = storage.append_vec_id();
-            for (i, offsets) in rvs.unwrap().windows(2).enumerate() {
-                let stored_size = offsets[1] - offsets[0];
-                storage.add_account(stored_size);
+            for (i, stored_account_info) in rvs.unwrap().into_iter().enumerate() {
+                storage.add_account(stored_account_info.size);
 
                 infos.push(AccountInfo::new(
-                    StorageLocation::AppendVec(store_id, offsets[0]),
+                    StorageLocation::AppendVec(store_id, stored_account_info.offset),
                     accounts_and_meta_to_store
                         .account(i)
                         .map(|account| account.lamports())
@@ -10484,19 +10483,18 @@ pub mod tests {
                 vec![&hash],
                 vec![write_version],
             );
-        let old_written = storage.written_bytes();
-        let offsets = storage
+        let stored_accounts_info = storage
             .accounts
             .append_accounts(&storable_accounts, 0)
             .unwrap();
         if mark_alive {
             // updates 'alive_bytes' on the storage
-            storage.add_account((storage.written_bytes() - old_written) as usize);
+            storage.add_account(stored_accounts_info[0].size);
         }
 
         if let Some(index) = add_to_index {
             let account_info = AccountInfo::new(
-                StorageLocation::AppendVec(storage.append_vec_id(), offsets[0]),
+                StorageLocation::AppendVec(storage.append_vec_id(), stored_accounts_info[0].offset),
                 account.lamports(),
             );
             index.upsert(
