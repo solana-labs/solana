@@ -212,9 +212,6 @@ pub fn load_program_from_account(
         return Err(InstructionError::IncorrectProgramId);
     }
 
-    let (programdata_offset, deployment_slot) =
-        get_programdata_offset_and_depoyment_offset(&log_collector, program, programdata)?;
-
     if let Some(ref tx_executor_cache) = tx_executor_cache {
         if let Some(loaded_program) = tx_executor_cache.get(program.get_key()) {
             if loaded_program.is_tombstone() {
@@ -226,6 +223,9 @@ pub fn load_program_from_account(
             return Ok((loaded_program, None));
         }
     }
+
+    let (programdata_offset, deployment_slot) =
+        get_programdata_offset_and_depoyment_offset(&log_collector, program, programdata)?;
 
     let programdata_size = if programdata_offset != 0 {
         programdata.get_data().len()
