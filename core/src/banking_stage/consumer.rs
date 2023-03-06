@@ -1837,9 +1837,7 @@ mod tests {
                 &mut LeaderSlotMetricsTracker::new(0),
             );
 
-            // After consume - check that all transactions were processed, and that the
-            // number of rebuffered transactions is correct - i.e. transactions were
-            // processed in batches of one.
+            // Check that all packets were processed
             assert!(buffered_packet_batches.is_empty());
             assert_eq!(
                 banking_stage_stats
