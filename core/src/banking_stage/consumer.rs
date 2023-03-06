@@ -1837,13 +1837,19 @@ mod tests {
                 &mut LeaderSlotMetricsTracker::new(0),
             );
 
-            // Check that all packets were processed
+            // Check that all packets were processed without retrying
             assert!(buffered_packet_batches.is_empty());
             assert_eq!(
                 banking_stage_stats
                     .consumed_buffered_packets_count
                     .load(Ordering::Relaxed),
                 num_conflicting_transactions
+            );
+            assert_eq!(
+                banking_stage_stats
+                    .rebuffered_packets_count
+                    .load(Ordering::Relaxed),
+                0
             );
             // Use bank to check the number of entries (batches)
             assert_eq!(bank_start.working_bank.transactions_per_entry_max(), 1);
