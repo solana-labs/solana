@@ -14,7 +14,6 @@ use {
         tower_storage::TowerStorage, validator::ValidatorStartProgress,
     },
     solana_geyser_plugin_manager::GeyserPluginManagerRequest,
-    solana_gossip::{cluster_info::ClusterInfo, contact_info::ContactInfo},
     solana_gossip::contact_info::ContactInfo,
     solana_rpc::rpc::verify_pubkey,
     solana_rpc_client_api::{config::RpcAccountIndex, custom_error::RpcCustomError},
