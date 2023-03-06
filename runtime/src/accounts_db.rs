@@ -17362,7 +17362,7 @@ pub mod tests {
 
     pub(crate) fn get_all_accounts(
         db: &AccountsDb,
-        slots: Range<Slot>,
+        slots: impl Iterator<Item = Slot>,
     ) -> Vec<(Pubkey, AccountSharedData)> {
         slots
             .filter_map(|slot| {
