@@ -7,7 +7,7 @@
 use {
     crossbeam_channel::{Receiver, Sender},
     solana_gossip::cluster_info::{ClusterInfo, MAX_SNAPSHOT_HASHES},
-    solana_measure::{measure, measure::Measure},
+    solana_measure::{measure::Measure, measure_us},
     solana_runtime::{
         accounts_hash::{AccountsHashEnum, CalcAccountsHashConfig, HashStats},
         snapshot_config::SnapshotConfig,
@@ -61,48 +61,49 @@ impl AccountsHashVerifier {
                         break;
                     }
 
-                    if let Some((
+                    let Some((
                         accounts_package,
                         num_outstanding_accounts_packages,
                         num_re_enqueued_accounts_packages,
                     )) = Self::get_next_accounts_package(
                         &accounts_package_sender,
                         &accounts_package_receiver,
-                    ) {
-                        info!("handling accounts package: {accounts_package:?}");
-                        let enqueued_time = accounts_package.enqueued.elapsed();
-
-                        let (_, measure) = measure!(Self::process_accounts_package(
-                            accounts_package,
-                            &cluster_info,
-                            known_validators.as_ref(),
-                            halt_on_known_validators_accounts_hash_mismatch,
-                            snapshot_package_sender.as_ref(),
-                            &mut hashes,
-                            &exit,
-                            fault_injection_rate_slots,
-                            &snapshot_config,
-                        ));
-
-                        datapoint_info!(
-                            "accounts_hash_verifier",
-                            (
-                                "num-outstanding-accounts-packages",
-                                num_outstanding_accounts_packages as i64,
-                                i64
-                            ),
-                            (
-                                "num-re-enqueued-accounts-packages",
-                                num_re_enqueued_accounts_packages as i64,
-                                i64
-                            ),
-                            ("enqueued-time-us", enqueued_time.as_micros() as i64, i64),
-                            ("total-processing-time-us", measure.as_us() as i64, i64),
-                        );
-                    } else {
+                    ) else {
                         std::thread::sleep(LOOP_LIMITER);
-                    }
+                        continue;
+                    };
+                    info!("handling accounts package: {accounts_package:?}");
+                    let enqueued_time = accounts_package.enqueued.elapsed();
+
+                    let (_, handling_time_us) = measure_us!(Self::process_accounts_package(
+                        accounts_package,
+                        &cluster_info,
+                        known_validators.as_ref(),
+                        halt_on_known_validators_accounts_hash_mismatch,
+                        snapshot_package_sender.as_ref(),
+                        &mut hashes,
+                        &exit,
+                        fault_injection_rate_slots,
+                        &snapshot_config,
+                    ));
+
+                    datapoint_info!(
+                        "accounts_hash_verifier",
+                        (
+                            "num-outstanding-accounts-packages",
+                            num_outstanding_accounts_packages,
+                            i64
+                        ),
+                        (
+                            "num-re-enqueued-accounts-packages",
+                            num_re_enqueued_accounts_packages,
+                            i64
+                        ),
+                        ("enqueued-time-us", enqueued_time.as_micros(), i64),
+                        ("handling-time-us", handling_time_us, i64),
+                    );
                 }
+                info!("Accounts Hash Verifier has stopped");
             })
             .unwrap();
         Self {
