@@ -14,8 +14,7 @@ use {
 };
 
 const_assert_eq!(MAX_CODE_SHREDS_PER_SLOT, 32_768 * 17);
-pub(crate) const MAX_CODE_SHREDS_PER_SLOT: usize =
-    MAX_DATA_SHREDS_PER_SLOT * (ERASURE_BATCH_SIZE[1] - 1);
+pub const MAX_CODE_SHREDS_PER_SLOT: usize = MAX_DATA_SHREDS_PER_SLOT * (ERASURE_BATCH_SIZE[1] - 1);
 
 const_assert_eq!(ShredCode::SIZE_OF_PAYLOAD, 1228);
 
