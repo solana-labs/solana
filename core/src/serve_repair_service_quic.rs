@@ -32,7 +32,7 @@ impl ServeRepairService {
         stats_reporter_sender: Sender<Box<dyn FnOnce() + Send>>,
         exit: Arc<AtomicBool>,
     ) -> Self {
-        trace!(
+        info!(
             "ServeRepairService: id: {}, listening on: {:?}",
             &serve_repair.my_id(),
             repair_quic_config
