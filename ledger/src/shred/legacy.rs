@@ -442,7 +442,7 @@ mod test {
             shred.common_header.index = MAX_CODE_SHREDS_PER_SLOT as u32;
             assert_matches!(
                 shred.sanitize(),
-                Err(Error::InvalidShredIndex(ShredType::Code, 557_056))
+                Err(Error::InvalidShredIndex(ShredType::Code, 32_768))
             );
         }
         // pos >= num_coding is invalid.
