@@ -6,7 +6,7 @@ use {
         pubkey::Pubkey,
         system_program,
     },
-    solana_sdk::address_lookup_table_program::id,
+    solana_program::address_lookup_table_program::id,
 };
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
