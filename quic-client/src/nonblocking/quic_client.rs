@@ -587,7 +587,6 @@ impl ClientConnection for QuicClientConnection {
             .client
             .send_buffer(data, &stats, self.connection_stats.clone());
         if let Err(e) = send_buffer.await {
-
             if std::env::var("CRASH").is_ok() {
                 panic!("Crashed intentionally");
             }
