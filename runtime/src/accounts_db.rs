@@ -12616,7 +12616,7 @@ pub mod tests {
 
         db.store_for_tests(some_slot, &[(&key, &account)]);
         db.add_root_and_flush_write_cache(some_slot);
-        db.update_accounts_hash_for_tests(some_slot, &ancestors, true, true);
+        let (_, capitalization) = db.update_accounts_hash_for_tests(some_slot, &ancestors, true, true);
 
         let config = BankHashLamportsVerifyConfig::new_for_test(
             &ancestors,
@@ -12636,10 +12636,7 @@ pub mod tests {
             Err(MissingBankHash)
         );
 
-        db.set_accounts_hash(
-            some_slot,
-            (AccountsHash(Hash::new(&[0xca; HASH_BYTES])), u64::default()),
-        );
+        db.set_accounts_hash(some_slot, (AccountsHash(Hash::new(&[0xca; HASH_BYTES])), capitalization));
 
         assert_matches!(
             db.verify_bank_hash_and_lamports(some_slot, 1, config),
