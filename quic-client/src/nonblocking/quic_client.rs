@@ -368,10 +368,11 @@ impl QuicClient {
                             Ok(conn) => {
                                 *conn_guard = Some(conn.clone());
                                 info!(
-                                    "Made connection to {} id {} try_count {}",
+                                    "Made connection to {} id {} try_count {} thread {:?}",
                                     self.addr,
                                     conn.connection.stable_id(),
-                                    connection_try_count
+                                    connection_try_count,
+                                    thread::current().id()
                                 );
                                 connection_try_count += 1;
                                 conn.connection.clone()
@@ -416,6 +417,12 @@ impl QuicClient {
             last_connection_id = connection.stable_id();
             match Self::_send_buffer_using_conn(data, &connection).await {
                 Ok(()) => {
+                    info!(
+                        "Successfully sent data to {} id {}, thread {:?}",
+                        self.addr,
+                        connection.stable_id(),
+                        thread::current().id(),
+                    );
                     return Ok(connection);
                 }
                 Err(err) => match err {
