@@ -133,7 +133,7 @@ pub async fn run_server(
     wait_for_chunk_timeout_ms: u64,
     coalesce_ms: u64,
 ) {
-    debug!("spawn quic server");
+    debug!("spawn quic server at {:?}", incoming);
     let mut last_datapoint = Instant::now();
     let unstaked_connection_table: Arc<Mutex<ConnectionTable>> = Arc::new(Mutex::new(
         ConnectionTable::new(ConnectionPeerType::Unstaked),
@@ -163,7 +163,11 @@ pub async fn run_server(
         }
 
         if let Ok(Some(connection)) = timeout_connection {
-            info!("Got a connection {:?}", connection.remote_address());
+            info!(
+                "Got a connection {:?} at {:?}",
+                connection.remote_address(),
+                incoming
+            );
             tokio::spawn(setup_connection(
                 connection,
                 unstaked_connection_table.clone(),
@@ -178,7 +182,10 @@ pub async fn run_server(
             ));
             sleep(Duration::from_micros(WAIT_BETWEEN_NEW_CONNECTIONS_US)).await;
         } else {
-            debug!("accept(): Timed out waiting for connection");
+            debug!(
+                "accept(): Timed out waiting for connection at {:?}",
+                incoming
+            );
         }
     }
 }
@@ -645,11 +652,14 @@ async fn handle_connection(
     peer_type: ConnectionPeerType,
     wait_for_chunk_timeout_ms: u64,
 ) {
+    let stable_id = connection.stable_id();
     debug!(
-        "quic new connection {} streams: {} connections: {}",
+        "quic new connection {} streams: {} connections: {} at {:?} {:?}",
         remote_addr,
         stats.total_streams.load(Ordering::Relaxed),
         stats.total_connections.load(Ordering::Relaxed),
+        connection,
+        stable_id
     );
     let stable_id = connection.stable_id();
     stats.total_connections.fetch_add(1, Ordering::Relaxed);
@@ -702,7 +712,7 @@ async fn handle_connection(
                             } else {
                                 let elapse = Instant::now() - start;
                                 if elapse.as_millis() as u64 > wait_for_chunk_timeout_ms {
-                                    debug!("Timeout in receiving on stream");
+                                    debug!("Timeout in receiving on stream for connection {:?} stream {:?}", stable_id, stream);
                                     stats
                                         .total_stream_read_timeouts
                                         .fetch_add(1, Ordering::Relaxed);
@@ -714,7 +724,7 @@ async fn handle_connection(
                     });
                 }
                 Err(e) => {
-                    debug!("stream error: {:?}", e);
+                    debug!("stream error: {:?} for connection {:?}", e, stable_id);
                     break;
                 }
             }

@@ -37,7 +37,7 @@ impl WarmQuicCacheService {
                 let slot_jitter = thread_rng().gen_range(-CACHE_JITTER_SLOT, CACHE_JITTER_SLOT);
                 let mut maybe_last_leader = None;
                 while !exit.load(Ordering::Relaxed) {
-                    let leader_pubkey =  poh_recorder
+                    let leader_pubkey = poh_recorder
                         .read()
                         .unwrap()
                         .leader_after_n_slots((CACHE_OFFSET_SLOT + slot_jitter) as u64);
