@@ -8,4 +8,4 @@ pub mod instruction;
 pub mod processor;
 pub mod state;
 
-pub use solana_sdk::address_lookup_table_program::{check_id, id};
+pub use solana_program::address_lookup_table_program::{check_id, id};
