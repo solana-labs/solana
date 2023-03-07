@@ -1336,7 +1336,7 @@ fn verify_and_unarchive_snapshots(
 
     let parallel_divisions = (num_cpus::get() / 4).clamp(1, PARALLEL_UNTAR_READERS_DEFAULT);
 
-    let next_append_vec_id = Arc::new(AtomicU32::new(0));
+    let next_append_vec_id = Arc::new(AtomicAppendVecId::new(0));
     let unarchived_full_snapshot = unarchive_snapshot(
         &bank_snapshots_dir,
         TMP_SNAPSHOT_ARCHIVE_PREFIX,
@@ -1631,7 +1631,7 @@ pub fn bank_from_latest_snapshot_archives(
 
 /// Build bank from a snapshot (a snapshot directory, not a snapshot archive)
 #[allow(clippy::too_many_arguments)]
-pub fn bank_from_snapshot(
+pub fn bank_from_snapshot_dir(
     account_paths: &[PathBuf],
     bank_snapshot: &BankSnapshotInfo,
     genesis_config: &GenesisConfig,
@@ -1648,7 +1648,7 @@ pub fn bank_from_snapshot(
     accounts_update_notifier: Option<AccountsUpdateNotifier>,
     exit: &Arc<AtomicBool>,
 ) -> Result<(Bank, BankFromArchiveTimings)> {
-    let next_append_vec_id = Arc::new(AtomicU32::new(0));
+    let next_append_vec_id = Arc::new(AtomicAppendVecId::new(0));
     let (storage, measure_build_storage) = build_storage_from_snapshot_dir(
         bank_snapshot,
         "build storage",
@@ -1656,7 +1656,8 @@ pub fn bank_from_snapshot(
         next_append_vec_id.clone(),
     )?;
 
-    let next_append_vec_id = Arc::try_unwrap(next_append_vec_id).unwrap();
+    let next_append_vec_id =
+        Arc::try_unwrap(next_append_vec_id).expect("this is the only strong reference");
     let storage_and_next_append_vec_id = StorageAndNextAppendVecId {
         storage,
         next_append_vec_id,
@@ -5399,7 +5400,7 @@ mod tests {
             delete_contents_of_path(path);
         }
 
-        let (bank_constructed, ..) = bank_from_snapshot(
+        let (bank_constructed, ..) = bank_from_snapshot_dir(
             account_paths,
             &bank_snapshot,
             &genesis_config,
