@@ -9,10 +9,7 @@ use {
         broadcast_stage::broadcast_utils::UnfinishedSlotInfo, cluster_nodes::ClusterNodesCache,
     },
     solana_entry::entry::Entry,
-    solana_ledger::{
-        blockstore,
-        shred::{shred_code, ProcessShredsStats, ReedSolomonCache, Shred, ShredFlags, Shredder},
-    },
+    solana_ledger::shred::{ProcessShredsStats, ReedSolomonCache, Shred, ShredFlags, Shredder},
     solana_sdk::{
         genesis_config::ClusterType,
         signature::Keypair,
@@ -40,6 +37,8 @@ pub struct StandardBroadcastRun {
 enum BroadcastError {
     TooManyShreds,
 }
+
+const MAX_BROADCAST_SHREDS_PER_SLOT: usize = 16_384;
 
 impl StandardBroadcastRun {
     pub(super) fn new(shred_version: u16) -> Self {
@@ -263,8 +262,8 @@ impl StandardBroadcastRun {
                 is_last_in_slot,
                 cluster_type,
                 &mut process_stats,
-                blockstore::MAX_DATA_SHREDS_PER_SLOT as u32,
-                shred_code::MAX_CODE_SHREDS_PER_SLOT as u32,
+                MAX_BROADCAST_SHREDS_PER_SLOT as u32,
+                MAX_BROADCAST_SHREDS_PER_SLOT as u32,
             )
             .unwrap();
         // Insert the first data shred synchronously so that blockstore stores
