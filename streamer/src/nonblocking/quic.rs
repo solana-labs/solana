@@ -101,7 +101,7 @@ pub async fn run_server(
     stats: Arc<StreamStats>,
     wait_for_chunk_timeout_ms: u64,
 ) {
-    debug!("spawn quic server at {:?}", incoming);
+    debug!("spawn quic server at {:?}", incoming.local_addr());
     let mut last_datapoint = Instant::now();
     let unstaked_connection_table: Arc<Mutex<ConnectionTable>> = Arc::new(Mutex::new(
         ConnectionTable::new(ConnectionPeerType::Unstaked),
@@ -126,7 +126,7 @@ pub async fn run_server(
             info!(
                 "Got a connection {:?} at {:?}",
                 connection.remote_address(),
-                incoming
+                incoming.local_addr()
             );
             tokio::spawn(setup_connection(
                 connection,
@@ -144,7 +144,7 @@ pub async fn run_server(
         } else {
             debug!(
                 "accept(): Timed out waiting for connection at {:?}",
-                incoming
+                incoming.local_addr()
             );
         }
     }
