@@ -1641,8 +1641,6 @@ pub fn bank_from_snapshot_dir(
     account_secondary_indexes: AccountSecondaryIndexes,
     limit_load_slot_count_from_snapshot: Option<usize>,
     shrink_ratio: AccountShrinkThreshold,
-    test_hash_calculation: bool,
-    accounts_db_skip_shrink: bool,
     verify_index: bool,
     accounts_db_config: Option<AccountsDbConfig>,
     accounts_update_notifier: Option<AccountsUpdateNotifier>,
@@ -1682,23 +1680,11 @@ pub fn bank_from_snapshot_dir(
     measure_rebuild.stop();
     info!("{}", measure_rebuild);
 
-    let mut measure_verify = Measure::start("verify");
-    if !bank.verify_snapshot_bank(
-        test_hash_calculation,
-        accounts_db_skip_shrink,
-        bank_snapshot.slot,
-        true, // When constructing from the files, ignore the hash mismatch.
-    ) && limit_load_slot_count_from_snapshot.is_none()
-    {
-        panic!("Snapshot bank for slot {} failed to verify", bank.slot());
-    }
-    measure_verify.stop();
-
     let timings = BankFromArchiveTimings {
         rebuild_bank_from_snapshots_us: measure_rebuild.as_us(),
         full_snapshot_untar_us: measure_build_storage.as_us(),
         incremental_snapshot_untar_us: 0,
-        verify_snapshot_bank_us: measure_verify.as_us(),
+        verify_snapshot_bank_us: 0,
     };
     Ok((bank, timings))
 }
@@ -5412,8 +5398,6 @@ mod tests {
             AccountSecondaryIndexes::default(),
             None, // limit_load_slot_count_from_snapshot: Option<usize>,
             AccountShrinkThreshold::default(), // shrink_ratio: AccountShrinkThreshold,
-            false, // test_hash_calculation: bool,
-            false, // accounts_db_skip_shrink: bool,
             false, // verify_index: bool,
             Some(ACCOUNTS_DB_CONFIG_FOR_TESTING), // accounts_db_config: Option<AccountsDbConfig>,
             None, // accounts_update_notifier: Option<AccountsUpdateNotifier>,
