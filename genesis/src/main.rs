@@ -3,6 +3,7 @@
 
 use {
     clap::{crate_description, crate_name, value_t, value_t_or_exit, App, Arg, ArgMatches},
+    itertools::Itertools,
     solana_clap_utils::{
         input_parsers::{
             cluster_type_of, pubkey_of, pubkeys_of, unix_timestamp_from_rfc3339_datetime,
@@ -615,85 +616,76 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     };
 
     if let Some(values) = matches.values_of("bpf_program") {
-        let values: Vec<&str> = values.collect::<Vec<_>>();
-        for address_loader_program in values.chunks(3) {
-            match address_loader_program {
-                [address, loader, program] => {
-                    let address = parse_address(address, "address");
-                    let loader = parse_address(loader, "loader");
-                    let program_data = parse_program_data(program);
-                    genesis_config.add_account(
-                        address,
-                        AccountSharedData::from(Account {
-                            lamports: genesis_config.rent.minimum_balance(program_data.len()),
-                            data: program_data,
-                            executable: true,
-                            owner: loader,
-                            rent_epoch: 0,
-                        }),
-                    );
-                }
-                _ => unreachable!(),
-            }
+        for (address, loader, program) in values.tuples() {
+            let address = parse_address(address, "address");
+            let loader = parse_address(loader, "loader");
+            let program_data = parse_program_data(program);
+            genesis_config.add_account(
+                address,
+                AccountSharedData::from(Account {
+                    lamports: genesis_config.rent.minimum_balance(program_data.len()),
+                    data: program_data,
+                    executable: true,
+                    owner: loader,
+                    rent_epoch: 0,
+                }),
+            );
         }
     }
 
     if let Some(values) = matches.values_of("upgradeable_program") {
-        let values: Vec<&str> = values.collect::<Vec<_>>();
-        for address_loader_program_upgrade_authority in values.chunks(4) {
-            match address_loader_program_upgrade_authority {
-                [address, loader, program, upgrade_authority] => {
-                    let address = parse_address(address, "address");
-                    let loader = parse_address(loader, "loader");
-                    let program_data_elf = parse_program_data(program);
-                    let upgrade_authority_address = if *upgrade_authority == "none" {
-                        Pubkey::default()
-                    } else {
-                        upgrade_authority.parse::<Pubkey>().unwrap_or_else(|_| {
-                          read_keypair_file(upgrade_authority).map(|keypair| keypair.pubkey()).unwrap_or_else(|err| {
-                              eprintln!("Error: invalid upgrade_authority {upgrade_authority}: {err}");
-                              process::exit(1);
-                          })
-                      })
-                    };
-
-                    let (programdata_address, _) =
-                        Pubkey::find_program_address(&[address.as_ref()], &loader);
-                    let mut program_data =
-                        bincode::serialize(&UpgradeableLoaderState::ProgramData {
-                            slot: 0,
-                            upgrade_authority_address: Some(upgrade_authority_address),
+        for (address, loader, program, upgrade_authority) in values.tuples() {
+            let address = parse_address(address, "address");
+            let loader = parse_address(loader, "loader");
+            let program_data_elf = parse_program_data(program);
+            let upgrade_authority_address = if upgrade_authority == "none" {
+                Pubkey::default()
+            } else {
+                upgrade_authority.parse::<Pubkey>().unwrap_or_else(|_| {
+                    read_keypair_file(upgrade_authority)
+                        .map(|keypair| keypair.pubkey())
+                        .unwrap_or_else(|err| {
+                            eprintln!(
+                                "Error: invalid upgrade_authority {upgrade_authority}: {err}"
+                            );
+                            process::exit(1);
                         })
-                        .unwrap();
-                    program_data.extend_from_slice(&program_data_elf);
-                    genesis_config.add_account(
-                        programdata_address,
-                        AccountSharedData::from(Account {
-                            lamports: genesis_config.rent.minimum_balance(program_data.len()),
-                            data: program_data,
-                            owner: loader,
-                            executable: false,
-                            rent_epoch: 0,
-                        }),
-                    );
+                })
+            };
 
-                    let program_data = bincode::serialize(&UpgradeableLoaderState::Program {
-                        programdata_address,
-                    })
-                    .unwrap();
-                    genesis_config.add_account(
-                        address,
-                        AccountSharedData::from(Account {
-                            lamports: genesis_config.rent.minimum_balance(program_data.len()),
-                            data: program_data,
-                            owner: loader,
-                            executable: true,
-                            rent_epoch: 0,
-                        }),
-                    );
-                }
-                _ => unreachable!(),
-            }
+            let (programdata_address, _) =
+                Pubkey::find_program_address(&[address.as_ref()], &loader);
+            let mut program_data = bincode::serialize(&UpgradeableLoaderState::ProgramData {
+                slot: 0,
+                upgrade_authority_address: Some(upgrade_authority_address),
+            })
+            .unwrap();
+            program_data.extend_from_slice(&program_data_elf);
+            genesis_config.add_account(
+                programdata_address,
+                AccountSharedData::from(Account {
+                    lamports: genesis_config.rent.minimum_balance(program_data.len()),
+                    data: program_data,
+                    owner: loader,
+                    executable: false,
+                    rent_epoch: 0,
+                }),
+            );
+
+            let program_data = bincode::serialize(&UpgradeableLoaderState::Program {
+                programdata_address,
+            })
+            .unwrap();
+            genesis_config.add_account(
+                address,
+                AccountSharedData::from(Account {
+                    lamports: genesis_config.rent.minimum_balance(program_data.len()),
+                    data: program_data,
+                    owner: loader,
+                    executable: true,
+                    rent_epoch: 0,
+                }),
+            );
         }
     }
 
