@@ -71,39 +71,14 @@ pull_request_rules:
           - automerge
       comment:
         message: automerge label removed due to a CI failure
-  - name: v1.13 feature-gate backport
-    conditions:
-      - label=v1.13
-      - label=feature-gate
-    actions:
-      backport:
-        assignees: &BackportAssignee
-          - "{{ merged_by|replace('mergify[bot]', label|select('equalto', 'community')|first|default(author)|replace('community', '@solana-labs/community-pr-s
-ubscribers')) }}"
-        title: "{{ destination_branch }}: {{ title }} (backport of #{{ number }})"
-        ignore_conflicts: true
-        labels:
-          - feature-gate
-        branches:
-          - v1.13
-  - name: v1.13 non-feature-gate backport
-    conditions:
-      - label=v1.13
-      - label!=feature-gate
-    actions:
-      backport:
-        assignees: *BackportAssignee
-        title: "{{ destination_branch }}: {{ title }} (backport of #{{ number }})"
-        ignore_conflicts: true
-        branches:
-          - v1.13
   - name: v1.14 feature-gate backport
     conditions:
       - label=v1.14
       - label=feature-gate
     actions:
       backport:
-        assignees: *BackportAssignee
+        assignees: &BackportAssignee
+          - "{{ merged_by|replace('mergify[bot]', label|select('equalto', 'community')|first|default(author)|replace('community', '@solana-labs/community-pr-subscribers')) }}"
         title: "{{ destination_branch }}: {{ title }} (backport of #{{ number }})"
         ignore_conflicts: true
         labels:
