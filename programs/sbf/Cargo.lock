@@ -6166,6 +6166,7 @@ dependencies = [
  "crossbeam-channel",
  "fd-lock",
  "indicatif",
+ "itertools",
  "jsonrpc-core",
  "jsonrpc-core-client",
  "jsonrpc-derive",

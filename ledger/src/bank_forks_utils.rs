@@ -230,7 +230,7 @@ fn bank_forks_from_snapshot(
     let full_snapshot_hash = FullSnapshotHash {
         hash: (
             full_snapshot_archive_info.slot(),
-            full_snapshot_archive_info.hash().0,
+            *full_snapshot_archive_info.hash(),
         ),
     };
     let starting_incremental_snapshot_hash =
@@ -239,7 +239,7 @@ fn bank_forks_from_snapshot(
                 base: full_snapshot_hash.hash,
                 hash: (
                     incremental_snapshot_archive_info.slot(),
-                    incremental_snapshot_archive_info.hash().0,
+                    *incremental_snapshot_archive_info.hash(),
                 ),
             }
         });

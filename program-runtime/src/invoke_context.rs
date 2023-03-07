@@ -37,8 +37,7 @@ use {
     },
 };
 
-pub type ProcessInstructionWithContext =
-    fn(IndexOfAccount, &mut InvokeContext) -> Result<(), InstructionError>;
+pub type ProcessInstructionWithContext = fn(&mut InvokeContext) -> Result<(), InstructionError>;
 
 #[derive(Clone)]
 pub struct BuiltinProgram {
@@ -50,7 +49,7 @@ impl std::fmt::Debug for BuiltinProgram {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         // These are just type aliases for work around of Debug-ing above pointers
         type ErasedProcessInstructionWithContext =
-            fn(IndexOfAccount, &'static mut InvokeContext<'static>) -> Result<(), InstructionError>;
+            fn(&'static mut InvokeContext<'static>) -> Result<(), InstructionError>;
 
         // rustc doesn't compile due to bug without this work around
         // https://github.com/rust-lang/rust/issues/50280
@@ -733,15 +732,15 @@ impl<'a> InvokeContext<'a> {
         let instruction_context = self.transaction_context.get_current_instruction_context()?;
         let mut process_executable_chain_time = Measure::start("process_executable_chain_time");
 
-        let (first_instruction_account, builtin_id) = {
+        let builtin_id = {
             let borrowed_root_account = instruction_context
                 .try_borrow_program_account(self.transaction_context, 0)
                 .map_err(|_| InstructionError::UnsupportedProgramId)?;
             let owner_id = borrowed_root_account.get_owner();
             if native_loader::check_id(owner_id) {
-                (1, *borrowed_root_account.get_key())
+                *borrowed_root_account.get_key()
             } else {
-                (0, *owner_id)
+                *owner_id
             }
         };
 
@@ -756,7 +755,7 @@ impl<'a> InvokeContext<'a> {
                 let result = if builtin_id == program_id {
                     let logger = self.get_log_collector();
                     stable_log::program_invoke(&logger, &program_id, self.get_stack_height());
-                    (entry.process_instruction)(first_instruction_account, self)
+                    (entry.process_instruction)(self)
                         .map(|()| {
                             stable_log::program_success(&logger, &program_id);
                         })
@@ -765,7 +764,7 @@ impl<'a> InvokeContext<'a> {
                             err
                         })
                 } else {
-                    (entry.process_instruction)(first_instruction_account, self)
+                    (entry.process_instruction)(self)
                 };
                 let post_remaining_units = self.get_remaining();
                 *compute_units_consumed = pre_remaining_units.saturating_sub(post_remaining_units);
@@ -1023,7 +1022,7 @@ pub fn mock_process_instruction(
         );
     let result = invoke_context
         .push()
-        .and_then(|_| process_instruction(1, &mut invoke_context));
+        .and_then(|_| process_instruction(&mut invoke_context));
     let pop_result = invoke_context.pop();
     assert_eq!(result.and(pop_result), expected_result);
     let mut transaction_accounts = transaction_context.deconstruct_without_keys().unwrap();
@@ -1062,16 +1061,12 @@ mod tests {
     fn test_program_entry_debug() {
         #[allow(clippy::unnecessary_wraps)]
         fn mock_process_instruction(
-            _first_instruction_account: IndexOfAccount,
             _invoke_context: &mut InvokeContext,
         ) -> Result<(), InstructionError> {
             Ok(())
         }
         #[allow(clippy::unnecessary_wraps)]
-        fn mock_ix_processor(
-            _first_instruction_account: IndexOfAccount,
-            _invoke_context: &mut InvokeContext,
-        ) -> Result<(), InstructionError> {
+        fn mock_ix_processor(_invoke_context: &mut InvokeContext) -> Result<(), InstructionError> {
             Ok(())
         }
         let builtin_programs = &[
@@ -1089,7 +1084,6 @@ mod tests {
 
     #[allow(clippy::integer_arithmetic)]
     fn mock_process_instruction(
-        _first_instruction_account: IndexOfAccount,
         invoke_context: &mut InvokeContext,
     ) -> Result<(), InstructionError> {
         let transaction_context = &invoke_context.transaction_context;
