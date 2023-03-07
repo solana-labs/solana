@@ -542,7 +542,7 @@ async fn handle_connection(
 ) {
     let stable_id = connection.stable_id();
     debug!(
-        "quic new connection {} streams: {} connections: {} at {:?} {:?}",
+        "quic new connection from remote address {} streams: {} connections: {} at {:?} {:?}",
         remote_addr,
         stats.total_streams.load(Ordering::Relaxed),
         stats.total_connections.load(Ordering::Relaxed),
