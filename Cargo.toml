@@ -257,7 +257,7 @@ qstring = "0.7.2"
 #quinn = "0.9.3"
 #quinn-proto = "0.9.2"
 quinn = {git = "https://github.com/lijunwangs/quinn.git", rev = "8b66fdbbc4b51b22482cc7b00515630ae94eef39"}
-quinn-proto = {git = "https://github.com/lijunwangs/quinn.git", rev = "8b66fdbbc4b51b22482cc7b00515630ae94eef39"}
+quinn-proto = {git = "https://github.com/lijunwangs/quinn.git", rev = "a65fc038e8f09169019022cf38b1213a036ed2ca"}
 
 quinn-udp = "0.3.2"
 quote = "1.0"
