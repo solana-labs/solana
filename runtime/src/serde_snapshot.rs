@@ -550,6 +550,7 @@ where
         accounts_update_notifier,
         exit,
         bank_fields.epoch_accounts_hash,
+        bank_fields.capitalization,
     )?;
 
     let bank_rc = BankRc::new(Accounts::new_empty(accounts_db), bank_fields.slot);
@@ -672,6 +673,7 @@ fn reconstruct_accountsdb_from_fields<E>(
     accounts_update_notifier: Option<AccountsUpdateNotifier>,
     exit: &Arc<AtomicBool>,
     epoch_accounts_hash: Option<Hash>,
+    capitalization: u64,
 ) -> Result<(AccountsDb, ReconstructedAccountsDbInfo), Error>
 where
     E: SerializableStorage + std::marker::Sync,
@@ -739,8 +741,11 @@ where
         old_accounts_delta_hash.is_none(),
         "There should not already be an AccountsDeltaHash at slot {snapshot_slot}: {old_accounts_delta_hash:?}",
         );
-    let old_accounts_hash = accounts_db
-        .set_accounts_hash_from_snapshot(snapshot_slot, snapshot_bank_hash_info.accounts_hash);
+    let old_accounts_hash = accounts_db.set_accounts_hash_from_snapshot(
+        snapshot_slot,
+        snapshot_bank_hash_info.accounts_hash,
+        capitalization,
+    );
     assert!(
         old_accounts_hash.is_none(),
         "There should not already be an AccountsHash at slot {snapshot_slot}: {old_accounts_hash:?}",
