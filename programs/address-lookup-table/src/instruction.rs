@@ -1,12 +1,12 @@
 use {
     serde::{Deserialize, Serialize},
     solana_program::{
+        address_lookup_table_program::id,
         clock::Slot,
         instruction::{AccountMeta, Instruction},
         pubkey::Pubkey,
         system_program,
     },
-    solana_program::address_lookup_table_program::id,
 };
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]

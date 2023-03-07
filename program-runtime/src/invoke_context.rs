@@ -1519,4 +1519,52 @@ mod tests {
             );
         }
     }
+
+    #[test]
+    fn test_define_default_cost_for_builtins() {
+        // Motivation:
+        // Default compute units cost for each built-in programs could be
+        // encapsulated within program-runtime, accessible to both invoke_context
+        // (to make builtins to consume CUs) and by runtime::cost_model.
+        //
+        lazy_static::lazy_static! {
+            /// Number of compute units for each built-in programs, measured average
+            /// execution micro-second from average host, converted 30cu/us.
+            pub static ref BUILTIN_COSTS: std::collections::HashMap<Pubkey, u64> = [
+                (solana_program::address_lookup_table_program::id(), 750),
+                (solana_program::bpf_loader_upgradeable::id(), 2370),
+                (solana_program::bpf_loader_deprecated::id(), 1140),
+                (solana_program::bpf_loader::id(), 570),
+                // inconsistent
+                (solana_sdk::compute_budget::id(), 150),
+                (solana_program::config::program::id(), 450),
+                (solana_program::ed25519_program::id(), 720),
+                (solana_program::feature::id(), 60),
+                (solana_program::incinerator::id(), 60),
+                // inconsistent
+                (solana_sdk::native_loader::id(), 60),
+                (solana_program::secp256k1_program::id(), 720),
+                (solana_program::stake::config::id(), 60),
+                (solana_program::stake::program::id(), 750),
+                (solana_program::system_program::id(), 150),
+                (solana_program::vote::program::id(), 2100),
+            ]
+            .iter()
+            .cloned()
+            .collect();
+        }
+
+        // likely method to find builtin's default cost
+        let default_builtin_cost = move |id| BUILTIN_COSTS.get(&id).copied().unwrap_or_default();
+
+        assert_eq!(
+            750,
+            default_builtin_cost(solana_program::address_lookup_table_program::id())
+        );
+        assert_eq!(
+            2100,
+            default_builtin_cost(solana_program::vote::program::id())
+        );
+        assert_eq!(0, default_builtin_cost(solana_sdk::pubkey::new_rand()));
+    }
 }

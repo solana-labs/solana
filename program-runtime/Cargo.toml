@@ -15,6 +15,7 @@ bincode = { workspace = true }
 eager = { workspace = true }
 enum-iterator = { workspace = true }
 itertools = { workspace = true }
+lazy_static = { workspace = true }
 libc = { workspace = true }
 libloading = { workspace = true }
 log = { workspace = true }
@@ -26,6 +27,7 @@ solana-frozen-abi = { workspace = true }
 solana-frozen-abi-macro = { workspace = true }
 solana-measure = { workspace = true }
 solana-metrics = { workspace = true }
+solana-program = { workspace = true }
 solana-sdk = { workspace = true }
 solana_rbpf = { workspace = true }
 thiserror = { workspace = true }
