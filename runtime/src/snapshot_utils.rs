@@ -1680,6 +1680,10 @@ pub fn bank_from_snapshot_dir(
     measure_rebuild.stop();
     info!("{}", measure_rebuild);
 
+    // Skip bank.verify_snapshot_bank.  Subsequent snapshot requests/accounts hash verification requests
+    // will calculate and check the accounts hash, so we will still have safety/correctness there.
+    bank.set_initial_accounts_hash_verification_completed();
+
     let timings = BankFromArchiveTimings {
         rebuild_bank_from_snapshots_us: measure_rebuild.as_us(),
         full_snapshot_untar_us: measure_build_storage.as_us(),
