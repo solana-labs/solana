@@ -1930,6 +1930,8 @@ fn build_storage_from_snapshot_dir(
     let account_paths_set: HashSet<PathBuf> = HashSet::from_iter(account_paths.clone());
 
     for dir_symlink in fs::read_dir(accounts_hardlinks).unwrap() {
+        // The symlink point to <account_path>/snapshot/<slot> which contain the account files hardlinks
+        // The corresponding run path should be <account_path>/run/
         let snapshot_account_path = fs::read_link(dir_symlink.unwrap().path()).unwrap();
         let account_run_path = snapshot_account_path
             .parent()
