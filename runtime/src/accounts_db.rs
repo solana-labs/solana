@@ -11884,8 +11884,8 @@ pub mod tests {
                 accounts.get_accounts_delta_hash(latest_slot).unwrap(),
             );
             assert_eq!(
-                daccounts.get_accounts_hash(latest_slot).unwrap(),
-                accounts.get_accounts_hash(latest_slot).unwrap(),
+                daccounts.get_accounts_hash(latest_slot).unwrap().0,
+                accounts.get_accounts_hash(latest_slot).unwrap().0,
             );
 
             daccounts.print_count_and_status("daccounts");
