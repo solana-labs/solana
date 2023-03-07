@@ -626,6 +626,10 @@ pub mod switch_to_new_elf_parser {
     solana_sdk::declare_id!("Cdkc8PPTeTNUPoZEfCY5AyetUrEdkZtNPMgz58nqyaHD");
 }
 
+pub mod require_signed_repairs {
+    solana_sdk::declare_id!("FCuCovioA92sZie9TkzuKWGBGFckJGSxRi1iw146CoYA");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -777,6 +781,7 @@ lazy_static! {
         (apply_cost_tracker_during_replay::id(), "apply cost tracker to blocks during replay #29595"),
         (add_set_tx_loaded_accounts_data_size_instruction::id(), "add compute budget instruction for setting account data size per transaction #30366"),
         (switch_to_new_elf_parser::id(), "switch to new ELF parser #30497"),
+        (require_signed_repairs::id(), "require signed repair requests #30624"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()

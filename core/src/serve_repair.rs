@@ -1,5 +1,6 @@
 use {
     crate::{
+        cluster_nodes::check_feature_activation,
         cluster_slots::ClusterSlots,
         duplicate_repair_status::ANCESTOR_HASH_REPAIR_SAMPLE_SIZE,
         repair_response,
@@ -29,9 +30,10 @@ use {
         data_budget::DataBudget,
         packet::{Packet, PacketBatch, PacketBatchRecycler},
     },
-    solana_runtime::bank_forks::BankForks,
+    solana_runtime::{bank::Bank, bank_forks::BankForks},
     solana_sdk::{
         clock::Slot,
+        feature_set,
         genesis_config::ClusterType,
         hash::{Hash, HASH_BYTES},
         packet::PACKET_DATA_SIZE,
@@ -297,6 +299,23 @@ impl RepairProtocol {
             | Self::AncestorHashes { .. } => true,
         }
     }
+
+    fn slot(&self) -> Option<Slot> {
+        match self {
+            Self::LegacyWindowIndex(_, slot, _) => Some(*slot),
+            Self::LegacyHighestWindowIndex(_, slot, _) => Some(*slot),
+            Self::LegacyOrphan(_, slot) => Some(*slot),
+            Self::LegacyWindowIndexWithNonce(_, slot, _, _) => Some(*slot),
+            Self::LegacyHighestWindowIndexWithNonce(_, slot, _, _) => Some(*slot),
+            Self::LegacyOrphanWithNonce(_, slot, _) => Some(*slot),
+            Self::LegacyAncestorHashes(_, slot, _) => Some(*slot),
+            Self::Pong(_) => None,
+            Self::WindowIndex { slot, .. } => Some(*slot),
+            Self::HighestWindowIndex { slot, .. } => Some(*slot),
+            Self::Orphan { slot, .. } => Some(*slot),
+            Self::AncestorHashes { slot, .. } => Some(*slot),
+        }
+    }
 }
 
 #[derive(Clone)]
@@ -475,6 +494,7 @@ impl ServeRepair {
         socket_addr_space: &SocketAddrSpace,
         stats: &mut ServeRepairStats,
         cluster_type: ClusterType,
+        root_bank: &Bank,
     ) -> Result<RepairRequestWithMeta> {
         let request: RepairProtocol = match packet.deserialize_slice(..) {
             Ok(request) => request,
@@ -493,7 +513,21 @@ impl ServeRepair {
                     return Err(Error::from(RepairVerifyError::Unsigned));
                 }
                 ClusterType::MainnetBeta | ClusterType::Devnet => {
-                    stats.err_unsigned += 1;
+                    let slot = match request.slot() {
+                        Some(slot) => slot,
+                        None => {
+                            debug_assert!(
+                                false,
+                                "all request types processed here are expected to have a slot"
+                            );
+                            return Err(Error::from(RepairVerifyError::Unsigned));
+                        }
+                    };
+                    if Self::should_require_signed_repairs(slot, root_bank) {
+                        return Err(Error::from(RepairVerifyError::Unsigned));
+                    } else {
+                        stats.err_unsigned += 1;
+                    }
                 }
             },
             Err(e) => return Err(e),
@@ -550,6 +584,7 @@ impl ServeRepair {
         socket_addr_space: &SocketAddrSpace,
         stats: &mut ServeRepairStats,
         cluster_type: ClusterType,
+        root_bank: &Bank,
     ) -> Vec<RepairRequestWithMeta> {
         let decode_packet = |packet| {
             let result = Self::decode_request(
@@ -560,6 +595,7 @@ impl ServeRepair {
                 socket_addr_space,
                 stats,
                 cluster_type,
+                root_bank,
             );
             match &result {
                 Ok(req) => {
@@ -632,6 +668,7 @@ impl ServeRepair {
                 &socket_addr_space,
                 stats,
                 cluster_type,
+                &root_bank,
             )
         };
         let whitelisted_request_count = decoded_requests.iter().filter(|r| r.whitelisted).count();
@@ -654,6 +691,7 @@ impl ServeRepair {
             stats,
             data_budget,
             cluster_type,
+            &root_bank,
         );
         stats.handle_requests_time_us += handle_requests_start.elapsed().as_micros() as u64;
 
@@ -900,6 +938,11 @@ impl ServeRepair {
         (check, ping_pkt)
     }
 
+    fn should_require_signed_repairs(slot: Slot, root_bank: &Bank) -> bool {
+        check_feature_activation(&feature_set::require_signed_repairs::id(), slot, root_bank)
+    }
+
+    #[allow(clippy::too_many_arguments)]
     fn handle_requests(
         &self,
         ping_cache: &mut PingCache,
@@ -910,11 +953,12 @@ impl ServeRepair {
         stats: &mut ServeRepairStats,
         data_budget: &DataBudget,
         cluster_type: ClusterType,
+        root_bank: &Bank,
     ) {
         let identity_keypair = self.cluster_info.keypair().clone();
         let mut pending_pings = Vec::default();
-
         let requests_len = requests.len();
+
         for (
             i,
             RepairRequestWithMeta {
@@ -935,7 +979,18 @@ impl ServeRepair {
                     stats.ping_cache_check_failed += 1;
                     match cluster_type {
                         ClusterType::Testnet | ClusterType::Development => continue,
-                        ClusterType::MainnetBeta | ClusterType::Devnet => (),
+                        ClusterType::MainnetBeta | ClusterType::Devnet => {
+                            let slot = match request.slot() {
+                                Some(slot) => slot,
+                                None => {
+                                    debug_assert!(false, "all request types processed here are expected to have a slot");
+                                    continue;
+                                }
+                            };
+                            if Self::should_require_signed_repairs(slot, root_bank) {
+                                continue;
+                            }
+                        }
                     }
                 }
             }
