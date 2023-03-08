@@ -12,6 +12,7 @@ pub struct Builtin {
     pub name: String,
     pub id: Pubkey,
     pub process_instruction_with_context: ProcessInstructionWithContext,
+    pub default_cost: u64,
 }
 
 impl Builtin {
@@ -19,18 +20,24 @@ impl Builtin {
         name: &str,
         id: Pubkey,
         process_instruction_with_context: ProcessInstructionWithContext,
+        default_cost: u64,
     ) -> Self {
         Self {
             name: name.to_string(),
             id,
             process_instruction_with_context,
+            default_cost,
         }
     }
 }
 
 impl fmt::Debug for Builtin {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "Builtin [name={}, id={}]", self.name, self.id)
+        write!(
+            f,
+            "Builtin [name={}, id={}, default_cost={}]",
+            self.name, self.id, self.default_cost
+        )
     }
 }
 
@@ -41,6 +48,7 @@ impl AbiExample for Builtin {
             name: String::default(),
             id: Pubkey::default(),
             process_instruction_with_context: |_invoke_context| Ok(()),
+            default_cost: u64::default(),
         }
     }
 }
@@ -120,21 +128,25 @@ fn genesis_builtins() -> Vec<Builtin> {
             "system_program",
             system_program::id(),
             system_instruction_processor::process_instruction,
+            150,
         ),
         Builtin::new(
             "vote_program",
             solana_vote_program::id(),
             solana_vote_program::vote_processor::process_instruction,
+            2100,
         ),
         Builtin::new(
             "stake_program",
             stake::program::id(),
             solana_stake_program::stake_instruction::process_instruction,
+            750,
         ),
         Builtin::new(
             "config_program",
             solana_config_program::id(),
             solana_config_program::config_processor::process_instruction,
+            450,
         ),
     ]
 }
@@ -147,6 +159,7 @@ fn builtin_feature_transitions() -> Vec<BuiltinFeatureTransition> {
                 "compute_budget_program",
                 solana_sdk::compute_budget::id(),
                 solana_compute_budget_program::process_instruction,
+                150,
             ),
             feature_id: feature_set::add_compute_budget_program::id(),
         },
@@ -155,6 +168,7 @@ fn builtin_feature_transitions() -> Vec<BuiltinFeatureTransition> {
                 "address_lookup_table_program",
                 solana_address_lookup_table_program::id(),
                 solana_address_lookup_table_program::processor::process_instruction,
+                750,
             ),
             feature_id: feature_set::versioned_tx_message_enabled::id(),
         },
@@ -163,6 +177,7 @@ fn builtin_feature_transitions() -> Vec<BuiltinFeatureTransition> {
                 "zk_token_proof_program",
                 solana_zk_token_sdk::zk_token_proof_program::id(),
                 solana_zk_token_proof_program::process_instruction,
+                1000, // TODO - find value
             ),
             feature_id: feature_set::zk_token_sdk_enabled::id(),
         },
