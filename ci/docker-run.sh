@@ -41,7 +41,12 @@ ARGS=(
   --rm
 )
 
-if [[ -n $CI ]]; then
+if [[ $BUILDKITE_RETRY_COUNT -ge 3 ]]; then
+  echo "Disabling cache due to many retries"
+  DISABLE_CACHE=1
+fi
+
+if [[ -n $CI && -z $DISABLE_CACHE ]]; then
   # Share the real ~/.cargo between docker containers in CI for speed
   ARGS+=(--volume "$HOME:/home")
 
