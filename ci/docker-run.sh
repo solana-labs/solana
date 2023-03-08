@@ -41,35 +41,35 @@ ARGS=(
   --rm
 )
 
-# Fully disable caching to create a clean-room environment to preclude any
-# cache-related bugs for our sanity
-if [[ $BUILDKITE_RETRY_COUNT -ge 2 ]]; then # to be third time's the charm
-  # I hate buildkite-esque echo is leaking into this generic shell wrapper.
-  # but it's easiest, in edge-case, and properly guarded under $BUILDKITE_ env...
-  echo "--- $0 ... (DISABLING CACHE DUE TO MANY (${BUILDKITE_RETRY_COUNT}) RETRIES)"
-  DISABLE_CACHE=1
-fi
-
-if [[ -n $CI && -z $DISABLE_CACHE ]]; then
+if [[ -n $CI ]]; then
   # Share the real ~/.cargo between docker containers in CI for speed
   ARGS+=(--volume "$HOME:/home")
+
+  if [[ -n $BUILDKITE ]]; then
+    # I hate buildkite-esque echo is leaking into this generic shell wrapper.
+    # but it's easiest to notify to users, and properly guarded under $BUILDKITE_ env
+    # (2 is chosen for third time's the charm).
+    if [[ $BUILDKITE_RETRY_COUNT -ge 2 ]]; then
+      # Disable sccache to create a clean-room environment to preclude any
+      # sccache-related bugs
+      echo "--- $0 ... (with sccache being DISABLED due to many (${BUILDKITE_RETRY_COUNT}) retries)"
+    else
+      echo "--- $0 ... (with sccache enabled)"
+      # sccache
+      ARGS+=(
+        --env "RUSTC_WRAPPER=/home/.cargo/bin/sccache"
+        --env AWS_ACCESS_KEY_ID
+        --env AWS_SECRET_ACCESS_KEY
+        --env SCCACHE_BUCKET
+        --env SCCACHE_REGION
+      )
+    fi
+  fi
 else
   # Avoid sharing ~/.cargo when building locally to avoid a mixed macOS/Linux
   # ~/.cargo
   ARGS+=(--volume "$PWD:/home")
 fi
-
-if [[ -n $BUILDKITE && -z $DISABLE_CACHE ]]; then
-  # sccache
-  ARGS+=(
-    --env "RUSTC_WRAPPER=/home/.cargo/bin/sccache"
-    --env AWS_ACCESS_KEY_ID
-    --env AWS_SECRET_ACCESS_KEY
-    --env SCCACHE_BUCKET
-    --env SCCACHE_REGION
-  )
-fi
-
 ARGS+=(--env "HOME=/home" --env "CARGO_HOME=/home/.cargo")
 
 # kcov tries to set the personality of the binary which docker
