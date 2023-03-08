@@ -2036,6 +2036,7 @@ impl Bank {
             {
                 new.update_slot_hashes();
                 new.update_stake_history(Some(parent_epoch));
+                new.update_reward_info();
                 new.update_clock(Some(parent_epoch));
                 new.update_fees();
             },
@@ -2351,6 +2352,8 @@ impl Bank {
             epoch_reward_calculator: Arc::new(RwLock::new(None)),
             epoch_reward_calc_start: None,
         };
+
+        // TODO-haoran-v2: add code to handle deserialized reward_calc result.
         bank.finish_init(
             genesis_config,
             additional_builtins,
@@ -2738,6 +2741,19 @@ impl Bank {
                 self.inherit_specially_retained_account_fields(account),
             )
         });
+    }
+
+    fn update_reward_info(&self) {
+        self.update_reward_history();
+        self.update_reward_reserve();
+    }
+
+    fn update_reward_history(&self) {
+        unimplemented!();
+    }
+
+    fn update_reward_reserve(&self) {
+        unimplemented!();
     }
 
     pub fn epoch_duration_in_years(&self, prev_epoch: Epoch) -> f64 {
