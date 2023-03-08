@@ -12,6 +12,7 @@ pub fn safe_clone_config(config: &ValidatorConfig) -> ValidatorConfig {
         expected_shred_version: config.expected_shred_version,
         voting_disabled: config.voting_disabled,
         account_paths: config.account_paths.clone(),
+        account_snapshot_paths: config.account_snapshot_paths.clone(),
         account_shrink_paths: config.account_shrink_paths.clone(),
         rpc_config: config.rpc_config.clone(),
         on_start_geyser_plugin_config_files: config.on_start_geyser_plugin_config_files.clone(),

@@ -40,7 +40,7 @@ use {
         runtime_config::RuntimeConfig,
         snapshot_config::{SnapshotConfig, SnapshotUsage},
         snapshot_utils::{
-            self, create_accounts_run_and_snapshot_dirs, ArchiveFormat, SnapshotVersion,
+            self, set_up_account_run_and_snapshot_paths, ArchiveFormat, SnapshotVersion,
         },
     },
     solana_sdk::{
@@ -1350,32 +1350,13 @@ pub fn main() {
             .map(|shrink_paths| shrink_paths.into_iter().map(PathBuf::from).collect())
             .ok();
 
-    // Create and canonicalize account paths to avoid issues with symlink creation
-    let account_run_paths: Vec<PathBuf> = account_paths
-        .into_iter()
-        .map(|account_path| {
-            match fs::create_dir_all(&account_path).and_then(|_| fs::canonicalize(&account_path)) {
-                Ok(account_path) => account_path,
-                Err(err) => {
-                    eprintln!("Unable to access account path: {account_path:?}, err: {err:?}");
-                    exit(1);
-                }
-            }
-        }).map(
-        |account_path| {
-            // For all account_paths, set up the run/ and snapshot/ sub directories.
-            // If the sub directories do not exist, the account_path will be cleaned because older version put account files there
-            match create_accounts_run_and_snapshot_dirs(&account_path) {
-                Ok((account_run_path, _account_snapshot_path)) => account_run_path,
-                Err(err) => {
-                    eprintln!("Unable to create account run and snapshot sub directories: {}, err: {err:?}", account_path.display());
-                    exit(1);
-                }
-            }
-        }).collect();
+    let (account_run_paths, account_snapshot_paths) =
+        set_up_account_run_and_snapshot_paths(&account_paths);
 
     // From now on, use run/ paths in the same way as the previous account_paths.
     validator_config.account_paths = account_run_paths;
+
+    validator_config.account_snapshot_paths = account_snapshot_paths;
 
     validator_config.account_shrink_paths = account_shrink_paths.map(|paths| {
         paths
