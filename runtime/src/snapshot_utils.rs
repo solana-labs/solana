@@ -479,7 +479,7 @@ pub fn clean_orphaned_account_snapshot_dirs(
     // This is used to clean up any hardlinks that are no longer referenced by the snapshot dirs.
 
     let mut account_snapshot_dirs_referenced = HashSet::new();
-    let snapshots = get_bank_snapshots(&bank_snapshots_dir);
+    let snapshots = get_bank_snapshots(bank_snapshots_dir);
     for snapshot in snapshots {
         let account_hardlinks_dir = snapshot.snapshot_dir.join("account_hardlinks");
         // loop through entries in the snapshot_hardlink_dir, read the symlinks, add the target to the HashSet
@@ -512,7 +512,7 @@ pub fn clean_orphaned_account_snapshot_dirs(
 
     // loop through the account snapshot hardlink directories, if the directory is not in the account_snapshot_dirs_referenced set, delete it
     for account_snapshot_path in account_snapshot_paths {
-        fs::read_dir(&account_snapshot_path)
+        fs::read_dir(account_snapshot_path)
             .unwrap_or_else(|_| {
                 panic!(
                     "Unable to read snapshot hardlink directory: {}",
@@ -541,14 +541,14 @@ pub fn clean_orphaned_account_snapshot_dirs(
 // For all account_paths, set up the run/ and snapshot/ sub directories.
 // If the sub directories do not exist, the account_path will be cleaned because older version put account files there
 pub fn set_up_account_run_and_snapshot_paths(
-    account_paths: &Vec<PathBuf>,
+    account_paths: &[PathBuf],
 ) -> (Vec<PathBuf>, Vec<PathBuf>) {
     // create the run/ and snapshot/ sub directories for each account_path
 
     let account_run_and_snapshot_paths: Vec<(PathBuf, PathBuf)> = account_paths
-        .into_iter()
+        .iter()
         .map(|account_path| {
-            match fs::create_dir_all(&account_path).and_then(|_| fs::canonicalize(&account_path)) {
+            match fs::create_dir_all(account_path).and_then(|_| fs::canonicalize(account_path)) {
                 Ok(account_path) => account_path,
                 Err(err) => {
                     panic!("Unable to access account path: {account_path:?}, err: {err:?}");
