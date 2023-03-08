@@ -4103,4 +4103,73 @@ mod tests {
             );
         }
     }
+
+    #[test]
+    fn test_get_requested_loaded_accounts_data_size_limit() {
+        macro_rules! test {
+            ( $instructions: expr, $feature_set: expr, $expected_result: expr ) => {
+                let payer_keypair = Keypair::new();
+                let tx = SanitizedTransaction::from_transaction_for_tests(Transaction::new(
+                    &[&payer_keypair],
+                    Message::new($instructions, Some(&payer_keypair.pubkey())),
+                    Hash::default(),
+                ));
+                assert_eq!(
+                    $expected_result,
+                    Accounts::get_requested_loaded_accounts_data_size_limit(&tx, $feature_set)
+                );
+            };
+        }
+
+        let tx_not_set_limit = &[solana_sdk::instruction::Instruction::new_with_bincode(
+            Pubkey::new_unique(),
+            &0_u8,
+            vec![],
+        )];
+        let tx_set_limit_99 =
+                &[
+                    solana_sdk::compute_budget::ComputeBudgetInstruction::set_loaded_accounts_data_size_limit(99u32),
+                    solana_sdk::instruction::Instruction::new_with_bincode(Pubkey::new_unique(), &0_u8, vec![]),
+                ];
+        let tx_set_limit_0 =
+                &[
+                    solana_sdk::compute_budget::ComputeBudgetInstruction::set_loaded_accounts_data_size_limit(0u32),
+                    solana_sdk::instruction::Instruction::new_with_bincode(Pubkey::new_unique(), &0_u8, vec![]),
+                ];
+
+        let result_no_limit = Ok(None);
+        let result_default_limit = Ok(Some(
+            NonZeroUsize::new(compute_budget::MAX_LOADED_ACCOUNTS_DATA_SIZE_BYTES).unwrap(),
+        ));
+        let result_requested_limit: Result<Option<NonZeroUsize>> =
+            Ok(Some(NonZeroUsize::new(99).unwrap()));
+        let result_invalid_limit = Err(TransactionError::InvalidLoadedAccountsDataSizeLimit);
+
+        let mut feature_set = FeatureSet::default();
+
+        // if `cap_transaction_accounts_data_size feature` is disable,
+        // the result will always be no limit
+        test!(tx_not_set_limit, &feature_set, result_no_limit);
+        test!(tx_set_limit_99, &feature_set, result_no_limit);
+        test!(tx_set_limit_0, &feature_set, result_no_limit);
+
+        // if `cap_transaction_accounts_data_size` is enabled, and
+        //    `add_set_tx_loaded_accounts_data_size_instruction` is disabled,
+        // the result will always be default limit (64MiB)
+        feature_set.activate(&feature_set::cap_transaction_accounts_data_size::id(), 0);
+        test!(tx_not_set_limit, &feature_set, result_default_limit);
+        test!(tx_set_limit_99, &feature_set, result_default_limit);
+        test!(tx_set_limit_0, &feature_set, result_default_limit);
+
+        // if `cap_transaction_accounts_data_size` and
+        //    `add_set_tx_loaded_accounts_data_size_instruction` are both enabled,
+        // the results are:
+        //    if tx doesn't set limit, then default limit (64MiB)
+        //    if tx sets limit, then requested limit
+        //    if tx sets limit to zero, then TransactionError::InvalidLoadedAccountsDataSizeLimit
+        feature_set.activate(&add_set_tx_loaded_accounts_data_size_instruction::id(), 0);
+        test!(tx_not_set_limit, &feature_set, result_default_limit);
+        test!(tx_set_limit_99, &feature_set, result_requested_limit);
+        test!(tx_set_limit_0, &feature_set, result_invalid_limit);
+    }
 }
