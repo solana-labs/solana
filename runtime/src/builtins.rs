@@ -12,7 +12,11 @@ pub struct Builtin {
     pub name: String,
     pub id: Pubkey,
     pub process_instruction_with_context: ProcessInstructionWithContext,
-    pub default_cost: u64,
+    // compute units to deduct from transaction's compute budget if builtin
+    // does not consume actual units during process_instruction. No builtin
+    // actively consumes units as bpf does (as of v1.16), but they could
+    // in the future.
+    pub default_compute_unit_cost: u64,
 }
 
 impl Builtin {
@@ -20,13 +24,13 @@ impl Builtin {
         name: &str,
         id: Pubkey,
         process_instruction_with_context: ProcessInstructionWithContext,
-        default_cost: u64,
+        default_compute_unit_cost: u64,
     ) -> Self {
         Self {
             name: name.to_string(),
             id,
             process_instruction_with_context,
-            default_cost,
+            default_compute_unit_cost,
         }
     }
 }
@@ -35,8 +39,8 @@ impl fmt::Debug for Builtin {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(
             f,
-            "Builtin [name={}, id={}, default_cost={}]",
-            self.name, self.id, self.default_cost
+            "Builtin [name={}, id={}, default_compute_unit_cost={}]",
+            self.name, self.id, self.default_compute_unit_cost
         )
     }
 }
@@ -48,7 +52,7 @@ impl AbiExample for Builtin {
             name: String::default(),
             id: Pubkey::default(),
             process_instruction_with_context: |_invoke_context| Ok(()),
-            default_cost: u64::default(),
+            default_compute_unit_cost: u64::default(),
         }
     }
 }
