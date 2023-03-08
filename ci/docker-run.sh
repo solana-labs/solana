@@ -41,8 +41,12 @@ ARGS=(
   --rm
 )
 
+# Fully disable caching to create a clean-room environment to preclude any
+# cache-related bugs for our sanity
 if [[ $BUILDKITE_RETRY_COUNT -ge 3 ]]; then
-  echo "Disabling cache due to many retries"
+  # I hate buildkite-esque echo is leaking into this generic shell wrapper.
+  # but it's easiest, in edge-case, and properly guarded under $BUILDKITE_ env...
+  echo "--- DISABLING CACHE DUE TO MANY (${BUILDKITE_RETRY_COUNT}) RETRIES"
   DISABLE_CACHE=1
 fi
 
