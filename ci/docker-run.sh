@@ -46,14 +46,24 @@ if [[ -n $CI ]]; then
   ARGS+=(--volume "$HOME:/home")
 
   if [[ -n $BUILDKITE ]]; then
-    # sccache
-    ARGS+=(
-      --env "RUSTC_WRAPPER=/home/.cargo/bin/sccache"
-      --env AWS_ACCESS_KEY_ID
-      --env AWS_SECRET_ACCESS_KEY
-      --env SCCACHE_BUCKET
-      --env SCCACHE_REGION
-    )
+    # I hate buildkite-esque echo is leaking into this generic shell wrapper.
+    # but it's easiest to notify to users, and properly guarded under $BUILDKITE_ env
+    # (2 is chosen for third time's the charm).
+    if [[ $BUILDKITE_RETRY_COUNT -ge 2 ]]; then
+      # Disable sccache to create a clean-room environment to preclude any
+      # sccache-related bugs
+      echo "--- $0 ... (with sccache being DISABLED due to many (${BUILDKITE_RETRY_COUNT}) retries)"
+    else
+      echo "--- $0 ... (with sccache enabled)"
+      # sccache
+      ARGS+=(
+        --env "RUSTC_WRAPPER=/home/.cargo/bin/sccache"
+        --env AWS_ACCESS_KEY_ID
+        --env AWS_SECRET_ACCESS_KEY
+        --env SCCACHE_BUCKET
+        --env SCCACHE_REGION
+      )
+    fi
   fi
 else
   # Avoid sharing ~/.cargo when building locally to avoid a mixed macOS/Linux
