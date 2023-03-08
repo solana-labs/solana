@@ -125,7 +125,7 @@ fn test_sbfv2() {
         .join("sdk")
         .join("sbf")
         .join("dependencies")
-        .join("sbf-tools")
+        .join("platform-tools")
         .join("llvm")
         .join("bin")
         .join("llvm-readelf");

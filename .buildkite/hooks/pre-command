@@ -10,7 +10,7 @@ export PS4="++"
 # Restore target/ from the previous CI build on this machine
 #
 eval "$(ci/channel-info.sh)"
-eval "$(ci/sbf-tools-info.sh)"
+eval "$(ci/platform-tools-info.sh)"
 source "ci/rust-version.sh"
 HOST_RUST_VERSION="$rust_stable"
 pattern='^[0-9]+\.[0-9]+\.[0-9]+$'
