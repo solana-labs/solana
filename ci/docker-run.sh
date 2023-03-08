@@ -50,25 +50,28 @@ if [[ $BUILDKITE_RETRY_COUNT -ge 3 ]]; then
   DISABLE_CACHE=1
 fi
 
-if [[ -n $CI && -z $DISABLE_CACHE ]]; then
-  # Share the real ~/.cargo between docker containers in CI for speed
-  ARGS+=(--volume "$HOME:/home")
-
-  if [[ -n $BUILDKITE ]]; then
-    # sccache
-    ARGS+=(
-      --env "RUSTC_WRAPPER=/home/.cargo/bin/sccache"
-      --env AWS_ACCESS_KEY_ID
-      --env AWS_SECRET_ACCESS_KEY
-      --env SCCACHE_BUCKET
-      --env SCCACHE_REGION
-    )
+if [[ -z $DISABLE_CACHE ]]; then
+  if [[ -n $CI ]]; then
+    # Share the real ~/.cargo between docker containers in CI for speed
+    ARGS+=(--volume "$HOME:/home")
+  else
+    # Avoid sharing ~/.cargo when building locally to avoid a mixed macOS/Linux
+    # ~/.cargo
+    ARGS+=(--volume "$PWD:/home")
   fi
-else
-  # Avoid sharing ~/.cargo when building locally to avoid a mixed macOS/Linux
-  # ~/.cargo
-  ARGS+=(--volume "$PWD:/home")
 fi
+
+if [[ -n $BUILDKITE && -z $DISABLE_CACHE ]]; then
+  # sccache
+  ARGS+=(
+    --env "RUSTC_WRAPPER=/home/.cargo/bin/sccache"
+    --env AWS_ACCESS_KEY_ID
+    --env AWS_SECRET_ACCESS_KEY
+    --env SCCACHE_BUCKET
+    --env SCCACHE_REGION
+  )
+fi
+
 ARGS+=(--env "HOME=/home" --env "CARGO_HOME=/home/.cargo")
 
 # kcov tries to set the personality of the binary which docker
