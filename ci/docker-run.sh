@@ -46,19 +46,17 @@ ARGS=(
 if [[ $BUILDKITE_RETRY_COUNT -ge 3 ]]; then
   # I hate buildkite-esque echo is leaking into this generic shell wrapper.
   # but it's easiest, in edge-case, and properly guarded under $BUILDKITE_ env...
-  echo "--- DISABLING CACHE DUE TO MANY (${BUILDKITE_RETRY_COUNT}) RETRIES"
+  echo "--- $0 ... (DISABLING CACHE DUE TO MANY (${BUILDKITE_RETRY_COUNT}) RETRIES)"
   DISABLE_CACHE=1
 fi
 
-if [[ -z $DISABLE_CACHE ]]; then
-  if [[ -n $CI ]]; then
-    # Share the real ~/.cargo between docker containers in CI for speed
-    ARGS+=(--volume "$HOME:/home")
-  else
-    # Avoid sharing ~/.cargo when building locally to avoid a mixed macOS/Linux
-    # ~/.cargo
-    ARGS+=(--volume "$PWD:/home")
-  fi
+if [[ -n $CI && -z $DISABLE_CACHE ]]; then
+  # Share the real ~/.cargo between docker containers in CI for speed
+  ARGS+=(--volume "$HOME:/home")
+else
+  # Avoid sharing ~/.cargo when building locally to avoid a mixed macOS/Linux
+  # ~/.cargo
+  ARGS+=(--volume "$PWD:/home")
 fi
 
 if [[ -n $BUILDKITE && -z $DISABLE_CACHE ]]; then
