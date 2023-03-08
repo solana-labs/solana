@@ -42,7 +42,7 @@ use {
 };
 
 const MAX_DUPLICATE_COUNT: usize = 2;
-const DEFAULT_LRU_SIZE: usize = 10_000;
+const DEFAULT_LRU_SIZE: usize = 1 << 20;
 // Minimum number of shreds to use rayon parallel iterators.
 const PAR_ITER_MIN_NUM_SHREDS: usize = 2;
 
