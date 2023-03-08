@@ -51,10 +51,7 @@ fn get_optional_pubkey<'a>(
     )
 }
 
-pub fn process_instruction(
-    _first_instruction_account: IndexOfAccount,
-    invoke_context: &mut InvokeContext,
-) -> Result<(), InstructionError> {
+pub fn process_instruction(invoke_context: &mut InvokeContext) -> Result<(), InstructionError> {
     let transaction_context = &invoke_context.transaction_context;
     let instruction_context = transaction_context.get_current_instruction_context()?;
     let data = instruction_context.get_instruction_data();
@@ -6475,8 +6472,8 @@ mod tests {
             None,
             Some(Arc::new(feature_set)),
             Ok(()),
-            |first_instruction_account, invoke_context| {
-                super::process_instruction(first_instruction_account, invoke_context)?;
+            |invoke_context| {
+                super::process_instruction(invoke_context)?;
                 let expected_minimum_delegation =
                     crate::get_minimum_delegation(&invoke_context.feature_set).to_le_bytes();
                 let actual_minimum_delegation =

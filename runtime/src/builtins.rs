@@ -40,7 +40,7 @@ impl AbiExample for Builtin {
         Self {
             name: String::default(),
             id: Pubkey::default(),
-            process_instruction_with_context: |_, _| Ok(()),
+            process_instruction_with_context: |_invoke_context| Ok(()),
         }
     }
 }

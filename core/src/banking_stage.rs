@@ -26,7 +26,7 @@ use {
     solana_ledger::blockstore_processor::TransactionStatusSender,
     solana_measure::{measure, measure_us},
     solana_perf::{data_budget::DataBudget, packet::PACKETS_PER_BATCH},
-    solana_poh::poh_recorder::{PohRecorder, TransactionRecorder},
+    solana_poh::poh_recorder::PohRecorder,
     solana_runtime::{bank_forks::BankForks, vote_sender_types::ReplayVoteSender},
     solana_sdk::{feature_set::allow_votes_to_directly_update_vote_state, timing::AtomicInterval},
     std::{
@@ -394,6 +394,13 @@ impl BankingStage {
                     connection_cache.clone(),
                     data_budget.clone(),
                 );
+                let consumer = Consumer::new(
+                    committer,
+                    poh_recorder.read().unwrap().recorder(),
+                    QosService::new(id),
+                    log_messages_bytes_limit,
+                    None,
+                );
 
                 Builder::new()
                     .name(format!("solBanknStgTx{id:02}"))
@@ -402,10 +409,8 @@ impl BankingStage {
                             &mut packet_receiver,
                             &decision_maker,
                             &forwarder,
-                            &committer,
-                            &poh_recorder,
+                            &consumer,
                             id,
-                            log_messages_bytes_limit,
                             unprocessed_transaction_storage,
                         );
                     })
@@ -419,13 +424,10 @@ impl BankingStage {
     fn process_buffered_packets(
         decision_maker: &DecisionMaker,
         forwarder: &Forwarder,
-        committer: &Committer,
+        consumer: &Consumer,
         unprocessed_transaction_storage: &mut UnprocessedTransactionStorage,
         banking_stage_stats: &BankingStageStats,
-        recorder: &TransactionRecorder,
-        qos_service: &QosService,
         slot_metrics_tracker: &mut LeaderSlotMetricsTracker,
-        log_messages_bytes_limit: Option<usize>,
         tracer_packet_stats: &mut TracerPacketStats,
     ) {
         if unprocessed_transaction_storage.should_not_process() {
@@ -443,16 +445,11 @@ impl BankingStage {
                 // of the previous slot
                 slot_metrics_tracker.apply_action(metrics_action);
                 let (_, consume_buffered_packets_time) = measure!(
-                    Consumer::consume_buffered_packets(
+                    consumer.consume_buffered_packets(
                         &bank_start,
                         unprocessed_transaction_storage,
-                        None::<Box<dyn Fn()>>,
                         banking_stage_stats,
-                        committer,
-                        recorder,
-                        qos_service,
                         slot_metrics_tracker,
-                        log_messages_bytes_limit
                     ),
                     "consume_buffered_packets",
                 );
@@ -492,16 +489,12 @@ impl BankingStage {
         packet_receiver: &mut PacketReceiver,
         decision_maker: &DecisionMaker,
         forwarder: &Forwarder,
-        committer: &Committer,
-        poh_recorder: &Arc<RwLock<PohRecorder>>,
+        consumer: &Consumer,
         id: u32,
-        log_messages_bytes_limit: Option<usize>,
         mut unprocessed_transaction_storage: UnprocessedTransactionStorage,
     ) {
-        let recorder = poh_recorder.read().unwrap().recorder();
         let mut banking_stage_stats = BankingStageStats::new(id);
         let mut tracer_packet_stats = TracerPacketStats::new(id);
-        let qos_service = QosService::new(id);
 
         let mut slot_metrics_tracker = LeaderSlotMetricsTracker::new(id);
         let mut last_metrics_update = Instant::now();
@@ -514,13 +507,10 @@ impl BankingStage {
                     Self::process_buffered_packets(
                         decision_maker,
                         forwarder,
-                        committer,
+                        consumer,
                         &mut unprocessed_transaction_storage,
                         &banking_stage_stats,
-                        &recorder,
-                        &qos_service,
                         &mut slot_metrics_tracker,
-                        log_messages_bytes_limit,
                         &mut tracer_packet_stats,
                     ),
                     "process_buffered_packets",

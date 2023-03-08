@@ -4,7 +4,9 @@ extern crate test;
 use {
     rand::{thread_rng, Rng},
     solana_runtime::{
-        account_storage::meta::{StorableAccountsWithHashesAndWriteVersions, StoredMeta},
+        account_storage::meta::{
+            StorableAccountsWithHashesAndWriteVersions, StoredAccountInfo, StoredMeta,
+        },
         accounts_db::INCLUDE_SLOT_IN_HASH_TESTS,
         append_vec::{
             test_utils::{create_test_account, get_append_vec_path},
@@ -32,7 +34,7 @@ fn append_account(
     storage_meta: StoredMeta,
     account: &AccountSharedData,
     hash: Hash,
-) -> Option<usize> {
+) -> Option<StoredAccountInfo> {
     let slot_ignored = Slot::MAX;
     let accounts = [(&storage_meta.pubkey, account)];
     let slice = &accounts[..];
@@ -63,7 +65,7 @@ fn add_test_accounts(vec: &AppendVec, size: usize) -> Vec<(usize, usize)> {
     (0..size)
         .filter_map(|sample| {
             let (meta, account) = create_test_account(sample);
-            append_account(vec, meta, &account, Hash::default()).map(|pos| (sample, pos))
+            append_account(vec, meta, &account, Hash::default()).map(|info| (sample, info.offset))
         })
         .collect()
 }
@@ -108,8 +110,8 @@ fn append_vec_concurrent_append_read(bencher: &mut Bencher) {
     spawn(move || loop {
         let sample = indexes1.lock().unwrap().len();
         let (meta, account) = create_test_account(sample);
-        if let Some(pos) = append_account(&vec1, meta, &account, Hash::default()) {
-            indexes1.lock().unwrap().push((sample, pos))
+        if let Some(info) = append_account(&vec1, meta, &account, Hash::default()) {
+            indexes1.lock().unwrap().push((sample, info.offset))
         } else {
             break;
         }
@@ -148,8 +150,8 @@ fn append_vec_concurrent_read_append(bencher: &mut Bencher) {
     bencher.iter(|| {
         let sample: usize = thread_rng().gen_range(0, 256);
         let (meta, account) = create_test_account(sample);
-        if let Some(pos) = append_account(&vec, meta, &account, Hash::default()) {
-            indexes.lock().unwrap().push((sample, pos))
+        if let Some(info) = append_account(&vec, meta, &account, Hash::default()) {
+            indexes.lock().unwrap().push((sample, info.offset))
         }
     });
 }
