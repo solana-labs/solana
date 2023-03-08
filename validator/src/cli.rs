@@ -45,6 +45,9 @@ const INCLUDE_KEY: &str = "account-index-include-key";
 const DEFAULT_MIN_SNAPSHOT_DOWNLOAD_SPEED: u64 = 10485760;
 // The maximum times of snapshot download abort and retry
 const MAX_SNAPSHOT_DOWNLOAD_ABORT: u32 = 5;
+// We've observed missed leader slots leading to deadlocks on test validator
+// with less than 2 ticks per slot.
+const MINIMUM_TICKS_PER_SLOT: u64 = 2;
 
 pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
     return App::new(crate_name!()).about(crate_description!())
@@ -2084,7 +2087,18 @@ pub fn test_app<'a>(version: &'a str, default_args: &'a DefaultTestArgs) -> App<
             Arg::with_name("ticks_per_slot")
                 .long("ticks-per-slot")
                 .value_name("TICKS")
-                .validator(is_parsable::<u64>)
+                .validator(|value| {
+                    value
+                        .parse::<u64>()
+                        .map_err(|err| format!("error parsing '{value}': {err}"))
+                        .and_then(|ticks| {
+                            if ticks < MINIMUM_TICKS_PER_SLOT {
+                                Err(format!("value must be >= {MINIMUM_TICKS_PER_SLOT}"))
+                            } else {
+                                Ok(())
+                            }
+                        })
+                })
                 .takes_value(true)
                 .help("The number of ticks in a slot"),
         )
