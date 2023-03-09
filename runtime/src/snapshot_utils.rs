@@ -1882,7 +1882,7 @@ fn streaming_snapshot_dir_files(
     file_sender: Sender<PathBuf>,
     snapshot_file_path: impl Into<PathBuf>,
     snapshot_version_path: impl Into<PathBuf>,
-    account_paths: Vec<PathBuf>,
+    account_paths: &[PathBuf],
 ) {
     file_sender
         .send(snapshot_file_path.into())
@@ -1914,7 +1914,7 @@ fn build_storage_from_snapshot_dir(
 
     let accounts_hardlinks = bank_snapshot_dir.join("accounts_hardlinks");
 
-    let account_paths_set: HashSet<_> = HashSet::from_iter(account_paths.iter().cloned());
+    let account_paths_set: HashSet<_> = HashSet::from_iter(account_paths.iter());
 
     for dir_symlink in fs::read_dir(accounts_hardlinks).expect("read_dir should return dir entries")
     {
@@ -1958,7 +1958,7 @@ fn build_storage_from_snapshot_dir(
     streaming_snapshot_dir_files(
         file_sender,
         snapshot_file_path,
-        &snapshot_version_path,
+        snapshot_version_path,
         account_paths,
     );
 
