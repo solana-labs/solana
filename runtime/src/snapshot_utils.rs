@@ -72,6 +72,7 @@ pub use archive_format::*;
 pub const SNAPSHOT_STATUS_CACHE_FILENAME: &str = "status_cache";
 pub const SNAPSHOT_VERSION_FILENAME: &str = "version";
 pub const SNAPSHOT_STATE_COMPLETE_FILENAME: &str = "state_complete";
+pub const SNAPSHOT_ACCOUNTS_HARDLINKS: &str = "accounts_hardlinks";
 pub const SNAPSHOT_ARCHIVE_DOWNLOAD_DIR: &str = "remote";
 pub const DEFAULT_FULL_SNAPSHOT_ARCHIVE_INTERVAL_SLOTS: Slot = 25_000;
 pub const DEFAULT_INCREMENTAL_SNAPSHOT_ARCHIVE_INTERVAL_SLOTS: Slot = 100;
@@ -481,7 +482,7 @@ pub fn clean_orphaned_account_snapshot_dirs(
     let mut account_snapshot_dirs_referenced = HashSet::new();
     let snapshots = get_bank_snapshots(bank_snapshots_dir);
     for snapshot in snapshots {
-        let account_hardlinks_dir = snapshot.snapshot_dir.join("account_hardlinks");
+        let account_hardlinks_dir = snapshot.snapshot_dir.join(SNAPSHOT_ACCOUNTS_HARDLINKS);
         // loop through entries in the snapshot_hardlink_dir, read the symlinks, add the target to the HashSet
         fs::read_dir(&account_hardlinks_dir)
             .unwrap_or_else(|_| {
@@ -498,15 +499,13 @@ pub fn clean_orphaned_account_snapshot_dirs(
                     )
                 });
                 let path = entry.path();
-                if path.is_dir() {
-                    let target = fs::read_link(&path).unwrap_or_else(|_| {
-                        panic!(
-                            "Unable to read snapshot hardlink directory entry: {}",
-                            path.display()
-                        )
-                    });
-                    account_snapshot_dirs_referenced.insert(target);
-                }
+                let target = fs::read_link(&path).unwrap_or_else(|_| {
+                    panic!(
+                        "Unable to read snapshot hardlink directory entry: {}",
+                        path.display()
+                    )
+                });
+                account_snapshot_dirs_referenced.insert(target);
             });
     }
 
