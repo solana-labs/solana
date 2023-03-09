@@ -372,10 +372,9 @@ impl RepairWeight {
             .copied()
             .map(|root| match root {
                 TreeRoot::Root(r) => r,
-                TreeRoot::PrunedRoot(r) => panic!(
-                    "New root {} chains to a pruned tree with root {}",
-                    new_root, r
-                ),
+                TreeRoot::PrunedRoot(r) => {
+                    panic!("New root {new_root} chains to a pruned tree with root {r}")
+                }
             });
 
         // Purge outdated trees from `self.trees`
@@ -847,7 +846,7 @@ mod test {
             blockstore::{make_chaining_slot_entries, Blockstore},
             get_tmp_ledger_path,
         },
-        solana_runtime::{bank::Bank, bank_utils},
+        solana_runtime::{bank::Bank, bank_utils, contains::Contains},
         solana_sdk::hash::Hash,
         trees::tr,
     };
