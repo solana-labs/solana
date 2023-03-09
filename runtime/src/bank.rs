@@ -4451,11 +4451,14 @@ impl Bank {
         (program_accounts_map, loaded_programs_for_txs)
     }
 
-    fn replenish_executor_cache(
+    fn replenish_executor_cache<'a>(
         &self,
-        program_owners: &[&Pubkey],
+        program_owners: &[&'a Pubkey],
         sanitized_txs: &[SanitizedTransaction],
         check_results: &mut [TransactionCheckResult],
+    ) -> (
+        HashMap<Pubkey, &'a Pubkey>,
+        HashMap<Pubkey, Arc<LoadedProgram>>,
     ) {
         let mut filter_programs_time = Measure::start("filter_programs_accounts");
         let program_accounts_map = self.rc.accounts.filter_executable_program_accounts(
@@ -4467,6 +4470,7 @@ impl Bank {
         );
         filter_programs_time.stop();
 
+        let mut loaded_programs_for_txs = HashMap::new();
         let mut filter_missing_programs_time = Measure::start("filter_missing_programs_accounts");
         let missing_executors = program_accounts_map
             .keys()
@@ -4475,6 +4479,10 @@ impl Bank {
                     .read()
                     .unwrap()
                     .get(key)
+                    .map(|program| {
+                        loaded_programs_for_txs.insert(*key, program.clone());
+                        program
+                    })
                     .is_none()
                     .then_some(key)
             })
@@ -4484,15 +4492,24 @@ impl Bank {
         let executors = missing_executors
             .iter()
             .map(|pubkey| match self.load_program(pubkey) {
-                Ok(program) => (**pubkey, program),
+                Ok(program) => {
+                    loaded_programs_for_txs.insert(**pubkey, program.clone());
+                    (**pubkey, program)
+                }
                 // Create a tombstone for the programs that failed to load
-                Err(_) => (**pubkey, Arc::new(LoadedProgram::new_tombstone(self.slot))),
+                Err(_) => {
+                    let tombstone = Arc::new(LoadedProgram::new_tombstone(self.slot));
+                    loaded_programs_for_txs.insert(**pubkey, tombstone.clone());
+                    (**pubkey, tombstone)
+                }
             });
 
         // avoid locking the cache if there are no new executors
         if executors.len() > 0 {
             self.executor_cache.write().unwrap().put(executors);
         }
+
+        (program_accounts_map, loaded_programs_for_txs)
     }
 
     #[allow(clippy::type_complexity)]
@@ -4561,7 +4578,6 @@ impl Bank {
             bpf_loader_upgradeable::id(),
             bpf_loader::id(),
             bpf_loader_deprecated::id(),
-            native_loader::id(),
         ];
 
         let program_owners_refs: Vec<&Pubkey> = program_owners.iter().collect();
@@ -4574,7 +4590,8 @@ impl Bank {
             &check_results,
         );
         */
-        self.replenish_executor_cache(&program_owners_refs, sanitized_txs, &mut check_results);
+        let (executable_programs_in_tx_batch, loaded_programs_map) =
+            self.replenish_executor_cache(&program_owners_refs, sanitized_txs, &mut check_results);
 
         let mut load_time = Measure::start("accounts_load");
         let mut loaded_transactions = self.rc.accounts.load_accounts(
@@ -4587,6 +4604,8 @@ impl Bank {
             &self.feature_set,
             &self.fee_structure,
             account_overrides,
+            &executable_programs_in_tx_batch,
+            &loaded_programs_map,
         );
         load_time.stop();
 

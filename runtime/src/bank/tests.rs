@@ -11740,6 +11740,8 @@ fn test_rent_state_list_len() {
         &bank.feature_set,
         &FeeStructure::default(),
         None,
+        &HashMap::new(),
+        &HashMap::new(),
     );
 
     let compute_budget = bank.runtime_config.compute_budget.unwrap_or_else(|| {

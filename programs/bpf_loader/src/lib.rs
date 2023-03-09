@@ -135,7 +135,7 @@ pub fn load_program_from_bytes(
     Ok(loaded_program)
 }
 
-fn get_programdata_offset_and_depoyment_offset(
+fn get_programdata_offset_and_deployment_offset(
     log_collector: &Option<Rc<RefCell<LogCollector>>>,
     program: &BorrowedAccount,
     programdata: &BorrowedAccount,
@@ -181,9 +181,6 @@ pub fn load_program_from_account(
         return Err(InstructionError::IncorrectProgramId);
     }
 
-    let (programdata_offset, deployment_slot) =
-        get_programdata_offset_and_depoyment_offset(&log_collector, program, programdata)?;
-
     if let Some(ref tx_executor_cache) = tx_executor_cache {
         if let Some(loaded_program) = tx_executor_cache.get(program.get_key()) {
             if loaded_program.is_tombstone() {
@@ -195,6 +192,9 @@ pub fn load_program_from_account(
             return Ok((loaded_program, None));
         }
     }
+
+    let (programdata_offset, deployment_slot) =
+        get_programdata_offset_and_deployment_offset(&log_collector, program, programdata)?;
 
     let programdata_size = if programdata_offset != 0 {
         programdata.get_data().len()
@@ -557,13 +557,14 @@ fn process_instruction_common(
         return Err(InstructionError::IncorrectProgramId);
     }
     let programdata_account = if bpf_loader_upgradeable::check_id(program_account.get_owner()) {
-        let programdata_account = instruction_context.try_borrow_program_account(
-            transaction_context,
-            instruction_context
-                .get_number_of_program_accounts()
-                .saturating_sub(2),
-        )?;
-        Some(programdata_account)
+        instruction_context
+            .try_borrow_program_account(
+                transaction_context,
+                instruction_context
+                    .get_number_of_program_accounts()
+                    .saturating_sub(2),
+            )
+            .ok()
     } else {
         None
     };
