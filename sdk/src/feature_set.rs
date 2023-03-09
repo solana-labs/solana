@@ -634,6 +634,10 @@ pub mod remove_bpf_loader_incorrect_program_id {
     solana_sdk::declare_id!("2HmTkCj9tXuPE4ueHzdD7jPeMf9JGCoZh5AsyoATiWEe");
 }
 
+pub mod include_loaded_accounts_data_size_in_fee_calculation {
+    solana_sdk::declare_id!("EaQpmC6GtRssaZ3PCUM5YksGqUdMLeZ46BQXYtHYakDS");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -787,6 +791,7 @@ lazy_static! {
         (switch_to_new_elf_parser::id(), "switch to new ELF parser #30497"),
         (round_up_heap_size::id(), "round up heap size when calculating heap cost #30679"),
         (remove_bpf_loader_incorrect_program_id::id(), "stop incorrectly throwing IncorrectProgramId in bpf_loader #30747"),
+        (include_loaded_accounts_data_size_in_fee_calculation::id(), "include transaction loaded accounts data size in base fee calculation #30657"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()
