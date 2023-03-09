@@ -9,7 +9,7 @@ if [[ -n $CI ]]; then
   console_out="console-$(date '+%Yy%mm%dd%Hh%Mm%Ss%Nns').log"
 
   # shellcheck disable=SC2094
-  if "$@" -- --color=always 2>> "$console_out" 1>> >(tee -a "$console_out"); then
+  if "$@" 2>> "$console_out" 1>> >(tee -a "$console_out"); then
     # noop
     true
   else

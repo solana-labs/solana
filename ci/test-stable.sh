@@ -65,7 +65,7 @@ test-stable)
     _ cargo test --jobs "$JOBS" --all --tests --exclude solana-local-cluster ${V:+--verbose} -- -Z unstable-options --format json --report-time | tee results.json
     exit_if_error "${PIPESTATUS[0]}"
   else
-    _ cargo test --jobs "$JOBS" --all --tests --exclude solana-local-cluster ${V:+--verbose} -- --nocapture
+    _ ci/upload-console.sh cargo test --jobs "$JOBS" --all --tests --exclude solana-local-cluster ${V:+--verbose} -- --nocapture --color=always
   fi
   ;;
 test-stable-sbf)

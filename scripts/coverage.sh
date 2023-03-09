@@ -79,7 +79,7 @@ NPROC=$(nproc)
 JOBS=$((JOBS>NPROC ? NPROC : JOBS))
 
 RUST_LOG=solana=trace _ "$cargo" nightly test --jobs "$JOBS" --target-dir target/cov --no-run "${packages[@]}"
-if RUST_LOG=solana=trace _ ci/upload-console.sh "$cargo" nightly test --jobs "$JOBS" --target-dir target/cov "${packages[@]}" -- --nocapture; then
+if RUST_LOG=solana=trace _ ci/upload-console.sh "$cargo" nightly test --jobs "$JOBS" --target-dir target/cov "${packages[@]}" -- --nocapture --color=always; then
   test_status=0
 else
   test_status=$?
