@@ -62,6 +62,7 @@ if [[ -n $CI ]]; then
         --env AWS_SECRET_ACCESS_KEY
         --env SCCACHE_BUCKET
         --env SCCACHE_REGION
+        --env SCCACHE_S3_KEY_PREFIX
       )
     fi
   fi
